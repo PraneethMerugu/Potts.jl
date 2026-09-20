@@ -23,14 +23,31 @@ function _native_endpoint_occurrence(
         occurrence -> occurrence.statement === endpoint,
         inventory.statements,
     )
-    if length(exact) == 1
-        return only(exact)
-    elseif length(exact) > 1
+    length(exact) == 1 && return only(exact)
+    arguments = _statement_arguments(endpoint)
+    if arguments isa NamedTuple && haskey(arguments, :variable)
+        variable = _namespace_symbolic_value(arguments.variable, native.system_path[2:end])
+        scoped = filter(inventory.statements) do occurrence
+            payload = _statement_arguments(occurrence.statement)
+            statement_kind(occurrence.statement) === statement_kind(endpoint) &&
+                payload isa NamedTuple && haskey(payload, :variable) &&
+                isequal(variable, _namespace_symbolic_value(payload.variable, occurrence.path[2:end]))
+        end
+        length(scoped) == 1 && return only(scoped)
+        isempty(scoped) || throw(
+            ArgumentError(
+                "native coupling endpoint $(repr(variable)) does not have a unique declaration owner"
+            )
+        )
+    end
+    if length(exact) > 1
         paths = join((join(item.path, '₊') for item in exact), ", ")
-        throw(ArgumentError(
-            "native coupling endpoint $(Symbol(statement_id(endpoint))) at " *
-            "$(join(native.path, '₊')) is ambiguous across $paths"
-        ))
+        throw(
+            ArgumentError(
+                "native coupling endpoint $(Symbol(statement_id(endpoint))) at " *
+                    "$(join(native.path, '₊')) is ambiguous across $paths"
+            )
+        )
     end
 
     same_identity = occurrence ->
@@ -65,7 +82,8 @@ end
 # Native component completion resolves Potts endpoints while retaining the
 # original ModelingToolkit systems as their own semantic authority.
 function _resolve_native_components(
-        inventory::_PottsSourceInventory, records
+        inventory::_PottsSourceInventory, records;
+        context_inventory = inventory,
     )
     isempty(inventory.natives) && return CompletedNativeComponent[]
     by_identity = Dict(record.identity => record for record in records)
@@ -78,31 +96,37 @@ function _resolve_native_components(
         ))
         push!(seen_paths, native.path)
         endpoints = CouplingEndpointSchema[]
+        context_native = only(filter(item -> item.path == native.path, context_inventory.natives))
         for port in (
                 native_inputs(native.component)...,
                 native_outputs(native.component)...,
             )
-            occurrence = _native_endpoint_occurrence(inventory, native, port)
+            occurrence = _native_endpoint_occurrence(context_inventory, context_native, port)
+            # A contextual child retains references to external owners without
+            # enrolling their state. The complete root remains fully closed.
+            local_owner = _inventory_path_iswithin(occurrence.path, inventory.systems[1].path)
             identity = QualifiedStatementID(
                 occurrence.path, statement_id(occurrence.statement)
             )
             record = get(by_identity, identity, nothing)
-            record isa QualifiedStatement || error(
+            !local_owner || record isa QualifiedStatement || error(
                 "native endpoint $identity is missing from completion records"
             )
-            if record.kind in (
+            kind = statement_kind(occurrence.statement)
+            if kind in (
                     :SiteState, :CellState, :MediumState, :ModelState,
                     :FieldState, :HistoryState,
                 )
-                arguments = first(record.normalized_payload)
+                arguments = local_owner ? first(record.normalized_payload) :
+                    _statement_arguments(occurrence.statement)
                 haskey(arguments, :variable) || throw(ArgumentError(
                     "native coupling endpoint $identity resolves to a " *
-                    "$(record.kind) without symbolic storage; author it with " *
+                    "$kind without symbolic storage; author it with " *
                     "the symbolic state constructor"
                 ))
             end
             push!(endpoints, CouplingEndpointSchema(
-                native.path, port, identity, record.kind
+                native.path, port, identity, kind
             ))
         end
         endpoint_tuple = Tuple(endpoints)
@@ -117,4 +141,3 @@ function _resolve_native_components(
     _assert_single_native_writers(all_endpoints)
     return completed
 end
-

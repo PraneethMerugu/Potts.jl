@@ -26,9 +26,11 @@ end
 function SeedStencil(site, offsets; relation)
     frozen = offsets isa Tuple ? offsets : Tuple(offsets)
     isempty(frozen) && throw(ArgumentError("SeedStencil offsets must be nonempty"))
-    length(unique(frozen)) == length(frozen) || throw(ArgumentError(
-        "SeedStencil offsets must be unique"
-    ))
+    length(unique(frozen)) == length(frozen) || throw(
+        ArgumentError(
+            "SeedStencil offsets must be unique"
+        )
+    )
     return SeedStencil(site, frozen, relation)
 end
 
@@ -48,9 +50,11 @@ struct PrincipalAxisPlane{P} <: AbstractLifecyclePartitionPolicy
     axis::Symbol
     point::P
     function PrincipalAxisPlane(axis::Symbol; point = CellCentroid())
-        axis in (:major, :minor) || throw(ArgumentError(
-            "PrincipalAxisPlane axis must be :major or :minor"
-        ))
+        axis in (:major, :minor) || throw(
+            ArgumentError(
+                "PrincipalAxisPlane axis must be :major or :minor"
+            )
+        )
         return new{typeof(point)}(axis, point)
     end
 end
@@ -130,8 +134,10 @@ struct RedrawDaughters{P, D, R, S} <: AbstractLifecycleStatePolicy
     parent_draw::R
     daughter_draw::S
 end
-RedrawDaughters(parent_distribution, daughter_distribution;
-        parent_draw, daughter_draw) = RedrawDaughters(
+RedrawDaughters(
+    parent_distribution, daughter_distribution;
+    parent_draw, daughter_draw
+) = RedrawDaughters(
     parent_distribution, daughter_distribution, parent_draw, daughter_draw
 )
 
@@ -160,10 +166,12 @@ struct StableLifecyclePriority <: AbstractLifecycleConflictPolicy end
 struct RetireAtZero <: AbstractExtinctionPolicy
     priority::Int32
     function RetireAtZero(; priority::Integer = 0)
-        typemin(Int32) <= priority <= typemax(Int32) || throw(ArgumentError(
-            "RetireAtZero priority must be representable as Int32"
-        ))
-        new(Int32(priority))
+        typemin(Int32) <= priority <= typemax(Int32) || throw(
+            ArgumentError(
+                "RetireAtZero priority must be representable as Int32"
+            )
+        )
+        return new(Int32(priority))
     end
 end
 RetireAtZero(priority::Integer) = RetireAtZero(; priority)
@@ -175,16 +183,20 @@ _lifecycle_tuple(values) = values === nothing ? () :
     values isa AbstractArray ? Tuple(values) : (values,)
 
 function _lifecycle_priority(priority::Integer)
-    typemin(Int32) <= priority <= typemax(Int32) || throw(ArgumentError(
-        "lifecycle priority must be representable as Int32"
-    ))
+    typemin(Int32) <= priority <= typemax(Int32) || throw(
+        ArgumentError(
+            "lifecycle priority must be representable as Int32"
+        )
+    )
     return Int32(priority)
 end
 
 function _lifecycle_inadmissibility(value)
-    value isa AbstractLifecycleInadmissibilityPolicy || throw(ArgumentError(
-        "on_inadmissible must be FilterInadmissible() or ErrorOnInadmissible()"
-    ))
+    value isa AbstractLifecycleInadmissibilityPolicy || throw(
+        ArgumentError(
+            "on_inadmissible must be FilterInadmissible() or ErrorOnInadmissible()"
+        )
+    )
     return value
 end
 
@@ -196,8 +208,10 @@ struct CreateCell{K, P, S <: Tuple, I} <: AbstractPottsEffect
     priority::Int32
     on_inadmissible::I
 end
-function CreateCell(kind; placement, state = (), priority::Integer = 0,
-        on_inadmissible)
+function CreateCell(
+        kind; placement, state = (), priority::Integer = 0,
+        on_inadmissible
+    )
     return CreateCell(
         kind,
         placement,
@@ -216,8 +230,15 @@ struct RemoveCell{C, M, S <: Tuple, R <: Tuple, I} <: AbstractPottsEffect
     priority::Int32
     on_inadmissible::I
 end
-function RemoveCell(cell; replacement, state = (), relationships = (),
-        priority::Integer = 0, on_inadmissible)
+function RemoveCell(
+        cell; replacement, state = (), relationships = (),
+        priority::Integer = 0, on_inadmissible
+    )
+    replacement isa MediumDomainOwner || throw(
+        ArgumentError(
+            "RemoveCell replacement must be a MediumDomainOwner"
+        )
+    )
     return RemoveCell(
         cell,
         replacement,
@@ -236,8 +257,10 @@ struct Retire{C, S <: Tuple, R <: Tuple, I} <: AbstractPottsEffect
     priority::Int32
     on_inadmissible::I
 end
-function Retire(cell; state = (), relationships = (), priority::Integer = 0,
-        on_inadmissible)
+function Retire(
+        cell; state = (), relationships = (), priority::Integer = 0,
+        on_inadmissible
+    )
     return Retire(
         cell,
         _lifecycle_tuple(state),
@@ -256,8 +279,10 @@ struct Transition{C, K, S <: Tuple, R <: Tuple, I} <: AbstractPottsEffect
     priority::Int32
     on_inadmissible::I
 end
-function Transition(cell, kind; state = (), relationships = (),
-        priority::Integer = 0, on_inadmissible)
+function Transition(
+        cell, kind; state = (), relationships = (),
+        priority::Integer = 0, on_inadmissible
+    )
     return Transition(
         cell,
         kind,
@@ -270,7 +295,7 @@ end
 
 """Request division of a cell under explicit geometry, state, and relationship policies."""
 struct Divide{C, G, R, D, P, K, S <: Tuple, L <: Tuple, I} <:
-       AbstractPottsEffect
+    AbstractPottsEffect
     cell::C
     geometry::G
     relation::R
@@ -282,16 +307,22 @@ struct Divide{C, G, R, D, P, K, S <: Tuple, L <: Tuple, I} <:
     priority::Int32
     on_inadmissible::I
 end
-function Divide(cell; geometry, relation, side,
+function Divide(
+        cell; geometry, relation, side,
         parent_kind = PreserveKind(), daughter_kind = PreserveKind(),
         state = (), relationships = (), priority::Integer = 0,
-        on_inadmissible)
-    parent_kind isa AbstractLifecycleKindPolicy || throw(ArgumentError(
-        "parent_kind must be PreserveKind() or SetKind(kind)"
-    ))
-    daughter_kind isa AbstractLifecycleKindPolicy || throw(ArgumentError(
-        "daughter_kind must be PreserveKind() or SetKind(kind)"
-    ))
+        on_inadmissible
+    )
+    parent_kind isa AbstractLifecycleKindPolicy || throw(
+        ArgumentError(
+            "parent_kind must be PreserveKind() or SetKind(kind)"
+        )
+    )
+    daughter_kind isa AbstractLifecycleKindPolicy || throw(
+        ArgumentError(
+            "daughter_kind must be PreserveKind() or SetKind(kind)"
+        )
+    )
     return Divide(
         cell,
         geometry,
@@ -324,10 +355,12 @@ function LifecycleProcess(
         source = UnknownSource(),
         kwargs...,
     )
-    return LifecycleProcess(_statement_core(
-        id,
-        (; domain, anchor, expression, effects = _defensive_tuple(effects)),
-        (; phase, cadence, kwargs...),
-        source,
-    ))
+    return LifecycleProcess(
+        _statement_core(
+            id,
+            (; domain, anchor, expression, effects = _defensive_tuple(effects)),
+            (; phase, cadence, kwargs...),
+            source,
+        )
+    )
 end

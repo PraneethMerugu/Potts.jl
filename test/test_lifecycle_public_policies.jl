@@ -10,6 +10,7 @@
     cell = CellKind(:policy_cell; extinction = RetireAtZero())
     daughter = CellKind(:policy_daughter; extinction = RetireAtZero())
     medium = MediumKind(:policy_medium)
+    medium_owner = MediumDomainOwner(:policy_medium_domain, medium)
     relation = SpatialRelation(
         :policy_division; neighborhood = VonNeumann()
     )
@@ -37,17 +38,19 @@
         :policy_create;
         domain = model(),
         expression = true,
-        effects = (CreateCell(
-            cell;
-            placement = SeedStencil(
-                create_site, ((0, 0), (1, 0), (2, 0), (3, 0)); relation
+        effects = (
+            CreateCell(
+                cell;
+                placement = SeedStencil(
+                    create_site, ((0, 0), (1, 0), (2, 0), (3, 0)); relation
+                ),
+                state = Tuple(
+                    state => InitializeFrom(10.0 * index)
+                        for (index, state) in enumerate(states)
+                ),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            state = Tuple(
-                state => InitializeFrom(10.0 * index)
-                for (index, state) in enumerate(states)
-            ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(1),
     )
     transition = LifecycleProcess(
@@ -55,48 +58,53 @@
         domain = cells(cell),
         anchor,
         expression = true,
-        effects = (Transition(
-            anchor,
-            daughter;
-            state = (
-                states[1] => Preserve(),
-                states[2] => ResetTo(22.0),
-                states[3] => Transform(policy_reset_both + 3.0),
-                states[4] => Preserve(),
-                states[5] => Preserve(),
-                states[6] => Preserve(),
+        effects = (
+            Transition(
+                anchor,
+                daughter;
+                state = (
+                    states[1] => Preserve(),
+                    states[2] => ResetTo(22.0),
+                    states[3] => Transform(policy_reset_both + 3.0),
+                    states[4] => Preserve(),
+                    states[5] => Preserve(),
+                    states[6] => Preserve(),
+                ),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(2),
     )
     divide = LifecycleProcess(
         :policy_divide;
         domain = cells(daughter),
         anchor,
-        expression = true,
-        effects = (Divide(
-            anchor;
-            geometry = SpecifiedNormalPlane((1.0, 0.0)),
-            relation,
-            side = CanonicalSide(),
-            parent_kind = PreserveKind(),
-            daughter_kind = SetKind(daughter),
-            state = (
-                states[1] => CopyToDaughters(),
-                states[2] => PreserveParentResetDaughter(2.0),
-                states[3] => ResetBoth(3.0, 4.0),
-                states[4] => SplitConservatively(0.25; rounding = :exact),
-                states[5] => TransformDaughters(5.0, 15.0),
-                states[6] => RedrawDaughters(
-                    Uniform(6.0, 7.0),
-                    Uniform(8.0, 9.0);
-                    parent_draw = :redraw_parent,
-                    daughter_draw = :redraw_daughter,
+        expression = draw(Uniform(0.0, 50.0),
+            DrawKey(:policy_mitotic_delay)) < 50.0,
+        effects = (
+            Divide(
+                anchor;
+                geometry = SpecifiedNormalPlane((1.0, 0.0)),
+                relation,
+                side = CanonicalSide(),
+                parent_kind = PreserveKind(),
+                daughter_kind = SetKind(daughter),
+                state = (
+                    states[1] => CopyToDaughters(),
+                    states[2] => PreserveParentResetDaughter(2.0),
+                    states[3] => ResetBoth(3.0, 4.0),
+                    states[4] => SplitConservatively(0.25; rounding = :exact),
+                    states[5] => TransformDaughters(5.0, 15.0),
+                    states[6] => RedrawDaughters(
+                        Uniform(6.0, 7.0),
+                        Uniform(8.0, 9.0);
+                        parent_draw = :redraw_parent,
+                        daughter_draw = :redraw_daughter,
+                    ),
                 ),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(3),
     )
     remove = LifecycleProcess(
@@ -104,36 +112,44 @@
         domain = cells(daughter),
         anchor,
         expression = true,
-        effects = (RemoveCell(
-            anchor;
-            replacement = medium,
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(4),
     )
     source = PottsSystem(
         name = :public_lifecycle_state_policy_matrix,
-        statements = StatementSet((
-            Lattice((5, 5); max_cells = 3),
-            cell,
-            daughter,
-            medium,
-            relation,
-            states...,
-            ProposalConstraint(:freeze_policy_matrix, false),
-            create,
-            transition,
-            divide,
-            remove,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((5, 5); default_owner = medium_owner, max_cells = 3),
+                cell,
+                daughter,
+                medium,
+                relation,
+                states...,
+                ProposalConstraint(:freeze_policy_matrix, false),
+                create,
+                transition,
+                divide,
+                remove,
+                Protocol(Sweep(
+                    ; temperature = 0.0, attempts = AttemptsPerSite(2)
+                ); name = :main),
+            )
+        ),
         unknowns = collect(variables),
     )
     problem = PottsProblem(
         mtkcompile(source),
-        PottsInitialState(ownership = LabelledCells(
-            zeros(Int, 5, 5); cells = [], medium
-        )),
+        PottsInitialState(
+            ownership = LabelledCells(
+                zeros(Int, 5, 5); cells = [], medium
+            )
+        ),
         (0, 4);
         seed = 0x51f9,
     )
@@ -150,6 +166,7 @@
         save_everystep = true,
     )
     @test solution.retcode == SciMLBase.ReturnCode.Success
+    @test solution.stats.candidate_attempts == 4 * 25 * 2
     @test solution(1)[state_names[1]][1] == 10
     @test solution(2)[state_names[1]][1] == 10
     @test solution(2)[state_names[2]][1] == 22
@@ -181,37 +198,46 @@ end
     )
     variants = Tuple(
         (geometry, side)
-        for geometry in geometries
-        for side in (CanonicalSide(), StableRandomSide(:partition_side))
+            for geometry in geometries
+            for side in (CanonicalSide(), StableRandomSide(:partition_side))
     )
     divisions = map(enumerate(variants)) do (cell_id, variant)
         geometry, side = variant
+        geometry = geometry isa RandomPlane ? RandomPlane(
+                point = geometry.point, draw = Symbol(:partition_random_, cell_id)
+            ) : geometry
+        side = side isa StableRandomSide ?
+            StableRandomSide(Symbol(:partition_side_, cell_id)) : side
         LifecycleProcess(
             Symbol(:partition_policy_, cell_id);
             domain = cells(cell),
             anchor,
             expression = Potts.anchor_value(anchor) == cell_id,
-            effects = (Divide(
-                anchor;
-                geometry,
-                relation,
-                side,
-                on_inadmissible = ErrorOnInadmissible(),
-            ),),
+            effects = (
+                Divide(
+                    anchor;
+                    geometry,
+                    relation,
+                    side,
+                    on_inadmissible = ErrorOnInadmissible(),
+                ),
+            ),
             cadence = AtMCS(1),
         )
     end
     source = PottsSystem(
         name = :public_partition_policy_matrix,
-        statements = StatementSet((
-            Lattice((12, 12); max_cells = 16),
-            cell,
-            medium,
-            relation,
-            ProposalConstraint(:freeze_partition_matrix, false),
-            divisions...,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((12, 12); max_cells = 16),
+                cell,
+                medium,
+                relation,
+                ProposalConstraint(:freeze_partition_matrix, false),
+                divisions...,
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
     )
     labels = zeros(Int, 12, 12)
     origins = (
@@ -223,9 +249,11 @@ end
     end
     problem = PottsProblem(
         mtkcompile(source),
-        PottsInitialState(ownership = LabelledCells(
-            labels; cells = fill(cell, length(origins)), medium
-        )),
+        PottsInitialState(
+            ownership = LabelledCells(
+                labels; cells = fill(cell, length(origins)), medium
+            )
+        ),
         (0, 1);
         seed = 0x51fa,
     )
@@ -253,6 +281,7 @@ end
         :policy_link_destination; extinction = RetireAtZero()
     )
     medium = MediumKind(:policy_link_medium)
+    medium_owner = MediumDomainOwner(:policy_link_medium_domain, medium)
     links = RelationshipState(
         :policy_links;
         endpoints = Undirected(cell, cell),
@@ -262,39 +291,49 @@ end
     )
     anchor = CellBinding(:policy_link_anchor)
     policies = (
-        (1, RemoveCell(
-            anchor;
-            replacement = medium,
-            relationships = (links => RejectWhileLinked(),),
-            on_inadmissible = FilterInadmissible(),
-        )),
-        (3, RemoveCell(
-            anchor;
-            replacement = medium,
-            relationships = (links => RemoveIncident(),),
-            on_inadmissible = ErrorOnInadmissible(),
-        )),
-        (5, Transition(
-            anchor,
-            transitioned;
-            relationships = (links => PreserveCompatible(),),
-            # Exact endpoint kinds make this incident edge incompatible with
-            # the destination.  PreserveCompatible therefore filters the
-            # transition and leaves both the cell and edge untouched.
-            on_inadmissible = FilterInadmissible(),
-        )),
-        (7, Transition(
-            anchor,
-            transitioned;
-            relationships = (links => RemoveIncompatible(),),
-            on_inadmissible = ErrorOnInadmissible(),
-        )),
-        (9, Transition(
-            anchor,
-            transitioned;
-            relationships = (links => RejectIncompatible(),),
-            on_inadmissible = FilterInadmissible(),
-        )),
+        (
+            1, RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                relationships = (links => RejectWhileLinked(),),
+                on_inadmissible = FilterInadmissible(),
+            ),
+        ),
+        (
+            3, RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                relationships = (links => RemoveIncident(),),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
+        (
+            5, Transition(
+                anchor,
+                transitioned;
+                relationships = (links => PreserveCompatible(),),
+                # Exact endpoint kinds make this incident edge incompatible with
+                # the destination.  PreserveCompatible therefore filters the
+                # transition and leaves both the cell and edge untouched.
+                on_inadmissible = FilterInadmissible(),
+            ),
+        ),
+        (
+            7, Transition(
+                anchor,
+                transitioned;
+                relationships = (links => RemoveIncompatible(),),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
+        (
+            9, Transition(
+                anchor,
+                transitioned;
+                relationships = (links => RejectIncompatible(),),
+                on_inadmissible = FilterInadmissible(),
+            ),
+        ),
     )
     processes = map(policies) do (cell_id, effect)
         LifecycleProcess(
@@ -308,16 +347,18 @@ end
     end
     source = PottsSystem(
         name = :public_relationship_policy_matrix,
-        statements = StatementSet((
-            Lattice((4, 4); max_cells = 10),
-            cell,
-            transitioned,
-            medium,
-            links,
-            ProposalConstraint(:freeze_relationship_matrix, false),
-            processes...,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((4, 4); default_owner = medium_owner, max_cells = 10),
+                cell,
+                transitioned,
+                medium,
+                links,
+                ProposalConstraint(:freeze_relationship_matrix, false),
+                processes...,
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
     )
     labels = zeros(Int, 4, 4)
     labels[1:10] .= 1:10
@@ -339,11 +380,15 @@ end
     topology = after[:policy_links]
     active_endpoints = Set(
         (topology.endpoint_a[index], topology.endpoint_b[index])
-        for index in eachindex(topology.active) if topology.active[index]
+            for index in eachindex(topology.active) if topology.active[index]
     )
-    @test active_endpoints == Set(((Int32(1), Int32(2)),
-                                  (Int32(5), Int32(6)),
-                                  (Int32(9), Int32(10))))
+    @test active_endpoints == Set(
+        (
+            (Int32(1), Int32(2)),
+            (Int32(5), Int32(6)),
+            (Int32(9), Int32(10)),
+        )
+    )
     @test after.cell_kinds[1] == before.cell_kinds[1]
     @test after.cell_kinds[3] == 0
     @test after.cell_kinds[5] == before.cell_kinds[5]

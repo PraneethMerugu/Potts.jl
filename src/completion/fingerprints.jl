@@ -299,31 +299,34 @@ function _scheduled_native_fingerprint_payload(
     ))
 end
 
+function _semantic_record_payload(record)
+    arguments, options = record.normalized_payload
+    if record.kind in (
+            :SiteState,
+            :CellState,
+            :MediumState,
+            :ModelState,
+            :FieldState,
+            :HistoryState,
+            :RelationshipState,
+        ) && arguments isa NamedTuple && haskey(arguments, :initial)
+        retained = Tuple(
+            name for name in keys(arguments) if name !== :initial
+        )
+        arguments = NamedTuple{retained}(
+            Tuple(
+                getproperty(arguments, name) for name in retained
+            )
+        )
+    end
+    return (arguments, options)
+end
+
 function _semantic_fingerprint(
         system::PottsSystem, records, native_components = ()
     )
-    function semantic_payload(record)
-        arguments, options = record.normalized_payload
-        if record.kind in (
-                :SiteState,
-                :CellState,
-                :MediumState,
-                :ModelState,
-                :FieldState,
-                :HistoryState,
-                :RelationshipState,
-            ) && arguments isa NamedTuple && haskey(arguments, :initial)
-            retained = Tuple(
-                name for name in keys(arguments) if name !== :initial
-            )
-            arguments = NamedTuple{retained}(Tuple(
-                getproperty(arguments, name) for name in retained
-            ))
-        end
-        return (arguments, options)
-    end
     normalized = sort!(
-        [_canonical_value(semantic_payload(record)) for record in records]
+        [_canonical_value(_semantic_record_payload(record)) for record in records]
     )
     equations = sort!(_canonical_value.(ModelingToolkitBase.equations(system)))
     natives = sort!([
@@ -335,6 +338,29 @@ function _semantic_fingerprint(
     ))
 end
 
+function _completed_record_summary(record)
+    return (
+        record.identity,
+        record.result_type,
+        record.shape,
+        record.units,
+        record.reference_conversion,
+        record.reads,
+        record.writes,
+        record.ownership,
+        record.persistence,
+        record.resources,
+        record.effect,
+        record.bound,
+        record.transaction_identity,
+        record.lifecycle,
+        record.random_operations,
+        record.phase,
+        record.engine_admission,
+        record.lowering_identity,
+    )
+end
+
 function _completed_fingerprint(
         semantic::SemanticFingerprint,
         records,
@@ -343,26 +369,7 @@ function _completed_fingerprint(
         native_components = (),
     )
     summaries = sort!([
-        _canonical_value((
-            record.identity,
-            record.result_type,
-            record.shape,
-            record.units,
-            record.reference_conversion,
-            record.reads,
-            record.writes,
-            record.ownership,
-            record.persistence,
-            record.resources,
-            record.effect,
-            record.bound,
-            record.transaction_identity,
-            record.lifecycle,
-            record.random_operations,
-            record.phase,
-            record.engine_admission,
-            record.lowering_identity,
-        ))
+            _canonical_value(_completed_record_summary(record))
         for record in records
     ])
     return CompletedSystemFingerprint(

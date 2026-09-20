@@ -112,7 +112,9 @@ inspect(system::PottsSystem, ::Observations) =
     Tuple(_scheduled_data(system).observations)
 function inspect(system::PottsSystem, ::ExternalIO)
     endpoints = NamedTuple[]
-    for component in scheduled_native_components(system)
+    components = is_scheduled(system) ? scheduled_native_components(system) :
+        _completion_data(system).native_components
+    for component in components
         for endpoint in native_coupling_endpoints(component)
             push!(endpoints, (
                 component_path = native_component_path(component),

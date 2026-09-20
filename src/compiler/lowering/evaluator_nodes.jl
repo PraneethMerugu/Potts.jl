@@ -1,5 +1,201 @@
 # Recursive lowering from analyzed term nodes to concrete CorePotts expressions.
 
+struct _OperationalCanonicalizationCache
+    order_observable::Vector{Union{Nothing, Bool}}
+    expression_shape::Vector{Union{Nothing, String}}
+end
+
+_OperationalCanonicalizationCache(count::Integer) =
+    _OperationalCanonicalizationCache(
+        Union{Nothing, Bool}[nothing for _ in 1:count],
+        Union{Nothing, String}[nothing for _ in 1:count],
+    )
+
+function _operand_order_is_observable(
+        graph,
+        node_index::Int32,
+        cache::_OperationalCanonicalizationCache,
+    )
+    cached = cache.order_observable[Int(node_index)]
+    cached === nothing || return cached
+    node = graph.nodes[Int(node_index)]
+    observable = node.payload isa DrawBindingPayload
+    transfer = node.transfer
+    observable |= !(transfer === nothing || (
+        transfer.purity === :pure && transfer.totality === :total
+    ))
+    observable || (observable = any(
+        operand -> _operand_order_is_observable(graph, operand, cache),
+        node.operands,
+    ))
+    cache.order_observable[Int(node_index)] = observable
+    return observable
+end
+
+function _scalar_product_is_commutatively_canonicalizable(
+        graph,
+        ir,
+        node::NormalizedTermNode,
+        cache::_OperationalCanonicalizationCache,
+    )
+    transfer = node.transfer
+    return transfer !== nothing &&
+        transfer.identity === :multiply &&
+        transfer.owner === :Potts &&
+        transfer.serialization_identity == "potts-operation:multiply:v1" &&
+        length(node.operands) == 2 &&
+        all(operand -> ir.facts.shape[Int(operand)] == (), node.operands) &&
+        all(
+            operand -> !_operand_order_is_observable(
+                graph, operand, cache,
+            ),
+            node.operands,
+        )
+end
+
+function _operational_expression_shape_key(
+        graph,
+        ir,
+        node_index::Int32,
+        cache::_OperationalCanonicalizationCache,
+    )
+    cached = cache.expression_shape[Int(node_index)]
+    cached === nothing || return cached
+    node = graph.nodes[Int(node_index)]
+    operand_keys = String[
+        _operational_expression_shape_key(graph, ir, operand, cache)
+        for operand in node.operands
+    ]
+    _scalar_product_is_commutatively_canonicalizable(
+        graph, ir, node, cache,
+    ) &&
+        sort!(operand_keys)
+    # Runtime expression topology depends on semantic roles and shapes, not on
+    # declaration spelling. Values and qualified identities stay in payloads.
+    payload_role = if node.payload isa StateBindingPayload
+        owner = _state_record_for_leaf(ir.source, node)
+        owner === nothing ? (:state, :unresolved) :
+            (:state, _state_sample_record(ir.source, owner).kind)
+    elseif node.payload isa VariableBindingPayload
+        (:variable,)
+    elseif node.payload isa ParameterBindingPayload
+        (:parameter,)
+    elseif node.payload isa LiteralPayload
+        (:literal, ir.facts.result_type[Int(node_index)])
+    else
+        (node.payload_kind,)
+    end
+    key = _sha256_hex(
+        "potts-operational-expression-shape-v1",
+        node.operation,
+        node.schema_version,
+        payload_role,
+        ir.facts.shape[Int(node_index)],
+        ir.facts.result_type[Int(node_index)],
+        Tuple(operand_keys),
+    )
+    cache.expression_shape[Int(node_index)] = key
+    return key
+end
+
+function _operational_operand_order(
+        graph,
+        ir,
+        node::NormalizedTermNode,
+        cache::_OperationalCanonicalizationCache,
+    )
+    _scalar_product_is_commutatively_canonicalizable(
+        graph, ir, node, cache,
+    ) ||
+        return node.operands
+    return sort(
+        node.operands;
+        by = operand -> _operational_expression_shape_key(
+            graph, ir, operand, cache,
+        ),
+    )
+end
+
+function _bound_state_expression(graph, ir, node, handle, owner, state_binding)
+    expression = CorePotts.CompilerSPI.StateExpression(handle)
+    sample = owner === nothing ? nothing : _state_sample_record(ir.source, owner)
+    operation = if sample !== nothing && sample.kind === :ModelState
+        _potts_model_bound_state_value
+    elseif state_binding === nothing
+        return expression
+    elseif state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite
+        _potts_proposal_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.IterationStageSite
+        _potts_iteration_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.ModelStageSite
+        _potts_model_bound_state_value
+    elseif state_binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation
+        _potts_cell_bound_state_value
+    elseif state_binding isa Symbol && startswith(String(state_binding), "lifecycle_")
+        _potts_lifecycle_bound_state_value
+    else
+        throw(ArgumentError("unsupported compiled state binding"))
+    end
+    record = ir.source.records[node.record]
+    return _compiler_synthesized_operation_expression(graph, operation, (expression,), record;
+        semantic_role = state_binding isa Symbol ? state_binding : _record_operation_role(record),
+        semantic_phase = state_binding isa Symbol ? :Lifecycle : _record_operation_phase(record))
+end
+
+function _operation_reference_factor(ir, node, manifest)
+    units = ir.facts.units
+    result_unit = units[Int(node.identity)]
+    _is_polymorphic_zero_unit(result_unit) && return 1.0
+    rule = node.transfer.unit_rule
+    arithmetic = rule === :arithmetic && node.operation in (:multiply, :divide, :power)
+    (arithmetic || rule === :square_root) || return 1.0
+    raw_scales = map(index -> _expression_reference_scale(units[index], manifest), node.operands)
+    raw_result_scale = _expression_reference_scale(result_unit, manifest)
+    all(==(1), raw_scales) && raw_result_scale == 1 && return 1.0
+    # Julia 1.12 scopes this precision to the task without changing the caller's
+    # default. Wide intermediates avoid overflow before the final scalar cast.
+    return setprecision(BigFloat, 256) do
+        operand_scales = map(BigFloat, raw_scales)
+        result_scale = BigFloat(raw_result_scale)
+        scale = if rule === :square_root
+            sqrt(only(operand_scales))
+        elseif node.operation === :multiply
+            prod(operand_scales)
+        elseif node.operation === :divide
+            operand_scales[1] / operand_scales[2]
+        else
+            exponent = _literal_integer_exponent(node, ir.graph)
+            exponent === nothing && error("validated power has no literal integer exponent")
+            first(operand_scales)^exponent
+        end
+        return scale / result_scale
+    end
+end
+
+function _scaled_operation_expression(expression, ir, node, manifest, ::Type{T}, state_binding) where {T <: AbstractFloat}
+    factor = _operation_reference_factor(ir, node, manifest)
+    factor == 1 && return expression
+    converted = T(factor)
+    isfinite(converted) && converted > zero(T) || throw(
+        PottsValidationError(
+            :descriptor_lowering, (
+                PottsDiagnostic(
+                    :expression_reference_scale, node.source, String(node.operation), node.source.path,
+                    "a finite positive reference conversion representable by $T", string(factor), (),
+                    ir.source.records[Int(node.record)].source,
+                ),
+            ),
+        )
+    )
+    record = ir.source.records[Int(node.record)]
+    return _compiler_synthesized_operation_expression(
+        ir.graph, *,
+        (CorePotts.CompilerSPI.LiteralExpression(converted), expression), record;
+        semantic_role = state_binding isa Symbol ? state_binding : _record_operation_role(record),
+        semantic_phase = state_binding isa Symbol ? :Lifecycle : _record_operation_phase(record)
+    )
+end
+
 function _lower_static_node(
         graph::NormalizedTermGraph,
         ir::AnalyzedTermIR,
@@ -7,17 +203,21 @@ function _lower_static_node(
         manifest::ParameterManifest,
         ::Type{T},
         state_handles::Dict{QualifiedStatementID, CorePotts.CompilerSPI.StateHandle},
-        draw_handles::Dict{Tuple{Tuple, Symbol}, UInt16},
+        draw_handles::Dict{Tuple{Tuple, Symbol}, CorePotts.CompilerSPI.RNGOperationKey},
         cache::Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression},
         state_binding = nothing,
         workspace_slices = nothing,
+        ; state_layout = nothing, history_descriptors = (), tracker_handles = nothing,
+        canonicalization_cache = _OperationalCanonicalizationCache(
+            length(graph.nodes),
+        ),
     ) where {T <: AbstractFloat}
     haskey(cache, node_index) && return cache[node_index]
     node = graph.nodes[node_index]
     expression = if node.payload_kind === :literal
         _static_literal(node.payload.value, manifest, T)
     elseif node.payload_kind === :parameter
-        _static_parameter(node.payload.value, manifest, T)
+        _static_parameter(node.payload.value, manifest, T; graph, record = ir.source.records[node.record])
     elseif node.payload_kind in (:state, :variable)
         handle = _state_handle_for_leaf(ir, node, state_handles)
         handle === nothing && throw(PottsValidationError(
@@ -33,32 +233,8 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         ))
-        state_expression = CorePotts.CompilerSPI.StateExpression(handle)
-        if state_binding === nothing
-            state_expression
-        else
-            operation = state_binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
-                _potts_proposal_bound_state_value :
-            state_binding isa CorePotts.CompilerSPI.IterationStageSite ?
-                _potts_iteration_bound_state_value :
-            state_binding isa CorePotts.CompilerSPI.ModelStageSite ?
-                _potts_model_bound_state_value :
-            state_binding isa Symbol && startswith(
-                    String(state_binding), "lifecycle_"
-                ) ?
-                _potts_lifecycle_bound_state_value :
-                throw(ArgumentError("unsupported compiled state binding"))
-            _compiler_synthesized_operation_expression(
-                graph,
-                operation,
-                (state_expression,),
-                ir.source.records[node.record],
-                semantic_role = state_binding isa Symbol ? state_binding :
-                    _record_operation_role(ir.source.records[node.record]),
-                semantic_phase = state_binding isa Symbol ? :Lifecycle :
-                    _record_operation_phase(ir.source.records[node.record]),
-            )
-        end
+        owner = _state_record_for_leaf(ir.source, node)
+        _bound_state_expression(graph, ir, node, handle, owner, state_binding)
     elseif node.payload_kind === :proposal_context
         # Context operations consume these compiler tokens. They are never
         # looked up by name in the executable.
@@ -143,6 +319,25 @@ function _lower_static_node(
                 UnknownSource(),
             ),),
         )) : CorePotts.CompilerSPI.LiteralExpression(draw_handle)
+    elseif _is_site_aggregate(node)
+        tracker_handles === nothing && throw(ArgumentError("aggregate reads require the canonical tracker lowering handles"))
+        cell = _lower_static_node(graph, ir, node.operands[3], manifest, T, state_handles, draw_handles,
+            cache, state_binding, workspace_slices; state_layout, history_descriptors, tracker_handles,
+            canonicalization_cache)
+        if _is_unit_count(graph, node)
+            _compiler_synthesized_operation_expression(graph, cell_volume, (cell,), ir.source.records[node.record])
+        else
+            key = tracker_handles[Int(node.identity)]
+            key isa CorePotts.CompilerSPI.QualifiedTrackerKey ||
+                throw(ArgumentError("aggregate read has no analyzed tracker handle"))
+            operation = CorePotts.CompilerSPI.QualifiedTrackerOperation(node.callable, key.quantity, key.source_handle)
+            CorePotts.CompilerSPI.OperationExpression(operation, (cell,))
+        end
+    elseif _is_history_sample_projection(node)
+        owner, amount = _history_sample_operand(ir.source, graph, node)
+        state_layout === nothing && throw(ArgumentError("history sample lowering requires the canonical state layout"))
+        handle = CorePotts.CompilerSPI.history_sample_handle(history_descriptors, state_layout, state_handles[owner.identity], amount)
+        _bound_state_expression(graph, ir, node, handle, owner, state_binding)
     else
         operation = _static_operation_callable(node)
         if workspace_slices !== nothing && haskey(workspace_slices, node_index)
@@ -188,8 +383,11 @@ function _lower_static_node(
                 key.source_handle,
             )
         end
+        ordered_operands = _operational_operand_order(
+            graph, ir, node, canonicalization_cache,
+        )
         arguments = if tracker_source === nothing
-            Tuple(map(enumerate(node.operands)) do indexed
+            Tuple(map(enumerate(ordered_operands)) do indexed
                 index, operand = indexed
                 if node.transfer.identity === :bounded_fold && index == 1
                     operand_node = graph.nodes[operand]
@@ -214,6 +412,8 @@ function _lower_static_node(
                     cache,
                     state_binding,
                     workspace_slices,
+                    ; state_layout, history_descriptors, tracker_handles,
+                    canonicalization_cache,
                 )
             end)
         else
@@ -230,7 +430,7 @@ function _lower_static_node(
                     ir.source.records[Int(node.record)].source,
                 ),),
             ))
-            Tuple(map(enumerate(node.operands)) do indexed
+            Tuple(map(enumerate(ordered_operands)) do indexed
                 index, operand = indexed
                 index == 2 && return CorePotts.CompilerSPI.LiteralExpression(
                     only(tracker_keys))
@@ -257,13 +457,15 @@ function _lower_static_node(
                     cache,
                     state_binding,
                     workspace_slices,
+                    ; state_layout, history_descriptors, tracker_handles,
+                    canonicalization_cache,
                 )
             end)
         end
         if operation isa CorePotts.CompilerSPI.ContextOperation
             CorePotts.CompilerSPI.ContextExpression(operation)
         else
-            _bounded_static_operation(operation, arguments)
+            _scaled_operation_expression(_bounded_static_operation(operation, arguments), ir, node, manifest, T, state_binding)
         end
     end
     cache[node_index] = expression
