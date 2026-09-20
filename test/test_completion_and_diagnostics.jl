@@ -62,9 +62,9 @@ Potts.operation_transfer(::typeof(wrong_arity_diagnostic_operation), ::Int) =
     @test failure isa Potts.PottsValidationError
     diagnostic = only(failure.diagnostics)
     @test diagnostic.kind === :missing_operation_transfer
-    # Qualified identities are relative to the composed system's root.
+    # Qualified identities retain the enclosing root and child namespace.
     @test diagnostic.identity == Potts.QualifiedStatementID(
-        (:child,), StatementID(:opaque_drive)
+        (:parent, :child), StatementID(:opaque_drive)
     )
     source = statement_source(only(declarations))
     @test diagnostic.source == source
@@ -509,6 +509,23 @@ end
     @test only(distribution_error.diagnostics).kind ===
           :invalid_random_distribution
     @test only(distribution_error.diagnostics).source isa SourceLocation
+
+    @named reversed_uniform = PottsSystem(statements = @statements begin
+        ProposalDrive(
+            :reversed_uniform,
+            draw(Uniform(2.0, 1.0), DrawKey(:reversed_uniform)),
+        )
+    end)
+    uniform_error = try
+        complete(reversed_uniform)
+        nothing
+    catch caught
+        caught
+    end
+    @test uniform_error isa Potts.PottsValidationError
+    @test only(uniform_error.diagnostics).kind ===
+          :invalid_random_distribution
+    @test only(uniform_error.diagnostics).source isa SourceLocation
 
     @named invalid_unit_vector = PottsSystem(statements = @statements begin
         ProposalDrive(

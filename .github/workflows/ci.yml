@@ -9,11 +9,11 @@ on:
       localmath_ref:
         description: Full LocalMath candidate commit SHA
         type: string
-        default: b699002a05f84e240e34162d509d6b952bf7d437
+        default: d3d2e5533585de3b16dafbb8ba7c0cb265209254
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: 7183bcec81afc34028153f8674d1992b625fd2bc
+        default: 8b759b41c0ecdc1057a06bd1e7989b957a690925
   schedule:
     - cron: '23 5 * * 1'
 
@@ -26,8 +26,8 @@ permissions:
 
 env:
   JULIA_VERSION: '1.12.6'
-  LOCALMATH_REF: ${{ inputs.localmath_ref || 'b699002a05f84e240e34162d509d6b952bf7d437' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || '7183bcec81afc34028153f8674d1992b625fd2bc' }}
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'd3d2e5533585de3b16dafbb8ba7c0cb265209254' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '8b759b41c0ecdc1057a06bd1e7989b957a690925' }}
 
 jobs:
   changes:
@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       execution: ${{ steps.diff.outputs.execution }}
+      compiler: ${{ steps.diff.outputs.compiler }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with: {fetch-depth: 0}
@@ -47,24 +48,41 @@ jobs:
         shell: bash
         run: |
           execution=true
+          compiler=true
           if [[ "$EVENT" == pull_request ]] && git cat-file -e "$BASE^{commit}" && git cat-file -e "$HEAD^{commit}"; then
             git diff --no-renames --name-only -z "$BASE...$HEAD" > "$RUNNER_TEMP/potts-changed-paths"
             execution=false
+            compiler=false
             while IFS= read -r -d '' path; do
               case "$path" in
                 AGENTS.md|CONTRIBUTING.md|README.md|LICENSE|CITATION.cff|spec/*.md|design/*.md) ;;
-                *) execution=true; break ;;
+                *) execution=true ;;
+              esac
+              case "$path" in
+                .github/workflows/ci.yml|Project.toml|benchmark/Project.toml|benchmark/compiler_contract_schema.jl|benchmark/resolved_aggregate_contract.jl|test/test_resolved_aggregate_compiler_report.jl|src/compiler/*|src/compiler/**|src/completion/*|src/completion/**|src/runtime/problem.jl|src/runtime/integrator.jl|src/runtime/symbolic_indexing.jl|src/symbolics/operations.jl) compiler=true ;;
               esac
             done < "$RUNNER_TEMP/potts-changed-paths"
           fi
           printf 'execution=%s\n' "$execution" >> "$GITHUB_OUTPUT"
+          printf 'compiler=%s\n' "$compiler" >> "$GITHUB_OUTPUT"
           git rev-parse HEAD
 
-  package:
+  package-shard:
     if: github.event_name != 'schedule'
-    name: package (ubuntu-latest)
+    name: package / ${{ matrix.shard }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
+      POTTS_TEST_TELEMETRY_DIR: ci-telemetry/fixtures
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - declaration_and_structure
+          - quantities_and_publication
+          - execution_and_integration
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -84,14 +102,49 @@ jobs:
           git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
-      - name: Test Potts
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2", "--verbose"])'
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\nshard\t%s\n' \
+            '${{ steps.julia-cache.outputs.cache-hit }}' \
+            '${{ steps.julia-cache.outputs.cache-key }}' \
+            '${{ matrix.shard }}' >> "$CI_CONTEXT_FILE"
+      - name: Test Potts shard
+        env:
+          POTTS_TEST_SHARD: ${{ matrix.shard }}
+        run: .github/ci/run-phase.sh package-test bash -o pipefail -c 'julia --startup-file=no .github/ci/run-package-shard.jl 2>&1 | tee ci-telemetry/test.log'
+      - name: Summarize package shard telemetry
+        if: always()
+        env:
+          POTTS_TEST_SHARD: ${{ matrix.shard }}
+        run: python3 .github/ci/summarize-package-shard.py --shard "$POTTS_TEST_SHARD"
+      - name: Upload package telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-package-telemetry-${{ matrix.shard }}-${{ github.sha }}
+          path: ci-telemetry
+
+  package:
+    if: always() && github.event_name != 'schedule'
+    needs: package-shard
+    name: package (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package shard
+        env:
+          PACKAGE_SHARDS_RESULT: ${{ needs.package-shard.result }}
+        run: test "$PACKAGE_SHARDS_RESULT" = success
 
   macos-smoke:
     if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 60
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -111,14 +164,28 @@ jobs:
           git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
       - name: Test macOS public trajectory
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=1", "test_platform_smoke"])'
+        run: .github/ci/run-phase.sh macos-smoke bash -o pipefail -c 'julia --startup-file=no -e '\''using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=1", "test_platform_smoke"])'\'' 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload macOS smoke telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-macos-smoke-telemetry-${{ github.sha }}
+          path: ci-telemetry
 
   macos-package:
     if: github.event_name != 'pull_request' && github.event_name != 'schedule'
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 180
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -138,15 +205,29 @@ jobs:
           git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
       - name: Complete macOS package tests
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
+        run: .github/ci/run-phase.sh macos-package bash -o pipefail -c 'julia --startup-file=no -e '\''using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'\'' 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload macOS package telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-macos-package-telemetry-${{ github.sha }}
+          path: ci-telemetry
 
   integration:
     needs: changes
     if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
     steps:
       - name: Validate candidate revisions
         shell: bash
@@ -169,9 +250,20 @@ jobs:
           git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
       - name: Test integration
-        run: julia --project=integration --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'
+        run: .github/ci/run-phase.sh integration bash -o pipefail -c 'julia --project=integration --startup-file=no -e '\''using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate(); include("integration/runtests.jl")'\'' 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload integration telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-integration-telemetry-${{ github.sha }}
+          path: ci-telemetry
 
   exact-replay:
     needs: changes
@@ -179,6 +271,9 @@ jobs:
     # The closed replay row uses the repository Julia 1.12.6 runtime.
     runs-on: macos-15
     timeout-minutes: 60
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
     steps:
       - name: Require a valid change selection
         if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
@@ -186,15 +281,81 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
       - name: Test exact replay environment
-        run: julia --project=integration/replay --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'
+        run: .github/ci/run-phase.sh exact-replay bash -o pipefail -c 'julia --project=integration/replay --startup-file=no -e '\''using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true); include("integration/replay/runtests.jl")'\'' 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload replay telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-replay-telemetry-${{ github.sha }}
+          path: ci-telemetry
 
-  metal:
+  compiler-evidence:
+    needs: changes
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.compiler != 'false')
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
+      JULIA_DEBUG: loading
+    steps:
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.compiler != 'true' && needs.changes.outputs.compiler != 'false')
+        run: exit 1
+      - name: Validate candidate revisions
+        shell: bash
+        run: |
+          for revision in "$LOCALMATH_REF" "$COREPOTTS_REF"; do
+            [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "Expected full lowercase commit SHA"; exit 1; }
+          done
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
+      - name: Resolve compiler-evidence environment
+        run: .github/ci/run-phase.sh compiler-environment julia --project=benchmark --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.instantiate()'
+      - name: Record resolved aggregate compiler evidence
+        run: .github/ci/run-phase.sh compiler-evidence julia --project=benchmark --startup-file=no benchmark/resolved_aggregate_contract.jl --revision-label=${{ github.sha }} --evidence-reason=Kaimon-is-not-installed-in-the-CI-evidence-environment --output=resolved-aggregate-compiler.toml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: resolved-aggregate-compiler-${{ github.sha }}
+          path: |
+            resolved-aggregate-compiler.toml
+            benchmark/Manifest.toml
+            ci-telemetry
+
+  metal_shards:
     needs: changes
     if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
+    name: metal shard (${{ matrix.semantic_shard }})
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 180
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
+    strategy:
+      fail-fast: false
+      matrix:
+        semantic_shard:
+          - authoring_and_state
+          - quantities_and_components
     steps:
       - name: Require a valid change selection
         if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
@@ -202,16 +363,44 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\nmetal_shard\t%s\n' \
+            '${{ steps.julia-cache.outputs.cache-hit }}' \
+            '${{ steps.julia-cache.outputs.cache-key }}' \
+            '${{ matrix.semantic_shard }}' >> "$CI_CONTEXT_FILE"
       - name: Instantiate qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
+        run: .github/ci/run-phase.sh metal-environment julia --project=benchmark/backends/metal --startup-file=no -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(; julia_version_strict=true)'
       - name: Test qualified Metal profile
-        run: julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl
+        run: .github/ci/run-phase.sh metal-test bash -o pipefail -c 'julia --project=benchmark/backends/metal --startup-file=no benchmark/backends/metal/runtests.jl "${{ matrix.semantic_shard }}" 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload Metal telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-metal-telemetry-${{ matrix.semantic_shard }}-${{ github.sha }}
+          path: ci-telemetry
+
+  metal:
+    needs: [changes, metal_shards]
+    if: always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every Metal semantic shard
+        env:
+          SHARDS_RESULT: ${{ needs.metal_shards.result }}
+        run: test "$SHARDS_RESULT" = success
 
   sibling-main:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      CI_TELEMETRY_FILE: ci-telemetry/phases.tsv
+      CI_CONTEXT_FILE: ci-telemetry/context.tsv
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -225,6 +414,17 @@ jobs:
           git -C deps/CorePotts rev-parse HEAD
       - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
         with: {version: '${{ env.JULIA_VERSION }}'}
-      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - id: julia-cache
+        uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+      - name: Record qualification context
+        run: |
+          .github/ci/record-context.sh
+          printf 'cache_hit\t%s\ncache_key\t%s\n' '${{ steps.julia-cache.outputs.cache-hit }}' '${{ steps.julia-cache.outputs.cache-key }}' >> "$CI_CONTEXT_FILE"
       - name: Test sibling main branches
-        run: julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'
+        run: .github/ci/run-phase.sh sibling-main bash -o pipefail -c 'julia --startup-file=no -e '\''using Pkg; Pkg.activate(; temp=true); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", ".")]); Pkg.test("Potts"; test_args=["--jobs=2"])'\'' 2>&1 | tee ci-telemetry/test.log'
+      - name: Upload sibling-main telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: potts-sibling-main-telemetry-${{ github.sha }}
+          path: ci-telemetry

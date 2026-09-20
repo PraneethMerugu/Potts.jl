@@ -361,6 +361,10 @@ function _defensive_tuple(values)
     return (_defensive_copy(values),)
 end
 
+# Symbolics array references are immutable declaration identities. Generic
+# `copy` materializes them as ordinary offset arrays on newer Symbolics releases,
+# which loses the whole-array symbolic contract before completion can inspect it.
+_defensive_copy(value::Symbolics.Arr) = value
 _defensive_copy(value::AbstractArray) = copy(value)
 _defensive_copy(value::AbstractDict) = copy(value)
 _defensive_copy(value) = value
@@ -374,10 +378,14 @@ _map_symbolic_payload(f, value::Tuple) =
     map(item -> _map_symbolic_payload(f, item), value)
 _map_symbolic_payload(f, value::Pair) =
     _map_symbolic_payload(f, first(value)) => _map_symbolic_payload(f, last(value))
+_map_symbolic_payload(f, value::Symbolics.Equation) =
+    _map_symbolic_payload(f, value.lhs) ~ _map_symbolic_payload(f, value.rhs)
 _map_symbolic_payload(f, value::AbstractArray) =
-    map(item -> _map_symbolic_payload(f, item), value)
+    SymbolicIndexingInterface.symbolic_type(value) isa SymbolicIndexingInterface.ArraySymbolic ?
+    f(value) : map(item -> _map_symbolic_payload(f, item), value)
 _map_symbolic_payload(f, value::AbstractDict) =
-    Dict(_map_symbolic_payload(f, key) => _map_symbolic_payload(f, item)
+    Dict(
+    _map_symbolic_payload(f, key) => _map_symbolic_payload(f, item)
         for (key, item) in value)
 
 function _map_symbolic_payload(f, value)

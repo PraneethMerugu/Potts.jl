@@ -17,14 +17,20 @@ function _lifecycle_diagnostic(kind, statement, expected, actual; alternatives =
     )
 end
 
-function _throw_lifecycle_completion(statement, kind, expected, actual;
-        alternatives = ())
-    throw(PottsValidationError(
-        :completion,
-        (_lifecycle_diagnostic(
-            kind, statement, expected, actual; alternatives
-        ),),
-    ))
+function _throw_lifecycle_completion(
+        statement, kind, expected, actual;
+        alternatives = ()
+    )
+    throw(
+        PottsValidationError(
+            :completion,
+            (
+                _lifecycle_diagnostic(
+                    kind, statement, expected, actual; alternatives
+                ),
+            ),
+        )
+    )
 end
 
 function _lifecycle_boolean_expression(value)
@@ -47,13 +53,13 @@ end
 
 function _validate_state_policies!(statement, effect, admitted)
     for item in effect.state
-        item isa Pair && first(item) isa CellState ||
+        item isa Pair && first(item) isa Union{CellState, HistoryState} ||
             _throw_lifecycle_completion(
-                statement,
-                :illegal_lifecycle_state_target,
-                "CellState => typed state policy",
-                repr(item),
-            )
+            statement,
+            :illegal_lifecycle_state_target,
+            "cell-owned state or history => typed state policy",
+            repr(item),
+        )
         policy = _policy_value(item)
         policy isa admitted || _throw_lifecycle_completion(
             statement,
@@ -92,11 +98,11 @@ function _validate_relationship_policies!(statement, effect, admitted)
     for item in effect.relationships
         item isa Pair && first(item) isa RelationshipState ||
             _throw_lifecycle_completion(
-                statement,
-                :illegal_lifecycle_relationship_target,
-                "RelationshipState => typed consequence policy",
-                repr(item),
-            )
+            statement,
+            :illegal_lifecycle_relationship_target,
+            "RelationshipState => typed consequence policy",
+            repr(item),
+        )
         policy = _policy_value(item)
         policy isa admitted || _throw_lifecycle_completion(
             statement,
@@ -109,13 +115,13 @@ function _validate_relationship_policies!(statement, effect, admitted)
 end
 
 _lifecycle_state_slot(::CreateCell) = (
-    :creation, Union{InitializeFrom, Unsupported}
+    :creation, Union{InitializeFrom, Unsupported},
 )
 _lifecycle_state_slot(::Union{RemoveCell, Retire}) = (
-    :retirement, Union{RetireTo, Unsupported}
+    :retirement, Union{RetireTo, Unsupported},
 )
 _lifecycle_state_slot(::Transition) = (
-    :transition, Union{Preserve, ResetTo, Transform, Unsupported}
+    :transition, Union{Preserve, ResetTo, Transform, Unsupported},
 )
 _lifecycle_state_slot(::Divide) = (
     :division,
@@ -131,14 +137,14 @@ _lifecycle_state_slot(::Divide) = (
 )
 
 _lifecycle_relationship_slot(::Union{RemoveCell, Retire}) = (
-    :retirement, Union{RejectWhileLinked, RemoveIncident}
+    :retirement, Union{RejectWhileLinked, RemoveIncident},
 )
 _lifecycle_relationship_slot(::Transition) = (
     :transition,
     Union{PreserveCompatible, RemoveIncompatible, RejectIncompatible},
 )
 _lifecycle_relationship_slot(::Divide) = (
-    :division, Union{RejectWhileLinked, RemoveIncident}
+    :division, Union{RejectWhileLinked, RemoveIncident},
 )
 
 function _canonical_visible_declarations(statements, type)
@@ -147,8 +153,12 @@ function _canonical_visible_declarations(statements, type)
         statement isa type || continue
         by_id[statement_id(statement)] = statement
     end
-    return Tuple(sort!(collect(values(by_id)); by = statement ->
-        string(statement_id(statement))))
+    return Tuple(
+        sort!(
+            collect(values(by_id)); by = statement ->
+            string(statement_id(statement))
+        )
+    )
 end
 
 function _canonical_policy_overrides!(statement, values, target_type, admitted)
@@ -156,13 +166,13 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
     for item in values
         item isa Pair && first(item) isa target_type ||
             _throw_lifecycle_completion(
-                statement,
-                target_type === CellState ?
-                    :illegal_lifecycle_state_target :
-                    :illegal_lifecycle_relationship_target,
-                "$(nameof(target_type)) => compatible typed policy",
-                repr(item),
-            )
+            statement,
+            target_type <: Union{CellState, HistoryState} ?
+                :illegal_lifecycle_state_target :
+                :illegal_lifecycle_relationship_target,
+            "$(target_type) => compatible typed policy",
+            repr(item),
+        )
         identity = statement_id(first(item))
         haskey(result, identity) && _throw_lifecycle_completion(
             statement,
@@ -173,7 +183,7 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
         policy = last(item)
         policy isa admitted || _throw_lifecycle_completion(
             statement,
-            target_type === CellState ?
+            target_type <: Union{CellState, HistoryState} ?
                 :illegal_lifecycle_state_policy :
                 :illegal_lifecycle_relationship_policy,
             "an operation-compatible typed policy",
@@ -184,12 +194,12 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
     return result
 end
 
-function _resolve_cell_state_policies(statement, effect, visible)
+function _resolve_cell_state_policies(statement, effect, states)
     slot, admitted = _lifecycle_state_slot(effect)
     overrides = _canonical_policy_overrides!(
-        statement, effect.state, CellState, admitted
+        statement, effect.state, Union{CellState, HistoryState}, admitted
     )
-    states = _canonical_visible_declarations(visible, CellState)
+    states = _canonical_visible_declarations(states, Union{CellState, HistoryState})
     resolved = Pair[]
     sources = Pair[]
     for state in states
@@ -202,14 +212,14 @@ function _resolve_cell_state_policies(statement, effect, visible)
             haskey(options, slot) || _throw_lifecycle_completion(
                 statement,
                 :missing_lifecycle_state_policy,
-                "an event override or CellState $(slot) policy for $(identity)",
+                "an event override or cell-owned state $(slot) policy for $(identity)",
                 "no compatible policy",
             )
             policy = getproperty(options, slot)
             policy isa admitted || _throw_lifecycle_completion(
                 statement,
                 :illegal_lifecycle_state_policy,
-                "an operation-compatible CellState $(slot) policy",
+                "an operation-compatible cell-owned state $(slot) policy",
                 string(typeof(policy)),
             )
             source = :schema
@@ -217,7 +227,7 @@ function _resolve_cell_state_policies(statement, effect, visible)
         policy isa Unsupported && _throw_lifecycle_completion(
             statement,
             :unsupported_reachable_lifecycle_state,
-            "an explicit event override or executable CellState $(slot) policy for $(identity)",
+            "an explicit event override or executable cell-owned state $(slot) policy for $(identity)",
             "Unsupported() resolved from $(source)",
         )
         push!(resolved, state => policy)
@@ -227,7 +237,7 @@ function _resolve_cell_state_policies(statement, effect, visible)
     isempty(overrides) || _throw_lifecycle_completion(
         statement,
         :unresolved_lifecycle_state_target,
-        "a lexically visible CellState",
+        "a lexically visible cell-owned state or history",
         string(first(keys(overrides))),
     )
     return Tuple(resolved), Tuple(sources)
@@ -294,7 +304,7 @@ end
 function _resolved_site_ownership_policies(statement, effect, visible)
     effect isa Union{CreateCell, RemoveCell, Divide} || return ()
     result = Pair[]
-    for state in _canonical_visible_declarations(visible, SiteState)
+    for state in _canonical_visible_declarations(visible, Union{SiteState, HistoryState})
         options = _statement_options(state)
         haskey(options, :lifecycle) || _throw_lifecycle_completion(
             statement,
@@ -306,11 +316,11 @@ function _resolved_site_ownership_policies(statement, effect, visible)
         policy = options.lifecycle
         policy isa Union{ClearOnOwnershipChange, PreserveOnOwnershipChange} ||
             _throw_lifecycle_completion(
-                statement,
-                :illegal_site_ownership_policy,
-                "ClearOnOwnershipChange() or PreserveOnOwnershipChange()",
-                string(typeof(policy)),
-            )
+            statement,
+            :illegal_site_ownership_policy,
+            "ClearOnOwnershipChange() or PreserveOnOwnershipChange()",
+            string(typeof(policy)),
+        )
         push!(result, state => policy)
     end
     return Tuple(result)
@@ -318,21 +328,21 @@ end
 
 _replace_lifecycle_policies(effect::CreateCell, state, relationships) =
     CreateCell(
-        effect.kind,
-        effect.placement,
-        state,
-        effect.priority,
-        effect.on_inadmissible,
-    )
+    effect.kind,
+    effect.placement,
+    state,
+    effect.priority,
+    effect.on_inadmissible,
+)
 _replace_lifecycle_policies(effect::RemoveCell, state, relationships) =
     RemoveCell(
-        effect.cell,
-        effect.replacement,
-        state,
-        relationships,
-        effect.priority,
-        effect.on_inadmissible,
-    )
+    effect.cell,
+    effect.replacement,
+    state,
+    relationships,
+    effect.priority,
+    effect.on_inadmissible,
+)
 _replace_lifecycle_policies(effect::Retire, state, relationships) = Retire(
     effect.cell,
     state,
@@ -342,13 +352,13 @@ _replace_lifecycle_policies(effect::Retire, state, relationships) = Retire(
 )
 _replace_lifecycle_policies(effect::Transition, state, relationships) =
     Transition(
-        effect.cell,
-        effect.kind,
-        state,
-        relationships,
-        effect.priority,
-        effect.on_inadmissible,
-    )
+    effect.cell,
+    effect.kind,
+    state,
+    relationships,
+    effect.priority,
+    effect.on_inadmissible,
+)
 _replace_lifecycle_policies(effect::Divide, state, relationships) = Divide(
     effect.cell,
     effect.geometry,
@@ -362,7 +372,7 @@ _replace_lifecycle_policies(effect::Divide, state, relationships) = Divide(
     effect.on_inadmissible,
 )
 
-function _resolve_lifecycle_process(statement::LifecycleProcess, visible)
+function _resolve_lifecycle_process(statement::LifecycleProcess, visible, inventory)
     options = _statement_options(statement)
     haskey(options, :resolved_state_policy_sources) &&
         haskey(options, :resolved_relationship_policy_sources) &&
@@ -371,28 +381,53 @@ function _resolve_lifecycle_process(statement::LifecycleProcess, visible)
     length(arguments.effects) == 1 || return statement
     effect = only(arguments.effects)
     _cell_lifecycle_effect(effect) || return statement
-    state, state_sources = _resolve_cell_state_policies(
-        statement, effect, visible
-    )
+    cell_states = AbstractPottsStatement[]
+    site_states = AbstractPottsStatement[]
+    for occurrence in visible
+        declaration = occurrence.statement
+        source = if declaration isa HistoryState
+            try
+                _history_source_contract(_namespace_statement(declaration, occurrence.path), inventory).declaration
+            catch exception
+                exception isa ArgumentError || rethrow()
+                throw(
+                    PottsValidationError(
+                        :completion, (
+                            _history_declaration_diagnostic(declaration, occurrence.path, exception),
+                        )
+                    )
+                )
+            end
+        else
+            declaration
+        end
+        source isa CellState && push!(cell_states, declaration)
+        source isa SiteState && push!(site_states, declaration)
+    end
+    state, state_sources = _resolve_cell_state_policies(statement, effect, cell_states)
     relationships, relationship_sources = _resolve_relationship_policies(
-        statement, effect, visible
+        statement, effect, Tuple(occurrence.statement for occurrence in visible)
     )
     site_ownership = _resolved_site_ownership_policies(
-        statement, effect, visible
+        statement, effect, site_states
     )
     resolved_effect = _replace_lifecycle_policies(
         effect, state, relationships
     )
     core = getfield(statement, :core)
     resolved_arguments = merge(arguments, (; effects = (resolved_effect,)))
-    resolved_options = merge(core.options, (;
-        resolved_state_policy_sources = state_sources,
-        resolved_relationship_policy_sources = relationship_sources,
-        resolved_site_ownership = site_ownership,
-    ))
-    return LifecycleProcess(StatementCore(
-        core.id, resolved_arguments, resolved_options, core.source
-    ))
+    resolved_options = merge(
+        core.options, (;
+            resolved_state_policy_sources = state_sources,
+            resolved_relationship_policy_sources = relationship_sources,
+            resolved_site_ownership = site_ownership,
+        )
+    )
+    return LifecycleProcess(
+        StatementCore(
+            core.id, resolved_arguments, resolved_options, core.source
+        )
+    )
 end
 
 function _validate_lifecycle_effect!(statement, domain, anchor, effect)
@@ -417,8 +452,10 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
         )
         placement = effect.placement
         builtin = placement isa AbstractLifecyclePlacementPolicy
-        symbolic = !(SymbolicIndexingInterface.symbolic_type(placement) isa
-            SymbolicIndexingInterface.NotSymbolic)
+        symbolic = !(
+            SymbolicIndexingInterface.symbolic_type(placement) isa
+                SymbolicIndexingInterface.NotSymbolic
+        )
         (builtin || symbolic) || _throw_lifecycle_completion(
             statement,
             :illegal_lifecycle_placement,
@@ -427,11 +464,11 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
         )
         placement isa SeedStencil && !(placement.relation isa SpatialRelation) &&
             _throw_lifecycle_completion(
-                statement,
-                :illegal_lifecycle_relation,
-                "a SpatialRelation bound by SeedStencil",
-                string(typeof(placement.relation)),
-            )
+            statement,
+            :illegal_lifecycle_relation,
+            "a SpatialRelation bound by SeedStencil",
+            string(typeof(placement.relation)),
+        )
         _validate_state_policies!(
             statement, effect, Union{InitializeFrom, Unsupported}
         )
@@ -450,11 +487,11 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
         )
         effect.cell isa CellBinding && _same_binding(anchor, effect.cell) ||
             _throw_lifecycle_completion(
-                statement,
-                :lifecycle_binding_mismatch,
-                "the effect source must be the process CellBinding",
-                repr(effect.cell),
-            )
+            statement,
+            :lifecycle_binding_mismatch,
+            "the effect source must be the process CellBinding",
+            repr(effect.cell),
+        )
         domain.kind isa CellKind || _throw_lifecycle_completion(
             statement,
             :illegal_lifecycle_kind,
@@ -462,10 +499,10 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
             string(typeof(domain.kind)),
         )
         if effect isa RemoveCell
-            effect.replacement isa MediumKind || _throw_lifecycle_completion(
+            effect.replacement isa MediumDomainOwner || _throw_lifecycle_completion(
                 statement,
                 :illegal_lifecycle_replacement,
-                "a declared MediumKind replacement",
+                "a declared MediumDomainOwner replacement",
                 string(typeof(effect.replacement)),
             )
             _validate_state_policies!(
@@ -498,8 +535,10 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
             )
         elseif effect isa Divide
             builtin = effect.geometry isa AbstractLifecyclePartitionPolicy
-            symbolic = !(SymbolicIndexingInterface.symbolic_type(effect.geometry) isa
-                SymbolicIndexingInterface.NotSymbolic)
+            symbolic = !(
+                SymbolicIndexingInterface.symbolic_type(effect.geometry) isa
+                    SymbolicIndexingInterface.NotSymbolic
+            )
             (builtin || symbolic) || _throw_lifecycle_completion(
                 statement,
                 :illegal_lifecycle_partition,
@@ -514,11 +553,11 @@ function _validate_lifecycle_effect!(statement, domain, anchor, effect)
             )
             effect.side isa AbstractLifecycleSidePolicy ||
                 _throw_lifecycle_completion(
-                    statement,
-                    :illegal_lifecycle_side_policy,
-                    "CanonicalSide() or StableRandomSide(draw_identity)",
-                    string(typeof(effect.side)),
-                )
+                statement,
+                :illegal_lifecycle_side_policy,
+                "CanonicalSide() or StableRandomSide(draw_identity)",
+                string(typeof(effect.side)),
+            )
             for policy in (effect.parent_kind, effect.daughter_kind)
                 policy isa PreserveKind && continue
                 policy isa SetKind && policy.kind isa CellKind && continue
@@ -565,11 +604,11 @@ function _validate_lifecycle_process!(statement::LifecycleProcess)
     if cell_effects > 0
         length(effects) == 1 && cell_effects == 1 ||
             _throw_lifecycle_completion(
-                statement,
-                :illegal_lifecycle_effect_composition,
-                "exactly one closed cell-structure effect",
-                repr(nameof.(typeof.(effects))),
-            )
+            statement,
+            :illegal_lifecycle_effect_composition,
+            "exactly one closed cell-structure effect",
+            repr(nameof.(typeof.(effects))),
+        )
         _validate_lifecycle_effect!(
             statement, arguments.domain, arguments.anchor, only(effects)
         )
@@ -583,18 +622,18 @@ function _validate_lifecycle_process!(statement::LifecycleProcess)
     end
     _lifecycle_boolean_expression(arguments.expression) ||
         _throw_lifecycle_completion(
-            statement,
-            :invalid_lifecycle_trigger_type,
-            "a dimensionless Boolean expression",
-            string(typeof(arguments.expression)),
-        )
+        statement,
+        :invalid_lifecycle_trigger_type,
+        "a dimensionless Boolean expression",
+        string(typeof(arguments.expression)),
+    )
     get(options, :phase, Lifecycle()) isa Lifecycle ||
         _throw_lifecycle_completion(
-            statement,
-            :illegal_lifecycle_phase,
-            "Lifecycle()",
-            string(typeof(get(options, :phase, nothing))),
-        )
+        statement,
+        :illegal_lifecycle_phase,
+        "Lifecycle()",
+        string(typeof(get(options, :phase, nothing))),
+    )
     cadence = get(options, :cadence, EveryMCS())
     cadence isa AbstractCadence || _throw_lifecycle_completion(
         statement,
@@ -619,11 +658,13 @@ function _retire_at_zero_process(kind::CellKind, policy::RetireAtZero)
         domain = cells(kind),
         anchor = cell,
         expression = cell_volume(anchor_value(cell)) == 0,
-        effects = (Retire(
-            cell;
-            priority = policy.priority,
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            Retire(
+                cell;
+                priority = policy.priority,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         phase = Lifecycle(),
         cadence = EveryMCS(),
         compiler_synthesized = :retire_at_zero,
@@ -636,8 +677,8 @@ function _forbid_extinction_constraint(kind::CellKind)
     proposal = ProposalContext(Symbol(:forbid_extinction_, local_name))
     owner = proposal.target_cell
     expression = (owner <= 0) |
-                 (proposal.target_kind != _kind_token(kind)) |
-                 (cell_volume(owner) != 1)
+        (proposal.target_kind != _kind_token(kind)) |
+        (cell_volume(owner) != 1)
     return ProposalConstraint(
         Symbol(:__potts_forbid_extinction_, local_name),
         expression;
@@ -686,11 +727,11 @@ function _validate_lifecycle_conflicts!(statements)
         )
         policy isa AbstractLifecycleConflictPolicy ||
             _throw_lifecycle_completion(
-                statement,
-                :illegal_lifecycle_conflict_policy,
-                "RejectLifecycleAmbiguity() or StableLifecyclePriority()",
-                string(typeof(policy)),
-            )
+            statement,
+            :illegal_lifecycle_conflict_policy,
+            "RejectLifecycleAmbiguity() or StableLifecyclePriority()",
+            string(typeof(policy)),
+        )
         any(candidate -> isequal(candidate, policy), policies) || push!(policies, policy)
     end
     length(policies) <= 1 || _throw_lifecycle_completion(

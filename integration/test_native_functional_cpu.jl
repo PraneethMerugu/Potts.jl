@@ -1,6 +1,84 @@
 using OrdinaryDiffEqTsit5: Tsit5
 using SciMLBase
 
+@testset "native islands without outputs retain maintained input values" begin
+    for input_only in (true, false)
+        @testset "$(input_only ? "input-only" : "no-input") ODE island" begin
+            @independent_variables retained_t
+            @variables retained_x(retained_t) = 1.0 retained_input(retained_t)
+            derivative = ModelingToolkitBase.Differential(retained_t)
+            @named retained_ode = ModelingToolkit.System(
+                [derivative(retained_x) ~ (input_only ? retained_input : 1.0)], retained_t
+            )
+            @variables signal total drive
+            small = 2.0^-54
+            lattice = LatticeDomain(:space; shape = (2, 2), spacing = (1.0, 1.0),
+                boundary = Closed(), max_cells = 2)
+            kind = CellKind(:cell; extinction = ForbidExtinction())
+            medium = MediumKind(:medium)
+            site = SiteBinding(:locations, sites(lattice))
+            owner = CellBinding(:owners, cells(kind))
+            drive_state = ModelState(drive; initial = 1.0)
+            component = NativeComponent(
+                retained_ode; name = :observer, family = ODEComponent(),
+                time = FixedPhysicalTime(0.0, 0.1),
+                inputs = input_only ? (NativeInput(retained_input, drive_state; value_type = Float64),) : (),
+            )
+            copy_context = ProposalContext(:copy)
+            source = PottsSystem(
+                name = :retained_native_inputs,
+                statements = StatementSet((
+                    lattice, kind, medium, drive_state,
+                    FieldState(signal; initial = 0.0, scope = site),
+                    CellState(total; initial = 0.0, scope = owner),
+                    Synchronous(:measure, Assign(total,
+                        aggregate(signal; over = site, by = owner, atol = small)); anchor = owner),
+                    ProposalConstraint(:remove_large_contribution,
+                        (copy_context.source_cell == 2) & (copy_context.target_cell == 1) &
+                        (field_value(signal, copy_context.target_site) > 0.5)),
+                    Protocol(Sweep(; temperature = 0.0); name = :main),
+                )),
+                unknowns = (signal, total, drive), native_components = (component,),
+            )
+            path = (:retained_native_inputs, :observer)
+            labels = Int32[1 2; 1 2]
+            signals = reshape(Float64[1, small, 0, 0], 2, 2)
+            initial = PottsInitialState(
+                ownership = LabelledCells(labels; cells = [kind, kind], medium),
+                values = (signal => signals,),
+                native = (NativeOperatingPoint(path; values = (retained_x => 1.0,)),),
+            )
+            problem = PottsProblem(source, initial, (0, 34); seed = 0x3826)
+            profile = NativeSolveProfile(path, Tsit5(); deterministic = true,
+                adaptive = false, dt = 0.01)
+            integrator = init(problem, SequentialCPM(); scalar_type = Float64,
+                native_profiles = (profile,))
+            # Only one ownership change is admissible. Its incremental update
+            # subtracts 1 from the rounded sum (1 + small), leaving cached zero.
+            for _ in 1:32
+                step!(integrator)
+                @test native_value(integrator, path, retained_x) ≈ 1.0 + 0.1integrator.t
+                integrator.u.ownership[1] == 2 && break
+            end
+            expected_labels = copy(labels)
+            expected_labels[1] = 2
+            @test integrator.u.ownership == expected_labels
+            canonical = sum((signals[index] for index in eachindex(signals)
+                if expected_labels[index] == 1); init = 0.0)
+            @test canonical === small
+            @test integrator.u[:total][1] === 0.0
+            for _ in 1:2
+                step!(integrator)
+                @test integrator.u.ownership == expected_labels
+                @test integrator.u[:signal] == signals
+                @test integrator.u[:total][1] === 0.0
+                @test integrator.u[:total][1] != canonical
+                @test native_value(integrator, path, retained_x) ≈ 1.0 + 0.1integrator.t
+            end
+        end
+    end
+end
+
 @testset "functional native CPU execution" begin
     @independent_variables functional_t
     @variables functional_x(functional_t) = 1.0

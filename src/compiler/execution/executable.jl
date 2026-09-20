@@ -56,36 +56,18 @@ function _adapt_runtime_backend(
     )
 end
 
-struct ReferenceUnitDescriptor
-    name::Symbol
-    dimension::String
-    scale::Float64
-end
+# Runtime parameter names stay value-level: they support diagnostics and public
+# indexing without parameterizing the normalized runtime-parameter buffer.
+struct _RuntimeParameterSchema
+    names::Tuple
 
-struct RuntimeParameter{D, U}
-    name::Symbol
-    default::D
-    required::Bool
-    unit::U
-    index::Int
+    function _RuntimeParameterSchema(names)
+        normalized = Tuple(Symbol(name) for name in names)
+        length(unique(normalized)) == length(normalized) ||
+            throw(ArgumentError("runtime parameter names must be unique"))
+        return new(normalized)
+    end
 end
-
-struct StructuralParameter{V}
-    name::Symbol
-    value::V
-end
-
-struct ParameterManifest{T <: Tuple, S <: Tuple, R <: Tuple}
-    entries::T
-    structural::S
-    reference_units::R
-end
-
-Base.length(manifest::ParameterManifest) = length(manifest.entries)
-Base.iterate(manifest::ParameterManifest, state...) =
-    iterate(manifest.entries, state...)
-Base.getindex(manifest::ParameterManifest, index::Integer) =
-    manifest.entries[index]
 
 """
     PottsParameters
@@ -93,26 +75,43 @@ Base.getindex(manifest::ParameterManifest, index::Integer) =
 An immutable, normalized runtime-parameter buffer. Construct it through
 `PottsProblem(...; p=...)` or `remake`; it cannot change structure or units.
 """
-struct PottsParameters{T, V <: Tuple, N <: NamedTuple}
+struct PottsParameters{T, V <: Tuple}
     values::V
-    named::N
+    schema::_RuntimeParameterSchema
 end
 
 PottsParameters(values::AbstractVector{T}, named::N) where {T, N <: NamedTuple} =
-    PottsParameters{T, typeof(Tuple(values)), N}(Tuple(values), named)
+    PottsParameters{T, typeof(Tuple(values))}(
+        Tuple(values), _RuntimeParameterSchema(keys(named)),
+    )
 PottsParameters(values::Tuple, named::N) where {N <: NamedTuple} =
-    PottsParameters{Any, typeof(values), N}(values, named)
+    PottsParameters{Any, typeof(values)}(
+        values, _RuntimeParameterSchema(keys(named)),
+    )
+
+function Base.getproperty(parameters::PottsParameters, name::Symbol)
+    name === :named || return getfield(parameters, name)
+    schema = getfield(parameters, :schema)
+    return NamedTuple{schema.names}(getfield(parameters, :values))
+end
 
 Base.getindex(parameters::PottsParameters, name::Symbol) =
-    getproperty(parameters.named, name)
-Base.propertynames(parameters::PottsParameters) = propertynames(parameters.named)
+    let index = findfirst(==(name), parameters.schema.names)
+        index === nothing && return getproperty(parameters.named, name)
+        parameters.values[index]
+    end
+Base.propertynames(parameters::PottsParameters) = parameters.schema.names
 
 function _parameter_buffer(values::Tuple, ::Type{T}) where {
         T <: AbstractFloat,
     }
-    buffer = Vector{T}(undef, length(values))
-    for index in eachindex(values)
-        buffer[index] = values[index]
+    buffer = T[]
+    for value in values
+        if value isa StaticArrays.StaticVector
+            append!(buffer, value)
+        else
+            push!(buffer, value)
+        end
     end
     return buffer
 end
@@ -134,6 +133,17 @@ struct CompiledRelationshipEndpointPolicy
     kind_b_name::Symbol
 end
 
+struct CompiledDomainOwnerIdentity
+    lattice::QualifiedStatementID
+    local_id::Symbol
+end
+
+struct CompiledDomainOwner
+    identity::CompiledDomainOwnerIdentity
+    kind_identity::QualifiedStatementID
+    metadata::CorePotts.CompilerSPI.DomainOwnerMetadata
+end
+
 struct _PottsExecutionPlan{P, M, S, R, K, O}
     core_program::P
     parameter_manifest::M
@@ -141,6 +151,7 @@ struct _PottsExecutionPlan{P, M, S, R, K, O}
     state_manifest::S
     relationship_manifest::R
     kind_manifest::K
+    domain_owner_manifest::Vector{CompiledDomainOwner}
     observations::O
     fingerprint::ExecutableFingerprint
 end
