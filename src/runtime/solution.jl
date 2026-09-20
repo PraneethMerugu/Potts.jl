@@ -228,11 +228,13 @@ function solve!(integrator::PottsIntegrator)
                 )
             _solve_queued!(integrator)
         else
+            sparse_states = isempty(integrator.native_states) &&
+                _callbacks_empty(integrator)
             while !integrator.terminated &&
                     integrator.retcode == SciMLBase.ReturnCode.Default &&
                     integrator.t < integrator.prob.tspan[2] &&
                     integrator.iterations < integrator.policy.maxiters
-                step!(integrator)
+                _step!(integrator, !sparse_states)
             end
         end
     catch solve_error
@@ -248,7 +250,12 @@ function solve!(integrator::PottsIntegrator)
                              SciMLBase.ReturnCode.Success :
                              SciMLBase.ReturnCode.MaxIters
     end
-    integrator.policy.save_end && _save_current!(integrator)
+    if integrator.policy.save_end
+        _save_current!(integrator)
+    elseif isempty(integrator.native_states) && _callbacks_empty(integrator) &&
+            integrator.u.mcs != integrator.t
+        integrator.u = _current_saved_state(integrator)
+    end
     _finalize_callbacks!(integrator)
     return PottsSolution(integrator)
 end

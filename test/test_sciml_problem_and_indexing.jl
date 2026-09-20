@@ -87,6 +87,29 @@ end
     end
 end
 
+@testset "sequential solve saves states without changing step semantics" begin
+    fixture = _lifecycle_fixture(:sequential_sparse_saves)
+    problem = _lifecycle_problem(fixture; tspan = (0, 5), seed = 0x53a9)
+    options = (
+        backend = CPUBackend(), scalar_type = Float32,
+        save_start = false, save_end = false, saveat = (2, 4),
+        observables = (:lifecycle_marker_snapshot,),
+    )
+    stepped = init(problem, SequentialCPM(); options...)
+    for mcs in 1:5
+        step!(stepped)
+        @test stepped.u.mcs == mcs
+    end
+    solved = init(problem, SequentialCPM(); options...)
+    solution = solve!(solved)
+    @test solution.t == [2, 4]
+    @test solved.u.mcs == 5
+    @test _lifecycle_same_state(solved.u, stepped.u)
+    @test all(_lifecycle_same_state(a, b) for (a, b) in
+        zip(solution.u, stepped.saved_states))
+    @test solution.stats == Potts._integrator_stats(stepped)
+end
+
 @testset "attempt budgets fit the Core execution representation" begin
     fixture = _lifecycle_fixture(
         :lifecycle_excessive_attempts;
