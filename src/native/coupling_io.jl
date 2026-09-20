@@ -5,13 +5,15 @@ function _native_state_entry(plan::_PottsExecutionPlan, endpoint)
         "only ModelState, CellState, and checked field-output endpoints are admitted; got $(endpoint.potts_kind)",
     ))
     identity = _qualified_resource_identity(potts_endpoint(endpoint))
-    matches = filter(entry -> entry.identity == identity, plan.state_manifest)
-    length(matches) == 1 || throw(NativeCapabilityError(
+    first_match = findfirst(entry -> entry.identity == identity, plan.state_manifest)
+    first_match !== nothing && findnext(
+        entry -> entry.identity == identity, plan.state_manifest, first_match + 1
+    ) === nothing || throw(NativeCapabilityError(
         endpoint.component_path,
         :typed_io,
         "resolved ModelState endpoint does not map to one runtime storage handle",
     ))
-    entry = only(matches)
+    entry = plan.state_manifest[first_match]
     expected_storage = endpoint.potts_kind === :ModelState ? :model :
         endpoint.potts_kind === :CellState ? :cell : :site
     entry.storage === expected_storage || throw(NativeCapabilityError(

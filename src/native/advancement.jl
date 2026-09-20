@@ -137,13 +137,16 @@ function _advance_native_candidates(
                     end
                 end
             end
-            for slot in eachindex(snapshot.cell_kinds)
-                snapshot.cell_kinds[slot] > 0 || continue
-                state = native_cell_state(
-                    runtime_state.policy, candidate_bank, slot
-                )
-                append!(all_updates,
-                    _native_output_updates(component, state; slot))
+            if any(endpoint -> endpoint.port isa Union{NativeOutput, NativeFieldOutput},
+                    native_coupling_endpoints(component))
+                for slot in eachindex(snapshot.cell_kinds)
+                    snapshot.cell_kinds[slot] > 0 || continue
+                    state = native_cell_state(
+                        runtime_state.policy, candidate_bank, slot
+                    )
+                    append!(all_updates,
+                        _native_output_updates(component, state; slot))
+                end
             end
         elseif native_due(declaration, completed_mcs)
             inputs = _native_input_pairs(
