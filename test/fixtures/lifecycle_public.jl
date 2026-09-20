@@ -1,7 +1,7 @@
 isdefined(@__MODULE__, :LifecycleOperationFixtures) ||
     include("LifecycleOperationFixtures.jl")
 
-function lifecycle_public_fixture()
+function lifecycle_public_fixture(; mitotic_draw = false)
     @variables lifecycle_activity
     cell = CellKind(:lifecycle_cell; extinction = RetireAtZero(priority = -20))
     daughter = CellKind(
@@ -56,7 +56,9 @@ function lifecycle_public_fixture()
         :lifecycle_divide;
         domain = cells(daughter),
         anchor,
-        expression = true,
+        expression = mitotic_draw ?
+            draw(Uniform(0.0f0, 50.0f0), DrawKey(:mitotic_delay)) < 50.0f0 :
+            true,
         effects = (
             Divide(
                 anchor;
