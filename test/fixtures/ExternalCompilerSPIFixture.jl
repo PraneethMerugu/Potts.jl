@@ -207,7 +207,7 @@ function model(term_count::Integer = 1; mismatched::Bool = false)
         name = Symbol(:external_spi_, term_count, mismatched ? :_bad : :_ok),
         statements = StatementSet((
             Lattice(
-                (2, 2);
+                (4, 4);
                 boundary = Periodic(),
                 relations = (proposal = VonNeumann(),),
             ),
@@ -226,12 +226,14 @@ function model(term_count::Integer = 1; mismatched::Bool = false)
         unknowns = [external_state],
         parameters = [external_weight],
     )
-    labels = Int32[1 0; 0 1]
+    # Four sites per periodic axis keep opposite contact lanes distinct.
+    # Alternating ownership also makes every proposed copy hit the guard.
+    labels = repeat(Int32[1 0; 0 1], 2, 2)
     initial = PottsInitialState(
         ownership = LabelledCells(
             labels; cells = [cell], medium
         ),
-        values = (external_state => ones(Float64, 2, 2),),
+        values = (external_state => ones(Float64, 4, 4),),
     )
     return (; source, initial, state = external_state, weight = external_weight)
 end

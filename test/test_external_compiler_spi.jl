@@ -15,8 +15,8 @@ using .ExternalCompilerSPIFixture
     opaque = CustomOperation.run_custom_operation()
     @test ordinary.solution.retcode == SciMLBase.ReturnCode.Success
     @test opaque.solution.retcode == SciMLBase.ReturnCode.Success
-    @test ordinary.solution.stats.constraint_rejections == 4
-    @test opaque.solution.stats.constraint_rejections == 4
+    @test ordinary.solution.stats.constraint_rejections == 16
+    @test opaque.solution.stats.constraint_rejections == 16
     @test last(ordinary.solution).ownership == last(opaque.solution).ownership
 end
 
@@ -271,7 +271,7 @@ end
     @test solution.retcode == SciMLBase.ReturnCode.Success
     @test solution.stats.accepted == 0
     @test solution.stats.null_attempts == 0
-    @test solution.stats.constraint_rejections == 4
+    @test solution.stats.constraint_rejections == 16
     @test last(solution).ownership == materialized.fixture.initial.ownership.labels
 
     unqualified_replay = init(

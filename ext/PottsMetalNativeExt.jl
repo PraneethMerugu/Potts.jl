@@ -25,42 +25,42 @@ const _TESTED_METAL_NATIVE_STACK = (
     DiffEqGPU = (
         package = "DiffEqGPU",
         uuid = "071ae1c0-96b5-11e9-1965-c90190d839ea",
-        version = v"3.16.0",
+        version = v"3.21.2",
     ),
     Metal = (
         package = "Metal",
         uuid = "dde4c033-4e86-420c-a63e-0dd931031962",
-        version = v"1.10.0",
+        version = v"1.11.1",
     ),
     ModelingToolkit = (
         package = "ModelingToolkit",
         uuid = "961ee093-0014-501f-94e3-6117800e7a78",
-        version = v"11.38.0",
+        version = v"11.44.0",
     ),
     ModelingToolkitBase = (
         package = "ModelingToolkitBase",
         uuid = "7771a370-6774-4173-bd38-47e70ca0b839",
-        version = v"1.59.0",
+        version = v"1.74.0",
     ),
     SciMLBase = (
         package = "SciMLBase",
         uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462",
-        version = v"3.41.0",
+        version = v"3.55.0",
     ),
     SymbolicIndexingInterface = (
         package = "SymbolicIndexingInterface",
         uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5",
-        version = v"0.3.51",
+        version = v"0.3.55",
     ),
     Symbolics = (
         package = "Symbolics",
         uuid = "0c5d862f-8b57-4792-8d23-62f2024744c7",
-        version = v"7.37.0",
+        version = v"7.40.0",
     ),
     StaticArrays = (
         package = "StaticArrays",
         uuid = "90137ffa-7385-5640-81b9-e52037218182",
-        version = v"1.9.18",
+        version = v"1.9.22",
     ),
     Julia = (
         version = v"1.12.6",

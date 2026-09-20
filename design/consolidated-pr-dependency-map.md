@@ -392,8 +392,10 @@ reproducible preparation, first-execution, warm-time, allocation-count and
 allocation-byte measurements; R20 carries those measurements into the public-
 model corpus. TestNoAllocations is not selected because its observed-call
 assertion overlaps the warmed tests without supplying AllocCheck's static call-
-chain analysis or Chairmarks' benchmark record. These are test and benchmark
-dependencies, not runtime dependencies.
+chain analysis or Chairmarks' benchmark record. AllocCheck and Chairmarks belong
+to focused diagnostic/benchmark environments, not production dependencies or
+ordinary `Pkg.test`; ordinary warmed allocation assertions use Julia's
+observed-allocation facilities.
 
 The intended guarantee is allocation-free device kernels and zero observed heap
 allocation in explicitly admitted, warmed, fixed-capacity CPU execution
@@ -621,11 +623,11 @@ family basis, a small 1-versus-64 owner witness must preserve the declared
 family/signature class. The dedicated compiler job exercises 1/4/16/64 and
 bounded-IR evidence; 256 belongs to the merge/nightly benchmark corpus.
 
-R49's focused ordinary test target applies AllocCheck only to the canonical
+R49's focused diagnostic target applies AllocCheck only to the canonical
 prepared lifecycle/update boundaries and unchanged controls, avoiding a static
-scan of the full package suite. It warms each concrete CPU fixture before
-asserting observed steady-state allocation. R50 extends the same probes through
-public authoring and proves that scientifically identical programs differing
+scan of the full package suite. Separate ordinary tests warm each concrete CPU
+fixture before asserting observed steady-state allocation. R50 extends the same
+probes through public authoring and proves that scientifically identical programs differing
 only in author-facing quantity identity share the same bound execution payload
 and specialization class. R20/G09 uses Chairmarks to preserve longitudinal
 public-model samples; exact timing is recorded, never required as a pass/fail
@@ -1163,11 +1165,17 @@ planning workspace, not the package implementation baseline.
   actual-device execution; raw Kaimon/exact-typed counts remain reviewed trend evidence,
   not fixed numerical thresholds.
 - Promote only stable inexpensive properties to ordinary regression tests:
-  concrete returns, no `Any` argument slots at a declared hot boundary,
-  payload/code-instance identity across rename/value/count controls, and warmed
-  zero allocation where contracted. Raw statement/call counts and machine timing
-  remain reviewed trends rather than brittle gates.
-- Keep focused Kaimon/allocation/behavioral probes on affected PRs. Run the
+  prepared execution-family identity across rename/value/capacity/graph-content
+  controls, warmed observed zero allocation where contracted, successful
+  canonical compilation, and scientific CPU/device behavior. Do not test exact
+  MethodInstance populations, compiler-internal identities, typed-IR counts,
+  generated-code sizes, cache bytes or machine timing in `Pkg.test`.
+- Keep focused compiler attribution, allocation and behavioral probes on affected
+  PRs. KCT, SnoopCompile, MethodAnalysis and JET run in isolated diagnostic jobs
+  or local investigations, never inside ordinary `Pkg.test`; use the underlying
+  libraries directly when KCT summaries obscure inference ownership,
+  invalidations or specialization growth. Keep their reports as reviewed trends
+  with exact candidate/dependency and tool versions. Run the
   representative fresh-process PottsModels latency corpus on merge/nightly CI,
   serializing real-device work; reserve package-cache size, invalidation and
   optional sysimage/disk-cache comparisons for scheduled or release-preparation

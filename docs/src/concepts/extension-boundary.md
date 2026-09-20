@@ -102,12 +102,24 @@ opaque = CustomOperation.run_custom_operation()
 )
 ```
 
-Each model evaluates four proposals and rejects them through its actual
+Each model evaluates sixteen proposals and rejects them through its actual
 constraint evaluator. Symbolic registration alone is insufficient for an opaque
 operation: completion reports the missing transfer or callable, including the
 captured statement location and available remedies. A contextual operation that
 reads evaluator resources must instead declare support for each required public
 context; the context-free example does not grant access to hidden runtime state.
+
+The same context-free contract composes inside a maintained site contribution
+when its admitted role and phase include the consuming process. Potts resolves
+the external operation and its transitive field/parameter dependencies during
+analysis, then lowers its concrete callable into the existing tracker recipe;
+CorePotts does not rediscover the extension contract at runtime. The callable
+must be immutable `isbits` data. In particular, declaring an operation pure
+does not authorize a closure or callable object that captures a mutable array;
+completion rejects that object before it can cross the execution boundary.
+`ExternalAggregateOperationFixture.jl` and
+`test_scalar_site_aggregates.jl` exercise both sides of this contract through
+the public operation API.
 
 The public extension-oriented names are distinguishable from the exported
 authoring API:

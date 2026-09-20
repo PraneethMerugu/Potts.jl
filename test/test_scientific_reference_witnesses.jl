@@ -11,7 +11,7 @@
             # supported two-dimensional CPU profile.
             Lattice(
                 (3, 1);
-                boundary = Periodic(),
+                boundary = (AxisBoundary(Periodic()), AxisBoundary(Closed())),
                 relations = (proposal = VonNeumann(),),
             ),
             finite_cell,

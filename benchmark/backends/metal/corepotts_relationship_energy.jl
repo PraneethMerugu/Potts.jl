@@ -2,7 +2,12 @@ using Test
 import Metal
 import LocalMath
 using Potts
-using ModelingToolkitBase: @variables
+using ModelingToolkitBase: @parameters, @variables
+
+include(joinpath(
+    @__DIR__, "..", "..", "..", "test", "fixtures",
+    "transition_relation_energy.jl",
+))
 
 function _relationship_energy_problem()
     @variables relationship_energy_signal
@@ -97,6 +102,52 @@ function _relationship_energy_problem()
         ),
     )
     return PottsProblem(mtkcompile(system), initial, (0, 1); seed = 0x6c07)
+end
+
+@testset "bounded relation energy evaluates an ownership transition on Metal" begin
+    Metal.allowscalar(false)
+    fixture = _transition_relation_energy_fixture(Float32)
+    favorable_delta = _independent_transition_relation_energy_delta(
+        fixture.labels,
+        fixture.after_extension,
+        fixture.signal_values,
+        -1.0f0,
+    )
+    unfavorable_delta = _independent_transition_relation_energy_delta(
+        fixture.labels,
+        fixture.after_extension,
+        fixture.signal_values,
+        1.0f0,
+    )
+    @test favorable_delta == -1.0f0
+    @test unfavorable_delta == 1.0f0
+
+    cpu = _transition_relation_energy_witness(
+        fixture, CheckerboardSweepCPM(), Potts.CPUBackend()
+    )
+    @test cpu !== nothing
+    cpu === nothing && error("no checkerboard relation-energy witness found")
+    device_favorable = _solve_transition_relation_energy(
+        fixture,
+        CheckerboardSweepCPM(),
+        Potts.MetalBackend(),
+        -1.0f0,
+        cpu.seed,
+    )
+    device_unfavorable = _solve_transition_relation_energy(
+        fixture,
+        CheckerboardSweepCPM(),
+        Potts.MetalBackend(),
+        1.0f0,
+        cpu.seed,
+    )
+
+    @test Array(last(device_favorable).ownership) == fixture.after_extension
+    @test Array(last(device_unfavorable).ownership) == fixture.labels
+    @test device_favorable.stats.accepted == cpu.favorable.stats.accepted == 1
+    @test device_unfavorable.stats.accepted == cpu.unfavorable.stats.accepted == 0
+    @test device_unfavorable.stats.energy_rejections ==
+          cpu.unfavorable.stats.energy_rejections > 0
 end
 
 @testset "CorePotts relationship energy uses LocalMath on Metal" begin

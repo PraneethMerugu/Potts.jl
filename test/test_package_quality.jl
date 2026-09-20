@@ -22,7 +22,7 @@ using ExplicitImports
             Set(
                 (
                     "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-                    "StaticArrays", "Unitful",
+                    "Unitful",
                 )
             ),
         )
@@ -30,7 +30,7 @@ using ExplicitImports
     @test Set(
         (
             "DiffEqGPU", "Metal", "MethodOfLines", "ModelingToolkit",
-            "StaticArrays", "Unitful",
+            "Unitful",
         )
     ) ⊆ weak_dependencies
 
@@ -54,11 +54,11 @@ using ExplicitImports
         upstream_sources = Dict(
             "CorePotts" => (
                 "https://github.com/PraneethMerugu/CorePotts.jl",
-                "3bab07f1a04fd3d1c96e555aa0d2a4da6c347fb4",
+                "b82c873b364a28d2ae0670d506c4736681f806f1",
             ),
             "LocalMath" => (
                 "https://github.com/PraneethMerugu/LocalMath.jl",
-                "b699002a05f84e240e34162d509d6b952bf7d437",
+                "d3d2e5533585de3b16dafbb8ba7c0cb265209254",
             ),
             # Potts cannot pin the commit containing its own exact manifest.
             # Its immutable self revision is still syntax-checked below.
@@ -72,16 +72,14 @@ using ExplicitImports
             manifest = TOML.parsefile(manifest_path)
             @test manifest["julia_version"] == julia_version
             dependencies = manifest["deps"]
-            for (name, (url, qualified_revision)) in upstream_sources
+            for (name, (url, revision)) in upstream_sources
                 entries = dependencies[name]
                 entry = entries isa AbstractVector ? only(entries) : entries
                 @test !haskey(entry, "path")
                 @test entry["repo-url"] == url
                 @test match(full_revision, entry["repo-rev"]) !== nothing
+                revision === nothing || @test entry["repo-rev"] == revision
                 @test match(full_revision, entry["git-tree-sha1"]) !== nothing
-                if qualified_revision !== nothing
-                    @test entry["repo-rev"] == qualified_revision
-                end
             end
 
             path_dependencies = String[]
@@ -91,6 +89,16 @@ using ExplicitImports
                 end
             end
             @test isempty(path_dependencies)
+        end
+
+        # Every workflow that checks out sibling repositories must use the
+        # same qualified revisions as the committed replay environments.
+        for workflow in ("ci.yml", "docs.yml", "docs-links.yml")
+            source = read(joinpath(repository, ".github", "workflows", workflow), String)
+            for (_, (_, revision)) in upstream_sources
+                revision === nothing && continue
+                @test length(findall(revision, source)) == 2
+            end
         end
     end
 end
