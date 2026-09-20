@@ -26,6 +26,8 @@ operation_transfer(::typeof(_potts_act_energy), ::Int) =
         5,
         :real,
         :declared;
+        version = v"2.0.0",
+        serialization_identity = "potts-operation:act_energy:v2",
         footprint_rule = NeighborhoodFootprintRule(
             ProposalSourceTargetNeighborhoodAnchor()
         ),
@@ -76,7 +78,7 @@ function CorePotts.CompilerSPI.operation_callable(
         ::Val{:act_energy},
         version::VersionNumber,
     )
-    version == v"1.0.0" || throw(ArgumentError(
+    version == v"2.0.0" || throw(ArgumentError(
         "unsupported Act-energy operation version $version"
     ))
     return ActEnergyCallable()
@@ -128,37 +130,6 @@ end
     return distinct_cells == 2
 end
 
-@inline function _act_local_geomean(
-        context,
-        state_handle,
-        relation_handle,
-        center,
-        owner::Int32,
-        ::Type{T},
-    ) where {T <: AbstractFloat}
-    owner <= 0 && return zero(T)
-    total = zero(T)
-    count = 0
-    if CorePotts.CompilerSPI.proposal_site_owner(context, center) == owner
-        value = T(CorePotts.CompilerSPI.state_value(context, state_handle, center))
-        total += log1p(max(zero(T), value))
-        count += 1
-    end
-    for direction in 1:CorePotts.CompilerSPI.proposal_relation_count(
-            context, relation_handle
-        )
-        neighbor = CorePotts.CompilerSPI.proposal_relation_neighbor_site(
-            context, relation_handle, center, direction
-        )
-        neighbor === nothing && continue
-        CorePotts.CompilerSPI.proposal_site_owner(context, neighbor) == owner || continue
-        value = T(CorePotts.CompilerSPI.state_value(context, state_handle, neighbor))
-        total += log1p(max(zero(T), value))
-        count += 1
-    end
-    return iszero(count) ? zero(T) : exp(total / T(count)) - one(T)
-end
-
 @inline function (operation::ActEnergyCallable)(arguments::Tuple, context)
     kind = Int16(arguments[1])
     state_handle = arguments[2]
@@ -167,25 +138,28 @@ end
     strength = arguments[5]
     T = promote_type(typeof(maximum), typeof(strength))
     new_owner = Int32(CorePotts.CompilerSPI.proposal_source_owner(context))
-    new_owner > 0 || return zero(T)
-    CorePotts.CompilerSPI.proposal_source_kind(context) == kind || return zero(T)
-    maximum > zero(T) || return zero(T)
-    source_activity = _act_local_geomean(
-        context,
-        state_handle,
-        relation_handle,
-        CorePotts.CompilerSPI.proposal_source_site(context),
-        new_owner,
-        T,
-    )
     old_owner = Int32(CorePotts.CompilerSPI.proposal_target_owner(context))
-    target_activity = _act_local_geomean(
-        context,
-        state_handle,
-        relation_handle,
-        CorePotts.CompilerSPI.proposal_target_site(context),
-        old_owner,
-        T,
-    )
+    source_responds = new_owner > 0 &&
+        CorePotts.CompilerSPI.proposal_source_kind(context) == kind
+    target_responds = old_owner > 0 &&
+        CorePotts.CompilerSPI.proposal_target_kind(context) == kind
+    (source_responds || target_responds) || return zero(T)
+    maximum > zero(T) || return zero(T)
+    source_activity = if source_responds
+        CorePotts.CompilerSPI.proposal_owner_activity_mean(
+            context, state_handle, relation_handle,
+            CorePotts.CompilerSPI.proposal_source_site(context), new_owner, T,
+        )
+    else
+        zero(T)
+    end
+    target_activity = if target_responds
+        CorePotts.CompilerSPI.proposal_owner_activity_mean(
+            context, state_handle, relation_handle,
+            CorePotts.CompilerSPI.proposal_target_site(context), old_owner, T,
+        )
+    else
+        zero(T)
+    end
     return -(strength / maximum) * (source_activity - target_activity)
 end

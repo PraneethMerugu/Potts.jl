@@ -591,6 +591,22 @@ source = PottsSystem(
 is_scheduled(mtkcompile(source))
 ```
 
+For a proposal drive that responds at either interface of a declared cell
+kind, compare the symbolic endpoint kinds with `kind_matches`:
+
+```julia
+copy = ProposalContext(:copy)
+leader_response = ProposalDrive(:leader_response,
+    ifelse(kind_matches(copy.source_kind, leader) |
+           kind_matches(copy.target_kind, leader),
+        -strength * (field_value(cue, copy.target_site) -
+                     field_value(cue, copy.source_site)),
+        0.0);
+    drive_scale=:energy)
+```
+
+The disjunction applies one energy contribution when both endpoints match.
+
 `gather` follows canonical relation-lane order. Missing boundary lanes
 and medium endpoints do not participate, while two lanes reaching the same
 finite owner contribute twice. It does not imply a distinct-neighbor-cell

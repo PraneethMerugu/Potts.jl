@@ -156,13 +156,13 @@ function independent_local_geomean(context, center, owner)
         push!(values, context.state[neighbor])
     end
     isempty(values) && return 0.0
-    return exp(sum(log1p(max(0.0, value)) for value in values) /
-               length(values)) - 1.0
+    any(value -> value <= 0, values) && return 0.0
+    return prod(values)^(1 / length(values))
 end
 
 @testset "Act operation matches an independent bounded-neighborhood oracle" begin
     operation = CorePotts.CompilerSPI.operation_callable(
-        Val(:act_energy), v"1.0.0"
+        Val(:act_energy), v"2.0.0"
     )
     for shape in ((7, 7), (71, 71))
         ownership = zeros(Int32, shape)
@@ -226,6 +226,20 @@ end
     @test operation(
         (Int16(9), :activity, Int32(1), 20.0, 5.0), context
     ) == 0.0
+    state[4, 4] = 0.0
+    @test operation(
+        (Int16(2), :activity, Int32(1), 20.0, 5.0), context
+    ) ≈ -2.0
+
+    retraction = ScientificProposalProbe(
+        ownership, Int16[2, 2], state,
+        CartesianIndex(4, 5), CartesianIndex(4, 4),
+        (SCIENTIFIC_MOORE_OFFSETS, SCIENTIFIC_VON_NEUMANN_OFFSETS), Ref(0),
+    )
+    state[4, 4] = 3.0
+    @test operation(
+        (Int16(2), :activity, Int32(1), 20.0, 5.0), retraction
+    ) ≈ 0.75
 end
 
 @testset "Merks connectivity matches the independent clockwise truth table" begin
