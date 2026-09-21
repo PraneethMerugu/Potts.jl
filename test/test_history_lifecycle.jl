@@ -3,6 +3,7 @@
     cell = CellKind(:cell; extinction = RetireAtZero())
     changed = CellKind(:changed; extinction = RetireAtZero())
     medium = MediumKind(:medium)
+    medium_owner = MediumDomainOwner(:medium_domain, medium)
     anchor = CellBinding(:selected)
     relation = SpatialRelation(:division; neighborhood = VonNeumann())
     source = CellState(signal; initial = 8.0, creation = InitializeFrom(10.0), division = CopyToDaughters(), transition = Preserve(), retirement = RetireTo(0.0))
@@ -31,7 +32,12 @@
         name = :retained_cell_lifecycle,
         statements = StatementSet(
             (
-                Lattice((4, 3); boundary = Closed(), max_cells = 2), cell, changed, medium, relation,
+                Lattice(
+                    (4, 3);
+                    boundary = Closed(),
+                    default_owner = medium_owner,
+                    max_cells = 2,
+                ), cell, changed, medium, relation,
                 source, copied_history, reset_history, split_history, sampled_history,
                 ProposalConstraint(:fixed_ownership, false),
                 LifecycleProcess(
@@ -50,7 +56,7 @@
                 ),
                 LifecycleProcess(
                     :remove; domain = cells(changed), anchor, expression = true,
-                    effects = (RemoveCell(anchor; replacement = medium, on_inadmissible = ErrorOnInadmissible()),), cadence = AtMCS(3)
+                    effects = (RemoveCell(anchor; replacement = medium_owner, on_inadmissible = ErrorOnInadmissible()),), cadence = AtMCS(3)
                 ),
                 LifecycleProcess(
                     :create; domain = model(), expression = true,

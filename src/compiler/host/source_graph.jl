@@ -159,7 +159,7 @@ function _freeze_source_graph(
     record_table = QualifiedStatement[record for record in records]
     record_indices = Dict(
         record.identity => Int32(index)
-        for (index, record) in enumerate(record_table)
+            for (index, record) in enumerate(record_table)
     )
     source_indices = Dict{QualifiedStatementID, Int32}()
 
@@ -253,22 +253,24 @@ function _freeze_source_graph(
         _source_graph_context!(references, record_table, source_nodes, context_inventory, context_records)
     registry_snapshot = Any[
         (
-            schema = definition.schema,
-            version = definition.version,
-            contract = definition.contract,
-        )
-        for definition in registry.definitions
+                schema = definition.schema,
+                version = definition.version,
+                contract = definition.contract,
+            )
+            for definition in registry.definitions
     ]
     structural_key = _sha256_hex(
         "potts-frozen-source-graph-v1",
         Tuple((node.path, node.parent) for node in systems),
-        Tuple((
-            node.identity,
-            node.source_order,
-            node.kind,
-            Tuple(node.references),
-            node.provenance,
-        ) for node in source_nodes),
+        Tuple(
+            (
+                    node.identity,
+                    node.source_order,
+                    node.kind,
+                    Tuple(node.references),
+                    node.provenance,
+                ) for node in source_nodes
+        ),
         Tuple((item.kind, item.path, item.source, item.value) for item in references),
         Tuple(registry_snapshot),
     )

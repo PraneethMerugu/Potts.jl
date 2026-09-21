@@ -42,6 +42,63 @@ Use `@named` when a parent expression should supply the component name. Use
 `flatten` only when a downstream operation genuinely needs a flat namespace.
 Namespacing is structural identity, not display metadata.
 
+## Cartesian faces, domain owners, and obstacles
+
+`Closed()` means that no ownership edge exists beyond a face. A fixed exterior
+is different: `FixedExterior(owner)` realizes an immutable non-finite owner that
+can participate in contact and spatial relations. `AxisBoundary` names the
+negative and positive faces explicitly, and its tuple position names the axis.
+
+```@example cartesian-domain
+using Potts
+
+cell = CellKind(:domain_cell; extinction=RetireAtZero())
+medium = MediumKind(:domain_medium)
+wall_kind = MediumKind(:domain_wall_kind)
+bulk = MediumDomainOwner(:bulk, medium)
+wall = WallDomainOwner(:wall, wall_kind)
+mask = falses(6, 6)
+mask[3, 3] = true
+
+domain = Lattice(
+    (6, 6);
+    boundary=(
+        AxisBoundary(negative=Closed(), positive=FixedExterior(wall)),
+        AxisBoundary(Periodic()),
+    ),
+    default_owner=bulk,
+    domain_owners=(wall,),
+    obstacles=Obstacle(mask; owner=wall),
+)
+length(statements(domain))
+```
+
+`MediumDomainOwner` and `WallDomainOwner` are distinct ownership categories.
+Their `MediumKind` argument is only the interaction kind; it never determines
+whether the owner is a wall. Periodic faces must be paired on an axis. Closed
+faces carry no owner. Fixed exteriors and obstacles are immutable and are never
+proposal recipients.
+
+Obstacle masks are defensively copied. Initial ownership arrays still use zero
+for the declared default domain owner and positive integers for finite cells;
+zero is not a generic medium-kind encoding. An obstacle entry must be zero
+because its owner comes from the domain declaration.
+`OwnershipLayout` uses `MediumPlacement(domain_owner, sites)` for a non-default
+medium-domain owner. Such an owner must be listed in `domain_owners` unless it
+is already referenced by the default, a fixed face, or an obstacle.
+
+Domain-owner names are local to the sole declaring `Lattice`. Compilation joins
+that lattice's qualified component identity with the local owner name before
+forming Core's stable identity. Lifecycle and initialization references resolve
+through that lattice-owned key even when the consumer is in a sibling component.
+The reference's category and kind spelling must remain consistent with the
+declaration, while Core's registered metadata is the exact category/kind
+authority. Consequently an explicit domain owner remains a valid initialization
+value when several components declare the same local `MediumKind` name; a bare
+root declaration name remains its canonical public spelling, while an
+unqualified convenience alias is rejected when it would ambiguously select
+between non-root declarations.
+
 For a factory that already returns a `StatementSet`, pass that set positionally:
 `PottsSystem(declarations; name=:model)`. This collects variables from owned
 state declarations and parameters carrying MTK parameter metadata from statement

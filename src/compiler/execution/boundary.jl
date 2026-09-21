@@ -1,10 +1,17 @@
 # Final executable storage reports and CorePotts boundary validation.
 
 function _storage_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
-    site_count = prod(program.shape)
+    domain = CorePotts.CompilerSPI.cartesian_domain_report(
+        CorePotts.CompilerSPI.cartesian_domain(program)
+    )
+    site_count = prod(domain.shape)
     return (
-        shape = program.shape,
+        shape = domain.shape,
         site_count,
+        mutable_site_count = domain.mutable_site_count,
+        domain_owners = domain.domain_owners,
+        faces = domain.faces,
+        obstacles = domain.obstacles,
         max_cells = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
             Int(program.lifecycle_plan.cell_capacity) : nothing,
         ownership = (element = Int32, count = site_count),
@@ -21,56 +28,67 @@ function _storage_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
         volume = Int,
         declared_state_blocks = Tuple(
             CorePotts.CompilerSPI.state_schema_metadata(entry.schema)
-            for entry in program.descriptor_plan.state_layout.entries
+                for entry in program.descriptor_plan.state_layout.entries
         ),
-        relationships = Tuple((
-            capacity = schema.capacity,
-            maximum_degree = schema.maximum_degree,
-            endpoint = Int32,
-            generation = UInt32,
-            payload = eltype(program.parameter_defaults),
-        ) for schema in program.relationships),
+        relationships = Tuple(
+            (
+                    capacity = schema.capacity,
+                    maximum_degree = schema.maximum_degree,
+                    endpoint = Int32,
+                    generation = UInt32,
+                    payload = eltype(program.parameter_defaults),
+                ) for schema in program.relationships
+        ),
     )
 end
 
 function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
+    shape = CorePotts.CompilerSPI.cartesian_domain_report(
+        CorePotts.CompilerSPI.cartesian_domain(program)
+    ).shape
     lifecycle = CorePotts.CompilerSPI.lifecycle_workspace_layout(
-        program.lifecycle_plan, prod(program.shape)
+        program.lifecycle_plan, prod(shape)
     )
     stage_groups = (
         program.stage_plan.before_lifecycle...,
         program.stage_plan.after_lifecycle...,
     )
     return (
-        stage_site_scratch = sum((
-            1
-            for group in stage_groups
-            for descriptor in group.instances
-            if descriptor.effect isa Union{
-                CorePotts.CompilerSPI.SiteAssignmentEffect,
-                CorePotts.CompilerSPI.IteratedSiteAssignmentEffect,
-            }
-        ); init = 0) * prod(program.shape),
-        stage_model_scratch = sum((
-            1
-            for group in stage_groups
-            for descriptor in group.instances
-            if descriptor.effect isa CorePotts.CompilerSPI.ModelAssignmentEffect
-        ); init = 0),
+        stage_site_scratch = sum(
+            (
+                1
+                    for group in stage_groups
+                    for descriptor in group.instances
+                    if descriptor.effect isa Union{
+                        CorePotts.CompilerSPI.SiteAssignmentEffect,
+                        CorePotts.CompilerSPI.IteratedSiteAssignmentEffect,
+                    }
+            ); init = 0
+        ) * prod(shape),
+        stage_model_scratch = sum(
+            (
+                1
+                    for group in stage_groups
+                    for descriptor in group.instances
+                    if descriptor.effect isa CorePotts.CompilerSPI.ModelAssignmentEffect
+            ); init = 0
+        ),
         proposal_scratch = length(program.descriptor_plan.source_table),
         relationship_requests = sum(
             schema.capacity for schema in program.relationships; init = 0
         ),
         relationship_lifecycle_scratch =
-            sum((
+            sum(
+            (
                 program.relationships[Int(descriptor.effect.relationship_slot)].capacity
-                for group in stage_groups
-                for descriptor in group.instances
-                if descriptor.effect isa Union{
-                    CorePotts.CompilerSPI.RelationshipRemoveEffect,
-                    CorePotts.CompilerSPI.RelationshipRetuneEffect,
-                }
-            ); init = 0),
+                    for group in stage_groups
+                    for descriptor in group.instances
+                    if descriptor.effect isa Union{
+                        CorePotts.CompilerSPI.RelationshipRemoveEffect,
+                        CorePotts.CompilerSPI.RelationshipRetuneEffect,
+                    }
+            ); init = 0
+        ),
         lifecycle,
         live_state_allocated = false,
     )
@@ -88,17 +106,25 @@ function _assert_concrete_core_boundary(value; path = "program", seen = IdSet())
     push!(seen, value)
     value isa Function &&
         !_is_concrete_callable(value) &&
-        throw(ArgumentError(
+        throw(
+        ArgumentError(
             "capturing host closure crossed the CorePotts boundary at $path"
-        ))
-    value isa AbstractPottsStatement && throw(ArgumentError(
-        "symbolic statement crossed the CorePotts boundary at $path"
-    ))
-    _is_quantity(value) && throw(ArgumentError(
-        "unit quantity crossed the CorePotts boundary at $path"
-    ))
-    if !(SymbolicIndexingInterface.symbolic_type(value) isa
-            SymbolicIndexingInterface.NotSymbolic)
+        )
+    )
+    value isa AbstractPottsStatement && throw(
+        ArgumentError(
+            "symbolic statement crossed the CorePotts boundary at $path"
+        )
+    )
+    _is_quantity(value) && throw(
+        ArgumentError(
+            "unit quantity crossed the CorePotts boundary at $path"
+        )
+    )
+    if !(
+            SymbolicIndexingInterface.symbolic_type(value) isa
+                SymbolicIndexingInterface.NotSymbolic
+        )
         throw(ArgumentError("Symbolics value crossed the CorePotts boundary at $path"))
     end
     if value isa AbstractArray || value isa Tuple || value isa NamedTuple

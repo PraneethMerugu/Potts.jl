@@ -9,17 +9,19 @@
     medium = MediumKind(:initial_medium)
     source = PottsSystem(
         name = :initial_problem_model,
-        statements = StatementSet((
-            Lattice((8, 8); relations = (proposal = VonNeumann(),)),
-            cell,
-            medium,
-            SiteState(initial_marker; name = :initial_marker, initial = 0.0),
-            Volume(cell; target = initial_target, strength = initial_strength),
-            Protocol(
-                Sweep(; temperature = initial_temperature);
-                name = :main,
-            ),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((8, 8); relations = (proposal = VonNeumann(),)),
+                cell,
+                medium,
+                SiteState(initial_marker; name = :initial_marker, initial = 0.0),
+                Volume(cell; target = initial_target, strength = initial_strength),
+                Protocol(
+                    Sweep(; temperature = initial_temperature);
+                    name = :main,
+                ),
+            )
+        ),
         unknowns = [initial_marker],
         parameters = [initial_target, initial_strength, initial_temperature],
     )
@@ -59,7 +61,7 @@
     implicit_source_traversals = Ref(0)
     implicit = Potts._with_source_traversal_witness(
         (kind, _, value) ->
-            kind === :system && value === source &&
+        kind === :system && value === source &&
             (implicit_source_traversals[] += 1),
     ) do
         PottsProblem(
@@ -76,7 +78,7 @@
     @test is_scheduled(implicit.system)
     @test implicit_source_traversals[] == 1
     @test inspect(implicit.system, Fingerprints()) ==
-          inspect(problem.system, Fingerprints())
+        inspect(problem.system, Fingerprints())
     @test Potts._lower_scheduled_execution_plan(
         implicit.system, SequentialCPM(), CPUBackend(), Float32
     ).fingerprint == Potts._lower_scheduled_execution_plan(
@@ -92,17 +94,19 @@
     )
     @test implicit_solution.t == explicit_solution.t
     @test getfield.(implicit_solution.u, :ownership) ==
-          getfield.(explicit_solution.u, :ownership)
+        getfield.(explicit_solution.u, :ownership)
     @test implicit_solution.stats == explicit_solution.stats
 
     invalid_source = PottsSystem(
         name = :invalid_problem_source,
-        statements = (@statements begin
-            Lattice((8, 8))
-            CellKind(:conflicting_kind; extinction = RetireAtZero())
-            MediumKind(:conflicting_kind)
-            Protocol(Sweep(); name = :main)
-        end),
+        statements = (
+            @statements begin
+                Lattice((8, 8))
+                CellKind(:conflicting_kind; extinction = RetireAtZero())
+                MediumKind(:conflicting_kind)
+                Protocol(Sweep(); name = :main)
+            end
+        ),
     )
     construction_error = try
         PottsProblem(invalid_source, initial, (0, 1); seed = 1)
@@ -112,7 +116,7 @@
     end
     @test construction_error isa Potts.PottsValidationError
     @test only(construction_error.diagnostics).kind ===
-          :duplicate_statement_identity
+        :duplicate_statement_identity
     @test only(construction_error.diagnostics).source isa SourceLocation
 
     # `problem.u0` is a public SciML property, but it must not expose the
@@ -243,7 +247,7 @@
             initial_strength => 2.0,
             initial_temperature => 4.0,
         ),
-        seed = 0xabc,
+        seed = 0x0abc,
     )
     procedural_ownership = init(
         procedural_problem,
@@ -280,7 +284,7 @@
             initial_strength => 2.0,
             initial_temperature => 4.0,
         ),
-        seed = 0xabc,
+        seed = 0x0abc,
     )
     procedural_run = solve(
         procedural_problem,
@@ -295,32 +299,43 @@
         save_everystep = true,
     )
     @test getfield.(procedural_run.u, :ownership) ==
-          getfield.(explicit_run.u, :ownership)
+        getfield.(explicit_run.u, :ownership)
 end
 
 @testset "scheduled multiple-medium placement" begin
     cell = CellKind(:multiple_medium_cell; extinction = RetireAtZero())
     medium = MediumKind(:multiple_medium_bulk)
     border = MediumKind(:multiple_medium_border)
-    scheduled = mtkcompile(PottsSystem(
-        name = :multiple_medium_model,
-        statements = StatementSet((
-            Lattice((6, 6); boundary = Closed()),
-            cell,
-            medium,
-            border,
-            Volume(cell; target = 4.0, strength = 1.0),
-            Protocol(Sweep(; temperature = 2.0); name = :main),
-            Observation(:bulk_sites, occupancy(medium, :lattice)),
-            Observation(:border_sites, occupancy(border, :lattice)),
-        )),
-    ))
+    bulk_owner = MediumDomainOwner(:multiple_medium_bulk_domain, medium)
+    border_owner = MediumDomainOwner(:multiple_medium_border_domain, border)
+    scheduled = mtkcompile(
+        PottsSystem(
+            name = :multiple_medium_model,
+            statements = StatementSet(
+                (
+                    Lattice(
+                        (6, 6);
+                        boundary = Closed(),
+                        default_owner = bulk_owner,
+                        domain_owners = (border_owner,),
+                    ),
+                    cell,
+                    medium,
+                    border,
+                    Volume(cell; target = 4.0, strength = 1.0),
+                    Protocol(Sweep(; temperature = 2.0); name = :main),
+                    Observation(:bulk_sites, occupancy(medium, :lattice)),
+                    Observation(:border_sites, occupancy(border, :lattice)),
+                )
+            ),
+        )
+    )
     border_coordinates = Tuple(
         (row, column) for row in (1, 6) for column in 1:6
     )
     layout = OwnershipLayout(
         (6, 6),
-        MediumPlacement(border, border_coordinates),
+        MediumPlacement(border_owner, border_coordinates),
         CellPlacement(
             1,
             cell,

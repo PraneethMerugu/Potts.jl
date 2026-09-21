@@ -244,18 +244,83 @@ function _scheduled_native_provenance(components)
     return NamedTuple[summary for summary in summaries]
 end
 
+function _domain_owner_requirement(
+        records, domain::QualifiedStatement, owner::AbstractDomainOwner
+    )
+    category = if owner isa MediumDomainOwner
+        :medium
+    elseif owner isa WallDomainOwner
+        :wall
+    else
+        error("unsupported Cartesian domain-owner category")
+    end
+    declaration = _resource_record(
+        records, domain.identity.path, :MediumKind, owner.kind
+    )
+    declaration === nothing && error(
+        "scheduled Cartesian domain owner has no declared MediumKind"
+    )
+    return (
+        local_id = Symbol(owner.id),
+        category,
+        kind = _qualified_public_name(declaration.identity),
+    )
+end
+
+function _face_requirement(records, domain, face)
+    face isa Periodic && return (kind = :periodic, owner = nothing)
+    face isa Closed && return (kind = :closed, owner = nothing)
+    face isa FixedExterior && return (
+        kind = :fixed_exterior,
+        owner = _domain_owner_requirement(records, domain, face.owner),
+    )
+    return (kind = :unsupported, owner = nothing)
+end
+
+function _boundary_requirement(records, domain, boundary, dimensions)
+    axes = boundary isa Tuple ? boundary :
+        ntuple(_ -> AxisBoundary(boundary), dimensions)
+    return Tuple(
+        (
+                negative = _face_requirement(records, domain, axis.negative),
+                positive = _face_requirement(records, domain, axis.positive),
+            ) for axis in axes
+    )
+end
+
 function _scheduled_capability_requirements(
         data::CompletedPottsData, native_components = ()
     )
     domains = filter(record -> record.kind === :LatticeDomain, data.records)
     domain_requirements = NamedTuple[]
     for record in domains
+        shape = _scheduled_option(record, :shape, ())
+        boundary = _scheduled_option(record, :boundary, Periodic())
+        default_owner = _scheduled_option(record, :default_owner, nothing)
+        owners = _scheduled_option(record, :domain_owners, ())
+        obstacles = _scheduled_option(record, :obstacles, ())
         push!(
             domain_requirements, (
-                identity = record.identity,
-                shape = _scheduled_option(record, :shape, ()),
-                dimension = length(_scheduled_option(record, :shape, ())),
-                boundary = nameof(typeof(_scheduled_option(record, :boundary, Periodic()))),
+                identity = _manifest_identity(record.identity),
+                shape,
+                dimension = length(shape),
+                boundary = _boundary_requirement(
+                    data.records, record, boundary, length(shape)
+                ),
+                default_owner = default_owner === nothing ? nothing :
+                    _domain_owner_requirement(data.records, record, default_owner),
+                domain_owners = Tuple(
+                    _domain_owner_requirement(data.records, record, owner)
+                        for owner in owners
+                ),
+                obstacles = Tuple(
+                    (
+                            owner = _domain_owner_requirement(
+                                data.records, record, obstacle.owner
+                            ),
+                            masked_site_count = count(obstacle.mask),
+                        ) for obstacle in obstacles
+                ),
                 max_cells = _scheduled_option(record, :max_cells, nothing),
             )
         )
