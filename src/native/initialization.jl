@@ -62,6 +62,8 @@ function _initial_native_states!(
             )
             policy = _native_cell_state_policy(component, template, capacity)
             bank = NativeCellStateBank(template, capacity)
+            output_slots = Set(_native_due_cell_slots(
+                plan, component, initial_kinds))
             for slot in eachindex(active)
                 active[slot] || continue
                 candidate = slot == template_slot ? template :
@@ -75,7 +77,7 @@ function _initial_native_states!(
                         t0,
                     )
                 _write_native_cell_state!(bank, slot, candidate)
-                append!(all_updates,
+                slot in output_slots && append!(all_updates,
                     _native_output_updates(component, candidate; slot))
             end
             push!(candidates, NativeCellStatePool(
@@ -109,4 +111,3 @@ function _initialize_native_logical_state(
     ))
     return candidate
 end
-

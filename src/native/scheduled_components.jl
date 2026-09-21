@@ -15,12 +15,14 @@ struct CompletedNativeComponent{C <: NativeComponent, E <: Tuple}
     path::Tuple{Vararg{Symbol}}
     declaration::C
     endpoints::E
+    domain_identity::Union{Nothing, QualifiedStatementID}
     source_fingerprint::NativeSourceFingerprint
 
     function CompletedNativeComponent(
             path::Tuple{Vararg{Symbol}},
             declaration::C,
             endpoints::E,
+            domain_identity::Union{Nothing, QualifiedStatementID},
             source_fingerprint::NativeSourceFingerprint,
         ) where {C <: NativeComponent, E <: Tuple}
         isempty(path) && throw(ArgumentError(
@@ -33,7 +35,8 @@ struct CompletedNativeComponent{C <: NativeComponent, E <: Tuple}
             throw(ArgumentError(
                 "completed native component endpoints must share its path"
             ))
-        return new{C, E}(path, declaration, endpoints, source_fingerprint)
+        return new{C, E}(path, declaration, endpoints, domain_identity,
+            source_fingerprint)
     end
 end
 
@@ -48,6 +51,7 @@ struct ScheduledNativeComponent{C <: NativeComponent, O, S, E <: Tuple}
     original_system::O
     scheduled_system::S
     endpoints::E
+    domain_identity::Union{Nothing, QualifiedStatementID}
     original_fingerprint::NativeSourceFingerprint
     scheduled_fingerprint::NativeSourceFingerprint
 
@@ -57,6 +61,7 @@ struct ScheduledNativeComponent{C <: NativeComponent, O, S, E <: Tuple}
             original_system::O,
             scheduled_system::S,
             endpoints::E,
+            domain_identity::Union{Nothing, QualifiedStatementID},
             original_fingerprint::NativeSourceFingerprint,
             scheduled_fingerprint::NativeSourceFingerprint,
         ) where {C <: NativeComponent, O, S, E <: Tuple}
@@ -79,6 +84,7 @@ struct ScheduledNativeComponent{C <: NativeComponent, O, S, E <: Tuple}
             original_system,
             scheduled_system,
             endpoints,
+            domain_identity,
             original_fingerprint,
             scheduled_fingerprint,
         )

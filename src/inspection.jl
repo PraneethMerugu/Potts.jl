@@ -54,9 +54,10 @@ function inspect(system::PottsSystem, ::Capabilities)
             clock = nameof(typeof(getfield(
                 getfield(component, :declaration), :time
             ))),
-            split = nameof(typeof(getfield(
-                getfield(component, :declaration), :split
+            phase = nameof(typeof(getfield(
+                getfield(component, :declaration), :phase
             ))),
+            domain = getfield(getfield(component, :declaration), :domain),
             cadence = native_cadence_stride(
                 getfield(component, :declaration)
             ),
@@ -145,7 +146,7 @@ function inspect(system::PottsSystem, ::ReplayContract)
                 :identical_profile_fingerprint,
             ),
         ) for component in native),
-        coupled_publication = :CPMThenComponents_atomic,
+        coupled_publication = :phase_ordered_atomic,
     )
 end
 inspect(system::PottsSystem, ::LifecyclePlans) =

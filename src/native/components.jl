@@ -1,6 +1,6 @@
 """
     NativeComponent(source; name, family, time, scope=Global(),
-                    cadence=EveryMCS(), split=CPMThenComponents(),
+                    cadence=EveryMCS(), phase=AfterCompletedMCS(), domain=nothing,
                     inputs=(), outputs=(), initialization=PreserveNativeInitialization(),
                     events=PreserveNativeEvents(), lifecycle=GlobalNativeLifecycle(),
                     algorithm=LateBoundNativeAlgorithm(),
@@ -8,7 +8,8 @@
 
 Declare a native ModelingToolkit component without translating it into Potts
 equations. `Global()` stores one state for the trajectory; `PerCell()` stores
-one state for every live finite Potts cell. `source` is retained by identity.
+one state for every live finite Potts cell in `domain=cells(kind)`, or every
+kind when `domain` is omitted. `source` is retained by identity.
 Its hierarchy, defaults, initialization equations, observations, and events
 remain under ModelingToolkit ownership.
 """
@@ -18,7 +19,8 @@ struct NativeComponent{
         SC <: AbstractNativeComponentScope,
         TP <: AbstractNativeTimePolicy,
         C <: AbstractCadence,
-        SP <: AbstractNativeSplitPolicy,
+        PH <: AbstractNativeCouplingPhase,
+        D <: Union{Nothing, Cells},
         I <: Tuple,
         O <: Tuple,
         IP <: AbstractNativeInitializationPolicy,
@@ -33,7 +35,8 @@ struct NativeComponent{
     scope::SC
     time::TP
     cadence::C
-    split::SP
+    phase::PH
+    domain::D
     inputs::I
     outputs::O
     initialization::IP
@@ -50,7 +53,8 @@ struct NativeComponent{
             scope::SC,
             time::TP,
             cadence::C,
-            split::SP,
+            phase::PH,
+            domain::D,
             inputs::I,
             outputs::O,
             initialization::IP,
@@ -64,7 +68,8 @@ struct NativeComponent{
             SC <: AbstractNativeComponentScope,
             TP <: AbstractNativeTimePolicy,
             C <: AbstractCadence,
-            SP <: AbstractNativeSplitPolicy,
+            PH <: AbstractNativeCouplingPhase,
+            D <: Union{Nothing, Cells},
             I <: Tuple,
             O <: Tuple,
             IP <: AbstractNativeInitializationPolicy,
@@ -73,14 +78,15 @@ struct NativeComponent{
             AP <: AbstractNativeAlgorithmPolicy,
             CP <: AbstractNativeCapabilityPolicy,
         }
-        return new{S, F, SC, TP, C, SP, I, O, IP, EP, LP, AP, CP}(
+        return new{S, F, SC, TP, C, PH, D, I, O, IP, EP, LP, AP, CP}(
             name,
             source,
             family,
             scope,
             time,
             cadence,
-            split,
+            phase,
+            domain,
             inputs,
             outputs,
             initialization,
@@ -99,7 +105,8 @@ function NativeComponent(
         time::AbstractNativeTimePolicy,
         scope::AbstractNativeComponentScope = Global(),
         cadence::AbstractCadence = EveryMCS(),
-        split::AbstractNativeSplitPolicy = CPMThenComponents(),
+        phase::AbstractNativeCouplingPhase = AfterCompletedMCS(),
+        domain = nothing,
         inputs = (),
         outputs = (),
         initialization::AbstractNativeInitializationPolicy =
@@ -122,8 +129,8 @@ function NativeComponent(
     time isa FixedPhysicalTime || throw(ArgumentError(
             "native components require FixedPhysicalTime"
     ))
-    split isa CPMThenComponents || throw(ArgumentError(
-            "native components currently admit only the CPMThenComponents split"
+    phase isa Union{BeforeLifecycle, AfterCompletedMCS} || throw(ArgumentError(
+            "native component phase must be BeforeLifecycle() or AfterCompletedMCS()"
     ))
     cadence isa Union{EveryMCS, Every} || throw(ArgumentError(
         "native component cadence must be EveryMCS() or Every(n)"
@@ -135,10 +142,17 @@ function NativeComponent(
             "native components require PreserveNativeEvents()"
     ))
     if scope isa Global
+        domain === nothing || throw(ArgumentError(
+            "Global native components cannot declare a cell domain"
+        ))
         lifecycle isa GlobalNativeLifecycle || throw(ArgumentError(
             "Global native components require GlobalNativeLifecycle()"
         ))
     else
+        (domain === nothing || (domain isa Cells && domain.kind isa CellKind)) ||
+            throw(ArgumentError(
+                "PerCell native component domain must be cells(CellKind)"
+            ))
         lifecycle isa PerCellNativeLifecycle || throw(ArgumentError(
             "PerCell native components require an explicit PerCellNativeLifecycle"
         ))
@@ -165,7 +179,8 @@ function NativeComponent(
         scope,
         time,
         cadence,
-        split,
+        phase,
+        domain,
         input_ports,
         output_ports,
         initialization,
@@ -253,6 +268,7 @@ function _rebuild_native_component(
         name = nameof(component),
         inputs = native_inputs(component),
         outputs = native_outputs(component),
+        domain = getfield(component, :domain),
     )
     return NativeComponent(
         native_source(component);
@@ -261,7 +277,8 @@ function _rebuild_native_component(
         scope = getfield(component, :scope),
         time = getfield(component, :time),
         cadence = getfield(component, :cadence),
-        split = getfield(component, :split),
+        phase = getfield(component, :phase),
+        domain,
         inputs,
         outputs,
         initialization = getfield(component, :initialization),
@@ -288,7 +305,10 @@ function _map_native_potts_endpoints(f, component::NativeComponent; name = nameo
         )
         for port in native_outputs(component)
     )
-    return _rebuild_native_component(component; name, inputs, outputs)
+    domain = getfield(component, :domain)
+    mapped_domain = domain === nothing ? nothing : cells(f(domain.kind))
+    return _rebuild_native_component(component;
+        name, inputs, outputs, domain = mapped_domain)
 end
 
 native_time_at(component::NativeComponent, completed_mcs::Integer) =
@@ -335,4 +355,3 @@ function _assert_single_native_writers(endpoints)
     end
     return nothing
 end
-

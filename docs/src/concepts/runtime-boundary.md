@@ -22,7 +22,7 @@ consumes derived descriptions without keeping another runtime copy of them.
 
 ## Native component boundary
 
-A component declares scope, IO, cadence, duration per MCS, split order, solver policy,
+A component declares scope, IO, cadence, duration per MCS, synchronization phase, solver policy,
 initialization, events, lifecycle transfer, and required capabilities. Unsupported combinations
 fail during preflight. GPU profiles cannot satisfy this contract through host fallback, scalar
 device indexing, or hidden transfers.
@@ -31,11 +31,13 @@ Global component state and per-cell component pools use the same explicit public
 Per-cell pools are fixed-capacity and generation safe; creation, deletion, division, and transition
 are applied from CorePotts lifecycle receipts.
 
-`CPMThenComponents()` stages one complete CPM step, then gives every due native island the same
-staged Core snapshot. Native outputs are collected without mutating that snapshot and publish only
-after every due solve succeeds. Islands therefore use simultaneous (Jacobi) coupling within a
-boundary: declaration or scheduling order cannot let one island observe another island's new
-output early.
+`AfterCompletedMCS()` advances after copy attempts and lifecycle. `BeforeLifecycle()` advances
+after copy attempts but before the same MCS's lifecycle decision, so its outputs can affect
+division. The latter phase requires sequential CPU execution. Due islands in one phase receive
+the same entry snapshot and publish together: declaration order cannot let one island see
+another island's current-phase output. A later phase sees outputs published by an earlier phase.
+The complete coupled MCS publishes atomically only after all due solves and lifecycle work succeed.
+`PerCell()` components may select `domain=cells(kind)` to advance only live cells of that kind.
 
 Native MTK execution retains continuous and discrete events through upstream structural compilation,
 but admits only event-free coupled runtime profiles. The pinned public API exposes recursive event

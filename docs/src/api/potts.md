@@ -11,7 +11,7 @@ The exported API is organized by lifecycle rather than implementation files.
 | Initialize | `PottsInitialState`, `LabelledCells`, `OwnershipLayout`, `CellPlacement`, `MediumPlacement`, `RandomSitePlacement` |
 | Execute | `PottsProblem`, `SequentialCPM`, `CheckerboardSweepCPM`, `CPUBackend`, `MetalBackend`, `init`, `solve`, `step!`, `solve!`, `terminate!`, `remake` |
 | Persist and inspect | `checkpoint`, `PottsCheckpoint`, `failure_report`, `inspect`, `StateSchema`, `Observations`, `Capabilities`, `ReplayContract`, `runtime_statistics` |
-| Native coupling | `NativeComponent`, `NativeInput`, `NativeOutput`, `NativeFieldOutput`, `MethodOfLinesComponent`, `NativeOperatingPoint`, `NativeSolveProfile`, `SerialNativeExecution`, `BatchedNativeExecution`, `MetalNativeExecution` |
+| Native coupling | `NativeComponent`, `BeforeLifecycle`, `AfterCompletedMCS`, `NativeInput`, `NativeOutput`, `NativeFieldOutput`, `MethodOfLinesComponent`, `NativeOperatingPoint`, `NativeSolveProfile`, `SerialNativeExecution`, `BatchedNativeExecution`, `MetalNativeExecution` |
 | Dynamic identity | `CellIdentity`, `relationship_transaction!`, `CreateCell`, `RemoveCell`, `Transition`, `Divide`, `Retire`, `Create`, `Remove`, `Retune` |
 
 The exact inventory is executable and rejects additions or retired aliases in

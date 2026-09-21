@@ -130,6 +130,16 @@ function _native_runtime_preflight(
     for (component, profile) in zip(components, profiles)
         path = native_component_path(component)
         declaration = getfield(component, :declaration)
+        if getfield(declaration, :phase) isa BeforeLifecycle
+            (algorithm isa SequentialCPM && backend isa CPUBackend &&
+                profile.execution isa Union{
+                    SerialNativeExecution, BatchedNativeExecution,
+                }) || throw(NativeCapabilityError(
+                path,
+                :native_phase,
+                "BeforeLifecycle() requires SequentialCPM on CPUBackend with serial or batched native execution",
+            ))
+        end
         scope = getfield(declaration, :scope)
         profile.execution isa BatchedNativeExecution &&
             !(scope isa PerCell) && throw(NativeCapabilityError(
@@ -200,4 +210,3 @@ function _require_requested_native_replay(system::PottsSystem, profiles)
     end
     return nothing
 end
-

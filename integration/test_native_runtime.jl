@@ -11,6 +11,82 @@ function impure_identity(value)
     return value
 end
 
+function native_transition_with_explicit_time(prior, event)
+    return Potts.NativeLogicalState(
+        prior.path, (10.0,), prior.p, prior.du, 0.05, prior.retcode
+    )
+end
+
+@testset "filtered native transition preserves explicit logical time" begin
+    @independent_variables filtered_t
+    @variables filtered_x(filtered_t) = 1.0
+    filtered_D = ModelingToolkitBase.Differential(filtered_t)
+    @named filtered_ode = ModelingToolkit.System(
+        [filtered_D(filtered_x) ~ 1.0], filtered_t
+    )
+    source_kind = CellKind(:filtered_source; extinction = RetireAtZero())
+    target_kind = CellKind(:filtered_target; extinction = RetireAtZero())
+    medium = MediumKind(:filtered_medium)
+    component = NativeComponent(
+        filtered_ode;
+        name = :filtered_growth,
+        family = ODEComponent(),
+        scope = PerCell(),
+        domain = cells(target_kind),
+        phase = AfterCompletedMCS(),
+        time = FixedPhysicalTime(0.0, 0.1),
+        lifecycle = PerCellNativeLifecycle(
+            creation = PreserveNativeInitialization(),
+            transition = Transform(native_transition_with_explicit_time),
+            division = CopyToDaughters(),
+        ),
+    )
+    anchor = CellBinding(:filtered_anchor)
+    transition = LifecycleProcess(
+        :filtered_transition;
+        domain = cells(source_kind),
+        anchor,
+        expression = true,
+        effects = (Transition(anchor, target_kind;
+            on_inadmissible = ErrorOnInadmissible()),),
+        cadence = AtMCS(1),
+    )
+    source = PottsSystem(
+        name = :filtered_transition_model,
+        statements = StatementSet((
+            Lattice((3, 3); boundary = Closed(), max_cells = 2),
+            source_kind, target_kind, medium,
+            ProposalConstraint(:freeze_filtered_transition, false),
+            transition,
+            Protocol(Sweep(; temperature = 0.0); name = :main),
+        )),
+        native_components = (component,),
+    )
+    path = (:filtered_transition_model, :filtered_growth)
+    labels = zeros(Int, 3, 3)
+    labels[2, 2] = 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [source_kind], medium),
+        native = (NativeOperatingPoint(path; values = (filtered_x => 1.0,)),),
+    )
+    problem = PottsProblem(mtkcompile(source), initial, (0, 2); seed = 0x0512)
+    profile = NativeSolveProfile(
+        path, Tsit5(); deterministic = true, adaptive = false, dt = 0.01,
+    )
+    integrator = init(problem, SequentialCPM(); native_profiles = (profile,))
+    original_kind = integrator.u.cell_kinds[1]
+    step!(integrator)
+    identity = CellIdentity(
+        1, integrator.u.cell_generations[1], integrator.u.cell_kinds[1]
+    )
+    @test identity.kind != original_kind
+    @test native_state(integrator.u, path, identity).t == 0.1
+    @test native_value(integrator, path, identity, filtered_x) ≈ 10.05
+    step!(integrator)
+    @test native_state(integrator.u, path, identity).t == 0.2
+    @test native_value(integrator, path, identity, filtered_x) ≈ 10.15
+end
+
 @testset "per-cell serial native ODE runtime" begin
     @independent_variables cell_ode_t
     @variables cell_ode_x(cell_ode_t) = 1.0 cell_ode_drive(cell_ode_t)

@@ -18,6 +18,7 @@ function accumulator(name, variable, input; gain = 1.0)
         name = :ode,
         family = ODEComponent(),
         time = FixedPhysicalTime(0.0, 0.1),
+        phase = AfterCompletedMCS(),
         inputs = (NativeInput(drive, input_port; value_type = Float64),),
         outputs = (NativeOutput(x, state; value_type = Float64),),
     )

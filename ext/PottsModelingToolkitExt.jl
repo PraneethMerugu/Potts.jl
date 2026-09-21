@@ -332,6 +332,7 @@ function Potts.mtkcompile_native(
         original,
         scheduled,
         component.endpoints,
+        component.domain_identity,
         component.source_fingerprint,
         scheduled_fingerprint,
     )
@@ -1135,6 +1136,7 @@ function Potts._advance_native_cell_batch(
         lanes::AbstractVector,
         profile::Potts.NativeSolveProfile,
         target_time,
+        ; cache = nothing, index = nothing,
     )
     profile.execution isa Potts.BatchedNativeExecution ||
         throw(_path_error(
@@ -1204,26 +1206,75 @@ function Potts._advance_native_cell_batch(
         first_index = (lane - 1) * state_width + 1
         copyto!(initial, first_index, problem.u0, 1, state_width)
     end
-    batched_function = NativeBatchedODEFunction(reference.f, state_width)
-    problem = SciMLBase.ODEProblem(
-        batched_function,
-        initial,
-        (first(lanes).state.t, target_time),
-        parameters,
-    )
-    integrator = SciMLBase.init(
-        problem, profile.algorithm; profile.options...
-    )
-    solution = SciMLBase.solve!(integrator)
+    # Solver workspaces belong to the outer Potts integrator and are fully
+    # reinitialized from the staged logical state; they are never checkpoint state.
+    cache_entries = if cache === nothing
+        nothing
+    else
+        index isa Integer && checkbounds(Bool, cache, index) ||
+            throw(ArgumentError("native solver cache requires a valid component index"))
+        entries = cache[index]
+        if entries === nothing
+            entries = Dict{Int, Any}()
+            cache[index] = entries
+        end
+        entries
+    end
+    cache_key = length(lanes)
+    entry = cache_entries === nothing ? nothing : get(cache_entries, cache_key, nothing)
+    integrator = if entry !== nothing &&
+            entry.function_type === typeof(reference.f) &&
+            entry.parameter_type === parameter_type &&
+            entry.state_width == state_width &&
+            typeof(entry.integrator.t) === typeof(first(lanes).state.t) &&
+            length(entry.integrator.u) == length(initial)
+        cached = entry.integrator
+        try
+            copyto!(cached.p, parameters)
+            SciMLBase.reinit!(cached, initial;
+                t0 = first(lanes).state.t, tf = target_time,
+                reinit_dae = false, reinit_callbacks = false)
+        catch
+            delete!(cache_entries, cache_key)
+            rethrow()
+        end
+        cached
+    else
+        batched_function = NativeBatchedODEFunction(reference.f, state_width)
+        problem = SciMLBase.ODEProblem(
+            batched_function,
+            initial,
+            (first(lanes).state.t, target_time),
+            parameters,
+        )
+        fresh = SciMLBase.init(problem, profile.algorithm; profile.options...)
+        if cache_entries !== nothing
+            cache_entries[cache_key] = (
+                integrator = fresh,
+                function_type = typeof(reference.f),
+                parameter_type,
+                state_width,
+            )
+        end
+        fresh
+    end
+    solution = try
+        SciMLBase.solve!(integrator)
+    catch
+        cache_entries === nothing || delete!(cache_entries, cache_key)
+        rethrow()
+    end
     retcode = solution.retcode
     reached = SymbolicIndexingInterface.current_time(integrator)
-    retcode === SciMLBase.ReturnCode.Success && reached == target_time ||
+    retcode === SciMLBase.ReturnCode.Success && reached == target_time || begin
+        cache_entries === nothing || delete!(cache_entries, cache_key)
         throw(Potts.NativeSolveFailure(
             Potts.native_component_path(component),
             retcode,
             reached,
             target_time,
         ))
+    end
     system = Potts.native_scheduled_system(component)
     final = SymbolicIndexingInterface.state_values(integrator)
     state_type = typeof(first(lanes).state)
