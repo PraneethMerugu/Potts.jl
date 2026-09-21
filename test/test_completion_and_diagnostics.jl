@@ -20,6 +20,8 @@ end
 Base.show(io::IO, value::FingerprintDelimiterPayload) =
     print(io, value.value)
 
+_completion_act_finish(total, count) = exp(total / count)
+
 struct FingerprintAxisVector{T} <: AbstractVector{T}
     values::Vector{T}
     offset::Int
@@ -119,6 +121,35 @@ end
     endothelial = CellKind(:endothelial; extinction = RetireAtZero())
     extracellular = MediumKind(:extracellular)
     copy = ProposalContext(:copy)
+    lane = SiteBinding(:activity_lane)
+    activity_state = SiteState(
+        activity;
+        owner = endothelial,
+        initial = 0.0,
+        lifecycle = ClearOnOwnershipChange(),
+    )
+    function local_activity(anchor, owner)
+        values = gather(
+            site_value(activity_state, lane);
+            bind = lane,
+            at = anchor,
+            over = :activity_neighborhood,
+            where = site_owner(lane) == owner,
+        )
+        return LocalMath.fold(values;
+            map = log, combine = +, init = 0.0,
+            finish = _completion_act_finish,
+            domain = >=(0.0), invalid = :reject, empty = 0.0,
+            order = :canonical,
+        )
+    end
+    source_activity = local_activity(copy.source_site, copy.source_cell)
+    target_activity = local_activity(copy.target_site, copy.target_cell)
+    inverse_maximum = exp(-log(maximum))
+    act_drive = -(activity_strength * inverse_maximum) * (
+        ifelse(kind_matches(copy.source_kind, endothelial), source_activity, 0.0) -
+        ifelse(kind_matches(copy.target_kind, endothelial), target_activity, 0.0)
+    )
 
     model_statements = StatementSet((
         Lattice(
@@ -127,7 +158,7 @@ end
             relations = (
                 proposal = Moore(),
                 contact = Moore(),
-                activity_neighborhood = Moore(),
+                activity_neighborhood = Moore(; include_center = true),
             ),
         ),
         endothelial,
@@ -137,23 +168,12 @@ end
             (extracellular ↔ endothelial) => 6.0,
             (endothelial ↔ endothelial) => 2.0,
         ]),
-        SiteState(
-            activity;
-            owner = endothelial,
-            initial = 0.0,
-            lifecycle = ClearOnOwnershipChange(),
-        ),
-        ActEnergy(
-            endothelial,
-            activity;
-            maximum,
-            strength = activity_strength,
-            reduction = :activity_neighborhood,
-        ),
+        activity_state,
+        ProposalDrive(:activity_drive, act_drive; drive_scale = :energy),
         AcceptedCopy(
             :activate,
             Assign(activity, maximum);
-            when = copy.is_extension,
+            when = kind_matches(copy.source_kind, endothelial),
         ),
         Synchronous(
             :decay,
@@ -173,16 +193,11 @@ end
     records = inspect(completed, Statements())
     @test length(records) == 14
     activity_record = only(filter(
-        record -> record.lowering_identity === :lower_activity, records
+        record -> record.identity.local_id == StatementID(:activity_drive), records
     ))
-    @test activity_record.shape == ()
-    @test activity_record.ownership === :none
-    @test activity_record.persistence === :none
-    @test Potts.QualifiedStatementID(
-        (:wortel,), StatementID(:endothelial)
-    ) in activity_record.resources
+    @test activity_record.kind === :ProposalDrive
+    @test last(activity_record.normalized_payload).drive_scale === :energy
     @test activity_record.provenance.schema === :built_in_v1
-    @test activity_record.transaction_identity === nothing
     @test inspect(completed, Capabilities()).sequential
     @test inspect(completed, Capabilities()).checkerboard
     @test any(item -> item[2] isa AcceptedCopyEffect, inspect(completed, Effects()))

@@ -106,7 +106,6 @@ function edge_payload end
 function lag end
 function _potts_draw end
 function _potts_merks_local_connectivity end
-function _potts_act_energy end
 function _potts_proposal_bound_state_value end
 function _potts_iteration_bound_state_value end
 function _potts_model_bound_state_value end
@@ -215,11 +214,9 @@ Symbolics.@register_symbolic _potts_draw(family, a, b, key)::Real
 Symbolics.@register_symbolic _potts_merks_local_connectivity(
     kind, foreground, background
 )::Bool
-Symbolics.@register_symbolic _potts_act_energy(
-    kind, activity, relation, maximum, strength
-)::Real
 Symbolics.@register_symbolic _potts_bounded_fold(
-    fold::LocalMath.BoundedFold, field, relation, anchor
+    fold::LocalMath.BoundedFold, field, relation, anchor,
+    filter_enabled, filter_owner
 )::Real
 
 # Reduction tags are cold and scalar-profile independent. Completion replaces
@@ -229,13 +226,17 @@ function _potts_bounded_fold(
         field::Symbolics.Num,
         relation::Symbolics.Num,
         anchor::Symbolics.Num,
+        filter_enabled,
+        filter_owner,
     )
     return Symbolics.wrap(Symbolics.term(
         _potts_bounded_fold,
         fold,
         Symbolics.unwrap(field),
         Symbolics.unwrap(relation),
-        Symbolics.unwrap(anchor);
+        Symbolics.unwrap(anchor),
+        Symbolics.unwrap(filter_enabled),
+        Symbolics.unwrap(filter_owner);
         type = Real,
     ))
 end
@@ -258,6 +259,10 @@ _spatial_relation_token(relation::SpatialRelation) =
 _field_token(field::FieldState) =
     _potts_token(
         Symbol("__potts_field__", Symbol(statement_id(field))); T = Real
+    )
+_site_state_token(state::SiteState) =
+    _potts_token(
+        Symbol("__potts_state__", Symbol(statement_id(state))); T = Real
     )
 
 cell_volume(kind::Union{CellKind, MediumKind}) = cell_volume(_kind_token(kind))

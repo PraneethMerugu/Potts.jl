@@ -581,8 +581,7 @@ source = PottsSystem(
         medium,
         ProposalDrive(
             :neighbor_volume,
-            neighbor_mean(gather(
-                cell_volume, :contact; at=proposal.target_site)),
+            neighbor_mean(gather(cell_volume; at = proposal.target_site, over = :contact)),
         ),
         Protocol(Sweep(); name=:main),
     )),
@@ -613,6 +612,52 @@ finite owner contribute twice. It does not imply a distinct-neighbor-cell
 reduction. The Potts compiler discovers and maintains tracker storage; authors
 never bind tracker arrays or expose them to LocalMath. Freely mutable per-cell
 quantities are `CellState` values rather than derived trackers.
+
+A lane binding exposes site-local state and ownership without introducing a
+model-specific operation. This Act-CPM drive uses a centered Moore relation,
+an exact-owner predicate, and a raw geometric mean whose zero,
+negative, and empty-set behavior is explicit:
+
+```julia
+@variables A
+activity = SiteState(A; name=:activity, owner=cell, initial=0.0,
+    lifecycle=ClearOnOwnershipChange())
+copy = ProposalContext(:copy)
+lane = SiteBinding(:act_neighbor)
+act_neighbors = Moore(; include_center=true)
+
+geometric_finish(total, count) = exp(total / count)
+function local_activity(anchor, owner)
+    values = gather(
+        site_value(activity, lane);
+        bind=lane,
+        at=anchor,
+        over=:act_neighbors,
+        where=site_owner(lane) == owner,
+    )
+    LocalMath.fold(values;
+        map=log, combine=+, init=0.0, finish=geometric_finish,
+        domain = >=(0.0), invalid=:reject, empty=0.0,
+        order=:canonical)
+end
+
+Gs = local_activity(copy.source_site, copy.source_cell)
+Gt = local_activity(copy.target_site, copy.target_cell)
+inverse_M = exp(-log(M)) # validates M > 0 before execution
+act = ProposalDrive(:activity,
+    -(λAct * inverse_M) * (
+        ifelse(kind_matches(copy.source_kind, cell), Gs, 0.0) -
+        ifelse(kind_matches(copy.target_kind, cell), Gt, 0.0));
+    drive_scale=:energy)
+```
+
+The declared relation determines center membership; `Moore()` excludes the
+anchor, while the centered relation above includes it to match the authors'
+executable Act-CPM definition. A zero admitted by
+`domain` maps to `-Inf` and therefore makes the
+geometric mean zero. A negative value rejects the containing transaction, and
+an empty same-owner neighborhood returns zero.
+
 Extension operations must explicitly declare that they are a direct scalar
 projection with
 `Potts.is_direct_scalar_tracker_projection(::typeof(operation)) = true`;
@@ -689,9 +734,7 @@ system = PottsSystem(
             :neighbor_signal;
             domain=sites(:lattice),
             anchor=site,
-            expression=neighbor_mean(gather(
-                signal, :contact; at=site
-            )),
+            expression=neighbor_mean(gather(signal; at = site, over = :contact)),
         ),
         Protocol(Sweep(); name=:main),
     )),

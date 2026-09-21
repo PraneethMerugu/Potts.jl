@@ -459,8 +459,8 @@ operation_transfer(::typeof(_potts_lifecycle_bound_state_value), ::Int) =
 
 operation_transfer(::typeof(_potts_bounded_fold), ::Int) =
     _transfer(
-    :bounded_fold,
-    4,
+        :bounded_fold,
+        6,
     :real,
     :declared;
     totality = :transaction_checked,

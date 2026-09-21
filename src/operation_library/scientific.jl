@@ -20,27 +20,6 @@ operation_transfer(::typeof(_potts_merks_local_connectivity), ::Int) =
         ),
     )
 
-operation_transfer(::typeof(_potts_act_energy), ::Int) =
-    _transfer(
-        :act_energy,
-        5,
-        :real,
-        :declared;
-        version = v"2.0.0",
-        serialization_identity = "potts-operation:act_energy:v2",
-        footprint_rule = NeighborhoodFootprintRule(
-            ProposalSourceTargetNeighborhoodAnchor()
-        ),
-        gpu = false,
-        allowed_roles = (:drive,),
-        allowed_phases = (:Proposal,),
-        required_context = :proposal,
-        owner = :PottsScientificOperations,
-        source_requirements = (
-            SpatialRelationRequirement(3, :moore, 1),
-        ),
-    )
-
 const _MERKS_CLOCKWISE_OFFSETS = (
     (-1, -1),
     (0, -1),
@@ -53,14 +32,9 @@ const _MERKS_CLOCKWISE_OFFSETS = (
 )
 
 struct MerksLocalConnectivityCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
-struct ActEnergyCallable <: CorePotts.CompilerSPI.AbstractContextualOperation end
 
 CorePotts.CompilerSPI.operation_context_supported(
     ::MerksLocalConnectivityCallable,
-    ::Type{<:CorePotts.CompilerSPI.AbstractProposalEvaluationContext},
-) = true
-CorePotts.CompilerSPI.operation_context_supported(
-    ::ActEnergyCallable,
     ::Type{<:CorePotts.CompilerSPI.AbstractProposalEvaluationContext},
 ) = true
 
@@ -72,16 +46,6 @@ function CorePotts.CompilerSPI.operation_callable(
         "unsupported Merks local-connectivity operation version $version"
     ))
     return MerksLocalConnectivityCallable()
-end
-
-function CorePotts.CompilerSPI.operation_callable(
-        ::Val{:act_energy},
-        version::VersionNumber,
-    )
-    version == v"2.0.0" || throw(ArgumentError(
-        "unsupported Act-energy operation version $version"
-    ))
-    return ActEnergyCallable()
 end
 
 @inline function (operation::MerksLocalConnectivityCallable)(
@@ -128,38 +92,4 @@ end
         distinct_cells += !seen
     end
     return distinct_cells == 2
-end
-
-@inline function (operation::ActEnergyCallable)(arguments::Tuple, context)
-    kind = Int16(arguments[1])
-    state_handle = arguments[2]
-    relation_handle = Int32(arguments[3])
-    maximum = arguments[4]
-    strength = arguments[5]
-    T = promote_type(typeof(maximum), typeof(strength))
-    new_owner = Int32(CorePotts.CompilerSPI.proposal_source_owner(context))
-    old_owner = Int32(CorePotts.CompilerSPI.proposal_target_owner(context))
-    source_responds = new_owner > 0 &&
-        CorePotts.CompilerSPI.proposal_source_kind(context) == kind
-    target_responds = old_owner > 0 &&
-        CorePotts.CompilerSPI.proposal_target_kind(context) == kind
-    (source_responds || target_responds) || return zero(T)
-    maximum > zero(T) || return zero(T)
-    source_activity = if source_responds
-        CorePotts.CompilerSPI.proposal_owner_activity_mean(
-            context, state_handle, relation_handle,
-            CorePotts.CompilerSPI.proposal_source_site(context), new_owner, T,
-        )
-    else
-        zero(T)
-    end
-    target_activity = if target_responds
-        CorePotts.CompilerSPI.proposal_owner_activity_mean(
-            context, state_handle, relation_handle,
-            CorePotts.CompilerSPI.proposal_target_site(context), old_owner, T,
-        )
-    else
-        zero(T)
-    end
-    return -(strength / maximum) * (source_activity - target_activity)
 end

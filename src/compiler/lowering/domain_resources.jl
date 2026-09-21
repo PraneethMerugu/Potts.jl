@@ -14,11 +14,14 @@ end
 
 function _neighborhood_offsets(neighborhood::VonNeumann, dimensions::Int)
     radius = neighborhood.radius
+    ranges = ntuple(_ -> (-radius):radius, dimensions)
     offsets = NTuple{dimensions, Int}[]
-    for dimension in 1:dimensions, distance in 1:radius
-        push!(offsets, ntuple(i -> i == dimension ? distance : 0, dimensions))
-        push!(offsets, ntuple(i -> i == dimension ? -distance : 0, dimensions))
+    for candidate in Iterators.product(ranges...)
+        sum(abs, candidate) <= radius || continue
+        all(iszero, candidate) && !neighborhood.include_center && continue
+        push!(offsets, Tuple(candidate))
     end
+    sort!(offsets)
     return _offset_matrix(offsets, dimensions)
 end
 
@@ -27,7 +30,7 @@ function _neighborhood_offsets(neighborhood::Moore, dimensions::Int)
     ranges = ntuple(_ -> (-radius):radius, dimensions)
     offsets = NTuple{dimensions, Int}[]
     for candidate in Iterators.product(ranges...)
-        all(iszero, candidate) && continue
+        all(iszero, candidate) && !neighborhood.include_center && continue
         push!(offsets, Tuple(candidate))
     end
     sort!(offsets)

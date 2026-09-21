@@ -129,6 +129,7 @@ function _compiler_leaf_kind(value, source::FrozenSourceGraph)
     startswith(text, "__potts_spatial_relation__") && return :spatial_relation
     startswith(text, "__potts_kind__") && return :kind
     startswith(text, "__potts_field__") && return :state
+    startswith(text, "__potts_state__") && return :state
     startswith(text, "__potts_payload__") && return :relationship_payload
     startswith(text, "__potts_draw__") && return :draw
     return :symbolic_leaf

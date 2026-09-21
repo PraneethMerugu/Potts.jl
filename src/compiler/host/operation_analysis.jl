@@ -248,7 +248,7 @@ end
 function _tracker_projection_operand(node, graph)
     node.transfer === nothing && return nothing
     node.transfer.identity === :bounded_fold || return nothing
-    length(node.operands) == 4 || return nothing
+    length(node.operands) == 6 || return nothing
     operand = graph.nodes[Int(node.operands[2])]
     transfer = operand.transfer
     transfer === nothing && return nothing

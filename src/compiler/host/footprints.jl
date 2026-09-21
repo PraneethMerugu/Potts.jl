@@ -38,7 +38,7 @@ function _host_neighborhood_offsets(neighborhood::VonNeumann, dimensions::Int)
     ranges = ntuple(_ -> (-neighborhood.radius):neighborhood.radius, dimensions)
     for offset in Iterators.product(ranges...)
         sum(abs, offset) <= neighborhood.radius || continue
-        all(iszero, offset) && continue
+        all(iszero, offset) && !neighborhood.include_center && continue
         push!(offsets, Tuple(Int.(offset)))
     end
     return Tuple(sort!(unique!(offsets)))
@@ -49,7 +49,7 @@ function _host_neighborhood_offsets(neighborhood::Moore, dimensions::Int)
     offsets = Tuple(
         Tuple(Int.(offset))
             for offset in Iterators.product(ranges...)
-            if !all(iszero, offset)
+            if neighborhood.include_center || !all(iszero, offset)
     )
     return Tuple(sort!(unique!(collect(offsets))))
 end
