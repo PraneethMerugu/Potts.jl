@@ -11,7 +11,7 @@ function _stage_descriptor(
         stage::CorePotts.CompilerSPI.AbstractCompiledStage,
         slot::Integer,
         effect_index::Integer = 1,
-        ; history_descriptors,
+        ; history_descriptors, tracker_handles = nothing,
     ) where {T <: AbstractFloat}
     record = ir.source.records[record_index]
     arguments = first(record.normalized_payload)
@@ -90,7 +90,7 @@ function _stage_descriptor(
         state_handles,
         draw_handles,
         binding,
-        ; state_layout, history_descriptors,
+        ; state_layout, history_descriptors, tracker_handles,
     )
     value = _stage_evaluator(
         ir,
@@ -102,7 +102,7 @@ function _stage_descriptor(
         state_handles,
         draw_handles,
         binding,
-        ; state_layout, history_descriptors,
+        ; state_layout, history_descriptors, tracker_handles,
     )
     target = _stage_state_handle(ir, record, effect.target, state_handles)
     reads = _record_state_handles(ir, record, state_handles; expressions = (condition.expression, value.expression))

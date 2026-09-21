@@ -313,7 +313,7 @@ function _lower_descriptor_plan(
         ir, manifest, T, state_handles, draw_handles
     )
     domain_resources = _hamiltonian_domain_resources(
-        ir, relationship_endpoint_policies
+        ir, relationship_endpoint_policies, T
     )
     fingerprint = _sha256_hex(
         "potts-descriptor-execution-plan-v2",

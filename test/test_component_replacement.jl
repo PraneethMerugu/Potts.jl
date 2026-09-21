@@ -183,6 +183,37 @@ end
     @test length(parameters(mtkcompile(nested))) == 1
 end
 
+@testset "component import aliases cannot overlap" begin
+    @variables shared[1:2] scalar incoming[1:2]
+    vector_source = ModelState(shared; initial = [1.0, 2.0])
+    scalar_source = ModelState(scalar; initial = 3.0)
+    vector_reference = ComponentReference((), vector_source)
+    scalar_reference = ComponentReference((), scalar_source)
+    for imports in (
+            (incoming => vector_reference, incoming[1] => scalar_reference),
+            (incoming[1] => scalar_reference, incoming => vector_reference),
+        )
+        consumer = PottsSystem(name = :consumer, imports = imports)
+        source = PottsSystem(
+            name = :root,
+            statements = StatementSet((vector_source, scalar_source)),
+            systems = (consumer,),
+            unknowns = (shared, scalar),
+        )
+        error = try
+            complete(source)
+            nothing
+        catch caught
+            caught
+        end
+        @test error isa ArgumentError
+        @test occursin(
+            "component import aliases cannot overlap at scalar components",
+            sprint(showerror, error),
+        )
+    end
+end
+
 @testset "replacement reconnects output identity and retains external inputs ($algorithm)" for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
     example = ComponentReplacementExample.replaced_input_model()
     original = solve(component_test_problem(example.source), algorithm; saveat = 0:2)

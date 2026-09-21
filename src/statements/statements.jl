@@ -361,6 +361,10 @@ function _defensive_tuple(values)
     return (_defensive_copy(values),)
 end
 
+# Symbolics array references are immutable declaration identities. Generic
+# `copy` materializes them as ordinary offset arrays on newer Symbolics releases,
+# which loses the whole-array symbolic contract before completion can inspect it.
+_defensive_copy(value::Symbolics.Arr) = value
 _defensive_copy(value::AbstractArray) = copy(value)
 _defensive_copy(value::AbstractDict) = copy(value)
 _defensive_copy(value) = value
