@@ -196,7 +196,7 @@ export LifecyclePlans
 public anchor_value
 export semantic_fingerprint, completed_system_fingerprint, scheduled_system_fingerprint
 export NativeComponent, ODEComponent, DAEComponent, Global, PerCell
-export FixedPhysicalTime, CPMThenComponents, NativeInput, NativeOutput
+export FixedPhysicalTime, BeforeLifecycle, AfterCompletedMCS, NativeInput, NativeOutput
 export NativeFieldOutput, MethodOfLinesComponent
 export NativeOperatingPoint, NativeSolveProfile
 export SerialNativeExecution, BatchedNativeExecution, MetalNativeExecution

@@ -38,7 +38,7 @@
         scope = Global(),
         time = FixedPhysicalTime(0.0, 0.1),
         cadence = EveryMCS(),
-        split = CPMThenComponents(),
+        phase = AfterCompletedMCS(),
         inputs = (
             NativeInput(native_drive, drive_state; value_type = Float64),
         ),

@@ -378,8 +378,13 @@ function _restore_native_states(
                 value isa NativeLogicalState || throw(ArgumentError(
                     "checkpoint per-cell state has an invalid logical value"
                 ))
-                isequal(value.t, expected_time) || throw(ArgumentError(
-                    "checkpoint per-cell native time does not match completed MCS"
+                domain = getfield(declaration, :domain)
+                valid_time = domain === nothing ?
+                    isequal(value.t, expected_time) :
+                    native_time_at(declaration, problem.tspan[1]) <=
+                        value.t <= expected_time
+                valid_time || throw(ArgumentError(
+                    "checkpoint per-cell native time does not match its domain cadence"
                 ))
                 _write_native_cell_state!(bank, slot, value)
             end
@@ -496,6 +501,7 @@ function _restore_checkpoint_materialization(
             descriptor_state,
             components,
             native_states,
+            checkpoint_value.snapshot.mcs,
         )
     end
     return runtime, history, native_states

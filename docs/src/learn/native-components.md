@@ -2,7 +2,7 @@
 
 A `NativeComponent` retains its upstream ModelingToolkit system. The
 declaration adds only Potts-facing scope, typed IO, physical-time mapping,
-cadence, split order, lifecycle policy, and capability requirement. Full MTK
+cadence, synchronization phase, lifecycle policy, and capability requirement. Full MTK
 structural compilation and standard SciML problem construction live in the
 weak extension.
 
@@ -25,6 +25,7 @@ component = NativeComponent(
     family=ODEComponent(),
     scope=Global(),
     time=FixedPhysicalTime(0.0, 0.1),
+    phase=AfterCompletedMCS(),
     inputs=(NativeInput(drive, input_state; value_type=Float64),),
     outputs=(NativeOutput(x, output_state; value_type=Float64),),
 )
@@ -71,7 +72,58 @@ preflight. Set `exact_replay=true` with a pinned `profile_id` and
 needed; that request additionally requires a matching closed replay row.
 
 For `PerCell()`, declare `PerCellNativeLifecycle` explicitly. The component
-pool has fixed capacity, active/generation/kind masks, and two-bank atomic
+may use `domain=cells(kind)` to advance only one finite-cell kind. Set
+`phase=BeforeLifecycle()` when its output must be visible to division in the
+same MCS; the default `AfterCompletedMCS()` sees a completed Core step. Due
+components in one phase read the same entry snapshot and publish together.
+`BeforeLifecycle()` currently requires `SequentialCPM()` and `CPUBackend()`
+with serial or batched native execution.
+
+For example, the Akeeb leader–follower model holds each follower's target,
+clock, and growth rate at the start of an MCS. Its MTK component publishes
+the discrete update before mitosis checks volume and clock:
+
+```julia
+@independent_variables t
+@variables growth_activity(t)=0.0 clock_activity(t)=0.0
+@variables start_target(t) start_clock(t) rate(t)
+@variables next_target(t) next_clock(t)
+D = Differential(t)
+growth_ode = System([
+    D(growth_activity) ~ ifelse(start_target < 20.0, rate, 0.0),
+    D(clock_activity) ~ ifelse(start_clock >= 0.0, 1.0, 0.0),
+    next_target ~ ifelse(t <= 0.0, start_target,
+        ifelse(start_target < 20.0, start_target + rate, start_target)),
+    next_clock ~ ifelse(t <= 0.0, start_clock,
+        ifelse(start_clock >= 0.0, start_clock + 1.0, start_clock)),
+], t; name=:follower_growth)
+growth = NativeComponent(growth_ode;
+    name=:follower_growth, family=ODEComponent(), scope=PerCell(),
+    domain=cells(follower), phase=BeforeLifecycle(),
+    time=FixedPhysicalTime(0.0, 1.0),
+    inputs=(
+        NativeInput(start_target, target_state; value_type=Float64),
+        NativeInput(start_clock, clock_state; value_type=Float64),
+        NativeInput(rate, rate_state; value_type=Float64),
+    ),
+    outputs=(
+        NativeOutput(next_target, target_state; value_type=Float64),
+        NativeOutput(next_clock, clock_state; value_type=Float64),
+    ),
+    lifecycle=PerCellNativeLifecycle(
+        creation=PreserveNativeInitialization(),
+        transition=Preserve(), division=CopyToDaughters()),
+)
+```
+
+The complete executable model and its source-law validation are in
+`SCDPotts/scripts/run_akeeb_proliferative.jl` and
+`SCDPotts/scripts/test_akeeb_mtk_growth.jl`, respectively. The auxiliary ODE
+states permit ordinary MTK/SciML execution; the algebraic outputs define
+the exact once-per-MCS source update. The source draws a fresh division
+threshold at each MCS, and the Potts lifecycle expression retains that rule.
+
+The component pool has fixed capacity, active/generation/kind masks, and two-bank atomic
 publication. `SerialNativeExecution()` is the reference;
 `BatchedNativeExecution(width)` vectorizes live lanes on CPU; and
 `MetalNativeExecution(width)` is a separately evidenced GPU profile executed

@@ -73,16 +73,14 @@ function native_time_at(clock::FixedPhysicalTime, completed_mcs::Integer)
     return clock.origin + completed_mcs * clock.duration_per_mcs
 end
 
-"""Coupled publication-order policy for a native component."""
-abstract type AbstractNativeSplitPolicy end
+"""Synchronization boundary at which a native component advances."""
+abstract type AbstractNativeCouplingPhase end
 
-"""
-The default Lie split: stage one CPM MCS, advance every due native component
-from the same staged Core snapshot, then atomically publish both domains. Due
-native components therefore have simultaneous (Jacobi) island semantics: one
-island cannot observe another island's output from the current coupled step.
-"""
-struct CPMThenComponents <: AbstractNativeSplitPolicy end
+"""Advance after copy attempts and before lifecycle effects of the same MCS."""
+struct BeforeLifecycle <: AbstractNativeCouplingPhase end
+
+"""Advance after copy attempts and lifecycle effects of the same MCS."""
+struct AfterCompletedMCS <: AbstractNativeCouplingPhase end
 
 """Initialization is delegated to the native system and standard MTK problem."""
 abstract type AbstractNativeInitializationPolicy end

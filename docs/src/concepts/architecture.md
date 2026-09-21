@@ -460,7 +460,7 @@ The completed integer Monte Carlo step is the master CPM clock and lifecycle bou
 A `Sweep` declares a positive `AttemptsPerSite` budget; CorePotts executes
 that many copy attempts per mutable site before closing the MCS and running
 its after-step events. Each native time-dependent component declares a
-physical duration per MCS and a named split policy. MTK clock objects are not
+physical duration per MCS and a named synchronization phase. MTK clock objects are not
 the master scheduler.
 
 The checkerboard law admits at most 255 attempt rounds per mutable site under

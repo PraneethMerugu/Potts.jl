@@ -174,16 +174,24 @@ function _publish_native_outputs!(plan, descriptor_state, updates)
 end
 
 function _validate_native_outputs(
-    plan, descriptor_state, components, states
+    plan, descriptor_state, components, states, completed_mcs
     )
     for (component, state) in zip(components, states)
+        # A pre-lifecycle output is an input to Core lifecycle, whose own
+        # daughter transformations may change that endpoint before publication.
+        declaration = getfield(component, :declaration)
+        getfield(declaration, :phase) isa
+            BeforeLifecycle && continue
+        native_due(declaration, completed_mcs) || continue
         updates = if state isa NativeLogicalState
             _native_output_updates(component, state)
         elseif state isa NativeCellStatePool
             snapshot = native_cell_state_snapshot(state)
+            slots = _native_due_cell_slots(plan, component, snapshot.kinds)
             Tuple(
                 update
-                for (slot, value) in enumerate(snapshot.states)
+                for slot in slots
+                for value in (snapshot.states[slot],)
                 if value !== nothing
                 for update in _native_output_updates(component, value; slot)
             )

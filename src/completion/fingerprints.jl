@@ -247,6 +247,7 @@ function _native_declaration_fingerprint_payload(
         path,
         declaration::NativeComponent,
         endpoints,
+        domain_identity,
         source_fingerprint::NativeSourceFingerprint,
     )
     endpoint_payloads = Tuple((
@@ -267,7 +268,8 @@ function _native_declaration_fingerprint_payload(
         scope = getfield(declaration, :scope),
         time = getfield(declaration, :time),
         cadence = getfield(declaration, :cadence),
-        split = nameof(typeof(getfield(declaration, :split))),
+        phase = nameof(typeof(getfield(declaration, :phase))),
+        domain = domain_identity,
         initialization = nameof(typeof(getfield(declaration, :initialization))),
         events = nameof(typeof(getfield(declaration, :events))),
         lifecycle = getfield(declaration, :lifecycle),
@@ -282,6 +284,7 @@ function _native_fingerprint_payload(component::CompletedNativeComponent)
         component.path,
         component.declaration,
         component.endpoints,
+        component.domain_identity,
         component.source_fingerprint,
     )
 end
@@ -293,6 +296,7 @@ function _scheduled_native_fingerprint_payload(
         component.path,
         component.declaration,
         component.endpoints,
+        component.domain_identity,
         component.original_fingerprint,
     )
     return merge(declaration, (

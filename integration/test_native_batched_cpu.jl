@@ -116,6 +116,19 @@ using SciMLBase
         @test native_value(batched, path, identity, batch_x) ==
             native_value(serial, path, identity, batch_x)
     end
+    continued_problem = PottsProblem(
+        scheduled, initial, (0, 3); seed = 0x506
+    )
+    continued_serial = solve(
+        continued_problem, SequentialCPM(); native_profiles = (serial_profile,)
+    )
+    continued_batched = solve(
+        continued_problem, SequentialCPM(); native_profiles = (batched_profile,)
+    )
+    @test last(continued_batched).batch_output ==
+        last(continued_serial).batch_output
+    @test last(continued_batched).batch_output ≈
+        [1.3, 1.6, 1.9, 2.2]
     report = inspect(init(
         problem,
         SequentialCPM();

@@ -79,6 +79,26 @@ function _native_endpoint_occurrence(
     return only(global_matches)
 end
 
+function _native_domain_occurrence(inventory::_PottsSourceInventory,
+        native::_SourceNativeOccurrence)
+    domain = getfield(native.component, :domain)
+    domain === nothing && return nothing
+    matches = filter(inventory.statements) do item
+        statement_kind(item.statement) === :CellKind &&
+            statement_id(item.statement) == statement_id(domain.kind)
+    end
+    exact = filter(item -> item.statement === domain.kind, matches)
+    length(exact) == 1 && return only(exact)
+    local_matches = filter(item -> item.path == native.system_path, matches)
+    length(local_matches) == 1 && return only(local_matches)
+    length(matches) == 1 && return only(matches)
+    throw(ArgumentError(
+        "native component $(join(native.path, '₊')) domain cells(kind) " *
+        (isempty(matches) ? "does not resolve to a CellKind" :
+         "has an ambiguous CellKind owner")
+    ))
+end
+
 # Native component completion resolves Potts endpoints while retaining the
 # original ModelingToolkit systems as their own semantic authority.
 function _resolve_native_components(
@@ -97,6 +117,11 @@ function _resolve_native_components(
         push!(seen_paths, native.path)
         endpoints = CouplingEndpointSchema[]
         context_native = only(filter(item -> item.path == native.path, context_inventory.natives))
+        domain_occurrence = _native_domain_occurrence(context_inventory,
+            context_native)
+        domain_identity = domain_occurrence === nothing ? nothing :
+            QualifiedStatementID(domain_occurrence.path,
+                statement_id(domain_occurrence.statement))
         for port in (
                 native_inputs(native.component)...,
                 native_outputs(native.component)...,
@@ -135,6 +160,7 @@ function _resolve_native_components(
             native.path,
             native.component,
             endpoint_tuple,
+            domain_identity,
             _native_source_fingerprint_or_error(native),
         ))
     end

@@ -34,6 +34,7 @@ mutable struct PottsIntegrator{P, A, B, L, R, S, C, N, F, Q}
     failure_report::Any
     native_states::N
     native_profiles::F
+    native_solver_cache::Vector{Any}
     capability_report::Q
 end
 
@@ -417,6 +418,7 @@ function _materialize_integrator(
         nothing,
         native_states,
         profiles,
+        Any[nothing for _ in profiles],
         capability_report,
     )
     _initialize_callbacks!(integrator)
@@ -444,10 +446,23 @@ init(problem::PottsProblem; alg = SequentialCPM(), kwargs...) =
     init(problem, alg; kwargs...)
 
 function _step_coupled!(integrator::PottsIntegrator)
-    transaction = CorePotts.BackendSPI.stage_program_mcs!(integrator.runtime)
-    if transaction === nothing
-        integrator.failure_report =
-            CorePotts.program_failure_report(integrator.runtime)
+    components = scheduled_native_components(integrator.prob.system)
+    has_pre = any(component -> begin
+        declaration = getfield(component, :declaration)
+        getfield(declaration, :phase) isa BeforeLifecycle &&
+            native_due(declaration, integrator.t + 1)
+    end, components)
+    paused = nothing
+    transaction = nothing
+    if has_pre
+        paused = CorePotts.BackendSPI.begin_program_mcs!(integrator.runtime)
+    else
+        transaction = CorePotts.BackendSPI.stage_program_mcs!(
+            integrator.runtime)
+    end
+    if paused === nothing && transaction === nothing
+        integrator.failure_report = CorePotts.program_failure_report(
+            integrator.runtime)
         integrator.retcode = SciMLBase.ReturnCode.Failure
         integrator.iterations += 1
         return integrator
@@ -455,9 +470,29 @@ function _step_coupled!(integrator::PottsIntegrator)
     candidates = nothing
     component_transactions = Any[]
     try
+        staged_pre = nothing
+        if has_pre
+            pre_snapshot = CorePotts.BackendSPI.program_step_snapshot(paused)
+            pre_descriptor = _native_components_have_ports(components) ?
+                CorePotts.BackendSPI.program_snapshot_descriptor_state(
+                    pre_snapshot) : nothing
+            staged_pre, pre_updates = _advance_native_before_lifecycle(
+                integrator, pre_descriptor, integrator.t + 1, pre_snapshot)
+            _publish_native_outputs!(integrator.plan, pre_descriptor, pre_updates)
+            !isempty(pre_updates) &&
+                CorePotts.BackendSPI.stage_program_descriptor_state!(
+                    paused, pre_descriptor)
+            transaction = CorePotts.BackendSPI.resume_program_mcs!(paused)
+            if transaction === nothing
+                integrator.failure_report = CorePotts.program_failure_report(
+                    integrator.runtime)
+                integrator.retcode = SciMLBase.ReturnCode.Failure
+                integrator.iterations += 1
+                return integrator
+            end
+        end
         snapshot = CorePotts.BackendSPI.program_step_snapshot(transaction)
         receipt = CorePotts.BackendSPI.program_step_lifecycle_receipt(transaction)
-        components = scheduled_native_components(integrator.prob.system)
         has_ports = _native_components_have_ports(components)
         descriptor_state = has_ports ?
             CorePotts.BackendSPI.program_snapshot_descriptor_state(snapshot) :
@@ -468,6 +503,7 @@ function _step_coupled!(integrator::PottsIntegrator)
             integrator.t + 1,
             receipt,
             snapshot,
+            staged_pre = staged_pre,
         )
         _publish_native_outputs!(integrator.plan, descriptor_state, updates)
         # Reading native inputs does not author a replacement Core state.
@@ -487,7 +523,12 @@ function _step_coupled!(integrator::PottsIntegrator)
             catch
             end
         end
-        CorePotts.BackendSPI.abort_program_step!(transaction)
+        if transaction === nothing
+            paused === nothing ||
+                CorePotts.BackendSPI.abort_program_mcs!(paused)
+        else
+            CorePotts.BackendSPI.abort_program_step!(transaction)
+        end
         integrator.retcode = SciMLBase.ReturnCode.Failure
         integrator.failure_report = error
         integrator.iterations += 1

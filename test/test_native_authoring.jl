@@ -18,6 +18,7 @@ Base.nameof(system::NativeAuthoringFixtureSystem) = system.name
         potts_cell_output; name = :per_cell_output, initial = 0.0
     )
     source = NativeAuthoringFixtureSystem(:per_cell_source)
+    follower = CellKind(:follower; extinction = RetireAtZero())
     lifecycle = PerCellNativeLifecycle(
         creation = PreserveNativeInitialization(),
         transition = Preserve(),
@@ -28,6 +29,8 @@ Base.nameof(system::NativeAuthoringFixtureSystem) = system.name
         name = :per_cell_component,
         family = ODEComponent(),
         scope = PerCell(),
+        phase = BeforeLifecycle(),
+        domain = cells(follower),
         time = FixedPhysicalTime(0.0, 0.5),
         inputs = (
             NativeInput(native_cell_input, model_input; value_type = Float64),
@@ -40,7 +43,19 @@ Base.nameof(system::NativeAuthoringFixtureSystem) = system.name
         lifecycle,
     )
     @test getfield(component, :scope) isa PerCell
+    @test getfield(component, :phase) isa BeforeLifecycle
+    @test getfield(component, :domain).kind === follower
     @test getfield(component, :lifecycle) === lifecycle
+    nested = PottsSystem(
+        name = :follower_child,
+        statements = StatementSet(follower),
+        native_components = (component,),
+    )
+    flattened = flatten(PottsSystem(name = :follower_root, systems = (nested,)))
+    mapped = only(native_components(flattened))
+    @test getfield(mapped, :phase) isa BeforeLifecycle
+    @test statement_id(getfield(mapped, :domain).kind) ==
+        StatementID(:follower_child₊follower)
 
     @named named_per_cell = NativeComponent(
         source;
@@ -76,6 +91,22 @@ Base.nameof(system::NativeAuthoringFixtureSystem) = system.name
         family = ODEComponent(),
         scope = PerCell(),
         time = FixedPhysicalTime(0.0, 1.0),
+    )
+    @test_throws ArgumentError NativeComponent(
+        source;
+        name = :global_cell_domain,
+        family = ODEComponent(),
+        time = FixedPhysicalTime(0.0, 1.0),
+        domain = cells(follower),
+    )
+    @test_throws ArgumentError NativeComponent(
+        source;
+        name = :invalid_cell_domain,
+        family = ODEComponent(),
+        scope = PerCell(),
+        time = FixedPhysicalTime(0.0, 1.0),
+        domain = cells(:follower),
+        lifecycle,
     )
     @test_throws ArgumentError NativeComponent(
         source;
@@ -141,6 +172,7 @@ end
         time = FixedPhysicalTime(0.0, 0.25),
     )
     @test nameof(named_component) === :named_component
+    @test getfield(named_component, :phase) isa AfterCompletedMCS
     @test Potts.native_source(named_component) === native_source_system
     source = PottsSystem(
         name = :native_authoring,

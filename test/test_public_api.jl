@@ -75,7 +75,8 @@
             :scheduled_system_fingerprint,
 
             :NativeComponent, :ODEComponent, :DAEComponent, :Global, :PerCell,
-            :FixedPhysicalTime, :CPMThenComponents, :NativeInput, :NativeOutput,
+            :FixedPhysicalTime, :BeforeLifecycle, :AfterCompletedMCS,
+            :NativeInput, :NativeOutput,
             :NativeFieldOutput, :MethodOfLinesComponent,
             :NativeOperatingPoint, :NativeSolveProfile, :NativeLogicalState,
             :SerialNativeExecution, :BatchedNativeExecution, :MetalNativeExecution,
