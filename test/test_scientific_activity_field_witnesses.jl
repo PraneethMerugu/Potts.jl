@@ -1,3 +1,5 @@
+_activity_witness_finish(total, count) = exp(total / count)
+
 @testset "activity ownership, retained history and saved observations" begin
     @variables activity_value activity_history
     @parameters maximum_activity = 5.0 activity_strength = 4.0 temperature = 8.0
@@ -12,22 +14,45 @@
         of = activity_value, depth = 2, cadence = EveryMCS()
     )
     copy = ProposalContext(:copy)
+    lane = SiteBinding(:activity_lane)
+    function local_activity(anchor, owner)
+        values = gather(
+            site_value(activity, lane);
+            bind = lane,
+            at = anchor,
+            over = :activity_neighborhood,
+            where = site_owner(lane) == owner,
+        )
+        return LocalMath.fold(values;
+            map = log, combine = +, init = 0.0,
+            finish = _activity_witness_finish,
+            domain = >=(0.0), invalid = :reject, empty = 0.0,
+            order = :canonical,
+        )
+    end
+    source_activity = local_activity(copy.source_site, copy.source_cell)
+    target_activity = local_activity(copy.target_site, copy.target_cell)
+    inverse_maximum_activity = exp(-log(maximum_activity))
+    act_drive = -(activity_strength * inverse_maximum_activity) * (
+        ifelse(kind_matches(copy.source_kind, cell), source_activity, 0.0) -
+        ifelse(kind_matches(copy.target_kind, cell), target_activity, 0.0)
+    )
     source = PottsSystem(
         name = :activity_history_observation,
         statements = StatementSet(
             (
                 Lattice(
                     (8, 8); boundary = Periodic(),
-                    relations = (proposal = Moore(), activity_neighborhood = Moore())
+                    relations = (
+                        proposal = Moore(),
+                        activity_neighborhood = Moore(; include_center = true),
+                    )
                 ),
                 cell, medium, activity, memory,
-                ActEnergy(
-                    cell, activity_value; maximum = maximum_activity,
-                    strength = activity_strength, reduction = :activity_neighborhood
-                ),
+                ProposalDrive(:activity_drive, act_drive; drive_scale = :energy),
                 AcceptedCopy(
                     :activate, Assign(activity_value, maximum_activity);
-                    when = copy.is_extension
+                    when = kind_matches(copy.source_kind, cell)
                 ),
                 Synchronous(
                     :decay, Assign(activity_value, max(activity_value - 1, 0));
@@ -48,6 +73,15 @@
         values = (activity_value => zeros(Float32, 8, 8),)
     )
     problem = PottsProblem(mtkcompile(source), initial, (0, 2); seed = 0x3302)
+    for invalid_maximum in (0.0, -1.0)
+        invalid = remake(
+            problem; p = Dict(maximum_activity => invalid_maximum)
+        )
+        @test_throws DomainError init(
+            invalid, SequentialCPM(); backend = CPUBackend(),
+            scalar_type = Float32,
+        )
+    end
     solution = solve(
         problem, SequentialCPM(); backend = CPUBackend(),
         scalar_type = Float32, save_everystep = true, observables = (:occupied_sites,)
@@ -88,6 +122,113 @@
         SymbolicIndexingInterface.getsym(
             replay, :occupied_sites
         )(replay)
+    end
+end
+
+@testset "authored Act drive changes acceptance across an energy threshold" begin
+    @variables oracle_activity oracle_gate
+    @parameters oracle_barrier = 1.9
+    cell = CellKind(:act_oracle_cell; extinction = RetireAtZero())
+    medium = MediumKind(:act_oracle_medium)
+    activity = SiteState(
+        oracle_activity; name = :act_oracle_activity, owner = cell,
+        initial = 0.0, lifecycle = ClearOnOwnershipChange(),
+    )
+    gate = FieldState(oracle_gate; name = :act_oracle_gate, initial = 0.0)
+    copy = ProposalContext(:act_oracle_copy)
+    lane = SiteBinding(:act_oracle_lane)
+    gathered = gather(
+        site_value(activity, lane);
+        bind = lane,
+        at = copy.source_site,
+        over = :act_oracle_neighborhood,
+        where = site_owner(lane) == copy.source_cell,
+    )
+    source_activity = LocalMath.fold(
+        gathered;
+        map = log,
+        combine = +,
+        init = 0.0,
+        finish = _activity_witness_finish,
+        domain = >=(0.0),
+        invalid = :reject,
+        empty = 0.0,
+        order = :canonical,
+    )
+    act_drive = ifelse(
+        kind_matches(copy.source_kind, cell), -source_activity, 0.0
+    )
+    source = PottsSystem(
+        name = :act_acceptance_oracle,
+        statements = StatementSet((
+            Lattice(
+                (3, 3); boundary = Closed(),
+                relations = (
+                    proposal = Moore(),
+                    act_oracle_neighborhood = Moore(; include_center = true),
+                ),
+            ),
+            cell,
+            medium,
+            activity,
+            gate,
+            ProposalDrive(:act_oracle_drive, act_drive; drive_scale = :energy),
+            ProposalDrive(
+                :act_oracle_barrier,
+                ifelse(copy.is_extension, oracle_barrier, 0.0);
+                drive_scale = :energy,
+            ),
+            ProposalConstraint(
+                :isolated_act_extension,
+                copy.is_extension &
+                    (field_value(gate, copy.source_site) == 1) &
+                    (field_value(gate, copy.target_site) == 2),
+            ),
+            Protocol(
+                Sweep(; temperature = 0.0, attempts = AttemptsPerSite(16));
+                name = :main,
+            ),
+        )),
+        unknowns = [oracle_activity, oracle_gate],
+        parameters = [oracle_barrier],
+    )
+    labels = zeros(Int32, 3, 3)
+    source_site = CartesianIndex(2, 2)
+    target_site = CartesianIndex(1, 2)
+    labels[source_site] = 1
+    activity_values = zeros(Float64, 3, 3)
+    activity_values[source_site] = 2.0
+    gate_values = zeros(Float64, 3, 3)
+    gate_values[source_site] = 1.0
+    gate_values[target_site] = 2.0
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium),
+        values = (
+            oracle_activity => activity_values,
+            oracle_gate => gate_values,
+        ),
+    )
+    scheduled = mtkcompile(source)
+    expected_extension = Base.copy(labels)
+    expected_extension[target_site] = 1
+
+    for (algorithm, seed) in ((SequentialCPM(), UInt64(1)),)
+        run(barrier) = solve(
+            PottsProblem(
+                scheduled, initial, (0, 1);
+                p = (oracle_barrier => barrier,), seed,
+            ),
+            algorithm; backend = CPUBackend(), scalar_type = Float64,
+        )
+        favorable = run(1.9)
+        unfavorable = run(2.1)
+        @test favorable.retcode == SciMLBase.ReturnCode.Success
+        @test unfavorable.retcode == SciMLBase.ReturnCode.Success
+        @test favorable.stats.accepted == 1
+        @test unfavorable.stats.accepted == 0
+        @test unfavorable.stats.energy_rejections > 0
+        @test last(favorable).ownership == expected_extension
+        @test last(unfavorable).ownership == labels
     end
 end
 

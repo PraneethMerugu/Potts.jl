@@ -117,15 +117,15 @@ end
         bounded_signal; name = :bounded_signal, initial = 1.0)
     site = SiteBinding(:bounded_site)
     proposal = ProposalContext(:bounded_copy)
-    @test_throws ArgumentError gather(
-        identity, :contact; at = site)
-    symbolic_fold = _localmath_neighbor_sum(gather(
-        signal, :contact; at = site))
+    @test_throws ArgumentError gather(identity; at = site, over = :contact)
+    symbolic_fold = _localmath_neighbor_sum(gather(signal; at = site, over = :contact))
     fold_node = Symbolics.unwrap(symbolic_fold)
     @test Symbolics.operation(fold_node) === Potts._potts_bounded_fold
     fold_arguments = Symbolics.arguments(fold_node)
-    @test length(fold_arguments) == 4
+    @test length(fold_arguments) == 6
     @test Symbolics.value(first(fold_arguments)) isa LocalMath.BoundedFold
+    @test Symbolics.value(fold_arguments[5]) === false
+    @test Symbolics.value(fold_arguments[6]) == 0
     source = PottsSystem(
         name = :bounded_term_system,
         statements = StatementSet((
@@ -142,18 +142,15 @@ end
             ),
             ProposalDrive(
                 :bounded_neighbor_volume,
-                _localmath_neighbor_volume_sum(gather(
-                    cell_volume, :contact; at = proposal.target_site)),
+                _localmath_neighbor_volume_sum(gather(cell_volume; at = proposal.target_site, over = :contact)),
             ),
             ProposalConstraint(
                 :bounded_neighbor_volume_is_nonnegative,
-                _localmath_neighbor_volume_sum(gather(
-                    cell_volume, :contact; at = proposal.target_site)) >= 0,
+                _localmath_neighbor_volume_sum(gather(cell_volume; at = proposal.target_site, over = :contact)) >= 0,
             ),
             ProposalModifier(
                 :bounded_neighbor_volume_identity_modifier,
-                1.0 + 0.0 * _localmath_neighbor_volume_sum(gather(
-                    cell_volume, :contact; at = proposal.target_site)),
+                1.0 + 0.0 * _localmath_neighbor_volume_sum(gather(cell_volume; at = proposal.target_site, over = :contact)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),
@@ -173,8 +170,7 @@ end
                 :nonlocal_neighbor_volume;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = _localmath_neighbor_volume_sum(gather(
-                    cell_volume, :contact; at = site)),
+                expression = _localmath_neighbor_volume_sum(gather(cell_volume; at = site, over = :contact)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),
@@ -188,8 +184,7 @@ end
     @test locality_error isa Potts.PottsValidationError
     @test occursin("proposal-snapshot", sprint(showerror, locality_error))
 
-    @test_throws ArgumentError gather(
-        cell_elongation, :contact; at = proposal.target_site)
+    @test_throws ArgumentError gather(cell_elongation; at = proposal.target_site, over = :contact)
 
     ownership = reshape(Int32[1, 1, 0, 1, 0, 0, 0, 0, 0], 3, 3)
     initial = PottsInitialState(
@@ -218,8 +213,7 @@ end
         ))
     end
 
-    invalid_fold = _invalid_type_changing_fold(gather(
-        signal, :contact; at = site))
+    invalid_fold = _invalid_type_changing_fold(gather(signal; at = site, over = :contact))
     invalid_scheduled = fold_contract_system(
         :invalid_gather_fold, invalid_fold)
     invalid_error = try
@@ -238,8 +232,7 @@ end
     @test occursin(
         "resolved gathered scalar type", sprint(showerror, invalid_error))
 
-    valid_fold = _valid_type_changing_fold(gather(
-        signal, :contact; at = site))
+    valid_fold = _valid_type_changing_fold(gather(signal; at = site, over = :contact))
     valid_scheduled = fold_contract_system(:valid_gather_fold, valid_fold)
     valid_integrator = init(
         PottsProblem(valid_scheduled, initial, (0, 1); seed = 0x1a),
@@ -266,7 +259,7 @@ end
           checkerboard_solution.stats.rejected
     @test size(last(checkerboard_solution).ownership) == size(ownership)
 
-    @test_throws ArgumentError gather(signal, 17; at = site)
+    @test_throws ArgumentError gather(signal; at = site, over = 17)
 
     missing_relation_source = PottsSystem(
         name = :bounded_term_missing_relation,
@@ -279,8 +272,7 @@ end
                 :missing_bounded_relation;
                 domain = sites(:lattice),
                 anchor = site,
-                expression = _localmath_neighbor_sum(gather(
-                    signal, :missing_contact; at = site)),
+                expression = _localmath_neighbor_sum(gather(signal; at = site, over = :missing_contact)),
             ),
             Protocol(Sweep(); name = :bounded_protocol),
         )),

@@ -77,8 +77,8 @@ function run_custom_model(; seed::Integer = 0x6c21)
     gathered_signal_drive = ProposalDrive(
         :gathered_signal,
         scaled_neighbor_signal(
-            mean(gather(signal, :contact; at = proposal.target_site)),
-            mean(gather(cell_volume, :contact; at = proposal.target_site)),
+            mean(gather(signal; at = proposal.target_site, over = :contact)),
+            mean(gather(cell_volume; at = proposal.target_site, over = :contact)),
             gain,
         ),
     )

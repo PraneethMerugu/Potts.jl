@@ -213,16 +213,18 @@ abstract type AbstractNeighborhood end
 """Axis-aligned neighborhood of positive Manhattan `radius`."""
 struct VonNeumann <: AbstractNeighborhood
     radius::Int
+    include_center::Bool
 end
-VonNeumann(radius::Integer = 1) =
-    radius > 0 ? VonNeumann(Int(radius)) :
+VonNeumann(radius::Integer = 1; include_center::Bool = false) =
+    radius > 0 ? VonNeumann(Int(radius), include_center) :
     throw(ArgumentError("neighborhood radius must be positive"))
 """Full neighborhood of positive Chebyshev `radius`."""
 struct Moore <: AbstractNeighborhood
     radius::Int
+    include_center::Bool
 end
-Moore(radius::Integer = 1) =
-    radius > 0 ? Moore(Int(radius)) :
+Moore(radius::Integer = 1; include_center::Bool = false) =
+    radius > 0 ? Moore(Int(radius), include_center) :
     throw(ArgumentError("neighborhood radius must be positive"))
 
 abstract type AbstractOwnershipChangePolicy end
@@ -557,31 +559,6 @@ function LocalConnectivity(
         foreground,
         background,
         theorem = :merks_2006_local_collision,
-    )
-end
-
-"""Construct the activity proposal drive for a bounded activity state."""
-function ActEnergy(
-        kind, activity; maximum, strength,
-        reduction::Symbol = :activity_neighborhood,
-        name::Symbol = Symbol(:activity_, Symbol(statement_id(kind)))
-    )
-    expression = _potts_act_energy(
-        _kind_token(kind),
-        activity,
-        _spatial_relation_token(reduction),
-        maximum,
-        strength,
-    )
-    return ProposalDrive(
-        name, expression;
-        mechanism = :activity,
-        drive_scale = :energy,
-        kind,
-        activity,
-        maximum,
-        strength,
-        reduction,
     )
 end
 

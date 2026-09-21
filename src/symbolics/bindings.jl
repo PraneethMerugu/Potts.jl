@@ -137,34 +137,104 @@ _gather_anchor(value) = throw(
     )
 )
 
-struct _RelationGather{S, R, A}
+struct _GatherSiteValue{S, B <: SiteBinding}
+    source::S
+    binding::B
+end
+
+"""Bind one declared site or field state value to a relation-gather lane."""
+function site_value(source::Union{SiteState, FieldState}, binding::SiteBinding)
+    return _GatherSiteValue(source, binding)
+end
+
+struct _GatherSiteOwner{B <: SiteBinding}
+    binding::B
+end
+
+"""Return the owner identity at a bound relation-gather site."""
+site_owner(binding::SiteBinding) = _GatherSiteOwner(binding)
+
+struct _GatherExactOwnerFilter{B <: SiteBinding, O}
+    binding::B
+    owner::O
+end
+
+function Base.:(==)(site::_GatherSiteOwner, owner::Symbolics.Num)
+    return _GatherExactOwnerFilter(site.binding, owner)
+end
+Base.:(==)(owner::Symbolics.Num, site::_GatherSiteOwner) = site == owner
+
+struct _RelationGather{S, R, A, B, F}
     source::S
     relation::R
     anchor::A
+    binding::B
+    filter::F
+end
+
+function _gather_relation(over)
+    over isa Union{Symbol, SpatialRelation} || throw(
+        ArgumentError(
+            "gather over requires a declared SpatialRelation or its local name"
+        )
+    )
+    return over
+end
+
+function _gather_filter(where, binding)
+    where === nothing && return nothing
+    where isa _GatherExactOwnerFilter || throw(ArgumentError(
+        "gather where currently requires `site_owner(binding) == proposal.source_cell` " *
+            "or the corresponding target-cell expression"
+    ))
+    binding isa SiteBinding || throw(ArgumentError(
+        "an owner-filtered gather requires one explicit SiteBinding"
+    ))
+    where.binding === binding || throw(ArgumentError(
+        "gather where must reference the binding supplied through `bind`"
+    ))
+    return where
 end
 
 """Return whether a unary operation is exactly one direct scalar tracker view."""
 is_direct_scalar_tracker_projection(::Any) = false
 
 """
-    gather(source, relation; at)
+    gather(source; at, over)
 
 Gather the finite values reached from `at` through `relation` as
 the input to `LocalMath.fold`. This is a cold symbolic declaration;
 the Potts compiler resolves both resources and removes the declaration before
 execution planning.
 """
-function gather(field::FieldState, relation; at)
-    relation isa Union{Symbol, SpatialRelation} || throw(
-        ArgumentError(
-            "gather relation must be a declared SpatialRelation or its local name"
-        )
+function gather(field::FieldState; at, over)
+    return _RelationGather(
+        field, _gather_relation(over), _gather_anchor(at), nothing, nothing
     )
-    return _RelationGather(field, relation, _gather_anchor(at))
 end
 
 """
-    gather(tracker_operation, relation; at)
+    gather(site_value(state, binding); bind, at, over, where=nothing)
+
+Gather one declared site-local state through a bounded relation. `bind` names
+the visited lane and `where` may select the exact owner visible at proposal
+entry. The declaration is removed during lowering.
+"""
+function gather(value::_GatherSiteValue; bind, at, over, where = nothing)
+    bind isa SiteBinding || throw(ArgumentError(
+        "a lane-bound gather requires `bind` to be a SiteBinding"
+    ))
+    value.binding === bind || throw(ArgumentError(
+        "site_value and gather must use the same SiteBinding"
+    ))
+    filter = _gather_filter(where, bind)
+    return _RelationGather(
+        value, _gather_relation(over), _gather_anchor(at), bind, filter
+    )
+end
+
+"""
+    gather(tracker_operation; at, over)
 
 Declare tracker values reached by mapping each relation endpoint site to its
 finite current owner and reading a unary direct scalar tracker projection such
@@ -174,12 +244,8 @@ relation-lane order: repeated owners remain
 repeated, while absent boundary lanes and medium endpoints do not participate
 in the consuming `LocalMath.BoundedFold`.
 """
-function gather(operation, relation; at)
-    relation isa Union{Symbol, SpatialRelation} || throw(
-        ArgumentError(
-            "gather relation must be a declared SpatialRelation or its local name"
-        )
-    )
+function gather(operation; at, over)
+    relation = _gather_relation(over)
     transfer = try
         operation_transfer(operation, 1)
     catch error
@@ -221,7 +287,9 @@ function gather(operation, relation; at)
             "gathered tracker projections currently require only named spatial resources"
         )
     )
-    return _RelationGather(operation, relation, _gather_anchor(at))
+    return _RelationGather(
+        operation, relation, _gather_anchor(at), nothing, nothing
+    )
 end
 
 @enum _GatherReductionKind::UInt8 begin
@@ -245,13 +313,23 @@ Base.isless(left::_GatherReduction, right::_GatherReduction) =
 Base.isless(::Type{_GatherReduction}, ::Type{_GatherReduction}) = false
 
 function _symbolic_gather_fold(fold, values::_RelationGather)
-    source = values.source isa FieldState ?
-        _field_token(values.source) : values.source(values.anchor)
+    source = if values.source isa FieldState
+        _field_token(values.source)
+    elseif values.source isa _GatherSiteValue
+        state = values.source.source
+        state isa SiteState ? _site_state_token(state) : _field_token(state)
+    else
+        values.source(values.anchor)
+    end
+    filter_enabled = values.filter !== nothing
+    filter_owner = filter_enabled ? values.filter.owner : 0
     return _potts_bounded_fold(
         fold,
         source,
         _spatial_relation_token(values.relation),
         values.anchor,
+        filter_enabled,
+        filter_owner,
     )
 end
 
