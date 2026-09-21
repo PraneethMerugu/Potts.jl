@@ -103,22 +103,6 @@ function CorePotts.CompilerSPI.proposal_target_kind(
     owner = CorePotts.CompilerSPI.proposal_target_owner(context)
     return owner > 0 ? context.cell_kinds[Int(owner)] : Int16(1)
 end
-CorePotts.CompilerSPI.proposal_site_owner(
-    context::ScientificProposalProbe, site
-) = context.ownership[site]
-CorePotts.CompilerSPI.proposal_relation_count(
-    context::ScientificProposalProbe, relation::Int32
-) = length(context.relations[Int(relation)])
-function CorePotts.CompilerSPI.proposal_relation_neighbor_site(
-        context::ScientificProposalProbe,
-        relation::Int32,
-        center::CartesianIndex{2},
-        direction::Integer,
-    )
-    offset = context.relations[Int(relation)][Int(direction)]
-    neighbor = center + CartesianIndex(offset)
-    return checkbounds(Bool, context.ownership, neighbor) ? neighbor : nothing
-end
 function CorePotts.CompilerSPI.proposal_relation_neighbor_owner(
         context::ScientificProposalProbe,
         relation::Int32,
@@ -129,118 +113,8 @@ function CorePotts.CompilerSPI.proposal_relation_neighbor_owner(
     return checkbounds(Bool, context.ownership, neighbor) ?
         context.ownership[neighbor] : typemin(Int32)
 end
-function CorePotts.CompilerSPI.state_value(
-        context::ScientificProposalProbe, handle, site
-    )
-    handle === :activity || throw(ArgumentError("unexpected state handle"))
-    context.state_reads[] += 1
-    return context.state[site]
-end
-
-const SCIENTIFIC_MOORE_OFFSETS = Tuple(
-    (row, column)
-    for row in -1:1 for column in -1:1
-    if (row, column) != (0, 0)
-)
 const SCIENTIFIC_VON_NEUMANN_OFFSETS =
     ((-1, 0), (0, -1), (0, 1), (1, 0))
-
-function independent_local_geomean(context, center, owner)
-    owner <= 0 && return 0.0
-    values = Float64[]
-    context.ownership[center] == owner && push!(values, context.state[center])
-    for offset in SCIENTIFIC_MOORE_OFFSETS
-        neighbor = center + CartesianIndex(offset)
-        checkbounds(Bool, context.ownership, neighbor) || continue
-        context.ownership[neighbor] == owner || continue
-        push!(values, context.state[neighbor])
-    end
-    isempty(values) && return 0.0
-    any(value -> value <= 0, values) && return 0.0
-    return prod(values)^(1 / length(values))
-end
-
-@testset "Act operation matches an independent bounded-neighborhood oracle" begin
-    operation = CorePotts.CompilerSPI.operation_callable(
-        Val(:act_energy), v"2.0.0"
-    )
-    for shape in ((7, 7), (71, 71))
-        ownership = zeros(Int32, shape)
-        center = CartesianIndex(cld(shape[1], 2), cld(shape[2], 2))
-        source = center + CartesianIndex(0, -1)
-        target = center
-        ownership[source] = 1
-        ownership[source + CartesianIndex(-1, 0)] = 1
-        ownership[source + CartesianIndex(1, 0)] = 1
-        state = zeros(Float64, shape)
-        state[source] = 3.0
-        state[source + CartesianIndex(-1, 0)] = 8.0
-        state[source + CartesianIndex(1, 0)] = 15.0
-        reads = Ref(0)
-        context = ScientificProposalProbe(
-            ownership,
-            Int16[2],
-            state,
-            source,
-            target,
-            (SCIENTIFIC_MOORE_OFFSETS, SCIENTIFIC_VON_NEUMANN_OFFSETS),
-            reads,
-        )
-        maximum = 20.0
-        strength = 5.0
-        expected = -(strength / maximum) * (
-            independent_local_geomean(context, source, Int32(1)) - 0.0
-        )
-        observed = operation(
-            (Int16(2), :activity, Int32(1), maximum, strength), context
-        )
-        @test observed ≈ expected
-        @test reads[] == 3
-        @test CorePotts.CompilerSPI.operation_context_supported(
-            operation, typeof(context)
-        )
-    end
-
-    ownership = zeros(Int32, 7, 7)
-    ownership[4, 3] = 1
-    ownership[4, 4] = 2
-    state = zeros(Float64, 7, 7)
-    state[4, 3] = 8.0
-    state[4, 4] = 3.0
-    context = ScientificProposalProbe(
-        ownership,
-        Int16[2, 2],
-        state,
-        CartesianIndex(4, 3),
-        CartesianIndex(4, 4),
-        (SCIENTIFIC_MOORE_OFFSETS, SCIENTIFIC_VON_NEUMANN_OFFSETS),
-        Ref(0),
-    )
-    expected = -(5.0 / 20.0) * (
-        independent_local_geomean(context, context.source, Int32(1)) -
-        independent_local_geomean(context, context.target, Int32(2))
-    )
-    @test operation(
-        (Int16(2), :activity, Int32(1), 20.0, 5.0), context
-    ) ≈ expected
-    @test operation(
-        (Int16(9), :activity, Int32(1), 20.0, 5.0), context
-    ) == 0.0
-    state[4, 4] = 0.0
-    @test operation(
-        (Int16(2), :activity, Int32(1), 20.0, 5.0), context
-    ) ≈ -2.0
-
-    retraction = ScientificProposalProbe(
-        ownership, Int16[2, 2], state,
-        CartesianIndex(4, 5), CartesianIndex(4, 4),
-        (SCIENTIFIC_MOORE_OFFSETS, SCIENTIFIC_VON_NEUMANN_OFFSETS), Ref(0),
-    )
-    state[4, 4] = 3.0
-    @test operation(
-        (Int16(2), :activity, Int32(1), 20.0, 5.0), retraction
-    ) ≈ 0.75
-end
 
 @testset "Merks connectivity matches the independent clockwise truth table" begin
     operation = CorePotts.CompilerSPI.operation_callable(
@@ -356,16 +230,11 @@ _tracker_lane_digits_finish(accumulator, count) = accumulator
                 proposal.is_extension &
                 (field_value(gate, proposal.source_site) == 1) &
                 (field_value(gate, proposal.target_site) == 2) &
-                (sum(gather(
-                    cell_volume, :contact; at = proposal.target_site)) == 4) &
-                (minimum(gather(
-                    cell_volume, :contact; at = proposal.target_site)) == 2) &
-                (maximum(gather(
-                    cell_volume, :contact; at = proposal.target_site)) == 2) &
-                (Statistics.mean(gather(
-                    cell_volume, :contact; at = proposal.target_site)) == 2) &
-                (lane_digits(gather(
-                    cell_volume, :contact; at = proposal.target_site)) == 22),
+                (sum(gather(cell_volume; at = proposal.target_site, over = :contact)) == 4) &
+                (minimum(gather(cell_volume; at = proposal.target_site, over = :contact)) == 2) &
+                (maximum(gather(cell_volume; at = proposal.target_site, over = :contact)) == 2) &
+                (Statistics.mean(gather(cell_volume; at = proposal.target_site, over = :contact)) == 2) &
+                (lane_digits(gather(cell_volume; at = proposal.target_site, over = :contact)) == 22),
             ),
             Protocol(Sweep(; temperature = 0.0); name = :main),
         )),

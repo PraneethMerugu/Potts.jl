@@ -58,12 +58,51 @@ end
         :geometric_mean, Float32, Float32[]).outcome.valid
 end
 
+_test_act_finish(total, count) = exp(total / count)
+
+@testset "lane-bound site gathers expose exact-owner selection" begin
+    @variables gathered_activity
+    cell = CellKind(:gathered_activity_cell; extinction = RetireAtZero())
+    activity = SiteState(
+        gathered_activity; name = :gathered_activity, owner = cell,
+        initial = 0.0, lifecycle = ClearOnOwnershipChange())
+    copy = ProposalContext(:gathered_activity_copy)
+    lane = SiteBinding(:gathered_activity_lane)
+    other_lane = SiteBinding(:other_activity_lane)
+    values = gather(
+        site_value(activity, lane);
+        bind = lane,
+        at = copy.source_site,
+        over = :act_neighbors,
+        where = site_owner(lane) == copy.source_cell,
+    )
+    expression = LocalMath.fold(values;
+        map = log, combine = +, init = 0.0,
+        finish = _test_act_finish,
+        domain = >=(0.0), invalid = :reject, empty = 0.0,
+        order = :canonical,
+    )
+    node = Symbolics.unwrap(expression)
+    @test Symbolics.operation(node) === Potts._potts_bounded_fold
+    arguments = Symbolics.arguments(node)
+    @test length(arguments) == 6
+    @test Symbolics.value(arguments[5]) === true
+    @test Symbolics.operation(arguments[6]) === source_cell
+    @test_throws ArgumentError gather(
+        site_value(activity, lane);
+        bind = other_lane, at = copy.source_site, over = :act_neighbors)
+    @test_throws ArgumentError gather(
+        site_value(activity, lane);
+        bind = lane, at = copy.source_site, over = :act_neighbors,
+        where = site_owner(other_lane) == copy.source_cell)
+end
+
 @testset "symbolic gather reductions lower through one bounded-fold operation" begin
     @variables reduction_signal
     signal = FieldState(
         reduction_signal; name = :reduction_signal, initial = 1.0)
     site = SiteBinding(:reduction_site)
-    values = gather(signal, :contact; at = site)
+    values = gather(signal; at = site, over = :contact)
 
     for T in (Float32, Float64)
         operations = (
@@ -87,14 +126,13 @@ end
     @test Statistics.mean(values) isa Symbolics.Num
     @test LocalMath.geometric_mean(values) isa Symbolics.Num
     proposal = ProposalContext(:whole_proposal)
+    @test sum(gather(signal; at = proposal.target_site, over = :contact)) isa Symbolics.Num
     @test sum(gather(
-        signal, :contact; at = proposal.target_site)) isa Symbolics.Num
-    @test sum(gather(
-        signal, :contact; at = Potts.anchor_value(site))) isa Symbolics.Num
-    @test_throws ArgumentError gather(signal, :contact; at = proposal)
+        signal; at = Potts.anchor_value(site), over = :contact)) isa Symbolics.Num
+    @test_throws ArgumentError gather(signal; at = proposal, over = :contact)
     for invalid_anchor in (1, :site, [1, 2])
         error = try
-            gather(signal, :contact; at = invalid_anchor)
+            gather(signal; at = invalid_anchor, over = :contact)
             nothing
         catch caught
             caught
@@ -114,7 +152,7 @@ end
     cell = CellKind(:mixed_reduction_cell; extinction = RetireAtZero())
     medium = MediumKind(:mixed_reduction_medium)
     proposal = ProposalContext(:mixed_reduction_proposal)
-    values = gather(signal, :contact; at = proposal.target_site)
+    values = gather(signal; at = proposal.target_site, over = :contact)
     expression = sum(values) + minimum(values) + maximum(values) +
         Statistics.mean(values) + LocalMath.geometric_mean(values)
 

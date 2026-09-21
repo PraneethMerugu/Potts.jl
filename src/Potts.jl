@@ -145,7 +145,7 @@ export AbstractPottsBackend, CPUBackend, MetalBackend
 export PottsParameters
 export LabelledCells, OwnershipLayout, CellPlacement, MediumPlacement
 export SiteBinding, CellBinding, ContactBinding, RelationshipBinding
-export gather
+export gather, site_value, site_owner
 export AbstractProceduralPlacement, RandomSitePlacement
 export PottsInitialState, PottsProblem, PottsIntegrator, PottsSavedState, PottsSolution
 export PottsStats, init, solve, solve!, step!, remake, terminate!, failure_report
@@ -187,7 +187,7 @@ export DiscreteFieldEuler
 export ExtensionsOnly, RetractionsOnly, ExtensionsAndRetractions
 export Nearest, Multilinear, CellCentered, AttemptsPerSite
 export Lattice, Volume, ContactEnergy, Elongation, Chemotaxis, LocalConnectivity
-export ActEnergy, Synchronous, Sweep, SweepStage
+export Synchronous, Sweep, SweepStage
 export RelationshipEnergy, RelationshipConstraint, ↔
 export inspect, Statements, Variables, Effects, RandomOperations, Schedule
 export Capabilities, Fingerprints

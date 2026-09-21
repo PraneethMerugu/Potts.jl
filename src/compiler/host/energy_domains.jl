@@ -219,6 +219,21 @@ function _checked_anchor_bound(value::Integer, description)
     return Int(value)
 end
 
+function _contact_neighborhood_bound(neighborhood::Moore, dimensions::Int)
+    center = neighborhood.include_center ? big(1) : big(0)
+    return big(2 * neighborhood.radius + 1)^dimensions - 1 + center
+end
+
+function _contact_neighborhood_bound(neighborhood::VonNeumann, dimensions::Int)
+    center = neighborhood.include_center ? big(1) : big(0)
+    radius = neighborhood.radius
+    return center + sum(
+        big(2)^axes * binomial(big(dimensions), axes) *
+            binomial(big(radius), axes)
+            for axes in 1:min(dimensions, radius)
+    )
+end
+
 function _contact_relation_bound(
         source::FrozenSourceGraph,
         owner::QualifiedStatement,
@@ -252,16 +267,7 @@ function _contact_relation_bound(
         )
     )
     dimensions = length(shape)
-    radius = neighborhood.radius
-    maximum = if neighborhood isa Moore
-        big(2 * radius + 1)^dimensions - 1
-    else
-        sum(
-            big(2)^axes * binomial(big(dimensions), axes) *
-                binomial(big(radius), axes)
-                for axes in 1:min(dimensions, radius)
-        )
-    end
+    maximum = _contact_neighborhood_bound(neighborhood, dimensions)
     return _checked_anchor_bound(maximum, "contact neighborhood")
 end
 

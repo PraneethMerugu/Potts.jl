@@ -18,7 +18,7 @@ function _builtin_operation_declarations()
         (_potts_model_bound_state_value, 1),
         (_potts_cell_bound_state_value, 1),
         (_potts_lifecycle_bound_state_value, 1),
-        (_potts_bounded_fold, 4),
+        (_potts_bounded_fold, 6),
         (_potts_cell_site_sum, 5),
         (_potts_cell_site_minimum, 5),
         (cell_volume, 1), (cell_surface, 1), (cell_elongation, 1),
@@ -31,7 +31,6 @@ function _builtin_operation_declarations()
         (history_value, 2), (edge_payload, 2), (lag, 2),
         (_potts_draw, 4),
         (_potts_merks_local_connectivity, 3),
-        (_potts_act_energy, 5),
         (_potts_discrete_field_stencil_rate, 6),
         (_potts_relationship_endpoint_kinds, 4),
     )

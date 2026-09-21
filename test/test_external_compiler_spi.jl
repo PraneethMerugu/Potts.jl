@@ -82,29 +82,17 @@ end
                         (field_value(gate, proposal.target_site) == 2) &
                         (
                         sum(
-                            gather(
-                                ExternalSurfaceOperationFixture.external_cell_surface,
-                                :surface_alt;
-                                at = proposal.target_site,
-                            )
+                            gather(ExternalSurfaceOperationFixture.external_cell_surface; at = proposal.target_site, over = :surface_alt)
                         ) == 16
                     ) &
                         (
                         surface_digits(
-                            gather(
-                                ExternalSurfaceOperationFixture.external_cell_surface,
-                                :surface_alt;
-                                at = proposal.target_site,
-                            )
+                            gather(ExternalSurfaceOperationFixture.external_cell_surface; at = proposal.target_site, over = :surface_alt)
                         ) == 808
                     ) &
                         (
                         surface_digits(
-                            gather(
-                                ExternalSurfaceOperationFixture.external_cell_surface_alt,
-                                :surface;
-                                at = proposal.target_site,
-                            )
+                            gather(ExternalSurfaceOperationFixture.external_cell_surface_alt; at = proposal.target_site, over = :surface)
                         ) >= 0
                     ),
                 ),
@@ -192,10 +180,7 @@ end
                         proposal.target_site
                     ) +
                         surface_digits(
-                        gather(
-                            ExternalSurfaceOperationFixture.external_cell_surface,
-                            :surface_alt; at = proposal.target_site,
-                        )
+                        gather(ExternalSurfaceOperationFixture.external_cell_surface; at = proposal.target_site, over = :surface_alt)
                     ),
                 ),
                 Protocol(Sweep(; temperature = 0.0); name = :main),

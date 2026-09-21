@@ -25,7 +25,7 @@ function _transition_relation_energy_fixture(::Type{T} = Float64) where {T <: Ab
                 domain = sites(:lattice),
                 anchor = site,
                 expression = bounded_oracle_weight * occupancy(cell, site) *
-                    sum(gather(signal, :contact; at = site)),
+                    sum(gather(signal; at = site, over = :contact)),
             ),
             ProposalConstraint(
                 :isolate_bounded_oracle_extension,

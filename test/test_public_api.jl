@@ -40,7 +40,7 @@
             :contact_owner_b, :contact_kind_a, :contact_kind_b,
             :field_value, :field_gradient, :laplacian,
             :occupancy, :linked, :degree, :endpoint_a, :endpoint_b, :edge_payload,
-            :lag, :history_value, :gather, :aggregate,
+            :lag, :history_value, :gather, :site_value, :site_owner, :aggregate,
 
             :AbstractPottsDistribution, :Bernoulli, :Uniform, :Normal,
             :UnitVector, :DrawKey, :draw, :PureRead, :SynchronousAssign,
@@ -65,7 +65,7 @@
             :DiscreteFieldEuler, :ExtensionsOnly, :RetractionsOnly,
             :ExtensionsAndRetractions, :Nearest, :Multilinear, :CellCentered,
             :AttemptsPerSite, :Lattice, :Volume, :ContactEnergy, :Elongation,
-            :Chemotaxis, :LocalConnectivity, :ActEnergy, :Synchronous, :Sweep,
+            :Chemotaxis, :LocalConnectivity, :Synchronous, :Sweep,
             :SweepStage, :RelationshipEnergy, :RelationshipConstraint, Symbol("↔"),
 
             :inspect, :Statements, :Variables, :Effects, :RandomOperations,

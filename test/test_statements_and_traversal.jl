@@ -80,6 +80,22 @@
     @test all(statement -> statement_source(statement) isa SourceLocation, captured)
     @test occursin("HamiltonianTerm", statement_source(captured[2]).expression)
 
+    centered_moore = Moore(; include_center = true)
+    centered_von_neumann = VonNeumann(2; include_center = true)
+    @test centered_moore.include_center
+    @test centered_von_neumann.include_center
+    @test size(Potts._neighborhood_offsets(centered_moore, 2), 2) == 9
+    @test size(Potts._neighborhood_offsets(centered_von_neumann, 2), 2) == 13
+    @test any(all(iszero, column) for column in
+        eachcol(Potts._neighborhood_offsets(centered_moore, 2)))
+    @test length(Potts._host_neighborhood_offsets(centered_moore, 2)) == 9
+    @test length(Potts._host_neighborhood_offsets(centered_von_neumann, 2)) == 13
+    @test (0, 0) in Potts._host_neighborhood_offsets(centered_moore, 2)
+    @test Potts._contact_neighborhood_bound(Moore(), 2) == 8
+    @test Potts._contact_neighborhood_bound(centered_moore, 2) == 9
+    @test Potts._contact_neighborhood_bound(VonNeumann(2), 2) == 12
+    @test Potts._contact_neighborhood_bound(centered_von_neumann, 2) == 13
+
     mapped = Potts.map_symbolics(
         value -> substitute(value, Dict(k => 4.0)),
         HamiltonianTerm(
