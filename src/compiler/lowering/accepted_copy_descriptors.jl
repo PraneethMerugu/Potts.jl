@@ -46,14 +46,9 @@ function _stage_descriptor(
     )
     target_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_target))
     target_unit = target_root === nothing ? :unknown : ir.facts.units[target_root]
-    value_unit = if value_root !== nothing
-        ir.facts.units[value_root]
-    elseif _compiler_leaf_kind(effect.value, ir.source) === :literal &&
-            effect.value isa Union{Number, Symbol}
-        _literal_unit(effect.value)
-    else
-        :unknown
-    end
+    value_unit = _stage_expression_unit(
+        ir, record_index, Symbol(:effect_, effect_index, :_value), effect.value,
+    )
     (
         !_is_unknown_unit(target_unit) && !_is_unknown_unit(value_unit) &&
             _unit_compatible(target_unit, value_unit)
