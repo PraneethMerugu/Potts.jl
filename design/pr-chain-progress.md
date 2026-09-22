@@ -1,6 +1,6 @@
 # PR-chain progress
 
-Status: current implementation snapshot. Updated 2026-09-17.
+Status: current implementation snapshot. Updated 2026-09-22.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
 identified work and dependencies: **69 repository PRs = R01–R54 plus fifteen
@@ -46,6 +46,12 @@ in dependency order. Releases remain unauthorized.
   dependency. Hosted `changes`, `macos-smoke`, `docs` and `scientific` are
   green; `package` and `metal` are pending, and conditional `macos-package` is
   skipped at observation.
+- C10 merged as CorePotts PR35 (`b6ded93d`). Its reconstructed tip passed
+  31,481 local CPU/quality assertions, strict documentation, independent review,
+  the complete hosted package suite, macOS smoke, and the real-Metal suite. The
+  obsolete broad domain fields were removed in the same cutover; the
+  authoritative `CartesianOwnershipDomain` now owns immutable owners and the
+  mutable-site attempt set.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -65,7 +71,7 @@ in dependency order. Releases remain unauthorized.
 | C13 LocalMath direct source-order recurrence | [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22) | `dd5d2e0` | LocalMath main after PR21 | merged; complete local/hosted CPU, real-Metal, KCT/allocation and review green |
 | C14 LocalMath validation-copy settlement | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) | `a26cbfe` | LocalMath main after PR22 | merged; complete local/hosted CPU, real-Metal, KCT and review green |
 | C15 LocalMath pointwise temporary-identity segmentation | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) | `a1d60d1a` | merged C14 `a26cbfe` | merged; fresh KCT, LocalMath behavioral CPU 1,942 pass with baseline Aqua environment error, real Metal 592/592, Core 17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and continuation 116/116 green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation |
-| C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `871c13c1` | Core R08 | draft; local science/compiler/docs/quality and independent review green; hosted package/docs/macOS/real-Metal running |
+| C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `b6ded93d` | Core R08 | merged; local/full hosted CPU, docs, quality, macOS, independent review, and real-Metal green |
 | C11 Potts Cartesian domain authoring | — | — | C10 and Potts R09 | identified; required before R11 can admit wall/exterior/obstacle filters |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
