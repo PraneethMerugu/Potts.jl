@@ -54,8 +54,10 @@ function _lower_scheduled_execution_plan(
         relationship_endpoint_policies,
         history_descriptors,
     )
+    cartesian = _lower_cartesian_domain(analyzed_ir)
     lifecycle_plan = _lower_lifecycle_plan(
         analyzed_ir,
+        cartesian.domain,
         manifest,
         scalar_type,
         lowered_descriptors.state_handles,
@@ -84,6 +86,7 @@ function _lower_scheduled_execution_plan(
     )
     core_program, kinds, observation_manifest = _lower_core_program(
         analyzed_ir,
+        cartesian,
         engine,
         backend,
         scalar_type,

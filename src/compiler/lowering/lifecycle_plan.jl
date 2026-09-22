@@ -460,6 +460,7 @@ end
 
 function _lower_lifecycle_plan(
         ir::AnalyzedTermIR,
+        cartesian_domain,
         manifest::ParameterManifest,
         ::Type{T},
         state_handles,
@@ -517,8 +518,25 @@ function _lower_lifecycle_plan(
             _lifecycle_kind_index(ir, record, effect.kind) :
             effect isa Transition ?
             _lifecycle_kind_index(ir, record, effect.kind) : Int16(0)
-        replacement_medium = effect isa RemoveCell ?
-            _lifecycle_kind_index(ir, record, effect.replacement) : Int16(0)
+        replacement_medium = if effect isa RemoveCell
+            kind = _lifecycle_kind_index(ir, record, effect.replacement)
+            report = CorePotts.CompilerSPI.cartesian_domain_report(
+                cartesian_domain,
+            )
+            if report.default_owner.kind == kind
+                Int32(0)
+            else
+                owner = only(filter(
+                    metadata -> metadata.kind == kind,
+                    report.domain_owners,
+                ))
+                CorePotts.CompilerSPI.domain_owner_code(
+                    cartesian_domain, owner.identity,
+                )
+            end
+        else
+            Int32(0)
+        end
         placement = CorePotts.CompilerSPI.NoLifecyclePlacement
         placement_evaluator = Int32(0)
         placement_maximum = Int32(1)

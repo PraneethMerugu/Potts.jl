@@ -397,29 +397,18 @@ function _ownership_change_handles(descriptor_plan)
     )
 end
 
-function _lower_core_program(
-        ir::AnalyzedTermIR,
-        engine::AbstractPottsAlgorithm,
-        backend::AbstractPottsBackend,
-        ::Type{T},
-        manifest::ParameterManifest,
-        descriptor_plan::CorePotts.CompilerSPI.DescriptorExecutionPlan,
-        stage_plan::CorePotts.CompilerSPI.StageExecutionPlan,
-        lifecycle_plan::CorePotts.CompilerSPI.AbstractLifecycleExecutionPlan,
-        relationship_endpoint_policies,
-        fingerprint_seed::String,
-    ) where {T <: AbstractFloat}
+function _lower_cartesian_domain(ir::AnalyzedTermIR)
     records = ir.source.records
     domains = filter(record -> record.kind === :LatticeDomain, records)
     length(domains) == 1 ||
         throw(ArgumentError("compilation requires exactly one LatticeDomain"))
-    domain = only(domains)
-    shape = _statement_option(domain, :shape)
+    domain_record = only(domains)
+    shape = _statement_option(domain_record, :shape)
     shape isa Tuple{Vararg{Int}} ||
         throw(ArgumentError("lattice shape must be resolved to integer dimensions"))
     dimensions = length(shape)
     dimensions > 0 || throw(ArgumentError("lattice must have positive dimension"))
-    boundary = _statement_option(domain, :boundary, Periodic())
+    boundary = _statement_option(domain_record, :boundary, Periodic())
     periodic = if boundary isa Periodic
         ntuple(_ -> true, dimensions)
     elseif boundary isa Union{Closed, FrozenBorder}
@@ -427,7 +416,6 @@ function _lower_core_program(
     else
         throw(ArgumentError("unsupported lattice boundary $(typeof(boundary))"))
     end
-
     declarations = _ordered_kind_records(records)
     isempty(declarations) &&
         throw(ArgumentError("compilation requires declared cell/medium kinds"))
@@ -443,7 +431,6 @@ function _lower_core_program(
     for declaration in media
         medium_kinds[kinds[declaration.identity]] = true
     end
-    count = length(kinds)
     default_owner = CorePotts.CompilerSPI.DomainOwnerMetadata(
         0,
         CorePotts.CompilerSPI.MediumDomainOwnerCategory,
@@ -463,9 +450,37 @@ function _lower_core_program(
             CorePotts.CompilerSPI.PeriodicCartesianFace :
             CorePotts.CompilerSPI.ClosedCartesianFace
     end
-    cartesian_domain = CorePotts.CompilerSPI.CartesianOwnershipDomain(
+    domain = CorePotts.CompilerSPI.CartesianOwnershipDomain(
         shape, default_owner, domain_owners; face_kinds,
     )
+    return (;
+        domain, domain_record, shape, dimensions, periodic, declarations,
+        kinds, medium_kinds, count = length(kinds),
+    )
+end
+
+function _lower_core_program(
+        ir::AnalyzedTermIR,
+        cartesian,
+        engine::AbstractPottsAlgorithm,
+        backend::AbstractPottsBackend,
+        ::Type{T},
+        manifest::ParameterManifest,
+        descriptor_plan::CorePotts.CompilerSPI.DescriptorExecutionPlan,
+        stage_plan::CorePotts.CompilerSPI.StageExecutionPlan,
+        lifecycle_plan::CorePotts.CompilerSPI.AbstractLifecycleExecutionPlan,
+        relationship_endpoint_policies,
+        fingerprint_seed::String,
+    ) where {T <: AbstractFloat}
+    records = ir.source.records
+    shape = cartesian.shape
+    dimensions = cartesian.dimensions
+    periodic = cartesian.periodic
+    declarations = cartesian.declarations
+    kinds = cartesian.kinds
+    count = cartesian.count
+    domain = cartesian.domain_record
+    cartesian_domain = cartesian.domain
     defaults = _default_parameter_buffer(manifest, T)
     proposal_offsets = _relation_offsets(
         ir.source, domain, :proposal, dimensions, VonNeumann()
