@@ -3,10 +3,10 @@
 function _stage_root(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
     )
     index = findfirst(root ->
-        root.record == record_index && root.role === role,
+        root.record == record_index && isequal(root.role, role),
         ir.graph.roots,
     )
     return index === nothing ? nothing : ir.graph.roots[index].node
@@ -19,7 +19,7 @@ struct _NamedProductConstruction{Names} end
 function _stage_expression(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
         fallback,
         manifest::ParameterManifest,
         ::Type{T},
@@ -32,7 +32,7 @@ function _stage_expression(
         names = keys(fallback)
         arguments = Tuple(
             _stage_expression(
-                ir, record_index, Symbol(role, :_, name), getproperty(fallback, name),
+                ir, record_index, _product_field_role(role, name), getproperty(fallback, name),
                 manifest, T, state_handles, draw_handles, binding;
                 state_layout, history_descriptors,
             ) for name in names
@@ -60,14 +60,14 @@ end
 function _stage_expression_unit(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
         fallback,
     )
     if fallback isa NamedTuple
         names = keys(fallback)
         return NamedTuple{names}(Tuple(
             _stage_expression_unit(
-                ir, record_index, Symbol(role, :_, name), getproperty(fallback, name),
+                ir, record_index, _product_field_role(role, name), getproperty(fallback, name),
             ) for name in names
         ))
     end

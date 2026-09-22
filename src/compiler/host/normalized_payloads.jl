@@ -66,7 +66,7 @@ end
 
 struct NormalizedTermRoot
     record::Int32
-    role::Symbol
+    role::Union{Symbol, Tuple}
     node::Int32
 end
 
