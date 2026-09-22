@@ -28,6 +28,10 @@ function _core_domain_owner_code(
     )
     domain = CorePotts.CompilerSPI.cartesian_domain(program)
     report = CorePotts.CompilerSPI.cartesian_domain_report(domain)
+    return _core_domain_owner_code(domain, report, kind)
+end
+
+function _core_domain_owner_code(domain, report, kind::Integer)
     report.default_owner.kind == kind && return Int32(0)
     owner = findfirst(metadata ->
         metadata.category === CorePotts.CompilerSPI.MediumDomainOwnerCategory &&

@@ -455,7 +455,8 @@ function _lower_core_program(
             CorePotts.CompilerSPI.MediumDomainOwnerCategory,
             kind,
         )
-        for kind in eachindex(medium_kinds) if medium_kinds[kind]
+        for kind in eachindex(medium_kinds)
+            if medium_kinds[kind] && kind != medium_kind
     ]
     face_kinds = ntuple(2 * dimensions) do face
         periodic[cld(face, 2)] ?

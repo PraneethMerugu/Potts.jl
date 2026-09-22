@@ -242,9 +242,10 @@ function _materialize_labelled(
     size(labelled.labels) == _core_program_shape(program) ||
         throw(ArgumentError("initial ownership shape does not match the executable"))
     kinds = _kind_indices(executable)
+    medium_kinds = _core_medium_kind_mask(program)
     medium_name = _kind_symbol(labelled.medium)
     medium_index = get(kinds, medium_name, nothing)
-    medium_index !== nothing && _core_medium_kind_mask(program)[medium_index] ||
+    medium_index !== nothing && medium_kinds[medium_index] ||
         throw(ArgumentError("initial medium is not a declared executable medium"))
     maximum_label = Int(maximum(labelled.labels; init = Int32(0)))
     minimum(labelled.labels; init = Int32(0)) >= 0 ||
@@ -263,7 +264,7 @@ function _materialize_labelled(
             index = get(kinds, name, nothing)
             index === nothing &&
                 throw(ArgumentError("unknown initial cell kind `$name`"))
-            _core_medium_kind_mask(program)[index] &&
+            medium_kinds[index] &&
                 throw(ArgumentError("a positive cell label cannot use the medium kind"))
             cell_kinds[label] = Int16(index)
         end
@@ -278,7 +279,7 @@ function _materialize_labelled(
             index = get(kinds, name, nothing)
             index === nothing &&
                 throw(ArgumentError("unknown initial cell kind `$name`"))
-            _core_medium_kind_mask(program)[index] &&
+            medium_kinds[index] &&
                 throw(ArgumentError("a positive cell label cannot use the medium kind"))
             cell_kinds[label] = Int16(index)
         end
@@ -321,18 +322,20 @@ function _materialize_layout(
         init = 0,
     )
     kinds = _kind_indices(executable)
+    program = executable.core_program
+    domain = CorePotts.CompilerSPI.cartesian_domain(program)
+    domain_report = CorePotts.CompilerSPI.cartesian_domain_report(domain)
+    medium_kinds = _core_medium_kind_mask(program)
     default_medium_name = _kind_symbol(layout.medium)
     default_medium_index = get(kinds, default_medium_name, nothing)
     default_medium_index !== nothing &&
-        _core_medium_kind_mask(executable.core_program)[default_medium_index] ||
+        medium_kinds[default_medium_index] ||
         throw(
         ArgumentError(
             "ownership layout default medium is not a declared medium kind"
         )
     )
-    background = _core_domain_owner_code(
-        executable.core_program, default_medium_index,
-    )
+    background = _core_domain_owner_code(domain, domain_report, default_medium_index)
     labels = fill(background, layout.shape)
     assigned = falses(layout.shape)
     cells = Dict{Int, Any}()
@@ -341,13 +344,13 @@ function _materialize_layout(
         medium_name = _kind_symbol(placement.kind)
         medium_index = get(kinds, medium_name, nothing)
         medium_index !== nothing &&
-            _core_medium_kind_mask(executable.core_program)[medium_index] ||
+            medium_kinds[medium_index] ||
             throw(
             ArgumentError(
                 "medium placement uses undeclared medium kind `$medium_name`"
             )
         )
-        encoded = _core_domain_owner_code(executable.core_program, medium_index)
+        encoded = _core_domain_owner_code(domain, domain_report, medium_index)
         for coordinates in placement.sites
             length(coordinates) == length(layout.shape) ||
                 throw(ArgumentError("medium placement site has the wrong dimension"))
@@ -410,7 +413,7 @@ function _materialize_layout(
         name = _kind_symbol(placement.kind)
         kind_index = get(kinds, name, nothing)
         kind_index !== nothing &&
-            !_core_medium_kind_mask(executable.core_program)[kind_index] ||
+            !medium_kinds[kind_index] ||
             throw(
             ArgumentError(
                 "procedural cell placement uses unknown or medium kind `$name`"
