@@ -4,10 +4,14 @@ include("fixtures/structured_random_continuation.jl")
     reference = nothing
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
         values = _structured_random_continuation_contract(algorithm, CPUBackend())
-        with_unrelated = _structured_random_continuation_contract(
-            algorithm, CPUBackend(); unrelated = true,
+        before = _structured_random_continuation_contract(
+            algorithm, CPUBackend(); unrelated = :before,
         )
-        @test with_unrelated == values
+        after = _structured_random_continuation_contract(
+            algorithm, CPUBackend(); unrelated = :after,
+        )
+        @test before == values
+        @test after == values
         reference === nothing || @test values == reference
         reference = values
     end

@@ -290,7 +290,10 @@ function _normalize_term!(
     )
 end
 
-function _push_effect_expression_roots!(roots, role::Symbol, value)
+_product_field_role(role, name::Symbol) =
+    role isa Tuple ? (role..., name) : (role, name)
+
+function _push_effect_expression_roots!(roots, role, value)
     if value isa StaticArrays.SVector
         push!(roots, role => value)
         return roots
@@ -298,7 +301,7 @@ function _push_effect_expression_roots!(roots, role::Symbol, value)
         for name in keys(value)
             _push_effect_expression_roots!(
                 roots,
-                Symbol(role, :_, name),
+                _product_field_role(role, name),
                 getproperty(value, name),
             )
         end
@@ -306,7 +309,7 @@ function _push_effect_expression_roots!(roots, role::Symbol, value)
     elseif value isa Tuple
         for (index, item) in enumerate(value)
             _push_effect_expression_roots!(
-                roots, Symbol(role, :_, index), item
+                roots, _product_field_role(role, Symbol(index)), item
             )
         end
         return roots
@@ -402,7 +405,7 @@ end
 
 function _record_expression_roots(record::QualifiedStatement)
     arguments = first(record.normalized_payload)
-    roots = Pair{Symbol, Any}[]
+    roots = Pair{Union{Symbol, Tuple}, Any}[]
     arguments isa NamedTuple || return roots
     if record.kind === :FieldState && haskey(_record_options(record), :rhs)
         push!(roots, :field_rhs => _record_options(record).rhs)
