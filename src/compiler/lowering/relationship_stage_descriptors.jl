@@ -63,7 +63,7 @@ function _relationship_process_stage_descriptor(
             _stage_evaluator(
                 ir,
                 record_index,
-                Symbol(:effect_1_payload_, name),
+                _product_field_role(:effect_1_payload, name),
                 getproperty(effect.payload, name),
                 manifest,
                 T,

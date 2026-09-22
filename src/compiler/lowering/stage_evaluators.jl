@@ -122,7 +122,7 @@ end
 function _stage_evaluator(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
         fallback,
         manifest::ParameterManifest,
         ::Type{T},

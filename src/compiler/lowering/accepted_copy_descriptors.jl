@@ -306,7 +306,7 @@ function _relationship_create_stage_descriptor(
         _stage_evaluator(
                 ir,
                 record_index,
-                Symbol(:effect_, effect_index, :_payload_, name),
+                _product_field_role(Symbol(:effect_, effect_index, :_payload), name),
                 getproperty(effect.payload, name),
                 manifest,
                 T,
