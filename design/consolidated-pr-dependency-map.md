@@ -23,7 +23,7 @@ additional deliveries are accepted scope. Read it alongside this map before
 selecting affected work; explicitly unresolved scientific details remain open.
 Approval of scope is not implementation evidence.
 
-Implementation has identified fifteen required additional PRs. `C01`–`C15` are
+Implementation has identified fourteen required additional PRs. `C01`–`C14` are
 stable planning-only companion identities; like `R01`–`R54`, they are not live
 API names, GitHub PR numbers or a prescribed merge sequence.
 
@@ -43,7 +43,13 @@ API names, GitHub PR numbers or a prescribed merge sequence.
 | **C12 Bounded runtime collection launch** | LocalMath | G05C | C09 | R49/R50 qualified compiler boundary and every later collection consumer | Merged as `12b3fa98`; local CPU/real-Metal/performance evidence, independent review and complete hosted suite green | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) |
 | **C13 Direct source-order recurrence** | LocalMath | G05C/G07 | C12 | R14 and every later source-ordered fold consumer | Merged as `dd5d2e0`; local KCT/allocation/full-CPU/full-real-Metal evidence, independent review and complete hosted suite green | [LocalMath PR22](https://github.com/PraneethMerugu/LocalMath.jl/pull/22) |
 | **C14 Validation-copy settlement** | LocalMath | G05C | C13 | R49/R50 receipt canaries and every later asynchronous LocalMath consumer | Merged as `a26cbfe`; complete hosted suite green | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) |
-| **C15 Pointwise temporary-identity segmentation** | LocalMath | G05C | C14 | R49/R50 pointwise compiler canaries and every later pointwise-stage consumer | Merged as `a1d60d1a`; local KCT/CPU/Metal and Core/Potts canaries green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) |
+
+Merged maintenance/compiler corrections remain in the dependency graph but do
+not add feature companions:
+
+| Correction | Repository | Depends on | First required consumer | Status | Published PR |
+| --- | --- | --- | --- | --- | --- |
+| **Pointwise temporary-identity segmentation** | LocalMath | C14 | R49/R50 pointwise compiler canaries and every later pointwise-stage consumer | Merged as `a1d60d1a`; local KCT/CPU/Metal and Core/Potts canaries green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation; not counted in the feature allocation | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) |
 
 The companion scopes are:
 
@@ -208,8 +214,9 @@ The companion scopes are:
   adds no event wrapper, cache, backend-specific scientific path, second status
   store or second scheduling authority. See the
   [exact audit](localmath-kernelabstractions-audit.md).
-- **C15 — the G05C LocalMath pointwise temporary-identity segmentation
-  companion**, ordered after C14 and before R49/R50 completion. The compiled-
+- **LocalMath PR24 — the G05C pointwise temporary-identity segmentation
+  maintenance/compiler correction**, ordered after C14 and before R49/R50
+  completion. The compiled-
   artifact reuse investigation demonstrated that the pointwise segmentation
   boundary unnecessarily received graph-aware wrapper state after the caller
   had already identified temporary publications. Keep graph traversal and
@@ -218,10 +225,12 @@ The companion scopes are:
   identities, authored names and completed graph contents remain runtime data.
   Preserve the existing bounded pointwise segment laws and the single
   KernelAbstractions CPU/Metal path. Do not add a cache, retained lookup table,
-  second graph representation, alternate executor or model-specific kernel.
+  second graph representation, alternate executor or model-specific kernel. It
+  is required evidence and a dependency, but is not a feature companion and
+  does not increase the identified allocation.
 
-The current identified allocation is therefore **69 repository PRs: the 54 planned
-PRs below plus these fifteen companions**. R49–R54 are counted once in the 54;
+The current identified allocation is therefore **68 repository PRs: the 54 planned
+PRs below plus these fourteen companions**. R49–R54 are counted once in the 54;
 the existing LocalMath companions are not counted again as compiler work.
 Further demonstrated companions can still increase the count.
 
@@ -236,10 +245,10 @@ or prescribed branch names; their numbering is not a chronological merge order.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Potts.jl | 8 | 13 | 21 | 1 | **22** |
 | CorePotts.jl | 7 | 9 | 16 | 1 | **17** |
-| LocalMath.jl | 1 | 2 | 3 | 12 | **15** |
+| LocalMath.jl | 1 | 2 | 3 | 11 | **14** |
 | MakiePotts.jl | 2 | 0 | 2 | 0 | **2** |
 | PottsModels.jl | 4 | 8 | 12 | 1 | **13** |
-| **Total** | **22** | **32** | **54** | **15** | **69** |
+| **Total** | **22** | **32** | **54** | **14** | **68** |
 
 ### Accepted composition-first changes to existing owners
 
@@ -324,19 +333,22 @@ This is absorbed into the existing dense allocation. It does not add a compiler
 framework PR. The demonstrated C07 ordered-fold validation, C08 exact
 keyed-reduction, C09 atomic keyed-rebuild and C10/C11 Cartesian-domain
 companions plus C12's bounded runtime launch, C13's direct source-order
-recurrence, C14's validation-copy settlement and C15's pointwise temporary-
-identity segmentation raise the current total to 69 identified PRs.
+recurrence and C14's validation-copy settlement raise the current total to 68
+identified PRs. LocalMath PR24's later pointwise temporary-identity segmentation
+correction remains required before final R49/R50 qualification but is
+maintenance/compiler work outside that feature allocation.
 
 The initial three-phase attribution arc changed the count exactly once, through
-C12. The follow-on exact LocalMath–KernelAbstractions and compiled-artifact
-reuse investigations separately demonstrated C13–C15. Their combined dependency
+C12. The follow-on exact LocalMath–KernelAbstractions investigation separately
+demonstrated C13–C14; the compiled-artifact reuse investigation then qualified
+the non-counted LocalMath PR24 maintenance correction. Their combined dependency
 pressure is:
 
 ```text
 C12 LocalMath bounded runtime launch prerequisite
 → C13 LocalMath direct source-order recurrence
 → C14 LocalMath validation-copy settlement
-→ C15 LocalMath pointwise temporary-identity segmentation
+→ LocalMath PR24 pointwise temporary-identity segmentation maintenance (not counted)
 → R49 Core operational boundary
 → R50 Potts lowering boundary
 → G06/G07 execution consumers
@@ -361,9 +373,10 @@ and reusable preparation/publication laws. Core owns scientific payloads,
 runtime extent and transaction/settlement meaning. Potts owns author structure,
 normalization and diagnostics above execution. R49 and R50 absorb demonstrated
 Core/Potts corrections. C12 is the one dense LocalMath execution-boundary
-companion justified by the initial launch investigation; C13–C15 are separately
-demonstrated recurrence, settlement and pointwise-segmentation owner laws from
-the follow-on audits. The preparation and Core payload investigations closed
+companion justified by the initial launch investigation; C13–C14 are separately
+demonstrated recurrence and settlement owner laws from the follow-on audit.
+LocalMath PR24 is a subsequent non-counted pointwise-segmentation correction.
+The preparation and Core payload investigations closed
 with no production change. Failed experiments, benchmark harnesses and raw
 Kaimon evidence do not receive PR identities.
 
@@ -1020,7 +1033,7 @@ flowchart TD
   C12["C12: LocalMath bounded runtime collection launch"]
   C13["C13: LocalMath direct source-order recurrence"]
   C14["C14: LocalMath validation-copy settlement"]
-  C15["C15: LocalMath pointwise temporary-identity segmentation"]
+  M24["LocalMath PR24 maintenance: pointwise temporary-identity segmentation (not counted)"]
   E01["E01: Three-dimensional CPM"]
   E02["E02: Equilibrium and fluctuating mechanical components"]
   E03["E03: Directed and anchored relationships"]
@@ -1053,13 +1066,13 @@ flowchart TD
   C09 --> C12
   C12 --> C13
   C13 --> C14
-  C14 --> C15
+  C14 --> M24
   G04 --> C10
   C10 --> C11
   C11 --> G05
   C09 --> G05
   G05 --> G05C
-  C15 --> G05C
+  M24 --> G05C
   G05C --> G06
   G01 --> G07
   G05C --> G07
@@ -1294,16 +1307,17 @@ topological guarantees are not automatically delivered by one representative.
 
 ### Future conditional owner PRs, not silently omitted features
 
-C01–C15 are already identified and counted above; they are not conditional
+C01–C14 are already identified and counted above; they are not conditional
 entries in this table. The following actions apply only to new demonstrated
-gaps beyond those fifteen companions.
+gaps beyond those fourteen companions. LocalMath PR24 is retained above as a
+non-counted maintenance/compiler correction.
 
 | Discovery | Action before declaring the group complete |
 | --- | --- |
 | Later structured storage/gather/publication needs a reusable LocalMath law not supplied by C01–C09 | Add and count a LocalMath companion at its first real consumer |
 | G08 needs failure information not already exposed by G06/G07 | Add a Core companion, or include the fact in its still-open owning PR |
 | Profiling identifies a material Potts/Core defect | Fix in a coherent open owner PR or count a measured optimization PR; G09 measurement alone is insufficient |
-| Repeated-stage/global-binding scaling demonstrates a reusable LocalMath cold-law correction | Count C16 and raise the total to 70 only if a direct candidate improves complete planning through settlement without displacement, deletes the old representation, and cannot coherently fit an open LocalMath owner; scaling evidence alone does not preallocate it |
+| Repeated-stage/global-binding scaling demonstrates a reusable LocalMath cold-law correction | Count a new companion and raise the total to 69 only if a direct candidate improves complete planning through settlement without displacement, deletes the old representation, and cannot coherently fit an open LocalMath owner; scaling evidence alone does not preallocate it |
 | 3D or graph results need a new public rendering protocol | Add Makie; existing 3D support is inspected first, graph rendering is not presumed |
 | OU mechanics cannot use actual prepared process/RNG contracts | Add the real Core/Potts public primitive; no hidden host callback or RNG |
 | Directed, 3D, global or graph traversal requires a missing LocalMath operation | Add the owning reusable law with its first real consumer, not one adapter per model |
@@ -1319,8 +1333,10 @@ gaps beyond those fifteen companions.
 
 These are not pre-created placeholder PRs and do not form a guaranteed numerical
 upper bound. The **54-PR base allocation** counts R01–R54, including R49–R54.
-The **69 currently identified PRs** add the fifteen demonstrated C01–C15
+The **68 currently identified PRs** add the fourteen demonstrated C01–C14
 companions; future demonstrated discoveries can increase that identified total.
+LocalMath PR24 is required maintenance/compiler evidence, not a counted feature
+companion.
 Absorb a required change only where it belongs coherently and before that PR
 closes. Do not expand another PR solely to preserve the headline count, omit
 needed work, or move an engine fact into Models.
@@ -1328,7 +1344,7 @@ needed work, or move an engine fact into Models.
 ### Mentioned but not fully scoped projects
 
 The following were explicitly conditional or deferred in the prior plan and are
-**not claimed complete by the 54-PR base allocation or the 69 currently
+**not claimed complete by the 54-PR base allocation or the 68 currently
 identified PRs**:
 
 | Project | Likely ownership and prerequisite | What must be decided first |

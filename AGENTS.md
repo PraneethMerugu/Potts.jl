@@ -84,7 +84,7 @@ For PR-chain work, read the current shared
 before selecting work or changing shared compiler contracts. The canonical
 planning directory is `/Users/praneethmerugu/Documents/Jiang/CPM 1.6/Potts.jl/design/`;
 existing package worktrees may contain older snapshots. The user-approved
-allocation is 69 identified PRs (R01–R54 plus fifteen companions), including G05C
+allocation is 68 identified PRs (R01–R54 plus fourteen companions), including G05C
 (R49 Core, R50 Potts) after a correct G05 baseline and before G06/G07 completion.
 The seventh companion is the demonstrated G07 LocalMath ordered-fold
 step-validation prerequisite before R14 exchange settlement.
@@ -119,12 +119,14 @@ completes the provider prefix, and empty/aliased representations synchronize
 explicitly. Receipt failure caching, lease release and fixed-relation admission
 share this owner. C14 adds no event wrapper, cache, alternate scheduler or
 backend-specific scientific path.
-The fifteenth companion, C15 LocalMath, narrows pointwise segmentation at its
-existing owner: a small graph-aware wrapper extracts the runtime temporary-field
-identity set, while the reusable segmentation law receives only that set. It
-adds no cache, lookup table, second graph representation, alternate executor or
-model-specific kernel, and preserves the single KernelAbstractions CPU/Metal
-path.
+Merged LocalMath PR24 is a maintenance/compiler correction rather than a
+feature companion. It narrows pointwise segmentation at its existing owner: a
+small graph-aware wrapper extracts the runtime temporary-field identity set,
+while the reusable segmentation law receives only that set. It follows C14 and
+precedes the final R49/R50 pointwise canaries, adds no cache, lookup table,
+second graph representation, alternate executor or model-specific kernel, and
+preserves the single KernelAbstractions CPU/Metal path without increasing the
+identified allocation.
 R51 Potts owns confirmed COBREXA.jl coupling; R52–R54 Models own FBCA, vascular
 and tumor corpora. E07 completion additionally depends on E04 for model 14.
 Composition-first authoring, selected SBMLToolkit/MethodOfLines integration and
