@@ -1,5 +1,52 @@
 # Accepted-copy assignment and bounded relationship-creation lowering.
 
+_assignment_field_path(path::Tuple) = join(string.(path), ".")
+
+function _product_schema_mismatch(::Type{D}, value, path = (:value,)) where {D}
+    if D <: NamedTuple
+        value isa NamedTuple || return (
+            path,
+            "named product with fields $(fieldnames(D))",
+            string(typeof(value)),
+        )
+        expected = fieldnames(D)
+        actual = keys(value)
+        expected == actual || return (
+            path,
+            "fields $expected in declared order",
+            "fields $actual",
+        )
+        for index in eachindex(expected)
+            mismatch = _product_schema_mismatch(
+                fieldtype(D, index), getfield(value, index), (path..., expected[index]),
+            )
+            mismatch === nothing || return mismatch
+        end
+    elseif value isa NamedTuple
+        return (path, "a scalar or fixed-size array leaf", "fields $(keys(value))")
+    end
+    return nothing
+end
+
+function _product_unit_mismatch(expected, actual, path = (:value,))
+    if expected isa NamedTuple || actual isa NamedTuple
+        expected isa NamedTuple && actual isa NamedTuple ||
+            return (path, expected, actual)
+        keys(expected) == keys(actual) || return (path, expected, actual)
+        for name in keys(expected)
+            mismatch = _product_unit_mismatch(
+                getproperty(expected, name), getproperty(actual, name),
+                (path..., name),
+            )
+            mismatch === nothing || return mismatch
+        end
+        return nothing
+    end
+    (!_is_unknown_unit(expected) && !_is_unknown_unit(actual) &&
+        _unit_compatible(expected, actual)) && return nothing
+    return (path, expected, actual)
+end
+
 function _stage_descriptor(
         ir::AnalyzedTermIR,
         record_index::Integer,
@@ -29,6 +76,23 @@ function _stage_descriptor(
     )
     target_arguments = _record_arguments(target_record)
     target_variable = get(target_arguments, :variable, nothing)
+    schema_mismatch = _product_schema_mismatch(target_record.result_type, effect.value)
+    schema_mismatch === nothing || begin
+        path, expected, actual = schema_mismatch
+        throw(PottsValidationError(
+            :descriptor_lowering,
+            (PottsDiagnostic(
+                :assignment_product_schema,
+                record.identity,
+                _assignment_field_path(path),
+                record.identity.path,
+                expected,
+                actual,
+                (),
+                record.source,
+            ),),
+        ))
+    end
     target_shape = target_variable isa Symbolics.Arr ? Tuple(size(target_variable)) : ()
     value_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_value))
     value_shape = value_root === nothing ? () : ir.facts.shape[value_root]
@@ -49,21 +113,23 @@ function _stage_descriptor(
     value_unit = _stage_expression_unit(
         ir, record_index, Symbol(:effect_, effect_index, :_value), effect.value,
     )
-    (
-        !_is_unknown_unit(target_unit) && !_is_unknown_unit(value_unit) &&
-            _unit_compatible(target_unit, value_unit)
-    ) || throw(
+    unit_mismatch = _product_unit_mismatch(target_unit, value_unit)
+    unit_mismatch === nothing || begin
+        path, expected, actual = unit_mismatch
+        throw(
         PottsValidationError(
             :descriptor_lowering,
             (
                 PottsDiagnostic(
-                    :assignment_value_units, record.identity, repr(effect.value),
-                    record.identity.path, "units compatible with target $target_unit",
-                    "assignment value units $value_unit", (), record.source,
+                    :assignment_value_units, record.identity,
+                    _assignment_field_path(path),
+                    record.identity.path, "units compatible with target $expected",
+                    "assignment value units $actual", (), record.source,
                 ),
             ),
         )
-    )
+        )
+    end
     is_model_assignment =
         stage isa CorePotts.CompilerSPI.AfterMCSStage &&
         target_record.kind === :ModelState
