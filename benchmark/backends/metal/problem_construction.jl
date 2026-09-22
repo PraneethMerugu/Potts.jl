@@ -87,12 +87,14 @@ end
         @test Array(device.u.ownership) == cpu.u.ownership
         @test device.u[:bulk_sites] == cpu.u[:bulk_sites] == 20
         @test device.u[:border_sites] == cpu.u[:border_sites] == 12
-        @test device.stats.candidate_attempts == cpu.stats.candidate_attempts
-        @test device.stats.accepted == cpu.stats.accepted == 0
-        @test device.stats.rejected == cpu.stats.rejected
-        @test device.stats.null_attempts == cpu.stats.null_attempts
-        @test device.stats.constraint_rejections ==
-            cpu.stats.constraint_rejections
+        cpu_stats = Potts.runtime_statistics(cpu)
+        device_stats = Potts.runtime_statistics(device)
+        @test device_stats.candidate_attempts == cpu_stats.candidate_attempts
+        @test device_stats.accepted == cpu_stats.accepted == 0
+        @test device_stats.rejected == cpu_stats.rejected
+        @test device_stats.null_attempts == cpu_stats.null_attempts
+        @test device_stats.constraint_rejections ==
+            cpu_stats.constraint_rejections
 
         restored = init(
             problem,
