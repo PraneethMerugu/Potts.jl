@@ -348,39 +348,6 @@ function _lifecycle_tracker_requirements(graph, nodes)
     return Tuple(sort!(result; by = String))
 end
 
-function _lifecycle_rng_sites(record, effect)
-    result = Any[record.random_operations...]
-    if effect isa Divide
-        effect.geometry isa RandomPlane && push!(result, (
-            identity = effect.geometry.draw,
-            family = :division_geometry,
-            entity = :cell_generation,
-        ))
-        effect.side isa StableRandomSide && push!(result, (
-            identity = effect.side.draw_identity,
-            family = :division_side,
-            entity = :cell_generation,
-        ))
-    end
-    for item in effect.state
-        policy = _policy_value(item)
-        policy isa RedrawDaughters || continue
-        push!(result, (
-            identity = policy.parent_draw,
-            family = :state_redraw,
-            entity = :destination,
-            role = :parent,
-        ))
-        push!(result, (
-            identity = policy.daughter_draw,
-            family = :state_redraw,
-            entity = :destination,
-            role = :daughter,
-        ))
-    end
-    return Tuple(result)
-end
-
 function _lifecycle_workspace_maximum(graph, nodes)
     maximum = 0
     for index in nodes
@@ -486,7 +453,7 @@ function _analyze_lifecycle_records(source, graph, facts)
             ),),
         )
         trackers = _lifecycle_tracker_requirements(graph, nodes)
-        rng = _lifecycle_rng_sites(record, effect)
+        rng = record.random_operations
         workspace = _lifecycle_workspace_maximum(graph, nodes)
         root_roles = Tuple(root.role for root in roots)
         operation_abis = _lifecycle_operation_abis(graph, roots)

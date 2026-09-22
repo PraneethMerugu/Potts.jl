@@ -1,5 +1,5 @@
 _scheduled_parameter_entries(system::PottsSystem) =
-    _scheduled_data(system).parameters.runtime
+    _scheduled_data(system).parameters.entries
 _scheduled_state_entries(system::PottsSystem) = _scheduled_data(system).states
 _scheduled_observation_entries(system::PottsSystem) =
     _scheduled_data(system).observations
@@ -31,10 +31,7 @@ SymbolicIndexingInterface.symbolic_container(solution::PottsSolution) =
 
 function SymbolicIndexingInterface.parameter_index(system::PottsSystem, symbol)
     is_scheduled(system) || return nothing
-    return findfirst(
-        entry -> _entry_matches(entry, symbol, (:symbolic, :name)),
-        _scheduled_parameter_entries(system),
-    )
+    return _parameter_selection(_scheduled_data(system).parameters, symbol)
 end
 
 SymbolicIndexingInterface.parameter_index(
@@ -48,7 +45,19 @@ SymbolicIndexingInterface.parameter_index(
 
 SymbolicIndexingInterface.is_parameter(
     system::PottsSystem, symbol::Symbol
-) = SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing
+) = is_scheduled(system) ? SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing :
+    invoke(SymbolicIndexingInterface.is_parameter, Tuple{ModelingToolkitBase.AbstractSystem, Symbol}, system, symbol)
+
+# ModelingToolkitBase's public indexing interface unwraps symbolic wrappers
+# before redispatching here; the scheduled manifest owns their identities.
+SymbolicIndexingInterface.is_parameter(
+    system::PottsSystem, symbol::SymbolicUtils.BasicSymbolic
+) = is_scheduled(system) ? SymbolicIndexingInterface.parameter_index(system, symbol) !== nothing :
+    invoke(SymbolicIndexingInterface.is_parameter, Tuple{ModelingToolkitBase.AbstractSystem, typeof(symbol)}, system, symbol)
+
+SymbolicIndexingInterface.is_parameter(
+    system::PottsSystem, symbol::SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}
+) = invoke(SymbolicIndexingInterface.is_parameter, Tuple{PottsSystem, SymbolicUtils.BasicSymbolic}, system, symbol)
 
 SymbolicIndexingInterface.is_parameter(
     system::PottsSystem, symbol::Int
@@ -56,7 +65,9 @@ SymbolicIndexingInterface.is_parameter(
     1 <= symbol <= length(_scheduled_parameter_entries(system))
 
 function SymbolicIndexingInterface.parameter_symbols(system::PottsSystem)
-    is_scheduled(system) || return Any[]
+    is_scheduled(system) || return invoke(
+        SymbolicIndexingInterface.parameter_symbols, Tuple{ModelingToolkitBase.AbstractSystem}, system
+    )
     return Any[entry.symbolic for entry in _scheduled_parameter_entries(system)]
 end
 
@@ -168,7 +179,7 @@ function SymbolicIndexingInterface.parameter_values(integrator::PottsIntegrator)
     _request_integrator_settlement!(
         integrator, CorePotts.BackendSPI.IndexReadSettlement
     )
-    return integrator.runtime.parameters
+    return _parameter_values(integrator.plan.parameter_manifest, integrator.runtime.parameters)
 end
 function SymbolicIndexingInterface.parameter_values(solution::PottsSolution)
     isempty(solution.parameter_history) && return solution.prob.p.values
@@ -177,84 +188,112 @@ end
 SymbolicIndexingInterface.parameter_values(solution::PottsSolution, index) =
     SymbolicIndexingInterface.parameter_values(solution)[index]
 
-struct PottsParameterSetter{I <: Tuple}
-    indices::I
+SymbolicIndexingInterface.parameter_values(solution::PottsSolution, index::ParameterComponentIndex) =
+    SymbolicIndexingInterface.parameter_values(solution)[index.parameter][index.component]
+
+function SymbolicIndexingInterface.parameter_values(
+        provider::Union{PottsProblem, PottsIntegrator}, index::ParameterComponentIndex,
+    )
+    values = SymbolicIndexingInterface.parameter_values(provider)
+    return values[index.parameter][index.component]
 end
 
-function _parameter_setter_indices(system::PottsSystem, symbols)
-    requested = symbols isa Tuple || symbols isa AbstractArray ?
-                Tuple(symbols) : (symbols,)
-    indices = Int[]
-    for symbol in requested
-        index = SymbolicIndexingInterface.parameter_index(system, symbol)
-        index === nothing && throw(ArgumentError(
-            "unknown runtime parameter $(repr(symbol))"
-        ))
-        index in indices && throw(ArgumentError(
-            "a parameter transaction cannot contain duplicate identities"
-        ))
-        push!(indices, index)
+SymbolicIndexingInterface.parameter_values(integrator::PottsIntegrator, index::Integer) =
+    SymbolicIndexingInterface.parameter_values(integrator)[index]
+
+struct PottsSymbolicSetter{I <: Tuple, N}
+    targets::I
+    names::N
+    single::Bool
+    publish::Bool
+end
+
+function (::PottsSymbolicSetter)(::Union{PottsSystem, PottsProblem, PottsSolution}, replacements)
+    throw(ArgumentError("symbolic mutation requires a PottsIntegrator; use remake to update an immutable problem"))
+end
+
+function _require_symbolic_mutation_boundary!(integrator::PottsIntegrator)
+    _request_integrator_settlement!(integrator, CorePotts.BackendSPI.IndexMutationSettlement)
+    if CorePotts.program_failed(integrator.runtime) || integrator.failure_report !== nothing
+        throw(ArgumentError("symbolic mutation cannot repair a terminal-failed integrator"))
     end
-    return Tuple(indices)
+    return nothing
 end
 
-function SymbolicIndexingInterface.setp(
-        integrator::PottsIntegrator, symbols
+function _commit_symbolic_update!(
+        integrator::PottsIntegrator;
+        parameters = nothing,
+        descriptor_state = nothing,
+        descriptor_before = nothing,
     )
-    return PottsParameterSetter(
-        _parameter_setter_indices(integrator.prob.system, symbols)
-    )
-end
+    parameters === nothing && descriptor_state === nothing && return nothing
+    previous_parameters = parameters === nothing ? nothing : copy(integrator.runtime.parameters)
+    previous_pending = integrator.pending_parameters
+    previous_u = integrator.u
+    history_length = length(integrator.parameter_history)
 
-function (setter::PottsParameterSetter)(integrator::PottsIntegrator, values)
-    _request_integrator_settlement!(
-        integrator, CorePotts.BackendSPI.IndexMutationSettlement
-    )
-    replacements = length(setter.indices) == 1 &&
-                   !(values isa Tuple || values isa AbstractArray) ?
-                   (values,) : Tuple(values)
-    length(replacements) == length(setter.indices) || throw(ArgumentError(
-        "parameter transaction value count does not match its symbolic identities"
-    ))
-    T = eltype(integrator.runtime.parameters)
-    staged = copy(integrator.runtime.parameters)
-    for (index, value) in zip(setter.indices, replacements)
-        staged[index] = _convert_parameter_value(
-            integrator.plan.parameter_manifest[index], value, T
-        )
+    # Core owns full acceptance and storage validation. No callback or other
+    # scientific observer runs between these settled-boundary publications.
+    parameters === nothing || CorePotts.update_program_parameters!(integrator.runtime, parameters)
+    if descriptor_state !== nothing
+        try
+            CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_state)
+        catch error
+            if parameters !== nothing && !CorePotts.program_failed(integrator.runtime)
+                try
+                    CorePotts.update_program_parameters!(integrator.runtime, previous_parameters)
+                catch restore_error
+                    throw(CompositeException(Any[error, restore_error]))
+                end
+            end
+            rethrow()
+        end
     end
-    CorePotts.update_program_parameters!(integrator.runtime, staged)
-    names = Tuple(entry.name for entry in integrator.plan.parameter_manifest)
-    parameters = PottsParameters(staged, NamedTuple{names}(Tuple(staged)))
-    push!(integrator.parameter_history, integrator.t => parameters)
-    integrator.pending_parameters = nothing
-    integrator.u = _current_saved_state(integrator)
+    try
+        if parameters !== nothing
+            saved_parameters = _saved_parameters(integrator.plan.parameter_manifest, parameters)
+            push!(integrator.parameter_history, integrator.t => saved_parameters)
+            integrator.pending_parameters = nothing
+        end
+        integrator.u = _current_saved_state(integrator)
+    catch error
+        # Ordinary host refresh failure restores the complete logical update.
+        # Backend copy/execution or terminal-runtime failures are not a general
+        # rollback guarantee; preserve both errors if restoration itself fails.
+        CorePotts.program_failed(integrator.runtime) && rethrow()
+        try
+            parameters === nothing || CorePotts.update_program_parameters!(integrator.runtime, previous_parameters)
+            descriptor_state === nothing || CorePotts.CompilerSPI.update_program_descriptor_state!(integrator.runtime, descriptor_before)
+        catch restore_error
+            throw(CompositeException(Any[error, restore_error]))
+        end
+        resize!(integrator.parameter_history, history_length)
+        integrator.pending_parameters = previous_pending
+        integrator.u = previous_u
+        rethrow()
+    end
     return nothing
 end
 
 function SymbolicIndexingInterface.set_parameter!(
         ::PottsProblem, value, index
     )
-    throw(ArgumentError(
-        "PottsProblem parameters are immutable; use remake(problem; p=...)"
-    ))
+    throw(
+        ArgumentError(
+            "PottsProblem parameters are immutable; use remake(problem; p=...)"
+        )
+    )
 end
 
 function SymbolicIndexingInterface.set_parameter!(
         integrator::PottsIntegrator, value, index
     )
-    _request_integrator_settlement!(
-        integrator, CorePotts.BackendSPI.IndexMutationSettlement
-    )
-    1 <= index <= length(integrator.plan.parameter_manifest) ||
-        throw(BoundsError(integrator.runtime.parameters, index))
+    _require_symbolic_mutation_boundary!(integrator)
+    index isa Union{Integer, ParameterComponentIndex} && !(index isa Bool) || throw(ArgumentError("a parameter index must identify a logical parameter or component"))
+    selected = _parameter_selection(integrator.plan.parameter_manifest, index)
     staged = integrator.pending_parameters === nothing ?
-             copy(integrator.runtime.parameters) : integrator.pending_parameters
-    staged[index] = _convert_parameter_value(
-        integrator.plan.parameter_manifest[index],
-        value,
-        eltype(integrator.runtime.parameters),
-    )
+        copy(integrator.runtime.parameters) : copy(integrator.pending_parameters)
+    _write_parameter_value!(staged, integrator.plan.parameter_manifest, selected, value)
     integrator.pending_parameters = staged
     return nothing
 end
@@ -262,15 +301,173 @@ end
 function SymbolicIndexingInterface.finalize_parameters_hook!(
         integrator::PottsIntegrator, symbols
     )
+    _require_symbolic_mutation_boundary!(integrator)
     staged = integrator.pending_parameters
     staged === nothing && return nothing
-    CorePotts.update_program_parameters!(integrator.runtime, staged)
-    names = Tuple(entry.name for entry in integrator.plan.parameter_manifest)
-    parameters = PottsParameters(staged, NamedTuple{names}(Tuple(staged)))
-    push!(integrator.parameter_history, integrator.t => parameters)
-    integrator.pending_parameters = nothing
-    integrator.u = _current_saved_state(integrator)
-    return nothing
+    return _commit_symbolic_update!(integrator; parameters = staged)
+end
+
+function _symbolic_setter_selection(symbols)
+    if symbols isa NamedTuple
+        return Tuple(values(symbols)), keys(symbols), false
+    elseif symbols isa Tuple || (
+            symbols isa AbstractArray &&
+                SymbolicIndexingInterface.symbolic_type(symbols) isa SymbolicIndexingInterface.NotSymbolic
+        )
+        return Tuple(symbols), nothing, false
+    end
+    return (symbols,), nothing, true
+end
+
+function _state_setter_index(system, symbol)
+    entries = _scheduled_state_entries(system)
+    if symbol isa Integer
+        symbol isa Bool && throw(ArgumentError("a state index cannot be Bool"))
+        1 <= symbol <= length(entries) || throw(BoundsError(entries, symbol))
+        return Int(symbol)
+    end
+    index = SymbolicIndexingInterface.variable_index(system, symbol)
+    index === nothing && return nothing
+    # A field/index expression must not inherit write permission merely
+    # because its display name resolves to the containing state.
+    symbol isa Symbol || isequal(symbol, entries[index].variable) ||
+        throw(ArgumentError("state mutation requires a whole canonical state, not a projected expression"))
+    return index
+end
+
+function _parameter_setter_index(system, symbol)
+    symbol isa Bool && throw(ArgumentError("a parameter index cannot be Bool"))
+    return _parameter_selection(_scheduled_data(system).parameters, symbol)
+end
+
+function _symbolic_setter(provider, symbols; parameters_only, publish)
+    system = SymbolicIndexingInterface.symbolic_container(provider)
+    is_scheduled(system) || throw(ArgumentError("symbolic setters require a scheduled Potts system"))
+    requested, names, single = _symbolic_setter_selection(symbols)
+    targets = map(requested) do symbol
+        if !parameters_only
+            index = _state_setter_index(system, symbol)
+            index === nothing || return :state => index
+        end
+        index = _parameter_setter_index(system, symbol)
+        index === nothing && throw(
+            ArgumentError(
+                "symbolic mutation requires canonical stored states or parameters; unsupported target $(repr(symbol))"
+            )
+        )
+        return :parameter => index
+    end
+    length(unique(targets)) == length(targets) ||
+        throw(ArgumentError("a symbolic transaction cannot contain duplicate identities"))
+    selected_slots = Set{Int}()
+    for target in targets
+        first(target) === :parameter || continue
+        slots = _parameter_slots(_scheduled_data(system).parameters, last(target))
+        any(in(selected_slots), slots) && throw(ArgumentError("a symbolic transaction cannot contain overlapping parameter selections"))
+        union!(selected_slots, slots)
+    end
+    return PottsSymbolicSetter(targets, names, single, publish)
+end
+
+function SymbolicIndexingInterface.setu(
+        provider::Union{PottsSystem, PottsProblem, PottsIntegrator}, symbols
+    )
+    return _symbolic_setter(provider, symbols; parameters_only = false, publish = true)
+end
+
+function SymbolicIndexingInterface.setp(
+        provider::Union{PottsSystem, PottsProblem, PottsIntegrator}, symbols;
+        run_hook::Bool = true,
+    )
+    return _symbolic_setter(provider, symbols; parameters_only = true, publish = run_hook)
+end
+
+function _symbolic_setter_replacements(setter::PottsSymbolicSetter, replacements, manifest)
+    if setter.single
+        target = only(setter.targets)
+        scalar_parameter = first(target) === :parameter && (
+            last(target) isa ParameterComponentIndex || isempty(manifest[last(target)].shape)
+        )
+        if scalar_parameter && replacements isa Union{Tuple, AbstractArray}
+            length(replacements) == 1 || throw(ArgumentError("one parameter target requires one replacement value"))
+            return setter.targets, Tuple(replacements)
+        end
+        return setter.targets, (replacements,)
+    end
+    if setter.names !== nothing
+        replacements isa NamedTuple || throw(ArgumentError("named symbolic targets require named replacement values"))
+        positions = map(keys(replacements)) do name
+            index = findfirst(isequal(name), setter.names)
+            index === nothing && throw(ArgumentError("unknown symbolic replacement label `$name`"))
+            index
+        end
+        return map(index -> setter.targets[index], positions), Tuple(values(replacements))
+    end
+    if length(setter.targets) == 1 && first(only(setter.targets)) === :parameter &&
+            !(replacements isa Union{Tuple, AbstractArray})
+        return setter.targets, (replacements,)
+    end
+    replacements isa Union{Tuple, AbstractArray} ||
+        throw(ArgumentError("multiple symbolic targets require a tuple or array of replacement values"))
+    selected_values = Tuple(replacements)
+    length(selected_values) == length(setter.targets) || throw(
+        ArgumentError(
+            "symbolic transaction value count does not match its identities"
+        )
+    )
+    return setter.targets, selected_values
+end
+
+function (setter::PottsSymbolicSetter)(integrator::PottsIntegrator, replacements)
+    _require_symbolic_mutation_boundary!(integrator)
+    targets, values = _symbolic_setter_replacements(setter, replacements, integrator.plan.parameter_manifest)
+    isempty(targets) && return nothing
+    SPI = CorePotts.CompilerSPI
+    program = integrator.plan.core_program
+    layout = program.descriptor_plan.state_layout
+    has_state = any(target -> first(target) === :state, targets)
+    has_parameters = any(target -> first(target) === :parameter, targets)
+    before = has_state ? CorePotts.BackendSPI.program_snapshot_descriptor_state(CorePotts.program_snapshot(integrator.runtime)) : nothing
+    candidate = has_state ? SPI.copy_auxiliary_state(before) : nothing
+    # A complete parameter transaction starts from published values. Explicit
+    # run_hook=false staging instead accumulates the existing pending batch.
+    parameter_base = setter.publish || integrator.pending_parameters === nothing ?
+        integrator.runtime.parameters : integrator.pending_parameters
+    parameters = has_parameters ? copy(parameter_base) : nothing
+    for (target, value) in zip(targets, values)
+        index = last(target)
+        if first(target) === :parameter
+            _write_parameter_value!(parameters, integrator.plan.parameter_manifest, index, value)
+            continue
+        end
+        entry = integrator.plan.state_manifest[index]
+        layout_entry = only(item for item in layout.entries if item.handle == entry.handle)
+        source = entry.storage === :history ? SPI.history_source(program.stage_plan, layout, entry.handle) : layout_entry
+        capacity = source.schema.domain === :cell ? only(source.schema.shape) : 0
+        # Runtime slot identities may contain holes. Unlike fresh initial
+        # values, mutation always supplies the complete canonical slot buffer.
+        normalized = _normalize_initial_state_entry(
+            entry, Dict(entry.name => value), program.shape, capacity, capacity,
+            integrator.scalar_type, entry.storage === :history ? source : nothing,
+        )
+        copyto!(SPI.state_block(candidate, entry.handle).values, _descriptor_state_value(layout_entry, normalized))
+    end
+    if !setter.publish
+        integrator.pending_parameters = parameters
+        return nothing
+    end
+    return _commit_symbolic_update!(
+        integrator; parameters, descriptor_state = candidate, descriptor_before = before,
+    )
+end
+
+function SymbolicIndexingInterface.set_state!(integrator::PottsIntegrator, value, index::Integer)
+    setter = SymbolicIndexingInterface.setu(integrator, index)
+    return setter(integrator, value)
+end
+
+function SymbolicIndexingInterface.set_state!(::Union{PottsProblem, PottsSolution}, value, index)
+    throw(ArgumentError("saved and problem state is immutable; mutate a PottsIntegrator or remake the problem"))
 end
 
 function _state_values_for(
@@ -380,18 +577,8 @@ function SymbolicIndexingInterface.remake_buffer(
         indices,
         values,
     )
-    replacements = Dict{Symbol, Any}(
-        name => getproperty(old.named, name) for name in keys(old.named)
+    length(indices) == length(values) || throw(ArgumentError("parameter replacement identities and values must have equal length"))
+    return _normalize_parameter_values(
+        _scheduled_data(system).parameters, [identity => value for (identity, value) in zip(indices, values)]; base = old,
     )
-    for (identity, value) in zip(indices, values)
-        index = identity isa Integer ? Int(identity) :
-                SymbolicIndexingInterface.parameter_index(system, identity)
-        index === nothing && throw(ArgumentError(
-            "unknown runtime parameter $(repr(identity))"
-        ))
-        entries = _scheduled_parameter_entries(system)
-        1 <= index <= length(entries) || throw(BoundsError(entries, index))
-        replacements[entries[index].name] = value
-    end
-    return _normalize_problem_parameters(system, replacements)
 end

@@ -15,19 +15,23 @@ function _parameter_constraint(
         node::NormalizedTermNode,
         record::QualifiedStatement,
     )
-    _parameter_only_expression(expression) || throw(PottsValidationError(
-        :descriptor_lowering,
-        (PottsDiagnostic(
-            :runtime_dependent_partial_operation,
-            node.source,
-            String(node.operation),
-            node.source.path,
-            "a parameter-only validated domain or a total device operation",
-            "runtime state/context dependent domain",
-            (),
-            UnknownSource(),
-        ),),
-    ))
+    _parameter_only_expression(expression) || throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :runtime_dependent_partial_operation,
+                    node.source,
+                    String(node.operation),
+                    node.source.path,
+                    "a parameter-only validated domain or a total device operation",
+                    "runtime state/context dependent domain",
+                    (),
+                    UnknownSource(),
+                ),
+            ),
+        )
+    )
     return CorePotts.CompilerSPI.ParameterDomainConstraint(
         _static_evaluator(
             expression,
@@ -46,19 +50,23 @@ function _draw_family_code(
     family_node = graph.nodes[first(node.operands)]
     family_node.payload_kind === :literal &&
         family_node.payload isa LiteralPayload &&
-        family_node.payload.value isa Integer || throw(PottsValidationError(
-        :descriptor_lowering,
-        (PottsDiagnostic(
-            :nonliteral_draw_family,
-            node.source,
-            String(node.operation),
-            node.source.path,
-            "a statically known scalar distribution family",
-            repr(_normalized_payload_key(family_node.payload)),
-            (),
-            UnknownSource(),
-        ),),
-    ))
+        family_node.payload.value isa Integer || throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :nonliteral_draw_family,
+                    node.source,
+                    String(node.operation),
+                    node.source.path,
+                    "a statically known scalar distribution family",
+                    repr(_normalized_payload_key(family_node.payload)),
+                    (),
+                    UnknownSource(),
+                ),
+            ),
+        )
+    )
     return Int(family_node.payload.value)
 end
 
@@ -132,33 +140,41 @@ function _draw_domain_constraints(
         )
         return (_parameter_constraint(positive, 0x03, node, record),)
     elseif family == 4
-        throw(PottsValidationError(
-            :descriptor_lowering,
-            (PottsDiagnostic(
-                :nonscalar_distribution_in_proposal_term,
-                node.source,
-                String(node.operation),
-                node.source.path,
-                "a scalar Bernoulli, Uniform, or Normal distribution",
-                "UnitVector",
-                (),
-                UnknownSource(),
-            ),),
-        ))
+        throw(
+            PottsValidationError(
+                :descriptor_lowering,
+                (
+                    PottsDiagnostic(
+                        :nonscalar_distribution_in_proposal_term,
+                        node.source,
+                        String(node.operation),
+                        node.source.path,
+                        "a scalar Bernoulli, Uniform, or Normal distribution",
+                        "UnitVector",
+                        (),
+                        UnknownSource(),
+                    ),
+                ),
+            )
+        )
     end
-    throw(PottsValidationError(
-        :descriptor_lowering,
-        (PottsDiagnostic(
-            :unknown_draw_family,
-            node.source,
-            String(node.operation),
-            node.source.path,
-            "a registered scalar distribution family",
-            string(family),
-            (),
-            UnknownSource(),
-        ),),
-    ))
+    throw(
+        PottsValidationError(
+            :descriptor_lowering,
+            (
+                PottsDiagnostic(
+                    :unknown_draw_family,
+                    node.source,
+                    String(node.operation),
+                    node.source.path,
+                    "a registered scalar distribution family",
+                    string(family),
+                    (),
+                    UnknownSource(),
+                ),
+            ),
+        )
+    )
 end
 
 function _domain_constraints(
@@ -172,7 +188,7 @@ function _domain_constraints(
     for node in ir.graph.nodes
         node.transfer === nothing && continue
         node.transfer.totality in (
-            :domain_checked, :requires_prelaunch_validation
+            :domain_checked, :requires_prelaunch_validation,
         ) || continue
         if node.operation === :draw
             append!(
@@ -183,23 +199,24 @@ function _domain_constraints(
             )
             continue
         end
-        # Unit/totality analysis admits `power` only after proving a literal
-        # integer exponent. The compiled floating-point evaluator is total for
-        # that closed case, so no runtime parameter predicate remains.
-        node.operation === :power && continue
+        # Analysis proves literal integer powers and literal in-bounds fixed
+        # indices. Those closed cases leave no runtime parameter predicate.
+        node.operation in (:power, :fixed_index) && continue
         node.operation in (:logarithm, :square_root) || throw(
             PottsValidationError(
                 :descriptor_lowering,
-                (PottsDiagnostic(
-                    :unsupported_totality_rule,
-                    node.source,
-                    String(node.operation),
-                    node.source.path,
-                    "a specified prelaunch domain predicate",
-                    String(node.operation),
-                    (),
-                    UnknownSource(),
-                ),),
+                (
+                    PottsDiagnostic(
+                        :unsupported_totality_rule,
+                        node.source,
+                        String(node.operation),
+                        node.source.path,
+                        "a specified prelaunch domain predicate",
+                        String(node.operation),
+                        (),
+                        UnknownSource(),
+                    ),
+                ),
             ),
         )
         length(node.operands) == 1 || error(
@@ -249,13 +266,16 @@ end
 
 function _lower_descriptor_plan(
         ir::AnalyzedTermIR,
+        completed::PottsSystem,
         manifest::ParameterManifest,
         ::Type{T},
         relationship_endpoint_policies,
+        state_layout,
+        state_handles,
+        draw_handles,
+        history_descriptors,
     ) where {T <: AbstractFloat}
-    state_layout, state_handles = _state_layout(ir, T)
     workspace_layout, workspace_handles = _workspace_layout(ir, T)
-    draw_handles = _draw_operation_handles(ir)
     descriptors = Any[]
     for candidate in ir.candidates
         candidate.category in (
@@ -275,16 +295,19 @@ function _lower_descriptor_plan(
                 workspace_layout,
                 workspace_handles,
                 draw_handles,
+                ; state_layout, history_descriptors,
             ),
         )
     end
     descriptor_sources = Int32[
         descriptor.source_handle
-        for descriptor in descriptors
+            for descriptor in descriptors
     ]
-    allunique(descriptor_sources) || throw(ArgumentError(
-        "proposal lowering requires exactly one descriptor occurrence per source statement"
-    ))
+    allunique(descriptor_sources) || throw(
+        ArgumentError(
+            "proposal lowering requires exactly one descriptor occurrence per source statement"
+        )
+    )
     groups = _descriptor_groups(descriptors)
     constraints = _domain_constraints(
         ir, manifest, T, state_handles, draw_handles
@@ -295,29 +318,35 @@ function _lower_descriptor_plan(
     fingerprint = _sha256_hex(
         "potts-descriptor-execution-plan-v2",
         ir.structural_key,
-        Tuple((
-            group.split,
-            length(group.instances),
-            group.state_handles,
-            group.workspace_handles,
-        ) for group in groups),
-        Tuple((
-            schema.identity.path,
-            schema.identity.name,
-            schema.version,
-            schema.domain,
-            schema.element_type,
-            schema.shape,
-            schema.capacity,
-        ) for schema in state_layout.schemas),
-        Tuple((
-            schema.identity.path,
-            schema.identity.name,
-            schema.version,
-            schema.element_type,
-            schema.shape,
-            schema.capacity,
-        ) for schema in workspace_layout.schemas),
+        Tuple(
+            (
+                    group.split,
+                    length(group.instances),
+                    group.state_handles,
+                    group.workspace_handles,
+                ) for group in groups
+        ),
+        Tuple(
+            (
+                    schema.identity.path,
+                    schema.identity.name,
+                    schema.version,
+                    schema.domain,
+                    schema.element_type,
+                    schema.shape,
+                    schema.capacity,
+                ) for schema in state_layout.schemas
+        ),
+        Tuple(
+            (
+                    schema.identity.path,
+                    schema.identity.name,
+                    schema.version,
+                    schema.element_type,
+                    schema.shape,
+                    schema.capacity,
+                ) for schema in workspace_layout.schemas
+        ),
         domain_resources.contact_offsets,
         domain_resources.contact_starts,
         domain_resources.contact_counts,

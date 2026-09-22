@@ -82,7 +82,7 @@ end
 function _potts_checkpoint_block(integrator::PottsIntegrator)
     history = Tuple((
         mcs = Int(time),
-        values = Tuple(parameters.values),
+        values = Tuple(_parameter_buffer(parameters)),
     ) for (time, parameters) in integrator.parameter_history)
     native_blocks = _native_checkpoint_blocks(integrator)
     replay_class = isempty(native_blocks) ?
@@ -415,7 +415,6 @@ function _restore_parameter_history(
     isempty(entries) && throw(ArgumentError(
         "checkpoint parameter history cannot be empty"
     ))
-    names = Tuple(entry.name for entry in plan.parameter_manifest)
     T = eltype(plan.core_program.parameter_defaults)
     history = Pair{Int, Any}[]
     previous_mcs = -1
@@ -436,7 +435,7 @@ function _restore_parameter_history(
                 "checkpoint parameter history contains incompatible values"
             ))
         end
-        length(values) == length(names) || throw(ArgumentError(
+        length(values) == _parameter_slot_count(plan.parameter_manifest) || throw(ArgumentError(
             "checkpoint parameter-history width does not match the runtime profile"
         ))
         all(isfinite, values) || throw(ArgumentError(
@@ -445,7 +444,7 @@ function _restore_parameter_history(
         CorePotts.CompilerSPI.validate_parameters(
             plan.core_program.descriptor_plan, values
         )
-        parameters = PottsParameters(values, NamedTuple{names}(Tuple(values)))
+        parameters = _saved_parameters(plan.parameter_manifest, values)
         push!(history, Int(mcs) => parameters)
         previous_mcs = Int(mcs)
     end

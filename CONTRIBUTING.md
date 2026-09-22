@@ -224,6 +224,49 @@ runtime and mathematical semantics in their standalone repositories.
 Performance campaigns remain separate. Use Julia 1.12.6 for this command; do
 not invoke the Metal environment through a different Julia release channel.
 
-Current specifications and decisions live under `spec/`. Historical interviews and evidence under
-`design/audits/`, and retired qualification scripts under `scripts/archive/`, document earlier
-repository states but are not active development gates.
+Dispatch `Ecosystem integration` with full commit SHAs for LocalMath, CorePotts,
+Potts, and MakiePotts to test a cross-repository candidate together. To include
+PottsModels, also supply its actual `owner/repository` and full commit SHA;
+neither has an invented default. Both Models inputs must be supplied together.
+A run without them covers only the four selected repositories and does not
+validate the model library. Include Models for model-library changes and
+upstream changes affecting its public consumer contracts.
+
+The combined workflow runs ordinary package, scientific, integration,
+documentation/tutorial, rendering, and applicable Metal tests. Its macOS
+candidate-tuple tests intentionally develop the selected upstream revisions,
+including native continuation tests; they do **not** establish the separately
+published closed-profile replay guarantee. Changes to any selected revision
+require rechecking the affected owner and consumers together before handoff.
+Use these ordinary results to coordinate dependent repository merges; this
+workflow does not merge repositories or make a multi-repository change atomic.
+It does not impose release-version inventories, spelling scans, or additional
+qualification paperwork.
+
+## Investigating compound-model compilation
+
+Run `benchmark/compound_compilation.jl` in an environment that develops the
+checkout being measured. Run each combination in a fresh Julia process:
+
+```sh
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl model checkerboard
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site sequential
+julia --project=ENV --startup-file=no benchmark/compound_compilation.jl site checkerboard
+```
+
+Replace `ENV` with the actual package environment. The diagnostic separates
+authoring, structural compilation, scheduled problem construction,
+initialization, first and subsequent steps, and repeated initialization. Julia's
+`@time` reports compilation time and cumulative allocations; allocations are
+not peak memory. Package loading occurs before the measured sections. Numerical
+swap, ownership, and clock checks run outside the timed sections.
+
+Record Julia/package versions and machine load with the output. Use an idle
+machine and repeated fresh processes for comparisons; concurrent test runs can
+distort timings. These measurements guide profiling, not pass/fail thresholds.
+
+Current specifications and decisions live under `spec/`. Historical interviews
+and evidence under `design/audits/`, and retired qualification scripts under
+`scripts/archive/`, document earlier repository states but are not active
+development gates.
