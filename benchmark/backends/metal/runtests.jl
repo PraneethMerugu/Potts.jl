@@ -10,6 +10,7 @@ const METAL_SEMANTIC_WITNESSES = (
     "problem_construction.jl",
     "authored_randomness.jl",
     "scheduled_process_draws.jl",
+    "structured_random_continuation.jl",
     "cell_polarity_dynamics.jl",
     "fixed_vector_operations.jl",
     "history_structured_samples.jl",
