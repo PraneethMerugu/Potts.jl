@@ -447,7 +447,7 @@ function (setter::PottsSymbolicSetter)(integrator::PottsIntegrator, replacements
         # Runtime slot identities may contain holes. Unlike fresh initial
         # values, mutation always supplies the complete canonical slot buffer.
         normalized = _normalize_initial_state_entry(
-            entry, Dict(entry.name => value), program.shape, capacity, capacity,
+            entry, Dict(entry.name => value), _core_program_shape(program), capacity, capacity,
             integrator.scalar_type, entry.storage === :history ? source : nothing,
         )
         copyto!(SPI.state_block(candidate, entry.handle).values, _descriptor_state_value(layout_entry, normalized))

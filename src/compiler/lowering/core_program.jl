@@ -444,6 +444,27 @@ function _lower_core_program(
         medium_kinds[kinds[declaration.identity]] = true
     end
     count = length(kinds)
+    default_owner = CorePotts.CompilerSPI.DomainOwnerMetadata(
+        0,
+        CorePotts.CompilerSPI.MediumDomainOwnerCategory,
+        medium_kind,
+    )
+    domain_owners = CorePotts.CompilerSPI.DomainOwnerMetadata[
+        CorePotts.CompilerSPI.DomainOwnerMetadata(
+            kind,
+            CorePotts.CompilerSPI.MediumDomainOwnerCategory,
+            kind,
+        )
+        for kind in eachindex(medium_kinds) if medium_kinds[kind]
+    ]
+    face_kinds = ntuple(2 * dimensions) do face
+        periodic[cld(face, 2)] ?
+            CorePotts.CompilerSPI.PeriodicCartesianFace :
+            CorePotts.CompilerSPI.ClosedCartesianFace
+    end
+    cartesian_domain = CorePotts.CompilerSPI.CartesianOwnershipDomain(
+        shape, default_owner, domain_owners; face_kinds,
+    )
     defaults = _default_parameter_buffer(manifest, T)
     proposal_offsets = _relation_offsets(
         ir.source, domain, :proposal, dimensions, VonNeumann()
@@ -479,7 +500,7 @@ function _lower_core_program(
             proposal_offsets,
             Val(dimensions),
         )
-        CorePotts.BackendSPI.CheckerboardPlan(shape, periodic, conflicts)
+        CorePotts.BackendSPI.CheckerboardPlan(cartesian_domain, conflicts)
     else
         CorePotts.BackendSPI.NoCheckerboardPlan()
     end
@@ -505,11 +526,9 @@ function _lower_core_program(
         Base.pkgversion(Potts),
     )
     return CorePotts.CompilerSPI.CompiledPottsProgram(
-        shape,
-        periodic,
+        cartesian_domain,
         proposal_offsets,
         count,
-        medium_kind,
         temperature,
         attempts,
         defaults,
@@ -520,7 +539,6 @@ function _lower_core_program(
         core_engine,
         core_backend,
         program_fingerprint;
-        medium_kinds,
         lifecycle_plan,
         checkerboard_plan,
         ownership_change_handles,
