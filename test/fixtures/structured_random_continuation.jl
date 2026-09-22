@@ -6,6 +6,7 @@ function _structured_random_continuation_problem(; unrelated = false)
     @variables unrelated_value
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
+    memory_state = ModelState(memory; initial = (sample = 0.25, previous = -1.0))
     extras = unrelated ? (
         ModelState(unrelated_value; initial = 0.0),
         Synchronous(
@@ -18,12 +19,18 @@ function _structured_random_continuation_problem(; unrelated = false)
         statements = StatementSet(
             (
                 Lattice((2, 2); boundary = Closed(), max_cells = 1), cell, medium,
-                ModelState(signal; initial = 0.25),
-                ModelState(memory; initial = (sample = 0.25, previous = -1.0)),
+                ModelState(signal; initial = 0.25), memory_state,
                 extras...,
                 Synchronous(
                     :sample,
-                    Assign(signal, draw(Uniform(), DrawKey(:structured_sample))),
+                    Assign(signal, draw(Uniform(), DrawKey(:scalar_sample))),
+                    Assign(
+                        memory,
+                        (
+                            sample = draw(Uniform(), DrawKey(:structured_sample)),
+                            previous = memory_state.sample,
+                        ),
+                    ),
                 ),
                 ProposalConstraint(:fixed_ownership, false),
                 Protocol(Sweep(; temperature = 0.0); name = :main),
@@ -51,8 +58,8 @@ function _structured_random_continuation_contract(algorithm, backend; unrelated 
     @test 0.0f0 < integrator.u[:signal] < 1.0f0
     @test restored.u[:signal] === integrator.u[:signal]
     @test restored.u[:memory] === integrator.u[:memory]
-
-    @test integrator.u[:memory] === initial
+    @test integrator.u[:memory].previous === initial.sample
+    @test 0.0f0 < integrator.u[:memory].sample < 1.0f0
     values = [(signal = integrator.u[:signal], memory = integrator.u[:memory])]
     for boundary in 2:4
         prior = last(values)
@@ -60,12 +67,16 @@ function _structured_random_continuation_contract(algorithm, backend; unrelated 
         step!(restored)
         current = (signal = integrator.u[:signal], memory = integrator.u[:memory])
         @test current === (signal = restored.u[:signal], memory = restored.u[:memory])
-        @test current.memory === prior.memory === initial
+        @test current.memory.previous === prior.memory.sample
+        @test current.memory.sample !== prior.memory.sample
         @test 0.0f0 < current.signal < 1.0f0
+        @test 0.0f0 < current.memory.sample < 1.0f0
         @test integrator.t == restored.t == boundary
         @test failure_report(integrator) === nothing
         @test failure_report(restored) === nothing
         push!(values, current)
     end
+    @test length(unique(value.signal for value in values)) == length(values)
+    @test length(unique(value.memory.sample for value in values)) == length(values)
     return values
 end
