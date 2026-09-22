@@ -523,17 +523,7 @@ function _lower_lifecycle_plan(
             report = CorePotts.CompilerSPI.cartesian_domain_report(
                 cartesian_domain,
             )
-            if report.default_owner.kind == kind
-                Int32(0)
-            else
-                owner = only(filter(
-                    metadata -> metadata.kind == kind,
-                    report.domain_owners,
-                ))
-                CorePotts.CompilerSPI.domain_owner_code(
-                    cartesian_domain, owner.identity,
-                )
-            end
+            _core_domain_owner_code(cartesian_domain, report, kind)
         else
             Int32(0)
         end
