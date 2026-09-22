@@ -2,28 +2,71 @@
 
 _assignment_field_path(path::Tuple) = join(string.(path), ".")
 
-function _product_schema_mismatch(::Type{D}, value, path = (:value,)) where {D}
+function _structured_type_mismatch(::Type{D}, ::Type{A}, path = (:value,)) where {D, A}
     if D <: NamedTuple
-        value isa NamedTuple || return (
+        A <: NamedTuple || return (
             path,
             "named product with fields $(fieldnames(D))",
-            string(typeof(value)),
+            string(A),
         )
         expected = fieldnames(D)
-        actual = keys(value)
+        actual = fieldnames(A)
         expected == actual || return (
             path,
             "fields $expected in declared order",
             "fields $actual",
         )
         for index in eachindex(expected)
-            mismatch = _product_schema_mismatch(
+            mismatch = _structured_type_mismatch(
+                fieldtype(D, index), fieldtype(A, index), (path..., expected[index]),
+            )
+            mismatch === nothing || return mismatch
+        end
+    elseif D <: StaticArrays.StaticArray
+        A <: StaticArrays.StaticArray || return (
+            path, "fixed array with shape $(Tuple(StaticArrays.Size(D)))", string(A),
+        )
+        StaticArrays.Size(D) == StaticArrays.Size(A) || return (
+            path,
+            "fixed array with shape $(Tuple(StaticArrays.Size(D)))",
+            "fixed array with shape $(Tuple(StaticArrays.Size(A)))",
+        )
+        return _structured_type_mismatch(eltype(D), eltype(A), path)
+    elseif A <: Union{NamedTuple, StaticArrays.StaticArray}
+        return (path, "a scalar leaf", string(A))
+    end
+    return nothing
+end
+
+function _explicit_structured_schema_mismatch(::Type{D}, value, path = (:value,)) where {D}
+    if value isa NamedTuple
+        D <: NamedTuple || return (path, "a scalar or fixed-array leaf", "fields $(keys(value))")
+        expected = fieldnames(D)
+        actual = keys(value)
+        expected == actual || return (
+            path, "fields $expected in declared order", "fields $actual",
+        )
+        for index in eachindex(expected)
+            mismatch = _explicit_structured_schema_mismatch(
                 fieldtype(D, index), getfield(value, index), (path..., expected[index]),
             )
             mismatch === nothing || return mismatch
         end
-    elseif value isa NamedTuple
-        return (path, "a scalar or fixed-size array leaf", "fields $(keys(value))")
+    elseif value isa StaticArrays.StaticArray
+        D <: StaticArrays.StaticArray || return (path, "a scalar leaf", string(typeof(value)))
+        StaticArrays.Size(D) == StaticArrays.Size(typeof(value)) || return (
+            path,
+            "fixed array with shape $(Tuple(StaticArrays.Size(D)))",
+            "fixed array with shape $(size(value))",
+        )
+        for item in value
+            mismatch = _explicit_structured_schema_mismatch(eltype(D), item, path)
+            mismatch === nothing || return mismatch
+        end
+    elseif D <: NamedTuple || D <: StaticArrays.StaticArray
+        # Symbolic whole-product/array expressions are validated from their
+        # analyzed result type after normalization.
+        return nothing
     end
     return nothing
 end
@@ -76,7 +119,18 @@ function _stage_descriptor(
     )
     target_arguments = _record_arguments(target_record)
     target_variable = get(target_arguments, :variable, nothing)
-    schema_mismatch = _product_schema_mismatch(target_record.result_type, effect.value)
+    value_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_value))
+    schema_mismatch = if target_variable isa Symbolics.Arr
+        nothing
+    elseif effect.value isa Union{NamedTuple, StaticArrays.StaticArray}
+        _explicit_structured_schema_mismatch(target_record.result_type, effect.value)
+    elseif value_root !== nothing
+        _structured_type_mismatch(
+            target_record.result_type, ir.facts.result_type[value_root],
+        )
+    else
+        nothing
+    end
     schema_mismatch === nothing || begin
         path, expected, actual = schema_mismatch
         throw(PottsValidationError(
@@ -94,7 +148,6 @@ function _stage_descriptor(
         ))
     end
     target_shape = target_variable isa Symbolics.Arr ? Tuple(size(target_variable)) : ()
-    value_root = _stage_root(ir, record_index, Symbol(:effect_, effect_index, :_value))
     value_shape = value_root === nothing ? () : ir.facts.shape[value_root]
     value_shape == target_shape || throw(
         PottsValidationError(

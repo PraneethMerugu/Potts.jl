@@ -9,6 +9,7 @@ function test_structured_history_samples(algorithms; backend = CPUBackend())
     @variables product::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
     @variables product_memory::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
     @variables product_copy::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
+    @variables product_state_copy::NamedTuple{(:amount, :enabled), Tuple{Float64, Bool}}
     @variables amount oldest
     history = HistoryState(product_memory; of = product, depth = 257, initial = 0)
     child = PottsSystem(
@@ -23,19 +24,21 @@ function test_structured_history_samples(algorithms; backend = CPUBackend())
                 ModelState(tensor_copy; initial = zero(SMatrix{2, 2, Float64})),
                 ModelState(product; initial = (amount = 6.0u"m", enabled = true)), history,
                 ModelState(product_copy; initial = (amount = 0.0u"m", enabled = false)),
+                ModelState(product_state_copy; initial = (amount = 0.0u"m", enabled = false)),
                 ModelState(amount; initial = 0.0u"m"),
                 ModelState(oldest; initial = 0.0u"m"),
                 Synchronous(
                     :sample_feedback,
                     Assign(rotated, SVector(lag(position_memory, 0)[2], -lag(position_memory, 0)[1])),
                     Assign(product_copy, lag(product_memory, 0)),
+                    Assign(product_state_copy, product),
                     Assign(amount, lag(history.amount, 0) + lag(history.amount, 1)),
                     Assign(tensor_copy, lag(tensor_memory, 0)),
                     Assign(oldest, lag(position_memory, 256)[1]),
                 ),
             )
         ),
-        unknowns = (position, position_memory, rotated, tensor, tensor_memory, tensor_copy, product, product_memory, product_copy, amount, oldest),
+        unknowns = (position, position_memory, rotated, tensor, tensor_memory, tensor_copy, product, product_memory, product_copy, product_state_copy, amount, oldest),
     )
     cell = CellKind(:cell; extinction = ForbidExtinction())
     medium = MediumKind(:medium)
@@ -60,6 +63,7 @@ function test_structured_history_samples(algorithms; backend = CPUBackend())
         step!(integrator)
         @test integrator.u[:sensor₊rotated] == SVector(0.0f0, 0.0f0)
         @test integrator.u[:sensor₊product_copy] === (amount = 0.0f0, enabled = false)
+        @test integrator.u[:sensor₊product_state_copy] === (amount = 3.0f0, enabled = true)
         @test integrator.u[:sensor₊amount] == 0.0f0
         @test integrator.u[:sensor₊tensor_copy] == zero(SMatrix{2, 2, Float32})
         restored = init(problem, algorithm; backend, scalar_type = Float32, checkpoint = checkpoint(integrator))
@@ -67,6 +71,7 @@ function test_structured_history_samples(algorithms; backend = CPUBackend())
             step!(current)
             @test current.u[:sensor₊rotated] == SVector(2.0f0, -1.0f0)
             @test current.u[:sensor₊product_copy] === (amount = 3.0f0, enabled = true)
+            @test current.u[:sensor₊product_state_copy] === (amount = 3.0f0, enabled = true)
             @test current.u[:sensor₊amount] == 3.0f0
             @test current.u[:sensor₊tensor_copy] == SMatrix{2, 2}(1.0f0, 2.0f0, 3.0f0, 4.0f0)
             @test first(current.u[:sensor₊position_memory]) == SVector(0.0f0, 0.0f0)

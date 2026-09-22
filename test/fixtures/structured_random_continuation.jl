@@ -1,6 +1,7 @@
 using Symbolics
 using DynamicQuantities
 using ModelingToolkitBase
+using StaticArrays
 
 function _structured_random_continuation_problem(; unrelated = :none)
     @variables memory::NamedTuple{(:sample, :previous, :a, :a_b, :physical), Tuple{Float64, Float64, NamedTuple{(:b,), Tuple{Float64}}, Float64, NamedTuple{(:distance, :duration), Tuple{Float64, Float64}}}}

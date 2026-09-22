@@ -19,9 +19,9 @@ end
 
 @testset "structured assignment schemas and dimensions fail at the exact field path" begin
     function assignment_problem(value)
-        @variables memory::NamedTuple{(:outer, :flat), Tuple{NamedTuple{(:distance, :duration), Tuple{Float64, Float64}}, Float64}}
+        @variables memory::NamedTuple{(:outer, :flat), Tuple{NamedTuple{(:distance, :duration, :direction), Tuple{Float64, Float64, SVector{2, Float64}}}, Float64}}
         state = ModelState(memory; initial = (
-            outer = (distance = 1.0, duration = 1.0), flat = 0.0,
+            outer = (distance = 1.0, duration = 1.0, direction = SVector(1.0, 0.0)), flat = 0.0,
         ))
         process = only(@statements begin
             Synchronous(:replace, Assign(memory, value))
@@ -46,18 +46,19 @@ end
     end
 
     valid = (
-        outer = (distance = 2.0, duration = 3.0), flat = 0.5,
+        outer = (distance = 2.0, duration = 3.0, direction = SVector(0.0, 1.0)), flat = 0.5,
     )
     result = solve(assignment_problem(valid), SequentialCPM(); scalar_type = Float32)
     @test result.u[end][:memory] === (
-        outer = (distance = 2.0f0, duration = 3.0f0), flat = 0.5f0,
+        outer = (distance = 2.0f0, duration = 3.0f0, direction = SVector(0.0f0, 1.0f0)), flat = 0.5f0,
     )
 
     failures = (
         ((flat = 0.5,), "value", "fields (:outer, :flat)"),
-        ((outer = (distance = 2.0, duration = 3.0), flat = 0.5, extra = 1.0), "value", "extra"),
-        ((flat = 0.5, outer = (distance = 2.0, duration = 3.0)), "value", "declared order"),
-        ((outer = (duration = 3.0, distance = 2.0), flat = 0.5), "value.outer", "declared order"),
+        ((outer = (distance = 2.0, duration = 3.0, direction = SVector(0.0, 1.0)), flat = 0.5, extra = 1.0), "value", "extra"),
+        ((flat = 0.5, outer = (distance = 2.0, duration = 3.0, direction = SVector(0.0, 1.0))), "value", "declared order"),
+        ((outer = (duration = 3.0, distance = 2.0, direction = SVector(0.0, 1.0)), flat = 0.5), "value.outer", "declared order"),
+        ((outer = (distance = 2.0, duration = 3.0, direction = SVector(0.0, 1.0, 2.0)), flat = 0.5), "value.outer.direction", "shape (2,)"),
     )
     for (value, path, detail) in failures
         error = try
