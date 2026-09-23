@@ -33,25 +33,28 @@ end
     cell = CellKind(:metal_multiple_medium_cell; extinction = RetireAtZero())
     bulk = MediumKind(:metal_multiple_medium_bulk)
     border = MediumKind(:metal_multiple_medium_border)
+    bulk_owner = MediumDomainOwner(:metal_multiple_medium_bulk_owner, bulk)
+    border_owner = MediumDomainOwner(:metal_multiple_medium_border_owner, border)
     border_coordinates = Tuple(
         (row, column) for row in (1, 6) for column in 1:6
     )
     initial = PottsInitialState(ownership = OwnershipLayout(
         (6, 6),
-        MediumPlacement(border, border_coordinates),
+        MediumPlacement(border_owner, border_coordinates),
         CellPlacement(
             1,
             cell,
             ((3, 3), (3, 4), (4, 3), (4, 4)),
         );
-        medium = bulk,
+        medium = bulk_owner,
     ))
 
     for (name, boundary) in ((:closed, Closed()), (:periodic, Periodic()))
         scheduled = mtkcompile(PottsSystem(
             name = Symbol(:metal_multiple_medium_, name),
             statements = StatementSet((
-                Lattice((6, 6); boundary = boundary),
+                Lattice((6, 6); boundary, default_owner = bulk_owner,
+                    domain_owners = (border_owner,)),
                 cell,
                 bulk,
                 border,

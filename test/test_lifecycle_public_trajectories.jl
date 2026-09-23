@@ -3,7 +3,7 @@
     scheduled = mtkcompile(fixture.source)
     plans = inspect(scheduled, LifecyclePlans())
     @test Set(plan.effect for plan in plans) ==
-          Set((:CreateCell, :Transition, :Divide, :RemoveCell, :Retire))
+        Set((:CreateCell, :Transition, :Divide, :RemoveCell, :Retire))
     @test count(plan -> plan.effect === :Retire, plans) == 2
     problem = PottsProblem(scheduled, fixture.initial, (0, 5); seed = 0x51f3)
     solution = solve(
@@ -39,19 +39,21 @@
     step!(integrator)
     step!(integrator)
     captured = checkpoint(integrator)
-    resumed = solve!(init(
-        problem,
-        SequentialCPM();
-        backend = CPUBackend(),
-        scalar_type = Float32,
-        checkpoint = captured,
-        save_start = false,
-    ))
+    resumed = solve!(
+        init(
+            problem,
+            SequentialCPM();
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            checkpoint = captured,
+            save_start = false,
+        )
+    )
     @test last(resumed).ownership == solution(5).ownership
     @test last(resumed).cell_kinds == solution(5).cell_kinds
     @test last(resumed).cell_generations == solution(5).cell_generations
     @test last(resumed)[:lifecycle_activity] ==
-          solution(5)[:lifecycle_activity]
+        solution(5)[:lifecycle_activity]
 end
 
 @testset "remove-cell replacement preserves Cartesian medium ownership" begin
@@ -131,6 +133,7 @@ end
 @testset "lifecycle relationship consequence is public and generation safe" begin
     cell = CellKind(:linked_cell; extinction = RetireAtZero())
     medium = MediumKind(:linked_medium)
+    medium_owner = MediumDomainOwner(:linked_medium_domain, medium)
     links = RelationshipState(
         :linked_edges;
         endpoints = Undirected(cell, cell),
@@ -144,25 +147,31 @@ end
         domain = cells(cell),
         anchor,
         expression = Potts.anchor_value(anchor) == 1,
-        effects = (RemoveCell(
-            anchor;
-            replacement = medium,
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(1),
     )
-    scheduled = mtkcompile(PottsSystem(
-        name = :lifecycle_relationship_model,
-        statements = StatementSet((
-            Lattice((5, 5); max_cells = 2),
-            cell,
-            medium,
-            links,
-            ProposalConstraint(:freeze_linked_lifecycle, false),
-            remove,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
-    ))
+    scheduled = mtkcompile(
+        PottsSystem(
+            name = :lifecycle_relationship_model,
+            statements = StatementSet(
+                (
+                    Lattice((5, 5); default_owner = medium_owner, max_cells = 2),
+                    cell,
+                    medium,
+                    links,
+                    ProposalConstraint(:freeze_linked_lifecycle, false),
+                    remove,
+                    Protocol(Sweep(; temperature = 0.0); name = :main),
+                )
+            ),
+        )
+    )
     labels = zeros(Int, 5, 5)
     labels[2, 2] = 1
     labels[4, 4] = 2
