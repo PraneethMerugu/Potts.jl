@@ -33,6 +33,53 @@ struct _PottsSourceInventory
     natives::Vector{_SourceNativeOccurrence}
 end
 
+# Resolve declaration references against the nearest enclosing lexical scope.
+# Completion and host analysis share this authority so qualification never
+# depends on a later compiler-pass implementation file.
+function _resource_local_id(resource)
+    resource isa Symbol && return StatementID(resource)
+    resource isa StatementID && return resource
+    resource isa AbstractPottsStatement && return statement_id(resource)
+    return nothing
+end
+
+_resource_identity(record::QualifiedStatement) = record.identity
+_resource_identity(occurrence::_SourceStatementOccurrence) =
+    QualifiedStatementID(occurrence.path, statement_id(occurrence.statement))
+_resource_kind(record::QualifiedStatement) = record.kind
+_resource_kind(occurrence::_SourceStatementOccurrence) =
+    statement_kind(occurrence.statement)
+
+function _resource_record(
+        records::AbstractVector, owner_path::Tuple, kind::Symbol, resource
+    )
+    if resource isa QualifiedStatementID
+        index = findfirst(
+            candidate -> _resource_kind(candidate) === kind &&
+                _resource_identity(candidate) == resource,
+            records,
+        )
+        return index === nothing ? nothing : records[index]
+    end
+    local_id = _resource_local_id(resource)
+    local_id === nothing && return nothing
+    best = nothing
+    best_depth = -1
+    for candidate in records
+        _resource_kind(candidate) === kind || continue
+        identity = _resource_identity(candidate)
+        identity.local_id == local_id || continue
+        candidate_path = identity.path
+        length(candidate_path) <= length(owner_path) || continue
+        owner_path[1:length(candidate_path)] == candidate_path || continue
+        if length(candidate_path) > best_depth
+            best = candidate
+            best_depth = length(candidate_path)
+        end
+    end
+    return best
+end
+
 const _SOURCE_TRAVERSAL_WITNESS_KEY = :__potts_source_traversal_witness__
 
 function _record_source_visit(kind::Symbol, path::Tuple, value)

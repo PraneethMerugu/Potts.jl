@@ -2,12 +2,14 @@
     @variables signal field_memory marked marked_memory activity activity_memory
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
+    medium_owner = MediumDomainOwner(:site_history_medium, medium)
     anchor = CellBinding(:selected)
     model_source = PottsSystem(
         name = :site_history_lifetimes,
         statements = StatementSet(
             (
-                Lattice((3, 3); boundary = Closed(), max_cells = 1), cell, medium,
+                Lattice((3, 3); boundary = Closed(),
+                    default_owner = medium_owner, max_cells = 1), cell, medium,
                 FieldState(signal; initial = 7.0),
                 HistoryState(field_memory; of = signal, depth = 3, initial = 4.0, cadence = Every(100)),
                 FieldState(marked; initial = 5.0, lifecycle = ClearOnOwnershipChange()),
@@ -23,7 +25,7 @@
                 ProposalConstraint(:fixed_ownership, false),
                 LifecycleProcess(
                     :remove; domain = cells(cell), anchor, expression = true,
-                    effects = (RemoveCell(anchor; replacement = medium, on_inadmissible = ErrorOnInadmissible()),),
+                    effects = (RemoveCell(anchor; replacement = medium_owner, on_inadmissible = ErrorOnInadmissible()),),
                     cadence = AtMCS(1)
                 ),
                 Protocol(Sweep(; temperature = 0.0); name = :main),

@@ -82,5 +82,17 @@ using ExplicitImports
             end
             @test isempty(path_dependencies)
         end
+
+        # Workflow checkout defaults must agree with the replay authority;
+        # their number of textual occurrences is not part of that contract.
+        replay_dependencies = TOML.parsefile(first(live_manifests))["deps"]
+        for workflow in ("ci.yml", "docs.yml", "docs-links.yml")
+            source = read(joinpath(repository, ".github", "workflows", workflow), String)
+            for name in ("CorePotts", "LocalMath")
+                entries = replay_dependencies[name]
+                entry = entries isa AbstractVector ? only(entries) : entries
+                @test occursin(entry["repo-rev"], source)
+            end
+        end
     end
 end
