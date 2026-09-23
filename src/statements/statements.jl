@@ -362,6 +362,7 @@ function _defensive_tuple(values)
 end
 
 _defensive_copy(value::AbstractArray) = copy(value)
+_defensive_copy(value::Symbolics.Arr) = value
 _defensive_copy(value::AbstractDict) = copy(value)
 _defensive_copy(value) = value
 
