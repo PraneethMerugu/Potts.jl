@@ -1,4 +1,5 @@
 using StaticArrays, Symbolics, ModelingToolkitBase, SymbolicIndexingInterface, DynamicQuantities
+import CorePotts
 
 function _mixed_symbolic_mutation_contract(algorithms, backend)
     return @testset "mixed symbolic updates and pending parameter publication" begin
