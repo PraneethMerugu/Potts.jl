@@ -65,6 +65,15 @@ macOS and real-Metal qualification. Its merge tree is identical to the
 qualified `b04e05fb` tip; local exact-tuple owner CPU passed 5,078/5,078.
 The original source refs, archive and stashes remain preserved pending the
 per-branch equivalence and cleanup decisions below.
+Potts C11 then merged as PR59 (`7bfc2d30`) after required hosted CPU, docs,
+macOS smoke, integration, exact replay, and real-Metal checks passed. Its merge
+tree equals qualified tip `43f293c3`; the original clean C11 restack differed
+only by the already merged progress text, one R09 fixture import, and two
+qualified test corrections. The clean temporary C11 restack and qualification
+worktrees were removed after this comparison. Their branch refs and all
+stashes remain preserved; older audited worktree registrations are handled
+separately. The historical table below is not a claim that its old PR head is
+still active.
 
 ## CorePotts — hard preserve
 

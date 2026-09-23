@@ -20,12 +20,13 @@ in dependency order. Releases remain unauthorized.
 - R01–R07 are merged across PottsModels, Potts, CorePotts, LocalMath, and
   MakiePotts. Core R08 merged as CorePotts PR32 (`7b46e4eb`), and its Potts
   consumer R09 merged as Potts PR53 (`0e0f4dfc`).
-- Thirteen demonstrated companions are merged: the PottsModels CI correction and
+- All fourteen demonstrated companions are merged: the PottsModels CI correction and
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
   ordered-fold step validation, plus exact keyed reduction, atomic keyed
   rebuild publication, bounded runtime launch, direct source-order recurrence,
-  validation-copy settlement, and Core Cartesian domain ownership.
+  validation-copy settlement, Core Cartesian domain ownership, and Potts
+  Cartesian domain authoring.
 - The seventh identified companion is LocalMath PR18, merged as `9d3e1a24`.
   The eighth is LocalMath PR19, merged as `7082ed84`; both passed their complete
   hosted package, scientific, documentation, macOS, and real-Metal checks.
@@ -63,7 +64,14 @@ in dependency order. Releases remain unauthorized.
   `2ceb98ac` tuple passed 5,078/5,078 local owner CPU assertions and the
   standalone mixed-symbolic real-Metal witness 416/416; hosted package,
   integration, exact replay, documentation, macOS smoke and full real-Metal
-  checks all passed. C11 is the next Potts consumer; R10 remains local work.
+  checks all passed.
+- Potts C11 merged as PR59 (`7bfc2d30`) on 2026-09-23, after documentation-only
+  progress PR67 (`bb7d0bf7`). The merge tree equals qualified tip `43f293c3`.
+  Local owner CPU passed 5,192/5,192; the post-restack exact-dependency focused
+  suite passed 217/217, strict docs and integration passed, exact replay passed
+  220/220, and the portable-KA real-Metal Cartesian parity witness passed 15/15.
+  Required hosted package, docs, macOS smoke, integration, replay and real-Metal
+  checks all passed. Corrected Core R10 is the next owner-level PR.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -73,8 +81,8 @@ in dependency order. Releases remain unauthorized.
 | --- | --- | --- | --- | --- |
 | R08 Core typed composition/lifecycle | [CorePotts PR32](https://github.com/PraneethMerugu/CorePotts.jl/pull/32) | `7b46e4eb` | main | merged |
 | R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `0e0f4dfc` | main | merged; exact local CPU and full hosted package/integration/replay/docs/macOS/Metal green; merge tree equals qualified tip `b04e05fb` |
-| R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `a4fb6c88` | main | draft; G05 science gaps remain |
-| R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
+| R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `b26d4d8b` (clean local candidate; PR branch unchanged) | merged C10 and Core PR38 | local owner CPU 33,288/33,288, strict docs and full real-Metal suite green; PR33 restack/hosted qualification pending |
+| R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` (historical branch) | merged C11 | draft; restack depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
 | R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft/CLEAN; exact Symbolics 7.37 CPU/Metal correction and complete hosted suite green, blocked by R11 and downstream canary |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
@@ -85,7 +93,7 @@ in dependency order. Releases remain unauthorized.
 | LocalMath PR24 maintenance/compiler correction — pointwise temporary-identity segmentation (not counted) | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) | `a1d60d1a` | merged C14 `a26cbfe` | merged; fresh KCT, LocalMath behavioral CPU 1,942 pass with baseline Aqua environment error, real Metal 592/592, Core 17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and continuation 116/116 green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation |
 | C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `b6ded93d` | Core R08 | merged; local/full hosted CPU, docs, quality, macOS, independent review, and real-Metal green |
 | Core lifecycle-product device correction (not counted) | [CorePotts PR38](https://github.com/PraneethMerugu/CorePotts.jl/pull/38) | `2ceb98ac` | merged C10 | merged; exact local/downstream and complete hosted CPU/docs/macOS/real-Metal green |
-| C11 Potts Cartesian domain authoring | [Potts PR59](https://github.com/PraneethMerugu/Potts.jl/pull/59) | `064231eb` (clean local restack; PR branch unchanged) | merged C10 and Potts R09 | focused Cartesian tests 106/106 green; rebase onto merged R09, full CPU/docs/quality and real Metal pending |
+| C11 Potts Cartesian domain authoring | [Potts PR59](https://github.com/PraneethMerugu/Potts.jl/pull/59) | `7bfc2d30` | merged C10 and Potts R09 | merged; local full CPU/docs/integration/replay/real Metal and complete required hosted suite green; merge tree equals qualified tip `43f293c3` |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
 
