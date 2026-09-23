@@ -59,10 +59,12 @@ lifecycle-product device correction merged as PR38 (`2ceb98ac`) after full
 hosted CPU/docs/macOS/Metal qualification. The clean canonical Core checkout
 was fast-forwarded to `2ceb98ac`; the original PR35/PR38 refs and the
 checksummed preservation archive remain intact. Potts R09 was reconstructed
-without dropping any file from the old PR53 semantic tree. Its local tip
-`a771b79c` passed the full 5,078-assertion owner CPU suite and affected actual
-Metal witnesses; the old PR53 remote ref remains untouched until exact joined
-qualification and a lease-checked in-place PR update.
+without dropping any file from the old PR53 semantic tree and merged as PR53
+(`0e0f4dfc`) after full hosted package, integration, exact replay, docs,
+macOS and real-Metal qualification. Its merge tree is identical to the
+qualified `b04e05fb` tip; local exact-tuple owner CPU passed 5,078/5,078.
+The original source refs, archive and stashes remain preserved pending the
+per-branch equivalence and cleanup decisions below.
 
 ## CorePotts — hard preserve
 
@@ -134,7 +136,7 @@ change; export it only if the archived text is still needed.
 | `codex/native-act-leader-follower-potts` — `WT/native-act-leader-follower/Potts.jl` | `6c5344d68318` | Earlier partial leader-drive/Act implementation with seven dirty tracked edits. | **Medium/unknown WIP**: focused files/tests, but uncommitted and not patch-equivalent to final leader commit. | Determine whether any behavior is missing from `3b421faf`. | Preserve, semantically diff, salvage only missing behavior, then retire. |
 | `codex/accepted-copy-fixture` — `WT/potts-accepted-copy-fixture` | `9b8393383cc5` | Explicit accepted-copy swap and extension-proposal fixtures. | **Medium-high**: focused behavioral coverage. | Later aggregates contain related behavior but exact oracle equivalence is unproved. | Retain missing oracle coverage, then retire after R09 comparison. |
 | `codex/potts-addressed-rng` — `WT/potts-addressed-rng` | `32274682544d` | Namespaced semantic RNG keys for authored and initialization draws. | **Medium-high**: clean deterministic-randomness tests. | Verify exact replay/checkpoint cases survived R09. | Preserve until contract comparison; transplant only missing guarantees. |
-| `codex/atomic-input-publication` — `WT/potts-atomic-input-publication` | `4fc9277ff621` | Open PR53 structured authoring, lifecycle, ingress, and execution identity. | **High historical/local**, but stale. | Behind remote PR53 tip `3790375c`; remote is authoritative. | Keep active PR worktree; update only through normal PR workflow. |
+| `codex/atomic-input-publication` — `WT/potts-atomic-input-publication` | `4fc9277ff621` | Historical checkout for PR53 structured authoring, lifecycle, ingress, and execution identity. | **High historical/local**, but stale; repaired PR53 merged as `0e0f4dfc`. | Compare this checkout against the identical qualified merge tree before cleanup; retain any unique ref evidence. | Archive only after source-branch patch and observable-contract equivalence are recorded. |
 | `codex/bounded-site-minimum-authoring` — `WT/potts-bounded-site-minimum-authoring` | `4cec5535b664` | Open PR54 maintained aggregates and bounded minima. | **Medium-high**, but stale local tip. | Behind remote `6156511c`; depends on PR59 and corrected Core R10. | Keep as active R11 PR worktree; remote branch is authority. |
 | `codex/cartesian-domain-authoring` — `WT/potts-cartesian-domain-authoring` | `1ae1fd439bb7` | Open PR59 typed Cartesian faces, obstacles/exterior, initialization, and lowering. | **Medium-high**, but stale local tip. | Behind remote `511413a5`; requires Core C10. | Preserve active C11 worktree. |
 | `codex/cell-process-authoring` — `WT/potts-cell-process-authoring` | `c72a4d563827` | Public cell/retirement processes and shared CPU/Metal numerical oracles. | **Medium-high**: explicit cross-backend oracle evidence. | Confirm lifecycle/retirement tests survived R09 aggregation. | Preserve until R09 content audit; retain missing oracles. |
