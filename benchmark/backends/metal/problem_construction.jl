@@ -28,6 +28,88 @@ function _problem_construction_inputs()
     return system, initial
 end
 
+@testset "multiple medium ownership survives Metal checkerboard checkpoints" begin
+    Metal.allowscalar(false)
+    cell = CellKind(:metal_multiple_medium_cell; extinction = RetireAtZero())
+    bulk = MediumKind(:metal_multiple_medium_bulk)
+    border = MediumKind(:metal_multiple_medium_border)
+    border_coordinates = Tuple(
+        (row, column) for row in (1, 6) for column in 1:6
+    )
+    initial = PottsInitialState(ownership = OwnershipLayout(
+        (6, 6),
+        MediumPlacement(border, border_coordinates),
+        CellPlacement(
+            1,
+            cell,
+            ((3, 3), (3, 4), (4, 3), (4, 4)),
+        );
+        medium = bulk,
+    ))
+
+    for (name, boundary) in ((:closed, Closed()), (:periodic, Periodic()))
+        scheduled = mtkcompile(PottsSystem(
+            name = Symbol(:metal_multiple_medium_, name),
+            statements = StatementSet((
+                Lattice((6, 6); boundary = boundary),
+                cell,
+                bulk,
+                border,
+                Volume(cell; target = 4.0f0, strength = 1.0f0),
+                ProposalConstraint(:fixed_multiple_medium, false),
+                Protocol(Sweep(; temperature = 2.0f0); name = :main),
+                Observation(:bulk_sites, occupancy(bulk, :lattice)),
+                Observation(:border_sites, occupancy(border, :lattice)),
+            )),
+        ))
+        problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x6c09)
+        cpu = init(
+            problem,
+            CheckerboardSweepCPM();
+            backend = CPUBackend(),
+            scalar_type = Float32,
+            observables = (:bulk_sites, :border_sites),
+        )
+        device = init(
+            problem,
+            CheckerboardSweepCPM();
+            backend = Potts.MetalBackend(),
+            scalar_type = Float32,
+            observables = (:bulk_sites, :border_sites),
+        )
+        @test Array(device.u.ownership) == cpu.u.ownership
+        @test device.u[:bulk_sites] == cpu.u[:bulk_sites] == 20
+        @test device.u[:border_sites] == cpu.u[:border_sites] == 12
+        @test any(<(0), Array(device.u.ownership))
+
+        step!(cpu)
+        step!(device)
+        @test Array(device.u.ownership) == cpu.u.ownership
+        @test device.u[:bulk_sites] == cpu.u[:bulk_sites] == 20
+        @test device.u[:border_sites] == cpu.u[:border_sites] == 12
+        cpu_stats = Potts.runtime_statistics(cpu)
+        device_stats = Potts.runtime_statistics(device)
+        @test device_stats.candidate_attempts == cpu_stats.candidate_attempts
+        @test device_stats.accepted == cpu_stats.accepted == 0
+        @test device_stats.rejected == cpu_stats.rejected
+        @test device_stats.null_attempts == cpu_stats.null_attempts
+        @test device_stats.constraint_rejections ==
+            cpu_stats.constraint_rejections
+
+        restored = init(
+            problem,
+            CheckerboardSweepCPM();
+            backend = Potts.MetalBackend(),
+            scalar_type = Float32,
+            observables = (:bulk_sites, :border_sites),
+            checkpoint = checkpoint(device),
+        )
+        @test Array(restored.u.ownership) == Array(device.u.ownership)
+        @test restored.u[:bulk_sites] == 20
+        @test restored.u[:border_sites] == 12
+    end
+end
+
 @testset "PottsProblem structural compilation precedes Metal execution" begin
     Metal.allowscalar(false)
     system, initial = _problem_construction_inputs()

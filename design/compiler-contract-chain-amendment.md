@@ -7,7 +7,7 @@ opened PRs, or new merge/release authority.
 ## Start here
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
-allocation and dependency graph: **69 identified PRs = 54 planned + fifteen
+allocation and dependency graph: **68 identified PRs = 54 planned + fourteen
 demonstrated companions**, following the accepted 2026-09-10
 [composition-first amendment](composition-first-model-roadmap.md). R51–R54 add
 COBREXA/model deliveries, not another compiler-contract PR. R01–R48 retain
@@ -70,22 +70,23 @@ cache, alternate scheduler or backend-specific scientific path. The
 [LocalMath–KA audit](localmath-kernelabstractions-audit.md) owns the exact source
 contract, boundary atlas and accepted/rejected evidence. It merged as LocalMath
 PR23 at `a26cbfe`.
-The fifteenth, **C15 LocalMath**, is the demonstrated pointwise temporary-
-identity segmentation boundary. A small graph-aware wrapper remains responsible
+Merged **LocalMath PR24** is a non-counted maintenance/compiler correction for
+the demonstrated pointwise temporary-identity segmentation boundary. A small
+graph-aware wrapper remains responsible
 for extracting the temporary publications used by one candidate segment; the
 reusable semantic segmentation law receives only that runtime temporary-
 identity set. This removes completed-graph wrapper shape from the reusable
 boundary without changing pointwise mathematics, bounded segment formation or
 the one KernelAbstractions CPU/Metal path. It adds no cache, retained lookup
 table, second graph representation, alternate executor or model-specific
-kernel. C15 follows merged C14 and precedes final R49/R50 and downstream
-pointwise compiler qualification.
+kernel. PR24 follows merged C14 and precedes final R49/R50 and downstream
+pointwise compiler qualification without increasing the feature allocation.
 
 The [portable GPU compiler architecture investigation](portable-gpu-compiler-architecture-investigation.md)
 owns the current top-down executable-identity ledger, specialization atlas,
 accepted and rejected compiler hypotheses, and upstream residual-cost record.
 Its demonstrated runtime-parameter-name correction fits R50; it does not add a
-companion or change the 69-PR allocation. Metal remains a hardware witness for
+companion or change the 68-PR allocation. Metal remains a hardware witness for
 portable KernelAbstractions code, never a separate scientific executor.
 
 Agents assigned chain work must read the current
@@ -311,7 +312,8 @@ specializations. This is evidence for the launch investigation, not yet proof
 of a defect or authorization for a companion. Earlier approximate counts must
 not be substituted for these controlled values.
 
-The follow-on compiled-artifact reuse investigation qualified C15 on merged C14
+The follow-on compiled-artifact reuse investigation qualified the non-counted
+LocalMath PR24 maintenance/compiler correction on merged C14
 `a26cbfe`; LocalMath PR24 merged as
 `a1d60d1a6137015763059851a878dea6dbec7991`. Fresh registered KCT
 comparisons isolated the pointwise segmentation boundary and supported the
@@ -909,10 +911,11 @@ LocalMath–KA audit demonstrated two distinct reusable owner laws: C13 direct
 source-order recurrence raised the allocation to 67, and C14 validation-copy
 settlement raised it to 68. Their different mathematical and provider-
 settlement responsibilities prevent combining them merely to preserve a count.
-The subsequent compiled-artifact reuse investigation then demonstrated C15:
+The subsequent compiled-artifact reuse investigation then qualified LocalMath
+PR24's maintenance/compiler correction:
 graph-aware extraction and reusable pointwise segmentation were fused at a
 boundary that needed only the runtime temporary-identity set. This narrowly
-owned LocalMath correction raises the allocation to 69 without changing the
+owned LocalMath correction does not change the 68-PR allocation or the
 specialization law: names, identities and graph contents remain values, and the
 bounded pointwise operation family remains the executable identity.
 
@@ -1003,8 +1006,9 @@ production path and delete the displaced prototype when appropriate.
 No extra framework, cosmetic cleanup, or placeholder vendor PR is allocated.
 A demonstrated missing event-settlement or reusable transfer/publication
 primitive earns a companion in its actual owner and updates the count.
-Existing companions are already counted in the **69 currently
-identified PRs**. That identified count is not a ceiling.
+Existing companions are already counted in the **68 currently
+identified PRs**. LocalMath PR24's required maintenance/compiler correction is
+not a feature companion. That identified count is not a ceiling.
 
 A world-class completion means promised public science actually works, laws are
 independently tested, extensions are documented, errors are actionable, source

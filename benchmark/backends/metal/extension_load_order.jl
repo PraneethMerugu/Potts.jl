@@ -1,5 +1,5 @@
 @testset "fresh-process Metal extension load orders" begin
-    project = @__DIR__
+    project = dirname(Base.active_project())
     orders = (
         raw"""
         using Potts

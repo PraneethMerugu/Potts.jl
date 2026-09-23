@@ -261,7 +261,7 @@ function _inventory_path_iswithin(path::Tuple, prefix::Tuple)
     return path[1:length(prefix)] == prefix
 end
 
-"""Create a rebased subtree view without walking the source hierarchy."""
+"""Project a subtree, retaining its enclosing source's qualified ownership."""
 function _source_subinventory(
         inventory::_PottsSourceInventory, root_index::Integer
     )
@@ -275,12 +275,11 @@ function _source_subinventory(
         occurrence.index => Int32(index)
         for (index, occurrence) in enumerate(included)
     )
-    rebase = path -> path[length(prefix):end]
     systems = _SourceSystemOccurrence[
         _SourceSystemOccurrence(
             old_to_new[occurrence.index],
             occurrence.system,
-            rebase(occurrence.path),
+            occurrence.path,
             occurrence.index == root.index ? Int32(0) :
                 old_to_new[occurrence.parent],
         ) for occurrence in included
@@ -292,7 +291,7 @@ function _source_subinventory(
         order += Int32(1)
         push!(statements, _SourceStatementOccurrence(
             old_to_new[occurrence.system],
-            rebase(occurrence.path),
+            occurrence.path,
             order,
             occurrence.statement,
         ))
@@ -300,7 +299,7 @@ function _source_subinventory(
     references = _SourceReferenceOccurrence[
         _SourceReferenceOccurrence(
             occurrence.kind,
-            rebase(occurrence.path),
+            occurrence.path,
             occurrence.value,
         ) for occurrence in inventory.references
         if _inventory_path_iswithin(occurrence.path, prefix)
@@ -308,8 +307,8 @@ function _source_subinventory(
     natives = _SourceNativeOccurrence[
         _SourceNativeOccurrence(
             old_to_new[occurrence.system],
-            rebase(occurrence.system_path),
-            rebase(occurrence.path),
+            occurrence.system_path,
+            occurrence.path,
             occurrence.component,
         ) for occurrence in inventory.natives
         if haskey(old_to_new, occurrence.system)

@@ -96,7 +96,7 @@ native_original_system(component::ScheduledNativeComponent) =
 native_scheduled_system(component::ScheduledNativeComponent) =
     getfield(component, :scheduled_system)
 """Return the ordered Potts/native coupling endpoint schemas."""
-native_coupling_endpoints(component::ScheduledNativeComponent) =
+native_coupling_endpoints(component::Union{CompletedNativeComponent, ScheduledNativeComponent}) =
     getfield(component, :endpoints)
 """Return the fingerprint of the original native system."""
 native_original_fingerprint(component::ScheduledNativeComponent) =

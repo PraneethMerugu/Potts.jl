@@ -4,8 +4,8 @@ The exported API is organized by lifecycle rather than implementation files.
 
 | Task | Primary names |
 |:--|:--|
-| Author and compose | `PottsSystem`, `StatementSet`, `@statements`, `@named`, `compose`, `extend`, `flatten`, `complete`, `mtkcompile` |
-| Declare domains and state | `Lattice`, `CellKind`, `MediumKind`, `SpatialRelation`, `SiteState`, `CellState`, `MediumState`, `ModelState`, `FieldState`, `HistoryState`, `RelationshipState` |
+| Author and compose | `PottsSystem`, `StatementSet`, `@statements`, `@named`, `compose`, `extend`, `ComponentReference`, `replace_component`, `flatten`, `complete`, `mtkcompile` |
+| Declare domains and state | `scoped`, `Lattice`, `CellKind`, `MediumKind`, `SpatialRelation`, `SiteState`, `CellState`, `MediumState`, `ModelState`, `FieldState`, `HistoryState`, `RelationshipState` |
 | Declare behavior | `HamiltonianTerm`, `ProposalDrive`, `ProposalConstraint`, `ProposalModifier`, `Synchronous`, `AcceptedCopy`, `LifecycleProcess`, `RelationshipProcess`, `DiscreteFieldEuler`, `Observation`, `Protocol` |
 | Author custom terms | `ProposalContext`, `SiteBinding`, `CellBinding`, `ContactBinding`, `RelationshipBinding`, `gather` |
 | Initialize | `PottsInitialState`, `LabelledCells`, `OwnershipLayout`, `CellPlacement`, `MediumPlacement`, `RandomSitePlacement` |

@@ -3,13 +3,78 @@
 function _stage_root(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
     )
     index = findfirst(root ->
-        root.record == record_index && root.role === role,
+        root.record == record_index && isequal(root.role, role),
         ir.graph.roots,
     )
     return index === nothing ? nothing : ir.graph.roots[index].node
+end
+
+struct _NamedProductConstruction{Names} end
+@inline (::_NamedProductConstruction{Names})(arguments...) where {Names} =
+    NamedTuple{Names}(arguments)
+
+function _stage_expression(
+        ir::AnalyzedTermIR,
+        record_index::Integer,
+        role,
+        fallback,
+        manifest::ParameterManifest,
+        ::Type{T},
+        state_handles,
+        draw_handles,
+        binding,
+        ; state_layout = nothing, history_descriptors = (),
+    ) where {T <: AbstractFloat}
+    if fallback isa NamedTuple
+        names = keys(fallback)
+        arguments = Tuple(
+            _stage_expression(
+                ir, record_index, _product_field_role(role, name), getproperty(fallback, name),
+                manifest, T, state_handles, draw_handles, binding;
+                state_layout, history_descriptors,
+            ) for name in names
+        )
+        return _bounded_static_operation(
+            _NamedProductConstruction{names}(), arguments,
+        )
+    end
+    root = _stage_root(ir, record_index, role)
+    return root === nothing ? _static_literal(fallback, manifest, T) :
+        _lower_static_node(
+            ir.graph,
+            ir,
+            root,
+            manifest,
+            T,
+            state_handles,
+            draw_handles,
+            Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
+            binding,
+            ; state_layout, history_descriptors,
+        )
+end
+
+function _stage_expression_unit(
+        ir::AnalyzedTermIR,
+        record_index::Integer,
+        role,
+        fallback,
+    )
+    if fallback isa NamedTuple
+        names = keys(fallback)
+        return NamedTuple{names}(Tuple(
+            _stage_expression_unit(
+                ir, record_index, _product_field_role(role, name), getproperty(fallback, name),
+            ) for name in names
+        ))
+    end
+    root = _stage_root(ir, record_index, role)
+    root !== nothing && return ir.facts.units[root]
+    return _compiler_leaf_kind(fallback, ir.source) === :literal &&
+        fallback isa Union{Number, Symbol} ? _literal_unit(fallback) : :unknown
 end
 
 function _stage_state_record(
@@ -57,32 +122,26 @@ end
 function _stage_evaluator(
         ir::AnalyzedTermIR,
         record_index::Integer,
-        role::Symbol,
+        role,
         fallback,
         manifest::ParameterManifest,
         ::Type{T},
         state_handles,
         draw_handles,
-        binding::Union{Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector},
+        binding::Union{
+            Nothing, CorePotts.CompilerSPI.AbstractStageSiteSelector,
+            CorePotts.CompilerSPI.BoundCellStateValueOperation,
+        },
+        ; state_layout = nothing, history_descriptors = (),
     ) where {T <: AbstractFloat}
-    root = _stage_root(ir, record_index, role)
-    expression = if root === nothing
-        _static_literal(fallback, manifest, T)
-    else
-        _lower_static_node(
-            ir.graph,
-            ir,
-            root,
-            manifest,
-            T,
-            state_handles,
-            draw_handles,
-            Dict{Int32, CorePotts.CompilerSPI.AbstractStaticExpression}(),
-            binding,
-        )
-    end
+    expression = _stage_expression(
+        ir, record_index, role, fallback, manifest, T, state_handles,
+        draw_handles, binding; state_layout, history_descriptors,
+    )
     execution_context = binding isa CorePotts.CompilerSPI.ProposalTargetStageSite ?
         CorePotts.CompilerSPI.AbstractProposalEvaluationContext :
+        binding isa CorePotts.CompilerSPI.BoundCellStateValueOperation ?
+        CorePotts.CompilerSPI.AbstractCellStageEvaluationContext :
         binding isa Union{
             CorePotts.CompilerSPI.IterationStageSite,
             CorePotts.CompilerSPI.ModelStageSite,

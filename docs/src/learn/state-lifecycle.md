@@ -58,6 +58,26 @@ state and relationship policies. Per-cell native components additionally
 declare creation, transition, and daughter-state transfer; the pool capacity
 is fixed at compile time while live count and generations remain data.
 
+A `HistoryState` whose `of` source is cell-owned requires its own lifecycle
+policies. It does not inherit policies from that source. Reset, initialization,
+and retirement fill every retained sample; `CopyToDaughters` copies each lag to
+the matching daughter lag, and `SplitConservatively` conserves each retained
+sample separately. Explicit `lag` reads in transforms still read the named
+retained sample rather than the current live source. These operations keep the
+retention axis separate from cell slots and generations and publish or roll
+back as one lifecycle transaction.
+Sampling follows lifecycle work at a due boundary. For example, resetting all
+three retained samples to `9` while retiring the live source to `0` gives
+`(9, 9, 0)` after an `EveryMCS()` append, whereas a history not due for sampling
+retains `(9, 9, 9)`.
+
+Site-owned histories declare their own `ClearOnOwnershipChange()` or
+`PreserveOnOwnershipChange()` law. Clearing affects every retained sample at
+the changed site, not just its newest sample. `FieldState` is Eulerian: a
+field and its history remain attached to fixed sites when cell occupancy
+changes. They do not require an implicit ownership-change policy, but an
+explicit clear or preserve law is honored independently on either declaration.
+
 `RelationshipState` declares endpoint kinds, bounded capacity, payload schema,
 maximum degree, and endpoint-lifecycle policy. At a settled host boundary,
 `relationship_transaction!` applies `Create`, `Remove`, or `Retune` requests

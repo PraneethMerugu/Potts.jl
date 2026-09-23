@@ -47,11 +47,11 @@ end
 
 function _validate_state_policies!(statement, effect, admitted)
     for item in effect.state
-        item isa Pair && first(item) isa CellState ||
+        item isa Pair && first(item) isa Union{CellState, HistoryState} ||
             _throw_lifecycle_completion(
                 statement,
                 :illegal_lifecycle_state_target,
-                "CellState => typed state policy",
+                "cell-owned state or history => typed state policy",
                 repr(item),
             )
         policy = _policy_value(item)
@@ -157,10 +157,10 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
         item isa Pair && first(item) isa target_type ||
             _throw_lifecycle_completion(
                 statement,
-                target_type === CellState ?
+                target_type <: Union{CellState, HistoryState} ?
                     :illegal_lifecycle_state_target :
                     :illegal_lifecycle_relationship_target,
-                "$(nameof(target_type)) => compatible typed policy",
+                "$(target_type) => compatible typed policy",
                 repr(item),
             )
         identity = statement_id(first(item))
@@ -173,7 +173,7 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
         policy = last(item)
         policy isa admitted || _throw_lifecycle_completion(
             statement,
-            target_type === CellState ?
+            target_type <: Union{CellState, HistoryState} ?
                 :illegal_lifecycle_state_policy :
                 :illegal_lifecycle_relationship_policy,
             "an operation-compatible typed policy",
@@ -184,12 +184,12 @@ function _canonical_policy_overrides!(statement, values, target_type, admitted)
     return result
 end
 
-function _resolve_cell_state_policies(statement, effect, visible)
+function _resolve_cell_state_policies(statement, effect, states)
     slot, admitted = _lifecycle_state_slot(effect)
     overrides = _canonical_policy_overrides!(
-        statement, effect.state, CellState, admitted
+        statement, effect.state, Union{CellState, HistoryState}, admitted
     )
-    states = _canonical_visible_declarations(visible, CellState)
+    states = _canonical_visible_declarations(states, Union{CellState, HistoryState})
     resolved = Pair[]
     sources = Pair[]
     for state in states
@@ -202,14 +202,14 @@ function _resolve_cell_state_policies(statement, effect, visible)
             haskey(options, slot) || _throw_lifecycle_completion(
                 statement,
                 :missing_lifecycle_state_policy,
-                "an event override or CellState $(slot) policy for $(identity)",
+                "an event override or cell-owned state $(slot) policy for $(identity)",
                 "no compatible policy",
             )
             policy = getproperty(options, slot)
             policy isa admitted || _throw_lifecycle_completion(
                 statement,
                 :illegal_lifecycle_state_policy,
-                "an operation-compatible CellState $(slot) policy",
+                "an operation-compatible cell-owned state $(slot) policy",
                 string(typeof(policy)),
             )
             source = :schema
@@ -217,7 +217,7 @@ function _resolve_cell_state_policies(statement, effect, visible)
         policy isa Unsupported && _throw_lifecycle_completion(
             statement,
             :unsupported_reachable_lifecycle_state,
-            "an explicit event override or executable CellState $(slot) policy for $(identity)",
+            "an explicit event override or executable cell-owned state $(slot) policy for $(identity)",
             "Unsupported() resolved from $(source)",
         )
         push!(resolved, state => policy)
@@ -227,7 +227,7 @@ function _resolve_cell_state_policies(statement, effect, visible)
     isempty(overrides) || _throw_lifecycle_completion(
         statement,
         :unresolved_lifecycle_state_target,
-        "a lexically visible CellState",
+        "a lexically visible cell-owned state or history",
         string(first(keys(overrides))),
     )
     return Tuple(resolved), Tuple(sources)
@@ -294,7 +294,7 @@ end
 function _resolved_site_ownership_policies(statement, effect, visible)
     effect isa Union{CreateCell, RemoveCell, Divide} || return ()
     result = Pair[]
-    for state in _canonical_visible_declarations(visible, SiteState)
+    for state in _canonical_visible_declarations(visible, Union{SiteState, HistoryState})
         options = _statement_options(state)
         haskey(options, :lifecycle) || _throw_lifecycle_completion(
             statement,
@@ -362,7 +362,7 @@ _replace_lifecycle_policies(effect::Divide, state, relationships) = Divide(
     effect.on_inadmissible,
 )
 
-function _resolve_lifecycle_process(statement::LifecycleProcess, visible)
+function _resolve_lifecycle_process(statement::LifecycleProcess, visible, inventory)
     options = _statement_options(statement)
     haskey(options, :resolved_state_policy_sources) &&
         haskey(options, :resolved_relationship_policy_sources) &&
@@ -371,14 +371,35 @@ function _resolve_lifecycle_process(statement::LifecycleProcess, visible)
     length(arguments.effects) == 1 || return statement
     effect = only(arguments.effects)
     _cell_lifecycle_effect(effect) || return statement
-    state, state_sources = _resolve_cell_state_policies(
-        statement, effect, visible
-    )
+    cell_states = AbstractPottsStatement[]
+    site_states = AbstractPottsStatement[]
+    for occurrence in visible
+        declaration = occurrence.statement
+        source = if declaration isa HistoryState
+            try
+                _history_source_contract(_namespace_statement(declaration, occurrence.path), inventory).declaration
+            catch exception
+                exception isa ArgumentError || rethrow()
+                throw(
+                    PottsValidationError(
+                        :completion, (
+                            _history_declaration_diagnostic(declaration, occurrence.path, exception),
+                        )
+                    )
+                )
+            end
+        else
+            declaration
+        end
+        source isa CellState && push!(cell_states, declaration)
+        source isa SiteState && push!(site_states, declaration)
+    end
+    state, state_sources = _resolve_cell_state_policies(statement, effect, cell_states)
     relationships, relationship_sources = _resolve_relationship_policies(
-        statement, effect, visible
+        statement, effect, Tuple(occurrence.statement for occurrence in visible)
     )
     site_ownership = _resolved_site_ownership_policies(
-        statement, effect, visible
+        statement, effect, site_states
     )
     resolved_effect = _replace_lifecycle_policies(
         effect, state, relationships

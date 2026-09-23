@@ -10,8 +10,8 @@ Keep the existing spine and breadth commitments, strengthen their composition
 contracts, and explicitly deliver the fourteen models in PottsModels. The user
 accepted four additional repository PRs: R51 Potts metabolic integration, R52
 Models FBCA, R53 Models vascular corpus, and R54 Models multiscale tumor corpus.
-The canonical allocation is **69 identified PRs: 54 planned + fifteen companions**.
-The all-in repository totals are Potts 22, CorePotts 17, LocalMath 15,
+The canonical allocation is **68 identified PRs: 54 planned + fourteen companions**.
+The all-in repository totals are Potts 22, CorePotts 17, LocalMath 14,
 MakiePotts 2 and PottsModels 13. This is not a verified ceiling; R01–R50 retain
 their identities.
 
@@ -22,9 +22,9 @@ the earlier 58-PR bundling alternative is not the selected allocation. Do not ma
 PR count an acceptance criterion.
 
 The [canonical map](consolidated-pr-dependency-map.md) owns the current
-69-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
+68-PR allocation, R51–R54/E13–E16 identities and dependencies. The [compiler amendment](compiler-contract-chain-amendment.md)
 remains accepted; [progress](pr-chain-progress.md) owns implementation status.
-R01–R07 and twelve completed companions are now recorded merged;
+R01–R07 and thirteen completed counted companions are now recorded merged;
 the G07 ordered-fold validation companion C07 is LocalMath
 PR18 and its complete hosted suite passed after merge. The G05 exact
 keyed-reduction companion C08 is LocalMath PR19, merged as `7082ed84`, and
@@ -38,7 +38,8 @@ mutable-site semantics before R10/R11 can claim the accepted wall/domain query
 surface. C10 replaces/extends the existing owner authority rather than adding a
 second decoder; C11 migrates current `FrozenBorder` no-flux consumers to
 `Closed` before deleting that ambiguous spelling, never reinterpreting it as a
-fixed owner. These two companions are identified but not implemented.
+fixed owner. C10 is merged as CorePotts PR35 (`b6ded93d`); C11 remains
+identified and unimplemented.
 C12 is the merged LocalMath bounded runtime collection-launch cutover at
 `12b3fa98`; it keeps extent/capacity as runtime `ndrange` data across the shared
 collection families and specializes only on their semantic workgroup. It adds no
@@ -48,14 +49,15 @@ it removes canonical sorting machinery only where `SourceOrder` does not
 consume it. C14 is the merged provider-settlement law in LocalMath PR23 at
 `a26cbfe`: compact program-level validation payloads, nonempty blocking copy
 completion, explicit empty/alias synchronization and exact receipt failure
-ownership. C15 is the separately demonstrated pointwise temporary-identity
+ownership. LocalMath PR24 is a separately demonstrated, non-counted
+maintenance/compiler correction for the pointwise temporary-identity
 segmentation boundary after C14: one small graph-aware wrapper extracts the
 runtime temporary-identity set, and the reusable semantic segmentation law
 receives only that set. It preserves the bounded pointwise laws and one
 KernelAbstractions path without a cache, retained table, second graph
 representation or executor. LocalMath PR24 has now merged as `a1d60d1a`, with
-green Potts 99/99 and
-downstream Metal Core checkerboard 83/83 plus continuation 116/116 canaries.
+green Potts 99/99 and downstream Metal Core checkerboard 83/83 plus continuation
+116/116 canaries. It does not increase the identified feature allocation.
 At observation, hosted `changes`, `macos-smoke`, `docs` and `scientific` are
 green; `package` and `metal` are pending, and conditional `macos-package` is
 skipped. LocalMath `main` now requires pull requests with zero approving

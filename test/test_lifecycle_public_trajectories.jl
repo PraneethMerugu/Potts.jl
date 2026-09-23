@@ -54,6 +54,80 @@
           solution(5)[:lifecycle_activity]
 end
 
+@testset "remove-cell replacement preserves Cartesian medium ownership" begin
+    cell = CellKind(:replacement_cell; extinction = RetireAtZero())
+    bulk = MediumKind(:a_replacement_bulk)
+    alternate = MediumKind(:z_replacement_alternate)
+    anchor = CellBinding(:replacement_anchor)
+    labels = zeros(Int, 5, 5)
+    labels[3, 3] = 1
+    initial = PottsInitialState(
+        ownership = LabelledCells(labels; cells = [cell], medium = bulk),
+    )
+
+    for (replacement_name, replacement, expected_bulk, expected_alternate) in (
+            (:default, bulk, 25, 0),
+            (:nondefault, alternate, 24, 1),
+        )
+        remove = LifecycleProcess(
+            Symbol(:remove_to_, replacement_name);
+            domain = cells(cell),
+            anchor,
+            expression = true,
+            effects = (RemoveCell(
+                anchor;
+                replacement,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),),
+            cadence = AtMCS(1),
+        )
+        scheduled = mtkcompile(PottsSystem(
+            name = Symbol(:remove_replacement_, replacement_name),
+            statements = StatementSet((
+                Lattice((5, 5); boundary = Closed(), max_cells = 1),
+                cell,
+                bulk,
+                alternate,
+                ProposalConstraint(:freeze_remove_replacement, false),
+                remove,
+                Observation(:bulk_sites, occupancy(bulk, :lattice)),
+                Observation(
+                    :alternate_sites, occupancy(alternate, :lattice),
+                ),
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )),
+        ))
+        problem = PottsProblem(scheduled, initial, (0, 2); seed = 0x524d)
+        for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+            integrator = init(
+                problem,
+                algorithm;
+                scalar_type = Float32,
+                observables = (:bulk_sites, :alternate_sites),
+            )
+            step!(integrator)
+            @test integrator.u[:bulk_sites] == expected_bulk
+            @test integrator.u[:alternate_sites] == expected_alternate
+            @test count(<(0), integrator.u.ownership) == expected_alternate
+            @test integrator.u.cell_kinds[1] == 0
+
+            restored = init(
+                problem,
+                algorithm;
+                scalar_type = Float32,
+                observables = (:bulk_sites, :alternate_sites),
+                checkpoint = checkpoint(integrator),
+            )
+            @test restored.u.ownership == integrator.u.ownership
+            @test restored.u[:bulk_sites] == expected_bulk
+            @test restored.u[:alternate_sites] == expected_alternate
+            step!(integrator)
+            step!(restored)
+            @test restored.u.ownership == integrator.u.ownership
+        end
+    end
+end
+
 @testset "lifecycle relationship consequence is public and generation safe" begin
     cell = CellKind(:linked_cell; extinction = RetireAtZero())
     medium = MediumKind(:linked_medium)

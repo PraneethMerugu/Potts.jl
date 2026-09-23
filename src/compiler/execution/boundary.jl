@@ -1,9 +1,56 @@
 # Final executable storage reports and CorePotts boundary validation.
 
+_core_domain_report(program::CorePotts.CompilerSPI.CompiledPottsProgram) =
+    CorePotts.CompilerSPI.cartesian_domain_report(
+        CorePotts.CompilerSPI.cartesian_domain(program),
+    )
+_core_program_shape(program::CorePotts.CompilerSPI.CompiledPottsProgram) =
+    _core_domain_report(program).shape
+
+function _core_medium_kind_mask(
+        program::CorePotts.CompilerSPI.CompiledPottsProgram,
+    )
+    report = _core_domain_report(program)
+    mask = falses(program.kind_count)
+    report.default_owner.category ===
+        CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
+        (mask[report.default_owner.kind] = true)
+    for owner in report.domain_owners
+        owner.category === CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
+            (mask[owner.kind] = true)
+    end
+    return mask
+end
+
+function _core_domain_owner_code(
+        program::CorePotts.CompilerSPI.CompiledPottsProgram,
+        kind::Integer,
+    )
+    domain = CorePotts.CompilerSPI.cartesian_domain(program)
+    report = CorePotts.CompilerSPI.cartesian_domain_report(domain)
+    return _core_domain_owner_code(domain, report, kind)
+end
+
+function _core_domain_owner_code(domain, report, kind::Integer)
+    report.default_owner.kind == kind && return Int32(0)
+    owner = findfirst(metadata ->
+        metadata.category === CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
+            metadata.kind == kind,
+        report.domain_owners,
+    )
+    owner === nothing && throw(ArgumentError(
+        "kind $kind is not a declared medium-domain owner"
+    ))
+    return CorePotts.CompilerSPI.domain_owner_code(
+        domain, report.domain_owners[owner].identity,
+    )
+end
+
 function _storage_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
-    site_count = prod(program.shape)
+    shape = _core_program_shape(program)
+    site_count = prod(shape)
     return (
-        shape = program.shape,
+        shape,
         site_count,
         max_cells = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
             Int(program.lifecycle_plan.cell_capacity) : nothing,
@@ -35,7 +82,7 @@ end
 
 function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
     lifecycle = CorePotts.CompilerSPI.lifecycle_workspace_layout(
-        program.lifecycle_plan, prod(program.shape)
+        program.lifecycle_plan, prod(_core_program_shape(program))
     )
     stage_groups = (
         program.stage_plan.before_lifecycle...,
@@ -50,7 +97,7 @@ function _workspace_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
                 CorePotts.CompilerSPI.SiteAssignmentEffect,
                 CorePotts.CompilerSPI.IteratedSiteAssignmentEffect,
             }
-        ); init = 0) * prod(program.shape),
+        ); init = 0) * prod(_core_program_shape(program)),
         stage_model_scratch = sum((
             1
             for group in stage_groups

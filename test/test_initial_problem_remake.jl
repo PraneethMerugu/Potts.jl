@@ -302,19 +302,6 @@ end
     cell = CellKind(:multiple_medium_cell; extinction = RetireAtZero())
     medium = MediumKind(:multiple_medium_bulk)
     border = MediumKind(:multiple_medium_border)
-    scheduled = mtkcompile(PottsSystem(
-        name = :multiple_medium_model,
-        statements = StatementSet((
-            Lattice((6, 6); boundary = Closed()),
-            cell,
-            medium,
-            border,
-            Volume(cell; target = 4.0, strength = 1.0),
-            Protocol(Sweep(; temperature = 2.0); name = :main),
-            Observation(:bulk_sites, occupancy(medium, :lattice)),
-            Observation(:border_sites, occupancy(border, :lattice)),
-        )),
-    ))
     border_coordinates = Tuple(
         (row, column) for row in (1, 6) for column in 1:6
     )
@@ -328,19 +315,71 @@ end
         );
         medium,
     )
-    problem = PottsProblem(
-        scheduled,
-        PottsInitialState(ownership = layout),
-        (0, 0);
-        seed = 3,
-    )
-    integrator = init(
-        problem,
-        SequentialCPM();
-        scalar_type = Float64,
-        observables = (:bulk_sites, :border_sites),
-    )
-    @test integrator.u[:border_sites] == 12
-    @test integrator.u[:bulk_sites] == 20
-    @test length(unique(integrator.u.ownership)) == 3
+    for (boundary_name, boundary, expected_face) in (
+            (:closed, Closed(), CorePotts.CompilerSPI.ClosedCartesianFace),
+            (:periodic, Periodic(), CorePotts.CompilerSPI.PeriodicCartesianFace),
+        )
+        scheduled = mtkcompile(PottsSystem(
+            name = Symbol(:multiple_medium_model_, boundary_name),
+            statements = StatementSet((
+                Lattice((6, 6); boundary = boundary),
+                cell,
+                medium,
+                border,
+                Volume(cell; target = 4.0, strength = 1.0),
+                Protocol(Sweep(; temperature = 2.0); name = :main),
+                Observation(:bulk_sites, occupancy(medium, :lattice)),
+                Observation(:border_sites, occupancy(border, :lattice)),
+            )),
+        ))
+        problem = PottsProblem(
+            scheduled,
+            PottsInitialState(ownership = layout),
+            (0, 0);
+            seed = 3,
+        )
+        for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+            integrator = init(
+                problem,
+                algorithm;
+                scalar_type = Float64,
+                observables = (:bulk_sites, :border_sites),
+            )
+            @test integrator.u[:border_sites] == 12
+            @test integrator.u[:bulk_sites] == 20
+            @test length(unique(integrator.u.ownership)) == 3
+
+            program = getfield(getfield(integrator, :plan), :core_program)
+            domain = CorePotts.CompilerSPI.cartesian_domain(program)
+            report = CorePotts.CompilerSPI.cartesian_domain_report(domain)
+            @test report.default_owner.identity == 0
+            @test length(report.domain_owners) == 1
+            nondefault = only(report.domain_owners)
+            @test nondefault.kind != report.default_owner.kind
+            @test all(==(expected_face), getproperty.(report.faces, :kind))
+            border_code = CorePotts.CompilerSPI.domain_owner_code(
+                domain, nondefault.identity,
+            )
+            @test border_code < 0
+            plan = getfield(integrator, :plan)
+            nondefault_name = plan.kind_manifest[Int(nondefault.kind)].local_name
+            nondefault_sites = nondefault_name === :multiple_medium_border ? 12 :
+                nondefault_name === :multiple_medium_bulk ? 20 :
+                error("unexpected medium kind $nondefault_name")
+            @test count(==(border_code), integrator.u.ownership) ==
+                nondefault_sites
+
+            captured = checkpoint(integrator)
+            restored = init(
+                problem,
+                algorithm;
+                scalar_type = Float64,
+                observables = (:bulk_sites, :border_sites),
+                checkpoint = captured,
+            )
+            @test restored.u.ownership == integrator.u.ownership
+            @test restored.u[:border_sites] == 12
+            @test restored.u[:bulk_sites] == 20
+        end
+    end
 end
