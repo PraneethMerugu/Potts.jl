@@ -18,8 +18,8 @@ in dependency order. Releases remain unauthorized.
 ## Completed foundation
 
 - R01–R07 are merged across PottsModels, Potts, CorePotts, LocalMath, and
-  MakiePotts. Core R08 is also merged as CorePotts PR32 (`7b46e4eb`); its Potts
-  consumer R09 remains open.
+  MakiePotts. Core R08 merged as CorePotts PR32 (`7b46e4eb`), and its Potts
+  consumer R09 merged as Potts PR53 (`0e0f4dfc`).
 - Thirteen demonstrated companions are merged: the PottsModels CI correction and
   LocalMath immutable products, execution prerequisites, fixed-value effect
   analysis, backend-owned transfer, identity-seeded reduction control, and
@@ -58,6 +58,12 @@ in dependency order. Releases remain unauthorized.
   passed; local Core CPU/quality passed 31,497/31,497, Core Metal 82/82, and
   the downstream Potts structured-retirement Metal witness 52/52. R09's exact
   CI, replay and Metal profiles now consume this merged Core tree.
+- Potts R09 merged as PR53 (`0e0f4dfc`) on 2026-09-23. The merged tree equals
+  the qualified PR tip `b04e05fb`. The exact LocalMath `d3d2e553` / Core
+  `2ceb98ac` tuple passed 5,078/5,078 local owner CPU assertions and the
+  standalone mixed-symbolic real-Metal witness 416/416; hosted package,
+  integration, exact replay, documentation, macOS smoke and full real-Metal
+  checks all passed. C11 is the next Potts consumer; R10 remains local work.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -66,7 +72,7 @@ in dependency order. Releases remain unauthorized.
 | Plan item | Repository PR | Selected revision | Base | State |
 | --- | --- | --- | --- | --- |
 | R08 Core typed composition/lifecycle | [CorePotts PR32](https://github.com/PraneethMerugu/CorePotts.jl/pull/32) | `7b46e4eb` | main | merged |
-| R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `a771b79c` (local reconstructed tip; PR branch update pending) | main | full local CPU 5,078/5,078, integration/replay, docs/quality and affected real-Metal witnesses green; exact merged-Core profiles validated; hosted qualification pending |
+| R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `0e0f4dfc` | main | merged; exact local CPU and full hosted package/integration/replay/docs/macOS/Metal green; merge tree equals qualified tip `b04e05fb` |
 | R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `a4fb6c88` | main | draft; G05 science gaps remain |
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
@@ -79,7 +85,7 @@ in dependency order. Releases remain unauthorized.
 | LocalMath PR24 maintenance/compiler correction — pointwise temporary-identity segmentation (not counted) | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) | `a1d60d1a` | merged C14 `a26cbfe` | merged; fresh KCT, LocalMath behavioral CPU 1,942 pass with baseline Aqua environment error, real Metal 592/592, Core 17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and continuation 116/116 green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation |
 | C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `b6ded93d` | Core R08 | merged; local/full hosted CPU, docs, quality, macOS, independent review, and real-Metal green |
 | Core lifecycle-product device correction (not counted) | [CorePotts PR38](https://github.com/PraneethMerugu/CorePotts.jl/pull/38) | `2ceb98ac` | merged C10 | merged; exact local/downstream and complete hosted CPU/docs/macOS/real-Metal green |
-| C11 Potts Cartesian domain authoring | [Potts PR59](https://github.com/PraneethMerugu/Potts.jl/pull/59) | `511413a5` (historical branch) | C10 and Potts R09 | draft; semantic restack and broader 3D, periodic, owner-identity, lifecycle and checkpoint tests required after R09 merge |
+| C11 Potts Cartesian domain authoring | [Potts PR59](https://github.com/PraneethMerugu/Potts.jl/pull/59) | `064231eb` (clean local restack; PR branch unchanged) | merged C10 and Potts R09 | focused Cartesian tests 106/106 green; rebase onto merged R09, full CPU/docs/quality and real Metal pending |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
 
@@ -224,7 +230,7 @@ qualify a later joined package tuple.
 | Qualification item | Current evidence | Remaining work and owner |
 | --- | --- | --- |
 | C08/C09 keyed reduction and rebuild | C08 and C09 are complete at merged LocalMath PR19/PR20 with full hosted qualification. C09 corrected its review blocker and its exact Core checkerboard consumer matches independent pair oracles, including capacity-greater-than-emission duplicate-key folding on real Metal. | Consume merged C09, then rerun the extended Core lifecycle/checkpoint/permanent Metal and affected full-suite witnesses before R10 publication. |
-| G04 structural baseline | Core R08 is merged; Potts R09 remains draft. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
+| G04 structural baseline | Core R08 and Potts R09 are merged. | Record the complete R08/R09 structural lifecycle/history/compound-effect tuple and unchanged control before G05 qualification. |
 | G05 relation and maintenance delta | Active Core/Potts candidates have focused evidence, but periodic geometry/connectivity and maintained-query science remain incomplete. | R10/R11 must measure exact contribution/update/rebuild/publication and geometry entrypoints plus unchanged controls on the joined C08/C09 tuple. |
 | R49 canonical Core boundary | The draft candidate has hosted evidence, but it is stacked on incomplete R10. | Warm the legitimate family basis; hard-check one versus 64 repeated entries plus rename/value/remake controls at the owner-defined family/signature boundary, AllocCheck, warmed allocation and actual-device probes on corrected R10. Retain the full 1/4/16/64 ladder, 256 and aggregate compiler counts in the dedicated compiler job or merge/nightly evidence. |
 | R50 public lowering identity | The draft candidate has pinned-array CPU/Metal evidence; its parent R11 and downstream interface canary remain open. | Prove package-declared and interactive equivalence, author-name erasure, source diagnostics and the complete public workflow on the exact joined stack. |
