@@ -47,7 +47,7 @@ function run_custom_operation(; operation = opaque_response, seed = 0x7531)
         name = :custom_operation,
         statements = (
             @statements begin
-                Lattice((2, 2); boundary = Periodic(), relations = (proposal = VonNeumann(),))
+                Lattice((4, 4); boundary = Periodic(), relations = (proposal = VonNeumann(),))
                 cell
                 medium
                 ProposalConstraint(:response_guard, operation(gain) < 0)
@@ -56,7 +56,7 @@ function run_custom_operation(; operation = opaque_response, seed = 0x7531)
         ),
         parameters = [gain],
     )
-    labels = Int32[1 0; 0 1]
+    labels = Int32[isodd(i + j) ? 1 : 0 for i in 1:4, j in 1:4]
     initial = PottsInitialState(
         ownership = LabelledCells(labels; cells = [cell], medium),
     )
@@ -67,7 +67,7 @@ function run_custom_operation(; operation = opaque_response, seed = 0x7531)
     # Every proposed neighbor has a different owner. The positive runtime gain
     # makes every response fail the constraint, exercising its actual evaluator.
     @assert solution.retcode == SciMLBase.ReturnCode.Success
-    @assert solution.stats.constraint_rejections == 4
+    @assert solution.stats.constraint_rejections == 16
     @assert last(solution).ownership == labels
     return (; problem, solution)
 end

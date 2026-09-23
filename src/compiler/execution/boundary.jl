@@ -7,51 +7,16 @@ _core_domain_report(program::CorePotts.CompilerSPI.CompiledPottsProgram) =
 _core_program_shape(program::CorePotts.CompilerSPI.CompiledPottsProgram) =
     _core_domain_report(program).shape
 
-function _core_medium_kind_mask(
-        program::CorePotts.CompilerSPI.CompiledPottsProgram,
-    )
-    report = _core_domain_report(program)
-    mask = falses(program.kind_count)
-    report.default_owner.category ===
-        CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
-        (mask[report.default_owner.kind] = true)
-    for owner in report.domain_owners
-        owner.category === CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
-            (mask[owner.kind] = true)
-    end
-    return mask
-end
-
-function _core_domain_owner_code(
-        program::CorePotts.CompilerSPI.CompiledPottsProgram,
-        kind::Integer,
-    )
-    domain = CorePotts.CompilerSPI.cartesian_domain(program)
-    report = CorePotts.CompilerSPI.cartesian_domain_report(domain)
-    return _core_domain_owner_code(domain, report, kind)
-end
-
-function _core_domain_owner_code(domain, report, kind::Integer)
-    report.default_owner.kind == kind && return Int32(0)
-    owner = findfirst(metadata ->
-        metadata.category === CorePotts.CompilerSPI.MediumDomainOwnerCategory &&
-            metadata.kind == kind,
-        report.domain_owners,
-    )
-    owner === nothing && throw(ArgumentError(
-        "kind $kind is not a declared medium-domain owner"
-    ))
-    return CorePotts.CompilerSPI.domain_owner_code(
-        domain, report.domain_owners[owner].identity,
-    )
-end
-
 function _storage_report(program::CorePotts.CompilerSPI.CompiledPottsProgram)
-    shape = _core_program_shape(program)
-    site_count = prod(shape)
+    domain = _core_domain_report(program)
+    site_count = prod(domain.shape)
     return (
-        shape,
+        shape = domain.shape,
         site_count,
+        mutable_site_count = domain.mutable_site_count,
+        domain_owners = domain.domain_owners,
+        faces = domain.faces,
+        obstacles = domain.obstacles,
         max_cells = program.lifecycle_plan isa CorePotts.CompilerSPI.LifecycleExecutionPlan ?
             Int(program.lifecycle_plan.cell_capacity) : nothing,
         ownership = (element = Int32, count = site_count),

@@ -58,6 +58,7 @@ function _lower_scheduled_execution_plan(
     lifecycle_plan = _lower_lifecycle_plan(
         analyzed_ir,
         cartesian.domain,
+        cartesian.owner_manifest,
         manifest,
         scalar_type,
         lowered_descriptors.state_handles,
@@ -212,6 +213,7 @@ function _lower_scheduled_execution_plan(
         states,
         relationship_states,
         kinds,
+        cartesian.owner_manifest,
         observations,
         fingerprint,
     )

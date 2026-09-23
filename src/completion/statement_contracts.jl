@@ -4,33 +4,49 @@ function _statement_expression(statement)
     return sprint(show, statement)
 end
 
-function _record_resources!(result, value, path)
+function _record_resources!(result, value, path, domain_owner_resource)
     if value isa QualifiedStatementID
         value in result || push!(result, value)
     elseif value isa AbstractPottsStatement
         identity = QualifiedStatementID(path, statement_id(value))
         identity in result || push!(result, identity)
     elseif value isa NamedTuple
-        foreach(item -> _record_resources!(result, item, path), values(value))
+        foreach(
+            item -> _record_resources!(result, item, path, domain_owner_resource),
+            values(value),
+        )
     elseif value isa Tuple || value isa AbstractArray
-        foreach(item -> _record_resources!(result, item, path), value)
+        foreach(
+            item -> _record_resources!(result, item, path, domain_owner_resource),
+            value,
+        )
     elseif value isa Pair
-        _record_resources!(result, first(value), path)
-        _record_resources!(result, last(value), path)
+        _record_resources!(result, first(value), path, domain_owner_resource)
+        _record_resources!(result, last(value), path, domain_owner_resource)
     elseif value isa AbstractPottsEffect
         foreach(
-            field -> _record_resources!(result, getfield(value, field), path),
+            field -> _record_resources!(
+                result, getfield(value, field), path, domain_owner_resource
+            ),
             fieldnames(typeof(value)),
         )
+    elseif value isa Obstacle
+        _record_resources!(result, value.owner, path, domain_owner_resource)
+    elseif value isa AbstractDomainOwner
+        identity = domain_owner_resource(value)
+        identity === nothing || identity in result || push!(result, identity)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
+            AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,
             SiteBinding, CellBinding,
         }
         foreach(
-            field -> _record_resources!(result, getfield(value, field), path),
+            field -> _record_resources!(
+                result, getfield(value, field), path, domain_owner_resource
+            ),
             fieldnames(typeof(value)),
         )
     end

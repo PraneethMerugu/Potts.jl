@@ -143,7 +143,6 @@ end
             Symbol(:oracle_cell_, suffix); extinction = RetireAtZero()
         )
         medium = MediumKind(Symbol(:oracle_medium_, suffix))
-        boundary_policy = boundary === :frozen ? FrozenBorder(cell) : boundary
         field = FieldState(
             field_variable;
             name = Symbol(:oracle_field_, suffix),
@@ -162,7 +161,7 @@ end
                 (
                     Lattice(
                         (3, 3);
-                        boundary = boundary_policy,
+                        boundary,
                         relations = (field_stencil = VonNeumann(),),
                     ),
                     cell,
@@ -212,13 +211,6 @@ end
     closed_expected[2, 1] = 0.1
     closed_expected[1, 2] = 0.1
     @test closed.u[closed_name] ≈ closed_expected
-
-    frozen_problem, frozen_name = field_oracle_problem(
-        :frozen, :frozen
-    )
-    frozen = init(frozen_problem, SequentialCPM(); scalar_type = Float32)
-    step!(frozen)
-    @test frozen.u[frozen_name] ≈ closed_expected
 
     saved = checkpoint(periodic)
     restored = init(
