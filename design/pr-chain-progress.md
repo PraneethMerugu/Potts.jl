@@ -1,6 +1,6 @@
 # PR-chain progress
 
-Status: current implementation snapshot. Updated 2026-09-22.
+Status: current implementation snapshot. Updated 2026-09-23.
 
 The [consolidated dependency map](consolidated-pr-dependency-map.md) owns the
 identified work and dependencies: **68 repository PRs = R01–R54 plus fourteen
@@ -53,6 +53,11 @@ in dependency order. Releases remain unauthorized.
   obsolete broad domain fields were removed in the same cutover; the
   authoritative `CartesianOwnershipDomain` now owns immutable owners and the
   mutable-site attempt set.
+- The non-counted CorePotts PR38 lifecycle-product device correction merged as
+  `2ceb98ac` on C10. Its full hosted package, docs, macOS and real-Metal checks
+  passed; local Core CPU/quality passed 31,497/31,497, Core Metal 82/82, and
+  the downstream Potts structured-retirement Metal witness 52/52. R09's exact
+  CI, replay and Metal profiles now consume this merged Core tree.
 - The complete delivery is not close to finished: G04/G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
@@ -61,7 +66,7 @@ in dependency order. Releases remain unauthorized.
 | Plan item | Repository PR | Selected revision | Base | State |
 | --- | --- | --- | --- | --- |
 | R08 Core typed composition/lifecycle | [CorePotts PR32](https://github.com/PraneethMerugu/CorePotts.jl/pull/32) | `7b46e4eb` | main | merged |
-| R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `61b8fac3` | main | reconstructed on current main with reviewed structured-assignment and C10 compatibility fixes; joined qualification in progress |
+| R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `a771b79c` (local reconstructed tip; PR branch update pending) | main | full local CPU 5,078/5,078, integration/replay, docs/quality and affected real-Metal witnesses green; exact merged-Core profiles validated; hosted qualification pending |
 | R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `a4fb6c88` | main | draft; G05 science gaps remain |
 | R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` | Potts PR53 | draft; depends on corrected R10 |
 | R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
@@ -73,7 +78,8 @@ in dependency order. Releases remain unauthorized.
 | C14 LocalMath validation-copy settlement | [LocalMath PR23](https://github.com/PraneethMerugu/LocalMath.jl/pull/23) | `a26cbfe` | LocalMath main after PR22 | merged; complete local/hosted CPU, real-Metal, KCT and review green |
 | LocalMath PR24 maintenance/compiler correction — pointwise temporary-identity segmentation (not counted) | [LocalMath PR24](https://github.com/PraneethMerugu/LocalMath.jl/pull/24) | `a1d60d1a` | merged C14 `a26cbfe` | merged; fresh KCT, LocalMath behavioral CPU 1,942 pass with baseline Aqua environment error, real Metal 592/592, Core 17,658/17,658, Potts 99/99, downstream Metal Core checkerboard 83/83 and continuation 116/116 green; hosted changes/macOS-smoke/docs/scientific green, package/Metal pending and conditional macOS-package skipped at observation |
 | C10 Core Cartesian domain ownership | [CorePotts PR35](https://github.com/PraneethMerugu/CorePotts.jl/pull/35) | `b6ded93d` | Core R08 | merged; local/full hosted CPU, docs, quality, macOS, independent review, and real-Metal green |
-| C11 Potts Cartesian domain authoring | — | — | C10 and Potts R09 | identified; required before R11 can admit wall/exterior/obstacle filters |
+| Core lifecycle-product device correction (not counted) | [CorePotts PR38](https://github.com/PraneethMerugu/CorePotts.jl/pull/38) | `2ceb98ac` | merged C10 | merged; exact local/downstream and complete hosted CPU/docs/macOS/real-Metal green |
+| C11 Potts Cartesian domain authoring | [Potts PR59](https://github.com/PraneethMerugu/Potts.jl/pull/59) | `511413a5` (historical branch) | C10 and Potts R09 | draft; semantic restack and broader 3D, periodic, owner-identity, lifecycle and checkpoint tests required after R09 merge |
 | Canonical plan/API publication | [Potts PR56](https://github.com/PraneethMerugu/Potts.jl/pull/56) | `c33c930a` | main | merged; complete hosted suite green |
 | Atomic keyed-rebuild plan | [Potts PR57](https://github.com/PraneethMerugu/Potts.jl/pull/57) | `a6b342b5` | main after PR56 | merged by auto-merge; complete hosted package/docs/macOS suite green |
 

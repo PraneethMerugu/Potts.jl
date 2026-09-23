@@ -1,6 +1,6 @@
 # Worktree and branch preservation ledger
 
-Status: read-only audit snapshot, 2026-09-22
+Status: preservation audit snapshot, with dispositions updated 2026-09-23
 
 This ledger describes every worktree classified on 2026-09-21 as
 `HARD-PRESERVE` or `REVIEW-PRESERVE`. It intentionally omits the 67 clean,
@@ -54,11 +54,21 @@ followed by attempt-budget and native Act/lifecycle work. Historical source
 branches remain here only until their observable contracts are shown to exist
 on that spine.
 
+Since the snapshot, Core C10 merged as PR35 (`b6ded93`), and its focused
+lifecycle-product device correction merged as PR38 (`2ceb98ac`) after full
+hosted CPU/docs/macOS/Metal qualification. The clean canonical Core checkout
+was fast-forwarded to `2ceb98ac`; the original PR35/PR38 refs and the
+checksummed preservation archive remain intact. Potts R09 was reconstructed
+without dropping any file from the old PR53 semantic tree. Its local tip
+`a771b79c` passed the full 5,078-assertion owner CPU suite and affected actual
+Metal witnesses; the old PR53 remote ref remains untouched until exact joined
+qualification and a lease-checked in-place PR update.
+
 ## CorePotts — hard preserve
 
 | Branch / worktree | HEAD | What it does | Quality | Potential resolution | Owner / action |
 |---|---|---|---|---|---|
-| `main` — `ECO/CorePotts.jl` | `b6ded93` | Primary Core line with merged typed composition/lifecycle and Cartesian domain ownership. | **High**: R08 and C10 are merged with local/full hosted CPU, docs, quality, independent-review, macOS, and real-Metal evidence. | No C10 reconciliation remains; the canonical checkout was fast-forwarded after merge. | Corrected R10 now stacks here. |
+| `main` — `ECO/CorePotts.jl` | `2ceb98a` | Primary Core line with merged typed composition/lifecycle, Cartesian domain ownership and focused device-product conversion. | **High**: R08, C10 and PR38 are merged with local/full hosted CPU, docs, quality, independent-review, macOS, and real-Metal evidence. | No C10 reconciliation remains; the canonical checkout was fast-forwarded after both merges. | Corrected R10 now stacks here. |
 | `codex/ecosystem-core-candidate` — `/private/tmp/corepotts-ecosystem-candidate` | `7568341` | Integrated C10/R10/R49 compiler and behavior candidate. | **Medium**: clean and tested, but collapses three owners. | Superseded as integration tree by `b82c873`; retain only as comparison oracle. | Compare against split C10→R10→R49 stack, then archive. |
 | `codex/scd-r49-restack` — `/private/tmp/corepotts-scd-r49` | `d909a4d` | Joined R10/R49 plus neutral-proposal and pausable-MCS changes. | **Medium**: real tests, but noisy merge history and 17-file drift from preferred aggregate chain. | Dependency inversion, reversions, and history noise. | Use only as conflict oracle; transplant semantic deltas and archive. |
 | `codex/scd-pausable-sequential-runtime` — `/private/tmp/corepotts-scd-sequential` | `c701de4` | Opaque pause/resume token for transactional sequential MCS/lifecycle boundaries. | **High**: focused execution, receipt, acceptance, and abort tests. | Needs Potts native-lifecycle canary and final API/naming review. | Preserve as distinct post-R49 lifecycle child. |
