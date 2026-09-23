@@ -13,7 +13,7 @@ on:
       corepotts_ref:
         description: Full CorePotts candidate commit SHA
         type: string
-        default: b6ded93d8c40ba7727e26f5206ffa9fb37467a97
+        default: 2ceb98ace25efcf265417ef8eb0bd672c4e434ba
   schedule:
     - cron: '23 5 * * 1'
 
@@ -27,7 +27,7 @@ permissions:
 env:
   JULIA_VERSION: '1.12.6'
   LOCALMATH_REF: ${{ inputs.localmath_ref || 'd3d2e5533585de3b16dafbb8ba7c0cb265209254' }}
-  COREPOTTS_REF: ${{ inputs.corepotts_ref || 'b6ded93d8c40ba7727e26f5206ffa9fb37467a97' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '2ceb98ace25efcf265417ef8eb0bd672c4e434ba' }}
 
 jobs:
   changes:
