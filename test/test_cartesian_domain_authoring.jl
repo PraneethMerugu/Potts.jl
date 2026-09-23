@@ -297,6 +297,29 @@ end
         typeof(last(owner_counts).plan.domain_owner_manifest)
     @test eltype(nested_owners.plan.domain_owner_manifest) ===
         eltype(last(owner_counts).plan.domain_owner_manifest)
+
+    function shape_plan(shape)
+        medium = MediumKind(:shape_reuse_medium)
+        cell = CellKind(:shape_reuse_cell; extinction = RetireAtZero())
+        bulk = MediumDomainOwner(:shape_reuse_bulk, medium)
+        scheduled = mtkcompile(PottsSystem(
+            name = :shape_reuse,
+            statements = StatementSet((
+                Lattice(shape; boundary = Closed(), default_owner = bulk,
+                    max_cells = 1),
+                cell, medium,
+                ProposalConstraint(:shape_reuse_frozen, false),
+                Protocol(Sweep(); name = :main),
+            )),
+        ))
+        return Potts._lower_scheduled_execution_plan(
+            scheduled, SequentialCPM(), CPUBackend(), Float32)
+    end
+    compact = shape_plan((4, 4))
+    expanded = shape_plan((6, 6))
+    @test typeof(compact.core_program) === typeof(expanded.core_program)
+    @test typeof(CartesianSPI.cartesian_domain(compact.core_program)) ===
+        typeof(CartesianSPI.cartesian_domain(expanded.core_program))
 end
 
 @testset "distinct medium owners may share one interaction kind" begin
@@ -345,12 +368,12 @@ end
     cell = CellKind(:mixed_3d_cell; extinction = RetireAtZero())
     bulk = MediumDomainOwner(:mixed_3d_bulk, medium)
     wall = WallDomainOwner(:mixed_3d_wall, medium)
-    mask = falses(3, 4, 2)
+    mask = falses(4, 4, 2)
     mask[2, 3, 1] = true
     scheduled = mtkcompile(PottsSystem(
         name = :mixed_3d_cartesian,
         statements = StatementSet((
-            Lattice((3, 4, 2);
+            Lattice((4, 4, 2);
                 boundary = (
                     AxisBoundary(Periodic()),
                     AxisBoundary(Closed(), FixedExterior(wall)),
@@ -369,8 +392,8 @@ end
         scheduled, SequentialCPM(), CPUBackend(), Float32)
     report = CartesianSPI.cartesian_domain_report(
         CartesianSPI.cartesian_domain(plan.core_program))
-    @test report.shape == (3, 4, 2)
-    @test report.mutable_site_count == 23
+    @test report.shape == (4, 4, 2)
+    @test report.mutable_site_count == 31
     @test getproperty.(report.faces, :kind) == (
         CartesianSPI.PeriodicCartesianFace,
         CartesianSPI.PeriodicCartesianFace,
@@ -380,6 +403,62 @@ end
         CartesianSPI.ClosedCartesianFace,
     )
     @test only(report.obstacles).site == LinearIndices(mask)[2, 3, 1]
+
+    initial = PottsInitialState(ownership = OwnershipLayout(
+        (4, 4, 2),
+        RandomSitePlacement(:seeded_cell, cell; count = 1);
+        medium = bulk,
+    ))
+    problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x0c13)
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        @test_throws r"does not support execution for this lattice dimension" init(
+            problem, algorithm; scalar_type = Float32)
+    end
+end
+
+@testset "mixed 2D domain runtime excludes obstacles on both engines" begin
+    medium = MediumKind(:mixed_runtime_medium)
+    cell = CellKind(:mixed_runtime_cell; extinction = RetireAtZero())
+    bulk = MediumDomainOwner(:mixed_runtime_bulk, medium)
+    wall = WallDomainOwner(:mixed_runtime_wall, medium)
+    mask = falses(4, 4)
+    mask[2, 3] = true
+    scheduled = mtkcompile(PottsSystem(
+        name = :mixed_runtime_cartesian,
+        statements = StatementSet((
+            Lattice((4, 4);
+                boundary = (
+                    AxisBoundary(Periodic()),
+                    AxisBoundary(Closed(), FixedExterior(wall)),
+                ),
+                default_owner = bulk,
+                domain_owners = (wall,),
+                obstacles = (Obstacle(mask; owner = wall),),
+            ),
+            cell, medium,
+            ProposalConstraint(:frozen_mixed_runtime, false),
+            Protocol(Sweep(); name = :main),
+        )),
+    ))
+    initial = PottsInitialState(ownership = OwnershipLayout(
+        (4, 4), RandomSitePlacement(:seeded_cell, cell; count = 1);
+        medium = bulk,
+    ))
+    problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x0c13)
+    for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
+        integrator = init(problem, algorithm; scalar_type = Float32)
+        @test integrator.u.ownership[2, 3] == -1
+        @test count(==(Int32(1)), integrator.u.ownership) == 1
+        saved = checkpoint(integrator)
+        resumed = init(problem, algorithm; scalar_type = Float32,
+            checkpoint = saved)
+        @test resumed.u.ownership == integrator.u.ownership
+        step!(integrator)
+        step!(resumed)
+        @test integrator.u.ownership == resumed.u.ownership
+        @test Potts.runtime_statistics(integrator).candidate_attempts == 15
+        @test Potts.runtime_statistics(resumed).candidate_attempts == 15
+    end
 end
 
 
