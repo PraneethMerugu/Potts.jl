@@ -327,6 +327,7 @@ end
     cell = CellKind(:shared_interaction_cell; extinction = RetireAtZero())
     bulk = MediumDomainOwner(:shared_interaction_bulk, medium)
     island = MediumDomainOwner(:shared_interaction_island, medium)
+    anchor = CellBinding(:shared_interaction_target)
     scheduled = mtkcompile(PottsSystem(
         name = :shared_interaction_owners,
         statements = StatementSet((
@@ -334,6 +335,11 @@ end
                 domain_owners = (island,)),
             cell, medium,
             ProposalConstraint(:frozen_shared_owners, false),
+            LifecycleProcess(:retire_shared_interaction;
+                domain = cells(cell), anchor, expression = true,
+                effects = (RemoveCell(anchor; replacement = island,
+                    on_inadmissible = ErrorOnInadmissible()),),
+                cadence = AtMCS(1)),
             Protocol(Sweep(); name = :main),
         )),
     ))
@@ -360,6 +366,10 @@ end
         restored = init(PottsProblem(scheduled, initial, (0, 1); seed = 0x0c11),
             algorithm; scalar_type = Float32, checkpoint = captured)
         @test restored.u.ownership == integrator.u.ownership
+        step!(integrator)
+        step!(restored)
+        @test restored.u.ownership == integrator.u.ownership
+        @test count(==(island_code), integrator.u.ownership) == 3
     end
 end
 
