@@ -60,16 +60,18 @@ end
     cell = CellKind(:replacement_cell; extinction = RetireAtZero())
     bulk = MediumKind(:a_replacement_bulk)
     alternate = MediumKind(:z_replacement_alternate)
+    bulk_owner = MediumDomainOwner(:replacement_bulk_domain, bulk)
+    alternate_owner = MediumDomainOwner(:replacement_alternate_domain, alternate)
     anchor = CellBinding(:replacement_anchor)
     labels = zeros(Int, 5, 5)
     labels[3, 3] = 1
     initial = PottsInitialState(
-        ownership = LabelledCells(labels; cells = [cell], medium = bulk),
+        ownership = LabelledCells(labels; cells = [cell], medium = bulk_owner),
     )
 
     for (replacement_name, replacement, expected_bulk, expected_alternate) in (
-            (:default, bulk, 25, 0),
-            (:nondefault, alternate, 24, 1),
+            (:default, bulk_owner, 25, 0),
+            (:nondefault, alternate_owner, 24, 1),
         )
         remove = LifecycleProcess(
             Symbol(:remove_to_, replacement_name);
@@ -86,7 +88,9 @@ end
         scheduled = mtkcompile(PottsSystem(
             name = Symbol(:remove_replacement_, replacement_name),
             statements = StatementSet((
-                Lattice((5, 5); boundary = Closed(), max_cells = 1),
+                Lattice((5, 5); boundary = Closed(),
+                    default_owner = bulk_owner,
+                    domain_owners = (alternate_owner,), max_cells = 1),
                 cell,
                 bulk,
                 alternate,
