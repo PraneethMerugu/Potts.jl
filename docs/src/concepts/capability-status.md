@@ -5,9 +5,9 @@ component scope, solver, or replay class does not authorize another.
 
 | Profile | Status | Exact boundary |
 |:--|:--:|:--|
-| Sequential CPM, CPU | supported; exact replay available | 2D closed/periodic, `Float32`/`Float64`; exact replay requires a matching environment |
-| Checkerboard sweep CPM, CPU | supported; exact replay available | Same 2D/scalar boundary |
-| Checkerboard sweep CPM, Metal | hardware-tested functional support | Apple Metal, 2D closed/periodic, `Float32`, mechanisms exercised by the real-device runner; no CI-hosted exact-replay claim |
+| Sequential CPM, CPU | supported; exact replay available | 2D closed/periodic/fixed-exterior faces and immutable obstacles, `Float32`/`Float64`; exact replay requires a matching environment |
+| Checkerboard sweep CPM, CPU | supported; exact replay available | Same 2D/scalar/domain boundary |
+| Checkerboard sweep CPM, Metal | hardware-tested functional support | Apple Metal, 2D closed/periodic/fixed-exterior faces and immutable obstacles, `Float32`, mechanisms exercised by the real-device runner; no CI-hosted exact-replay claim |
 | Sequential CPM on Metal | unsupported | Fails preflight; Metal requires checkerboard execution |
 | 3D CPM execution | unsupported | Structural construction is retained, but `init` rejects `dimension=3` |
 | CUDA or ROCm | unsupported | No public selector or qualifying real-device extension |

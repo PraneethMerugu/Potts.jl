@@ -421,8 +421,15 @@ end
     ))
     problem = PottsProblem(scheduled, initial, (0, 1); seed = 0x0c13)
     for algorithm in (SequentialCPM(), CheckerboardSweepCPM())
-        @test_throws r"does not support execution for this lattice dimension" init(
-            problem, algorithm; scalar_type = Float32)
+        rejection = try
+            init(problem, algorithm; scalar_type = Float32)
+            nothing
+        catch caught
+            caught
+        end
+        @test rejection isa CorePotts.BackendSPI.ProgramCapabilityError
+        @test rejection.operation === :init
+        @test rejection.report.status === CorePotts.BackendSPI.Unsupported
     end
 end
 
