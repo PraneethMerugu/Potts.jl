@@ -32,8 +32,11 @@ function _collect_symbolics!(found, value)
         for field in fieldnames(typeof(value))
             _collect_symbolics!(found, getfield(value, field))
         end
+    elseif value isa Obstacle
+        _collect_symbolics!(found, value.owner)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractDomainOwner, AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,
@@ -200,8 +203,11 @@ function _collect_draw_calls!(result, value)
             field -> _collect_draw_calls!(result, getfield(value, field)),
             fieldnames(typeof(value)),
         )
+    elseif value isa Obstacle
+        _collect_draw_calls!(result, value.owner)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractDomainOwner, AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,

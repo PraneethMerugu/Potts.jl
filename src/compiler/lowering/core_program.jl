@@ -397,68 +397,6 @@ function _ownership_change_handles(descriptor_plan)
     )
 end
 
-function _lower_cartesian_domain(ir::AnalyzedTermIR)
-    records = ir.source.records
-    domains = filter(record -> record.kind === :LatticeDomain, records)
-    length(domains) == 1 ||
-        throw(ArgumentError("compilation requires exactly one LatticeDomain"))
-    domain_record = only(domains)
-    shape = _statement_option(domain_record, :shape)
-    shape isa Tuple{Vararg{Int}} ||
-        throw(ArgumentError("lattice shape must be resolved to integer dimensions"))
-    dimensions = length(shape)
-    dimensions > 0 || throw(ArgumentError("lattice must have positive dimension"))
-    boundary = _statement_option(domain_record, :boundary, Periodic())
-    periodic = if boundary isa Periodic
-        ntuple(_ -> true, dimensions)
-    elseif boundary isa Union{Closed, FrozenBorder}
-        ntuple(_ -> false, dimensions)
-    else
-        throw(ArgumentError("unsupported lattice boundary $(typeof(boundary))"))
-    end
-    declarations = _ordered_kind_records(records)
-    isempty(declarations) &&
-        throw(ArgumentError("compilation requires declared cell/medium kinds"))
-    kinds = Dict(
-        declaration.identity => index
-        for (index, declaration) in enumerate(declarations)
-    )
-    media = filter(record -> record.kind === :MediumKind, declarations)
-    isempty(media) &&
-        throw(ArgumentError("compilation requires at least one MediumKind"))
-    medium_kind = kinds[first(media).identity]
-    medium_kinds = falses(length(kinds))
-    for declaration in media
-        medium_kinds[kinds[declaration.identity]] = true
-    end
-    default_owner = CorePotts.CompilerSPI.DomainOwnerMetadata(
-        0,
-        CorePotts.CompilerSPI.MediumDomainOwnerCategory,
-        medium_kind,
-    )
-    domain_owners = CorePotts.CompilerSPI.DomainOwnerMetadata[
-        CorePotts.CompilerSPI.DomainOwnerMetadata(
-            kind,
-            CorePotts.CompilerSPI.MediumDomainOwnerCategory,
-            kind,
-        )
-        for kind in eachindex(medium_kinds)
-            if medium_kinds[kind] && kind != medium_kind
-    ]
-    face_kinds = ntuple(2 * dimensions) do face
-        periodic[cld(face, 2)] ?
-            CorePotts.CompilerSPI.PeriodicCartesianFace :
-            CorePotts.CompilerSPI.ClosedCartesianFace
-    end
-    domain = CorePotts.CompilerSPI.CartesianOwnershipDomain(
-        shape, default_owner, domain_owners; face_kinds,
-    )
-    return (;
-        domain, domain_record, shape, dimensions, periodic, declarations,
-        kinds, medium_kinds, count = length(kinds),
-    )
-end
-
 function _lower_core_program(
         ir::AnalyzedTermIR,
         cartesian,

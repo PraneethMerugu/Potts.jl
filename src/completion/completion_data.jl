@@ -60,8 +60,11 @@ function _collect_quantities!(found, value)
         for field in fieldnames(typeof(value))
             _collect_quantities!(found, getfield(value, field))
         end
+    elseif value isa Obstacle
+        _collect_quantities!(found, value.owner)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractDomainOwner, AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,
@@ -209,8 +212,11 @@ function _structural_parameter_variables!(found, value)
         end
     elseif value isa Tuple || value isa AbstractArray
         foreach(item -> _structural_parameter_variables!(found, item), value)
+    elseif value isa Obstacle
+        _structural_parameter_variables!(found, value.owner)
     elseif value isa Union{
             AbstractIterationDomain, AbstractBoundaryPolicy,
+            AbstractDomainOwner, AxisBoundary,
             AbstractRelationshipEndpointPolicy, AbstractLifecyclePolicy,
             SweepStage,
             SymmetricPair,

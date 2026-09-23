@@ -55,11 +55,17 @@ function _structured_retirement_contract(algorithm, backend)
     @variables status::NamedTuple{(:enabled, :count, :level), Tuple{Bool, Int32, Float64}}
     cell = CellKind(:cell; extinction = RetireAtZero())
     medium = MediumKind(:medium)
+    medium_owner = MediumDomainOwner(:medium_domain, medium)
     anchor = CellBinding(:retiring)
     source = PottsSystem(
         name = :structured_retirement, statements = StatementSet(
             (
-                Lattice((2, 2); boundary = Closed(), max_cells = 1), cell, medium,
+                Lattice(
+                    (2, 2);
+                    boundary = Closed(),
+                    default_owner = medium_owner,
+                    max_cells = 1,
+                ), cell, medium,
                 CellState(
                     position; initial = SVector(2.0u"m", 4.0u"m"),
                     retirement = RetireTo(SVector(600.0u"cm", 800.0u"cm"))
@@ -73,7 +79,7 @@ function _structured_retirement_contract(algorithm, backend)
                     :remove; domain = cells(cell), anchor, expression = true,
                     effects = (
                         RemoveCell(
-                            anchor; replacement = medium,
+                            anchor; replacement = medium_owner,
                             on_inadmissible = ErrorOnInadmissible()
                         ),
                     ), cadence = AtMCS(1)

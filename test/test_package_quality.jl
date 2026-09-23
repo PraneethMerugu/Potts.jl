@@ -82,5 +82,15 @@ using ExplicitImports
             end
             @test isempty(path_dependencies)
         end
+
+        # Every workflow that checks out sibling repositories must use the
+        # same qualified revisions as the committed replay environments.
+        for workflow in ("ci.yml", "docs.yml", "docs-links.yml")
+            source = read(joinpath(repository, ".github", "workflows", workflow), String)
+            for (_, (_, revision)) in upstream_sources
+                revision === nothing && continue
+                @test length(findall(revision, source)) == 2
+            end
+        end
     end
 end

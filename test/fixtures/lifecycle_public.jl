@@ -8,6 +8,7 @@ function lifecycle_public_fixture()
         :lifecycle_daughter; extinction = RetireAtZero(priority = -20)
     )
     medium = MediumKind(:lifecycle_medium)
+    medium_owner = MediumDomainOwner(:lifecycle_medium_domain, medium)
     relation = SpatialRelation(
         :lifecycle_division; neighborhood = VonNeumann()
     )
@@ -24,14 +25,16 @@ function lifecycle_public_fixture()
         :lifecycle_create;
         domain = model(),
         expression = true,
-        effects = (CreateCell(
-            cell;
-            placement = SeedStencil(
-                create_site, ((0, 0), (1, 0)); relation
+        effects = (
+            CreateCell(
+                cell;
+                placement = SeedStencil(
+                    create_site, ((0, 0), (1, 0)); relation
+                ),
+                state = (activity => InitializeFrom(2.0),),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            state = (activity => InitializeFrom(2.0),),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(1),
     )
     transition = LifecycleProcess(
@@ -39,12 +42,14 @@ function lifecycle_public_fixture()
         domain = cells(cell),
         anchor,
         expression = true,
-        effects = (Transition(
-            anchor,
-            daughter;
-            state = (activity => Transform(lifecycle_activity + 1),),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            Transition(
+                anchor,
+                daughter;
+                state = (activity => Transform(lifecycle_activity + 1),),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(2),
     )
     divide = LifecycleProcess(
@@ -52,16 +57,18 @@ function lifecycle_public_fixture()
         domain = cells(daughter),
         anchor,
         expression = true,
-        effects = (Divide(
-            anchor;
-            geometry = SpecifiedNormalPlane((1.0, 0.0)),
-            relation,
-            side = CanonicalSide(),
-            state = (
-                activity => SplitConservatively(0.5; rounding = :exact),
+        effects = (
+            Divide(
+                anchor;
+                geometry = SpecifiedNormalPlane((1.0, 0.0)),
+                relation,
+                side = CanonicalSide(),
+                state = (
+                    activity => SplitConservatively(0.5; rounding = :exact),
+                ),
+                on_inadmissible = ErrorOnInadmissible(),
             ),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        ),
         cadence = AtMCS(3),
     )
     remove = LifecycleProcess(
@@ -69,42 +76,48 @@ function lifecycle_public_fixture()
         domain = cells(daughter),
         anchor,
         expression = true,
-        effects = (RemoveCell(
-            anchor;
-            replacement = medium,
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            RemoveCell(
+                anchor;
+                replacement = medium_owner,
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(4),
     )
     reuse = LifecycleProcess(
         :lifecycle_reuse;
         domain = model(),
         expression = true,
-        effects = (CreateCell(
-            daughter;
-            placement = SeedAt(reuse_site),
-            state = (activity => InitializeFrom(5.0),),
-            on_inadmissible = ErrorOnInadmissible(),
-        ),),
+        effects = (
+            CreateCell(
+                daughter;
+                placement = SeedAt(reuse_site),
+                state = (activity => InitializeFrom(5.0),),
+                on_inadmissible = ErrorOnInadmissible(),
+            ),
+        ),
         cadence = AtMCS(5),
     )
     source = PottsSystem(
         name = :lifecycle_public_model,
-        statements = StatementSet((
-            Lattice((6, 6); max_cells = 6),
-            cell,
-            daughter,
-            medium,
-            relation,
-            activity,
-            ProposalConstraint(:freeze_lifecycle_trajectory, false),
-            create,
-            transition,
-            divide,
-            remove,
-            reuse,
-            Protocol(Sweep(; temperature = 0.0); name = :main),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((6, 6); default_owner = medium_owner, max_cells = 6),
+                cell,
+                daughter,
+                medium,
+                relation,
+                activity,
+                ProposalConstraint(:freeze_lifecycle_trajectory, false),
+                create,
+                transition,
+                divide,
+                remove,
+                reuse,
+                Protocol(Sweep(; temperature = 0.0); name = :main),
+            )
+        ),
         unknowns = [lifecycle_activity],
     )
     labels = zeros(Int, 6, 6)
@@ -125,19 +138,22 @@ function lifecycle_birth_system(
     )
     cell = CellKind(:birth_cell; extinction = RetireAtZero())
     medium = MediumKind(:birth_medium)
+    medium_owner = MediumDomainOwner(:birth_medium_domain, medium)
     declarations = state === nothing ? () : (state,)
     source = PottsSystem(
         name = name,
-        statements = StatementSet((
-            Lattice((3, 3); max_cells),
-            cell,
-            medium,
-            declarations...,
-            births(cell)...,
-            Protocol(
-                Sweep(); name = :main, lifecycle_conflicts = conflicts
-            ),
-        )),
+        statements = StatementSet(
+            (
+                Lattice((3, 3); default_owner = medium_owner, max_cells),
+                cell,
+                medium,
+                declarations...,
+                births(cell)...,
+                Protocol(
+                    Sweep(); name = :main, lifecycle_conflicts = conflicts
+                ),
+            )
+        ),
         unknowns = unknowns,
     )
     initial = PottsInitialState(
@@ -156,11 +172,13 @@ function permutation_lifecycle_fixture(reverse_order; conflicting = false)
                 Symbol(:permutation_birth_, index);
                 domain = model(),
                 expression = true,
-                effects = (CreateCell(
-                    cell;
-                    placement = SeedAt(sites[index]),
-                    on_inadmissible = ErrorOnInadmissible(),
-                ),),
+                effects = (
+                    CreateCell(
+                        cell;
+                        placement = SeedAt(sites[index]),
+                        on_inadmissible = ErrorOnInadmissible(),
+                    ),
+                ),
                 cadence = AtMCS(1),
             )
         end
@@ -168,7 +186,7 @@ function permutation_lifecycle_fixture(reverse_order; conflicting = false)
     end
     return lifecycle_birth_system(
         conflicting ? :public_conflict_permutation :
-        :public_success_permutation,
+            :public_success_permutation,
         births;
         max_cells = 2,
     )

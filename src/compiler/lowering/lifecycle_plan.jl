@@ -461,6 +461,7 @@ end
 function _lower_lifecycle_plan(
         ir::AnalyzedTermIR,
         cartesian_domain,
+        domain_owner_manifest,
         manifest::ParameterManifest,
         ::Type{T},
         state_handles,
@@ -518,12 +519,11 @@ function _lower_lifecycle_plan(
             _lifecycle_kind_index(ir, record, effect.kind) :
             effect isa Transition ?
             _lifecycle_kind_index(ir, record, effect.kind) : Int16(0)
-        replacement_medium = if effect isa RemoveCell
-            kind = _lifecycle_kind_index(ir, record, effect.replacement)
-            report = CorePotts.CompilerSPI.cartesian_domain_report(
-                cartesian_domain,
-            )
-            _core_domain_owner_code(cartesian_domain, report, kind)
+        replacement_owner = if effect isa RemoveCell
+            requested = _registered_domain_owner(
+                domain_owner_manifest, effect.replacement,
+            ).metadata
+            CorePotts.CompilerSPI.domain_owner_code(cartesian_domain, requested)
         else
             Int32(0)
         end
@@ -667,7 +667,7 @@ function _lower_lifecycle_plan(
             _lifecycle_effect_code(effect),
             domain_kind,
             destination_kind,
-            replacement_medium,
+            replacement_owner,
             placement,
             placement_maximum,
             stencil_count,
@@ -704,7 +704,7 @@ function _lower_lifecycle_plan(
             effect.priority,
             _lifecycle_disposition(effect.on_inadmissible),
             destination_kind,
-            replacement_medium,
+            replacement_owner,
             placement,
             placement_evaluator,
             placement_maximum,
