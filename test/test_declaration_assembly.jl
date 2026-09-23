@@ -29,6 +29,11 @@ end
 @testset "assembly discovers whole and indexed parameter arrays without scalarizing ownership" begin
     @parameters weights[1:2] offset = 2.0 initial_only = 4.0 observed_only = 5.0 index::Int = 1
     @variables amount vector[1:2] observation
+    @test Potts._defensive_copy(weights) === weights
+    mutable_values = [1.0, 2.0]
+    copied_values = Potts._defensive_copy(mutable_values)
+    mutable_values[1] = 9.0
+    @test copied_values == [1.0, 2.0]
     source = PottsSystem(
         StatementSet(
             (
