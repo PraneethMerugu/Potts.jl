@@ -71,8 +71,17 @@ in dependency order. Releases remain unauthorized.
   suite passed 217/217, strict docs and integration passed, exact replay passed
   220/220, and the portable-KA real-Metal Cartesian parity witness passed 15/15.
   Required hosted package, docs, macOS smoke, integration, replay and real-Metal
-  checks all passed. Corrected Core R10 is the next owner-level PR.
-- The complete delivery is not close to finished: G04/G05 and all later
+  checks all passed.
+- Core R10's source-aware maintained-quantity foundation merged as PR33
+  (`6ec73169`) on 2026-09-24. Its merge tree equals qualified tip `65c62ea4`.
+  Local owner CPU/quality passed 33,288/33,288, strict documentation and the
+  full portable-KA real-Metal suite passed, and all required hosted package,
+  docs, macOS smoke, and Metal checks passed. The separately reviewed CI
+  correction increased only the package and Metal job time limits after the
+  first hosted run timed out; test commands and coverage were unchanged.
+  Maintained spatial relation/query completion remains in Core PR37 and must
+  qualify before R10 as a whole or Potts R11 is complete.
+- The complete delivery is not close to finished: G05 and all later
   main-spine/breadth groups remain open unless listed above.
 
 ## Published active stack
@@ -81,10 +90,11 @@ in dependency order. Releases remain unauthorized.
 | --- | --- | --- | --- | --- |
 | R08 Core typed composition/lifecycle | [CorePotts PR32](https://github.com/PraneethMerugu/CorePotts.jl/pull/32) | `7b46e4eb` | main | merged |
 | R09 Potts composition | [Potts PR53](https://github.com/PraneethMerugu/Potts.jl/pull/53) | `0e0f4dfc` | main | merged; exact local CPU and full hosted package/integration/replay/docs/macOS/Metal green; merge tree equals qualified tip `b04e05fb` |
-| R10 Core maintained quantities | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `b26d4d8b` (clean local candidate; PR branch unchanged) | merged C10 and Core PR38 | local owner CPU 33,288/33,288, strict docs and full real-Metal suite green; PR33 restack/hosted qualification pending |
-| R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` (historical branch) | merged C11 | draft; restack depends on corrected R10 |
-| R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` | CorePotts PR33 | draft; hosted suite green, blocked by R10 completion |
-| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `6c5344d6` | Potts PR54 | draft/CLEAN; exact Symbolics 7.37 CPU/Metal correction and complete hosted suite green, blocked by R11 and downstream canary |
+| R10 Core maintained-quantity foundation | [CorePotts PR33](https://github.com/PraneethMerugu/CorePotts.jl/pull/33) | `6ec73169` | merged C10 and Core PR38 | merged; local owner CPU 33,288/33,288 and full real Metal plus all required hosted checks green; merge tree equals qualified tip `65c62ea4` |
+| R10 Core maintained spatial relation/query completion | [CorePotts PR37](https://github.com/PraneethMerugu/CorePotts.jl/pull/37) | `c353a873` (historical source branch) | merged R10 foundation | draft; restack, owner tests, downstream canaries, and real Metal pending; no additional identified PR allocation |
+| R11 Potts maintained-quantity authoring | [Potts PR54](https://github.com/PraneethMerugu/Potts.jl/pull/54) | `4cec5535` (historical branch) | merged C11 and completed Core R10 relations | draft; restack depends on PR37 completion |
+| R49 Core operational runtime boundary | [CorePotts PR34](https://github.com/PraneethMerugu/CorePotts.jl/pull/34) | `b4e5bda5` (historical branch) | completed Core R10 including PR37 relations | draft; historical hosted suite green, but restack and joined qualification remain after PR37 |
+| R50 Potts resolved operational lowering | [Potts PR55](https://github.com/PraneethMerugu/Potts.jl/pull/55) | `2d317fc0` (historical merge into unmerged PR54 lineage) | completed Potts R11 and Core R49 | reviewed historical source; a new successor PR must deliver its semantic delta onto the corrected main stack, with joined qualification |
 | C08 LocalMath exact keyed reduction | [LocalMath PR19](https://github.com/PraneethMerugu/LocalMath.jl/pull/19) | `7082ed84` | main after LocalMath PR18 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | C09 LocalMath atomic keyed rebuild publication | [LocalMath PR20](https://github.com/PraneethMerugu/LocalMath.jl/pull/20) | `cca004b9` | LocalMath main after PR19 | merged; exact-tip hosted package/scientific/docs/macOS/real-Metal green |
 | C12 LocalMath bounded runtime collection launch | [LocalMath PR21](https://github.com/PraneethMerugu/LocalMath.jl/pull/21) | `12b3fa98` | LocalMath main after PR20 | merged; complete local/hosted CPU, real-Metal, KCT/allocation/performance and review green |

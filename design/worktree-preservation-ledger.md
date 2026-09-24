@@ -75,11 +75,20 @@ stashes remain preserved; older audited worktree registrations are handled
 separately. The historical table below is not a claim that its old PR head is
 still active.
 
+Core R10's source-aware maintained-quantity foundation then merged as PR33
+(`6ec73169`) after complete hosted package, docs, macOS smoke, and real-Metal
+checks passed. Its merge tree equals qualified tip `65c62ea4`; the clean
+temporary `/private/tmp/corepotts-r10-foundation` worktree was removed after
+that comparison, and the canonical Core checkout fast-forwarded to the merge.
+The branch ref, source worktrees, and stashes remain preserved. Core PR37 still
+owns the unmerged maintained spatial relation/query completion; PR33 does not
+subsume it.
+
 ## CorePotts — hard preserve
 
 | Branch / worktree | HEAD | What it does | Quality | Potential resolution | Owner / action |
 |---|---|---|---|---|---|
-| `main` — `ECO/CorePotts.jl` | `2ceb98a` | Primary Core line with merged typed composition/lifecycle, Cartesian domain ownership and focused device-product conversion. | **High**: R08, C10 and PR38 are merged with local/full hosted CPU, docs, quality, independent-review, macOS, and real-Metal evidence. | No C10 reconciliation remains; the canonical checkout was fast-forwarded after both merges. | Corrected R10 now stacks here. |
+| `main` — `ECO/CorePotts.jl` | `6ec7316` | Primary Core line with merged typed composition/lifecycle, Cartesian domain ownership, device-product conversion, and source-aware maintained quantities. | **High**: R08, C10, PR38, and R10 foundation PR33 are merged with local/full hosted CPU, docs, quality, independent-review, macOS, and real-Metal evidence. | Maintained spatial relation/query completion remains in PR37. | Keep the clean canonical checkout on remote main. |
 | `codex/ecosystem-core-candidate` — `/private/tmp/corepotts-ecosystem-candidate` | `7568341` | Integrated C10/R10/R49 compiler and behavior candidate. | **Medium**: clean and tested, but collapses three owners. | Superseded as integration tree by `b82c873`; retain only as comparison oracle. | Compare against split C10→R10→R49 stack, then archive. |
 | `codex/scd-r49-restack` — `/private/tmp/corepotts-scd-r49` | `d909a4d` | Joined R10/R49 plus neutral-proposal and pausable-MCS changes. | **Medium**: real tests, but noisy merge history and 17-file drift from preferred aggregate chain. | Dependency inversion, reversions, and history noise. | Use only as conflict oracle; transplant semantic deltas and archive. |
 | `codex/scd-pausable-sequential-runtime` — `/private/tmp/corepotts-scd-sequential` | `c701de4` | Opaque pause/resume token for transactional sequential MCS/lifecycle boundaries. | **High**: focused execution, receipt, acceptance, and abort tests. | Needs Potts native-lifecycle canary and final API/naming review. | Preserve as distinct post-R49 lifecycle child. |
