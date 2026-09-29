@@ -15,10 +15,10 @@ end
     site_key = SiteChannelKey(:activity, Float32)
     cell_key = CellChannelKey(:signal, Float64)
     medium_key = MediumChannelKey(:temperature, Float64)
-    site_values = reshape(Float32.(1:length(state.ownership)), size(state.ownership))
+    site_values = reshape(Float32.(1:length(CorePotts.ownership(state))), size(CorePotts.ownership(state)))
     active_identities = [
-        RenderCellIdentity(id, state.cell_generations[id])
-        for id in eachindex(state.volumes) if state.volumes[id] > 0
+        RenderCellIdentity(id, CorePotts.cell_generations(state)[id])
+        for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0
     ]
     cell_values = Dict(identity => Float64(identity.id) for identity in active_identities)
     medium_values = Dict(UInt32(1) => 2.5)
@@ -36,7 +36,7 @@ end
     @test channel(full, medium_key).values == medium_values
     @test channel(full, medium_key).values !== medium_values
 
-    for axis in 1:3, index in (1, size(state.ownership, axis))
+    for axis in 1:3, index in (1, size(CorePotts.ownership(state), axis))
         request = RenderRequest(extent = OrthogonalSlice(axis, index))
         frame = renderframe(state, request; channels)
         expected = _site_slice_oracle(site_values, axis, index)
@@ -62,19 +62,14 @@ end
     @test medium_values == medium_before
 
     solution_fixture = render_fixture()
-    solution = Potts.solve(
-        solution_fixture.problem,
-        Potts.SequentialCPM();
-        backend = Potts.CPUBackend(),
-        scalar_type = Float64,
-    )
+    solution = CorePotts.solve(solution_fixture.problem, CorePotts.SequentialCPM())
     solution_values = reshape(
-        Float32.(1:length(solution_fixture.state.ownership)),
-        size(solution_fixture.state.ownership),
+        Float32.(1:length(CorePotts.ownership(solution_fixture.state))),
+        size(CorePotts.ownership(solution_fixture.state)),
     )
     from_solution = renderframe(
         solution;
-        index = firstindex(solution),
+        index = firstindex(solution.u),
         channels = (RenderChannel(site_key, solution_values),),
     )
     @test channel(from_solution, site_key).values == solution_values
@@ -86,14 +81,14 @@ end
     site_key = SiteChannelKey(:site, Float64)
     cell_key = CellChannelKey(:cell, Float64)
     medium_key = MediumChannelKey(:medium, Float64)
-    valid_site = zeros(Float64, size(state.ownership))
+    valid_site = zeros(Float64, size(CorePotts.ownership(state)))
     valid_site_before = copy(valid_site)
-    first_identity = RenderCellIdentity(1, state.cell_generations[1])
+    first_identity = RenderCellIdentity(1, CorePotts.cell_generations(state)[1])
 
     @test_throws MakiePotts.InvalidRenderFrameError renderframe(
         state; channels = (RenderChannel(site_key, zeros(2, 2)),))
     @test_throws MakiePotts.InvalidRenderFrameError renderframe(
-        state; channels = (RenderChannel(site_key, fill("wrong", size(state.ownership))),))
+        state; channels = (RenderChannel(site_key, fill("wrong", size(CorePotts.ownership(state)))),))
     @test_throws MakiePotts.InvalidRenderFrameError renderframe(
         state; channels = (RenderChannel(cell_key,
             Dict(RenderCellIdentity(first_identity.id, first_identity.generation + 1) => 1.0)),))
@@ -116,7 +111,7 @@ end
         state; channels = ("not a channel",))
     @test_throws BoundsError renderframe(
         state,
-        RenderRequest(extent = OrthogonalSlice(3, size(state.ownership, 3) + 1));
+        RenderRequest(extent = OrthogonalSlice(3, size(CorePotts.ownership(state), 3) + 1));
         channels = (RenderChannel(site_key, valid_site),),
     )
 end

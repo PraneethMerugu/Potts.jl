@@ -21,4 +21,6 @@ projects = [
     "lib/LocalMath/test",
     "lib/CorePotts",
     "lib/CorePotts/test",
+    "lib/MakiePotts",
+    "lib/MakiePotts/test",
 ]

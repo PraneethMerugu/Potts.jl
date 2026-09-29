@@ -106,7 +106,13 @@ _array_adaptor(::Type{<:Array}) = Array
 _array_adaptor(A::Type) = Base.typename(A).wrapper
 
 function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
-        saveat = Int[], save_start = true, save_end = true)
+        saveat = Int[], save_start = true, save_end = true, checkpoint = nothing)
+    if checkpoint !== nothing
+        prob = _from_checkpoint(prob, checkpoint)
+        integ = init(prob, alg; backend, saveat, save_start, save_end)
+        _restore_stats!(integ.stats, checkpoint.stats)
+        return integ
+    end
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     lat = prob.lattice
@@ -250,4 +256,12 @@ function (sol::PottsSolution)(t::Integer)
     (i <= length(sol.t) && sol.t[i] == t) ||
         throw(ArgumentError("MCS $t was not saved; saved times are $(sol.t)"))
     return sol.u[i]
+end
+
+function _restore_stats!(dst::PottsStats, src::PottsStats)
+    dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
+    for f in fieldnames(LifecycleStats)
+        setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
+    end
+    return dst
 end

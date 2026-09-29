@@ -13,9 +13,9 @@ Manifest or a nested `[workspace]` anywhere else (the only exception is
 - `src/` — `Potts` (symbolic layer: MTK-style `@potts_model`, compiler, codegen)
 - `lib/CorePotts` — numerical solvers, no Symbolics dependency
 - `lib/LocalMath` — bulk-synchronous stage runtime
-- `lib/MakiePotts` — plotting (outside the workspace until M2.10)
+- `lib/MakiePotts` — plotting (renders CorePotts states and solutions)
 
-Tests: `julia --project=test test/runtests.jl` with `GROUP=All|LocalMath|CorePotts|Potts`,
+Tests: `julia --project=test test/runtests.jl` with `GROUP=All|LocalMath|CorePotts|MakiePotts|Potts`,
 or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl`.
 
 ## Code rules (INTERNALS §5)

@@ -2,11 +2,9 @@ using Test
 using Aqua
 using CairoMakie
 using MakiePotts
-using ModelingToolkitBase: @named
 using Random
 import Makie
-import Potts
-using Symbolics
+import CorePotts
 
 include(joinpath(dirname(@__DIR__), "dev", "ci_telemetry.jl"))
 using .CITelemetry: record_duration
@@ -37,59 +35,16 @@ function render_fixture(; dimensions = 2)
         fill!(view(labels, 2:3, 2:3, 2), 1)
         fill!(view(labels, 4:5, 2:3, 2), 2)
     end
-    cell = Potts.CellKind(
-        :cell; extinction = Potts.RetireAtZero()
-    )
-    other = Potts.CellKind(
-        :other; extinction = Potts.RetireAtZero()
-    )
-    medium = Potts.MediumKind(:medium)
-    @named visual = Potts.PottsSystem(
-        statements = Potts.StatementSet((
-            Potts.Lattice(dims),
-            cell,
-            other,
-            medium,
-            Potts.Volume(cell; target = 4.0, strength = 1.0),
-            Potts.Volume(other; target = 4.0, strength = 1.0),
-            Potts.Protocol(
-                Potts.Sweep(; temperature = 2.0); name = :main
-            ),
-        )),
-    )
-    scheduled = Potts.mtkcompile(Potts.complete(visual))
-    initial = Potts.PottsInitialState(
-        ownership = Potts.LabelledCells(
-            labels; cells = [cell, other], medium
-        )
-    )
-    problem = Potts.PottsProblem(
-        scheduled, initial, (0, 0); seed = 1
-    )
-    state = if dimensions == 2
-        only(Potts.solve(
-            problem,
-            Potts.SequentialCPM();
-            backend = Potts.CPUBackend(),
-            scalar_type = Float64,
-        ))
-    else
-        # Three-dimensional CPM execution is intentionally not admitted until
-        # Keep MakiePotts' independent 3D projection witness without
-        # bypassing the runtime capability preflight.
-        Potts.PottsSavedState(
-            0,
-            Int32.(labels),
-            Int32[2, 3],
-            UInt32[1, 1],
-            Int32[count(==(1), labels), count(==(2), labels)],
-            NamedTuple(),
-            NamedTuple(),
-            Dict{Symbol, Any}(),
-            (),
-            (),
-        )
-    end
+    kinds = [1, 2]
+    lattice = CorePotts.Lattice(dims)
+    temperature(st, p, prop, ctx) = p.T
+    energy(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> (v - 4.0)^2)
+    f = CorePotts.CPMFunction(energy; temperature)
+    problem = CorePotts.CPMProblem(f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
+        (; T = 2.0); seed = 1)
+    state = dimensions == 2 ?
+            only(CorePotts.solve(problem, CorePotts.SequentialCPM()).u) :
+            CorePotts.initial_state(labels, kinds)
     return (; state, problem)
 end
 
@@ -101,7 +56,7 @@ end
     @test frame_size(frame) == (5, 4)
     @test frame_geometry(frame).spacing == (1.0, 1.0)
     @test owner_at(frame, CartesianIndex(1, 1)).kind === MediumSite
-    @test cell_metadata(frame, RenderCellIdentity(1, 1)).cell_type == 2
+    @test cell_metadata(frame, RenderCellIdentity(1, 1)).cell_type == 1
     @test isempty(available_channels(frame))
     @test frame_provenance(frame).source === :saved_state
     @test Base.isvalid(render_frame_conformance(frame))
@@ -278,21 +233,21 @@ end
         raw"""
         using MakiePotts
         loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
-        @assert "Potts" in loaded
+        @assert "CorePotts" in loaded
         @assert !("ModelingToolkit" in loaded)
         print("makie-first-ok")
         """,
         raw"""
-        using Potts
+        using CorePotts
         using MakiePotts
         loaded = Set(pkgid.name for pkgid in keys(Base.loaded_modules))
-        @assert "Potts" in loaded
+        @assert "CorePotts" in loaded
         @assert "MakiePotts" in loaded
         @assert !("ModelingToolkit" in loaded)
-        print("potts-first-ok")
+        print("corepotts-first-ok")
         """,
     )
-    for (script, output) in zip(orders, ("makie-first-ok", "potts-first-ok"))
+    for (script, output) in zip(orders, ("makie-first-ok", "corepotts-first-ok"))
         command = `$(Base.julia_cmd()) --startup-file=no --project=$(project) -e $script`
         @test read(command, String) == output
     end

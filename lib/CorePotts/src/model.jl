@@ -25,6 +25,16 @@ Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
 
+# Saved-state accessors (the legacy `PottsSavedState` vocabulary).
+"""Site → cell id array (`0` = medium)."""
+ownership(st::CPMState) = st.σ
+"""Kind of every cell slot (cells are kinds `1…`, the medium is `0`)."""
+cell_kinds(st::CPMState) = st.cell.kind
+"""Generation of every cell slot (incremented when an id is reused)."""
+cell_generations(st::CPMState) = st.cell.generation
+"""Volume of every cell slot (`0` = free slot)."""
+volumes(st::CPMState) = st.cell.volume
+
 """
     initial_state(σ, kinds; cell = (;), site = (;), model = (;))
 

@@ -9,6 +9,7 @@ Atomix = "a9b6321e-bd34-4604-b9c9-b65b8de01458"
 CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [compat]
 Adapt = "4"
@@ -16,4 +17,5 @@ Atomix = "1"
 CommonSolve = "0.2"
 KernelAbstractions = "0.9.42"
 SciMLBase = "3"
+Serialization = "1.11.0"
 julia = "1.12"

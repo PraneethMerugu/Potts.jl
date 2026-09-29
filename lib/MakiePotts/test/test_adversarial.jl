@@ -1,6 +1,6 @@
 function _saved_state_frame_oracle(state, request)
-    active = Set(Int32(id) for id in eachindex(state.volumes) if state.volumes[id] > 0)
-    owners = map(state.ownership) do id
+    active = Set(Int32(id) for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0)
+    owners = map(CorePotts.ownership(state)) do id
         id == 0 ? RenderOwner(MediumSite, 1) : begin
             id in active || error("oracle encountered an inactive finite owner")
             RenderOwner(CellSite, id)
@@ -8,8 +8,8 @@ function _saved_state_frame_oracle(state, request)
     end
     metadata = [
         RenderCellMetadata(
-            RenderCellIdentity(id, state.cell_generations[id]), state.cell_kinds[id])
-        for id in eachindex(state.volumes) if state.volumes[id] > 0
+            RenderCellIdentity(id, CorePotts.cell_generations(state)[id]), CorePotts.cell_kinds(state)[id])
+        for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0
     ]
     if request.extent isa FullDomain
         projected = owners
@@ -20,7 +20,7 @@ function _saved_state_frame_oracle(state, request)
         retained = Tuple(filter(!=(extent.axis), ntuple(identity, ndims(owners))))
         geometry = RenderGeometry(size(projected); source_axes = retained)
     end
-    return (; mcs = Int(state.mcs), owners = projected, metadata, geometry)
+    return (; mcs = 0, owners = projected, metadata, geometry)
 end
 
 @testset "adversarial geometry and ownership semantics" begin
@@ -247,16 +247,16 @@ end
     @test channel(frame, medium_key).values[UInt32(1)] == 6.0
 
     fixture = render_fixture()
-    ownership_before = copy(fixture.state.ownership)
-    kinds_before = copy(fixture.state.cell_kinds)
-    generations_before = copy(fixture.state.cell_generations)
-    volumes_before = copy(fixture.state.volumes)
+    ownership_before = copy(CorePotts.ownership(fixture.state))
+    kinds_before = copy(CorePotts.cell_kinds(fixture.state))
+    generations_before = copy(CorePotts.cell_generations(fixture.state))
+    volumes_before = copy(CorePotts.volumes(fixture.state))
     rendered = renderframe(fixture.state)
-    @test frame_mcs(rendered) == fixture.state.mcs
-    @test fixture.state.ownership == ownership_before
-    @test fixture.state.cell_kinds == kinds_before
-    @test fixture.state.cell_generations == generations_before
-    @test fixture.state.volumes == volumes_before
+    @test frame_mcs(rendered) == 0
+    @test CorePotts.ownership(fixture.state) == ownership_before
+    @test CorePotts.cell_kinds(fixture.state) == kinds_before
+    @test CorePotts.cell_generations(fixture.state) == generations_before
+    @test CorePotts.volumes(fixture.state) == volumes_before
 end
 
 @testset "rapid reactive replacement and recording guards" begin

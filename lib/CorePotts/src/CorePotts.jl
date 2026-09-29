@@ -11,11 +11,12 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
-using SciMLBase: SciMLBase, remake
+using SciMLBase: SciMLBase, remake, reinit!
+using Serialization: Serialization
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
     Weighted, relation, AllMobile, MaskMobility, is_mobile
-export CPMState, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
+export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
@@ -36,6 +37,7 @@ export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
 export init, solve, solve!, step!, remake, CPU
+export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 
 include("rng.jl")
 include("lattice.jl")
@@ -52,5 +54,6 @@ include("algorithms.jl")
 include("sequential.jl")
 include("checkerboard.jl")
 include("problem.jl")
+include("checkpoint.jl")
 
 end

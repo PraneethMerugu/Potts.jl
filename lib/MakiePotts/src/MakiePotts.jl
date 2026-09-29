@@ -5,7 +5,7 @@ Potts solutions.
 module MakiePotts
 
 import Makie
-import Potts
+import CorePotts
 import PrecompileTools
 
 include("errors.jl")
