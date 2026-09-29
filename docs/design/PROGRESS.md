@@ -194,3 +194,25 @@
     the gradient and Laplacian of a ramp are exact.
   - Metal ≈ CPU.
 - **Moved.** Merks parity moves to M2.5, where it needs chemotaxis.
+
+## 2026-09-29 — M2.5 and M2.6 (commit 785ef32)
+
+- **Drives** (`drives.jl`): `is_extension`/`is_retraction` (legacy definition: medium to
+  cell), `chemotaxis_delta`, `act_mean`/`act_delta` (owner-filtered, plain or legacy
+  shifted GM, D-034). `CPMFunction(...; bias)` adds to log α (`ΔH_eff = ΔH − T·bias`), and
+  `FieldStep(...; lower)` provides the legacy clip at 0.
+- **Constraints:**
+  - `locally_connected`: N-D, a bitmask flood fill over the 3ᴺ−1 Moore neighbourhood.
+  - `merks_connectivity`: the exact legacy rule.
+  - `forbid_extinction`.
+- **Tests.**
+  - `locally_connected` agrees with an independent flood fill on thousands of random
+    neighbourhoods in 2D and 3D.
+  - Cells stay globally face-connected under hot dynamics with the constraint (both
+    algorithms, 2D and 3D) and fragment without it.
+  - Bias is identical to −T·b in ΔH; forbid_extinction; Act means.
+- **Legacy parity** (`reference/sample_models.jl` → `reference/data/{merks,wortel}_parity.tsv`,
+  64 seeds, saved MCS 2–40). Ported as `test/parity/models.jl` (the hand-written oracle
+  for M3's codegen). KS per MCS and observable: Merks 15/15, Wortel 9/9.
+  - The first Merks run failed (volume 11.4 against 7.8). The bisection isolated
+    connectivity, and legacy CorePotts treats out-of-domain neighbours as medium (D-034).
