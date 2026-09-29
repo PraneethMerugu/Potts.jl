@@ -278,4 +278,31 @@ using Metal
         @test rest.σ == whole.σ
         @test rest.cell.volume == whole.cell.volume
     end
+
+    @testset "compartments on Metal" begin
+        σ, kinds, cluster = compartment_cells((48, 48), 8, 4)
+        lat = Lattice((48, 48))
+        n = length(kinds)
+        f, p64 = compartment_model(; λs = 0.05)
+        p = (; J = SMatrix{3, 3, Float32}(p64.J), Jint = 2.0f0, λ = 1.0f0, V0 = (48.0f0, 16.0f0),
+            λc = 1.0f0, Vc = 64.0f0, λs = 0.05f0, Sc = 32.0f0, T = 10.0f0)
+        st = initial_state(σ, kinds; cell = init_clusters(σ, cluster, lat; relation = Moore(1), T = Float32))
+        u = solve(CPMProblem(f, st, lat, (0, 60), p; relations = (; surface = Moore(1))), CheckerboardCPM(); backend).u[end]
+        @test u.σ != σ
+        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
+        @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.σ, u.cell.cluster, lat, Moore(1)) rtol = 1e-5
+
+        # a cluster divides as a unit on the device
+        σd = zeros(Int32, 40, 40); σd[11:30, 15:22] .= 1; σd[18:23, 17:20] .= 2
+        latd = Lattice((40, 40))
+        cell = merge(init_moments(σd, latd, 2), init_clusters(σd, [1, 1], latd))
+        std = with_capacity(initial_state(σd, Int32[1, 2]; cell), 6)
+        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE : EVENT_NONE
+        fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+            lifecycle = Lifecycle(tr; clusters = true, normal = AlongMinorAxis{Float32}()))
+        pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
+        ud = solve(CPMProblem(fd, std, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
+        @test ud.cell.volume[1:4] == Int32[68, 12, 68, 12]
+        @test ud.cell.cluster[1:4] == Int32[1, 1, 3, 3]
+    end
 end

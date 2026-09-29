@@ -16,7 +16,7 @@ const EVENT_REMOVE = Int32(2)
 const EVENT_TRANSITION = Int32(3)
 
 """
-    Lifecycle(trigger; normal, kind, divide!, every = 1)
+    Lifecycle(trigger; normal, kind, divide!, every = 1, clusters = false)
 
 The lifecycle of a model (generated from `@divide`, `@remove`, `@transition` rules, or
 hand-written):
@@ -29,6 +29,12 @@ hand-written):
 - `divide!(st, p, ctx, key, mcs, parent, daughter)` — daughter state rule, run after the
   default `Copy` of every non-tracker cell quantity (e.g. halve extensive quantities).
 - `every` — check triggers every `every` MCS.
+- `clusters` — divide compartment clusters as a unit (`st.cell.cluster`, D-036): a cluster
+  divides when its root triggers `EVENT_DIVIDE` (members' own divide events are ignored);
+  `normal` is evaluated on the host with the cluster's moments (`st.cell` then holds cluster
+  volume/moments, indexed by root), and every member splits along that plane through the
+  cluster centroid. Daughters form a new cluster. Without `clusters`, a dividing
+  compartment's daughter stays in its parent's cluster.
 
 Division requires the moment trackers (`init_moments`).
 """
@@ -38,9 +44,11 @@ struct Lifecycle{TR, NO, KI, DV}
     kind::KI
     divide!::DV
     every::Int
+    clusters::Bool
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
-    every::Integer = 1) = Lifecycle(trigger, normal, kind, divide!, Int(every))
+    every::Integer = 1, clusters::Bool = false) =
+    Lifecycle(trigger, normal, kind, divide!, Int(every), clusters)
 
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
@@ -132,7 +140,7 @@ end
     end
 end
 
-@kernel function _partition_kernel!(σ, @Const(daughter), @Const(normals), @Const(removed), cell, lat)
+@kernel function _partition_kernel!(σ, @Const(daughter), @Const(normals), @Const(bias), @Const(removed), cell, lat)
     i = @index(Global, Linear)
     c = @inbounds σ[i]
     if c > 0
@@ -143,7 +151,7 @@ end
             δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
             T = eltype(normals)
             V = T(@inbounds cell.volume[c])
-            side = zero(T)
+            side = @inbounds bias[c]                                # 0 unless clusters divide
             for d in 1:N
                 offset = T(δ[d]) - T(@inbounds cell.m1[d, c]) / V      # site − centroid
                 side += offset * @inbounds(normals[d, c])
@@ -167,12 +175,13 @@ end
 # Host orchestration
 
 """Lifecycle scratch: device buffers sized by capacity, plus host mirrors."""
-struct LifecycleCache{E, C, D, R, NM}
+struct LifecycleCache{E, C, D, R, NM, B}
     events::E
     count::C
     daughter::D
     removed::R
     normals::NM
+    bias::B
 end
 
 function LifecycleCache(backend, N::Int, capacity::Int)
@@ -181,7 +190,8 @@ function LifecycleCache(backend, N::Int, capacity::Int)
         KernelAbstractions.zeros(backend, Int32, 1),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
-        KernelAbstractions.zeros(backend, T, N, capacity))
+        KernelAbstractions.zeros(backend, T, N, capacity),
+        KernelAbstractions.zeros(backend, T, capacity))
 end
 
 Base.@kwdef mutable struct LifecycleStats
@@ -214,8 +224,34 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     daughter = zeros(Int32, cap)
     removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
     nextfree = 1
+    clusters = lc.clusters && _has_clusters(st)
+    if clusters
+        cl = Array(st.cell.cluster)
+        members = Dict{Int32, Vector{Int32}}()
+        for c in 1:cap
+            volume[c] > 0 && push!(get!(members, cl[c], Int32[]), Int32(c))
+        end
+        roots = Int32[]
+        for c in 1:cap                                  # members' own divide events are ignored
+            events[c] == EVENT_DIVIDE && cl[c] != c && (events[c] = EVENT_NONE)
+        end
+    end
     for c in 1:cap
-        if events[c] == EVENT_DIVIDE
+        if clusters && events[c] == EVENT_DIVIDE
+            cl[c] == c || continue                          # members follow their root
+            ms = filter(m -> events[m] != EVENT_REMOVE, members[Int32(c)])
+            if nextfree + length(ms) - 1 <= length(free)
+                for m in ms
+                    events[m] = EVENT_DIVIDE
+                    daughter[m] = free[nextfree]
+                    nextfree += 1
+                end
+                push!(roots, Int32(c))
+                stats.divisions += length(ms)
+            else
+                stats.deferred += 1
+            end
+        elseif events[c] == EVENT_DIVIDE
             if nextfree <= length(free)
                 daughter[c] = free[nextfree]
                 nextfree += 1
@@ -232,14 +268,17 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     end
     copyto!(cache.daughter, daughter)
     copyto!(cache.removed, removed)
+    clusters && copyto!(cache.events, events)
 
-    if any(>(0), daughter)
+    if clusters
+        isempty(roots) || _cluster_planes!(cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
+    elseif any(>(0), daughter)
         _normal_kernel!(backend)(cache.normals, cache.daughter, lc.normal, st, p, ctx, key, mcs;
             ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
         launches += 1
     end
     n = length(st.σ)
-    _partition_kernel!(backend)(st.σ, cache.daughter, cache.normals, cache.removed, st.cell,
+    _partition_kernel!(backend)(st.σ, cache.daughter, cache.normals, cache.bias, cache.removed, st.cell,
         ctx.lattice; ndrange = n, workgroupsize = _phase_groupsize(backend, n))
     launches += 1
 
@@ -256,6 +295,13 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         gen = Array(st.cell.generation)
         gen[ds] .+= Int32(1)
         copyto!(st.cell.generation, gen)
+        if clusters                                      # daughters form the root's daughter cluster
+            clh = Array(st.cell.cluster)
+            for m in parents
+                clh[daughter[m]] = daughter[clh[m]]
+            end
+            copyto!(st.cell.cluster, clh)
+        end
     end
     haskey(st.cell, :links) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(st, findall(removed), daughter[parents])
@@ -263,6 +309,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         key, mcs; ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
     launches += 1
 
+    _has_clusters(st) && _fix_clusters!(st)
     rebuild_trackers!(st, ctx, backend)
     if !isempty(parents)
         v = Array(st.cell.volume)
@@ -287,7 +334,8 @@ end
     rebuild_trackers!(st, ctx, backend)
 
 Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`, `surface`
-(over `ctx.surface`, if both exist) and moments (`anchor`, `m1`, `m2`). Host-side; used at
+(over `ctx.surface`, if both exist), moments (`anchor`, `m1`, `m2`) and the cluster
+trackers (`cluster_volume`, `cluster_surface`). Host-side; used at
 lifecycle events and after host edits of `σ`.
 """
 function rebuild_trackers!(st, ctx, backend)
@@ -308,6 +356,7 @@ function rebuild_trackers!(st, ctx, backend)
         m = init_moments(σ, lat, cap)
         copyto!(st.cell.anchor, m.anchor); copyto!(st.cell.m1, m.m1); copyto!(st.cell.m2, m.m2)
     end
+    _has_clusters(st) && _rebuild_cluster_trackers!(st, σ, ctx)
     return st
 end
 
@@ -327,6 +376,7 @@ function with_capacity(st::CPMState, capacity::Integer)
     end
     cell = map(grow, st.cell)
     cell.kind[(n + 1):end] .= Int32(1)
+    haskey(cell, :cluster) && (cell.cluster[(n + 1):end] .= Int32.((n + 1):capacity))
     return CPMState(st.σ, cell, st.site, st.model, st.history)
 end
 

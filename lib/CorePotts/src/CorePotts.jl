@@ -33,6 +33,9 @@ export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_REMOVE, EVENT_TRANSITION, Alon
     principal_axis, rebuild_trackers!, with_capacity
 export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remove_incident!,
     centroid_distance, link_delta, link_claims, HostPhase
+export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
+    recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
+    cluster_surface_change, cluster_surface_delta, commit_cluster_surface!, cluster_claims
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
@@ -48,6 +51,7 @@ include("fields.jl")
 include("drives.jl")
 include("spatial.jl")
 include("relationships.jl")
+include("compartments.jl")
 include("lifecycle.jl")
 include("trackers.jl")
 include("algorithms.jl")

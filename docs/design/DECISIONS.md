@@ -230,3 +230,23 @@ Decision:
   trackers exactly on the host.
 - Models without a lifecycle pay nothing. Cost is under 1% at publication scale.
   Revisit if profiling shows lifecycle syncs matter.
+
+## D-036 Compartments are a cluster id per cell, not a second level of ownership
+CompuCell3D's compartments put `clusterId` on every cell; Morpheus has no equivalent.
+A two-level lattice (site → compartment → cell) would double every ownership read in the
+hot loop.
+
+Decision:
+- `st.cell.cluster[c]` names each cell's cluster by a live member (the root, lowest id
+  after normalization); a lone cell is its own cluster, and free slots are their own.
+- Internal vs external contact energies are plain model code
+  (`same_cluster(st.cell, a, b) ? Jint : J`), so the symbolic layer needs no new
+  construct: it becomes a conditional on a cell quantity.
+- Cluster volume and surface are trackers indexed by cluster id, committed atomically so
+  they stay exact under checkerboard. Energies read exact values only with
+  `cluster_claims` (the `link_claims` trade: at most one change per cluster per color).
+- `Lifecycle(…; clusters = true)` divides clusters as a unit. The root's trigger decides;
+  the host evaluates the plane on cluster moments (planning is host-side already, D-035);
+  every member splits along it through the cluster centroid; daughters form a new
+  cluster. Without it, compartments divide alone and daughters stay in the cluster.
+- Lifecycle events re-root clusters whose root died.

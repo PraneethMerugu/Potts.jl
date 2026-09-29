@@ -45,7 +45,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [x] **M2.10** (bd713f5) checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
 - [x] **M2.11** (f67f82c) Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
 
-- [ ] **M2.10a** compartments: compartment cells grouped under a parent; internal vs external contact energies; coordinated division.
+- [x] **M2.10a** (see PROGRESS) compartments: compartment cells grouped under a parent; internal vs external contact energies; coordinated division.
 
 ## Phase 3 — Potts symbolic front end (spec: AUTHORING.md)
 
