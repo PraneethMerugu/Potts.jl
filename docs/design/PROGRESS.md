@@ -338,3 +338,47 @@
 - **Test-design note.** Without an extinction veto the nuclei vanish (λ = 1 volume cost
   is below the contact savings); the test model forbids extinction.
 - Phase 2 is complete. Next: Phase 3 (the Potts symbolic front end).
+
+## 2026-09-29 — M3 slice 1: symbolic front end (commit 1027300)
+
+- **Pipeline.** `@potts_model` → `PottsSystem` → `mtkcompile` (`CompiledPottsSystem`) →
+  `PottsProblem(csys, op, tspan; T)` → `CorePotts.CPMProblem` with
+  RuntimeGeneratedFunctions (`drop_expr`'d). Design choices are in D-037.
+- **Supported so far.**
+  - Energies: `cells(kinds) => E(volume, surface, kind, cell vars)`,
+    `contacts[(rel)] => E(kind, kind′, owner, owner′, weight)`, `sites => E(owner, kind, …)`.
+  - `@drive copy => …`; `@constraint` (expressions, `connectivity(k; rule)`,
+    `no_extinction`); `@on_copy`; `@after_mcs`/`@before_mcs` (site and cell, `Every(n)`,
+    scratch buffers when neighbours of an updated variable are read).
+  - `@equations`: field PDEs with `Δ`, auto substeps from the Δ coefficient; per-cell
+    ODEs by explicit Euler. `@divide` (principal/major/random/fixed plane, `x => value` or
+    `Split()`). `@relations`.
+  - Folds over relations (`sum, prod, mean, geomean, geomean_shifted, minimum, maximum,
+    count, any, all`); kind-indexed parameters; `total_energy`, `energy_change`;
+    `expression = Val(true)`.
+- **Verification** (`test/symbolic.jl`, `test/parity/symbolic_models.jl`).
+  - Graner, Wortel Act, Merks and OpenVT authored in the AUTHORING surface. Their
+    generated ΔH, constraints and commits equal the hand-written oracle ports on
+    ~1200 proposals each, and 15-MCS trajectories are bit-identical.
+  - The energy self-check is exact (0.0).
+  - Legacy KS parity passes through the symbolic problems (Graner 7/7, Merks 15/15,
+    Wortel 9/9, OpenVT 18/18).
+  - Symbolic Graner on Metal (`T = Float32`) agrees with CPU (t = 0.19); symbolic
+    Wortel/Merks/OpenVT run on Metal with exact trackers.
+- **Performance.** Generated Graner ΔH is identical to the hand-written one: one loop
+  plus the closed-form volume delta. Symbolic Wortel runs at about 1.6× the hand-written
+  time (a generic gather vs the specialised `act_mean`). First problem build is 0.2–1.3 s
+  (Symbolics derivation plus RGF compile); rebuilds are about 1–50 ms and reuse the
+  compiled code.
+- **Bugs found.**
+  - `gensym` names made every rebuild a new function type (18 s of recompiles in the
+    parity tests). Fixed; now tested.
+  - Extinct cells were dropped from `total_energy`. Fixed (D-037).
+  - `ownership` name clash with CorePotts; the accessor is reused as the key.
+- **Next** (remaining M3.1–M3.4):
+  - `PottsParameters` + SII (`getu`, `setp`, `remake(prob; p = [λ => 2])`).
+  - `@sweep` law propagation; model-scope variables; `@observed`; composition
+    (`compose`/`extend`) on `ModelingToolkitBase.AbstractSystem`.
+  - Relationships (`@relationship`, `edges`) and compartments in the surface.
+  - Units; diagnostics with source locations.
+  - Symbolic GPU tests in the GPU group.
