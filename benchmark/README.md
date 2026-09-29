@@ -21,3 +21,18 @@ Legacy comparison: `julia --project=reference reference/graner.jl [mcs] [seed]`.
 | checkerboard Metal 576² Float32 | 3.1 s | 0.03 s | 926 MCS/s | 3.25 |
 
 The reference environment's precompile alone takes 491 s; the workspace's CorePotts 1.9 s.
+
+### Generated (symbolic) vs hand-written Graner–Glazier, warm MCS (2026-09-29)
+
+`PottsModels.GranerGlazier` through `PottsProblem` vs the hand-written CorePotts port,
+BenchmarkTools median ns per site per MCS, Apple M1 Pro:
+
+| run | hand-written | generated |
+|---|---|---|
+| sequential 72² | 24.4 | 25.8 |
+| sequential 288² | 24.9 | 26.3 |
+| checkerboard CPU 72² | 26.4 | 28.9 |
+| checkerboard CPU 288² | 19.1 | 17.4 |
+
+The generated ΔH is one fused contact loop plus the expanded volume delta. The remaining
+~6% on small lattices is within per-call overhead and has not been chased further.

@@ -116,12 +116,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
-            push!(cell_terms, (d.kinds, e.expr))
+            push!(cell_terms, (_all_kinds(sys, d.kinds), e.expr))
         elseif d isa ClusterDomain
             0 in d.kinds && throw(ArgumentError("clusters(…) cannot include the medium kind"))
             _check_names(e.expr, _CLUSTER_BUILTINS, "a cluster term")
             isempty(_gathers(e.expr)) || throw(ArgumentError("cluster terms reading neighbours are not supported"))
-            push!(cluster_terms, (d.kinds, e.expr))
+            push!(cluster_terms, (_all_kinds(sys, d.kinds), e.expr))
         elseif d isa ContactDomain
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
             _check_static(e.expr, "a contact term")
@@ -289,6 +289,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
         scratch)
 end
+
+# A kind filter naming every cell kind is no filter (the generated code skips the test).
+_all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(sys.kinds) - 1) ? Int[] : kinds
 
 # Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
 # derived only for cell terms.
