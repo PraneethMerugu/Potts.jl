@@ -286,11 +286,11 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     parents = findall(>(0), daughter)
     if !isempty(parents)
         ds = daughter[parents]
-        for name in keys(st.cell)
-            name in (:volume, :surface, :anchor, :m1, :m2, :generation) && continue
-            _is_link_data(name) && continue              # daughters start unlinked
-            a = getfield(st.cell, name)
-            _copy_columns!(a, ds, parents)
+        # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
+        map(keys(st.cell), values(st.cell)) do name, a
+            (name in (:volume, :surface, :anchor, :m1, :m2, :generation) || _is_link_data(name)) ||
+                _copy_columns!(a, ds, parents)          # daughters start unlinked
+            nothing
         end
         gen = Array(st.cell.generation)
         gen[ds] .+= Int32(1)

@@ -22,6 +22,9 @@ GROUP in ("All", "Potts") &&
 GROUP == "GPU" &&
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
         env = ("COREPOTTS_GPU" => "metal", "COREPOTTS_QA" => "false"))
+GROUP == "GPU" &&
+    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl");
+        env = ("POTTS_GPU" => "metal", "POTTS_QA" => "false"))
 # Legacy reference stack (D-021): not part of All; needs its own pinned environment.
 GROUP == "Reference" &&
     run_group(joinpath(ROOT, "reference"), joinpath(ROOT, "reference/graner.jl"))
