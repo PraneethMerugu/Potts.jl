@@ -420,3 +420,100 @@ end
     @test u.σ[:, 1:2] == σk[:, 1:2] && u.cell.volume[1] == 48                       # the wall never moves
     @test u.σ != σk
 end
+
+# Compartments (D-036) in the authoring surface: the CorePotts nucleus/cytoplasm test model.
+@potts_model Compartments begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 14 30; 16 30 14]
+        Jint = 2.0
+        V₀[kind] = [0.0, 48.0, 16.0]
+        λ = 1.0
+        λc = 1.0
+        Vc = 64.0
+        λs = 0.1
+        Sc = 32.0
+        T = 10.0
+    end
+    @variables mass(cell) = 2.0
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy begin
+        cells => λ * (volume - V₀[kind])^2
+        contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+        clusters(cytoplasm) => λc * (cluster_volume - Vc)^2 + λs * (cluster_surface - Sc)^2
+    end
+    @constraint no_extinction
+    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
+    @sweep Metropolis(; temperature = T)
+end
+
+function compartment_state()
+    σ = zeros(Int32, 30, 30)
+    n = 0
+    for i in 1:10:21, j in 1:10:21
+        n += 1
+        σ[i:(i + 7), j:(j + 7)] .= n
+    end
+    for c in 1:n
+        idx = findall(==(c), σ); lo = minimum(idx)
+        σ[(lo[1] + 2):(lo[1] + 5), (lo[2] + 2):(lo[2] + 5)] .= n + c
+    end
+    return σ, vcat(fill(:cytoplasm, n), fill(:nucleus, n)), vcat(1:n, 1:n)
+end
+
+@testset "compartments in the authoring surface" begin
+    σ, kinds, groups = compartment_state()
+    prob = PottsProblem(Compartments(; name = :comp), [ownership => σ, kind => kinds, cluster => groups], (0, 1))
+    u0 = prob.u0
+    @test Array(u0.cell.cluster)[1:18] == vcat(1:9, 1:9)
+    @test Array(u0.cell.cluster_volume)[1:9] == fill(64, 9)
+    @test Array(u0.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(σ, u0.cell.cluster, prob.lattice, Moore(1)) &&
+          allequal(Array(u0.cell.cluster_surface)[1:9])      # nuclei are internal
+    # the hand-written CorePotts model (lib/CorePotts/test/compartments.jl)
+    Jt = [0 16 16; 16 14 30; 16 30 14]
+    ki(st, a) = a == 0 ? 1 : Int(st.cell.kind[a]) + 1
+    function hand(st, p, prop, ctx)
+        J(a, b) = CorePotts.same_cluster(st.cell, a, b) ? 2.0 : Float64(Jt[ki(st, a), ki(st, b)])
+        E(v, c) = (v - (48.0, 16.0)[st.cell.kind[c]])^2
+        EC(v, k) = st.cell.kind[k] == 1 ? (v - 64.0)^2 : 0.0
+        ES(s, k) = st.cell.kind[k] == 1 ? 0.1 * (s - 32.0)^2 : 0.0
+        return CorePotts.contact_delta(st.σ, ctx, prop, J) + CorePotts.volume_delta(st.cell.volume, prop, E) +
+               CorePotts.cluster_volume_delta(st.cell, prop, EC) +
+               CorePotts.cluster_surface_delta(st.cell, prop, CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop), ES)
+    end
+    ctx = ctx_of(prob)
+    states = proposal_states(remake(prob; tspan = (0, 1)); mcs = (0, 1), n = 400)
+    @test maximum(((u, prop),) -> abs(prob.f.delta_H(u, prob.p, prop, ctx) - hand(u, prob.p, prop, ctx)), states) < 1e-9
+    @test selfcheck(remake(prob; tspan = (0, 1))) < 1e-9
+    # trackers stay exact through a run
+    u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
+    cl = Array(u.cell.cluster)
+    @test Array(u.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.σ), cl)
+    @test Array(u.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(u.σ), cl, prob.lattice, Moore(1))
+    # checkerboard claims the clusters of old and new
+    t = findfirst(==(Int32(10)), σ)      # a nucleus site of cluster 1
+    @test prob.f.claims(u0, prob.p, CorePotts.Proposal(LinearIndices(σ)[t], 1, Tuple(t), 1, Int32(10), Int32(5)), ctx) == (1, 5)
+    # a cluster divides as a unit: both daughters keep a nucleus and a cytoplasm
+    sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = Moore(1)))
+    v = sol.u[end]
+    live = findall(>(0), Array(v.cell.volume))
+    @test length(live) == 36
+    roots = unique(Array(v.cell.cluster)[live])
+    @test length(roots) == 18
+    @test all(r -> sort(Array(v.cell.kind)[filter(c -> v.cell.cluster[c] == r, live)]) == [1, 2], roots)
+    @test sum(Array(v.cell.mass)[live]) ≈ 36.0          # every member split its mass
+    @test sort(Array(v.cell.mass)[live]) == fill(1.0, 36)
+end
+
+@testset "compartment validation" begin
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+        lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+        energies = [Potts.EnergyTerm(Potts.CellDomain(Int[]), Potts.B.cluster_volume^2)]))
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+        lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+        energies = [Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume)]))
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+        lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+        divisions = [Potts.divide(Potts.cells(1); when = Potts.B.volume > 1),
+            Potts.divide(Potts.clusters(1); when = Potts.B.volume > 1)]))
+end

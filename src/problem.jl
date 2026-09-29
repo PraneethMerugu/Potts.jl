@@ -25,7 +25,8 @@ end
 
 Build a `CorePotts.CPMProblem` from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
-`kind` to the kinds of the labelled cells (names or numbers), variables to initial values
+`kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
+compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
 (scalars or arrays), parameters to values overriding their defaults, and a relationship's
 name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). With
@@ -61,8 +62,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     exprs = (_delta_H_expr(c, T), _commit_expr(c, T), ce, _temperature_expr(c, T))
     f = CorePotts.CPMFunction(_rgf(exprs[1]); commit! = _rgf(exprs[2]),
         constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(exprs[4]),
-        claims = c.relationship === nothing ? CorePotts.no_claims :
-                 _rgf(:((st, p, prop, ctx) -> CorePotts.link_claims(st.cell, prop, Val($(c.relationship.capacity))))),
+        claims = _claims(c),
         phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
         fingerprint = hash((string.(exprs), sys.lattice, T)),
@@ -71,6 +71,17 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     frozen = _frozen_mask(sys, st)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, frozen, seed, replica, repeat)
+end
+
+# Checkerboard claims beyond old/new: link partners (link energies read their centroids) and
+# the clusters of old/new (cluster energies read cluster trackers).
+function _claims(c::CompiledPottsSystem)
+    parts = Any[]
+    c.relationship === nothing ||
+        push!(parts, :(CorePotts.link_claims(st.cell, prop, Val($(c.relationship.capacity)))...))
+    isempty(c.cluster_terms) || push!(parts, :(CorePotts.cluster_claims(st.cell, prop)...))
+    isempty(parts) && return CorePotts.no_claims
+    return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
 end
 
 _acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
@@ -144,6 +155,15 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
+    ckey = _unwrap(B.cluster)
+    if c.uses_clusters
+        ids = haskey(opd, ckey) ? opd[ckey] : 1:ncell
+        length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labelled cells"))
+        rel = c.uses_cluster_surface ? c.relations[:surface] : nothing
+        append!(cell, pairs(CorePotts.init_clusters(σ, ids, lat; relation = rel, T)))
+    elseif haskey(opd, ckey)
+        throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
+    end
     if c.relationship !== nothing
         payloads = [info(x).name => T for x in sys.variables if info(x).role === :edge]
         links = CorePotts.empty_links(c.relationship.capacity, ncell; payloads...)

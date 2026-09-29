@@ -5,7 +5,9 @@ using JET, AllocCheck, Aqua
 @testset "QA: generated models are type stable and allocation free ($name)" for (name, make) in (
         ("graner", () -> symbolic_graner_problem(; nmcs = 5)),
         ("wortel", symbolic_wortel_problem), ("merks", symbolic_merks_problem),
-        ("openvt", symbolic_openvt_problem))
+        ("openvt", symbolic_openvt_problem),
+        ("compartments", () -> (c = compartment_state(); PottsProblem(Compartments(; name = :comp),
+            [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))))
     prob = make()
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
     step!(integ)

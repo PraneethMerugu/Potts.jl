@@ -40,6 +40,7 @@ include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""
 const kind = B.kind
-export kind
+const cluster = B.cluster
+export kind, cluster
 
 end

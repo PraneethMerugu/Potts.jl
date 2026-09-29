@@ -34,7 +34,8 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 # Built-in names
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
-    :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance)
+    :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
+    :cluster_volume, :cluster_surface)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -42,6 +43,7 @@ const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, not
 # Tracker deltas substituted during ΔH derivation (not user-visible)
 const DVOLUME = _tag(_sym(:δvolume), Info(:delta, :volume, nothing, (;)))
 const DSURFACE = _tag(_sym(:δsurface), Info(:delta, :surface, nothing, (;)))
+const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, nothing, (;)))
 
 # ---------------------------------------------------------------------------------------
 # Declarations
@@ -178,8 +180,13 @@ struct ContactDomain
 end
 struct SiteDomain end
 struct CopyDomain end
+"""Compartment clusters (D-036) whose root cell is of `kinds`: `clusters(k) => E(cluster_volume, …)`."""
+struct ClusterDomain
+    kinds::Vector{Int}
+end
 
 cells(kinds::Integer...) = CellDomain(collect(Int, kinds))
+clusters(kinds::Integer...) = ClusterDomain(collect(Int, kinds))
 (d::ContactDomain)(relation::Symbol) = ContactDomain(relation)
 const contacts = ContactDomain(:contact)
 const sites = SiteDomain()
@@ -206,7 +213,11 @@ connectivity(kinds::Integer...; rule::Symbol = :local) =
 """`no_extinction`: forbid copies that remove a cell's last site."""
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
 
-energy(p::Pair) = EnergyTerm(p.first, p.second)
+energy(p::Pair) = EnergyTerm(_domain(p.first), p.second)
+# bare `cells`/`clusters` mean every kind
+_domain(::typeof(cells)) = CellDomain(Int[])
+_domain(::typeof(clusters)) = ClusterDomain(Int[])
+_domain(d) = d
 
 # ---------------------------------------------------------------------------------------
 # Relationships (cell–cell links, CorePotts `relationships.jl`)
@@ -255,13 +266,17 @@ update(phase::Symbol, e::Every, eq::Equation) = Update(phase, eq, e.n)
 
 """
     @divide cells(kinds) when = cond, along = normal, x => rule, …
+    @divide clusters(kinds) when = cond, along = normal, x => rule, …
 
 A division rule: `when` (cell scope, may use `mcs`), `along` (`principal_axis()`,
 `major_axis()`, `RandomPlane()`, or a vector expression), daughter state rules
-`x => value` (applied to both parent and daughter) or `x => Split()`.
+`x => value` (applied to both parent and daughter) or `x => Split()`. With `clusters`,
+a compartment cluster whose root is of `kinds` divides as a unit when `when` holds at the
+root (`cluster_volume` is the cluster's); every member splits along one plane through the
+cluster centroid and the state rules apply to every member.
 """
 struct DivideRule
-    domain::CellDomain
+    domain::Union{CellDomain, ClusterDomain}
     when::Any
     along::Any
     rules::Vector{Pair{Any, Any}}
@@ -276,7 +291,8 @@ _random_plane() = AlongRandom()
 """Daughter state rule: halve the quantity between parent and daughter."""
 struct Split end
 
-function divide(d::CellDomain, args...; when, along = AlongMinor())
+divide(d::Union{typeof(cells), typeof(clusters)}, args...; kw...) = divide(_domain(d), args...; kw...)
+function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = AlongMinor())
     rules = Pair{Any, Any}[a for a in args if a isa Pair]
     length(rules) == length(args) || throw(ArgumentError("@divide state rules must be `x => rule`"))
     return DivideRule(d, when, along, rules)
@@ -348,7 +364,7 @@ struct ObservedEq
 end
 
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
-const DSL = (; cells, contacts, sites, edges, new_contact, connectivity, no_extinction,
+const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, Every, geomean, geomean_shifted, mean, Δ)

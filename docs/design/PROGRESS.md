@@ -431,3 +431,32 @@
 - `@kinds medium wall[frozen] cell`: sites of frozen kinds go into CorePotts' `frozen`
   mask, so walls and obstacles never move.
 - Tests: every Potts suite (with QA/Aqua) and CorePotts (9021) pass.
+
+## 2026-09-29 — M3 slice 4: compartments in the authoring surface (D-036)
+
+- **Builtins:** `cluster`, which can be indexed (`cluster[owner] == cluster[owner′]` for
+  internal contact energies), plus `cluster_volume` and `cluster_surface`.
+  - Cell updates, division conditions and observed quantities can read the cell's cluster
+    trackers.
+  - Cell, contact, site and edge energies cannot: those trackers change when other
+    members copy, and this is checked.
+- **Energy domain** `clusters(kinds...)`, filtered by the kind of the root. ΔH is derived
+  like cell terms, over the clusters of old and new, and is zero within a cluster. Cluster
+  surface change comes from `cluster_surface_change`. `total_energy` sums over the roots.
+- **Operating point** `cluster => ids`, with any ids; equal ids form one cluster. `cluster`
+  is exported like `kind`.
+- **Checkerboard claims** cover the clusters of old and new, together with any link
+  claims.
+- **Division:** `@divide clusters(k) when = …` gives `Lifecycle(clusters = true)`. State
+  rules apply to every member, gated by the root's kind. A model cannot mix cell and
+  cluster divisions.
+- **Tests:**
+  - The symbolic nucleus/cytoplasm model equals the hand-written CorePotts model
+    (ΔH < 1e-9 on 400 proposals), and the energy self-check is exact.
+  - Trackers stay exact through runs.
+  - A cluster division yields 18 two-kind clusters, and mass is split per member.
+  - JET/AllocCheck QA is clean.
+  - On Metal, the trackers are exact.
+- A JET finding fixed in CorePotts: `recompute_surface` with a `T` keyword dispatched at
+  run time in the lifecycle tracker rebuild. It now goes through positional
+  `::Type{T}` helpers.

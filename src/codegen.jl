@@ -10,7 +10,16 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, extra
     LowerEnv(T, :cell, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
+        :cluster => :(CorePotts.cluster_of(st.cell, $c)),
+        :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $c)))),
+        :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $c))),
         (mcs === nothing ? () : (:mcs => mcs,))..., extra...), relname)
+
+# A cluster named by its root `r` (cluster terms): its trackers, the root's kind and variables.
+_cluster_env(T, r, relname; δ = nothing) =
+    LowerEnv(T, :cell, Dict{Symbol, Any}(:cluster_volume => :($T(@inbounds st.cell.cluster_volume[$r])),
+        :cluster_surface => :(@inbounds st.cell.cluster_surface[$r]), :kind => :(Potts._cellkind(st, $r)),
+        :id => r, :__cell => r, (δ === nothing ? () : (:δcluster_surface => δ,))...), relname)
 
 _site_env(T, i, relname; mcs = nothing) =
     LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$i]),
@@ -94,6 +103,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
     end
+    append!(body, _cluster_delta_code(c, T))
     if !isempty(c.edge_terms)
         Ecode = lower(sum(c.edge_terms), _edge_env(T, :ea, :eb, :ek, :ed, rn))
         push!(body, :(dH += CorePotts.link_delta($T, st.cell, ctx, prop, (ea, eb, ek, ed) -> $Ecode)))
@@ -108,6 +118,30 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
     push!(body, :(return $T(dH)))
     return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
+end
+
+_group_terms(terms) = (g = Dict{Vector{Int}, Any}(); foreach(((k, E),) -> (g[k] = haskey(g, k) ? g[k] + E : E), terms); g)
+
+# Cluster terms: the target moves from the cluster of `old` to that of `new` (nothing
+# changes when both are the same cluster).
+function _cluster_delta_code(c::CompiledPottsSystem, T)
+    isempty(c.cluster_terms) && return Any[]
+    rn = c.gather_names
+    body = Any[:(cl_old = CorePotts.cluster_of(st.cell, old)), :(cl_new = CorePotts.cluster_of(st.cell, new))]
+    c.uses_cluster_surface && push!(body,
+        :(δc = CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface))))
+    sides = Any[]
+    for (side, dv, δ) in ((:cl_old, -1, :(δc[1])), (:cl_new, +1, :(δc[2])))
+        terms = Any[]
+        for (kinds, E) in _sorted(_group_terms(c.cluster_terms))
+            ΔE = _cell_delta(E, dv)
+            env = _cluster_env(T, side, rn; δ = c.uses_cluster_surface ? δ : nothing)
+            push!(terms, :($(_kindtest(:(Potts._cellkind(st, $side)), kinds)) && (dH += $(lower(ΔE, env)))))
+        end
+        push!(sides, Expr(:&&, :($side != 0), Expr(:block, terms...)))
+    end
+    push!(body, Expr(:if, :(cl_old != cl_new), Expr(:block, sides...)))
+    return body
 end
 
 # Deterministic iteration over Dicts used in codegen (the generated code must not depend on
@@ -136,6 +170,9 @@ function _commit_expr(c::CompiledPottsSystem, T)
     push!(body, :(CorePotts.commit_volume!(st, p, prop, ctx)))
     c.uses_surface && push!(body, :(CorePotts.commit_surface!(st.cell.surface, prop, δs)))
     c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx.lattice, prop)))
+    c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
+        CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
+    c.uses_clusters && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
     append!(body, writes)
     push!(body, :(return nothing))
     return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
@@ -373,11 +410,13 @@ function _lifecycle(c::CompiledPottsSystem, T)
             end
         end
         # each division's rules apply to its own kinds (the parent keeps its kind)
-        isempty(block) || push!(rules, Expr(:&&, _kindtest(:(Potts._cellkind(st, parent)), d.domain.kinds), Expr(:block, block...)))
+        # cluster divisions: every member, gated by the kind of its cluster's root
+        who = c.cluster_division ? :(CorePotts.cluster_of(st.cell, parent)) : :parent
+        isempty(block) || push!(rules, Expr(:&&, _kindtest(:(Potts._cellkind(st, $who)), d.domain.kinds), Expr(:block, block...)))
     end
     divide! = isempty(rules) ? CorePotts.no_divide_rule :
               _rgf(:((st, p, ctx, key, mcs, parent, daughter) -> $(Expr(:block, rules..., :(return nothing)))))
-    return CorePotts.Lifecycle(trigger; normal, divide!)
+    return CorePotts.Lifecycle(trigger; normal, divide!, clusters = c.cluster_division)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -396,6 +435,15 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
             for c in 1:length(st.cell.kind)           # every slot, empty ones at E(0): consistent with ΔH
                 k = Potts._cellkind(st, c)
                 $(_kindtest(:k, kinds)) && (H += $(lower(E, env)))
+            end
+        end)
+    end
+    for (kinds, E) in _sorted(_group_terms(c.cluster_terms))
+        e = lower(E, _cluster_env(T, :r, rn))
+        push!(body, quote
+            for r in 1:length(st.cell.kind)           # every root (free slots are their own cluster)
+                st.cell.cluster[r] == r || continue
+                $(_kindtest(:(Potts._cellkind(st, r)), kinds)) && (H += $e)
             end
         end)
     end

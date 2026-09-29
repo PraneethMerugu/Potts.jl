@@ -255,8 +255,10 @@ end
 Surfaces from scratch (initialization and tracker checks). Weighted surfaces default to
 `Float32` (device-portable); pass `T = Float64` for long CPU runs.
 """
-function recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer;
-        T::Type = typeof(weight(r, 1)))
+recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1))) =
+    _recompute_surface(T, σ, lat, r, ncell)
+
+function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer) where {T}
     S = zeros(T, ncell)
     for i in 1:nsites(lat)
         c = σ[i]

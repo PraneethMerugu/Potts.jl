@@ -139,6 +139,10 @@ function _lower_at(args, env)
         end
         i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        if i.name === :cluster
+            s === :site && error("`cluster[…]` needs a cell; write `cluster[owner[s]]`")
+            return :(CorePotts.cluster_of(st.cell, $j))
+        end
     end
     error("cannot index `$(i.name)`")
 end
@@ -155,7 +159,8 @@ function _lower_population(args, env)
     if ni.role === :bound_cell
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
-            :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym))
+            :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+            :cluster => :(CorePotts.cluster_of(st.cell, $nsym))))
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else

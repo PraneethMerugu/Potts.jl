@@ -67,6 +67,7 @@ end
 Base.ndims(sys::PottsSystem) = length(sys.lattice.dims)
 
 _domain_string(d::CellDomain) = isempty(d.kinds) ? "cells" : "cells(" * join(d.kinds, ", ") * ")"
+_domain_string(d::ClusterDomain) = isempty(d.kinds) ? "clusters" : "clusters(" * join(d.kinds, ", ") * ")"
 _domain_string(d::ContactDomain) = d.relation === :contact ? "contacts" : "contacts($(d.relation))"
 _domain_string(::SiteDomain) = "sites"
 _domain_string(d::EdgeDomain) = "edges($(d.relationship))"

@@ -11,6 +11,7 @@ copy deltas, the trackers and relations the model needs, and its footprint.
 struct CompiledPottsSystem
     sys::PottsSystem
     cell_terms::Vector{Tuple{Vector{Int}, Any}}       # (kinds, E) with E in volume/surface/…
+    cluster_terms::Vector{Tuple{Vector{Int}, Any}}    # (root kinds, E) with E in cluster_volume/…
     contact_terms::Dict{Symbol, Any}                  # relation name → symmetrized pair energy
     site_terms::Vector{Any}
     drive::Any                                        # sum of drives (proposal scope)
@@ -23,6 +24,9 @@ struct CompiledPottsSystem
     edge_terms::Vector{Any}                           # link energies E(a, b, distance, edge vars)
     link_rules::Vector{LinkRule}
     uses_surface::Bool
+    uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
+    uses_cluster_surface::Bool
+    cluster_division::Bool
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
     contact_spec::Any
@@ -33,8 +37,11 @@ end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
-const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation)
-const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs)      # cell updates, division rules
+const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster)
+# cell updates, division rules (cluster trackers change with copies of other members, so
+# they are readable here but not in cell energies)
+const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
+const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight)
 const _SITE_BUILTINS = (:owner, :kind, :position, :mcs)
 const _PROPOSAL_BUILTINS = (:source, :target, :old, :new)
@@ -65,7 +72,7 @@ function _bare_builtins(x, out = Set{Symbol}())
     return out
 end
 
-const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation)
+const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
 
 function _check_names(x, allowed, what)
     x, pops = _strip_populations(x)
@@ -93,6 +100,7 @@ per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     cell_terms = Tuple{Vector{Int}, Any}[]
+    cluster_terms = Tuple{Vector{Int}, Any}[]
     contact_terms = Dict{Symbol, Any}()
     site_terms = Any[]
     edge_terms = Any[]
@@ -104,6 +112,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
             push!(cell_terms, (d.kinds, e.expr))
+        elseif d isa ClusterDomain
+            0 in d.kinds && throw(ArgumentError("clusters(…) cannot include the medium kind"))
+            _check_names(e.expr, _CLUSTER_BUILTINS, "a cluster term")
+            isempty(_gathers(e.expr)) || throw(ArgumentError("cluster terms reading neighbours are not supported"))
+            push!(cluster_terms, (d.kinds, e.expr))
         elseif d isa ContactDomain
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
             _check_static(e.expr, "a contact term")
@@ -171,6 +184,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for d in sys.divisions
         _check_names(d.when, _CELL_BUILTINS, "a division condition")
     end
+    cluster_division = any(d -> d.domain isa ClusterDomain, sys.divisions)
+    cluster_division && !all(d -> d.domain isa ClusterDomain, sys.divisions) &&
+        throw(ArgumentError("a model divides either cells or clusters; mix of @divide cells(…) and clusters(…)"))
     for r in sys.link_rules
         (relationship !== nothing && relationship.name === r.relationship) ||
             throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
@@ -193,13 +209,19 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         r === :contact || haskey(relations, r) || throw(ArgumentError("contacts($r): relation `$r` is not declared in @relations"))
     end
     gather_names = Dict{Any, Symbol}()
-    all_exprs = Any[last.(cell_terms)..., values(contact_terms)..., site_terms...,
+    all_exprs = Any[last.(cell_terms)..., last.(cluster_terms)..., values(contact_terms)..., site_terms...,
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
         (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)...,
         sys.sweep.temperature]
     uses_surface = any(x -> _uses_builtin(x, :surface), all_exprs) ||
                    any(d -> _uses_builtin(d.when, :surface), sys.divisions)
-    uses_surface && !haskey(relations, :surface) && (relations[:surface] = sys.lattice.neighborhood)
+    uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), all_exprs) ||
+                           any(d -> _uses_builtin(d.when, :cluster_surface), sys.divisions)
+    uses_clusters = cluster_division || uses_cluster_surface ||
+                    any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), all_exprs) ||
+                    any(d -> _uses_builtin(d.when, :cluster_volume), sys.divisions)
+    (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
+        (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1
     for x in all_exprs, (ni, anchor) in _gathers(x)
         spec = ni.options.relation
@@ -213,7 +235,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     lat = core_lattice(sys.lattice)
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
-    uses_surface && (radius_read = max(radius_read, rad(relations[:surface])))
+    (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
     for x in Any[(drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
             (u.eq.rhs for u in get(updates, (:on_copy, :proposal), Update[]))...]
         for (ni, anchor) in _gathers(x)
@@ -243,9 +265,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         push!(scratch, info(x).name)
     end
 
-    return CompiledPottsSystem(sys, cell_terms, contact_terms, site_terms, drive,
+    return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         sys.constraints, updates, fields, cell_odes, sys.divisions, relationship, edge_terms,
-        sys.link_rules, uses_surface,
+        sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
         scratch)
 end
@@ -253,7 +275,7 @@ end
 # Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
 # derived only for cell terms.
 function _check_static(x, what)
-    for n in (:volume, :surface)
+    for n in (:volume, :surface, :cluster_volume, :cluster_surface)
         _uses_builtin(x, n) && throw(ArgumentError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
     end
     return nothing
@@ -326,9 +348,12 @@ function _contact_tables(c::CompiledPottsSystem)
     return out
 end
 
-# Copy delta of a cell term for one side: E(q + δq) − E(q), expanded when that is cheaper.
+# Copy delta of a cell (or cluster) term for one side: E(q + δq) − E(q), expanded when that
+# is cheaper.
 function _cell_delta(E, dv::Int)
-    sub = Dict(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE)
+    sub = Dict(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
+        _unwrap(B.cluster_volume) => B.cluster_volume + dv,
+        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
     expanded = Symbolics.expand(naive)
     return _nops(expanded) <= _nops(naive) ? expanded : naive

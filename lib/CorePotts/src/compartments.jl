@@ -53,10 +53,12 @@ function recompute_cluster_volume(σ, cluster)
 end
 
 """Cluster surfaces (bonds to sites outside the cluster) over `relation`, from scratch."""
-function recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64)
-    rel = r isa Relation ? r : relation(r, lat)
+recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64) =
+    _recompute_cluster_surface(T, σ, cluster, lat, r isa Relation ? r : relation(r, lat))
+
+function _recompute_cluster_surface(::Type{T}, σ, cluster, lat::Lattice, rel::Relation) where {T}
     σK = map(s -> s == 0 ? Int32(0) : Int32(cluster[s]), σ)
-    return recompute_surface(σK, lat, rel, length(cluster); T)
+    return _recompute_surface(T, σK, lat, rel, length(cluster))
 end
 
 """
@@ -160,8 +162,8 @@ function _rebuild_cluster_trackers!(st, σ, ctx)
     cl = Array(st.cell.cluster)
     haskey(st.cell, :cluster_volume) && copyto!(st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
     if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
-        copyto!(st.cell.cluster_surface, recompute_cluster_surface(σ, cl, ctx.lattice, ctx.surface;
-            T = eltype(st.cell.cluster_surface)))
+        copyto!(st.cell.cluster_surface, _recompute_cluster_surface(eltype(st.cell.cluster_surface),
+            σ, cl, ctx.lattice, ctx.surface))
     end
     return nothing
 end

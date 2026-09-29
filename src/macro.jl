@@ -58,7 +58,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
-        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance) = $P.B
+        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface) = $P.B
         $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
         t = $P.t
         D = $P.D

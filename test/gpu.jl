@@ -33,4 +33,12 @@ using Statistics: mean, var
     uc = solve(cp, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
     @test uc.model.total[1] == sum(uc.site.act)
     @test uc.model.ndark[1] == count(c -> kc[c] == 1 && uc.cell.volume[c] > 0, eachindex(kc))
+    # compartments: cluster energies, trackers and cluster division on the device
+    σk, kk, gk = compartment_state()
+    kp = PottsProblem(Compartments(; name = :comp), [ownership => σk, kind => kk, cluster => gk], (0, 4); T = Float32)
+    uk = solve(kp, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+    cl = Array(uk.cell.cluster)
+    @test Array(uk.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(uk.σ), cl)
+    @test Array(uk.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(uk.σ), cl, kp.lattice, Moore(1); T = Float32)
+    @test count(>(0), Array(uk.cell.volume)) == 36
 end

@@ -349,8 +349,7 @@ function rebuild_trackers!(st, ctx, backend)
     end
     copyto!(st.cell.volume, volume)
     if haskey(st.cell, :surface) && haskey(ctx, :surface)
-        copyto!(st.cell.surface, recompute_surface(σ, lat, ctx.surface, cap;
-            T = eltype(st.cell.surface)))
+        copyto!(st.cell.surface, _recompute_surface(eltype(st.cell.surface), σ, lat, ctx.surface, cap))
     end
     if haskey(st.cell, :m1)
         m = init_moments(σ, lat, cap)
