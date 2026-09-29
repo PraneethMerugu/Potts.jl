@@ -1,0 +1,5 @@
+include(joinpath(@__DIR__, "fixtures", "reduction_control_contracts.jl"))
+reduction_control_contracts(Array)
+reduction_control_producer_totality(Array)
+reduction_control_filtered_producers(Array)
+reduction_control_atomic_prefix(Array)
