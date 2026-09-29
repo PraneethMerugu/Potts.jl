@@ -151,7 +151,7 @@ function (ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F}
     mcs % ph.every == 0 || return 0
     KernelAbstractions.synchronize(backend)
     host = _snapshot(backend, st)
-    ph.f!(host.cell, host, p, ctx, mcs)
+    ph.f!(host.cell, host, p, merge(ctx, (; lattice = host_lattice(ctx.lattice))), mcs)
     foreach(keys(st.cell)) do name
         copyto!(getfield(st.cell, name), getfield(host.cell, name))
     end

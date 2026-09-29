@@ -17,7 +17,7 @@ using Serialization: Serialization
 using SymbolicIndexingInterface: SymbolicIndexingInterface
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
-    Weighted, relation, AllMobile, MaskMobility, is_mobile
+    Weighted, relation, AllMobile, MaskMobility, is_mobile, in_domain, host_lattice
 export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta

@@ -491,3 +491,25 @@
   5. `uses_clusters` missed division conditions, division rules and observed quantities.
 - **Also fixed:** a macro parse bug. `when = …, along = (1.0, 0.0)` with no trailing rule
   splatted the tuple into state rules.
+
+## 2026-09-29 — Irregular lattice domains (M2.1b, first half)
+
+- **CorePotts.** `Lattice(dims; boundary, domain = mask | x -> Bool)` gives a
+  `Lattice{N, M}` with an optional mask.
+  - `shift` reports a pair as outside if either site is outside the domain. This is
+    symmetric, so brute-force sums over all sites agree with per-copy deltas. Contacts,
+    surfaces, gathers, proposals and field stencils (zero flux) therefore all stop at the
+    domain edge with no changes to their code.
+  - `CPMProblem` freezes out-of-domain sites and requires them to be medium.
+  - Field steps and site phases leave out-of-domain sites untouched.
+  - The mask moves to the device with the context. Host code (tracker rebuilds, cluster
+    planes, `HostPhase`) uses `host_lattice`.
+- **Surface:** `@lattice Lattice(dims; domain = …)`. The mask is evaluated once into the
+  `LatticeSpec`.
+- **Tests:**
+  - A disk domain on CPU (sequential and checkerboard) and on Metal (checkerboard, field,
+    division with a host tracker rebuild).
+  - ΔH equals the brute-force energy difference on every edge-adjacent proposal.
+  - Diffusion conserves mass inside the domain and never touches outside sites.
+  - The symbolic `DiskSorting` model has an exact energy self-check.
+- Hexagonal geometry remains.

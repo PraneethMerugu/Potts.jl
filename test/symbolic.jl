@@ -572,3 +572,35 @@ end
     @test mtkcompile(Potts.PottsSystem(; base..., observed = [Potts.ObservedEq(Potts.observed_var(:cv),
         Potts.B.cluster_volume)])).uses_clusters
 end
+
+@potts_model DiskSorting begin
+    @kinds medium dark light
+    @parameters begin
+        T = 10.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((40, 40); boundary = Closed(), domain = x -> (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2)
+    @energy begin
+        Volume(dark, light; target = 25.0)
+        Adhesion(J)
+    end
+    @equations D(c) ~ 0.2 * Δ(c) + 0.01 * (kind == dark)
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "irregular lattice domains in the surface" begin
+    sys = DiskSorting(; name = :disk)
+    mask = sys.lattice.domain
+    σ, kinds = two_kind_blocks()
+    σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= σ
+    @test all(mask[σd .> 0])
+    prob = PottsProblem(sys, [ownership => σd, kind => kinds], (0, 30))
+    @test count(prob.frozen) == count(!, mask)
+    @test selfcheck(prob) < 1e-9
+    u = solve(prob, CheckerboardCPM(; proposal = Moore(1))).u[end]
+    @test all(u.σ[.!mask] .== 0) && all(u.site.c[.!mask] .== 0)
+    @test sum(u.site.c) > 0
+    σbad = copy(σd); σbad[1, 1] = 1
+    @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1))
+end

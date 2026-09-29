@@ -32,7 +32,7 @@ end
 
 @kernel function _site_phase_kernel!(f!, st, p, ctx, key, mcs)
     i = @index(Global, Linear)
-    f!(st, p, ctx, key, mcs, i)
+    in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i)
 end
 
 @kernel function _cell_phase_kernel!(f!, st, p, ctx, key, mcs)

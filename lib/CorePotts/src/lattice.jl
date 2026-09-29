@@ -7,21 +7,52 @@ struct Periodic <: AbstractBoundary end
 struct Closed <: AbstractBoundary end
 
 """
-    Lattice(dims; boundary = Periodic())
+    Lattice(dims; boundary = Periodic(), domain = nothing)
 
 A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
+`domain` restricts it to an irregular region (ROADMAP M2.1b): a `Bool` array over the
+lattice or a predicate of the site coordinates, `x -> …`. Sites outside the domain never
+change owner and must belong to the medium. The domain edge is closed: `shift` reports
+neighbours outside it as outside the lattice, so contacts, surfaces, gathers, proposals and
+field stencils (zero flux) all stop there.
 """
-struct Lattice{N}
+struct Lattice{N, M}
     dims::NTuple{N, Int}
     periodic::NTuple{N, Bool}
+    mask::M                       # `nothing`, or a Bool array (`true` = in the domain)
 end
+Lattice{N}(dims, periodic) where {N} = Lattice{N, Nothing}(dims, periodic, nothing)
 
-function Lattice(dims::NTuple{N, Integer}; boundary = Periodic()) where {N}
+function Lattice(dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothing) where {N}
     b = boundary isa AbstractBoundary ? ntuple(_ -> boundary, N) : Tuple(boundary)
     length(b) == N || throw(ArgumentError("need $N boundaries, got $(length(b))"))
     all(>(0), dims) || throw(ArgumentError("lattice dimensions must be positive"))
-    return Lattice{N}(Int.(dims), map(x -> x isa Periodic, b))
+    d = Int.(dims)
+    mask = _domain_mask(domain, d)
+    mask === nothing || any(mask) || throw(ArgumentError("the domain contains no sites"))
+    return Lattice{N, typeof(mask)}(d, map(x -> x isa Periodic, b), mask)
 end
+
+_domain_mask(::Nothing, dims) = nothing
+function _domain_mask(m::AbstractArray{Bool}, dims)
+    size(m) == dims || throw(ArgumentError("domain mask has size $(size(m)), lattice $dims"))
+    return Array{Bool}(m)
+end
+_domain_mask(f, dims) = Bool[f(Tuple(x)) for x in CartesianIndices(dims)]
+
+Adapt.adapt_structure(to, l::Lattice{N}) where {N} =
+    (m = Adapt.adapt(to, l.mask); Lattice{N, typeof(m)}(l.dims, l.periodic, m))
+Base.:(==)(a::Lattice, b::Lattice) = a.dims == b.dims && a.periodic == b.periodic &&
+    (a.mask === b.mask || (a.mask !== nothing && b.mask !== nothing && Array(a.mask) == Array(b.mask)))
+Base.hash(l::Lattice, h::UInt) = hash((l.dims, l.periodic, l.mask === nothing ? nothing : Array(l.mask)), h)
+
+"""`true` if site `i` is in the lattice's domain."""
+@inline in_domain(::Lattice{N, Nothing}, i) where {N} = true
+@inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
+
+"""The lattice with its domain mask on the host (for host code given a device context)."""
+host_lattice(l::Lattice{N, Nothing}) where {N} = l
+host_lattice(l::Lattice) = Adapt.adapt(Array, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 nsites(l::Lattice) = prod(l.dims)
@@ -48,7 +79,8 @@ end
 """
     shift(lattice, x, offset) -> (inside::Bool, y)
 
-Neighbour of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside = false`.
+Neighbour of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside = false`, as
+does a pair with either site outside the lattice domain.
 """
 @inline function shift(l::Lattice{N}, x::NTuple{N, Int}, off::NTuple{N, Int32}) where {N}
     # No captured mutable state in the closure (it would be boxed).
@@ -59,8 +91,12 @@ Neighbour of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside =
         v = y[d]
         ifelse(v < 1, ifelse(l.periodic[d], v + n, 1), ifelse(v > n, ifelse(l.periodic[d], v - n, n), v))
     end
-    return inside, w
+    return inside && _in_domain(l.mask, l, x, w), w
 end
+# a pair interacts only if both sites are in the domain (symmetric, so brute-force sums
+# over all sites agree with per-copy deltas)
+@inline _in_domain(::Nothing, l, x, w) = true
+@inline _in_domain(m, l, x, w) = @inbounds(m[linear_index(l, x)]) && @inbounds(m[linear_index(l, w)])
 
 # ---------------------------------------------------------------------------------------
 # Relations

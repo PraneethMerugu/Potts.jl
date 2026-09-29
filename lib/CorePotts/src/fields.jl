@@ -89,7 +89,8 @@ end
 
 @kernel function _field_step_kernel!(rate, cn, @Const(c), st, p, ctx, key, mcs, h, lower)
     i = @index(Global, Linear)
-    @inbounds cn[i] = _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower)
+    # outside the lattice domain the field is inert (neighbours never read it)
+    @inbounds cn[i] = in_domain(ctx.lattice, i) ? _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower) : c[i]
 end
 
 function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}

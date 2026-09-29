@@ -301,16 +301,20 @@ end
 # ---------------------------------------------------------------------------------------
 # Lattice and sweep specifications
 
-"""The lattice of a model: dims, boundaries, spacing and the contact neighborhood."""
-struct LatticeSpec{N, B, S, R}
+"""The lattice of a model: dims, boundaries, spacing, the contact neighborhood and an
+optional irregular domain (a Bool mask, evaluated once from a predicate `x -> …`)."""
+struct LatticeSpec{N, B, S, R, D}
     dims::NTuple{N, Int}
     boundary::B
     spacing::S
     neighborhood::R
+    domain::D
 end
-lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing) =
-    LatticeSpec(Tuple(Int.(dims)), boundary, spacing, neighborhood)
-core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary)
+function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing, domain = nothing)
+    d = Tuple(Int.(dims))
+    return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain).mask)
+end
+core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain)
 
 """Field solver of `@sweep`: explicit Euler with `substeps` (auto if `nothing`) and an
 optional lower clip (legacy Potts clips concentrations at 0)."""

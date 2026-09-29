@@ -50,6 +50,11 @@ function CPMProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
         throw(ArgumentError("spacing must be $(ndims(lattice)) positive numbers"))
     frozen === nothing || size(frozen) == lattice.dims ||
         throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(lattice.dims)"))
+    if lattice.mask !== nothing                     # outside the domain: medium, never mobile
+        all(i -> lattice.mask[i] || u0.σ[i] == 0, eachindex(u0.σ)) ||
+            throw(ArgumentError("sites outside the lattice domain must belong to the medium (0)"))
+        frozen = frozen === nothing ? .!lattice.mask : (frozen .| .!lattice.mask)
+    end
     return CPMProblem(f, u0, lattice, relation(contact, lattice), rs, h, frozen, (t0, t1), p,
         UInt64(seed), UInt32(replica), UInt32(repeat))
 end
@@ -139,7 +144,7 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     lat = prob.lattice
-    ctx = (; lattice = lat, proposal = relation(alg.proposal, lat), contact = prob.contact,
+    ctx = (; lattice = _to_backend(backend, lat), proposal = relation(alg.proposal, lat), contact = prob.contact,
         mobility = _to_backend(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
     _preflight(prob, alg, ctx)

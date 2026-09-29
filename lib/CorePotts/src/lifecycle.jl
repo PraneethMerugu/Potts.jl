@@ -343,7 +343,8 @@ lifecycle events and after host edits of `σ`.
 function rebuild_trackers!(st, ctx, backend)
     KernelAbstractions.synchronize(backend)
     σ = Array(st.σ)
-    lat = ctx.lattice
+    lat = host_lattice(ctx.lattice)
+    ctx = merge(ctx, (; lattice = lat))
     cap = length(st.cell.kind)
     volume = zeros(Int32, cap)
     for s in σ

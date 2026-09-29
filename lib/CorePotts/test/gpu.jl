@@ -305,4 +305,23 @@ using Metal
         @test ud.cell.volume[1:4] == Int32[68, 12, 68, 12]
         @test ud.cell.cluster[1:4] == Int32[1, 1, 3, 3]
     end
+
+    @testset "lattice domains on Metal" begin
+        disk(x) = (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2
+        lat = Lattice((40, 40); boundary = Closed(), domain = disk)
+        σ = zeros(Int32, 40, 40); σ[16:25, 16:25] .= 1; σ[5:10, 18:23] .= 2
+        rate(st, p, ctx, key, mcs, i, c) = 0.2f0 * laplacian(c, ctx, i)
+        c0 = zeros(Float32, 40, 40); c0[18:23, 18:23] .= 1
+        # a division at MCS 5 rebuilds trackers on the host from the device context
+        tr(st, p, ctx, key, mcs, c) = mcs == 5 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = Lifecycle(tr; normal = AlongMinorAxis{Float32}()),
+            phases = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate),)))
+        st = with_capacity(initial_state(σ, Int32[1, 2]; cell = init_moments(σ, lat, 2),
+            site = (; c = c0, c_next = copy(c0))), 4)
+        p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 60.0f0, T = 10.0f0)
+        u = solve(CPMProblem(f, st, lat, (0, 40), p), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        @test all(u.σ[.!lat.mask] .== 0)
+        @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
+        @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
+    end
 end
