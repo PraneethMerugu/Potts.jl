@@ -1,5 +1,7 @@
 # Roadmap (machine-checkable)
 
+Feature scope per milestone is extended by `research/legacy-spec-adjudication.md` §3 (the "Milestone" column) and, once merged, the Morpheus/CompuCell3D research.
+
 Each milestone: id, depends-on, deliverable, acceptance (commands that must exit 0 or
 numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
@@ -12,6 +14,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M1.3** MakiePotts import → `lib/MakiePotts`; compiles (recipes may be stubbed against a temporary frame type until M2.10).
 - [ ] **M1.4** CorePotts seed from FusedCPM: `CPMFunction`, `CPMProblem`, `PottsParameters`, `CPMState`, Philox4x32 (D-005), owned `exp` (D-006), `SequentialCPM`, `CheckerboardCPM` with footprint-derived stride (D-008), `PottsIntegrator <: DEIntegrator`, `PottsSolution`, status word.
   Accept: FusedCPM tests ported and green; `GROUP=Core`; JET `@test_opt init/step!` clean; AllocCheck warm `step!` = 0.
+- [ ] **M1.4b** verification harness: exact transition-matrix oracle for tiny lattices (independent of production code; scheduler state lifted), TV-distance comparison; preflight rejection of unsupported algorithm × backend × feature combinations.
 - [ ] **M1.5** CI matrix (Core, QA, Reference), Downgrade job, docs build, AirspeedVelocity suite with Graner–Glazier; `reference/` environment (D-021) with the legacy models runnable.
   Accept: CI green on `monorepo`; `benchmark/` produces the table from `FusedCPM/README.md` numbers ± noise.
 
@@ -29,6 +32,8 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M2.10** checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
 - [ ] **M2.11** Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
 
+- [ ] **M2.10a** compartments: compartment cells grouped under a parent; internal vs external contact energies; coordinated division.
+
 ## Phase 3 — Potts symbolic front end (spec: AUTHORING.md)
 
 - [ ] **M3.1** `PottsSystem`, `@potts_model` sections and plain constructors, scoped `@variables`, `@kinds`, kind-indexed parameters, `Lattice`/relations of any order in N-D, source locations, composition (`compose/extend/flatten/@named`), units.
@@ -45,8 +50,11 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI.
   Accept: reference parity for each; TTFX table in docs.
 
+- [ ] **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: reference or literature parity.
+
 ## Phase 5 — Slim, docs, cut-over
 
 - [ ] **M5.1** LocalMath slimming (INTERNALS §3); TTFX benchmark for 1/4/8/32-stage programs.
 - [ ] **M5.2** docs site (Learn / Published models / API per package).
+- [ ] **M5.2a** MakiePotts: vector/arrow channels, relationship overlays, lineage, tensor ellipses, true-3D volume, WGLMakie, DataInspector, rerun controller.
 - [ ] **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.

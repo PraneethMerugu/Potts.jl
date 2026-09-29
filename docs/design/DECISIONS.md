@@ -163,3 +163,12 @@ balance); PDEs through MTK/MethodOfLines or built-in lattice stencils. No Python
 RoadRunner, Antimony, MaBoSS, Tissue Forge or other non-Julia runtimes. Binary
 artifacts (JLLs) pulled transitively by Julia packages are acceptable; importers for
 foreign model formats (e.g. MorpheusML, PIFF) are allowed if written in pure Julia.
+
+## D-031 Legacy-spec adjudication (2026-09-29)
+Decision: `research/legacy-spec-adjudication.md` is adopted. Fixes F1–F13 (RNG key and
+generation, stable stream hashes, checkerboard claim sets and write footprint, medium
+never claimed, non-finite ΔH status, 1 MCS = N attempts, Float32 default everywhere,
+per-kind extinction default `:retire`, deferred creations on capacity exhaustion,
+exact-lookup `sol(t)`, tolerance-based ΔH self-check) are applied to INTERNALS.md.
+Adopted features are scheduled in ROADMAP.md. Rejections are recorded with reasons.
+Supersedes D-007 (scalar defaults) and the `attempts_per_site` parts of D-008/AUTHORING.

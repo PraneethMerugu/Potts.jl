@@ -39,9 +39,11 @@ struct CPMState{N, S, C, M, F, H, R}
 end
 ```
 
-- Cell ids are dense `1:capacity`. `generation[c]` disambiguates reused ids. Capacity
-  grows only at an MCS boundary, on the host, by reallocation (types unchanged, so no
-  recompilation).
+- Cell ids are `1:capacity`, reused lowest-first from the MCS after retirement.
+  `generation[c]` disambiguates reused ids. Capacity is preallocated (`max_cells`,
+  default 2 × initial + 64). Exhaustion defers that MCS's creations (the cell stays
+  eligible), counts them in `stats`, and the host grows capacity at the next sync point
+  (types unchanged, so no recompilation).
 - Generated code accesses state by name: `st.cell.volume[c]`, `st.site.activity[i]`.
   `getproperty` on a `NamedTuple` is resolved at compile time, so this is flat.
 
@@ -90,54 +92,66 @@ produces the same type: zero compilation.
 ### 1.4 RNG — address-keyed Philox4x32-10
 
 ```
-key     = (seed ⊕ replica ⊕ repeat) hashed to 2×UInt32
-counter = (mcs::UInt32, phase_round::UInt32, entity::UInt32, (stream << 24) | draw)
+key     = philox_hash(tag, seed::UInt64, replica::UInt32, repeat::UInt32)   # 2×UInt32
+counter = (mcs::UInt32,
+           entity::UInt32,          # site index, or (cell id << 8 | generation & 0xff)
+           stream::UInt32,          # 32-bit hash of a namespaced operation key
+           local::UInt32)           # round(8) | substep(8) | draw(8) | retry(8)
 ```
 
-- `stream` is an 8-bit id assigned by codegen to every distinct random operation in the
-  model (direction, acceptance, priority, each authored `draw`, lifecycle side, …), from
-  a namespaced operation key. `draw` indexes repeated draws inside one operation.
-- `entity` is the site linear index, cell id or attempt counter depending on the stream.
-- Nothing depends on thread order or launch order → same seed reproduces a run on a
-  given backend (free; not a published guarantee, D-029).
+- `stream` hashes a stable namespaced operation key, so editing one term never
+  renumbers another. Collisions are rejected at compile time. Built-in streams
+  (direction, acceptance, priority, color order, initialization) are reserved.
+- Cell-addressed draws include the generation, so a reused id never replays a dead
+  cell's randomness.
+- Nothing depends on thread order or launch order. The same seed reproduces a run on
+  a given backend; this is free, and not a published guarantee (D-029).
+- Bounded integer draws use Lemire multiply-shift. Uniforms are grid midpoints in (0,1).
+- The requested `tspan` must fit the 32-bit MCS field (checked at `init`).
 - 4x32 rather than the old 4x64: 32-bit multiplies are native on every GPU.
 
 ### 1.5 Algorithms
 
-**`SequentialCPM(; attempts_per_site = 1)`** — host loop, random target site, random
-source direction; the fidelity reference.
+**`SequentialCPM()`** — host loop; one MCS = N attempts with replacement over mutable
+sites; random source direction from the proposal relation (out-of-domain directions
+are counted null attempts); the fidelity reference.
 
-**`CheckerboardCPM(; attempts_per_site = 1)`** — KA kernels, CPU or GPU.
+**`CheckerboardCPM()`**: KernelAbstractions kernels, on CPU or GPU.
 
-- Coloring stride per axis `s = r + 1`, where `r = footprint.max_read_radius`, the
-  largest lattice distance any generated function reads from a target. Moore contact
-  only → `r = 1`, `s = 2`, 4 colors in 2D. Act with neighborhood-of-source → `r = 2`,
-  `s = 3`. If `n % s != 0` on a periodic axis, `s` is raised to the next divisor (or the
-  axis gets an extra remainder color class).
-- Per color: **2 launches**.
-  1. `propose!`: draw direction, build `prop`, `constraint`, `delta_H`, Metropolis
-     accept, then claim both cells with `atomic max` of a unique priority
-     (random high bits | color-local index).
-  2. `commit!`: if the proposal won both claims, run the generated `commit!` and clear
-     the alternate claim buffer.
-  Claims guarantee each cell changes at most once per color, so ΔH is exact and the
-  tracker updates need no atomics.
-- Same-color targets are ≥ `s` apart, so no target lies inside another's read
-  footprint. Sources are read-only. This makes contact and site-domain ΔH exact.
-- Dynamics differ from sequential (mutual maxima); documented and tested
-  statistically.
+- **One MCS = N copy attempts**, where N counts mutable sites. Each MCS visits every
+  mutable site once, in color order.
+- **Footprint.** Compile-time analysis gives, per generated function:
+  - `r_read`: the largest lattice distance read from the target;
+  - `r_write`: the largest distance written by `commit!`/`@on_copy`;
+  - the **claim set**: every cell whose quantities ΔH or `commit!` read. That is the
+    old and new owner, plus linked partners, and neighbor cells whose quantities
+    appear in contact terms.
 
-**Metropolis** uses native `exp` (fast math allowed); CPU/GPU agreement is
-statistical (D-029). The acceptance test is `u < exp(-ΔH/T)` with `ΔH ≤ 0`
-short-circuited.
+  Stride per axis is `s = r_read + r_write + 1`. An indivisible periodic axis gets a
+  remainder color class. Moore contact with no neighbor writes gives `s = 2`, i.e. 4
+  colors in 2D.
+- **Per color, 2 launches:**
+  1. `propose!`: draw a direction, build `prop`, check `constraint`, compute
+     `delta_H`, then Metropolis accept. If accepted, claim every **finite** cell in the
+     claim set with `atomic max` of a unique priority (random high bits | canonical
+     color-local index). Medium and obstacle domains are never claimed.
+  2. `commit!`: if the proposal won every claim, run the generated `commit!`. Also
+     clear the alternate claim buffer.
+- **Why this is correct.** Claims guarantee each claimed cell changes at most once
+  per color, and same-color targets lie outside each other's read/write footprints.
+  So ΔH is exact for every term the footprint analysis can bound. Models with terms
+  that cannot be bounded (for example exact global connectivity) are **rejected at
+  `init`** for checkerboard, and run on `SequentialCPM`.
+- **Accept-then-claim** is intentional: it yields more accepted copies per color than
+  claim-then-accept. It is an approximate parallel dynamic, documented and validated
+  statistically against sequential.
 
 ### 1.6 The MCS schedule
 
 ```
 for each MCS:
   phases.before_mcs          (LocalMath stages)
-  for round in 1:attempts_per_site
-      for color in permuted colors: propose! ; commit!
+  for color in permuted colors (one permutation per MCS): propose! ; commit!
   phases.after_mcs           (synchronous site/cell updates, field steps, history push)
   lifecycle (device-gated)   (see 1.7)
   relationships rebuild      (only if relationships exist and something changed)
@@ -147,8 +161,8 @@ for each MCS:
 - **No host synchronization inside the loop.** Everything is enqueued; the integrator
   synchronizes only at save points, on `integrator.u` access, at the end, or when a
   callback needs host state.
-- A device `status` word (UInt32 bitflags) records capacity overflow and invariant
-  violations. It is read at every synchronization; a nonzero status ends the solve with
+- A device `status` word (UInt32 bitflags) records non-finite ΔH, invariant
+  violations and deferred creations. It is read at every synchronization; a nonzero status ends the solve with
   `ReturnCode.Failure` and the MCS index. Phases validate before they write, so a
   failing MCS leaves the previous boundary state intact.
 
@@ -190,8 +204,9 @@ applied at the boundary.
 ### 1.10 Backends
 
 `backend = CPU()` / `MetalBackend()` / `CUDABackend()` passed directly. `init` adapts
-arrays with `Adapt`. Sequential requires `CPU()`. Scalar type defaults to `Float64` on
-CPU and `Float32` on GPU.
+arrays with `Adapt`. Sequential requires `CPU()`. The scalar type defaults to `Float32`
+on every backend; a model or solve may declare `Float64`, and a backend that cannot
+provide it errors rather than narrowing (F9).
 
 ## 2. Potts — symbolic layer
 
@@ -343,3 +358,9 @@ means, predicate filters, interface queries — all `Reduce`/`KeyedReduce` stage
 - Every pass-through of a function argument is `::F where {F}`.
 - Every generated function is `drop_expr`'d.
 - SciML formatter style; ExplicitImports clean.
+
+## 6. Amendments from the legacy-spec adjudication
+
+`research/legacy-spec-adjudication.md` is authoritative where it is more specific than
+this document. §1 of that file (F1–F13) is already applied above; §2 semantics and §3
+features are scheduled in ROADMAP.md.
