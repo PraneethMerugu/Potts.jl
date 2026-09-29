@@ -139,3 +139,39 @@
   - Site-sum and site-minimum invariants.
 - **GPU group** (`COREPOTTS_GPU=metal`, 86 checks). Surface, volume and moment trackers are
   exact on Metal. CPU/Metal statistical parity: t = −0.49 on 12 + 12 seeds.
+
+## 2026-09-29 — M2.3 and D-033 (commit 6fd6998)
+
+- **D-033.** Measured LocalMath against plain KA on one 5-point Laplacian at 256²:
+
+  | | first execution | warm |
+  |---|---|---|
+  | LocalMath | 8.2 s | 1.77 ms |
+  | plain KA | 0.16 s | 0.31 ms |
+
+  CorePotts phases are therefore generated KA kernels, and CorePotts does not depend on
+  LocalMath. LocalMath stays as an optional stage runtime, wrapped as a phase. INTERNALS
+  §3 is amended.
+- **Phases** (`phases.jl`). The protocol is `phase(st, p, ctx, key, mcs, backend)`,
+  enqueued without host sync, with launches counted in `stats`. Built-in kinds:
+  `SitePhase`, `CellPhase`, `CopyPhase` (double-buffer publish), and `HistoryPush` (ring
+  buffers; `history_slot(depth, mcs, lag)`). `Phases(before_mcs, after_mcs)` lives in
+  `CPMFunction.phases`.
+  - State paths are compile-time `Part{A,B}` accessors, one pair per phase. A
+    heterogeneous tuple of pairs defeated inference ("failed to optimize due to
+    recursion").
+- **State.** `CPMState` gains `history`. `initial_state` validates site shapes, the cell
+  last dimension and 1-element model arrays. `clear_on_copy!` provides the
+  accepted-copy affect.
+- **Bugs fixed:**
+  - Saved states aliased the live state on CPU, because `Adapt.adapt(Array, ::Array)` is
+    the identity. `current_state` now deep-copies on CPU. Snapshot regression tests added.
+  - Kernels received the whole `CPMFunction`, which is not isbits once phases or a
+    symbolic `sys` are present. They now receive `DeviceFunctions` (the five
+    per-proposal functions).
+- **Tests.**
+  - The Jacobi site update equals a host reference exactly, under both algorithms.
+  - Phase randomness is address-keyed, and equal to host draws.
+  - Cell-phase growth, history lags, and the clear-on-copy age invariants (checked with a
+    per-site copy counter).
+  - Metal phases ≈ CPU. JET is clean on `step!` with phases.
