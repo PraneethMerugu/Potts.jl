@@ -744,3 +744,53 @@ end
         components = [Potts.ComponentSpec(:clock, clock, Potts.CellDomain(Int[]))],
         equations = [Potts.Symbolics.variable(Symbol("clock₊nope")) ~ 1.0]))
 end
+
+# First-class 3D: the same surface, N-generic generated code.
+@potts_model Sorting3D begin
+    @kinds medium dark light
+    @parameters begin
+        λ = 1.0
+        V₀ = 64.0
+        λₛ = 0.01
+        S₀ = 430.0                         # a 4³ cube has 432 NeighborOrder(2) bonds
+        T = 12.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @variables begin
+        c(field) = 0.0
+        mass(cell) = 1.0
+    end
+    @lattice Lattice((24, 24, 24); boundary = Closed(), neighborhood = NeighborOrder(2),
+        domain = x -> sum(abs2, x .- 12.5) <= 11.5^2)
+    @energy begin
+        cells(dark, light) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
+        contacts => J[kind, kind′]
+    end
+    @drive copy => -2.0 * (c[target] - c[source]) * (kind[new] == dark)
+    @equations D(c) ~ 0.1 * Δ(c) + 0.05 * (kind == dark) - 0.01 * c
+    @divide cells(dark) when = (mcs == 3) && (volume >= 40), along = principal_axis(), mass => Split()
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "3D models" begin
+    σ = zeros(Int32, 24, 24, 24)
+    n = 0
+    for i in 8:5:13, j in 8:5:13, k in 8:5:13
+        n += 1
+        σ[i:(i + 3), j:(j + 3), k:(k + 3)] .= n
+    end
+    kinds = [isodd(c) ? :dark : :light for c in 1:n]
+    prob = PottsProblem(Sorting3D(; name = :s3), [ownership => σ, kind => kinds], (0, 6))
+    @test ndims(prob.lattice) == 3 && length(prob.contact) == 18                      # NeighborOrder(2) in 3D
+    @test selfcheck(prob) < 1e-9
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        u = solve(prob, alg).u[end]
+        live = findall(>(0), u.cell.volume)
+        @test length(live) > n                                                      # dark cells divided in 3D
+        @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+        @test u.cell.surface ≈ CorePotts.recompute_surface(u.σ, prob.lattice, prob.relations.surface, length(u.cell.volume);
+            T = eltype(u.cell.surface))
+        @test sum(u.cell.mass[live]) ≈ n
+        @test all(u.σ[.!prob.lattice.mask] .== 0)
+    end
+end

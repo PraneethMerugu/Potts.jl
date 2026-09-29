@@ -582,3 +582,16 @@
   - The coupled clock is exact and resets on division.
   - Kind scoping, `remake` of component parameters, and `sol[:decay₊y_c]`.
   - JET QA of the component kernel, and Float32 RK4 on Metal.
+
+## 2026-09-29 — 3D through the authoring surface; generated-code benchmark
+
+- The `Sorting3D` test model runs on a 24³ lattice. It has:
+  - a ball domain;
+  - `NeighborOrder(2)` contacts (18 neighbours) and a surface energy;
+  - a chemotaxis drive on a 3D field;
+  - division along the principal axis with mass split.
+- Its energy self-check is exact. Sequential and checkerboard runs keep exact volume and
+  surface trackers, and nothing leaves the domain.
+- Generated vs hand-written Graner–Glazier is recorded in `benchmark/README.md`: within
+  6% at 72² and equal or faster at 288².
+- Kind filters naming every cell kind are dropped at compile time.
