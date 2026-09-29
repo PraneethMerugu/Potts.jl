@@ -738,3 +738,22 @@
 - Rejected with a remedy: lags of cell variables (rings do not follow capacity growth or
   division; chain `Pre`), and lags in energies (no clock) and `@observed` (the saved-state
   clock would be off by one).
+
+## 2026-09-29 — Per-cell site reductions `integral(x)` (M3.4)
+
+- `integral(x)` is a cell-scope sum of a site expression over the cell's sites.
+  - Each distinct `x` gets a cell array `integral_<hash>`, filled by
+    `CorePotts.CellReduce` (atomic adds; GPU-safe).
+  - The reduce runs first in the after-MCS phases, first in the before-MCS phases when
+    they read it, and once on the host at problem construction.
+- Recompute versus maintain: `commit_site_sum!` is exact only if site values change
+  solely through copies. Updates, fields and on-copy writes break that, so the compiler
+  always recomputes at the boundary. That is one pass over the sites, and it keeps
+  energies and drives free of the term, which is why they reject it.
+- Observed-scope detection treats `integral(…)` as a cell quantity, whatever site
+  variables it sums.
+- Tests:
+  - Exact against brute force after every MCS, under sequential and checkerboard sweeps.
+  - Mean and count forms; `integral(1) == volume`.
+  - Valid at t0; energies and drives rejected.
+  - QA list; Metal Float32.

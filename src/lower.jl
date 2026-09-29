@@ -53,6 +53,10 @@ function lower(x, env::LowerEnv)
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
         return :(Potts._displacement_axis($(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k))
     end
+    if op === cell_integral
+        haskey(env.bind, :__cell) || error("`integral(x)` is per cell: use it in cell updates, division conditions or observed quantities")
+        return :(Potts._cellval(st.cell.$(_integral_name(args[1])), $(env.bind[:__cell])))
+    end
     if op === history_lag
         haskey(env.bind, :mcs) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
         _walk(args[1]) do y
@@ -137,6 +141,22 @@ end
     return _LagView(ring, (CorePotts.history_slot(depth, Int(mcs), k) - 1) * (length(ring) ÷ depth))
 end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
+
+"""Distinct site expressions `x` of `integral(x)` in the model's statements."""
+function _integrals(sys::PottsSystem)
+    out = Any[]
+    xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+        (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature]
+    for x in xs
+        _walk(x) do y
+            iscall(y) && operation(y) === cell_integral || return
+            a = _unwrap(arguments(y)[1])
+            any(z -> isequal(z, a), out) || push!(out, a)
+        end
+    end
+    return out
+end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
 _history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,

@@ -240,9 +240,18 @@ end
 # ---------------------------------------------------------------------------------------
 # Phases: synchronous updates, field equations, per-cell ODEs
 
+"""One `CellReduce` per `integral(x)`: the site expression `x` summed over each cell."""
+function _integral_phases(c::CompiledPottsSystem, T)
+    env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
+    return Any[CorePotts.CellReduce((:cell, _integral_name(x)), _rgf(:((st, p, ctx, key, mcs, i) -> $(lower(x, env)))))
+               for x in _integrals(c.sys)]
+end
+
 function _phases(c::CompiledPottsSystem, T, values)
     rn = c.gather_names
-    before = Any[]; after = Any[]
+    integrals = _integral_phases(c, T)
+    before = Any[]; after = Any[integrals...]
+    any(u -> u.phase === :before_mcs && _has_op(u.eq.rhs, cell_integral), c.sys.updates) && append!(before, integrals)
     for ((phase, scope), us) in sort!(collect(c.updates); by = x -> string(x[1]))
         phase === :on_copy && continue
         dst = phase === :before_mcs ? before : after

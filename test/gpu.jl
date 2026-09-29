@@ -64,4 +64,11 @@ using Statistics: mean, var
     ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
         CheckerboardCPM(); backend).u[end]
     @test Array(ul.model.lag3) == Float32[4] && all(==(-1), Array(ul.site.wlag))
+    # integral(x): atomic per-cell reductions on the device
+    σi = zeros(Int32, 20, 20); σi[3:6, 3:6] .= 1; σi[12:15, 12:15] .= 2
+    wi = [Float32(i + j) / 40 for i in 1:20, j in 1:20]
+    ui = solve(PottsProblem(Integrals(; name = :i), [ownership => σi, kind => [1, 1], :w => wi], (0, 5); T = Float32),
+        CheckerboardCPM(); backend).u[end]
+    σh = Array(ui.σ)
+    @test Array(ui.cell.mass) ≈ [sum(wi[σh .== k]) for k in 1:2]
 end

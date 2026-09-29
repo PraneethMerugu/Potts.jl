@@ -13,7 +13,9 @@ using JET, AllocCheck, Aqua
         ("persistent", () -> (σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
             remake(PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 5)); p = [:μ => 500.0]))),
         ("lags", () -> (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
-            PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5)))))
+            PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5)))),
+        ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
+            PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))))
     prob = make()
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
     step!(integ)

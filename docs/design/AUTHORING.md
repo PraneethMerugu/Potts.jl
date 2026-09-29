@@ -547,6 +547,18 @@ end
   boundary, so there is no hot-path cost.
 - Reductions over a cell's sites (`sum`, `mean`, `integral`, `maximum`, …) and over
   populations are maintained or recomputed at the boundary as the compiler decides.
+  **Implemented: `integral(x)`.**
+  - It is the sum of the site expression `x` over the cell's sites, in cell scope:
+    updates, equations, division conditions and rules, observed quantities, and the
+    temperature.
+  - For a mean, divide by `volume`. For a count, use `integral(x > θ)`.
+  - Each distinct integral gets one cell array, recomputed by an atomic `CellReduce`
+    kernel at the start of the after-MCS phases, so it reflects the state after the copy
+    sweep. It is recomputed before the before-MCS phases too, when they read it.
+  - It is filled at problem construction, so it is valid at t0.
+  - It is not maintained through copies: site values also change through updates and
+    fields, so a maintained sum would drift, and a recompute costs one pass over the
+    sites. For the same reason it is rejected in energies and drives.
 
 ### 12.4 Shape descriptors (CompuCell3D definitions)
 

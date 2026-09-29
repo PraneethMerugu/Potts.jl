@@ -69,6 +69,9 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         fingerprint = hash((string.(exprs), core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T)),
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
             hctx, Dict{Any, Any}()))
+    # integrals start valid: fill them on the host once
+    key = CorePotts.RNGKey(seed, replica, repeat)
+    foreach(ph -> ph(st, p, hctx, key, tspan[1], CorePotts.CPU()), _integral_phases(c, T))
     frozen = _frozen_mask(sys, st)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, frozen, seed, replica, repeat)
@@ -172,6 +175,9 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         elseif i.role === :model
             push!(model, i.name => fill(T(v), 1))
         end
+    end
+    for x in _integrals(sys)
+        push!(cell, _integral_name(x) => zeros(T, ncell))
     end
     if c.uses_surface
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))

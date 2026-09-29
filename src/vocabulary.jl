@@ -107,6 +107,17 @@ scope: drives and on-copy updates, e.g. persistent motion
 """
 _displacement(c, k::Integer) = copy_displacement(c, Num(k))
 
+"""
+`integral(x)`: the sum of the site expression `x` over the cell's sites (cell scope; divide
+by `volume` for the mean). Recomputed at the start of the after-MCS phases (and of the
+before-MCS phases when they read it), so it reflects the state after the copy sweep.
+"""
+cell_integral(x) = error("`integral` is symbolic-only")
+Symbolics.@register_symbolic cell_integral(x)
+"""Cell-state name of the tracker for `integral(x)`."""
+_integral(x) = cell_integral(x isa Num ? x : Num(x))
+_integral_name(x) = Symbol(:integral_, string(hash(Symbolics.unwrap(x)); base = 62))
+
 """`history_lag(x, k)`: `x` at the end of the MCS `k` before the current one."""
 history_lag(x, k) = error("`history_lag` is symbolic-only")
 Symbolics.@register_symbolic history_lag(x, k)
@@ -428,7 +439,7 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand,
-    centroid = _centroid, displacement = _displacement, geomean, geomean_shifted, mean, Δ)
+    centroid = _centroid, displacement = _displacement, integral = _integral, geomean, geomean_shifted, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

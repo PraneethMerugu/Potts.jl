@@ -54,7 +54,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
   Accept: `ΔH == H(after) − H(before)` on random flips for every model in `lib/PottsModels`.
 - [x] 2026-09-29 (EnsembleProblem, callbacks, parity from lib/PottsModels sources; `eval_module` unnecessary: generated code interpolates function objects, user-registered functions tested) **M3.3** codegen → `CPMFunction`; `PottsProblem(sys, op, tspan)`; `PottsParameters`; SII; `remake`; `EnsembleProblem`; callbacks; `expression = Val(true)`; `eval_module`.
   Accept: every Phase 2 oracle test re-run through symbolic authoring; `remake` zero compile; Graner/Wortel/Merks/OpenVT from `lib/PottsModels` sources.
-- [ ] **M3.4** component imports and structural replacement, scoped quantities, logical vector parameters, symbolic setters (done: b36f410), history lags `Pre(x, k)` (done), one-block declaration, compound assignments, diagnostics with expression + remedy.
+- [ ] **M3.4** component imports and structural replacement, scoped quantities, logical vector parameters, symbolic setters (done: b36f410), history lags `Pre(x, k)` (done), per-cell site reductions `integral(x)` (done), one-block declaration, compound assignments, diagnostics with expression + remedy.
 
 ## Phase 4 — Coupling and models
 

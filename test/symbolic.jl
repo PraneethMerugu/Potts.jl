@@ -1099,3 +1099,50 @@ end
         @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
     end
 end
+
+@potts_model Integrals begin
+    @kinds medium A
+    @variables begin
+        w(site) = 0.0
+        mass(cell) = 0.0
+        hot(cell) = 0.0
+        n(model) = 0.0
+    end
+    @lattice Lattice((20, 20))
+    @energy cells => (volume - 16)^2
+    @after_mcs begin
+        mass ~ integral(w)
+        hot ~ integral(w > 0.5) / volume
+        n ~ Pre(n) + 1
+    end
+    @observed begin
+        cmass(cell) ~ integral(w)
+        occupied(cell) ~ integral(1)
+    end
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+@testset "integral(x): per-cell site reductions" begin
+    σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
+    w0 = [Float64(i + j) / 40 for i in 1:20, j in 1:20]
+    p = PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1, 1], :w => w0], (0, 5))
+    @test p[:cmass] ≈ [sum(w0[σ .== k]) for k in 1:2] && p[:occupied] == [16, 16]   # valid at t0
+    sol = solve(p, SequentialCPM(); saveat = 0:5)
+    for u in sol.u[2:end]
+        @test u.cell.mass ≈ [sum(w0[u.σ .== k]) for k in 1:2]
+        @test u.cell.hot ≈ [count(>(0.5), w0[u.σ .== k]) / count(==(k), u.σ) for k in 1:2]
+    end
+    @test sol[:occupied][end] == sol.u[end].cell.volume                              # integral(1) == volume
+    uc = solve(p, CheckerboardCPM()).u[end]
+    @test uc.cell.mass ≈ [sum(w0[uc.σ .== k]) for k in 1:2]
+    for body in (:(@energy cells => integral(w)), :(@drive copy => integral(w)))
+        m = eval(:(@potts_model _BadIntegral begin
+            @kinds medium A
+            @variables w(site) = 0.0
+            @lattice Lattice((8, 8))
+            $(body)
+            @sweep Metropolis(; temperature = 1.0)
+        end))
+        @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
+    end
+end

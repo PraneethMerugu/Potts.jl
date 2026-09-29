@@ -22,6 +22,10 @@ end
 
 function _observed_scope(x)
     x, _ = _strip_populations(_unwrap(x))
+    # an integral is a cell quantity, whatever site expression it sums
+    calls = Dict{Any, Any}()
+    _walk(y -> (iscall(y) && operation(y) === cell_integral && (calls[y] = _unwrap(B.volume))), x)
+    isempty(calls) || (x = _unwrap(Symbolics.substitute(x, calls; fold = Val(false))))
     scope = _has_op(x, cell_centroid) ? :cell : :model
     for v in _bare_vars(x)
         r = info(v).role

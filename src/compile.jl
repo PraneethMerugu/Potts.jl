@@ -507,6 +507,11 @@ function _check_geometry(x, N; energy = false)
     _walk(x) do y
         iscall(y) || return
         op = operation(y)
+        if op === cell_integral
+            energy && throw(ArgumentError("`integral` is not available in energies (it is refreshed once per MCS, " *
+                                          "so it has no ΔH); write the site term in the energy instead"))
+            return
+        end
         (op === cell_centroid || op === copy_displacement) || return
         name = op === cell_centroid ? "centroid" : "displacement"
         energy && throw(ArgumentError("`$name` is not available in energies (the copy's centroid shift " *
