@@ -1,0 +1,6 @@
+[deps]
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Test = "1"
