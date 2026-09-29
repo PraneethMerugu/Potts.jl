@@ -36,3 +36,18 @@ BenchmarkTools median ns per site per MCS, Apple M1 Pro:
 
 The generated ΔH is one fused contact loop plus the expanded volume delta. The remaining
 ~6% on small lattices is within per-call overhead and has not been chased further.
+
+### Time to first MCS per published model (fresh process, warm package cache, 2026-09-29)
+
+`julia --project=lib/PottsModels/test /tmp/ttfx_models.jl <model>` (build = `PottsProblem`
+from the `@potts_model` constructor, including `mtkcompile` and code generation):
+
+| model | `using Potts, PottsModels` | build | first sequential MCS | first checkerboard MCS |
+|---|---|---|---|---|
+| Graner–Glazier 72² | 4.6 s | 2.9 s | 0.5 s | 0.7 s |
+| Wortel Act 150² | 4.8 s | 3.0 s | 1.0 s | 0.7 s |
+| Merks 100² | 4.8 s | 2.6 s | 1.0 s | 1.0 s |
+| OpenVT monolayer | 4.8 s | 3.3 s | 2.1 s | 1.0 s |
+| Akeeb invasion 99×60 | 4.6 s | 3.7 s | 2.2 s | 1.2 s |
+
+Legacy Graner–Glazier: build 5.9 s, first 320-MCS solve 27.4 s (mostly compilation).
