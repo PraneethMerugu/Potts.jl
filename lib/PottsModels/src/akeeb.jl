@@ -43,7 +43,7 @@ Use `akeeb_state` for the published initial slab.
         contacts => J[kind, kind′]
     end
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
-    @constraint connectivity(leader, follower)
+    @constraint connectivity(leader, follower; rule = :merks)   # legacy LocalConnectivity: the Merks (2006) ring rule
     @constraint no_extinction
     @after_mcs begin
         V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))

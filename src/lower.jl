@@ -46,7 +46,7 @@ function lower(x, env::LowerEnv)
     if op === cell_centroid
         haskey(env.bind, :__cell) || error("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities")
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
-        return :(CorePotts.centroid($(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]))[$k])
+        return :(Potts._centroid_axis($(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]), $k))
     end
     if op === copy_displacement
         env.mode === :proposal || error("`displacement(c, k)` is only available in drives and on-copy updates")
@@ -107,10 +107,16 @@ function _lower_named(x, i::Info, env::LowerEnv)
     error("cannot lower `$x` (role $r)")
 end
 
+"""Centroid of cell `c` along axis `k` (0 for the medium and empty slots)."""
+@inline function _centroid_axis(::Type{T}, cell, lat, c, k) where {T}
+    (c == 0 || cell.volume[c] == 0) && return zero(T)
+    return CorePotts.centroid(T, cell, lat, Int(c))[k]
+end
+
 """Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or new cell)."""
 @inline function _displacement_axis(::Type{T}, cell, lat, prop, c, k) where {T}
     (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
-    return @inbounds CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1)[k]
+    return CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1)[k]
 end
 
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""

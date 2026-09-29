@@ -1034,3 +1034,23 @@ end
     step!(ic)
     @test ic[:n] == 11
 end
+
+@testset "centroid/displacement/rand review regressions" begin
+    _bad(body) = eval(:(@potts_model _Bad begin
+        @kinds medium A
+        @variables cz(cell) = 0.0
+        @lattice Lattice((8, 8))
+        $(body)
+        @sweep Metropolis(; temperature = 1.0)
+    end))
+    bad(body) = Base.invokelatest(_bad(body); name = :b)
+    @test_throws ArgumentError mtkcompile(bad(:(@drive copy => -displacement(new, 3))))   # 2D: no axis 3
+    @test_throws ArgumentError mtkcompile(bad(:(@after_mcs cz ~ centroid(3))))
+    @test_throws ArgumentError mtkcompile(bad(:(@energy cells => 100 * (centroid(1) - 5)^2)))
+    @test_throws ArgumentError mtkcompile(bad(:(@observed r ~ rand())))
+    # empty cell slots observe a zero centroid, not NaN
+    σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1
+    p = PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 2); capacity = 4)
+    x = solve(p, SequentialCPM())[:x][end]
+    @test length(x) == 4 && x[2:4] == zeros(3) && !any(isnan, x)
+end

@@ -427,6 +427,7 @@ _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
 _describe(d::DivideRule) = "@divide $(_domain_string(d.domain)) when = $(d.when)"
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship) when = $(r.when)"
+_describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
 # finds (a site variable without a site, a cell variable indexed by a site, …) surface at
@@ -478,6 +479,39 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     end
     for r in sys.link_rules
         _located(() -> lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)), sys, r)
+    end
+    # geometry axes, and names the lowering environments cannot rule out
+    N = length(sys.lattice.dims)
+    for e in sys.energies
+        _located(() -> _check_geometry(e.expr, N; energy = true), sys, e)
+    end
+    for (x, items) in ((d -> d.expr, sys.drives), (c -> c.kind === :expr ? c.expr : 0, sys.constraints),
+            (u -> u.eq.rhs, sys.updates), (eq -> eq.rhs, sys.equations),
+            (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], sys.divisions))
+        foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N), vcat(x(i))), sys, i), items)
+    end
+    for o in sys.observed
+        _located(sys, o) do
+            _check_geometry(o.expr, N)
+            _has_op(o.expr, random_uniform) &&
+                throw(ArgumentError("`rand()` is not available in @observed (observed quantities are pure functions of the state)"))
+        end
+    end
+    return nothing
+end
+
+"""Axes of `centroid`/`displacement` must be lattice axes; `centroid` has no ΔH in energies."""
+function _check_geometry(x, N; energy = false)
+    _walk(x) do y
+        iscall(y) || return
+        op = operation(y)
+        (op === cell_centroid || op === copy_displacement) || return
+        name = op === cell_centroid ? "centroid" : "displacement"
+        energy && throw(ArgumentError("`$name` is not available in energies (the copy's centroid shift " *
+                                      "is not part of ΔH); use `displacement(c, k)` in a @drive"))
+        k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[end]))
+        (k isa Real && isinteger(k) && 1 <= k <= N) ||
+            throw(ArgumentError("`$name`: axis $k is not an axis of the $(N)D lattice"))
     end
     return nothing
 end

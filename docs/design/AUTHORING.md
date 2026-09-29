@@ -287,7 +287,9 @@ checkpoint(integrator); init(prob, alg; checkpoint = ck)
 ```
 
 Operating points, `remake`, `getu`/`setp`, `observed`, ensembles and callbacks are
-MTK/SciMLBase semantics unchanged.
+MTK/SciMLBase semantics unchanged. Declared variables are SII variables: `integ[:px] = v`
+and `setu` write into the live (device) state, while built-ins are read-only. `integ.ps[:λ] = v` takes
+effect from the next MCS without recompiling; a problem's parameters change with `remake`.
 
 **Extending models (implemented).** `@extend λ, dark = base = Sorting()` works like
 MTK's `@extend`:
@@ -495,7 +497,9 @@ In `@drive`/`@bias`, in addition to `source`, `target`, `direction`:
 scope: updates, division conditions and rules, observed; periodic-safe moment trackers).
 `displacement(c, k)` is the exact shift of cell `c`'s centroid along axis `k` if the copy is
 accepted (proposal scope; `c` is `new` or `old`, zero for the medium or any other cell).
-Either one switches the moment trackers on. Persistent motion in scalars:
+Either one switches the moment trackers on. Axes are checked against the lattice at
+`mtkcompile`; `centroid` is not allowed in energies (ΔH would miss the copy's shift — use
+`displacement` in a drive) and is 0 for empty cell slots. Persistent motion in scalars:
 
 ```julia
 @variables begin px(cell) = 0.0; py(cell) = 0.0; cx(cell) = 0.0; cy(cell) = 0.0 end

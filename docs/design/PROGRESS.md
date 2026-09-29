@@ -643,7 +643,7 @@
   - The 99×60 slab has 308 cells (77 leaders), as in the SCDPotts MTK-bridge check.
     200 MCS take 2.4 s including compilation. Divisions occur with PP = 0.5 and none with
     PP = 0, as in the legacy audit.
-  - Statistical parity against the SCDPotts runner is pending.
+  - Statistical parity against the SCDPotts runner: see the entry below (Merks rule).
 
 ## 2026-09-29 — PIFF import/export (M4.4, first half)
 
@@ -677,3 +677,47 @@
     with trackers matching the host recompute.
 - Note: with an EMA polarity, μ must be large (hundreds or more), because the per-copy
   displacement is about 1/V.
+
+## 2026-09-29 — Symbolic setters (M3.4)
+
+- Declared state variables (cell, site, field, model) are now SymbolicIndexingInterface
+  variables, indexed by `CorePotts.StateIndex(scope, name)`.
+  - `integ[:px] = v`, `setu(integ, :px)(integ, v)` and `getu` all work. Built-ins such
+    as `volume`, and expressions, stay read-only observed quantities.
+  - Writes go to the live state, including device memory. `integ.u` is a host snapshot,
+    so SciMLBase's default setter, which writes to `state_values(integ)`, would have lost
+    them silently.
+  - An array value must be the same size; a number fills the array.
+- `integ.ps[:μ] = v` and `setp(integ, :μ)(integ, v)` swap in a new `PottsParameters` of
+  the same isbits type. Nothing recompiles and there is no device upload.
+  - `setp` on a problem is an error that points to `remake`.
+  - `integ.ps` had been hidden by `PottsIntegrator`'s `getproperty`; it is restored.
+- `getu`, `setu`, `getp` and `setp` are re-exported.
+- Tests on CPU and Metal cover parameters, cell and model variables, size errors, and
+  read-only built-ins.
+
+## 2026-09-29 — Review 3 (42d448f..HEAD) and Akeeb parity
+
+- Review findings, all fixed with regressions:
+  1. **Out-of-range axes.** An axis beyond the lattice dimension in `displacement` or
+     `centroid` read garbage and crashed with SIGILL. Axes are now checked at
+     `mtkcompile`, and the `@inbounds` is removed.
+  2. **`centroid` in energies.** It was silently ignored: its ΔH was always 0. It is now
+     rejected, with a pointer to `displacement` in a `@drive`.
+  3. **Empty cell slots.** `centroid` gave NaN for free slots; it now returns 0.
+  4. **`rand()` in `@observed`.** It passed `mtkcompile` and failed on the first query.
+     It is now rejected at compile time with a specific message.
+- Not a bug: the reviewer flagged that PIFF accepts a cell box over an earlier medium
+  box. That is intended, because CompuCell3D files list a whole-lattice Medium box first.
+- **Akeeb parity** (`test/parity/akeeb.jl`, now in the Potts group; about 7 s):
+  - Legacy reference: 8 SCDPotts seeds on the 99×60 lattice for 400 MCS, sampled with
+    `reference/sample_akeeb.jl` into `reference/data/akeeb_parity.tsv`. Metrics are
+    taken at MCS 200 and 400 (`reference/akeeb_metrics.jl`).
+  - The new model is run for 16 seeds, and each metric must pass a Welch t test
+    with |t| < 4.
+  - The first comparison failed on connected components (t ≈ 5.6). The port used the
+    default local connectivity rule, but legacy `LocalConnectivity` is the Merks (2006)
+    ring rule.
+  - With `rule = :merks`, every metric agrees (|t| ≤ 1.6). Divisions agreed under both
+    rules.
+  - Runtime: legacy takes about 80 s per seed, the new model about 0.2 s per seed.
