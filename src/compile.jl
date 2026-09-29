@@ -111,6 +111,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     relationship = isempty(sys.relationships) ? nothing : only(sys.relationships)
     for e in sys.energies
         d = e.domain
+        _located(sys, e) do
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
@@ -139,18 +140,22 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         else
             throw(ArgumentError("unknown energy domain $d"))
         end
+        end
     end
     drive = isempty(sys.drives) ? nothing : sum(d -> d.expr, sys.drives)
-    drive === nothing || _check_names(drive, _PROPOSAL_BUILTINS, "a drive")
+    for d in sys.drives
+        _located(() -> _check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"), sys, d)
+    end
     for c in sys.constraints
-        c.kind === :expr && _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint")
+        c.kind === :expr && _located(() -> _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint"), sys, c)
     end
 
     # updates by phase and scope
     updates = Dict{Tuple{Symbol, Symbol}, Vector{Update}}()
     for u in sys.updates
         lhs = _unwrap(u.eq.lhs)
-        scope = if u.phase === :on_copy
+        scope = _located(sys, u) do
+        if u.phase === :on_copy
             (iscall(lhs) && operation(lhs) === at) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
             _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
             :proposal
@@ -161,6 +166,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
             i.role === :field ? :site : i.role
         end
+        end
         push!(get!(updates, (u.phase, scope), Update[]), u)
     end
 
@@ -168,6 +174,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     fields = Tuple{Any, Any}[]
     cell_odes = Tuple{Any, Any}[]
     for eq in sys.equations
+        _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) ||
             throw(ArgumentError("equations are `D(x) ~ rhs`; got $eq"))
@@ -183,17 +190,21 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         else
             throw(ArgumentError("model-scope equations are not supported yet"))
         end
+        end
     end
     for d in sys.divisions
-        _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true)
+        _located(() -> _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true),
+            sys, d)
     end
     cluster_division = any(d -> d.domain isa ClusterDomain, sys.divisions)
     cluster_division && !all(d -> d.domain isa ClusterDomain, sys.divisions) &&
         throw(ArgumentError("a model divides either cells or clusters; mix of @divide cells(…) and clusters(…)"))
     for r in sys.link_rules
-        (relationship !== nothing && relationship.name === r.relationship) ||
-            throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
-        _check_names(r.when, _LINK_BUILTINS, "a link rule"; between_copies = true)
+        _located(sys, r) do
+            (relationship !== nothing && relationship.name === r.relationship) ||
+                throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
+            _check_names(r.when, _LINK_BUILTINS, "a link rule"; between_copies = true)
+        end
     end
     for x in sys.variables
         info(x).role === :edge && relationship === nothing &&
@@ -268,6 +279,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for (x, _) in fields
         push!(scratch, info(x).name)
     end
+
+    _dry_lower(sys, gather_names, fields, cell_odes)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         sys.constraints, updates, fields, cell_odes, sys.divisions, relationship, edge_terms,
@@ -366,4 +379,83 @@ function _nops(x)
     n = Ref(0)
     _walk(y -> (iscall(y) && (n[] += 1)), x)
     return n[]
+end
+
+# ---------------------------------------------------------------------------------------
+# Diagnostics: errors name the offending statement and where it was written
+
+_source!(d, x, ln) = (ln isa LineNumberNode && (d[x] = ln); x)
+
+"""Run `f()`; an error it raises is re-raised naming statement `x` and its source line."""
+function _located(f, sys::PottsSystem, x)
+    try
+        return f()
+    catch e
+        e isa Union{ArgumentError, ErrorException} || rethrow()
+        occursin("\n  in ", e.msg) && rethrow()
+        ln = get(sys.sources, x, nothing)
+        loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
+        throw(ArgumentError("$(e.msg)\n  in $(_describe(x))$loc"))
+    end
+end
+
+# descriptions are built only when reporting (printing symbolic expressions is slow)
+_describe(e::EnergyTerm) = "@energy $(_domain_string(e.domain)) => $(e.expr)"
+_describe(d::Drive) = "@drive copy => $(d.expr)"
+_describe(c::Constraint) = "@constraint $(c.expr)"
+_describe(u::Update) = "@$(u.phase) $(u.eq)"
+_describe(eq::Equation) = "@equations $eq"
+_describe(d::DivideRule) = "@divide $(_domain_string(d.domain)) when = $(d.when)"
+_describe(r::LinkRule) = "@$(r.action) $(r.relationship) when = $(r.when)"
+
+# Lower every statement once, in the scope it will be generated in, so errors that lowering
+# finds (a site variable without a site, a cell variable indexed by a site, …) surface at
+# `mtkcompile` with their source instead of while building a problem.
+function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
+    T = Float64
+    cellenv = _cell_env(T, :c, rn; mcs = :mcs)
+    for e in sys.energies
+        _located(sys, e) do
+            d = e.domain
+            d isa CellDomain ? lower(e.expr, _cell_env(T, :c, rn)) :
+            d isa ClusterDomain ? lower(e.expr, _cluster_env(T, :r, rn)) :
+            d isa ContactDomain ? lower(_cellvars_at_owner(e.expr), _contact_env(T, :a, :ka, :n, :kn, :w, :i, rn)) :
+            d isa SiteDomain ? lower(e.expr, _site_env(T, :i, rn)) :
+            d isa EdgeDomain ? lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn)) : nothing
+        end
+    end
+    for d in sys.drives
+        _located(() -> lower(d.expr, _proposal_env(T, rn)), sys, d)
+    end
+    for c in sys.constraints
+        c.kind === :expr && _located(() -> lower(c.expr, _proposal_env(T, rn)), sys, c)
+    end
+    for u in sys.updates
+        _located(sys, u) do
+            if u.phase === :on_copy
+                env = _proposal_env(T, rn)
+                lower(u.eq.rhs, env)
+                _write(_unwrap(u.eq.lhs), :v, env)
+            else
+                r = info(_unwrap(u.eq.lhs)).role
+                lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn) : _site_env(T, :i, rn; mcs = :mcs))
+            end
+        end
+    end
+    for eq in sys.equations
+        _located(sys, eq) do
+            x = arguments(_unwrap(eq.lhs))[1]
+            lower(eq.rhs, info(x).role === :cell ? cellenv : _site_env(T, :i, rn; mcs = :mcs))
+        end
+    end
+    for d in sys.divisions
+        _located(sys, d) do
+            lower(d.when, cellenv)
+            foreach(((x, r),) -> r isa Split || lower(r, _cell_env(T, :parent, rn; mcs = :mcs)), d.rules)
+        end
+    end
+    for r in sys.link_rules
+        _located(() -> lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)), sys, r)
+    end
+    return nothing
 end

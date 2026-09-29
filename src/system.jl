@@ -28,6 +28,7 @@ Base.@kwdef struct PottsSystem
     observed::Vector{ObservedEq} = ObservedEq[]
     sweep::SweepSpec
     structural::NamedTuple = (;)
+    sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
 end
 
 Base.nameof(sys::PottsSystem) = sys.name

@@ -648,3 +648,42 @@ end
         sweep = SORTING.sys.sweep), SORTING.sys)
     @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
 end
+
+@potts_model BadSiteVar begin
+    @kinds medium A
+    @parameters T = 1.0
+    @variables x(site) = 0.0
+    @lattice Lattice((8, 8))
+    @energy begin
+        cells(A) => (volume - 10.0)^2
+        cells(A) => x                      # a site variable without a site
+    end
+    @sweep Metropolis(; temperature = T)
+end
+const BAD_ENERGY_LINE = @__LINE__() - 4
+
+@potts_model BadDrive begin
+    @kinds medium A
+    @parameters T = 1.0
+    @lattice Lattice((8, 8))
+    @drive copy => volume                  # `volume` changes with the copy
+    @sweep Metropolis(; temperature = T)
+end
+const BAD_DRIVE_LINE = @__LINE__() - 3
+
+@testset "diagnostics name the statement and its source line" begin
+    msg(f) = try
+        f(); ""
+    catch e
+        sprint(showerror, e)
+    end
+    m = msg(() -> mtkcompile(BadSiteVar(; name = :bad)))
+    @test occursin("needs a site", m) && occursin("in @energy cells(1) => x", m) &&
+          occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
+    m = msg(() -> mtkcompile(BadDrive(; name = :bad)))
+    @test occursin("`volume` is not available in a drive", m) && occursin("symbolic.jl:$BAD_DRIVE_LINE", m)
+    # locations survive `extend`
+    m = msg(() -> mtkcompile(extend(PottsSystem(; name = :e, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)), BadSiteVar(; name = :bad))))
+    @test occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
+end

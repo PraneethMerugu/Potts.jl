@@ -25,7 +25,8 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         equations = [base.equations; sys.equations], divisions = [base.divisions; sys.divisions],
         relationships = unique(r -> r.name, [sys.relationships; base.relationships]),
         link_rules = [base.link_rules; sys.link_rules], observed = [base.observed; sys.observed],
-        sweep = sys.sweep, structural = merge(base.structural, sys.structural))
+        sweep = sys.sweep, structural = merge(base.structural, sys.structural),
+        sources = merge(base.sources, sys.sources))
 end
 
 """

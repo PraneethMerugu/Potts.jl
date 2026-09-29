@@ -533,3 +533,20 @@
     parameter.
 - MTK-style `compose` (namespaced subsystems) applies to ODE components and is part of
   M4.1.
+
+## 2026-09-29 — M3 slice 6: diagnostics with source locations
+
+- `@potts_model` records where each energy, drive, constraint, update, equation,
+  division, link rule and observed quantity was written (`PottsSystem.sources`; merged by
+  `extend`).
+- `mtkcompile` validates each statement on its own and lowers it once in the scope it
+  will run in. Errors that used to appear only while building a problem now appear at
+  compile time.
+  - Every error is re-raised with the statement and its location, for example
+    `site variable x needs a site: write x[target] … in @energy cells(1) => x at model.jl:12`.
+  - Descriptions are built only when reporting, because printing symbolic expressions is
+    slow.
+- **TTFX:** `using` 4.4 s, construction 0.65–0.9 s, `mtkcompile` 0.01 s, problem build
+  1.5 s, first solve 0.74 s. Total 7.6 s against the 15 s gate.
+  - `@extend` plumbing is emitted only for models that use it; it had added 0.45 s to
+    every model's first construction.

@@ -44,7 +44,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
-            _section!(parts, ex.args[1], filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
+            _section!(parts, ex.args[1], filter(a -> !(a isa LineNumberNode), ex.args[3:end]), ex.args[2])
         else
             push!(parts.code, rewrite(ex))        # helper functions, local definitions
         end
@@ -82,35 +82,48 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __lattice = nothing
         __sweep = nothing
         __bases = $P.PottsSystem[]
+        __sources = IdDict{Any, LineNumberNode}()
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
+    extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
         variables = __vars, relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen,
+        observed = __observed, frozen_kinds = __frozen, sources = __sources,
         sweep = __sweep, structural = $structural))
     return quote
         function $name(; $(kws...))
             $preamble
             $(parts.code...)
-            for b in __bases                       # an extension inherits what it does not declare
+            $(extends ? :(for b in __bases                # an extension inherits what it does not declare
                 __lattice === nothing && (__lattice = b.lattice)
                 __sweep === nothing && (__sweep = b.sweep)
                 isempty(__kinds) && append!(__kinds, b.kinds)
-            end
+            end) : nothing)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
-            foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)
+            $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
         end
     end
 end
 
 _lines(args) = length(args) == 1 && args[1] isa Expr && args[1].head === :block ?
                filter(a -> !(a isa LineNumberNode), args[1].args) : args
+# lines with their source locations (a block's own line numbers, else the section's)
+function _lines_ln(args, ln)
+    length(args) == 1 && args[1] isa Expr && args[1].head === :block || return [(a, ln) for a in args]
+    out = Tuple{Any, Any}[]
+    for a in args[1].args
+        a isa LineNumberNode ? (ln = a) : push!(out, (a, ln))
+    end
+    return out
+end
+# `push!(list, x)` recording where `x` was written (diagnostics)
+_located_push(list, x, ln) = :(push!($list, Potts._source!(__sources, $x, $(QuoteNode(ln)))))
 _strip(ex) = ex isa Expr && ex.head === :block ? only(filter(a -> !(a isa LineNumberNode), ex.args)) : ex
 
-function _section!(parts, sec, args)
+function _section!(parts, sec, args, ln = nothing)
     P = :(Potts)
     code = parts.code
     if sec === Symbol("@structural_parameters")
@@ -188,8 +201,8 @@ function _section!(parts, sec, args)
             push!(code, :(__relations[$(QuoteNode(k))] = $(l.args[2])), :($k = $P.RelationRef($(QuoteNode(k)))))
         end
     elseif sec === Symbol("@energy")
-        for l in _lines(args)
-            e = :(push!(__energies, $P.energy($(rewrite(l)))))
+        for (l, lln) in _lines_ln(args, ln)
+            e = _located_push(:__energies, :($P.energy($(rewrite(l)))), lln)
             push!(code, _is_edges(l) ? _edge_scope(e) : e)
         end
     elseif sec === Symbol("@observed")
@@ -199,7 +212,7 @@ function _section!(parts, sec, args)
             k = lhs isa Expr && lhs.head === :call ? lhs.args[1] : lhs      # `name(scope)` or `name`
             k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
             push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
-                :(push!(__observed, $P.ObservedEq($k, $(rewrite(l.args[3]))))))
+                _located_push(:__observed, :($P.ObservedEq($k, $(rewrite(l.args[3])))), ln))
         end
     elseif sec === Symbol("@relationship")
         decl = args[1]
@@ -213,26 +226,25 @@ function _section!(parts, sec, args)
         action = QuoteNode(sec === Symbol("@link") ? :link : :unlink)
         opts, _ = _options(args[2:end])
         kw = [Expr(:kw, o, rewrite(v)) for (o, v) in opts]
-        push!(code, _edge_scope(:(push!(__links, $P.link_rule($action, $(args[1]); $(kw...))))))
+        push!(code, _edge_scope(_located_push(:__links, :($P.link_rule($action, $(args[1]); $(kw...))), ln)))
     elseif sec === Symbol("@drive")
-        foreach(l -> push!(code, :(push!(__drives, $P.drive($(rewrite(_replace_copy(l))))))), _lines(args))
+        foreach(((l, lln),) -> push!(code, _located_push(:__drives, :($P.drive($(rewrite(_replace_copy(l))))), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@constraint")
-        foreach(l -> push!(code, :(push!(__constraints, $P.constraint($(rewrite(l)))))), _lines(args))
+        foreach(((l, lln),) -> push!(code, _located_push(:__constraints, :($P.constraint($(rewrite(l)))), lln)), _lines_ln(args, ln))
     elseif sec in (Symbol("@on_copy"), Symbol("@after_mcs"), Symbol("@before_mcs"))
         phase = QuoteNode(Symbol(String(sec)[2:end]))
         every = length(args) == 2 ? args[1] : nothing
-        eqs = _lines(args[end:end])
-        for l in eqs
-            push!(code, every === nothing ? :(push!(__updates, $P.update($phase, $(rewrite(l))))) :
-                        :(push!(__updates, $P.update($phase, $every, $(rewrite(l))))))
+        for (l, lln) in _lines_ln(args[end:end], ln)
+            push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $(rewrite(l)))) :
+                                                  :($P.update($phase, $every, $(rewrite(l)))), lln))
         end
     elseif sec === Symbol("@equations")
-        foreach(l -> push!(code, :(push!(__equations, $(rewrite(l))))), _lines(args))
+        foreach(((l, lln),) -> push!(code, _located_push(:__equations, rewrite(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])
         kw = [Expr(:kw, k, rewrite(v)) for (k, v) in opts]
-        push!(code, :(push!(__divisions, $P.divide($domain, $(map(rewrite, rules)...); $(kw...)))))
+        push!(code, _located_push(:__divisions, :($P.divide($domain, $(map(rewrite, rules)...); $(kw...))), ln))
     elseif sec === Symbol("@sweep")
         ex = only(args)
         ex = _replace_call(ex, :Metropolis, :($P.sweep_spec), QuoteNode(:metropolis))
