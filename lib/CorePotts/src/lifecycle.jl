@@ -91,7 +91,7 @@ end
 
 """Unit eigenvector of cell `c`'s covariance for its `k`-th largest eigenvalue."""
 @inline function principal_axis(::Type{T}, cell, l::Lattice{2}, c, k) where {T}
-    C = covariance(T, cell, c, Val(2))
+    C = embed_covariance(l, covariance(T, cell, c, Val(2)))     # Cartesian axes
     λ = principal_moments(C)[k]
     a, b, d = C
     v = abs(b) > eps(T) * (abs(a) + abs(d)) ? (λ - d, b) :
@@ -152,9 +152,9 @@ end
             T = eltype(normals)
             V = T(@inbounds cell.volume[c])
             side = @inbounds bias[c]                                # 0 unless clusters divide
+            offset = embed(lat, ntuple(d -> T(δ[d]) - T(@inbounds cell.m1[d, c]) / V, Val(N)))   # site − centroid
             for d in 1:N
-                offset = T(δ[d]) - T(@inbounds cell.m1[d, c]) / V      # site − centroid
-                side += offset * @inbounds(normals[d, c])
+                side += T(offset[d]) * @inbounds(normals[d, c])
             end
             side > 0 && (@inbounds σ[i] = daughter[c])
         end

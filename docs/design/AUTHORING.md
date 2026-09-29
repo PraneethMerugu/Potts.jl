@@ -88,6 +88,18 @@ is sugar.
   tested; nothing in the compiler assumes `N == 2`.
 - `geometry = Square()` (default, cubic in 3D) or `Hexagonal()` (2D; 7 published
   Morpheus models use it). Relations are defined per geometry.
+  **Hexagonal (implemented).**
+  - Sites are axial `(q, r)` on the usual array, placed at `(q + r/2, r·√3/2)`.
+  - `Hex(k)` is the hex-distance ball: 6, 18, 36 neighbours. `Moore(k)` and
+    `VonNeumann(k)` mean `Hex(k)` on these lattices. `Ball`/`NeighborOrder` use Euclidean
+    distance in the embedding.
+  - Cartesian quantities: `centroid`, `displacement`, shapes, principal axes, division
+    planes and link distances.
+  - `Δ` and `∇` use the 6-point stencils: exact for quadratic (`Δ`) and linear (`∇`)
+    fields, with zero flux at closed faces.
+  - Periodic axes make a rhombic torus. `position` and domain predicates see axial
+    coordinates.
+  - One spacing.
 - `domain = mask` (Bool array or image via TiffImages.jl) or `domain = x -> expr`
   restricts the lattice to an irregular region; the domain edge is a boundary for both
   copies and fields.

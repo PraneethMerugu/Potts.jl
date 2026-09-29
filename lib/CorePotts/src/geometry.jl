@@ -131,6 +131,9 @@ end
 end
 centroid(cell, l::Lattice, c) = centroid(Float64, cell, l, c)
 
+"""Centroid of cell `c` as a Cartesian position (`embed` of `centroid`; equal on square lattices)."""
+@inline centroid_position(::Type{T}, cell, l::Lattice, c) where {T} = embed(l, centroid(T, cell, l, c))
+
 """
     centroid_shift(T, cell, lattice, c, x, s) -> NTuple{N, T}
 
@@ -207,7 +210,7 @@ CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁
 - `elongation = major_length / minor_length`.
 """
 @inline function shape(::Type{T}, cell, l::Lattice{2}, c) where {T}
-    C = covariance(T, cell, c, Val(2))
+    C = embed_covariance(l, covariance(T, cell, c, Val(2)))
     λ1, λ2 = principal_moments(C)
     λ2 = max(λ2, zero(T))
     major, minor = 4sqrt(λ1), 4sqrt(λ2)

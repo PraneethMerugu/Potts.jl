@@ -1366,3 +1366,46 @@ end
     end
     @test_throws ArgumentError PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1], :a => nothing], (0, 1))
 end
+
+@potts_model HexSorting begin
+    @kinds medium dark light
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+        Dc = 0.1
+    end
+    @variables begin
+        c(field) = 0.0
+        cx(cell) = 0.0
+    end
+    @lattice Lattice((30, 30); geometry = Hexagonal(), neighborhood = Hex(2))
+    @energy begin
+        cells => (volume - 19)^2 + 0.2 * (surface - 60)^2
+        contacts => J[kind, kind′]
+    end
+    @equations D(c) ~ Dc * Δ(c)
+    @after_mcs cx ~ centroid(1)
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+@testset "hexagonal lattices in the surface" begin
+    σ = zeros(Int32, 30, 30); c0 = zeros(30, 30); c0[15, 15] = 100.0
+    n = 0
+    for q in 4:6:26, r in 4:6:26
+        n += 1
+        for x in CartesianIndices(σ)
+            CorePotts._hexdist(Tuple(x) .- (q, r)) <= 2 && (σ[x] = n)
+        end
+    end
+    p = PottsProblem(HexSorting(; name = :h), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n], :c => c0], (0, 20))
+    @test p.lattice.geometry isa Hexagonal && length(p.contact) == 18
+    for alg in (SequentialCPM(proposal = Hex(1)), CheckerboardCPM(proposal = Hex(1)))
+        u = solve(p, alg).u[end]
+        @test u.cell.volume == [count(==(k), u.σ) for k in 1:n]
+        @test u.cell.surface ≈ CorePotts.recompute_surface(u.σ, p.lattice, p.relations.surface, n)
+        @test sum(u.site.c) ≈ 100                                          # zero-sum 6-point Laplacian
+        pos = [embed(p.lattice, Float64.(Tuple(x))) for x in CartesianIndices(u.σ)]
+        k = findfirst(>(0), u.cell.volume)
+        mine = pos[u.σ .== k]
+        @test u.cell.cx[k] ≈ sum(first, mine) / length(mine) atol = 1e-9   # centroid() is Cartesian (no wrap here)
+    end
+end

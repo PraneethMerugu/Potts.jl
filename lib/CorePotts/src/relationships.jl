@@ -73,14 +73,14 @@ end
     return _periodic_norm(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
 end
 @inline function _periodic_norm(::Type{T}, l::Lattice{N}, δ) where {T, N}
+    w = ntuple(Val(N)) do d                       # minimum image (lattice coordinates)
+        x = δ[d]
+        l.periodic[d] ? x - T(l.dims[d]) * round(x / T(l.dims[d])) : x
+    end
+    e = embed(l, w)
     s = zero(T)
     for d in 1:N
-        x = δ[d]
-        if l.periodic[d]
-            n = T(l.dims[d])
-            x = x - n * round(x / n)
-        end
-        s += x^2
+        s += T(e[d])^2
     end
     return sqrt(s)
 end

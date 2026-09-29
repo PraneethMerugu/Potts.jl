@@ -858,3 +858,30 @@
     with a population input, all against analytic solutions, under sequential and
     checkerboard sweeps.
   - `remake`; Metal Float32.
+
+## 2026-09-29 — Hexagonal lattices (M2.1b)
+
+- CorePotts:
+  - `Lattice{N, M, G}` gained a `geometry` of `Square()` or `Hexagonal()`. The old
+    constructors default to `Square`.
+  - `embed` and `embed_covariance` apply the linear axial-to-Cartesian map.
+    `centroid_position` is the Cartesian centroid.
+  - The integer moment trackers, `min_image`, checkerboard colouring and periodic
+    wrapping are unchanged: the hex neighbours are a subset of Moore(1) in axial
+    coordinates.
+  - The embedding is applied in shape, principal axes, the division partition (offset ·
+    normal), the cluster division bias, and `_periodic_norm` (link distances).
+  - Relations per geometry: `Hex(k)`; Moore/VonNeumann mean Hex on hex lattices;
+    Euclidean `Ball`/`NeighborOrder` shells, ordered by embedded distance.
+  - `laplacian`/`gradient` dispatch on geometry to 6-point stencils. The explicit
+    stability bound is unchanged.
+- Potts: `LatticeSpec.geometry`; `Lattice(dims; geometry = Hexagonal())` in `@lattice`.
+  `centroid(k)` and `displacement(c, k)` are Cartesian.
+- Tests:
+  - CorePotts: counts, unit distances, exact Δ on a quadratic and ∇ on a linear field,
+    a hex disc (61 sites) with exact centroid and elongation 1, an axial box that is
+    elongated, and division of an ellipse separated along x.
+  - Potts: a hex sorting model with a diffusing field, under sequential and checkerboard
+    sweeps. Trackers match recomputes, field mass is conserved, and centroids are
+    Cartesian. Metal Float32.
+- Not done: MakiePotts renders hex states on the sheared array, without hexagon glyphs.

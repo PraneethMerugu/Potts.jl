@@ -36,8 +36,8 @@ end
 Second-order `Σ_d (c[x+e_d] − 2c[x] + c[x−e_d]) / h_d²` at site `i`. On closed axes
 `bc = ((low₁, high₁), …)` selects zero flux (`nothing`, default) or a Dirichlet value per face.
 """
-@inline function laplacian(c, ctx, i; h = spacing(ctx), bc = nothing)
-    lat = ctx.lattice
+@inline laplacian(c, ctx, i; h = spacing(ctx), bc = nothing) = _laplacian(ctx.lattice, c, ctx, i, h, bc)
+@inline function _laplacian(lat::Lattice, c, ctx, i, h, bc)
     x = coordinates(lat, i)
     acc = zero(eltype(c))
     for d in 1:ndims(lat)
@@ -52,13 +52,43 @@ end
 
 Central-difference gradient at site `i` (per-face `bc` as in `laplacian`).
 """
-@inline function gradient(c, ctx, i; h = spacing(ctx), bc = nothing)
-    lat = ctx.lattice
+@inline gradient(c, ctx, i; h = spacing(ctx), bc = nothing) = _gradient(ctx.lattice, c, ctx, i, h, bc)
+@inline function _gradient(lat::Lattice, c, ctx, i, h, bc)
     x = coordinates(lat, i)
     return ntuple(Val(ndims(lat))) do d
         up, _, dn = _neighbors_along(c, lat, x, i, d, bc)
         (up - dn) / (2 * h[d])
     end
+end
+
+# Hexagonal lattices: the six nearest neighbours at unit distance (spacing `h[1]`, isotropic).
+# Δc ≈ 2/(3h²) Σ (c_n − c), ∇c ≈ 1/(3h) Σ (c_n − c) ê_n; missing neighbours (closed faces,
+# the domain edge) mirror the site (zero flux; per-face Dirichlet values are square-only).
+const _HEX6 = ((Int32(1), Int32(0)), (Int32(-1), Int32(0)), (Int32(0), Int32(1)),
+    (Int32(0), Int32(-1)), (Int32(1), Int32(-1)), (Int32(-1), Int32(1)))
+@inline function _hex_value(c, lat, x, ci, o)
+    inside, y = shift(lat, x, o)
+    return inside ? @inbounds(c[linear_index(lat, y)]) : ci
+end
+@inline function _laplacian(lat::Lattice{2, M, Hexagonal}, c, ctx, i, h, bc) where {M}
+    x = coordinates(lat, i)
+    ci = @inbounds c[i]
+    acc = zero(ci)
+    for o in _HEX6
+        acc += _hex_value(c, lat, x, ci, o) - ci
+    end
+    return 2 * acc / (3 * h[1]^2)
+end
+@inline function _gradient(lat::Lattice{2, M, Hexagonal}, c, ctx, i, h, bc) where {M}
+    x = coordinates(lat, i)
+    ci = @inbounds c[i]
+    gx = zero(ci); gy = zero(ci)
+    for o in _HEX6
+        e = embed(lat, (oftype(ci, o[1]), oftype(ci, o[2])))
+        dv = _hex_value(c, lat, x, ci, o) - ci
+        gx += dv * e[1]; gy += dv * e[2]
+    end
+    return (gx / (3 * h[1]), gy / (3 * h[1]))
 end
 
 """Kind of the cell owning site `i` (`0` for the medium)."""

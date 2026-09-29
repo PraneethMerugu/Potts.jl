@@ -82,4 +82,17 @@ using Statistics: mean, var
         T = Float32), CheckerboardCPM(); backend).u[end]
     @test Array(ua.cell.y)[1:2] ≈ fill(exp(-0.3 * 5), 2) rtol = 1e-4
     @test Array(ua.model.a)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
+    # hexagonal lattice on the device
+    σh = zeros(Int32, 30, 30); nh = 0
+    for q in 4:6:26, r in 4:6:26
+        nh += 1
+        for x in CartesianIndices(σh)
+            CorePotts._hexdist(Tuple(x) .- (q, r)) <= 2 && (σh[x] = nh)
+        end
+    end
+    ph = PottsProblem(HexSorting(; name = :h), [ownership => σh, kind => [isodd(k) ? :dark : :light for k in 1:nh]], (0, 20); T = Float32)
+    uh = solve(ph, CheckerboardCPM(proposal = Hex(1)); backend).u[end]
+    σhh = Array(uh.σ)
+    @test Array(uh.cell.volume) == [count(==(k), σhh) for k in 1:nh]
+    @test Array(uh.cell.surface) ≈ CorePotts.recompute_surface(σhh, ph.lattice, ph.relations.surface, nh; T = Float32)
 end

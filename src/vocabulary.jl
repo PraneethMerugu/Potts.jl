@@ -437,22 +437,26 @@ end
 
 """The lattice of a model: dims, boundaries, spacing, the contact neighborhood and an
 optional irregular domain (a Bool mask, evaluated once from a predicate `x -> …`)."""
-struct LatticeSpec{N, B, S, R, D}
+struct LatticeSpec{N, B, S, R, D, G}
     dims::NTuple{N, Int}
     boundary::B
     spacing::S
     neighborhood::R
     domain::D
+    geometry::G                   # `Square()` or `Hexagonal()` (CorePotts)
 end
-function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing, domain = nothing)
+function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spacing = nothing, domain = nothing,
+        geometry = CorePotts.Square())
     d = Tuple(Int.(dims))
-    return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain).mask)
+    geometry isa CorePotts.Hexagonal && spacing !== nothing && length(unique(spacing)) > 1 &&
+        throw(ArgumentError("a hexagonal lattice has one spacing"))
+    return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain, geometry).mask, geometry)
 end
-core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain)
+core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain, geometry = l.geometry)
 # by content (the domain is an array)
 Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b.boundary &&
-    a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain
-Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain), h)
+    a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
+Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain, l.geometry), h)
 
 """Field solver of `@sweep`: explicit Euler with `substeps` (auto if `nothing`) and an
 optional lower clip (legacy Potts clips concentrations at 0)."""

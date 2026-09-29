@@ -180,13 +180,13 @@ end
 """Centroid of cell `c` along axis `k` (0 for the medium and empty slots)."""
 @inline function _centroid_axis(::Type{T}, cell, lat, c, k) where {T}
     (c == 0 || cell.volume[c] == 0) && return zero(T)
-    return CorePotts.centroid(T, cell, lat, Int(c))[k]
+    return CorePotts.centroid_position(T, cell, lat, Int(c))[k]
 end
 
 """Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or new cell)."""
 @inline function _displacement_axis(::Type{T}, cell, lat, prop, c, k) where {T}
     (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
-    return CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1)[k]
+    return CorePotts.embed(lat, CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1))[k]
 end
 
 """Integers (and `Bool`s) in the model's scalar type; other numbers (dual numbers of an
