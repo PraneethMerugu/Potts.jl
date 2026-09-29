@@ -249,6 +249,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         ds = daughter[parents]
         for name in keys(st.cell)
             name in (:volume, :surface, :anchor, :m1, :m2, :generation) && continue
+            _is_link_data(name) && continue              # daughters start unlinked
             a = getfield(st.cell, name)
             _copy_columns!(a, ds, parents)
         end
@@ -256,6 +257,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         gen[ds] .+= Int32(1)
         copyto!(st.cell.generation, gen)
     end
+    haskey(st.cell, :links) && (any(removed) || !isempty(parents)) &&
+        _lifecycle_links!(st, findall(removed), daughter[parents])
     _cell_rule_kernel!(backend)(cache.events, cache.daughter, lc.kind, lc.divide!, st, p, ctx,
         key, mcs; ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
     launches += 1
@@ -325,4 +328,17 @@ function with_capacity(st::CPMState, capacity::Integer)
     cell = map(grow, st.cell)
     cell.kind[(n + 1):end] .= Int32(1)
     return CPMState(st.σ, cell, st.site, st.model, st.history)
+end
+
+_is_link_data(name::Symbol) = name === :links || startswith(String(name), "link_")
+
+# RemoveIncident for removed cells; empty link rows for daughters (their ids may be reused).
+function _lifecycle_links!(st, removed, daughters)
+    names = Tuple(k for k in keys(st.cell) if _is_link_data(k))
+    host = NamedTuple{names}(map(k -> Array(getfield(st.cell, k)), names))
+    for c in Iterators.flatten((removed, daughters))
+        remove_incident!(host, c)
+    end
+    foreach(k -> copyto!(getfield(st.cell, k), getfield(host, k)), names)
+    return nothing
 end

@@ -30,6 +30,8 @@ export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_grap
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
     AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
     principal_axis, rebuild_trackers!, with_capacity
+export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remove_incident!,
+    centroid_distance, link_delta, link_claims, HostPhase
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
@@ -43,6 +45,7 @@ include("phases.jl")
 include("fields.jl")
 include("drives.jl")
 include("spatial.jl")
+include("relationships.jl")
 include("lifecycle.jl")
 include("trackers.jl")
 include("algorithms.jl")
