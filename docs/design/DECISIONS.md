@@ -306,3 +306,28 @@ Why:
 Deferred: adaptive or stiff integration, via an optional host `ODEComponent` that keeps
 an init-once OrdinaryDiffEq integrator and couples through SII. Also deferred: DAE and
 jump components, MethodOfLines components, and output couplings into kind tables.
+
+## D-039 No `compose` for Potts systems; units on DynamicQuantities (2026-09-29)
+
+Decision: Potts models do not implement MTK's namespacing `compose(sys, subsystems)`.
+Composition works in three ways:
+- `extend`/`@extend` merges models; this is MTK's `extend`.
+- `@components` embeds MTK systems per cell or per model, namespaced as `name₊x` (D-038).
+  A component may itself be an MTK `compose`d hierarchy, which is flattened by its own
+  `mtkcompile`.
+- `lookup` reaches into a built model.
+
+Units use MTK's own mechanism: `VariableUnit` metadata, with DynamicQuantities in a weak
+extension. This replaces the Unitful extension named in D-015.
+
+Why:
+- A Potts model owns one lattice, one kind list, one sweep and one H. A namespaced
+  sub-model would have to share all of them, so "compose" would really be `extend`
+  with renamed parameters.
+- Every use seen so far (legacy composition tables, Morpheus and CompuCell3D plugins) is
+  either an extension of a base model or an intracellular or model-level MTK system,
+  and both are covered.
+- For units, following MTK means one unit system across Potts and its components.
+
+Revisit if a model needs two copies of the same sub-model with different parameters.
+That would be `extend` plus automatic prefixing.
