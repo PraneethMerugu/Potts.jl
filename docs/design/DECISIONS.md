@@ -250,3 +250,30 @@ Decision:
   every member splits along it through the cluster centroid; daughters form a new
   cluster. Without it, compartments divide alone and daughters stay in the cluster.
 - Lifecycle events re-root clusters whose root died.
+
+## D-037 Symbolic front end: implementation choices (M3 first slice)
+- **IR.** Symbolics expressions, every model quantity tagged with an `Info` metadata
+  record (role: param, kindtable, site/cell/model/field variable, builtin, bound). The
+  metadata survives `substitute`/`expand`. Variables are MTK-style `x(t)`, so `D(x)`,
+  `Pre(x)` and `~` come from ModelingToolkitBase unchanged.
+- **Macro.** `@potts_model` is sugar for a constructor. Section bodies run as ordinary
+  Julia with built-ins and DSL words bound locally (nothing but the entry points is
+  exported). A syntactic rewrite turns `x[i]` into `at`/`at2`, `&&`/`||`/`!` into `&`/`|`/`!`,
+  ternaries into `ifelse`, and `fold(body for n in R(s) if cond)` into a `gather` term.
+- **Codegen emits its own neighbour loops.** It does not call `contact_delta`: `weight` may
+  appear anywhere in a contact term, and the surface δ is fused into the contact loop
+  when the relations coincide. Cell-term deltas are `E(q+δq) − E(q)`, expanded when
+  that is cheaper by operation count (the volume term becomes `λ(1 ∓ 2(V − V₀))`).
+- **Contact terms** are symmetrized unless structurally symmetric. Kind tables used in
+  them must be symmetric: compared up to index order symbolically, and checked against
+  their values at `PottsProblem`.
+- **`total_energy`** sums cell terms over every cell slot: an emptied cell keeps
+  `E(volume = 0)`, matching the ΔH of the copy that emptied it (legacy/CC3D semantics).
+  The self-check `ΔE == H(after) − H(before)` is exact (0.0) on all four models.
+- **Deterministic generated code.** Generated names are derived from model content
+  (never `gensym`), so rebuilding a problem yields the same RuntimeGeneratedFunction type
+  and never recompiles. Found when per-seed rebuilds cost 18 s in the parity tests.
+- **Deferred.** No-extinction is an explicit `@constraint no_extinction`, not a default
+  (the legacy published models allow extinction). The proposal relation stays on the
+  algorithm (`SequentialCPM(; proposal)`), and the `@sweep` law is not yet propagated
+  (Metropolis with offset 0 is the default everywhere).

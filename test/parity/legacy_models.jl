@@ -1,6 +1,5 @@
 # Merks and Wortel parity against legacy samples (ROADMAP M2.5/M2.6, D-022): per saved MCS,
 # two-sample KS of cell volumes and field/activity summaries over 64 + 64 seeds.
-include(joinpath(@__DIR__, "models.jl"))
 
 function read_legacy(name)
     path = joinpath(@__DIR__, "..", "..", "reference", "data", "$(name)_parity.tsv")
@@ -24,8 +23,9 @@ function new_samples(problem, quantity, times, seeds)
     return rows
 end
 
-@testset "legacy parity: $name" for (name, problem, quantity) in (
-        ("merks", merks_problem, :c), ("wortel", wortel_problem, :act))
+@testset "legacy parity: $name ($label)" for (name, problem, quantity, label) in (
+        ("merks", merks_problem, :c, "hand-written"), ("wortel", wortel_problem, :act, "hand-written"),
+        ("merks", symbolic_merks_problem, :c, "symbolic"), ("wortel", symbolic_wortel_problem, :act, "symbolic"))
     legacy = read_legacy(name)
     times = filter(>(0), sort(unique(Int[r.mcs for r in legacy])))
     nseeds = length(unique(r.seed for r in legacy))
@@ -43,7 +43,8 @@ end
     end
 end
 
-@testset "legacy parity: openvt (division)" begin
+@testset "legacy parity: openvt (division, $label)" for (label, openvt_problem) in (
+        ("hand-written", openvt_problem), ("symbolic", symbolic_openvt_problem))
     legacy = read_legacy("openvt")
     times = sort(unique(Int[r.mcs for r in legacy]))
     nseeds = length(unique(r.seed for r in legacy))

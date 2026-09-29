@@ -4,7 +4,9 @@ BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [sources]
 CorePotts = {path = "../lib/CorePotts"}
+Potts = {path = ".."}
