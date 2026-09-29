@@ -12,6 +12,7 @@ equations (MTK syntax), lifecycle rules and the sweep protocol.
 Base.@kwdef struct PottsSystem
     name::Symbol
     kinds::Vector{Symbol}
+    frozen_kinds::Vector{Int} = Int[]          # obstacle kinds: their sites never change owner
     lattice::LatticeSpec
     parameters::Vector{Any} = Any[]
     variables::Vector{Any} = Any[]

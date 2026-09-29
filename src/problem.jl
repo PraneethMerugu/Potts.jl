@@ -68,8 +68,9 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         fingerprint = hash((string.(exprs), sys.lattice, T)),
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
             hctx, Dict{Any, Any}()))
+    frozen = _frozen_mask(sys, st)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
-        spacing, seed, replica, repeat)
+        spacing, frozen, seed, replica, repeat)
 end
 
 _acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
@@ -157,6 +158,13 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         model = NamedTuple(model))
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+end
+
+# Sites of cells of frozen kinds never change owner (walls, obstacles).
+function _frozen_mask(sys::PottsSystem, st)
+    isempty(sys.frozen_kinds) && return nothing
+    kinds = st.cell.kind
+    return map(s -> s != 0 && Int(kinds[s]) in sys.frozen_kinds, st.σ)
 end
 
 function _kind_index(sys::PottsSystem, k::Symbol)

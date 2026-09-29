@@ -178,8 +178,24 @@ function _constraint_expr(c::CompiledPottsSystem, T)
     return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, :(return $test))))
 end
 
-_temperature_expr(c::CompiledPottsSystem, T) = :((st, p, prop, ctx) ->
-    $(Expr(:block, _PROP_LOCALS, :(return $T($(lower(c.sys.sweep.temperature, _proposal_env(T, c.gather_names))))))))
+# The copy temperature: a copy-scope expression, or a cell-scope one evaluated for the
+# gaining and losing cells and combined (`combine`, default `min`); the medium never
+# contributes (CompuCell3D/Morpheus convention).
+function _temperature_expr(c::CompiledPottsSystem, T)
+    sw = c.sys.sweep
+    rn = c.gather_names
+    if _observed_scope(sw.temperature) === :cell
+        tn = lower(sw.temperature, _cell_env(T, :new, rn; kind = :(Potts._cellkind(st, new))))
+        to = lower(sw.temperature, _cell_env(T, :old, rn; kind = :(Potts._cellkind(st, old))))
+        return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, quote
+            new == 0 && return $T($to)
+            old == 0 && return $T($tn)
+            return $T($(sw.combine)($tn, $to))
+        end)))
+    end
+    return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS,
+        :(return $T($(lower(sw.temperature, _proposal_env(T, rn))))))))
+end
 
 # ---------------------------------------------------------------------------------------
 # Phases: synchronous updates, field equations, per-cell ODEs

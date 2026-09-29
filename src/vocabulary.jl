@@ -306,14 +306,36 @@ end
 """The sweep protocol: acceptance law, temperature expression, MCS duration, field solver."""
 struct SweepSpec
     law::Symbol
-    temperature::Any
+    temperature::Any          # copy scope, or cell scope (`T[kind]`, a cell variable)
+    combine::Any              # combines the source and target cells' temperatures
     offset::Float64
     mcs_duration::Float64
     field_solver::ExplicitEuler
 end
-sweep_spec(law::Symbol; temperature, offset = 0.0, mcs_duration = 1.0,
-    field_solver = ExplicitEuler()) = SweepSpec(law, temperature, Float64(offset),
+sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0,
+    field_solver = ExplicitEuler()) = SweepSpec(law, temperature, combine, Float64(offset),
     Float64(mcs_duration), field_solver)
+
+# ---------------------------------------------------------------------------------------
+# Library one-liners (AUTHORING §4): functions returning the same `domain => expr` pairs
+
+"""`Volume(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (volume - target)^2`."""
+Volume(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
+"""`Surface(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (surface - target)^2`."""
+Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
+"""`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
+Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
+"""
+    Chemotaxis(c; strength, kinds = (), extension_only = false)
+
+`copy => -strength * (c[target] - c[source])` when the gaining cell (`new`) is of `kinds`
+(any cell if empty); `extension_only` restricts it to copies into the medium (legacy Merks).
+"""
+function Chemotaxis(c; strength, kinds = (), extension_only::Bool = false)
+    gain = isempty(kinds) ? (B.new != 0) : foldl(|, [_index(B.kind, B.new) == k for k in kinds])
+    gate = extension_only ? gain & (B.old == 0) : gain
+    return COPY => ifelse(gate, -strength * (_index(c, B.target) - _index(c, B.source)), 0.0)
+end
 
 # ---------------------------------------------------------------------------------------
 # Observed quantities
@@ -327,6 +349,7 @@ end
 
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
 const DSL = (; cells, contacts, sites, edges, new_contact, connectivity, no_extinction,
+    Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, Every, geomean, geomean_shifted, mean, Δ)
 

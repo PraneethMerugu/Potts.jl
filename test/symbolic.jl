@@ -364,3 +364,59 @@ end
     @test SII.getp(prob, named(:λ))(prob) == 1.0
     @test SII.getp(sol, named(:T))(sol) == 10.0
 end
+
+@potts_model LibrarySorting begin
+    @kinds medium dark light
+    @parameters begin
+        λ = 1.0
+        V₀ = 40.0
+        T = 10.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @lattice Lattice((72, 72); boundary = Periodic(), neighborhood = Moore(1))
+    @energy begin
+        Volume(dark, light; target = V₀, strength = λ)
+        Adhesion(J)
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model KindTemperature begin
+    @kinds medium wall[frozen] dark light
+    @parameters begin
+        Tk[kind] = [0.0, 0.0, 5.0, 20.0]
+        J[kind, kind] = [0 30 16 16; 30 0 30 30; 16 30 2 11; 16 30 11 14]
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @energy begin
+        Volume(dark, light; target = 25.0, strength = 1.0)
+        Adhesion(J)
+    end
+    @drive Chemotaxis(c; strength = 3.0, kinds = (dark,))
+    @sweep Metropolis(; temperature = Tk[kind], combine = min)
+end
+
+@testset "library one-liners, per-kind temperature, frozen kinds" begin
+    a = symbolic_graner_problem(; nmcs = 5)
+    σ, kinds = graner_state()
+    b = PottsProblem(LibrarySorting(; name = :lib), [ownership => σ, kind => kinds], (0, 5))
+    @test all(((u, prop),) -> a.f.delta_H(u, a.p, prop, ctx_of(a)) == b.f.delta_H(u, b.p, prop, ctx_of(b)),
+        proposal_states(a; mcs = (0, 5), n = 200))
+
+    σk = zeros(Int32, 24, 24); σk[:, 1:2] .= 1                 # a wall along one side
+    for (c, (i, j)) in enumerate(Iterators.product(2:6:20, 6:6:18))
+        σk[i:(i + 4), j:(j + 4)] .= c + 1
+    end
+    n = maximum(σk)
+    kinds = [c == 1 ? :wall : isodd(c) ? :dark : :light for c in 1:n]
+    prob = PottsProblem(KindTemperature(; name = :kt), [ownership => σk, kind => kinds], (0, 20))
+    ctx = ctx_of(prob)
+    Tof(old, new) = prob.f.temperature(prob.u0, prob.p, CorePotts.Proposal(1, 2, (1, 1), 1, Int32(old), Int32(new)), ctx)
+    dark_cell = findfirst(==(:dark), kinds); light_cell = findfirst(==(:light), kinds)
+    @test Tof(dark_cell, light_cell) == 5.0 && Tof(light_cell, dark_cell) == 5.0     # min of the two
+    @test Tof(0, light_cell) == 20.0 && Tof(dark_cell, 0) == 5.0                     # medium never contributes
+    u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
+    @test u.σ[:, 1:2] == σk[:, 1:2] && u.cell.volume[1] == 48                       # the wall never moves
+    @test u.σ != σk
+end

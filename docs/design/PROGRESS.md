@@ -419,3 +419,15 @@
     non-relations.
   - Parameter keyword overrides did not work.
   - A gather counter made the generated code non-deterministic.
+
+## 2026-09-29 — M3 slice 3: temperature by kind, library one-liners, frozen kinds
+
+- `@sweep Metropolis(; temperature = Tk[kind], combine = min)`: when the temperature
+  depends on the cell, it is evaluated for the new and old cells and combined. If one side
+  is the medium, only the other cell's value is used.
+- The library one-liners `Volume(kinds...; target, strength)`, `Surface`, `Adhesion(J)`
+  and `Chemotaxis(c; strength, kinds, extension_only)` expand to the explicit terms. A
+  Graner model written with them has the same ΔH on every tested proposal.
+- `@kinds medium wall[frozen] cell`: sites of frozen kinds go into CorePotts' `frozen`
+  mask, so walls and obstacles never move.
+- Tests: every Potts suite (with QA/Aqua) and CorePotts (9021) pass.

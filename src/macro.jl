@@ -65,6 +65,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         Pre = $P.Pre
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
+        __frozen = Int[]
         __params = Any[]
         __vars = Any[]
         __relations = Dict{Symbol, Any}()
@@ -85,7 +86,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         variables = __vars, relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed,
+        observed = __observed, frozen_kinds = __frozen,
         sweep = __sweep, structural = $structural))
     return quote
         function $name(; $(kws...))
@@ -113,7 +114,11 @@ function _section!(parts, sec, args)
     elseif sec === Symbol("@kinds")
         names = Symbol[]
         for l in _lines(args)
-            l isa Symbol || throw(ArgumentError("@kinds lists kind names; the first is the medium"))
+            if l isa Expr && l.head === :ref && l.args[2:end] == [:frozen]
+                push!(code, :(push!(__frozen, $(length(names)))))    # `wall[frozen]`: an obstacle kind
+                l = l.args[1]
+            end
+            l isa Symbol || throw(ArgumentError("@kinds lists kind names (optionally `name[frozen]`); the first is the medium"))
             push!(names, l)
         end
         for (i, k) in enumerate(names)
