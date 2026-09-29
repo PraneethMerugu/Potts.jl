@@ -212,7 +212,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             throw(ArgumentError("edge variable `$(info(x).name)` needs a @relationship"))
     end
 
-    needs_moments = !isempty(sys.divisions) || relationship !== nothing
+    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement)
+    needs_moments = !isempty(sys.divisions) || relationship !== nothing ||
+                    any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,
+                        (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+                        (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)

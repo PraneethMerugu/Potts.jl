@@ -87,6 +87,26 @@ Symbolics.@register_symbolic at2(x, i, j)
 Symbolics.@register_symbolic gather(n, a, b, c)
 Symbolics.@register_symbolic population(n, b, c)
 Symbolics.@register_symbolic Δ(x)
+"""`cell_centroid(k)`: coordinate `k` of the current cell's centroid (cell scope)."""
+cell_centroid(k) = error("`cell_centroid` is symbolic-only")
+"""`copy_displacement(c, k)`: change of cell `c`'s centroid along axis `k` by the copy (proposal scope)."""
+copy_displacement(c, k) = error("`copy_displacement` is symbolic-only")
+Symbolics.@register_symbolic cell_centroid(k)
+Symbolics.@register_symbolic copy_displacement(c, k)
+
+"""
+`centroid(k)`: coordinate `k` of the cell's centroid (lattice units; periodic axes wrap
+into the lattice). Cell scope: updates, equations, division conditions and rules, observed.
+"""
+_centroid(k::Integer) = cell_centroid(Num(k))
+"""
+`displacement(c, k)`: how far the copy moves the centroid of cell `c` (`new` or `old`) along
+axis `k` (minimum image on periodic axes; zero for the medium or other cells). Proposal
+scope: drives and on-copy updates, e.g. persistent motion
+`copy => -μ * (px[new] * displacement(new, 1) + px[old] * displacement(old, 1) + …)`.
+"""
+_displacement(c, k::Integer) = copy_displacement(c, Num(k))
+
 """`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
 random_uniform(n) = error("`random_uniform` is symbolic-only")
 Symbolics.@register_symbolic random_uniform(n)
@@ -393,7 +413,8 @@ end
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand, geomean, geomean_shifted, mean, Δ)
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand,
+    centroid = _centroid, displacement = _displacement, geomean, geomean_shifted, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

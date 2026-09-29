@@ -657,3 +657,23 @@
 - Kind names can go straight into an operating point (`kind => Symbol.(kinds)`).
 - MorpheusML import is pending: it needs a pure-Julia XML parser (Julia-only
   dependencies).
+
+## 2026-09-29 — Centroid and displacement builtins (persistent motility)
+
+- `centroid(k)` (cell scope) and `displacement(c, k)` (proposal scope) are building
+  blocks for persistent or directed motion instead of a special-cased polarity feature.
+  They lower to `CorePotts.centroid` and `CorePotts.centroid_shift` on the exact moment
+  trackers, which are switched on whenever either name appears.
+  - Misuse is an error with a remedy: `centroid` outside a cell scope, `displacement`
+    outside a copy scope.
+  - Observed quantities that use `centroid` are per cell.
+- Tests:
+  - The centroid matches the brute-force mean.
+  - `displacement` matches the brute-force before/after difference, both when a site is
+    added and when one is removed, and is zero for other cells.
+  - A persistent walker (EMA polarity, μ = 1000) travels more than twice as far as an
+    unbiased one over 60 MCS.
+  - The model is JET-clean and allocation-free (QA list), and runs in Float32 on Metal
+    with trackers matching the host recompute.
+- Note: with an EMA polarity, μ must be large (hundreds or more), because the per-copy
+  displacement is about 1/V.

@@ -491,6 +491,26 @@ In `@drive`/`@bias`, in addition to `source`, `target`, `direction`:
 @after_mcs polarity ~ normalize(α * Pre(polarity) + (1 - α) * velocity)      # persistence memory
 ```
 
+**Implemented (scalar form).** `centroid(k)` is coordinate `k` of the cell's centroid (cell
+scope: updates, division conditions and rules, observed; periodic-safe moment trackers).
+`displacement(c, k)` is the exact shift of cell `c`'s centroid along axis `k` if the copy is
+accepted (proposal scope; `c` is `new` or `old`, zero for the medium or any other cell).
+Either one switches the moment trackers on. Persistent motion in scalars:
+
+```julia
+@variables begin px(cell) = 0.0; py(cell) = 0.0; cx(cell) = 0.0; cy(cell) = 0.0 end
+@drive copy => -μ * (px[new] * displacement(new, 1) + py[new] * displacement(new, 2) +
+                     px[old] * displacement(old, 1) + py[old] * displacement(old, 2))
+@after_mcs begin
+    px ~ ifelse(mcs == 0, 0.0, α * Pre(px) + (1 - α) * (centroid(1) - Pre(cx)))
+    py ~ ifelse(mcs == 0, 0.0, α * Pre(py) + (1 - α) * (centroid(2) - Pre(cy)))
+    cx ~ centroid(1); cy ~ centroid(2)
+end
+```
+
+(On periodic axes use a wrapped difference for the velocity.) The vector-valued names in
+the table and the library motility terms are still to come.
+
 Library: `DirectedMotion(direction; strength)`, `PersistentMotion(; memory, strength)`,
 `Chemotaxis(c; law = Linear() | Saturating(s) | MichaelisMenten(K) | LogScaled(),
 mode = Extension() | Retraction() | Reciprocal() | Interface(filter))`.

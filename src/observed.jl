@@ -22,7 +22,7 @@ end
 
 function _observed_scope(x)
     x, _ = _strip_populations(_unwrap(x))
-    scope = :model
+    scope = _has_op(x, cell_centroid) ? :cell : :model
     for v in _bare_vars(x)
         r = info(v).role
         r === :cell && (scope = :cell)

@@ -934,3 +934,63 @@ end
     end
     @test_throws ArgumentError mtkcompile(RandomEnergy(; name = :r))
 end
+
+@potts_model Persistent begin
+    @kinds medium A
+    @parameters μ = 0.0 T = 2.0
+    @variables begin
+        px(cell) = 0.0
+        py(cell) = 0.0
+        cx(cell) = 0.0
+        cy(cell) = 0.0
+    end
+    @lattice Lattice((48, 48); neighborhood = Moore(1))
+    @energy begin
+        Volume(A; target = 25.0, strength = 2.0)
+        contacts => 4 * (kind != kind′)
+    end
+    @drive copy => -μ * (px[new] * displacement(new, 1) + py[new] * displacement(new, 2) +
+                         px[old] * displacement(old, 1) + py[old] * displacement(old, 2))
+    @after_mcs begin
+        px ~ ifelse(mcs == 0, 0.0, 0.8 * Pre(px) + 0.2 * (centroid(1) - Pre(cx)))
+        py ~ ifelse(mcs == 0, 0.0, 0.8 * Pre(py) + 0.2 * (centroid(2) - Pre(cy)))
+        cx ~ centroid(1)
+        cy ~ centroid(2)
+    end
+    @observed x(cell) ~ centroid(1)
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "centroid/displacement: persistent motility" begin
+    σ = zeros(Int32, 48, 48)
+    σ[22:26, 22:26] .= 1
+    p = PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 1); seed = 1)
+    st, lat = p.u0, p.lattice
+    mean_x(σ, d) = sum(i -> CorePotts.coordinates(lat, i)[d], findall(==(1), vec(σ))) / count(==(1), σ)
+    @test CorePotts.centroid(Float64, st.cell, lat, 1) == (mean_x(σ, 1), mean_x(σ, 2))
+    for (x, new, old) in (((27, 24), 1, 0), ((22, 23), 0, 1))           # add / remove a site
+        prop = CorePotts.Proposal{2}(0, 0, x, 0, Int32(old), Int32(new))
+        σ2 = copy(σ); σ2[x...] = new
+        for k in 1:2
+            @test Potts._displacement_axis(Float64, st.cell, lat, prop, 1, k) ≈ mean_x(σ2, k) - mean_x(σ, k)
+            @test Potts._displacement_axis(Float64, st.cell, lat, prop, 2, k) == 0
+        end
+    end
+    s = solve(p, SequentialCPM())
+    @test s[:x][end][1] ≈ s.u[end].cell.cx[1]
+    function travel(μ)
+        d = map(1:6) do seed
+            u = solve(remake(p; p = [:μ => μ], tspan = (0, 60), seed), SequentialCPM()).u[end]
+            hypot(u.cell.cx[1] - 24, u.cell.cy[1] - 24)
+        end
+        return sum(d) / length(d)
+    end
+    @test travel(1000.0) > 2 * travel(0.0)
+    @potts_model BadCentroid begin
+        @kinds medium A
+        @lattice Lattice((8, 8))
+        @drive copy => centroid(1)
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    @test_throws Exception mtkcompile(BadCentroid(; name = :b))
+end

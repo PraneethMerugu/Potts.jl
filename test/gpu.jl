@@ -47,4 +47,12 @@ using Statistics: mean, var
         p = [:T => 1.0f-9])
     yo = solve(po, CheckerboardCPM(); backend).u[end].cell.decay₊y_c
     @test Array(yo)[1:2] ≈ fill(Float32((1 - 0.15 + 0.15^2 / 2 - 0.15^3 / 6 + 0.15^4 / 24)^20), 2) rtol = 1e-5
+    # centroid/displacement: moment trackers read in the proposal and cell kernels
+    σm = zeros(Int32, 48, 48); σm[22:26, 22:26] .= 1
+    pm = remake(PottsProblem(Persistent(; name = :pm), [ownership => σm, kind => [1]], (0, 20); T = Float32);
+        p = [:μ => 1000.0f0])
+    um = solve(pm, CheckerboardCPM(); backend).u[end]
+    cm = CorePotts.centroid(Float64, map(Array, um.cell), pm.lattice, 1)
+    @test Array(um.cell.cx)[1] ≈ cm[1] && Array(um.cell.cy)[1] ≈ cm[2]
+    @test Array(um.cell.volume)[1] == count(==(1), Array(um.σ))
 end

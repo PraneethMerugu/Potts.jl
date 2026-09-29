@@ -43,6 +43,16 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
+    if op === cell_centroid
+        haskey(env.bind, :__cell) || error("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities")
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
+        return :(CorePotts.centroid($(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]))[$k])
+    end
+    if op === copy_displacement
+        env.mode === :proposal || error("`displacement(c, k)` is only available in drives and on-copy updates")
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+        return :(Potts._displacement_axis($(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k))
+    end
     if op === random_uniform
         haskey(env.bind, :__draw) || error("`rand()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))")
         key, mcs, entity = env.bind[:__draw]
@@ -95,6 +105,12 @@ function _lower_named(x, i::Info, env::LowerEnv)
         return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
     end
     error("cannot lower `$x` (role $r)")
+end
+
+"""Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or new cell)."""
+@inline function _displacement_axis(::Type{T}, cell, lat, prop, c, k) where {T}
+    (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
+    return @inbounds CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1)[k]
 end
 
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""
