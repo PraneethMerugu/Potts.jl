@@ -55,4 +55,9 @@ end
     @test_throws ArgumentError mtkcompile(unit_model(:(@divide cells(A) when = m > 1)))         # mol vs unitless
     @test_throws ArgumentError mtkcompile(unit_model(:(@observed q ~ sum(m + μ for n in cells))))
     @test mtkcompile(unit_model(:(@divide cells(A) when = m > integral(c)))) isa CompiledPottsSystem  # mol vs mol
+    # literal zeros take any unit (published-model patterns); real clashes in max/min still fail
+    @test mtkcompile(unit_model(:(@drive copy => ifelse(old == 0, λ * (c[target] - c[source]) / c[source], 0.0)))) isa CompiledPottsSystem
+    @test mtkcompile(unit_model(:(@after_mcs m ~ max(Pre(m) - integral(c), 0)))) isa CompiledPottsSystem
+    @test_throws ArgumentError mtkcompile(unit_model(:(@after_mcs m ~ max(Pre(m), μ))))
+    @test_throws ArgumentError mtkcompile(unit_model(:(@drive copy => ifelse(μ, λ, 0.0))))       # condition in m
 end

@@ -774,3 +774,33 @@
 - Errors name the statement and the conflicting units.
 - `using Potts` is unaffected. DynamicQuantities is a weak dependency and is in the test
   project.
+
+## 2026-09-29 — Vector quantities; review 4 (3bef008..HEAD)
+
+- **Vector quantities (`8788419`).**
+  - `@variables p(cell)[1:n]` and `@parameters d[1:n]` declare scalar components
+    `p_1…p_n`, tagged `vector`/`index`, and bind `p` as a `QuantityVector`.
+  - `p[i]` is a component, `p[new]` is the vector at a cell, and `Pre(p)` is
+    component-wise.
+  - `p ~ rhs` in updates and equations is rewritten by the macro to `Potts._eq`,
+    component-wise. Symbolics' `~` does not take vectors, and defining it for
+    `Vector{Num}` would be type piracy.
+  - Also available: `dot`, `norm`, `normalize` (zero-safe), `centroid()`,
+    `displacement(c)`, per-component division rules, and operating-point / `remake`
+    expansion (`:p => M`, `:d => [..]`, `Model(; d = [..])`).
+  - A vector-authored persistent walker reproduces the scalar model's trajectory
+    exactly.
+- **Review 4 findings, all fixed with regressions:**
+  - **Units error handler.** `DimensionError` fields are `q1`/`q2`; the handler read
+    `x`/`y` and crashed.
+  - **Units false positives.** Literal zeros in `ifelse`/`max`/`min` failed published
+    patterns. They now take the other branch's unit, and `ifelse` conditions are still
+    checked.
+  - **Stale integrals.** Integrals were stale in saved and observed states, after
+    division, and after `remake`. CorePotts `Phases` gained `end_mcs` (run after the
+    lifecycle) and `at_init` (run when an integrator is created). Integrals refresh in
+    both, and additionally after the sweep when after-MCS statements read them. Observed
+    integrals are recomputed from the queried state. The construction-time fill is gone.
+  - **`Pre(x, 1)`.** It used MTK `Pre`, the live value, while `k ≥ 2` read the ring, so
+    the lag sequence skipped a step. All `Pre(x, k)` now read the ring.
+  - **History timing.** History pushes moved to `end_mcs`, after the lifecycle.

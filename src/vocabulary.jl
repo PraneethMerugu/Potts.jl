@@ -192,14 +192,15 @@ Symbolics.@register_symbolic history_lag(x, k)
 
 """
 `Pre(x)`: the value of `x` before the update being written (MTK). `Pre(x, k)`: the value of
-the site, field or model quantity `x` at the end of the MCS `k` before the current one,
-read from a ring buffer of depth `k` (`Pre(x, 1) == Pre(x)`). Before the run started, the
-lag is the initial value. Lags are available where the MCS clock is: updates, equations,
+the site, field or model quantity `x` at the end of the MCS `k` before the current one (the
+MCS boundary, after the lifecycle), read from a ring buffer of depth `k`. `Pre(x, 1)` is
+`Pre(x)` unless `x` changed earlier in the same MCS. Before the run started, the lag is the
+initial value. Lags are available where the MCS clock is: updates, equations,
 division conditions and rules, link rules.
 """
 _pre(x) = ModelingToolkitBase.Pre(x)
 _pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
-_pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); k == 1 ? _pre(x) : history_lag(x, Num(k)))
+_pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
 
 """`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
 random_uniform(n) = error("`random_uniform` is symbolic-only")

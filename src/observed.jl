@@ -58,8 +58,22 @@ function _observed_function(info::PottsModelInfo, x)
             _rgf(:((st, p, ctx, t) -> $code))
         end
         hctx = info.ctx
-        (u, p, t) -> f(u, p, hctx, t)
+        if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
+            ph = _integral_phases(c, T)
+            names = [_integral_name(x) for x in _integrals(c.sys)]
+            (u, p, t) -> f(_fresh_integrals(u, p, hctx, t, ph, names), p, hctx, t)
+        else
+            (u, p, t) -> f(u, p, hctx, t)
+        end
     end
+end
+
+"""A copy of state `u` whose integral arrays are recomputed from its sites (host)."""
+function _fresh_integrals(u, p, ctx, t, phases, names)
+    cell = merge(u.cell, NamedTuple(n => zero(getfield(u.cell, n)) for n in names))
+    st = CorePotts.CPMState(u.σ, cell, u.site, u.model, u.history)
+    foreach(ph -> ph(st, p, ctx, CorePotts.RNGKey(0), Int(t), CorePotts.CPU()), phases)
+    return st
 end
 
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)

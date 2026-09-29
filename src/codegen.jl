@@ -250,8 +250,14 @@ end
 function _phases(c::CompiledPottsSystem, T, values)
     rn = c.gather_names
     integrals = _integral_phases(c, T)
-    before = Any[]; after = Any[integrals...]
-    any(u -> u.phase === :before_mcs && _has_op(u.eq.rhs, cell_integral), c.sys.updates) && append!(before, integrals)
+    before = Any[]; after = Any[]
+    # integrals: fresh at every MCS boundary (and at init); refreshed after the sweep too when
+    # the after-MCS updates, equations or lifecycle read them
+    s = c.sys
+    after_reads = Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., (eq.rhs for eq in s.equations)...,
+        (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in s.link_rules)...]
+    any(x -> _has_op(x, cell_integral), after_reads) && append!(after, integrals)
     for ((phase, scope), us) in sort!(collect(c.updates); by = x -> string(x[1]))
         phase === :on_copy && continue
         dst = phase === :before_mcs ? before : after
@@ -278,12 +284,14 @@ function _phases(c::CompiledPottsSystem, T, values)
     end
     isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
     append!(after, _link_phases(c, T))
-    # history rings take the end-of-MCS values last
+    # at the MCS boundary (after the lifecycle): integrals, then history rings take the values
+    finish = Any[integrals...]
     for (n, _) in sort!(collect(_history_depths(c.sys)); by = first)
         scope = any(x -> info(x).name === n && info(x).role === :model, c.sys.variables) ? :model : :site
-        push!(after, CorePotts.HistoryPush(n => (scope, n)))
+        push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
-    return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after))
+    return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
+        at_init = Tuple(integrals))
 end
 
 # All cell ODEs (`D(x) ~ f` on cell variables, component equations) advance together, per

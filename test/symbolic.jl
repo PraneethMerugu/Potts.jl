@@ -1213,3 +1213,50 @@ end
     @test r.p.d_2 == 6.0 && r.u0.cell.q_2[1] == 8.0 && all(==(1.0), r.u0.site.g_2)
     @test_throws ArgumentError PottsProblem(VectorBits(; name = :v), [ownership => σ2, kind => [1], :q => [1.0, 2.0]], (0, 1))
 end
+
+@potts_model Fresh begin
+    @kinds medium A
+    @parameters k = 1.0
+    @variables begin
+        w(site) = 1.0
+        mb(cell) = 0.0
+        n(model) = 0.0
+        d1(site) = -1.0
+    end
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 44)^2
+    @before_mcs mb ~ integral(k * w)
+    @after_mcs begin
+        w ~ Pre(w) + 1
+        n ~ Pre(n) + 1
+        d1 ~ Pre(n, 1) - Pre(n, 2)
+    end
+    @divide cells(A) when = volume > 40, along = RandomPlane()
+    @observed begin
+        cmass(cell) ~ integral(w)
+        occ(cell) ~ integral(1)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "integral and lag review regressions" begin
+    σ = zeros(Int32, 16, 16); σ[3:8, 3:8] .= 1
+    p = PottsProblem(Fresh(; name = :f), [ownership => σ, kind => [1]], (0, 4); capacity = 8)
+    sol = solve(p, SequentialCPM(); saveat = 0:4)
+    brute(u, x) = [sum(x[u.σ .== c]; init = 0.0) for c in eachindex(u.cell.volume)]
+    names = [Potts._integral_name(x) for x in Potts._integrals(p.f.sys.csys.sys)]
+    for (t, u) in zip(sol.t, sol.u)
+        @test sol[:cmass][t + 1] ≈ brute(u, u.site.w)                 # observed: the saved state itself
+        @test sol[:occ][t + 1] == u.cell.volume                        # after division too
+        fresh = Potts._fresh_integrals(u, p.p, p.f.sys.ctx, t, Potts._integral_phases(p.f.sys.csys, Float64), names)
+        @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)   # stored = recomputed at the boundary
+    end
+    @test sol.stats.lifecycle.divisions >= 1
+    @test sol.u[3].model.n[1] == 2 && all(==(1), sol.u[3].site.d1)       # Pre(n, 1) - Pre(n, 2) = 1
+    # before-MCS reads see the state at the MCS boundary (at init: the initial state), also after remake
+    u1 = solve(remake(p; tspan = (0, 1)), SequentialCPM()).u[end]
+    @test u1.cell.mb[1] ≈ 36
+    q = remake(p; p = [:k => 5.0], u0 = [ownership => σ, kind => [1], :w => 2.0], tspan = (0, 1))
+    @test q[:cmass] ≈ [72; zeros(7)]
+    @test solve(q, SequentialCPM()).u[end].cell.mb[1] ≈ 5 * 72
+end

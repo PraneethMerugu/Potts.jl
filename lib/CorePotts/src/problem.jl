@@ -158,6 +158,8 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback))
+    integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
     end
@@ -264,6 +266,8 @@ function CommonSolve.step!(integ::PottsIntegrator)
         integ.stats.launches += run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
             integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
     end
+    integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += nmobile(integ.ctx.mobility, lat)

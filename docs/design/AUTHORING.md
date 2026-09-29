@@ -213,12 +213,15 @@ end
 - Updates are equations; the left side is the variable at the new MCS, `Pre(x)` the
   previous value, `Pre(x, k)` k steps back (histories are inferred).
   **Implemented:**
-  - `Pre(x, k)` is the value at the end of the MCS `k` before the current one, and
-    `Pre(x, 1) == Pre(x)`.
+  - `Pre(x, k)` is the value at the end of the MCS `k` before the current one, i.e. at
+    the MCS boundary after the lifecycle. `Pre(x, 1)` differs from `Pre(x)` when `x`
+    changed earlier in the same MCS.
   - It works for site, field and model quantities, anywhere the MCS clock is available:
     updates, equations, division conditions and rules, and link rules.
   - Each lagged variable gets one ring buffer, as deep as its largest `k`. The rings
-    start as the initial value and take the end-of-MCS value after every other phase.
+    start as the initial value and take the value at the MCS boundary (CorePotts
+    `end_mcs` phases). A value changed after that, by a callback or a setter, reaches the
+    ring at the next boundary.
   - Lags of cell variables are rejected, because rings would not follow capacity growth
     and division. Chain `Pre` instead.
   - Lags are also rejected in energies and `@observed`.
@@ -567,9 +570,11 @@ end
     temperature.
   - For a mean, divide by `volume`. For a count, use `integral(x > θ)`.
   - Each distinct integral gets one cell array, recomputed by an atomic `CellReduce`
-    kernel at the start of the after-MCS phases, so it reflects the state after the copy
-    sweep. It is recomputed before the before-MCS phases too, when they read it.
-  - It is filled at problem construction, so it is valid at t0.
+    kernel at the MCS boundary (`end_mcs`, after the lifecycle) and when an integrator
+    starts (`at_init`, so `remake` is respected).
+  - When after-MCS updates, equations, division rules or link rules read an integral,
+    it is also recomputed right after the copy sweep.
+  - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the
     sites. For the same reason it is rejected in energies and drives.

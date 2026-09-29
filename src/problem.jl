@@ -69,9 +69,6 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         fingerprint = hash((string.(exprs), core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T)),
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
             hctx, Dict{Any, Any}()))
-    # integrals start valid: fill them on the host once
-    key = CorePotts.RNGKey(seed, replica, repeat)
-    foreach(ph -> ph(st, p, hctx, key, tspan[1], CorePotts.CPU()), _integral_phases(c, T))
     frozen = _frozen_mask(sys, st)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, frozen, seed, replica, repeat)

@@ -40,12 +40,29 @@ end
 
 _hasunit(x) = SymbolicUtils.getmetadata(Symbolics.unwrap(x), VariableUnit, nothing) !== nothing
 
+# A literal zero takes any unit: `ifelse(c, x, 0)`, `max(x, 0)`, `min(0, x)` have x's unit.
+_iszeroconst(x) = SymbolicUtils.isconst(x) && iszero(SymbolicUtils.unwrap_const(x))
+function _zero_free(x)
+    x = Symbolics.unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic && SymbolicUtils.iscall(x) || return x
+    op = SymbolicUtils.operation(x)
+    args = map(_zero_free, SymbolicUtils.arguments(x))
+    if op === ifelse && length(args) == 3          # keep the condition (it must be unitless)
+        _iszeroconst(args[3]) && (args = [args[1], args[2], args[2]])
+        _iszeroconst(args[2]) && (args = [args[1], args[3], args[3]])
+    elseif (op === max || op === min) && length(args) == 2
+        _iszeroconst(args[2]) && return args[1]
+        _iszeroconst(args[1]) && return args[2]
+    end
+    return SymbolicUtils.maketerm(typeof(x), op, args, SymbolicUtils.metadata(x))
+end
+
 function _unit(label, x)
     try
-        return get_unit(Symbolics.unwrap(x))
+        return get_unit(_zero_free(x))
     catch err
         msg = err isa ValidationError ? err.message : err isa DQ.DimensionError ?
-              ": $(err.x) and $(err.y) are not dimensionally compatible." : nothing
+              ": $(err.q1) and $(err.q2) are not dimensionally compatible." : nothing
         msg === nothing && rethrow()
         throw(ArgumentError("units: in $label$msg"))
     end

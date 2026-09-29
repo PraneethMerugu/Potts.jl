@@ -139,13 +139,23 @@ A ring buffer for snapshots of array `x` (all slots start as copies of `x`).
 history_buffer(x::AbstractArray, depth::Integer) =
     repeat(x, ntuple(_ -> 1, ndims(x))..., depth)
 
-"""Phases run before and after the copy sweep of every MCS."""
-struct Phases{B, A}
+"""
+    Phases(; before_mcs, after_mcs, end_mcs, at_init)
+
+Phases of every MCS: `before_mcs` before the copy sweep, `after_mcs` after it, `end_mcs`
+after the lifecycle (the state at the MCS boundary: history pushes, derived quantities);
+`at_init` once when an integrator is created (derived quantities of the initial state).
+"""
+struct Phases{B, A, E, I}
     before_mcs::B
     after_mcs::A
+    end_mcs::E
+    at_init::I
 end
-Phases(; before_mcs = (), after_mcs = ()) = Phases(Tuple(before_mcs), Tuple(after_mcs))
-const NO_PHASES = Phases((), ())
+Phases(; before_mcs = (), after_mcs = (), end_mcs = (), at_init = ()) =
+    Phases(Tuple(before_mcs), Tuple(after_mcs), Tuple(end_mcs), Tuple(at_init))
+Phases(before_mcs, after_mcs) = Phases(before_mcs, after_mcs, (), ())
+const NO_PHASES = Phases((), (), (), ())
 
 """Enqueue every phase; returns the number of launches."""
 _run_phases(phases::Tuple, st, p, ctx, key, mcs, backend) =
