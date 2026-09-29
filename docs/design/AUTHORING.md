@@ -552,6 +552,28 @@ end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
 `side = RandomSide()` (default, CompuCell3D) or `CanonicalSide()`; `along =
 minor_axis()` / `major_axis()` / `RandomPlane()` / `normal(v)`.
 
+### 12.7a Compartments (D-036, implemented)
+
+```julia
+@energy begin
+    contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+    clusters(cytoplasm) => λc * (cluster_volume - Vc)^2 + λs * (cluster_surface - Sc)^2
+end
+@divide clusters(cytoplasm) when = cluster_volume >= 2Vc, mass => Split()
+PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
+```
+
+- **Clusters.** A cluster is named by its lowest live member (the root). `clusters(k)`
+  selects the clusters whose root is of kind `k`.
+- **Where the trackers can be read.** Cells can read their cluster's trackers in updates,
+  division conditions and observed quantities.
+  - They cannot read them in cell energies: those values change when other members copy,
+    so a cell-local ΔH would be wrong.
+  - `cluster` itself never changes on a copy, so any energy can use it.
+- **Dividing clusters.** `@divide clusters(…)` divides a cluster as a unit:
+  - Every member splits along one plane through the cluster centroid.
+  - The state rules apply to every member.
+
 ### 12.8 Initialization, import and steering
 
 - Layouts: `UniformSeeds`, `RejectionPlacement`, `Rectangles`, `Spheres`, `Blobs`,
