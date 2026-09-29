@@ -98,7 +98,8 @@ counter = (mcs::UInt32, phase_round::UInt32, entity::UInt32, (stream << 24) | dr
   model (direction, acceptance, priority, each authored `draw`, lifecycle side, …), from
   a namespaced operation key. `draw` indexes repeated draws inside one operation.
 - `entity` is the site linear index, cell id or attempt counter depending on the stream.
-- Nothing depends on thread order, launch order or backend → exact replay.
+- Nothing depends on thread order or launch order → same seed reproduces a run on a
+  given backend (free; not a published guarantee, D-029).
 - 4x32 rather than the old 4x64: 32-bit multiplies are native on every GPU.
 
 ### 1.5 Algorithms
@@ -126,9 +127,9 @@ source direction; the fidelity reference.
 - Dynamics differ from sequential (mutual maxima); documented and tested
   statistically.
 
-**Metropolis** uses a package-owned `exp` (pure Julia, no fast-math) so CPU and GPU
-agree bitwise for the same scalar type. The acceptance test is `u < exp(-ΔH/T)` with
-`ΔH ≤ 0` short-circuited.
+**Metropolis** uses native `exp` (fast math allowed); CPU/GPU agreement is
+statistical (D-029). The acceptance test is `u < exp(-ΔH/T)` with `ΔH ≤ 0`
+short-circuited.
 
 ### 1.6 The MCS schedule
 
@@ -183,7 +184,7 @@ applied at the boundary.
 - `PottsSolution <: AbstractTimeseriesSolution`; `sol[x]`, `sol(t)`, SII through
   `f.sys`.
 - `checkpoint(integ)` = host copy of `CPMState` + `mcs` + RNG key + `fingerprint` + `p`.
-  `init(prob, alg; checkpoint = ck)` continues bitwise (counter RNG makes this exact).
+  `init(prob, alg; checkpoint = ck)` continues the run (statistically correct; D-029).
   Fingerprint mismatch is an error.
 
 ### 1.10 Backends
@@ -323,8 +324,8 @@ means, predicate filters, interface queries — all `Reduce`/`KeyedReduce` stage
 | `delta_H` | brute-force total Hamiltonian difference on random flips, every model |
 | trackers | full recomputation after N steps equals the maintained value |
 | checkerboard | sequential statistics (heterotypic fraction, cell counts, volume histograms) over ≥ 12 seeds |
-| replay | identical results across runs, thread counts, and CPU vs GPU (same scalar type) |
-| checkpoint | split run == straight run, bitwise |
+| determinism | same seed + backend → same run (debug aid); CPU vs GPU agree statistically |
+| checkpoint | state round-trips exactly; continuation is statistically correct |
 | lifecycle | invariants: dense ids, volumes sum to occupied sites, no orphan sites; scientific tests ported from CorePotts |
 | reference parity | each published model vs the frozen `reference/` environment, KS test on saved observables over 16 seeds |
 | quality | Aqua, ExplicitImports, JET `@test_opt` on `init`/`step!`, AllocCheck on the warm step, Downgrade CI |

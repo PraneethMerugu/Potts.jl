@@ -139,3 +139,18 @@ neighborhoods of any order (`Moore(k)`, `VonNeumann(k)`, `Ball(r)`, `Shell(k)`,
 ## D-028 Renames
 Decision: the table in `AUTHORING.md` §9 is authoritative; old names are not kept as
 aliases.
+
+## D-029 Performance over exact playback (2026-09-29, maintainer principle)
+Principle: take inspiration from the best high-level features; disregard guarantees
+that cost performance. Exact trajectory playback is not a product goal.
+Decisions:
+- **Supersedes D-006.** Metropolis uses native `exp` (fast math allowed on GPU). CPU/GPU
+  agreement is statistical, not bitwise.
+- Same seed + same backend + same scalar type → same run is kept, because the counter RNG
+  makes it free; it is a debugging aid, not a published guarantee.
+- Checkpoints resume a statistically correct continuation; bitwise split == straight is
+  not required (tests assert state round-trips exactly, not trajectories).
+- No ordered/canonical reductions on the hot path when a relaxed atomic suffices;
+  LocalMath's `CanonicalLeftFold` remains available, never the default in CorePotts.
+- Filter for importing legacy features: a feature is carried over only if its
+  steady-state cost is ~zero or it is scientifically essential.

@@ -15,7 +15,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M1.5** CI matrix (Core, QA, Reference), Downgrade job, docs build, AirspeedVelocity suite with Graner–Glazier; `reference/` environment (D-021) with the legacy models runnable.
   Accept: CI green on `monorepo`; `benchmark/` produces the table from `FusedCPM/README.md` numbers ± noise.
 
-## Phase 2 — CorePotts engine (each with brute-force ΔH + replay + CPU/Metal parity)
+## Phase 2 — CorePotts engine (each with brute-force ΔH + seed determinism + statistical CPU/Metal parity)
 
 - [ ] **M2.1** N-dimensional lattice with per-axis boundaries/spacing and neighborhoods of any order (`Moore(k)`, `VonNeumann(k)`, `Ball`, `Shell`, `Stencil`, weighted); contact + volume + surface energies; surface tracker; generic cell/site energy functions. Accept: oracle tests; Graner–Glazier reference parity (KS over 16 seeds).
 - [ ] **M2.2** moments tracker (centroid, elongation, periodic-safe geometry); site sums and minima trackers; structured owner sums.
@@ -26,8 +26,8 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M2.7** spatial queries and Cartesian ownership domains (fixed owners, immutable sites, per-face boundaries): neighbor counts, weighted contact measures, boundary-site queries, sums/means, predicate filters, interface queries.
 - [ ] **M2.8** lifecycle: trigger/plan/apply; divide (principal major/minor, random plane, specified normal, external), remove, retire, create, transition; state rules; placement; conflicts; inadmissibility policies; capacity growth. Accept: OpenVT reference parity; ported CorePotts lifecycle scientific tests; invariants.
 - [ ] **M2.9** relationships: CSR store, energies, create/remove/retune, lifecycle interaction.
-- [ ] **M2.10** checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: split == straight bitwise; MakiePotts tests.
-- [ ] **M2.11** Metal: all of the above in the GPU group; parity bitwise for Float32. Accept: `GROUP=GPU` locally green.
+- [ ] **M2.10** checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
+- [ ] **M2.11** Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
 
 ## Phase 3 — Potts symbolic front end (spec: AUTHORING.md)
 
