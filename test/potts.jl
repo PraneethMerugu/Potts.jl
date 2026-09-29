@@ -1,4 +1,7 @@
-using Test, Potts
+using Potts, Test
+
 @testset "Potts re-exports CorePotts" begin
-    @test isdefined(Potts, :CorePotts)
+    @test isdefined(Potts, :CPMProblem)
 end
+
+include("parity/graner.jl")

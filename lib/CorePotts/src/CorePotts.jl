@@ -14,9 +14,10 @@ using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
 using SciMLBase: SciMLBase, remake
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
-    relation
+    Weighted, relation
 export CPMState, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
-    contact_delta, volume_delta
+    contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
+    recompute_surface, site_delta
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
 export init, solve, solve!, step!, remake, CPU

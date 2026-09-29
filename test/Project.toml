@@ -1,5 +1,9 @@
 [deps]
+CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]

@@ -65,11 +65,20 @@ end
 # ---------------------------------------------------------------------------------------
 # Relations
 
-"""A resolved neighborhood: `K` offsets in canonical order (by squared length, then lexicographic)."""
-struct Relation{N, K}
+"""
+A resolved neighborhood: `K` offsets in canonical order (by squared length, then
+lexicographic) and optional per-offset weights (`Float32`, device-safe; `nothing` = all 1).
+"""
+struct Relation{N, K, W <: Union{Nothing, NTuple{K, Float32}}}
     offsets::NTuple{K, NTuple{N, Int32}}
+    weights::W
 end
+Relation{N, K}(offsets) where {N, K} = Relation{N, K, Nothing}(offsets, nothing)
 Base.length(::Relation{N, K}) where {N, K} = K
+
+"""Weight of the `k`-th offset (`Int32(1)` when unweighted, so counts stay integers)."""
+@inline weight(::Relation{N, K, Nothing}, k) where {N, K} = Int32(1)
+@inline weight(r::Relation, k) = @inbounds r.weights[k]
 radius(r::Relation) = maximum(o -> maximum(abs, o; init = 0), r.offsets; init = 0)
 
 abstract type RelationSpec end
@@ -107,6 +116,17 @@ struct Ball <: RelationSpec
 end
 Ball(r::Real; include_self = false) = Ball(r, include_self)
 
+"""
+    Weighted(spec, weight)
+
+`spec` with per-offset weights `weight(offset::NTuple{N,Int})` (e.g. `o -> 1 / sqrt(sum(abs2, o))`
+for distance-weighted contact). Weights are stored as `Float32`.
+"""
+struct Weighted{S <: RelationSpec, F} <: RelationSpec
+    spec::S
+    weight::F
+end
+
 """Explicit offsets."""
 struct Stencil <: RelationSpec
     offsets::Vector{Vector{Int}}
@@ -143,13 +163,25 @@ under a small periodic axis (two offsets reaching the same site, or an offset re
 the origin) are rejected.
 """
 function relation(spec::RelationSpec, l::Lattice{N}) where {N}
+    offs = _offsets(spec, l)
+    return Relation{N, length(offs)}(Tuple(map(o -> Int32.(o), offs)))
+end
+function relation(spec::Weighted, l::Lattice{N}) where {N}
+    offs = _offsets(spec.spec, l)
+    w = Tuple(Float32[spec.weight(o) for o in offs])
+    all(isfinite, w) || throw(ArgumentError("relation weights must be finite, got $w"))
+    return Relation{N, length(offs), typeof(w)}(Tuple(map(o -> Int32.(o), offs)), w)
+end
+
+function _offsets(spec::RelationSpec, l::Lattice{N}) where {N}
     offs = unique(_candidates(spec, N))
     filter!(o -> _include_self(spec) || !all(iszero, o), offs)
     sort!(offs; by = o -> (_sq(o), o))
     _check_aliasing(offs, l)
-    return Relation{N, length(offs)}(Tuple(map(o -> Int32.(o), offs)))
+    return offs
 end
 relation(r::Relation, ::Lattice) = r
+has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
 function _check_aliasing(offs, l::Lattice{N}) where {N}
     wrap(o) = ntuple(d -> l.periodic[d] ? mod(o[d], l.dims[d]) : o[d], N)

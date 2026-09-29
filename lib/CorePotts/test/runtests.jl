@@ -50,6 +50,52 @@ function total_H(st, lat, contact, p)
     return H + sum(p.λ * (v - p.V0)^2 for v in vol)
 end
 
+# Graner–Glazier plus a surface (perimeter) constraint over a possibly weighted relation.
+function gs_delta_H(st, p, prop, ctx)
+    J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+    E(v, c) = p.λ * (v - p.V0)^2
+    S(s, c) = p.λs * (s - p.S0)^2
+    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+           surface_delta(st.cell.surface, prop,
+               surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface)), S)
+end
+function gs_commit!(st, p, prop, ctx)
+    commit_volume!(st, p, prop, ctx)
+    commit_surface!(st.cell.surface, prop,
+        surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface)))
+end
+const GS = CPMFunction(gs_delta_H; commit! = gs_commit!, temperature = gg_temperature)
+gs_params() = merge(gg_params(), (; λs = 0.5, S0 = 20.0))
+
+function brute_surface(σ, lat, r, ncell)
+    S = zeros(Float64, ncell)
+    for i in 1:nsites(lat), (k, off) in enumerate(r.offsets)
+        c = σ[i]
+        inside, y = shift(lat, coordinates(lat, i), off)
+        (c != 0 && inside && σ[linear_index(lat, y)] != c) || continue
+        S[c] += r.weights === nothing ? 1.0 : Float64(r.weights[k])
+    end
+    return S
+end
+function total_H_surface(st, lat, ctx, p)
+    H = 0.0
+    k(c) = c == 0 ? 1 : Int(st.cell.kind[c]) + 1
+    r = ctx.contact
+    for i in 1:nsites(lat), (j, off) in enumerate(r.offsets)
+        inside, y = shift(lat, coordinates(lat, i), off)
+        inside || continue
+        a, b = st.σ[i], st.σ[linear_index(lat, y)]
+        w = r.weights === nothing ? 1.0 : Float64(r.weights[j])
+        a != b && (H += w * p.J[k(a), k(b)] / 2)
+    end
+    n = length(st.cell.kind)
+    vol = [count(==(c), st.σ) for c in 1:n]
+    S = brute_surface(st.σ, lat, ctx.surface, n)
+    return H + sum(p.λ * (v - p.V0)^2 for v in vol) + sum(p.λs * (s - p.S0)^2 for s in S)
+end
+surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
+    cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T)))
+
 @testset "CorePotts" begin
     @testset "relations" begin
         l2 = Lattice((20, 20)); l3 = Lattice((12, 12, 12))
@@ -140,6 +186,58 @@ end
             checked >= 300 && break
         end
         @test checked >= 100
+    end
+
+    invdist(o) = 1 / sqrt(sum(abs2, o))
+    @testset "ΔH with surface, weighted contact ($(length(dims))-D, $cspec, $sspec)" for (
+            dims, cspec, sspec) in (
+            ((20, 20), Moore(1), VonNeumann(1)),
+            ((20, 18), Weighted(NeighborOrder(2), invdist), Moore(1)),
+            ((10, 10, 10), Weighted(Moore(1), invdist), Weighted(NeighborOrder(2), invdist)),
+            ((12, 12, 11), VonNeumann(1), Moore(1)))
+        σ, kinds = blocks(dims, 3)
+        lat = Lattice(dims; boundary = length(dims) == 2 ? Periodic() : (Periodic(), Closed(), Periodic()))
+        st = surface_state(σ, kinds, lat, sspec)
+        p = gs_params()
+        ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat),
+            contact = relation(cspec, lat), surface = relation(sspec, lat))
+        @test st.cell.surface ≈ brute_surface(st.σ, lat, ctx.surface, length(kinds))
+        st32 = surface_state(σ, kinds, lat, sspec; T = Float32)
+        checked = 0
+        for t in 1:7:nsites(lat), dir in 1:length(ctx.proposal)
+            inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
+            s = linear_index(lat, y)
+            (inside && st.σ[t] != st.σ[s]) || continue
+            prop = Proposal(t, s, coordinates(lat, t), dir, st.σ[t], st.σ[s])
+            before = total_H_surface(st, lat, ctx, p)
+            dH = gs_delta_H(st, p, prop, ctx)
+            after = deepcopy(st)
+            after.σ[t] = prop.new
+            gs_commit!(after, p, prop, ctx)          # after the write, as the algorithms do
+            @test dH ≈ total_H_surface(after, lat, ctx, p) - before atol = 1e-6
+            @test after.cell.surface ≈ brute_surface(after.σ, lat, ctx.surface, length(kinds))
+            @test gs_delta_H(st32, p, prop, ctx) ≈ dH rtol = 1e-5 atol = 1e-2   # Float32 tracker
+            checked += 1
+            checked >= 150 && break
+        end
+        @test checked >= 50
+    end
+
+    @testset "surface trackers survive a run ($(nameof(typeof(alg))))" for alg in (
+            SequentialCPM(), CheckerboardCPM())
+        σ, kinds = blocks((30, 30), 5)
+        lat = Lattice((30, 30))
+        sspec = Weighted(Moore(1), invdist)
+        sprob = CPMProblem(GS, surface_state(σ, kinds, lat, sspec), lat, (0, 30), gs_params();
+            relations = (; surface = sspec))
+        sol = solve(sprob, alg)
+        @test sol.retcode == ReturnCode.Success
+        u = sol.u[end]
+        @test u.σ != σ
+        @test u.cell.surface ≈ brute_surface(u.σ, lat, relation(sspec, lat), length(kinds)) rtol = 1e-12
+        bad = CPMProblem(GS, sprob.u0, lat, (0, 1), gs_params();
+            relations = (; surface = Moore(1; include_self = true)))
+        @test_throws ArgumentError init(bad, alg)
     end
 
     σ0, kinds0 = blocks((36, 36), 5)

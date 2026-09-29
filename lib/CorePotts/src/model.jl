@@ -116,22 +116,103 @@ end
 # Energy primitives used by generated and hand-written models.
 
 """
-    contact_delta(σ, ctx, prop, J)
+    contact_delta(σ, ctx, prop, J; relation = ctx.contact)
 
-Change of `Σ_{unordered pairs} J(owner, owner′)` over the contact relation when `prop` is
-accepted. `J(a, b)` takes cell ids (`0` = medium) and is only evaluated for `a ≠ b`.
+Change of `Σ_{unordered pairs} w·J(owner, owner′)` over a (possibly weighted) relation when
+`prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only evaluated for
+`a ≠ b`.
 """
-@inline function contact_delta(σ, ctx, prop::Proposal{N}, J::F) where {N, F}
+@inline function contact_delta(σ, ctx, prop::Proposal{N}, J::F;
+        relation = ctx.contact) where {N, F}
     a, b = prop.old, prop.new
     dH = zero(typeof(J(a, b)))
-    for off in ctx.contact.offsets
-        inside, y = shift(ctx.lattice, prop.x, off)
+    for k in 1:length(relation)
+        inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(ctx.lattice, y)]
-        n != b && (dH += J(b, n))
-        n != a && (dH -= J(a, n))
+        w = weight(relation, k)
+        n != b && (dH += w * J(b, n))
+        n != a && (dH -= w * J(a, n))
     end
     return dH
+end
+
+"""
+    surface_change(σ, ctx, prop; relation = ctx.surface, T = <weight type>) -> (δold, δnew)
+
+Change of the old and new cells' surfaces (weighted count of bonds to other owners over
+`relation`) when `prop` is accepted, accumulated in `T` (pass the tracker's element type;
+Float32 weights convert exactly). Only these two cells' surfaces change.
+"""
+@inline function surface_change(σ, ctx, prop::Proposal{N}; relation = ctx.surface,
+        T::Type = typeof(weight(relation, 1))) where {N}
+    a, b = prop.old, prop.new
+    δa = zero(T)
+    δb = δa
+    for k in 1:length(relation)
+        inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
+        inside || continue
+        n = @inbounds σ[linear_index(ctx.lattice, y)]
+        w = T(weight(relation, k))
+        δa += ifelse(n == a, w, -w)     # t leaves a: bonds to a appear, others vanish
+        δb += ifelse(n == b, -w, w)     # t joins b: bonds to b vanish, others appear
+    end
+    return δa, δb
+end
+
+"""
+    surface_delta(surface, prop, δ, E)
+
+Change of `Σ_cells E(surface, cell)` given `δ = surface_change(…)`.
+"""
+@inline function surface_delta(surface, prop, δ, E::F) where {F}
+    a, b = prop.old, prop.new
+    δa, δb = δ
+    dH = zero(typeof(E(zero(eltype(surface)), Int32(1))))
+    if a != 0
+        s = @inbounds surface[a]
+        dH += E(s + δa, a) - E(s, a)
+    end
+    if b != 0
+        s = @inbounds surface[b]
+        dH += E(s + δb, b) - E(s, b)
+    end
+    return dH
+end
+
+"""
+Apply `δ = surface_change(…)` to a surface tracker. Valid before or after the ownership
+write, because the surface relation excludes the origin (checked at `init`).
+"""
+@inline function commit_surface!(surface, prop, δ)
+    prop.old != 0 && @inbounds(surface[prop.old] += δ[1])
+    prop.new != 0 && @inbounds(surface[prop.new] += δ[2])
+    return nothing
+end
+
+"""Change of `Σ_sites E(site, owner)` when the target's owner changes: `E(t, new) − E(t, old)`."""
+@inline site_delta(prop, E::F) where {F} = E(prop.target, prop.new) - E(prop.target, prop.old)
+
+"""
+    recompute_surface(σ, lattice, relation, ncell; T = <weight type>) -> Vector{T}
+
+Surfaces from scratch (initialization and tracker checks). Weighted surfaces default to
+`Float32` (device-portable); pass `T = Float64` for long CPU runs.
+"""
+function recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer;
+        T::Type = typeof(weight(r, 1)))
+    S = zeros(T, ncell)
+    for i in 1:nsites(lat)
+        c = σ[i]
+        c == 0 && continue
+        x = coordinates(lat, i)
+        for k in 1:length(r)
+            inside, y = shift(lat, x, r.offsets[k])
+            inside || continue
+            σ[linear_index(lat, y)] != c && (S[c] += T(weight(r, k)))
+        end
+    end
+    return S
 end
 
 """Change of `Σ_cells E(volume, cell)` when `prop` moves one site from `old` to `new`."""
