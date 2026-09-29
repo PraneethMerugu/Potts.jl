@@ -66,6 +66,7 @@ Base.@kwdef mutable struct PottsStats
     attempts::Int = 0
     accepted::Int = -1          # -1: not counted by this algorithm (checkerboard)
     launches::Int = 0
+    lifecycle::LifecycleStats = LifecycleStats()
 end
 
 """
@@ -75,12 +76,13 @@ The integrator for a `CPMProblem`. `t` is the current MCS; `integrator.u` return
 copy of the state (synchronizing the device only when accessed). `step!` enqueues one MCS
 without synchronizing.
 """
-mutable struct PottsIntegrator{Alg, Law, P, S, C, F, KF, Pa, Ctx, B} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
+mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
     const prob::P
     const alg::Alg
     const law::Law
     const state::S
     const cache::C
+    const lcache::LCC
     const f::F
     const kf::KF
     p::Pa
@@ -117,7 +119,9 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0)) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
-    integ = PottsIntegrator(prob, alg, _device_law(alg.acceptance, backend), state, cache, prob.f, device_functions(prob.f), p, ctx, backend, key,
+    lcache = prob.f.lifecycle === nothing ? nothing :
+             LifecycleCache(backend, ndims(lat), ncells(prob.u0))
+    integ = PottsIntegrator(prob, alg, _device_law(alg.acceptance, backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats())
     save_start && _save!(integ)
@@ -130,6 +134,8 @@ from the model's declared footprint, so the declared read radius must cover ever
 the kernels read: the proposal source and the contact neighborhood.
 """
 function _preflight(prob::CPMProblem, alg::CPMAlgorithm, ctx)
+    prob.f.lifecycle === nothing || haskey(prob.u0.cell, :m1) ||
+        throw(ArgumentError("a lifecycle needs the moment trackers: add `init_moments(σ, lattice, capacity)` to the cell state"))
     haskey(ctx, :surface) && has_origin(ctx.surface) &&
         throw(ArgumentError("the surface relation must not include the origin"))
     alg isa CheckerboardCPM || return nothing
@@ -191,6 +197,10 @@ function CommonSolve.step!(integ::PottsIntegrator)
     end
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
+    if integ.f.lifecycle !== nothing
+        integ.stats.launches += run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
+            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
+    end
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += nmobile(integ.ctx.mobility, lat)

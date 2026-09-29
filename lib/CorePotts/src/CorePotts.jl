@@ -27,6 +27,9 @@ export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
     locally_connected, merks_connectivity, forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
     neighbors, contact
+export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
+    AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
+    principal_axis, rebuild_trackers!, with_capacity
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
@@ -40,6 +43,7 @@ include("phases.jl")
 include("fields.jl")
 include("drives.jl")
 include("spatial.jl")
+include("lifecycle.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

@@ -27,27 +27,40 @@ end
 """
     init_moments(σ, lattice, ncell) -> (; anchor, m1, m2)
 
-Moment trackers from scratch. Each cell is anchored at its first site in linear order.
+Moment trackers from scratch. Each cell is anchored at the rounded per-axis centre of its
+sites (the circular mean on periodic axes), so the minimum-image offsets are valid while
+the cell spans less than the whole axis about its centre.
 """
 function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
-    anchor = zeros(Int32, N, ncell)
-    m1 = zeros(Int64, N, ncell)
-    m2 = zeros(Int64, npairs(N), ncell)
-    seen = falses(ncell)
+    S = zeros(N, ncell); C = zeros(N, ncell); M = zeros(N, ncell); V = zeros(Int, ncell)
     for i in 1:nsites(l)
         c = σ[i]
         c == 0 && continue
         x = coordinates(l, i)
-        if !seen[c]
-            seen[c] = true
-            anchor[:, c] .= x
+        V[c] += 1
+        for d in 1:N
+            θ = 2π * (x[d] - 1) / l.dims[d]
+            S[d, c] += sin(θ); C[d, c] += cos(θ); M[d, c] += x[d]
         end
-        _accumulate!(m1, m2, c, min_image(l, x, ntuple(d -> Int(anchor[d, c]), N)), 1)
+    end
+    anchor = ones(Int32, N, ncell)
+    for c in 1:ncell, d in 1:N
+        V[c] == 0 && continue
+        n = l.dims[d]
+        centre = l.periodic[d] ? atan(S[d, c], C[d, c]) * n / 2π + 1 : M[d, c] / V[c]
+        anchor[d, c] = l.periodic[d] ? mod1(round(Int, centre), n) : round(Int, centre)
+    end
+    m1 = zeros(Int64, N, ncell)
+    m2 = zeros(Int64, npairs(N), ncell)
+    for i in 1:nsites(l)
+        c = σ[i]
+        c == 0 && continue
+        a = ntuple(d -> Int(anchor[d, c]), N)
+        _accumulate!(m1, m2, c, min_image(l, coordinates(l, i), a), 1)
     end
     cell = (; anchor, m1, m2)
-    volume = [count(==(c), σ) for c in 1:ncell]
     for c in 1:ncell
-        _recenter!(cell, l, c, volume[c])
+        _recenter!(cell, l, c, V[c])
     end
     return cell
 end

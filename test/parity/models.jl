@@ -62,3 +62,29 @@ function wortel_problem(; tspan = (0, 40), seed = 0)
     return CPMProblem(f, st, lat, tspan, p; contact = Moore(1),
         relations = (; surface = Moore(1), act = Moore(1)), seed)
 end
+
+# --- OpenVT monolayer with one scheduled division, 12×8 closed --------------------------
+openvt_trigger(st, p, ctx, key, mcs, c) =
+    mcs == 0 && @inbounds(st.cell.volume[c]) >= 8 ? EVENT_DIVIDE : EVENT_NONE   # AtMCS(1)
+openvt_normal(st, p, ctx, key, mcs, c) = (1.0, 0.0)
+openvt_split!(st, p, ctx, key, mcs, parent, daughter) =
+    (m = st.cell.mass[parent] / 2; st.cell.mass[parent] = m; st.cell.mass[daughter] = m; nothing)
+function openvt_delta_H(st, p, prop, ctx)
+    J(a, b) = (a == 0 || b == 0) ? p.Jm : p.Jt
+    E(v, c) = p.λ * (v - p.V0)^2
+    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+end
+function openvt_commit!(st, p, prop, ctx)
+    commit_volume!(st, p, prop, ctx)
+    commit_moments!(st.cell, ctx.lattice, prop)
+end
+
+function openvt_problem(; tspan = (0, 20), seed = 0)
+    σ = zeros(Int32, 12, 8); σ[5:8, 4:5] .= 1
+    lat = Lattice((12, 8); boundary = Closed())
+    st = with_capacity(initial_state(σ, [1]; cell = merge(init_moments(σ, lat, 1), (; mass = [8.0]))), 8)
+    f = CPMFunction(openvt_delta_H; commit! = openvt_commit!, temperature = merks_temperature,
+        lifecycle = Lifecycle(openvt_trigger; normal = openvt_normal, divide! = openvt_split!))
+    p = (; λ = 2.0, V0 = 8.0, Jt = 0.0, Jm = 4.0, T = 2.0)
+    return CPMProblem(f, st, lat, tspan, p; contact = Moore(1), seed)
+end

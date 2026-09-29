@@ -16,9 +16,9 @@ function new_samples(problem, quantity, times, seeds)
         sol = solve(problem(; tspan = (0, maximum(times)), seed), SequentialCPM(; proposal = Moore(1));
             saveat = times, save_start = false)
         for (t, u) in zip(sol.t, sol.u)
-            q = getproperty(u.site, quantity)
+            q = quantity === nothing ? [0.0] : getproperty(u.site, quantity)
             push!(rows, (; mcs = t, volume1 = count(==(1), u.σ), volume2 = count(==(2), u.σ),
-                qsum = sum(q), qmax = maximum(q)))
+                qsum = sum(q), qmax = maximum(q), ncells = length(unique(filter(>(0), vec(u.σ))))))
         end
     end
     return rows
@@ -39,6 +39,21 @@ end
         D = ks(x, y)
         ok = D < ks_critical(length(x), length(y))
         ok || @warn "parity" name t observable = lk legacy = mean(x) new = mean(y) D
+        @test ok
+    end
+end
+
+@testset "legacy parity: openvt (division)" begin
+    legacy = read_legacy("openvt")
+    times = sort(unique(Int[r.mcs for r in legacy]))
+    nseeds = length(unique(r.seed for r in legacy))
+    new = new_samples(openvt_problem, nothing, times, 10_001:(10_000 + nseeds))
+    for t in times, k in (:volume1, :volume2, :ncells)
+        x = [getproperty(r, k) for r in legacy if r.mcs == t]
+        y = [Float64(getproperty(r, k)) for r in new if r.mcs == t]
+        D = ks(x, y)
+        ok = D < ks_critical(length(x), length(y))
+        ok || @warn "parity" t observable = k legacy = mean(x) new = mean(y) D
         @test ok
     end
 end

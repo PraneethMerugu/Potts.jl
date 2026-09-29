@@ -217,3 +217,16 @@ Decision:
   missing from the relation. A literal reading of the Potts.jl call site suggested
   "reject at walls", but that ratchets cells against closed walls (mean volume 11.4 against
   legacy 7.8 at MCS 40). The port follows the executed semantics, and parity passes.
+
+## D-035 Lifecycle: one 4-byte readback per checked MCS
+INTERNALS §1.7 asked for a lifecycle with no host synchronization. Lowest-first id reuse,
+capacity deferral and exact tracker rebuilds are sequential, host-shaped work. Doing them
+on-device needs device-wide scans, plus 64-bit atomics that Metal lacks.
+
+Decision:
+- A model with a `Lifecycle` runs one trigger kernel per checked MCS (`every`) and reads
+  back the 4-byte event count. Quiet MCS end there.
+- Event MCS plan ids on the host, run partition/removal/rule kernels, and rebuild
+  trackers exactly on the host.
+- Models without a lifecycle pay nothing. Cost is under 1% at publication scale.
+  Revisit if profiling shows lifecycle syncs matter.

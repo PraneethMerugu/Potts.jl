@@ -98,4 +98,32 @@ using Metal
             @test u.cell.vmax[c] == maximum(v[owned])
         end
     end
+
+    @testset "division on Metal" begin
+        latd = Lattice((48, 48))
+        σd = zeros(Int32, 48, 48); σd[20:27, 20:27] .= 1
+        grow!(st, p, ctx, key, mcs, c) = (@inbounds st.cell.target[c] += 1.0f0; nothing)
+        big(st, p, ctx, key, mcs, c) = st.cell.volume[c] >= 80 ? EVENT_DIVIDE : EVENT_NONE
+        reset!(st, p, ctx, key, mcs, parent, daughter) =
+            (st.cell.target[parent] = 40.0f0; st.cell.target[daughter] = 40.0f0; nothing)
+        function dH(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
+            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+        end
+        commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        st = with_capacity(initial_state(σd, [1]; cell = merge(init_moments(σd, latd, 1), (; target = Float32[64]))), 64)
+        f = CPMFunction(dH; commit!, temperature = gg_temperature,
+            phases = Phases(before_mcs = (CellPhase(grow!),)),
+            lifecycle = Lifecycle(big; divide! = reset!, normal = AlongMinorAxis{Float32}()))
+        pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, T = 10.0f0)
+        sol = solve(CPMProblem(f, st, latd, (0, 120), pd), CheckerboardCPM(); backend)
+        u = sol.u[end]
+        @test sol.stats.lifecycle.divisions >= 3
+        @test u.cell.volume == [count(==(c), u.σ) for c in 1:64]
+        ref = init_moments(u.σ, latd, 64)
+        for c in findall(>(0), u.cell.volume)
+            @test all(isapprox.(centroid(u.cell, latd, c), centroid(merge(ref, (; volume = u.cell.volume)), latd, c); atol = 1e-9))
+        end
+    end
 end
