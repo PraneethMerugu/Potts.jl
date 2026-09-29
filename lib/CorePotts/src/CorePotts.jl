@@ -11,7 +11,7 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
-using SciMLBase: SciMLBase
+using SciMLBase: SciMLBase, remake
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
     relation
@@ -19,7 +19,7 @@ export CPMState, initial_state, Proposal, Footprint, CPMFunction, commit_volume!
     contact_delta, volume_delta
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
-export init, solve, solve!, step!, CPU
+export init, solve, solve!, step!, remake, CPU
 
 include("rng.jl")
 include("lattice.jl")

@@ -52,3 +52,34 @@
   wider contact relation (e.g. `NeighborOrder(3)`, radius 2) would have run the checkerboard
   at stride 2. `init` now rejects a declared read radius smaller than the proposal/contact
   radius. The symbolic compiler (M3) must derive the footprint itself.
+
+## 2026-09-29 — M1.5 (local parts)
+
+- **Benchmarks.** `benchmark/` is a workspace member: `graner.jl` (fresh-process TTFX and warm
+  throughput), `benchmarks.jl` (BenchmarkTools `SUITE`), and the Graner baseline data with
+  provenance. The results table is in `benchmark/README.md`.
+  - Sequential 72²: 0.19 s to the first MCS, 0.018 s remake plus first MCS, 25–31 ns/attempt.
+  - Legacy: 1.9 µs/attempt at 16 attempts/site and 62–67 s cold compile.
+  - Metal 576²: 3.25 ns/attempt.
+- **CPU launch fix.** A multithreaded KA CPU launch of a ~1300-site colour cost ~120 µs of
+  task spawn and sync. 8 threads ran 6× slower than 1 thread at 72². CPU workgroups are now
+  sized from an 8192-site grain: small colours run inline as one workgroup, large colours
+  get one workgroup per thread.
+- **Manifest.** Adding Metal re-resolved the workspace Manifest (GPUArraysCore
+  0.2.1 → 0.2.0). All groups still pass.
+- **Reference stack (D-021).** `reference/Project.toml` pins the five legacy repos by full
+  SHA via `[sources]` URLs, with a committed Manifest. It is not a workspace member. Run
+  it with `GROUP=Reference`, which is not part of `All`. Legacy `SequentialCPM` at
+  427dc2e2 allows only `AttemptsPerSite(1)`, so its MCS equals ours.
+- **First legacy parity look.** Graner 72², 320 MCS, heterotypic fraction of cell–cell
+  Moore bonds over 8 seeds:
+  - legacy: 0.342 (0.327–0.358)
+  - new: 0.346 (0.308–0.387)
+  - The difference, 0.004, is within one standard error (~0.01).
+  - The new code's contact convention (unordered pairs, ΔH as in legacy) is confirmed:
+    doubling J moves the result away from legacy, to 0.389.
+  - Formal KS parity is M2.1. Legacy used `ForbidExtinction`; the new core has no
+    extinction policy yet (no cell vanished in these runs at λ = 1, V0 = 40).
+- **Performance note for M2/M3.** Sequential runs at ~25–31 ns/attempt against FusedCPM's
+  ~20. The hand-written ΔH resolves kinds through a closure per neighbour. Generated code
+  (M3) should hoist the old/new kind lookups.

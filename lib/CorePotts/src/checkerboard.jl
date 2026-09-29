@@ -118,6 +118,7 @@ struct CheckerboardCache{N, P, S, C, B, K1, K2}
     claims::NTuple{2, C}
     status::B
     colors::Vector{Color{N}}
+    groupsize::Vector{Int}            # per color; 0 = let the backend choose
     order::Vector{Int}
     buffer::Base.RefValue{Int}        # claim buffer the next color uses (always cleared)
     idbits::Int
@@ -136,9 +137,17 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int)
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),
         (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))),
-        zeros_u32(1), Vector{Color{N}}(cs), collect(1:length(cs)), Ref(1), idbits,
+        zeros_u32(1), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
+        collect(1:length(cs)), Ref(1), idbits,
         propose_kernel!(backend), commit_kernel!(backend))
 end
+
+# On the CPU backend every workgroup beyond the first is a spawned task. Small colors run
+# inline as one workgroup; large ones split into one workgroup per thread of at least
+# CPU_GRAIN sites. (Multithreaded launches of ~1000 sites were 6× slower than inline.)
+const CPU_GRAIN = 8192
+_groupsize(backend, n) = 0
+_groupsize(::KernelAbstractions.CPU, n) = max(cld(n, Threads.nthreads()), min(n, CPU_GRAIN))
 
 function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         key::RNGKey, mcs::Integer) where {F, L}
@@ -149,10 +158,12 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         color = cache.colors[ci]
         n = ncolorsites(color)
         claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
+        g = cache.groupsize[ci]
+        workgroupsize = g == 0 ? nothing : g
         cache.propose!(cache.prio, cache.source, claim, cache.status, st, f, p, ctx, law,
-            key, mcs, color, cache.idbits; ndrange = n)
+            key, mcs, color, cache.idbits; ndrange = n, workgroupsize)
         cache.commit!(st, claim, next_claim, cache.prio, cache.source, f, p, ctx, color,
-            ncell, n; ndrange = n)
+            ncell, n; ndrange = n, workgroupsize)
         buf = 3 - buf
     end
     # the next color's buffer was cleared by the last commit; with an odd number of colors
