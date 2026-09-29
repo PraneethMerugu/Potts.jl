@@ -414,3 +414,84 @@ that only HCP models pay for the parity branch.
 - **Still rejected, each with a pointer to what works:**
   - `rand()` in an `Adaptive` ODE: use a fixed-step solver, or a future SDE option (A-68).
   - `Every(n)` on `@on_copy`: use `when = mcs % n == 0` (A-36).
+
+## Codegen committee (2026-09-29): amendments to D-012, D-014, D-016; D-046, D-047
+
+A maintainer review raised five SciML-alignment items. Three proposers and an adversarial
+judge weighed them; scratch evidence is in `/tmp/committee/`, not in the repo.
+
+### D-012 (amended) Parameters
+
+Decision: `PottsParameters` stores parameter values in a `NamedTuple`. It is isbits, values
+are converted to the scalar type `T`, and kind tables are `SMatrix`. The generated code reads
+parameters by name, which is a constant field index.
+
+SciMLStructures is implemented on the host side:
+- **Tunable:** every `T`-valued scalar and kind table, flattened on `canonicalize`.
+- **Discrete:** integer, Bool and enum values.
+- **Constants:** everything else.
+
+`replace` re-derives parameters defined by expressions and re-checks the tables. Structural
+parameters are literals in the generated code; changing them rebuilds the problem.
+Flattened tunable storage (a tunable `SVector`) is deferred until a need is measured.
+
+Why:
+- Performance is identical either way.
+- A raw `replace` on flattened storage would bypass the re-derivation (D-042/A-39) and the
+  contact-table symmetry check.
+- Names in the type are moot, because every RGF type already carries a per-model id.
+- CPM acceptance is discontinuous, so AD gradients through `solve` are essentially zero.
+  The payoff is derivative-free fitting and ensemble `replace`.
+
+### D-014 (amended) Codegen mechanism
+
+Decision: Potts owns its lowering from symbolic terms to `Expr` (`src/lower.jl`). It does not
+use Symbolics `toexpr`/`build_function`, because it needs:
+- `literal_pow` for integer exponents;
+- literals in the scalar type `T` (no Float64 on Metal);
+- a lazy `ifelse`;
+- loops for gathers, folds, history rings and draws;
+- its own scope and mode diagnostics.
+
+N-ary `+`/`*` are emitted as left-associated binary calls: Julia varargs above 32 arguments
+allocate. The result is bitwise identical, since n-ary `+` is itself a left fold. Functions
+are compiled via RuntimeGeneratedFunction plus `drop_expr` in the Potts cache.
+
+There is no general CSE. Lowering reuses the bindings it already has (`k_old`, `k_new`,
+per-side loads), and LLVM removes about 85% of the repeated scalar work. A Potts-owned
+Expr-level CSE pass that never hoists out of conditionals may come later, if a published
+model gains more than 10% from it. SymbolicUtils' CSE is not used: its internals are not
+public API, it binds exponent constants, and it hoists work out of a lazy `ifelse`.
+
+`eval_expression`, `eval_module` and a problem-building `expression = Val(true)` are not
+supported. `Potts.generated_code(sys; T)` returns every generated Expr. PottsModels
+precompiles its models by running a workload (D-047): RGF ids are content hashes, so the
+cached code is reused.
+
+### D-016 (amended) Fingerprints
+
+Decision: the fingerprint is a hash of every generated Expr with line numbers stripped
+(ΔH, `commit!`, constraint, temperature, total energy, phases, lifecycle), plus the lattice,
+spacing, neighbourhood and `T`. It must not depend on the install path. It is valid for the
+same Julia version only.
+
+### D-046 Model content in types (scopes the CLAUDE.md rule)
+
+Decision: per-model types are allowed because they are per-model by construction: RGF ids,
+the parameter NamedTuple, `SMatrix` sizes and the state NamedTuples (D-013). CorePotts
+algorithm, lattice and kernel types must not encode model content. (CLAUDE.md's wording
+"no type parameters encoding model content" should be updated to match; that edit is left to
+the maintainer.)
+
+### D-047 Codegen QA and time to first step
+
+Decision: every PottsModels model and test fixture must pass, in Float64 and Float32:
+- AllocCheck on the sequential and checkerboard MCS;
+- JET on plain functions `eval`'d from `generated_code` (JET cannot see inside RGF bodies,
+  so `@test_opt step!` alone is blind to generated code);
+- under Float32, no Float64 literal in the generated code and no LLVM `double`.
+
+PottsModels carries a `@compile_workload` (Akeeb, Float32, Sequential and Checkerboard),
+which developers can switch off with the PrecompileTools preference. Target: first MCS in
+under 15 s from a fresh process for the covered configuration (16.1 s measured before the
+workload).
