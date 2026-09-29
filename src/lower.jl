@@ -43,6 +43,12 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
+    if op === random_uniform
+        haskey(env.bind, :__draw) || error("`rand()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))")
+        key, mcs, entity = env.bind[:__draw]
+        stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
+        return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
+    end
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
     op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))

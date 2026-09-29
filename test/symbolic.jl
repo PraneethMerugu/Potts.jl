@@ -890,3 +890,47 @@ end
     u = solve(p, SequentialCPM()).u[end]
     @test u.cell.g[1] > 0.5
 end
+
+@potts_model Noisy begin
+    @kinds medium A
+    @parameters T = 1.0
+    @variables begin
+        u(cell) = 0.0
+        w(site) = 0.0
+        tally(model) = 0.0
+    end
+    @lattice Lattice((16, 16))
+    @after_mcs begin
+        u ~ rand()
+        w ~ rand()
+        tally ~ Pre(tally) + rand()
+    end
+    @divide cells(A) when = (mcs == 2) && (rand() < 0.5), along = RandomPlane()
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "rand(): counter-based draws in updates and divisions" begin
+    σ = zeros(Int32, 16, 16)
+    for (c, (i, j)) in enumerate(Iterators.product(1:4:13, 1:4:13))
+        σ[i:(i + 2), j:(j + 2)] .= c
+    end
+    p = PottsProblem(Noisy(; name = :n), [ownership => σ, kind => fill(1, 16)], (0, 4); seed = 3)
+    s1 = solve(p, SequentialCPM(); saveat = 0:4)
+    s2 = solve(p, CheckerboardCPM(); saveat = 0:4)
+    live = findall(c -> s1.u[end].cell.volume[c] > 0 && s2.u[end].cell.volume[c] > 0, 1:16)
+    @test s1.u[end].cell.u[live] == s2.u[end].cell.u[live] && s1.u[end].site.w == s2.u[end].site.w &&
+          s1.u[end].model.tally == s2.u[end].model.tally                                # schedule-independent
+    @test s1.u[2].cell.u != s1.u[3].cell.u                                                # fresh every MCS
+    w = s1.u[end].site.w
+    @test length(unique(w)) == length(w) && abs(sum(w) / length(w) - 0.5) < 0.05          # per site, uniform
+    @test 0 < s1.stats.lifecycle.divisions < 16                                           # about half divide
+    @test s1.u[end].cell.u != solve(remake(p; seed = 4), SequentialCPM()).u[end].cell.u
+    @potts_model RandomEnergy begin
+        @kinds medium A
+        @parameters T = 1.0
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 10 * rand())^2
+        @sweep Metropolis(; temperature = T)
+    end
+    @test_throws ArgumentError mtkcompile(RandomEnergy(; name = :r))
+end

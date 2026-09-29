@@ -561,6 +561,15 @@ end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
 - Cell ODEs advance with `@sweep …; ode_solver = ExplicitEuler(substeps = n) |
   RK4(substeps = n)`.
 
+**Randomness (implemented).**
+- `rand()` inside a model is a uniform draw in (0, 1), fresh every MCS for every cell or
+  site. Each occurrence has its own counter-based Philox stream, keyed by
+  `(seed, replica, repeat)`, so results are identical across schedules and backends.
+- It is available in updates, equations, division conditions and rules, for example
+  `@divide cells(f) when = clock > 75 + 50rand()`.
+- It is an error in energies, drives and constraints, where a random ΔH would break
+  detailed balance.
+
 ### 12.7 Lifecycle additions
 
 ```julia

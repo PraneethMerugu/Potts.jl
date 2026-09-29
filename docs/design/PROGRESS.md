@@ -622,3 +622,25 @@
   makes MTK's `eval_module` unnecessary here.
   - One fix was needed: `expand` rebuilt the arguments of opaque functions, stripping
     Potts metadata. Cell-term deltas now expand over placeholders.
+
+## 2026-09-29 — `rand()` in models; Akeeb leader/follower invasion
+
+- **`rand()` in model bodies.** It is a symbolic draw with one stream per occurrence, numbered
+  deterministically. It lowers to `uniform(T, draw(key, mcs, entity, stream))` in
+  functions that receive the RNG key (MCS phases, the lifecycle trigger, division rules).
+  Anywhere else it is an error, with a remedy.
+  - Tests: draws are identical under sequential and checkerboard sweeps, fresh every MCS
+    and for every site, roughly uniform, and change with the seed.
+- **`PottsModels.AkeebInvasion`**, with `akeeb_state` and `akeeb_contacts`, ported from
+  `SCDPotts/scripts/run_akeeb_proliferative.jl` (spec in `research/akeeb_*`).
+  - The per-cell target volume grows by `rate` up to `V_max`.
+  - The integer mitotic clock is an `@after_mcs` update.
+  - Division happens when `clock > 75 + 50·rand()` and `volume > 20`, on a random plane,
+    with `V_target` split and clocks reset.
+  - Chemotaxis applies when the source or target cell is a leader, on the static cue
+    `y − 1`.
+  - Connectivity is enforced and extinction is forbidden.
+  - The 99×60 slab has 308 cells (77 leaders), as in the SCDPotts MTK-bridge check.
+    200 MCS take 2.4 s including compilation. Divisions occur with PP = 0.5 and none with
+    PP = 0, as in the legacy audit.
+  - Statistical parity against the SCDPotts runner is pending.

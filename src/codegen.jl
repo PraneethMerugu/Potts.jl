@@ -6,8 +6,11 @@
 _rgf(ex) = RuntimeGeneratedFunctions.drop_expr(
     RuntimeGeneratedFunctions.RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
 
-_cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, extra = ()) =
-    LowerEnv(T, :cell, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$c])),
+# `key`: the RNG key in scope (functions of the MCS phases and lifecycle); enables `rand()`.
+_draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity),)
+
+_cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key = nothing, extra = ()) =
+    LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, c)..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
         :cluster => :(CorePotts.cluster_of(st.cell, $c)),
@@ -21,8 +24,8 @@ _cluster_env(T, r, relname; δ = nothing) =
         :cluster_surface => :(@inbounds st.cell.cluster_surface[$r]), :kind => :(Potts._cellkind(st, $r)),
         :id => r, :__cell => r, (δ === nothing ? () : (:δcluster_surface => δ,))...), relname)
 
-_site_env(T, i, relname; mcs = nothing) =
-    LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$i]),
+_site_env(T, i, relname; mcs = nothing, key = nothing) =
+    LowerEnv(T, :site, Dict{Symbol, Any}(_draws(key, mcs, i)..., :owner => :(@inbounds st.σ[$i]),
         :kind => :(CorePotts.owner_kind(st, $i)), :__site => i,
         :position => :(CorePotts.coordinates(ctx.lattice, $i)),
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
@@ -258,7 +261,7 @@ function _phases(c::CompiledPottsSystem, T, values)
     dt = c.sys.sweep.mcs_duration
     for (x, rate) in c.fields
         name = info(x).name
-        f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs)))))
+        f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key)))))
         sub = something(c.sys.sweep.field_solver.substeps, _auto_substeps(x, rate, values, dt, c.sys.lattice))
         lowerclip = c.sys.sweep.field_solver.lower
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
@@ -285,7 +288,7 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
         locals[_unwrap(x)] = _unwrap(s)
         bind[Symbol(:__y, i)] = ys[i]
     end
-    env = _cell_env(T, :c, rn; mcs = :mcs, extra = (bind..., :time => :tt))
+    env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
     rates = [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.cell_odes]
     names = [info(x).name for (x, _) in c.cell_odes]
     substeps = something(solver.substeps, 1)
@@ -363,7 +366,7 @@ end
 _by_cadence(us) = [filter(u -> u.every == e, us) for e in sort!(unique(u.every for u in us))]
 
 function _site_update_phases(c, T, us, every, rn)
-    env = _site_env(T, :i, rn; mcs = :mcs)
+    env = _site_env(T, :i, rn; mcs = :mcs, key = :key)
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     buffered = any(in(c.scratch), names)
     vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
@@ -391,10 +394,10 @@ end
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
     mcs % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
 
-_model_env(T, rn; mcs = :mcs) = LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs), rn)
+_model_env(T, rn; mcs = :mcs, key = nothing) = LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)...), rn)
 
 function _model_update_expr(c, T, us, every, rn)
-    env = _model_env(T, rn)
+    env = _model_env(T, rn; key = :key)
     vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.model.$(info(_unwrap(u.eq.lhs)).name)[1] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
@@ -402,7 +405,7 @@ function _model_update_expr(c, T, us, every, rn)
 end
 
 function _cell_update_expr(c, T, us, every, rn)
-    env = _cell_env(T, :c, rn; mcs = :mcs)
+    env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.cell.$(info(_unwrap(u.eq.lhs)).name)[c] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
@@ -432,7 +435,7 @@ function _lifecycle(c::CompiledPottsSystem, T)
     rn = c.gather_names
     alongs = unique(d -> d.along isa Tuple ? ("tuple", d.along) : typeof(d.along), c.divisions)
     length(alongs) == 1 || throw(ArgumentError("divisions with different planes are not supported yet"))
-    env = _cell_env(T, :c, rn; mcs = :mcs)
+    env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     tests = [:($(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) && $(lower(d.when, env)) && return CorePotts.EVENT_DIVIDE)
              for d in c.divisions]
     trigger = _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:block, tests..., :(return CorePotts.EVENT_NONE)))))
@@ -450,7 +453,7 @@ function _lifecycle(c::CompiledPottsSystem, T)
             if r isa Split
                 push!(block, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
             else
-                v = lower(r, _cell_env(T, :parent, rn; mcs = :mcs))
+                v = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key))
                 push!(block, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))
             end
         end

@@ -429,7 +429,7 @@ _describe(r::LinkRule) = "@$(r.action) $(r.relationship) when = $(r.when)"
 # `mtkcompile` with their source instead of while building a problem.
 function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     T = Float64
-    cellenv = _cell_env(T, :c, rn; mcs = :mcs)
+    cellenv = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     for e in sys.energies
         _located(sys, e) do
             d = e.domain
@@ -454,21 +454,22 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
                 _write(_unwrap(u.eq.lhs), :v, env)
             else
                 r = info(_unwrap(u.eq.lhs)).role
-                lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn) : _site_env(T, :i, rn; mcs = :mcs))
+                lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn; key = :key) :
+                                _site_env(T, :i, rn; mcs = :mcs, key = :key))
             end
         end
     end
     for eq in sys.equations
         _located(sys, eq) do
             x = arguments(_unwrap(eq.lhs))[1]
-            lower(eq.rhs, info(x).role === :cell ? _cell_env(T, :c, rn; mcs = :mcs, extra = (:time => :tt,)) :
-                          _site_env(T, :i, rn; mcs = :mcs))
+            lower(eq.rhs, info(x).role === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
+                          _site_env(T, :i, rn; mcs = :mcs, key = :key))
         end
     end
     for d in sys.divisions
         _located(sys, d) do
             lower(d.when, cellenv)
-            foreach(((x, r),) -> r isa Split || lower(r, _cell_env(T, :parent, rn; mcs = :mcs)), d.rules)
+            foreach(((x, r),) -> r isa Split || lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key)), d.rules)
         end
     end
     for r in sys.link_rules

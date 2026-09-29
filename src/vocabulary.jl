@@ -87,6 +87,17 @@ Symbolics.@register_symbolic at2(x, i, j)
 Symbolics.@register_symbolic gather(n, a, b, c)
 Symbolics.@register_symbolic population(n, b, c)
 Symbolics.@register_symbolic Δ(x)
+"""`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
+random_uniform(n) = error("`random_uniform` is symbolic-only")
+Symbolics.@register_symbolic random_uniform(n)
+
+"""
+`rand()` inside a model: a uniform draw in (0, 1), fresh per MCS and per cell (or site),
+from its own counter-based stream (reproducible on any backend and schedule). Available in
+updates, equations, division conditions and rules; not in energies, drives or constraints
+(a random ΔH would break detailed balance).
+"""
+_rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
 
 # ---------------------------------------------------------------------------------------
 # Helpers the macro rewrites user syntax into
@@ -382,7 +393,7 @@ end
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, geomean, geomean_shifted, mean, Δ)
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand, geomean, geomean_shifted, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

@@ -10,13 +10,15 @@ module PottsModels
 
 using Potts
 using DelimitedFiles: readdlm
+using Random: MersenneTwister
 
-export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTMonolayer
-export graner_glazier_state
+export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTMonolayer, AkeebInvasion
+export graner_glazier_state, akeeb_state, akeeb_contacts
 
 include("graner_glazier.jl")
 include("wortel_act.jl")
 include("merks.jl")
 include("openvt.jl")
+include("akeeb.jl")
 
 end

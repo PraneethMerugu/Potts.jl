@@ -42,6 +42,20 @@ end
         u = sol.u[end]
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
     end
+    @testset "Akeeb invasion (99×60)" begin
+        op = akeeb_state(; lattice = (99, 60))
+        @test length(op[2].second) == 308 && count(==(:leader), op[2].second) == 77     # as in the MTK-bridge check
+        prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 200); capacity = 1000)
+        @test selfcheck(prob) < 1e-9
+        sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)))
+        u = sol.u[end]
+        @test sol.stats.lifecycle.divisions > 0
+        @test all(>(0), u.cell.volume[1:308])                                             # no extinction
+        @test all(c -> u.cell.clock[c] >= 0 || u.cell.clock[c] == -1, 1:308)
+        p0 = remake(prob; u0 = akeeb_state(; lattice = (99, 60), pp = 0.0))
+        @test solve(p0, SequentialCPM(; proposal = VonNeumann(1))).stats.lifecycle.divisions == 0
+        @test akeeb_contacts(-2.0)[2, 3] == akeeb_contacts(-2.0)[3, 2] == -2.0
+    end
     @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end
