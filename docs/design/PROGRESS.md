@@ -315,3 +315,26 @@
   - Links with `link_claims` (spring relaxes to rest length), `HostPhase` link rules,
     the contact table.
   - Checkpoint continuation is bit-exact on the device (the Metal run is reproducible).
+
+## 2026-09-29 — M2.10a (commit cf898ab)
+
+- **Compartments** (`compartments.jl`, D-036). `st.cell.cluster` + `init_clusters`,
+  `same_cluster`/`cluster_of`, atomic cluster volume/surface trackers with deltas
+  (`cluster_volume_delta`, `cluster_surface_change/delta`), `cluster_claims`.
+  `Lifecycle(…; clusters = true)` divides a cluster as a unit along one plane through the
+  cluster centroid (host plane from cluster moments; the partition kernel gains a
+  per-cell `bias` = (member centroid − cluster centroid)·n). Lifecycle events re-root
+  clusters; `with_capacity` makes free slots their own cluster.
+- **Tests** (684 CPU + 5 Metal):
+  - Cluster deltas equal brute-force energy differences on 400 random proposals, and
+    trackers stay exact after commit.
+  - Nucleus/cytoplasm cells under both algorithms: the nuclei's interface with their own
+    cytoplasm is 0.97 (sequential) and 0.99 (checkerboard), against 0.85 for a neutral
+    internal J.
+  - The cluster divides as a unit (68/12 | 68/12, daughters form cluster 3, rules run per
+    member). Non-cluster division keeps the daughter in its cluster; root removal
+    re-roots the cluster.
+  - On Metal: trackers exact with claims; cluster division.
+- **Test-design note.** Without an extinction veto the nuclei vanish (λ = 1 volume cost
+  is below the contact savings); the test model forbids extinction.
+- Phase 2 is complete. Next: Phase 3 (the Potts symbolic front end).
