@@ -85,6 +85,11 @@ function lower(x, env::LowerEnv)
     if op in _FLOAT_OPS || op === (^)
         return Expr(:call, op, map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...)
     end
+    # `+`/`*` as left-associated binary calls: varargs calls above 32 arguments allocate
+    # (bitwise the same result: n-ary `+` is itself a left fold), D-014
+    if (op === (+) || op === (*)) && length(args) > 2
+        return foldl((a, b) -> Expr(:call, op, a, b), map(a -> lower(a, env), args))
+    end
     return Expr(:call, op, map(a -> lower(a, env), args)...)
 end
 

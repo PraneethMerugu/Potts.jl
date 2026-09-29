@@ -62,7 +62,8 @@ ctx_of(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations
 end
 
 @testset "symbolic surface: generated code" begin
-    ex = PottsProblem(SORTING, [ownership => zeros(Int32, 72, 72), kind => Int[]], (0, 1); expression = Val(true))
+    ex = Potts.generated_code(SORTING)
+    @test_throws ArgumentError PottsProblem(SORTING, [ownership => zeros(Int32, 72, 72), kind => Int[]], (0, 1); expression = Val(true))
     s = string(ex.delta_H)
     @test occursin("p.J", s) && occursin("st.cell.volume", s)
     @test !occursin("^", s)                          # the volume term was expanded to closed form
@@ -211,7 +212,7 @@ end
     prob = PottsProblem(CellVarContacts(; name = :cv), [ownership => σ, kind => kinds,
         first(filter(v -> Potts.info(v).name === :x, CellVarContacts(; name = :cv).variables)) => xs], (0, 3))
     @test selfcheck(prob) < 1e-9           # cell variables mirrored; surface δ fused once
-    ex = PottsProblem(CellVarContacts(; name = :cv), [ownership => σ, kind => kinds], (0, 1); expression = Val(true))
+    ex = Potts.generated_code(CellVarContacts(; name = :cv))
     @test count("δs_old +=", string(ex.delta_H)) == 1
 
     # quantities that change with the copy are rejected outside cell terms

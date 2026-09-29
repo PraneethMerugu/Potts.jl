@@ -23,7 +23,8 @@ PrecompileTools.@setup_workload begin
         σ = zeros(Int32, 16, 16)
         σ[4:8, 4:8] .= 1
         for S in (Float64, Float32)
-            PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, expression = Val(true))
+            generated_code(csys; T = S)
+            PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S)
         end
     end
 end

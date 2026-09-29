@@ -29,9 +29,26 @@ needed). `op` maps `ownership` to the initial labels (an integer array over the 
 compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
 (scalars or arrays), parameters to values overriding their defaults, and a relationship's
 name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
-type of the generated code and state (use `Float32` on Metal). With
-`expression = Val(true)` the generated function expressions are returned instead.
+type of the generated code and state (use `Float32` on Metal). The generated code is
+`Potts.generated_code(sys; T)`.
 """
+
+"""
+    generated_code(sys; T = Float64)
+
+The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in scalar
+type `T`, as expressions: `delta_H`, `commit!`, `constraint`, `temperature`, `total_energy`,
+`delta_E` (ΔH without drives), and `phases`, every other function (MCS phases, lifecycle), in
+build order. Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
+"""
+function generated_code(sys; T::Type = Float64)
+    c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
+    values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in c.sys.parameters)
+    _, phases = _recording(() -> (_phases(c, T, values), _lifecycle(c, T)))
+    return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
+        temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
+        delta_E = _delta_H_expr(c, T; drives = false), phases)
+end
 function PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end
@@ -47,11 +64,8 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
     end
     _check_kind_tables(sys, p)
-    if expression isa Val{true}
-        return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T),
-            constraint = _constraint_expr(c, T), temperature = _temperature_expr(c, T),
-            total_energy = _total_energy_expr(c, T))
-    end
+    expression isa Val{true} && throw(ArgumentError(
+        "`expression = Val(true)` is not supported (D-014); use `Potts.generated_code(sys; T)` to inspect the code"))
     st = _initial_state(c, opd, T, capacity, values)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
@@ -59,16 +73,19 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...)
-    ce = _constraint_expr(c, T)
-    exprs = (_delta_H_expr(c, T), _commit_expr(c, T), ce, _temperature_expr(c, T))
-    f = CorePotts.CPMFunction(_rgf(exprs[1]); commit! = _rgf(exprs[2]),
-        constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(exprs[4]),
-        claims = _claims(c),
-        phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
+    fns, generated = _recording() do
+        ce = _constraint_expr(c, T)
+        (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
+            constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
+            phases = _phases(c, T, values), lifecycle = _lifecycle(c, T),
+            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
+    end
+    f = CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
+        claims = _claims(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
-        fingerprint = hash((string.(exprs), core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T)),
-        sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
-            hctx, Dict{Any, Any}()))
+        # every generated function, without line numbers: independent of the install path (D-016)
+        fingerprint = _code_hash(generated, hash((core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T))),
+        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, Dict{Any, Any}()))
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,

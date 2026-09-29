@@ -3,8 +3,26 @@
 # GPU-safe), plus the brute-force `total_energy` used for self-verification.
 
 """Compile a function expression to a RuntimeGeneratedFunction without its expression."""
-_rgf(ex) = RuntimeGeneratedFunctions.drop_expr(
-    RuntimeGeneratedFunctions.RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
+function _rgf(ex)
+    log = _GENERATED[]
+    log === nothing || push!(log, ex)
+    return RuntimeGeneratedFunctions.drop_expr(
+        RuntimeGeneratedFunctions.RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
+end
+
+# The expressions compiled while building one problem (D-016 fingerprints, `generated_code`)
+const _GENERATED = Base.ScopedValues.ScopedValue{Union{Nothing, Vector{Any}}}(nothing)
+
+"""Run `f()` and return `(result, exprs)`: every function expression compiled by `_rgf` in it."""
+function _recording(f)
+    log = Any[]
+    r = Base.ScopedValues.with(f, _GENERATED => log)
+    return r, log
+end
+
+"""Hash of generated code, independent of line numbers and the install path (D-016)."""
+_code_hash(exprs, h::UInt = zero(UInt)) =
+    foldl((h, ex) -> hash(string(Base.remove_linenums!(deepcopy(ex))), h), exprs; init = h)
 
 # `key`: the RNG key in scope (functions of the MCS phases and lifecycle); enables `rand()`.
 _draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity),)

@@ -29,7 +29,7 @@ for name in names(CorePotts)
     name === :CorePotts || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile, extend,
-    total_energy, energy_change, parameters, variables, observe, Adaptive
+    total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive
 
 include("vocabulary.jl")
 include("system.jl")

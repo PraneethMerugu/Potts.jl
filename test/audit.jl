@@ -378,3 +378,17 @@ end
     sol = solve(p, SequentialCPM())
     @test sol[:per][end][1] == sol.u[end].cell.surface[1]
 end
+
+@testset "D-014/D-016: binary sums, fingerprints over all code" begin
+    # a wide energy: 40 terms lower to binary `+`, allocation-free
+    ex = Potts.lower(sum(Potts.B.volume^k for k in 1:40) |> Potts._unwrap,
+        Potts._cell_env(Float32, :c, Dict{Any, Symbol}()))
+    @test ex.args[1] === (+) && length(ex.args) == 3
+    # models differing only in an update block have different fingerprints
+    σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1
+    a = PottsProblem(AuditPopCell(; name = :a), [ownership => σ, kind => [1]], (0, 1))
+    b = PottsProblem(AuditJacobi(; name = :j), [ownership => σ, kind => [1]], (0, 1))
+    @test a.f.fingerprint != b.f.fingerprint
+    @test PottsProblem(AuditPopCell(; name = :a), [ownership => σ, kind => [1]], (0, 1)).f.fingerprint == a.f.fingerprint
+    @test haskey(Potts.generated_code(AuditPopCell(; name = :a)), :phases)
+end
