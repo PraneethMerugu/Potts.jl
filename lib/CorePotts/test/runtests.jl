@@ -1,4 +1,4 @@
-using Test, CorePotts, StaticArrays, Statistics
+using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, colors, color_site,
     ncolorsites, coordinates, linear_index, shift
@@ -330,6 +330,7 @@ end
 include("geometry.jl")
 include("phases.jl")
 include("fields.jl")
+include("drives.jl")
 include("oracle.jl")
 get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")

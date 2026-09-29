@@ -54,28 +54,33 @@ end
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldStep((:site, :c) => (:site, :c_next), rate; dt = 1, substeps = 1)
+    FieldStep((:site, :c) => (:site, :c_next), rate; dt = 1, substeps = 1, lower = nothing)
 
 Explicit Euler for `∂c/∂t = rate(st, p, ctx, key, mcs, i, c)` over one MCS of length `dt`,
-in `substeps` equal steps. Each step writes the scratch array and publishes it, so the
+in `substeps` equal steps, optionally clipped below at `lower` after each step (legacy
+Potts clips concentrations at 0). Each step writes the scratch array and publishes it, so the
 rate function sees a consistent field (bulk-synchronous). Stability of diffusion needs
 `dt/substeps · D · Σ_d 2/h_d² ≤ 1`; see `stable_substeps`.
 """
-struct FieldStep{F <: Part, S <: Part, R, T}
+struct FieldStep{F <: Part, S <: Part, R, T, L}
     field::F
     scratch::S
     rate::R
     dt::T
     substeps::Int
+    lower::L
 end
-function FieldStep(pair::Pair, rate; dt = 1.0, substeps::Integer = 1)
+function FieldStep(pair::Pair, rate; dt = 1.0, substeps::Integer = 1, lower = nothing)
     substeps >= 1 || throw(ArgumentError("substeps must be ≥ 1"))
-    return FieldStep(Part(pair.first), Part(pair.second), rate, dt, Int(substeps))
+    return FieldStep(Part(pair.first), Part(pair.second), rate, dt, Int(substeps), lower)
 end
 
-@kernel function _field_step_kernel!(rate, cn, @Const(c), st, p, ctx, key, mcs, h)
+@inline _clip(v, ::Nothing) = v
+@inline _clip(v, lower) = max(v, oftype(v, lower))
+
+@kernel function _field_step_kernel!(rate, cn, @Const(c), st, p, ctx, key, mcs, h, lower)
     i = @index(Global, Linear)
-    @inbounds cn[i] = c[i] + h * rate(st, p, ctx, key, mcs, i, c)
+    @inbounds cn[i] = _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower)
 end
 
 function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
@@ -84,7 +89,7 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     h = eltype(c)(ph.dt / ph.substeps)
     kernel = _field_step_kernel!(backend)
     for _ in 1:ph.substeps
-        kernel(ph.rate, cn, c, st, p, ctx, key, mcs, h; ndrange = n,
+        kernel(ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower; ndrange = n,
             workgroupsize = _phase_groupsize(backend, n))
         copyto!(c, cn)
     end

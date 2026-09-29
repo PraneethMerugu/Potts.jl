@@ -5,3 +5,4 @@ using Potts, Test
 end
 
 include("parity/graner.jl")
+include("parity/legacy_models.jl")

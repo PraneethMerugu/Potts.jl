@@ -206,3 +206,14 @@ Decision:
   with provenance). A LocalMath prepared plan is wrapped as a phase.
 - Supersedes INTERNALS §3's "used by CorePotts for…" list. Reversible if LocalMath's
   first-execution and warm costs reach parity.
+
+## D-034 Act model mean and legacy connectivity semantics
+- **Act mean.** Legacy Potts averages activity as `exp(mean(log1p a)) − 1`. The published
+  model (Niculescu et al. 2015, Artistoo) uses the plain geometric mean, which is zero if any
+  owned neighbour has zero activity. `act_mean`/`act_delta` default to the published plain
+  mean; `shifted = true` reproduces legacy and is used in the parity tests.
+- **Merks connectivity.** Legacy counts out-of-domain ring sites as medium: CorePotts
+  6ec7316 returns owner 0 for an absent neighbour, and `typemin` only when the offset is
+  missing from the relation. A literal reading of the Potts.jl call site suggested
+  "reject at walls", but that ratchets cells against closed walls (mean volume 11.4 against
+  legacy 7.8 at MCS 40). The port follows the executed semantics, and parity passes.

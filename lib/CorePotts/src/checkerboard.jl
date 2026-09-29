@@ -66,6 +66,7 @@ end
                 dH = f.delta_H(st, p, prop, ctx)
                 temperature = f.temperature(st, p, prop, ctx)
                 T = typeof(temperature)
+                dH = _effective_dH(f, dH, temperature, st, p, prop, ctx)
                 if !isfinite(dH)
                     Atomix.@atomic status[1] |= STATUS_NONFINITE
                 elseif accept(law, T(dH), temperature, uniform(T, ra))

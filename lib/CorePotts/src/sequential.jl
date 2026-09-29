@@ -22,6 +22,7 @@ function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer) wh
         dH = f.delta_H(st, p, prop, ctx)
         temperature = f.temperature(st, p, prop, ctx)
         T = typeof(temperature)
+        dH = _effective_dH(f, dH, temperature, st, p, prop, ctx)
         isfinite(dH) || return accepted, STATUS_NONFINITE
         if accept(law, T(dH), temperature, uniform(T, ra))
             @inbounds σ[t] = b

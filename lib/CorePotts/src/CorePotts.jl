@@ -23,6 +23,8 @@ export init_moments, commit_moments!, centroid, centroid_shift, covariance,
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
 export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
+export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
+    locally_connected, merks_connectivity, forbid_extinction
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
@@ -34,6 +36,7 @@ include("model.jl")
 include("geometry.jl")
 include("phases.jl")
 include("fields.jl")
+include("drives.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

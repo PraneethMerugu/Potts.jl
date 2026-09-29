@@ -85,8 +85,8 @@ end
 
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
-                temperature, phases = Phases(), footprint = Footprint(), fingerprint = 0,
-                sys = nothing)
+                temperature, bias = no_bias, phases = Phases(), footprint = Footprint(),
+                fingerprint = 0, sys = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -97,17 +97,19 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `claims` → tuple of extra cell ids (beyond old/new) whose quantities the other
   functions read; they are claimed in checkerboard execution
 - `temperature` → the copy temperature
+- `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`, D-033)
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, TT, PH, SYS}
+struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, SYS}
     delta_H::DH
     commit!::CM
     constraint::CN
     claims::CL
     temperature::TT
+    bias::BI
     phases::PH
     footprint::Footprint
     fingerprint::UInt64
@@ -115,28 +117,33 @@ struct CPMFunction{DH, CM, CN, CL, TT, PH, SYS}
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
-        claims = no_claims, temperature, phases = NO_PHASES, footprint = Footprint(),
-        fingerprint = 0, sys = nothing)
-    return CPMFunction(delta_H, commit!, constraint, claims, temperature, phases, footprint,
-        UInt64(fingerprint), sys)
+        claims = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
+        footprint = Footprint(), fingerprint = 0, sys = nothing)
+    return CPMFunction(delta_H, commit!, constraint, claims, temperature, bias, phases,
+        footprint, UInt64(fingerprint), sys)
 end
 
 """
 The device-side part of a `CPMFunction`: the five per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, TT}
+struct DeviceFunctions{DH, CM, CN, CL, TT, BI}
     delta_H::DH
     commit!::CM
     constraint::CN
     claims::CL
     temperature::TT
+    bias::BI
 end
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.temperature)
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.temperature, f.bias)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()
+@inline no_bias(st, p, prop, ctx) = false
+
+"""Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""
+@inline _effective_dH(f, dH, T, st, p, prop, ctx) = dH - T * f.bias(st, p, prop, ctx)
 
 """Default `commit!`: maintain `st.cell.volume`."""
 @inline function commit_volume!(st, p, prop, ctx)
