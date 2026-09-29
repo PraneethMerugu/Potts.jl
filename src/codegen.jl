@@ -269,6 +269,11 @@ function _phases(c::CompiledPottsSystem, T, values)
     end
     isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
     append!(after, _link_phases(c, T))
+    # history rings take the end-of-MCS values last
+    for (n, _) in sort!(collect(_history_depths(c.sys)); by = first)
+        scope = any(x -> info(x).name === n && info(x).role === :model, c.sys.variables) ? :model : :site
+        push!(after, CorePotts.HistoryPush(n => (scope, n)))
+    end
     return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after))
 end
 

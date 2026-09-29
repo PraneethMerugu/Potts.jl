@@ -493,6 +493,8 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for o in sys.observed
         _located(sys, o) do
             _check_geometry(o.expr, N)
+            _has_op(o.expr, history_lag) &&
+                throw(ArgumentError("`Pre(x, k)` is not available in @observed; keep the lag in a variable updated @after_mcs"))
             _has_op(o.expr, random_uniform) &&
                 throw(ArgumentError("`rand()` is not available in @observed (observed quantities are pure functions of the state)"))
         end

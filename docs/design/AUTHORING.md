@@ -212,6 +212,16 @@ end
 
 - Updates are equations; the left side is the variable at the new MCS, `Pre(x)` the
   previous value, `Pre(x, k)` k steps back (histories are inferred).
+  **Implemented:**
+  - `Pre(x, k)` is the value at the end of the MCS `k` before the current one, and
+    `Pre(x, 1) == Pre(x)`.
+  - It works for site, field and model quantities, anywhere the MCS clock is available:
+    updates, equations, division conditions and rules, and link rules.
+  - Each lagged variable gets one ring buffer, as deep as its largest `k`. The rings
+    start as the initial value and take the end-of-MCS value after every other phase.
+  - Lags of cell variables are rejected, because rings would not follow capacity growth
+    and division. Chain `Pre` instead.
+  - Lags are also rejected in energies and `@observed`.
 - Neighbourhood expressions are generator comprehensions over a relation, in any scope:
   ```julia
   geomean_act(s) = geomean(act[n] for n in Moore(1)(s) if owner[n] == owner[s])

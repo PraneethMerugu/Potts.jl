@@ -1054,3 +1054,48 @@ end
     x = solve(p, SequentialCPM())[:x][end]
     @test length(x) == 4 && x[2:4] == zeros(3) && !any(isnan, x)
 end
+
+@potts_model Lags begin
+    @kinds medium A
+    @variables begin
+        n(model) = 0.0
+        lag3(model) = -1.0
+        w(site) = 0.0
+        wlag(site) = -1.0
+        u(cell) = 0.0
+    end
+    @lattice Lattice((8, 8))
+    @after_mcs begin
+        n ~ Pre(n) + 1
+        lag3 ~ Pre(n, 3)
+        w ~ Pre(w) + 1
+        wlag ~ Pre(w, 2) - Pre(w, 1)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "history lags: Pre(x, k)" begin
+    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
+    p = PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 8))
+    @test size(p.u0.history.n) == (1, 3) && size(p.u0.history.w) == (8, 8, 2)
+    sol = solve(p, SequentialCPM(); saveat = 0:8)
+    for m in 1:8                       # after m MCS: n = m; lag3 = n at the end of MCS m - 1 - 3
+        u = sol.u[m + 1]
+        @test u.model.n[1] == m
+        @test u.model.lag3[1] == max(m - 3, 0)
+        @test all(==(m == 1 ? 0 : -1), u.site.wlag)                 # w(end m - 3) - w(end m - 2)
+    end
+    for body in (:(@after_mcs u ~ Pre(u, 2)), :(@energy cells => Pre(volume, 2)), :(@observed q ~ Pre(n, 2)))
+        m = eval(:(@potts_model _BadLag begin
+            @kinds medium A
+            @variables begin
+                u(cell) = 0.0
+                n(model) = 0.0
+            end
+            @lattice Lattice((8, 8))
+            $(body)
+            @sweep Metropolis(; temperature = 1.0)
+        end))
+        @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
+    end
+end

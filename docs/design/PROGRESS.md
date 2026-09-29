@@ -721,3 +721,20 @@
   - With `rule = :merks`, every metric agrees (|t| ≤ 1.6). Divisions agreed under both
     rules.
   - Runtime: legacy takes about 80 s per seed, the new model about 0.2 s per seed.
+
+## 2026-09-29 — History lags `Pre(x, k)` (M3.4)
+
+- The DSL's `Pre` is now `Potts._pre`. `Pre(x)` is still MTK's `Pre`; `Pre(x, k ≥ 2)`
+  becomes a registered `history_lag(x, k)`.
+- Lowering: lower `x` as usual, then point its `st.site.x` / `st.model.x` reads at
+  `_LagView(st.history.x, mcs, k)`. That is an isbits linear view of the ring slot
+  `CorePotts.history_slot(depth, mcs, k)`, so kernels are unchanged apart from one offset.
+- Ring depths come from the model's statements (`_history_depths`). `_initial_state`
+  builds `history_buffer`s. `_phases` appends one `HistoryPush` per lagged variable as
+  the last after-MCS phase.
+- Semantics are checked exactly: lags of a counter and of a site array over 8 MCS,
+  including the initial-value fill.
+- The model is JET-clean and allocation-free (QA list), and runs in Float32 on Metal.
+- Rejected with a remedy: lags of cell variables (rings do not follow capacity growth or
+  division; chain `Pre`), and lags in energies (no clock) and `@observed` (the saved-state
+  clock would be off by one).

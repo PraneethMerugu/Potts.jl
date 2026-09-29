@@ -197,8 +197,10 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         end
         append!(cell, pairs(links))
     end
-    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = NamedTuple(site),
-        model = NamedTuple(model))
+    sitent, modelnt = NamedTuple(site), NamedTuple(model)
+    history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
+                  for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
+    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
 end

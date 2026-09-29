@@ -53,6 +53,16 @@ function lower(x, env::LowerEnv)
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
         return :(Potts._displacement_axis($(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k))
     end
+    if op === history_lag
+        haskey(env.bind, :mcs) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
+        _walk(args[1]) do y
+            i = info(y)
+            i !== nothing && i.role === :cell &&
+                error("`Pre($(i.name), k)`: lags of cell variables are not tracked; chain lag variables instead (`$(i.name)_1 ~ Pre($(i.name))`, `$(i.name)_2 ~ Pre($(i.name)_1)`, …)")
+        end
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+        return _retarget_history(lower(args[1], env), env.bind[:mcs], k)
+    end
     if op === random_uniform
         haskey(env.bind, :__draw) || error("`rand()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))")
         key, mcs, entity = env.bind[:__draw]
@@ -105,6 +115,46 @@ function _lower_named(x, i::Info, env::LowerEnv)
         return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
     end
     error("cannot lower `$x` (role $r)")
+end
+
+"""Site and model variable reads in `ex` → reads of their history ring `k` MCS back."""
+function _retarget_history(ex, mcs, k)
+    ex isa Expr || return ex
+    if ex.head === :. && (ex.args[1] == :(st.site) || ex.args[1] == :(st.model))
+        name = ex.args[2].value
+        return :(Potts._LagView(st.history.$name, $mcs, $k))
+    end
+    return Expr(ex.head, (_retarget_history(a, mcs, k) for a in ex.args)...)
+end
+
+"""Read-only linear view of the ring-buffer slot holding a lag (`CorePotts.history_slot`)."""
+struct _LagView{R}
+    ring::R
+    offset::Int
+end
+@inline function _LagView(ring, mcs, k)
+    depth = size(ring, ndims(ring))
+    return _LagView(ring, (CorePotts.history_slot(depth, Int(mcs), k) - 1) * (length(ring) ÷ depth))
+end
+Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
+
+"""Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
+_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+    (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+    (r.when for r in sys.link_rules)...])
+function _history_depths(xs::Vector{Any})
+    depths = Dict{Symbol, Int}()
+    for x in xs
+        _walk(x) do y
+            (iscall(y) && operation(y) === history_lag) || return
+            k = Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))
+            _walk(arguments(y)[1]) do z
+                i = info(z)
+                i !== nothing && i.role in (:site, :field, :model) && (depths[i.name] = max(get(depths, i.name, 0), k))
+            end
+        end
+    end
+    return depths
 end
 
 """Centroid of cell `c` along axis `k` (0 for the medium and empty slots)."""

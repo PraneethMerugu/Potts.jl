@@ -59,4 +59,9 @@ using Statistics: mean, var
     im = init(pm, CheckerboardCPM(); backend)
     im[:px] = [0.25]; im.ps[:μ] = 0.0
     @test Array(im.state.cell.px) == Float32[0.25] && im.p.μ === 0.0f0 && im[:px] == Float32[0.25]
+    # history rings: pushed and read on the device
+    σl = zeros(Int32, 8, 8); σl[3:5, 3:5] .= 1
+    ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
+        CheckerboardCPM(); backend).u[end]
+    @test Array(ul.model.lag3) == Float32[4] && all(==(-1), Array(ul.site.wlag))
 end

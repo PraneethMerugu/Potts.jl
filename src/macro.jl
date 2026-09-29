@@ -64,7 +64,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
         t = $P.t
         D = $P.D
-        Pre = $P.Pre
+        Pre = $P._pre
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
         __frozen = Int[]
