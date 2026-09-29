@@ -212,6 +212,16 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             throw(ArgumentError("edge variable `$(info(x).name)` needs a @relationship"))
     end
 
+    # one writer per target, phase and cadence (combine contributions with `+=`)
+    writers = Dict{Any, Update}()
+    for u in sys.updates
+        k = (_target_key(u)..., u.every)
+        haskey(writers, k) && _located(sys, u) do
+            throw(ArgumentError("`$(u.eq.lhs)` is already written @$(u.phase)$(u.every == 1 ? "" : " Every($(u.every))") " *
+                                "by `$(writers[k].eq)`; combine contributions with `+=` or in one equation"))
+        end
+        writers[k] = u
+    end
     geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement)
     needs_moments = !isempty(sys.divisions) || relationship !== nothing ||
                     any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,

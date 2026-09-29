@@ -1260,3 +1260,79 @@ end
     @test q[:cmass] ≈ [72; zeros(7)]
     @test solve(q, SequentialCPM()).u[end].cell.mb[1] ≈ 5 * 72
 end
+
+@potts_model Compound begin
+    @kinds medium A
+    @variables begin
+        n(model) = 0.0
+        g(model) = 1.0
+        hits(site) = 0.0
+        v(cell)[1:2] = 0.0
+    end
+    @lattice Lattice((10, 10))
+    @energy cells => (volume - 9)^2
+    @on_copy hits[target] += 1
+    @after_mcs begin
+        n += 1
+        n += 2
+        n -= 0.5
+        g *= 2
+        v += [1.0, -1.0]
+    end
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@potts_model CompoundBase begin
+    @kinds medium A
+    @variables n(model) = 0.0
+    @lattice Lattice((10, 10))
+    @after_mcs n += 1
+    @observed twice ~ 2n
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model CompoundExt begin
+    @extend n = base = CompoundBase()
+    @kinds medium A
+    @after_mcs n += 10                 # replaces the base's update of `n`
+    @observed twice ~ 3n               # and its observed `twice`
+end
+
+@testset "compound assignments, single writers, replacement" begin
+    σ = zeros(Int32, 10, 10); σ[4:6, 4:6] .= 1
+    sol = solve(PottsProblem(Compound(; name = :c), [ownership => σ, kind => [1]], (0, 4)), SequentialCPM())
+    u = sol.u[end]
+    @test u.model.n[1] == 4 * 2.5 && u.model.g[1] == 16
+    @test u.cell.v_1[1] == 4 && u.cell.v_2[1] == -4
+    @test sum(u.site.hits) == sol.stats.accepted                            # one per accepted copy
+    s2 = solve(PottsProblem(CompoundExt(; name = :e), [ownership => σ, kind => [1]], (0, 3)), SequentialCPM())
+    @test s2.u[end].model.n[1] == 30 && s2[:twice][end] == 90
+    bad(body) = Base.invokelatest(eval(:(@potts_model _BadW begin
+        @kinds medium A
+        @variables n(model) = 0.0
+        @lattice Lattice((8, 8))
+        $(body)
+        @sweep Metropolis(; temperature = 1.0)
+    end)); name = :b)
+    @test_throws ArgumentError mtkcompile(bad(:(@after_mcs begin
+        n ~ 1.0
+        n ~ 2.0
+    end)))                                                                  # two writers
+    @test_throws LoadError bad(:(@after_mcs begin
+        n ~ 1.0
+        n += 2.0
+    end))                                                                  # at macro expansion
+    @test_throws LoadError bad(:(@after_mcs begin
+        n += 1.0
+        n *= 2.0
+    end))                                                                  # at macro expansion
+    ok = Base.invokelatest(eval(:(@potts_model _OkW begin
+        @kinds medium A
+        @variables n(model) = 0.0
+        @lattice Lattice((8, 8))
+        @after_mcs n += 1
+        @after_mcs Every(5) n ~ 0.0
+        @sweep Metropolis(; temperature = 1.0)
+    end)); name = :ok)
+    @test mtkcompile(ok) isa CompiledPottsSystem                             # another cadence
+end

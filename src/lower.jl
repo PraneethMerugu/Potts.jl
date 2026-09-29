@@ -213,6 +213,8 @@ end
 
 function _lower_at(args, env)
     x = _unwrap(args[1])
+    # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
+    iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     i = info(x)
     i === nothing && error("cannot index `$x`")
     idx = map(a -> lower(a, env), args[2:end])

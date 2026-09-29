@@ -804,3 +804,18 @@
   - **`Pre(x, 1)`.** It used MTK `Pre`, the live value, while `k ≥ 2` read the ring, so
     the lag sequence skipped a step. All `Pre(x, k)` now read the ring.
   - **History timing.** History pushes moved to `end_mcs`, after the lifecycle.
+
+## 2026-09-29 — Compound assignments, single writers, structural replacement (M3.4)
+
+- **Macro.** `_combine_compound` folds the `+=`, `-=`, `*=` and `/=` writes to each
+  target in an update block into one `x ~ Pre(x) op …`. Mixing `~` with compound writes,
+  or additive with multiplicative ones, is an error at macro expansion.
+- **Lowering.** MTK's `Pre` distributes into function arguments (`at(Pre(x), i)`);
+  `_lower_at` now looks through it.
+- **Compile.** Two updates of the same target in one phase and cadence are an error.
+  Before, this was a silent race.
+- **`extend`.** An extension's update, equation or observed quantity replaces the base's
+  for the same target or name. This is the explicit structural replacement from the
+  legacy G04 plan.
+- Tests cover compound counters (model, cell vector, on-copy site), replacement through
+  `@extend`, and the error cases.

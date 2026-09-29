@@ -130,6 +130,51 @@ _push_located!(list, sources, xs::AbstractVector, ln) = foreach(x -> _push_locat
 _rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.args) == 3 ?
                  :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
 _is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
+
+const _COMPOUND = (:+=, :-=, :*=, :/=)
+"""
+Compound assignments in an update block: `x += a` is `x ~ Pre(x) + a`, and every compound
+write of one target folds into a single update reading the same previous value
+(`x += a; x -= b` → `x ~ Pre(x) + a - b`). Mixing `~` and compound writes of one target, or
+additive and multiplicative ones, is an error.
+"""
+function _combine_compound(lines)
+    groups = Dict{String, Vector{Any}}()
+    order = Any[]
+    for (l, ln) in lines
+        if l isa Expr && l.head in _COMPOUND
+            key = string(l.args[1])
+            if !haskey(groups, key)
+                groups[key] = Any[]
+                push!(order, (key, ln))
+            end
+            push!(groups[key], l)
+        else
+            push!(order, (l, ln))
+        end
+    end
+    plain = Set(string(l.args[2]) for (l, _) in order if l isa Expr && l.head === :call && l.args[1] === :~)
+    out = Tuple{Any, Any}[]
+    for (item, ln) in order
+        if item isa String
+            ls = groups[item]
+            item in plain && throw(ArgumentError("`$item` has both `~` and compound (`+=`, …) writes in one block"))
+            ops = Set(l.head for l in ls)
+            ops ⊆ Set((:+=, :-=)) || ops ⊆ Set((:*=, :/=)) ||
+                throw(ArgumentError("`$item`: additive and multiplicative compound writes do not combine; write one equation"))
+            lhs = ls[1].args[1]
+            rhs = :(Pre($lhs))
+            for l in ls
+                op = Dict(:+= => :+, :-= => :-, :*= => :*, :/= => :/)[l.head]
+                rhs = Expr(:call, op, rhs, l.args[2])
+            end
+            push!(out, (:($lhs ~ $rhs), ln))
+        else
+            push!(out, (item, ln))
+        end
+    end
+    return out
+end
 _strip(ex) = ex isa Expr && ex.head === :block ? only(filter(a -> !(a isa LineNumberNode), ex.args)) : ex
 
 function _section!(parts, sec, args, ln = nothing)
@@ -278,7 +323,7 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec in (Symbol("@on_copy"), Symbol("@after_mcs"), Symbol("@before_mcs"))
         phase = QuoteNode(Symbol(String(sec)[2:end]))
         every = length(args) == 2 ? args[1] : nothing
-        for (l, lln) in _lines_ln(args[end:end], ln)
+        for (l, lln) in _combine_compound(_lines_ln(args[end:end], ln))
             l = _rewrite_eq(l)
             push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
                                                   :($P.update($phase, $every, $l)), lln))

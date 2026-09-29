@@ -9,8 +9,10 @@
 
 The model with everything in `base` and `sys`. `sys` wins where both define something
 (parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
-extension that declares them). Energies, drives, constraints, updates, equations,
-divisions, relationships, link rules and observed quantities accumulate, base first.
+extension that declares them). Structural replacement: an update of `sys` replaces the base's
+updates of the same target in the same phase, an equation the base's equation for the same
+variable, an observed quantity the base's of the same name. Energies, drives, constraints,
+divisions, relationships and link rules accumulate, base first.
 """
 function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
     length(sys.kinds) >= length(base.kinds) && sys.kinds[1:length(base.kinds)] == base.kinds ||
@@ -21,14 +23,22 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
-        constraints = [base.constraints; sys.constraints], updates = [base.updates; sys.updates],
-        equations = [base.equations; sys.equations], divisions = [base.divisions; sys.divisions],
+        constraints = [base.constraints; sys.constraints],
+        updates = [_unreplaced(base.updates, sys.updates, _target_key); sys.updates],
+        equations = [_unreplaced(base.equations, sys.equations, eq -> string(eq.lhs)); sys.equations],
+        divisions = [base.divisions; sys.divisions],
         relationships = unique(r -> r.name, [sys.relationships; base.relationships]),
-        link_rules = [base.link_rules; sys.link_rules], observed = [base.observed; sys.observed],
+        link_rules = [base.link_rules; sys.link_rules],
+        observed = [_unreplaced(base.observed, sys.observed, o -> info(o.var).name); sys.observed],
         components = unique(c -> c.name, [sys.components; base.components]),
         sweep = sys.sweep, structural = merge(base.structural, sys.structural),
         sources = merge(base.sources, sys.sources))
 end
+
+"""Items of `base` whose key no item of `new` shares."""
+_unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))
+"""What an update writes: its phase and target (`x`, `act[target]`, …)."""
+_target_key(u::Update) = (u.phase, string(u.eq.lhs))
 
 """
     lookup(sys::PottsSystem, name::Symbol)

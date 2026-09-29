@@ -225,6 +225,14 @@ end
   - Lags of cell variables are rejected, because rings would not follow capacity growth
     and division. Chain `Pre` instead.
   - Lags are also rejected in energies and `@observed`.
+- **Compound assignments (implemented).** `x += e` is `x ~ Pre(x) + e` (also `-=`, `*=`,
+  `/=`), including indexed on-copy targets (`hits[target] += 1`) and vectors. Every
+  compound write of one target in a block folds into one update that reads the same
+  previous value: `x += a; x -= b` gives `x ~ Pre(x) + a - b`.
+- **One writer per target (implemented).** A target written twice in the same phase and
+  cadence is an error that suggests `+=`. In `extend`, an extension's update of a target
+  replaces the base's, and its equation or observed quantity of the same name replaces the
+  base's. Structural replacement is therefore explicit: redeclare the target.
 - Neighbourhood expressions are generator comprehensions over a relation, in any scope:
   ```julia
   geomean_act(s) = geomean(act[n] for n in Moore(1)(s) if owner[n] == owner[s])
