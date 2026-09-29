@@ -23,6 +23,7 @@ export init_moments, commit_moments!, centroid, centroid_shift, covariance,
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
 export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
+export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
 export init, solve, solve!, step!, remake, CPU
@@ -32,6 +33,7 @@ include("lattice.jl")
 include("model.jl")
 include("geometry.jl")
 include("phases.jl")
+include("fields.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

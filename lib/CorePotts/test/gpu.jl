@@ -62,4 +62,18 @@ using Metal
         @test g.site.u ≈ c.site.u rtol = 1e-5
         @test g.history.u ≈ c.history.u rtol = 1e-5
     end
+
+    @testset "fields on Metal" begin
+        σf, kf = blocks((64, 32), 6)
+        latf = Lattice((64, 32))
+        c0 = Float32[exp(-((i - 20)^2 + (j - 10)^2) / 30) for i in 1:64, j in 1:32]
+        pf = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
+            D = 0.1f0)
+        prob = field_problem(σf, kf, latf, c0, diffuse, pf; dt = 1.0f0, spacing = (1.0f0, 0.8f0),
+            tspan = (0, 20))
+        g = solve(prob, CheckerboardCPM(); backend).u[end].site.c
+        c = solve(prob, CheckerboardCPM()).u[end].site.c
+        @test g ≈ c rtol = 1e-4
+        @test sum(g) ≈ sum(c0) rtol = 1e-4
+    end
 end

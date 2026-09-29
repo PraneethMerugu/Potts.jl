@@ -329,6 +329,7 @@ end
 
 include("geometry.jl")
 include("phases.jl")
+include("fields.jl")
 include("oracle.jl")
 get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")
