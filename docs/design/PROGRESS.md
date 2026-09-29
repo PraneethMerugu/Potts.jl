@@ -382,3 +382,40 @@
   - Relationships (`@relationship`, `edges`) and compartments in the surface.
   - Units; diagnostics with source locations.
   - Symbolic GPU tests in the GPU group.
+
+## 2026-09-29 — M3 slice 2 (commits b22ad35 … fe139fe)
+
+- **Acceptance law.** `CPMFunction(…; acceptance)` holds the model's law; algorithms
+  default to `acceptance = nothing` (the model's, else Metropolis). `@sweep` propagates.
+- **remake.** `remake(prob; p = [λ => 3.0])` and `remake(prob; u0 = [ownership => σ, …])`
+  go through CorePotts hooks. The parameter type is kept, so nothing recompiles.
+- **Relationships in the surface.** `@relationship`, `x(edge)` payloads,
+  `edges(rel) => E(a, b, distance, …)` (`link_delta` + automatic `link_claims`), and
+  `@link`/`@unlink … when = …, every = n` (host phases over the contact graph); initial
+  links come from the operating point.
+- **Observed and SII.**
+  - Model variables `x(model)` with population folds over `cells(k)`/`sites`, run as
+    `ModelPhase` (a single work item; also on Metal).
+  - `@observed`; `sol[x]` for any quantity or expression via SII on `PottsModelInfo`;
+    `getp`; `observe`.
+  - `PottsParameters` (D-012) is an isbits NamedTuple wrapper.
+- **QA** (`test/qa.jl`): the generated Graner/Wortel/Merks/OpenVT `step!` is JET-clean;
+  a warm sequential MCS allocates 0 bytes; Aqua is clean. This found and fixed one
+  runtime dispatch in the lifecycle daughter copy.
+- **GPU** (`POTTS_GPU=metal`, part of `GROUP=GPU`): the symbolic models with
+  `T = Float32` run with exact trackers. Graner H agrees with CPU (29380 vs 29389),
+  springs relax, and model phases run.
+- **TTFX** (PrecompileTools workload), fresh process, warm cache: `using Potts` 4.6 s,
+  build 1.5 s (was 4.5 s), first solve 0.5 s, so build + first MCS is 7.2 s against the
+  15 s gate.
+- **Code review** (a subagent over `src/`) found 10 issues, all fixed with regression
+  tests (commit 5809718):
+  - Four were wrong physics without an error: unmirrored cell variables in contact
+    terms; volume/surface allowed outside cell terms; the surface δ fused twice;
+    division rules not gated by kind.
+  - `@on_copy x[new]` wrote `x[0]`.
+  - Float64 leaked into Float32 code.
+  - Macro hygiene: indexed assignment, eager ternary/`&&`, and generators over
+    non-relations.
+  - Parameter keyword overrides did not work.
+  - A gather counter made the generated code non-deterministic.
