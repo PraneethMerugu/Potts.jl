@@ -281,3 +281,19 @@
   proposals, including linked old–new pairs, across seams); a spring relaxes to
   equilibrium (13.2 with checkerboard + claims against sequential's 13.1); the
   host-rule and lifecycle policies (347 checks).
+
+## 2026-09-29 — M2.10 (commit bd713f5)
+
+- **Checkpoints** (`checkpoint.jl`). `checkpoint(integ)` captures state, MCS, key and
+  stats; `save_checkpoint`/`load_checkpoint` use Serialization (Julia-only, D-032 spirit).
+  `init(prob, alg; checkpoint)` refuses a checkpoint whose model fingerprint differs.
+  `reinit!` restores state and stats in place. Continuation is exact: N MCS equals
+  k MCS, checkpoint, reload, N − k MCS, bit for bit, for both algorithms (RNG is
+  address-keyed, so no stream state needs saving).
+- **Saved states.** Snapshots are deep copies on CPU (they previously aliased the live
+  state). Accessors `ownership`, `cell_kinds`, `cell_generations`, `volumes`.
+- **MakiePotts** (also closes M1.3) now depends on CorePotts only: `renderframe` for
+  `CPMState` and `PottsSolution` (frozen medium sites render as obstacles, spacing from
+  the problem). Workspace member with its own test project; GROUP=MakiePotts in the root
+  dispatcher. All MakiePotts suites pass, including Aqua and the fresh-process load orders.
+- **Full run.** GROUP=All green (4 min 43 s wall); Metal 169/169.

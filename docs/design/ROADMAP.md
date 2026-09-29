@@ -23,7 +23,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
   Accept: `julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'` succeeds from a clean clone.
 - [x] 7b0a81b 2026-09-29 **M1.2** LocalMath import (git subtree, history preserved) → `lib/LocalMath`; tests pass unchanged.
   Accept: `GROUP=LocalMath julia --project test/runtests.jl`.
-- [ ] **M1.3** MakiePotts import → `lib/MakiePotts`; compiles (recipes may be stubbed against a temporary frame type until M2.10).
+- [x] **M1.3** (bd713f5) MakiePotts import → `lib/MakiePotts`; compiles (recipes may be stubbed against a temporary frame type until M2.10).
 - [x] 7b0a81b b5bd201 2026-09-29 (`PottsParameters` moves to M3 with the compiler; native `exp` per D-029) **M1.4** CorePotts seed from FusedCPM: `CPMFunction`, `CPMProblem`, `PottsParameters`, `CPMState`, Philox4x32 (D-005), owned `exp` (D-006), `SequentialCPM`, `CheckerboardCPM` with footprint-derived stride (D-008), `PottsIntegrator <: DEIntegrator`, `PottsSolution`, status word.
   Accept: FusedCPM tests ported and green; `GROUP=Core`; JET `@test_opt init/step!` clean; AllocCheck warm `step!` = 0.
 - [x] b5bd201 2026-09-29 (preflight so far covers footprint vs relation radius; extend per feature) **M1.4b** verification harness: exact transition-matrix oracle for tiny lattices (independent of production code; scheduler state lifted), TV-distance comparison; preflight rejection of unsupported algorithm × backend × feature combinations.
@@ -42,7 +42,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [x] 48a43bc 2026-09-29 (contact graph is host-side; its device build is in M2.11) **M2.7** spatial queries and Cartesian ownership domains (fixed owners, immutable sites, per-face boundaries): neighbor counts, weighted contact measures, boundary-site queries, sums/means, predicate filters, interface queries.
 - [x] 1c84438 2026-09-29 (D-035; seeding via host API and relationship consequences with M2.9) **M2.8** lifecycle: trigger/plan/apply; divide (principal major/minor, random plane, specified normal, external), remove, retire, create, transition; state rules; placement; conflicts; inadmissibility policies; capacity growth. Accept: OpenVT reference parity; ported CorePotts lifecycle scientific tests; invariants.
 - [x] 69b0cfd 2026-09-29 (padded adjacency instead of CSR; directed/anchor links and link age via payloads) **M2.9** relationships: CSR store, energies, create/remove/retune, lifecycle interaction.
-- [ ] **M2.10** checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
+- [x] **M2.10** (bd713f5) checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
 - [ ] **M2.11** Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
 
 - [ ] **M2.10a** compartments: compartment cells grouped under a parent; internal vs external contact energies; coordinated division.
