@@ -927,3 +927,10 @@ Timing: the Potts Metal group takes about 1 min. The same group under `julia -t 
   and inert, and still describe the old multi-repo workflow. The monorepo has no CI yet
   (local-only).
 - `GROUP=All` (CorePotts, MakiePotts, Potts, PottsModels) passes.
+
+## 2026-09-29 — Full audit (docs/design/AUDIT.md)
+
+Five read-only reviews (CorePotts, front end, codegen, SciML/units, docs/models/Makie); all
+HIGH items re-run independently. ~90 findings with stable IDs `A-xx`, a hex section (user's
+three items plus torus min-image, Weighted/domain axial inputs, PIFF, Makie), a 3D-hex plan
+(prism first, FCC second, HCP rejected), and a fix order. No fixes yet — awaiting review.
