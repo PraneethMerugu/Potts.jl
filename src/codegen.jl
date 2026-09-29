@@ -349,10 +349,14 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope)
         return nothing
     end))
     solver = c.sys.sweep.ode_solver
-    return _AdaptiveODE(f, solver.alg, solver.kwargs, [info(x).name for (x, _) in odes], scope, T, Float64(dt), nothing)
+    return _AdaptiveODE(f, solver.alg, solver.kwargs, [info(x).name for (x, _) in odes], scope, T, Float64(dt),
+        Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
 end
 
-mutable struct _AdaptiveODE{F, A, K}
+# One SciML integrator per trajectory, keyed by the identity of its live state array (held
+# weakly; ensembles run trajectories concurrently through the same phase object), rebuilt if
+# the parameter-tuple type changes (another algorithm, backend or relation set).
+struct _AdaptiveODE{F, A, K}
     f::F
     alg::A
     kwargs::K
@@ -360,11 +364,13 @@ mutable struct _AdaptiveODE{F, A, K}
     scope::Symbol
     T::Type
     dt::Float64
-    integ::Any
+    integrators::Dict{UInt, Tuple{WeakRef, Any}}
+    lock::ReentrantLock
 end
 
 function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     KernelAbstractions.synchronize(backend)
+    owner = st.σ                                   # identifies the trajectory
     cpu = backend isa CorePotts.CPU
     host = cpu ? st : CorePotts._snapshot(backend, st)
     hp = cpu ? p : Adapt.adapt(Array, p)
@@ -373,16 +379,19 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     arrays = [getfield(part, n) for n in ph.names]
     u = zeros(ph.T, length(arrays))
     t0 = mcs * ph.dt
-    advance!(P) = begin
-        integ = ph.integ
-        if integ === nothing
+    advance!(P, c) = begin
+        integ = lock(() -> _cached_integrator(ph.integrators, owner), ph.lock)
+        if integ === nothing || typeof(integ.p) !== typeof(P)
             prob = SciMLBase.ODEProblem{true}(ph.f, copy(u), (t0, t0 + ph.dt), P)
-            integ = ph.integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, ph.kwargs...)
+            integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, ph.kwargs...)
+            lock(() -> _cache_integrator!(ph.integrators, owner, integ), ph.lock)
         else
-            SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true)
+            SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true, reset_dt = true)
             integ.p = P
         end
         SciMLBase.solve!(integ)
+        SciMLBase.successful_retcode(integ.sol) || error("Adaptive ODE integration failed at MCS $mcs" *
+                                                         (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)")
         return integ.u
     end
     if ph.scope === :cell
@@ -391,7 +400,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
             for (i, a) in enumerate(arrays)
                 u[i] = a[c]
             end
-            v = advance!((host, hp, hctx, mcs, c))
+            v = advance!((host, hp, hctx, mcs, c), c)
             for (i, a) in enumerate(arrays)
                 a[c] = v[i]
             end
@@ -400,7 +409,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
         for (i, a) in enumerate(arrays)
             u[i] = a[1]
         end
-        v = advance!((host, hp, hctx, mcs, 0))
+        v = advance!((host, hp, hctx, mcs, 0), 0)
         for (i, a) in enumerate(arrays)
             a[1] = v[i]
         end
@@ -410,6 +419,16 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
         foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.names)
     end
     return 0
+end
+
+function _cached_integrator(cache, owner)
+    e = get(cache, objectid(owner), nothing)
+    return e !== nothing && e[1].value === owner ? e[2] : nothing
+end
+function _cache_integrator!(cache, owner, integ)
+    filter!(kv -> kv[2][1].value !== nothing, cache)            # drop finished trajectories
+    cache[objectid(owner)] = (WeakRef(owner), integ)
+    return integ
 end
 
 # The ODE unknowns as local values `y_i` inside the step (Jacobi: every rate sees the state

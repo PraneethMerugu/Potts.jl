@@ -61,7 +61,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
     P = :(Potts)
     preamble = quote
         (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface, time) = $P.B
-        $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
+        # gather variables and draws are numbered per model; a base built by `@extend` inside
+        # another model continues the outer numbering (so the merged model has no collisions)
+        $P._NESTING[] == 0 && ($P._GATHER_COUNT[] = 0)
         $P._DIM[] = 0                             # set by @lattice (vector builtins)
         t = $P.t
         D = $P._D
@@ -266,7 +268,7 @@ function _section!(parts, sec, args, ln = nothing)
         params = call.args[findfirst(a -> a isa Expr && a.head === :parameters, call.args)]
         any(a -> a isa Expr && a.head === :kw && a.args[1] === :name, params.args) ||
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
-        push!(code, :($bname = $call), :(push!(__bases, $bname)))
+        push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
     elseif sec === Symbol("@components")
         # `@components clock = sys`, `@components cells(k) grn = sys`, or a block of `name = sys`

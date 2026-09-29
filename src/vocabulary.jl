@@ -127,6 +127,19 @@ _normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) fo
 
 """Spatial dimension of the lattice being declared (for `centroid()`, `displacement(c)`)."""
 const _DIM = Ref(0)
+"""Depth of `@extend` bases being built inside another model's constructor."""
+const _NESTING = Ref(0)
+"""Build an `@extend` base: numbering continues, and the outer model's lattice dimension is kept."""
+function _nested(f)
+    dim = _DIM[]
+    _NESTING[] += 1
+    try
+        return f()
+    finally
+        _NESTING[] -= 1
+        _DIM[] = dim
+    end
+end
 _lattice_dim() = _DIM[] > 0 ? _DIM[] :
                  throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 

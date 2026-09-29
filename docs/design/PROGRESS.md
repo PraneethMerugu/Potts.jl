@@ -885,3 +885,31 @@
     sweeps. Trackers match recomputes, field mass is conserved, and centroids are
     Cartesian. Metal Float32.
 - Not done: MakiePotts renders hex states on the sheared array, without hexagon glyphs.
+
+## 2026-09-29 — Review 5 (8788419^..HEAD)
+
+All findings are fixed and have regression tests.
+
+1. **Ensemble threads shared one integrator.** `EnsembleThreads` crashed on the shared
+   `_AdaptiveODE` integrator.
+   - Integrators are now cached per trajectory, keyed by the identity of the live state
+     array. The reference is held weakly (`objectid` + `WeakRef`, with dead entries pruned)
+     and the cache is guarded by a lock.
+   - A first attempt with `WeakKeyDict` hashed the array by content. That meant scalar
+     indexing on Metal, and on CPU the key changed every MCS.
+2. **Parameter-tuple type change.** The cached integrator is rebuilt when the type
+   changes (another proposal, relation set or backend).
+3. **Silent solver failures.** A failed adaptive solve is now an error naming the MCS and
+   cell. `reinit!` uses `reset_dt = true`.
+4. **Replacement vs cadence.** Replacement and the single-writer check now share one
+   `(phase, target, every)` key.
+5. **Nested `@extend` counters.** The gather/draw numbering is reset only by the
+   outermost model constructor (`_NESTING`), and `_nested` restores the outer lattice
+   dimension. Base and outer `rand()` streams no longer collide.
+6. **`reinit!` and integrals.** `reinit!` now runs the `at_init` phases, so integrals are
+   valid again.
+7. **Flat vector operating points.** A flat numeric vector for a vector variable is the
+   vector itself for every entry, with a clear error on a length mismatch.
+
+Timing: the Potts Metal group takes about 1 min. The same group under `julia -t 4` took
+12 min (host-thread contention with Metal), so GPU tests run single-threaded.

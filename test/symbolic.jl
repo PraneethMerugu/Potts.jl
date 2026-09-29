@@ -1409,3 +1409,21 @@ end
         @test u.cell.cx[k] ≈ sum(first, mine) / length(mine) atol = 1e-9   # centroid() is Cartesian (no wrap here)
     end
 end
+
+@potts_model CadenceBase begin
+    @kinds medium A
+    @variables n(model) = 0.0
+    @lattice Lattice((8, 8))
+    @after_mcs n += 1
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CadenceExt begin
+    @extend n = base = CadenceBase()
+    @kinds medium A
+    @after_mcs Every(5) n ~ 0.0             # another cadence: kept alongside the base's update
+end
+
+@testset "replacement respects cadence" begin
+    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
+    @test solve(PottsProblem(CadenceExt(; name = :c), [ownership => σ, kind => [1]], (0, 4)), SequentialCPM()).u[end].model.n[1] > 0
+end

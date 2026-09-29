@@ -138,10 +138,14 @@ function _expand_vectors(sys::PottsSystem, op)
 end
 function _vector_entry(name, v, i, n, role)
     v isa Number && return v
-    if role === :param || (v isa AbstractVector && eltype(v) <: Number && length(v) == n && role === :model)
-        length(v) == n || throw(ArgumentError("`$name` has $n components; got $(length(v)) values"))
+    # a flat numeric vector is the vector itself (for every cell/site); per-entry data are
+    # vectors of tuples/vectors or arrays whose last dimension is `n`
+    if v isa AbstractVector && eltype(v) <: Number
+        length(v) == n || throw(ArgumentError("`$name` has $n components; got $(length(v)) numbers " *
+                                              "(per-cell/site values: a vector of $n-tuples or an array whose last dimension is $n)"))
         return v[i]
     end
+    role === :param && throw(ArgumentError("`$name` takes $n numbers"))
     v isa AbstractVector && all(e -> e isa Union{AbstractVector, Tuple}, v) && return [e[i] for e in v]
     v isa AbstractArray && size(v, ndims(v)) == n && return copy(selectdim(v, ndims(v), i))
     throw(ArgumentError("values for the $n-component `$name`: a number, per-entry vectors, or an array whose last dimension is $n"))

@@ -220,7 +220,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
     for u in sys.updates
-        k = (_target_key(u)..., u.every)
+        k = _target_key(u)
         haskey(writers, k) && _located(sys, u) do
             throw(ArgumentError("`$(u.eq.lhs)` is already written @$(u.phase)$(u.every == 1 ? "" : " Every($(u.every))") " *
                                 "by `$(writers[k].eq)`; combine contributions with `+=` or in one equation"))

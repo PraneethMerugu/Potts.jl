@@ -38,7 +38,7 @@ end
 """Items of `base` whose key no item of `new` shares."""
 _unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))
 """What an update writes: its phase and target (`x`, `act[target]`, …)."""
-_target_key(u::Update) = (u.phase, string(u.eq.lhs))
+_target_key(u::Update) = (u.phase, string(u.eq.lhs), u.every)
 
 """
     lookup(sys::PottsSystem, name::Symbol)
