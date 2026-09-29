@@ -280,13 +280,26 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
     (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
+    # per-copy reads anchored at the target count from it; at the source, from the source
+    # (CorePotts adds the proposal radius: `reach`)
+    source_read = -1
+    source_write = -1
+    oncopy = get(updates, (:on_copy, :proposal), Update[])
     for x in Any[(drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-            (u.eq.rhs for u in get(updates, (:on_copy, :proposal), Update[]))...]
+            (u.eq.rhs for u in oncopy)..., sys.sweep.temperature]
         for (ni, anchor) in _gathers(x)
             spec = ni.options.relation
             r = rad(spec isa RelationRef ? sys.relations[spec.name] : spec)
-            radius_read = max(radius_read, r + (_uses_builtin(anchor, :source) ? 1 : 0))
+            if _uses_builtin(anchor, :source)
+                source_read = max(source_read, r)
+            else
+                radius_read = max(radius_read, r)
+            end
         end
+    end
+    for u in oncopy                                  # `act[source] ~ …` writes at the source
+        idx = arguments(_unwrap(u.eq.lhs))[2]
+        _uses_builtin(idx, :source) && (source_write = max(source_write, 0))
     end
 
     # fields step double-buffered; synchronous updates read previous values from snapshots
@@ -316,7 +329,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationship, edge_terms,
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
-        needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
+        needs_moments, relations, contact_spec, gather_names,
+        Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops)
 end
 

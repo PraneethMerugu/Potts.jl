@@ -176,6 +176,14 @@ function _commit_expr(c::CompiledPottsSystem, T)
     c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
         CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
     c.uses_clusters && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
+    # `clear_on_ownership_change`: the target's value resets to the default, before the
+    # on-copy writes (which may set it again)
+    for x in c.sys.variables
+        i = info(x)
+        get(i.options, :clear_on_ownership_change, false) === true || continue
+        v = i.default isa Real ? T(i.default) : zero(T)
+        push!(body, :(@inbounds st.site.$(i.name)[target] = $v))
+    end
     append!(body, writes)
     push!(body, :(return nothing))
     return :((st, p, prop, ctx) -> $(Expr(:block, body...)))

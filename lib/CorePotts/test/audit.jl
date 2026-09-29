@@ -103,3 +103,13 @@ end
     ri = relation(Weighted(Hex(1), OnIndices(o -> 1 / sqrt(sum(abs2, o)))), L)
     @test count(≈(1 / sqrt(2)), ri.weights) == 2
 end
+
+@testset "A-65 footprint reach includes the proposal radius and source reads" begin
+    L = Lattice((24, 24))
+    @test CorePotts.reach(Footprint(), relation(Moore(2), L)) == (2, 0)
+    @test CorePotts.reach(Footprint(; source_read = 2, source_write = 0), relation(Moore(2), L)) == (4, 2)
+    σ, kinds = blocks((24, 24), 4)
+    prob = CPMProblem(GG, initial_state(σ, kinds), L, (0, 3), gg_params())
+    u = solve(prob, CheckerboardCPM(; proposal = Moore(2))).u[end]
+    @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
+end

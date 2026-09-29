@@ -1,6 +1,6 @@
 # Checkerboard dynamics (KernelAbstractions; CPU or GPU).
 #
-# Coloring. With stride s = footprint.read + footprint.write + 1, a site's color is its
+# Coloring. With stride s = read + write + 1 (`reach(footprint, proposal)`), a site's color is its
 # residue class along every axis. On a periodic axis whose length is not a multiple of s
 # the last (n mod s) columns form extra singleton classes, so no two same-color sites are
 # closer than s across the seam. Each color is enumerated by a per-axis (start, step,
@@ -127,8 +127,10 @@ struct CheckerboardCache{N, P, S, C, B, K1, K2}
     commit!::K2
 end
 
-function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int) where {N}
-    s = f.footprint.read + f.footprint.write + 1
+function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
+        proposal = relation(VonNeumann(1), lat)) where {N}
+    r, w = reach(f.footprint, proposal)
+    s = r + w + 1
     cs = colors(lat, s)
     maxsites = maximum(ncolorsites, cs)
     idbits = max(1, ceil(Int, log2(maxsites + 1)))

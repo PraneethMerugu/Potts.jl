@@ -60,10 +60,18 @@ kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope."""
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index)
+
 function variable(x, scope::Symbol; default = 0.0, unit = nothing, options...)
     scope in SCOPES || throw(ArgumentError("unknown scope `$scope`; use one of $SCOPES"))
     u = Symbolics.unwrap(x)
     name = SymbolicUtils.iscall(u) ? nameof(SymbolicUtils.operation(u)) : nameof(u)
+    for (k, v) in options
+        k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
+                                                      "(options: `unit`, `clear_on_ownership_change`)"))
+        k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
+            throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
+    end
     return _with_unit(_tag(x, Info(scope, name, default, NamedTuple(options))), unit)
 end
 

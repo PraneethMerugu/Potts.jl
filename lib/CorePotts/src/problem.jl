@@ -156,7 +156,7 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0)) : nothing
+            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(alg.proposal, lat)) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0))
@@ -214,9 +214,8 @@ function _preflight(prob::CPMProblem, alg::CPMAlgorithm, ctx)
             "weight); an asymmetric relation gives a ΔH that is not an energy difference"))
     end
     alg isa CheckerboardCPM || return nothing
-    need = max(radius(ctx.proposal), radius(ctx.contact),
-        maximum(radius, values(prob.relations); init = 0))
-    have = prob.f.footprint.read
+    need = max(radius(ctx.contact), maximum(radius, values(prob.relations); init = 0))
+    have = first(reach(prob.f.footprint, ctx.proposal))
     have >= need || throw(ArgumentError(
         "CheckerboardCPM: the model declares Footprint(read = $have) but its proposal, " *
         "contact and named relations reach distance $need; pass `footprint = Footprint(read = $need)` " *

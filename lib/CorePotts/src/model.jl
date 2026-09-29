@@ -86,11 +86,23 @@ end
     Footprint(; read = 1, write = 0)
 
 Largest lattice distance, from the target, that a model's functions read (`read`) and
-write besides the target itself (`write`). Sets the checkerboard coloring stride.
+write besides the target itself (`write`), plus reads and writes anchored at the proposal
+source (`source_read`, `source_write`: distance from the source, `-1` for none), which reach
+`radius(proposal)` further. Sets the checkerboard coloring stride (`reach`).
 """
 Base.@kwdef struct Footprint
     read::Int = 1
     write::Int = 0
+    source_read::Int = -1
+    source_write::Int = -1
+end
+
+"""Effective `(read, write)` distances from the target under proposal relation `proposal`."""
+function reach(fp::Footprint, proposal)
+    rp = radius(proposal)
+    read = max(fp.read, rp, fp.source_read >= 0 ? rp + fp.source_read : 0)
+    write = max(fp.write, fp.source_write >= 0 ? rp + fp.source_write : 0)
+    return read, write
 end
 
 """

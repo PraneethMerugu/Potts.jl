@@ -195,3 +195,33 @@ end
     @test uq ≈ solve(fresh, SequentialCPM()).u[end].site.c
     @test maximum(abs, uq) < 100
 end
+
+@potts_model AuditClear begin
+    @kinds medium A
+    @variables begin
+        act(site) = 0.0, [clear_on_ownership_change = true]
+        tag(site) = 0.0
+    end
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 16)^2
+    @sweep Metropolis(; temperature = 20.0)
+end
+
+@potts_model AuditBadOption begin
+    @kinds medium A
+    @variables act(site) = 0.0, [clear_on_ownership_chnage = true]
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "A-34 clear_on_ownership_change; unknown variable options" begin
+    σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 10:13] .= 2
+    p = PottsProblem(AuditClear(; name = :c), [ownership => σ, kind => [1, 1], :act => 5.0, :tag => 5.0], (0, 5))
+    u = solve(p, SequentialCPM()).u[end]
+    changed = u.σ .!= σ
+    @test any(changed)
+    @test all(iszero, u.site.act[changed]) && count(==(5), u.site.act) > 0   # changed back: also cleared
+    @test all(==(5), u.site.tag)
+    @test_throws ArgumentError AuditBadOption(; name = :b)
+end
