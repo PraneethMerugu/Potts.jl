@@ -91,6 +91,9 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if c.uses_surface && !fused_surface
         push!(body, :((δs_old, δs_new) = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
     end
+    # on-copy writes the energies read (D-045): the state after the copy has them applied
+    after, oc_binds, oc_vals = _oncopy_after(c, T, rn)
+    append!(body, oc_vals)
     # cell terms, grouped by kind filter
     groups = Dict{Vector{Int}, Any}()
     for (kinds, E) in c.cell_terms
@@ -99,9 +102,9 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     for (side, dv, k, δs) in ((:old, -1, :k_old, :δs_old), (:new, +1, :k_new, :δs_new))
         terms = Any[]
         for (kinds, E) in _sorted(groups)
-            ΔE = _cell_delta(E, dv)
+            ΔE = _cell_delta(E, dv; after = after[side])
             _nops(ΔE) == 0 && isequal(_unwrap(ΔE), 0) && continue
-            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs,))
+            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, oc_binds...))
             push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
@@ -112,8 +115,9 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         push!(body, :(dH += CorePotts.link_delta($T, st.cell, ctx, prop, (ea, eb, ek, ed) -> $Ecode)))
     end
     for E in c.site_terms
-        after = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :new, :kind => :k_new, :__site => :target,
-            :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
+        after = lower(isempty(after[:target]) ? E : Symbolics.substitute(E, after[:target]; fold = Val(false)),
+            LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :new, :kind => :k_new, :__site => :target,
+            :position => :(Potts._position($T, ctx, target)), :site => :target, oc_binds...), rn))
         before = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :old, :kind => :k_old, :__site => :target,
             :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
         push!(body, :(dH += $after - $before))
@@ -154,6 +158,39 @@ _sorted(d::AbstractDict) = sort!(collect(d); by = x -> string(first(x)))
 _same_relation(c::CompiledPottsSystem, a::Symbol, b::Symbol) =
     a === b || isequal(a === :contact ? c.contact_spec : get(c.relations, a, nothing),
         b === :contact ? c.contact_spec : get(c.relations, b, nothing))
+
+"""
+On-copy updates whose targets the energies read, as after-copy stand-ins: `after[side]`
+maps a cell variable written at `new`/`old` (or a site variable written at `target`) to a
+local holding its on-copy value, computed as `commit!` will.
+"""
+function _oncopy_after(c::CompiledPottsSystem, T, rn)
+    after = Dict(:new => Dict{Any, Any}(), :old => Dict{Any, Any}(), :target => Dict{Any, Any}())
+    binds = Pair{Symbol, Any}[]
+    vals = Any[]
+    read = Set{Symbol}(n for E in Any[last.(c.cell_terms)..., c.site_terms...] for (r, n) in _uses(E) if r in SCOPES)
+    for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
+        x, idx = arguments(_unwrap(u.eq.lhs))
+        i = info(x)
+        i.name in read || continue
+        side = _oncopy_side(i, idx)
+        side === nothing && continue                 # rejected by mtkcompile
+        name = Symbol(:__oncopy_, j)
+        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, (;))))
+        push!(binds, name => Symbol(:v_oncopy_, j))
+        push!(vals, :($(Symbol(:v_oncopy_, j)) = $(lower(u.eq.rhs, _proposal_env(T, rn)))))
+    end
+    return after, binds, vals
+end
+
+"""Where an on-copy write `x[idx]` lands for the energies: `:new`, `:old`, `:target` or `nothing`."""
+function _oncopy_side(i::Info, idx)
+    ii = info(idx)
+    (ii === nothing || ii.role !== :builtin) && return nothing
+    i.role === :cell && ii.name in (:new, :old) && return ii.name
+    i.role in (:site, :field) && ii.name === :target && return :target
+    return nothing
+end
 
 # ---------------------------------------------------------------------------------------
 # commit!, constraint, temperature

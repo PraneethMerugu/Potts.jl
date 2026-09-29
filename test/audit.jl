@@ -241,3 +241,40 @@ end
     @test_throws ArgumentError expand(quote @kinds medium A; @variables x(cell) = 1.0; @observed x ~ 2 end)
     @test expand(quote @kinds medium A; @parameters λ = 1.0; @variables x(cell) = 1.0 end) isa Expr
 end
+
+@potts_model AuditOnCopyEnergy begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 1.0
+        act(site) = 0.0
+    end
+    @lattice Lattice((20, 20))
+    @energy begin
+        cells => x * volume + (volume - 9)^2
+        sites => 0.5 * act
+    end
+    @on_copy begin
+        x[new] ~ x[new] + 1
+        act[target] ~ 3.0
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@potts_model AuditOnCopyContact begin
+    @kinds medium A
+    @variables x(cell) = 1.0
+    @lattice Lattice((20, 20))
+    @energy begin
+        cells => (volume - 9)^2
+        contacts => x[owner] + x[owner′]
+    end
+    @on_copy x[new] ~ x[new] + 1
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "A-67 energies see on-copy writes (D-045)" begin
+    σ = audit_blocks()
+    p = PottsProblem(AuditOnCopyEnergy(; name = :o), [ownership => σ, kind => fill(1, 16)], (0, 3))
+    @test selfcheck(p) < 1e-9
+    @test_throws ArgumentError mtkcompile(AuditOnCopyContact(; name = :c))
+end

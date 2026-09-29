@@ -149,6 +149,26 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
         end
     end
+    # energies may read on-copy-written variables only where ΔH can apply the write (D-045):
+    # cell terms at the written cell (`x[new]`, `x[old]`), site terms at the target
+    for u in sys.updates
+        u.phase === :on_copy || continue
+        lhs = _unwrap(u.eq.lhs)
+        (iscall(lhs) && operation(lhs) === at) || continue
+        x, idx = arguments(lhs)
+        i = info(x)
+        i === nothing && continue
+        readers = Any[(E for (_, E) in cluster_terms)..., values(contact_terms)..., edge_terms...,
+            (i.role === :cell ? () : last.(cell_terms))..., (i.role === :cell ? site_terms : ())...]
+        ok = _oncopy_side(i, idx) !== nothing
+        if !ok
+            readers = Any[readers..., last.(cell_terms)..., site_terms...]
+        end
+        any(E -> any(==((i.role, i.name)), _uses(E)), readers) && _located(sys, u) do
+            throw(ArgumentError("an energy reads `$(i.name)`, which this on-copy update writes; ΔH applies the " *
+                                "write only for cell terms reading `$(i.name)[new]`/`[old]` and site terms at the target"))
+        end
+    end
     drive = isempty(sys.drives) ? nothing : sum(d -> d.expr, sys.drives)
     for d in sys.drives
         _located(() -> _check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"), sys, d)
@@ -415,10 +435,10 @@ end
 
 # Copy delta of a cell (or cluster) term for one side: E(q + δq) − E(q), expanded when that
 # is cheaper.
-function _cell_delta(E, dv::Int)
-    sub = Dict(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
+function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
+    sub = Dict{Any, Any}(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
-        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE)
+        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, after...)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
     # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
     # metadata of scoped variables `x(t)` inside them: expand over placeholders instead

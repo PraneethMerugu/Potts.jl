@@ -934,3 +934,17 @@ Five read-only reviews (CorePotts, front end, codegen, SciML/units, docs/models/
 HIGH items re-run independently. ~90 findings with stable IDs `A-xx`, a hex section (user's
 three items plus torus min-image, Weighted/domain axial inputs, PIFF, Makie), a 3D-hex plan
 (prism first, FCC second, HCP rejected), and a fix order. No fixes yet — awaiting review.
+
+## 2026-09-29 — Audit fix group 1 (memory safety and silent physics)
+
+Commits 865b415, d1c9de8, 4f88af4, a689d39 and this one. Fixed A-01, A-02/A-66, A-03, A-05,
+A-10, A-11, A-12, A-14, A-19, A-30, A-31, A-32, A-34, A-47, A-50, A-51, A-52, A-54, A-60–A-65,
+A-67 (details in AUDIT.md's fix log). New: `src/schedule.jl` (D-041 energy-fold snapshots,
+D-042 ordered update stages with `x__pre` snapshots and hoisted folds), `Footprint` source
+reach (`reach`), `Lifecycle(…; rebuild!)`, `OnIndices`, `site` builtin, Cartesian
+`position`. Regression tests: `test/audit.jl`, `lib/CorePotts/test/audit.jl`.
+Behaviour changes: bare reads of a variable updated in the same block are its new value
+(sibling vector components and self-references stay previous values); extension
+replacement ignores cadence (warns); `with_capacity` no longer touches history rings (a
+mismatched ring is an error); diffusion coefficients that are not parameter expressions need
+explicit `substeps`; declared names may not shadow built-ins.
