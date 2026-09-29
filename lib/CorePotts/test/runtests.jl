@@ -325,5 +325,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
     end
 end
 
+include("geometry.jl")
 include("oracle.jl")
+get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")
