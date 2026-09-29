@@ -271,6 +271,7 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@components")
         # `@components clock = sys`, `@components cells(k) grn = sys`, or a block of `name = sys`
         domain = length(args) == 2 ? args[1] : :($P.cells)
+        domain = domain === :model ? QuoteNode(:model) : :($P._domain($domain))   # `@components model drug = sys`
         for l in _lines(args[end:end])
             l isa Expr && l.head === :(=) && l.args[1] isa Symbol ||
                 throw(ArgumentError("@components lines are `name = system`"))
@@ -279,7 +280,7 @@ function _section!(parts, sec, args, ln = nothing)
             rhs = _globalize(l.args[2], k, parts.mod)
             # renamed, so `k.x` is `k₊x` whatever the system was called
             push!(code, :($k = $P.ModelingToolkitBase.rename($rhs, $(QuoteNode(k)))),
-                :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $P._domain($domain)))))
+                :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $domain))))
         end
     elseif sec === Symbol("@lattice")
         push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))),

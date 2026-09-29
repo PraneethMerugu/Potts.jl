@@ -1336,3 +1336,33 @@ end
     end)); name = :ok)
     @test mtkcompile(ok) isa CompiledPottsSystem                             # another cadence
 end
+
+Potts.ModelingToolkitBase.@variables drug_c(_tc) = 0.0
+@parameters drug_k = 0.2 drug_dose = 0.0
+@named drug = System([Potts.D(drug_c) ~ drug_dose - drug_k * drug_c], _tc)
+
+@potts_model Systemic begin
+    @kinds medium A
+    @variables a(model) = 1.0
+    @components model pk = drug
+    @equations begin
+        D(a) ~ -0.5 * a
+        pk.drug_dose ~ count(true for c in cells)           # dosing ∝ the number of live cells
+    end
+    @lattice Lattice((20, 20))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0, ode_solver = RK4(substeps = 4))
+end
+
+@testset "model-scope ODEs and components" begin
+    σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1; σ[10:12, 10:12] .= 2; σ[15:17, 3:5] .= 3
+    p = PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1]], (0, 10))
+    @test :pk₊drug_c in propertynames(p.u0.model) && :pk₊drug_k in propertynames(p.p)
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        u = solve(p, alg).u[end]
+        x = 0.5 / 4
+        @test u.model.a[1] ≈ (1 - x + x^2 / 2 - x^3 / 6 + x^4 / 24)^40 rtol = 1e-12  # RK4, 4 substeps per MCS
+        @test u.model.pk₊drug_c[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-5
+    end
+    @test_throws ArgumentError PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1], :a => nothing], (0, 1))
+end

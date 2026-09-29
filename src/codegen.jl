@@ -283,6 +283,7 @@ function _phases(c::CompiledPottsSystem, T, values)
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
     isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
+    isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
     append!(after, _link_phases(c, T))
     # at the MCS boundary (after the lifecycle): integrals, then history rings take the values
     finish = Any[integrals...]
@@ -300,19 +301,50 @@ end
 # `y_i`, the right-hand sides see them (and `time`), and the result is written back.
 function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
     rn = c.gather_names
-    solver = c.sys.sweep.ode_solver
-    n = length(c.cell_odes)
-    ys = [Symbol(:y_, i) for i in 1:n]
+    ys, locals, bind = _ode_locals(c.cell_odes)
+    env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
+    names = [info(x).name for (x, _) in c.cell_odes]
+    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.cell_odes])
+    return :((st, p, ctx, key, mcs, c) -> begin
+        @inbounds st.cell.volume[c] > 0 || return nothing
+        $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in eachindex(ys)]...)
+        $body
+        $([:(@inbounds st.cell.$(names[i])[c] = $(ys[i])) for i in eachindex(ys)]...)
+        return nothing
+    end)
+end
+
+# Model ODEs (`D(x) ~ rhs` on model variables): the same fixed-step solver, one work item.
+function _model_ode_expr(c::CompiledPottsSystem, T, dt)
+    ys, locals, bind = _ode_locals(c.model_odes)
+    env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
+    names = [info(x).name for (x, _) in c.model_odes]
+    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.model_odes])
+    return :((st, p, ctx, key, mcs) -> begin
+        $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
+        $body
+        $([:(@inbounds st.model.$(names[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
+        return nothing
+    end)
+end
+
+# The ODE unknowns as local values `y_i` inside the step (Jacobi: every rate sees the state
+# at the start of the stage).
+function _ode_locals(odes)
+    ys = [Symbol(:y_, i) for i in eachindex(odes)]
     locals = Dict{Any, Any}()
     bind = Dict{Symbol, Any}()
-    for (i, (x, _)) in enumerate(c.cell_odes)
+    for (i, (x, _)) in enumerate(odes)
         s = _tag(_sym(Symbol(:__y, i)), Info(:builtin, Symbol(:__y, i), nothing, (;)))
         locals[_unwrap(x)] = _unwrap(s)
         bind[Symbol(:__y, i)] = ys[i]
     end
-    env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
-    rates = [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.cell_odes]
-    names = [info(x).name for (x, _) in c.cell_odes]
+    return ys, locals, bind
+end
+
+# `substeps` fixed steps of the sweep's `ode_solver` over one MCS (`dt`), on locals `ys`.
+function _ode_steps(solver, T, dt, ys, rates)
+    n = length(ys)
     substeps = something(solver.substeps, 1)
     h = :($T($dt / $substeps))
     f = :(rhs = (tt, $(ys...)) -> ($(rates...),))
@@ -333,18 +365,14 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
             ($(ys...),) = ($([clip(:($(ys[i]) + h * $(Symbol(:k1_, i)))) for i in 1:n]...),)
         end
     end
-    return :((st, p, ctx, key, mcs, c) -> begin
-        @inbounds st.cell.volume[c] > 0 || return nothing
+    return quote
         h = $h
-        $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in 1:n]...)
         $f
         for s in 1:$substeps
             tt = $T(mcs) * $T($dt) + $T(s - 1) * h
             $step
         end
-        $([:(@inbounds st.cell.$(names[i])[c] = $(ys[i])) for i in 1:n]...)
-        return nothing
-    end)
+    end
 end
 
 # `@link`/`@unlink` rules: host phases over the contact graph / existing links.
@@ -416,7 +444,8 @@ end
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
     mcs % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
 
-_model_env(T, rn; mcs = :mcs, key = nothing) = LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)...), rn)
+_model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
+    LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)
 
 function _model_update_expr(c, T, us, every, rn)
     env = _model_env(T, rn; key = :key)

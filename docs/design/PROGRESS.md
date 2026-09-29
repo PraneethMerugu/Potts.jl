@@ -819,3 +819,19 @@
   legacy G04 plan.
 - Tests cover compound counters (model, cell vector, on-copy site), replacement through
   `@extend`, and the error cases.
+
+## 2026-09-29 — Model-scope ODEs and model components (M4.1)
+
+- `CompiledPottsSystem.model_odes`: equations on model variables, which used to be
+  rejected as "not supported yet".
+- `_model_ode_expr` runs the same Euler/RK4 steps as the cell ODEs, in a `ModelPhase`.
+  The step generator is now shared (`_ode_locals`, `_ode_steps`).
+- `@components model name = sys`: `ComponentSpec.domain` is a `CellDomain` or `:model`.
+  Unknowns become model variables. Couplings go to model-scope expressions.
+- A model variable with no initial value is an error that asks for it in the operating
+  point.
+- Tests:
+  - Exact RK4 discrete factor for `D(a) ~ -a/2`.
+  - A pharmacokinetic component dosed by the live-cell count matches the analytic
+    solution, under sequential and checkerboard sweeps.
+  - Metal Float32; QA list.

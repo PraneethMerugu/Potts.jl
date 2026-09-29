@@ -19,6 +19,7 @@ struct CompiledPottsSystem
     updates::Dict{Tuple{Symbol, Symbol}, Vector{Update}}   # (phase, scope) → updates
     fields::Vector{Tuple{Any, Any}}                   # (field variable, rate)
     cell_odes::Vector{Tuple{Any, Any}}                # (cell variable, rate)
+    model_odes::Vector{Tuple{Any, Any}}               # (model variable, rate)
     divisions::Vector{DivideRule}
     relationship::Union{Nothing, RelationshipSpec}
     edge_terms::Vector{Any}                           # link energies E(a, b, distance, edge vars)
@@ -174,6 +175,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     # differential equations: fields (lattice PDEs) and per-cell ODEs
     fields = Tuple{Any, Any}[]
     cell_odes = Tuple{Any, Any}[]
+    model_odes = Tuple{Any, Any}[]
     for eq in sys.equations
         _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
@@ -188,8 +190,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         elseif i.role === :cell
             _check_names(eq.rhs, (_CELL_BUILTINS..., :time), "a cell equation"; between_copies = true)
             push!(cell_odes, (x, eq.rhs))
+        elseif i.role === :model
+            _check_names(eq.rhs, (:mcs, :time), "a model equation"; between_copies = true)
+            push!(model_odes, (x, eq.rhs))
         else
-            throw(ArgumentError("model-scope equations are not supported yet"))
+            throw(ArgumentError("equations are for field, site, cell and model variables; `$x` is $(i.role)"))
         end
         end
     end
@@ -240,7 +245,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     gather_names = Dict{Any, Symbol}()
     all_exprs = Any[last.(cell_terms)..., last.(cluster_terms)..., values(contact_terms)..., site_terms...,
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-        (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)...,
+        (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
         sys.sweep.temperature]
     uses_surface = any(x -> _uses_builtin(x, :surface), all_exprs) ||
                    any(d -> _uses_builtin(d.when, :surface), sys.divisions)
@@ -299,7 +304,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
-        sys.constraints, updates, fields, cell_odes, sys.divisions, relationship, edge_terms,
+        sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationship, edge_terms,
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
         scratch)
@@ -478,7 +483,9 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for eq in sys.equations
         _located(sys, eq) do
             x = arguments(_unwrap(eq.lhs))[1]
-            lower(eq.rhs, info(x).role === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
+            r = info(x).role
+            lower(eq.rhs, r === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
+                          r === :model ? _model_env(T, rn; key = :key, extra = (:time => :tt,)) :
                           _site_env(T, :i, rn; mcs = :mcs, key = :key))
         end
     end

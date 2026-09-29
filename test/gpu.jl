@@ -71,4 +71,9 @@ using Statistics: mean, var
         CheckerboardCPM(); backend).u[end]
     σh = Array(ui.σ)
     @test Array(ui.cell.mass) ≈ [sum(wi[σh .== k]) for k in 1:2]
+    # model-scope ODEs and a model component (single-item kernel)
+    σs2 = zeros(Int32, 20, 20); σs2[2:4, 2:4] .= 1; σs2[10:12, 10:12] .= 2; σs2[15:17, 3:5] .= 3
+    us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32),
+        CheckerboardCPM(); backend).u[end]
+    @test Array(us.model.pk₊drug_c)[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-4
 end

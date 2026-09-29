@@ -4,11 +4,15 @@
 # `@equations clock.τ ~ …`, and its equations become cell ODEs, advanced for every cell of
 # the component's kinds by the sweep's `ode_solver` in one batched kernel (CPU or GPU).
 
-"""`@components cells(kinds…) name = system`: an MTK system instantiated per cell."""
+"""
+`@components cells(kinds…) name = system`: an MTK system instantiated per cell;
+`@components model name = system`: one instance for the whole model (model variables and
+parameters, couplings to model-scope expressions such as `sum(volume for c in cells)`).
+"""
 struct ComponentSpec
     name::Symbol
     system::Any
-    domain::CellDomain
+    domain::Union{CellDomain, Symbol}           # a cell domain, or `:model`
 end
 
 _mtkname(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic && info(u) === nothing ?
@@ -66,7 +70,7 @@ function _bind_components(sys::PottsSystem)
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         for u in ModelingToolkitBase.unknowns(cs)
             nm = Symbol(comp.name, :₊, ModelingToolkitBase.getname(u))
-            v = variable(only(Symbolics.@variables $nm(t)), :cell; default = value(u))
+            v = variable(only(Symbolics.@variables $nm(t)), comp.domain === :model ? :model : :cell; default = value(u))
             push!(vars, v)
             names[nm] = _unwrap(v)
             local_sub[_unwrap(u)] = _unwrap(v)
@@ -95,7 +99,7 @@ function _bind_components(sys::PottsSystem)
                 throw(ArgumentError("component `$(comp.name)`: only explicit ODEs `D(x) ~ f` are supported; got $eq"))
             x = local_sub[arguments(lhs)[1]]
             rhs = _unwrap(Symbolics.substitute(expand(eq.rhs), local_sub; fold = Val(false)))
-            isempty(comp.domain.kinds) || (rhs = _unwrap(ifelse(_kind_in(comp.domain.kinds), Symbolics.wrap(rhs), 0.0)))
+            comp.domain isa CellDomain && !isempty(comp.domain.kinds) && (rhs = _unwrap(ifelse(_kind_in(comp.domain.kinds), Symbolics.wrap(rhs), 0.0)))
             push!(odes, D(Symbolics.wrap(x)) ~ Symbolics.wrap(rhs))
         end
     end

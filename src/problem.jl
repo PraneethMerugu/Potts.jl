@@ -209,6 +209,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         elseif i.role === :edge
             continue                                   # link payloads, below
         elseif i.role === :model
+            v === nothing && throw(ArgumentError("model variable `$(i.name)` has no initial value; give it in the operating point"))
             push!(model, i.name => fill(T(v), 1))
         end
     end

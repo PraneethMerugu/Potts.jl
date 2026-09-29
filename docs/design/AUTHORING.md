@@ -245,6 +245,14 @@ end
 
 ### Differential equations, in MTK syntax
 
+**Model scope (implemented).**
+- `D(x) ~ rhs` on a model variable advances with the sweep's `ode_solver`, in a
+  single-work-item kernel. The right side may use population folds, `mcs` and `time`.
+- `@components model name = sys` instantiates an MTK system once for the whole model.
+  Its unknowns are model variables and its parameters are model parameters, which can be
+  coupled to model-scope expressions:
+  `@equations pk.dose ~ count(true for c in cells)`.
+
 ```julia
 @equations begin
     D(c) ~ Dc * Δ(c) + σ * (kind == endothelial) - δ * c     # field PDE (c(field))
