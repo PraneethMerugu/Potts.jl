@@ -76,4 +76,10 @@ using Statistics: mean, var
     us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32),
         CheckerboardCPM(); backend).u[end]
     @test Array(us.model.pk₊drug_c)[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-4
+    # adaptive host ODEs with a device state (copied once per MCS)
+    σa = zeros(Int32, 20, 20); σa[3:6, 3:6] .= 1; σa[12:15, 12:15] .= 2
+    ua = solve(PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-6)), [ownership => σa, kind => [:A, :B]], (0, 5);
+        T = Float32), CheckerboardCPM(); backend).u[end]
+    @test Array(ua.cell.y)[1:2] ≈ fill(exp(-0.3 * 5), 2) rtol = 1e-4
+    @test Array(ua.model.a)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
 end

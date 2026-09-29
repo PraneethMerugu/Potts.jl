@@ -461,6 +461,21 @@ Base.@kwdef struct ExplicitEuler
     lower::Union{Nothing, Float64} = nothing
 end
 
+"""
+    Adaptive(alg; kwargs...)
+
+Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`,
+`Rodas5P()`, … from OrdinaryDiffEq, loaded by the user), with `kwargs` (`reltol`, `abstol`,
+…) passed to `init`. One integrator is created on first use and re-initialized per cell
+and per MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for
+intracellular or systemic models, at host speed (a device state is copied once per MCS).
+"""
+struct Adaptive{A, K}
+    alg::A
+    kwargs::K
+end
+Adaptive(alg; kwargs...) = Adaptive(alg, NamedTuple(kwargs))
+
 """Classic fourth-order Runge–Kutta for cell ODEs, `substeps` steps per MCS."""
 Base.@kwdef struct RK4
     substeps::Int = 1
@@ -475,7 +490,7 @@ struct SweepSpec
     offset::Float64
     mcs_duration::Float64
     field_solver::ExplicitEuler
-    ode_solver::Union{ExplicitEuler, RK4}     # cell ODEs (`D(x) ~ …` on cell variables, components)
+    ode_solver::Union{ExplicitEuler, RK4, Adaptive}   # cell and model ODEs (`D(x) ~ …`, components)
 end
 sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0,
     field_solver = ExplicitEuler(), ode_solver = ExplicitEuler()) = SweepSpec(law, temperature, combine, Float64(offset),
@@ -516,7 +531,7 @@ end
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand,
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, geomean_shifted, mean, Δ)
 

@@ -245,6 +245,15 @@ end
 
 ### Differential equations, in MTK syntax
 
+**Adaptive and stiff solvers (implemented).**
+`@sweep Metropolis(; …, ode_solver = Adaptive(Rodas5P(); reltol = 1e-8))` integrates the
+cell and model ODEs on the host with any SciML ODE algorithm. The user loads
+OrdinaryDiffEq; Potts depends only on SciMLBase.
+- One integrator is created on first use and re-initialized per cell and per MCS
+  (`reinit!`, set `p`, `solve!` to `t + mcs_duration`).
+- A device state is copied to the host and back once per MCS.
+- The fixed-step `ExplicitEuler`/`RK4` stay the GPU-resident default.
+
 **Model scope (implemented).**
 - `D(x) ~ rhs` on a model variable advances with the sweep's `ode_solver`, in a
   single-work-item kernel. The right side may use population folds, `mcs` and `time`.

@@ -7,11 +7,14 @@ Models are authored as a global Hamiltonian with `@potts_model` (see
 """
 module Potts
 
+using Adapt: Adapt
 using CorePotts
+using KernelAbstractions: KernelAbstractions
 using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
+using SciMLBase: SciMLBase
 using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
@@ -26,7 +29,7 @@ for name in names(CorePotts)
     name === :CorePotts || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile, extend,
-    total_energy, energy_change, parameters, variables, observe
+    total_energy, energy_change, parameters, variables, observe, Adaptive
 
 include("vocabulary.jl")
 include("system.jl")

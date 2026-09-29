@@ -83,7 +83,7 @@ function lower(x, env::LowerEnv)
     end
     # float-valued functions compute in the model's scalar type (no Float64 from Int args)
     if op in _FLOAT_OPS || op === (^)
-        return Expr(:call, op, map(a -> :($(env.T)($(lower(a, env)))), args)...)
+        return Expr(:call, op, map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...)
     end
     return Expr(:call, op, map(a -> lower(a, env), args)...)
 end
@@ -188,6 +188,11 @@ end
     (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
     return CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1)[k]
 end
+
+"""Integers (and `Bool`s) in the model's scalar type; other numbers (dual numbers of an
+implicit solver's Jacobian, already-typed floats) unchanged."""
+@inline _tofloat(::Type{T}, x::Integer) where {T} = T(x)
+@inline _tofloat(::Type{T}, x) where {T} = x
 
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""
 @inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]

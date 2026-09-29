@@ -60,7 +60,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
-        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface) = $P.B
+        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface, time) = $P.B
         $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
         $P._DIM[] = 0                             # set by @lattice (vector builtins)
         t = $P.t

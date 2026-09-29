@@ -282,8 +282,13 @@ function _phases(c::CompiledPottsSystem, T, values)
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
-    isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
-    isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
+    if c.sys.sweep.ode_solver isa Adaptive
+        isempty(c.cell_odes) || push!(after, _adaptive_phase(c, T, dt, :cell))
+        isempty(c.model_odes) || push!(after, _adaptive_phase(c, T, dt, :model))
+    else
+        isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
+        isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
+    end
     append!(after, _link_phases(c, T))
     # at the MCS boundary (after the lifecycle): integrals, then history rings take the values
     finish = Any[integrals...]
@@ -326,6 +331,85 @@ function _model_ode_expr(c::CompiledPottsSystem, T, dt)
         $([:(@inbounds st.model.$(names[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
         return nothing
     end)
+end
+
+# Adaptive host integration (`ode_solver = Adaptive(alg)`): an in-place SciML right-hand side
+# `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered rates, and a phase that keeps one
+# integrator (created on first use) and re-initializes it per cell / per MCS.
+function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope)
+    odes = scope === :cell ? c.cell_odes : c.model_odes
+    ys, locals, bind = _ode_locals(odes)
+    env = scope === :cell ? _cell_env(T, :c, c.gather_names; mcs = :mcs, extra = (bind..., :time => :tt)) :
+          _model_env(T, c.gather_names; extra = (bind..., :time => :tt))
+    rates = [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in odes]
+    f = _rgf(:((du, u, P, tt) -> begin
+        (st, p, ctx, mcs, c) = P
+        $([:($(ys[i]) = u[$i]) for i in eachindex(ys)]...)
+        $([:(du[$i] = $(rates[i])) for i in eachindex(ys)]...)
+        return nothing
+    end))
+    solver = c.sys.sweep.ode_solver
+    return _AdaptiveODE(f, solver.alg, solver.kwargs, [info(x).name for (x, _) in odes], scope, T, Float64(dt), nothing)
+end
+
+mutable struct _AdaptiveODE{F, A, K}
+    f::F
+    alg::A
+    kwargs::K
+    names::Vector{Symbol}
+    scope::Symbol
+    T::Type
+    dt::Float64
+    integ::Any
+end
+
+function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
+    KernelAbstractions.synchronize(backend)
+    cpu = backend isa CorePotts.CPU
+    host = cpu ? st : CorePotts._snapshot(backend, st)
+    hp = cpu ? p : Adapt.adapt(Array, p)
+    hctx = merge(ctx, (; lattice = CorePotts.host_lattice(ctx.lattice)))
+    part = ph.scope === :cell ? host.cell : host.model
+    arrays = [getfield(part, n) for n in ph.names]
+    u = zeros(ph.T, length(arrays))
+    t0 = mcs * ph.dt
+    advance!(P) = begin
+        integ = ph.integ
+        if integ === nothing
+            prob = SciMLBase.ODEProblem{true}(ph.f, copy(u), (t0, t0 + ph.dt), P)
+            integ = ph.integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, ph.kwargs...)
+        else
+            SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true)
+            integ.p = P
+        end
+        SciMLBase.solve!(integ)
+        return integ.u
+    end
+    if ph.scope === :cell
+        for c in 1:length(host.cell.kind)
+            host.cell.volume[c] > 0 || continue
+            for (i, a) in enumerate(arrays)
+                u[i] = a[c]
+            end
+            v = advance!((host, hp, hctx, mcs, c))
+            for (i, a) in enumerate(arrays)
+                a[c] = v[i]
+            end
+        end
+    else
+        for (i, a) in enumerate(arrays)
+            u[i] = a[1]
+        end
+        v = advance!((host, hp, hctx, mcs, 0))
+        for (i, a) in enumerate(arrays)
+            a[1] = v[i]
+        end
+    end
+    if !cpu
+        dst = ph.scope === :cell ? st.cell : st.model
+        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.names)
+    end
+    return 0
 end
 
 # The ODE unknowns as local values `y_i` inside the step (Jacobi: every rate sees the state

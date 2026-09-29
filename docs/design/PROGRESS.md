@@ -835,3 +835,26 @@
   - A pharmacokinetic component dosed by the live-cell count matches the analytic
     solution, under sequential and checkerboard sweeps.
   - Metal Float32; QA list.
+
+## 2026-09-29 — Adaptive host ODE integration (M4.1, D-038's deferred `ODEComponent`)
+
+- `Adaptive(alg; kwargs...)` is an `ode_solver`. `_adaptive_phase` builds an in-place
+  SciML right-hand side `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered
+  rates, and `_AdaptiveODE` keeps one integrator.
+  - The integrator is created on the first call. After that, each call does `reinit!`,
+    sets `p` and runs `solve!` to `t + dt`, per live cell or once for the model.
+  - On CPU the state is aliased. On GPU it is copied to the host and the ODE arrays are
+    copied back.
+- Potts now depends directly on SciMLBase, KernelAbstractions and Adapt, which were
+  already in the Manifest. The algorithms come from the user, so there is no new
+  dependency.
+- **Lowering fix.** Float functions cast their arguments with `_tofloat(T, x)`, which
+  converts only integers. The old `T(x)` broke the dual numbers of implicit solvers'
+  Jacobians. The Float32/Metal "never touch Float64" tests still pass.
+- **`time` is now bound in the DSL preamble.** Before, `cos(time)` resolved to
+  `Base.time`.
+- Tests:
+  - Tsit5 and Rodas5P on a decaying cell ODE, a stiff forced cell ODE and a model ODE
+    with a population input, all against analytic solutions, under sequential and
+    checkerboard sweeps.
+  - `remake`; Metal Float32.
