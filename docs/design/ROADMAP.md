@@ -52,7 +52,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] (partial: all but units and MTK `compose`, see PROGRESS M3 slices 1–6) **M3.1** `PottsSystem`, `@potts_model` sections and plain constructors, scoped `@variables`, `@kinds`, kind-indexed parameters, `Lattice`/relations of any order in N-D, source locations, composition (`compose/extend/flatten/@named`), units.
 - [ ] (partial) **M3.2** `mtkcompile`: global-H → ΔH derivation with simplification and loop fusion (AUTHORING §4), generated `total_energy` self-check, validation, footprint analysis, CSE, scheduling; `CompiledPottsSystem`.
   Accept: `ΔH == H(after) − H(before)` on random flips for every model in `lib/PottsModels`.
-- [ ] (partial; EnsembleProblem + callbacks done 2026-09-29) **M3.3** codegen → `CPMFunction`; `PottsProblem(sys, op, tspan)`; `PottsParameters`; SII; `remake`; `EnsembleProblem`; callbacks; `expression = Val(true)`; `eval_module`.
+- [ ] (partial; EnsembleProblem + callbacks, parity from lib/PottsModels sources done 2026-09-29; `eval_module` pending) **M3.3** codegen → `CPMFunction`; `PottsProblem(sys, op, tspan)`; `PottsParameters`; SII; `remake`; `EnsembleProblem`; callbacks; `expression = Val(true)`; `eval_module`.
   Accept: every Phase 2 oracle test re-run through symbolic authoring; `remake` zero compile; Graner/Wortel/Merks/OpenVT from `lib/PottsModels` sources.
 - [ ] **M3.4** component imports and structural replacement, scoped quantities, logical vector parameters, symbolic setters, one-block declaration, compound assignments, diagnostics with expression + remedy.
 
@@ -60,7 +60,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 - [ ] **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
   Accept: Akeeb MTK-bridge targets bytewise vs discrete clock (as in `SCDPotts/research`).
-- [ ] **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI.
+- [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI.
   Accept: reference parity for each; TTFX table in docs.
 
 - [ ] **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: reference or literature parity.

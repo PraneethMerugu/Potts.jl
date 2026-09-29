@@ -16,7 +16,7 @@ graner_params(T = Float64) = (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 1
 
 """The pre-equilibrated 72² SCDPotts baseline (64 cells), tiled `scale × scale` times."""
 function graner_state(scale = 1)
-    dir = joinpath(@__DIR__, "data", "graner")
+    dir = joinpath(@__DIR__, "..", "lib", "PottsModels", "data", "graner")
     σ1 = Int32.(readdlm(joinpath(dir, "pre_equilibrated_ownership.tsv"), '\t', Int))
     k1 = Int32.(vec(readdlm(joinpath(dir, "cell_kinds.tsv"), '\t', Int)))
     nc = length(k1)

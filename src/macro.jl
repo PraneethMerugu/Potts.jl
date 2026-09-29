@@ -93,7 +93,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         observed = __observed, frozen_kinds = __frozen, sources = __sources,
         sweep = __sweep, structural = $structural))
     return quote
-        function $name(; $(kws...))
+        Base.@__doc__ function $name(; $(kws...))
             $preamble
             $(parts.code...)
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare

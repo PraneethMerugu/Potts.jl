@@ -37,4 +37,6 @@ projects = [
     "lib/CorePotts/test",
     "lib/MakiePotts",
     "lib/MakiePotts/test",
+    "lib/PottsModels",
+    "lib/PottsModels/test",
 ]

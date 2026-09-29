@@ -1,5 +1,5 @@
 # Legacy Graner–Glazier sorting run (reference stack, D-021), from the committed
-# pre-equilibrated baseline in benchmark/data/graner. Mirrors SCDPotts/scripts/run_graner_paper.jl.
+# pre-equilibrated baseline in lib/PottsModels/data/graner. Mirrors SCDPotts/scripts/run_graner_paper.jl.
 # usage: julia --project=reference reference/graner.jl [mcs] [seed]   (MCS = N attempts, as in CorePotts)
 const T0 = time()
 using Potts, DelimitedFiles
@@ -7,7 +7,7 @@ const LOAD = time() - T0
 
 nmcs = parse(Int, get(ARGS, 1, "320"))
 seed = parse(UInt64, get(ARGS, 2, "97329219"))
-dir = joinpath(@__DIR__, "..", "benchmark", "data", "graner")
+dir = joinpath(@__DIR__, "..", "lib", "PottsModels", "data", "graner")
 labels = Int.(readdlm(joinpath(dir, "pre_equilibrated_ownership.tsv"), '\t', Int))
 kinds = vec(readdlm(joinpath(dir, "cell_kinds.tsv"), '\t', Int))
 

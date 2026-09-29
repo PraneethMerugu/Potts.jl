@@ -550,3 +550,16 @@
   1.5 s, first solve 0.74 s. Total 7.6 s against the 15 s gate.
   - `@extend` plumbing is emitted only for models that use it; it had added 0.45 s to
     every model's first construction.
+
+## 2026-09-29 — PottsModels package (M4.2 started; M3.3 parity from its sources)
+
+- `lib/PottsModels` is a new workspace package (`GROUP=PottsModels`). It contains:
+  - `GranerGlazier`, `WortelAct`, `MerksVasculogenesis` and `OpenVTMonolayer` as
+    documented `@potts_model` sources, with citations.
+  - `graner_glazier_state(scale)`. The legacy pre-equilibrated data moved from
+    `benchmark/data` to `lib/PottsModels/data`.
+- `@potts_model` supports docstrings (`Base.@__doc__`).
+- The root parity tests (legacy KS parity and exact equality with the hand-written ports)
+  now build their problems from the PottsModels sources.
+- The package's own tests: every model builds and runs, has an exact energy self-check,
+  and passes Aqua.
