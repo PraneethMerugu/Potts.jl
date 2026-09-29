@@ -315,6 +315,10 @@ function lattice_spec(dims; boundary = Periodic(), neighborhood = Moore(1), spac
     return LatticeSpec(d, boundary, spacing, neighborhood, Lattice(d; boundary, domain).mask)
 end
 core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain)
+# by content (the domain is an array)
+Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b.boundary &&
+    a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain
+Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain), h)
 
 """Field solver of `@sweep`: explicit Euler with `substeps` (auto if `nothing`) and an
 optional lower clip (legacy Potts clips concentrations at 0)."""

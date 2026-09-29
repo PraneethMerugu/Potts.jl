@@ -169,7 +169,7 @@ function _lower_population(args, env)
         merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
             :__site => nsym, :position => :(CorePotts.coordinates(ctx.lattice, $nsym))))
         range = :(1:length(st.σ))
-        skip = true
+        skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
     inner = LowerEnv(T, env.mode, bind, env.relname)
     op = ni.options.op

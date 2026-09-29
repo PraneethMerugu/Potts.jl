@@ -39,13 +39,14 @@ end
 function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false))
     sys = c.sys
-    opd = Dict{Any, Any}(_opkey(k) => v for (k, v) in op)
+    opd = _operating_point(sys, op)
     values = _parameter_values(c, opd)
     p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in sys.parameters))
     for name in _contact_tables(c)
         J = getproperty(p, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
     end
+    _check_kind_tables(sys, p)
     if expression isa Val{true}
         return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T),
             constraint = _constraint_expr(c, T), temperature = _temperature_expr(c, T),
@@ -65,7 +66,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         claims = _claims(c),
         phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
-        fingerprint = hash((string.(exprs), sys.lattice, T)),
+        fingerprint = hash((string.(exprs), core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T)),
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
             hctx, Dict{Any, Any}()))
     frozen = _frozen_mask(sys, st)
@@ -84,8 +85,28 @@ function _claims(c::CompiledPottsSystem)
     return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
 end
 
+# Kind tables are indexed by kind (medium first) along every axis.
+function _check_kind_tables(sys::PottsSystem, p)
+    nk = length(sys.kinds)
+    for x in sys.parameters
+        i = info(x)
+        i.role === :kindtable || continue
+        v = getproperty(p, i.name)
+        all(==(nk), size(v)) || throw(ArgumentError("kind table `$(i.name)` has size $(size(v)); the model has $nk kinds " *
+                                                    "($(join(sys.kinds, ", "))), so it needs $nk entries per axis"))
+    end
+    return nothing
+end
+
 _acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
                                s.offset == 0 ? CorePotts.Metropolis() : CorePotts.Metropolis(T(s.offset))
+
+# Keys may be symbolic quantities or their names (`:λ`, `Symbol("clock₊τ")`); relationship
+# names (`:bond => [(1, 2)]`) stay symbols.
+function _operating_point(sys::PottsSystem, op)
+    byname = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in Iterators.flatten((sys.parameters, sys.variables)))
+    return Dict{Any, Any}((k isa Symbol ? get(byname, k, k) : _opkey(k)) => v for (k, v) in op)
+end
 
 _opkey(k::typeof(CorePotts.ownership)) = k
 _opkey(k) = (u = _unwrap(k); u)
@@ -144,6 +165,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
         elseif i.role === :cell
+            v === nothing && throw(ArgumentError("cell variable `$(i.name)` has no initial value; give it in the operating point"))
             push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
         elseif i.role === :edge
             continue                                   # link payloads, below
@@ -245,6 +267,7 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
     end
     out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(prob.p))))
     typeof(out) === typeof(prob.p) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
+    _check_kind_tables(info.csys.sys, out)
     for name in _contact_tables(info.csys)
         J = getproperty(out, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
@@ -255,6 +278,6 @@ end
 CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
-    opd = Dict{Any, Any}(_opkey(k) => v for (k, v) in u0)
+    opd = _operating_point(info.csys.sys, u0)
     return _initial_state(info.csys, opd, info.T, length(prob.u0.cell.kind))
 end

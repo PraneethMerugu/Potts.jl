@@ -58,3 +58,13 @@
     @test uf.site.c[1, 1] == 7.0
     @test maximum(uf.site.c[lat.mask]) - minimum(uf.site.c[lat.mask]) < 0.05    # equilibrates inside
 end
+
+@testset "field faces vs domain edges" begin
+    stripe = Lattice((9, 9); boundary = Closed(), domain = x -> 3 <= x[1] <= 7)
+    c = zeros(9, 9)
+    ctx = (; lattice = stripe)
+    i = linear_index(stripe, (7, 5))
+    @test laplacian(c, ctx, i; bc = ((0.0, 100.0), (nothing, nothing))) == 0.0     # domain edge: zero flux
+    full = Lattice((9, 9); boundary = Closed())
+    @test laplacian(c, (; lattice = full), linear_index(full, (9, 5)); bc = ((0.0, 100.0), (nothing, nothing))) == 200.0
+end

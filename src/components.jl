@@ -56,25 +56,28 @@ function _bind_components(sys::PottsSystem)
         n === nothing ? push!(rest, eq) : (couplings[n] = eq.rhs)
     end
     time = _unwrap(B.time)
+    coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
     for comp in sys.components
         cs = ModelingToolkitBase.mtkcompile(comp.system)
         ics = ModelingToolkitBase.initial_conditions(cs)
-        value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? 0.0 :
-                                                        (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w))
+        # a missing value stays `nothing`: the operating point must give it (checked there)
+        value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
+                                                        (w = _unwrap(v); SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w))
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         for u in ModelingToolkitBase.unknowns(cs)
             nm = Symbol(comp.name, :₊, ModelingToolkitBase.getname(u))
-            v = variable(only(Symbolics.@variables $nm(t)), :cell; default = Float64(value(u)))
+            v = variable(only(Symbolics.@variables $nm(t)), :cell; default = value(u))
             push!(vars, v)
             names[nm] = _unwrap(v)
             local_sub[_unwrap(u)] = _unwrap(v)
         end
         for p in ModelingToolkitBase.parameters(cs)
             nm = Symbol(comp.name, :₊, ModelingToolkitBase.getname(p))
+            push!(coupleable, nm)
             if haskey(couplings, nm)
                 names[nm] = _unwrap(couplings[nm])
             else
-                q = parameter(nm, Float64(value(p)))
+                q = parameter(nm, value(p))
                 push!(params, q)
                 names[nm] = _unwrap(q)
             end
@@ -97,8 +100,11 @@ function _bind_components(sys::PottsSystem)
         end
     end
     for k in keys(couplings)
-        haskey(names, k) || throw(ArgumentError("@equations $k ~ …: no component parameter `$k`"))
+        k in coupleable || throw(ArgumentError("@equations $k ~ …: `$k` is not a parameter of a component " *
+                                               "(component unknowns evolve by their own equations)"))
     end
+    # couplings may read other components' state (`dec.k ~ clock.m`)
+    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names)) for eq in odes]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
     sub(x) = _substitute_names(x, names)
     m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,

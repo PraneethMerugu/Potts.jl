@@ -376,7 +376,19 @@ function _cell_delta(E, dv::Int)
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
         _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
-    expanded = Symbolics.expand(naive)
+    # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
+    # metadata of scoped variables `x(t)` inside them: expand over placeholders instead
+    hide, show = Dict{Any, Any}(), Dict{Any, Any}()
+    _walk(naive) do y
+        i = info(y)
+        if i !== nothing && i.role in SCOPES && !haskey(hide, y)
+            p = _sym(Symbol(:__scoped_, length(hide) + 1))
+            hide[y] = p
+            show[p] = y
+        end
+    end
+    expanded = Symbolics.expand(isempty(hide) ? naive : Symbolics.substitute(naive, hide; fold = Val(false)))
+    isempty(show) || (expanded = Symbolics.substitute(expanded, show; fold = Val(false)))
     return _nops(expanded) <= _nops(naive) ? expanded : naive
 end
 function _nops(x)

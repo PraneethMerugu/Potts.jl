@@ -595,3 +595,30 @@
 - Generated vs hand-written Graner–Glazier is recorded in `benchmark/README.md`: within
   6% at 72² and equal or faster at 288².
 - Kind filters naming every cell kind are dropped at compile time.
+
+## 2026-09-29 — Review of domains → components; registered functions
+
+- **Code review** (a subagent over `6e2480a..7d44a45`) found 7 issues, all fixed with
+  regression tests:
+  1. **Wrong results, no error:** `@components other = clock` read and coupled the wrong
+     component. Systems are now renamed to their binding.
+  2. **Wrong results, no error:** couplings on component unknowns were silently dropped.
+     Only component parameters can be coupled; anything else is an error.
+  3. Kind tables were never checked against the number of kinds, so an extension adding
+     kinds read out of bounds. `PottsProblem` and `remake` now require
+     `length(kinds)` entries per axis.
+  4. Fingerprints of models with domains changed on every rebuild, so checkpoints were
+     rejected. `LatticeSpec` now has content-based `==`/`hash`, and fingerprints hash the
+     core lattice.
+  5. Site populations counted out-of-domain sites.
+  6. Component values without defaults silently became 0. They must now be given in the
+     operating point.
+  7. Dirichlet face values were applied at interior domain edges. The edge is now zero
+     flux.
+  - **Also fixed:** couplings may read other components' state.
+- Operating points accept names (`:λ`, `Symbol("clock₊τ") => …`), as `remake` does.
+- **User-registered functions** (`@register_symbolic hill(x, K)` in the user's module)
+  work in generated code, because function objects are interpolated as values. This
+  makes MTK's `eval_module` unnecessary here.
+  - One fix was needed: `expand` rebuilt the arguments of opaque functions, stripping
+    Potts metadata. Cell-term deltas now expand over placeholders.

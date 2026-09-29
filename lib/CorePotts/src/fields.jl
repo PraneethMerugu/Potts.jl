@@ -20,11 +20,13 @@
 @inline _face(bc, d, side) = @inbounds bc[d][side]
 
 @inline function _neighbors_along(c, lat::Lattice{N}, x, i, d, bc = nothing) where {N}
-    in1, y1 = shift(lat, x, _unit(Val(N), d, 1))
-    in2, y2 = shift(lat, x, _unit(Val(N), d, -1))
+    e1, e2 = _unit(Val(N), d, 1), _unit(Val(N), d, -1)
+    in1, y1 = shift(lat, x, e1)
+    in2, y2 = shift(lat, x, e2)
     ci = @inbounds c[i]
-    up = in1 ? @inbounds(c[linear_index(lat, y1)]) : _ghost(ci, _face(bc, d, 2))
-    dn = in2 ? @inbounds(c[linear_index(lat, y2)]) : _ghost(ci, _face(bc, d, 1))
+    # face values apply at the lattice faces; the edge of an irregular domain is zero flux
+    up = in1 ? @inbounds(c[linear_index(lat, y1)]) : _within_faces(lat, x, e1) ? ci : _ghost(ci, _face(bc, d, 2))
+    dn = in2 ? @inbounds(c[linear_index(lat, y2)]) : _within_faces(lat, x, e2) ? ci : _ghost(ci, _face(bc, d, 1))
     return up, ci, dn
 end
 

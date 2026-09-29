@@ -95,6 +95,9 @@ does a pair with either site outside the lattice domain.
 end
 # a pair interacts only if both sites are in the domain (symmetric, so brute-force sums
 # over all sites agree with per-copy deltas)
+"""`true` if `x + off` stays within the lattice faces (ignoring the domain mask)."""
+@inline _within_faces(l::Lattice{N}, x, off) where {N} =
+    all(ntuple(d -> l.periodic[d] || 1 <= x[d] + Int(off[d]) <= l.dims[d], Val(N)))
 @inline _in_domain(::Nothing, l, x, w) = true
 @inline _in_domain(m, l, x, w) = @inbounds(m[linear_index(l, x)]) && @inbounds(m[linear_index(l, w)])
 

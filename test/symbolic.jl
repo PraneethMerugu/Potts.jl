@@ -794,3 +794,99 @@ end
         @test all(u.σ[.!prob.lattice.mask] .== 0)
     end
 end
+
+@parameters k_nd
+@named nodefault = System([Potts.D(y_c) ~ -k_nd * y_c], _tc)
+
+@potts_model TwoClocks begin
+    @kinds medium A B
+    @parameters T = 1.0
+    @components cells(A) fast = clock
+    @components cells(B) slow = clock
+    @components dec = decay
+    @equations begin
+        slow.r_c ~ 0.5
+        dec.k_c ~ fast.m_c / 10                      # a coupling reading another component
+    end
+    @observed om(cell) ~ slow.m_c
+    @lattice Lattice((20, 20))
+    @energy cells => (volume - 25.0)^2
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "component and domain review regressions" begin
+    σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2
+    op = [ownership => σ, kind => [:A, :B]]
+    # components are named by their binding, whatever the system is called
+    p = remake(PottsProblem(TwoClocks(; name = :two), op, (0, 4)); p = [:T => 1e-9])
+    @test Set(propertynames(p.p)) == Set([:T, :fast₊τ_c, :fast₊r_c, :slow₊τ_c])
+    sol = solve(p, SequentialCPM(); saveat = 0:4)
+    u = sol.u[end]
+    @test u.cell.fast₊m_c ≈ [4 / 20, 0] && u.cell.slow₊m_c ≈ [0, 0.5 * 4 / 20]
+    @test sol[:om][end] == u.cell.slow₊m_c
+    @test u.cell.dec₊y_c[1] ≈ prod(1 - m / 10 for m in (0:3) ./ 20)             # Euler with k = m(t)/10
+    # couplings target component parameters only
+    @potts_model BadCoupling begin
+        @kinds medium A
+        @parameters T = 1.0
+        @components clock = clock
+        @equations clock.m_c ~ volume
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = T)
+    end
+    @test_throws ArgumentError mtkcompile(BadCoupling(; name = :b))
+    # component values without defaults must be given
+    @potts_model NoDefault begin
+        @kinds medium A
+        @parameters T = 1.0
+        @components nd = nodefault
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = T)
+    end
+    σ8 = zeros(Int32, 8, 8); σ8[3:5, 3:5] .= 1
+    @test_throws ArgumentError PottsProblem(NoDefault(; name = :n), [ownership => σ8, kind => [1]], (0, 1))
+    pn = PottsProblem(NoDefault(; name = :n), [ownership => σ8, kind => [1], Symbol("nd₊k_nd") => 0.5], (0, 1))
+    @test pn.p.nd₊k_nd == 0.5
+    # kind tables must cover every kind (an extension adding kinds)
+    @potts_model MoreKinds begin
+        @extend base = Sorting()
+        @kinds medium dark light extra
+    end
+    σg, kg = graner_state()
+    @test_throws ArgumentError PottsProblem(MoreKinds(; name = :m), [ownership => σg, kind => kg], (0, 1))
+    # models with domains fingerprint by content: checkpoints resume across rebuilds
+    σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= first(two_kind_blocks())
+    kd = last(two_kind_blocks())
+    p1 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6))
+    p2 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6))
+    @test p1.f.fingerprint == p2.f.fingerprint && DiskSorting(; name = :a).lattice == DiskSorting(; name = :b).lattice
+    integ = init(p1, SequentialCPM()); foreach(_ -> step!(integ), 1:3)
+    ck = checkpoint(integ)
+    @test solve!(init(p2, SequentialCPM(); checkpoint = ck)).u[end].σ == solve(p1, SequentialCPM()).u[end].σ
+    # site populations stay inside the domain
+    @test observe(p1, Potts._fold_iter(count, s -> true, Potts.sites, nothing)) == count(DiskSorting(; name = :d).lattice.domain)
+end
+
+module UserFunctions
+using Potts
+using Potts: Symbolics
+hill(x, K) = x^2 / (K^2 + x^2)
+Symbolics.@register_symbolic hill(x, K)
+@potts_model Hill begin
+    @kinds medium A
+    @parameters T = 5.0
+    @variables g(cell) = 0.5
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 20.0 * hill(g, 0.5))^2
+    @after_mcs g ~ Pre(g) + 0.1 * hill(volume, 10.0)
+    @sweep Metropolis(; temperature = T)
+end
+end
+
+@testset "user-registered functions in generated code" begin
+    σ = zeros(Int32, 16, 16); σ[5:9, 5:9] .= 1
+    p = PottsProblem(UserFunctions.Hill(; name = :h), [ownership => σ, kind => [1]], (0, 5))
+    @test selfcheck(p) < 1e-9
+    u = solve(p, SequentialCPM()).u[end]
+    @test u.cell.g[1] > 0.5
+end
