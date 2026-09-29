@@ -87,6 +87,16 @@ SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
                                           !SII.is_independent_variable(sys, x)
 SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, x)
+# by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
+function _named_quantity(sys::PottsModelInfo, x::Symbol)
+    m = sys.csys.sys
+    for v in Iterators.flatten((m.variables, (o.var for o in m.observed)))
+        info(v).name === x && return v
+    end
+    return x in BUILTIN_NAMES ? getfield(B, x) : nothing
+end
+SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && _named_quantity(sys, x) !== nothing
+SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_quantity(sys, x))
 
 """
     observe(prob_or_sol, x[, u])

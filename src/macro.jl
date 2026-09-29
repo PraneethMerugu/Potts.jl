@@ -9,7 +9,8 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@variables"), Symbol("@lattice"), Symbol("@relations"), Symbol("@energy"),
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
-    Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"))
+    Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
+    Symbol("@extend"))
 
 """
     @potts_model Name begin
@@ -80,6 +81,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.ObservedEq[]
         __lattice = nothing
         __sweep = nothing
+        __bases = $P.PottsSystem[]
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
@@ -92,9 +94,14 @@ function _potts_model(name::Symbol, body::Expr, mod)
         function $name(; $(kws...))
             $preamble
             $(parts.code...)
+            for b in __bases                       # an extension inherits what it does not declare
+                __lattice === nothing && (__lattice = b.lattice)
+                __sweep === nothing && (__sweep = b.sweep)
+                isempty(__kinds) && append!(__kinds, b.kinds)
+            end
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
-            $finish
+            foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)
         end
     end
 end
@@ -150,6 +157,29 @@ function _section!(parts, sec, args)
             push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
                 :(push!(__vars, $k)))
         end
+    elseif sec === Symbol("@extend")
+        # `@extend Base()`, `@extend base = Base()` or `@extend a, b = base = Base()` (MTK)
+        ex = only(args)
+        names, rhs = Symbol[], ex
+        if ex isa Expr && ex.head === :(=)
+            lhs, rhs = ex.args
+            if rhs isa Expr && rhs.head === :(=)       # names = base = Base()
+                names = lhs isa Symbol ? [lhs] : Symbol[a for a in lhs.args]
+                bname, rhs = rhs.args
+            else
+                bname = lhs
+            end
+        else
+            bname = :__base
+        end
+        rhs isa Expr && rhs.head === :call || throw(ArgumentError("@extend expects a model call, e.g. `@extend λ = base = Sorting()`"))
+        call = copy(rhs)
+        any(a -> a isa Expr && a.head === :parameters, call.args) || insert!(call.args, 2, Expr(:parameters))
+        params = call.args[findfirst(a -> a isa Expr && a.head === :parameters, call.args)]
+        any(a -> a isa Expr && a.head === :kw && a.args[1] === :name, params.args) ||
+            push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
+        push!(code, :($bname = $call), :(push!(__bases, $bname)))
+        foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
     elseif sec === Symbol("@lattice")
         push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))))
     elseif sec === Symbol("@relations")

@@ -9,7 +9,7 @@ module Potts
 
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore
-using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile
+using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using StaticArrays: SMatrix, SVector
@@ -25,7 +25,7 @@ const D = ModelingToolkitBase.D_nounits
 for name in names(CorePotts)
     name === :CorePotts || @eval export $name
 end
-export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile,
+export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile, extend,
     total_energy, energy_change, parameters, variables, observe
 
 include("vocabulary.jl")
@@ -36,6 +36,7 @@ include("compile.jl")
 include("codegen.jl")
 include("problem.jl")
 include("observed.jl")
+include("compose.jl")
 include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""

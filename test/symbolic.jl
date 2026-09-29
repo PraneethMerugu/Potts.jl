@@ -604,3 +604,47 @@ end
     σbad = copy(σd); σbad[1, 1] = 1
     @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1))
 end
+
+# Composition: a chemotactic extension of the Graner model and an obstacle kind added to it.
+@potts_model ChemoSorting begin
+    @extend λ, V₀, dark = base = Sorting()
+    @parameters χ = 50.0
+    @variables c(field) = 0.0
+    @drive Chemotaxis(c; strength = χ, kinds = (dark,))
+    @equations D(c) ~ 0.1 * Δ(c) + 0.02 * (kind == dark) - 0.01 * c
+    @observed mean_excess ~ sum((volume - V₀) for n in cells) * λ
+end
+
+@potts_model WalledSorting begin
+    @extend base = Sorting(; lattice = (40, 40), T = 6.0)
+    @kinds medium dark light wall[frozen]
+    @parameters J[kind, kind] = [0 16 16 30; 16 2 11 30; 16 11 14 30; 30 30 30 0]
+end
+
+@testset "composition: extend and @extend" begin
+    ext = ChemoSorting(; name = :chemo)
+    @test ext.kinds == [:medium, :dark, :light]
+    @test Set(Potts.info(x).name for x in ext.parameters) == Set([:λ, :V₀, :T, :J, :χ])
+    @test length(ext.energies) == 2 && length(ext.drives) == 1 && ext.lattice == SORTING.sys.lattice
+    σ, kinds = graner_state()
+    a = symbolic_graner_problem(; nmcs = 5)
+    b = PottsProblem(ext, [ownership => σ, kind => kinds], (0, 5))
+    # without the drive the extension's energy is the base's
+    @test all(((u, prop),) -> energy_change(a, u, prop) == energy_change(b, u, prop), proposal_states(a; mcs = (0, 5), n = 100))
+    @test b.p.χ == 50.0 && haskey(b.u0.site, :c)
+    @test selfcheck(b) < 1e-9
+    sol = solve(b, SequentialCPM(; proposal = Moore(1)))
+    @test length(sol[:mean_excess]) == length(sol.t)
+    @test sol[:volume][end] == [Float64(v) for v in sol.u[end].cell.volume] && sol[:c][end] == sol.u[end].site.c
+    # an added frozen kind and a redeclared (wider) contact table; base overrides by keyword
+    w = WalledSorting(; name = :walled)
+    @test w.kinds == [:medium, :dark, :light, :wall] && w.frozen_kinds == [3]
+    @test count(x -> Potts.info(x).name === :J, w.parameters) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, w.parameters))).default) == (4, 4)
+    @test w.lattice.dims == (40, 40)
+    σw = zeros(Int32, 40, 40); σw[:, 1] .= 1; σw[10:15, 10:15] .= 2; σw[20:25, 20:25] .= 3
+    pw = PottsProblem(w, [ownership => σw, kind => [:wall, :dark, :light]], (0, 10))
+    @test pw.p.T == 6.0 && count(pw.frozen) == 40
+    @test_throws ArgumentError extend(PottsSystem(; name = :x, kinds = [:medium, :light], lattice = SORTING.sys.lattice,
+        sweep = SORTING.sys.sweep), SORTING.sys)
+    @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
+end

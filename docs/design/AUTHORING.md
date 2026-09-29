@@ -289,6 +289,19 @@ checkpoint(integrator); init(prob, alg; checkpoint = ck)
 Operating points, `remake`, `getu`/`setp`, `observed`, ensembles and callbacks are
 MTK/SciMLBase semantics unchanged.
 
+**Extending models (implemented).** `@extend λ, dark = base = Sorting()` works like
+MTK's `@extend`:
+- It builds the base model (keywords override its parameters).
+- It binds the listed names: parameters, variables, kinds, relations.
+- It merges the base into the model being defined. Terms accumulate base first, and
+  same-named parameters and variables are redeclared by the extension.
+- An extension that declares no `@lattice`, `@sweep` or `@kinds` inherits the base's.
+- The base's kinds must come first in the extension's `@kinds`, which may add more (for
+  example `wall[frozen]`).
+
+`extend(sys, base)` is the functional form. Quantities can also be read by name:
+`sol[:volume]`, `sol[:c]`, `sol[:my_observed]`.
+
 ---
 
 ## 9. Renames for readability

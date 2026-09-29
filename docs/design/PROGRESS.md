@@ -513,3 +513,23 @@
   - Diffusion conserves mass inside the domain and never touches outside sites.
   - The symbolic `DiskSorting` model has an exact energy self-check.
 - Hexagonal geometry remains.
+
+## 2026-09-29 — M3 slice 5: composition
+
+- `extend(sys, base)` (a method of MTK's `extend`) and the `@extend a, b = base = Base(…)`
+  section, as in MTK:
+  - Names are bound through `Potts.lookup`.
+  - Terms and rules accumulate base first. Same-named parameters and variables are
+    redeclared by the extension.
+  - Lattice, sweep and kinds are inherited when not declared.
+  - The base's kinds must be a prefix of the extension's, because expressions refer to
+    kinds by number.
+- `sol[:name]` / `getu(sol, :name)` resolve variables, observed quantities and builtins
+  by name.
+- **Tests:**
+  - A chemotactic extension of the Graner model has the base's exact energy change and an
+    exact self-check.
+  - An extension adds a frozen wall kind with a wider contact table and overrides a base
+    parameter.
+- MTK-style `compose` (namespaced subsystems) applies to ODE components and is part of
+  M4.1.
