@@ -7,7 +7,9 @@ using JET, AllocCheck, Aqua
         ("wortel", symbolic_wortel_problem), ("merks", symbolic_merks_problem),
         ("openvt", symbolic_openvt_problem),
         ("compartments", () -> (c = compartment_state(); PottsProblem(Compartments(; name = :comp),
-            [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))))
+            [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))),
+        ("components", () -> (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
+            PottsProblem(component_model(Potts.RK4(substeps = 2)), [ownership => σ, kind => [:A, :B]], (0, 5)))))
     prob = make()
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
     step!(integ)

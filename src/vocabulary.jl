@@ -35,7 +35,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface)
+    :cluster_volume, :cluster_surface, :time)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -323,7 +323,13 @@ Base.@kwdef struct ExplicitEuler
     lower::Union{Nothing, Float64} = nothing
 end
 
-"""The sweep protocol: acceptance law, temperature expression, MCS duration, field solver."""
+"""Classic fourth-order Runge–Kutta for cell ODEs, `substeps` steps per MCS."""
+Base.@kwdef struct RK4
+    substeps::Int = 1
+end
+
+"""The sweep protocol: acceptance law, temperature expression, MCS duration, field and
+cell-ODE solvers."""
 struct SweepSpec
     law::Symbol
     temperature::Any          # copy scope, or cell scope (`T[kind]`, a cell variable)
@@ -331,10 +337,11 @@ struct SweepSpec
     offset::Float64
     mcs_duration::Float64
     field_solver::ExplicitEuler
+    ode_solver::Union{ExplicitEuler, RK4}     # cell ODEs (`D(x) ~ …` on cell variables, components)
 end
 sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0,
-    field_solver = ExplicitEuler()) = SweepSpec(law, temperature, combine, Float64(offset),
-    Float64(mcs_duration), field_solver)
+    field_solver = ExplicitEuler(), ode_solver = ExplicitEuler()) = SweepSpec(law, temperature, combine, Float64(offset),
+    Float64(mcs_duration), field_solver, ode_solver)
 
 # ---------------------------------------------------------------------------------------
 # Library one-liners (AUTHORING §4): functions returning the same `domain => expr` pairs
@@ -371,7 +378,7 @@ end
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, Every, geomean, geomean_shifted, mean, Δ)
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, geomean, geomean_shifted, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

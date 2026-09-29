@@ -277,3 +277,32 @@ Decision:
   (the legacy published models allow extinction). The proposal relation stays on the
   algorithm (`SequentialCPM(; proposal)`), and the `@sweep` law is not yet propagated
   (Metropolis with offset 0 is the default everywhere).
+
+## D-038 Components as generated batched cell ODEs (2026-09-29)
+Context: D-017 asks for init-once integrators, per-cell ODEs batched over the cell
+dimension, and Metal via DiffEqGPU's `EnsembleGPUKernel`.
+
+Decision: `@components cells(k) name = sys` takes an MTK `System`. At `mtkcompile`:
+- The system is `mtkcompile`d once.
+- Its unknowns become cell variables (`name₊x`) and its parameters become model
+  parameters (`name₊p`). A parameter coupled with `@equations name.p ~ expr` is replaced
+  by that cell-scope expression instead.
+- Its observed equations are substituted.
+- Its explicit ODEs join the model's own cell ODEs, gated by kind.
+
+Advancing the ODEs:
+- All cell ODEs advance together per cell in one generated kernel (a `CellPhase`, CPU or
+  GPU). Each MCS covers `mcs_duration` with the sweep's `ode_solver`:
+  `ExplicitEuler(substeps)` or `RK4(substeps)`.
+- The unified kernel is Jacobi: every right-hand side sees the state at the start of the
+  step. Before, each cell ODE was its own phase, so later equations saw earlier updates.
+
+Why:
+- This is `EnsembleGPUKernel`'s execution model (one fixed-step trajectory per work
+  item), produced by our own code generator. It needs no new dependencies (Julia-only,
+  small), works on Metal, and fuses with the model's cell state.
+- MTK remains the authoring and compilation front end for the component.
+
+Deferred: adaptive or stiff integration, via an optional host `ODEComponent` that keeps
+an init-once OrdinaryDiffEq integrator and couples through SII. Also deferred: DAE and
+jump components, MethodOfLines components, and output couplings into kind tables.

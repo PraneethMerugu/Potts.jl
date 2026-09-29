@@ -58,7 +58,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 ## Phase 4 — Coupling and models
 
-- [ ] **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
+- [ ] (partial, D-038: MTK components as batched cell ODEs, Euler/RK4, CPU+Metal; host adaptive `ODEComponent`, DAE, MethodOfLines pending) **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
   Accept: Akeeb MTK-bridge targets bytewise vs discrete clock (as in `SCDPotts/research`).
 - [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI.
   Accept: reference parity for each; TTFX table in docs.

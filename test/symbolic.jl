@@ -687,3 +687,60 @@ const BAD_DRIVE_LINE = @__LINE__() - 3
         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)), BadSiteVar(; name = :bad))))
     @test occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
 end
+
+# Components (M4.1): MTK systems instantiated per cell, advanced by a batched cell ODE kernel.
+using Potts.ModelingToolkitBase: System, @parameters
+const _tc = Potts.t
+Potts.ModelingToolkitBase.@variables y_c(_tc) = 1.0 m_c(_tc) = 0.0
+@parameters k_c = 0.3 τ_c = 20.0 r_c = 1.0
+@named decay = System([Potts.D(y_c) ~ -k_c * y_c], _tc)
+@named clock = System([Potts.D(m_c) ~ r_c / τ_c], _tc)
+
+function component_model(solver)
+    @potts_model Decaying begin
+        @kinds medium A B
+        @parameters T = 1.0
+        @components begin
+            decay = decay
+        end
+        @components cells(A) clock = clock
+        @equations clock.r_c ~ volume / 25
+        @lattice Lattice((20, 20))
+        @energy cells => (volume - 25.0)^2
+        @divide cells(A) when = clock.m_c >= 1, along = (1.0, 0.0), clock.m_c => 0.0
+        @sweep Metropolis(; temperature = T, ode_solver = solver)
+    end
+    return Decaying(; name = :decaying)
+end
+
+@testset "components: MTK systems per cell" begin
+    σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2
+    op = [ownership => σ, kind => [:A, :B]]
+    frozen(sys) = PottsProblem(sys, op, (0, 10); T = Float64)
+    for (solver, exact, tol) in ((Potts.ExplicitEuler(), t -> (1 - 0.3)^t, 1e-12),
+            (Potts.RK4(substeps = 2), t -> (1 + (z = -0.15) + z^2 / 2 + z^3 / 6 + z^4 / 24)^(2t), 1e-12))
+        sys = component_model(solver)
+        cs = mtkcompile(sys)
+        @test Set(Potts.info(v).name for v in cs.sys.variables) == Set([:decay₊y_c, :clock₊m_c])
+        @test Set(Potts.info(v).name for v in cs.sys.parameters) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
+        # no copies (T = 0 and frozen cells) so the volume coupling is exact
+        prob = remake(PottsProblem(cs, op, (0, 10)); p = [:T => 1e-9])
+        sol = solve(prob, SequentialCPM(); saveat = 0:10)
+        ys = [u.cell.decay₊y_c[1] for u in sol.u]
+        @test maximum(abs.(ys .- exact.(0:10))) < tol
+        @test all(u -> u.cell.decay₊y_c[2] == u.cell.decay₊y_c[1], sol.u)            # every kind
+        @test sol.u[end].cell.clock₊m_c[2] == 0.0                                     # kind-scoped
+        @test sol[:decay₊y_c][end] == sol.u[end].cell.decay₊y_c
+    end
+    # coupling and division: the clock runs at volume/25/τ per MCS and resets on division
+    sys = component_model(Potts.ExplicitEuler())
+    prob = remake(PottsProblem(sys, op, (0, 12)); p = [:T => 1e-9, Symbol("clock₊τ_c") => 8.0])
+    sol = solve(prob, SequentialCPM(); saveat = 0:12)
+    m = [u.cell.clock₊m_c[1] for u in sol.u]
+    @test m[1:8] == (0:7) ./ 8                          # exact: 1/8 per MCS at volume 25
+    @test m[9] == 0.0 && sol.u[9].cell.clock₊m_c[3] == 0.0 && count(>(0), sol.u[9].cell.volume) == 3
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :A],
+        lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+        components = [Potts.ComponentSpec(:clock, clock, Potts.CellDomain(Int[]))],
+        equations = [Potts.Symbolics.variable(Symbol("clock₊nope")) ~ 1.0]))
+end

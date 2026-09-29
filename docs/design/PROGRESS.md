@@ -563,3 +563,22 @@
   now build their problems from the PottsModels sources.
 - The package's own tests: every model builds and runs, has an exact energy self-check,
   and passes Aqua.
+
+## 2026-09-29 — M4.1 slice 1: MTK components per cell (D-038)
+
+- `@components [cells(k)] name = sys`:
+  - Component unknowns become cell variables and parameters become model parameters,
+    unless coupled with `@equations name.p ~ cell expression`.
+  - Observed equations are substituted, and `t` maps to the builtin `time`.
+  - Explicit ODEs join the cell ODEs, gated by kind.
+- All cell ODEs advance in one generated kernel with the sweep's `ode_solver`
+  (`ExplicitEuler` or `RK4`, with substeps).
+- A component's RHS reads the model's cell quantities through couplings. The model reads
+  component state as `name.x` in energies, division conditions and rules, updates and
+  observed quantities.
+- `@components clock = clock` resolves the right-hand side to the caller's global.
+- **Tests:**
+  - Euler and RK4 match their exact discrete solutions to 1e-12.
+  - The coupled clock is exact and resets on division.
+  - Kind scoping, `remake` of component parameters, and `sol[:decay₊y_c]`.
+  - JET QA of the component kernel, and Float32 RK4 on Metal.

@@ -264,17 +264,62 @@ function _phases(c::CompiledPottsSystem, T, values)
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
-    for (x, rate) in c.cell_odes
-        name = info(x).name
-        ex = :((st, p, ctx, key, mcs, c) -> begin
-            @inbounds st.cell.volume[c] > 0 || return nothing
-            @inbounds st.cell.$name[c] += $T($dt) * $(lower(rate, _cell_env(T, :c, rn; mcs = :mcs)))
-            return nothing
-        end)
-        push!(after, CorePotts.CellPhase(_rgf(ex)))
-    end
+    isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
     append!(after, _link_phases(c, T))
     return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after))
+end
+
+# All cell ODEs (`D(x) ~ f` on cell variables, component equations) advance together, per
+# cell, over one MCS of length `dt` with the sweep's `ode_solver` (a batched system over the
+# cell dimension: one work item per cell, CPU or GPU). The state is read into locals
+# `y_i`, the right-hand sides see them (and `time`), and the result is written back.
+function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
+    rn = c.gather_names
+    solver = c.sys.sweep.ode_solver
+    n = length(c.cell_odes)
+    ys = [Symbol(:y_, i) for i in 1:n]
+    locals = Dict{Any, Any}()
+    bind = Dict{Symbol, Any}()
+    for (i, (x, _)) in enumerate(c.cell_odes)
+        s = _tag(_sym(Symbol(:__y, i)), Info(:builtin, Symbol(:__y, i), nothing, (;)))
+        locals[_unwrap(x)] = _unwrap(s)
+        bind[Symbol(:__y, i)] = ys[i]
+    end
+    env = _cell_env(T, :c, rn; mcs = :mcs, extra = (bind..., :time => :tt))
+    rates = [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.cell_odes]
+    names = [info(x).name for (x, _) in c.cell_odes]
+    substeps = something(solver.substeps, 1)
+    h = :($T($dt / $substeps))
+    f = :(rhs = (tt, $(ys...)) -> ($(rates...),))
+    lowerclip = solver isa ExplicitEuler ? solver.lower : nothing
+    clip(v) = lowerclip === nothing ? v : :(max($v, $T($lowerclip)))
+    step = if solver isa RK4
+        k(j) = [Symbol(:k, j, :_, i) for i in 1:n]
+        quote
+            ($(k(1)...),) = rhs(tt, $(ys...))
+            ($(k(2)...),) = rhs(tt + h / 2, $([:($(ys[i]) + h / 2 * $(k(1)[i])) for i in 1:n]...))
+            ($(k(3)...),) = rhs(tt + h / 2, $([:($(ys[i]) + h / 2 * $(k(2)[i])) for i in 1:n]...))
+            ($(k(4)...),) = rhs(tt + h, $([:($(ys[i]) + h * $(k(3)[i])) for i in 1:n]...))
+            ($(ys...),) = ($([clip(:($(ys[i]) + h / 6 * ($(k(1)[i]) + 2 * $(k(2)[i]) + 2 * $(k(3)[i]) + $(k(4)[i])))) for i in 1:n]...),)
+        end
+    else
+        quote
+            ($(Symbol.(:k1_, 1:n)...),) = rhs(tt, $(ys...))
+            ($(ys...),) = ($([clip(:($(ys[i]) + h * $(Symbol(:k1_, i)))) for i in 1:n]...),)
+        end
+    end
+    return :((st, p, ctx, key, mcs, c) -> begin
+        @inbounds st.cell.volume[c] > 0 || return nothing
+        h = $h
+        $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in 1:n]...)
+        $f
+        for s in 1:$substeps
+            tt = $T(mcs) * $T($dt) + $T(s - 1) * h
+            $step
+        end
+        $([:(@inbounds st.cell.$(names[i])[c] = $(ys[i])) for i in 1:n]...)
+        return nothing
+    end)
 end
 
 # `@link`/`@unlink` rules: host phases over the contact graph / existing links.

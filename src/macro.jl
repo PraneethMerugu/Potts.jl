@@ -10,7 +10,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
-    Symbol("@extend"))
+    Symbol("@extend"), Symbol("@components"))
 
 """
     @potts_model Name begin
@@ -36,11 +36,12 @@ struct _Parts
     structural::Vector{Any}      # (name, default)
     params::Vector{Symbol}
     code::Vector{Any}
+    mod::Module                  # the calling module (globals shadowed by component names)
 end
 
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
-    parts = _Parts(Any[], Symbol[], Any[])
+    parts = _Parts(Any[], Symbol[], Any[], mod)
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -83,6 +84,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __sweep = nothing
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
+        __components = Any[]
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
@@ -90,7 +92,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         variables = __vars, relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen, sources = __sources,
+        observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
         sweep = __sweep, structural = $structural))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -193,6 +195,18 @@ function _section!(parts, sec, args, ln = nothing)
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
         push!(code, :($bname = $call), :(push!(__bases, $bname)))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
+    elseif sec === Symbol("@components")
+        # `@components clock = sys`, `@components cells(k) grn = sys`, or a block of `name = sys`
+        domain = length(args) == 2 ? args[1] : :($P.cells)
+        for l in _lines(args[end:end])
+            l isa Expr && l.head === :(=) && l.args[1] isa Symbol ||
+                throw(ArgumentError("@components lines are `name = system`"))
+            k = l.args[1]
+            # `clock = clock`: the right-hand side means the caller's global, not the new local
+            rhs = _globalize(l.args[2], k, parts.mod)
+            push!(code, :($k = $rhs),
+                :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $P._domain($domain)))))
+        end
     elseif sec === Symbol("@lattice")
         push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))))
     elseif sec === Symbol("@relations")
@@ -253,6 +267,9 @@ function _section!(parts, sec, args, ln = nothing)
     end
     return parts
 end
+
+_globalize(ex, k, mod) = ex === k ? GlobalRef(mod, k) :
+                         ex isa Expr ? Expr(ex.head, map(a -> _globalize(a, k, mod), ex.args)...) : ex
 
 # Replace a call to `from(args…)` by `to([extra,] args…)` at the top of `ex`.
 function _replace_call(ex, from, to, extra...)

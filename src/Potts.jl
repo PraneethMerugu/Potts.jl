@@ -37,6 +37,7 @@ include("codegen.jl")
 include("problem.jl")
 include("observed.jl")
 include("compose.jl")
+include("components.jl")
 include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""

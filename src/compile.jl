@@ -102,6 +102,7 @@ Validate and analyse a Potts model (the symbolic half of compilation; code is ge
 per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
+    sys = _bind_components(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
     contact_terms = Dict{Symbol, Any}()
@@ -185,7 +186,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             _check_names(eq.rhs, _SITE_BUILTINS, "a field equation"; between_copies = true)
             push!(fields, (x, eq.rhs))
         elseif i.role === :cell
-            _check_names(eq.rhs, _CELL_BUILTINS, "a cell equation"; between_copies = true)
+            _check_names(eq.rhs, (_CELL_BUILTINS..., :time), "a cell equation"; between_copies = true)
             push!(cell_odes, (x, eq.rhs))
         else
             throw(ArgumentError("model-scope equations are not supported yet"))
@@ -445,7 +446,8 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for eq in sys.equations
         _located(sys, eq) do
             x = arguments(_unwrap(eq.lhs))[1]
-            lower(eq.rhs, info(x).role === :cell ? cellenv : _site_env(T, :i, rn; mcs = :mcs))
+            lower(eq.rhs, info(x).role === :cell ? _cell_env(T, :c, rn; mcs = :mcs, extra = (:time => :tt,)) :
+                          _site_env(T, :i, rn; mcs = :mcs))
         end
     end
     for d in sys.divisions

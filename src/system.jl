@@ -26,6 +26,7 @@ Base.@kwdef struct PottsSystem
     relationships::Vector{RelationshipSpec} = RelationshipSpec[]
     link_rules::Vector{LinkRule} = LinkRule[]
     observed::Vector{ObservedEq} = ObservedEq[]
+    components::Vector{Any} = Any[]            # `ComponentSpec`s: MTK systems instantiated per cell
     sweep::SweepSpec
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written

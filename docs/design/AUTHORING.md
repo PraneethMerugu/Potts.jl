@@ -551,6 +551,16 @@ end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
 @components cells(tumor) sbml = SBMLToolkit.readSBML("model.xml")
 ```
 
+**Implemented (D-038).**
+- `@components cells(k) clock = sys` instantiates an MTK `System` per cell.
+  - `clock.m` is the cell variable `clock₊m`. It can be read anywhere, and division
+    rules can set it.
+  - `@equations clock.r ~ volume / V₀` couples a component parameter to a cell-scope
+    expression. Uncoupled parameters become model parameters (`clock₊τ`), which can be
+    set by `remake(prob; p = [:clock₊τ => …])`.
+- Cell ODEs advance with `@sweep …; ode_solver = ExplicitEuler(substeps = n) |
+  RK4(substeps = n)`.
+
 ### 12.7 Lifecycle additions
 
 ```julia

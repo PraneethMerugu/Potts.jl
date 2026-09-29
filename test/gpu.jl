@@ -41,4 +41,10 @@ using Statistics: mean, var
     @test Array(uk.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(uk.σ), cl)
     @test Array(uk.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(uk.σ), cl, kp.lattice, Moore(1); T = Float32)
     @test count(>(0), Array(uk.cell.volume)) == 36
+    # components: the batched RK4 cell-ODE kernel in Float32 on the device
+    σo = zeros(Int32, 20, 20); σo[3:7, 3:7] .= 1; σo[12:16, 12:16] .= 2
+    po = remake(PottsProblem(component_model(Potts.RK4(substeps = 2)), [ownership => σo, kind => [:A, :B]], (0, 10); T = Float32);
+        p = [:T => 1.0f-9])
+    yo = solve(po, CheckerboardCPM(); backend).u[end].cell.decay₊y_c
+    @test Array(yo)[1:2] ≈ fill(Float32((1 - 0.15 + 0.15^2 / 2 - 0.15^3 / 6 + 0.15^4 / 24)^20), 2) rtol = 1e-5
 end
