@@ -62,8 +62,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
     preamble = quote
         (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface) = $P.B
         $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
+        $P._DIM[] = 0                             # set by @lattice (vector builtins)
         t = $P.t
-        D = $P.D
+        D = $P._D
         Pre = $P._pre
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
@@ -122,7 +123,13 @@ function _lines_ln(args, ln)
     return out
 end
 # `push!(list, x)` recording where `x` was written (diagnostics)
-_located_push(list, x, ln) = :(push!($list, Potts._source!(__sources, $x, $(QuoteNode(ln)))))
+_located_push(list, x, ln) = :(Potts._push_located!($list, __sources, $x, $(QuoteNode(ln))))
+_push_located!(list, sources, x, ln) = push!(list, _source!(sources, x, ln))
+_push_located!(list, sources, xs::AbstractVector, ln) = foreach(x -> _push_located!(list, sources, x, ln), xs)
+# `lhs ~ rhs` → `Potts._eq(lhs, rhs)` (component-wise for vector quantities)
+_rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.args) == 3 ?
+                 :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
+_is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
 _strip(ex) = ex isa Expr && ex.head === :block ? only(filter(a -> !(a isa LineNumberNode), ex.args)) : ex
 
 function _section!(parts, sec, args, ln = nothing)
@@ -154,7 +161,13 @@ function _section!(parts, sec, args, ln = nothing)
                         val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             all(k -> k.args[1] === :unit, kw) || throw(ArgumentError("parameter options: only `unit` is supported"))
-            if lhs isa Expr && lhs.head === :ref
+            if lhs isa Expr && lhs.head === :ref && _is_range(lhs.args[2])     # `d[1:n]`: a vector
+                k = lhs.args[1]
+                push!(parts.params, k)
+                push!(code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $k === nothing ? $val : $k; $(kw...))),
+                    :(append!(__params, $k.components)))
+                continue
+            elseif lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
                 push!(parts.params, k)
                 push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k; $(kw...))))
@@ -168,14 +181,24 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@variables")
         for l in _lines(args)
             decl, rhs = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
+            range = nothing
+            if decl isa Expr && decl.head === :ref                         # `p(cell)[1:n]`: a vector
+                range = decl.args[2]
+                decl = decl.args[1]
+            end
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
                 throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`"))
             k, scope = decl.args
             default, opts = rhs isa Expr && rhs.head === :tuple ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
-            push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
-                :(push!(__vars, $k)))
+            if range === nothing
+                push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
+                    :(push!(__vars, $k)))
+            else
+                push!(code, :($k = $P.vector_variable($(QuoteNode(k)), $range, $(QuoteNode(scope)); $(kw...))),
+                    :(append!(__vars, $k.components)))
+            end
         end
     elseif sec === Symbol("@extend")
         # `@extend Base()`, `@extend base = Base()` or `@extend a, b = base = Base()` (MTK)
@@ -214,7 +237,8 @@ function _section!(parts, sec, args, ln = nothing)
                 :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $P._domain($domain)))))
         end
     elseif sec === Symbol("@lattice")
-        push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))))
+        push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))),
+            :($P._DIM[] = length(__lattice.dims)))
     elseif sec === Symbol("@relations")
         for l in _lines(args)
             k = l.args[1]
@@ -255,11 +279,12 @@ function _section!(parts, sec, args, ln = nothing)
         phase = QuoteNode(Symbol(String(sec)[2:end]))
         every = length(args) == 2 ? args[1] : nothing
         for (l, lln) in _lines_ln(args[end:end], ln)
-            push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $(rewrite(l)))) :
-                                                  :($P.update($phase, $every, $(rewrite(l)))), lln))
+            l = _rewrite_eq(l)
+            push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
+                                                  :($P.update($phase, $every, $l)), lln))
         end
     elseif sec === Symbol("@equations")
-        foreach(((l, lln),) -> push!(code, _located_push(:__equations, rewrite(l), lln)), _lines_ln(args, ln))
+        foreach(((l, lln),) -> push!(code, _located_push(:__equations, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])

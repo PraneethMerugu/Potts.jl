@@ -68,6 +68,69 @@ function variable(x, scope::Symbol; default = 0.0, unit = nothing, options...)
 end
 
 # ---------------------------------------------------------------------------------------
+# Vector quantities: `p(cell)[1:2]`, `d[1:3] = …` declare scalar components `p_1, p_2, …`
+# (tagged `vector = :p, index = i`) and bind `p` to this vector of them.
+
+"""
+    QuantityVector
+
+A declared vector quantity (`@variables p(cell)[1:2]`, `@parameters d[1:2]`): an
+`AbstractVector` of its scalar components `p_1, p_2, …`, which are ordinary variables or
+parameters. `p[i]` is component `i`; `p[new]` (a cell or site) the vector there; `Pre(p)`,
+`p ~ rhs`, `dot`, `norm`, `normalize` and arithmetic act component-wise.
+"""
+struct QuantityVector <: AbstractVector{Num}
+    name::Symbol
+    components::Vector{Num}
+end
+Base.size(v::QuantityVector) = size(v.components)
+Base.getindex(v::QuantityVector, i::Int) = v.components[i]
+
+_component_name(name, i) = Symbol(name, :_, i)
+_component(v, i) = v isa AbstractVector ? v[i] : v
+function _vector_length(r)
+    r isa AbstractUnitRange && first(r) == 1 && return length(r)
+    throw(ArgumentError("vector quantities are declared with a range `1:n`"))
+end
+
+"""`vector_variable(name, 1:n, scope; default, unit, options...)`: components `name_i` of a vector variable."""
+function vector_variable(name::Symbol, r, scope::Symbol; default = 0.0, unit = nothing, options...)
+    n = _vector_length(r)
+    return QuantityVector(name, [variable(only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
+                                     default = _component(default, i), unit = _component(unit, i),
+                                     vector = name, index = i, options...) for i in 1:n])
+end
+"""`vector_parameter(name, 1:n, default; unit)`: components `name_i` of a vector parameter."""
+function vector_parameter(name::Symbol, r, default; unit = nothing)
+    n = _vector_length(r)
+    return QuantityVector(name, [_with_unit(_tag(_sym(_component_name(name, i)),
+                                                 Info(:param, _component_name(name, i), _component(default, i), (; vector = name, index = i))),
+                                            _component(unit, i)) for i in 1:n])
+end
+
+"""`lhs ~ rhs` in updates and equations: component-wise for vectors."""
+_eq(a, b) = a ~ b
+function _eq(a::AbstractVector, b)
+    b isa AbstractVector || return [x ~ b for x in a]
+    length(a) == length(b) || throw(DimensionMismatch("`~` between vectors of lengths $(length(a)) and $(length(b))"))
+    return [x ~ y for (x, y) in zip(a, b)]
+end
+"""`D(x)`, component-wise for vectors."""
+_D(x) = D(x)
+_D(v::AbstractVector) = map(_D, v)
+
+_dot(a::AbstractVector, b::AbstractVector) =
+    (length(a) == length(b) || throw(DimensionMismatch("dot of vectors of lengths $(length(a)) and $(length(b))")); sum(a .* b))
+_norm(a::AbstractVector) = sqrt(sum(abs2, a))
+"""`normalize(v)`: `v / norm(v)`, and zero where `norm(v) == 0`."""
+_normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) for x in a])
+
+"""Spatial dimension of the lattice being declared (for `centroid()`, `displacement(c)`)."""
+const _DIM = Ref(0)
+_lattice_dim() = _DIM[] > 0 ? _DIM[] :
+                 throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
+
+# ---------------------------------------------------------------------------------------
 # Symbolic operations recognised by lowering
 
 """`at(x, i...)`: `x` at an explicit site/cell (`act[target]`) or kind-table entry (`J[a, b]`)."""
@@ -102,6 +165,7 @@ Symbolics.@register_symbolic copy_displacement(c, k)
 into the lattice). Cell scope: updates, equations, division conditions and rules, observed.
 """
 _centroid(k::Integer) = cell_centroid(Num(k))
+_centroid() = Num[_centroid(k) for k in 1:_lattice_dim()]
 """
 `displacement(c, k)`: how far the copy moves the centroid of cell `c` (`new` or `old`) along
 axis `k` (minimum image on periodic axes; zero for the medium or other cells). Proposal
@@ -109,6 +173,7 @@ scope: drives and on-copy updates, e.g. persistent motion
 `copy => -μ * (px[new] * displacement(new, 1) + px[old] * displacement(old, 1) + …)`.
 """
 _displacement(c, k::Integer) = copy_displacement(c, Num(k))
+_displacement(c) = Num[_displacement(c, k) for k in 1:_lattice_dim()]
 
 """
 `integral(x)`: the sum of the site expression `x` over the cell's sites (cell scope; divide
@@ -133,6 +198,7 @@ lag is the initial value. Lags are available where the MCS clock is: updates, eq
 division conditions and rules, link rules.
 """
 _pre(x) = ModelingToolkitBase.Pre(x)
+_pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); k == 1 ? _pre(x) : history_lag(x, Num(k)))
 
 """`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
@@ -152,6 +218,8 @@ _rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
 _index(x::Num, i) = at(x, i)
+_index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
+_index(x::QuantityVector, i::Integer) = x.components[i]
 _index(x::Num, i, j) = at2(x, i, j)
 _index(x, i...) = getindex(x, i...)
 
@@ -322,6 +390,8 @@ struct Every
 end
 update(phase::Symbol, eq::Equation) = Update(phase, eq, 1)
 update(phase::Symbol, e::Every, eq::Equation) = Update(phase, eq, e.n)
+update(phase::Symbol, eqs::AbstractVector{<:Equation}) = [update(phase, eq) for eq in eqs]
+update(phase::Symbol, e::Every, eqs::AbstractVector{<:Equation}) = [update(phase, e, eq) for eq in eqs]
 
 """
     @divide cells(kinds) when = cond, along = normal, x => rule, …
@@ -352,8 +422,12 @@ struct Split end
 
 divide(d::Union{typeof(cells), typeof(clusters)}, args...; kw...) = divide(_domain(d), args...; kw...)
 function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = AlongMinor())
-    rules = Pair{Any, Any}[a for a in args if a isa Pair]
-    length(rules) == length(args) || throw(ArgumentError("@divide state rules must be `x => rule`"))
+    all(a -> a isa Pair, args) || throw(ArgumentError("@divide state rules must be `x => rule`"))
+    rules = Pair{Any, Any}[]
+    for (x, r) in args     # vector quantities: component-wise (a scalar or `Split()` applies to all)
+        x isa AbstractVector ? append!(rules, [c => (r isa AbstractVector ? r[i] : r) for (i, c) in enumerate(x)]) :
+        push!(rules, x => r)
+    end
     return DivideRule(d, when, along, rules)
 end
 
@@ -442,7 +516,8 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     Volume, Surface, Adhesion, Chemotaxis,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Every, rand = _rand,
-    centroid = _centroid, displacement = _displacement, integral = _integral, geomean, geomean_shifted, mean, Δ)
+    centroid = _centroid, displacement = _displacement, integral = _integral,
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, geomean_shifted, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

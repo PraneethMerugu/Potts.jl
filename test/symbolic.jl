@@ -1146,3 +1146,70 @@ end
         @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
     end
 end
+
+@potts_model PersistentVec begin
+    @kinds medium A
+    @parameters μ = 0.0 T = 2.0
+    @lattice Lattice((48, 48); neighborhood = Moore(1))
+    @variables begin
+        pol(cell)[1:2] = 0.0
+        c(cell)[1:2] = 0.0
+    end
+    @energy begin
+        Volume(A; target = 25.0, strength = 2.0)
+        contacts => 4 * (kind != kind′)
+    end
+    @drive copy => -μ * (dot(pol[new], displacement(new)) + dot(pol[old], displacement(old)))
+    @after_mcs begin
+        pol ~ ifelse(mcs == 0, 0.0, 1.0) .* (0.8 * Pre(pol) + 0.2 * (centroid() - Pre(c)))
+        c ~ centroid()
+    end
+    @observed speed(cell) ~ norm(pol)
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model VectorBits begin
+    @kinds medium A
+    @parameters begin
+        d[1:2] = [1.0, 0.0]
+        T = 1.0
+    end
+    @lattice Lattice((12, 12))
+    @variables begin
+        g(site)[1:2] = [0.5, -0.5]
+        m(model)[1:2] = 0.0
+        q(cell)[1:3] = [1.0, 2.0, 3.0]
+    end
+    @energy cells => (volume - 9)^2
+    @after_mcs begin
+        m ~ Pre(m) + d
+        g ~ normalize(g)
+    end
+    @divide cells(A) when = mcs == 1, q => Split()
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "vector quantities" begin
+    σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1
+    for μ in (0.0, 1000.0)
+        a = solve(PottsProblem(Persistent(; name = :a, μ), [ownership => σ, kind => [1]], (0, 30); seed = 5), SequentialCPM())
+        b = solve(PottsProblem(PersistentVec(; name = :b, μ), [ownership => σ, kind => [1]], (0, 30); seed = 5), SequentialCPM())
+        @test a.u[end].σ == b.u[end].σ                                          # same model, same run
+        @test a.u[end].cell.px ≈ b.u[end].cell.pol_1 && a.u[end].cell.cy ≈ b.u[end].cell.c_2
+        @test b[:speed][end] ≈ hypot.(b.u[end].cell.pol_1, b.u[end].cell.pol_2)
+    end
+    σ2 = zeros(Int32, 12, 12); σ2[4:6, 4:6] .= 1
+    p = PottsProblem(VectorBits(; name = :v), [ownership => σ2, kind => [1]], (0, 3); capacity = 4)
+    @test p.p.d_1 == 1.0 && p.p.d_2 == 0.0 && p.u0.cell.q_3[1] == 3.0 && all(==(0.5), p.u0.site.g_1)
+    u = solve(p, SequentialCPM()).u[end]
+    @test u.model.m_1[1] == 3 && u.model.m_2[1] == 0
+    @test all(x -> x ≈ sqrt(0.5), u.site.g_1) && all(x -> x ≈ -sqrt(0.5), u.site.g_2)
+    live = findall(>(0), u.cell.volume)
+    @test length(live) == 2 && sum(u.cell.q_2[live]) ≈ 2.0                    # Split() per component
+    q = remake(p; p = [:d => [0.0, 2.0]])
+    @test q.p.d_1 == 0.0 && q.p.d_2 == 2.0
+    r = PottsProblem(VectorBits(; name = :v, d = [5.0, 6.0]), [ownership => σ2, kind => [1], :q => [(7.0, 8.0, 9.0)],
+        :g => fill(1.0, 12, 12, 2)], (0, 1))
+    @test r.p.d_2 == 6.0 && r.u0.cell.q_2[1] == 8.0 && all(==(1.0), r.u0.site.g_2)
+    @test_throws ArgumentError PottsProblem(VectorBits(; name = :v), [ownership => σ2, kind => [1], :q => [1.0, 2.0]], (0, 1))
+end

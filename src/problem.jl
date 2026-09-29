@@ -107,8 +107,47 @@ _acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
 # Keys may be symbolic quantities or their names (`:λ`, `Symbol("clock₊τ")`); relationship
 # names (`:bond => [(1, 2)]`) stay symbols.
 function _operating_point(sys::PottsSystem, op)
+    op = _expand_vectors(sys, op)
     byname = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in Iterators.flatten((sys.parameters, sys.variables)))
     return Dict{Any, Any}((k isa Symbol ? get(byname, k, k) : _opkey(k)) => v for (k, v) in op)
+end
+
+"""
+Operating-point entries for vector quantities (`p => …`, `:p => …`) split into their
+components: a number applies to every component; a parameter takes a length-`n` vector; a
+variable takes per-cell/site vectors (`[(x, y), …]`) or an array whose last dimension is `n`.
+"""
+function _expand_vectors(sys::PottsSystem, op)
+    vecs = Dict{Symbol, Vector{Any}}()
+    for x in Iterators.flatten((sys.parameters, sys.variables))
+        o = info(x).options
+        haskey(o, :vector) || continue
+        v = get!(vecs, o.vector, Any[])
+        length(v) < o.index && resize!(v, o.index)
+        v[o.index] = x
+    end
+    isempty(vecs) && return op
+    out = Pair{Any, Any}[]
+    for (k, v) in (op isa AbstractDict ? pairs(op) : op)
+        name = k isa QuantityVector ? k.name : k isa Symbol ? k : nothing
+        if name !== nothing && haskey(vecs, name)
+            comps = vecs[name]
+            append!(out, [c => _vector_entry(name, v, i, length(comps), info(c).role) for (i, c) in enumerate(comps)])
+        else
+            push!(out, k => v)
+        end
+    end
+    return out
+end
+function _vector_entry(name, v, i, n, role)
+    v isa Number && return v
+    if role === :param || (v isa AbstractVector && eltype(v) <: Number && length(v) == n && role === :model)
+        length(v) == n || throw(ArgumentError("`$name` has $n components; got $(length(v)) values"))
+        return v[i]
+    end
+    v isa AbstractVector && all(e -> e isa Union{AbstractVector, Tuple}, v) && return [e[i] for e in v]
+    v isa AbstractArray && size(v, ndims(v)) == n && return copy(selectdim(v, ndims(v), i))
+    throw(ArgumentError("values for the $n-component `$name`: a number, per-entry vectors, or an array whose last dimension is $n"))
 end
 
 _opkey(k::typeof(CorePotts.ownership)) = k
@@ -260,6 +299,7 @@ end
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
 function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap)
+    p = _expand_vectors(info.csys.sys, p)
     names = Dict{Any, Info}()
     for x in info.csys.sys.parameters
         i = Potts.info(x)
