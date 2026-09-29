@@ -328,9 +328,10 @@ Slimmed:
 - `_WorkspaceLeafSlot{Name}` / `_PreparedFieldSlot{I}` become value fields
 - `PreparedPlan` is concrete and typed on the stage schema only
 
-Used by CorePotts for: field stages, synchronous updates, history push, lifecycle
-compaction/assignment, relationship rebuild, spatial queries (neighbor counts, sums,
-means, predicate filters, interface queries — all `Reduce`/`KeyedReduce` stages).
+~~Used by CorePotts for: field stages, synchronous updates, history push, …~~ Superseded
+by D-033: CorePotts phases are plain generated KA kernels. LocalMath is an optional
+stage-program runtime, wrapped as a phase `(st, p, ctx, key, mcs, backend)` when a model
+needs its ordered folds, collections or keyed reductions.
 
 ## 4. Testing and verification
 

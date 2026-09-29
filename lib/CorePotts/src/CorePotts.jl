@@ -21,6 +21,8 @@ export CPMState, initial_state, Proposal, Footprint, CPMFunction, commit_volume!
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
+export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
+    clear_on_copy!
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
 export init, solve, solve!, step!, remake, CPU
@@ -29,6 +31,7 @@ include("rng.jl")
 include("lattice.jl")
 include("model.jl")
 include("geometry.jl")
+include("phases.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

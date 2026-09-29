@@ -63,13 +63,14 @@ The integrator for a `CPMProblem`. `t` is the current MCS; `integrator.u` return
 copy of the state (synchronizing the device only when accessed). `step!` enqueues one MCS
 without synchronizing.
 """
-mutable struct PottsIntegrator{Alg, Law, P, S, C, F, Pa, Ctx, B} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
+mutable struct PottsIntegrator{Alg, Law, P, S, C, F, KF, Pa, Ctx, B} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
     const prob::P
     const alg::Alg
     const law::Law
     const state::S
     const cache::C
     const f::F
+    const kf::KF
     p::Pa
     const ctx::Ctx
     const backend::B
@@ -103,7 +104,7 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0)) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
-    integ = PottsIntegrator(prob, alg, _device_law(alg.acceptance, backend), state, cache, prob.f, p, ctx, backend, key,
+    integ = PottsIntegrator(prob, alg, _device_law(alg.acceptance, backend), state, cache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats())
     save_start && _save!(integ)
@@ -129,11 +130,17 @@ function _preflight(prob::CPMProblem, alg::CPMAlgorithm, ctx)
     return nothing
 end
 
-"""Host copy of the current state. Synchronizes the device."""
+"""
+Host snapshot of the current state: independent of the live state on every backend
+(`Adapt.adapt(Array, …)` alone would alias host arrays). Synchronizes the device. The live
+device state is `integ.state`.
+"""
 function current_state(integ::PottsIntegrator)
     KernelAbstractions.synchronize(integ.backend)
-    return Adapt.adapt(Array, integ.state)
+    return _snapshot(integ.backend, integ.state)
 end
+_snapshot(backend, st) = Adapt.adapt(Array, st)
+_snapshot(::KernelAbstractions.CPU, st) = deepcopy(st)
 
 function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :u && return current_state(integ)
@@ -157,15 +164,20 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
     lat = integ.ctx.lattice
+    phases = integ.f.phases
+    integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend)
     if integ.alg isa SequentialCPM
-        acc, status = sequential_mcs!(integ.state, integ.f, integ.p, integ.ctx,
+        acc, status = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     else
-        integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.f,
+        integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
     end
+    integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += nsites(lat)

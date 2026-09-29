@@ -259,6 +259,8 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             @test solve(prob, alg).u[end].σ == last_state.σ             # same seed, same run
             @test solve(remake(prob; seed = 8), alg).u[end].σ != last_state.σ
             @test sol(10).σ == sol.u[3].σ
+            @test sol.u[1].σ == σ0 && sol.u[2].σ != sol.u[end].σ     # snapshots, not aliases
+            @test sol.u[1].σ !== sol.u[end].σ
             @test_throws ArgumentError sol(11)
             @test sol.stats.attempts == 20 * nsites(lat)
         end
@@ -326,6 +328,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
 end
 
 include("geometry.jl")
+include("phases.jl")
 include("oracle.jl")
 get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")

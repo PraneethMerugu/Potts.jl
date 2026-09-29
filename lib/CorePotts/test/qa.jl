@@ -5,18 +5,27 @@ using JET, AllocCheck
     σ0, kinds0 = blocks((36, 36), 5)
     prob = CPMProblem(GG, initial_state(σ0, kinds0), Lattice((36, 36)), (0, 20), gg_params())
     integ = init(prob, SequentialCPM(); save_start = false)
-    args = (integ.state, integ.f, integ.p, integ.ctx, integ.law, integ.key, 0)
+    args = (integ.state, integ.kf, integ.p, integ.ctx, integ.law, integ.key, 0)
     @test_opt target_modules = (CorePotts,) CorePotts.sequential_mcs!(args...)
     @test_opt target_modules = (CorePotts,) step!(integ)
     @test isempty(check_allocs(CorePotts.sequential_mcs!, typeof.(args)))
 
     cinteg = init(prob, CheckerboardCPM(); save_start = false)
-    cargs = (cinteg.state, cinteg.cache, cinteg.f, cinteg.p, cinteg.ctx, cinteg.law,
+    cargs = (cinteg.state, cinteg.cache, cinteg.kf, cinteg.p, cinteg.ctx, cinteg.law,
         cinteg.key, 0)
     @test_opt target_modules = (CorePotts,) CorePotts.checkerboard_mcs!(cargs...)
     @test_opt target_modules = (CorePotts,) step!(cinteg)
     # `init` is not gated: resolving a relation fixes its length K at run time, which is a
     # deliberate one-time function barrier before the (gated) hot loop.
+
+    # with phases
+    u0 = zeros(36, 36)
+    ph = Phases(after_mcs = (SitePhase(jacobi!), CopyPhase((:site, :u) => (:site, :u_next))))
+    pprob = CPMProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph),
+        initial_state(σ0, kinds0; site = (; u = u0, u_next = copy(u0))), Lattice((36, 36)),
+        (0, 5), merge(gg_params(), (; D = 0.1)))
+    pinteg = init(pprob, CheckerboardCPM(); save_start = false)
+    @test_opt target_modules = (CorePotts,) step!(pinteg)
 
     # the energy primitives are allocation free on their own
     prop = Proposal(1, 2, (1, 1), 1, Int32(1), Int32(0))

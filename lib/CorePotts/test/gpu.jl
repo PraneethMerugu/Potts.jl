@@ -45,4 +45,21 @@ using Metal
     t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 12 + var(ys) / 12)
     @info "CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
     @test abs(t) < 4
+
+    @testset "phases on Metal" begin
+        σp, kp = blocks((32, 32), 4)
+        latp = Lattice((32, 32))
+        u0 = Float32[sin(2π * i / 32) + cos(2π * j / 16) for i in 1:32, j in 1:32]
+        st = initial_state(σp, kp; site = (; u = copy(u0), u_next = zero(u0)),
+            history = (; u = history_buffer(u0, 2)))
+        ph = Phases(after_mcs = (SitePhase(jacobi!), CopyPhase((:site, :u) => (:site, :u_next)),
+            HistoryPush(:u => (:site, :u))))
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
+        pp = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 16.0f0, T = 10.0f0, D = 0.05f0)
+        prob = CPMProblem(f, st, latp, (0, 5), pp)
+        g = solve(prob, CheckerboardCPM(); backend).u[end]
+        c = solve(prob, CheckerboardCPM()).u[end]
+        @test g.site.u ≈ c.site.u rtol = 1e-5
+        @test g.history.u ≈ c.history.u rtol = 1e-5
+    end
 end

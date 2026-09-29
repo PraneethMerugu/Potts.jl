@@ -1,22 +1,26 @@
 # The numerical model interface: state, proposals, and the functions a model supplies.
 
 """
-    CPMState(σ, cell; site = (;), model = (;))
+    CPMState(σ, cell; site = (;), model = (;), history = (;))
 
 Structure-of-arrays model state.
 
 - `σ`: site → cell id (`Int32`, `0` = medium), an `N`-dimensional array.
-- `cell`: `NamedTuple` of per-cell vectors; must contain `kind::Vector{Int32}` and
-  `volume::Vector{Int32}`; may contain any other tracked or authored cell quantity.
-- `site`, `model`: `NamedTuple`s of per-site arrays and model-level 1-element arrays.
+- `cell`: `NamedTuple` of per-cell arrays (last dimension = cell id); must contain
+  `kind::Vector{Int32}` and `volume::Vector{Int32}`; may contain any other tracked or
+  authored cell quantity.
+- `site`: per-site arrays shaped like `σ`. `model`: model-level quantities as 1-element
+  arrays (medium properties live here). `history`: ring buffers (`history_buffer`).
 """
-struct CPMState{A, C, S, M}
+struct CPMState{A, C, S, M, H}
     σ::A
     cell::C
     site::S
     model::M
+    history::H
 end
-CPMState(σ, cell; site = (;), model = (;)) = CPMState(σ, cell, site, model)
+CPMState(σ, cell; site = (;), model = (;), history = (;)) =
+    CPMState(σ, cell, site, model, history)
 Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
@@ -28,7 +32,7 @@ Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = med
 `kinds[c] ≥ 1` is the kind of cell `c`. Volumes are computed from `σ`.
 """
 function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
-        cell = (;), site = (;), model = (;))
+        cell = (;), site = (;), model = (;), history = (;))
     n = length(kinds)
     volume = zeros(Int32, n)
     for s in σ
@@ -37,7 +41,19 @@ function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Int
     end
     all(>=(1), kinds) || throw(ArgumentError("cell kinds must be ≥ 1 (0 is the medium)"))
     base = (; kind = Vector{Int32}(kinds), volume, generation = ones(Int32, n))
-    return CPMState(Array{Int32}(σ), merge(base, cell), site, model)
+    for (name, a) in pairs(site)
+        size(a) == size(σ) ||
+            throw(ArgumentError("site quantity `$name` has size $(size(a)), lattice $(size(σ))"))
+    end
+    for (name, a) in pairs(cell)
+        size(a, ndims(a)) == n ||
+            throw(ArgumentError("cell quantity `$name` has last dimension $(size(a, ndims(a))), expected $n cells"))
+    end
+    for (name, a) in pairs(model)
+        a isa AbstractArray && length(a) == 1 ||
+            throw(ArgumentError("model quantity `$name` must be a 1-element array"))
+    end
+    return CPMState(Array{Int32}(σ), merge(base, cell), site, model, history)
 end
 
 """
@@ -69,7 +85,8 @@ end
 
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
-                temperature, footprint = Footprint(), fingerprint = 0, sys = nothing)
+                temperature, phases = Phases(), footprint = Footprint(), fingerprint = 0,
+                sys = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -80,27 +97,43 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `claims` → tuple of extra cell ids (beyond old/new) whose quantities the other
   functions read; they are claimed in checkerboard execution
 - `temperature` → the copy temperature
+- `phases` → synchronous work before/after each copy sweep (`Phases`, D-033)
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, TT, SYS}
+struct CPMFunction{DH, CM, CN, CL, TT, PH, SYS}
     delta_H::DH
     commit!::CM
     constraint::CN
     claims::CL
     temperature::TT
+    phases::PH
     footprint::Footprint
     fingerprint::UInt64
     sys::SYS
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
-        claims = no_claims, temperature, footprint = Footprint(), fingerprint = 0,
-        sys = nothing)
-    return CPMFunction(delta_H, commit!, constraint, claims, temperature, footprint,
+        claims = no_claims, temperature, phases = NO_PHASES, footprint = Footprint(),
+        fingerprint = 0, sys = nothing)
+    return CPMFunction(delta_H, commit!, constraint, claims, temperature, phases, footprint,
         UInt64(fingerprint), sys)
 end
+
+"""
+The device-side part of a `CPMFunction`: the five per-proposal functions, without host-only
+fields (`phases`, `sys`), so it is isbits whenever the functions are.
+"""
+struct DeviceFunctions{DH, CM, CN, CL, TT}
+    delta_H::DH
+    commit!::CM
+    constraint::CN
+    claims::CL
+    temperature::TT
+end
+device_functions(f::CPMFunction) =
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.temperature)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()

@@ -185,3 +185,24 @@ fields, secretion/uptake helpers, per-face field BCs, `@brownians`; kind-scoped 
 blocks and pure-Julia intracellular components; division with `daughter` index and
 state-oriented planes; `@terminate`; hexagonal geometry and irregular domains promoted
 from deferred; PIFF and pure-Julia MorpheusML import. Portability semantics per §12.9.
+
+## D-033 CorePotts phases are generated KA kernels; LocalMath is optional
+Evidence (2026-09-29, M1 Pro, Julia 1.12.6): one periodic 5-point Laplacian, 256².
+
+| | first execution | warm |
+|---|---|---|
+| LocalMath (`@localmath` + `@prepare` + `execute!`) | 8.2 s (law 3.0 s, prepare 5.0 s) | 1.77 ms |
+| plain KernelAbstractions kernel | 0.16 s | 0.31 ms |
+
+At 1024² with 8 threads the warm times are 7.2 ms and 1.2 ms.
+
+Decision:
+- Synchronous site and cell updates, history pushes and field steps run as plain KA
+  kernels generated like `delta_H`, through a phase protocol
+  `phase(st, p, ctx, key, mcs, backend)` (INTERNALS §1.6).
+- CorePotts does not depend on LocalMath.
+- LocalMath stays in the monorepo, tested, as an optional stage-program runtime for the
+  laws plain kernels express poorly (ordered folds, bounded collections, keyed reductions
+  with provenance). A LocalMath prepared plan is wrapped as a phase.
+- Supersedes INTERNALS §3's "used by CorePotts for…" list. Reversible if LocalMath's
+  first-execution and warm costs reach parity.
