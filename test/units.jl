@@ -60,4 +60,26 @@ end
     @test mtkcompile(unit_model(:(@after_mcs m ~ max(Pre(m) - integral(c), 0)))) isa CompiledPottsSystem
     @test_throws ArgumentError mtkcompile(unit_model(:(@after_mcs m ~ max(Pre(m), μ))))
     @test_throws ArgumentError mtkcompile(unit_model(:(@drive copy => ifelse(μ, λ, 0.0))))       # condition in m
+    # A-56: zero in comparisons and rules; equations need x's units per unit of time
+    @test mtkcompile(unit_model(:(@divide cells(A) when = m >= 0, m => 0.0))) isa CompiledPottsSystem
+    @test mtkcompile(unit_model(:(@after_mcs m ~ 0))) isa CompiledPottsSystem
+    @test_throws ArgumentError mtkcompile(unit_model(:(@equations D(m) ~ μ)))                   # m per time ≠ m
+    @test mtkcompile(unit_model(:(@equations D(m) ~ -m))) isa CompiledPottsSystem              # per MCS
+end
+
+@potts_model UnitRate begin
+    @kinds medium A
+    @parameters begin
+        k = 0.1, [unit = u"1/s"]
+        T = 4.0
+    end
+    @variables m(cell) = 1.0, [unit = u"mol"]
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 16)^2
+    @equations D(m) ~ -k * m
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "units: rates per unit of time (A-56)" begin
+    @test mtkcompile(UnitRate(; name = :r)) isa CompiledPottsSystem
 end

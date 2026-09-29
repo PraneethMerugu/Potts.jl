@@ -53,6 +53,9 @@ function _zero_free(x)
     elseif (op === max || op === min) && length(args) == 2
         _iszeroconst(args[2]) && return args[1]
         _iszeroconst(args[1]) && return args[2]
+    elseif op in (<, <=, >, >=, ==, !=) && length(args) == 2     # `clock >= 0`
+        _iszeroconst(args[2]) && (args = [args[1], args[1]])
+        _iszeroconst(args[1]) && (args = [args[2], args[2]])
     end
     return SymbolicUtils.maketerm(typeof(x), op, args, SymbolicUtils.metadata(x))
 end
@@ -67,6 +70,9 @@ function _unit(label, x)
         throw(ArgumentError("units: in $label$msg"))
     end
 end
+
+# a literal zero on the right side takes the unit of the left (`clock => 0.0`)
+_literal_zero(x) = (x isa Number && iszero(x)) || _iszeroconst(Symbolics.unwrap(x))
 
 function _require(label, u, want, what)
     _same(u, want) || throw(ArgumentError("units: in $label, $what has units [$u], expected [$want]"))
@@ -92,10 +98,20 @@ function Potts._check_units(sys::PottsSystem)
     end
     for u in sys.updates
         label = Potts._describe(u)
-        _require(label, _unit(label, u.eq.rhs), _unit(label, u.eq.lhs), "the right side")
+        _literal_zero(u.eq.rhs) || _require(label, _unit(label, u.eq.rhs), _unit(label, u.eq.lhs), "the right side")
     end
+    # `D(x) ~ rhs`: the clock is the MCS (`mcs_duration` is a plain number), so a rate has x's
+    # units per unit of time in whatever time unit its parameters use: [rhs]/[x] must be
+    # dimensionless or a pure inverse time
     for eq in sys.equations
-        _unit(Potts._describe(eq), eq.rhs)
+        label = Potts._describe(eq)
+        r = _unit(label, eq.rhs)
+        _literal_zero(eq.rhs) && continue
+        x = SymbolicUtils.arguments(Symbolics.unwrap(eq.lhs))[1]
+        q = DQ.dimension(r / _unit(label, x))
+        pertime = q.time == -1 && all(f -> f === :time || iszero(getfield(q, f)), fieldnames(typeof(q)))
+        (iszero(q) || pertime) ||
+            throw(ArgumentError("units: in $label, the rate has units [$r]; expected [$(_unit(label, x))] per unit of time"))
     end
     for c in sys.constraints
         c.kind === :expr && _require(Potts._describe(c), _unit(Potts._describe(c), c.expr), UNITLESS, "the condition")
@@ -104,7 +120,7 @@ function Potts._check_units(sys::PottsSystem)
         label = Potts._describe(d)
         _require(label, _unit(label, d.when), UNITLESS, "the condition")
         for (x, r) in d.rules
-            r isa Split || _require(label, _unit(label, r), _unit(label, x), "the rule for $(info(x).name)")
+            r isa Split || _literal_zero(r) || _require(label, _unit(label, r), _unit(label, x), "the rule for $(info(x).name)")
         end
     end
     for o in sys.observed
