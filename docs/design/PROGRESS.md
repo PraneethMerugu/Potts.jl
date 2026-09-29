@@ -262,3 +262,22 @@
 - **Parity.** OpenVT monolayer, a scheduled division against legacy
   (`reference/sample_openvt.jl`), 18/18 KS checks. Legacy `AtMCS(1)` means the boundary
   after the first MCS (our `mcs == 0`).
+
+## 2026-09-29 — M2.9 (commit 69b0cfd)
+
+- **Link store** (`relationships.jl`). Links are fixed-degree padded adjacency
+  (`st.cell.links`, `maxdeg × capacity`) plus `link_<name>` payload matrices, chosen over
+  a CSR that would need rebuilding. They are GPU-friendly and grow with capacity.
+  `add_link!`/`remove_link!`/`remove_incident!`/`linked`/`link_count` are symmetric.
+- **Energies.** `link_delta` gives ΔH over links incident to old/new from `centroid_shift`
+  (the old–new link counted once), with periodic-safe `centroid_distance`.
+  `link_claims(cell, prop, Val(D))` supplies checkerboard claims for partners. Exact, but
+  about 2× slower relaxation per MCS; omitting it is the user's stale-read trade.
+- **Rules.** `HostPhase(f!; every)` is a synchronizing host phase for rule-based link
+  creation, removal and retuning (e.g. from `contact_graph`).
+- **Lifecycle policies.** Daughters start unlinked (link data is excluded from the default
+  Copy); removed cells drop incident links (RemoveIncident).
+- **Tests.** Bookkeeping; `link_delta` against brute-force centroid distances (200
+  proposals, including linked old–new pairs, across seams); a spring relaxes to
+  equilibrium (13.2 with checkerboard + claims against sequential's 13.1); the
+  host-rule and lifecycle policies (347 checks).
