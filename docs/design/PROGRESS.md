@@ -34,3 +34,21 @@
 
 - **Next:** M1.4 JET/AllocCheck gates, M1.4b transition-matrix oracle, M1.5 benchmark suite
   and `reference/` environment (CI parts deferred: local only).
+
+## 2026-09-29 — M1.4 gates and M1.4b oracle
+
+- **QA gates** (`lib/CorePotts/test/qa.jl`, skip with `COREPOTTS_QA=false`): JET `@test_opt` is
+  clean on `sequential_mcs!`, `checkerboard_mcs!` and both `step!`s; AllocCheck finds no
+  allocations in `sequential_mcs!` or a hand-written ΔH. `init` is deliberately not gated:
+  resolving a relation fixes K at run time, a one-time function barrier.
+- **Exact oracle** (`lib/CorePotts/test/oracle.jl`):
+  - A self-contained re-derivation of both algorithms' stated semantics (random-site
+    attempts; colour classes, uniform colour order, pre-colour proposals, claim
+    resolution by uniform priorities). It propagates the exact state distribution on a
+    closed 3×2 lattice for 2 MCS.
+  - Scored against 40k seeds with pooled χ² as a Wilson–Hilferty z: sequential z = 0.00,
+    checkerboard z = −0.76, and a T = 5 mutant against exact T = 4 gives z = 11.9.
+- **Preflight found a latent race.** `CPMFunction` defaults to `Footprint(read = 1)`, so a
+  wider contact relation (e.g. `NeighborOrder(3)`, radius 2) would have run the checkerboard
+  at stride 2. `init` now rejects a declared read radius smaller than the proposal/contact
+  radius. The symbolic compiler (M3) must derive the footprint itself.

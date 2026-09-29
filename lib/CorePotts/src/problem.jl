@@ -90,6 +90,7 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     lat = prob.lattice
     ctx = (; lattice = lat, proposal = relation(alg.proposal, lat), contact = prob.contact)
+    _preflight(prob, alg, ctx)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
@@ -100,6 +101,22 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats())
     save_start && _save!(integ)
     return integ
+end
+
+"""
+Reject combinations the algorithm cannot execute correctly. The checkerboard stride comes
+from the model's declared footprint, so the declared read radius must cover everything
+the kernels read: the proposal source and the contact neighborhood.
+"""
+function _preflight(prob::CPMProblem, alg::CPMAlgorithm, ctx)
+    alg isa CheckerboardCPM || return nothing
+    need = max(radius(ctx.proposal), radius(ctx.contact))
+    have = prob.f.footprint.read
+    have >= need || throw(ArgumentError(
+        "CheckerboardCPM: the model declares Footprint(read = $have) but its proposal and " *
+        "contact relations reach distance $need; pass `footprint = Footprint(read = $need)` " *
+        "to CPMFunction"))
+    return nothing
 end
 
 """Host copy of the current state. Synchronizes the device."""

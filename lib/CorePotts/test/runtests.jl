@@ -226,3 +226,6 @@ end
         @test mean(hc) < h0 - 0.05
     end
 end
+
+include("oracle.jl")
+get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")
