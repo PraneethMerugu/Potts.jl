@@ -1,6 +1,18 @@
 # Roadmap (machine-checkable)
 
-Feature scope per milestone is extended by `research/legacy-spec-adjudication.md` §3 (the "Milestone" column) and, once merged, the Morpheus/CompuCell3D research.
+Feature scope per milestone is extended by `research/legacy-spec-adjudication.md` §3 (the "Milestone" column) and AUTHORING.md §12 (Morpheus/CompuCell3D, D-032):
+
+| AUTHORING §12 | Milestone |
+|---|---|
+| 12.1 energies/acceptance, 12.9 semantics | M2.1 |
+| hexagonal geometry, irregular domains | M2.1b |
+| 12.4 shape descriptors | M2.2 |
+| 12.3 reductions, neighbor-cell iteration | M2.7 |
+| 12.5 fields | M2.4 |
+| 12.2 motility | M2.5 |
+| 12.7 lifecycle | M2.8 |
+| 12.6 kind-scoped dynamics, components | M4.1 |
+| 12.8 initialization, PIFF, MorpheusML importer, steering | M2.1 (layouts), M4.4 (importers), M5.2a (steering) |
 
 Each milestone: id, depends-on, deliverable, acceptance (commands that must exit 0 or
 numbers that must hold). Tick with `[x] <commit> <date>` when merged.
@@ -21,6 +33,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 ## Phase 2 — CorePotts engine (each with brute-force ΔH + seed determinism + statistical CPU/Metal parity)
 
 - [ ] **M2.1** N-dimensional lattice with per-axis boundaries/spacing and neighborhoods of any order (`Moore(k)`, `VonNeumann(k)`, `Ball`, `Shell`, `Stencil`, weighted); contact + volume + surface energies; surface tracker; generic cell/site energy functions. Accept: oracle tests; Graner–Glazier reference parity (KS over 16 seeds).
+- [ ] **M2.1b** hexagonal 2D geometry; irregular domains from masks/images/expressions (domain edge is a copy and field boundary).
 - [ ] **M2.2** moments tracker (centroid, elongation, periodic-safe geometry); site sums and minima trackers; structured owner sums.
 - [ ] **M2.3** site/cell/medium/model state; history ring buffers; synchronous phase updates via LocalMath stages; accepted-copy affects; `ClearOnOwnershipChange`.
 - [ ] **M2.4** fields: explicit-rate discrete Euler stages, diffusion stencils, sub-stepping; `field_value`, gradient, laplacian primitives. Accept: Merks reference parity.
@@ -51,6 +64,8 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
   Accept: reference parity for each; TTFX table in docs.
 
 - [ ] **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: reference or literature parity.
+
+- [ ] **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
 
 ## Phase 5 — Slim, docs, cut-over
 

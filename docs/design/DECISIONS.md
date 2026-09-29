@@ -172,3 +172,16 @@ per-kind extinction default `:retire`, deferred creations on capacity exhaustion
 exact-lookup `sol(t)`, tolerance-based ΔH self-check) are applied to INTERNALS.md.
 Adopted features are scheduled in ROADMAP.md. Rejections are recorded with reasons.
 Supersedes D-007 (scalar defaults) and the `attempts_per_site` parts of D-008/AUTHORING.
+
+## D-032 Morpheus and CompuCell3D research (2026-09-29)
+Decision: AUTHORING.md §12 is adopted (from `research/morpheus-gaps.md` and
+`research/cc3d-gaps.md`). Highlights: `NeighborOrder(k)` replaces `Shell(k)`; unordered
+contact pairs counted once; contacts may read both owners' cell state (non-local claim
+set); per-length energy normalization; per-kind/per-cell temperature with `combine`;
+unified `offset` (CompuCell3D offset = −Morpheus yield); proposal-scope `δcentroid`,
+`normal`, `velocity`; neighbor-cell iteration with interface lengths; cell-level field
+reductions; CompuCell3D shape descriptors; kind-dependent diffusion, quasi-steady
+fields, secretion/uptake helpers, per-face field BCs, `@brownians`; kind-scoped ODE
+blocks and pure-Julia intracellular components; division with `daughter` index and
+state-oriented planes; `@terminate`; hexagonal geometry and irregular domains promoted
+from deferred; PIFF and pure-Julia MorpheusML import. Portability semantics per §12.9.

@@ -35,7 +35,7 @@ using Potts
         cells(dark, light) => λ * (volume - V₀)^2
         contacts           => J[kind, kind′]
     end
-    @sweep Metropolis(; temperature = T, attempts_per_site = 16)
+    @sweep Metropolis(; temperature = T)     # the paper's 16 attempts/site = 16 MCS
 end
 
 @named sys = Sorting()
@@ -71,7 +71,7 @@ is sugar.
 | `@relationship`, `@link`, `@unlink` | cell–cell edges | — |
 | `@components` | MTK subsystems (ODE/DAE) coupled to the model | same |
 | `@observed` | derived quantities | `observed` |
-| `@sweep` | protocol: `Metropolis(; temperature, attempts_per_site)` | solver options |
+| `@sweep` | protocol: `Metropolis(; temperature, offset)` (1 MCS = N attempts) | solver options |
 
 ---
 
@@ -86,13 +86,23 @@ is sugar.
 
 - Dimension comes from `dims`; all generated code is `N`-generic. 1D, 2D and 3D are
   tested; nothing in the compiler assumes `N == 2`.
+- `geometry = Square()` (default, cubic in 3D) or `Hexagonal()` (2D; 7 published
+  Morpheus models use it). Relations are defined per geometry.
+- `domain = mask` (Bool array or image via TiffImages.jl) or `domain = x -> expr`
+  restricts the lattice to an irregular region; the domain edge is a boundary for both
+  copies and fields.
+- **Relation roles are separate.** `neighborhood` sets the contact and surface
+  relations. The proposal relation defaults to the first shell (`VonNeumann(1)`: 4 in
+  2D, 6 in 3D) unless set with `proposal = …`. Widening contact never widens proposals.
 - **Neighborhoods** are relations with an order or radius:
   - `Moore(k)`: Chebyshev distance ≤ k (order 1 = 8 neighbours in 2D, 26 in 3D)
   - `VonNeumann(k)`: Manhattan distance ≤ k
   - `Ball(r)`: Euclidean distance ≤ r, in lattice spacing units
-  - `Shell(k)`: exactly order k (CompuCell3D "neighbor order" semantics)
+  - `NeighborOrder(k)`: all offsets in the first k distinct distance shells, cumulative
+    (CompuCell3D `NeighborOrder`; 2D counts 4, 8, 12, 20, 24, 28; 3D 6, 18, 26, 32, 56, 80)
   - `Stencil([(1,0), (0,1), …])`: explicit offsets
   - `Moore(2; weights = inverse_distance)` weighted relations for contact energies
+  - `include_self = true` adds the zero offset (e.g. Artistoo's Act geometric mean)
 - Named relations can be declared and referenced:
   ```julia
   @relations begin
@@ -119,7 +129,7 @@ expression may refer to:
 |---|---|---|
 | `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
-| `contacts` / `contacts(relation)` | every neighbouring pair `(s, s′)` with `owner[s] ≠ owner[s′]` | `kind`, `kind′`, `owner`, `owner′`, `weight`, plus `x`/`x′` for site state |
+| `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`, site state `x`/`x′`, and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
 | `edges(relationship)` | every relationship edge | `a`, `b` (cells), `distance`, edge state |
 | `model` | once | model-scoped variables |
 
@@ -288,7 +298,7 @@ MTK/SciMLBase semantics unchanged.
 | `CheckerboardSweepCPM` | `CheckerboardCPM` |
 | `CPUBackend()`, `MetalBackend()` wrappers | `CPU()`, `MetalBackend()` from KernelAbstractions/Metal |
 | `PottsInitialState(ownership = LabelledCells(labels; cells, medium))` | `ownership => labels, kind => kinds` in the operating point |
-| `Protocol(Sweep(; temperature, attempts = AttemptsPerSite(16)))` | `@sweep Metropolis(; temperature, attempts_per_site = 16)` |
+| `Protocol(Sweep(; temperature, attempts = AttemptsPerSite(16)))` | `@sweep Metropolis(; temperature)`; 1 MCS = N attempts, so a paper's "16 attempts per site" is 16 MCS |
 | `ContactEnergy([(a ↔ b) => J, …])` | `contacts => J[kind, kind′]` with a kind-indexed parameter |
 | `HamiltonianTerm(:name; domain, anchor, expression)` | `@energy domain => expression` |
 | `ProposalDrive(:name, expr; drive_scale)` | `@drive copy => expr` |
@@ -421,3 +431,157 @@ end
   registry that remains).
 - **Custom kernels:** the numerical layer (`CorePotts`) accepts hand-written
   `delta_H`/`commit!` functions for anything the symbolic layer cannot express.
+
+---
+
+## 12. Additions from the Morpheus and CompuCell3D research
+
+Sources: `research/morpheus-gaps.md` (50 published Morpheus models surveyed),
+`research/cc3d-gaps.md` (reference manual + C++ source). Julia-only per D-030.
+
+### 12.1 Energies and acceptance
+
+```julia
+@energy begin
+    contacts(; per_length = true) => J[kind, kind′]       # Magno et al. 2015 normalization
+    cells(tumor) => λₛ * (surface(; per_length = true) - S₀)^2
+    contacts => Homophilic(cad; strength = α)              # min(cad[owner], cad[owner′])
+    contacts => J[kind, kind′] - α * cad[owner] * cad[owner′]   # any adhesion-molecule law
+    cells(tumor) => -dot(λ⃗, centroid)                      # external potential (CC3D exact form)
+end
+@sweep Metropolis(; temperature = T[kind], combine = min,  # per-kind/per-cell T; medium never contributes
+                  offset = 0.0)                          # accept if ΔH ≤ offset; Morpheus yield Y ≡ offset = -Y
+```
+
+- `per_length = true` divides by the lattice/neighborhood constant so energies are per unit
+  boundary length (square orders 1–4: 1.273, 3.074, 5.620, 11.31; computed for any relation).
+- Temperature may be a scalar, `T[kind]`, or cell state; the copy uses
+  `combine(T_source, T_target)` (default `min`), and medium never contributes.
+- At `T ≤ 0`: accept if `ΔH < offset`, reject if `>`, accept with probability ½ at equality
+  (CompuCell3D convention).
+- Library one-liners: `Homophilic`, `Heterophilic`, `AdditiveAdhesion`, `Aspherity`,
+  `ExternalPotential`, `FreezeMotion(kind)`, `Haptotaxis(field)`.
+
+### 12.2 Motility and proposal-scope names
+
+In `@drive`/`@bias`, in addition to `source`, `target`, `direction`:
+
+| Name | Meaning |
+|---|---|
+| `δcentroid[new]`, `δcentroid[old]` | centroid shift of the gaining / losing cell if the copy is accepted |
+| `normal` | outward surface normal at the target, from the contact relation |
+| `velocity[c]`, `displacement[c]` | tracked motility quantities (per MCS, since birth) |
+
+```julia
+@variables polarity(cell)::SVector{2,Float64} = zeros(2)
+@drive copy => -μ * dot(polarity[owner[source]], δcentroid[owner[source]])   # persistent/directed motion
+@after_mcs polarity ~ normalize(α * Pre(polarity) + (1 - α) * velocity)      # persistence memory
+```
+
+Library: `DirectedMotion(direction; strength)`, `PersistentMotion(; memory, strength)`,
+`Chemotaxis(c; law = Linear() | Saturating(s) | MichaelisMenten(K) | LogScaled(),
+mode = Extension() | Retraction() | Reciprocal() | Interface(filter))`.
+
+### 12.3 Cell-level reductions and neighbor-cell iteration
+
+```julia
+@observed begin
+    exposure(cell)  ~ sum(contact(c, n) for n in neighbors(c) if kind[n] == medium)
+    signal(cell)    ~ sum(delta[n] * contact(c, n) for n in neighbors(c)) / surface   # juxtacrine
+    c_total(cell)   ~ integral(c)            # field integrated over the cell's sites
+    c_mean(cell)    ~ mean(c)
+    c_center(cell)  ~ c[centroid]
+    n_tumor(model)  ~ count(cells(tumor))
+end
+```
+
+- `neighbors(c)` iterates distinct neighbouring cells (face-sharing under the contact
+  relation); `contact(c, n)` is their shared interface length. Built once per MCS at the
+  boundary, so there is no hot-path cost.
+- Reductions over a cell's sites (`sum`, `mean`, `integral`, `maximum`, …) and over
+  populations are maintained or recomputed at the boundary as the compiler decides.
+
+### 12.4 Shape descriptors (CompuCell3D definitions)
+
+`inertia` (tensor), `major_length`, `minor_length` (2D: `4√(λ/V)` of the inertia
+eigenvalues), `semiaxes`, `orientation`, `elongation = major_length / minor_length`,
+`eccentricity`. These names replace any informal "elongation".
+
+### 12.5 Fields
+
+```julia
+@equations begin
+    D(c) ~ ∇⋅(Dc[kind] * ∇(c)) - δ[kind] * c + secrete(σ; at = outer_rim(tumor))
+    D(c) ~ … - uptake(c; vmax, K, by = kind == tumor)       # Michaelis–Menten, conservative
+    0    ~ Do * Δ(o) - consume(o; rate = k, by = kind == tumor)   # quasi-steady (LinearSolve.jl)
+end
+@boundary c begin
+    x => (Dirichlet(1.0), NoFlux())       # per axis, per face; default follows the lattice
+end
+```
+
+- Kind-dependent coefficients use harmonic-mean faces.
+- Secretion locations: `interior(kind)`, `rim(kind)`, `outer_rim(kind)`,
+  `contact_with(kind_a, kind_b)`, `centroid(kind)`, with optional `clamp = cmax`.
+- Substeps are chosen automatically from the stability limit; secretion is split
+  across substeps.
+- `@brownians` inside `@equations` gives cell SDEs and noisy fields (StochasticDiffEq).
+
+### 12.6 Kind-scoped dynamics and intracellular models
+
+```julia
+@equations cells(tumor) begin                 # per-cell ODE block, own solver/step/time scale
+    D(x) ~ k1 - k2 * x
+end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
+@components cells(tumor) grn = BooleanNetwork(...)          # pure-Julia logic network
+@components cells(tumor) stoch = JumpSystem(...)            # or Catalyst.jl ReactionSystem
+@components cells(tumor) sbml = SBMLToolkit.readSBML("model.xml")
+```
+
+### 12.7 Lifecycle additions
+
+```julia
+@divide cells(tumor) when = clock >= τ,
+    along = normal(orientation[c]),                 # plane oriented from cell state
+    clock => (daughter == 1 ? 0.0 : rand(Uniform(0, 1)))   # `daughter` index; parent via Pre
+@create tumor at = density(ρ(position)), when = rand(Bernoulli(p))
+@retire cells(tumor) when = volume < 2, sites => neighbors    # or => medium
+@terminate when = count(cells(tumor)) == 0
+```
+
+`side = RandomSide()` (default, CompuCell3D) or `CanonicalSide()`; `along =
+minor_axis()` / `major_axis()` / `RandomPlane()` / `normal(v)`.
+
+### 12.8 Initialization, import and steering
+
+- Layouts: `UniformSeeds`, `RejectionPlacement`, `Rectangles`, `Spheres`, `Blobs`,
+  `FromImage`, `FromMask`.
+- **PIFF import/export** (pure Julia).
+- **MorpheusML importer** (pure Julia, EzXML.jl + expression translation to Symbolics):
+  makes the Morpheus model repository a test corpus.
+- Live steering: a Makie panel bound to `setp` (MakiePotts).
+
+### 12.9 CompuCell3D and Morpheus semantics matched for portability
+
+| Topic | Rule |
+|---|---|
+| Neighbor order | `NeighborOrder(k)` cumulative distance shells |
+| Proposals | uniform source site, uniform target within the proposal relation; same-cell and frozen picks consume an attempt |
+| Contact H | unordered pairs counted once |
+| Surface | unlike-neighbour pairs within the surface relation (lattice factor 1 on square) |
+| Acceptance | `ΔH ≤ offset` → accept, else `exp(-(ΔH - offset)/T)`; T ≤ 0 tie → ½ |
+| Temperature | per-cell ≥ per-kind ≥ global precedence; `combine` default `min` |
+| External potential | `H = Σ λ⃗·x_COM`; positive component pushes toward negative coordinates |
+| Chemotaxis default | source cell's parameters, falling back to target's |
+| Uptake | subtract `max_amount` if `c > max_amount`, else `relative·c` (CompuCell3D `Uptake`) |
+| Division | parent side randomized by default; neighbours share a face (no corner-only contact) |
+| Morpheus yield | `offset = -yield` |
+
+### 12.10 Deliberately skipped
+
+Viscosity (experimental, hot-path), ConvergentExtension (documented as broken),
+OrientedGrowth and Elasticity/Plasticity (covered by polarity and relationships),
+InterfaceConstraint (per-copy tracker, unused in published models), per-flip energy
+output, BoundaryWalker/BoxWatcher/OpenCL variants (implementation details), Python/C++
+interop (D-030), plotting/logging plugins (MakiePotts covers them), ParamSweep
+(`EnsembleProblem` covers it).
