@@ -56,8 +56,10 @@ Everything else is decided and logged.
   local monorepo at `PottsEcosystem/PottsMonorepo`. No pushes, no PRs, no CI; every
   acceptance gate runs locally. The loop replaces steps 6–7 above with: local
   self-review, merge `feat/*` into `monorepo` locally, tick the milestone.
-- **Phase 0 cleanup: not yet.** No tag push, no worktree pruning, no branch deletion
-  until the maintainer says so. The `archive/*` tags stay local.
+- **Phase 0 cleanup: authorized locally** (maintainer, 2026-09-29). Pruning stale
+  worktrees, deleting local branches, and creating `archive/*` and `legacy/*` tags locally.
+  A branch is deleted only after confirming it is merged or tagged; every removal is listed
+  in PROGRESS. Pushing anything, tags included, still waits for the cut-over checklist (§5).
 - **Cut-over: pre-authorized** once §5 passes. Because it necessarily pushes (`legacy/*`
   and `archive/*` tags, the `monorepo` branch, the merge into `main`) and archives
   repos, that push is the first and only GitHub action, and it happens only when the

@@ -332,7 +332,7 @@ Why:
 Revisit if a model needs two copies of the same sub-model with different parameters.
 That would be `extend` plus automatic prefixing.
 
-## D-040 LocalMath leaves the monorepo (2026-09-29)
+## D-040 LocalMath leaves the monorepo (2026-09-29, maintainer-approved)
 
 Decision: `lib/LocalMath` may be deleted. Nothing in Potts, CorePotts, MakiePotts or
 PottsModels depends on it (D-033). Its reserved niche (ordered folds, bounded collections,
@@ -353,7 +353,7 @@ Consequences:
   history. If a stage-program runtime is wanted later, revive it there as a standalone
   package, not as a Potts dependency.
 
-## D-041 Populations in energies are snapshots per MCS (2026-09-29)
+## D-041 Populations in energies are snapshots per MCS (2026-09-29, maintainer-approved)
 
 Decision: a population fold inside `@energy` (e.g. `mean(volume for c in cells)`) is
 evaluated once per MCS, after the before-MCS updates and just before the sweep (and at
@@ -368,7 +368,7 @@ accepted copy, with cell terms expanded algebraically into totals. It would be e
 Why: today's behaviour gives a wrong ΔH and costs O(N) per proposal (A-60). The snapshot is
 standard CPM practice, cheaper, and GPU-safe, and it keeps global energy terms.
 
-## D-042 Update blocks follow MTK discrete semantics (2026-09-29)
+## D-042 Update blocks follow MTK discrete semantics (2026-09-29, maintainer-approved)
 
 Decision:
 - Within one update block, `Pre(x)` is always the value before the block, snapshotted where
@@ -383,7 +383,7 @@ Decision:
 Why: execution in alphabetical scope order made `Pre(m)` return new values (A-63). In-place
 folds raced and compounded (A-62). This keeps chaining, now explicit, and fixes both.
 
-## D-043 `position` is Cartesian; `site` is the lattice site (2026-09-29)
+## D-043 `position` is Cartesian; `site` is the lattice site (2026-09-29, maintainer-approved)
 
 Decision:
 - `position[k]` is the embedded (Cartesian) coordinate times the spacing. On a square
@@ -395,7 +395,7 @@ Decision:
 Why: raw indices are sheared by 60° on hex, and `position` could not be indexed or used as
 an anchor (A-02, A-05, A-66).
 
-## D-044 3D hexagonal lattices: prism first, then FCC; HCP deferred (2026-09-29)
+## D-044 3D hexagonal lattices: prism first, then FCC; HCP deferred (2026-09-29, maintainer-approved)
 
 Decision: `Hexagonal(; stacking = :prism)` in 3D (6 in-plane + 2 axial neighbours) comes
 first, then `:fcc` (12 equidistant neighbours).
@@ -404,7 +404,7 @@ HCP is deferred. Its layer-parity-dependent offsets don't fit the one-static-rel
 design, and it shares FCC's first shell. It may come later as its own geometry type, so
 that only HCP models pay for the parity branch.
 
-## D-045 Keep features the audit proposed rejecting (2026-09-29)
+## D-045 Keep features the audit proposed rejecting (2026-09-29, maintainer-approved)
 
 - **An energy that reads an on-copy-written variable** is scored with the on-copy update
   applied, so ΔH includes it (A-67).
@@ -479,9 +479,8 @@ same Julia version only.
 
 Decision: per-model types are allowed because they are per-model by construction: RGF ids,
 the parameter NamedTuple, `SMatrix` sizes and the state NamedTuples (D-013). CorePotts
-algorithm, lattice and kernel types must not encode model content. (CLAUDE.md's wording
-"no type parameters encoding model content" should be updated to match; that edit is left to
-the maintainer.)
+algorithm, lattice and kernel types must not encode model content. CLAUDE.md's code rule
+says so (wording approved by the maintainer, 2026-09-29).
 
 ### D-047 Codegen QA and time to first step
 
@@ -495,3 +494,15 @@ PottsModels carries a `@compile_workload` (Akeeb, Float32, Sequential and Checke
 which developers can switch off with the PrecompileTools preference. Target: first MCS in
 under 15 s from a fresh process for the covered configuration (16.1 s measured before the
 workload).
+
+## Maintainer approvals (2026-09-29)
+
+- **D-046**: approved, with the CLAUDE.md wording now in place.
+- **D-040**: approved. LocalMath is gone from the workspace, the tree, the test groups and
+  CLAUDE.md. M5.1 is withdrawn and INTERNALS §3 points here. `reference/` is untouched.
+- **Phase 0 local cleanup**: approved (AUTONOMY §4). Pushes, tag pushes included, wait for
+  the cut-over checklist (§5). Force pushes stay forbidden (D-025).
+- **Akeeb connectivity**: `AkeebInvasion` using `connectivity(...; rule = :merks)` is
+  approved as the published model's science. The justification is the legacy parity test
+  (`test/parity/akeeb.jl`: every metric agrees under `:merks`).
+- **D-041, D-042, D-043, D-044, D-045**: approved as written.

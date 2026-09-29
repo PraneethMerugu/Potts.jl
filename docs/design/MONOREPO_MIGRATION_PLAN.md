@@ -284,8 +284,9 @@ assertions). It is frozen as the `legacy` reference:
 - Uncommitted work (native-act worktree, second clone, AGENTS.md edits) saved as
   patches, with the triage report and scripts, in
   `.reconciliation-preservation/phase0-2026-09-29/`.
-- **Pending approval:** push the tags to GitHub, then prune 42 stale worktrees and
-  delete archived branches.
+- Local cleanup approved and done (2026-09-29; see PROGRESS): 223 merged or tagged
+  branches deleted, stale worktrees pruned, `legacy/main` tags created locally. Pushing the
+  tags waits for the cut-over checklist (AUTONOMY §5).
 
 ### Phase 1 — Skeleton monorepo
 

@@ -22,7 +22,9 @@ or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePott
 
 - No `@generated`, no recursion over heterogeneous tuples; models vary only through
   generated functions (RuntimeGeneratedFunctions, always `drop_expr`'d).
-- No type parameters encoding model content (names, counts, expressions).
+- CorePotts algorithm, lattice and kernel types must not encode model content (names,
+  counts, expressions). Per-model types are allowed (D-046): generated-function ids, the
+  parameter NamedTuple, `SMatrix` sizes and the state NamedTuples (D-013).
 - `@inline` only on leaf primitives; no `@inbounds` without an adjacent bounds argument.
 - No `throw` inside kernels; set the status word.
 - Every pass-through of a function argument is `::F where {F}` (else Julia will not specialize).
@@ -33,5 +35,7 @@ or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePott
 
 ## Git
 
-Local only: no pushes, PRs, tag pushes, worktree pruning or branch deletion without the
-maintainer (see `AUTONOMY.md` §4). Work on branch `monorepo`.
+Local only: no pushes, PRs or tag pushes until the cut-over checklist (`AUTONOMY.md` §5).
+Local Phase 0 cleanup is authorized (pruning stale worktrees, deleting local branches that
+are merged or tagged, local `archive/*` and `legacy/*` tags; see §4). Never force-push
+(D-025). Work on branch `monorepo`.
