@@ -10,6 +10,7 @@ module Potts
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile
+using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
@@ -33,6 +34,7 @@ include("lower.jl")
 include("compile.jl")
 include("codegen.jl")
 include("problem.jl")
+include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""
 const kind = B.kind

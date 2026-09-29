@@ -6,6 +6,7 @@ authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 [deps]
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
@@ -17,6 +18,7 @@ CorePotts = {path = "lib/CorePotts"}
 [compat]
 CorePotts = "0.3"
 ModelingToolkitBase = "1"
+PrecompileTools = "1"
 RuntimeGeneratedFunctions = "0.5"
 StaticArrays = "1"
 SymbolicUtils = "4"
