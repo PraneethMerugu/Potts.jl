@@ -77,10 +77,13 @@ at(x, i) = error("`at` is symbolic-only")
 at2(x, i, j) = error("`at2` is symbolic-only")
 Δ(x) = error("`Δ` is symbolic-only")
 gather(n, a, b, c) = error("`gather` is symbolic-only")
+"""`population(n, body, cond)`: fold of `body` over live cells or sites `n` (`n`'s metadata)."""
+population(n, b, c) = error("`population` is symbolic-only")
 
 Symbolics.@register_symbolic at(x, i)
 Symbolics.@register_symbolic at2(x, i, j)
 Symbolics.@register_symbolic gather(n, a, b, c)
+Symbolics.@register_symbolic population(n, b, c)
 Symbolics.@register_symbolic Δ(x)
 
 # ---------------------------------------------------------------------------------------
@@ -109,10 +112,31 @@ struct Around{R}
 end
 _around(spec, anchor) = Around(spec, anchor)
 
-"""`fold(body(n) for n in R(s) if cond(n))`: a gather when `R` is a relation, else plain Julia."""
+"""`fold(body(n) for n in R(s) if cond(n))`: a gather when `R` is a relation, a population
+fold for `cells(k)`, else plain Julia."""
 function _fold_or_gather(fold, body, R, s, cond)
     R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond)
+    R === cells && return _population(fold, body, cells(s), cond)
     return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
+end
+
+"""`fold(body(n) for n in itr if cond(n))`: a population fold over `cells(…)`/`sites`, else plain Julia."""
+function _fold_iter(fold, body, itr, cond)
+    itr === cells && (itr = CellDomain(Int[]))
+    itr isa Union{CellDomain, SiteDomain} && return _population(fold, body, itr, cond)
+    return cond === nothing ? fold(body(n) for n in itr) : fold(body(n) for n in itr if cond(n))
+end
+
+const _POPULATION_FOLDS = (:sum, :mean, :minimum, :maximum, :count, :any, :all)
+
+function _population(fold, body, d, cond)
+    op = nameof(fold)
+    op in _POPULATION_FOLDS || throw(ArgumentError("`$op` over a population is not supported; use one of $_POPULATION_FOLDS"))
+    _GATHER_COUNT[] += 1
+    role = d isa CellDomain ? :bound_cell : :bound_site
+    kinds = d isa CellDomain ? d.kinds : Int[]
+    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, _GATHER_COUNT[])), Info(role, :n, nothing, (; op, kinds)))
+    return population(n, body(n), cond === nothing ? true : cond(n))
 end
 
 const FOLDS = (:sum, :prod, :mean, :geomean, :geomean_shifted, :minimum, :maximum, :count,
@@ -291,7 +315,38 @@ sweep_spec(law::Symbol; temperature, offset = 0.0, mcs_duration = 1.0,
     field_solver = ExplicitEuler()) = SweepSpec(law, temperature, Float64(offset),
     Float64(mcs_duration), field_solver)
 
+# ---------------------------------------------------------------------------------------
+# Observed quantities
+
+"""`@observed name ~ expr`: a derived quantity, evaluated on saved states (`sol[name]`)."""
+observed_var(name::Symbol) = _tag(_sym(name), Info(:observed, name, nothing, (;)))
+struct ObservedEq
+    var::Any
+    expr::Any
+end
+
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
 const DSL = (; cells, contacts, sites, edges, new_contact, connectivity, no_extinction,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, Every, geomean, geomean_shifted, mean, Δ)
+
+# ---------------------------------------------------------------------------------------
+# Parameters object
+
+"""
+    PottsParameters
+
+The parameter object of a generated problem (D-012): an isbits wrapper of a `NamedTuple` of
+scalars and kind tables in the model's scalar type. `p.λ` reads a parameter (generated code
+does this); `remake(prob; p = [λ => 2.0])` changes values without changing the type, so
+nothing recompiles.
+"""
+struct PottsParameters{NT <: NamedTuple}
+    values::NT
+end
+@inline Base.getproperty(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
+Base.propertynames(p::PottsParameters) = propertynames(getfield(p, :values))
+Base.getindex(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
+Base.NamedTuple(p::PottsParameters) = getfield(p, :values)
+Base.:(==)(a::PottsParameters, b::PottsParameters) = NamedTuple(a) == NamedTuple(b)
+Base.show(io::IO, p::PottsParameters) = print(io, "PottsParameters", NamedTuple(p))

@@ -67,7 +67,7 @@ end
     @test occursin("p.J", s) && occursin("st.cell.volume", s)
     @test !occursin("^", s)                          # the volume term was expanded to closed form
     prob = symbolic_graner_problem(; nmcs = 5)
-    @test remake(prob; p = merge(prob.p, (; λ = 2.0))).f === prob.f   # parameters change, code does not
+    @test remake(prob; p = [:λ => 2.0]).f === prob.f                  # parameters change, code does not
     @test_throws ArgumentError PottsProblem(SORTING, [ownership => zeros(Int32, 4, 4)], (0, 1))
     @test_throws ArgumentError PottsProblem(SORTING, [ownership => zeros(Int32, 72, 72), kind => Int[],
         first(filter(x -> Potts.info(x).name === :J, SORTING.sys.parameters)) => [0 1 1; 2 0 1; 1 1 0]], (0, 1))
@@ -309,4 +309,58 @@ end
     a = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
     b = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
     @test a.f.fingerprint == b.f.fingerprint && typeof(a.f) === typeof(b.f)
+end
+
+@potts_model Census begin
+    @kinds medium dark light
+    @parameters begin
+        λ = 1.0
+        T = 10.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @variables begin
+        act(site) = 0.0
+        total(model) = 0.0
+        ndark(model) = 0.0
+    end
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @energy begin
+        cells(dark, light) => λ * (volume - 25)^2
+        contacts => J[kind, kind′]
+    end
+    @on_copy act[target] ~ 1.0
+    @after_mcs begin
+        total ~ sum(act[s] for s in sites)
+        ndark ~ count(true for c in cells(dark))
+    end
+    @observed begin
+        mean_volume ~ mean(volume for c in cells)
+        dark_area ~ sum(volume for c in cells(dark))
+        big ~ volume > 25
+        excess ~ dark_area - 25 * ndark
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "model variables, populations, observed and SII" begin
+    σ, kinds = two_kind_blocks()
+    sys = Census(; name = :census)
+    prob = PottsProblem(sys, [ownership => σ, kind => kinds], (0, 6))
+    sol = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = [2, 4, 6])
+    named(n) = only(filter(x -> Potts.info(x).name === n, vcat(sys.variables, [o.var for o in sys.observed], sys.parameters)))
+    live(u) = findall(>(0), u.cell.volume)
+    @test sol[named(:total)] == [sum(u.site.act) for u in sol.u]
+    @test sol[named(:ndark)][2:end] == [count(c -> kinds[c] == 1, live(u)) for u in sol.u[2:end]]   # t = 0: default
+    @test sol[named(:ndark)][1] == 0
+    @test sol[named(:mean_volume)] ≈ [sum(u.cell.volume[live(u)]) / length(live(u)) for u in sol.u]
+    @test sol[named(:dark_area)] == [sum(u.cell.volume[c] for c in live(u) if kinds[c] == 1; init = 0) for u in sol.u]
+    @test sol[named(:big)][end] == (sol.u[end].cell.volume .> 25)
+    @test sol[named(:excess)] == sol[named(:dark_area)] .- 25 .* sol[named(:ndark)]
+    @test prob.p isa Potts.PottsParameters && isbits(prob.p)
+    @test sol[Potts.kind][1] == kinds                                   # built-ins observe too
+    @test sol[named(:act)][end] == sol.u[end].site.act
+    @test observe(prob, named(:mean_volume)) ≈ 25.0
+    SII = Potts.SymbolicIndexingInterface
+    @test SII.getp(prob, named(:λ))(prob) == 1.0
+    @test SII.getp(sol, named(:T))(sol) == 10.0
 end

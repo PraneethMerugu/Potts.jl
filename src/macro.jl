@@ -9,7 +9,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@variables"), Symbol("@lattice"), Symbol("@relations"), Symbol("@energy"),
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
-    Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"))
+    Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"))
 
 """
     @potts_model Name begin
@@ -76,6 +76,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __divisions = $P.DivideRule[]
         __relationships = $P.RelationshipSpec[]
         __links = $P.LinkRule[]
+        __observed = $P.ObservedEq[]
         __lattice = nothing
         __sweep = nothing
     end
@@ -84,6 +85,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         variables = __vars, relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
+        observed = __observed,
         sweep = __sweep, structural = $structural))
     return quote
         function $name(; $(kws...))
@@ -154,6 +156,15 @@ function _section!(parts, sec, args)
         for l in _lines(args)
             e = :(push!(__energies, $P.energy($(rewrite(l)))))
             push!(code, _is_edges(l) ? _edge_scope(e) : e)
+        end
+    elseif sec === Symbol("@observed")
+        for l in _lines(args)
+            (l isa Expr && l.head === :call && l.args[1] === :~) || throw(ArgumentError("@observed lines are `name ~ expr`"))
+            lhs = l.args[2]
+            k = lhs isa Expr && lhs.head === :call ? lhs.args[1] : lhs      # `name(scope)` or `name`
+            k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
+            push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
+                :(push!(__observed, $P.ObservedEq($k, $(rewrite(l.args[3]))))))
         end
     elseif sec === Symbol("@relationship")
         decl = args[1]
@@ -280,9 +291,12 @@ function _rewrite_gather(fold, gen)
     plain = Expr(:call, fold, Expr(:generator, map(rewrite, gen.args)...))
     spec isa Expr && spec.head === :(=) || return plain
     n, iter = spec.args
-    # `R(s)` may be a relation at a site (a gather) or an ordinary call: decided at run time
-    (n isa Symbol && iter isa Expr && iter.head === :call && length(iter.args) == 2) || return plain
+    n isa Symbol || return plain
     condf = cond === nothing ? :nothing : :($n -> $(rewrite(cond)))
+    # `R(s)` may be a relation at a site (a gather), `cells(k)`, or an ordinary call; other
+    # iterators may be a population (`sites`, `cells(a, b)`): decided at run time
+    (iter isa Expr && iter.head === :call && length(iter.args) == 2) ||
+        return :($P._fold_iter($fold, $n -> $(rewrite(body)), $(rewrite(iter)), $condf))
     return :($P._fold_or_gather($fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
         $(rewrite(iter.args[2])), $condf))
 end

@@ -194,6 +194,8 @@ function _phases(c::CompiledPottsSystem, T, values)
             every = first(group).every
             if scope === :site
                 append!(dst, _site_update_phases(c, T, group, every, rn))
+            elseif scope === :model
+                push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, group, every, rn))))
             else
                 push!(dst, CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, group, every, rn))))
             end
@@ -290,6 +292,16 @@ struct _Gated{P}
 end
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
     mcs % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
+
+_model_env(T, rn; mcs = :mcs) = LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs), rn)
+
+function _model_update_expr(c, T, us, every, rn)
+    env = _model_env(T, rn)
+    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    writes = [:(@inbounds st.model.$(info(_unwrap(u.eq.lhs)).name)[1] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
+    gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
+    return :((st, p, ctx, key, mcs) -> $(Expr(:block, gate, vals..., writes..., :(return nothing))))
+end
 
 function _cell_update_expr(c, T, us, every, rn)
     env = _cell_env(T, :c, rn; mcs = :mcs)

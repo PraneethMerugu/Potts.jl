@@ -272,3 +272,13 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     end
     return dst
 end
+
+# ---------------------------------------------------------------------------------------
+# SymbolicIndexingInterface: the symbolic system (if any) is `f.sys`; symbolic layers
+# implement the SII queries on it (`sol[x]`, `getp(prob, x)`).
+
+SymbolicIndexingInterface.symbolic_container(f::CPMFunction) = f.sys
+SymbolicIndexingInterface.state_values(prob::CPMProblem) = prob.u0
+SymbolicIndexingInterface.parameter_values(prob::CPMProblem) = prob.p
+SymbolicIndexingInterface.current_time(prob::CPMProblem) = prob.tspan[1]
+SymbolicIndexingInterface.is_time_dependent(::CPMProblem) = true

@@ -20,7 +20,7 @@ struct LowerEnv
 end
 
 const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
 
 _unwrap(x) = Symbolics.unwrap(x)
 
@@ -30,7 +30,7 @@ function lower(x, env::LowerEnv)
     x isa SymbolicUtils.BasicSymbolic || return _literal(x, env)
     SymbolicUtils.isconst(x) && return _literal(SymbolicUtils.unwrap_const(x), env)
     i = info(x)
-    if i !== nothing && i.role !== :bound
+    if i !== nothing && !(i.role in (:bound, :bound_cell, :bound_site))
         return _lower_named(x, i, env)
     end
     if issym(x)
@@ -41,6 +41,7 @@ function lower(x, env::LowerEnv)
     args = arguments(x)
     (op === at || op === at2) && return _lower_at(args, env)
     op === gather && return _lower_gather(args, env)
+    op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
     op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
@@ -100,7 +101,8 @@ function _sort(x)
     x = _unwrap(x)
     i = info(x)
     if i !== nothing
-        i.role === :bound && return :site
+        i.role in (:bound, :bound_site) && return :site
+        i.role === :bound_cell && return :cell
         i.role === :builtin && return i.name in (:source, :target) ? :site :
                i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
     end
@@ -139,6 +141,58 @@ function _lower_at(args, env)
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
     end
     error("cannot index `$(i.name)`")
+end
+
+# Fold over live cells (optionally of some kinds) or over all sites; the body sees the bound
+# cell/site as the implicit index (`volume`, `x`, `kind` refer to it).
+function _lower_population(args, env)
+    n, body, cond = args
+    ni = info(n)
+    T = env.T
+    nsym = Symbol(nameof(_unwrap(n)))
+    acc, cnt, flag, v = map(p -> Symbol(p, :_, nsym), (:acc, :cnt, :zero, :v))
+    bind = copy(env.bind)
+    if ni.role === :bound_cell
+        merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
+            :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
+            :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym))
+        range = :(1:length(st.cell.kind))
+        skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
+    else
+        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
+            :__site => nsym, :position => :(CorePotts.coordinates(ctx.lattice, $nsym))))
+        range = :(1:length(st.σ))
+        skip = true
+    end
+    inner = LowerEnv(T, env.mode, bind, env.relname)
+    op = ni.options.op
+    init, step, fin = if op === :sum
+        :(zero($T)), :($acc += $v), acc
+    elseif op === :mean
+        :(zero($T)), :($acc += $v), :($cnt == 0 ? zero($T) : $acc / $T($cnt))
+    elseif op === :minimum
+        :(typemax($T)), :($acc = min($acc, $T($v))), acc
+    elseif op === :maximum
+        :(typemin($T)), :($acc = max($acc, $T($v))), acc
+    elseif op === :count
+        :(Int32(0)), :($acc += Int32($v)), acc
+    elseif op === :any
+        false, :($acc |= $v), acc
+    elseif op === :all
+        true, :($acc &= $v), acc
+    end
+    return quote
+        let $acc = $init, $cnt = 0
+            for $nsym in $range
+                if $skip && $(lower(cond, inner))
+                    $v = $(lower(body, inner))
+                    $step
+                    $cnt += 1
+                end
+            end
+            $fin
+        end
+    end
 end
 
 function _lower_laplacian(c, env)

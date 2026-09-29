@@ -27,4 +27,10 @@ using Statistics: mean, var
     sp = PottsProblem(Spring(; name = :spring), [ownership => σs, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000); T = Float32)
     ds = [CorePotts.centroid_distance(Float64, solve(remake(sp; seed), CheckerboardCPM(); backend).u[end].cell, sp.lattice, 1, 2) for seed in 1:4]
     @test abs(sum(ds) / 4 - 12.0) < 2.5
+    # model-scope updates run as a single-item kernel on the device
+    σc, kc = two_kind_blocks()
+    cp = PottsProblem(Census(; name = :census), [ownership => σc, kind => kc], (0, 5); T = Float32)
+    uc = solve(cp, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+    @test uc.model.total[1] == sum(uc.site.act)
+    @test uc.model.ndark[1] == count(c -> kc[c] == 1 && uc.cell.volume[c] > 0, eachindex(kc))
 end

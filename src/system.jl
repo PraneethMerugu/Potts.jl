@@ -24,6 +24,7 @@ Base.@kwdef struct PottsSystem
     divisions::Vector{DivideRule} = DivideRule[]
     relationships::Vector{RelationshipSpec} = RelationshipSpec[]
     link_rules::Vector{LinkRule} = LinkRule[]
+    observed::Vector{ObservedEq} = ObservedEq[]
     sweep::SweepSpec
     structural::NamedTuple = (;)
 end

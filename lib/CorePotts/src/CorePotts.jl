@@ -13,6 +13,7 @@ using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
 using SciMLBase: SciMLBase, remake, reinit!
 using Serialization: Serialization
+using SymbolicIndexingInterface: SymbolicIndexingInterface
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
     Weighted, relation, AllMobile, MaskMobility, is_mobile
@@ -22,7 +23,7 @@ export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
-export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
+export Phases, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
     locally_connected, merks_connectivity, forbid_extinction

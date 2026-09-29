@@ -41,6 +41,14 @@ const _PROPOSAL_BUILTINS = (:source, :target, :old, :new)
 const _EDGE_BUILTINS = (:a, :b, :distance)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
 
+# Replace population folds by placeholders; return them for separate checking.
+function _strip_populations(x)
+    pops = Any[]
+    _walk(y -> (iscall(y) && operation(y) === population && push!(pops, y)), x)
+    isempty(pops) && return x, pops
+    return Symbolics.substitute(x, Dict{Any, Any}(p => 0 for p in pops); fold = Val(false)), pops
+end
+
 # Built-in names used bare (not as the array of an explicit index like `kind[new]`).
 function _bare_builtins(x, out = Set{Symbol}())
     x = _unwrap(x)
@@ -60,6 +68,13 @@ end
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation)
 
 function _check_names(x, allowed, what)
+    x, pops = _strip_populations(x)
+    for p in pops                                  # population bodies have their own scope
+        n, body, cond = arguments(p)
+        inner = info(n).role === :bound_cell ? _CELL_ENERGY_BUILTINS : _SITE_BUILTINS
+        _check_names(body, (allowed..., inner...), what)
+        _check_names(cond, (allowed..., inner...), what)
+    end
     for n in _bare_builtins(x)
         n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
@@ -126,8 +141,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         else
             i = info(lhs)
             (i !== nothing && i.role in SCOPES) || throw(ArgumentError("update target `$lhs` is not a declared variable"))
-            i.role === :model && throw(ArgumentError("model-scope updates are not supported yet"))
-            _check_names(u.eq.rhs, i.role === :cell ? _CELL_BUILTINS : _SITE_BUILTINS, "a $(i.role) update")
+            allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
+            _check_names(u.eq.rhs, allowed, "a $(i.role) update")
             i.role === :field ? :site : i.role
         end
         push!(get!(updates, (u.phase, scope), Update[]), u)

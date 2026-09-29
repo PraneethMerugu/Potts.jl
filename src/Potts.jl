@@ -15,6 +15,7 @@ using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
+using SymbolicIndexingInterface: SymbolicIndexingInterface
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -25,7 +26,7 @@ for name in names(CorePotts)
     name === :CorePotts || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile,
-    total_energy, energy_change, parameters, variables
+    total_energy, energy_change, parameters, variables, observe
 
 include("vocabulary.jl")
 include("system.jl")
@@ -34,6 +35,7 @@ include("lower.jl")
 include("compile.jl")
 include("codegen.jl")
 include("problem.jl")
+include("observed.jl")
 include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""

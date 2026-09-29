@@ -10,11 +10,13 @@ const ownership = CorePotts.ownership
 What a generated problem keeps about its model (`prob.f.sys`): the compiled system, the
 scalar type and the generated `total_energy(st, p, ctx)`.
 """
-struct PottsModelInfo{C, E, DE}
+struct PottsModelInfo{C, E, DE, X}
     csys::C
     T::Type
     total_energy::E
     delta_E::DE          # ΔH without drives: the energy change the self-check compares
+    ctx::X               # host context (lattice, relations) for observed quantities
+    cache::Dict{Any, Any}    # compiled observed functions, by expression
 end
 
 """
@@ -38,7 +40,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     sys = c.sys
     opd = Dict{Any, Any}(_opkey(k) => v for (k, v) in op)
     values = _parameter_values(c, opd)
-    p = NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in sys.parameters)
+    p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in sys.parameters))
     for name in _contact_tables(c)
         J = getproperty(p, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
@@ -50,6 +52,11 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     end
     st = _initial_state(c, opd, T, capacity)
     lat = core_lattice(sys.lattice)
+    relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
+    spacing = sys.lattice.spacing === nothing ? nothing : map(T, sys.lattice.spacing)
+    hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
+        map(r -> CorePotts.relation(r, lat), relations)...,
+        (spacing === nothing ? (;) : (; spacing))...)
     ce = _constraint_expr(c, T)
     exprs = (_delta_H_expr(c, T), _commit_expr(c, T), ce, _temperature_expr(c, T))
     f = CorePotts.CPMFunction(_rgf(exprs[1]); commit! = _rgf(exprs[2]),
@@ -59,9 +66,8 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
         fingerprint = hash((string.(exprs), sys.lattice, T)),
-        sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false))))
-    relations = NamedTuple(k => v for (k, v) in c.relations)
-    spacing = sys.lattice.spacing === nothing ? nothing : map(T, sys.lattice.spacing)
+        sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
+            hctx, Dict{Any, Any}()))
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, seed, replica, repeat)
 end
@@ -117,6 +123,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
     lat = core_lattice(sys.lattice)
     site = Pair{Symbol, Any}[]
     cell = Pair{Symbol, Any}[]
+    model = Pair{Symbol, Any}[]
     for x in sys.variables
         i = info(x)
         v = get(opd, _unwrap(x), i.default)
@@ -128,8 +135,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
             push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
         elseif i.role === :edge
             continue                                   # link payloads, below
-        else
-            throw(ArgumentError("model-scope variables are not supported yet"))
+        elseif i.role === :model
+            push!(model, i.name => fill(T(v), 1))
         end
     end
     if c.uses_surface
@@ -146,7 +153,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         end
         append!(cell, pairs(links))
     end
-    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = NamedTuple(site))
+    st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = NamedTuple(site),
+        model = NamedTuple(model))
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
 end
@@ -201,7 +209,7 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
         i = names[key]
         new[i.name] = _param_value(info.T, v, i)
     end
-    out = NamedTuple(k => get(new, k, v) for (k, v) in pairs(prob.p))
+    out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(prob.p))))
     typeof(out) === typeof(prob.p) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
     for name in _contact_tables(info.csys)
         J = getproperty(out, name)

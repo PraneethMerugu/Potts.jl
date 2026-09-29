@@ -55,6 +55,26 @@ function (ph::CellPhase{F})(st, p, ctx, key, mcs, backend) where {F}
     return 1
 end
 
+"""
+    ModelPhase(f!)
+
+Run `f!(st, p, ctx, key, mcs)` once (a single work item): model-scope updates, e.g. a
+reduction over the population written to `st.model`. Sequential on the device by design;
+use `CellReduce` for large parallel reductions.
+"""
+struct ModelPhase{F}
+    f!::F
+end
+
+@kernel function _model_phase_kernel!(f!, st, p, ctx, key, mcs)
+    f!(st, p, ctx, key, mcs)
+end
+
+function (ph::ModelPhase{F})(st, p, ctx, key, mcs, backend) where {F}
+    _model_phase_kernel!(backend)(ph.f!, st, p, ctx, key, mcs; ndrange = 1, workgroupsize = 1)
+    return 1
+end
+
 _phase_groupsize(backend, n) = nothing
 _phase_groupsize(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n)
 
