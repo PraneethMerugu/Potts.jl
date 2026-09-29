@@ -36,7 +36,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M2.1b** hexagonal 2D geometry; irregular domains from masks/images/expressions (domain edge is a copy and field boundary).
 - [x] 6e525c1 2026-09-29 (lattice units; spacing with M2.4) **M2.2** moments tracker (centroid, elongation, periodic-safe geometry); site sums and minima trackers; structured owner sums.
 - [x] 6fd6998 2026-09-29 (phases are KA kernels per D-033) **M2.3** site/cell/medium/model state; history ring buffers; synchronous phase updates ~~via LocalMath stages~~ as generated KA kernels; accepted-copy affects; `ClearOnOwnershipChange`.
-- [ ] **M2.4** fields: explicit-rate discrete Euler stages, diffusion stencils, sub-stepping; `field_value`, gradient, laplacian primitives. Accept: Merks reference parity.
+- [x] 8f0ac2d 2026-09-29 (Merks parity moves to M2.5: it needs chemotaxis) **M2.4** fields: explicit-rate discrete Euler stages, diffusion stencils, sub-stepping; `field_value`, gradient, laplacian primitives. Accept: Merks reference parity.
 - [ ] **M2.5** drives: chemotaxis, Act with owner-filtered gathers and geometric-mean fold, generic `ProposalDrive`/`ProposalModifier`; authored draws inside updates and rates (stream assignment). Accept: Wortel reference parity.
 - [ ] **M2.6** constraints: local connectivity, extinction policies, `ProposalConstraint`.
 - [ ] **M2.7** spatial queries and Cartesian ownership domains (fixed owners, immutable sites, per-face boundaries): neighbor counts, weighted contact measures, boundary-site queries, sums/means, predicate filters, interface queries.

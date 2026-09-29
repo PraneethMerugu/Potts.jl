@@ -175,3 +175,22 @@
   - Cell-phase growth, history lags, and the clear-on-copy age invariants (checked with a
     per-site copy counter).
   - Metal phases ≈ CPU. JET is clean on `step!` with phases.
+
+## 2026-09-29 — M2.4 (commit 8f0ac2d)
+
+- **Fields** (`fields.jl`). `laplacian` and `gradient` are second-order and take per-axis
+  spacing: periodic axes wrap, closed axes are zero-flux (mirror). `owner_kind` is the
+  secretion helper.
+  - `FieldStep(field => scratch, rate; dt, substeps)` is an explicit Euler phase with
+    double-buffered publication after every substep. `stable_substeps` gives the CFL
+    count.
+  - Per-axis spacing arrives: `CPMProblem(...; spacing)` → `ctx.spacing`, typed by the
+    user (Float32 for Metal).
+- **Tests.**
+  - A Fourier mode decays by exactly the discrete factor (rtol 1e-10), including
+    anisotropic spacing.
+  - Mass is conserved on periodic and closed lattices (rtol 1e-12).
+  - Substeps are equivalent to smaller dt; secretion–decay reaches the analytic total mass;
+    the gradient and Laplacian of a ramp are exact.
+  - Metal ≈ CPU.
+- **Moved.** Merks parity moves to M2.5, where it needs chemotaxis.
