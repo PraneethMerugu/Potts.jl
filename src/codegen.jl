@@ -49,7 +49,7 @@ _site_env(T, i, relname; mcs = nothing, key = nothing) =
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
-    :target => :target, :old => :old, :new => :new), relname)
+    :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new)), relname)
 
 _contact_env(T, a, ka, n, kn, w, site, relname) = LowerEnv(T, :contact,
     Dict{Symbol, Any}(:kind => ka, :kind′ => kn, :owner => a, :owner′ => n, :weight => w,
@@ -66,6 +66,8 @@ const _PROP_LOCALS = quote
     new = prop.new
     target = prop.target
     source = prop.source
+    k_old = Potts._cellkind(st, old)       # `kind[old]`/`kind[new]` read these (D-014)
+    k_new = Potts._cellkind(st, new)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -73,8 +75,7 @@ end
 
 function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     rn = c.gather_names
-    body = Any[_PROP_LOCALS, :(k_old = Potts._cellkind(st, old)), :(k_new = Potts._cellkind(st, new)),
-        :(dH = zero($T))]
+    body = Any[_PROP_LOCALS, :(dH = zero($T))]
     surf_rel = c.uses_surface ? :surface : nothing
     fused_surface = false
     if c.uses_surface
@@ -268,10 +269,10 @@ function _constraint_expr(c::CompiledPottsSystem, T)
         if k.kind === :expr
             push!(tests, lower(k.expr, env))
         elseif k.kind === :connectivity
-            push!(tests, :(old == 0 || !$(_kindtest(:(Potts._cellkind(st, old)), k.kinds)) ||
+            push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) ||
                            CorePotts.locally_connected(st.σ, ctx, prop)))
         elseif k.kind === :merks_connectivity
-            push!(tests, :(old == 0 || !$(_kindtest(:(Potts._cellkind(st, old)), k.kinds)) ||
+            push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) ||
                            CorePotts.merks_connectivity(st.σ, ctx, prop)))
         elseif k.kind === :no_extinction
             push!(tests, :(CorePotts.forbid_extinction(st.cell.volume, prop)))
@@ -288,8 +289,8 @@ function _temperature_expr(c::CompiledPottsSystem, T)
     sw = c.sys.sweep
     rn = c.gather_names
     if _observed_scope(sw.temperature) === :cell
-        tn = lower(sw.temperature, _cell_env(T, :new, rn; kind = :(Potts._cellkind(st, new))))
-        to = lower(sw.temperature, _cell_env(T, :old, rn; kind = :(Potts._cellkind(st, old))))
+        tn = lower(sw.temperature, _cell_env(T, :new, rn; kind = :k_new))
+        to = lower(sw.temperature, _cell_env(T, :old, rn; kind = :k_old))
         return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, quote
             new == 0 && return $T($to)
             old == 0 && return $T($tn)

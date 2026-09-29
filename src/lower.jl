@@ -257,6 +257,11 @@ function _lower_at(args, env)
         end
         if i.name === :kind
             s === :site && return :(CorePotts.owner_kind(st, $j))
+            if haskey(env.bind, :__kind_of)                   # `kind[old]`/`kind[new]`: bound once
+                for (c, k) in env.bind[:__kind_of]
+                    j === c && return k
+                end
+            end
             s === :cell && return :(Potts._cellkind(st, $j))
             error("`kind[…]` needs a site (`source`, `target`) or a cell (`new`, `owner[s]`)")
         end
