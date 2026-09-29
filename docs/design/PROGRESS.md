@@ -236,3 +236,29 @@
   reductions against the host, including empty-cell identities; the contact graph
   against brute force (2.5k checks); Dirichlet walls reach the exact linear profile.
   Metal covers frozen sites and reductions (163 GPU checks).
+
+## 2026-09-29 — M2.8 (commit 1c84438)
+
+- **Lifecycle** (`lifecycle.jl`, D-035).
+  - `Lifecycle(trigger; normal, kind, divide!, every)`, where the trigger returns
+    `EVENT_DIVIDE/REMOVE/TRANSITION`.
+  - Division plane through the centroid: `AlongMinorAxis{T}`, `AlongMajorAxis{T}`,
+    `RandomPlane{T}` (float-typed, so Float32 on Metal), or any vector. Principal axes
+    use closed forms in 2D and 3D.
+  - Daughters take free ids lowest-first, with generation + 1 on reuse. Every non-tracker
+    cell quantity is copied from the parent, then the `divide!` rule runs (e.g. a
+    conservative split).
+  - Removal sends sites to the medium. Transitions set kinds. Exhausted capacity defers
+    the event and counts it. `with_capacity` preallocates slots.
+  - Trackers (volume, surface, moments) are rebuilt exactly via `rebuild_trackers!`.
+- **Bug fixed.** `init_moments` anchored cells at a corner, so a cell longer than half a
+  periodic axis was wrapped (a 12-long box on 20 had centroid 6.8 instead of 8.5).
+  Anchors are now the per-axis circular mean.
+- **Tests.**
+  - Exact halves for 2D across both seams and for a 3D box.
+  - Removal/transition, id reuse + generation + copy + rule, deferral.
+  - A growth → division run keeps every tracker exact (both algorithms).
+  - Metal division (169 GPU checks).
+- **Parity.** OpenVT monolayer, a scheduled division against legacy
+  (`reference/sample_openvt.jl`), 18/18 KS checks. Legacy `AtMCS(1)` means the boundary
+  after the first MCS (our `mcs == 0`).
