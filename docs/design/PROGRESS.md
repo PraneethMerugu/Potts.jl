@@ -460,3 +460,34 @@
 - A JET finding fixed in CorePotts: `recompute_surface` with a `T` keyword dispatched at
   run time in the lifecycle tracker rebuild. It now goes through positional
   `::Type{T}` helpers.
+
+## 2026-09-29 — SciML ensembles/callbacks; review of slices 3–4
+
+- **Ensembles:** `EnsembleProblem(prob::CPMProblem)` makes trajectory `i` equal to
+  `remake(prob; replica = prob.replica + i)` (Philox streams, D-005).
+  - This holds with any scheduler and reuses one compiled model.
+  - A user `prob_func` is applied first. If it leaves the seed and replica alone,
+    trajectories still get distinct replicas.
+  - `PottsStats` merge.
+- **Callbacks:** `solve(…; callback = DiscreteCallback | CallbackSet)` checks callbacks at
+  each MCS boundary, after the lifecycle and before saving.
+  - `condition(u, t, integ)` and `affect!` see the live state and may replace `integ.p`
+    (for example with `remake(prob; p = [:T => 0.0]).p`).
+  - `initialize` and `finalize` run.
+  - Continuous callbacks are rejected.
+  - The SciML names are re-exported, as solver packages do.
+- **Code review** (a subagent over `6c05049..61bbd02`) found 5 issues, all fixed with
+  regression tests:
+  1. **Wrong physics, no error:** a dead cluster root's id was handed to a daughter,
+     merging two clusters. Lifecycle planning now never frees ids that still name a
+     cluster.
+  2. **Wrong physics, no error:** re-rooting could change a cluster's root kind, switching
+     `clusters(k)` terms off. Roots are now stable (they change only when the root dies,
+     then to a member of the same kind). At init, the root is chosen among the kinds that
+     name clusters, whatever the numbering.
+  3. `remake(prob; u0)` kept the old frozen mask. A new CorePotts hook, `remake_frozen`,
+     recomputes it.
+  4. Population folds over cells read the outer cell's cluster trackers.
+  5. `uses_clusters` missed division conditions, division rules and observed quantities.
+- **Also fixed:** a macro parse bug. `when = …, along = (1.0, 0.0)` with no trailing rule
+  splatted the tuple into state rules.

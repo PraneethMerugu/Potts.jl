@@ -142,5 +142,33 @@ end
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 1 ? EVENT_REMOVE : EVENT_NONE))
         u3 = solve(CPMProblem(f3, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test u3.cell.cluster[1:2] == Int32[1, 2] && u3.cell.cluster_volume[2] == 24
+        # a dead root keeps naming its cluster: its id is never handed to a daughter
+        σd = zeros(Int32, 40, 40); σd[3:8, 3:8] .= 2; σd[11:30, 15:22] .= 3; σd[18:23, 17:20] .= 4
+        cd = merge(init_moments(σd, lat, 4), init_clusters(σd, Int32[1, 2, 3, 4], lat), (; mass = ones(4)))
+        std = with_capacity(initial_state(σd, Int32[1, 2, 1, 2]; cell = cd), 8)
+        std.cell.cluster[1:4] .= Int32[1, 1, 3, 3]          # cell 1 (the root of {1, 2}) has died
+        std.cell.cluster_volume .= recompute_cluster_volume(σd, std.cell.cluster)
+        fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE : EVENT_NONE;
+                clusters = true))
+        ud = solve(CPMProblem(fd, std, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        @test ud.cell.cluster[2] == 2                         # re-rooted at its surviving member
+        @test ud.cell.cluster[3] == ud.cell.cluster[4] == 3
+        daughters = findall(c -> c > 4 && ud.cell.volume[c] > 0, 1:8)
+        @test length(daughters) == 2 && all(c -> ud.cell.cluster[c] == daughters[1], daughters)
+        @test !(ud.cell.cluster[2] in ud.cell.cluster[daughters])
+
+        # a live root stays the root when a lower id is reused (the cluster keeps its kind)
+        σr = zeros(Int32, 40, 40); σr[11:30, 15:22] .= 2; σr[18:23, 17:20] .= 3   # slot 1 empty
+        cr = merge(init_moments(σr, lat, 3), init_clusters(σr, Int32[1, 2, 2], lat))
+        str = with_capacity(initial_state(σr, Int32[1, 1, 2]; cell = cr), 4)
+        @test str.cell.cluster[1:3] == Int32[1, 2, 2]
+        fr = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE : EVENT_NONE))
+        ur = solve(CPMProblem(fr, str, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        @test ur.cell.volume[1] > 0 && ur.cell.cluster[1:3] == Int32[2, 2, 2]
+
+        # init: the root is the lowest member of a preferred kind
+        @test init_clusters(σr, Int32[1, 2, 2], lat; kind = Int32[1, 2, 1], prefer = (1,)).cluster == Int32[1, 3, 3]
     end
 end

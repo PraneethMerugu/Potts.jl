@@ -160,7 +160,9 @@ function _lower_population(args, env)
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
-            :cluster => :(CorePotts.cluster_of(st.cell, $nsym))))
+            :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
+            :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
+            :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))))
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else

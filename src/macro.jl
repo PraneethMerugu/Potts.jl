@@ -235,7 +235,17 @@ _replace_copy(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(=>) && 
 # `when = a, along = b, x => 1` arrives as nested `=`/tuple chains; flatten to options + rules.
 function _options(args)
     toks = Any[]
-    flat(e) = e isa Expr && e.head === :(=) ? (flatitems(e.args[1]); push!(toks, :__EQ); flatitems(e.args[2])) :
+    # `k = v, rule` parses as `k = (v, rule)`; with no rule after a tuple value, `k = (1.0, 0.0)`
+    # parses identically: the leading elements that are not rules/options form the value
+    isrule(x) = x isa Expr && (x.head === :(=) || (x.head === :call && x.args[1] === :(=>)))
+    function flatvalue(v)
+        v isa Expr && v.head === :tuple || return flatitems(v)
+        i = something(findfirst(isrule, v.args), length(v.args) + 1)
+        lead = v.args[1:(i - 1)]
+        isempty(lead) || push!(toks, length(lead) == 1 ? lead[1] : Expr(:tuple, lead...))
+        foreach(x -> x isa Expr && x.head === :(=) ? flat(x) : push!(toks, x), v.args[i:end])
+    end
+    flat(e) = e isa Expr && e.head === :(=) ? (flatitems(e.args[1]); push!(toks, :__EQ); flatvalue(e.args[2])) :
               flatitems(e)
     flatitems(e) = e isa Expr && e.head === :tuple ? foreach(x -> x isa Expr && x.head === :(=) ? flat(x) : push!(toks, x), e.args) :
                    e isa Expr && e.head === :(=) ? flat(e) : push!(toks, e)

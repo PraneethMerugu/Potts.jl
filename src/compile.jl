@@ -74,13 +74,16 @@ end
 
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
 
-function _check_names(x, allowed, what)
+# `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
+# not inside ΔH, so population bodies may read cluster trackers.
+function _check_names(x, allowed, what; between_copies::Bool = false)
     x, pops = _strip_populations(x)
     for p in pops                                  # population bodies have their own scope
         n, body, cond = arguments(p)
-        inner = info(n).role === :bound_cell ? _CELL_ENERGY_BUILTINS : _SITE_BUILTINS
-        _check_names(body, (allowed..., inner...), what)
-        _check_names(cond, (allowed..., inner...), what)
+        inner = info(n).role !== :bound_cell ? _SITE_BUILTINS :
+                between_copies ? (_CELL_ENERGY_BUILTINS..., :cluster_volume, :cluster_surface) : _CELL_ENERGY_BUILTINS
+        _check_names(body, (allowed..., inner...), what; between_copies)
+        _check_names(cond, (allowed..., inner...), what; between_copies)
     end
     for n in _bare_builtins(x)
         n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
@@ -155,7 +158,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             i = info(lhs)
             (i !== nothing && i.role in SCOPES) || throw(ArgumentError("update target `$lhs` is not a declared variable"))
             allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
-            _check_names(u.eq.rhs, allowed, "a $(i.role) update")
+            _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
             i.role === :field ? :site : i.role
         end
         push!(get!(updates, (u.phase, scope), Update[]), u)
@@ -172,17 +175,17 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         i = info(x)
         i === nothing && throw(ArgumentError("`$x` is not a declared variable"))
         if i.role === :field || i.role === :site
-            _check_names(eq.rhs, _SITE_BUILTINS, "a field equation")
+            _check_names(eq.rhs, _SITE_BUILTINS, "a field equation"; between_copies = true)
             push!(fields, (x, eq.rhs))
         elseif i.role === :cell
-            _check_names(eq.rhs, _CELL_BUILTINS, "a cell equation")
+            _check_names(eq.rhs, _CELL_BUILTINS, "a cell equation"; between_copies = true)
             push!(cell_odes, (x, eq.rhs))
         else
             throw(ArgumentError("model-scope equations are not supported yet"))
         end
     end
     for d in sys.divisions
-        _check_names(d.when, _CELL_BUILTINS, "a division condition")
+        _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true)
     end
     cluster_division = any(d -> d.domain isa ClusterDomain, sys.divisions)
     cluster_division && !all(d -> d.domain isa ClusterDomain, sys.divisions) &&
@@ -190,7 +193,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for r in sys.link_rules
         (relationship !== nothing && relationship.name === r.relationship) ||
             throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
-        _check_names(r.when, _LINK_BUILTINS, "a link rule")
+        _check_names(r.when, _LINK_BUILTINS, "a link rule"; between_copies = true)
     end
     for x in sys.variables
         info(x).role === :edge && relationship === nothing &&
@@ -215,11 +218,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         sys.sweep.temperature]
     uses_surface = any(x -> _uses_builtin(x, :surface), all_exprs) ||
                    any(d -> _uses_builtin(d.when, :surface), sys.divisions)
-    uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), all_exprs) ||
-                           any(d -> _uses_builtin(d.when, :cluster_surface), sys.divisions)
+    # everything evaluated against the state, including division rules and observed quantities
+    scanned = Any[all_exprs..., (d.when for d in sys.divisions)...,
+        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., (o.expr for o in sys.observed)...]
+    uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_clusters = cluster_division || uses_cluster_surface ||
-                    any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), all_exprs) ||
-                    any(d -> _uses_builtin(d.when, :cluster_volume), sys.divisions)
+                    any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1

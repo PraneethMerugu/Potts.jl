@@ -532,3 +532,43 @@ end
     foreach(_ -> step!(integ), 1:3)
     @test integ.p.T == 0.0
 end
+
+@potts_model ClusterCensus begin
+    @kinds medium cytoplasm nucleus
+    @parameters T = 10.0
+    @variables total(model) = 0.0
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy cells => (volume - 40.0)^2
+    @after_mcs total ~ sum(cluster_volume for c in cells)
+    @divide cells(nucleus) when = (cluster == id) && (mcs == 100), along = (1.0, 0.0)
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "compartment review regressions" begin
+    σ, kinds, groups = compartment_state()
+    # populations read the bound cell's cluster trackers
+    p = PottsProblem(ClusterCensus(; name = :cc), [ownership => σ, kind => kinds, cluster => groups], (0, 1))
+    u = solve(p, SequentialCPM(; proposal = Moore(1))).u[end]
+    @test u.model.total[1] == sum(u.cell.cluster_volume[u.cell.cluster[c]] for c in 1:18 if u.cell.volume[c] > 0)
+    # roots are chosen among the kinds that name clusters, whatever the numbering
+    n = 9
+    σn = map(s -> s == 0 ? s : Int32(s <= n ? s + n : s - n), σ)     # nuclei first
+    pn = PottsProblem(Compartments(; name = :comp), [ownership => σn, kind => vcat(kinds[(n + 1):end], kinds[1:n]),
+        cluster => groups], (0, 1))
+    @test Array(pn.u0.cell.cluster)[1:18] == vcat(n + 1:2n, n + 1:2n)
+    @test total_energy(pn) ≈ total_energy(PottsProblem(Compartments(; name = :comp),
+        [ownership => σ, kind => kinds, cluster => groups], (0, 1)))
+    # remake with a new state recomputes the frozen mask
+    σk = zeros(Int32, 24, 24); σk[:, 1:2] .= 1; σk[10:14, 10:14] .= 2
+    kt = PottsProblem(KindTemperature(; name = :kt), [ownership => σk, kind => [:wall, :dark]], (0, 5))
+    σk2 = zeros(Int32, 24, 24); σk2[:, 23:24] .= 1; σk2[10:14, 10:14] .= 2
+    kt2 = remake(kt; u0 = [ownership => σk2, kind => [:wall, :dark]])
+    @test kt2.frozen == (σk2 .== 1)
+    # clusters used only in a division condition or an observed quantity still get storage
+    base = (; name = :x, kinds = [:medium, :a], lattice = Potts.lattice_spec((8, 8)),
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0))
+    @test mtkcompile(Potts.PottsSystem(; base..., divisions = [Potts.divide(Potts.cells(1);
+        when = Potts.B.cluster == Potts.B.id)])).uses_clusters
+    @test mtkcompile(Potts.PottsSystem(; base..., observed = [Potts.ObservedEq(Potts.observed_var(:cv),
+        Potts.B.cluster_volume)])).uses_clusters
+end

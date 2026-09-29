@@ -220,7 +220,9 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = Array(cache.events)
     volume = Array(st.cell.volume)
-    free = [c for c in 1:cap if volume[c] == 0 && events[c] == EVENT_NONE]
+    # a dead root still names its cluster while members live: never reuse its id
+    held = _has_clusters(st) ? _referenced_clusters(Array(st.cell.cluster), volume) : Set{Int32}()
+    free = [c for c in 1:cap if volume[c] == 0 && events[c] == EVENT_NONE && !(Int32(c) in held)]
     daughter = zeros(Int32, cap)
     removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
     nextfree = 1

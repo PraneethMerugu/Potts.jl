@@ -58,13 +58,19 @@ end
 # `remake` into the problem's parameter object and state (identity here).
 remake_parameters(sys, prob, p) = p
 remake_state(sys, prob, u0) = u0
+# the frozen mask of a remade state (models whose mask derives from the state override this)
+remake_frozen(sys, prob, u0) = prob.frozen
 
 function SciMLBase.remake(prob::CPMProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan,
         p = prob.p, seed = prob.seed, replica = prob.replica, repeat = prob.repeat)
     p === prob.p || (p = remake_parameters(f.sys, prob, p))
-    u0 === prob.u0 || (u0 = remake_state(f.sys, prob, u0))
+    frozen = prob.frozen
+    if u0 !== prob.u0
+        u0 = remake_state(f.sys, prob, u0)
+        frozen = remake_frozen(f.sys, prob, u0)
+    end
     return CPMProblem(f, u0, prob.lattice, tspan, p; contact = prob.contact,
-        relations = prob.relations, spacing = prob.spacing, frozen = prob.frozen, seed,
+        relations = prob.relations, spacing = prob.spacing, frozen, seed,
         replica, repeat)
 end
 

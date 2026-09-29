@@ -12,16 +12,20 @@
 @inline same_cluster(cell, a, b) = a != 0 && b != 0 && cluster_of(cell, a) == cluster_of(cell, b)
 
 """
-    init_clusters(σ, cluster, lattice; relation = nothing, T = Float64) -> NamedTuple
+    init_clusters(σ, cluster, lattice; relation = nothing, T = Float64, kind = nothing,
+                  prefer = ()) -> NamedTuple
 
 Compartment storage to merge into the cell state: `cluster` (the given ids, normalized so
-each cluster is named by its lowest member) and `cluster_volume`, plus `cluster_surface`
-over `relation` if given (element type `T`).
+each cluster is named by one live member, its root) and `cluster_volume`, plus
+`cluster_surface` over `relation` if given (element type `T`). The root is the lowest
+member whose `kind` is in `prefer` (the kinds that name clusters, e.g. the cytoplasm),
+else the lowest member. Roots are stable: they change only when the root dies, and then
+to the lowest live member of the same kind if there is one.
 """
 function init_clusters(σ, cluster::AbstractVector, lat::Lattice; relation = nothing,
-        T::Type = Float64)
+        T::Type = Float64, kind = nothing, prefer = ())
     cl = Int32.(cluster)
-    _normalize_clusters!(cl, _live(σ, length(cl)))
+    _normalize_clusters!(cl, _live(σ, length(cl)); kind, prefer, keep = false)
     out = (; cluster = cl, cluster_volume = recompute_cluster_volume(σ, cl))
     relation === nothing && return out
     return merge(out, (; cluster_surface = recompute_cluster_surface(σ, cl, lat, relation; T)))
@@ -29,19 +33,34 @@ end
 
 _live(σ, n) = (v = zeros(Bool, n); foreach(s -> s > 0 && (v[s] = true), σ); v)
 
-# Each cluster is named by its lowest live member; free and dead slots are their own cluster.
-function _normalize_clusters!(cl, live)
-    root = Dict{Int32, Int32}()
+# Name each cluster by a live member (its root); free and dead slots are their own cluster.
+# `keep`: an id that is itself a live member of its cluster stays the root. Otherwise the
+# lowest live member whose kind is in `prefer` (or, when re-rooting, the old root's kind),
+# else the lowest live member.
+function _normalize_clusters!(cl, live; kind = nothing, prefer = (), keep = true)
+    members = Dict{Int32, Vector{Int32}}()
     for c in eachindex(cl)
-        live[c] || continue
-        k = cl[c]
-        root[k] = min(get(root, k, Int32(c)), Int32(c))
+        live[c] && push!(get!(members, cl[c], Int32[]), Int32(c))
+    end
+    root = Dict{Int32, Int32}()
+    for (k, ms) in members
+        r = if keep && k in ms
+            k
+        else
+            want = !keep ? prefer : (kind !== nothing && 1 <= k <= length(cl)) ? (kind[k],) : ()
+            i = kind === nothing ? nothing : findfirst(m -> kind[m] in want, ms)
+            i === nothing ? minimum(ms) : ms[i]
+        end
+        root[k] = r
     end
     for c in eachindex(cl)
         cl[c] = live[c] ? root[cl[c]] : Int32(c)
     end
     return cl
 end
+
+# Ids that name a cluster with live members (not free for reuse, even if that cell died).
+_referenced_clusters(cl, volume) = Set(cl[c] for c in eachindex(cl) if volume[c] > 0)
 
 """Cluster volumes from scratch (indexed by cluster id)."""
 function recompute_cluster_volume(σ, cluster)
@@ -152,7 +171,7 @@ _has_clusters(st) = haskey(st.cell, :cluster)
 # make free slots their own cluster. Host arrays.
 function _fix_clusters!(st)
     cl = Array(st.cell.cluster)
-    _normalize_clusters!(cl, _live(Array(st.σ), length(cl)))
+    _normalize_clusters!(cl, _live(Array(st.σ), length(cl)); kind = Array(st.cell.kind))
     copyto!(st.cell.cluster, cl)
     return nothing
 end

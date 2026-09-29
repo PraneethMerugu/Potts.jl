@@ -160,7 +160,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         ids = haskey(opd, ckey) ? opd[ckey] : 1:ncell
         length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labelled cells"))
         rel = c.uses_cluster_surface ? c.relations[:surface] : nothing
-        append!(cell, pairs(CorePotts.init_clusters(σ, ids, lat; relation = rel, T)))
+        append!(cell, pairs(CorePotts.init_clusters(σ, ids, lat; relation = rel, T, kind = kinds,
+            prefer = _cluster_kinds(c))))
     elseif haskey(opd, ckey)
         throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
     end
@@ -179,6 +180,11 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
 end
+
+# Kinds that name clusters (`clusters(k)` terms and divisions): a cluster's root is chosen
+# among its members of these kinds, so the filters select it.
+_cluster_kinds(c::CompiledPottsSystem) = Tuple(unique(Iterators.flatten((first.(c.cluster_terms)...,
+    (d.domain.kinds for d in c.divisions if d.domain isa ClusterDomain)...))))
 
 # Sites of cells of frozen kinds never change owner (walls, obstacles).
 function _frozen_mask(sys::PottsSystem, st)
@@ -245,6 +251,8 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
     end
     return out
 end
+
+CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = Dict{Any, Any}(_opkey(k) => v for (k, v) in u0)
