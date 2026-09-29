@@ -259,7 +259,9 @@ function _section!(parts, sec, args, ln = nothing)
                 throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`"))
             k, scope = decl.args
             _declare!(parts, k, "variable")
-            default, opts = rhs isa Expr && rhs.head === :tuple ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
+            # `= default, [options…]`; a tuple without an options vector is the default itself
+            default, opts = rhs isa Expr && rhs.head === :tuple && length(rhs.args) == 2 && rhs.args[2] isa Expr &&
+                            rhs.args[2].head === :vect ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
             if range === nothing
@@ -291,7 +293,9 @@ function _section!(parts, sec, args, ln = nothing)
         params = call.args[findfirst(a -> a isa Expr && a.head === :parameters, call.args)]
         any(a -> a isa Expr && a.head === :kw && a.args[1] === :name, params.args) ||
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
-        push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)))
+        # an extension without its own @lattice uses the base's dimension (vector builtins, A-38)
+        push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)),
+            :($P._DIM[] == 0 && ($P._DIM[] = length($bname.lattice.dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
     elseif sec === Symbol("@components")
         # `@components clock = sys`, `@components cells(k) grn = sys`, or a block of `name = sys`
@@ -438,6 +442,8 @@ function rewrite(ex)
     P = :(Potts)
     h = ex.head
     if h === :ref
+        # `v[end]`, `v[begin + 1]`: ordinary Julia indexing (`end` only means something in a ref)
+        _has_endbegin(ex.args[2:end]) && return Expr(:ref, rewrite(ex.args[1]), ex.args[2:end]...)
         return Expr(:call, :($P._index), map(rewrite, ex.args)...)
     elseif h in (:(=), :+=, :-=, :*=, :/=) || (h === :function && length(ex.args) == 2)
         # assignment targets and function signatures are not expressions: leave them alone
@@ -459,16 +465,21 @@ function rewrite(ex)
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+_has_endbegin(x) = x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
+                   (x isa AbstractVector && any(_has_endbegin, x))
 
 function _rewrite_gather(fold, gen)
     P = :(Potts)
     body = gen.args[1]
+    plain = Expr(:call, fold, Expr(:generator, map(rewrite, gen.args)...))
+    # several iterators (`for i in 1:2, j in 1:3`): ordinary Julia (A-40)
+    length(gen.args) > 2 && return plain
     spec = gen.args[2]
     cond = nothing
     if spec isa Expr && spec.head === :filter
+        length(spec.args) > 2 && return plain
         cond, spec = spec.args[1], spec.args[2]
     end
-    plain = Expr(:call, fold, Expr(:generator, map(rewrite, gen.args)...))
     spec isa Expr && spec.head === :(=) || return plain
     n, iter = spec.args
     n isa Symbol || return plain

@@ -88,6 +88,9 @@ function lookup(sys::PottsSystem, name::Symbol)
     for o in sys.observed
         info(o.var).name === name && return o.var
     end
+    # a vector quantity: its components (tagged `vector = name`) in order (A-37)
+    comps = [x for x in Iterators.flatten((sys.parameters, sys.variables)) if get(info(x).options, :vector, nothing) === name]
+    isempty(comps) || return QuantityVector(name, Num[Symbolics.wrap(x) for x in sort!(comps; by = x -> info(x).options.index)])
     k = findfirst(==(name), sys.kinds)
     k === nothing || return k - 1
     haskey(sys.relations, name) && return RelationRef(name)

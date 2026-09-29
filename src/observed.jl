@@ -33,14 +33,20 @@ function _observed_scope(x)
         r in (:site, :field) && return :site
     end
     for n in _bare_builtins(x)
-        n in (:owner, :position) && return :site
+        n in (:owner, :position, :site) && return :site
         n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface) && (scope = :cell)
     end
     return scope
 end
 
+# One lock for every model's observed-function cache: ensemble threads (`EnsembleThreads`)
+# read observed quantities concurrently (A-55).
+const _OBSERVED_LOCK = ReentrantLock()
+
 """A host function `(u, p, t) -> value` for the quantity or expression `x`."""
-function _observed_function(info::PottsModelInfo, x)
+_observed_function(info::PottsModelInfo, x) = lock(() -> _observed_function_unlocked(info, x), _OBSERVED_LOCK)
+
+function _observed_function_unlocked(info::PottsModelInfo, x)
     get!(info.cache, _unwrap(x)) do
         c = info.csys
         T = info.T

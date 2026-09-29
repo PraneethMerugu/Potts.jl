@@ -335,3 +335,29 @@ end
     @test_throws ArgumentError Potts.vector_parameter(:d, 1:2, [5.0, 6.0, 7.0])
     @test_throws ArgumentError Potts._potts_model(:X, quote @kinds medium[frozen] A end, @__MODULE__)
 end
+
+@potts_model AuditVecBase begin
+    @kinds medium A
+    @parameters d[1:2] = [1.0, 2.0]
+    @variables p(cell)[1:2] = (3.0, 4.0)
+    @lattice Lattice((10, 10))
+    @energy cells => (volume - 4)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model AuditVecExt begin
+    @extend d, p = base = AuditVecBase()
+    @kinds medium A
+    @variables c(cell)[1:2] = 0.0
+    @after_mcs c ~ centroid() .+ d
+end
+helper_last(v) = v[end]
+
+@testset "group 3: extend vectors and centroid, Julia indexing, tuple defaults" begin
+    s = AuditVecExt(; name = :v)                                         # A-37, A-38
+    σ = zeros(Int32, 10, 10); σ[2:3, 2:3] .= 1
+    u = solve(PottsProblem(s, [ownership => σ, kind => [1]], (0, 1)), SequentialCPM()).u[end]
+    @test u.cell.p_1[1] == 3 && u.cell.p_2[1] == 4                       # A-42
+    @test u.cell.c_2[1] ≈ Potts._centroid_axis(Float64, u.cell, PottsProblem(s, [ownership => σ, kind => [1]], (0, 1)).lattice, 1, 2) + 2
+    ex = Potts.rewrite(:(v[end] + sum(i * j for i in 1:2, j in 1:3)))    # A-40
+    @test eval(:(let v = [1, 5]; $ex; end)) == 5 + 18
+end

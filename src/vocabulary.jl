@@ -95,7 +95,7 @@ Base.size(v::QuantityVector) = size(v.components)
 Base.getindex(v::QuantityVector, i::Int) = v.components[i]
 
 _component_name(name, i) = Symbol(name, :_, i)
-_component(v, i) = v isa AbstractVector ? v[i] : v
+_component(v, i) = v isa Union{AbstractVector, Tuple} ? v[i] : v
 function _vector_length(r)
     r isa AbstractUnitRange && first(r) == 1 && return length(r)
     throw(ArgumentError("vector quantities are declared with a range `1:n`"))
@@ -103,7 +103,7 @@ end
 
 """`vector_variable(name, 1:n, scope; default, unit, options...)`: components `name_i` of a vector variable."""
 function _check_components(name, v, n)
-    v isa AbstractVector && length(v) != n &&
+    v isa Union{AbstractVector, Tuple} && length(v) != n &&
         throw(ArgumentError("`$name` has $n components; got $(length(v)) values"))
     return v
 end
