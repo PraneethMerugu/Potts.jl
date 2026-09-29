@@ -54,8 +54,15 @@ function CPMProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
         UInt64(seed), UInt32(replica), UInt32(repeat))
 end
 
+# Hooks for the symbolic layer: translate parameter maps / operating points given to
+# `remake` into the problem's parameter object and state (identity here).
+remake_parameters(sys, prob, p) = p
+remake_state(sys, prob, u0) = u0
+
 function SciMLBase.remake(prob::CPMProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan,
         p = prob.p, seed = prob.seed, replica = prob.replica, repeat = prob.repeat)
+    p === prob.p || (p = remake_parameters(f.sys, prob, p))
+    u0 === prob.u0 || (u0 = remake_state(f.sys, prob, u0))
     return CPMProblem(f, u0, prob.lattice, tspan, p; contact = prob.contact,
         relations = prob.relations, spacing = prob.spacing, frozen = prob.frozen, seed,
         replica, repeat)
@@ -127,7 +134,7 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0))
-    integ = PottsIntegrator(prob, alg, _device_law(alg.acceptance, backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
+    integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats())
     save_start && _save!(integ)

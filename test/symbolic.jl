@@ -78,3 +78,16 @@ end
     @test typeof(a.f) === typeof(b.f)
     @test a.f.fingerprint == b.f.fingerprint
 end
+
+@testset "remake with symbolic maps; the sweep law" begin
+    prob = symbolic_graner_problem(; nmcs = 5)
+    λ = first(filter(x -> Potts.info(x).name === :λ, SORTING.sys.parameters))
+    q = remake(prob; p = [λ => 3.0])
+    @test q.p.λ == 3.0 && q.p.V₀ == prob.p.V₀ && q.f === prob.f
+    @test remake(prob; p = Dict(:T => 2)).p.T === 2.0              # converted to the scalar type
+    @test_throws ArgumentError remake(prob; p = [:nope => 1.0])
+    σ, kinds = graner_state()
+    r = remake(prob; u0 = [ownership => circshift(σ, (3, 0)), kind => kinds])
+    @test r.u0.σ == circshift(σ, (3, 0)) && r.u0.cell.volume == prob.u0.cell.volume
+    @test prob.f.acceptance === Metropolis()
+end

@@ -53,7 +53,8 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     exprs = (_delta_H_expr(c, T), _commit_expr(c, T), ce, _temperature_expr(c, T))
     f = CorePotts.CPMFunction(_rgf(exprs[1]); commit! = _rgf(exprs[2]),
         constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(exprs[4]),
-        phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), footprint = c.footprint,
+        phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
+        footprint = c.footprint,
         fingerprint = hash((string.(exprs), sys.lattice, T)),
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false))))
     relations = NamedTuple(k => v for (k, v) in c.relations)
@@ -61,6 +62,9 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, seed, replica, repeat)
 end
+
+_acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
+                               s.offset == 0 ? CorePotts.Metropolis() : CorePotts.Metropolis(T(s.offset))
 
 _opkey(k::typeof(CorePotts.ownership)) = k
 _opkey(k) = (u = _unwrap(k); u)
@@ -161,4 +165,37 @@ function total_energy(prob::CorePotts.CPMProblem, u = prob.u0)
     info = prob.f.sys
     info isa PottsModelInfo || throw(ArgumentError("not a PottsProblem"))
     return info.total_energy(u, prob.p, _host_ctx(prob))
+end
+
+# `remake(prob; p = [λ => 2.0])` and `remake(prob; u0 = [ownership => σ, kind => kinds])`:
+# symbolic maps are translated with the problem's scalar type, so the parameter object keeps
+# its type and nothing recompiles.
+const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
+
+function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap)
+    names = Dict{Any, Info}()
+    for x in info.csys.sys.parameters
+        i = Potts.info(x)
+        names[_unwrap(x)] = i
+        names[i.name] = i
+    end
+    new = Dict{Symbol, Any}()
+    for (k, v) in p
+        key = k isa Symbol ? k : _unwrap(k)
+        haskey(names, key) || throw(ArgumentError("`$k` is not a parameter of $(nameof(info.csys))"))
+        i = names[key]
+        new[i.name] = _param_value(info.T, v, i)
+    end
+    out = NamedTuple(k => get(new, k, v) for (k, v) in pairs(prob.p))
+    typeof(out) === typeof(prob.p) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
+    for name in _contact_tables(info.csys)
+        J = getproperty(out, name)
+        J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
+    end
+    return out
+end
+
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
+    opd = Dict{Any, Any}(_opkey(k) => v for (k, v) in u0)
+    return _initial_state(info.csys, opd, info.T, length(prob.u0.cell.kind))
 end

@@ -96,7 +96,7 @@ end
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
                 temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
-                footprint = Footprint(), fingerprint = 0, sys = nothing)
+                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -110,11 +110,13 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`, D-033)
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
+- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker()`), used
+  unless the algorithm sets one; `nothing` means `Metropolis()`
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, LC, SYS}
+struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, LC, AC, SYS}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -123,6 +125,7 @@ struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, LC, SYS}
     bias::BI
     phases::PH
     lifecycle::LC
+    acceptance::AC
     footprint::Footprint
     fingerprint::UInt64
     sys::SYS
@@ -130,9 +133,10 @@ end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
         claims = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
-        lifecycle = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing)
+        lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
+        sys = nothing)
     return CPMFunction(delta_H, commit!, constraint, claims, temperature, bias, phases,
-        lifecycle, footprint, UInt64(fingerprint), sys)
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys)
 end
 
 """
