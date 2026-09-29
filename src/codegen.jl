@@ -258,20 +258,30 @@ function _phases(c::CompiledPottsSystem, T, values)
         (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))...,
         (r.when for r in s.link_rules)...]
     any(x -> _has_op(x, cell_integral), after_reads) && append!(after, integrals)
-    for ((phase, scope), us) in sort!(collect(c.updates); by = x -> string(x[1]))
-        phase === :on_copy && continue
+    # update blocks (D-042): snapshots of previous values, then the ordered stages, each
+    # after its hoisted population folds
+    for phase in (:before_mcs, :after_mcs)
         dst = phase === :before_mcs ? before : after
-        for group in _by_cadence(us)
-            every = first(group).every
-            if scope === :site
-                append!(dst, _site_update_phases(c, T, group, every, rn))
-            elseif scope === :model
-                push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, group, every, rn))))
+        for (scope, n) in c.pre_snapshots[phase]
+            push!(dst, CorePotts.CopyPhase((scope, Symbol(n, :__pre)) => (scope, n)))
+        end
+        for stage in c.schedule[phase]
+            if !isempty(stage.pops)
+                ph = _slots_phase(T, stage.pops, rn)
+                push!(dst, stage.every == 1 ? ph : _Gated(stage.every, ph))
+            end
+            if stage.scope === :site
+                append!(dst, _site_update_phases(c, T, stage.updates, stage.every, rn))
+            elseif stage.scope === :model
+                push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
             else
-                push!(dst, CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, group, every, rn))))
+                push!(dst, CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, stage.updates, stage.every, rn))))
             end
         end
     end
+    # energy snapshots (D-041): after the before-MCS updates, constant during the sweep
+    snapshots = isempty(c.energy_snapshots) ? () : (_slots_phase(T, c.energy_snapshots, rn),)
+    append!(before, snapshots)
     # fields after the synchronous updates (MTK equations advance with the MCS clock)
     dt = c.sys.sweep.mcs_duration
     for (x, rate) in c.fields
@@ -283,9 +293,11 @@ function _phases(c::CompiledPottsSystem, T, values)
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
     if c.sys.sweep.ode_solver isa Adaptive
+        isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
         isempty(c.cell_odes) || push!(after, _adaptive_phase(c, T, dt, :cell))
         isempty(c.model_odes) || push!(after, _adaptive_phase(c, T, dt, :model))
     else
+        isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
         isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
         isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
     end
@@ -297,7 +309,14 @@ function _phases(c::CompiledPottsSystem, T, values)
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
     return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
-        at_init = Tuple(integrals))
+        at_init = (integrals..., snapshots...))
+end
+
+"""One model phase computing the population folds `slots` (`name => fold`) into `st.model`."""
+function _slots_phase(T, slots, rn)
+    env = _model_env(T, rn; key = :key)
+    body = [:(@inbounds st.model.$(n)[1] = $T($(lower(x, env)))) for (n, x) in slots]
+    return CorePotts.ModelPhase(_rgf(:((st, p, ctx, key, mcs) -> $(Expr(:block, body..., :(return nothing))))))
 end
 
 # All cell ODEs (`D(x) ~ f` on cell variables, component equations) advance together, per
@@ -309,7 +328,7 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
     ys, locals, bind = _ode_locals(c.cell_odes)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in c.cell_odes]
-    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.cell_odes])
+    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in c.cell_odes])
     return :((st, p, ctx, key, mcs, c) -> begin
         @inbounds st.cell.volume[c] > 0 || return nothing
         $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in eachindex(ys)]...)
@@ -324,7 +343,7 @@ function _model_ode_expr(c::CompiledPottsSystem, T, dt)
     ys, locals, bind = _ode_locals(c.model_odes)
     env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in c.model_odes]
-    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in c.model_odes])
+    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in c.model_odes])
     return :((st, p, ctx, key, mcs) -> begin
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
@@ -341,7 +360,7 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope)
     ys, locals, bind = _ode_locals(odes)
     env = scope === :cell ? _cell_env(T, :c, c.gather_names; mcs = :mcs, extra = (bind..., :time => :tt)) :
           _model_env(T, c.gather_names; extra = (bind..., :time => :tt))
-    rates = [lower(Symbolics.substitute(rate, locals; fold = Val(false)), env) for (_, rate) in odes]
+    rates = [lower(_substitute_locals(rate, locals, scope), env) for (_, rate) in odes]
     f = _rgf(:((du, u, P, tt) -> begin
         (st, p, ctx, mcs, c) = P
         $([:($(ys[i]) = u[$i]) for i in eachindex(ys)]...)
@@ -445,6 +464,16 @@ function _ode_locals(odes)
     return ys, locals, bind
 end
 
+# The ODE locals replace the current entity's unknowns, but not inside population folds:
+# `sum(h for c in cells)` reads every cell's stored value (the state at the start of the MCS
+# step, D-029), not `ncells` copies of this cell's local.
+# (Model unknowns are one value everywhere, so model ODEs substitute inside folds too.)
+_substitute_locals(rate, locals, scope = :cell) = scope === :model ?
+    Symbolics.substitute(rate, locals; fold = Val(false)) :
+    Symbolics.substitute(rate, locals; fold = Val(false), filterer = _outside_populations)
+_outside_populations(ex) = !(iscall(ex) && operation(ex) === population) &&
+                           SymbolicUtils.default_substitute_filter(ex)
+
 # `substeps` fixed steps of the sweep's `ode_solver` over one MCS (`dt`), on locals `ys`.
 function _ode_steps(solver, T, dt, ys, rates)
     n = length(ys)
@@ -516,7 +545,6 @@ function _link_phases(c::CompiledPottsSystem, T)
     return out
 end
 
-_by_cadence(us) = [filter(u -> u.every == e, us) for e in sort!(unique(u.every for u in us))]
 
 function _site_update_phases(c, T, us, every, rn)
     env = _site_env(T, :i, rn; mcs = :mcs, key = :key)

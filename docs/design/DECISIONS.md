@@ -356,8 +356,8 @@ Consequences:
 ## D-041 Populations in energies are snapshots per MCS (2026-09-29)
 
 Decision: a population fold inside `@energy` (e.g. `mean(volume for c in cells)`) is
-evaluated once at the start of each MCS. It is hoisted into a model-scope value and held
-constant during the sweep. AUTHORING says so. Under this meaning ΔH is exact.
+evaluated once per MCS, after the before-MCS updates and just before the sweep (and at
+initialization). It is hoisted into a model-scope value and held constant during the sweep. AUTHORING says so. Under this meaning ΔH is exact.
 
 A live, exact variant may come later as an opt-in (AUDIT §1 decision a/b). It would cover
 sum-decomposable folds (sum, count, mean): model-scope running totals updated on every

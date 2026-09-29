@@ -121,6 +121,10 @@ end
 function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
     ring = ph.ring(st)
     s = ph.src(st)
+    # host-side shape check: the kernel indexes the ring by the source's length
+    size(ring)[1:(end - 1)] == size(s) || throw(DimensionMismatch(
+        "history ring $(size(ring)) does not match its source $(size(s)) plus a depth axis " *
+        "(grow rings with the state, e.g. `with_capacity`)"))
     depth = size(ring, ndims(ring))
     n = length(s)
     _history_kernel!(backend)(ring, s, mod1(mcs + 1, depth), n; ndrange = n,

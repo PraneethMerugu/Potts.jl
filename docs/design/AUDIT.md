@@ -269,3 +269,11 @@ Every parity test should get a **negative control**: a perturbed science paramet
    - then **3D hex (prism first)** as a feature milestone.
 6. **Docs.** Executable AUTHORING (doctest extraction); the §6 drift; ROADMAP/INTERNALS/DECISIONS staleness; MakiePotts legacy files.
 7. **LOW polish.**
+
+---
+
+## Fix log
+
+| Commit | IDs | Notes |
+|--------|-----|-------|
+| (group 1a) | A-10, A-11, A-12, A-14, A-19, A-50, A-51, A-52, A-54, A-60, A-61, A-62, A-63 | Mismatched history rings are a `DimensionMismatch` (rings are not resized by `with_capacity`). Asymmetric contact/surface relations are rejected. `Lifecycle(…; rebuild!)` hook for model trackers. `saveat = Δ`, solution `show`/`sol[i]`. Operating-point `:kind`/`:cluster`/`:ownership` Symbol keys, kind range and label sign checks, unknown keys are errors. `remake(u0)` keeps the old free slots. `src/schedule.jl`: D-041 energy snapshots, D-042 ordered stages with `x__pre` snapshots and hoisted folds (also for cell ODEs); vector components are one unit. |

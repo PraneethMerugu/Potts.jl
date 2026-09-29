@@ -28,6 +28,10 @@ hand-written):
 - `kind(st, p, ctx, key, mcs, c) -> Int32` — the destination kind of a transition.
 - `divide!(st, p, ctx, key, mcs, parent, daughter)` — daughter state rule, run after the
   default `Copy` of every non-tracker cell quantity (e.g. halve extensive quantities).
+- `rebuild!(st, p, ctx, backend)` — host hook run after the built-in trackers are rebuilt
+  (a lifecycle event moves sites between cells). Model-specific trackers that the lifecycle
+  cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
+  here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
 - `every` — check triggers every `every` MCS.
 - `clusters` — divide compartment clusters as a unit (`st.cell.cluster`, D-036): a cluster
   divides when its root triggers `EVENT_DIVIDE` (members' own divide events are ignored);
@@ -38,17 +42,20 @@ hand-written):
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, KI, DV}
+struct Lifecycle{TR, NO, KI, DV, RB}
     trigger::TR
     normal::NO
     kind::KI
     divide!::DV
+    rebuild!::RB
     every::Int
     clusters::Bool
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
-    every::Integer = 1, clusters::Bool = false) =
-    Lifecycle(trigger, normal, kind, divide!, Int(every), clusters)
+    rebuild! = no_rebuild, every::Integer = 1, clusters::Bool = false) =
+    Lifecycle(trigger, normal, kind, divide!, rebuild!, Int(every), clusters)
+
+no_rebuild(st, p, ctx, backend) = nothing
 
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
@@ -313,6 +320,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
 
     _has_clusters(st) && _fix_clusters!(st)
     rebuild_trackers!(st, ctx, backend)
+    lc.rebuild!(st, p, ctx, backend)
     if !isempty(parents)
         v = Array(st.cell.volume)
         stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
@@ -366,7 +374,8 @@ end
     with_capacity(st, capacity)
 
 A copy of host state `st` whose cell quantities have `capacity` slots (free slots have
-volume 0, kind 1, generation 0). Lifecycle models preallocate capacity (F11).
+volume 0, kind 1, generation 0). History rings are not resized: build rings of cell
+quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error). Lifecycle models preallocate capacity (F11).
 """
 function with_capacity(st::CPMState, capacity::Integer)
     n = length(st.cell.kind)

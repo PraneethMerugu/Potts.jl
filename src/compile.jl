@@ -33,7 +33,12 @@ struct CompiledPottsSystem
     contact_spec::Any
     gather_names::Dict{Any, Symbol}
     footprint::Footprint
-    scratch::Set{Symbol}                              # site variables that need a scratch buffer
+    scratch::Set{Symbol}                              # field variables (double-buffered steps)
+    schedule::Dict{Symbol, Vector{Stage}}             # :before_mcs/:after_mcs → ordered stages (D-042)
+    pre_snapshots::Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}   # block → (scope, x) copied to x__pre
+    update_pops::Vector{Pair{Symbol, Any}}            # model slots of folds hoisted from updates
+    energy_snapshots::Vector{Pair{Symbol, Any}}       # model slots of folds in energies (D-041)
+    cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -125,18 +130,18 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             push!(cluster_terms, (_all_kinds(sys, d.kinds), e.expr))
         elseif d isa ContactDomain
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
-            _check_static(e.expr, "a contact term")
+            _check_static(_strip_populations(e.expr)[1], "a contact term")
             E = _symmetrize(_cellvars_at_owner(e.expr))
             contact_terms[d.relation] = haskey(contact_terms, d.relation) ? contact_terms[d.relation] + E : E
         elseif d isa EdgeDomain
             (relationship !== nothing && relationship.name === d.relationship) ||
                 throw(ArgumentError("edges($(d.relationship)): no @relationship $(d.relationship)"))
             _check_names(e.expr, _EDGE_BUILTINS, "an edge term")
-            _check_static(e.expr, "an edge term")
+            _check_static(_strip_populations(e.expr)[1], "an edge term")
             push!(edge_terms, e.expr)
         elseif d isa SiteDomain
             _check_names(e.expr, _SITE_BUILTINS, "a site term")
-            _check_static(e.expr, "a site term")
+            _check_static(_strip_populations(e.expr)[1], "a site term")
             isempty(_gathers(e.expr)) || throw(ArgumentError("site terms reading neighbours are not supported yet"))
             push!(site_terms, e.expr)
         else
@@ -280,25 +285,26 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
     end
 
-    # site variables whose synchronous updates read neighbours need a scratch buffer
-    scratch = Set{Symbol}()
-    for ((phase, scope), us) in updates
-        scope === :site || continue
-        written = Set(info(_unwrap(u.eq.lhs)).name for u in us)
-        for u in us
-            neighbour_reads = Set{Symbol}()
-            _walk(u.eq.rhs) do y
-                if iscall(y) && (operation(y) === gather || operation(y) === Δ)
-                    foreach(z -> (i = info(z); i !== nothing && i.role in (:site, :field) && push!(neighbour_reads, i.name)),
-                        _leaves(y))
-                end
-            end
-            isempty(intersect(neighbour_reads, written)) || union!(scratch, written)
-        end
+    # fields step double-buffered; synchronous updates read previous values from snapshots
+    scratch = Set{Symbol}(info(x).name for (x, _) in fields)
+
+    # population folds: snapshots in energies (D-041), hoisted from updates and cell ODEs
+    energy_snapshots = Pair{Symbol, Any}[]
+    snap(x) = _hoist_populations(x, energy_snapshots, gather_names, :__snap; strict = true)
+    cell_terms = [(k, snap(E)) for (k, E) in cell_terms]
+    cluster_terms = [(k, snap(E)) for (k, E) in cluster_terms]
+    contact_terms = Dict{Symbol, Any}(r => snap(E) for (r, E) in contact_terms)
+    site_terms = Any[snap(E) for E in site_terms]
+    edge_terms = Any[snap(E) for E in edge_terms]
+    update_pops = Pair{Symbol, Any}[]
+    schedule = Dict{Symbol, Vector{Stage}}()
+    pre_snapshots = Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}()
+    for ph in (:before_mcs, :after_mcs)
+        schedule[ph], pre_snapshots[ph] = _schedule_block(sys, Update[u for u in sys.updates if u.phase === ph],
+            gather_names, update_pops)
     end
-    for (x, _) in fields
-        push!(scratch, info(x).name)
-    end
+    cell_ode_pops = Pair{Symbol, Any}[]
+    cell_odes = Tuple{Any, Any}[(x, _hoist_populations(r, cell_ode_pops, gather_names, :__odepop)) for (x, r) in cell_odes]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_units(sys)
@@ -307,7 +313,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationship, edge_terms,
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
-        scratch)
+        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops)
 end
 
 # A kind filter naming every cell kind is no filter (the generated code skips the test).

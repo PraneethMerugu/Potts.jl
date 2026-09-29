@@ -143,6 +143,11 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
     end
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
+    t0, t1 = prob.tspan
+    # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
+    saveat isa Number && (saveat = (t0 + Int(saveat)):Int(saveat):t1)
+    outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
+    isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(alg.proposal, lat), contact = prob.contact,
         mobility = _to_backend(backend, mobility(prob.frozen, lat)), prob.relations...)
@@ -202,6 +207,12 @@ function _preflight(prob::CPMProblem, alg::CPMAlgorithm, ctx)
         throw(ArgumentError("a lifecycle needs the moment trackers: add `init_moments(σ, lattice, capacity)` to the cell state"))
     haskey(ctx, :surface) && has_origin(ctx.surface) &&
         throw(ArgumentError("the surface relation must not include the origin"))
+    # the pair-energy deltas assume unordered bonds: every offset needs its negation
+    for name in (:contact, :surface)
+        haskey(ctx, name) && !is_symmetric(getfield(ctx, name)) && throw(ArgumentError(
+            "the $name relation is not symmetric (each offset needs its negation with the same " *
+            "weight); an asymmetric relation gives a ΔH that is not an energy difference"))
+    end
     alg isa CheckerboardCPM || return nothing
     need = max(radius(ctx.proposal), radius(ctx.contact),
         maximum(radius, values(prob.relations); init = 0))
@@ -315,6 +326,22 @@ function PottsSolution(integ::PottsIntegrator)
     return PottsSolution(convert(Vector{S}, integ.saved_u), copy(integ.saved_t),
         integ.prob, integ.alg, integ.retcode, integ.stats)
 end
+
+# Integer indexing is by saved state (`sol[end]` is the final state), not RecursiveArrayTools'
+# element indexing: a state is a named collection of arrays, not an array.
+Base.getindex(sol::PottsSolution, i::Int) = sol.u[i]
+Base.getindex(sol::PottsSolution, i::AbstractVector{<:Integer}) = sol.u[i]
+Base.firstindex(sol::PottsSolution) = firstindex(sol.u)
+Base.lastindex(sol::PottsSolution) = lastindex(sol.u)
+
+function Base.show(io::IO, ::MIME"text/plain", sol::PottsSolution)
+    n = length(sol.t)
+    println(io, "PottsSolution: retcode ", sol.retcode, ", ", n, " saved state", n == 1 ? "" : "s",
+        ", ", sol.stats.mcs, " MCS")
+    print(io, "t: ", n <= 12 ? sol.t : "[$(join(sol.t[1:5], ", ")), …, $(join(sol.t[(end - 4):end], ", "))]")
+end
+Base.show(io::IO, sol::PottsSolution) =
+    print(io, "PottsSolution(", sol.retcode, ", ", length(sol.t), " states)")
 
 function (sol::PottsSolution)(t::Integer)
     i = searchsortedfirst(sol.t, t)

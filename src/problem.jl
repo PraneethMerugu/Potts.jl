@@ -70,6 +70,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         sys = PottsModelInfo(c, T, _rgf(_total_energy_expr(c, T)), _rgf(_delta_H_expr(c, T; drives = false)),
             hctx, Dict{Any, Any}()))
     frozen = _frozen_mask(sys, st)
+    _host_init!(f, st, p, hctx, seed, replica, repeat)
     return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
         spacing, frozen, seed, replica, repeat)
 end
@@ -106,7 +107,22 @@ _acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
 function _operating_point(sys::PottsSystem, op)
     op = _expand_vectors(sys, op)
     byname = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in Iterators.flatten((sys.parameters, sys.variables)))
-    return Dict{Any, Any}((k isa Symbol ? get(byname, k, k) : _opkey(k)) => v for (k, v) in op)
+    byname[:kind] = _unwrap(B.kind)
+    byname[:cluster] = _unwrap(B.cluster)
+    byname[:ownership] = CorePotts.ownership
+    rels = Set(r.name for r in sys.relationships)
+    known = Set{Any}(values(byname))
+    opd = Dict{Any, Any}()
+    for (k, v) in op
+        key = k isa Symbol ? get(byname, k, k) : _opkey(k)
+        (key in known || (key isa Symbol && key in rels)) || throw(ArgumentError(
+            "operating-point key `$k` names nothing in model `$(nameof(sys))`; it has parameters " *
+            "$(join((info(x).name for x in sys.parameters), ", ")), variables " *
+            "$(join((info(x).name for x in sys.variables), ", ")), and `ownership`, `kind`, `cluster`" *
+            (isempty(rels) ? "" : ", $(join(rels, ", "))")))
+        opd[key] = v
+    end
+    return opd
 end
 
 """
@@ -191,11 +207,17 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
     haskey(opd, ownership) || throw(ArgumentError("the operating point needs `ownership => labels`"))
     σ = Int32.(opd[ownership])
     size(σ) == sys.lattice.dims || throw(ArgumentError("labels have size $(size(σ)); the lattice is $(sys.lattice.dims)"))
+    all(>=(0), σ) || throw(ArgumentError("labels must be ≥ 0 (0 is medium); got $(minimum(σ))"))
     ncell = maximum(σ; init = Int32(0))
     kkey = _unwrap(B.kind)
     kinds = haskey(opd, kkey) ? opd[kkey] : fill(1, ncell)
     kinds = Int32[k isa Symbol ? _kind_index(sys, k) : Int(k) for k in (kinds isa AbstractVector ? kinds : fill(kinds, ncell))]
     length(kinds) == ncell || throw(ArgumentError("$(length(kinds)) kinds for $ncell labelled cells"))
+    nk = length(sys.kinds) - 1
+    for k in kinds
+        1 <= k <= nk || throw(ArgumentError("kind number $k is out of range: cell kinds are 1:$nk " *
+                                            "($(join(sys.kinds[2:end], ", ")))"))
+    end
     lat = core_lattice(sys.lattice)
     site = Pair{Symbol, Any}[]
     cell = Pair{Symbol, Any}[]
@@ -244,12 +266,28 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         end
         append!(cell, pairs(links))
     end
+    # previous-value snapshots and population slots (D-041, D-042)
+    for (scope, n) in unique(Iterators.flatten(values(c.pre_snapshots)))
+        dst = scope === :site ? site : scope === :cell ? cell : model
+        push!(dst, Symbol(n, :__pre) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
+    end
+    for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops))
+        push!(model, n => zeros(T, 1))
+    end
     sitent, modelnt = NamedTuple(site), NamedTuple(model)
     history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
                   for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+end
+
+# The at-init phases (integrals, energy snapshots) on a host state, so a problem's `u0` is
+# consistent before `init` (e.g. `total_energy(prob)`).
+function _host_init!(f, st, p, ctx, seed, replica, repeat)
+    key = CorePotts.RNGKey(seed, replica, repeat)
+    CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
+    return st
 end
 
 # Kinds that name clusters (`clusters(k)` terms and divisions): a cluster's root is chosen
@@ -329,5 +367,10 @@ CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = _operating_point(info.csys.sys, u0)
-    return _initial_state(info.csys, opd, info.T, length(prob.u0.cell.kind))
+    # keep the old capacity and the old number of free slots (room for divisions)
+    old = length(prob.u0.cell.kind)
+    free = count(iszero, prob.u0.cell.volume)
+    ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
+    st = _initial_state(info.csys, opd, info.T, max(old, ncell + free))
+    return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
 end

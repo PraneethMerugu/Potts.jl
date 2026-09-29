@@ -290,6 +290,16 @@ end
 relation(r::Relation, ::Lattice) = r
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
+"""Whether every offset's negation is in `r` with the same weight (a symmetric pair relation)."""
+function is_symmetric(r::Relation)
+    for (k, o) in enumerate(r.offsets)
+        j = findfirst(==(map(-, o)), r.offsets)
+        j === nothing && return false
+        r.weights === nothing || r.weights[j] == r.weights[k] || return false
+    end
+    return true
+end
+
 function _check_aliasing(offs, l::Lattice{N}) where {N}
     wrap(o) = ntuple(d -> l.periodic[d] ? mod(o[d], l.dims[d]) : o[d], N)
     seen = Dict{NTuple{N, Int}, NTuple{N, Int}}()
