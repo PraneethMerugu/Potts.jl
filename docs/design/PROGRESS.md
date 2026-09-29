@@ -114,3 +114,28 @@
   t ≈ 1, so it was chance.
 - **Deferred.** Per-axis spacing moves to M2.2/M2.4, where moments and fields consume it.
   A Float64 field in `Lattice` would be invalid on Metal.
+
+## 2026-09-29 — M2.2 (commit 6e525c1)
+
+- **Moments** (`geometry.jl`). Each cell has an integer anchor and exact `Int64` sums of
+  minimum-image offsets (ties at +n/2 resolve to +, per the adjudication). When the mean
+  offset reaches ±2 the anchor re-centres inside `commit_moments!`, shifting the sums
+  exactly; this is safe because the cell is claimed.
+  - No drift, and no Float32 precision loss on Metal: floats appear only in the final
+    division.
+  - Valid while cells span less than half of each periodic axis.
+- **Queries.** `centroid` (wrapped), `centroid_shift` (δcentroid for drives),
+  `covariance`, `principal_moments` (closed-form 2×2 and 3×3), and `shape` with the
+  CompuCell3D descriptors of AUTHORING §12.4 (major/minor length, semiaxes, elongation,
+  eccentricity, orientation).
+- **Site trackers** (`trackers.jl`). Site sums work for any additive isbits type
+  (`SVector` for structured owner sums). Site minima are exact on gain; a cell that loses
+  its minimum-holding site is marked `stale` (its value is a lower bound) until
+  `recompute_site_min!` at a sync point.
+- **Tests.**
+  - Trackers match brute-force unwrapped geometry after sequential and checkerboard runs
+    in 2D and 3D, with every cell straddling seams.
+  - Analytic box shapes in 2D and 3D; `centroid_shift` equals the committed change.
+  - Site-sum and site-minimum invariants.
+- **GPU group** (`COREPOTTS_GPU=metal`, 86 checks). Surface, volume and moment trackers are
+  exact on Metal. CPU/Metal statistical parity: t = −0.49 on 12 + 12 seeds.
