@@ -154,3 +154,12 @@ Decisions:
   LocalMath's `CanonicalLeftFold` remains available, never the default in CorePotts.
 - Filter for importing legacy features: a feature is carried over only if its
   steady-state cost is ~zero or it is scientifically essential.
+
+## D-030 Julia-only coupling and dependencies (2026-09-29, maintainer principle)
+Decision: every runtime dependency and every coupling target is a Julia package.
+Intracellular models couple through ModelingToolkit (ODE/SDE/DAE/jump systems),
+Catalyst.jl, JumpProcesses.jl, SBMLToolkit.jl (for SBML import) and COBREXA.jl (flux
+balance); PDEs through MTK/MethodOfLines or built-in lattice stencils. No Python,
+RoadRunner, Antimony, MaBoSS, Tissue Forge or other non-Julia runtimes. Binary
+artifacts (JLLs) pulled transitively by Julia packages are acceptable; importers for
+foreign model formats (e.g. MorpheusML, PIFF) are allowed if written in pure Julia.
