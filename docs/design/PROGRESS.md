@@ -216,3 +216,23 @@
   for M3's codegen). KS per MCS and observable: Merks 15/15, Wortel 9/9.
   - The first Merks run failed (volume 11.4 against 7.8). The bisection isolated
     connectivity, and legacy CorePotts treats out-of-domain neighbours as medium (D-034).
+
+## 2026-09-29 — M2.7 (commit 48a43bc)
+
+- **Frozen sites.** `CPMProblem(...; frozen = mask)` builds `ctx.mobility`: `AllMobile()` by
+  default (zero cost), otherwise `MaskMobility` (device mask plus mobile index list).
+  Frozen sites are never targets or sources, and N counts mobile sites; they still count
+  in contact energies (adjudication §2).
+- **Queries** (`spatial.jl`). `is_boundary_site`, weighted `count_neighbors`, and the
+  `CellReduce` phase (atomic per-cell +/max/min of any site expression). Float max/min
+  use a CAS loop, since UnsafeAtomics has no float max. This covers owner sums, means,
+  predicate counts and structured sums.
+- **Contact graph.** `contact_graph` (host CSR: neighbours plus interface measure, medium
+  separate) with `neighbors(g, c)` and `contact(g, c, n)`, as in CompuCell3D's
+  NeighborTracker.
+- **Field BCs.** `laplacian`/`gradient` take `bc = ((low, high), …)` per closed face:
+  zero flux, or a cell-centred Dirichlet value (ghost = 2v − c).
+- **Tests.** Frozen invariants and attempt counts under both algorithms; predicates;
+  reductions against the host, including empty-cell identities; the contact graph
+  against brute force (2.5k checks); Dirichlet walls reach the exact linear profile.
+  Metal covers frozen sites and reductions (163 GPU checks).
