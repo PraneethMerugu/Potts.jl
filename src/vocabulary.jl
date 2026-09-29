@@ -34,7 +34,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 # Built-in names
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
-    :weight, :source, :target, :old, :new, :mcs, :position)
+    :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -52,7 +52,7 @@ parameter(name::Symbol, default) = _tag(_sym(name), Info(:param, name, default, 
 """`kind_parameter(name, values)`: a parameter indexed by kind (medium included)."""
 kind_parameter(name::Symbol, values) = _tag(_sym(name), Info(:kindtable, name, values, (;)))
 
-const SCOPES = (:site, :cell, :model, :field)
+const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope."""
 function variable(x, scope::Symbol; default = 0.0, options...)
@@ -172,6 +172,34 @@ connectivity(kinds::Integer...; rule::Symbol = :local) =
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
 
 energy(p::Pair) = EnergyTerm(p.first, p.second)
+
+# ---------------------------------------------------------------------------------------
+# Relationships (cell–cell links, CorePotts `relationships.jl`)
+
+"""`@relationship name(cell, cell) capacity = k`: a symmetric link set, at most `k` per cell."""
+struct RelationshipSpec
+    name::Symbol
+    capacity::Int
+end
+relationship(name::Symbol; capacity::Integer = 4) = RelationshipSpec(name, Int(capacity))
+struct RelationshipRef
+    name::Symbol
+end
+"""Energy domain `edges(rel)`: every link once; names `a`, `b` (cells), `distance`, edge variables."""
+struct EdgeDomain
+    relationship::Symbol
+end
+edges(r::RelationshipRef) = EdgeDomain(r.name)
+"""`@link rel when = cond` / `@unlink rel when = cond`, checked every `every` MCS on the host."""
+struct LinkRule
+    relationship::Symbol
+    action::Symbol          # :link or :unlink
+    when::Any
+    every::Int
+end
+link_rule(action::Symbol, r::RelationshipRef; when, every::Integer = 1) = LinkRule(r.name, action, when, Int(every))
+"""`new_contact(a, b)`: the pair touches and is not yet linked (the candidates of `@link`)."""
+new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)
 drive(p::Pair) = throw(ArgumentError("a drive must be `copy => expr`"))
 constraint(c::Constraint) = c
@@ -253,6 +281,6 @@ sweep_spec(law::Symbol; temperature, offset = 0.0, mcs_duration = 1.0,
     Float64(mcs_duration), field_solver)
 
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
-const DSL = (; cells, contacts, sites, connectivity, no_extinction,
+const DSL = (; cells, contacts, sites, edges, new_contact, connectivity, no_extinction,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, Every, geomean, geomean_shifted, mean, Δ)

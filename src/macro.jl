@@ -8,7 +8,8 @@
 const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
     Symbol("@variables"), Symbol("@lattice"), Symbol("@relations"), Symbol("@energy"),
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
-    Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"))
+    Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
+    Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"))
 
 """
     @potts_model Name begin
@@ -56,13 +57,11 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
-        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position) = $P.B
+        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance) = $P.B
         t = $P.t
         D = $P.D
         Pre = $P.Pre
-        (; cells, contacts, sites, connectivity, no_extinction, principal_axis, major_axis,
-            minor_axis, RandomPlane, Split, ExplicitEuler, Every, geomean, geomean_shifted,
-            mean, Δ) = $P.DSL
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
         __params = Any[]
         __vars = Any[]
@@ -73,6 +72,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __updates = $P.Update[]
         __equations = $P.Equation[]
         __divisions = $P.DivideRule[]
+        __relationships = $P.RelationshipSpec[]
+        __links = $P.LinkRule[]
         __lattice = nothing
         __sweep = nothing
     end
@@ -80,7 +81,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
         variables = __vars, relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
-        divisions = __divisions, sweep = __sweep, structural = $structural))
+        divisions = __divisions, relationships = __relationships, link_rules = __links,
+        sweep = __sweep, structural = $structural))
     return quote
         function $name(; $(kws...))
             $preamble
@@ -149,7 +151,23 @@ function _section!(parts, sec, args)
             push!(code, :(__relations[$(QuoteNode(k))] = $(l.args[2])), :($k = $P.RelationRef($(QuoteNode(k)))))
         end
     elseif sec === Symbol("@energy")
-        foreach(l -> push!(code, :(push!(__energies, $P.energy($(rewrite(l)))))), _lines(args))
+        for l in _lines(args)
+            e = :(push!(__energies, $P.energy($(rewrite(l)))))
+            push!(code, _is_edges(l) ? _edge_scope(e) : e)
+        end
+    elseif sec === Symbol("@relationship")
+        decl = args[1]
+        decl isa Expr && decl.head === :call || throw(ArgumentError("@relationship name(cell, cell) capacity = k"))
+        k = decl.args[1]
+        opts, _ = _options(args[2:end])
+        kw = [Expr(:kw, o, v) for (o, v) in opts if o !== :distance]
+        push!(code, :(push!(__relationships, $P.relationship($(QuoteNode(k)); $(kw...)))),
+            :($k = $P.RelationshipRef($(QuoteNode(k)))))
+    elseif sec in (Symbol("@link"), Symbol("@unlink"))
+        action = QuoteNode(sec === Symbol("@link") ? :link : :unlink)
+        opts, _ = _options(args[2:end])
+        kw = [Expr(:kw, o, rewrite(v)) for (o, v) in opts]
+        push!(code, _edge_scope(:(push!(__links, $P.link_rule($action, $(args[1]); $(kw...))))))
     elseif sec === Symbol("@drive")
         foreach(l -> push!(code, :(push!(__drives, $P.drive($(rewrite(_replace_copy(l))))))), _lines(args))
     elseif sec === Symbol("@constraint")
@@ -185,6 +203,15 @@ function _replace_call(ex, from, to, extra...)
     rest = filter(a -> !(a isa Expr && a.head === :parameters), ex.args[2:end])
     return Expr(:call, to, params..., extra..., rest...)
 end
+
+# Edge-scoped statements see the link endpoints `a`, `b` (bound only there, so parameters
+# named `a`/`b` elsewhere are unaffected).
+_edge_scope(ex) = :(let a = Potts.B.a, b = Potts.B.b
+    $ex
+end)
+
+_is_edges(l) = l isa Expr && l.head === :call && l.args[1] === :(=>) &&
+               l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
 
 _replace_copy(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(=>) && ex.args[2] === :copy ?
                     Expr(:call, :(=>), :(Potts.COPY), ex.args[3]) : ex

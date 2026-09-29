@@ -17,7 +17,7 @@ struct LowerEnv
 end
 
 const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+    :contact => "a contact term (`contacts => …`)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
 
 _unwrap(x) = Symbolics.unwrap(x)
 
@@ -75,6 +75,10 @@ function _lower_named(x, i::Info, env::LowerEnv)
         return :(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell])))
     elseif r === :model
         return :(@inbounds st.model.$(i.name)[1])
+    elseif r === :edge
+        haskey(env.bind, :__edge) || error("edge variable `$(i.name)` is only available in edge terms and link rules")
+        k, a = env.bind[:__edge]
+        return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
     end
     error("cannot lower `$x` (role $r)")
 end
@@ -91,7 +95,7 @@ function _sort(x)
     if i !== nothing
         i.role === :bound && return :site
         i.role === :builtin && return i.name in (:source, :target) ? :site :
-               i.name in (:old, :new, :owner, :owner′, :id) ? :cell : :unknown
+               i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
     end
     if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at
         a = info(arguments(x)[1])

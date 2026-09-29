@@ -22,6 +22,8 @@ Base.@kwdef struct PottsSystem
     updates::Vector{Update} = Update[]
     equations::Vector{Equation} = Equation[]
     divisions::Vector{DivideRule} = DivideRule[]
+    relationships::Vector{RelationshipSpec} = RelationshipSpec[]
+    link_rules::Vector{LinkRule} = LinkRule[]
     sweep::SweepSpec
     structural::NamedTuple = (;)
 end
@@ -65,4 +67,5 @@ Base.ndims(sys::PottsSystem) = length(sys.lattice.dims)
 _domain_string(d::CellDomain) = isempty(d.kinds) ? "cells" : "cells(" * join(d.kinds, ", ") * ")"
 _domain_string(d::ContactDomain) = d.relation === :contact ? "contacts" : "contacts($(d.relation))"
 _domain_string(::SiteDomain) = "sites"
+_domain_string(d::EdgeDomain) = "edges($(d.relationship))"
 _domain_string(d) = string(d)

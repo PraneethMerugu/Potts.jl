@@ -91,3 +91,75 @@ end
     @test r.u0.σ == circshift(σ, (3, 0)) && r.u0.cell.volume == prob.u0.cell.volume
     @test prob.f.acceptance === Metropolis()
 end
+
+@potts_model Spring begin
+    @kinds medium blob
+    @parameters begin
+        λ = 1.0
+        V₀ = 36.0
+        T = 10.0
+        k = 2.0
+        J[kind, kind] = [0 16; 16 2]
+    end
+    @variables rest(edge) = 12.0
+    @relationship bond(cell, cell) capacity = 1
+    @lattice Lattice((60, 30); neighborhood = Moore(1))
+    @energy begin
+        cells(blob) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+        edges(bond) => k * (distance - rest)^2
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model Tissue begin
+    @kinds medium leader follower
+    @parameters begin
+        T = 10.0
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    end
+    @variables age(edge) = 0.0
+    @relationship bond(cell, cell) capacity = 8
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy contacts => J[kind, kind′]
+    @link bond when = new_contact(a, b) && (kind[a] == leader), every = 100
+    @unlink bond when = distance > 100.0
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "relationships: springs and link rules" begin
+    σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[40:45, 12:17] .= 2
+    prob = PottsProblem(Spring(; name = :spring), [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000))
+    @test CorePotts.linked(prob.u0.cell, 1, 2) && prob.u0.cell.link_rest[1, 1] == 12.0
+    # self-check with edge energies (partner centroids move with the copy)
+    worst = 0.0
+    for (u, prop) in proposal_states(remake(prob; tspan = (0, 5)); mcs = (0, 5), n = 300)
+        a = deepcopy(u); a.σ[prop.target] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+    end
+    @test worst < 1e-9
+    ds = map(1:4) do seed
+        u = solve(remake(prob; seed), CheckerboardCPM()).u[end]
+        CorePotts.centroid_distance(Float64, u.cell, prob.lattice, 1, 2)
+    end
+    @test abs(sum(ds) / 4 - 12.0) < 2.5                 # relaxes from 25 to the rest length
+
+    σb = zeros(Int32, 30, 30)
+    for (c, (i, j)) in enumerate(Iterators.product(1:5:26, 1:5:26))
+        σb[i:(i + 4), j:(j + 4)] .= c
+    end
+    n = maximum(σb)
+    kinds = [isodd(c) ? :leader : :follower for c in 1:n]
+    tp = PottsProblem(Tissue(; name = :tissue), [ownership => σb, kind => kinds], (0, 1))
+    u = solve(tp, SequentialCPM()).u[end]            # the rule ran once, after MCS 0's sweep
+    g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
+    nlinks = 0
+    for a in 1:n, b in (a + 1):n
+        touching = b in CorePotts.neighbors(g, a)
+        led = isodd(a) || isodd(b)
+        @test CorePotts.linked(u.cell, a, b) == (touching && led)
+        nlinks += CorePotts.linked(u.cell, a, b)
+    end
+    @test nlinks > 20
+end

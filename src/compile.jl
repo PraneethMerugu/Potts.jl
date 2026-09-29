@@ -19,6 +19,9 @@ struct CompiledPottsSystem
     fields::Vector{Tuple{Any, Any}}                   # (field variable, rate)
     cell_odes::Vector{Tuple{Any, Any}}                # (cell variable, rate)
     divisions::Vector{DivideRule}
+    relationship::Union{Nothing, RelationshipSpec}
+    edge_terms::Vector{Any}                           # link energies E(a, b, distance, edge vars)
+    link_rules::Vector{LinkRule}
     uses_surface::Bool
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
@@ -34,6 +37,8 @@ const _CELL_BUILTINS = (:volume, :surface, :kind, :id, :generation, :mcs)
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight)
 const _SITE_BUILTINS = (:owner, :kind, :position, :mcs)
 const _PROPOSAL_BUILTINS = (:source, :target, :old, :new)
+const _EDGE_BUILTINS = (:a, :b, :distance)
+const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
 
 # Built-in names used bare (not as the array of an explicit index like `kind[new]`).
 function _bare_builtins(x, out = Set{Symbol}())
@@ -74,6 +79,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     cell_terms = Tuple{Vector{Int}, Any}[]
     contact_terms = Dict{Symbol, Any}()
     site_terms = Any[]
+    edge_terms = Any[]
+    length(sys.relationships) <= 1 || throw(ArgumentError("one @relationship per model is supported so far"))
+    relationship = isempty(sys.relationships) ? nothing : only(sys.relationships)
     for e in sys.energies
         d = e.domain
         if d isa CellDomain
@@ -83,6 +91,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
             E = _symmetrize(e.expr)
             contact_terms[d.relation] = haskey(contact_terms, d.relation) ? contact_terms[d.relation] + E : E
+        elseif d isa EdgeDomain
+            (relationship !== nothing && relationship.name === d.relationship) ||
+                throw(ArgumentError("edges($(d.relationship)): no @relationship $(d.relationship)"))
+            _check_names(e.expr, _EDGE_BUILTINS, "an edge term")
+            push!(edge_terms, e.expr)
         elseif d isa SiteDomain
             _check_names(e.expr, _SITE_BUILTINS, "a site term")
             isempty(_gathers(e.expr)) || throw(ArgumentError("site terms reading neighbours are not supported yet"))
@@ -138,9 +151,18 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for d in sys.divisions
         _check_names(d.when, _CELL_BUILTINS, "a division condition")
     end
+    for r in sys.link_rules
+        (relationship !== nothing && relationship.name === r.relationship) ||
+            throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
+        _check_names(r.when, _LINK_BUILTINS, "a link rule")
+    end
+    for x in sys.variables
+        info(x).role === :edge && relationship === nothing &&
+            throw(ArgumentError("edge variable `$(info(x).name)` needs a @relationship"))
+    end
 
     uses_surface = any(t -> _uses_builtin(t[2], :surface), cell_terms)
-    needs_moments = !isempty(sys.divisions)
+    needs_moments = !isempty(sys.divisions) || relationship !== nothing
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)
@@ -201,7 +223,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     end
 
     return CompiledPottsSystem(sys, cell_terms, contact_terms, site_terms, drive,
-        sys.constraints, updates, fields, cell_odes, sys.divisions, uses_surface,
+        sys.constraints, updates, fields, cell_odes, sys.divisions, relationship, edge_terms,
+        sys.link_rules, uses_surface,
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
         scratch)
 end

@@ -24,7 +24,8 @@ end
 Build a `CorePotts.CPMProblem` from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
 `kind` to the kinds of the labelled cells (names or numbers), variables to initial values
-(scalars or arrays) and parameters to values overriding their defaults. `T` is the scalar
+(scalars or arrays), parameters to values overriding their defaults, and a relationship's
+name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). With
 `expression = Val(true)` the generated function expressions are returned instead.
 """
@@ -53,6 +54,8 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
     exprs = (_delta_H_expr(c, T), _commit_expr(c, T), ce, _temperature_expr(c, T))
     f = CorePotts.CPMFunction(_rgf(exprs[1]); commit! = _rgf(exprs[2]),
         constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(exprs[4]),
+        claims = c.relationship === nothing ? CorePotts.no_claims :
+                 _rgf(:((st, p, prop, ctx) -> CorePotts.link_claims(st.cell, prop, Val($(c.relationship.capacity))))),
         phases = _phases(c, T, values), lifecycle = _lifecycle(c, T), acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
         fingerprint = hash((string.(exprs), sys.lattice, T)),
@@ -123,6 +126,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
         elseif i.role === :cell
             push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
+        elseif i.role === :edge
+            continue                                   # link payloads, below
         else
             throw(ArgumentError("model-scope variables are not supported yet"))
         end
@@ -131,6 +136,16 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
+    if c.relationship !== nothing
+        payloads = [info(x).name => T for x in sys.variables if info(x).role === :edge]
+        links = CorePotts.empty_links(c.relationship.capacity, ncell; payloads...)
+        defaults = (; (info(x).name => T(info(x).default) for x in sys.variables if info(x).role === :edge)...)
+        for (x, y) in get(opd, c.relationship.name, ())
+            CorePotts.add_link!(links, x, y; defaults...) ||
+                throw(ArgumentError("cannot link cells $x and $y (full row or duplicate)"))
+        end
+        append!(cell, pairs(links))
+    end
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = NamedTuple(site))
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st

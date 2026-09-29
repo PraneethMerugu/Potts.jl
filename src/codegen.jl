@@ -25,6 +25,10 @@ _contact_env(T, a, ka, n, kn, w, site, relname) = LowerEnv(T, :contact,
     Dict{Symbol, Any}(:kind => ka, :kind′ => kn, :owner => a, :owner′ => n, :weight => w,
         :__site => site, :__cell => a), relname)
 
+_edge_env(T, a, b, k, d, relname; mcs = nothing) = LowerEnv(T, :edge,
+    Dict{Symbol, Any}(:a => a, :b => b, :distance => d, :__edge => (k, a),
+        (mcs === nothing ? () : (:mcs => mcs,))...), relname)
+
 _kindtest(k, kinds) = isempty(kinds) ? true : foldl((a, b) -> :($a || $b), [:($k == $x) for x in kinds])
 
 const _PROP_LOCALS = quote
@@ -89,6 +93,10 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
+    end
+    if !isempty(c.edge_terms)
+        Ecode = lower(sum(c.edge_terms), _edge_env(T, :ea, :eb, :ek, :ed, rn))
+        push!(body, :(dH += CorePotts.link_delta($T, st.cell, ctx, prop, (ea, eb, ek, ed) -> $Ecode)))
     end
     for E in c.site_terms
         after = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :new, :kind => :k_new, :__site => :target,
@@ -197,7 +205,46 @@ function _phases(c::CompiledPottsSystem, T, values)
         end)
         push!(after, CorePotts.CellPhase(_rgf(ex)))
     end
+    append!(after, _link_phases(c, T))
     return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after))
+end
+
+# `@link`/`@unlink` rules: host phases over the contact graph / existing links.
+function _link_phases(c::CompiledPottsSystem, T)
+    rn = c.gather_names
+    out = Any[]
+    defaults = [Expr(:kw, info(x).name, T(info(x).default)) for x in c.sys.variables if info(x).role === :edge]
+    for r in c.link_rules
+        body = if r.action === :unlink
+            cond = lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs))
+            quote
+                for ea in 1:length(cell.kind), ek in 1:size(cell.links, 1)
+                    eb = cell.links[ek, ea]
+                    eb > ea || continue
+                    ed = CorePotts.centroid_distance($T, cell, ctx.lattice, ea, eb)
+                    $cond && CorePotts.remove_link!(cell, ea, eb)
+                end
+            end
+        else
+            ab = lower(r.when, LowerEnv(T, :edge, Dict{Symbol, Any}(:a => :ea, :b => :eb, :distance => :ed, :mcs => :mcs), rn))
+            ba = lower(r.when, LowerEnv(T, :edge, Dict{Symbol, Any}(:a => :eb, :b => :ea, :distance => :ed, :mcs => :mcs), rn))
+            quote
+                g = CorePotts.contact_graph(st.σ, ctx.lattice, ctx.contact, length(cell.kind))
+                for ea in 1:length(cell.kind)
+                    cell.volume[ea] > 0 || continue
+                    for eb in CorePotts.neighbors(g, ea)
+                        eb > ea || continue
+                        CorePotts.linked(cell, ea, eb) && continue
+                        ed = CorePotts.centroid_distance($T, cell, ctx.lattice, ea, eb)
+                        ($ab || $ba) && CorePotts.add_link!(cell, ea, eb; $(defaults...))
+                    end
+                end
+            end
+        end
+        f = _rgf(:((cell, st, p, ctx, mcs) -> $(Expr(:block, body, :(return nothing)))))
+        push!(out, CorePotts.HostPhase(f; every = r.every))
+    end
+    return out
 end
 
 _by_cadence(us) = [filter(u -> u.every == e, us) for e in sort!(unique(u.every for u in us))]
@@ -323,6 +370,17 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
                     kn = Potts._cellkind(st, n)
                     H += $e / 2
                 end
+            end
+        end)
+    end
+    if !isempty(c.edge_terms)
+        Ecode = lower(sum(c.edge_terms), _edge_env(T, :ea, :eb, :ek, :ed, rn))
+        push!(body, quote
+            for ea in 1:length(st.cell.kind), ek in 1:size(st.cell.links, 1)
+                eb = st.cell.links[ek, ea]
+                eb > ea || continue
+                ed = CorePotts.centroid_distance($T, st.cell, ctx.lattice, ea, eb)
+                H += $Ecode
             end
         end)
     end
