@@ -45,9 +45,11 @@ export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them
 export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
+export read_piff, write_piff
 
 include("rng.jl")
 include("lattice.jl")
+include("piff.jl")
 include("model.jl")
 include("geometry.jl")
 include("phases.jl")

@@ -65,7 +65,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 - [ ] **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: reference or literature parity.
 
-- [ ] **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
+- [ ] (PIFF done 2026-09-29; MorpheusML pending) **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
 
 ## Phase 5 — Slim, docs, cut-over
 

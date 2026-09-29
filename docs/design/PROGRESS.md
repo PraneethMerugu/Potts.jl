@@ -644,3 +644,16 @@
     200 MCS take 2.4 s including compilation. Divisions occur with PP = 0.5 and none with
     PP = 0, as in the legacy audit.
   - Statistical parity against the SCDPotts runner is pending.
+
+## 2026-09-29 — PIFF import/export (M4.4, first half)
+
+- `CorePotts.read_piff(io_or_path, dims) -> (labels, kind names, PIFF ids)` and
+  `write_piff(io_or_path, labels, kinds; medium, ids)` handle CompuCell3D's initial
+  format in 2D and 3D.
+  - Coordinates are 0-based and boxes inclusive. Cells may span several lines, and medium
+    lines are optional.
+  - Errors are reported for boxes outside the lattice, overlaps, one cell with two types,
+    and z ≠ 0 in 2D.
+- Kind names can go straight into an operating point (`kind => Symbol.(kinds)`).
+- MorpheusML import is pending: it needs a pure-Julia XML parser (Julia-only
+  dependencies).
