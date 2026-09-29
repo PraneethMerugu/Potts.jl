@@ -352,3 +352,65 @@ Consequences:
 - Its git history is preserved in the legacy `LocalMath.jl` repository and in this repo's
   history. If a stage-program runtime is wanted later, revive it there as a standalone
   package, not as a Potts dependency.
+
+## D-041 Populations in energies are snapshots per MCS (2026-09-29)
+
+Decision: a population fold inside `@energy` (e.g. `mean(volume for c in cells)`) is
+evaluated once at the start of each MCS. It is hoisted into a model-scope value and held
+constant during the sweep. AUTHORING says so. Under this meaning ΔH is exact.
+
+A live, exact variant may come later as an opt-in (AUDIT §1 decision a/b). It would cover
+sum-decomposable folds (sum, count, mean): model-scope running totals updated on every
+accepted copy, with cell terms expanded algebraically into totals. It would be exact on
+`SequentialCPM` and use a colour-lagged total on the checkerboard (D-029). `minimum` and
+`maximum` stay snapshot-only.
+
+Why: today's behaviour gives a wrong ΔH and costs O(N) per proposal (A-60). The snapshot is
+standard CPM practice, cheaper, and GPU-safe, and it keeps global energy terms.
+
+## D-042 Update blocks follow MTK discrete semantics (2026-09-29)
+
+Decision:
+- Within one update block, `Pre(x)` is always the value before the block, snapshotted where
+  needed.
+- A bare `y` on a right-hand side, where `y` is updated in the same block, means y's new
+  value.
+- The compiler orders the updates by these dependencies across scopes and cadence groups,
+  and reports cycles as errors.
+- Population folds inside updates become reductions that run before the update reading them.
+  They fold old values under `Pre` and new values when written bare.
+
+Why: execution in alphabetical scope order made `Pre(m)` return new values (A-63). In-place
+folds raced and compounded (A-62). This keeps chaining, now explicit, and fixes both.
+
+## D-043 `position` is Cartesian; `site` is the lattice site (2026-09-29)
+
+Decision:
+- `position[k]` is the embedded (Cartesian) coordinate times the spacing. On a square
+  lattice with spacing 1 it equals the old values.
+- The new name `site` is the current lattice site. It is usable as a gather anchor.
+- Domain predicates receive Cartesian coordinates. Raw indices are opt-in.
+- `Weighted` weight functions receive embedded offsets.
+
+Why: raw indices are sheared by 60° on hex, and `position` could not be indexed or used as
+an anchor (A-02, A-05, A-66).
+
+## D-044 3D hexagonal lattices: prism first, then FCC; HCP deferred (2026-09-29)
+
+Decision: `Hexagonal(; stacking = :prism)` in 3D (6 in-plane + 2 axial neighbours) comes
+first, then `:fcc` (12 equidistant neighbours).
+
+HCP is deferred. Its layer-parity-dependent offsets don't fit the one-static-relation
+design, and it shares FCC's first shell. It may come later as its own geometry type, so
+that only HCP models pay for the parity branch.
+
+## D-045 Keep features the audit proposed rejecting (2026-09-29)
+
+- **An energy that reads an on-copy-written variable** is scored with the on-copy update
+  applied, so ΔH includes it (A-67).
+- **`@relations proposal = …`** maps onto the algorithm's proposal (A-41).
+- **Extension replacement** is keyed by `(phase, target)`, with a warning when the cadence
+  differs. This matches AUTHORING (A-47).
+- **Still rejected, each with a pointer to what works:**
+  - `rand()` in an `Adaptive` ODE: use a fixed-step solver, or a future SDE option (A-68).
+  - `Every(n)` on `@on_copy`: use `when = mcs % n == 0` (A-36).
