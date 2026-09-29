@@ -407,7 +407,7 @@ end
 function Base.setindex!(st::CPMState, v, i::StateIndex)
     a = _state_array(st, i)
     if v isa Number
-        fill!(a, v)
+        fill!(a, convert(eltype(a), v))      # a Float64 must not reach a Float32 device array
     else
         size(v) == size(a) ||
             throw(DimensionMismatch("$(i.scope) variable $(i.name) has size $(size(a)); got $(size(v))"))

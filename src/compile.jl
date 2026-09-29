@@ -261,7 +261,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     needs_moments = !isempty(sys.divisions) || relationship !== nothing ||
                     any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,
                         (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
-                        (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...])
+                        (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...,
+                        (r.when for r in sys.link_rules)..., sys.sweep.temperature,
+                        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)
@@ -277,11 +279,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
         (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
         sys.sweep.temperature]
-    uses_surface = any(x -> _uses_builtin(x, :surface), all_exprs) ||
-                   any(d -> _uses_builtin(d.when, :surface), sys.divisions)
-    # everything evaluated against the state, including division rules and observed quantities
+    # everything evaluated against the state, including division rules, observed quantities
+    # and link rules: every tracker flag scans the same set (A-35)
     scanned = Any[all_exprs..., (d.when for d in sys.divisions)...,
-        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., (o.expr for o in sys.observed)...]
+        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., (o.expr for o in sys.observed)...,
+        (r.when for r in sys.link_rules)...]
+    uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_clusters = cluster_division || uses_cluster_surface ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
@@ -344,6 +347,14 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     cell_ode_pops = Pair{Symbol, Any}[]
     cell_odes = Tuple{Any, Any}[(x, _hoist_populations(r, cell_ode_pops, gather_names, :__odepop)) for (x, r) in cell_odes]
 
+    if sys.sweep.ode_solver isa Adaptive              # A-68: an adaptive step cannot replay draws
+        for eq in sys.equations
+            _has_op(eq.rhs, random_uniform) && _located(sys, eq) do
+                throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
+                                    "the rate at trial steps; use `RK4`/`ExplicitEuler`, or draw in an update"))
+            end
+        end
+    end
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_units(sys)
 

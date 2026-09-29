@@ -361,3 +361,20 @@ helper_last(v) = v[end]
     ex = Potts.rewrite(:(v[end] + sum(i * j for i in 1:2, j in 1:3)))    # A-40
     @test eval(:(let v = [1, 5]; $ex; end)) == 5 + 18
 end
+
+@potts_model AuditTrackers begin
+    @kinds medium A
+    @variables s(cell) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 9)^2
+    @observed per(cell) ~ surface
+    @divide cells(A) when = volume > 1000, s => surface
+    @sweep Metropolis(; temperature = 1.0 + 0 * centroid(1))
+end
+
+@testset "A-35 trackers read only by observed/division/temperature" begin
+    σ = zeros(Int32, 16, 16); σ[2:4, 2:4] .= 1
+    p = PottsProblem(AuditTrackers(; name = :t), [ownership => σ, kind => [1]], (0, 2))
+    sol = solve(p, SequentialCPM())
+    @test sol[:per][end][1] == sol.u[end].cell.surface[1]
+end

@@ -14,6 +14,8 @@ const EVENT_NONE = Int32(0)
 const EVENT_DIVIDE = Int32(1)
 const EVENT_REMOVE = Int32(2)
 const EVENT_TRANSITION = Int32(3)
+# internal: a cluster member that transitions and divides with its cluster in the same MCS
+const _EVENT_DIVIDE_TRANSITION = Int32(4)
 
 """
     Lifecycle(trigger; normal, kind, divide!, every = 1, clusters = false)
@@ -97,6 +99,8 @@ end
 end
 
 """Unit eigenvector of cell `c`'s covariance for its `k`-th largest eigenvalue."""
+# 1D: the axis itself (a division cuts the cell across its length, A-16)
+@inline principal_axis(::Type{T}, cell, l::Lattice{1}, c, k) where {T} = (one(T),)
 @inline function principal_axis(::Type{T}, cell, l::Lattice{2}, c, k) where {T}
     C = embed_covariance(l, covariance(T, cell, c, Val(2)))     # Cartesian axes
     λ = principal_moments(C)[k]
@@ -173,8 +177,14 @@ end
     e = @inbounds events[c]
     if e == EVENT_TRANSITION
         @inbounds st.cell.kind[c] = kindf(st, p, ctx, key, mcs, Int32(c))
-    elseif e == EVENT_DIVIDE && @inbounds(daughter[c]) > 0
-        divide!(st, p, ctx, key, mcs, Int32(c), @inbounds daughter[c])
+    elseif (e == EVENT_DIVIDE || e == _EVENT_DIVIDE_TRANSITION) && @inbounds(daughter[c]) > 0
+        d = @inbounds daughter[c]
+        divide!(st, p, ctx, key, mcs, Int32(c), d)
+        if e == _EVENT_DIVIDE_TRANSITION                 # both halves take the new kind
+            k = kindf(st, p, ctx, key, mcs, Int32(c))
+            @inbounds st.cell.kind[c] = k
+            @inbounds st.cell.kind[d] = k
+        end
     end
 end
 
@@ -251,7 +261,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             ms = filter(m -> events[m] != EVENT_REMOVE, members[Int32(c)])
             if nextfree + length(ms) - 1 <= length(free)
                 for m in ms
-                    events[m] = EVENT_DIVIDE
+                    events[m] = events[m] == EVENT_TRANSITION ? _EVENT_DIVIDE_TRANSITION : EVENT_DIVIDE
                     daughter[m] = free[nextfree]
                     nextfree += 1
                 end
@@ -271,10 +281,9 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         elseif events[c] == EVENT_REMOVE
             removed[c] = true
             stats.removals += 1
-        elseif events[c] == EVENT_TRANSITION
-            stats.transitions += 1
         end
     end
+    stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_TRANSITION, events)
     copyto!(cache.daughter, daughter)
     copyto!(cache.removed, removed)
     clusters && copyto!(cache.events, events)

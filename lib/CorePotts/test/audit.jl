@@ -113,3 +113,29 @@ end
     u = solve(prob, CheckerboardCPM(; proposal = Moore(2))).u[end]
     @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
 end
+
+@testset "A-16 division on a 1D lattice" begin
+    lat = Lattice((40,))
+    σ = zeros(Int32, 40); σ[5:20] .= 1
+    st = with_capacity(initial_state(σ, [1]; cell = init_moments(σ, lat, 1)), 4)
+    st = CPMState(st.σ, merge(st.cell, init_moments(σ, lat, 4)), st.site, st.model, st.history)
+    lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE)
+    f = CPMFunction(gg_delta_H; temperature = (a...) -> 0.0, lifecycle = lc)
+    u = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM(; proposal = VonNeumann(1))).u[end]
+    @test count(>(0), u.cell.volume) == 2
+end
+
+@testset "A-17 a member's transition survives its cluster's division" begin
+    lat = Lattice((40, 40))
+    σ = zeros(Int32, 40, 40); σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2
+    cell = merge(init_moments(σ, lat, 2), init_clusters(σ, Int32[1, 1], lat))
+    st = with_capacity(initial_state(σ, Int32[1, 2]; cell), 6)
+    tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE : c == 2 ? EVENT_TRANSITION : EVENT_NONE
+    frozen(st, p, prop, ctx) = false
+    f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
+        lifecycle = Lifecycle(tr; clusters = true, kind = (st, p, ctx, key, mcs, c) -> Int32(1)))
+    sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+    u = sol.u[end]
+    @test sol.stats.lifecycle.divisions == 2 && sol.stats.lifecycle.transitions == 1
+    @test u.cell.kind[1:4] == Int32[1, 1, 1, 1]          # member 2 and its daughter took kind 1
+end
