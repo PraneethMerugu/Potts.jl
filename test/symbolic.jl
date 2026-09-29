@@ -1420,10 +1420,11 @@ end
 @potts_model CadenceExt begin
     @extend n = base = CadenceBase()
     @kinds medium A
-    @after_mcs Every(5) n ~ 0.0             # another cadence: kept alongside the base's update
+    @after_mcs Every(5) n ~ 0.0             # replaces the base's update despite the cadence (D-045)
 end
 
-@testset "replacement respects cadence" begin
+@testset "replacement is by target; a changed cadence warns (D-045)" begin
     σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
-    @test solve(PottsProblem(CadenceExt(; name = :c), [ownership => σ, kind => [1]], (0, 4)), SequentialCPM()).u[end].model.n[1] > 0
+    sys = @test_logs (:warn, r"replaces the base's Every\(1\)") CadenceExt(; name = :c)
+    @test solve(PottsProblem(sys, [ownership => σ, kind => [1]], (0, 4)), SequentialCPM()).u[end].model.n[1] == 0
 end

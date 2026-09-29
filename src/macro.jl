@@ -60,7 +60,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
-        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface, time) = $P.B
+        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface, time, site) = $P.B
         # gather variables and draws are numbered per model; a base built by `@extend` inside
         # another model continues the outer numbering (so the merged model has no collisions)
         $P._NESTING[] == 0 && ($P._GATHER_COUNT[] = 0)

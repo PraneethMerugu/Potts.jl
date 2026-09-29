@@ -98,23 +98,28 @@ end
     FieldStep((:site, :c) => (:site, :c_next), rate; dt = 1, substeps = 1, lower = nothing)
 
 Explicit Euler for `∂c/∂t = rate(st, p, ctx, key, mcs, i, c)` over one MCS of length `dt`,
-in `substeps` equal steps, optionally clipped below at `lower` after each step (legacy
+in `substeps` equal steps (a number, or a function of the parameters `p -> n` evaluated
+each MCS, so a `remake` with a larger diffusion coefficient stays stable), optionally clipped below at `lower` after each step (legacy
 Potts clips concentrations at 0). Each step writes the scratch array and publishes it, so the
 rate function sees a consistent field (bulk-synchronous). Stability of diffusion needs
 `dt/substeps · D · Σ_d 2/h_d² ≤ 1`; see `stable_substeps`.
 """
-struct FieldStep{F <: Part, S <: Part, R, T, L}
+struct FieldStep{F <: Part, S <: Part, R, T, N, L}
     field::F
     scratch::S
     rate::R
     dt::T
-    substeps::Int
+    substeps::N          # an Int, or `p -> Int` (from the current parameters, host-side)
     lower::L
 end
-function FieldStep(pair::Pair, rate; dt = 1.0, substeps::Integer = 1, lower = nothing)
-    substeps >= 1 || throw(ArgumentError("substeps must be ≥ 1"))
-    return FieldStep(Part(pair.first), Part(pair.second), rate, dt, Int(substeps), lower)
+function FieldStep(pair::Pair, rate; dt = 1.0, substeps = 1, lower = nothing)
+    substeps isa Integer && (substeps >= 1 || throw(ArgumentError("substeps must be ≥ 1")))
+    return FieldStep(Part(pair.first), Part(pair.second), rate, dt,
+        substeps isa Integer ? Int(substeps) : substeps, lower)
 end
+
+@inline _substeps(n::Int, p) = n
+_substeps(f::F, p) where {F} = max(1, Int(f(p)))
 
 @inline _clip(v, ::Nothing) = v
 @inline _clip(v, lower) = max(v, oftype(v, lower))
@@ -128,14 +133,15 @@ end
 function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     c, cn = ph.field(st), ph.scratch(st)
     n = length(c)
-    h = eltype(c)(ph.dt / ph.substeps)
+    nsub = _substeps(ph.substeps, p)
+    h = eltype(c)(ph.dt / nsub)
     kernel = _field_step_kernel!(backend)
-    for _ in 1:ph.substeps
+    for _ in 1:nsub
         kernel(ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower; ndrange = n,
             workgroupsize = _phase_groupsize(backend, n))
         copyto!(c, cn)
     end
-    return 2 * ph.substeps
+    return 2 * nsub
 end
 
 """Smallest substep count keeping explicit diffusion stable: `dt·D·Σ 2/h_d² / substeps ≤ 1`."""

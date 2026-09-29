@@ -104,3 +104,94 @@ end
     @test_throws ArgumentError PottsProblem(sys, [ownership => -σ, kind => fill(1, 16)], (0, 1))
     @test_throws ArgumentError PottsProblem(sys, [ownership => σ, kind => fill(1, 16), :lamda => 2.0], (0, 1))
 end
+
+@potts_model AuditPosition begin
+    @kinds medium A
+    @variables begin
+        px(site) = 0.0
+        py(site) = 0.0
+        c(site) = 1.0
+        g(site) = 0.0
+    end
+    @lattice Lattice((8, 6); geometry = Hexagonal())
+    @energy cells => (volume - 4)^2
+    @after_mcs begin
+        px ~ position[1]
+        py ~ position[2]
+        g ~ sum(c[n] for n in Hex(1)(site))
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "D-043 position is Cartesian, site is the current site" begin
+    σ = zeros(Int32, 8, 6); σ[2:3, 2:3] .= 1
+    p = PottsProblem(AuditPosition(; name = :p), [ownership => σ, kind => [1]], (0, 1))
+    u = solve(p, SequentialCPM()).u[end]
+    L = p.lattice
+    for I in CartesianIndices(σ)
+        e = embed(L, Float64.(Tuple(I)))
+        @test (u.site.px[I], u.site.py[I]) == e
+    end
+    @test all(==(6), u.site.g)                       # periodic hex: six neighbours everywhere
+end
+
+@potts_model AuditDupODE begin
+    @kinds medium A
+    @variables c(field) = 1.0
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4)^2
+    @equations begin
+        D(c) ~ -c / 10
+        D(c) ~ -c / 10
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "A-31 one equation per variable" begin
+    @test_throws ArgumentError mtkcompile(AuditDupODE(; name = :d))
+end
+
+@potts_model AuditDrawBase begin
+    @kinds medium A
+    @variables x(model) = 0.0
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4)^2
+    @after_mcs x ~ rand()
+    @sweep Metropolis(; temperature = 5.0)
+end
+@potts_model AuditDrawExt begin
+    @kinds medium A
+    @variables y(model) = 0.0
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4)^2
+    @after_mcs y ~ rand()
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "A-32 draws stay independent under extend" begin
+    m = extend(AuditDrawExt(; name = :e), AuditDrawBase(; name = :b))
+    σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1
+    u = solve(PottsProblem(m, [ownership => σ, kind => [1]], (0, 3)), SequentialCPM()).u[end]
+    @test u.model.x[1] != u.model.y[1]
+end
+
+@potts_model AuditDiffusion begin
+    @kinds medium A
+    @parameters Dc = 0.1
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ Dc * Δ(c)
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "A-64 field substeps follow the current parameters" begin
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1
+    c0 = zeros(16, 16); c0[8, 8] = 100.0
+    p = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0], (0, 10))
+    q = remake(p; p = [:Dc => 5.0])
+    fresh = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0, :Dc => 5.0], (0, 10))
+    uq = solve(q, SequentialCPM()).u[end].site.c
+    @test uq ≈ solve(fresh, SequentialCPM()).u[end].site.c
+    @test maximum(abs, uq) < 100
+end

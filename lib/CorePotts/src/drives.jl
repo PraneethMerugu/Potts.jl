@@ -79,12 +79,42 @@ end
 `true` unless removing the target from its (non-medium) owner would split the owner's sites
 in the target's Moore neighbourhood into more than one face-connected component. Works in
 any dimension (3ᴺ − 1 ≤ 26 neighbours, bitmask flood fill); out-of-domain neighbours are
-not part of the cell.
+not part of the cell. On a hexagonal lattice the neighbourhood is the 6-ring and the owner's
+sites there must form a single arc.
 """
-@inline function locally_connected(σ, ctx, prop::Proposal{N}) where {N}
+@inline locally_connected(σ, ctx, prop::Proposal) = _locally_connected(ctx.lattice, σ, ctx, prop)
+
+# Hexagonal: consecutive sites of the 6-ring are mutually adjacent, so the owner's sites
+# around the target stay connected iff they form a single arc of the ring.
+@inline function _locally_connected(lat::Lattice{2, M, Hexagonal}, σ, ctx, prop::Proposal{2}) where {M}
     a = prop.old
     a == 0 && return true
-    lat = ctx.lattice
+    same = _hex_ring(lat, σ, prop.x, a)
+    return _arcs(same) <= 1
+end
+
+# The 6 hex neighbours in angular order (axial offsets at 0°, 60°, …, 300°).
+const _HEX_RING = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
+
+@inline _hex_owners(lat, σ, x) = ntuple(Val(6)) do k
+    o = _HEX_RING[k]
+    inside, y = shift(lat, x, (Int32(o[1]), Int32(o[2])))
+    inside ? @inbounds(σ[linear_index(lat, y)]) : Int32(0)
+end
+@inline _hex_ring(lat, σ, x, a) = map(==(a), _hex_owners(lat, σ, x))
+
+# Number of maximal runs of `true` in a cyclic tuple (0 if none, 1 if all).
+@inline function _arcs(same::NTuple{K, Bool}) where {K}
+    n = 0
+    for k in 1:K
+        n += same[k] & !same[k == 1 ? K : k - 1]
+    end
+    return (n == 0 && same[1]) ? 1 : n
+end
+
+@inline function _locally_connected(lat::Lattice{N}, σ, ctx, prop::Proposal{N}) where {N}
+    a = prop.old
+    a == 0 && return true
     M = 3^N
     mask = UInt32(0)
     for p in 0:(M - 1)
@@ -131,10 +161,34 @@ if the losing cell occupies one arc of the clockwise ring (≤ 2 transitions), o
 if exactly two distinct cells occupy the ring. Out-of-domain ring sites count as medium
 (legacy CorePotts returns owner 0 for an absent neighbour). Gate by kind in the model.
 """
-@inline function merks_connectivity(σ, ctx, prop::Proposal{2})
+@inline merks_connectivity(σ, ctx, prop::Proposal{2}) = _merks(ctx.lattice, σ, ctx, prop)
+
+# Hexagonal: the same rule on the 6-ring (one arc, or else exactly two distinct cells).
+@inline function _merks(lat::Lattice{2, M, Hexagonal}, σ, ctx, prop::Proposal{2}) where {M}
     a = prop.old
     a <= 0 && return true
-    lat = ctx.lattice
+    owners = _hex_owners(lat, σ, prop.x)
+    _arcs(map(==(a), owners)) <= 1 && return true
+    return _distinct_cells(owners) == 2
+end
+
+@inline function _distinct_cells(owners::NTuple{K}) where {K}
+    distinct = 0
+    for k in 1:K
+        o = owners[k]
+        o > 0 || continue
+        seen = false
+        for j in 1:(k - 1)
+            owners[j] == o && (seen = true)
+        end
+        distinct += !seen
+    end
+    return distinct
+end
+
+@inline function _merks(lat::Lattice{2}, σ, ctx, prop::Proposal{2})
+    a = prop.old
+    a <= 0 && return true
     owners = ntuple(Val(8)) do k
         o = _MERKS_RING[k]
         inside, y = shift(lat, prop.x, (Int32(o[1]), Int32(o[2])))
@@ -147,15 +201,5 @@ if exactly two distinct cells occupy the ring. Out-of-domain ring sites count as
         transitions += 2 - Int(same[k == 1 ? 8 : k - 1]) - Int(same[k == 8 ? 1 : k + 1])
     end
     transitions <= 2 && return true
-    distinct = 0
-    for k in 1:8
-        o = owners[k]
-        o > 0 || continue
-        seen = false
-        for j in 1:(k - 1)
-            owners[j] == o && (seen = true)
-        end
-        distinct += !seen
-    end
-    return distinct == 2
+    return _distinct_cells(owners) == 2
 end

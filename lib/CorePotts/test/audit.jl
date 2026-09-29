@@ -51,3 +51,55 @@ end
     @test occursin("6 saved states", sprint(show, MIME"text/plain"(), sol))
     @test occursin("PottsSolution", sprint(show, sol))
 end
+
+@testset "A-01 hex connectivity uses the 6-ring" begin
+    L = Lattice((12, 12); geometry = Hexagonal())
+    ctx = (; lattice = L)
+    ring = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
+    hexadj(a, b) = (d = (b[1] - a[1], b[2] - a[2]); d in ring)
+    rng = Xoshiro(3)
+    x = (6, 6)
+    for _ in 1:500
+        σ = zeros(Int32, 12, 12)
+        σ[6, 6] = 1
+        members = [o for o in ring if rand(rng, Bool)]
+        foreach(o -> σ[6 + o[1], 6 + o[2]] = 1, members)
+        foreach(o -> σ[6 + o[1], 6 + o[2]] = 2, [o for o in ring if !(o in members) && rand(rng, Bool)])
+        prop = Proposal(linear_index(L, x), linear_index(L, (5, 6)), x, 1, Int32(1), Int32(2))
+        # brute force: the members are one component under hex adjacency
+        comp = isempty(members) ? Set() : Set([first(members)])
+        while true
+            grown = union(comp, Set(m for m in members if any(c -> hexadj(c, m), comp)))
+            grown == comp && break
+            comp = grown
+        end
+        @test locally_connected(σ, ctx, prop) == (length(comp) == length(members))
+    end
+    # the Merks rule allows the adjacent pair (1,0),(0,1) on hex
+    σ = zeros(Int32, 12, 12); σ[6, 6] = 1; σ[7, 6] = 1; σ[6, 7] = 1
+    prop = Proposal(linear_index(L, x), linear_index(L, (5, 6)), x, 1, Int32(1), Int32(0))
+    @test merks_connectivity(σ, ctx, prop)
+end
+
+@testset "A-03 hex minimum image" begin
+    L = Lattice((20, 14); geometry = Hexagonal())
+    rng = Xoshiro(5)
+    for _ in 1:200
+        δ = (20 * rand(rng) - 10, 14 * rand(rng) - 7)
+        brute = minimum(hypot(embed(L, (δ[1] + 20i, δ[2] + 14j))...) for i in -2:2, j in -2:2)
+        @test CorePotts._periodic_norm(Float64, L, δ) ≈ brute
+    end
+    @test CorePotts._periodic_norm(Float64, Lattice((20, 20); geometry = Hexagonal()), (8.0, 8.0)) ≈ sqrt(112)
+end
+
+@testset "A-05 hex domains and weights see Cartesian positions" begin
+    L = Lattice((21, 21); geometry = Hexagonal(), boundary = Closed(),
+        domain = x -> hypot(x[1] - 16.5, x[2] - 11 * sqrt(3) / 2) <= 6)
+    c = embed(L, (11.0, 11.0))
+    inside = [hypot((embed(L, Float64.(Tuple(i))) .- c)...) for i in CartesianIndices((21, 21)) if L.mask[i]]
+    @test maximum(inside) <= 6 + 1e-9
+    r = relation(Weighted(Hex(1), o -> 1 / sqrt(sum(abs2, o))), L)
+    @test all(≈(1), r.weights)
+    ri = relation(Weighted(Hex(1), OnIndices(o -> 1 / sqrt(sum(abs2, o)))), L)
+    @test count(≈(1 / sqrt(2)), ri.weights) == 2
+end

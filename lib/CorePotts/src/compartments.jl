@@ -210,10 +210,7 @@ function _cluster_planes!(normals, bias, lc, st, p, ctx, key, mcs, roots, member
         cK = centroid(T, cellK, lat, r)
         for m in members[r]
             cm = centroid(T, cell, lat, m)
-            δ = embed(lat, ntuple(Val(N)) do d                  # member − cluster centroid (minimum image)
-                x = cm[d] - cK[d]
-                lat.periodic[d] ? x - T(lat.dims[d]) * round(x / T(lat.dims[d])) : x
-            end)
+            δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))   # member − cluster centroid
             s = zero(T)
             for d in 1:N
                 s += T(δ[d]) * T(n[d])

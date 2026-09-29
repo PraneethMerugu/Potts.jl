@@ -49,7 +49,7 @@ const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :clus
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight)
-const _SITE_BUILTINS = (:owner, :kind, :position, :mcs)
+const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
 const _PROPOSAL_BUILTINS = (:source, :target, :old, :new)
 const _EDGE_BUILTINS = (:a, :b, :distance)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
@@ -181,6 +181,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     fields = Tuple{Any, Any}[]
     cell_odes = Tuple{Any, Any}[]
     model_odes = Tuple{Any, Any}[]
+    derivatives = Dict{Symbol, Any}()
     for eq in sys.equations
         _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
@@ -189,6 +190,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         x = arguments(lhs)[1]
         i = info(x)
         i === nothing && throw(ArgumentError("`$x` is not a declared variable"))
+        haskey(derivatives, i.name) && throw(ArgumentError(
+            "`D($(i.name))` is already given by `$(derivatives[i.name])`; one equation per variable (add the terms)"))
+        derivatives[i.name] = eq
         if i.role === :field || i.role === :site
             _check_names(eq.rhs, _SITE_BUILTINS, "a field equation"; between_copies = true)
             push!(fields, (x, eq.rhs))
@@ -225,7 +229,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
     for u in sys.updates
-        k = _target_key(u)
+        k = (_target_key(u)..., u.every)
         haskey(writers, k) && _located(sys, u) do
             throw(ArgumentError("`$(u.eq.lhs)` is already written @$(u.phase)$(u.every == 1 ? "" : " Every($(u.every))") " *
                                 "by `$(writers[k].eq)`; combine contributions with `+=` or in one equation"))

@@ -194,6 +194,15 @@ implicit solver's Jacobian, already-typed floats) unchanged."""
 @inline _tofloat(::Type{T}, x::Integer) where {T} = T(x)
 @inline _tofloat(::Type{T}, x) where {T} = x
 
+"""
+Cartesian position of site `i` (D-043): the embedded lattice coordinates times the lattice
+spacing (on a square lattice with unit spacing, the coordinates themselves).
+"""
+@inline function _position(::Type{T}, ctx, i) where {T}
+    e = CorePotts.embed(ctx.lattice, map(T, CorePotts.coordinates(ctx.lattice, i)))
+    return haskey(ctx, :spacing) ? map((x, h) -> x * T(h), e, ctx.spacing) : e
+end
+
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""
 @inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]
 """Kind of cell `c` (`0` for the medium)."""
@@ -237,6 +246,10 @@ function _lower_at(args, env)
         return :(Potts._cellval(st.cell.$(i.name), $j))
     elseif i.role === :builtin
         i.name === :owner && return :(@inbounds st.σ[$j])
+        if i.name === :position
+            haskey(env.bind, :position) || error("`position` is not available in $(_MODE_NAMES[env.mode])")
+            return :($(env.bind[:position])[$j])
+        end
         if i.name === :kind
             s === :site && return :(CorePotts.owner_kind(st, $j))
             s === :cell && return :(Potts._cellkind(st, $j))
@@ -272,7 +285,7 @@ function _lower_population(args, env)
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else
         merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
-            :__site => nsym, :position => :(CorePotts.coordinates(ctx.lattice, $nsym))))
+            :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
         range = :(1:length(st.σ))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
@@ -316,6 +329,8 @@ end
 
 function _lower_gather(args, env)
     n, anchor, body, cond = args
+    _uses_builtin(anchor, :position) &&
+        error("a gather is anchored at a site: use `site` (the current site), `source` or `target`, not `position`")
     ni = info(n)
     spec = ni.options.relation
     rel = spec isa RelationRef ? spec.name : env.relname[spec]

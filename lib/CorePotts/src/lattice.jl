@@ -23,7 +23,8 @@ struct Hexagonal <: AbstractGeometry end
 
 A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
 `domain` restricts it to an irregular region (ROADMAP M2.1b): a `Bool` array over the
-lattice or a predicate of the site coordinates, `x -> …`. Sites outside the domain never
+lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on a
+hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside the domain never
 change owner and must belong to the medium. The domain edge is closed: `shift` reports
 neighbours outside it as outside the lattice, so contacts, surfaces, gathers, proposals and
 field stencils (zero flux) all stop there.
@@ -44,17 +45,33 @@ function Lattice(dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothi
     length(b) == N || throw(ArgumentError("need $N boundaries, got $(length(b))"))
     all(>(0), dims) || throw(ArgumentError("lattice dimensions must be positive"))
     d = Int.(dims)
-    mask = _domain_mask(domain, d)
+    mask = _domain_mask(domain, d, geometry)
     mask === nothing || any(mask) || throw(ArgumentError("the domain contains no sites"))
     return Lattice{N, typeof(mask), typeof(geometry)}(d, map(x -> x isa Periodic, b), mask, geometry)
 end
 
-_domain_mask(::Nothing, dims) = nothing
-function _domain_mask(m::AbstractArray{Bool}, dims)
+"""
+    OnIndices(f)
+
+A domain predicate (or relation weight) that receives lattice coordinates (axial `(q, r)`
+on a hexagonal lattice) instead of Cartesian positions.
+"""
+struct OnIndices{F}
+    f::F
+end
+
+_domain_mask(::Nothing, dims, g) = nothing
+function _domain_mask(m::AbstractArray{Bool}, dims, g)
     size(m) == dims || throw(ArgumentError("domain mask has size $(size(m)), lattice $dims"))
     return Array{Bool}(m)
 end
-_domain_mask(f, dims) = Bool[f(Tuple(x)) for x in CartesianIndices(dims)]
+_domain_mask(f, dims, g) = Bool[f(_embed(g, Tuple(x))) for x in CartesianIndices(dims)]
+_domain_mask(f::OnIndices, dims, g) = Bool[f.f(Tuple(x)) for x in CartesianIndices(dims)]
+
+
+# `embed` by geometry alone (for construction, before the lattice exists)
+_embed(::Square, v) = v
+_embed(::Hexagonal, v) = (v[1] + v[2] / 2, v[2] * sqrt(3) / 2)
 
 Adapt.adapt_structure(to, l::Lattice{N}) where {N} =
     (m = Adapt.adapt(to, l.mask); Lattice{N, typeof(m), typeof(l.geometry)}(l.dims, l.periodic, m, l.geometry))
@@ -196,8 +213,9 @@ Ball(r::Real; include_self = false) = Ball(r, include_self)
 """
     Weighted(spec, weight)
 
-`spec` with per-offset weights `weight(offset::NTuple{N,Int})` (e.g. `o -> 1 / sqrt(sum(abs2, o))`
-for distance-weighted contact). Weights are stored as `Float32`.
+`spec` with per-offset weights `weight(offset)` of the Cartesian offset (e.g.
+`o -> 1 / sqrt(sum(abs2, o))` for distance-weighted contact; `OnIndices(f)` receives lattice
+offsets instead). Weights are stored as `Float32`.
 """
 struct Weighted{S <: RelationSpec, F} <: RelationSpec
     spec::S
@@ -275,10 +293,13 @@ function relation(spec::RelationSpec, l::Lattice{N}) where {N}
 end
 function relation(spec::Weighted, l::Lattice{N}) where {N}
     offs = _offsets(spec.spec, l)
-    w = Tuple(Float32[spec.weight(o) for o in offs])
+    w = Tuple(Float32[_weight(spec.weight, l.geometry, o) for o in offs])
     all(isfinite, w) || throw(ArgumentError("relation weights must be finite, got $w"))
     return Relation{N, length(offs), typeof(w)}(Tuple(map(o -> Int32.(o), offs)), w)
 end
+
+_weight(f, g, o) = f(_embed(g, Tuple(o)))
+_weight(f::OnIndices, g, o) = f.f(Tuple(o))
 
 function _offsets(spec::RelationSpec, l::Lattice{N}) where {N}
     offs = unique(_candidates(spec, N, l.geometry))

@@ -27,7 +27,7 @@ _cluster_env(T, r, relname; δ = nothing) =
 _site_env(T, i, relname; mcs = nothing, key = nothing) =
     LowerEnv(T, :site, Dict{Symbol, Any}(_draws(key, mcs, i)..., :owner => :(@inbounds st.σ[$i]),
         :kind => :(CorePotts.owner_kind(st, $i)), :__site => i,
-        :position => :(CorePotts.coordinates(ctx.lattice, $i)),
+        :position => :(Potts._position($T, ctx, $i)), :site => i,
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
@@ -113,9 +113,9 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     end
     for E in c.site_terms
         after = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :new, :kind => :k_new, :__site => :target,
-            :position => :(prop.x)), rn))
+            :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
         before = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :old, :kind => :k_old, :__site => :target,
-            :position => :(prop.x)), rn))
+            :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
         push!(body, :(dH += $after - $before))
     end
     drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
@@ -287,7 +287,8 @@ function _phases(c::CompiledPottsSystem, T, values)
     for (x, rate) in c.fields
         name = info(x).name
         f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key)))))
-        sub = something(c.sys.sweep.field_solver.substeps, _auto_substeps(x, rate, values, dt, c.sys.lattice))
+        sub = c.sys.sweep.field_solver.substeps
+        sub === nothing && (sub = _auto_substeps(x, rate, values, dt, c.sys.lattice))
         lowerclip = c.sys.sweep.field_solver.lower
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
@@ -595,18 +596,22 @@ function _cell_update_expr(c, T, us, every, rn)
         :(@inbounds st.cell.volume[c] > 0 || return nothing), vals..., writes..., :(return nothing))))
 end
 
-# Explicit-Euler substeps from the diffusion coefficient: the factor multiplying Δ(x).
+# Explicit-Euler substeps from the diffusion coefficient (the factor multiplying Δ(x)),
+# computed from the current parameters every MCS (a `remake(p = …)` keeps the step stable).
+# A coefficient that varies in space is taken at its build-time value where constant.
 function _auto_substeps(x, rate, values, dt, lattice)
     L = _unwrap(Symbolics.variable(:__Lap))
     lap = Dict{Any, Any}()
     _walk(y -> (iscall(y) && operation(y) === Δ && (lap[y] = L)), rate)
     isempty(lap) && return 1
-    coef = Symbolics.derivative(Symbolics.substitute(rate, lap; fold = Val(false)), Symbolics.wrap(L))
-    v = Symbolics.substitute(coef, values)
-    v = _unwrap(v)
-    SymbolicUtils.isconst(v) || return 1
+    coef = _unwrap(Symbolics.derivative(Symbolics.substitute(rate, lap; fold = Val(false)), Symbolics.wrap(L)))
     h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
-    return CorePotts.stable_substeps(Float64(SymbolicUtils.unwrap_const(v)), dt, h)
+    if all(u -> first(u) === :param, _uses(coef))
+        body = lower(coef, _model_env(Float64, Dict{Any, Symbol}()))
+        return _rgf(:(p -> CorePotts.stable_substeps(abs(Float64($body)), $(Float64(dt)), $h)))
+    end
+    throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not a parameter expression; " *
+                        "set `field_solver = ExplicitEuler(; substeps = n)` explicitly"))
 end
 
 # ---------------------------------------------------------------------------------------

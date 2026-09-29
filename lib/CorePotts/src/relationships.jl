@@ -73,16 +73,40 @@ end
     return _periodic_norm(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
 end
 @inline function _periodic_norm(::Type{T}, l::Lattice{N}, δ) where {T, N}
-    w = ntuple(Val(N)) do d                       # minimum image (lattice coordinates)
-        x = δ[d]
-        l.periodic[d] ? x - T(l.dims[d]) * round(x / T(l.dims[d])) : x
-    end
-    e = embed(l, w)
+    e = _min_image(T, l, δ)
     s = zero(T)
     for d in 1:N
         s += T(e[d])^2
     end
     return sqrt(s)
+end
+
+"""
+Embedded minimum-image displacement of the lattice-coordinate difference `δ`. On a square
+lattice the per-axis wrap is the minimum; on the skewed hexagonal torus the nearest image
+may be a diagonal one, so the images one period away on each periodic axis are compared.
+"""
+@inline function _min_image(::Type{T}, l::Lattice{N}, δ) where {T, N}
+    w = ntuple(Val(N)) do d
+        x = T(δ[d])
+        l.periodic[d] ? x - T(l.dims[d]) * round(x / T(l.dims[d])) : x
+    end
+    return embed(l, w)
+end
+@inline function _min_image(::Type{T}, l::Lattice{2, M, Hexagonal}, δ) where {T, M}
+    w1 = T(δ[1]); w2 = T(δ[2])
+    L1 = T(l.dims[1]); L2 = T(l.dims[2])
+    l.periodic[1] && (w1 -= L1 * round(w1 / L1))
+    l.periodic[2] && (w2 -= L2 * round(w2 / L2))
+    best = embed(l, (w1, w2))
+    bn = best[1]^2 + best[2]^2
+    for i in -1:1, j in -1:1
+        ((i == 0 || l.periodic[1]) && (j == 0 || l.periodic[2])) || continue
+        e = embed(l, (w1 + i * L1, w2 + j * L2))
+        n = e[1]^2 + e[2]^2
+        n < bn && (best = e; bn = n)
+    end
+    return best
 end
 
 """
