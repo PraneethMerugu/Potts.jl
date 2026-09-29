@@ -11,7 +11,8 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
-using SciMLBase: SciMLBase, remake, reinit!
+using SciMLBase: SciMLBase, remake, reinit!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
+    DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
 using SymbolicIndexingInterface: SymbolicIndexingInterface
 
@@ -41,6 +42,8 @@ export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
 export init, solve, solve!, step!, remake, CPU
+# SciML ensembles and callbacks, as solver packages re-export them
+export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 
 include("rng.jl")

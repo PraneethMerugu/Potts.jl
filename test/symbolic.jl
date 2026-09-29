@@ -517,3 +517,18 @@ end
         divisions = [Potts.divide(Potts.cells(1); when = Potts.B.volume > 1),
             Potts.divide(Potts.clusters(1); when = Potts.B.volume > 1)]))
 end
+
+@testset "ensembles and callbacks of generated problems" begin
+    prob = symbolic_graner_problem(; nmcs = 5)
+    alg = SequentialCPM(; proposal = Moore(1))
+    ens = solve(EnsembleProblem(prob; output_func = (sol, ctx) -> (total_energy(prob, sol.u[end]), false)),
+        alg, EnsembleThreads(); trajectories = 4)
+    @test length(unique(ens.u)) == 4
+    @test ens.u[3] == total_energy(prob, solve(remake(prob; replica = 3), alg).u[end])
+    # a callback that quenches the temperature through a symbolic parameter map
+    cold = remake(prob; p = [:T => 0.0])
+    quench = DiscreteCallback((u, t, integ) -> t == 2, integ -> (integ.p = cold.p))
+    integ = init(prob, alg; callback = quench)
+    foreach(_ -> step!(integ), 1:3)
+    @test integ.p.T == 0.0
+end

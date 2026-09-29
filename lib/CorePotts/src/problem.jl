@@ -83,7 +83,7 @@ The integrator for a `CPMProblem`. `t` is the current MCS; `integrator.u` return
 copy of the state (synchronizing the device only when accessed). `step!` enqueues one MCS
 without synchronizing.
 """
-mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
+mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB} <: SciMLBase.DEIntegrator{Alg, false, S, Int}
     const prob::P
     const alg::Alg
     const law::Law
@@ -105,6 +105,15 @@ mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B} <: Sci
     const saved_u::Vector{Any}
     retcode::SciMLBase.ReturnCode.T
     const stats::PottsStats
+    const callbacks::CB             # tuple of DiscreteCallbacks, checked after every MCS
+end
+
+# Ensemble statistics: totals over trajectories.
+function Base.merge(a::PottsStats, b::PottsStats)
+    l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
+    return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
+        accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
+        launches = a.launches + b.launches, lifecycle = l)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -113,10 +122,11 @@ _array_adaptor(::Type{<:Array}) = Array
 _array_adaptor(A::Type) = Base.typename(A).wrapper
 
 function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
-        saveat = Int[], save_start = true, save_end = true, checkpoint = nothing)
+        saveat = Int[], save_start = true, save_end = true, checkpoint = nothing,
+        callback = nothing)
     if checkpoint !== nothing
         prob = _from_checkpoint(prob, checkpoint)
-        integ = init(prob, alg; backend, saveat, save_start, save_end)
+        integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ
     end
@@ -136,10 +146,38 @@ function CommonSolve.init(prob::CPMProblem, alg::CPMAlgorithm; backend = CPU(),
              LifecycleCache(backend, ndims(lat), ncells(prob.u0))
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
-        Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats())
+        Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback))
+    for cb in integ.callbacks
+        cb.initialize(cb, integ.state, integ.t, integ)
+    end
     save_start && _save!(integ)
     return integ
 end
+
+# SciML callbacks: `DiscreteCallback`s (alone or in a `CallbackSet`) are checked at every
+# MCS boundary, after the lifecycle and before saving. `condition(u, t, integrator)` and
+# `affect!(integrator)` see the live state (`integrator.state`, on the device for GPU
+# backends; `integrator.u` is a host copy). Continuous callbacks have no meaning for an
+# MCS clock.
+_callbacks(::Nothing) = ()
+_callbacks(cb::SciMLBase.DiscreteCallback) = (cb,)
+function _callbacks(cb::SciMLBase.CallbackSet)
+    isempty(cb.continuous_callbacks) ||
+        throw(ArgumentError("continuous callbacks are not supported by Potts integrators (time is the integer MCS); use DiscreteCallback"))
+    return cb.discrete_callbacks
+end
+_callbacks(cb) = throw(ArgumentError("unsupported callback $(typeof(cb)); use DiscreteCallback or CallbackSet"))
+
+function _apply_callbacks!(integ::PottsIntegrator)
+    for cb in integ.callbacks
+        cb.condition(integ.state, integ.t, integ) && cb.affect!(integ)
+    end
+    return nothing
+end
+
+# No derivative to reset: a callback's changes take effect at the next MCS.
+SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
+SciMLBase.u_modified!(::PottsIntegrator, ::Bool) = nothing
 
 """
 Reject combinations the algorithm cannot execute correctly. The checkerboard stride comes
@@ -217,6 +255,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += nmobile(integ.ctx.mobility, lat)
+    isempty(integ.callbacks) || _apply_callbacks!(integ)
     insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
     return integ
 end
@@ -231,6 +270,9 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     end
     integ.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
         _save!(integ)
+    for cb in integ.callbacks
+        cb.finalize(cb, integ.state, integ.t, integ)
+    end
     return PottsSolution(integ)
 end
 
@@ -276,6 +318,33 @@ end
 # ---------------------------------------------------------------------------------------
 # SymbolicIndexingInterface: the symbolic system (if any) is `f.sys`; symbolic layers
 # implement the SII queries on it (`sol[x]`, `getp(prob, x)`).
+
+# ---------------------------------------------------------------------------------------
+# Ensembles: trajectory `i` is the template with `replica = template.replica + i` and
+# `repeat = ctx.repeat - 1` (independent Philox streams, D-005; one compiled model), unless
+# the user's `prob_func` already changed the seed or replica.
+
+"""
+    EnsembleProblem(prob::CPMProblem; prob_func, output_func, reduction, u_init, safetycopy = false)
+
+A SciML ensemble of Potts runs. Trajectory `i` solves `remake(prob′; replica = prob.replica + i)`,
+where `prob′ = prob_func(prob, ctx)` (default: `prob`), so trajectories are independent and
+reproducible: trajectory `i` equals `solve(remake(prob; replica = prob.replica + i), alg)`.
+"""
+function SciMLBase.EnsembleProblem(prob::CPMProblem; prob_func = SciMLBase.DEFAULT_PROB_FUNC,
+        safetycopy = false, kwargs...)
+    pf = _ReplicaProbFunc(prob_func)
+    return invoke(SciMLBase.EnsembleProblem, Tuple{Any}, prob; prob_func = pf, safetycopy, kwargs...)
+end
+
+struct _ReplicaProbFunc{F}
+    f::F
+end
+function (r::_ReplicaProbFunc)(prob, ctx)
+    q = r.f(prob, ctx)
+    (q.seed == prob.seed && q.replica == prob.replica) || return q
+    return remake(q; replica = prob.replica + UInt32(ctx.sim_id), repeat = UInt32(ctx.repeat - 1))
+end
 
 SymbolicIndexingInterface.symbolic_container(f::CPMFunction) = f.sys
 SymbolicIndexingInterface.state_values(prob::CPMProblem) = prob.u0
