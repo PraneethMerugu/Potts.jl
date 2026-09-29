@@ -44,8 +44,6 @@ julia = "1.12"
 projects = [
     "test",
     "benchmark",
-    "lib/LocalMath",
-    "lib/LocalMath/test",
     "lib/CorePotts",
     "lib/CorePotts/test",
     "lib/MakiePotts",

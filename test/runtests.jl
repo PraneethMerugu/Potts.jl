@@ -1,5 +1,5 @@
 # Test entry point for the whole monorepo.
-#   GROUP=All (default) | Potts | CorePotts | LocalMath | MakiePotts | PottsModels | GPU | Reference
+#   GROUP=All (default) | Potts | CorePotts | MakiePotts | PottsModels | GPU | Reference
 # Each group runs in the shared workspace environment of its own test project.
 const GROUP = get(ENV, "GROUP", "All")
 const ROOT = dirname(@__DIR__)
@@ -10,8 +10,6 @@ function run_group(project, file; env = ())
     run(cmd)
 end
 
-GROUP in ("All", "LocalMath") &&
-    run_group(joinpath(ROOT, "lib/LocalMath/test"), joinpath(ROOT, "lib/LocalMath/test/runtests.jl"))
 GROUP in ("All", "CorePotts") &&
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl"))
 GROUP in ("All", "MakiePotts") &&

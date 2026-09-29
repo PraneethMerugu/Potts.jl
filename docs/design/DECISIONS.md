@@ -331,3 +331,24 @@ Why:
 
 Revisit if a model needs two copies of the same sub-model with different parameters.
 That would be `extend` plus automatic prefixing.
+
+## D-040 LocalMath leaves the monorepo (2026-09-29)
+
+Decision: `lib/LocalMath` may be deleted. Nothing in Potts, CorePotts, MakiePotts or
+PottsModels depends on it (D-033). Its reserved niche (ordered folds, bounded collections,
+keyed reductions) is covered by generated gathers and population folds, atomic `CellReduce`
+and cluster trackers, and host phases for the lifecycle, links and compartments.
+
+Why:
+- D-033 benchmark: 8.2 s first execution vs 0.16 s, and 1.77 ms vs 0.31 ms warm, for one
+  Laplacian stencil.
+- Much of its size (about 24.5k source and 15k test lines, 45% of the repo) is exactness
+  machinery (receipts, leases, canonical ordering, plan-time admission) that D-029 drops.
+
+Consequences:
+- M5.1 (LocalMath slimming) is withdrawn.
+- INTERNALS §3 is historical.
+- The workspace, CLAUDE.md, the test groups and CI lose `LocalMath`.
+- Its git history is preserved in the legacy `LocalMath.jl` repository and in this repo's
+  history. If a stage-program runtime is wanted later, revive it there as a standalone
+  package, not as a Potts dependency.

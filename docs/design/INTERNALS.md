@@ -5,19 +5,22 @@ follows. Versions: Julia ≥ 1.12, SciMLBase 3, ModelingToolkitBase 1, Symbolics
 KernelAbstractions 0.9, RuntimeGeneratedFunctions 0.5.
 
 ```
-Potts (symbolic)          lib/CorePotts (numerical)             lib/LocalMath
+Potts (symbolic)          lib/CorePotts (numerical)
 PottsSystem ──mtkcompile──▶ CompiledPottsSystem ──codegen──▶ CPMFunction ──▶ CPMProblem
                                                                   │
                                             init ──▶ PottsIntegrator ──▶ step!/solve!
                                                                   │
-                                       fused MC kernels   +   LocalMath stages (fields,
-                                       (propose/commit)       sync updates, lifecycle,
-                                                              relationships, queries)
+                                       fused MC kernels   +   generated KA phase kernels
+                                       (propose/commit)       and host phases (D-033; fields,
+                                                              updates, lifecycle, links)
 ```
+
+(D-033/D-040: LocalMath is not used; the rest of this document's references to LocalMath
+stages describe the original plan.)
 
 ## 1. lib/CorePotts — numerical layer
 
-Depends on KernelAbstractions, Atomix, LocalMath, SciMLBase, SymbolicIndexingInterface,
+Depends on KernelAbstractions, Atomix, SciMLBase, SymbolicIndexingInterface,
 RuntimeGeneratedFunctions (only to call generated functions), StaticArrays. **No
 Symbolics.** Everything here takes plain Julia functions, exactly as `ODEProblem(f, …)`.
 
@@ -316,7 +319,7 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
 - `MethodOfLinesComponent`: `symbolic_discretize` once, then the same integrator path.
 - Native lifecycle phases (`BeforeLifecycle`, …) are schedule slots in §1.6.
 
-## 3. lib/LocalMath — what changes
+## 3. lib/LocalMath — what changes (historical: D-040 removed LocalMath from the monorepo)
 
 Kept: `Space`, `Field`, relation algebra, all publication laws, `@localmath`,
 `@prepare`, bind → plan → prepare → execute!, launch fusion.

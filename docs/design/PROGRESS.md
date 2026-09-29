@@ -913,3 +913,17 @@ All findings are fixed and have regression tests.
 
 Timing: the Potts Metal group takes about 1 min. The same group under `julia -t 4` took
 12 min (host-thread contention with Metal), so GPU tests run single-threaded.
+
+## 2026-09-29 — D-040: LocalMath removed from the monorepo
+
+- `git rm -r lib/LocalMath` (about 2.1 MB).
+- The workspace entries `lib/LocalMath` and `lib/LocalMath/test` are removed and the
+  Manifest re-resolves with no LocalMath.
+- `GROUP=LocalMath` is removed from `test/runtests.jl` and CLAUDE.md.
+- INTERNALS: the overview no longer shows LocalMath, and §3 is marked historical.
+- ROADMAP: M5.1 is withdrawn.
+- `reference/` still pins LocalMath by URL for the legacy oracle stack (D-021).
+- `lib/MakiePotts/.github/workflows/ci.yml` and its CONTRIBUTING/AGENTS files are inherited
+  and inert, and still describe the old multi-repo workflow. The monorepo has no CI yet
+  (local-only).
+- `GROUP=All` (CorePotts, MakiePotts, Potts, PottsModels) passes.

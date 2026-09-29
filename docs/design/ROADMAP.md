@@ -69,7 +69,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 ## Phase 5 — Slim, docs, cut-over
 
-- [ ] **M5.1** LocalMath slimming (INTERNALS §3); TTFX benchmark for 1/4/8/32-stage programs.
+- [x] ~~**M5.1** LocalMath slimming (INTERNALS §3); TTFX benchmark for 1/4/8/32-stage programs.~~ Withdrawn by D-040: `lib/LocalMath` removed from the monorepo.
 - [ ] **M5.2** docs site (Learn / Published models / API per package).
 - [ ] **M5.2a** MakiePotts: vector/arrow channels, relationship overlays, lineage, tensor ellipses, true-3D volume, WGLMakie, DataInspector, rerun controller.
 - [ ] **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.
