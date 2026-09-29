@@ -225,3 +225,19 @@ end
     @test all(==(5), u.site.tag)
     @test_throws ArgumentError AuditBadOption(; name = :b)
 end
+
+@testset "A-30 declared names cannot shadow built-ins or each other" begin
+    expand(body) = Potts._potts_model(:X, body, @__MODULE__)
+    base = quote
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    @test_throws ArgumentError expand(quote @kinds medium A; @parameters distance = 3.0 end)
+    @test_throws ArgumentError expand(quote @kinds medium A; @parameters D = 3.0 end)
+    @test_throws ArgumentError expand(quote @kinds medium source end)
+    @test_throws ArgumentError expand(quote @kinds medium A; @variables target(cell) = 1.0 end)
+    @test_throws ArgumentError expand(quote @kinds medium a; @parameters a = 1.0 end)
+    @test_throws ArgumentError expand(quote @kinds medium A A end)
+    @test_throws ArgumentError expand(quote @kinds medium A; @variables x(cell) = 1.0; @observed x ~ 2 end)
+    @test expand(quote @kinds medium A; @parameters λ = 1.0; @variables x(cell) = 1.0 end) isa Expr
+end

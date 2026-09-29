@@ -37,11 +37,27 @@ struct _Parts
     params::Vector{Symbol}
     code::Vector{Any}
     mod::Module                  # the calling module (globals shadowed by component names)
+    declared::Dict{Symbol, String}   # name → what declared it (collision checks)
+end
+
+# Names the constructor binds itself: a declaration of one would be silently rebound.
+const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
+    :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
+    :time, :site)
+_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
+
+"""Record a declared name; reject built-in names and a second declaration of a name."""
+function _declare!(parts::_Parts, k::Symbol, what::String)
+    k in _reserved_names() && throw(ArgumentError(
+        "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
+    haskey(parts.declared, k) && throw(ArgumentError("$what `$k`: `$k` is already declared as a $(parts.declared[k])"))
+    parts.declared[k] = what
+    return k
 end
 
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
-    parts = _Parts(Any[], Symbol[], Any[], mod)
+    parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -60,7 +76,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
-        (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance, cluster, cluster_volume, cluster_surface, time, site) = $P.B
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, _BOUND_BUILTINS...)), :($P.B)))
         # gather variables and draws are numbered per model; a base built by `@extend` inside
         # another model continues the outer numbering (so the merged model has no collisions)
         $P._NESTING[] == 0 && ($P._GATHER_COUNT[] = 0)
@@ -185,6 +201,7 @@ function _section!(parts, sec, args, ln = nothing)
     if sec === Symbol("@structural_parameters")
         for l in _lines(args)
             l isa Expr && l.head === :(=) || throw(ArgumentError("structural parameters are `name = default`"))
+            _declare!(parts, l.args[1], "structural parameter")
             push!(parts.structural, (l.args[1], l.args[2]))
         end
     elseif sec === Symbol("@kinds")
@@ -198,6 +215,7 @@ function _section!(parts, sec, args, ln = nothing)
             push!(names, l)
         end
         for (i, k) in enumerate(names)
+            _declare!(parts, k, "kind")
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
         end
     elseif sec === Symbol("@parameters")
@@ -210,16 +228,19 @@ function _section!(parts, sec, args, ln = nothing)
             all(k -> k.args[1] === :unit, kw) || throw(ArgumentError("parameter options: only `unit` is supported"))
             if lhs isa Expr && lhs.head === :ref && _is_range(lhs.args[2])     # `d[1:n]`: a vector
                 k = lhs.args[1]
+                _declare!(parts, k, "parameter")
                 push!(parts.params, k)
                 push!(code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $k === nothing ? $val : $k; $(kw...))),
                     :(append!(__params, $k.components)))
                 continue
             elseif lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
+                _declare!(parts, k, "parameter")
                 push!(parts.params, k)
                 push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k; $(kw...))))
             else
                 k = lhs::Symbol
+                _declare!(parts, k, "parameter")
                 push!(parts.params, k)
                 push!(code, :($k = $P.parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k; $(kw...))))
             end
@@ -236,6 +257,7 @@ function _section!(parts, sec, args, ln = nothing)
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
                 throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`"))
             k, scope = decl.args
+            _declare!(parts, k, "variable")
             default, opts = rhs isa Expr && rhs.head === :tuple ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
@@ -278,6 +300,7 @@ function _section!(parts, sec, args, ln = nothing)
             l isa Expr && l.head === :(=) && l.args[1] isa Symbol ||
                 throw(ArgumentError("@components lines are `name = system`"))
             k = l.args[1]
+            _declare!(parts, k, "component")
             # `clock = clock`: the right-hand side means the caller's global, not the new local
             rhs = _globalize(l.args[2], k, parts.mod)
             # renamed, so `k.x` is `k₊x` whatever the system was called
@@ -290,6 +313,7 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@relations")
         for l in _lines(args)
             k = l.args[1]
+            k === :contact || _declare!(parts, k, "relation")
             push!(code, :(__relations[$(QuoteNode(k))] = $(l.args[2])), :($k = $P.RelationRef($(QuoteNode(k)))))
         end
     elseif sec === Symbol("@energy")
@@ -303,6 +327,7 @@ function _section!(parts, sec, args, ln = nothing)
             lhs = l.args[2]
             k = lhs isa Expr && lhs.head === :call ? lhs.args[1] : lhs      # `name(scope)` or `name`
             k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
+            _declare!(parts, k, "observed quantity")
             push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
                 _located_push(:__observed, :($P.ObservedEq($k, $(rewrite(l.args[3])))), ln))
         end
@@ -310,6 +335,7 @@ function _section!(parts, sec, args, ln = nothing)
         decl = args[1]
         decl isa Expr && decl.head === :call || throw(ArgumentError("@relationship name(cell, cell) capacity = k"))
         k = decl.args[1]
+        _declare!(parts, k, "relationship")
         opts, _ = _options(args[2:end])
         kw = [Expr(:kw, o, v) for (o, v) in opts if o !== :distance]
         push!(code, :(push!(__relationships, $P.relationship($(QuoteNode(k)); $(kw...)))),
