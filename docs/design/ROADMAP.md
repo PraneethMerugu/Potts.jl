@@ -17,7 +17,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 ## Phase 2 — CorePotts engine (each with brute-force ΔH + replay + CPU/Metal parity)
 
-- [ ] **M2.1** contact + volume + surface energies; surface tracker; generic cell/site energy functions. Accept: oracle tests; Graner–Glazier reference parity (KS over 16 seeds).
+- [ ] **M2.1** N-dimensional lattice with per-axis boundaries/spacing and neighborhoods of any order (`Moore(k)`, `VonNeumann(k)`, `Ball`, `Shell`, `Stencil`, weighted); contact + volume + surface energies; surface tracker; generic cell/site energy functions. Accept: oracle tests; Graner–Glazier reference parity (KS over 16 seeds).
 - [ ] **M2.2** moments tracker (centroid, elongation, periodic-safe geometry); site sums and minima trackers; structured owner sums.
 - [ ] **M2.3** site/cell/medium/model state; history ring buffers; synchronous phase updates via LocalMath stages; accepted-copy affects; `ClearOnOwnershipChange`.
 - [ ] **M2.4** fields: explicit-rate discrete Euler stages, diffusion stencils, sub-stepping; `field_value`, gradient, laplacian primitives. Accept: Merks reference parity.
@@ -29,10 +29,11 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M2.10** checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: split == straight bitwise; MakiePotts tests.
 - [ ] **M2.11** Metal: all of the above in the GPU group; parity bitwise for Float32. Accept: `GROUP=GPU` locally green.
 
-## Phase 3 — Potts symbolic front end
+## Phase 3 — Potts symbolic front end (spec: AUTHORING.md)
 
-- [ ] **M3.1** `PottsSystem`, statements + `expand`, registry, source locations, composition (`compose/extend/flatten/@named`), units.
-- [ ] **M3.2** `mtkcompile`: expansion, validation, footprint analysis, ΔH derivation, CSE, scheduling; `CompiledPottsSystem`.
+- [ ] **M3.1** `PottsSystem`, `@potts_model` sections and plain constructors, scoped `@variables`, `@kinds`, kind-indexed parameters, `Lattice`/relations of any order in N-D, source locations, composition (`compose/extend/flatten/@named`), units.
+- [ ] **M3.2** `mtkcompile`: global-H → ΔH derivation with simplification and loop fusion (AUTHORING §4), generated `total_energy` self-check, validation, footprint analysis, CSE, scheduling; `CompiledPottsSystem`.
+  Accept: `ΔH == H(after) − H(before)` on random flips for every model in `lib/PottsModels`.
 - [ ] **M3.3** codegen → `CPMFunction`; `PottsProblem(sys, op, tspan)`; `PottsParameters`; SII; `remake`; `EnsembleProblem`; callbacks; `expression = Val(true)`; `eval_module`.
   Accept: every Phase 2 oracle test re-run through symbolic authoring; `remake` zero compile; Graner/Wortel/Merks/OpenVT from `lib/PottsModels` sources.
 - [ ] **M3.4** component imports and structural replacement, scoped quantities, logical vector parameters, symbolic setters, one-block declaration, compound assignments, diagnostics with expression + remedy.

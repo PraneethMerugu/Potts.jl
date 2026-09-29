@@ -122,3 +122,20 @@ stale worktrees pruned. Legacy repos are archived on GitHub after cut-over.
 - deleting a GitHub repository
 - changing scientific semantics of a published model beyond D-003/D-008 without a
   decision entry citing the oracle evidence
+
+## D-026 Authoring surface (2026-09-29)
+Decision: the surface in `AUTHORING.md`. Global-H authoring (`@energy domain => expr`)
+with symbolic ΔH derivation and a compiler-generated `total_energy` self-check; MTK
+syntax for all differential equations (`D(x) ~ …`, lattice operators `Δ`, `∇`); updates
+as equations with `Pre`; generator comprehensions over relations replace gather/fold;
+`@potts_model` mirrors `@mtkmodel` and lowers to plain constructors. Coexistence with
+MTK/SciML over replacement.
+
+## D-027 Lattices and neighborhoods
+Decision: N-dimensional lattices (1D/2D/3D tested), per-axis boundaries and spacing,
+neighborhoods of any order (`Moore(k)`, `VonNeumann(k)`, `Ball(r)`, `Shell(k)`,
+`Stencil`, weighted variants). Checkerboard stride derives from the declared orders.
+
+## D-028 Renames
+Decision: the table in `AUTHORING.md` §9 is authoritative; old names are not kept as
+aliases.
