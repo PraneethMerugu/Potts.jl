@@ -225,6 +225,7 @@ _snapshot(::KernelAbstractions.CPU, st) = deepcopy(st)
 
 function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :u && return current_state(integ)
+    name === :ps && return SymbolicIndexingInterface.ParameterIndexingProxy(integ)
     return getfield(integ, name)
 end
 
@@ -355,6 +356,60 @@ function (r::_ReplicaProbFunc)(prob, ctx)
     q = r.f(prob, ctx)
     (q.seed == prob.seed && q.replica == prob.replica) || return q
     return remake(q; replica = prob.replica + UInt32(ctx.sim_id), repeat = UInt32(ctx.repeat - 1))
+end
+
+"""
+    StateIndex(scope, name)
+
+SymbolicIndexingInterface index of the named state array `getfield(st.scope, name)`
+(`scope` ∈ `:cell`, `:site`, `:model`). Reading gives the array (a model variable: its
+value); writing copies a same-sized array into the live storage, or fills it with a number.
+"""
+struct StateIndex
+    scope::Symbol
+    name::Symbol
+end
+_state_array(st::CPMState, i::StateIndex) = getfield(getfield(st, i.scope), i.name)
+function Base.getindex(st::CPMState, i::StateIndex)
+    a = _state_array(st, i)
+    return i.scope === :model ? only(Array(a)) : a
+end
+function Base.setindex!(st::CPMState, v, i::StateIndex)
+    a = _state_array(st, i)
+    if v isa Number
+        fill!(a, v)
+    else
+        size(v) == size(a) ||
+            throw(DimensionMismatch("$(i.scope) variable $(i.name) has size $(size(a)); got $(size(v))"))
+        copyto!(a, convert(Array{eltype(a)}, v))
+    end
+    return v
+end
+
+"""
+Parameter object `p` with parameter `i` set to `v`, converted to the stored type (so the
+parameter type, and the compiled code, never change). Symbolic layers add methods for their
+parameter objects.
+"""
+function set_parameter(p::NamedTuple, v, i::Symbol)
+    return merge(p, NamedTuple{(i,)}((convert(typeof(getfield(p, i)), v),)))
+end
+
+# Setters act on the live state and parameters of an integrator (`integ.u` is a host
+# snapshot) and take effect from the next MCS. A problem's parameters are immutable (isbits):
+# change them with `remake`.
+function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::StateIndex)
+    KernelAbstractions.synchronize(integ.backend)
+    integ.state[i] = v
+    return v
+end
+function SymbolicIndexingInterface.set_parameter!(integ::PottsIntegrator, v, i)
+    integ.p = set_parameter(integ.p, v, i)
+    return nothing
+end
+function SymbolicIndexingInterface.set_parameter!(::CPMProblem, v, i)
+    throw(ArgumentError("problem parameters are immutable; use `remake(prob; p = [$(repr(i)) => $v])` " *
+                        "(or `setp` on an integrator)"))
 end
 
 SymbolicIndexingInterface.symbolic_container(f::CPMFunction) = f.sys

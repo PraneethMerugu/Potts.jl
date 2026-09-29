@@ -67,10 +67,23 @@ function _param_info(sys::PottsModelInfo, x)
     return i !== nothing && i.role in (:param, :kindtable) ? i.name : nothing
 end
 
-SII.is_variable(::PottsModelInfo, x) = false
-SII.variable_index(::PottsModelInfo, x) = nothing
-SII.variable_symbols(::PottsModelInfo) = []
-SII.all_variable_symbols(sys::PottsModelInfo) = [o.var for o in sys.csys.sys.observed]
+# Declared state variables are SII variables (settable with `setu`/`integ[x] = v`); built-ins
+# and expressions are observed (read-only).
+const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)
+_state_var(v) = (i = info(v); i !== nothing && haskey(_STATE_SCOPE, i.role))
+function _state_index(sys::PottsModelInfo, x)
+    x isa Symbol || _potts_quantity(x) || return nothing
+    for v in sys.csys.sys.variables
+        _state_var(v) || continue
+        (x isa Symbol ? info(v).name === x : isequal(_unwrap(v), _unwrap(x))) &&
+            return CorePotts.StateIndex(_STATE_SCOPE[info(v).role], info(v).name)
+    end
+    return nothing
+end
+SII.is_variable(sys::PottsModelInfo, x) = _state_index(sys, x) !== nothing
+SII.variable_index(sys::PottsModelInfo, x) = _state_index(sys, x)
+SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, sys.csys.sys.variables)
+SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.var for o in sys.csys.sys.observed]]
 SII.is_parameter(sys::PottsModelInfo, x) = _param_info(sys, x) !== nothing
 function SII.parameter_index(sys::PottsModelInfo, x)
     i = _param_info(sys, x)
@@ -85,7 +98,7 @@ SII.constant_structure(::PottsModelInfo) = true
 SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), sys.csys.sys.parameters, [t])
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
-                                          !SII.is_independent_variable(sys, x)
+                                          !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
 SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, x)
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
@@ -95,7 +108,8 @@ function _named_quantity(sys::PottsModelInfo, x::Symbol)
     end
     return x in BUILTIN_NAMES ? getfield(B, x) : nothing
 end
-SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && _named_quantity(sys, x) !== nothing
+SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
+                                                  _named_quantity(sys, x) !== nothing
 SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_quantity(sys, x))
 
 """

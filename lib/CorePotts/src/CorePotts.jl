@@ -14,7 +14,7 @@ using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
 using SciMLBase: SciMLBase, remake, reinit!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
-using SymbolicIndexingInterface: SymbolicIndexingInterface
+using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
     Weighted, relation, AllMobile, MaskMobility, is_mobile, in_domain, host_lattice
@@ -40,7 +40,7 @@ export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!, cluster_claims
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
-export CPMProblem, PottsIntegrator, PottsSolution, current_state
+export CPMProblem, PottsIntegrator, PottsSolution, current_state, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them
 export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!

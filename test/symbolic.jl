@@ -994,3 +994,43 @@ end
     end
     @test_throws Exception mtkcompile(BadCentroid(; name = :b))
 end
+
+@testset "symbolic setters: setp and setu on integrators" begin
+    σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1
+    p = PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 6); seed = 2)
+    integ = init(p, SequentialCPM())
+    step!(integ)
+    # parameters: same isbits type (nothing recompiles), effective from the next MCS
+    P = typeof(integ.p)
+    integ.ps[:μ] = 700
+    @test integ.ps[:μ] === 700.0 && typeof(integ.p) === P
+    setp(integ, :μ)(integ, 800.0)
+    @test getp(integ, :μ)(integ) == 800.0
+    @test_throws ArgumentError setp(p, :μ)(p, 1.0)                       # problems: remake
+    # state: declared variables write through to the live state; built-ins are read-only
+    integ[:px] = [0.5]
+    @test integ.state.cell.px == [0.5] && integ[:px] == [0.5] && getu(integ, :px)(integ) == [0.5]
+    setu(integ, :py)(integ, -0.25)
+    @test integ.state.cell.py == [-0.25]
+    @test_throws DimensionMismatch (integ[:px] = [1.0, 2.0])
+    @test_throws Exception (integ[:volume] = [3])
+    sol = solve!(integ)
+    @test sol[:x][end][1] ≈ sol.u[end].cell.cx[1]                     # observed still derived
+    @test sol[:px][end] == sol.u[end].cell.px
+    SII = Potts.SymbolicIndexingInterface
+    @test SII.is_variable(p.f.sys, :px) && !SII.is_variable(p.f.sys, :volume) && SII.is_observed(p.f.sys, :volume)
+    @potts_model Counter begin
+        @kinds medium A
+        @variables n(model) = 0.0
+        @lattice Lattice((8, 8))
+        @after_mcs n ~ Pre(n) + 1
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    σc = zeros(Int32, 8, 8); σc[3:5, 3:5] .= 1
+    ic = init(PottsProblem(Counter(; name = :c), [ownership => σc, kind => [1]], (0, 5)), SequentialCPM())
+    step!(ic); step!(ic)
+    @test ic[:n] == 2
+    ic[:n] = 10
+    step!(ic)
+    @test ic[:n] == 11
+end

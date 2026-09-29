@@ -434,5 +434,6 @@ end
 Base.propertynames(p::PottsParameters) = propertynames(getfield(p, :values))
 Base.getindex(p::PottsParameters, s::Symbol) = getfield(getfield(p, :values), s)
 Base.NamedTuple(p::PottsParameters) = getfield(p, :values)
+CorePotts.set_parameter(p::PottsParameters, v, i::Symbol) = PottsParameters(CorePotts.set_parameter(NamedTuple(p), v, i))
 Base.:(==)(a::PottsParameters, b::PottsParameters) = NamedTuple(a) == NamedTuple(b)
 Base.show(io::IO, p::PottsParameters) = print(io, "PottsParameters", NamedTuple(p))

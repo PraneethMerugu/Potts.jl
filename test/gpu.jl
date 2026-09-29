@@ -55,4 +55,8 @@ using Statistics: mean, var
     cm = CorePotts.centroid(Float64, map(Array, um.cell), pm.lattice, 1)
     @test Array(um.cell.cx)[1] ≈ cm[1] && Array(um.cell.cy)[1] ≈ cm[2]
     @test Array(um.cell.volume)[1] == count(==(1), Array(um.σ))
+    # setters write through to device memory
+    im = init(pm, CheckerboardCPM(); backend)
+    im[:px] = [0.25]; im.ps[:μ] = 0.0
+    @test Array(im.state.cell.px) == Float32[0.25] && im.p.μ === 0.0f0 && im[:px] == Float32[0.25]
 end
