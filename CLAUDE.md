@@ -15,7 +15,7 @@ Manifest or a nested `[workspace]` anywhere else (the only exception is
 - `lib/LocalMath` — bulk-synchronous stage runtime
 - `lib/MakiePotts` — plotting (renders CorePotts states and solutions)
 
-Tests: `julia --project=test test/runtests.jl` with `GROUP=All|LocalMath|CorePotts|MakiePotts|Potts`,
+Tests: `julia --project=test test/runtests.jl` with `GROUP=All|LocalMath|CorePotts|MakiePotts|Potts` (and opt-in `GPU`, `Reference`),
 or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl`.
 
 ## Code rules (INTERNALS §5)

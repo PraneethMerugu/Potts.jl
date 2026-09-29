@@ -1,6 +1,6 @@
 # Spatial queries (ROADMAP M2.7): site predicates, per-cell reductions and the cell contact
-# graph. Site predicates are device functions; `CellReduce` is a phase; the contact graph is
-# rebuilt on the host at a synchronization point (only when a model references it).
+# graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases; the
+# host `contact_graph` (CSR) is built at a synchronization point.
 
 """`true` if some in-domain `relation` neighbour of site `i` has a different owner."""
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
@@ -139,4 +139,90 @@ function contact(g::ContactGraph{T}, c, n) where {T}
     r = g.row_ptr[c]:(g.row_ptr[c + 1] - 1)
     j = searchsortedfirst(view(g.col, r), n)
     return j <= length(r) && g.col[r[j]] == n ? g.measure[r[j]] : zero(T)
+end
+
+# ---------------------------------------------------------------------------------------
+# Contact table (device)
+
+"""
+    empty_contacts(maxdeg, ncell; T = Float32) -> NamedTuple
+
+Device-resident contact table to merge into the cell state, filled by `ContactPhase`:
+`contact_nbr[k, c]` (0 = empty slot, rows in no particular order), `contact_measure[k, c]`
+(shared weighted bond count), `contact_medium[c]` and `contact_overflow[c]` (bonds dropped
+because `c`'s row was full; nonzero means `maxdeg` is too small).
+"""
+empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32) =
+    (; contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
+        contact_medium = zeros(T, ncell), contact_overflow = zeros(Int32, ncell))
+
+"""
+    ContactPhase(relation = :contact)
+
+Phase that rebuilds the contact table (`empty_contacts`) from `σ` over the named `ctx`
+relation, on the device. Rows are built with atomic insertion, so their order varies;
+query with `contact_slot`/`contact_measure`.
+"""
+struct ContactPhase{R} end
+ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
+
+@kernel function _contact_kernel!(nbr, measure, medium, overflow, @Const(σ), lat, r)
+    i = @index(Global, Linear)
+    a = @inbounds σ[i]
+    if a != 0
+        x = coordinates(lat, i)
+        maxdeg = size(nbr, 1)
+        for k in 1:length(r)
+            inside, y = shift(lat, x, @inbounds r.offsets[k])
+            inside || continue
+            b = @inbounds σ[linear_index(lat, y)]
+            b == a && continue
+            w = convert(eltype(measure), weight(r, k))
+            if b == 0
+                Atomix.@atomic medium[a] += w
+                continue
+            end
+            slot = 0
+            for s in 1:maxdeg
+                cur = @inbounds nbr[s, a]
+                if cur == b
+                    slot = s
+                elseif cur == 0
+                    old, ok = Atomix.@atomicreplace nbr[s, a] Int32(0) => b
+                    (ok || old == b) && (slot = s)
+                end
+                slot != 0 && break
+            end
+            if slot == 0
+                Atomix.@atomic overflow[a] += Int32(1)
+            else
+                Atomix.@atomic measure[slot, a] += w
+            end
+        end
+    end
+end
+
+function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
+    c = st.cell
+    fill!(c.contact_nbr, 0); fill!(c.contact_measure, 0)
+    fill!(c.contact_medium, 0); fill!(c.contact_overflow, 0)
+    n = length(st.σ)
+    _contact_kernel!(backend)(c.contact_nbr, c.contact_measure, c.contact_medium,
+        c.contact_overflow, st.σ, ctx.lattice, getfield(ctx, R); ndrange = n,
+        workgroupsize = _phase_groupsize(backend, n))
+    return 5
+end
+
+"""Slot of `b` in `a`'s contact row, or 0 (device or host)."""
+@inline function contact_slot(cell, a, b)
+    for k in 1:size(cell.contact_nbr, 1)
+        @inbounds(cell.contact_nbr[k, a]) == b && return k
+    end
+    return 0
+end
+"""Shared interface measure of cells `a` and `b` from the contact table (`b = 0`: medium)."""
+@inline function contact_measure(cell, a, b)
+    b == 0 && return @inbounds cell.contact_medium[a]
+    k = contact_slot(cell, a, b)
+    return k == 0 ? zero(eltype(cell.contact_measure)) : @inbounds cell.contact_measure[k, a]
 end

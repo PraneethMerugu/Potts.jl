@@ -27,7 +27,7 @@ export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, his
 export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
     locally_connected, merks_connectivity, forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
-    neighbors, contact
+    neighbors, contact, empty_contacts, ContactPhase, contact_slot, contact_measure
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
     AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
     principal_axis, rebuild_trackers!, with_capacity

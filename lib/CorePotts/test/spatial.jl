@@ -93,4 +93,33 @@
         # zero flux on both faces conserves mass instead
         @test laplacian(fill(3.0, 40, 4), (; lattice = lat1), 1) == 0
     end
+
+    @testset "device contact table equals the host contact graph" begin
+        σ, kinds = blocks((24, 24), 5; gap = 0)
+        σ[σ .== 5] .= 0                                         # some medium contact
+        lat = Lattice((24, 24))
+        n = length(kinds)
+        @test count(!isempty, neighbors(contact_graph(σ, lat, relation(Moore(1), lat), n), a) for a in 1:n) > 5
+        for (spec, name) in ((VonNeumann(1), :contact), (Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o))), :touch))
+            st = initial_state(σ, kinds; cell = empty_contacts(8, n; T = Float64))
+            f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+                phases = Phases(after_mcs = (ContactPhase(name),)))
+            prob = CPMProblem(f, st, lat, (0, 1), gg_params(); contact = VonNeumann(1),
+                relations = name === :touch ? (; touch = spec) : (;))
+            u = solve(prob, CheckerboardCPM()).u[end]
+            g = contact_graph(u.σ, lat, relation(spec, lat), n)
+            @test all(iszero, u.cell.contact_overflow)
+            for a in 1:n
+                @test sort(filter(!=(0), u.cell.contact_nbr[:, a])) == collect(neighbors(g, a))
+                @test contact_measure(u.cell, a, 0) ≈ contact(g, a, 0)
+                for b in 1:n
+                    a == b && continue
+                    @test contact_measure(u.cell, a, b) ≈ contact(g, a, b)
+                end
+            end
+            small = initial_state(σ, kinds; cell = empty_contacts(1, n))
+            v = solve(remake(prob; u0 = small), CheckerboardCPM()).u[end]
+            @test any(>(0), v.cell.contact_overflow)             # rows too short are reported
+        end
+    end
 end
