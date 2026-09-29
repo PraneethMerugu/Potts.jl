@@ -196,3 +196,33 @@ function _check_aliasing(offs, l::Lattice{N}) where {N}
     end
     return nothing
 end
+
+# ---------------------------------------------------------------------------------------
+# Mobility: frozen sites (walls, obstacles, fixed owners) are neither copy targets nor
+# sources and are not counted in N; they still count in contact energies.
+
+"""Every site may change owner (the default; no per-attempt cost)."""
+struct AllMobile end
+
+"""Sites with `frozen[i] = true` never change owner and never donate; `sites` lists the rest."""
+struct MaskMobility{M, S}
+    frozen::M
+    sites::S
+    n::Int
+end
+Adapt.@adapt_structure MaskMobility
+
+function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
+    frozen === nothing && return AllMobile()
+    size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
+    sites = Int32[i for i in 1:nsites(l) if !frozen[i]]
+    isempty(sites) && throw(ArgumentError("every site is frozen"))
+    return MaskMobility(Array{Bool}(frozen), sites, length(sites))
+end
+
+@inline is_mobile(::AllMobile, i) = true
+@inline is_mobile(m::MaskMobility, i) = !@inbounds(m.frozen[i])
+nmobile(::AllMobile, l::Lattice) = nsites(l)
+nmobile(m::MaskMobility, l::Lattice) = m.n
+@inline mobile_site(::AllMobile, j) = j
+@inline mobile_site(m::MaskMobility, j) = Int(@inbounds m.sites[j])

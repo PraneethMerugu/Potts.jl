@@ -76,4 +76,26 @@ using Metal
         @test g ≈ c rtol = 1e-4
         @test sum(g) ≈ sum(c0) rtol = 1e-4
     end
+
+    @testset "frozen sites and cell reductions on Metal" begin
+        σz, kz = blocks((32, 32), 5; gap = 0)
+        latz = Lattice((32, 32))
+        frozen = falses(32, 32); frozen[:, 1:2] .= true
+        v = Float32[i + j for i in 1:32, j in 1:32]
+        n = length(kz)
+        st = initial_state(σz, kz; site = (; v), cell = (; vsum = zeros(Float32, n), vmax = zeros(Float32, n)))
+        ph = Phases(after_mcs = (
+            CellReduce((:cell, :vsum), (st, p, ctx, key, mcs, i) -> st.site.v[i]),
+            CellReduce((:cell, :vmax), (st, p, ctx, key, mcs, i) -> st.site.v[i]; op = max)))
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
+        pz = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 20.0f0)
+        u = solve(CPMProblem(f, st, latz, (0, 10), pz; frozen), CheckerboardCPM(); backend).u[end]
+        @test u.σ[frozen] == σz[frozen]
+        for c in 1:n
+            owned = findall(==(c), u.σ)
+            isempty(owned) && continue
+            @test u.cell.vsum[c] ≈ sum(v[owned]) rtol = 1e-5
+            @test u.cell.vmax[c] == maximum(v[owned])
+        end
+    end
 end

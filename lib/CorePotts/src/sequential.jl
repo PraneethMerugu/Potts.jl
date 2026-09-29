@@ -3,17 +3,19 @@
 function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer) where {F, L}
     σ = st.σ
     lat = ctx.lattice
-    nsite = nsites(lat)
+    mob = ctx.mobility
+    nsite = nmobile(mob, lat)
     K = length(ctx.proposal)
     accepted = 0
     for attempt in 1:nsite
         rt, rd, ra, _ = draw(key, mcs, attempt, STREAM_SEQUENTIAL_TARGET)
-        t = bounded(rt, nsite) + 1
+        t = mobile_site(mob, bounded(rt, nsite) + 1)
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
         inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
         inside || continue
         s = linear_index(lat, y)
+        is_mobile(mob, s) || continue
         a = @inbounds σ[t]
         b = @inbounds σ[s]
         a == b && continue

@@ -11,41 +11,50 @@
 @inline spacing(ctx) = haskey(ctx, :spacing) ? ctx.spacing : _ones(ctx.lattice)
 @inline _ones(::Lattice{N}) where {N} = ntuple(_ -> 1, Val(N))
 
-@inline function _neighbors_along(c, lat::Lattice{N}, x, i, d) where {N}
+# Per-face boundary conditions on closed axes: `bc[d] = (low, high)`, each `nothing`
+# (zero flux: the ghost mirrors the site) or a number (Dirichlet: the ghost holds the value
+# so the face value is reached midway, i.e. ghost = 2·value − c[x]).
+@inline _ghost(ci, ::Nothing) = ci
+@inline _ghost(ci, v) = 2 * oftype(ci, v) - ci
+@inline _face(::Nothing, d, side) = nothing
+@inline _face(bc, d, side) = @inbounds bc[d][side]
+
+@inline function _neighbors_along(c, lat::Lattice{N}, x, i, d, bc = nothing) where {N}
     in1, y1 = shift(lat, x, _unit(Val(N), d, 1))
     in2, y2 = shift(lat, x, _unit(Val(N), d, -1))
     ci = @inbounds c[i]
-    up = in1 ? @inbounds(c[linear_index(lat, y1)]) : ci
-    dn = in2 ? @inbounds(c[linear_index(lat, y2)]) : ci
+    up = in1 ? @inbounds(c[linear_index(lat, y1)]) : _ghost(ci, _face(bc, d, 2))
+    dn = in2 ? @inbounds(c[linear_index(lat, y2)]) : _ghost(ci, _face(bc, d, 1))
     return up, ci, dn
 end
 
 """
-    laplacian(c, ctx, i; h = spacing(ctx))
+    laplacian(c, ctx, i; h = spacing(ctx), bc = nothing)
 
-Second-order `Σ_d (c[x+e_d] − 2c[x] + c[x−e_d]) / h_d²` at site `i`.
+Second-order `Σ_d (c[x+e_d] − 2c[x] + c[x−e_d]) / h_d²` at site `i`. On closed axes
+`bc = ((low₁, high₁), …)` selects zero flux (`nothing`, default) or a Dirichlet value per face.
 """
-@inline function laplacian(c, ctx, i; h = spacing(ctx))
+@inline function laplacian(c, ctx, i; h = spacing(ctx), bc = nothing)
     lat = ctx.lattice
     x = coordinates(lat, i)
     acc = zero(eltype(c))
     for d in 1:ndims(lat)
-        up, ci, dn = _neighbors_along(c, lat, x, i, d)
+        up, ci, dn = _neighbors_along(c, lat, x, i, d, bc)
         acc += (up - 2ci + dn) / h[d]^2
     end
     return acc
 end
 
 """
-    gradient(c, ctx, i; h = spacing(ctx)) -> NTuple{N}
+    gradient(c, ctx, i; h = spacing(ctx), bc = nothing) -> NTuple{N}
 
-Central-difference gradient at site `i` (zero-flux mirror on closed axes).
+Central-difference gradient at site `i` (per-face `bc` as in `laplacian`).
 """
-@inline function gradient(c, ctx, i; h = spacing(ctx))
+@inline function gradient(c, ctx, i; h = spacing(ctx), bc = nothing)
     lat = ctx.lattice
     x = coordinates(lat, i)
     return ntuple(Val(ndims(lat))) do d
-        up, _, dn = _neighbors_along(c, lat, x, i, d)
+        up, _, dn = _neighbors_along(c, lat, x, i, d, bc)
         (up - dn) / (2 * h[d])
     end
 end

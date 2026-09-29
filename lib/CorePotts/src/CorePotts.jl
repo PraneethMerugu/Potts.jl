@@ -14,7 +14,7 @@ using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
 using SciMLBase: SciMLBase, remake
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
-    Weighted, relation
+    Weighted, relation, AllMobile, MaskMobility, is_mobile
 export CPMState, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
@@ -25,6 +25,8 @@ export Phases, SitePhase, CellPhase, CopyPhase, HistoryPush, history_buffer, his
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
     locally_connected, merks_connectivity, forbid_extinction
+export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
+    neighbors, contact
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export CPMProblem, PottsIntegrator, PottsSolution, current_state
@@ -37,6 +39,7 @@ include("geometry.jl")
 include("phases.jl")
 include("fields.jl")
 include("drives.jl")
+include("spatial.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

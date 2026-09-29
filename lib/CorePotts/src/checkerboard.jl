@@ -56,7 +56,7 @@ end
     inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
     won = UInt32(0)
     s = 0
-    if inside
+    if inside && is_mobile(ctx.mobility, t) && is_mobile(ctx.mobility, linear_index(lat, y))
         s = linear_index(lat, y)
         a = @inbounds st.σ[t]
         b = @inbounds st.σ[s]
