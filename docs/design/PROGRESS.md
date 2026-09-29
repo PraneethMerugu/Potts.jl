@@ -757,3 +757,20 @@
   - Mean and count forms; `integral(1) == volume`.
   - Valid at t0; energies and drives rejected.
   - QA list; Metal Float32.
+
+## 2026-09-29 — Units (M3.1)
+
+- `[unit = …]` is now an option on `@parameters` (scalars and kind tables) and
+  `@variables`, stored as MTK `VariableUnit` metadata.
+- `mtkcompile` calls `_check_units(sys)`. It is a no-op, implemented by the weak
+  extension `PottsDynamicQuantitiesExt`, which uses MTK's DynamicQuantities unit
+  inference (MTK's choice, not Unitful as D-015 had it).
+  - Rules for Potts operations: `at`/`at2`/`Pre`/lags/`integral`/`Δ` keep their
+    argument's unit. `centroid`, `displacement` and `rand` are unitless. Folds follow
+    their op. `&`/`|`/`!` need dimensionless arguments.
+  - Checks: every term of H shares one unit; each update and division rule matches its
+    variable; conditions and constraints are dimensionless; equations and observed
+    quantities are consistent.
+- Errors name the statement and the conflicting units.
+- `using Potts` is unaffected. DynamicQuantities is a weak dependency and is in the test
+  project.

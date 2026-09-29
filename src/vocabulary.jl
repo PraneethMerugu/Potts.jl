@@ -48,20 +48,23 @@ const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, 
 # ---------------------------------------------------------------------------------------
 # Declarations
 
-"""`parameter(name, default)`: a scalar model parameter."""
-parameter(name::Symbol, default) = _tag(_sym(name), Info(:param, name, default, (;)))
+"""`parameter(name, default; unit)`: a scalar model parameter (`unit`: MTK `VariableUnit`)."""
+parameter(name::Symbol, default; unit = nothing) = _with_unit(_tag(_sym(name), Info(:param, name, default, (;))), unit)
+
+_with_unit(x, ::Nothing) = x
+_with_unit(x, u) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), ModelingToolkitBase.VariableUnit, u))
 
 """`kind_parameter(name, values)`: a parameter indexed by kind (medium included)."""
-kind_parameter(name::Symbol, values) = _tag(_sym(name), Info(:kindtable, name, values, (;)))
+kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name), Info(:kindtable, name, values, (;))), unit)
 
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope."""
-function variable(x, scope::Symbol; default = 0.0, options...)
+function variable(x, scope::Symbol; default = 0.0, unit = nothing, options...)
     scope in SCOPES || throw(ArgumentError("unknown scope `$scope`; use one of $SCOPES"))
     u = Symbolics.unwrap(x)
     name = SymbolicUtils.iscall(u) ? nameof(SymbolicUtils.operation(u)) : nameof(u)
-    return _tag(x, Info(scope, name, default, NamedTuple(options)))
+    return _with_unit(_tag(x, Info(scope, name, default, NamedTuple(options))), unit)
 end
 
 # ---------------------------------------------------------------------------------------

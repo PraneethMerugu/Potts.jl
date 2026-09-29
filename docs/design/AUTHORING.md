@@ -316,6 +316,20 @@ MTK's `@extend`:
 
 ---
 
+**Units (implemented).** Declare units with MTK metadata:
+`λ = 1.0, [unit = u"J"]`, `J[kind, kind] = …, [unit = u"J"]`, `c(field) = 0.0, [unit = u"mol"]`.
+With DynamicQuantities loaded (`PottsDynamicQuantitiesExt`, on MTK's unit inference),
+`mtkcompile` checks the model:
+- Every term of H (energies, drives, the temperature) has one unit.
+- Each update's right side has its variable's unit, and each division rule matches its
+  variable.
+- Conditions and constraints are dimensionless.
+- Equations and observed quantities are internally consistent. Equation rates are not
+  compared with a time unit, because the MCS clock carries none.
+
+Built-ins are unitless (lattice units). Folds keep the body's unit, except `count`, `any`
+and `all`. Without units, or without DynamicQuantities, the check is skipped.
+
 ## 9. Renames for readability
 
 | Old | New |

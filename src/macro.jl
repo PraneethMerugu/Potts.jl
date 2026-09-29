@@ -149,14 +149,19 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@parameters")
         for l in _lines(args)
             lhs, val = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
+            # `λ = 1.0, [unit = u"…"]` (MTK metadata)
+            val, opts = val isa Expr && val.head === :tuple && length(val.args) == 2 && val.args[2] isa Expr &&
+                        val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
+            kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
+            all(k -> k.args[1] === :unit, kw) || throw(ArgumentError("parameter options: only `unit` is supported"))
             if lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k)))
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k; $(kw...))))
             else
                 k = lhs::Symbol
                 push!(parts.params, k)
-                push!(code, :($k = $P.parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k)))
+                push!(code, :($k = $P.parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k; $(kw...))))
             end
             push!(code, :(push!(__params, $k)))
         end

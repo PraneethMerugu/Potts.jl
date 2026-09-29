@@ -286,6 +286,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     end
 
     _dry_lower(sys, gather_names, fields, cell_odes)
+    _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         sys.constraints, updates, fields, cell_odes, sys.divisions, relationship, edge_terms,
@@ -501,6 +502,14 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     end
     return nothing
 end
+
+"""
+Dimensional analysis of a model whose parameters or variables carry units (`[unit = …]`):
+every term of H (energies, drives, the temperature) has one unit, each update's right side
+has its variable's unit, and equations, conditions and observed quantities are consistent.
+Implemented by the DynamicQuantities extension; without it (or without units) a no-op.
+"""
+_check_units(sys) = nothing
 
 """Axes of `centroid`/`displacement` must be lattice axes; `centroid` has no ΔH in energies."""
 function _check_geometry(x, N; energy = false)

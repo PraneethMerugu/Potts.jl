@@ -49,7 +49,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 ## Phase 3 — Potts symbolic front end (spec: AUTHORING.md)
 
-- [ ] (partial: all but units and MTK `compose`, see PROGRESS M3 slices 1–6) **M3.1** `PottsSystem`, `@potts_model` sections and plain constructors, scoped `@variables`, `@kinds`, kind-indexed parameters, `Lattice`/relations of any order in N-D, source locations, composition (`compose/extend/flatten/@named`), units.
+- [ ] (partial: all but MTK `compose`; units done, see PROGRESS) **M3.1** `PottsSystem`, `@potts_model` sections and plain constructors, scoped `@variables`, `@kinds`, kind-indexed parameters, `Lattice`/relations of any order in N-D, source locations, composition (`compose/extend/flatten/@named`), units.
 - [ ] (partial) **M3.2** `mtkcompile`: global-H → ΔH derivation with simplification and loop fusion (AUTHORING §4), generated `total_energy` self-check, validation, footprint analysis, CSE, scheduling; `CompiledPottsSystem`.
   Accept: `ΔH == H(after) − H(before)` on random flips for every model in `lib/PottsModels`.
 - [x] 2026-09-29 (EnsembleProblem, callbacks, parity from lib/PottsModels sources; `eval_module` unnecessary: generated code interpolates function objects, user-registered functions tested) **M3.3** codegen → `CPMFunction`; `PottsProblem(sys, op, tspan)`; `PottsParameters`; SII; `remake`; `EnsembleProblem`; callbacks; `expression = Val(true)`; `eval_module`.

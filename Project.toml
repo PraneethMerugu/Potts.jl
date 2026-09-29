@@ -13,11 +13,18 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
+[weakdeps]
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+
+[extensions]
+PottsDynamicQuantitiesExt = "DynamicQuantities"
+
 [sources]
 CorePotts = {path = "lib/CorePotts"}
 
 [compat]
 CorePotts = "0.3"
+DynamicQuantities = "1"
 ModelingToolkitBase = "1"
 PrecompileTools = "1"
 RuntimeGeneratedFunctions = "0.5"
