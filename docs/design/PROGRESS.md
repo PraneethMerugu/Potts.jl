@@ -83,3 +83,34 @@
 - **Performance note for M2/M3.** Sequential runs at ~25–31 ns/attempt against FusedCPM's
   ~20. The hand-written ΔH resolves kinds through a closure per neighbour. Generated code
   (M3) should hoist the old/new kind lookups.
+
+## 2026-09-29 — M2.1 (commit 0864882)
+
+- **Relations.** `Weighted(spec, w)` stores per-offset `Float32` weights, which are
+  device-safe. Unweighted relations use weight `Int32(1)`, so counts stay integers.
+  `CPMProblem(...; relations = (; surface = ...))` exposes named relations as `ctx.<name>`.
+  Preflight checks every relation's radius against the footprint and rejects a surface
+  relation that includes the origin.
+- **Primitives.** `surface_change` (δ for the old and new cells only, accumulated in the
+  tracker's type), `surface_delta`, `commit_surface!`, `recompute_surface`, `site_delta`.
+  `contact_delta` handles weights and takes any relation.
+- **Tracker precision.** Weighted Float32 surface trackers hit rounding errors near 1e-5
+  relative in ΔH, and would drift over long runs. The tracker type is the user's choice
+  (`recompute_surface(...; T = Float64)` on CPU); Float32 stays available for Metal.
+- **Tests.** Brute-force ΔH with contact + volume + surface over weighted and unweighted
+  relations, in 2D and 3D with mixed boundaries. Trackers are checked against brute force
+  after every copy and after full sequential and checkerboard runs (rtol 1e-12).
+- **Parity (D-022).** The `Potts` test group compares against committed legacy samples
+  (`reference/data/graner_parity.tsv`, 16 seeds from `reference/sample_graner.jl`,
+  16 s/seed). All KS D values are below the α≈0.001 critical value 0.69:
+
+  | observable | D | t |
+  |---|---|---|
+  | hetero fraction | 0.25 | −0.09 |
+  | edge bonds | 0.44 | 2.36 |
+  | cell bonds | 0.13 | 0.53 |
+
+  Edge bonds was re-checked with 64 new seeds: 560.2 ± 1.0 against legacy 562.6 ± 2.3,
+  t ≈ 1, so it was chance.
+- **Deferred.** Per-axis spacing moves to M2.2/M2.4, where moments and fields consume it.
+  A Float64 field in `Lattice` would be invalid on Metal.
