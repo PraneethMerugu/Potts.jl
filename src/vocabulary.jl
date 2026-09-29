@@ -93,9 +93,14 @@ _index(x, i...) = getindex(x, i...)
 
 # `&&`, `||`, `!` in models become the symbolic `&`, `|`, `!` (operands are pure, so
 # non-short-circuit evaluation is equivalent).
-_andq(a, b) = a isa Bool && b isa Bool ? a && b : a & b
-_orq(a, b) = a isa Bool && b isa Bool ? a || b : a | b
+# `b` and the branches are thunks: short-circuit/lazy on real values, as in plain Julia.
+_andq(a::Bool, b) = a && b()
+_andq(a, b) = a & b()
+_orq(a::Bool, b) = a || b()
+_orq(a, b) = a | b()
 _notq(a) = !a
+_ifelseq(c::Bool, a, b) = c ? a() : b()
+_ifelseq(c, a, b) = ifelse(c, a(), b())
 
 """Neighbours of `anchor` over a relation spec, as the iterator of a gather."""
 struct Around{R}
@@ -103,6 +108,12 @@ struct Around{R}
     anchor::Any
 end
 _around(spec, anchor) = Around(spec, anchor)
+
+"""`fold(body(n) for n in R(s) if cond(n))`: a gather when `R` is a relation, else plain Julia."""
+function _fold_or_gather(fold, body, R, s, cond)
+    R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond)
+    return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
+end
 
 const FOLDS = (:sum, :prod, :mean, :geomean, :geomean_shifted, :minimum, :maximum, :count,
     :any, :all)

@@ -50,14 +50,16 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     kws = Any[Expr(:kw, :name, QuoteNode(name))]
     for (k, v) in parts.structural
+        k in parts.params && throw(ArgumentError("`$k` is both a structural parameter and a parameter"))
         push!(kws, Expr(:kw, k, v))
     end
     for k in parts.params
-        push!(kws, Expr(:kw, Symbol(:__override_, k), :nothing))
+        push!(kws, Expr(:kw, k, :nothing))        # `Model(; λ = 2.0)` overrides the default
     end
     P = :(Potts)
     preamble = quote
         (; volume, surface, kind, kind′, owner, owner′, id, generation, weight, source, target, old, new, mcs, position, distance) = $P.B
+        $P._GATHER_COUNT[] = 0                    # gather variables are numbered per model
         t = $P.t
         D = $P.D
         Pre = $P.Pre
@@ -121,13 +123,11 @@ function _section!(parts, sec, args)
             if lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)),
-                    $(Symbol(:__override_, k)) === nothing ? $val : $(Symbol(:__override_, k)))))
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k)))
             else
                 k = lhs::Symbol
                 push!(parts.params, k)
-                push!(code, :($k = $P.parameter($(QuoteNode(k)),
-                    $(Symbol(:__override_, k)) === nothing ? $(rewrite(val)) : $(Symbol(:__override_, k)))))
+                push!(code, :($k = $P.parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k)))
             end
             push!(code, :(push!(__params, $k)))
         end
@@ -248,12 +248,16 @@ function rewrite(ex)
     h = ex.head
     if h === :ref
         return Expr(:call, :($P._index), map(rewrite, ex.args)...)
+    elseif h in (:(=), :+=, :-=, :*=, :/=) || (h === :function && length(ex.args) == 2)
+        # assignment targets and function signatures are not expressions: leave them alone
+        return Expr(h, ex.args[1], rewrite(ex.args[2]))
     elseif h === :&&
-        return Expr(:call, :($P._andq), map(rewrite, ex.args)...)
+        return :($P._andq($(rewrite(ex.args[1])), () -> $(rewrite(ex.args[2]))))
     elseif h === :||
-        return Expr(:call, :($P._orq), map(rewrite, ex.args)...)
+        return :($P._orq($(rewrite(ex.args[1])), () -> $(rewrite(ex.args[2]))))
     elseif h === :if && length(ex.args) == 3 && !_isblock(ex.args[2]) && !_isblock(ex.args[3])
-        return Expr(:call, :ifelse, map(rewrite, ex.args)...)
+        # lazy on real conditions, `ifelse` on symbolic ones
+        return :($P._ifelseq($(rewrite(ex.args[1])), () -> $(rewrite(ex.args[2])), () -> $(rewrite(ex.args[3]))))
     elseif h === :call && ex.args[1] === :! && length(ex.args) == 2
         return Expr(:call, :($P._notq), rewrite(ex.args[2]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
@@ -273,13 +277,14 @@ function _rewrite_gather(fold, gen)
     if spec isa Expr && spec.head === :filter
         cond, spec = spec.args[1], spec.args[2]
     end
-    spec isa Expr && spec.head === :(=) || throw(ArgumentError("unsupported generator: $gen"))
+    plain = Expr(:call, fold, Expr(:generator, map(rewrite, gen.args)...))
+    spec isa Expr && spec.head === :(=) || return plain
     n, iter = spec.args
-    iter isa Expr && iter.head === :call && length(iter.args) == 2 ||
-        throw(ArgumentError("fold over `$iter`: iterate a relation at a site, e.g. `n in Moore(1)(s)`"))
-    around = :($P._around($(rewrite(iter.args[1])), $(rewrite(iter.args[2]))))
+    # `R(s)` may be a relation at a site (a gather) or an ordinary call: decided at run time
+    (n isa Symbol && iter isa Expr && iter.head === :call && length(iter.args) == 2) || return plain
     condf = cond === nothing ? :nothing : :($n -> $(rewrite(cond)))
-    return :($P._gather($fold, $n -> $(rewrite(body)), $around, $condf))
+    return :($P._fold_or_gather($fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
+        $(rewrite(iter.args[2])), $condf))
 end
 
 """A named relation declared in `@relations`."""

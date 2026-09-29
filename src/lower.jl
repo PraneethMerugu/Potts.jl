@@ -9,6 +9,9 @@ using SymbolicUtils: iscall, operation, arguments, issym
 
 const CP = CorePotts
 
+const _FLOAT_OPS = (sqrt, cbrt, exp, exp2, exp10, expm1, log, log2, log10, log1p, sin, cos, tan,
+    sinh, cosh, tanh, asin, acos, atan, (/), inv, hypot)
+
 struct LowerEnv
     T::Type                          # scalar type of the generated code
     mode::Symbol                     # :cell, :site, :contact, :proposal
@@ -46,6 +49,10 @@ function lower(x, env::LowerEnv)
         if e isa Integer || (e isa Real && isinteger(e))
             return Expr(:call, :^, lower(args[1], env), Int(e))   # literal_pow, no float exponent
         end
+    end
+    # float-valued functions compute in the model's scalar type (no Float64 from Int args)
+    if op in _FLOAT_OPS || op === (^)
+        return Expr(:call, op, map(a -> :($(env.T)($(lower(a, env)))), args)...)
     end
     return Expr(:call, op, map(a -> lower(a, env), args)...)
 end
@@ -128,7 +135,8 @@ function _lower_at(args, env)
             s === :cell && return :(Potts._cellkind(st, $j))
             error("`kind[…]` needs a site (`source`, `target`) or a cell (`new`, `owner[s]`)")
         end
-        i.name in (:volume, :surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
+        i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
     end
     error("cannot index `$(i.name)`")
 end

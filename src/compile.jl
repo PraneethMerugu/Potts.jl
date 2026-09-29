@@ -33,7 +33,8 @@ end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
-const _CELL_BUILTINS = (:volume, :surface, :kind, :id, :generation, :mcs)
+const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation)
+const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs)      # cell updates, division rules
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight)
 const _SITE_BUILTINS = (:owner, :kind, :position, :mcs)
 const _PROPOSAL_BUILTINS = (:source, :target, :old, :new)
@@ -85,19 +86,23 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for e in sys.energies
         d = e.domain
         if d isa CellDomain
-            _check_names(e.expr, _CELL_BUILTINS, "a cell term")
+            0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
+            _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
             push!(cell_terms, (d.kinds, e.expr))
         elseif d isa ContactDomain
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
-            E = _symmetrize(e.expr)
+            _check_static(e.expr, "a contact term")
+            E = _symmetrize(_cellvars_at_owner(e.expr))
             contact_terms[d.relation] = haskey(contact_terms, d.relation) ? contact_terms[d.relation] + E : E
         elseif d isa EdgeDomain
             (relationship !== nothing && relationship.name === d.relationship) ||
                 throw(ArgumentError("edges($(d.relationship)): no @relationship $(d.relationship)"))
             _check_names(e.expr, _EDGE_BUILTINS, "an edge term")
+            _check_static(e.expr, "an edge term")
             push!(edge_terms, e.expr)
         elseif d isa SiteDomain
             _check_names(e.expr, _SITE_BUILTINS, "a site term")
+            _check_static(e.expr, "a site term")
             isempty(_gathers(e.expr)) || throw(ArgumentError("site terms reading neighbours are not supported yet"))
             push!(site_terms, e.expr)
         else
@@ -161,7 +166,6 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             throw(ArgumentError("edge variable `$(info(x).name)` needs a @relationship"))
     end
 
-    uses_surface = any(t -> _uses_builtin(t[2], :surface), cell_terms)
     needs_moments = !isempty(sys.divisions) || relationship !== nothing
 
     # relations: contact (ctx.contact), surface, named, gathers
@@ -170,7 +174,6 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for (k, v) in sys.relations
         k === :contact || (relations[k] = v)
     end
-    uses_surface && !haskey(relations, :surface) && (relations[:surface] = sys.lattice.neighborhood)
     for r in keys(contact_terms)
         r === :contact || haskey(relations, r) || throw(ArgumentError("contacts($r): relation `$r` is not declared in @relations"))
     end
@@ -179,6 +182,9 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
         (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)...,
         sys.sweep.temperature]
+    uses_surface = any(x -> _uses_builtin(x, :surface), all_exprs) ||
+                   any(d -> _uses_builtin(d.when, :surface), sys.divisions)
+    uses_surface && !haskey(relations, :surface) && (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1
     for x in all_exprs, (ni, anchor) in _gathers(x)
         spec = ni.options.relation
@@ -227,6 +233,48 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         sys.link_rules, uses_surface,
         needs_moments, relations, contact_spec, gather_names, Footprint(read = radius_read),
         scratch)
+end
+
+# Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
+# derived only for cell terms.
+function _check_static(x, what)
+    for n in (:volume, :surface)
+        _uses_builtin(x, n) && throw(ArgumentError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
+    end
+    return nothing
+end
+
+# In a contact term a bare cell variable means its value at the owner (`x[owner]`), so that
+# mirroring (owner ↔ owner′) sees it; bare site variables are ambiguous there.
+function _cellvars_at_owner(E)
+    sub = Dict{Any, Any}()
+    for x in _bare_vars(E)
+        i = info(x)
+        i.role === :cell && (sub[x] = _unwrap(at(Symbolics.wrap(x), B.owner)))
+        i.role in (:site, :field) && throw(ArgumentError("site variable `$(i.name)` in a contact term: the pair has two sites; not supported"))
+    end
+    isempty(sub) && return E
+    return Symbolics.substitute(E, sub; fold = Val(false), filterer = _not_indexed)
+end
+_not_indexed(ex) = !(iscall(ex) && (operation(ex) === at || operation(ex) === at2)) &&
+                   SymbolicUtils.default_substitute_filter(ex)
+
+# Scoped variables used bare (not as the array of `x[i]`).
+function _bare_vars(x, out = Set{Any}())
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return out
+    i = info(x)
+    if i !== nothing && i.role in SCOPES
+        push!(out, x)
+        return out
+    end
+    if iscall(x)
+        skip = operation(x) === at || operation(x) === at2
+        for (j, a) in enumerate(arguments(x))
+            (skip && j == 1) || _bare_vars(a, out)
+        end
+    end
+    return out
 end
 
 function _leaves(x)

@@ -7,7 +7,7 @@ _rgf(ex) = RuntimeGeneratedFunctions.drop_expr(
     RuntimeGeneratedFunctions.RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
 
 _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, extra = ()) =
-    LowerEnv(T, :cell, Dict{Symbol, Any}(:volume => :(@inbounds st.cell.volume[$c]),
+    LowerEnv(T, :cell, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
         (mcs === nothing ? () : (:mcs => mcs,))..., extra...), relname)
@@ -50,12 +50,12 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if c.uses_surface
         push!(body, :(δs_old = zero(eltype(st.cell.surface))), :(δs_new = zero(eltype(st.cell.surface))))
     end
-    for (rel, E) in c.contact_terms
+    for (rel, E) in _sorted(c.contact_terms)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         ctxname = rel === :contact ? :contact : rel
         Enew = lower(E, _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, rn))
         Eold = lower(E, _contact_env(T, :old, :k_old, :n, :k_n, :w, :target, rn))
-        fuse = c.uses_surface && _same_relation(c, ctxname, :surface)
+        fuse = c.uses_surface && !fused_surface && _same_relation(c, ctxname, :surface)
         fused_surface |= fuse
         surfacc = fuse ? quote
             ws = eltype(st.cell.surface)(w)
@@ -86,7 +86,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     end
     for (side, dv, k, δs) in ((:old, -1, :k_old, :δs_old), (:new, +1, :k_new, :δs_new))
         terms = Any[]
-        for (kinds, E) in groups
+        for (kinds, E) in _sorted(groups)
             ΔE = _cell_delta(E, dv)
             _nops(ΔE) == 0 && isequal(_unwrap(ΔE), 0) && continue
             env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs,))
@@ -110,6 +110,10 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
 end
 
+# Deterministic iteration over Dicts used in codegen (the generated code must not depend on
+# hash order, or rebuilding a model would produce a new function type).
+_sorted(d::AbstractDict) = sort!(collect(d); by = x -> string(first(x)))
+
 _same_relation(c::CompiledPottsSystem, a::Symbol, b::Symbol) =
     a === b || isequal(a === :contact ? c.contact_spec : get(c.relations, a, nothing),
         b === :contact ? c.contact_spec : get(c.relations, b, nothing))
@@ -125,9 +129,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
         v = Symbol(:v_, j)
         push!(vals, :($v = $(lower(u.eq.rhs, env))))
-        lhs = _unwrap(u.eq.lhs)
-        target = lower(lhs, env)                                  # an array read
-        push!(writes, Expr(:(=), _as_lvalue(target), :(oftype($(_as_rvalue(target)), $v))))
+        push!(writes, _write(_unwrap(u.eq.lhs), v, env))
     end
     append!(body, vals)
     c.uses_surface && push!(body, :(δs = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
@@ -139,10 +141,21 @@ function _commit_expr(c::CompiledPottsSystem, T)
     return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
 end
 
-# `@inbounds a[i]` / `Potts._cellval(a, c)` read → assignable form
-_as_lvalue(ex) = ex isa Expr && ex.head === :macrocall ? _as_lvalue(ex.args[end]) :
-                 ex isa Expr && ex.head === :call && ex.args[1] == :(Potts._cellval) ? Expr(:ref, ex.args[2], ex.args[3]) : ex
-_as_rvalue(ex) = _as_lvalue(ex)
+# Write `v` into the target of an on-copy update `x[i] ~ …` (a cell index may be the
+# medium, 0: then there is nothing to write).
+function _write(lhs, v, env)
+    x, i = arguments(lhs)
+    xi = info(x)
+    j = lower(i, env)
+    if xi.role === :cell
+        a = :(st.cell.$(xi.name))
+        return :(($j) != 0 && (@inbounds $a[$j] = convert(eltype($a), $v)))
+    elseif xi.role in (:site, :field)
+        a = :(st.site.$(xi.name))
+        return :(@inbounds $a[$j] = convert(eltype($a), $v))
+    end
+    error("@on_copy can assign site or cell variables, not `$(xi.name)`")
+end
 
 function _constraint_expr(c::CompiledPottsSystem, T)
     isempty(c.constraints) && return nothing
@@ -319,15 +332,20 @@ function _lifecycle(c::CompiledPottsSystem, T)
              along isa AlongRandom ? CorePotts.RandomPlane{T}() :
              _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
     rules = Any[]
-    for d in c.divisions, (x, r) in d.rules
-        name = info(x).name
-        role(x) === :cell || throw(ArgumentError("division rules set cell variables; `$name` is $(role(x))"))
-        if r isa Split
-            push!(rules, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
-        else
-            v = lower(r, _cell_env(T, :parent, rn; mcs = :mcs))
-            push!(rules, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))
+    for d in c.divisions
+        block = Any[]
+        for (x, r) in d.rules
+            name = info(x).name
+            role(x) === :cell || throw(ArgumentError("division rules set cell variables; `$name` is $(role(x))"))
+            if r isa Split
+                push!(block, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
+            else
+                v = lower(r, _cell_env(T, :parent, rn; mcs = :mcs))
+                push!(block, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))
+            end
         end
+        # each division's rules apply to its own kinds (the parent keeps its kind)
+        isempty(block) || push!(rules, Expr(:&&, _kindtest(:(Potts._cellkind(st, parent)), d.domain.kinds), Expr(:block, block...)))
     end
     divide! = isempty(rules) ? CorePotts.no_divide_rule :
               _rgf(:((st, p, ctx, key, mcs, parent, daughter) -> $(Expr(:block, rules..., :(return nothing)))))
@@ -344,7 +362,7 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
     for (kinds, E) in c.cell_terms
         groups[kinds] = haskey(groups, kinds) ? groups[kinds] + E : E
     end
-    for (kinds, E) in groups
+    for (kinds, E) in _sorted(groups)
         env = _cell_env(T, :c, rn; kind = :k)
         push!(body, quote
             for c in 1:length(st.cell.kind)           # every slot, empty ones at E(0): consistent with ΔH
@@ -353,7 +371,7 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
             end
         end)
     end
-    for (rel, E) in c.contact_terms
+    for (rel, E) in _sorted(c.contact_terms)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         e = lower(E, _contact_env(T, :a, :ka, :n, :kn, :w, :i, rn))
         push!(body, quote

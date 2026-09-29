@@ -2,6 +2,7 @@
 # ports proposal by proposal, and the derived ΔH equals H(after) − H(before) of the
 # generated total energy.
 using Random: Xoshiro
+using InteractiveUtils: code_llvm
 
 """Random proposals (Moore(1) sources) on states along a trajectory of `prob`."""
 function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
@@ -162,4 +163,150 @@ end
         nlinks += CorePotts.linked(u.cell, a, b)
     end
     @test nlinks > 20
+end
+
+# ---------------------------------------------------------------------------------------
+# Regressions from the review of the symbolic layer
+
+function selfcheck(prob; n = 300)
+    worst = 0.0
+    for (u, prop) in proposal_states(remake(prob; tspan = (0, 3)); mcs = (0, 3), n)
+        a = deepcopy(u); a.σ[prop.target] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+    end
+    return worst
+end
+
+function two_kind_blocks()
+    σ = zeros(Int32, 24, 24)
+    for (c, (i, j)) in enumerate(Iterators.product(2:6:20, 2:6:20))
+        σ[i:(i + 4), j:(j + 4)] .= c
+    end
+    return σ, [isodd(c) ? 1 : 2 for c in 1:maximum(σ)]
+end
+
+@potts_model CellVarContacts begin
+    @kinds medium A B
+    @parameters begin
+        λ = 1.0
+        T = 8.0
+        J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
+    end
+    @variables x(cell) = 1.0
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @relations near = Moore(1)
+    @energy begin
+        cells(A, B) => λ * (volume - 25)^2 + 0.3 * (surface - 20)^2
+        contacts => J[kind, kind′] + x                      # bare cell variable: x[owner]
+        contacts(near) => 0.5 * x[owner] * x[owner′]
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "review regressions" begin
+    σ, kinds = two_kind_blocks()
+    n = length(kinds)
+    xs = collect(1.0:n)
+    prob = PottsProblem(CellVarContacts(; name = :cv), [ownership => σ, kind => kinds,
+        first(filter(v -> Potts.info(v).name === :x, CellVarContacts(; name = :cv).variables)) => xs], (0, 3))
+    @test selfcheck(prob) < 1e-9           # cell variables mirrored; surface δ fused once
+    ex = PottsProblem(CellVarContacts(; name = :cv), [ownership => σ, kind => kinds], (0, 1); expression = Val(true))
+    @test count("δs_old +=", string(ex.delta_H)) == 1
+
+    # quantities that change with the copy are rejected outside cell terms
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :bad, kinds = [:medium, :A],
+        lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts._index(Potts.B.volume, Potts.B.owner))],
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)))
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :bad, kinds = [:medium, :A],
+        lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.sites => 0.1 * Potts._index(Potts.B.volume, Potts.B.owner))],
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)))
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :bad, kinds = [:medium, :A],
+        lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.cells(0) => Potts.B.volume)],
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)))
+end
+
+@potts_model TwoDivisions begin
+    @kinds medium A B
+    @parameters begin
+        T = 5.0
+        J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
+    end
+    @variables begin
+        m(cell) = 8.0
+        q(cell) = 5.0
+        y(cell) = 0.0
+    end
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @energy contacts => J[kind, kind′]
+    @on_copy y[new] ~ 1.0                     # new may be the medium: nothing to write
+    @divide cells(A) when = mcs == 0, m => Split()
+    @divide cells(B) when = mcs == 1000, q => 0.0
+    @constraint no_extinction
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "division rules are per kind; on-copy writes skip the medium" begin
+    σ, kinds = two_kind_blocks()
+    prob = PottsProblem(TwoDivisions(; name = :td), [ownership => σ, kind => kinds], (0, 2))
+    u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]      # retractions happen: no BoundsError
+    nA = count(==(1), kinds)
+    @test count(>(0), u.cell.volume) == length(kinds) + nA
+    @test all(==(5.0), u.cell.q[u.cell.volume .> 0])                  # B's rule never ran on A cells
+    @test all(c -> u.cell.m[c] == (kinds[c] == 1 ? 4.0 : 8.0), 1:length(kinds))
+end
+
+@potts_model FloatModel begin
+    @kinds medium A
+    @parameters begin
+        λ = 1.0
+        T = 8.0
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16); neighborhood = Moore(1))
+    @energy cells(A) => λ * (surface - 4 * sqrt(volume))^2 + log(2) * volume / 3
+    @drive copy => -2 * (c[target] - c[source]) / 3
+    @equations D(c) ~ 0.1 * Δ(c) - c / 10 + exp(-1) * (kind == A)
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "Float32 models never touch Float64" begin
+    σ = zeros(Int32, 16, 16); σ[5:10, 5:10] .= 1
+    prob = PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2); T = Float32)
+    ctx = ctx_of(prob)
+    prop = CorePotts.Proposal(4 + 16 * 5, 5 + 16 * 5, (4, 6), 1, Int32(0), Int32(1))
+    io = IOBuffer()
+    code_llvm(io, prob.f.delta_H, typeof.((prob.u0, prob.p, prop, ctx)); debuginfo = :none)
+    @test !occursin("double", String(take!(io)))
+    @test prob.f.delta_H(prob.u0, prob.p, prop, ctx) isa Float32
+    @test selfcheck(PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2))) < 1e-9
+end
+
+@potts_model Helpers begin
+    @kinds medium A
+    firstor0(v) = isempty(v) ? 0.0 : v[1]            # plain Julia: lazy ternary, real indexing
+    w = zeros(2)
+    w[1] = 3.0                                        # indexed assignment is not rewritten
+    total = sum(w[i] for i in eachindex(w))           # an ordinary generator
+    ok = w[1] > 0 && firstor0(Float64[]) == 0.0       # short-circuit on real values
+    @parameters begin
+        λ = firstor0(w) + total
+        T = ok ? 5.0 : 1.0
+    end
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy cells(A) => λ * volume
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "macro: plain Julia stays plain; keyword overrides" begin
+    sys = Helpers(; name = :h)
+    vals = Dict(Potts.info(p).name => Potts.info(p).default for p in sys.parameters)
+    @test vals[:λ] == 6.0 && vals[:T] == 5.0
+    sys2 = Helpers(; name = :h, λ = 2.0)
+    @test Potts.info(first(sys2.parameters)).default == 2.0
+    # constructing a model twice yields the same generated code (gathers numbered per model)
+    σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1
+    a = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
+    b = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
+    @test a.f.fingerprint == b.f.fingerprint && typeof(a.f) === typeof(b.f)
 end
