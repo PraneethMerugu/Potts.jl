@@ -434,9 +434,17 @@ function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::Stat
     return v
 end
 function SymbolicIndexingInterface.set_parameter!(integ::PottsIntegrator, v, i)
-    integ.p = set_parameter(integ.p, v, i)
+    integ.p = set_parameter(integ.f.sys, integ.p, v, i)
     return nothing
 end
+
+"""
+    set_parameter(sys, p, v, i)
+
+`set_parameter(p, v, i)` for the model described by `sys` (`CPMFunction.sys`): a symbolic
+layer adds a method to validate the value and update parameters derived from `i`.
+"""
+set_parameter(sys, p, v, i) = set_parameter(p, v, i)
 function SymbolicIndexingInterface.set_parameter!(::CPMProblem, v, i)
     throw(ArgumentError("problem parameters are immutable; use `remake(prob; p = [$(repr(i)) => $v])` " *
                         "(or `setp` on an integrator)"))

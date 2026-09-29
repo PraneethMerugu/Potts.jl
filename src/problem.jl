@@ -52,7 +52,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
             constraint = _constraint_expr(c, T), temperature = _temperature_expr(c, T),
             total_energy = _total_energy_expr(c, T))
     end
-    st = _initial_state(c, opd, T, capacity)
+    st = _initial_state(c, opd, T, capacity, values)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
     spacing = sys.lattice.spacing === nothing ? nothing : map(T, sys.lattice.spacing)
@@ -178,6 +178,34 @@ function _parameter_values(c::CompiledPottsSystem, opd)
         v === nothing && throw(ArgumentError("parameter `$(info(x).name)` has no default; give it in the operating point"))
         values[u] = v
     end
+    return _resolve_defaults!(values)
+end
+
+_is_symbolic(v) = v isa Num || v isa SymbolicUtils.BasicSymbolic
+
+"""A value given by an expression of parameters, evaluated with the parameter `values`."""
+function _evaluate(v, values)
+    _is_symbolic(v) || return v
+    w = _unwrap(Symbolics.substitute(v, values))
+    SymbolicUtils.isconst(w) || throw(ArgumentError("`$v` does not reduce to a number with the parameter values"))
+    return SymbolicUtils.unwrap_const(w)
+end
+
+"""
+The parameters as a `Dict` (symbol → value) with the parameters that were not set
+explicitly (`explicit`: names) and are defined by expressions re-derived from the others:
+`b = 3a` follows a new `a` (MTK semantics).
+"""
+function _derived_parameters(c::CompiledPottsSystem, p, explicit)
+    values = Dict{Any, Any}()
+    for x in c.sys.parameters
+        i = info(x)
+        values[_unwrap(x)] = (_is_symbolic(i.default) && !(i.name in explicit)) ? i.default : getproperty(p, i.name)
+    end
+    return _resolve_defaults!(values)
+end
+
+function _resolve_defaults!(values)
     # parameters may default to expressions of other parameters
     for _ in 1:length(values)
         done = true
@@ -195,6 +223,7 @@ end
 
 function _param_value(T, v, i::Info)
     if i.role === :kindtable
+        v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)
         v isa AbstractVector && return SVector{length(v), T}(T.(v))
         return SMatrix{size(A, 1), size(A, 2), T}(T.(A))
@@ -202,7 +231,7 @@ function _param_value(T, v, i::Info)
     return T(v)
 end
 
-function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
+function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())
     sys = c.sys
     haskey(opd, ownership) || throw(ArgumentError("the operating point needs `ownership => labels`"))
     σ = Int32.(opd[ownership])
@@ -224,7 +253,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity)
     model = Pair{Symbol, Any}[]
     for x in sys.variables
         i = info(x)
-        v = get(opd, _unwrap(x), i.default)
+        v = _evaluate(get(opd, _unwrap(x), i.default), pvals)
         if i.role === :site || i.role === :field
             a = v isa AbstractArray ? T.(v) : fill(T(v), sys.lattice.dims)
             push!(site, i.name => a)
@@ -354,13 +383,30 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
         new[i.name] = _param_value(info.T, v, i)
     end
     out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(prob.p))))
-    typeof(out) === typeof(prob.p) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
-    _check_kind_tables(info.csys.sys, out)
-    for name in _contact_tables(info.csys)
+    return _finish_parameters(info, prob.p, out, Set(keys(new)))
+end
+
+# Re-derive the expression-defined parameters not set in this change, and check the tables.
+function _finish_parameters(mi::PottsModelInfo, old, out, explicit)
+    c = mi.csys
+    derived = _derived_parameters(c, out, explicit)
+    out = PottsParameters(NamedTuple(info(x).name => _param_value(mi.T, derived[_unwrap(x)], info(x))
+                                     for x in c.sys.parameters))
+    typeof(out) === typeof(old) || throw(ArgumentError("parameter types changed; kind tables keep their size"))
+    _check_kind_tables(c.sys, out)
+    for name in _contact_tables(c)
         J = getproperty(out, name)
         J == transpose(J) || throw(ArgumentError("kind table `$name` is used in a contact energy and must be symmetric"))
     end
     return out
+end
+
+# `setp`/`integ.ps[x] = v` on an integrator: the same conversion, derivation and checks (A-53)
+function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i::Symbol)
+    x = findfirst(x -> Potts.info(x).name === i, info.csys.sys.parameters)
+    x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
+    q = PottsParameters(merge(NamedTuple(p), NamedTuple{(i,)}((_param_value(info.T, v, Potts.info(info.csys.sys.parameters[x])),))))
+    return _finish_parameters(info, p, q, Set([i]))
 end
 
 CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
@@ -371,6 +417,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     old = length(prob.u0.cell.kind)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
-    st = _initial_state(info.csys, opd, info.T, max(old, ncell + free))
+    values = _derived_parameters(info.csys, prob.p, Set(Potts.info(x).name for x in info.csys.sys.parameters))
+    st = _initial_state(info.csys, opd, info.T, max(old, ncell + free), values)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
 end

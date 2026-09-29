@@ -102,8 +102,15 @@ function _vector_length(r)
 end
 
 """`vector_variable(name, 1:n, scope; default, unit, options...)`: components `name_i` of a vector variable."""
+function _check_components(name, v, n)
+    v isa AbstractVector && length(v) != n &&
+        throw(ArgumentError("`$name` has $n components; got $(length(v)) values"))
+    return v
+end
+
 function vector_variable(name::Symbol, r, scope::Symbol; default = 0.0, unit = nothing, options...)
     n = _vector_length(r)
+    _check_components(name, default, n)
     return QuantityVector(name, [variable(only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
                                      default = _component(default, i), unit = _component(unit, i),
                                      vector = name, index = i, options...) for i in 1:n])
@@ -111,6 +118,7 @@ end
 """`vector_parameter(name, 1:n, default; unit)`: components `name_i` of a vector parameter."""
 function vector_parameter(name::Symbol, r, default; unit = nothing)
     n = _vector_length(r)
+    _check_components(name, default, n)
     return QuantityVector(name, [_with_unit(_tag(_sym(_component_name(name, i)),
                                                  Info(:param, _component_name(name, i), _component(default, i), (; vector = name, index = i))),
                                             _component(unit, i)) for i in 1:n])
@@ -409,6 +417,7 @@ end
 """`Every(n)`: update cadence."""
 struct Every
     n::Int
+    Every(n::Integer) = n >= 1 ? new(Int(n)) : throw(ArgumentError("Every(n) needs n ≥ 1; got $n"))
 end
 update(phase::Symbol, eq::Equation) = Update(phase, eq, 1)
 update(phase::Symbol, e::Every, eq::Equation) = Update(phase, eq, e.n)

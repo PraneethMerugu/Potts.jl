@@ -208,6 +208,7 @@ function _section!(parts, sec, args, ln = nothing)
         names = Symbol[]
         for l in _lines(args)
             if l isa Expr && l.head === :ref && l.args[2:end] == [:frozen]
+                isempty(names) && throw(ArgumentError("the medium (the first kind) cannot be frozen"))
                 push!(code, :(push!(__frozen, $(length(names)))))    # `wall[frozen]`: an obstacle kind
                 l = l.args[1]
             end

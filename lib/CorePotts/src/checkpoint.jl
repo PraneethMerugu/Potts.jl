@@ -60,6 +60,11 @@ allocation of device storage), clearing saved values, statistics and the return 
 function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         t0::Integer = integ.prob.tspan[1])
     KernelAbstractions.synchronize(integ.backend)
+    u0 isa CPMState || (u0 = remake_state(integ.f.sys, integ.prob, u0))     # symbolic maps
+    _same_shape(integ.state, u0) || throw(ArgumentError(
+        "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
+        "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))); use `remake` and `init`"))
+    _reset_mobility!(integ.ctx.mobility, mobility(remake_frozen(integ.f.sys, integ.prob, u0), integ.prob.lattice))
     _copy_state!(integ.state, u0)
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
@@ -68,6 +73,24 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> fill!(c, 0), integ.cache.claims))
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
+    for cb in integ.callbacks
+        cb.initialize(cb, integ.state, integ.t, integ)
+    end
     integ.save_start && _save!(integ)
     return integ
 end
+
+_same_shape(a::AbstractArray, b) = b isa AbstractArray && size(a) == size(b)
+_same_shape(a::NamedTuple, b) = b isa NamedTuple && keys(a) == keys(b) && all(k -> _same_shape(a[k], b[k]), keys(a))
+_same_shape(a::CPMState, b) = false
+_same_shape(a::CPMState, b::CPMState) = all(f -> _same_shape(getfield(a, f), getfield(b, f)), fieldnames(CPMState))
+
+# The mobility of a reinitialized state: storage is reused, so the frozen sites may move but
+# their number must stay (it sizes the proposal draw).
+_reset_mobility!(::AllMobile, ::AllMobile) = nothing
+function _reset_mobility!(m::MaskMobility, new::MaskMobility)
+    m.n == new.n || throw(ArgumentError("reinit!: the number of frozen sites changed; use `remake` and `init`"))
+    copyto!(m.frozen, new.frozen); copyto!(m.sites, new.sites)
+    return nothing
+end
+_reset_mobility!(m, new) = throw(ArgumentError("reinit!: the frozen sites changed; use `remake` and `init`"))

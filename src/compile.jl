@@ -184,6 +184,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         scope = _located(sys, u) do
         if u.phase === :on_copy
             (iscall(lhs) && operation(lhs) === at) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
+            u.every == 1 || throw(ArgumentError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
             _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
             :proposal
         else

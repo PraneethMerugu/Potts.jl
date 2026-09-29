@@ -278,3 +278,60 @@ end
     @test selfcheck(p) < 1e-9
     @test_throws ArgumentError mtkcompile(AuditOnCopyContact(; name = :c))
 end
+
+@potts_model AuditDerived begin
+    @kinds medium A
+    @parameters begin
+        V₀ = 9.0
+        V2 = 2V₀
+        a = 2.0
+        b = 3a
+        J[kind, kind] = [0 2; 2 1]
+    end
+    @variables x(cell) = V₀
+    @lattice Lattice((12, 12))
+    @energy begin
+        cells => (volume - V2 / 2)^2 + b * 0
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@potts_model AuditOnCopyEvery begin
+    @kinds medium A
+    @variables act(site) = 0.0
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4)^2
+    @on_copy Every(3) act[target] ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "group 2: derived parameters, reinit!, cadence and length checks" begin
+    σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1
+    op = [ownership => σ, kind => [1]]
+    p = PottsProblem(AuditDerived(; name = :d), op, (0, 2))
+    @test p.p.V2 == 18 && p.u0.cell.x[1] == 9                             # A-39
+    @test PottsProblem(AuditDerived(; name = :d, V₀ = 4.0), op, (0, 2)).p.V2 == 8
+    q = remake(p; p = [:a => 10.0])
+    @test (q.p.a, q.p.b) == (10, 30)                                     # b follows a (MTK)
+    @test remake(p; p = [:a => 10.0, :b => 1.0]).p.b == 1                 # unless given
+    integ = init(p, SequentialCPM())
+    setp(integ, :a)(integ, 7.0)
+    @test integ.p.b == 21
+    @test_throws ArgumentError setp(integ, :J)(integ, [0 2; 5 1])       # A-53: contact tables stay symmetric
+    @test_throws ArgumentError PottsProblem(AuditDerived(; name = :d), [op; :J => 2.0], (0, 2))   # A-57
+    # A-15: reinit! validates shapes, takes symbolic maps, reruns callback initialization
+    σ2 = zeros(Int32, 12, 12); σ2[6:8, 6:8] .= 1
+    reinit!(integ, [ownership => σ2, kind => [1]])
+    @test integ.u.σ == σ2
+    @test_throws Exception reinit!(integ, PottsProblem(AuditDerived(; name = :d),
+        [ownership => (s = zeros(Int32, 12, 12); s[1:2, 1:2] .= 1; s[5:6, 5:6] .= 2; s), kind => [1, 1]], (0, 2); capacity = 5).u0)
+    # A-36: Every on on-copy updates; Every(0)
+    @test_throws ArgumentError mtkcompile(AuditOnCopyEvery(; name = :e))
+    @test_throws ArgumentError Potts.Every(0)
+end
+
+@testset "A-43/A-44 vector lengths; a frozen medium" begin
+    @test_throws ArgumentError Potts.vector_parameter(:d, 1:2, [5.0, 6.0, 7.0])
+    @test_throws ArgumentError Potts._potts_model(:X, quote @kinds medium[frozen] A end, @__MODULE__)
+end
