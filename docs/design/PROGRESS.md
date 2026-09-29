@@ -297,3 +297,21 @@
   the problem). Workspace member with its own test project; GROUP=MakiePotts in the root
   dispatcher. All MakiePotts suites pass, including Aqua and the fresh-process load orders.
 - **Full run.** GROUP=All green (4 min 43 s wall); Metal 169/169.
+
+## 2026-09-29 — M2.11 (commit f67f82c)
+
+- **Device contact table** (`spatial.jl`). `empty_contacts(maxdeg, n)` + `ContactPhase(:rel)`
+  rebuild a fixed-degree neighbour table on the device (atomic CAS row insertion, atomic
+  measure sums); `contact_slot`/`contact_measure` query it from device code. A full row
+  increments `contact_overflow[c]` instead of throwing. Matches the host CSR
+  `contact_graph` for weighted and unweighted relations (CPU and Metal).
+- **Metal group** (260 checks, `GROUP=GPU` in the root dispatcher, opt-in):
+  - Act + chemotaxis + `locally_connected` + extinction veto + bias: trackers exact, every
+    cell stays connected, chemotactic drift agrees with CPU. An 8-seed run gave
+    t = 2.4, so it was re-checked offline with 32 seeds: CPU 0.0360, Metal 0.0350,
+    t = 0.33 (sequential 0.042; the checkerboard rate differs, as expected).
+  - Merks connectivity with Barker acceptance (volume statistics agree).
+  - 3D `NeighborOrder(2)` contact and surface: surface/volume/moments exact.
+  - Links with `link_claims` (spring relaxes to rest length), `HostPhase` link rules,
+    the contact table.
+  - Checkpoint continuation is bit-exact on the device (the Metal run is reproducible).

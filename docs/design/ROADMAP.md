@@ -43,7 +43,7 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [x] 1c84438 2026-09-29 (D-035; seeding via host API and relationship consequences with M2.9) **M2.8** lifecycle: trigger/plan/apply; divide (principal major/minor, random plane, specified normal, external), remove, retire, create, transition; state rules; placement; conflicts; inadmissibility policies; capacity growth. Accept: OpenVT reference parity; ported CorePotts lifecycle scientific tests; invariants.
 - [x] 69b0cfd 2026-09-29 (padded adjacency instead of CSR; directed/anchor links and link age via payloads) **M2.9** relationships: CSR store, energies, create/remove/retune, lifecycle interaction.
 - [x] **M2.10** (bd713f5) checkpoint/continuation; `PottsSavedState` accessors; MakiePotts wired to real solutions. Accept: state round-trip exact; MakiePotts tests.
-- [ ] **M2.11** Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
+- [x] **M2.11** (f67f82c) Metal: all of the above in the GPU group; statistical parity with CPU. Accept: `GROUP=GPU` locally green.
 
 - [ ] **M2.10a** compartments: compartment cells grouped under a parent; internal vs external contact energies; coordinated division.
 
