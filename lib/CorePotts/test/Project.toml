@@ -2,6 +2,7 @@
 AllocCheck = "9b6a8646-10ed-4001-bbdc-1d2f46dfbb1a"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
 JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -13,6 +14,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+ExplicitImports = "1.15"
 StaticArrays = "1"
 Statistics = "1"
 Test = "1"

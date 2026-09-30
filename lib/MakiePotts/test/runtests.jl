@@ -225,6 +225,31 @@ end
     @test isempty(Docs.undocumented_names(MakiePotts; private = false))
 end
 
+# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name MakiePotts uses is
+# imported explicitly and by its owner. The allowlist names each non-public access the
+# package genuinely needs; add to it only by review, with the reason.
+using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
+    check_no_stale_explicit_imports, check_all_qualified_accesses_via_owners, check_all_qualified_accesses_are_public
+
+const MAKIEPOTTS_NONPUBLIC_QUALIFIED = (
+    # Makie's recipe interface: methods a recipe package extends, not declared public by Makie
+    :plottype,                   # default plot type for `plot(::PottsSavedState)`
+    :preferred_axis_type,        # axis choice for the recipe
+    :preferred_axis_attributes,  # axis attributes for the recipe
+    :automatic,                  # Makie's `automatic` attribute sentinel
+    :apply_transform_and_model,  # `boundingbox` of the recipe: data limits through the plot transform
+    :extract_colormap,           # extended so colorbars read the child plot colormap
+    :RefValue,                   # Base.RefValue: concrete `Ref` type for type-stable fields
+)
+
+@testset "MakiePotts ExplicitImports" begin
+    @test check_no_implicit_imports(MakiePotts) === nothing
+    @test check_all_explicit_imports_are_public(MakiePotts) === nothing
+    @test check_no_stale_explicit_imports(MakiePotts) === nothing
+    @test check_all_qualified_accesses_via_owners(MakiePotts) === nothing
+    @test check_all_qualified_accesses_are_public(MakiePotts; ignore = MAKIEPOTTS_NONPUBLIC_QUALIFIED) === nothing
+end
+
 @testset "fresh-process MakiePotts load orders" begin
     # Pkg.test owns a resolved temporary environment. Reuse that exact graph
     # rather than a developer's ignored package-local Manifest.toml.
