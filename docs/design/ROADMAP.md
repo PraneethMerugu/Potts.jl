@@ -140,6 +140,8 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.1a** R2 first slice: `Tiling`, `Scatter`, `Frame`, with an overlay algebra;
   the output is an SII operating point. Accept: layouts round-trip through `PottsProblem`;
   3D and hex tilings.
+- [ ] **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
+  Today a frame on a lattice with a domain always throws.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
 - [ ] **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
