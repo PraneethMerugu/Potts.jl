@@ -166,37 +166,27 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`
-    # --- Potts -> MTK/Symbolics (see the owners note below)
-    :getname,             # reached as `ModelingToolkitBase.getname`, not public there
-    :rename,              # Symbolics.rename: not public in Symbolics or MTK
+    # --- Potts -> Symbolics
+    :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
     # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
     # Potts's own symbolic operators their unit rules, so it reads Potts internals.
     :at, :at2, :history_lag, :cell_integral, :Δ, :cell_centroid, :copy_displacement,
     :random_uniform, :gather, :population,   # operators whose `get_unit` rules it defines
     :_check_units,        # the unit-check hook `mtkcompile` calls, defined by the extension
     :_describe,           # statement labels for unit error messages
-    # --- PottsDynamicQuantitiesExt -> MTK / SymbolicUtils
+    # --- PottsDynamicQuantitiesExt -> MTK
     :get_unit,            # MTK's unit-inference function the extension extends; not public
-    :maketerm,            # term rebuilding (TermInterface API, see the owners note below)
-    :metadata,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (
     :Split, :info,                # ext -> Potts internals (system splitting, model info)
     :get_unit, :ValidationError,  # ext -> MTK's unit-inference API; not declared public
 )
-# TODO(P6.0j follow-up): qualified accesses through a non-owner module. Fixing them edits
-# code lines, outside this item's import-only write set; ignored here until approved:
-# - `ModelingToolkitBase.getname` (owner SymbolicIndexingInterface), src/components.jl
-# - `ModelingToolkitBase.rename`  (owner Symbolics), src/macro.jl
-# - `SymbolicUtils.maketerm`, `SymbolicUtils.metadata` (owner TermInterface),
-#   ext/PottsDynamicQuantitiesExt.jl
-const POTTS_NONOWNER_QUALIFIED = (:getname, :rename, :maketerm, :metadata)
 
 @testset "QA: ExplicitImports (Potts)" begin
     @test check_no_implicit_imports(Potts) === nothing
     @test check_all_explicit_imports_are_public(Potts; ignore = POTTS_NONPUBLIC_EXPLICIT) === nothing
     @test check_no_stale_explicit_imports(Potts) === nothing
-    @test check_all_qualified_accesses_via_owners(Potts; ignore = POTTS_NONOWNER_QUALIFIED) === nothing
+    @test check_all_qualified_accesses_via_owners(Potts) === nothing
     @test check_all_qualified_accesses_are_public(Potts; ignore = POTTS_NONPUBLIC_QUALIFIED) === nothing
 end

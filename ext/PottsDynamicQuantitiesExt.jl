@@ -8,6 +8,7 @@ using ModelingToolkitBase: ModelingToolkitBase as MTK, get_unit, VariableUnit, V
 using Potts: Potts, PottsSystem, Split, info
 using Symbolics: Symbolics
 using SymbolicUtils: SymbolicUtils
+using TermInterface: TermInterface
 
 const UNITLESS = DQ.Quantity(1.0)
 _isunitless(u) = iszero(DQ.dimension(u))
@@ -57,7 +58,7 @@ function _zero_free(x)
         _iszeroconst(args[2]) && (args = [args[1], args[1]])
         _iszeroconst(args[1]) && (args = [args[2], args[2]])
     end
-    return SymbolicUtils.maketerm(typeof(x), op, args, SymbolicUtils.metadata(x))
+    return TermInterface.maketerm(typeof(x), op, args, TermInterface.metadata(x))
 end
 
 function _unit(label, x)

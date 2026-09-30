@@ -349,7 +349,7 @@ function _section!(parts, sec, args, ln = nothing)
             # `clock = clock`: the right-hand side means the caller's global, not the new local
             rhs = _globalize(l.args[2], k, parts.mod)
             # renamed, so `k.x` is `k₊x` whatever the system was called
-            push!(code, :($k = $P.ModelingToolkitBase.rename($rhs, $(QuoteNode(k)))),
+            push!(code, :($k = $P.Symbolics.rename($rhs, $(QuoteNode(k)))),
                 :(push!(__components, $P.ComponentSpec($(QuoteNode(k)), $k, $domain))))
         end
     elseif sec === Symbol("@lattice")
