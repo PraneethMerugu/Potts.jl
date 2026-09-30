@@ -1,92 +1,99 @@
 # Questions for Chiara Damiani, Alex Graudenzi and Davide Maspero: FBCA (J Cell Automata 15:75) and its diffusion extension (Fundam Inform 171:279)
 
-Batch 1 — **draft, not sent.** The maintainer sends this personally. Citations point to
-`docs/design/research/model-specs/08_fbca.md` ("spec 08 §x"; 08a = J Cell Automata paper,
-08b = Fundamenta Informaticae paper) and the specs README ("specs README §4 X<n>").
+Batch 1 — **draft, not sent.** The maintainer sends this personally. Internal traceability
+is in the comment block at the end of the file. **Q1 and Q2 are on HOLD** until the pre-send
+checks in README.md are done.
 
 ---
 
 Dear Dr. Damiani, Dr. Graudenzi and Dr. Maspero,
 
 I am [Maintainer name], and I work on Potts.jl, an open-source Julia ecosystem for cellular
-Potts models. We are reproducing FBCA — a CPM with a flux-balance problem solved per cell every
-MCS — with full provenance: every equation and parameter is traced to a page or figure, and
-every choice we make is listed in a public tutorial. FBCA is the most ambitious coupling in our
-set, and we would like the reproduction to be exact.
+Potts models. We are reproducing FBCA — a CPM with a flux-balance problem solved for each cell
+every MCS — with full provenance: every equation and parameter is traced to a page or figure,
+and every choice we make will be listed in a tutorial that we will publish and share with you.
+FBCA is the most ambitious coupling in our set, and we would like the reproduction to be exact.
 
-Neither paper links code or the metabolic model file, and 08b takes its defaults "as in [18]",
-the ACRI 2018 paper, which we do not have. Questions 1–5 block a reproduction; 6–9 are quick.
-We would be glad to work on this together with you.
-
-With thanks,
-[Maintainer name]
-
----
+Questions 1–5 block a reproduction; 6–9 are quick. We would be glad to work on this together
+with you.
 
 ## Blocking questions
 
-### Q1 [B] Code and the HMR CORE model file
+### Q1 [B] [HOLD] Code and the metabolic model
 
-- **Context.** Both papers say the implementation is MATLAB with the COBRA Toolbox (08a p.82;
-  08b p.288), on HMR CORE (Di Filippo et al. 2016; 272 reactions, 240 metabolites) (spec 08 §1,
-  §2.2). No repository or SBML/MAT file is linked (spec 08 §7 item 13).
-- **Question.** Could you share the MATLAB sources and the exact HMR CORE file used?
-- **Our assumption.** None possible: the metabolic model is a blocking gate (specs README §4 X5).
-- **What changes.** Everything; without it there is no per-cell LP to solve.
+- **Context.** Both papers use MATLAB with the COBRA Toolbox (J Cell Automata 15, p.82; Fundam
+  Inform 171, p.288) on HMR CORE (Di Filippo et al. 2016), with 272 reactions and 240
+  metabolites. Neither paper links code or a model file.
+- **Question.** Did you use the published HMR CORE unchanged? If not, which bounds, biomass
+  reaction or reaction IDs differ? Could you also share the MATLAB sources?
+- **Our assumption.** The published HMR CORE, unchanged.
+- **What changes.** The per-cell linear programme itself, and so every metabolic phenotype.
 
-### Q2 [B] The ACRI 2018 parameters used in 08b
+### Q2 [B] [HOLD] Parameters taken from the ACRI 2018 paper
 
-- **Context.** 08b's defaults are "as in [18]" (08b p.285), i.e. Graudenzi et al., ACRI 2018
-  (LNCS 11115), which we do not have (spec 08 §1).
-- **Question.** What values of λ, k_BT, attempts per MCS and the initial field values were used
-  in 08b (spec 08 §7 item 12)?
+- **Context.** The Fundamenta Informaticae paper takes its defaults "as in [18]" (p.285), i.e.
+  Graudenzi et al., ACRI 2018 (LNCS 11115), which we could not obtain.
+- **Question.** What values of λ, k_BT, attempts per MCS and initial field values were used in
+  the Fundamenta Informaticae simulations?
 - **Our assumption.** None yet.
-- **What changes.** The CPM layer and the initial nutrient fields of every 08b scenario.
+- **What changes.** The CPM layer and the initial nutrient fields of every scenario.
 
 ### Q3 [B] Starvation death
 
-- **Context.** "cellular death by starving is the only way to remove cells" (08b p.282, p.285), but
-  no criterion is given (spec 08 §2.2).
-- **Question.** What triggers death: a threshold on v_b, an infeasible LP, a biomass decrease,
-  or something else (spec 08 §7 item 10)?
+- **Context.** "cellular death by starving is the only way to remove cells" (Fundam Inform 171,
+  p.282, p.285), but no criterion is given.
+- **Question.** What triggers death: a threshold on v_b, an infeasible LP, a decrease of biomass,
+  or something else?
 - **Our assumption.** None yet.
-- **What changes.** Population size and composition over time in all 08b tissue scenarios.
+- **What changes.** Population size and composition over time in all tissue scenarios.
 
 ### Q4 [B] The Eq 6 averaging operator
 
 - **Context.** Diffusion is neighbourhood averaging, [N(l_i)] ← (D/|I|) Σ_{j∈I} [N(l_j)]
-  (08b Eq 6, p.284). D is "chosen based on the nutrient species" but not given, the number of
-  sweeps per MCS is not given, and for D ≠ 1 the operator does not conserve mass (spec 08 §2.2).
-- **Question.** What D per species, how many sweeps per MCS, and is D < 1 intended as a decay
-  (spec 08 §7 item 8)?
-- **Our assumption.** The operator as written, with D a calibration parameter (specs README §4
-  X3).
+  (Fundam Inform 171, Eq 6, p.284). D is "chosen based on the nutrient species" but not given,
+  the number of sweeps per MCS is not given, and for D ≠ 1 the operator does not conserve mass.
+- **Question.** What D was used for each species, how many sweeps per MCS, and is D < 1 meant as
+  a decay?
+- **Our assumption.** The operator as written, with D a calibration parameter.
 - **What changes.** Nutrient gradients around the vessels, hence the spatial phenotype maps.
 
 ### Q5 [B] Edge efflux
 
 - **Context.** Unconsumed nutrients "are removed … through a constant flux value" at the lattice
-  edges (08b p.286); the value is not given (spec 08 §2.2).
-- **Question.** What is the value, and does it apply to all four edges (spec 08 §7 item 9)?
+  edges (Fundam Inform 171, p.286); the value is not given.
+- **Question.** What is the value, and does it apply to all four edges?
 - **Our assumption.** None yet.
 - **What changes.** The nutrient balance of the closed tissue scenarios.
 
 ## Quick questions (non-blocking)
 
-**Q6. Units.** 08a Table 1 has "1 lattice site = 1 μm". Is that a 1 μm edge, or 1 μm² per site?
-A 25 μm² cell would be small for crypt epithelium (spec 08 §7 item 1).
+**Q6. Lattice spacing.** Table 1 of the J Cell Automata paper gives 1 lattice site = 1 μm. With
+1 μm spacing a 25-site cell is 5 μm across (25 μm²), small for crypt epithelium. Is the spacing
+really 1 μm, or does a site represent a larger length?
 
-**Q7. ρ in 08a.** Is ρ = B/|C| as in 08b (spec 08 §7 item 3)?
+**Q7. ρ in the J Cell Automata paper.** Is ρ = B/|C|, as in the Fundamenta Informaticae paper?
 
-**Q8. Biomass at division.** Is B halved between daughters or split by area (spec 08 §7 item 4)?
-*We halve (specs README §4 X4).*
+**Q8. Biomass at division.** Is B halved between the daughters or split by area? *We halve.*
 
-**Q9. Degenerate optima.** Was pFBA or another secondary objective used to pick among equal-v_b
-solutions? It matters for the lactate phenotypes of 08b Fig 6 (spec 08 §7 item 5). *We use pFBA
-(specs README §4 X1).*
+**Q9. Degenerate optima.** Was pFBA or another secondary objective used to choose among
+solutions with equal v_b? It matters for the lactate phenotypes of Fundamenta Informaticae
+Fig 6. *We use pFBA.*
 
-## Tutorial to share once public
+Once the reproduction is published, we will send you the tutorial. Each of your answers will be
+recorded there with a dated entry.
 
-`lib/PottsModels/reproductions/08_fbca.jl` (planned, build step 12, following
-TUTORIAL_TEMPLATE). Each answer becomes a dated changelog entry and a row of its deviations
-table.
+With thanks,
+[Maintainer name]
+
+<!-- trace:
+Q1: spec 08 §1, §2.2, §7 item 13; specs README §4 X5; README §5 Damiani item 1. HOLD: obtain the HMR CORE file from the Di Filippo 2016 supplementary (Comput Biol Chem 62:60)
+Q2: spec 08 §1, §7 item 12; README §5 Damiani item 1. HOLD: obtain the ACRI 2018 paper (LNCS 11115, doi 10.1007/978-3-319-99813-8_2)
+Q3: spec 08 §2.2, §7 item 10; README §5 Damiani item 2
+Q4: spec 08 §2.2, §7 item 8; specs README §4 X3; README §5 Damiani item 2
+Q5: spec 08 §2.2, §7 item 9; README §5 Damiani item 2
+Q6: spec 08 §7 item 1; README §5 Damiani item 3
+Q7: spec 08 §7 item 3; README §5 Damiani item 3
+Q8: spec 08 §7 item 4; specs README §4 X4; README §5 Damiani item 3
+Q9: spec 08 §7 item 5; specs README §4 X1; README §5 Damiani item 3
+Tutorial (planned): 08_fbca.jl, step 12
+-->
