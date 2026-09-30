@@ -8,11 +8,12 @@
 # !!! warning "Reduced run"
 #     The docs build runs a reduced ensemble (`POTTS_FULL_REPRODUCTION` unset), so the
 #     tables below are a smoke check, not validation. The full run
-#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length. It
-#     still uses the same small aggregate from `graner_glazier_state`, so the differences
-#     that come from aggregate size (deviations table) remain until a paper-size generator
-#     exists. The committed full-run outputs (`lib/PottsModels/reproductions/data/09/`) are
-#     **pending**: no full run has been made yet.
+#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length, and
+#     replaces the small aggregate of `graner_glazier_state` with a paper-size one of 1000
+#     cells (`graner_glazier_aggregate`), so the differences that come from aggregate size
+#     (deviations table) can be tested there. The committed full-run outputs
+#     (`lib/PottsModels/reproductions/data/09/`) are **pending**: no full run has been made
+#     yet.
 #
 # ## 1. Paper and sources
 #
@@ -69,8 +70,8 @@ const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
 #
 # The published constructor carries all of it:
 
-@named gg = GranerGlazier()
-σ0, k0 = graner_glazier_state()
+σ0, k0 = FULL ? graner_glazier_aggregate(1000; seed = 1) : graner_glazier_state()
+gg = GranerGlazier(; name = :gg, lattice = size(σ0))
 prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = 1)
 J = getp(prob0, :J)(prob0)
 par(name) = getp(prob0, name)(prob0)
@@ -102,11 +103,11 @@ Markdown.parse("""
 | Item | Paper | Released code | Our default | Variant keyword | Reason |
 |---|---|---|---|---|---|
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t |
-| Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $ncells cells on $(join(size(σ0), " × ")) | `graner_glazier_state(scale)` tiles aggregates, it does not enlarge one | Cost. Boundary fractions scale with perimeter/area, and sorting levels off long before 10⁴ paper MCS (`GranerGlazier` docstring; `test/papers.jl`) |
+| Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $ncells cells on $(join(size(σ0), " × ")) | `graner_glazier_aggregate(n)`: one round aggregate of n cells (the full run uses n = 1000) | Cost. Boundary fractions scale with perimeter/area, and sorting levels off long before 10⁴ paper MCS (`GranerGlazier` docstring; `test/papers.jl`) |
 | Log-law window | 5–4000 paper MCS (spec §8.5 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
 | Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image; unsuitable for dispersal runs (spec §8.6 D2) |
-| Type fraction | unstated (spec §8.4) | — | probability ½ per cell ($ndark dark / $nlight light) | — | Assumption, recorded in `data/graner/provenance.toml` |
-| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | the same recipe with $ncells cells | — | D-049 F-2; `data/graner/generate.jl` |
+| Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | Assumption, recorded in `data/graner/provenance.toml` |
+| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | — | $(FULL ? "Paper size; the tessellation is compact and near-equal like the relaxed aggregate" : "D-049 F-2; `data/graner/generate.jl`") |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
 | Target area per kind | one value except the cavity run (PRE Fig. 28) | — | one `V₀` | — | Per-kind targets not expressible yet (spec §8.6 D14) |
 | Boundary length | mismatched bonds on the 8-neighbour lattice, medium included (PRE p.2133) | — | the same, each bond once | — | Once/twice counting cancels in fractions (spec §8.6 D8) |
@@ -114,8 +115,8 @@ Markdown.parse("""
 
 # ## 4. Build and run
 #
-# One replicate to 10³ paper MCS, sequential CPU solver, timed after a warm-up solve. This
-# is our small aggregate, not paper size.
+# One replicate to 10³ paper MCS, sequential CPU solver, timed after a warm-up solve. In
+# the reduced build this is our small aggregate, not paper size.
 
 alg = SequentialCPM(; proposal = Moore(1))
 prob = remake(prob0; tspan = (0, PAPER_MCS * 1000))
@@ -156,7 +157,7 @@ end
 
 ## anneal a copy at T = 0 with the energies of the run `run` (a PottsProblem)
 function annealed(σ, k, run; seed = 1)
-    q = PottsProblem(GranerGlazier(; name = :anneal),
+    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(σ)),
         [ownership => copy(σ), kind => k, :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
             :V₀ => getp(run, :V₀)(run), :T => 0.0], (0, 2PAPER_MCS); seed)
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
@@ -468,3 +469,4 @@ Markdown.parse(isempty(failing) ? "No row fails in this run." : #hide
 # | Date | Change | Reason |
 # |---|---|---|
 # | 2026-09-30 | First version (pilot tutorial, reduced run) | ROADMAP P6.0h |
+# | 2026-09-30 | The full run uses a 1000-cell aggregate (`graner_glazier_aggregate`) | ROADMAP P6.1b2 |

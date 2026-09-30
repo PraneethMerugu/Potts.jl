@@ -107,6 +107,79 @@ blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b.
     end
 end
 
+# The paper-size aggregate (P6.1b2) and its layout, `VoronoiBall`, checked against their
+# definitions: a centroidal Voronoi tessellation of a Euclidean ball.
+"""Share of ball sites whose nearest cell centroid (Euclidean, embedded by `pos`) is their own cell's."""
+function own_centroid_share(σ, pos)
+    sites = [x for x in CartesianIndices(σ) if σ[x] != 0]
+    P = [collect(pos(x)) for x in sites]
+    n = maximum(σ)
+    cen = [sum(P[i] for i in eachindex(sites) if σ[sites[i]] == c) ./ count(==(c), σ) for c in 1:n]
+    return count(i -> argmin(c -> sum(abs2, P[i] .- cen[c]), 1:n) == σ[sites[i]], eachindex(sites)) / length(sites)
+end
+"""Cells whose sites are not one piece under the unit offsets `offs` (index space, no wrap)."""
+function pieces_split(σ, offs)
+    bad = 0
+    for c in 1:maximum(σ)
+        idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]]
+        while !isempty(st)
+            q = pop!(st)
+            for o in offs
+                p = q + CartesianIndex(o)
+                checkbounds(Bool, σ, p) && σ[p] == c && !(p in seen) && (push!(seen, p); push!(st, p))
+            end
+        end
+        bad += length(seen) < length(idx)
+    end
+    return bad
+end
+
+@testset "VoronoiBall and the paper-size Graner–Glazier aggregate" begin
+    # square, 2D: the ball is exactly the sites within `radius`; a centroidal tessellation
+    op = layout(VoronoiBall(40; radius = 15.5, center = (20, 21), kinds = [:a, :b], seed = 3), (40, 42))
+    σ = op[1].second
+    @test Set(findall(!=(0), σ)) == Set(x for x in CartesianIndices(σ) if (x[1] - 20)^2 + (x[2] - 21)^2 <= 15.5^2)
+    @test maximum(σ) == 40 && op[2].second == repeat([:a, :b], 20)
+    @test own_centroid_share(σ, x -> Float64.(Tuple(x))) > 0.97
+    rnd = zeros(Int32, size(σ)); ball = findall(!=(0), σ)            # control: random labels are not
+    foreach(((i, x),) -> rnd[x] = mod1(i * 7919, 40), enumerate(ball))
+    @test own_centroid_share(rnd, x -> Float64.(Tuple(x))) < 0.2
+    @test pieces_split(σ, ((1, 0), (-1, 0), (0, 1), (0, -1))) == 0
+    @test layout(VoronoiBall(40; radius = 15.5, kinds = [:a], seed = 3, iterations = 0), (40, 42))[1].second != σ
+    @test_throws ArgumentError layout(VoronoiBall(50; radius = 3, kinds = [:a], seed = 1), (10, 10))
+    # hexagonal: round in the embedding, not in axial indices; cells connected under Hex(1)
+    hex = Lattice((50, 50); geometry = Hexagonal())
+    σh = layout(VoronoiBall(30; radius = 14, center = (25 - 12, 25), kinds = [:a], seed = 1), hex)[1].second
+    E(x) = (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)
+    xy = [E(Tuple(x)) for x in findall(!=(0), σh)]
+    @test all(v -> abs(maximum(getindex.(xy, v)) - minimum(getindex.(xy, v)) - 28) <= 2, 1:2)
+    @test own_centroid_share(σh, x -> E(Tuple(x))) > 0.97
+    @test pieces_split(σh, ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))) == 0
+    # 3D
+    σ3 = layout(VoronoiBall(20; radius = 7, kinds = [1], seed = 2), (17, 17, 17))[1].second
+    @test maximum(σ3) == 20 && count(!=(0), σ3) == count(x -> sum(abs2, Tuple(x) .- 9) <= 49, CartesianIndices(σ3))
+    @test pieces_split(σ3, ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))) == 0
+
+    # sorting proceeds on the aggregate; symmetric contacts (no differential adhesion) do not sort
+    σ, k = graner_glazier_aggregate(200; seed = 1)
+    function hetero(σ)                     # dark–light fraction of cell–cell Moore bonds
+        he = ho = 0
+        for x in CartesianIndices(σ), d in ((1, 0), (0, 1), (1, 1), (1, -1))
+            y = x + CartesianIndex(d)
+            checkbounds(Bool, σ, y) || continue
+            a, b = σ[x], σ[y]
+            (a == b || a == 0 || b == 0) && continue
+            k[a] == k[b] ? (ho += 1) : (he += 1)
+        end
+        return he / (he + ho)
+    end
+    h0 = hetero(σ)
+    run(J) = [hetero(Array(solve(PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)),
+        [ownership => σ, kind => k, :J => J], (0, 300); seed), SequentialCPM(; proposal = Moore(1))).u[end].σ)) for seed in 1:2]
+    @test all(<(h0 - 0.1), run([0 16 16; 16 2 11; 16 11 14]))
+    @test all(h -> abs(h - h0) < 0.05, run([0 16 16; 16 11 11; 16 11 11]))
+end
+
 # Merks' cell length (Eq. 5), from σ: 4√λ_max of the covariance of the cell's site coordinates
 function merks_length(σ, c)
     x = [Float64.(Tuple(i)) for i in findall(==(c), σ)]

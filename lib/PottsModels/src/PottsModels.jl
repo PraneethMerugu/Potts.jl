@@ -8,14 +8,15 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts: Potts, @potts_model, Closed, Lattice, Metropolis, Moore, Periodic, RandomPlane,
-    VonNeumann, kind, major_length, ownership
+using Potts: Potts, @potts_model, AbstractLayout, Closed, Lattice, Metropolis, Moore, Periodic, RandomPlane,
+    VonNeumann, embed, kind, layout, major_length, ownership
 using DelimitedFiles: readdlm
 using Random: MersenneTwister
+using StableRNGs: StableRNG
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
     AkeebInvasion
-export graner_glazier_state, akeeb_state, akeeb_contacts, openvt_monolayer_state, merks_state
+export graner_glazier_state, graner_glazier_aggregate, VoronoiBall, akeeb_state, akeeb_contacts, openvt_monolayer_state, merks_state
 
 include("graner_glazier.jl")
 include("wortel_act.jl")
