@@ -69,7 +69,7 @@ is sugar.
 | `@before_mcs`, `@after_mcs`, `@on_copy` | discrete updates as equations with `Pre` | discrete events |
 | `@divide`, `@retire`, `@create`, `@transition` | lifecycle rules | — |
 | `@relationship`, `@link`, `@unlink` | cell–cell edges | — |
-| `@components` | MTK subsystems (ODE/DAE) coupled to the model | same |
+| `@components` | MTK subsystems (ODE, or discrete-time clocked `Shift` systems such as Boolean networks) coupled to the model | same |
 | `@observed` | derived quantities | `observed` |
 | `@sweep` | protocol: `Metropolis(; temperature, offset)` (1 MCS = N attempts) | solver options |
 
@@ -756,7 +756,7 @@ end
 @equations cells(tumor) begin                 # per-cell ODE block, own solver/step/time scale
     D(x) ~ k1 - k2 * x
 end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
-@components cells(tumor) grn = BooleanNetwork(...)          # pure-Julia logic network
+@components cells(tumor) grn = grn                          # MTK discrete (clocked, `Shift`) System
 @components cells(tumor) stoch = JumpSystem(...)            # or Catalyst.jl ReactionSystem
 @components cells(tumor) sbml = SBMLToolkit.readSBML("model.xml")
 ```
@@ -770,6 +770,79 @@ end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
     set by `remake(prob; p = [:clock₊τ => …])`.
 - Cell ODEs advance with `@sweep …; ode_solver = ExplicitEuler(substeps = n) |
   RK4(substeps = n)`.
+
+**Discrete-time components: Boolean and discrete networks (P6.0k, D-065 Q9, implemented).**
+A Boolean or discrete network is a plain MTK discrete-time `System`; Potts has no network
+type and no truth-table helper.
+
+```julia
+using Potts.ModelingToolkitBase: System, ShiftIndex, Clock, @variables, @parameters, @named
+k = ShiftIndex(Potts.t, 0)            # one tick per MCS; ShiftIndex(Clock(n * mcs_duration)): every n MCS
+@variables A(Potts.t)::Bool = false B(Potts.t)::Bool = false C(Potts.t)::Bool = false
+@parameters wnt::Bool = false
+@named grn = System([A(k) ~ wnt | (B(k - 1) & !C(k - 1)),     # x(k-1): the previous tick (synchronous)
+                     B(k) ~ A(k - 1),
+                     C(k) ~ !(A(k) | B(k - 1))], Potts.t)       # x(k): A's new value (ordered by MTK)
+
+@potts_model Tumour begin
+    @kinds medium tumour
+    @variables signal(cell) = 0.0
+    @components cells(tumour) grn = grn
+    @equations grn.wnt ~ signal > 0.5                 # a cell-scope coupling, sampled at the tick
+    @divide cells(tumour) when = grn.A & (volume >= 40)
+    ...
+end
+```
+
+- **Storage.** Each discrete variable `x` becomes the cell (or, with `@components model`,
+  model) variable `grn₊x`, holding the value of the latest tick. A `Bool` node is stored in
+  the model's scalar type as exact 0/1, so `sol[:grn₊A]`, the operating point
+  (`:grn₊A => [true, false, …]`), division copies and plotting treat it like any cell
+  variable. Model statements read `grn.A` as a `Bool` (`grn.A & …`) or as 0/1 (`λ * grn.A`).
+  A deeper lag (`z(k - 2)`) keeps its own slot, `grn₊zₜ₋₁`; an array variable `z[1:n]`
+  has one slot per element, `grn₊z_1 … grn₊z_n`. A node read at another cell
+  (`grn.A[j]`) is a `Bool` as well.
+- **Timing.** One fused phase per clock runs at the end of the MCS: after the updates, the
+  fields and the ODEs, before the link rules and the lifecycle; for live cells
+  (`volume > 0`) of the component's kinds only. Ticks follow MTK clock time: `Clock(dt;
+  phase)` ticks at `t = phase + k·dt` (after MCS `t - 1`, in units of `mcs_duration`), and
+  `t = 0` is the initial state. So `Clock(2)` ticks after MCS 1, 3, …, one MCS later than
+  `Every(2)` (MCS 0, 2, …): the state saved at `t` has had `t ÷ 2` ticks.
+  `Clock(n; phase = 1)` ticks after MCS 0, n, …, as `Every(n)` does. `dt` and `phase`
+  must be whole numbers of MCS, with `0 ≤ phase < dt`.
+- **Update order is MTK's.** Every rule reads the state before the tick (a `x(k - 1)` read
+  is synchronous); a same-step read `x(k)` sees the new value, because `mtkcompile`
+  substitutes its rule. Several components on one clock and scope share one phase. Every
+  component that ticks at a given MCS (cell or model scope, any clock) reads the other
+  components' pre-tick values, whatever the declaration order: with more than one tick
+  phase, new values go to scratch slots (`grn₊x__tick`) and are published after all ticks.
+  The same holds across cells: a rule reading another cell's node (`grn.A[j]`, a gather, a
+  link partner) sees its pre-tick value, through the same scratch slots.
+- **Couplings (as D-038).** `@equations grn.p ~ expr` replaces a component parameter by a
+  cell-scope expression (cell variables, `volume`, `integral`, population folds, other
+  components' state, `rand()`). A `Bool` parameter coupled to a number reads it as
+  `!iszero`; write thresholds explicitly (`signal > 0.5`). An uncoupled parameter is a
+  model parameter (`grn₊wnt`, 0/1 for a `Bool`). A continuous component coupled to a node
+  (`ode.k ~ grn.A`) holds the latest tick over the MCS (zero-order hold); a discrete one
+  coupled to an ODE state (`grn.s ~ ode.x > 0.5`) samples it at the tick.
+- **Initial values** come from the MTK defaults and the operating point. MTK's
+  initialization is never run (it is ill-posed for Boolean maps). A node or lag without a
+  default must be given in the operating point.
+- **Rejected at `mtkcompile`**, with an `ArgumentError` naming the component: a node
+  without an update of its own ("every discrete variable needs an update"); `D(x)` in a
+  discrete component (use a continuous and a discrete component, coupled); `Sample`/`Hold`;
+  implicit rules and algebraic loops of same-step reads; several clocks in one component
+  (one component per clock); a `Bool` node given a non-`Bool` rule; a period or phase that
+  is not a whole number of MCS; an update or equation writing a node.
+- Write updates as `x(k) ~ f(x(k - 1))` (MTK rejects `x(k + 1) ~ f(x(k))`) and clocks as
+  `Clock(dt; phase)`. `ShiftIndex()` (an inferred clock) is not available.
+- Random-order asynchronous updating is written in MTK form: a per-cell draw
+  `@equations grn.u ~ rand()` and rules `A(k) ~ ifelse(u < 1/3, f_A, A(k - 1))`.
+- Loading full `ModelingToolkit` (11.45 or later; its compiler rejects clocked systems) is
+  supported: the `PottsModelingToolkitExt` extension compiles discrete components through
+  MTK's discrete-pass hook, with the same generated code. Full MTK also compiles
+  continuous components itself; it may order their unknowns differently (so the cell
+  variables are declared in another order), with the same results.
 
 **Randomness (implemented).**
 - `rand()` inside a model is a uniform draw in (0, 1), fresh every MCS for every cell or

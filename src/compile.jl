@@ -41,6 +41,8 @@ struct CompiledPottsSystem
     update_pops::Vector{Pair{Symbol, Any}}            # model slots of folds hoisted from updates
     energy_snapshots::Vector{Pair{Symbol, Any}}       # model slots of folds in energies (D-041)
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
+    discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
+    discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -159,6 +161,7 @@ per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     sys = _bind_components(sys)
+    _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
     contact_terms = Dict{Symbol, Any}()
@@ -301,6 +304,16 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
     end
 
+    # discrete components (P6.0k): a tick reads the pre-tick state, between copies
+    for b in sys.discrete
+        _located(sys, b) do
+            for x in b.next
+                _check_names(x, b.scope === :cell ? _CELL_BUILTINS : (:mcs,), "a discrete component"; between_copies = true)
+            end
+        end
+    end
+    tick_exprs = Any[x for b in sys.discrete for x in b.next]
+
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
     for u in sys.updates
@@ -317,7 +330,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
                         (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
                         (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...,
                         (r.when for r in sys.link_rules)..., sys.sweep.temperature,
-                        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...])
+                        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., tick_exprs...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)
@@ -333,7 +346,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     all_exprs = Any[last.(cell_terms)..., last.(cluster_terms)..., values(contact_terms)..., site_terms...,
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
         (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
-        sys.sweep.temperature]
+        sys.sweep.temperature, tick_exprs...]
     # everything evaluated against the state, including division rules, observed quantities
     # and link rules: every tracker flag scans the same set (A-35)
     scanned = Any[all_exprs..., (d.when for d in sys.divisions)...,
@@ -401,6 +414,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     end
     cell_ode_pops = Pair{Symbol, Any}[]
     cell_odes = Tuple{Any, Any}[(x, _hoist_populations(r, cell_ode_pops, gather_names, :__odepop)) for (x, r) in cell_odes]
+    # folds in a cell-scope tick are computed once per tick, before it (as for cell ODEs)
+    discrete_pops = Pair{Symbol, Any}[]
+    discrete = DiscreteBlock[b.scope === :cell ?
+                             DiscreteBlock(b.name, b.scope, b.kinds, b.slots,
+        Any[_hoist_populations(x, discrete_pops, gather_names, :__tickpop) for x in b.next], b.every, b.offset) : b
+                             for b in sys.discrete]
 
     if sys.sweep.ode_solver isa Adaptive              # A-68: an adaptive step cannot replay draws
         for eq in sys.equations
@@ -418,7 +437,25 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
-        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops)
+        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops)
+end
+
+# A slot of a discrete component is written by its ticks only.
+function _check_discrete_slots(sys)
+    isempty(sys.discrete) && return nothing
+    slots = Dict{Symbol, Symbol}(info(x).name => b.name for b in sys.discrete for x in b.slots)
+    target(lhs) = (x = _standin_var(lhs);
+        iscall(x) && (operation(x) === at || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x)
+    for s in Iterators.flatten((sys.updates, sys.equations))
+        lhs = _unwrap(s isa Update ? s.eq.lhs : s.lhs)
+        i = info(target(lhs))
+        (i !== nothing && haskey(slots, i.name)) || continue
+        _located(sys, s) do
+            throw(ArgumentError("`$(i.name)` is a node of the discrete component `$(slots[i.name])`: only its ticks " *
+                                "write it (no updates or equations for it)"))
+        end
+    end
+    return nothing
 end
 
 # A kind filter naming every cell kind is no filter (the generated code skips the test).
@@ -561,6 +598,7 @@ _describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
+_describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
 # finds (a site variable without a site, a cell variable indexed by a site, …) surface at
@@ -614,6 +652,10 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     end
     for r in sys.link_rules
         _located(() -> lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)), sys, r)
+    end
+    for b in sys.discrete
+        env = b.scope === :cell ? cellenv : _model_env(T, rn; key = :key)
+        _located(() -> foreach(x -> (lower(x, env); _check_geometry(x, length(sys.lattice.dims))), b.next), sys, b)
     end
     # geometry axes, and names the lowering environments cannot rule out
     N = length(sys.lattice.dims)

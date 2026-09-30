@@ -352,7 +352,7 @@ function _phases(c::CompiledPottsSystem, T, values)
     s = c.sys
     after_reads = Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., (eq.rhs for eq in s.equations)...,
         (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in s.link_rules)...]
+        (r.when for r in s.link_rules)..., (x for b in c.discrete for x in b.next)...]
     any(x -> _has_op(x, cell_integral), after_reads) && append!(after, integrals)
     # update blocks (D-042): snapshots of previous values, then the ordered stages, each
     # after its hoisted population folds
@@ -397,6 +397,7 @@ function _phases(c::CompiledPottsSystem, T, values)
         isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
         isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
     end
+    append!(after, _discrete_phases(c, T))
     append!(after, _link_phases(c, T))
     # at the MCS boundary (after the lifecycle): integrals, then history rings take the values
     finish = Any[integrals...]
@@ -603,6 +604,96 @@ function _ode_steps(solver, T, dt, ys, rates)
     end
 end
 
+# Discrete components (P6.0k, D-065 Q9): one fused phase per clock and scope, after the ODEs
+# and before the links and the lifecycle. Every new value is computed from the pre-tick state
+# before any slot is written (Jacobi; a same-step read `x(k)` arrives already substituted by
+# `mtkcompile`), for live cells of each component's kinds. With several phases (cell and model
+# scope, or several clocks that may tick at the same MCS) every phase first writes scratch
+# slots `x__tick`, and the slots are published only after all of them ran, so no block ever
+# reads another's post-tick value. A model with a single phase writes its slots directly.
+_tick_groups(c::CompiledPottsSystem) = unique((b.scope, b.every, b.offset) for b in c.discrete)
+_tick_scratch(c::CompiledPottsSystem) = length(_tick_groups(c)) > 1 || _reads_other_cells_slots(c)
+
+# A cell-scope tick that reads a discrete slot of another cell (`x[j]`, a gather, a fold that is
+# not hoisted, a link partner) must not see cells that already ticked: it needs scratch slots
+# even in a single phase (review P6.0k round 2). Reads of the cell's own slots do not.
+function _reads_other_cells_slots(c::CompiledPottsSystem)
+    slots = Set{Symbol}(info(x).name for b in c.discrete if b.scope === :cell for x in b.slots)
+    isempty(slots) && return false
+    hit = Ref(false)
+    reads_slot(y) = (found = Ref(false);
+        _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in slots && (found[] = true)), y); found[])
+    for b in c.discrete, x in b.next
+        b.scope === :cell || continue
+        _walk_all(x) do y
+            hit[] && return
+            iscall(y) && operation(y) in (at, at2, gather, population) && reads_slot(y) && (hit[] = true)
+        end
+    end
+    return hit[]
+end
+_tick_scratch_name(n::Symbol) = Symbol(n, :__tick)
+
+# MTK clock ticks at `t = offset + k·every` MCS happen after MCS `t - 1`: `mcs % every == mod(offset - 1, every)`
+_clocked(every, offset, ph) = every == 1 && offset == 0 ? ph : _Gated(every, mod(offset - 1, every), ph)
+
+function _discrete_phases(c::CompiledPottsSystem, T)
+    isempty(c.discrete) && return Any[]
+    rn = c.gather_names
+    scratch = _tick_scratch(c)
+    computes = Any[]
+    commits = Any[]
+    for key in _tick_groups(c)
+        scope, every, offset = key
+        bs = [b for b in c.discrete if (b.scope, b.every, b.offset) == key]
+        if scope === :cell
+            used = Set(n for b in bs for x in b.next for (r, n) in _uses(x) if r === :model)
+            pops = [s for s in c.discrete_pops if s.first in used]
+            isempty(pops) || push!(computes, _clocked(every, offset, _slots_phase(T, pops, rn)))
+            push!(computes, _clocked(every, offset, CorePotts.CellPhase(_rgf(_tick_expr(bs, T, rn, :cell; scratch)))))
+        else
+            push!(computes, _clocked(every, offset, CorePotts.ModelPhase(_rgf(_tick_expr(bs, T, rn, :model; scratch)))))
+        end
+        scratch || continue
+        for b in bs, x in b.slots
+            n = info(x).name
+            push!(commits, _clocked(every, offset, CorePotts.CopyPhase((scope, n) => (scope, _tick_scratch_name(n)))))
+        end
+    end
+    return Any[computes..., commits...]
+end
+
+function _tick_expr(bs, T, rn, scope; scratch = false)
+    env = scope === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key) : _model_env(T, rn; key = :key)
+    arr(n) = scope === :cell ? :(st.cell.$n) : :(st.model.$n)
+    idx = scope === :cell ? :c : 1
+    dst(n) = arr(scratch ? _tick_scratch_name(n) : n)
+    body = Any[]
+    if scope === :cell
+        # a dead cell does not tick (its scratch keeps its value, so publishing leaves it unchanged)
+        keep = scratch ? [:(@inbounds $(dst(info(x).name))[c] = $(arr(info(x).name))[c]) for b in bs for x in b.slots] : Any[]
+        push!(body, :(@inbounds st.cell.volume[c] > 0 || $(Expr(:block, keep..., :(return nothing)))))
+        any(b -> !isempty(b.kinds), bs) && push!(body, :(kc = Potts._cellkind(st, c)))
+    end
+    writes = Any[]
+    for (i, b) in enumerate(bs)
+        gated = scope === :cell && !isempty(b.kinds)
+        g = Symbol(:g_, i)
+        gated && push!(body, :($g = $(_kindtest(:kc, b.kinds))))
+        for (j, (x, r)) in enumerate(zip(b.slots, b.next))
+            v = Symbol(:v_, i, :_, j)
+            n = info(x).name
+            a = arr(n)
+            new = :(convert(eltype($a), $(lower(r, env))))
+            # another kind keeps its value (the component is not instantiated there)
+            push!(body, :($v = $(gated ? :($g ? $new : (@inbounds $a[$idx])) : new)))
+            push!(writes, :(@inbounds $(dst(n))[$idx] = $v))
+        end
+    end
+    args = scope === :cell ? :((st, p, ctx, key, mcs, c)) : :((st, p, ctx, key, mcs))
+    return :($args -> $(Expr(:block, body..., writes..., :(return nothing))))
+end
+
 # `@link`/`@unlink` rules: host phases over the contact graph / existing links.
 function _link_phases(c::CompiledPottsSystem, T)
     rn = c.gather_names
@@ -666,13 +757,18 @@ function _site_update_phases(c, T, us, every, rn)
     return phases
 end
 
-"""A phase that runs only every `every` MCS."""
+"""
+A phase that runs only after MCS `mcs` with `mcs % every == offset`: `Every(n)` (offset 0,
+MCS 0, n, …) and the clocks of discrete components (`_clocked`).
+"""
 struct _Gated{P}
     every::Int
+    offset::Int
     phase::P
 end
+_Gated(every::Integer, phase) = _Gated(every, 0, phase)
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
-    mcs % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
+    mcs % g.every == g.offset ? g.phase(st, p, ctx, key, mcs, backend) : 0
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)

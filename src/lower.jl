@@ -152,7 +152,8 @@ function _integrals(sys::PottsSystem)
     out = Any[]
     xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
         (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature]
+        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
+        (x for b in sys.discrete for x in b.next)...]
     for x in xs
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
@@ -166,7 +167,7 @@ end
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
 _history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
     (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-    (r.when for r in sys.link_rules)...])
+    (r.when for r in sys.link_rules)..., (x for b in sys.discrete for x in b.next)...])
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
     for x in xs
@@ -234,8 +235,10 @@ function _lower_at(args, env)
     x = _unwrap(args[1])
     # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
+    # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
+    iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
     i = info(x)
-    i === nothing && error("cannot index `$x`")
+    i === nothing && error("cannot index `$(_standin_var(x))`")
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
         return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])

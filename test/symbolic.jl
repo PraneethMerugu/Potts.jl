@@ -2314,3 +2314,363 @@ end
 @testset "P6.0f per-rule cadence survives @components" begin
     @test only(mtkcompile(CadenceComponents(; name = :cc)).divisions).every == 4
 end
+
+# ---------------------------------------------------------------------------------------
+# Discrete-time components (P6.0k, D-065 Q9): MTK clocked (`Shift`) systems lowered into one
+# per-cell tick phase per clock, after the ODEs. Oracles are hand-computed sequences.
+using Potts.ModelingToolkitBase: ShiftIndex, Clock
+const _kd = ShiftIndex(_tc, 0)
+Potts.ModelingToolkitBase.@variables fz(_tc) = 1.0 dn(_tc) = 0.0 dA(_tc)::Bool = false dB(_tc)::Bool = false
+@parameters dinc = 1.0 dwnt::Bool = false dsig::Bool = false du = 0.5
+
+# a lag-2 recurrence: the older lag gets its own slot (`fib₊fzₜ₋₁`)
+@named fib = System([fz(_kd) ~ fz(_kd - 1) + fz(_kd - 2)], _tc)
+# a counter on a clock; `dinc` is coupled to a population fold in the model
+counter(clock) = System([dn(clock) ~ dn(clock - 1) + dinc], _tc; name = :counter)
+# a toggle driving a continuous component, and a Bool node sampling one
+@named toggle = System([dA(_kd) ~ !dA(_kd - 1)], _tc)
+@named sampler = System([dB(_kd) ~ dsig], _tc)
+Potts.ModelingToolkitBase.@variables yx(_tc) = 1.0 xt(_tc) = 0.0
+@parameters yr = 0.0
+@named relax = System([Potts.D(yx) ~ -yr * yx, Potts.D(xt) ~ 1.0], _tc)
+# asynchronous-style updating in MTK form (gap G9): a per-cell draw decides whether A updates
+@named coin = System([dA(_kd) ~ ifelse(du < 0.5, !dA(_kd - 1), dA(_kd - 1))], _tc)
+
+const _DISCRETE_SYS = Ref{Any}(nothing)
+
+@potts_model DiscreteFib begin
+    @kinds medium A
+    @components cells(A) fib = fib
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+function discrete_counter_model(clock; mcs_duration = 1.0, scope = :cells)
+    _DISCRETE_SYS[] = counter(clock)
+    if scope === :cells
+        @potts_model DiscreteCounter begin
+            @kinds medium A
+            @components cells(A) ctr = _DISCRETE_SYS[]
+            @lattice Lattice((12, 12))
+            @energy cells => (volume - 9.0)^2
+            @sweep Metropolis(; temperature = 1.0e-6, mcs_duration = mcs_duration)
+        end
+        return DiscreteCounter(; name = :ctr)
+    else
+        @potts_model DiscreteCensus begin
+            @kinds medium A
+            @components model ctr = _DISCRETE_SYS[]
+            @equations ctr.dinc ~ count(true for c in cells)       # a model-scope coupling
+            @lattice Lattice((12, 12))
+            @energy cells => (volume - 9.0)^2
+            @sweep Metropolis(; temperature = 1.0e-6, mcs_duration = mcs_duration)
+        end
+        return DiscreteCensus(; name = :census)
+    end
+end
+
+@potts_model DiscreteHybrid begin
+    @kinds medium A
+    @variables seen(cell) = 0.0
+    @components cells(A) begin
+        tg = toggle
+        smp = sampler
+        rel = relax
+    end
+    @equations begin
+        rel.yr ~ 0.1 * tg.dA                 # a Real parameter holds the latest tick (zero-order hold)
+        smp.dsig ~ rel.xt > 2.5              # a Bool parameter samples the ODE state at the tick
+    end
+    @after_mcs seen ~ seen + tg.dA           # model statements read a node as 0/1
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@potts_model DiscreteCoin begin
+    @kinds medium A
+    @components cells(A) cn = coin
+    @equations cn.du ~ rand()
+    @lattice Lattice((40, 40))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+function _discrete_blocks(n = 4, L = 12)
+    σ = zeros(Int32, L, L)
+    for (c, (i, j)) in enumerate(Iterators.take(((i, j) for i in 1:4:(L - 3), j in 1:4:(L - 3)), n))
+        σ[(i + 1):(i + 3), (j + 1):(j + 3)] .= c
+    end
+    return σ
+end
+
+const _DISCRETE_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+
+@testset "discrete components: lag-2 recurrence (Fibonacci oracle)" begin
+    σ = _discrete_blocks(2)
+    cs = mtkcompile(DiscreteFib(; name = :f))
+    @test Set(Potts.info(v).name for v in cs.sys.variables) == Set([:fib₊fz, Symbol("fib₊fzₜ₋₁")])
+    # the older lag has no MTK default: the operating point must give it
+    @test_throws ArgumentError PottsProblem(cs, [ownership => σ, kind => [1, 1]], (0, 6))
+    prob = PottsProblem(cs, [ownership => σ, kind => [1, 1], Symbol("fib₊fzₜ₋₁") => [0.0, 1.0]], (0, 6))
+    fibs(a, b, n) = (out = [a]; for _ in 1:n
+        a, b = a + b, a
+        push!(out, a)
+    end; out)
+    for alg in _DISCRETE_ALGS
+        sol = solve(prob, alg; saveat = 0:6)
+        @test [u.cell.fib₊fz[1] for u in sol.u] == fibs(1.0, 0.0, 6)       # 1, 1, 2, 3, 5, 8, 13
+        @test [u.cell.fib₊fz[2] for u in sol.u] == fibs(1.0, 1.0, 6)       # 1, 2, 3, 5, 8, 13, 21
+        @test sol[Symbol("fib₊fzₜ₋₁")][end] == [8.0, 13.0]
+    end
+end
+
+@testset "discrete components: clock periods, phases and mcs_duration" begin
+    σ = _discrete_blocks(2)
+    op = [ownership => σ, kind => [1, 1]]
+    ticks(sys; n = 12) = [u.cell.ctr₊dn[1] for u in solve(PottsProblem(sys, op, (0, n)), SequentialCPM(); saveat = 0:n).u]
+    # MTK clock time: ticks at t = phase + k·dt; the state saved at t has had that many ticks
+    oracle(dt, phase, n) = [Float64(count(τ -> 0 < τ <= t, phase:dt:n)) for t in 0:n]
+    @test ticks(discrete_counter_model(_kd)) == 0:12
+    @test ticks(discrete_counter_model(ShiftIndex(Clock(1.0)))) == 0:12
+    @test ticks(discrete_counter_model(ShiftIndex(Clock(3.0)))) == oracle(3, 0, 12)
+    @test ticks(discrete_counter_model(ShiftIndex(Clock(3.0; phase = 1.0)))) == oracle(3, 1, 12)
+    @test oracle(3, 1, 12) != oracle(3, 0, 12)                             # the phase is visible
+    # the period is model time: Clock(1) at half an MCS per MCS is one tick every two MCS
+    @test ticks(discrete_counter_model(ShiftIndex(Clock(1.0)); mcs_duration = 0.5)) == oracle(2, 0, 12)
+    @test ticks(discrete_counter_model(_kd; mcs_duration = 0.5)) == 0:12  # a step count, no period
+    for bad in (Clock(2.5), Clock(3.0; phase = 0.5), Clock(3.0; phase = 3.0))
+        @test_throws ArgumentError mtkcompile(discrete_counter_model(ShiftIndex(bad)))
+    end
+end
+
+@testset "discrete components: model scope" begin
+    σ = _discrete_blocks(3)
+    sys = discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model)
+    prob = PottsProblem(sys, [ownership => σ, kind => [1, 1, 1]], (0, 8))
+    @test :ctr₊dn in propertynames(prob.u0.model)
+    for alg in _DISCRETE_ALGS
+        sol = solve(prob, alg; saveat = 0:8)
+        @test [u.model.ctr₊dn[1] for u in sol.u] == [3.0 * (t ÷ 2) for t in 0:8]   # 3 live cells per tick
+    end
+end
+
+@testset "discrete components: hold, sample and the tick after the ODEs" begin
+    σ = _discrete_blocks(2)
+    prob = PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 8))
+    for alg in _DISCRETE_ALGS
+        sol = solve(prob, alg; saveat = 0:8)
+        for c in 1:2
+            A = [isodd(m + c - 1) for m in 0:8]                          # the toggle after m ticks
+            @test [u.cell.tg₊dA[c] for u in sol.u] == Float64.(A)
+            # the ODE of MCS m sees A after m ticks (held over the MCS): Euler with r = 0.1·A
+            @test [u.cell.rel₊yx[c] for u in sol.u] ≈ [prod(1 - 0.1 * A[j + 1] for j in 0:(m - 1); init = 1.0) for m in 0:8] rtol = 1e-12
+            # the tick of MCS m samples x = m + 1 (the ODE step of the same MCS came first)
+            @test [u.cell.smp₊dB[c] for u in sol.u] == [t >= 3 ? 1.0 : 0.0 for t in 0:8]
+            # after-MCS updates run before the tick: they read A after m ticks
+            @test sol.u[end].cell.seen[c] == count(A[1:8])
+        end
+    end
+end
+
+@testset "discrete components: per-cell draws (asynchronous updating in MTK form)" begin
+    σ = _discrete_blocks(100, 40)
+    prob = PottsProblem(DiscreteCoin(; name = :c), [ownership => σ, kind => fill(1, 100)], (0, 40))
+    sols = [solve(prob, alg; saveat = 0:40) for alg in _DISCRETE_ALGS]
+    A = reduce(hcat, [u.cell.cn₊dA for u in sols[1].u])
+    @test A == reduce(hcat, [u.cell.cn₊dA for u in sols[2].u])            # keyed draws: the sweep does not matter
+    flips = count(A[:, 2:end] .!= A[:, 1:(end - 1)]) / length(A[:, 2:end])
+    @test abs(flips - 0.5) < 4 * sqrt(0.25 / length(A[:, 2:end]))       # P(flip) = 1/2
+    @test all(x -> x == 0 || x == 1, A)
+end
+
+@testset "discrete components: statements and couplings" begin
+    bad(extra) = Base.invokelatest(eval(Potts._potts_model(:DiscreteBad, quote
+        @kinds medium A
+        @variables inp(cell) = 0.0
+        @components cells(A) tg = toggle
+        $extra
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0)
+    end, @__MODULE__)); name = :b)
+    # a node evolves only by its ticks (control: the same model without the statement compiles)
+    @test mtkcompile(bad(:(@after_mcs inp ~ 1.0))) isa CompiledPottsSystem
+    @test_throws r"only its ticks write it" mtkcompile(bad(:(@after_mcs tg.dA ~ 1.0)))
+    @test_throws r"not a parameter of a component" mtkcompile(bad(:(@equations tg.dA ~ inp)))
+    # a Bool parameter coupled to a Real expression reads it as `!iszero`
+    σ = _discrete_blocks(2, 8)
+    _DISCRETE_SYS[] = sampler
+    @potts_model DiscreteRealCoupling begin
+        @kinds medium A
+        @variables inp(cell) = 0.0
+        @components cells(A) smp = _DISCRETE_SYS[]
+        @equations smp.dsig ~ inp
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end
+    u = solve(PottsProblem(DiscreteRealCoupling(; name = :r), [ownership => σ, kind => [1, 1], :inp => [0.0, 0.3]], (0, 1)),
+        SequentialCPM()).u[end]
+    @test u.cell.smp₊dB == [0.0, 1.0]
+    # an uncoupled Bool parameter is a model parameter holding 0/1
+    @potts_model DiscreteBoolParameter begin
+        @kinds medium A
+        @components cells(A) smp = _DISCRETE_SYS[]
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end
+    p = PottsProblem(DiscreteBoolParameter(; name = :b), [ownership => σ, kind => [1, 1]], (0, 1))
+    @test p.p.smp₊dsig === 0.0
+    @test solve(remake(p; p = [Symbol("smp₊dsig") => true]), SequentialCPM()).u[end].cell.smp₊dB == [1.0, 1.0]
+    # components travel through `extend`
+    @potts_model DiscreteExtended begin
+        @extend base = DiscreteFib()
+        @kinds medium A
+        @parameters λx = 2.0
+        @energy cells => λx * (volume - 9.0)^2
+    end
+    ec = mtkcompile(DiscreteExtended(; name = :e))
+    @test only(ec.discrete).name === :fib && length(ec.cell_terms) == 2
+end
+
+# Several tick phases (cell and model scope, clocks that coincide) read only pre-tick values:
+# the result does not depend on declaration order (review P6.0k round 1).
+Potts.ModelingToolkitBase.@variables dX(_tc)::Bool = false dM(_tc) = 0.0 dZ(_tc)::Bool = false dY(_tc)::Bool = false
+@parameters ds::Bool = false dq = 0.0 dw::Bool = false
+@named xcell = System([dX(_kd) ~ ds], _tc)
+@named mmodel = System([dM(_kd) ~ dq], _tc)
+@named zslow = System([dZ(ShiftIndex(Clock(2.0))) ~ !dZ(ShiftIndex(Clock(2.0)) - 1)], _tc)
+@named yfast = System([dY(_kd) ~ dw], _tc)
+
+@testset "discrete components: ticks on one MCS are Jacobi across phases" begin
+    make(label, comps, eqs) = Base.invokelatest(eval(Potts._potts_model(:DiscreteOrder, quote
+        @kinds medium A
+        $(comps...)
+        @equations begin
+            $(eqs...)
+        end
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end, @__MODULE__)); name = label)
+    σ = _discrete_blocks(2)
+    run(sys) = solve(PottsProblem(sys, [ownership => σ, kind => [1, 1]], (0, 5)), SequentialCPM(); saveat = 0:5)
+    # cell and model scope on one clock: X reads M before the tick
+    cc = :(@components cells(A) cc = xcell)
+    mm = :(@components model mm = mmodel)
+    eqs = (:(cc.ds ~ mm.dM > 0.5), :(mm.dq ~ 1.0 + count(true for c in cells)))
+    for comps in ((cc, mm), (mm, cc))
+        sol = run(make(:xm, comps, eqs))
+        @test [u.model.mm₊dM[1] for u in sol.u] == [0.0; fill(3.0, 5)]
+        @test [u.cell.cc₊dX[1] for u in sol.u] == [0.0, 0.0, 1.0, 1.0, 1.0, 1.0]   # one tick behind M
+        @test :cc₊dX__tick in propertynames(sol.u[1].cell)                       # published after both
+    end
+    # two clocks coinciding on even t: Y reads Z before Z's tick
+    zz = :(@components cells(A) zz = zslow)
+    yy = :(@components cells(A) yy = yfast)
+    for comps in ((zz, yy), (yy, zz))
+        sol = run(make(:zy, comps, (:(yy.dw ~ zz.dZ),)))
+        Z = [isodd(t ÷ 2) for t in 0:5]
+        @test [u.cell.zz₊dZ[1] for u in sol.u] == Float64.(Z)
+        @test [u.cell.yy₊dY[1] for u in sol.u] == Float64.([false; Z[1:5]])
+    end
+    # a single phase writes its slots directly (no scratch)
+    @test !(:tg₊dA__tick in propertynames(PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1]], (0, 1)).u0.cell))
+end
+
+@testset "discrete components: a Bool node indexed by a cell" begin
+    @potts_model DiscreteIndexed begin
+        @kinds medium A
+        @variables begin
+            got(cell) = 0.0
+            amp(cell) = 0.0
+            neg(cell) = 0.0
+            sel(cell) = 0.0
+        end
+        @components cells(A) tg = toggle
+        @after_mcs begin
+            got ~ 1.0 + tg.dA[id]                          # as a number: 0/1
+            amp ~ ifelse(tg.dA[id] & (volume > 1), 1.0, 0.0)   # as a Bool
+            neg ~ ifelse(!tg.dA[id], 1.0, 0.0)
+            sel ~ ifelse(tg.dA[id], 1.0, 0.0)
+        end
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end
+    σ = _discrete_blocks(2, 8)
+    u = solve(PottsProblem(DiscreteIndexed(; name = :i), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 1)),
+        SequentialCPM()).u[end]
+    # the updates run before the MCS-0 tick
+    @test u.cell.got == [1.0, 2.0] && u.cell.amp == [0.0, 1.0] && u.cell.neg == [1.0, 0.0] && u.cell.sel == [0.0, 1.0]
+end
+
+# A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under both
+# algorithms: a shift register moves one cell per tick (review P6.0k round 2, B1).
+@named shiftcell = System([dX(_kd) ~ ds], _tc)
+@potts_model DiscreteShiftRegister begin
+    @kinds medium A
+    @components cells(A) xc = shiftcell
+    @equations xc.ds ~ ifelse(id > 1, xc.dX[max(id - 1, 1)] > 0.5, true)
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+shift_register_oracle(m) = Float64[c <= m for c in 1:6]
+
+@testset "discrete components: Jacobi across cells (shift register)" begin
+    prob = PottsProblem(DiscreteShiftRegister(; name = :s), [ownership => _discrete_blocks(6, 16), kind => fill(1, 6)], (0, 4))
+    @test :xc₊dX__tick in propertynames(prob.u0.cell)       # a cross-cell read ticks through scratch
+    for alg in _DISCRETE_ALGS
+        sol = solve(prob, alg; saveat = 0:4)
+        @test [u.cell.xc₊dX for u in sol.u] == shift_register_oracle.(0:4)
+    end
+end
+
+# Array variables: one scalar slot per element, `name₊z_i` (G11)
+Potts.ModelingToolkitBase.@variables dz(_tc)[1:2]::Bool = [false, true]
+@named ring = System([dz[1](_kd) ~ !dz[2](_kd - 1), dz[2](_kd) ~ dz[1](_kd - 1)], _tc)
+@potts_model DiscreteArray begin
+    @kinds medium A
+    @components cells(A) ar = ring
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "discrete components: array variables" begin
+    cs = mtkcompile(DiscreteArray(; name = :a))
+    @test Set(Potts.info(v).name for v in cs.sys.variables) == Set([:ar₊dz_1, :ar₊dz_2])
+    sol = solve(PottsProblem(cs, [ownership => _discrete_blocks(1, 8), kind => [1]], (0, 5)), SequentialCPM(); saveat = 0:5)
+    # (z1, z2) ← (!z2, z1) from the array default (0, 1): (0,1) → (0,0) → (1,0) → (1,1) → (0,1) → (0,0)
+    @test [(u.cell.ar₊dz_1[1], u.cell.ar₊dz_2[1]) for u in sol.u] ==
+          [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.0, 0.0)]
+end
+
+@testset "discrete components: an under-determined node" begin
+    @named undet = System([dX(_kd) ~ ds & dY(_kd)], _tc)
+    _DISCRETE_SYS[] = undet
+    @potts_model DiscreteUndetermined begin
+        @kinds medium A
+        @components cells(A) ud = _DISCRETE_SYS[]
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    @test_throws r"every discrete variable needs an update" mtkcompile(DiscreteUndetermined(; name = :u))
+end
+
+# Gap G1: with full ModelingToolkit loaded (it replaces MTKBase's compiler, and its own
+# rejects clocked systems), `PottsModelingToolkitExt` compiles discrete components through
+# MTK's discrete-pass hook. Loading MTK is session-wide, so both sides run in fresh processes;
+# they must generate the same code and the same trajectories.
+@testset "discrete components with full ModelingToolkit loaded (G1)" begin
+    script = joinpath(@__DIR__, "mtk_extension.jl")
+    run_script(args...) = read(`$(Base.julia_cmd()) --startup-file=no --project=$(@__DIR__) $script $args`, String)
+    lines(s) = filter(startswith("P60K|"), split(s, '\n'))
+    base, full = lines(run_script()), lines(run_script("mtk"))
+    @test length(base) == 4
+    @test full == base
+end

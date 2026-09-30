@@ -324,7 +324,15 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         dst = scope === :site ? site : scope === :cell ? cell : model
         push!(dst, Symbol(n, :__pre) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
     end
-    for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops))
+    # scratch slots of discrete components ticking in several phases (P6.0k)
+    if _tick_scratch(c)
+        for b in c.discrete, x in b.slots
+            dst = b.scope === :cell ? cell : model
+            n = info(x).name
+            push!(dst, _tick_scratch_name(n) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
+        end
+    end
+    for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops, c.discrete_pops))
         push!(model, n => zeros(T, 1))
     end
     sitent, modelnt = NamedTuple(site), NamedTuple(model)

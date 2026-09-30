@@ -1354,3 +1354,59 @@ session.
 - **Coordinator scheduling note.** §6.4 places the rename and `isdiscrete` in P6.0m.
   P6.0m's frozen test and implementation were already in flight, so they land as
   **P6.0m2**, immediately after P6.0m and before P6.0c.
+
+## D-077 MTK discrete-time components (2026-09-30, P6.0k; extends D-038 and D-065 Q9)
+
+- **What.** Boolean and discrete networks are plain MTK clocked Systems (`Shift`) in
+  `@components`. There is no Potts helper (D-065 Q9).
+  - Each node is a cell or model variable `name₊x`. A Bool node is stored as exact 0/1.
+  - One fused phase runs per (scope, clock), after the ODEs and before links and the
+    lifecycle. It runs only for live cells of the component's kinds.
+- **Semantics: Jacobi.** Every component that ticks at an MCS reads every other
+  component's, clock's, scope's and cell's pre-tick values.
+  - Scratch slots `x__tick` are published after all ticks when there are several tick
+    phases, or when a cell-scope rule reads another cell's slot (`at`/`gather`/`population`
+    over a discrete slot). Otherwise slots are written directly.
+  - Scratch costs about 45 ns per MCS on the fixture network, within noise on a whole MCS,
+    with zero warm allocations.
+  - Models without discrete components generate the same code as before (canonicalised).
+- **MTK gaps and workarounds** (register: `research/mtk-discrete-components.md` §4):
+  - **G1.** Full ModelingToolkit rejects clocked systems and replaces MTKBase's compiler.
+    The weak extension `PottsModelingToolkitExt` compiles through MTK's
+    `discrete_compile_pass` hook (`PottsDiscretePass(sys)`, re-entering MTKBase's
+    `__mtkcompile`), with compat MTK 11.45 and MTKBase 1.77. `check_compatible()` checks
+    the hook once per session. Slots are sorted by name, so generated code is identical
+    with or without full MTK (pinned by `test/mtk_extension.jl`).
+  - **G2.** No `ShiftIndex()`. Use `ShiftIndex(t, 0)` or `ShiftIndex(Clock(n·mcs_duration))`.
+  - **G3.** MTKBase compiles `Sample`/`Hold` silently wrong, and hybrid systems are
+    unsupported. `D`/`Sample`/`Hold` are rejected in a discrete component. Write two
+    components coupled by `@equations`.
+  - **G4.** No clock partitioning: one clock per component.
+  - **G5.** `DiscreteProblem` throws for Bool unknowns or parameters. This is not on
+    Potts' path; tests use hand-written tables.
+  - **G6.** `DiscreteProblem` ignores the period. Potts reads `VariableTimeDomain`; the
+    period and phase must be whole MCS, with 0 ≤ phase < period.
+  - **G7.** Bool symtypes are not enforced by MTKBase. Bool leaves use `_nonzero`
+    stand-ins, and a non-Bool rule for a Bool node is rejected.
+  - **G8.** MTK initialisation is not run (it is ill-posed for Boolean maps). Nodes and
+    lags need defaults or operating-point values.
+  - **G9.** Asynchronous updating has no MTK form. Use a per-cell `rand()` coupling with
+    `ifelse` rules.
+  - **G10.** `x(k+1) ~ f(x(k))` is rejected. Write `x(k) ~ f(x(k-1))`.
+  - **G11.** Array variables become one scalar slot per element (`name₊z_i`,
+    `name₊z_i_j`), and duplicate slot names are an `ArgumentError`. Element lag slots have
+    no default (as G8), and the operating point takes elements, not the array.
+  - **G12.** Use `Clock(dt; phase)`; there is no positional phase.
+  - **G13.** An indexed node read was Real-typed. A Bool node read at an index is now
+    Bool-typed (`_nonzero(at(x, j))`).
+  - **G14.** `Clock(n)` ticks one MCS later than `Every(n)`, because MTK clock time has
+    t = 0 as the initial state. `Clock(n; phase = 1)` aligns them.
+  - **G15.** An under-determined node surfaces MTK's `ExtraVariablesSystemException`. It is
+    wrapped as "every discrete variable needs an update `x(k) ~ …`".
+- **Review.** Three adversarial rounds; round 3 approved.
+- **Follow-ups (P6.0k2):**
+  - F1: `Pre` of a discrete node is rejected with a confusing message.
+  - F4: the narrowed catch still relabels internal Potts `MethodError`/`BoundsError`.
+  - F6: cosmetic double `_nonzero`.
+  - Cell ODEs reading other cells' ODE state are Gauss–Seidel and race on the GPU (N3),
+    as its own item.

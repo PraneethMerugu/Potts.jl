@@ -246,6 +246,16 @@ _pre(x) = ModelingToolkitBase.Pre(x)
 _pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
 
+"""
+`_nonzero(x)`: a Boolean node of a discrete component read from its slot (stored in the
+model's scalar type as exact 0/1): `true` unless the stored value is zero. Symbolically it
+has symtype `Bool`, so it stands in for the MTK `Bool` variable in the component's rules
+(P6.0k).
+"""
+_nonzero(x::Real) = !iszero(x)
+_nonzero(x::Bool) = x
+Symbolics.@register_symbolic _nonzero(x)::Bool
+
 """`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
 random_uniform(n) = error("`random_uniform` is symbolic-only")
 Symbolics.@register_symbolic random_uniform(n)
@@ -262,7 +272,8 @@ _rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
 # Helpers the macro rewrites user syntax into
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
-_index(x::Num, i) = at(x, i)
+# a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
+_index(x::Num, i) = SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i)
 _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
 _index(x::Num, i, j) = at2(x, i, j)

@@ -2,6 +2,26 @@
 # constructor. `mtkcompile` turns it into a `CompiledPottsSystem` (compile.jl).
 
 """
+    DiscreteBlock
+
+A discrete-time (clocked, `Shift`) MTK component lowered into Potts terms (D-065 Q9, P6.0k):
+one tick replaces every slot (`slots[j]`, a cell or model variable holding the node's latest
+value) by `next[j]`, an expression of the pre-tick state (Jacobi reads: every `next` sees the
+values before the tick). A tick follows MCS `m` when `(m + 1 - offset) % every == 0` (MTK
+clock time `t = offset + k·every` MCS; `t = 0` is the initial state). `scope` is `:cell`
+(for the live cells of `kinds`; empty: every kind) or `:model`.
+"""
+struct DiscreteBlock
+    name::Symbol
+    scope::Symbol
+    kinds::Vector{Int}
+    slots::Vector{Any}
+    next::Vector{Any}
+    every::Int
+    offset::Int
+end
+
+"""
     PottsSystem(; name, kinds, lattice, parameters, variables, relations, energies, drives,
                 constraints, updates, equations, divisions, sweep, structural)
 
@@ -27,6 +47,7 @@ Base.@kwdef struct PottsSystem
     link_rules::Vector{LinkRule} = LinkRule[]
     observed::Vector{ObservedEq} = ObservedEq[]
     components::Vector{Any} = Any[]            # `ComponentSpec`s: MTK systems instantiated per cell
+    discrete::Vector{DiscreteBlock} = DiscreteBlock[]   # bound discrete components (`_bind_components`)
     sweep::SweepSpec
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
@@ -60,6 +81,10 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     end
     for e in sys.equations
         println(io, "  equation ", e)
+    end
+    for b in sys.discrete
+        println(io, "  tick    ", b.name, b.scope === :model ? " (model)" : "", b.every == 1 ? "" : " every $(b.every) MCS",
+            ": ", join((string(info(x).name, " ← ", y) for (x, y) in zip(b.slots, b.next)), ", "))
     end
     for d in sys.divisions
         println(io, "  divide  ", _domain_string(d.domain), _cadence_string(d.every), " when ", d.when)

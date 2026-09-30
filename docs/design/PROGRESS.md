@@ -1493,3 +1493,23 @@ The maintainer approved F-1…F-6 (D-049).
   - The round-3 should-fixes are acceptance text on those rows.
   - P6.0m2 is added for the `PottsProblem` rename, because P6.0m was already in flight.
 - **Still untracked:** the draft sketches in `model-specs/sketches/`.
+
+## 2026-09-30 — P6.0k merged: MTK discrete-time components (D-077)
+
+- **Review.** Three adversarial rounds; round 3 approved.
+  - Round 1: cross-scope Jacobi, extension guarding.
+  - Round 2 blockers:
+    - Gauss–Seidel across cells, with a GPU race on a single tick phase;
+    - array variables collapsing into one slot.
+  - Both are fixed: scratch slots `x__tick` when a rule reads another cell's slot, and scalar slots `name₊z_i` per array element.
+- **Suites on the merged tree: all exit 0.**
+  - CorePotts (QA);
+  - PottsModels (with `POTTS_REFERENCES`);
+  - MakiePotts;
+  - Potts on Metal (P6.0k testsets on the device: 5/5, 4/4 and 2/2);
+  - docs.
+  - Full ModelingToolkit 11.45.1 is now in the test environment.
+- **Gate.** CPU ratios are 0.977–1.006 with zero allocations. Metal flagged four cases, which `benchmark/ab.jl` settled against afdf507:
+  - Merks 0.981, OpenVT 1.006, Akeeb 0.994.
+  - Wortel 1.068 (6 rounds) and 1.057 (8 rounds). Per-round medians spread 67–112 ns/site on BOTH sides, with the candidate faster in some rounds, and Wortel's generated code is byte-identical to base (canonicalised, round-3 review). Accepted as noise.
+- **Follow-ups in ROADMAP:** P6.0k2 (F1, F4, F6) and P6.0n (cell-ODE cross-cell reads).

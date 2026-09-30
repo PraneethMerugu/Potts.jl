@@ -168,13 +168,18 @@ Every item's acceptance also includes the standing checks:
     reviewed allowlist), `check_no_stale_explicit_imports` and
     `check_all_qualified_accesses_via_owners` pass in each package's QA.
   - Negative control: a deliberate implicit import fails the check.
-- [ ] **P6.0k** MTK discrete-component spike (D-065 Q9, unparked 2026-09-30). A per-cell
+- [x] (merge, 2026-09-30; D-077) **P6.0k** MTK discrete-component spike (D-065 Q9, unparked 2026-09-30). A per-cell
   MTK clocked component (`Shift`, a Boolean update rule) lowered into the per-cell phases.
   - Accept: a 3-node Boolean network per cell matches a hand-written truth-table
     reference, under both algorithms and on Metal.
   - Accept: zero warm allocations.
   - Every part of MTK's discrete support that is not usable yet is recorded in DECISIONS
     with its workaround.
+- [ ] **P6.0k2** P6.0k round-3 follow-ups (D-077):
+  - F1: `Pre(grn.x)[j]` and `Pre(grn.x[j])` on a discrete node fail with "cannot index" (`lower.jl:236-241`). Support them, since they equal `x[j]` inside a tick, or give a clear message.
+  - F4: `_compile_discrete`'s catch still relabels internal Potts `MethodError`/`BoundsError` as "ModelingToolkit cannot compile" (`components.jl:258-263`).
+  - F6: the generated code has a cosmetic `_nonzero(_nonzero(…))`.
+- [ ] **P6.0n** Cell ODEs that read another cell's ODE state are Gauss–Seidel across cells and race on the GPU (P6.0k review N3). Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
 - [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
   linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
   NaN, `accept` rejects every copy touching the partner so it freezes silently, and
