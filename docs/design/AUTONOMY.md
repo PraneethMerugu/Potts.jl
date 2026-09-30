@@ -62,6 +62,10 @@ Everything else is decided and logged.
   worktrees, deleting local branches, and creating `archive/*` and `legacy/*` tags locally.
   A branch is deleted only after confirming it is merged or tagged; every removal is listed
   in PROGRESS. Pushing anything, tags included, still waits for the cut-over checklist (§5).
+- **Packages: at discretion** (maintainer, 2026-09-30: "u can add packages at discretion").
+  Adding registered Julia packages (and their downloads) to any project in the workspace
+  needs no further approval. Prefer SciML and JuliaStats packages, add a `[compat]` bound,
+  and record each new dependency in the PROGRESS entry of the item that adds it.
 - **Cut-over: pre-authorized** once §5 passes. Because it necessarily pushes (`legacy/*`
   and `archive/*` tags, the `monorepo` branch, the merge into `main`) and archives
   repos, that push is the first and only GitHub action, and it happens only when the
