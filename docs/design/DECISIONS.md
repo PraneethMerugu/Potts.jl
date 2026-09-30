@@ -633,3 +633,27 @@ up.
    - Prefer MTK's own path where it is performant: `@observed` quantities evaluated through
      SymbolicIndexingInterface on solutions.
    - Else use the most Julian, teachable code.
+
+## D-052 Acceptance for non-symmetric proposal laws (2026-09-30, maintainer-approved)
+
+Answers `research/feature-roadmap-review.md` §7 question 3. The maintainer approved it in
+the models-and-publications session, which relayed it here.
+
+- **Default: plain Metropolis on the model's proposal law, with no correction.** All
+  reproduction tutorials use it.
+  - The standard neighbour-copy proposal is itself non-symmetric: forward ∝ n_{s′}(i),
+    reverse ∝ n_s(i).
+  - The published models are kinetic (MCS = time), so a correction would change their
+    kinetics.
+  - Most of the 12 models carry active drives that break detailed balance anyway.
+- **Opt-in Hastings correction as an acceptance type** (algorithm-level, SciML
+  problem/solver separation): `acceptance = Metropolis()` (default) or
+  `MetropolisHastings()`.
+  - Each R10 proposal law defines `proposal_ratio(law, state, move)`. For the standard law
+    it is a local neighbour-count ratio.
+  - It must cost nothing when unused (the same criterion as D-051 item 2) and work on
+    sequential and checkerboard sweeps (D-051 item 5); the ratio is local.
+- **Validation:** a known-answer test against the exact Boltzmann distribution, by
+  enumeration on a tiny lattice with a pure-energy model. `MetropolisHastings()` must
+  reproduce it, and the measurable deviation of plain `Metropolis()` is documented.
+- **Timing:** built with R10 (proposal laws), not before.

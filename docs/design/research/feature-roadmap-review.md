@@ -9,7 +9,7 @@
   algorithms;
 - 12: analysis in docs unless a library has merit.
 
-Questions 3 and 6–10 are open. This review
+D-052 answers question 3: plain Metropolis by default, with an opt-in `MetropolisHastings()` built with R10. Questions 6–10 are open. This review
 covers `model-specs/README.md` §2 (features G1–G21), §3 and §6. Only the per-model decisions
 in README §4 are approved (D-050).
 

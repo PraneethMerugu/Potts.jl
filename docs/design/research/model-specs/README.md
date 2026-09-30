@@ -224,11 +224,13 @@ The ownership-delta routine lands with R8 and claim widening with R6 (review §4
 ### 2.5 Open roadmap questions
 
 D-051 answers review [§7](../feature-roadmap-review.md#7-questions-for-the-maintainer)
-questions 11, 1, 4, 5, 2 and 12 (its items 1–6, in that order). Questions **3 and 6–10 are
-open**.
-
-3. Non-symmetric proposal laws (R10) break detailed balance. Match the papers only, or also
-   offer an optional Hastings correction? (Not addressed by D-051.)
+questions 11, 1, 4, 5, 2 and 12 (its items 1–6, in that order). Question 3 was answered by
+the maintainer on 2026-09-30 (relayed to the architecture session for DECISIONS): default
+acceptance is plain Metropolis on the model's proposal law, as in the papers and every
+reproduction tutorial; an opt-in `MetropolisHastings()` acceptance type (each R10 proposal
+law defines `proposal_ratio`) is built alongside R10, zero-cost when unused, on both
+algorithms, and validated against exact Boltzmann enumeration on a tiny lattice.
+Questions **6–10 are open**.
 
 6. Explicit liveness (R6) changes id reuse (D-035) and the empty-cell energy (D-037). Is
    that a new decision or an amendment?
