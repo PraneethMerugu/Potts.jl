@@ -131,8 +131,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Kernels
 
-@kernel function _trigger_kernel!(events, count, trigger, st, p, ctx, key, mcs)
-    c = @index(Global, Linear)
+@inline function _trigger_body!(c, events, count, trigger, st, p, ctx, key, mcs)
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
         e = Int32(trigger(st, p, ctx, key, mcs, Int32(c)))
@@ -141,8 +140,7 @@ end
     e != EVENT_NONE && Atomix.@atomic count[1] += Int32(1)
 end
 
-@kernel function _normal_kernel!(normals, @Const(daughter), normal, st, p, ctx, key, mcs)
-    c = @index(Global, Linear)
+@inline function _normal_body!(c, normals, daughter, normal, st, p, ctx, key, mcs)
     if @inbounds(daughter[c]) > 0
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
@@ -151,8 +149,7 @@ end
     end
 end
 
-@kernel function _partition_kernel!(σ, @Const(daughter), @Const(normals), @Const(bias), @Const(removed), cell, lat)
-    i = @index(Global, Linear)
+@inline function _partition_body!(i, σ, daughter, normals, bias, removed, cell, lat)
     c = @inbounds σ[i]
     if c > 0
         if @inbounds(removed[c])
@@ -172,8 +169,7 @@ end
     end
 end
 
-@kernel function _cell_rule_kernel!(@Const(events), @Const(daughter), kindf, divide!, st, p, ctx, key, mcs)
-    c = @index(Global, Linear)
+@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, st, p, ctx, key, mcs)
     e = @inbounds events[c]
     if e == EVENT_TRANSITION
         @inbounds st.cell.kind[c] = kindf(st, p, ctx, key, mcs, Int32(c))
@@ -228,11 +224,10 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     mcs % lc.every == 0 || return 0
     cap = length(st.cell.kind)
     fill!(cache.count, Int32(0))
-    _trigger_kernel!(backend)(cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs;
-        ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
+    _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
     KernelAbstractions.synchronize(backend)
-    Array(cache.count)[1] == 0 && return launches
+    _readback(cache.count) == 0 && return launches
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = Array(cache.events)
@@ -291,13 +286,12 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     if clusters
         isempty(roots) || _cluster_planes!(cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
     elseif any(>(0), daughter)
-        _normal_kernel!(backend)(cache.normals, cache.daughter, lc.normal, st, p, ctx, key, mcs;
-            ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
+        _launch(_normal_body!, backend, cap, (cache.normals, cache.daughter, lc.normal, st, p, ctx, key, mcs))
         launches += 1
     end
     n = length(st.σ)
-    _partition_kernel!(backend)(st.σ, cache.daughter, cache.normals, cache.bias, cache.removed, st.cell,
-        ctx.lattice; ndrange = n, workgroupsize = _phase_groupsize(backend, n))
+    _launch(_partition_body!, backend, n, (st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
+        st.cell, ctx.lattice))
     launches += 1
 
     # daughters: copy every non-tracker cell quantity from the parent, same kind, new generation
@@ -323,8 +317,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     end
     haskey(st.cell, :links) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(st, findall(removed), daughter[parents])
-    _cell_rule_kernel!(backend)(cache.events, cache.daughter, lc.kind, lc.divide!, st, p, ctx,
-        key, mcs; ndrange = cap, workgroupsize = _phase_groupsize(backend, cap))
+    _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!, st, p,
+        ctx, key, mcs))
     launches += 1
 
     _has_clusters(st) && _fix_clusters!(st)

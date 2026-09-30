@@ -45,8 +45,7 @@ _identity(::typeof(+), T) = zero(T)
 _identity(::typeof(max), T) = typemin(T)
 _identity(::typeof(min), T) = typemax(T)
 
-@kernel function _cell_reduce_kernel!(f, op, dst, st, p, ctx, key, mcs)
-    i = @index(Global, Linear)
+@inline function _cell_reduce_body!(i, f, op, dst, st, p, ctx, key, mcs)
     c = @inbounds st.σ[i]
     if c != 0
         v = convert(eltype(dst), f(st, p, ctx, key, mcs, i))
@@ -69,8 +68,7 @@ function (ph::CellReduce{D, F, O})(st, p, ctx, key, mcs, backend) where {D, F, O
     dst = ph.dst(st)
     fill!(dst, _identity(ph.op, eltype(dst)))
     n = length(st.σ)
-    _cell_reduce_kernel!(backend)(ph.f, ph.op, dst, st, p, ctx, key, mcs; ndrange = n,
-        workgroupsize = _phase_groupsize(backend, n))
+    _launch(_cell_reduce_body!, backend, n, (ph.f, ph.op, dst, st, p, ctx, key, mcs))
     return 2
 end
 
@@ -166,8 +164,7 @@ query with `contact_slot`/`contact_measure`.
 struct ContactPhase{R} end
 ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
 
-@kernel function _contact_kernel!(nbr, measure, medium, overflow, @Const(σ), lat, r)
-    i = @index(Global, Linear)
+@inline function _contact_body!(i, nbr, measure, medium, overflow, σ, lat, r)
     a = @inbounds σ[i]
     if a != 0
         x = coordinates(lat, i)
@@ -207,9 +204,8 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     fill!(c.contact_nbr, 0); fill!(c.contact_measure, 0)
     fill!(c.contact_medium, 0); fill!(c.contact_overflow, 0)
     n = length(st.σ)
-    _contact_kernel!(backend)(c.contact_nbr, c.contact_measure, c.contact_medium,
-        c.contact_overflow, st.σ, ctx.lattice, getfield(ctx, R); ndrange = n,
-        workgroupsize = _phase_groupsize(backend, n))
+    _launch(_contact_body!, backend, n, (c.contact_nbr, c.contact_measure, c.contact_medium,
+        c.contact_overflow, st.σ, ctx.lattice, getfield(ctx, R)))
     return 5
 end
 

@@ -30,28 +30,46 @@ struct CellPhase{F}
     f!::F
 end
 
-@kernel function _site_phase_kernel!(f!, st, p, ctx, key, mcs)
-    i = @index(Global, Linear)
-    in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i)
+# Every kernel is a thin `@kernel` around an `@inline` body `body(i, args...)`. `_launch` runs
+# the body as a plain loop when the CPU backend would run the launch as one workgroup: a KA
+# CPU launch allocates (argument tuple, boxed indices) even inline, and a warm MCS must not.
+@kernel function _each_kernel!(body, args)
+    i = @index(Global, Linear)          # KA's CPU backend needs `@index` as its own statement
+    body(i, args...)
 end
 
-@kernel function _cell_phase_kernel!(f!, st, p, ctx, key, mcs)
-    c = @index(Global, Linear)
-    f!(st, p, ctx, key, mcs, Int32(c))
+"""Run `body(i, args...)` for `i in 1:n` on `backend` (returns nothing, does not synchronize)."""
+@inline function _launch(body::B, backend, n, args::A) where {B, A}
+    if _inline(backend, n)
+        for i in 1:n
+            body(i, args...)
+        end
+    else
+        _each_kernel!(backend)(body, args; ndrange = n, workgroupsize = _phase_groupsize(backend, n))
+    end
+    return nothing
 end
+_inline(backend, n) = false
+_inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
+
+"""The first element of a 1-element device array, on the host (no copy on the CPU)."""
+_readback(a::Array) = a[1]
+_readback(a) = Array(a)[1]
+
+@inline _site_phase_body!(i, f!::F, st, p, ctx, key, mcs) where {F} =
+    (in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i); nothing)
+@inline _cell_phase_body!(c, f!::F, st, p, ctx, key, mcs) where {F} =
+    (f!(st, p, ctx, key, mcs, Int32(c)); nothing)
 
 function (ph::SitePhase{F})(st, p, ctx, key, mcs, backend) where {F}
-    n = nsites(ctx.lattice)
-    _site_phase_kernel!(backend)(ph.f!, st, p, ctx, key, mcs;
-        ndrange = n, workgroupsize = _phase_groupsize(backend, n))
+    _launch(_site_phase_body!, backend, nsites(ctx.lattice), (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
 
 function (ph::CellPhase{F})(st, p, ctx, key, mcs, backend) where {F}
     n = ncells(st)
     n == 0 && return 0
-    _cell_phase_kernel!(backend)(ph.f!, st, p, ctx, key, mcs;
-        ndrange = n, workgroupsize = _phase_groupsize(backend, n))
+    _launch(_cell_phase_body!, backend, n, (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
 
@@ -66,12 +84,10 @@ struct ModelPhase{F}
     f!::F
 end
 
-@kernel function _model_phase_kernel!(f!, st, p, ctx, key, mcs)
-    f!(st, p, ctx, key, mcs)
-end
+@inline _model_phase_body!(_, f!::F, st, p, ctx, key, mcs) where {F} = (f!(st, p, ctx, key, mcs); nothing)
 
 function (ph::ModelPhase{F})(st, p, ctx, key, mcs, backend) where {F}
-    _model_phase_kernel!(backend)(ph.f!, st, p, ctx, key, mcs; ndrange = 1, workgroupsize = 1)
+    _launch(_model_phase_body!, backend, 1, (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
 
@@ -113,10 +129,7 @@ struct HistoryPush{D <: Part, S <: Part}
 end
 HistoryPush(pair::Pair) = HistoryPush(Part((:history, pair.first)), Part(pair.second))
 
-@kernel function _history_kernel!(ring, @Const(src), slot, n)
-    i = @index(Global, Linear)
-    @inbounds ring[i + (slot - 1) * n] = src[i]
-end
+@inline _history_body!(i, ring, src, slot, n) = (@inbounds ring[i + (slot - 1) * n] = src[i]; nothing)
 
 function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
     ring = ph.ring(st)
@@ -127,8 +140,7 @@ function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
         "(grow rings with the state, e.g. `with_capacity`)"))
     depth = size(ring, ndims(ring))
     n = length(s)
-    _history_kernel!(backend)(ring, s, mod1(mcs + 1, depth), n; ndrange = n,
-        workgroupsize = _phase_groupsize(backend, n))
+    _launch(_history_body!, backend, n, (ring, s, mod1(mcs + 1, depth), n))
     return 1
 end
 

@@ -124,8 +124,7 @@ _substeps(f::F, p) where {F} = max(1, Int(f(p)))
 @inline _clip(v, ::Nothing) = v
 @inline _clip(v, lower) = max(v, oftype(v, lower))
 
-@kernel function _field_step_kernel!(rate, cn, @Const(c), st, p, ctx, key, mcs, h, lower)
-    i = @index(Global, Linear)
+@inline function _field_step_body!(i, rate, cn, c, st, p, ctx, key, mcs, h, lower)
     # outside the lattice domain the field is inert (neighbours never read it)
     @inbounds cn[i] = in_domain(ctx.lattice, i) ? _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower) : c[i]
 end
@@ -135,10 +134,8 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     n = length(c)
     nsub = _substeps(ph.substeps, p)
     h = eltype(c)(ph.dt / nsub)
-    kernel = _field_step_kernel!(backend)
     for _ in 1:nsub
-        kernel(ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower; ndrange = n,
-            workgroupsize = _phase_groupsize(backend, n))
+        _launch(_field_step_body!, backend, n, (ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
         copyto!(c, cn)
     end
     return 2 * nsub

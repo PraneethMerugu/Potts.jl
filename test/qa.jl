@@ -44,6 +44,7 @@ Core.eval(_QA_MOD, :(using Potts; using Potts: CorePotts))
 
 _qa_float64_literals(ex) = (n = Ref(0); _qa_walk(x -> x isa Float64 && (n[] += 1), ex); n[])
 _qa_walk(f, x) = (f(x); x isa Expr && foreach(a -> _qa_walk(f, a), x.args))
+_qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
 
 @testset "QA: generated code of $label ($T)" for (label, make) in (
         ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
@@ -66,6 +67,12 @@ _qa_walk(f, x) = (f(x); x isa Expr && foreach(a -> _qa_walk(f, a), x.args))
     prop = CorePotts.Proposal{N}(1, 2, ntuple(_ -> 1, N), 1, Int32(1), Int32(0))
     for fn in (prob.f.delta_H, prob.f.commit!, prob.f.temperature, prob.f.constraint)
         @test isempty(check_allocs(fn, typeof.((st, p, prop, ctx))))
+    end
+    # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors that
+    # fit one CPU workgroup run as plain loops (`CorePotts._launch`; AUTONOMY §5)
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap), alg; save_start = false, save_end = false)
+        @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
     end
     gc = generated_code(sys; T)
     for name in (:delta_H, :commit!, :temperature, :constraint)

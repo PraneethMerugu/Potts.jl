@@ -140,6 +140,15 @@ are counted null attempts); the fidelity reference.
      color-local index). Medium and obstacle domains are never claimed.
   2. `commit!`: if the proposal won every claim, run the generated `commit!`. Also
      clear the alternate claim buffer.
+
+  Every kernel is an `@inline` body `body(i, args...)` under a thin `@kernel` wrapper: the
+  phases, field steps and lifecycle share `_each_kernel!`; propose and commit keep their own
+  wrappers with `@Const` read-only buffers (the generic wrapper cost 22% on Metal 576²,
+  958 → 750 MCS/s). On the CPU backend, a
+  launch that fits one workgroup (always single-threaded, and up to `CPU_GRAIN` sites
+  otherwise) runs the body as a plain loop (`_launch`). A KernelAbstractions CPU launch
+  allocates (argument tuple, boxed indices) even inline, and a warm MCS must allocate
+  nothing (AUTONOMY §5, gated in the QA group).
 - **Why this is correct.** Claims guarantee each claimed cell changes at most once
   per color, and same-color targets lie outside each other's read/write footprints.
   So ΔH is exact for every term the footprint analysis can bound. Models with terms

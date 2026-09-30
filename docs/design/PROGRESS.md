@@ -976,3 +976,45 @@ explicit `substeps`; declared names may not shadow built-ins.
     - **LocalMath.jl** (31): `codex/architecture-readability`, `codex/backend-owned-array-allocation`*, `codex/ci-testing-performance`†, `codex/collect-order-bounds`*, `codex/compact-validation-settlement`*, `codex/compacted-record-stage-access`*†, `codex/d2q9-animation`*†, `codex/data-first-fold`, `codex/dependency-table-lowering`, `codex/empty-compacted-storage`, `codex/empty-pointwise-domains`*, `codex/fixed-relation-copy-settlement`*†, `codex/fixed-value-stage-operations`, `codex/github-pages-docs`*, `codex/identity-seeded-reduction-control`*, `codex/keyed-rebuild-publication`†, `codex/keyed-reduce-workspace-identity`*†, `codex/keyed-reduction`, `codex/keyed-reduction-pr18`†, `codex/ordered-fold-step-validation`*†, `codex/pointwise-temporary-identity-segmentation`*, `codex/product-values`*, `codex/rc2-citation-metadata`, `codex/source-order-fold-direct-traversal`*†, `codex/stable-plan-preparation-waist`, `codex/structural-truth`, `codex/trigonometric-stage-admission`*†, `codex/typed-stage-execution`, `codex/verification-audit`, `ecosystem-candidate-ci`*, `gh-pages`†.
     - **MakiePotts.jl** (38): `codex/ProcessBigraphs-Docs`, `codex/architecture-readability`†, `codex/docs-redesign-9of10`, `codex/docs-visible-workflows`, `codex/documentation-redesign`, `codex/finalize-phase-1`, `codex/makiepotts-v0.2`†, `codex/phase-11-level1`, `codex/phase-12-baseline-harness`, `codex/phase-12-cpu`, `codex/phase-12-cpu-closeout`, `codex/phase-12-cpu-qualification`, `codex/phase-12-performance`, `codex/phase-13`†, `codex/phase-14`, `codex/phase-14-wang-order-audit`, `codex/phase-15a-canonical-structure`, `codex/phase-15b-open-composition`, `codex/phase-15b-post-merge-hygiene`, `codex/phase-15c-attestation`, `codex/phase-15c-implementation`, `codex/phase-15c-preimplementation`, `codex/phase-16`†, `codex/phase-2-repository-structure`†, `codex/phase-3-conformance-foundation`†, `codex/phase-4-core-state-protocols`†, `codex/phase-5-execution-rng`†, `codex/phase-6-scientific-inner-loop`†, `codex/phase13-realistic-v4-launcher`†, `codex/phase13-transition-v2-launcher`†, `codex/pin-gpu-benchmark-manifests`, `codex/pre-refactor-baseline`†, `codex/rc2-citation-metadata`, `codex/trim-makie-ci`, `codex/verification-audit`†, `ecosystem-candidate-ci`*, `feat/intrinsic-metropolis-engine`, `gh-pages`†.
     - **Potts.jl** (56): `authoring-operational-ownership`*†, `codex/accepted-copy-fixture`*†, `codex/atomic-input-publication`*†, `codex/attempt-budget-reconciliation`*†, `codex/authoring-workflow`*†, `codex/bounded-site-minimum-authoring`*†, `codex/bounded-site-minimum-restack`†, `codex/cartesian-domain-authoring`*†, `codex/cell-process-authoring`*†, `codex/component-replacement`*†, `codex/compound-compilation`*†, `codex/compound-effects`*†, `codex/declaration-control-flow`*†, `codex/dimensional-expression-scales`*†, `codex/failure-reporting`†, `codex/fixed-vector-parameters`*†, `codex/history-authoring`*†, `codex/lexical-authoring`*†, `codex/logical-state-authoring`*†, `codex/logical-state-mutation`*†, `codex/metal-runner-qualification`*†, `codex/mixed-symbolic-mutation`*†, `codex/model-product-authoring`*†, `codex/model-state-reads`*†, `codex/native-act-leader-follower-potts-integrated`*†, `codex/operation-contracts`*†, `codex/package-repository-cutover`†, `codex/potts-addressed-rng`*†, `codex/problem-construction-polish`†, `codex/product-fields`*†, `codex/product-state-authoring`*†, `codex/r09-pre-scope-split`†, `codex/r11-pre-parent-fix`†, `codex/r11-pre-restack`†, `codex/reconcile-diagnostic-validation`*†, `codex/resolved-quantity-lowering`*†, `codex/scd-c11-restack`*†, `codex/scd-compositional-activity-drives`*†, `codex/scd-leader-drive-authoring`*†, `codex/scd-native-lifecycle-phases`*†, `codex/scd-r09-restack`*†, `codex/scd-r11-restack`*†, `codex/scd-r50-restack`*†, `codex/scd-runtime-reuse`*†, `codex/scheduled-process-draws`*†, `codex/scoped-component-integration`*†, `codex/scoped-quantities`*†, `codex/stable-materialization-waist`†, `codex/stable-snapshot-schema`†, `codex/state-contract-quality`*†, `codex/step-compilation`*†, `codex/stochastic-field-authoring`*†, `codex/structured-authoring-integration`*†, `codex/structured-state-authoring`*†, `codex/verification-audit`†, `model-library-workspace`*†.
+
+## 2026-09-29 — Follow-ups: the 11m51s Metal run; performance after group 1
+
+- **The 11m51s Metal run was a one-off**, not threads and not group 1.
+  - At the same commit, the "symbolic models on Metal" testset took 11m51s under `-t 4` and
+    1m01s single-threaded; only the tail of the `-t 4` log survived.
+  - Re-run now: the Metal group under `-t 4` takes 62.7 s (67.5 s single-threaded). The
+    CPU-only Potts group takes 153 s at `-t 4` and 162 s at `-t 1`, and no testset differs
+    by more than 1.5 s.
+  - Most likely cause: contention with other julia jobs running then, or a cold Metal shader
+    cache.
+- **Throughput** (benchmark/README): at or above the baseline everywhere.
+  - Sequential 72²: 7207 MCS/s (was 6130).
+  - CPU checkerboard: 6652 MCS/s at 72² (was 5690) and 412 at 576² (was 296).
+  - Metal: 5551 MCS/s at 72² (was 4470) and 956 at 576² (was 926).
+- **TTFX:** build is 1.1–1.4 s faster and the first sequential MCS 0.1–0.7 s slower (cause not
+  isolated). Build plus first MCS is equal or lower for every model, all under 15 s.
+- **Hex paths dispatch on geometry.** `which` confirms that square lattices resolve
+  `_min_image`, `_locally_connected` and `_merks` to the generic `Lattice{N}` / `Lattice{2}`
+  methods. Only `Lattice{2, M, Hexagonal}` reaches the 6-ring and hex minimum-image code.
+- **Warm MCS was not allocation-free, and now is.**
+  - Only sequential Graner allocated 0 B. Every other model allocated 0.8–1.9 KB per
+    sequential MCS, and every model 7–23 KB per checkerboard MCS.
+  - Byte-identical at b491cb0, so this predates group 1. It had been missed because QA
+    checked `sequential_mcs!`, not `step!`.
+  - Cause 1: KernelAbstractions' CPU launch allocates (argument tuple, boxed indices) even
+    for a single inline workgroup.
+  - Cause 2: the lifecycle's `Array(count)[1]` readback.
+  - Fix:
+    - every kernel is an `@inline` body behind a thin `@kernel` wrapper;
+    - `CorePotts._launch` runs the body as a plain loop when the CPU runs it as one
+      workgroup, and checkerboard colors do the same;
+    - `_readback` reads 1-element host arrays without a copy.
+  - A first version routed propose and commit through the generic `_each_kernel!`. That
+    cost 22% on Metal 576², so they keep dedicated `@Const` wrappers. It also hit a KA CPU
+    pitfall: `@index` must be its own statement. The single-threaded suite never took
+    multi-workgroup CPU launches, so a CorePotts test now forces that path and checks it
+    against the inline one.
+  - Now every published model allocates 0 B per warm MCS, sequential and checkerboard. The
+    D-047 QA testset gates this (AUTONOMY §5).
+  - All groups pass, including CorePotts under `-t 4` with Metal, Potts with Metal and QA,
+    PottsModels and MakiePotts.

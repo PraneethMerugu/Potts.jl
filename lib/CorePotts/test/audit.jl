@@ -139,3 +139,22 @@ end
     @test sol.stats.lifecycle.divisions == 2 && sol.stats.lifecycle.transitions == 1
     @test u.cell.kind[1:4] == Int32[1, 1, 1, 1]          # member 2 and its daughter took kind 1
 end
+
+@testset "CPU launches: inline loops and multi-workgroup kernels agree" begin
+    # single-threaded runs take the inline path everywhere; force the KA path explicitly
+    out = zeros(Int, 100)
+    body(i, a, k) = (@inbounds a[i] = k * i; nothing)
+    CorePotts._each_kernel!(CorePotts.CPU())(body, (out, 3); ndrange = 100, workgroupsize = 16)
+    @test out == 3 .* (1:100)
+    L = Lattice((48, 48))
+    σ, kinds = blocks((48, 48), 6)
+    prob = CPMProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
+    alg = CheckerboardCPM(; proposal = Moore(1))
+    a, b = init(prob, alg), init(prob, alg)
+    b.cache.groupsize .= 64                     # several workgroups per color
+    for _ in 1:10
+        step!(a); step!(b)
+    end
+    @test a.state.σ == b.state.σ && a.state.cell.volume == b.state.cell.volume
+    @test minimum(_ -> (step!(a); @allocated step!(a)), 1:3) == 0
+end

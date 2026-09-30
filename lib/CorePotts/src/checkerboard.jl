@@ -45,9 +45,8 @@ ncolorsites(c::Color) = prod(c.count)
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
 
-@kernel function propose_kernel!(prio, source, claim, status, st, f, p, ctx, law, key,
+@inline function propose_body!(j, prio, source, claim, status, st, f, p, ctx, law, key,
         mcs, color, idbits)
-    j = @index(Global, Linear)
     lat = ctx.lattice
     x = color_site(color, j)
     t = linear_index(lat, x)
@@ -85,9 +84,8 @@ end
     @inbounds source[j] = s
 end
 
-@kernel function commit_kernel!(st, claim, next_claim, @Const(prio), @Const(source), f, p,
+@inline function commit_body!(j, st, claim, next_claim, prio, source, f, p,
         ctx, color, nclear, nthreads)
-    j = @index(Global, Linear)
     c = j
     while c <= nclear                     # clear the other claim buffer for the next color
         @inbounds next_claim[c] = UInt32(0)
@@ -127,6 +125,16 @@ struct CheckerboardCache{N, P, S, C, B, K1, K2}
     commit!::K2
 end
 
+# Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
+@kernel function propose_kernel!(prio, source, claim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+    j = @index(Global, Linear)
+    propose_body!(j, prio, source, claim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+end
+@kernel function commit_kernel!(st, claim, next_claim, @Const(prio), @Const(source), f, p, ctx, color, nclear, nthreads)
+    j = @index(Global, Linear)
+    commit_body!(j, st, claim, next_claim, prio, source, f, p, ctx, color, nclear, nthreads)
+end
+
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         proposal = relation(VonNeumann(1), lat)) where {N}
     r, w = reach(f.footprint, proposal)
@@ -162,11 +170,21 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         n = ncolorsites(color)
         claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
         g = cache.groupsize[ci]
-        workgroupsize = g == 0 ? nothing : g
-        cache.propose!(cache.prio, cache.source, claim, cache.status, st, f, p, ctx, law,
-            key, mcs, color, cache.idbits; ndrange = n, workgroupsize)
-        cache.commit!(st, claim, next_claim, cache.prio, cache.source, f, p, ctx, color,
-            ncell, n; ndrange = n, workgroupsize)
+        pargs = (cache.prio, cache.source, claim, cache.status, st, f, p, ctx, law, key, mcs,
+            color, cache.idbits)
+        cargs = (st, claim, next_claim, cache.prio, cache.source, f, p, ctx, color, ncell, n)
+        if g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
+            for j in 1:n
+                propose_body!(j, pargs...)
+            end
+            for j in 1:n
+                commit_body!(j, cargs...)
+            end
+        else
+            workgroupsize = g == 0 ? nothing : g
+            cache.propose!(pargs...; ndrange = n, workgroupsize)
+            cache.commit!(cargs...; ndrange = n, workgroupsize)
+        end
         buf = 3 - buf
     end
     # the next color's buffer was cleared by the last commit; with an odd number of colors

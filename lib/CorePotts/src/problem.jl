@@ -249,7 +249,7 @@ end
 
 function _check_status!(integ::PottsIntegrator)
     integ.alg isa CheckerboardCPM || return integ.retcode
-    st = Array(integ.cache.status)[1]
+    st = _readback(integ.cache.status)
     st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     return integ.retcode
 end
