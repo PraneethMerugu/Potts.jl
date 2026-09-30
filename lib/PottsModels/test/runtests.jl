@@ -110,6 +110,7 @@ end
 include("mechanisms.jl")
 include("papers.jl")
 include("siblings.jl")
+include("analysis.jl")
 include("guardrails.jl")
 include("frozen.jl")
 foreach(f -> include(joinpath(@__DIR__, "acceptance", f)), sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))

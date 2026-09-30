@@ -268,6 +268,123 @@ function _paint_domain_frame!(σ, kinds, l::Frame, mask, dims, per)
 end
 
 """
+    InsertUntil(kind; into, fraction = nothing, number = nothing, seed, region = <whole lattice>,
+                misses = :retry)
+
+One-site cells of `kind` inserted at random into cells of the kinds `into`, until a count is
+reached. Each draw picks a site of `region` (a tuple of ranges) uniformly with
+`StableRNG(seed)`. It *hits* when the site belongs to a cell whose kind is in `into` and that
+was painted before this layer: the site becomes a new one-site cell of `kind`. Any other
+draw (medium, a site outside the domain, another kind, a cell this layer inserted) *misses*.
+
+- `misses = :retry`: a miss changes nothing and is drawn again.
+- `misses = :count`: a miss also counts towards the stop rule, without creating a cell (the
+  empty cells that CompuCell3D-style seeding scripts create on a miss; they never own a site,
+  so they are never alive and are not allocated).
+
+The count is `counted` = hits (+ misses under `:count`). Give exactly one stop rule:
+
+- `number = n`: stop once `counted ≥ n`;
+- `fraction = r` (`0 < r < 1`): stop once `K + counted ≥ r·(N + counted)`, where `N` is
+  the number of cells painted before this layer and `K` the number of those of `kind`, both
+  counting only cells that still own a site.
+  Pass a `Rational` (e.g. `1//4`) to emulate a script's `K/(N) < r` loop exactly: with a
+  floating-point `r` the product form can disagree with the ratio form at the boundary.
+
+The rule is checked before the first draw and after every hit, not after a miss, so under
+`:count` the count can overshoot by the misses drawn since the last hit (as in a script that
+recomputes its ratio only when it paints). A hit may take the last site of a cell, which then
+drops out of `N` (and `K`). Throws an `ArgumentError` when `region` holds no site to insert
+into, when the allowed sites run out before the rule is met, and for a missing, doubled or
+out-of-range stop rule. Use [`layout_tally`](@ref) to read how many cells a layer inserted
+and how many draws missed.
+"""
+struct InsertUntil{K} <: AbstractLayout
+    kind::K
+    into::Vector{Any}
+    fraction::Union{Nothing, Real}
+    number::Int
+    seed::UInt64
+    region::Union{Nothing, Tuple{Vararg{UnitRange{Int}}}}
+    count_misses::Bool
+end
+function InsertUntil(kind; into, fraction = nothing, number = nothing, seed::Integer, region = nothing,
+        misses::Symbol = :retry)
+    (fraction === nothing) == (number === nothing) &&
+        throw(ArgumentError("InsertUntil: give exactly one stop rule, `fraction` or `number`"))
+    fraction === nothing || (fraction isa Real && 0 < fraction < 1) ||
+        throw(ArgumentError("InsertUntil: `fraction` must lie strictly between 0 and 1, got $fraction"))
+    number === nothing || (number isa Integer && number >= 0) ||
+        throw(ArgumentError("InsertUntil: `number` must be a non-negative integer, got $number"))
+    misses in (:retry, :count) ||
+        throw(ArgumentError("InsertUntil: `misses` must be :retry or :count, got $(repr(misses))"))
+    0 <= seed <= typemax(UInt64) ||
+        throw(ArgumentError("InsertUntil: seed must be in 0:typemax(UInt64), got $seed"))
+    reg = region === nothing ? nothing : _region_arg(region, length(region), "InsertUntil")
+    return InsertUntil(kind, collect(Any, _kinds_arg(into, "InsertUntil")), fraction,
+        number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count)
+end
+
+const _InsertTally = NamedTuple{(:painted, :misses, :counted), NTuple{3, Int}}
+
+paint!(σ, kinds, l::InsertUntil, lat::LatticeSpec) = (_insert_until!(σ, kinds, l, lat); σ)
+
+function _paint!(σ, kinds, l::InsertUntil, lat::LatticeSpec, tallies)
+    t = _insert_until!(σ, kinds, l, lat)
+    tallies === nothing || push!(tallies, t)
+    return σ
+end
+
+# The stop rule, from the cells painted before the layer that still own a site (`N`, `K`
+# of them of the inserted kind) and the count so far.
+_insert_done(l::InsertUntil, N, K, counted) = l.number >= 0 ? counted >= l.number :
+                                               K + counted >= l.fraction * (N + counted)
+
+function _insert_until!(σ, kinds, l::InsertUntil, lat::LatticeSpec)
+    dims = lat.dims
+    l.region === nothing || _check_rank(l, length(l.region), dims, "InsertUntil")
+    sites = CartesianIndices(_region(l.region, dims, "InsertUntil"))
+    n0 = length(kinds)                           # cells painted before this layer
+    nsites = zeros(Int, n0)
+    for s in σ
+        s > 0 && (nsites[s] += 1)
+    end
+    target = [k in l.into for k in kinds]        # a hit needs one of these owners
+    N = count(>(0), nsites)
+    K = count(c -> nsites[c] > 0 && isequal(kinds[c], l.kind), 1:n0)
+    free = 0                                     # sites of `region` a draw can hit
+    for i in sites
+        s = σ[i]
+        s > 0 && target[s] && (free += 1)
+    end
+    free == 0 && throw(ArgumentError("InsertUntil: the region $(sites.indices) holds no site of the kinds $(l.into)"))
+    rng = StableRNG(l.seed)
+    painted = misses = 0
+    done = _insert_done(l, N, K, 0)
+    while !done
+        free == 0 && throw(ArgumentError("InsertUntil: the region ran out of sites of the kinds $(l.into) after " *
+                                         "$painted insertions, before the stop rule was met"))
+        i = sites[rand(rng, 1:length(sites))]
+        s = σ[i]
+        if 0 < s <= n0 && target[s]
+            push!(kinds, l.kind)
+            σ[i] = length(kinds)
+            nsites[s] -= 1
+            if nsites[s] == 0                    # the hit took the cell's last site
+                N -= 1
+                isequal(kinds[s], l.kind) && (K -= 1)
+            end
+            painted += 1
+            free -= 1
+            done = _insert_done(l, N, K, painted + (l.count_misses ? misses : 0))
+        else
+            misses += 1
+        end
+    end
+    return (; painted, misses, counted = painted + (l.count_misses ? misses : 0))
+end
+
+"""
     overlay(layers...)
 
 Layers painted in order: later layers overwrite earlier ones, and cell ids follow layer
@@ -287,7 +404,13 @@ function overlay(layers::AbstractLayout...)
     return Overlay(flat)
 end
 
-function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
+paint!(σ, kinds, l::Overlay, lat::LatticeSpec) = _paint!(σ, kinds, l, lat, nothing)
+
+# `paint!` that also records the tally of every `InsertUntil` layer in `tallies` (a vector,
+# or `nothing`), for `layout_tally`. A layout without tallies paints as usual.
+_paint!(σ, kinds, l::AbstractLayout, lat, tallies) = paint!(σ, kinds, l, lat)
+
+function _paint!(σ, kinds, l::Overlay, lat::LatticeSpec, tallies)
     cut = Set{Int32}()                      # cells that lost sites to a later layer
     prev = similar(σ, 0)                    # one buffer, refilled before each later layer
     for (j, x) in enumerate(l.layers)
@@ -295,7 +418,7 @@ function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
             j == 2 && (prev = similar(σ))
             copyto!(prev, σ)
         end
-        paint!(σ, kinds, x, lat)
+        _paint!(σ, kinds, x, lat, tallies)
         j == 1 && continue
         for i in eachindex(σ)
             0 < prev[i] != σ[i] && push!(cut, prev[i])
@@ -365,6 +488,8 @@ function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
     return nothing
 end
 
+const _LayoutTarget = Union{Tuple{Vararg{Integer}}, Lattice, LatticeSpec, PottsSystem, CompiledPottsSystem}
+
 """
     layout(l, dims) -> [ownership => σ, kind => kinds]
 
@@ -378,21 +503,38 @@ use; a CorePotts `Lattice` carries boundaries, domain and geometry but no neighb
 so `Moore(1)` is assumed (it only matters for the split warning of `overlay`). On a
 lattice with a domain, no cell may cover a site outside it.
 """
-function layout(l::AbstractLayout, dims::Tuple{Vararg{Integer}})
-    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))
-    return _layout(l, lattice_spec(dims; boundary = Closed()))
-end
-layout(l::AbstractLayout, lat::Lattice) = _layout(l,
-    LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing, Moore(1), lat.mask,
-        lat.geometry))
-layout(l::AbstractLayout, lat::LatticeSpec) = _layout(l, lat)
-layout(l::AbstractLayout, sys::PottsSystem) = layout(l, sys.lattice)
-layout(l::AbstractLayout, sys::CompiledPottsSystem) = layout(l, sys.sys)
+layout(l::AbstractLayout, lat::_LayoutTarget) = _layout(l, _layout_spec(lat), nothing)
 
-function _layout(l, lat::LatticeSpec)
+"""
+    layout_tally(l, lat) -> (point, tallies)
+
+[`layout`](@ref) that also reports what every [`InsertUntil`](@ref) layer of `l` did:
+`point == layout(l, lat)`, and `tallies` holds one `(; painted, misses, counted)` per
+`InsertUntil` layer, in paint order. `painted` is the number of cells it inserted, `misses`
+the number of draws that missed (in both `misses` modes) and `counted` what its stop rule
+counted (`painted`, plus `misses` under `misses = :count`).
+A composite layout of your own that calls `paint!` on its children reports no tallies for
+the `InsertUntil` layers inside it.
+"""
+function layout_tally(l::AbstractLayout, lat::_LayoutTarget)
+    tallies = _InsertTally[]
+    return _layout(l, _layout_spec(lat), tallies), tallies
+end
+
+function _layout_spec(dims::Tuple{Vararg{Integer}})
+    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))
+    return lattice_spec(dims; boundary = Closed())
+end
+_layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
+    Moore(1), lat.mask, lat.geometry)
+_layout_spec(lat::LatticeSpec) = lat
+_layout_spec(sys::PottsSystem) = _layout_spec(sys.lattice)
+_layout_spec(sys::CompiledPottsSystem) = _layout_spec(sys.sys)
+
+function _layout(l, lat::LatticeSpec, tallies)
     σ = zeros(Int32, lat.dims)
     kinds = Any[]
-    paint!(σ, kinds, l, lat)
+    _paint!(σ, kinds, l, lat, tallies)
     σ, kinds = _compact(σ, kinds)
     mask = lat.domain
     if mask !== nothing

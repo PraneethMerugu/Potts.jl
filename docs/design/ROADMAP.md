@@ -204,13 +204,23 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
   per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
   owner. There is no code change: the page is frozen (D-072).
-- [ ] **P6.0m** Confirmed small defects from the API synthesis (models session):
-  - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`);
-  - `connectivity(k)` accepts 0 components.
+- [ ] **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
+  script:
+  - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
+  - `connectivity(k)` accepts 0 components: a copy into an isolated fragment or into a
+    cell's last pixel is allowed. The shipped Akeeb deviates from CC3D's `!= 1` rule, so
+    this changes the science and needs a DECISIONS entry.
+  - `a` and `b` are not reserved: a parameter `b` is shadowed by the edge endpoint inside
+    edge terms.
+  - `integral` reads the previous MCS's site values when they are written in the same
+    `@after_mcs`. Document the ordering, or fix it.
+- [ ] **P6.2a2** Refactor `akeeb_state` onto `InsertUntil` (`misses = :count`, `fraction = 1//4`)
+  and expose the counted inventory (spec 10 V-A1(a)). This changes the RNG stream from
+  MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
 
 ### Step 2 — Akeeb
 
-- [ ] **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
+- [x] (merge, 2026-09-30; D-073) **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
   seeding onto it, with a counted-miss option); R16 code-definition metrics (per-column
   areas, the `find_peaks` port per D-069, BFS clusters).
 - [x] (merge, 2026-09-30; D-068, D-071) **P6.2c** Akeeb seeding per D-068 (MD-1).

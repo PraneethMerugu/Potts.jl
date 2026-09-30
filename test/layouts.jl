@@ -437,3 +437,103 @@ end
     # negative control: a tiling one row shorter differs
     @test _op(layout(Tiling((3, 3); region = (1:X, 1:(slab - 3)), kinds = [:follower]), (X, Y)), ownership) != σ
 end
+
+# ---------------------------------------------------------------------------------------------
+# InsertUntil (P6.2a, review §3 R2)
+# ---------------------------------------------------------------------------------------------
+
+@potts_model InsertProbe begin
+    @kinds medium host guest
+    @parameters begin
+        J[kind, kind] = [0 8 8; 8 4 6; 8 6 4]
+    end
+    @lattice Lattice((16, 16); boundary = Closed(), domain = OnIndices(x -> x[1] + x[2] <= 26))
+    @energy begin
+        cells(host) => (volume - 16)^2
+        cells(guest) => (volume - 4)^2
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+_kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> σ[i] > 0 && ks[σ[i]] == k, CartesianIndices(σ)))
+
+@testset "layouts: InsertUntil stop rules (hand-derived counts)" begin
+    # 16 hosts of 1 site and 4 guests of 9 sites. fraction 1/2 of guests, inserting guests into
+    # hosts: every hit kills a host, so N + counted stays 20 and the rule 4 + c ≥ 10 needs 6
+    # hits. Negative control: without the death, N would grow to 20 + c and need 12 hits.
+    hosts = Tiling((1, 1); spacing = 1, region = (1:8, 1:8), kinds = [:host])        # 16 one-site cells
+    guests = Tiling((3, 3); spacing = 1, region = (11:18, 11:18), kinds = [:guest])   # 4 cells
+    l = overlay(hosts, guests, InsertUntil(:guest; into = [:host], fraction = 1 // 2, seed = 5))
+    op, t = layout_tally(l, (20, 20))
+    @test only(t).painted == 6 && only(t).counted == 6
+    ks = _op(op, kind)
+    @test count(==(:host), ks) == 10 && count(==(:guest), ks) == 10
+    # `number` counts hits (retry) exactly; `number = 0` draws nothing
+    for n in (0, 1, 7)
+        op, t = layout_tally(overlay(hosts, InsertUntil(:guest; into = [:host], number = n, seed = 1)), (20, 20))
+        @test only(t) == (; painted = n, misses = only(t).misses, counted = n)
+        @test length(_kind_sites(op, :guest)) == n
+    end
+    # running out of allowed sites before the rule is met throws (16 hosts, 17 wanted)
+    @test_throws ArgumentError layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 17, seed = 1)), (20, 20))
+    @test length(_kind_sites(layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 16, seed = 1)), (20, 20)),
+        :guest)) == 16
+    # inserted cells are never drawn again as hits, even when their kind is allowed
+    op, t = layout_tally(overlay(hosts, InsertUntil(:host; into = [:host], number = 16, seed = 2)), (20, 20))
+    @test only(t).painted == 16 && count(==(:host), _op(op, kind)) == 16     # every host replaced once
+    @test_throws ArgumentError layout(overlay(hosts, InsertUntil(:host; into = [:host], number = 17, seed = 2)), (20, 20))
+    # no InsertUntil layer: no tallies; the point equals `layout`
+    op, t = layout_tally(hosts, (20, 20))
+    @test isempty(t) && _same(op, layout(hosts, (20, 20)))
+end
+
+@testset "layouts: InsertUntil draws uniformly over the region" begin
+    # 4 one-site hosts in a 2 × 2 region; one insertion per seed lands on each about 1/4 of the time
+    hosts = Tiling((1, 1); region = (3:4, 3:4), kinds = [:host])
+    hits = zeros(Int, 4)
+    for seed in 1:2000
+        op = layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 1, seed, region = (3:4, 3:4))), (6, 6))
+        i = only(_kind_sites(op, :guest))
+        hits[LinearIndices((2, 2))[i[1] - 2, i[2] - 2]] += 1
+    end
+    @test all(h -> abs(h - 500) < 5 * sqrt(2000 * 0.25 * 0.75), hits)         # 5 SD
+    # under :count with the region twice the hosts' area, about half the draws miss
+    ts = [only(last(layout_tally(overlay(hosts,
+        InsertUntil(:guest; into = [:host], number = 4, seed, misses = :count, region = (3:4, 3:6))), (6, 6))))
+          for seed in 1:400]
+    @test all(t -> t.painted + t.misses == t.counted && t.counted >= 4, ts)
+    frac = sum(t -> t.misses, ts) / sum(t -> t.painted + t.misses, ts)
+    @test 0.35 < frac < 0.65
+end
+
+@testset "layouts: InsertUntil on hex, 3D and domain lattices" begin
+    # hex: axial indices, as every layer
+    hexlat = Lattice((12, 12); boundary = Closed(), geometry = Hexagonal())
+    op = layout(overlay(Tiling((3, 3); kinds = [:a, :b]), InsertUntil(:x; into = [:b], number = 5, seed = 3)), hexlat)
+    base = layout(Tiling((3, 3); kinds = [:a, :b]), hexlat)
+    σ0, k0 = _op(base, ownership), _op(base, kind)
+    xs = _kind_sites(op, :x)
+    @test length(xs) == 5 && all(i -> k0[σ0[i]] == :b, xs)
+    # 3D
+    op = layout(overlay(Tiling((2, 2, 2); kinds = [:a]), InsertUntil(:x; into = [:a], fraction = 1 // 5, seed = 4)), (6, 6, 6))
+    @test count(==(:x), _op(op, kind)) == 7                                  # 27 + n ≤ 5n ⇒ n = 7
+    # a domain: draws outside it land on medium and miss
+    sys = InsertProbe(; name = :ins)
+    op, t = layout_tally(overlay(Tiling((4, 4); region = (1:12, 1:12), kinds = [:host]),
+        InsertUntil(:guest; into = [:host], number = 6, seed = 9)), sys)
+    @test only(t).painted == 6 && only(t).misses > 0
+    @test all(i -> i[1] + i[2] <= 26, findall(>(0), _op(op, ownership)))
+    # the operating point runs
+    prob = PottsProblem(sys, op, (0, 5))
+    @test Symbol(solve(prob, SequentialCPM()).retcode) === :Success
+    # bad regions
+    @test_throws ArgumentError layout(overlay(Tiling((2, 2); kinds = [:a]),
+        InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:30, 1:4))), (8, 8))
+    @test_throws ArgumentError layout(overlay(Tiling((2, 2); kinds = [:a]),
+        InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:4,))), (8, 8))
+    @test_throws ArgumentError InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:0, 1:3))
+    @test_throws ArgumentError InsertUntil(:x; into = Symbol[], number = 1, seed = 1)
+    @test_throws ArgumentError InsertUntil(:x; into = [:a], number = -1, seed = 1)
+    @test_throws ArgumentError InsertUntil(:x; into = [:a], fraction = 1, seed = 1)
+end

@@ -1466,3 +1466,15 @@ The maintainer approved F-1…F-6 (D-049).
 - **Suites on the merged tree:** PottsModels and Potts on Metal pass. CorePotts passed on
   the branch.
 - **Review:** 1 round plus one targeted fix, the check for split daughters.
+
+## 2026-09-30 — P6.2a merged: `InsertUntil` and `PottsModels.Analysis` (D-073)
+
+- **Frozen test:** passes 308/308, including the authors' four profiles (fingers 12/12/0/0,
+  areas exact).
+- **Review:** 1 round, approved with doc nits, which were applied at merge. The reviewer
+  diffed against the SciPy/NumPy source text and cross-ran the cached SciPy with 0
+  mismatches; all mutants were killed.
+- **Suites on the merged tree:** PottsModels (with and without the reference data), Potts
+  CPU and docs pass.
+- **Gate:** not run; no kernels changed.
+- **Follow-up:** P6.2a2 moves `akeeb_state` onto `InsertUntil`.

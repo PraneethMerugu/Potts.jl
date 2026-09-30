@@ -169,3 +169,30 @@ const SIBLINGS = Dict(
         check()
     end
 end
+
+# P6.2a primitives outside their first model (Akeeb's seeding and code metrics): seed light
+# cells into a dark tiling on the hexagonal sorting sibling with `InsertUntil`, run it, and
+# read the result with the analysis functions on the hex lattice.
+@testset "InsertUntil and Analysis on the hexagonal sorting sibling" begin
+    sys = HexSorting(; name = :hs)
+    l = overlay(Tiling((5, 5); region = (1:30, 1:15), kinds = [:dark]),
+        InsertUntil(:light; into = [:dark], fraction = 1 // 3, seed = 11, misses = :count, region = (1:30, 1:20)))
+    op, tallies = Base.CoreLogging.with_logger(() -> layout_tally(l, sys), Base.CoreLogging.NullLogger())
+    t = only(tallies)
+    ks = last(op[2])
+    @test count(==(:light), ks) == t.painted && t.painted + t.misses == t.counted
+    @test 3 * t.counted >= 18 + t.counted                   # 18 dark tiles: at least 9 counted
+    prob = PottsProblem(sys, op, (0, 20))
+    @test selfcheck(prob) < 1e-9
+    u = solve(prob, SequentialCPM()).u[end]
+    σ = reshape(u.σ, prob.lattice.dims)
+    g = PottsModels.Analysis.cell_graph(σ, prob.lattice; neighborhood = Hex(1))
+    @test all(c -> all(d -> c in g[d], g[c]), eachindex(g))          # symmetric
+    comps = PottsModels.Analysis.components(g, eachindex(g))
+    @test sort!(reduce(vcat, comps)) == collect(eachindex(g))
+    @test all(c -> PottsModels.Analysis.reachable(g, [first(c)]) == c, comps)
+    com = PottsModels.Analysis.centroids(σ)
+    @test all(c -> all(isfinite, com[c]), eachindex(g))
+    # negative control: square Moore(1) adjacency sees the axial (1, 1) diagonal that hex does not
+    @test PottsModels.Analysis.cell_graph(σ; neighborhood = Moore(1)) != g
+end

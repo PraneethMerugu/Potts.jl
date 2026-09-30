@@ -34,7 +34,7 @@ Depth = 1
 
 makedocs(;
     sitename = "Potts.jl",
-    modules = [Potts, CorePotts, PottsModels],
+    modules = [Potts, CorePotts, PottsModels, PottsModels.Analysis],
     remotes = nothing,
     format = Documenter.HTML(; prettyurls = true, edit_link = nothing, repolink = nothing,
         size_threshold = nothing, size_threshold_warn = nothing),

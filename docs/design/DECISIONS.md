@@ -1224,3 +1224,35 @@ session.
   some, and weak gives more (weak > mid in 10 of 10 groups).
   - With four seeds, P(all mid zero) ≈ 2e-4 from the ensemble.
 - **Frozen file.** Edited under this entry; its `frozen.toml` decision is D-071.
+
+## D-073 `InsertUntil` and `PottsModels.Analysis` (2026-09-30, P6.2a; addendum to D-069)
+
+- **`InsertUntil`** is a host-side layout layer in Potts, exported together with
+  `layout_tally`. It is not DSL.
+  - A hit needs a live owner that was painted before the layer, with a kind in `into`.
+    Cells the layer inserted are never hit again.
+  - `N` and `K` are live counts: a hit that takes a cell's last site removes that cell.
+  - The stop rule is checked before the first draw and after each hit only. So under
+    `misses = :count` it overshoots by trailing misses, as CC3D does.
+  - It throws when the allowed sites run out, instead of looping forever.
+  - Draws use `StableRNG(seed)`.
+  - Pass a `Rational` `fraction` to emulate a script's ratio loop exactly.
+- **`PottsModels.Analysis`** is a public submodule under D-051 item 6, not a separate
+  package. It holds:
+  - the D-069 `find_peaks`, `peak_prominences` and `peak_widths` port, with SciPy's and
+    NumPy's BSD notices;
+  - `merge_peaks`, `column_tops` and `trapz`;
+  - `cell_graph`, built on `CorePotts.contact_graph`;
+  - `reachable`, `components` and `centroids`.
+- **Exactness.**
+  - The distance-filter tie order follows NumPy 1.21 `aquicksort`, including its heapsort
+    fallback. NumPy's quicksort is unstable once there are 17 or more elements, and Akeeb
+    profiles have 37–47 local maxima.
+  - The reviewer found 0 mismatches against the real SciPy 1.7.3 / NumPy 1.23 code already
+    cached on the machine (nothing was downloaded): 8000 `find_peaks` cases and 948 argsorts.
+  - Widths match non-FMA SciPy builds bit for bit. The arm64 SciPy build fuses one
+    multiply-add, so 539 of those 8000 cases differ in the last bit.
+  - `trapz` sums sequentially, which is exact for integer profiles.
+- **Author data.** On the authors' four stored profiles we reproduce their finger counts
+  (12/12/0/0) and areas exactly. Their released data has no lattice snapshots, so the
+  cluster metrics cannot be checked against it.
