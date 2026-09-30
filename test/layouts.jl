@@ -307,6 +307,31 @@ end
     σ = _op(layout(Frame(:w), Lattice((12, 12); boundary = Periodic(), domain = half)), ownership)
     @test findall(==(1), σ) == findall(i -> i[1] in (1, 6), CartesianIndices(σ))           # x = 1 meets 12 by wrap
     @test_throws r"no boundary" layout(Frame(:w), Lattice((6, 6); boundary = Periodic(), domain = trues(6, 6)))
+    # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and
+    # no in-domain site off the ring has a Hex(1) neighbour outside the domain (it seals)
+    domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square()) = (σ = zeros(Int32, size(mask));
+        Potts.paint!(σ, Any[], Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry));
+        σ .== 1)
+    pacman = [(x - 9)^2 + (y - 9)^2 <= 49 && !(x > 9 && abs(y - 9) <= 2) for x in 1:18, y in 1:18]
+    hexlat = Lattice((18, 18); boundary = Closed(), geometry = Hexagonal())
+    hoffs = Potts.CorePotts.relation(Hex(1), hexlat).offsets
+    for w in 1:3
+        ring = domain_frame(pacman, Closed(), w; geometry = Hexagonal())
+        @test ring == _frame_oracle(pacman, (false, false), w)
+        inner = pacman .& .!ring
+        @test any(inner)
+        @test all(i -> !inner[i] || all(o -> ((in, y) = Potts.CorePotts.shift(hexlat, Tuple(i), o); in && pacman[y...]), hoffs),
+            CartesianIndices(pacman))
+    end
+    # 3D with mixed boundaries: random masks against the oracle
+    rng = Potts.StableRNG(3)
+    for _ in 1:40
+        per = (rand(rng, Bool), rand(rng, Bool), rand(rng, Bool))
+        m3 = rand(rng, rand(rng, 3:8), rand(rng, 3:8), rand(rng, 3:8)) .> rand(rng, (0.05, 0.2, 0.5))
+        (any(m3) && !(all(m3) && all(per))) || continue
+        w = rand(rng, 1:3)
+        @test domain_frame(m3, map(p -> p ? Periodic() : Closed(), per), w) == _frame_oracle(m3, per, w)
+    end
     # a frozen frame on the disk: the model runs and the frame stays put
     l = overlay(Frame(:wall), Tiling((3, 3); spacing = 1, region = (6:19, 6:19), kinds = [:cell]))
     op = layout(l, sys)
@@ -391,7 +416,9 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     c = σ2[6, 6, 6]
     σ2[6:10, 6:10, 8] .= 0                       # a medium slab through tile `c` = (6:10)³
     @test_logs (:warn, r"split cell") Potts._warn_split(σ2, kinds, cut, lat)
-    @test (@allocated Potts._warn_split(σ2, kinds, cut, lat)) >= sizeof(Int32) * 80^3
+    Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+        @test (@allocated Potts._warn_split(σ2, kinds, cut, lat)) >= sizeof(Int32) * 80^3
+    end
 end
 
 @testset "layouts reproduce an existing state's geometry" begin

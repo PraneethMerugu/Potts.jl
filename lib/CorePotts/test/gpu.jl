@@ -397,6 +397,8 @@ using Metal
         m(x, i) = mean(getindex.(x, i))
         @info "reads on Metal: bond, tether distance" metal = (m(gpu, 1), m(gpu, 2)) cpu = (m(cpu, 1), m(cpu, 2))
         @test abs(m(gpu, 1) - 12) < 2.5 && abs(m(gpu, 2) - 18) < 2.5             # relaxed toward rest
+        # a consistency smoke check only: claim races are covered by the CPU kernel-mutation
+        # tests in relationships.jl ("claim protocol in the real propose/commit kernels")
         @test abs(m(gpu, 1) - m(cpu, 1)) < 2.5 && abs(m(gpu, 2) - m(cpu, 2)) < 2.5  # comparable to CPU
         # negative control: without the spring the chain stays far from its rest lengths
         free = dist.(runs(0, true, 1:4))
