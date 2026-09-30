@@ -1,12 +1,14 @@
 [deps]
-CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 PottsModels = "7ddeed3b-134f-4313-a104-79862f0bd557"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
 CorePotts = {path = "../lib/CorePotts"}

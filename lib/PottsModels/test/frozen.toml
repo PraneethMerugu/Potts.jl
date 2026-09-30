@@ -1,0 +1,8 @@
+# Frozen acceptance tests (D-053, AUTONOMY §7.3). An implementer may not edit a listed file.
+# A file is frozen in its own commit, before the code it accepts. Changing it (a tolerance,
+# a target, a run length) needs a DECISIONS entry. Update `sha256` and `decision` in the
+# same commit. Hash: shasum -a 256 <file>
+[[file]]
+path = "papers.jl"
+sha256 = "0bf4e3b7704d49e1c56efc097376aa2462285f06fff97fcad7cd76973eb7a801"
+decision = "D-050"

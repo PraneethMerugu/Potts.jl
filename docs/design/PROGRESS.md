@@ -1176,3 +1176,28 @@ The maintainer approved F-1…F-6 (D-049).
     with a registry check;
   - a syntax-tree scan for model/author names in `src/`, `lib/CorePotts/src` and
     `lib/MakiePotts/src` (negative control checked).
+
+## 2026-09-30 — agent-driven development set up (D-053)
+
+- **Protocol:** AUTONOMY §7 covers the coordinator, worktree implementers and the
+  adversarial reviewer, the item loop, safeguards, parallelism and checkpoints. ROADMAP
+  Phase 6 holds the queue (step 0 composition fixes, then the model-specs §6 sequence).
+- **Agent definitions:** `.claude/agents/potts-implementer.md` and `potts-reviewer.md`.
+- **Performance gate:** `benchmark/gate.jl` with `benchmark/baseline.toml`, run
+  single-threaded. A threaded KernelAbstractions launch allocates a fixed ~3 KB of tasks
+  per phase, which would mask per-site allocations. Warm MCS in ns/site, sequential /
+  checkerboard / Metal (Float32):
+
+  | Model | Sequential | Checkerboard | Metal |
+  |---|---|---|---|
+  | Graner–Glazier | 24.8 | 27.2 | 18.9 |
+  | Wortel Act | 13.7 | 14.9 | 44.3 |
+  | Merks | 94.3 | 93.4 | 183.8 |
+  | OpenVT | 13.8 | 15.0 | 74.2 |
+  | Akeeb | 47.2 | 46.5 | 185.8 |
+
+  All cases allocate zero bytes. A repeat run stays within 4 %.
+- **Frozen acceptance tests:** `lib/PottsModels/test/frozen.toml` and `frozen.jl`.
+  `papers.jl` is frozen under D-050. The negative control is a one-line edit, which fails
+  the check.
+- **`tools/exclusive.sh`:** a machine-wide lock for GPU suites and the gate.

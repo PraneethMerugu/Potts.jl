@@ -1,0 +1,20 @@
+"akeeb_99x60.checkerboard" = 46.514
+"akeeb_99x60.metal" = 185.824
+"akeeb_99x60.sequential" = 47.229
+"graner_glazier_72.checkerboard" = 27.239
+"graner_glazier_72.metal" = 18.872
+"graner_glazier_72.sequential" = 24.844
+"merks_100.checkerboard" = 93.425
+"merks_100.metal" = 183.783
+"merks_100.sequential" = 94.317
+"openvt_monolayer_100.checkerboard" = 14.983
+"openvt_monolayer_100.metal" = 74.154
+"openvt_monolayer_100.sequential" = 13.75
+"wortel_act_100.checkerboard" = 14.917
+"wortel_act_100.metal" = 44.304
+"wortel_act_100.sequential" = 13.717
+
+[meta]
+julia = "1.12.6"
+machine = "Apple M1 Pro"
+threads = 1

@@ -75,3 +75,154 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 - [ ] **M5.2** docs site (Learn / Published models / API per package). "Published models" renders the Literate reproduction tutorials `lib/PottsModels/reproductions/<nn>_<model>.jl` (structure: `research/model-specs/TUTORIAL_TEMPLATE.md`), one per published model.
 - [ ] **M5.2a** MakiePotts: vector/arrow channels, relationship overlays, lineage, tensor ellipses, true-3D volume, WGLMakie, DataInspector, rerun controller.
 - [ ] **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.
+
+## Phase 6 — Model families (D-051, D-053; run by the agent protocol, AUTONOMY §7)
+
+Scope and order: `research/model-specs/README.md` §6 (the build sequence) and
+`research/feature-roadmap-review.md` §3–§4 (R-features, composability). Each item lists
+its dependencies, its write set, its acceptance and, where one applies, its **gate**: an
+open maintainer or author question that parks the item until it is answered.
+
+Every item's acceptance also includes the standing checks:
+- all suites green (AUTONOMY §7.4);
+- the performance gate passes;
+- reviewer APPROVE;
+- every new primitive is used by a sibling, and a new published model adds its sibling
+  and gate case;
+- no frozen file edited.
+
+"Frozen:" names the files the coordinator commits first.
+
+**Acceptance for model reproductions.** The file
+`lib/PottsModels/test/reproductions/<nn>_<model>.jl` tests the spec's V-targets.
+- The CI-sized subset runs in the suite; ensembles run under `REPRO=full`.
+- Each quantitative target is an ensemble mean within the spec's tolerance.
+- Each qualitative target has a negative control.
+- A tutorial `lib/PottsModels/reproductions/<nn>_<model>.jl` (Literate,
+  `TUTORIAL_TEMPLATE.md`) builds with its deviations table.
+
+### Step 0 — composition fixes and infrastructure
+
+- [ ] **P6.0a** division kinds per rule domain: cell division and cluster division in one
+  model (lift `compile.jl` mutual exclusion).
+  - Write set: `src/compile.jl`, `src/codegen.jl`, `lib/CorePotts/src/lifecycle.jl`.
+  - Accept: a model with both kinds runs both; ΔH self-check; a sibling.
+- [ ] **P6.0b** several named relationships per model, each with its own link store and
+  claim set. Depends: none. Accept: two relationships with different laws, checked by the
+  springs oracle on each; checkerboard equals sequential statistically.
+- [ ] **P6.0c** solver metadata per equation block or component (replaces the single
+  `field_solver`). Accept: a stiff component (`Adaptive(Rodas5P())`) beside an explicit
+  field in one model; conformance against each solver alone.
+- [ ] **P6.0d** frozen-kind mask recomputed on lifecycle events. Accept: a kind that
+  becomes frozen after a transition stops moving; the negative control moves.
+- [ ] **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
+  contact term that reads a site field.
+- [ ] **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
+  at their counts.
+- [ ] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
+  Accept: a Bauer-style model where the matrix is a cell kind uses class gates; the
+  denylist and DSL snapshots are updated with the reviewer's justification.
+- [ ] **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`
+  rendered for Graner–Glazier as the pilot. Accept: `julia --project=docs docs/make.jl`
+  builds offline.
+- [ ] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
+  README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
+  send.
+
+### Step 1 — Sorting (GG + Osborne CP), pilot reproduction
+
+- [ ] **P6.1a** R2 first slice: `Tiling`, `Scatter`, `Frame`, with an overlay algebra;
+  the output is an SII operating point. Accept: layouts round-trip through `PottsProblem`;
+  3D and hex tilings.
+- [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
+  measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
+- [ ] **P6.1c** reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
+  **Gate:** S1 provenance flag.
+
+### Step 2 — Akeeb
+
+- [ ] **P6.2a** R2 `InsertUntil`; R16 code-definition metrics (per-column areas, peaks, BFS
+  clusters).
+- [ ] **P6.2b** reproduction 10 against the authors' 13,310-run data (10 §5).
+  Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
+  confirmation).
+
+### Step 3 — Merks 2006 + 2008
+
+- [ ] **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
+  placeholder. Accept: the soft-connectivity sibling; hex and 3D ring tests.
+- [ ] **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
+  placement and an explicit phase order.
+  - Accept: the absorbing frame keeps c = 0 on the ring after every substep.
+  - Accept: PDE-before-sweep ordering is observable in a two-phase test.
+- [ ] **P6.3c** R2 `Eden` + splits.
+- [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
+  15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
+  `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
+  L 50 vs 60 remains an author question.
+
+### Step 4 — Foam
+
+- [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
+- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
+  all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
+  item 2). Hastings acceptance (D-052).
+  - Accept: the enumeration oracle for `MetropolisHastings()`.
+  - Accept: the performance gate is unchanged for the default law.
+- [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
+  SciMLBase callbacks, `@terminate`.
+- [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
+- [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
+
+### Step 5 — Fortuna (14a/14b), 3D
+
+- [ ] **P6.5a** R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
+  explicit liveness (`alive`, D-053 item 6, amends D-035/D-037); claim widening (item 7).
+- [ ] **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
+  transition > divide > create); `@convert`; ownership hooks fire `@on_copy` /
+  `clear_on_ownership_change`. Fixes A-17.
+- [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
+- [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
+
+### Steps 6–12
+
+These are listed so that dependencies are visible. They are expanded into items when step 5
+merges (phase-end checkpoint).
+
+- **P6.6** myxobacteria:
+  - R9 3-body terms and ordered chains;
+  - R7 unwrapped centroids and cluster moments;
+  - related centroids with declared footprints;
+  - R2 `Chains`. Gate: Y1, Y2.
+- **P6.7** Zajac:
+  - R7 tensor ΔH;
+  - R11a `neighbors`/`contact`;
+  - R11b exact pair trackers (D-051 item 3);
+  - the 12a Eq 7 unit test. Labelled as a reconstruction.
+- **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
+- **P6.8** Bauer 2007:
+  - R3 symbolic `@transition` with scope that survives it;
+  - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
+  - R15 `CellOperator` and `uptake` (once per MCS, D-053 item 8);
+  - R10 `UnlikeNeighbor`;
+  - R2 `Fibres`. Gate: B2.
+- **P6.9** Bauer 2009:
+  - R4 `Global()` on both algorithms;
+  - R8 `@create`;
+  - R16 branch and loop detection. Gate: B2.
+- **P6.10** Jafari Nivlouei:
+  - R13 tables;
+  - Boolean networks as MTK discrete components (D-053 item 9);
+  - two periodic PDEs with EC clamps;
+  - the Andasari ODE conformance test. Gate: N1–N3.
+- **P6.11** Jiang 2005:
+  - 3D;
+  - fractional attempts;
+  - coarse field grids (D-051 item 4);
+  - R14 implicit transient;
+  - `@retire … sites => ref`. Gate: J3.
+- **P6.12** FBCA:
+  - R15 FBA `CellOperator` (COBREXA/JuMP extension, warm start);
+  - the Eq 6 averaging operator;
+  - division plane by draw;
+  - copy-time field writes. Gate: X5.

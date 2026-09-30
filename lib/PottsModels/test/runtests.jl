@@ -66,6 +66,7 @@ include("mechanisms.jl")
 include("papers.jl")
 include("siblings.jl")
 include("guardrails.jl")
+include("frozen.jl")
 
 @testset "Aqua" begin
     Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))

@@ -657,3 +657,33 @@ the models-and-publications session, which relayed it here.
   enumeration on a tiny lattice with a pure-energy model. `MetropolisHastings()` must
   reproduce it, and the measurable deviation of plain `Metropolis()` is documented.
 - **Timing:** built with R10 (proposal laws), not before.
+
+## D-053 Remaining review answers and agent-driven development (2026-09-30, maintainer)
+
+**Review questions 6–10** (`research/feature-roadmap-review.md` §7): the reviewers'
+recommendations are adopted.
+- **6. Liveness.** Explicit cell liveness (`alive`, separate from `volume > 0`) is a new
+  decision that amends D-035 (id reuse picks dead ids) and D-037 (dead cells contribute no
+  energy; empty live cells keep E(volume = 0)).
+- **7. Claims.** Cell references widen checkerboard claim sets automatically. Sequential is
+  the reference for reference-reading energies, and checkerboard must still be exact under
+  the widened claims (D-051 item 5).
+- **8. Uptake.** The uptake/secretion operator split runs once per MCS: exactly
+  conservative, lagging within the MCS.
+- **9. Boolean networks** are MTK discrete-time (clocked, `Shift`) components, per the
+  SciML-first rule. A helper that expands a truth table into one is sugar.
+- **10. Float32 moments.** On Metal, Float32 moment after-values must agree with the CPU
+  statistically (D-029), not bitwise.
+
+**Development mode** (AUTONOMY §7):
+- One coordinator session runs a self-paced loop over the ROADMAP Phase 6 queue.
+- Implementer agents work in separate git worktrees, two or three at a time. Suites that
+  use the GPU run one at a time.
+- A separate reviewer agent with a fresh context must approve every diff before it merges
+  locally into `monorepo`.
+- **Checkpoints:** the maintainer is asked only for the AUTONOMY §3 escalations, a science
+  question that no oracle or spec settles, and at the end of each phase.
+- **Mandatory safeguards:**
+  - acceptance tests are frozen before implementation;
+  - a performance gate against a stored baseline;
+  - the adversarial reviewer.
