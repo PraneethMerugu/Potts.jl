@@ -88,10 +88,10 @@ checks; the letters have been renumbered where a question was dropped.
 
 | Done | Letter / question | Check that decides it | Result |
 |---|---|---|---|
-| ☑ | dealmeida_thomas_dalcastel Q1 (J cyto–lamellipodium), Q2, Q3 (SF1 provenance), Q6 (polarization measure) | Obtain Biophys J 2020 Document S1 (mmc1.pdf) and the nanoHUB gltcellcrawl code; diff them against SF1_Code.zip; settle or drop Q1/Q2/Q3/Q6. If the codes match, rewrite Q3 as whether the same settings (J cyto–lamellipodium, conversion rule) were used for Figs 5–12. (The paper, Biophys J 118:2801, PMC7264849, says its CC3D code and run instructions are in Document S1, with Table S1; nanoHUB DOI 10.21981/YXKM-4E26.) | Both obtained. Document S1 holds run instructions, not code, and lists no J values; it names CC3D 3.5.1 for the paper's runs. The nanoHUB tool is a 2022 CC3D 4.2.2 port with the same energies (J = 10), field and conversion rule, plus one extra secretion source on the top plate. Q1: HOLD removed, context extended. Q3: rewritten as planned (now Q2), plus the 3.5.1 vs 3.6.2 version conflict. Q6: narrowed (now Q5), HOLD removed. Spec 14 §1, §2.9, §2.9.8, §9 items 3, 17, 19 |
-| ☑ | dealmeida_thomas_dalcastel Q2 (F-actin secretion/decay order) | Read the CC3D 3.7.9 `DiffusionSolverFE` source (and `SecretionOnContact` neighbour test). Obtain `Instructions_To_Run.pdf` from the same directory as `SF1_Code.zip`. | Answered by the CC3D 3.7.9 and 3.6.2 source: one solver call per MCS, diffusion + decay before secretion, so F ≈ 1 at source sites; face neighbours only; one secretion per site. `Instructions_To_Run.pdf` (already on disk) names 3.6.2. **Q2 dropped.** Also resolved spec 14 §9 item 16 (chemotaxis acts on retraction too) from the CC3D `Chemotaxis` source. Spec 14 §2.9.2, §2.9.4, §9 items 15, 16 |
+| ☑ | dealmeida_thomas_dalcastel Q1 (J cyto–lamellipodium), Q2, Q3 (SF1 provenance), Q6 (polarization measure) | Obtain Biophys J 2020 Document S1 (mmc1.pdf) and the nanoHUB gltcellcrawl code; diff them against SF1_Code.zip; settle or drop Q1/Q2/Q3/Q6. If the codes match, rewrite Q3 as whether the same settings (J cyto–lamellipodium, conversion rule) were used for Figs 5–12. (The paper, Biophys J 118:2801, PMC7264849, says its CC3D code and run instructions are in Document S1, with Table S1; nanoHUB DOI 10.21981/YXKM-4E26.) | Both obtained. Document S1 holds run instructions, not code, and lists no J values; it names CC3D 3.5.1 for the paper's runs. The nanoHUB tool is a 2022 CC3D 4.2.2 port with the same energies (J = 10), field and conversion rule, plus one extra secretion source on the top plate. Q1: HOLD removed, context extended. Q3: rewritten as planned (now Q2), plus the 3.5.1 vs 3.6.2 version conflict and (review round 1) the retraction term. Q6: narrowed (now Q5), HOLD removed. Spec 14 §1, §2.9, §2.9.8, §9 items 3, 17, 19 |
+| ☑ | dealmeida_thomas_dalcastel Q2 (F-actin secretion/decay order) | Read the CC3D 3.7.9 `DiffusionSolverFE` source (and `SecretionOnContact` neighbour test). Obtain `Instructions_To_Run.pdf` from the same directory as `SF1_Code.zip`. | Answered by the CC3D 3.7.9 and 3.6.2 source: one solver call per MCS, diffusion + decay before secretion, so F ≈ 1 at source sites; face neighbours only; one secretion per site. `Instructions_To_Run.pdf` (already on disk) names 3.6.2. **Q2 dropped.** The CC3D `Chemotaxis` source (3.6.2, 3.7.9) also showed that the protrusion term acts on retraction too, in 14a and 14c (spec 14 §9 item 16); the default now follows the code (specs README §4 C7, D-067), and the authors are asked about it as the third setting in dealmeida Q2. Spec 14 §2.9.2, §2.9.4, §9 items 15, 16 |
 | ☐ blocked | dealmeida_thomas_dalcastel Q4 (Eq 6 gate details), Q5 (Fig 8 caption) (now Q3, Q4) | Diff arXiv:2312.00776v1 against the 2025 Physica A version of record. | Not possible: arXiv has only v1, and the version of record (Physica A 666 (2025) 130524, doi 10.1016/j.physa.2025.130524) is closed access. **Still HOLD.** Spec 14 §1, §9 item 13 |
-| ☑ | damiani_graudenzi_maspero Q1 (metabolic model) | Obtain the HMR CORE file from the Di Filippo et al. 2016 supplementary (Comput Biol Chem 62:60) and compare with 272 reactions / 240 metabolites. | Obtained (mmc1–mmc4.xls). The core model (mmc1) has 274 reactions and 252 metabolites, not 272 × 240. **Q1 narrowed**, HOLD removed. Spec 08 §1, §7 item 13 |
+| ☑ | damiani_graudenzi_maspero Q1 (metabolic model) | Obtain the HMR CORE file from the Di Filippo et al. 2016 supplementary (Comput Biol Chem 62:60) and compare with 272 reactions / 240 metabolites. | Obtained (mmc1–mmc4.xls). The file we take to be the core model (mmc1) has 274 reactions (272 without the biomass reaction and its export) and 252 metabolites, vs the stated 272 × 240. **Q1 narrowed** to how the counts were made, then what changed; HOLD removed. The default is now `mmc1.xls`, flagged (specs README §4 X5, D-067). Spec 08 §1, §7 item 13 |
 | ☐ blocked | damiani_graudenzi_maspero Q2 (ACRI 2018 parameters) | Obtain Graudenzi et al., ACRI 2018 (LNCS 11115, doi 10.1007/978-3-319-99813-8_2). Revise the Q2 context sentence if it is obtained (step 1). | Not obtained: closed access; the Milano-Bicocca repository record has no file. **Still HOLD**; the context sentence stays. Spec 08 §1, §7 item 12 |
 | ☑ | osborne_fletcher Q4 (2017 contact neighbourhood) | Read Chaste `release_2017.1` `AdhesionPottsUpdateRule.cpp` and `PottsMesh.cpp`. | `release_2017.1` and the paper's own tag `paper/CellBasedComparison` (2016) have the same Potts rules as develop: VN contacts and perimeter, Moore proposals. **Q4 dropped.** Spec 09 §1, §7 A-OS4 |
 | ☑ (partly) | merks Q1 (2006 L, E₀, seeding), Q2 (2008 relaxation) | Check the 2006 ScienceDirect supplementary data, the PMC author manuscript, and the TST tutorial chapter (Methods Mol Biol 1214, 2015). Revise the intro sentence if the 2006 supplementary is found (step 1). | PMC manuscript (same text as the journal), the 2006 supplementary movie and the TST chapter (CWI preprint) obtained; none settles Q1 or Q2. The 2006 "Supplementary methods" file was not found. Q1 narrowed, **still HOLD** for that file; Q2 HOLD removed. Intro sentence revised. Spec 01 §1, §8 A-1, A-15, A-19 |
@@ -121,9 +121,12 @@ README §5 items that the specs have since answered:
   by the CompuCell3D 3.6.2 and 3.7.9 source (2026-09-30): diffusion + decay run before
   secretion in the one solver call per MCS, so F ≈ 1 at source sites, and `SecretionOnContact`
   tests face neighbours only (spec 14 §2.9.2, §9 item 15). Dropped.
-- **Chemotaxis plugin on retraction (de Almeida item 16, batch 2).** Answered by the
-  CompuCell3D 3.7.9 `Chemotaxis` source: the FRONT term also applies when Medium overwrites
-  FRONT (spec 14 §2.9.4, §9 item 16). Removed from batch 2.
+- **Chemotaxis plugin on retraction (de Almeida item 16, batch 2).** Answered for the code by
+  the CompuCell3D 3.6.2 and 3.7.9 `Chemotaxis` source: the term also applies when Medium
+  overwrites FRONT (14a) or LAMEL (14c) (spec 14 §2.9.4, §9 item 16). The default changed to
+  follow the code (specs README §4 C7, D-067). Removed from batch 2 as a separate question;
+  whether the figures used it is asked inside dealmeida_thomas_dalcastel.md Q2, as the same
+  provenance question.
 - **2017 Chaste contact neighbourhood (Osborne item 3, first half; former osborne_fletcher Q4).**
   The paper's Chaste tag and `release_2017.1` match develop (spec 09 §1, §7 A-OS4). Dropped.
 
@@ -136,7 +139,10 @@ Non-blocking README §5 items not in batch 1:
   by the code requested in jiang.md Q7.
 - **de Almeida group.** Items 11 (Table S1 S column) and 13 (arXiv v1 vs the 2025 version of
   record; now a pre-send check instead, blocked by closed access) (spec 14 §9). Item 16 was
-  resolved from the CompuCell3D source (see "Resolved, not asked").
+  resolved for the code from the CompuCell3D source (see "Resolved, not asked"). Also deferred:
+  the minor Document S1 inconsistencies (scan list lacks Table 2's λ = 160/165/170; "830" where
+  10 × 3 × 4 × 7 = 840; a spherical nucleus at L_z/2 vs the code's 6³ cube; spec 14 §2.9.7 item
+  20, §9 item 20).
 - **Deutsch/Starruß.** Items 7–11 (spec 13 §7).
 - **Damiani group.** Items 2, 6, 7, 11 (spec 08 §7).
 - **Jafari Nivlouei group.** Items 4, 8, 10, 11, 14 (spec 11 §7). Most would be settled by the

@@ -24,13 +24,14 @@ with you.
 
 - **Context.** Both papers use MATLAB with the COBRA Toolbox (J Cell Automata 15, p.82; Fundam
   Inform 171, p.288) on HMR CORE (Di Filippo et al. 2016), with 272 reactions and 240
-  metabolites. Neither paper links code or a model file. The core model in the Di Filippo et al.
-  supplementary (the first spreadsheet, `mmc1.xls`, with the `biomass_synthesis` objective)
-  has 274 reactions (28 of them exchange reactions) and 252 metabolites (15 of them
-  extracellular), so it does not match those counts as we read it.
-- **Question.** Which reactions and metabolites did you add, remove or merge relative to that
-  file, and did any bounds or the biomass reaction change? Could you share the model file you
-  used, and the MATLAB sources?
+  metabolites. Neither paper links code or a model file. The Di Filippo et al. supplementary
+  includes a spreadsheet, `mmc1.xls`, which we take to be the core model because its objective
+  is a generic `biomass_synthesis` reaction. It has 274 reactions, which is 272 without
+  `biomass_synthesis` and its export `Ex_biomass[s]`, and 252 metabolites (237 without the 15
+  extracellular ones).
+- **Question.** Is `mmc1.xls` the model you used, and how were the 272 reactions and 240
+  metabolites counted? If your model differs from that file, which reactions, metabolites,
+  bounds or biomass terms changed? Could you also share the MATLAB sources?
 - **Our assumption.** The published `mmc1.xls` model, unchanged, with the count difference
   flagged.
 - **What changes.** The per-cell linear programme itself, and so every metabolic phenotype.
@@ -92,7 +93,7 @@ With thanks,
 [Maintainer name]
 
 <!-- trace:
-Q1: spec 08 §1 (HMR core counts), §2.2, §7 item 13; specs README §4 X5; README §5 Damiani item 1. HOLD lifted 2026-09-30: Di Filippo 2016 mmc1.xls on disk, 274 rxn × 252 met vs stated 272 × 240; question narrowed
+Q1: spec 08 §1 (HMR core counts), §2.2, §7 item 13; specs README §4 X5; README §5 Damiani item 1. HOLD lifted 2026-09-30: Di Filippo 2016 mmc1.xls on disk, 274 rxn (272 without biomass_synthesis and Ex_biomass[s]) × 252 met vs stated 272 × 240; question narrowed to counting first, then changes (review round 1)
 Q2: spec 08 §1, §7 item 12; README §5 Damiani item 1. HOLD: ACRI 2018 paper (LNCS 11115, doi 10.1007/978-3-319-99813-8_2) not obtained: closed access, no repository copy (checked 2026-09-30)
 Q3: spec 08 §2.2, §7 item 10; README §5 Damiani item 2
 Q4: spec 08 §2.2, §7 item 8; specs README §4 X3; README §5 Damiani item 2

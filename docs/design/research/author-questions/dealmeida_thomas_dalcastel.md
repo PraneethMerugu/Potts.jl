@@ -22,10 +22,10 @@ and share with you.
 
 Your released code and documents (`SF1_Code.zip` with its run instructions, Document S1 of
 the 2020 paper and `Single_Cell_Chemotaxis_2.3`), together with the nanoHUB port, answered most
-of our questions; thank you for publishing them. Reading the CompuCell3D source settled the order of secretion and decay in the
-F-actin solver, so we no longer need to ask about it. Questions 1–2 still matter for a
-quantitative reproduction; 3–5 are quick. We would be glad to reach an exact reproduction
-together with you.
+of our questions; thank you for publishing them. Reading the CompuCell3D source settled the
+order of secretion and decay in the F-actin solver, so we no longer need to ask about it.
+Questions 1–2 still matter for a quantitative reproduction; 3–5 are quick. We would be glad to
+reach an exact reproduction together with you.
 
 ## Blocking questions
 
@@ -42,17 +42,28 @@ together with you.
 ### Q2 [B] Were the released settings used for Figs 5–12, and with which CompuCell3D version?
 
 - **Context.** `SF1_Code.zip` agrees with the lattice rule and output files that Document S1
-  describes, and the nanoHUB port has the same energies, field and conversion rule. Two
-  settings differ from the paper text, and no document says which settings the figures used: J_cyto–lamellipodium = 10 (Q1), and the lamellipodium conversion
-  law, which the code writes on target volumes (`CellMig3D_Steppables.py:132–139`,
-  p = 0.1 (1 − V_l^target/(φ_l V^target)), so conversion stops once the lamellipodium target is
-  reached) rather than on the current volume as in the paper (p.2806). Document S1 (p.2) says the
-  published runs used CompuCell3D 3.5.1; `Instructions_To_Run.pdf` (p.1) says 3.6.2.
-- **Question.** Were Figs 5–12 produced with these released settings (J = 10 and the
-  target-volume conversion law)? And which CompuCell3D version was used, 3.5.1 or 3.6.2?
-- **Our assumption.** Yes to both settings. For the solver we rely on the 3.6.2 and 3.7.9
-  sources, which behave the same.
-- **What changes.** Whether the two paper–code differences are paper facts or code artefacts,
+  describes, and the nanoHUB port has the same energies, field and conversion rule. Three
+  settings differ from the paper text, and no document says which settings the figures used:
+  1. J_cyto–lamellipodium = 10 (Q1).
+  2. The lamellipodium conversion law is written on target volumes
+     (`CellMig3D_Steppables.py:132–139`, p = 0.1 (1 − V_l^target/(φ_l V^target))), so conversion
+     stops once the lamellipodium target is reached. The paper writes it on the current volume
+     (p.2806).
+  3. The F-actin protrusion term also acts on retraction. With no `Algorithm` element,
+     CompuCell3D's `Chemotaxis` plugin uses its default algorithm, which applies the
+     `ChemotaxisByType` term both when the lamellipodium extends into medium and when medium
+     overwrites a lamellipodium site (we checked the 3.6.2 and 3.7.9 sources). Eq 7 (p.2806)
+     and the code comment (`CellMig3D.py:6`) describe extension only. The same holds for
+     `SCellSign.py:147–149`.
+
+  Document S1 (p.2) says the published runs used CompuCell3D 3.5.1; `Instructions_To_Run.pdf`
+  (p.1) says 3.6.2.
+- **Question.** Were Figs 5–12 produced with these released settings (J = 10, the
+  target-volume conversion law, and the protrusion term acting on retraction too)? And which
+  CompuCell3D version was used, 3.5.1 or 3.6.2?
+- **Our assumption.** Yes to all three. For the solver and the protrusion term we rely on the
+  3.6.2 and 3.7.9 sources, which behave the same.
+- **What changes.** Whether these paper–code differences are paper facts or code artefacts,
   and so the defaults of our base model.
 
 ## Quick questions (non-blocking)
@@ -83,7 +94,7 @@ With thanks,
 
 <!-- trace:
 Q1: spec 14 §2.9.7 item 1, §2.9.8, §9 item 3; specs README §4 C1; README §5 de Almeida item 1. HOLD lifted 2026-09-30: Document S1 lists no J; nanoHUB port uses 10 (nH:P3:139)
-Q2 (was Q3, rewritten 2026-09-30): spec 14 §2.9 (provenance evidence), §2.9.5, §2.9.7 items 1, 2, 16, §2.9.8, §9 item 17; README §5 Glazier item 3 (moved here in review round 1). Codes match (Document S1 by content, nanoHUB by diff), so rewritten as "same settings for Figs 5–12" plus the 3.5.1 vs 3.6.2 version conflict
+Q2 (was Q3, rewritten 2026-09-30; retraction term added in review round 1): spec 14 §2.9 (provenance evidence), §2.9.4, §2.9.5, §2.9.7 items 1, 2, 16, 19, §9 item 16 (D-067), specs README §4 C7, §2.9.8, §9 item 17; README §5 Glazier item 3 (moved here in review round 1). Codes match (Document S1 by content, nanoHUB by diff), so rewritten as "same settings for Figs 5–12" plus the 3.5.1 vs 3.6.2 version conflict
 Former Q2 (F-actin solver order): DROPPED 2026-09-30, answered by CC3D 3.6.2/3.7.9 source (spec 14 §2.9.2, §9 item 15; specs README §4 C4); see README "Resolved, not asked"
 Q3 (was Q4): spec 14 §9 item 10; specs README §4 C6; README §5 de Almeida item 3. HOLD: diff arXiv v1 against the 2025 Physica A version of record (closed access; arXiv has only v1)
 Q4 (was Q5): spec 14 §9 item 12; README §5 de Almeida item 4. HOLD: same diff

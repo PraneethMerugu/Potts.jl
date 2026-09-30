@@ -371,7 +371,7 @@ evidence. Such items need explicit re-approval.
 | X2 | Impermeable cells: sequential random-order FBA with write-back (08 §2.2) vs parallel | sequential / parallel | **Sequential**, as written | It is a conservation rule, and LP cost dominates regardless |
 | X3 | Eq 6 averaging is non-conservative for D ≠ 1 (08 §2.2) | as written / conservative | **As written** (G18 [R5]), with D as a calibration parameter | The paper's operator. Ask the authors for the D values |
 | X4 | Biomass on division (08 §6 G9) | halve / by area | **Halve** | Consistent with ρ = 1/F at initialisation |
-| X5 | Metabolic model: HMR CORE (240 × 272) (08 §7 item 13) | published file / authors' variant | **Published HMR core (Di Filippo 2016 mmc1.xls, on disk since 2026-09-30)**, flagged: it has 274 reactions and 252 metabolites, not the 272 × 240 the FBCA papers state (08 §1). Ask which changes | The only released core model |
+| X5 | Metabolic model: HMR CORE (240 × 272) (08 §7 item 13) | published file / authors' variant | **Published HMR core as the default, flagged:** Di Filippo 2016 supplementary `mmc1.xls` (on disk; taken to be the core model, since the article text that labels the files was not read). It has 274 reactions (272 without `biomass_synthesis` and `Ex_biomass[s]`) and 252 metabolites, vs the stated 272 × 240 (08 §1); ask how the papers counted and what changed. (changed 2026-09-30 on new evidence; approved by the maintainer 2026-09-30; D-067) Previously: **Blocking**: obtain it (Di Filippo 2016 supplementary). | The only released core model |
 
 ### 4.6 Cell sorting (09)
 
@@ -380,7 +380,7 @@ evidence. Such items need explicit re-approval.
 | S1 | GG initial state follows PRE 47, 2128 (1993) §II D3 (D-049 F-2), a paper **not on disk** (09 §7 A-GG5) | – | Keep it, but mark it "external source, not verified on disk" in the tutorial until the PDF is added | Provenance honesty |
 | S2 | GG "two T = 0 annealing steps": on a copy vs on the trajectory (09 §7 A-GG4) | copy / trajectory | **On a copy** (a measurement), with a trajectory variant | "before calculating the statistical properties" reads as a measurement |
 | S3 | OS: which type is engulfed (09 §7 A-OS1) | – | **A engulfs B** (B = labelled) | Parameters, S1 Movie and Fig 2 agree; the p.11 wording is the outlier |
-| S4 | OS: VN contact / Moore proposal (09 §7 A-OS4) | – | **Follow the code** (RESOLVED 2026-09-30) | The paper tag `paper/CellBasedComparison` (2016-08-29), `release_2017.1` and 2026 develop have the same Potts rules (09 §1) |
+| S4 | OS: VN contact / Moore proposal from 2026 Chaste develop, not the 2017 release (09 §7 A-OS4) | – | **Follow the code**, flagged | The only concrete source. Evidence 2026-09-30: the paper tag `paper/CellBasedComparison` (2016-08-29) and `release_2017.1` have the same Potts rules as develop (09 §1), so the flag can be dropped |
 | S5 | OS: Binomial(400, 0.5) labels vs exactly 200 (09 §2.2) | – | **Binomial** (code) | What produced the figure |
 | S6 | OS: 10 h unlabelled equilibration (code only) and time origin (09 §7 A-OS3) | – | **Include**; t = 0 at labelling | Code |
 
@@ -434,10 +434,10 @@ The code is authoritative: the paper reports the code's quantities (10 §7 D12).
 | C1 | J_cyto–lamellipodium: 20 (Table 1) vs 10 (both released codes) (14 §9 item 3) | **10** default, `J_CL = 20` variant | Both codes agree. Ask which produced the figures |
 | C2 | Conversion law: paper p ∝ (1 − V₃/V₃ᵗ) vs code 0.1·(1 − V₃ᵗ(t)/(φ_F V_totᵗ)) on target volumes, which stops permanently (14 §2.9.5) | **Code** default; a paper-literal variant | Code, and 14b agrees ("until the lamellipodium target volume is attained") |
 | C3 | F-actin: PDE (14a code) vs binary indicator (14c) (14 §9 item 1) | **PDE** for 14a/14b; **indicator** (G18 [R5]) for 14c | Each paper's own code |
-| C4 | Secretion vs decay order inside CC3D `DiffusionSolverFE`: F ≈ 1 vs F ≈ 0.1 at the source, a **10× difference in protrusion strength** (14 §9 item 15) | **RESOLVED 2026-09-30: F ≈ 1** (diffusion + decay, then secretion; one call per MCS; face-neighbour contact test) | CC3D 3.7.9 and 3.6.2 source (14 §2.9.2) |
+| C4 | Secretion vs decay order inside CC3D `DiffusionSolverFE`: F ≈ 1 vs F ≈ 0.1 at the source, a **10× difference in protrusion strength** (14 §9 item 15) | **Blocking**: read the CC3D 3.7.9 source or ask. Calibrate against Table 2 in the meantime. **Done 2026-09-30:** the 3.7.9 and 3.6.2 sources give **F ≈ 1** (one call per MCS; diffusion + decay, then secretion; face-neighbour contact test), so the question is not asked | CC3D source (14 §2.9.2) |
 | C5 | Initial condition: suspended cell (Fig 4A) vs tangent ball + 6³ nucleus (code, 14b) | **Code** | Resolved (14 §9 item 9) |
 | C6 | 14c gate: δ, strict "<" vs "≤", window includes the current MCS (14 §9 item 10) | **Code** (δ = 0, ≤, includes current) | – |
-| C7 | Protrusion on retraction (Medium overwriting FRONT) (14 §9 item 16) | **Code (RESOLVED 2026-09-30):** both FRONT → Medium and Medium → FRONT, same formula; Eq 7 extension-only as a variant | CC3D 3.7.9 `Chemotaxis` source, default merks algorithm (14 §2.9.4) |
+| C7 | Protrusion on retraction (Medium overwriting FRONT/LAMEL) (14 §9 item 16) | **Code:** both extension (FRONT → Medium) and retraction (Medium → FRONT), same formula, for 14a and 14c; the paper's extension-only Eq 7 is a variant. (changed 2026-09-30 on new evidence; approved by the maintainer 2026-09-30; D-067) Previously: **Eq 7** (FRONT source → Medium target only) | CC3D's default `merks` chemotaxis algorithm, which both codes use without an `Algorithm` element, applies the term in both directions (CC3D 3.6.2 and 3.7.9 source, 14 §2.9.4; 14c's CC3D 4.2.3 not checked but very likely the same). Asked in the letter as part of the provenance question |
 
 ### 4.12 Cross-cutting accuracy-vs-performance choices
 
@@ -512,7 +512,7 @@ model's list.
 
 ### Chiara Damiani / Alex Graudenzi / Davide Maspero
 
-1. **[B]** MATLAB sources and the HMR CORE model file; the ACRI 2018 parameters (λ, k_BT, attempts, initial fields) (08 §7 items 12–13).
+1. **[B]** MATLAB sources, and how the 272 reactions / 240 metabolites were counted relative to the published HMR core `mmc1.xls` (274 × 252; 08 §1) and what changed; the ACRI 2018 parameters (λ, k_BT, attempts, initial fields) (08 §7 items 12–13).
 2. **[B]** The starvation-death rule (item 10); Eq 6 D values and sweeps per MCS (item 8); the edge efflux value (item 9).
 3. Units (item 1); the periodic axis and top boundary (item 2); ρ definition (item 3); biomass split (item 4); tie-breaking of degenerate optima (item 5); the uptake bound form (item 6); SC1/SC2 nutrient bookkeeping (item 7); SC2 reaction ids and O₂ bands (item 11).
 
@@ -564,7 +564,7 @@ Rationale for the order:
 | 2 | **Akeeb** | R2 `InsertUntil`; R16 code-definition metrics (per-column areas, peaks, BFS clusters) | A5 default μ |
 | 3 | **Merks** (2006 + 2008) | **R4:** soft E₀ drive over a topology value, and the geometry dispatch; the soft-connectivity sibling (guardrail (e)) is its acceptance test.<br>**R5:** `@boundary` absorbing frame applied every substep; PDE before the sweep; explicit phase order.<br>**R2:** `Eden` + splits.<br>**R16:** compactness, morphometry | M1–M7 sign-off |
 | 4 | **Foam** | R1 (`direction`, `time`, `Metropolis(tie)`); R10 `BoundarySite` law with all-site attempt counting; R3 (`@discrete_events`, `@terminate`, with the rest of R3); R2 `BrickWall`; R16 (T1, topology moments, spectra) | Provisional until F1 is answered |
-| 5 | **Fortuna** (14a/14b) | 3D run. **R6:** `sibling`/`members`, retain-empty, explicit liveness (open question 6), claim widening. **R8:** `@convert` (sequential) with the shared ownership-delta routine and ownership hooks. R2 `Plane`/`Spheres`; R5 predicate-sourced PDE; R16 MSD/Fürth | C4 blocking for quantitative S/P/D |
+| 5 | **Fortuna** (14a/14b) | 3D run. **R6:** `sibling`/`members`, retain-empty, explicit liveness (open question 6), claim widening. **R8:** `@convert` (sequential) with the shared ownership-delta routine and ownership hooks. R2 `Plane`/`Spheres`; R5 predicate-sourced PDE; R16 MSD/Fürth | C4 settled by the CC3D source (F ≈ 1); C7 per D-067 |
 | 6 | **Myxobacteria** | R9 (3-body angle terms, ordered chains); R7 (unwrapped centroids, cluster moments); R6 related centroids in drives with declared footprints; R2 `Chains`; R16 cluster-graph Ψ̄. Hex exists | Y1, Y2 |
 | 7 | **Zajac** | R7 (eccentricity, orientation, tensor ΔH); R11a `neighbors`/`contact`; **R11b** per-copy pair trackers, exact (D-051 item 3); R10 boundary-only law (reused); the exact-vs-lagged acceptance test (12 §5); the 12a Eq 7 unit test | Label as a reconstruction |
 | 7b | **14c chemotaxis variant** | R12 (`Pre(x, k)` on cell variables, 100-MCS window); R5 indicator field (conformance); site-set mean/std via `integral` with a mask | – |
@@ -572,4 +572,4 @@ Rationale for the order:
 | 9 | **Bauer 2009** | R4 `Global()` soft BFS penalty, on both algorithms (D-051 item 5); R8 `@create` at the wall; R16 branch and loop detection | B2 |
 | 10 | **Jafari Nivlouei 2021** (item 11) and the **Andasari ODE test** | R13 (the Fig 3 lookup table; the Boolean-network unit test); R11a contact fractions; R5 two periodic PDEs with EC clamps; R3 therapy clamps as `@discrete_events`; the ODE conformance test (11b Eqs 10–12) | N1–N3 |
 | 11 | **Jiang 2005** | 3D. **R10:** fractional attempts, the ¼-MCS keyword (D-051 item 2). **R5:** coarse field grids (D-051 item 4) and moving Dirichlet. **R14:** implicit 45-min transient. **R13:** Boolean with stochastic gating. **R8:** `@retire … sites => ref`. **R15:** state-dependent uptake | J3 blocking |
-| 12 | **FBCA** | **R15:** FBA `CellOperator` (COBREXA/JuMP extension, D-030; pFBA, warm start) with sequential write-back. **R5:** the Eq 6 averaging operator, the flux BC and an explicit 6-phase order. **R3:** division plane by draw. **R5:** a field write at copy time. **R16:** lineage and clone sizes | X5 blocking |
+| 12 | **FBCA** | **R15:** FBA `CellOperator` (COBREXA/JuMP extension, D-030; pFBA, warm start) with sequential write-back. **R5:** the Eq 6 averaging operator, the flux BC and an explicit 6-phase order. **R3:** division plane by draw. **R5:** a field write at copy time. **R16:** lineage and clone sizes | X5: published HMR core `mmc1.xls` as the default, flagged (D-067) |
