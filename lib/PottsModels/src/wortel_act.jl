@@ -13,7 +13,8 @@ their reference code Artistoo (D-049):
   therefore penalised.
 - **Energies.** Adhesion `J`, area `λ(V − V₀)²` and perimeter `λₛ(P − S₀)²`, where the
   perimeter counts Moore neighbours owned by others.
-- **Connectivity.** `connected = true` adds the Merks ring rule, which Niculescu et al. use
+- **Connectivity.** `connected = true` adds the ring rule `connectivity(cell; rule =
+  :arc_or_pair)` (one arc, or else two cells on the ring), which Niculescu et al. use
   for multicellular runs. Without it, cells can break at high `λ_act`, as Wortel et al.
   report.
 
@@ -48,7 +49,7 @@ The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 20
     @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)
     @after_mcs act ~ max(Pre(act) - 1, 0)
     if connected
-        @constraint connectivity(cell; rule = :merks)
+        @constraint connectivity(cell; rule = :arc_or_pair)
     end
     @sweep Metropolis(; temperature = T)
 end

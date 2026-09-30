@@ -40,7 +40,7 @@ end
         prob = PottsProblem(sys, op, (0, 10))
         @test selfcheck(prob) < 1e-9
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
-        @test sol.retcode == Potts.CorePotts.SciMLBase.ReturnCode.Success
+        @test Symbol(sol.retcode) === :Success
         u = sol.u[end]
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
     end
@@ -64,6 +64,8 @@ end
 
 include("mechanisms.jl")
 include("papers.jl")
+include("siblings.jl")
+include("guardrails.jl")
 
 @testset "Aqua" begin
     Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))

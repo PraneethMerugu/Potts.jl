@@ -49,29 +49,28 @@ end
         @test is_retraction(p2) && !is_extension(p2)
         c = [0.0, 0.0, 5.0, 2.0]
         @test chemotaxis_delta(c, p1, 2.0) == -2.0 * (5.0 - 2.0)   # up-gradient is favoured
+        @test chemotaxis_delta(c, p1, 2.0; response = saturating(1.0)) ≈ -2.0 * (5 / 6 - 2 / 3)
+        @test chemotaxis_delta(c, p1, 2.0; response = saturating_linear(0.5)) ≈ -2.0 * (5 / 3.5 - 2 / 2)
     end
 
-    @testset "Act geometric means" begin
+    @testset "neighbourhood means" begin
         lat = Lattice((5, 5))
         σ = zeros(Int32, 5, 5); σ[2:4, 2:4] .= 1; σ[3, 4] = 2
-        act = zeros(5, 5); act[2:4, 2:4] .= 4.0; act[3, 3] = 1.0
-        ctx = (; lattice = lat, act = relation(Moore(1), lat))
+        x = zeros(5, 5); x[2:4, 2:4] .= 4.0; x[3, 3] = 1.0
+        ctx = (; lattice = lat)
+        rel = relation(Moore(1), lat)
         centre = linear_index(lat, (3, 3))
-        vals = [act[i, j] for i in 2:4, j in 2:4 if σ[i, j] == 1]     # owner-filtered
-        @test act_mean(act, σ, ctx, centre, 1) ≈ exp(sum(log, vals) / length(vals))
-        @test act_mean(act, σ, ctx, centre, 1; shifted = true) ≈
+        vals = [x[i, j] for i in 2:4, j in 2:4 if σ[i, j] == 1]       # owner-filtered
+        @test neighborhood_mean(x, σ, ctx, centre, 1; relation = rel) ≈ exp(sum(log, vals) / length(vals))
+        @test neighborhood_mean(x, σ, ctx, centre, 1; relation = rel, fold = ArithmeticMean()) ≈ sum(vals) / length(vals)
+        @test neighborhood_mean(x, σ, ctx, centre, 1; relation = rel, fold = Log1pGeometricMean()) ≈
               expm1(sum(log1p, vals) / length(vals))
-        act[2, 2] = 0.0
-        @test act_mean(act, σ, ctx, centre, 1) == 0.0                 # a zero kills the GM
-        @test act_mean(act, σ, ctx, centre, 0) == 0.0                 # medium has no activity
-        prop = Proposal(linear_index(lat, (1, 3)), centre, (1, 3), 1, Int32(0), Int32(1))
-        @test act_delta(act, σ, ctx, prop, 4.0, 5.0; shifted = true) ≈
-              -(4.0 / 5.0) * act_mean(act, σ, ctx, centre, 1; shifted = true)
-        # a retraction by the medium pays for the activity it removes (Niculescu 2015, D-049)
-        act[2, 2] = 4.0
-        edge = linear_index(lat, (2, 3))
-        back = Proposal(edge, linear_index(lat, (1, 3)), (2, 3), 1, Int32(1), Int32(0))
-        @test act_delta(act, σ, ctx, back, 4.0, 5.0) ≈ (4.0 / 5.0) * act_mean(act, σ, ctx, edge, 1) > 0
+        x[2, 2] = 0.0
+        @test neighborhood_mean(x, σ, ctx, centre, 1; relation = rel) == 0.0      # a zero kills the GM
+        @test neighborhood_mean(x, σ, ctx, centre, 0; relation = rel) == 0.0      # the medium's mean is zero
+        x[2, 2] = -3.0                                                   # log1p fold clips at zero
+        @test neighborhood_mean(x, σ, ctx, centre, 1; relation = rel, fold = Log1pGeometricMean()) ≈
+              expm1(sum(log1p ∘ (v -> max(v, 0.0)), [x[i, j] for i in 2:4, j in 2:4 if σ[i, j] == 1]) / length(vals))
     end
 
     @testset "locally_connected equals a flood fill ($(N)-D)" for N in (2, 3)
@@ -91,20 +90,46 @@ end
         @test agree == trials[]
     end
 
-    @testset "merks_connectivity (legacy rule)" begin
+    @testset "ring arcs and ring cells" begin
         lat = Lattice((5, 5); boundary = Closed())
         ctx = (; lattice = lat)
         σ = zeros(Int32, 5, 5)
         σ[2, 2:4] .= 1; σ[3, 3] = 1                     # one arc above the target (3,3)
         prop = Proposal(linear_index(lat, (3, 3)), 0, (3, 3), 1, Int32(1), Int32(0))
-        @test merks_connectivity(σ, ctx, prop)
+        @test ring_arcs(σ, ctx, prop) == 1 && ring_cells(σ, ctx, prop) == 1
+        @test local_components(σ, ctx, prop) == 1
         σ[4, 3] = 1                                      # a second arc below: split
-        @test !merks_connectivity(σ, ctx, prop)
-        σ[3, 2] = 2                                      # now exactly two distinct cells
-        @test merks_connectivity(σ, ctx, prop)
+        @test ring_arcs(σ, ctx, prop) == 2 && local_components(σ, ctx, prop) == 2
+        σ[3, 2] = 2                                      # a second cell on the ring
+        @test ring_cells(σ, ctx, prop) == 2
         edge = Proposal(linear_index(lat, (1, 3)), 0, (1, 3), 1, Int32(1), Int32(0))
         σ[1, 3] = 1
-        @test merks_connectivity(σ, ctx, edge)           # out-of-domain ring sites = medium
+        @test ring_arcs(σ, ctx, edge) == 1               # out-of-domain ring sites = medium
+        medium = Proposal(linear_index(lat, (5, 5)), 0, (5, 5), 1, Int32(0), Int32(1))
+        @test ring_arcs(σ, ctx, medium) == 0 && local_components(σ, ctx, medium) == 0
+    end
+
+    @testset "local_components counts flood-fill pieces ($(N)-D)" for N in (2, 3)
+        lat = Lattice(ntuple(_ -> 7, N); boundary = Closed())
+        rng = Random.Xoshiro(5)
+        for _ in 1:500
+            σ = Int32.(rand(rng, 0:1, lat.dims))
+            x = ntuple(_ -> 4, N)
+            σ[x...] = 1
+            prop = Proposal(linear_index(lat, x), 1, x, 1, Int32(1), Int32(0))
+            offs = [o for o in Iterators.product(ntuple(_ -> -1:1, N)...) if any(!iszero, o) && σ[(x .+ o)...] == 1]
+            comps = 0; left = Set(offs)
+            while !isempty(left)
+                comps += 1; front = [pop!(left)]
+                while !isempty(front)
+                    a = pop!(front)
+                    for b in collect(left)
+                        sum(abs.(a .- b)) == 1 && (delete!(left, b); push!(front, b))
+                    end
+                end
+            end
+            @test local_components(σ, (; lattice = lat), prop) == comps
+        end
     end
 
     @testset "local connectivity keeps every cell connected ($(length(dims))-D)" for dims in (

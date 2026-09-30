@@ -10,7 +10,7 @@ module Potts
 using Adapt: Adapt
 using CorePotts
 using KernelAbstractions: KernelAbstractions
-using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore
+using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore, saturating, saturating_linear
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
@@ -26,7 +26,7 @@ const t = ModelingToolkitBase.t_nounits
 const D = ModelingToolkitBase.D_nounits
 
 for name in names(CorePotts)
-    name === :CorePotts || @eval export $name
+    (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, PottsProblem, mtkcompile, extend,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive

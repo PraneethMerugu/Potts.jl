@@ -295,7 +295,7 @@ docstring.
 | P-12 | Akeeb | Divisions beyond `capacity` were deferred silently (0 divisions in a full-size run at capacity 1000) | bug | **fixed**: warns once per run |
 | P-13 | Akeeb | Paper Table 1 is an image; λ_V and T must be checked by eye against the source (2, 10) | – | maintainer check |
 | P-14 | Merks | The defaults mix variants: A = 50, λ = 25 are Merks 2008 (Dataset S1); L, λ_L and 282 cells in 333² are 2006. The TST v0.1.3 files for 2006 Fig. 4 give λ = 50, A = 100, λ_L = 5, L = 60 px, a soft connectivity penalty E₀ = 2000–5000 on the 8-ring, integer ΔH, 15 field substeps, an absorbing field boundary and 100 MCS of relaxation without the field (`model-specs/01_merks.md` §7–§8) | mixed variant | **decided (D-050, model-specs README §4.1 M1–M7)**: separate 2006/2008 sets; implementation pending |
-| P-15 | API hygiene | Model-named primitives remain: `rule = :merks`, `merks_connectivity`, `extension_only` (`src/vocabulary.jl`, `src/codegen.jl`) | naming | open: rename to descriptive names (group 7) |
+| P-15 | API hygiene | Model-named primitives remain: `rule = :merks`, `merks_connectivity`, `extension_only` (`src/vocabulary.jl`, `src/codegen.jl`) | naming | **fixed (D-051 R0)**: family-general primitives (connectivity values, `Chemotaxis(response, when)`, `neighborhood_mean`), guarded by QA |
 
 Tests added (`lib/PottsModels/test/papers.jl`, all pass on the current models):
 - **Graner–Glazier:**

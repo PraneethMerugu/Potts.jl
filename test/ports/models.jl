@@ -45,7 +45,8 @@ function wortel_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    act = act_delta(st.site.act, st.σ, ctx, prop, p.λact, p.maxact)     # every copy, plain GM
+    m(site, owner) = neighborhood_mean(st.site.act, st.σ, ctx, site, owner; relation = ctx.act)
+    act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))   # every copy
     return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            surface_delta(st.cell.surface, prop, surface_change(st.σ, ctx, prop), S) + act
 end

@@ -27,8 +27,9 @@ export init_moments, commit_moments!, centroid, centroid_shift, covariance,
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
 export Phases, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
-export is_extension, is_retraction, chemotaxis_delta, act_mean, act_delta,
-    locally_connected, merks_connectivity, forbid_extinction
+export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
+    neighborhood_mean, MeanFold, ArithmeticMean, GeometricMean, Log1pGeometricMean,
+    local_components, locally_connected, ring_arcs, ring_cells, forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
     neighbors, contact, empty_contacts, ContactPhase, contact_slot, contact_measure
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
@@ -47,6 +48,9 @@ export init, solve, solve!, step!, remake, CPU
 export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 export read_piff, write_piff
+# Public but not exported: generic lattice and randomness primitives for hand-written models
+# and generated code (ExplicitImports checks qualified accesses against this list).
+public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey
 
 include("rng.jl")
 include("lattice.jl")

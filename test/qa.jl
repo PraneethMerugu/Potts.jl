@@ -85,3 +85,53 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
         end
     end
 end
+
+# D-051 R0: no model- or author-named code in the core packages. Identifiers, macro names,
+# symbols and non-doc strings are scanned (comments and docstrings may cite sources);
+# identifiers are split on `_` and camel case. Exceptions live in `privileged_allow.txt`.
+const _DENY = ["merks", "wortel", "niculescu", "graner", "glazier", "akeeb", "jiang", "bauer", "zajac",
+    "starruss", "myxo", "fortuna", "osborne", "chaste", "artistoo", "openvt", "cc3d", "compucell", "morpheus",
+    "savill", "hogeweg", "act", "leader", "follower", "endothelial", "tumor", "tumour", "vasculo", "angiogen",
+    "keratocyte", "amoeboid"]
+_tokens(s) = [lowercase(t) for t in split(s, r"[^A-Za-z0-9]+|(?<=[a-z])(?=[A-Z])") if !isempty(t)]
+_denied(s) = [d for d in _DENY if any(t -> t == d || (length(d) > 4 && occursin(d, t)), _tokens(s))]
+
+const JS = Base.JuliaSyntax
+function _privileged_hits(file)
+    root = JS.parseall(JS.SyntaxNode, read(file, String); filename = file)
+    out = Tuple{Int, String}[]
+    function walk(n, indoc)
+        if JS.kind(n) == JS.K"doc"
+            foreach(((i, c),) -> walk(c, i == 1), enumerate(JS.children(n)))
+            return
+        end
+        indoc && return
+        if JS.is_leaf(n) && JS.kind(n) in (JS.K"Identifier", JS.K"String", JS.K"MacroName")
+            s = string(n.val)
+            isempty(_denied(s)) || push!(out, (JS.source_location(n)[1], s))
+        end
+        JS.is_leaf(n) || foreach(c -> walk(c, false), JS.children(n))
+    end
+    walk(root, false)
+    return out
+end
+
+@testset "QA: no model-named code in the core packages" begin
+    root = joinpath(@__DIR__, "..")
+    allow = Set(strip(first(split(l, "   #"))) for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
+                if !startswith(l, "#") && !isempty(strip(l)))
+    bad = String[]
+    for d in ("src", "lib/CorePotts/src", "lib/MakiePotts/src"), (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
+        endswith(f, ".jl") || continue
+        rel = relpath(joinpath(dir, f), root)
+        for (line, s) in _privileged_hits(joinpath(dir, f))
+            "$rel:$s" in allow || push!(bad, "$rel:$line $s")
+        end
+    end
+    isempty(bad) || @error "model-named code in core packages" bad
+    @test isempty(bad)
+    # and none among the names a model or hand-written problem can reach
+    for ns in (names(Potts), names(CorePotts), collect(keys(Potts.DSL)))
+        @test all(n -> isempty(_denied(string(n))), ns)
+    end
+end

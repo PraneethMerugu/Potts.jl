@@ -359,7 +359,7 @@ function _lower_gather(args, env)
     elseif op === :geomean
         :(zero($T)), :(($v > 0 ? ($acc += log($T($v))) : ($flag = true))),
         :(($cnt == 0 || $flag) ? zero($T) : exp($acc / $T($cnt)))
-    elseif op === :geomean_shifted
+    elseif op === :log1p_geomean
         :(zero($T)), :($acc += log1p(max(zero($T), $T($v)))), :($cnt == 0 ? zero($T) : expm1($acc / $T($cnt)))
     elseif op === :minimum
         :(typemax($T)), :($acc = min($acc, $T($v))), acc

@@ -277,7 +277,7 @@ end
     @test all(hprops) do (u, prop, ctx)
         isapprox(drive(hot, u, prop, ctx), -(p.λ_act / p.max_act) * (GM(u, prop.source) - GM(u, prop.target)); atol = 1e-9)
     end
-    # connectivity is off by default; `connected = true` is the Merks ring rule
+    # connectivity is off by default; `connected = true` is the arc-or-pair ring rule
     @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx), props)
     cprob = PottsProblem(WortelAct(; name = :w, lattice = (L, L), connected = true),
         [ownership => σ0, kind => [:cell, :cell], :λ => 5.0, :V₀ => 16.0, :λₛ => 0.5, :S₀ => 24.0, :λ_act => 20.0], (0, 10))

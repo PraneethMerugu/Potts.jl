@@ -75,10 +75,10 @@ end
         end
         @test locally_connected(σ, ctx, prop) == (length(comp) == length(members))
     end
-    # the Merks rule allows the adjacent pair (1,0),(0,1) on hex
+    # the adjacent pair (1,0),(0,1) is one arc of the hex ring
     σ = zeros(Int32, 12, 12); σ[6, 6] = 1; σ[7, 6] = 1; σ[6, 7] = 1
     prop = Proposal(linear_index(L, x), linear_index(L, (5, 6)), x, 1, Int32(1), Int32(0))
-    @test merks_connectivity(σ, ctx, prop)
+    @test ring_arcs(σ, ctx, prop) == 1
 end
 
 @testset "A-03 hex minimum image" begin

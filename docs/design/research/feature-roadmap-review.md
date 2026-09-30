@@ -1,6 +1,15 @@
 # Feature roadmap review: general primitives for the 12 published models (2026-09-30)
 
-**Status: proposal.** Questions 1–5 and 12 are answered in D-051: adopt guardrails and R0; allow fractional MCS at zero cost; exact Zajac; build coarse field grids; global connectivity on the checkerboard, with features working across both algorithms; analysis in docs unless a library has merit. The other questions are open. This review
+**Status: proposal.** D-051 answers questions 1, 2, 4, 5, 11 and 12:
+- 11: adopt the guardrails and R0;
+- 1: allow fractional MCS at zero cost;
+- 4: exact Zajac;
+- 5: build coarse field grids;
+- 2: global connectivity on the checkerboard, with features working across both
+  algorithms;
+- 12: analysis in docs unless a library has merit.
+
+Questions 3 and 6–10 are open. This review
 covers `model-specs/README.md` §2 (features G1–G21), §3 and §6. Only the per-model decisions
 in README §4 are approved (D-050).
 

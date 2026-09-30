@@ -50,7 +50,10 @@ _site_env(T, i, relname; mcs = nothing, key = nothing) =
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
-    :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new)), relname)
+    :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new),
+    :local_components => :(Int32(CorePotts.local_components(st.σ, ctx, prop))),
+    :ring_arcs => :(Int32(CorePotts.ring_arcs(st.σ, ctx, prop))),
+    :ring_cells => :(Int32(CorePotts.ring_cells(st.σ, ctx, prop)))), relname)
 
 _contact_env(T, a, ka, n, kn, w, site, relname) = LowerEnv(T, :contact,
     Dict{Symbol, Any}(:kind => ka, :kind′ => kn, :owner => a, :owner′ => n, :weight => w,
@@ -270,12 +273,8 @@ function _constraint_expr(c::CompiledPottsSystem, T)
     for k in c.constraints
         if k.kind === :expr
             push!(tests, lower(k.expr, env))
-        elseif k.kind === :connectivity
-            push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) ||
-                           CorePotts.locally_connected(st.σ, ctx, prop)))
-        elseif k.kind === :merks_connectivity
-            push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) ||
-                           CorePotts.merks_connectivity(st.σ, ctx, prop)))
+        elseif k.kind === :connectivity          # evaluated only for a losing cell of `kinds`
+            push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) || $(lower(k.expr, env))))
         elseif k.kind === :no_extinction
             push!(tests, :(CorePotts.forbid_extinction(st.cell.volume, prop)))
         end

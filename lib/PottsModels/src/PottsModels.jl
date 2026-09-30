@@ -8,7 +8,8 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts
+using Potts: Potts, @potts_model, Closed, Lattice, Metropolis, Moore, Periodic, RandomPlane,
+    VonNeumann, kind, major_length, ownership
 using DelimitedFiles: readdlm
 using Random: MersenneTwister
 

@@ -81,7 +81,7 @@ statements on or off:
 @structural_parameters begin connected = false end
 …
 if connected
-    @constraint connectivity(cell; rule = :merks)
+    @constraint connectivity(cell; rule = :arc_or_pair)
 end
 ```
 
@@ -220,6 +220,32 @@ end
 Inside proposal-scoped expressions: `source`, `target` (sites), `owner[·]`, `kind[·]`,
 `x[·]` for site state, `volume[owner[source]]` etc. for cell quantities. A drive is
 added to ΔH with unit weight; `copy => expr` is the copy-attempt context.
+
+**Connectivity values (implemented, D-051 R0).** Copy-scope integers about the losing cell
+(`old`) around the target:
+- `local_components`: its pieces in the target's neighbourhood after the copy;
+- `ring_arcs`: its arcs on the 2D neighbour ring;
+- `ring_cells`: distinct cells on that ring.
+
+Connectivity rules are then ordinary statements:
+
+| Rule | Statement |
+|---|---|
+| Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components <= 1` for losers of kind `k` |
+| Ring rule | `connectivity(k; rule = :arc_or_pair)` |
+| Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
+
+An unknown `rule` is an error.
+
+**Chemotaxis family.** `Chemotaxis(c; strength, response, kinds, when)`:
+- `response`: `identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
+  `c/(s c + 1)`, or any function;
+- `when`: any copy condition, e.g. `old == 0` for extensions only.
+
+**Neighbourhood memory (Act family).** Write the mean as a fold:
+`geomean(x[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])`. `mean`
+and `log1p_geomean` give the other variants. CorePotts has `neighborhood_mean(x, σ, ctx,
+site, owner; relation, fold)` for hand-written models.
 
 ---
 
@@ -428,7 +454,7 @@ act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[
 @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)                          # gained sites active
 @after_mcs act ~ max(Pre(act) - 1, 0)
 if connected
-    @constraint connectivity(cell; rule = :merks)
+    @constraint connectivity(cell; rule = :arc_or_pair)
 end
 ```
 

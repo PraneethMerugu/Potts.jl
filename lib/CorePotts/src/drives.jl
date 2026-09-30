@@ -10,61 +10,70 @@
 @inline is_retraction(prop) = prop.old != 0 && prop.new == 0
 
 """
-    chemotaxis_delta(c, prop, χ)
+    chemotaxis_delta(c, prop, χ; response = identity)
 
-Savill–Hogeweg chemotaxis `ΔH = −χ (c[target] − c[source])` (nearest-site sampling); gate it
-by kind and mode (e.g. `is_extension`) in the model.
+Chemotaxis `ΔH = −χ (r(c[target]) − r(c[source]))` with a response `r` applied to each
+concentration: `identity` (linear), `saturating(s)` = `c/(s + c)`,
+`saturating_linear(s)` = `c/(s c + 1)`, or any function. Gate it by kind and copy type in
+the model.
 """
-@inline chemotaxis_delta(c, prop, χ) = -χ * (@inbounds(c[prop.target]) - @inbounds(c[prop.source]))
+@inline chemotaxis_delta(c, prop, χ; response::F = identity) where {F} =
+    -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
+
+"""`saturating(s)`: the response `c -> c/(s + c)`."""
+saturating(s) = c -> c / (s + c)
+"""`saturating_linear(s)`: the response `c -> c/(s c + 1)`."""
+saturating_linear(s) = c -> c / (s * c + 1)
+
+"""Folds for [`neighborhood_mean`](@ref)."""
+abstract type MeanFold end
+"""Arithmetic mean."""
+struct ArithmeticMean <: MeanFold end
+"""Geometric mean, zero if any value is zero."""
+struct GeometricMean <: MeanFold end
+"""`exp(mean(log1p(max(x, 0)))) − 1`."""
+struct Log1pGeometricMean <: MeanFold end
+
+@inline _fold_term(::ArithmeticMean, a) = a
+@inline _fold_term(::GeometricMean, a) = a > 0 ? log(a) : zero(a)
+@inline _fold_term(::Log1pGeometricMean, a) = log1p(max(zero(a), a))
+@inline _fold_end(::ArithmeticMean, total, n, zero_seen) = total / n
+@inline _fold_end(::GeometricMean, total, n, zero_seen) = zero_seen ? zero(total) : exp(total / n)
+@inline _fold_end(::Log1pGeometricMean, total, n, zero_seen) = expm1(total / n)
 
 """
-    act_mean(act, σ, ctx, site, owner; relation = ctx.act, shifted = false)
+    neighborhood_mean(x, σ, ctx, site, owner; relation, fold = GeometricMean())
 
-Mean activity of `owner`'s sites among `site` and its `relation` neighbours: the geometric
-mean (Niculescu et al. 2015; zero if any value is zero), or with `shifted = true` the
-legacy `exp(mean(log1p(a))) − 1`.
+Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbours owned by
+`owner`. Zero for the medium or an empty set. The neighbourhood-memory drive of the Act
+family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 """
-@inline function act_mean(act, σ, ctx, site, owner; relation = ctx.act, shifted::Bool = false)
-    T = eltype(act)
+@inline function neighborhood_mean(x, σ, ctx, site, owner; relation, fold::M = GeometricMean()) where {M <: MeanFold}
+    T = eltype(x)
     owner == 0 && return zero(T)
     lat = ctx.lattice
-    x = coordinates(lat, site)
+    p = coordinates(lat, site)
     total = zero(T)
     n = 0
     zero_seen = false
     if @inbounds(σ[site]) == owner
-        a = max(zero(T), @inbounds act[site])
-        total += shifted ? log1p(a) : (a > 0 ? log(a) : zero(T))
+        a = @inbounds x[site]
+        total += _fold_term(fold, a)
         zero_seen |= a == 0
         n += 1
     end
     for k in 1:length(relation)
-        inside, y = shift(lat, x, @inbounds relation.offsets[k])
+        inside, y = shift(lat, p, @inbounds relation.offsets[k])
         inside || continue
         j = linear_index(lat, y)
         @inbounds(σ[j]) == owner || continue
-        a = max(zero(T), @inbounds act[j])
-        total += shifted ? log1p(a) : (a > 0 ? log(a) : zero(T))
+        a = @inbounds x[j]
+        total += _fold_term(fold, a)
         zero_seen |= a == 0
         n += 1
     end
     n == 0 && return zero(T)
-    shifted && return expm1(total / n)
-    return zero_seen ? zero(T) : exp(total / n)
-end
-
-"""
-    act_delta(act, σ, ctx, prop, λ, maximum; relation = ctx.act, shifted = false)
-
-Act model drive `ΔH = −(λ/max)(GM(source, new) − GM(target, old))` for every copy (Niculescu
-et al. 2015, Artistoo): the medium's mean is zero, so a retraction by the medium costs
-`(λ/max)·GM(target, old)`.
-"""
-@inline function act_delta(act, σ, ctx, prop, λ, maximum; relation = ctx.act,
-        shifted::Bool = false)
-    s = act_mean(act, σ, ctx, prop.source, prop.new; relation, shifted)
-    t = act_mean(act, σ, ctx, prop.target, prop.old; relation, shifted)
-    return -(λ / maximum) * (s - t)
+    return _fold_end(fold, total, n, zero_seen)
 end
 
 """Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last site."""
@@ -74,34 +83,48 @@ end
 # Local connectivity
 
 """
-    locally_connected(σ, ctx, prop) -> Bool
+    local_components(σ, ctx, prop) -> Int
 
-`true` unless removing the target from its (non-medium) owner would split the owner's sites
-in the target's Moore neighbourhood into more than one face-connected component. Works in
-any dimension (3ᴺ − 1 ≤ 26 neighbours, bitmask flood fill); out-of-domain neighbours are
-not part of the cell. On a hexagonal lattice the neighbourhood is the 6-ring and the owner's
-sites there must form a single arc.
+Number of pieces the losing cell's (`prop.old`) sites around the target would form if the
+copy were accepted: face-connected components of its sites in the target's Moore
+neighbourhood (3ᴺ − 1 ≤ 26 sites, bitmask flood fill), or arcs of the 6-ring on a hexagonal
+lattice. Out-of-domain sites are not part of the cell. Zero for the medium or when the target
+is the cell's last site here. Connectivity rules are expressions over it:
+`local_components <= 1` (hard), `λ * (local_components > 1)` (soft).
 """
-@inline locally_connected(σ, ctx, prop::Proposal) = _locally_connected(ctx.lattice, σ, ctx, prop)
+@inline local_components(σ, ctx, prop::Proposal) = _local_components(ctx.lattice, σ, prop)
 
-# Hexagonal: consecutive sites of the 6-ring are mutually adjacent, so the owner's sites
-# around the target stay connected iff they form a single arc of the ring.
-@inline function _locally_connected(lat::Lattice{2, M, Hexagonal}, σ, ctx, prop::Proposal{2}) where {M}
-    a = prop.old
-    a == 0 && return true
-    same = _hex_ring(lat, σ, prop.x, a)
-    return _arcs(same) <= 1
-end
+"""`locally_connected(σ, ctx, prop)`: `local_components(σ, ctx, prop) <= 1`."""
+@inline locally_connected(σ, ctx, prop::Proposal) = local_components(σ, ctx, prop) <= 1
+
+"""
+    ring_arcs(σ, ctx, prop) -> Int
+
+Maximal runs of the losing cell's sites around the target's neighbour ring (the 8-ring on
+a square 2D lattice, the 6-ring on a hexagonal one; out-of-domain sites count as medium).
+"""
+@inline ring_arcs(σ, ctx, prop::Proposal{2}) = prop.old == 0 ? 0 : _arcs(map(==(prop.old), _ring_owners(ctx.lattice, σ, prop.x)))
+
+"""
+    ring_cells(σ, ctx, prop) -> Int
+
+Number of distinct cells (medium excluded) on the target's neighbour ring (see
+[`ring_arcs`](@ref)).
+"""
+@inline ring_cells(σ, ctx, prop::Proposal{2}) = _distinct_cells(_ring_owners(ctx.lattice, σ, prop.x))
 
 # The 6 hex neighbours in angular order (axial offsets at 0°, 60°, …, 300°).
 const _HEX_RING = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
+# The 8 square neighbours in clockwise order.
+const _MOORE_RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
 
-@inline _hex_owners(lat, σ, x) = ntuple(Val(6)) do k
-    o = _HEX_RING[k]
+@inline _ring_owners(lat::Lattice{2, M, Hexagonal}, σ, x) where {M} = _owners(lat, σ, x, _HEX_RING)
+@inline _ring_owners(lat::Lattice{2}, σ, x) = _owners(lat, σ, x, _MOORE_RING)
+@inline _owners(lat, σ, x, ring::NTuple{K}) where {K} = ntuple(Val(K)) do k
+    o = ring[k]
     inside, y = shift(lat, x, (Int32(o[1]), Int32(o[2])))
     inside ? @inbounds(σ[linear_index(lat, y)]) : Int32(0)
 end
-@inline _hex_ring(lat, σ, x, a) = map(==(a), _hex_owners(lat, σ, x))
 
 # Number of maximal runs of `true` in a cyclic tuple (0 if none, 1 if all).
 @inline function _arcs(same::NTuple{K, Bool}) where {K}
@@ -110,66 +133,6 @@ end
         n += same[k] & !same[k == 1 ? K : k - 1]
     end
     return (n == 0 && same[1]) ? 1 : n
-end
-
-@inline function _locally_connected(lat::Lattice{N}, σ, ctx, prop::Proposal{N}) where {N}
-    a = prop.old
-    a == 0 && return true
-    M = 3^N
-    mask = UInt32(0)
-    for p in 0:(M - 1)
-        off = _ternary_offset(p, Val(N))
-        all(iszero, off) && continue
-        inside, y = shift(lat, prop.x, off)
-        (inside && @inbounds(σ[linear_index(lat, y)]) == a) && (mask |= UInt32(1) << p)
-    end
-    mask == 0 && return true                        # the target was the cell's last site here
-    reached = mask & (~mask + UInt32(1))            # lowest set bit
-    while true
-        grown = reached
-        for p in 0:(M - 1)
-            (reached >> p) & 1 == 1 || continue
-            grown |= _face_neighbors(p, Val(N)) & mask
-        end
-        grown == reached && break
-        reached = grown
-    end
-    return reached == mask
-end
-
-@inline _ternary_offset(p, ::Val{N}) where {N} =
-    ntuple(d -> Int32(rem(div(p, 3^(d - 1)), 3) - 1), Val(N))
-
-@inline function _face_neighbors(p, ::Val{N}) where {N}
-    m = UInt32(0)
-    center = (3^N - 1) ÷ 2
-    for d in 1:N
-        digit = rem(div(p, 3^(d - 1)), 3)
-        digit > 0 && (q = p - 3^(d - 1); q != center && (m |= UInt32(1) << q))
-        digit < 2 && (q = p + 3^(d - 1); q != center && (m |= UInt32(1) << q))
-    end
-    return m
-end
-
-const _MERKS_RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
-
-"""
-    merks_connectivity(σ, ctx, prop) -> Bool
-
-The Merks et al. (2006) local rule as implemented by legacy Potts (2D, Moore ring): allow
-if the losing cell occupies one arc of the clockwise ring (≤ 2 transitions), or otherwise
-if exactly two distinct cells occupy the ring. Out-of-domain ring sites count as medium
-(legacy CorePotts returns owner 0 for an absent neighbour). Gate by kind in the model.
-"""
-@inline merks_connectivity(σ, ctx, prop::Proposal{2}) = _merks(ctx.lattice, σ, ctx, prop)
-
-# Hexagonal: the same rule on the 6-ring (one arc, or else exactly two distinct cells).
-@inline function _merks(lat::Lattice{2, M, Hexagonal}, σ, ctx, prop::Proposal{2}) where {M}
-    a = prop.old
-    a <= 0 && return true
-    owners = _hex_owners(lat, σ, prop.x)
-    _arcs(map(==(a), owners)) <= 1 && return true
-    return _distinct_cells(owners) == 2
 end
 
 @inline function _distinct_cells(owners::NTuple{K}) where {K}
@@ -186,20 +149,51 @@ end
     return distinct
 end
 
-@inline function _merks(lat::Lattice{2}, σ, ctx, prop::Proposal{2})
+# Hexagonal: consecutive sites of the 6-ring are mutually adjacent, so the pieces are arcs.
+@inline function _local_components(lat::Lattice{2, M, Hexagonal}, σ, prop::Proposal{2}) where {M}
+    prop.old == 0 && return 0
+    return _arcs(map(==(prop.old), _owners(lat, σ, prop.x, _HEX_RING)))
+end
+
+@inline function _local_components(lat::Lattice{N}, σ, prop::Proposal{N}) where {N}
     a = prop.old
-    a <= 0 && return true
-    owners = ntuple(Val(8)) do k
-        o = _MERKS_RING[k]
-        inside, y = shift(lat, prop.x, (Int32(o[1]), Int32(o[2])))
-        inside ? @inbounds(σ[linear_index(lat, y)]) : Int32(0)
+    a == 0 && return 0
+    M = 3^N
+    mask = UInt32(0)
+    for p in 0:(M - 1)
+        off = _ternary_offset(p, Val(N))
+        all(iszero, off) && continue
+        inside, y = shift(lat, prop.x, off)
+        (inside && @inbounds(σ[linear_index(lat, y)]) == a) && (mask |= UInt32(1) << p)
     end
-    same = map(==(a), owners)
-    transitions = 0
-    for k in 1:8
-        same[k] || continue
-        transitions += 2 - Int(same[k == 1 ? 8 : k - 1]) - Int(same[k == 8 ? 1 : k + 1])
+    n = 0
+    while mask != 0                                 # peel off one component at a time
+        reached = mask & (~mask + UInt32(1))        # lowest set bit
+        while true
+            grown = reached
+            for p in 0:(M - 1)
+                (reached >> p) & 1 == 1 || continue
+                grown |= _face_neighbors(p, Val(N)) & mask
+            end
+            grown == reached && break
+            reached = grown
+        end
+        mask &= ~reached
+        n += 1
     end
-    transitions <= 2 && return true
-    return _distinct_cells(owners) == 2
+    return n
+end
+
+@inline _ternary_offset(p, ::Val{N}) where {N} =
+    ntuple(d -> Int32(rem(div(p, 3^(d - 1)), 3) - 1), Val(N))
+
+@inline function _face_neighbors(p, ::Val{N}) where {N}
+    m = UInt32(0)
+    center = (3^N - 1) ÷ 2
+    for d in 1:N
+        digit = rem(div(p, 3^(d - 1)), 3)
+        digit > 0 && (q = p - 3^(d - 1); q != center && (m |= UInt32(1) << q))
+        digit < 2 && (q = p + 3^(d - 1); q != center && (m |= UInt32(1) << q))
+    end
+    return m
 end

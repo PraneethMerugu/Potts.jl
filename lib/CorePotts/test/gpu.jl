@@ -135,7 +135,8 @@ using Metal
         function dHA(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
-            act = act_delta(st.site.act, st.σ, ctx, prop, p.λact, p.maxact)
+            m(site, owner) = neighborhood_mean(st.site.act, st.σ, ctx, site, owner; relation = ctx.act)
+            act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))
             chem = is_extension(prop) ? chemotaxis_delta(st.site.c, prop, p.χ) : 0.0f0
             return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) + act + chem
         end
@@ -166,10 +167,10 @@ using Metal
         @test abs(t) < 4
     end
 
-    @testset "Merks connectivity and Barker on Metal" begin
+    @testset "ring connectivity rule and Barker on Metal" begin
         σM, kM = blocks((48, 48), 5; gap = 1)
         latM = Lattice((48, 48))
-        okM(st, p, prop, ctx) = merks_connectivity(st.σ, ctx, prop)
+        okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 || ring_cells(st.σ, ctx, prop) == 2
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = okM)
         pM = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 12.0f0)
         prob = CPMProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))

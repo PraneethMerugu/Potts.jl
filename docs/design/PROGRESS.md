@@ -1144,3 +1144,35 @@ The maintainer approved F-1…F-6 (D-049).
 - **Benchmarks:** the Graner–Glazier timings in `benchmark/README.md` were measured on the
   old initial state. Same size and cell count, so they are expected to hold, but they have
   not been re-measured.
+
+## 2026-09-30 — Graner–Glazier audit fixes, D-050/D-051, feature review, R0
+
+- **Graner–Glazier port** (fixes from the PRE 1993 audit, spec 09 §8.6):
+  - square staggered-brick start with a plateau check;
+  - random cell types;
+  - annealed-copy measurements, with fractions over all mismatched bonds;
+  - paper-timed engulfment and λ-survival tests;
+  - an honest list of the remaining differences.
+- **D-050:** the per-model decisions in model-specs README §4 are recorded as approved.
+- **Feature review:** `research/feature-roadmap-review.md` (three reviewers) proposes R0–R16.
+- **D-051:** the maintainer's answers to the review.
+- **R0, family-general primitives replacing the model-named paths:**
+  - Connectivity is copy-scope values: `local_components`, `ring_arcs`, `ring_cells`.
+    - `connectivity(k; rule = :local | :arc_or_pair)` is shorthand, and unknown rules throw.
+    - Soft rules are drives.
+    - `rule = :merks` and `merks_connectivity` are gone.
+  - `Chemotaxis(c; strength, response, kinds, when)` replaces `extension_only`. It comes with
+    `saturating(s)` and `saturating_linear(s)`.
+  - `neighborhood_mean(…; relation, fold)` with `ArithmeticMean`, `GeometricMean` and
+    `Log1pGeometricMean` replaces `act_mean`/`act_delta`/`ctx.act`.
+  - `log1p_geomean` replaces `geomean_shifted` and now clips at 0 like the lowered fold.
+  - CorePotts declares `public` its generic lattice and RNG names.
+- **Guardrails:**
+  - ExplicitImports on PottsModels, which now has explicit `using Potts: …`;
+  - each model builds in a bare `using Potts` module;
+  - a DSL-surface snapshot;
+  - one sibling per published model (hexagonal sorting, arithmetic-mean Act, saturating
+    chemotaxis, soft connectivity with leader-gated chemotaxis, major-axis division),
+    with a registry check;
+  - a syntax-tree scan for model/author names in `src/`, `lib/CorePotts/src` and
+    `lib/MakiePotts/src` (negative control checked).

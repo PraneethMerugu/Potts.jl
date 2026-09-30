@@ -605,8 +605,10 @@ only from general public primitives.
 
 ## D-051 Feature roadmap review: maintainer answers (2026-09-30)
 
-Answers to `research/feature-roadmap-review.md` §7 (questions 1–5 and 12). The rest of the
-review (R0–R16) remains a proposal until each step is taken up.
+Answers to `research/feature-roadmap-review.md` §7 questions 11, 1, 4, 5, 2 and 12, in
+that order below. Questions 3 (Hastings correction for non-symmetric proposal laws) and
+6–10 are open. The rest of the review (R0–R16) remains a proposal until each step is taken
+up.
 
 1. **Guardrails and R0 renames: adopt now.** Guardrails (a)–(e) go into the test suite,
    together with the family-general replacements for `rule = :merks`, `extension_only` and

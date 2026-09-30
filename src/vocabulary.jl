@@ -35,7 +35,8 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site, :major_length)
+    :cluster_volume, :cluster_surface, :time, :site, :major_length, :local_components, :ring_arcs,
+    :ring_cells)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -300,11 +301,11 @@ function _population(fold, body, d, cond)
     return population(n, body(n), cond === nothing ? true : cond(n))
 end
 
-const FOLDS = (:sum, :prod, :mean, :geomean, :geomean_shifted, :minimum, :maximum, :count,
+const FOLDS = (:sum, :prod, :mean, :geomean, :log1p_geomean, :minimum, :maximum, :count,
     :any, :all)
 
-"""`geomean_shifted(itr)`: `exp(mean(log1p.(itr))) − 1` (the legacy Act mean, D-034)."""
-geomean_shifted(itr) = expm1(sum(log1p, itr) / length(itr))
+"""`log1p_geomean(itr)`: `exp(mean(log1p.(max.(itr, 0)))) − 1`."""
+log1p_geomean(itr) = expm1(sum(v -> log1p(max(zero(v), v)), itr) / length(itr))
 """`geomean(itr)`: geometric mean, zero if any value is zero (Niculescu et al. 2015)."""
 geomean(itr) = any(iszero, itr) ? zero(first(itr)) : exp(sum(log, itr) / length(itr))
 """`mean(itr)`: arithmetic mean (a fold over relations inside models)."""
@@ -359,16 +360,34 @@ end
 struct Drive
     expr::Any
 end
-"""A hard constraint: `expr` (proposal scope) must hold, or a built-in connectivity rule."""
+"""A hard constraint: `expr` (proposal scope) must hold, or a connectivity rule `expr` that
+must hold when the losing cell is of `kinds`."""
 struct Constraint
-    kind::Symbol                   # :expr, :connectivity, :merks_connectivity, :no_extinction
+    kind::Symbol                   # :expr, :connectivity, :no_extinction
     kinds::Vector{Int}
     expr::Any
 end
-"""`connectivity(kinds...; rule = :local)`: forbid copies that locally disconnect a cell of
-those kinds (`rule = :merks` is the legacy Merks et al. 2006 ring rule)."""
-connectivity(kinds::Integer...; rule::Symbol = :local) =
-    Constraint(rule === :merks ? :merks_connectivity : :connectivity, collect(Int, kinds), nothing)
+const _CONNECTIVITY_RULES = (:local, :arc_or_pair)
+"""
+    connectivity(kinds...; rule = :local)
+
+Forbid copies that locally disconnect a cell of `kinds` (every kind if empty). Shorthand for
+a constraint over the proposal-scope connectivity values, applied when the losing cell is of
+`kinds`:
+
+- `rule = :local`: `local_components <= 1`, the losing cell's sites around the target stay
+  one piece (CompuCell3D `Connectivity`, Morpheus);
+- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, one arc of the neighbour
+  ring, or else exactly two cells on it (a looser 2D ring rule).
+
+Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
+"""
+function connectivity(kinds::Integer...; rule::Symbol = :local)
+    rule in _CONNECTIVITY_RULES ||
+        throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
+    test = rule === :local ? (B.local_components <= 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
+    return Constraint(:connectivity, collect(Int, kinds), test)
+end
 """`no_extinction`: forbid copies that remove a cell's last site."""
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
 
@@ -542,15 +561,18 @@ Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength *
 """`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
 Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 """
-    Chemotaxis(c; strength, kinds = (), extension_only = false)
+    Chemotaxis(c; strength, response = identity, kinds = (), when = true)
 
-`copy => -strength * (c[target] - c[source])` when the gaining cell (`new`) is of `kinds`
-(any cell if empty); `extension_only` restricts it to copies into the medium (legacy Merks).
+`copy => -strength * (r(c[target]) - r(c[source]))` with a response `r` applied to each
+concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
+`c/(s c + 1)`, or any function). It acts when the gaining cell (`new`) is of `kinds` (any
+cell if empty) and the copy condition `when` holds, e.g. `old == 0` for extensions into the
+medium only, or `(kind[new] == a) | (kind[old] == a)` for copies involving kind `a`.
 """
-function Chemotaxis(c; strength, kinds = (), extension_only::Bool = false)
+function Chemotaxis(c; strength, response::F = identity, kinds = (), when = true) where {F}
     gain = isempty(kinds) ? (B.new != 0) : foldl(|, [_index(B.kind, B.new) == k for k in kinds])
-    gate = extension_only ? gain & (B.old == 0) : gain
-    return COPY => ifelse(gate, -strength * (_index(c, B.target) - _index(c, B.source)), 0.0)
+    gate = when === true ? gain : gain & when
+    return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -565,11 +587,11 @@ end
 
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
-    Volume, Surface, Adhesion, Chemotaxis,
+    Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, geomean_shifted, mean, Δ)
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object
