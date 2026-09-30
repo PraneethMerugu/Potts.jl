@@ -301,6 +301,10 @@ function _section!(parts, sec, args, ln = nothing)
                 push!(code, :($k = $P.vector_variable($(QuoteNode(k)), $range, $(QuoteNode(scope)); $(kw...))),
                     :(append!(__vars, $k.components)))
             end
+            if scope in (:site, :field)                  # `x′`: the value at s′ of a contact pair
+                k′ = _declare!(parts, Symbol(k, '′'), "variable (the contact-pair value of `$k`)")
+                push!(code, :($k′ = $P._primed($k)))
+            end
         end
     elseif sec === Symbol("@extend")
         # `@extend Base()`, `@extend base = Base()` or `@extend a, b = base = Base()` (MTK)

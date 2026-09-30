@@ -1797,7 +1797,6 @@ using Statistics: Statistics
         J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
     end
     @variables cue(site) = 0.0
-    cue′ = Potts._primed(cue)
     @lattice Lattice(dims; geometry, neighborhood = near)
     @relations wide = far
     @energy begin
@@ -1881,6 +1880,8 @@ end
     @test_throws r"only available in contact terms" mtkcompile(bad(Potts.sites => Potts._primed(c)))
     @test mtkcompile(bad(Potts.contacts => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
     @test_throws ArgumentError Potts._primed(Potts.variable(only(Potts.Symbolics.@variables m(Potts.t)), :cell))
+    @test_throws r"`x′` is already declared as a variable \(the contact-pair value of `x`\)" Potts._potts_model(:X,
+        quote @kinds medium A; @variables begin x(site) = 0.0; x′(site) = 0.0 end end, @__MODULE__)
 end
 
 # an on-copy write and a clear-on-ownership-change variable read by contact (and site) terms:
@@ -1901,8 +1902,6 @@ end
         mark(site) = 0.0
         tag(site) = 0.5, [clear_on_ownership_change = clear]
     end
-    mark′ = Potts._primed(mark)
-    tag′ = Potts._primed(tag)
     @lattice Lattice((20, 20); neighborhood = Moore(1))
     @energy begin
         cells(A) => (volume - 16)^2
@@ -1918,7 +1917,6 @@ end
 @potts_model SourceWriteContacts begin
     @kinds medium A
     @variables mark(site) = 0.0
-    mark′ = Potts._primed(mark)
     @lattice Lattice((8, 8))
     @energy contacts => mark * mark′
     @on_copy mark[source] ~ 1.0
@@ -1963,7 +1961,6 @@ end
 @potts_model SiteContactsFold begin
     @kinds medium A B
     @variables cue(site) = 0.0
-    cue′ = Potts._primed(cue)
     @lattice Lattice((24, 24); neighborhood = Moore(1))
     @energy begin
         cells(A, B) => (volume - 16)^2
