@@ -140,7 +140,7 @@ end
 end
 
 @testset "Akeeb, Marcus & Jiang (2026): leader/follower invasion" begin
-    function sim(; μ = 30.0, jlf = 2.0, pp = 0.5, nmcs = 150, seed = 1, W = 99, H = 90, capacity = 1000)
+    function sim(; μ = 24.0, jlf = 2.0, pp = 0.5, nmcs = 150, seed = 1, W = 99, H = 90, capacity = 1000)
         o = akeeb_state(; lattice = (W, H), pp, seed)
         u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (W, H)), [o; :μ => μ; :J => akeeb_contacts(jlf)],
             (0, nmcs); capacity, seed), SequentialCPM(; proposal = VonNeumann(1))).u[end]
@@ -156,9 +156,13 @@ end
     strong, mid, weak = s(-5.0), s(2.0), s(5.0)
     @test all(m -> m.singles == 0 && m.detached == 0, strong)
     @test mean(m -> m.singles, weak) > mean(m -> m.singles, mid) >= 2
-    # the published sample (500×300, J_LF = 2, μ = 24, 700 MCS): 578 divisions in the paper
+    # the published sample (500×300, J_LF = 2, μ = 24, 700 MCS): 578 divisions in the paper.
+    # Band (D-068): mean ± 3 SD of our ensemble under the default seeding, seeds 1:40:
+    # 585.0 ± 16.4 (range 555–617). It must hold the paper's 578 (a guard on the constants)
+    band = 585.0 - 3 * 16.4, 585.0 + 3 * 16.4
+    @test band[1] <= 578 <= band[2]
     full = sim(; μ = 24.0, W = 500, H = 300, nmcs = 700, capacity = 4000)
-    @test abs(full.divisions - 578) <= 50
+    @test band[1] <= full.divisions <= band[2]
     @test 150 <= full.singles <= 300
     @test full.leader_front == full.outer_front                         # a leader leads
 end
