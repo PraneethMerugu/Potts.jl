@@ -14,17 +14,22 @@ const EVENT_NONE = Int32(0)
 const EVENT_DIVIDE = Int32(1)
 const EVENT_REMOVE = Int32(2)
 const EVENT_TRANSITION = Int32(3)
+const EVENT_DIVIDE_CLUSTER = Int32(4)
 # internal: a cluster member that transitions and divides with its cluster in the same MCS
-const _EVENT_DIVIDE_TRANSITION = Int32(4)
+const _EVENT_DIVIDE_CLUSTER_TRANSITION = Int32(5)
+
+@inline _divides_with_cluster(e) = e == EVENT_DIVIDE_CLUSTER || e == _EVENT_DIVIDE_CLUSTER_TRANSITION
 
 """
-    Lifecycle(trigger; normal, kind, divide!, every = 1, clusters = false)
+    Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1,
+              cluster_normal = normal, cluster_divide! = divide!)
 
 The lifecycle of a model (generated from `@divide`, `@remove`, `@transition` rules, or
 hand-written):
 
 - `trigger(st, p, ctx, key, mcs, c) -> Int32` — the event for live cell `c`: `EVENT_NONE`,
-  `EVENT_DIVIDE`, `EVENT_REMOVE` or `EVENT_TRANSITION` (priorities are resolved inside).
+  `EVENT_DIVIDE` (the cell divides alone), `EVENT_DIVIDE_CLUSTER` (its compartment cluster
+  divides as a unit), `EVENT_REMOVE` or `EVENT_TRANSITION` (priorities are resolved inside).
 - `normal(st, p, ctx, key, mcs, c) -> NTuple{N}` — division plane normal through the
   centroid (`along_minor_axis`, `along_major_axis`, `random_plane`, or any vector).
 - `kind(st, p, ctx, key, mcs, c) -> Int32` — the destination kind of a transition.
@@ -35,27 +40,35 @@ hand-written):
   cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
   here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
 - `every` — check triggers every `every` MCS.
-- `clusters` — divide compartment clusters as a unit (`st.cell.cluster`, D-036): a cluster
-  divides when its root triggers `EVENT_DIVIDE` (members' own divide events are ignored);
-  `normal` is evaluated on the host with the cluster's moments (`st.cell` then holds cluster
-  volume/moments, indexed by root), and every member splits along that plane through the
-  cluster centroid. Daughters form a new cluster. Without `clusters`, a dividing
-  compartment's daughter stays in its parent's cluster.
+- `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
+
+Both kinds of division can happen in one MCS (P6.0a):
+
+- `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`, D-036).
+  Only the root's event counts (members' `EVENT_DIVIDE_CLUSTER` are ignored).
+  `cluster_normal` is evaluated on the host with the cluster's moments (`st.cell` then holds
+  cluster volume/moments, indexed by root), and every live member splits along that plane
+  through the cluster centroid; `cluster_divide!` runs for each member. The daughters form
+  a new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
+- `EVENT_DIVIDE` divides the cell alone along `normal`; `divide!` runs. A compartment's
+  daughter (the parent shares its cluster with another live cell) stays in the parent's
+  cluster; a lone cell's daughter is a lone cell (its own cluster).
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, KI, DV, RB}
+struct Lifecycle{TR, NO, CN, KI, DV, CD, RB}
     trigger::TR
     normal::NO
+    cluster_normal::CN
     kind::KI
     divide!::DV
+    cluster_divide!::CD
     rebuild!::RB
     every::Int
-    clusters::Bool
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
-    rebuild! = no_rebuild, every::Integer = 1, clusters::Bool = false) =
-    Lifecycle(trigger, normal, kind, divide!, rebuild!, Int(every), clusters)
+    rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every))
 
 no_rebuild(st, p, ctx, backend) = nothing
 
@@ -140,8 +153,8 @@ end
     e != EVENT_NONE && Atomix.@atomic count[1] += Int32(1)
 end
 
-@inline function _normal_body!(c, normals, daughter, normal, st, p, ctx, key, mcs)
-    if @inbounds(daughter[c]) > 0
+@inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs)
+    if @inbounds(events[c]) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
             @inbounds normals[d, c] = n[d]
@@ -159,7 +172,7 @@ end
             δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
             T = eltype(normals)
             V = T(@inbounds cell.volume[c])
-            side = @inbounds bias[c]                                # 0 unless clusters divide
+            side = @inbounds bias[c]                     # 0 unless it divides with its cluster
             offset = embed(lat, ntuple(d -> T(δ[d]) - T(@inbounds cell.m1[d, c]) / V, Val(N)))   # site − centroid
             for d in 1:N
                 side += T(offset[d]) * @inbounds(normals[d, c])
@@ -169,14 +182,16 @@ end
     end
 end
 
-@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, st, p, ctx, key, mcs)
+@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs)
     e = @inbounds events[c]
     if e == EVENT_TRANSITION
         @inbounds st.cell.kind[c] = kindf(st, p, ctx, key, mcs, Int32(c))
-    elseif (e == EVENT_DIVIDE || e == _EVENT_DIVIDE_TRANSITION) && @inbounds(daughter[c]) > 0
+    elseif e == EVENT_DIVIDE && @inbounds(daughter[c]) > 0
+        divide!(st, p, ctx, key, mcs, Int32(c), @inbounds daughter[c])
+    elseif _divides_with_cluster(e) && @inbounds(daughter[c]) > 0
         d = @inbounds daughter[c]
-        divide!(st, p, ctx, key, mcs, Int32(c), d)
-        if e == _EVENT_DIVIDE_TRANSITION                 # both halves take the new kind
+        cluster_divide!(st, p, ctx, key, mcs, Int32(c), d)
+        if e == _EVENT_DIVIDE_CLUSTER_TRANSITION         # both halves take the new kind
             k = kindf(st, p, ctx, key, mcs, Int32(c))
             @inbounds st.cell.kind[c] = k
             @inbounds st.cell.kind[d] = k
@@ -246,34 +261,42 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     daughter = zeros(Int32, cap)
     removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
     nextfree = 1
-    clusters = lc.clusters && _has_clusters(st)
-    if clusters
+    has_clusters = _has_clusters(st)
+    roots = Int32[]
+    if has_clusters
         cl = Array(st.cell.cluster)
         members = Dict{Int32, Vector{Int32}}()
         for c in 1:cap
             volume[c] > 0 && push!(get!(members, cl[c], Int32[]), Int32(c))
         end
-        roots = Int32[]
-        for c in 1:cap                                  # members' own divide events are ignored
-            events[c] == EVENT_DIVIDE && cl[c] != c && (events[c] = EVENT_NONE)
+        # pass 1: clusters divide as a unit, in root order; members follow their root and a
+        # dividing cluster takes precedence over its members' own events except removal
+        for c in 1:cap                                  # only the root's event counts
+            events[c] == EVENT_DIVIDE_CLUSTER && cl[c] != c && (events[c] = EVENT_NONE)
         end
-    end
-    for c in 1:cap
-        if clusters && events[c] == EVENT_DIVIDE
-            cl[c] == c || continue                          # members follow their root
+        for c in 1:cap
+            events[c] == EVENT_DIVIDE_CLUSTER && cl[c] == c || continue
             ms = filter(m -> events[m] != EVENT_REMOVE, members[Int32(c)])
             if nextfree + length(ms) - 1 <= length(free)
                 for m in ms
-                    events[m] = events[m] == EVENT_TRANSITION ? _EVENT_DIVIDE_TRANSITION : EVENT_DIVIDE
+                    events[m] = events[m] == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION :
+                                EVENT_DIVIDE_CLUSTER
                     daughter[m] = free[nextfree]
                     nextfree += 1
                 end
                 push!(roots, Int32(c))
                 stats.divisions += length(ms)
             else
+                events[c] = EVENT_NONE
                 _defer!(stats, cap)
             end
-        elseif events[c] == EVENT_DIVIDE
+        end
+    elseif any(==(EVENT_DIVIDE_CLUSTER), events)
+        throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    end
+    # pass 2: cells dividing alone, removals
+    for c in 1:cap
+        if events[c] == EVENT_DIVIDE && daughter[c] == 0
             if nextfree <= length(free)
                 daughter[c] = free[nextfree]
                 nextfree += 1
@@ -286,15 +309,19 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             stats.removals += 1
         end
     end
-    stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_TRANSITION, events)
+    stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION, events)
     copyto!(cache.daughter, daughter)
     copyto!(cache.removed, removed)
-    clusters && copyto!(cache.events, events)
+    copyto!(cache.events, events)
 
-    if clusters
-        isempty(roots) || _cluster_planes!(cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
-    elseif any(>(0), daughter)
-        _launch(_normal_body!, backend, cap, (cache.normals, cache.daughter, lc.normal, st, p, ctx, key, mcs))
+    if isempty(roots)
+        fill!(cache.bias, zero(eltype(cache.bias)))
+    else
+        _cluster_planes!(cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
+    end
+    if any(c -> daughter[c] > 0 && events[c] == EVENT_DIVIDE, 1:cap)    # after the host planes
+        _launch(_normal_body!, backend, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
+            ctx, key, mcs))
         launches += 1
     end
     n = length(st.σ)
@@ -315,18 +342,23 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         gen = Array(st.cell.generation)
         gen[ds] .+= Int32(1)
         copyto!(st.cell.generation, gen)
-        if clusters                                      # daughters form the root's daughter cluster
+        if has_clusters
             clh = Array(st.cell.cluster)
             for m in parents
-                clh[daughter[m]] = daughter[clh[m]]
+                d = daughter[m]
+                if _divides_with_cluster(events[m])      # the root's daughter names the new cluster
+                    clh[d] = daughter[cl[m]]
+                elseif length(members[cl[m]]) == 1       # a lone cell's daughter is lone
+                    clh[d] = d
+                end                                      # else it stays in the parent's cluster
             end
             copyto!(st.cell.cluster, clh)
         end
     end
     haskey(st.cell, :links) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(st, findall(removed), daughter[parents])
-    _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!, st, p,
-        ctx, key, mcs))
+    _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
+        lc.cluster_divide!, st, p, ctx, key, mcs))
     launches += 1
 
     _has_clusters(st) && _fix_clusters!(st)
