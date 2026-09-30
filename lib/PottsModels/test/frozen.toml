@@ -41,3 +41,8 @@ decision = "D-053"
 path = "../reproductions/09_cell_sorting.jl"
 sha256 = "716d2f405e09b45d89f8df0be6ff88ec8f0a9682ebd7548570df6d708b347fa5"
 decision = "D-072"
+
+[[file]]
+path = "acceptance/p6_0k_boolean_network.jl"
+sha256 = "2efbf328d775cd80fe3236213807eb7069b6ceff44afbd1f871ca6ecb4cae1de"
+decision = "D-065"
