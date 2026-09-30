@@ -140,23 +140,25 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; D-056, D-057) **P6.1a** R2 first slice: `Tiling`, `Scatter`, `Frame`, with an overlay algebra;
   the output is an SII operating point. Accept: layouts round-trip through `PottsProblem`;
   3D and hex tilings.
-- [ ] **P6.1a3** P6.1a review nits:
+- [x] (merge, 2026-09-30) **P6.1a3** P6.1a review nits:
   - on periodic axes, clamp the grown box side to `min(s + gap, n)` in the Scattered area
     bound (it now rejects feasible requests when gap ≥ n − s);
   - warm the 300² split-timing test;
   - optionally, dense per-cell buffers in the split bucketing.
+- [ ] **P6.1a4** `_warn_split` allocates its `Int32` visited array lazily, only when a cell
+  needs a flood fill (it is 32 MB at 200³ today).
 - [ ] **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
-- [ ] **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
+- [x] (merge, 2026-09-30) **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
 - [ ] **P6.1b2** follow-ups from the P6.0h review:
   - `graner_glazier_state` gains a paper-size single-aggregate generator (≈ 1000 cells),
     so the FULL run can test the size-driven targets.
   - `papers.jl` anneals each regime with that run's own J and T. The frozen file is edited
     under a DECISIONS entry. The reviewer measured a bias of 0.005–0.01 toward the effect.
   - The public-names guardrail (`guardrails.jl`) is extended to `lib/PottsModels/reproductions/`.
-- [ ] **P6.0h2** P6.0h review nits for the 09 tutorial:
+- [x] (merge, 2026-09-30) **P6.0h2** P6.0h review nits for the 09 tutorial:
   - "consistent with the medium share" instead of "which passes";
   - a caveat on the time-dependence and uncertainty of `PAPER_MEDIUM`;
   - a plateau criterion that also checks the slope over the last decade;

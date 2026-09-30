@@ -296,6 +296,7 @@ function at(key, τ)
 end
 medium(t) = at(:dM, t) + at(:lM, t)                  # our medium share of all boundary
 const PAPER_MEDIUM = 0.027 + 0.037                   # PRE Fig. 13(b) at t = 1 (spec §8.5 V-PRE3)
+## caveat: this is the paper's t = 1 value, applied at all times; read off the figure; our own read-off uncertainty estimate is ≈ ±0.014
 function logfit(lo, hi)
     js = findall(t -> lo <= t <= hi, ts)
     x = log10.(ts[js])
@@ -343,13 +344,23 @@ c_dM = (j = findfirst(<(0.003), m(:dM)); j === nothing ? nothing : ts[j])
 ok_dM(s) = c_dM !== nothing && c_dM <= 1000s
 addrow!("V-PRE3 dark–medium < 0.003", "≈ 0 by 300–600 (Fig. 13b)", show_t(c_dM), "by 10³", pf(ok_dM(1));
     timed = ok_dM)
-## plateau: first save after which light–medium stays within 5% of its last value
+## plateau: first save after which light–medium stays within 5% of its last value, and the
+## curve is flat over the last decade: its least-squares slope in log₁₀ t, over the saves in
+## [t_end / 10, t_end], changes it by at most 5% of its last value per decade
 lM_end = m(:lM)[end]
 j_plat = findfirst(j -> all(abs.(m(:lM)[j:end] .- lM_end) .<= 0.05lM_end), eachindex(ts))
 t_plat = ts[j_plat]
-ok_plat(s) = t_plat <= 1000s
+js_last = findall(t -> t >= last(ts) / 10, ts)
+lM_slope = length(js_last) < 2 ? NaN :
+           let x = log10.(ts[js_last])
+               cov(x, m(:lM)[js_last]) / var(x)
+           end
+flat = abs(lM_slope) <= 0.05lM_end
+ok_plat(s) = t_plat <= 1000s && flat
 addrow!("V-PRE3 light–medium plateau reached", "from ≈ 200 (Fig. 13b)",
-    "$t_plat (within 5% of the value at $(last(ts)))", "before 10³", pf(ok_plat(1)); timed = ok_plat)
+    "$t_plat (within 5% of the value at $(last(ts))); last-decade slope $(fmt(lM_slope)) per decade",
+    "before 10³; last-decade slope within ± 5% of the last value ($(fmt(0.05lM_end))) per decade",
+    pf(ok_plat(1)); timed = ok_plat)
 ## plateau level: raw against the spec band, and relative to the medium share at t = 1
 lM_1000 = at(:lM, 1000)
 ratio, paper_ratio = lM_1000 / medium(1), 0.0625 / PAPER_MEDIUM
@@ -386,47 +397,50 @@ $(npass(best)) of them pass; $(npass(1.0)) pass at s = 1.
 
 # Diagnosis of the failing rows, generated from the table:
 
-function light_on_surface(σ, k)      # share of light cells with a Moore neighbour in the medium
-    nx, ny = size(σ)
-    surf = falses(length(k))
-    for y in 1:ny, x in 1:nx, dx in -1:1, dy in -1:1
-        c = σ[x, y]
-        c != 0 && σ[mod1(x + dx, nx), mod1(y + dy, ny)] == 0 && (surf[c] = true)
-    end
-    return count(c -> surf[c] && k[c] == 2, eachindex(k)) / count(==(2), k)
-end
-## a cell–cell fraction rescaled to the paper's medium share
-corrected(r) = at(r.info.key, r.info.t) / (1 - medium(r.info.t)) * (1 - PAPER_MEDIUM)
-failing = filter(r -> occursin("FAIL", r.result), targets)
-lines = String[]
-for r in failing
-    if haskey(r.info, :key)
-        x = corrected(r)
-        ok = abs(x - r.info.v) <= 0.05
-        push!(lines, "$(r.target): rescaled from our medium share ($(fmt(medium(r.info.t)))) to the " *
-            "paper's ($(fmt(PAPER_MEDIUM))), $(fmt(at(r.info.key, r.info.t))) becomes $(fmt(x)) against " *
-            "$(r.info.v), $(ok ? "which passes: the failure is the medium share of a small aggregate" :
-                                  "which still fails")."
-        )
-    end
-end
-if any(r -> startswith(r.target, "V-PRE1 light–light") && occursin("FAIL", r.result), failing)
-    push!(lines, "Light–light: at 10³, $(round(Int, 100mean(σ -> light_on_surface(σ, k0), sorted_states)))% " *
-        "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " *
-        "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " *
-        "$(count(r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) &&
-                      abs(corrected(r) - r.info.v) > 0.05, failing)) of the failing light–light rows failing; " *
-        "a larger aggregate is needed to test them.")
-end
-any(r -> startswith(r.target, "V-PRE2 light–light") && occursin("FAIL", r.result), failing) && gap != "" &&
-    push!(lines, "Crossings: shape, not only timing. Our dark–dark and light–light crossings are " *
-        "$(fmt(c_ll / c_dd))× apart in time; the paper's are ≈ $(fmt(45 / 20))× apart.")
-any(r -> startswith(r.target, "V-PRE1 log law"), failing) &&
-    push!(lines, "Log law: the 5–4000 fit spans the plateau our small aggregate reaches; compare the extra 4–512 row.")
-any(r -> startswith(r.target, "V-PRE3 light–medium plateau level"), failing) &&
-    push!(lines, "Plateau level: the raw value is set by aggregate size (perimeter/area); see the size-corrected ratio in the same row.")
-Markdown.parse(isempty(failing) ? "No row fails in this run." :
-               "Failing rows: $(join([r.target for r in failing], "; ")).\n\n" * join(["- " * l for l in lines], "\n"))
+function light_on_surface(σ, k)      # share of light cells with a Moore neighbour in the medium #hide
+    nx, ny = size(σ) #hide
+    surf = falses(length(k)) #hide
+    for y in 1:ny, x in 1:nx, dx in -1:1, dy in -1:1 #hide
+        c = σ[x, y] #hide
+        c != 0 && σ[mod1(x + dx, nx), mod1(y + dy, ny)] == 0 && (surf[c] = true) #hide
+    end #hide
+    return count(c -> surf[c] && k[c] == 2, eachindex(k)) / count(==(2), k) #hide
+end #hide
+## a cell–cell fraction rescaled to the paper's medium share #hide
+corrected(r) = at(r.info.key, r.info.t) / (1 - medium(r.info.t)) * (1 - PAPER_MEDIUM) #hide
+failing = filter(r -> occursin("FAIL", r.result), targets) #hide
+lines = String[] #hide
+for r in failing #hide
+    if haskey(r.info, :key) #hide
+        x = corrected(r) #hide
+        ok = abs(x - r.info.v) <= 0.05 #hide
+        push!(lines, "$(r.target): rescaled from our medium share ($(fmt(medium(r.info.t)))) to the " * #hide
+            "paper's ($(fmt(PAPER_MEDIUM))), $(fmt(at(r.info.key, r.info.t))) becomes $(fmt(x)) against " * #hide
+            "$(r.info.v), $(ok ? "which is within tolerance: consistent with the medium share of a small aggregate" : #hide
+                                  "which still fails")." #hide
+        ) #hide
+    end #hide
+end #hide
+any(r -> haskey(r.info, :key), failing) && #hide
+    push!(lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value, applied at all " * #hide
+        "times, and is read off Fig. 13(b) (our estimate of the read-off uncertainty: ≈ ±0.014).") #hide
+if any(r -> startswith(r.target, "V-PRE1 light–light") && occursin("FAIL", r.result), failing) #hide
+    push!(lines, "Light–light: at 10³, $(round(Int, 100mean(σ -> light_on_surface(σ, k0), sorted_states)))% " * #hide
+        "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " * #hide
+        "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " * #hide
+        "$(count(r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) && #hide
+                      abs(corrected(r) - r.info.v) > 0.05, failing)) of the failing light–light rows failing; " * #hide
+        "a larger aggregate is needed to test them.") #hide
+end #hide
+any(r -> startswith(r.target, "V-PRE2 light–light") && occursin("FAIL", r.result), failing) && gap != "" && #hide
+    push!(lines, "Crossings: shape, not only timing. Our dark–dark and light–light crossings are " * #hide
+        "$(fmt(c_ll / c_dd))× apart in time; the paper's are ≈ $(fmt(45 / 20))× apart.") #hide
+any(r -> startswith(r.target, "V-PRE1 log law"), failing) && #hide
+    push!(lines, "Log law: the 5–4000 fit spans the plateau our small aggregate reaches; compare the extra 4–512 row.") #hide
+any(r -> startswith(r.target, "V-PRE3 light–medium plateau level"), failing) && #hide
+    push!(lines, "Plateau level: the raw value is set by aggregate size (perimeter/area); see the size-corrected ratio in the same row.") #hide
+Markdown.parse(isempty(failing) ? "No row fails in this run." : #hide
+               "Failing rows: $(join([r.target for r in failing], "; ")).\n\n" * join(["- " * l for l in lines], "\n")) #hide
 
 # ## 6. Known limitations and open questions for the authors
 #

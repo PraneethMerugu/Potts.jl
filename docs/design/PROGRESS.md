@@ -1260,3 +1260,22 @@ The maintainer approved F-1…F-6 (D-049).
   changed, and another agent was running heavy suites at the time.
 - **Nits queued:** P6.1a3.
 - Merge fix: two `@ref` links in the layout docstrings pointed at undocumented names (`overlay`, `PottsProblem`) and broke the docs build. They are now plain code. The docs build is now a standing suite.
+
+## 2026-09-30 — follow-ups merged: P6.0a2, P6.1a3, P6.0h2
+
+- **P6.0a2:** capacity-limited mixed-division test. It pins D-055 item 4, and the reviewer
+  killed 5 of 5 mutations with it.
+- **P6.1a3:**
+  - the `Scattered` area bound no longer rejects feasible requests on periodic axes;
+  - the timing test is warmed before it measures;
+  - `_warn_split` uses dense per-cell buffers.
+- **P6.0h2 (tutorial 09):**
+  - wording and caveats;
+  - the plateau criterion adds a last-decade log-slope check (±5 % of the final value per
+    decade), which turns the smoke run's "plateau reached" row from PASS to FAIL
+    (0.042 per decade against 0.011), correctly;
+  - the helper code is hidden.
+- **Merge fixes:** the local `nsites` in `_warn_split` is renamed `ncount`, because it
+  shadowed the exported function. The ±0.014 read-off uncertainty is marked as our own
+  estimate.
+

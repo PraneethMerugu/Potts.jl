@@ -182,6 +182,13 @@ end
     @test occursin("cannot fit", msg(PeriodicLayoutProbe(; name = :p)))
     # control: closed 12×12 has 13² = 169 of room, so the bound passes and placement jams
     @test occursin("could not place", msg((12, 12)))
+    # the grown box side is clamped to the ring too: one 3×3 box with gap 10 always fits a
+    # 12×12 torus (it was rejected as 13² > 12²)
+    one = layout(Scattered(1, (3, 3); kinds = [:cell], seed = 1, gap = 10), PeriodicLayoutProbe(; name = :p))
+    @test count(==(1), _op(one, ownership)) == 9 && maximum(_op(one, ownership)) == 1
+    # control: two such boxes are infeasible (each needs the whole ring on some axis)
+    @test_throws "cannot fit" layout(Scattered(2, (3, 3); kinds = [:cell], seed = 1, gap = 10),
+        PeriodicLayoutProbe(; name = :p))
 end
 
 @testset "layouts: periodic lattices" begin
@@ -277,7 +284,9 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (12, 12, 12))
     t = @elapsed layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (60, 60, 60))
     @test t < 5
-    # many genuinely split cells still flood-fill in linear time
+    # many genuinely split cells still flood-fill in linear time (warmed on a small 2D call)
+    _warnings(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:11, 2:11), kinds = [:b])),
+        (12, 12)))
     t = @elapsed layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299), kinds = [:b])),
         (300, 300))
     @test t < 5
