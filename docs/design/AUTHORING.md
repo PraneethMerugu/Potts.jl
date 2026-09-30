@@ -769,19 +769,24 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     packing, so a feasible dense request can throw. Like every layer it overwrites
     earlier ones, so keep it off a `Frame` with a `region` (as above).
   - `Frame(kind; width = 1)`: one cell owning every site within `width` of the edge of
-    each closed axis (periodic axes have no edge; all-periodic is an error).
+    each closed axis. Periodic axes have no edge: on `(Periodic(), Closed())` the frame is
+    two walls that are still one (frozen) cell; all-periodic is an error.
   - `overlay(layers...)`: later layers overwrite earlier ones; ids follow layer order.
     Cells left with no site are dropped. Partly covered cells keep what remains, which can
     be disconnected pieces: `layout` warns, naming the cell, when the remaining sites are
-    not connected under the lattice neighbourhood.
-  - `layout(l, dims)`: `dims` means a closed lattice with `Moore(1)`. It also takes a
-    `Lattice`, a `PottsSystem` or a `CompiledPottsSystem`, whose boundaries,
-    neighbourhood, domain and geometry the layouts use. On a lattice with a domain, no
-    cell may cover a site outside it.
+    not connected under the lattice neighbourhood (linear time; cells still a box are
+    skipped).
+  - `layout(l, dims)`: `dims` means a closed square lattice with `Moore(1)`. For a
+    hexagonal, periodic, domain or non-Moore lattice pass the `PottsSystem` (or
+    `CompiledPottsSystem`): the layouts use its boundaries, neighbourhood, domain and
+    geometry. A CorePotts `Lattice` also works but has no neighbourhood, so `Moore(1)` is
+    assumed. On a lattice with a domain, no cell may cover a site outside it.
   - Coordinates are lattice indices, so layouts are N-D. On a hexagonal lattice they are
     axial, and a box is a rhombus.
   - **Adding a layout.** Subtype `AbstractLayout` and add one method,
-    `Potts.paint!(σ, kinds, l, lat)`. `lat` is the model's `LatticeSpec`: `lat.dims`,
+    `Potts.paint!(σ, kinds, l, lat)`. `paint!`, `LatticeSpec` and `core_lattice` are
+    declared `public` (so a layout in another package passes ExplicitImports'
+    qualified-access check), as are CorePotts' `shift`, `relation` and `embed`. `lat` is the model's `LatticeSpec`: `lat.dims`,
     boundaries, `lat.neighborhood`, the domain mask `lat.domain` and `lat.geometry`;
     `core_lattice(lat)` is the CorePotts `Lattice` for `shift`, `relation` and `embed`.
     The method paints ids `length(kinds) + 1, …` over `σ` (`Int32`, 0 = medium) and

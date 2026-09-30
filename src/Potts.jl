@@ -52,5 +52,7 @@ export kind, cluster
 
 include("layouts.jl")
 export AbstractLayout, Tiling, Scattered, Frame, overlay, layout
+# the layout extension API: `Potts.paint!(σ, kinds, l, lat::LatticeSpec)`, `core_lattice(lat)`
+public paint!, core_lattice, LatticeSpec
 
 end

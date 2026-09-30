@@ -164,8 +164,9 @@ function paint!(σ, kinds, l::Scattered{N}, lat::LatticeSpec) where {N}
     ext = map(length, reg)
     all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg"))
     # necessary: the boxes grown by `gap` on their upper sides are disjoint in the region
-    # grown by `gap`
-    prod(ext .+ l.gap) >= l.n * prod(l.size .+ l.gap) ||
+    # grown by `gap`; on a periodic axis they are disjoint around the ring, so at most `n`
+    room = map((e, n, p) -> p ? min(e + l.gap, n) : e + l.gap, ext, dims, per)
+    prod(room) >= l.n * prod(l.size .+ l.gap) ||
         throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
@@ -195,8 +196,9 @@ end
     Frame(kind; width = 1)
 
 One cell of `kind` owning every site within `width` of the lattice edge (a wall; pair it
-with a `[frozen]` kind). Periodic axes have no edge: on a lattice periodic along x only,
-the frame is a wall at both ends of y (a channel).
+with a `[frozen]` kind). Periodic axes have no edge: on a `(Periodic(), Closed())` lattice
+the frame is two walls, at both ends of y (a channel), that are still one cell (one id, one
+kind). A lattice periodic along every axis has no edge and throws an `ArgumentError`.
 """
 struct Frame{K} <: AbstractLayout
     kind::K
@@ -240,8 +242,12 @@ end
 
 function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
     cut = Set{Int32}()                      # cells that lost sites to a later layer
+    prev = similar(σ, 0)                    # one buffer, refilled before each later layer
     for (j, x) in enumerate(l.layers)
-        prev = j == 1 ? σ : copy(σ)
+        if j > 1
+            j == 2 && (prev = similar(σ))
+            copyto!(prev, σ)
+        end
         paint!(σ, kinds, x, lat)
         j == 1 && continue
         for i in eachindex(σ)
@@ -253,27 +259,53 @@ function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
 end
 
 # Warn about cut cells whose remaining sites are not connected under the neighbourhood.
+# One pass buckets the cut cells' sites; a cell that is still a full box is connected
+# (every neighbourhood holds the unit axis steps) and skipped; the rest are flood-filled
+# with one shared `visited` array, reset per cell. O(sites).
 function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
+    buckets = Dict{Int32, Vector{Int}}(c => Int[] for c in cut)
+    lo = Dict{Int32, NTuple{N, Int}}()
+    hi = Dict{Int32, NTuple{N, Int}}()
+    ci = CartesianIndices(σ)
+    for i in eachindex(σ)
+        c = σ[i]
+        (c > 0 && haskey(buckets, c)) || continue
+        push!(buckets[c], i)
+        x = Tuple(ci[i])
+        lo[c] = min.(get(lo, c, x), x)
+        hi[c] = max.(get(hi, c, x), x)
+    end
     clat = core_lattice(lat)
     offs = CorePotts.relation(lat.neighborhood, clat).offsets
+    units = all(d -> all(s -> ntuple(k -> Int32(k == d ? s : 0), N) in offs, (-1, 1)), 1:N)
+    visited = falses(size(σ))
+    stack = Int[]
+    li = LinearIndices(σ)
     alive = falses(length(kinds))
     for s in σ
         s > 0 && (alive[s] = true)
     end
     for c in sort!(collect(cut))
-        alive[c] || continue
-        sites = findall(==(c), σ)
-        seen = Set{CartesianIndex{N}}((first(sites),))
-        stack = [first(sites)]
+        sites = buckets[c]
+        isempty(sites) && continue
+        units && length(sites) == prod(hi[c] .- lo[c] .+ 1) && continue      # still a box
+        visited[first(sites)] = true
+        push!(stack, first(sites))
+        reached = 1
         while !isempty(stack)
-            x = pop!(stack)
+            x = Tuple(ci[pop!(stack)])
             for o in offs
-                inside, y = CorePotts.shift(clat, Tuple(x), o)
-                yi = CartesianIndex(y)
-                inside && σ[yi] == c && !(yi in seen) && (push!(seen, yi); push!(stack, yi))
+                inside, y = CorePotts.shift(clat, x, o)
+                inside || continue
+                k = li[y...]
+                (σ[k] == c && !visited[k]) || continue
+                visited[k] = true
+                reached += 1
+                push!(stack, k)
             end
         end
-        length(seen) < length(sites) &&
+        visited[sites] .= false
+        reached < length(sites) &&
             @warn "overlay: later layers split cell $(count(view(alive, 1:c))) (kind $(kinds[c])) into disconnected pieces"
     end
     return nothing
@@ -283,10 +315,14 @@ end
     layout(l, dims) -> [ownership => σ, kind => kinds]
 
 Paint the layout `l` (see [`overlay`](@ref)) on an empty lattice and return an operating
-point for [`PottsProblem`](@ref): `σ` is an `Int32` array (0 = medium). In place of `dims`
-(a closed lattice with the `Moore(1)` neighbourhood) pass a `Lattice`, a `PottsSystem` or a
-`CompiledPottsSystem`, whose boundaries, neighbourhood, domain and geometry the layouts
-use. On a lattice with a domain, no cell may cover a site outside it.
+point for [`PottsProblem`](@ref): `σ` is an `Int32` array (0 = medium).
+
+A `dims` tuple means a closed square lattice with the `Moore(1)` neighbourhood. For a
+hexagonal, periodic, domain-restricted or non-Moore lattice pass the `PottsSystem` (or
+`CompiledPottsSystem`), whose boundaries, neighbourhood, domain and geometry the layouts
+use; a CorePotts `Lattice` carries boundaries, domain and geometry but no neighbourhood,
+so `Moore(1)` is assumed (it only matters for the split warning of [`overlay`](@ref)). On a
+lattice with a domain, no cell may cover a site outside it.
 """
 function layout(l::AbstractLayout, dims::Tuple{Vararg{Integer}})
     all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))

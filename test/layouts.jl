@@ -1,5 +1,6 @@
 # Layouts (P6.1a): spec-level properties with independent checks (D-048).
 using PottsModels: akeeb_state
+using Test: Test
 
 _op(op, key) = only(last(p) for p in op if isequal(first(p), key))
 # operating points compared by value (their keys are symbolic)
@@ -171,6 +172,18 @@ end
     @test_throws ArgumentError Scattered(3, (2, 2); kinds = [:a], seed = -1)
 end
 
+@testset "layouts: wrap-aware area bound" begin
+    msg(dims) = try
+        layout(Scattered(10, (3, 3); kinds = [:cell], seed = 1), dims); ""
+    catch e
+        e.msg
+    end
+    # 10 boxes of 3×3 with gap 1 need 160 sites of room: a 12×12 torus has 144
+    @test occursin("cannot fit", msg(PeriodicLayoutProbe(; name = :p)))
+    # control: closed 12×12 has 13² = 169 of room, so the bound passes and placement jams
+    @test occursin("could not place", msg((12, 12)))
+end
+
 @testset "layouts: periodic lattices" begin
     sys = PeriodicLayoutProbe(; name = :p)
     per = (true, true)
@@ -217,6 +230,57 @@ end
     dsys = DomainLayoutProbe(; name = :d)
     @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:cell]), dsys), ownership)[6:end, :] == zeros(Int32, 5, 10)
     @test_throws r"outside the lattice domain" layout(Tiling((2, 2); kinds = [:cell]), dsys)
+end
+
+# The extension API: a layout defined outside Potts, through public names only.
+module ScratchLayouts
+using Potts: Potts, AbstractLayout
+using CorePotts: CorePotts
+"""Paint the given sites as one cell of kind `k`."""
+struct Sites{N} <: AbstractLayout
+    idx::Vector{NTuple{N, Int}}
+    k::Symbol
+end
+function Potts.paint!(σ, kinds, l::Sites, lat::Potts.LatticeSpec)
+    clat = Potts.core_lattice(lat)                      # CorePotts view, e.g. for `shift`
+    push!(kinds, l.k)
+    for i in l.idx
+        _, j = CorePotts.shift(clat, i, ntuple(_ -> Int32(0), length(i)))
+        σ[j...] = length(kinds)
+    end
+    return σ
+end
+# every qualified access above, as ExplicitImports' `check_all_qualified_accesses_are_public` sees them
+const QUALIFIED = ((Potts, :paint!), (Potts, :LatticeSpec), (Potts, :core_lattice), (CorePotts, :shift))
+end
+
+_warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.CoreLogging.Warn)[1]]
+
+@testset "layouts: extension API and split warnings" begin
+    @test all(((m, n),) -> Base.ispublic(m, n), ScratchLayouts.QUALIFIED)
+    @test !Base.ispublic(Potts, :_warn_split)                          # control: internals are not
+    S = ScratchLayouts.Sites
+    op = layout(overlay(Frame(:w), S([(3, 3), (4, 4)], :a)), (6, 6))
+    @test _op(op, kind) == [:w, :a] && findall(==(2), _op(op, ownership)) == CartesianIndex.([(3, 3), (4, 4)])
+    # hex: the axial diagonal (1, 1) is not a hex neighbour, the anti-diagonal (1, -1) is
+    box = Tiling((2, 2); region = (1:2, 1:2), kinds = [:a])
+    hexlat = Lattice((6, 6); boundary = Closed(), geometry = Hexagonal())
+    @test length(_warnings(() -> layout(overlay(box, S([(1, 2), (2, 1)], :b)), hexlat))) == 1
+    @test isempty(_warnings(() -> layout(overlay(box, S([(1, 1), (2, 2)], :b)), hexlat)))
+    @test isempty(_warnings(() -> layout(overlay(box, S([(1, 2), (2, 1)], :b)), (6, 6))))   # square Moore(1): joined
+    # a bar across a periodic axis stays connected through the wrap when cut once
+    bar = Tiling((12, 1); region = (1:12, 2:2), kinds = [:a])
+    mid = Tiling((1, 1); region = (5:5, 2:2), kinds = [:b])
+    @test isempty(_warnings(() -> layout(overlay(bar, mid), PeriodicLayoutProbe(; name = :p))))
+    @test length(_warnings(() -> layout(overlay(bar, mid), (12, 12)))) == 1                # control: closed splits
+    # cost: one pass over σ, boxes trimmed by a frame are skipped (was 22 s at 200³)
+    layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (12, 12, 12))
+    t = @elapsed layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (60, 60, 60))
+    @test t < 5
+    # many genuinely split cells still flood-fill in linear time
+    t = @elapsed layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299), kinds = [:b])),
+        (300, 300))
+    @test t < 5
 end
 
 @testset "layouts reproduce an existing state's geometry" begin
