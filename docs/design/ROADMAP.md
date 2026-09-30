@@ -119,7 +119,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; A/B akeeb 0.993) **P6.0b3** Find the ≈ 3 % Metal cost that P6.0b added to akeeb_99x60, a model with
   no relationships (A/B 1.031, consistent). The no-reads path is meant to be free. Accept:
   A/B ≤ 1.01 against 5258ab9.
-- [ ] **P6.0b4** a permanent Metal (Float32) test of a model with reads in
+- [x] (merge, 2026-09-30) **P6.0b4** a permanent Metal (Float32) test of a model with reads in
   `lib/CorePotts/test/gpu.jl` (the P6.0b3 reviewer used a scratch version,
   `/tmp/rv-p6-0b3-metal.jl`).
 - [ ] **P6.0c** solver metadata per equation block or component (replaces the single
@@ -157,9 +157,9 @@ Every item's acceptance also includes the standing checks:
     bound (it now rejects feasible requests when gap ≥ n − s);
   - warm the 300² split-timing test;
   - optionally, dense per-cell buffers in the split bucketing.
-- [ ] **P6.1a4** `_warn_split` allocates its `Int32` visited array lazily, only when a cell
+- [x] (merge, 2026-09-30) **P6.1a4** `_warn_split` allocates its `Int32` visited array lazily, only when a cell
   needs a flood fill (it is 32 MB at 200³ today).
-- [ ] **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
+- [x] (merge, 2026-09-30) **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
 - [ ] **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
   a core layout, next to the planned `Spheres`. It needs a DSL and export review, and moves

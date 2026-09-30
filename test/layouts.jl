@@ -46,6 +46,46 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+# a disk domain (Cartesian predicate) with a frozen wall kind; the same model with a mobile
+# wall is the negative control for "the frame stays put"
+@potts_model DiskFrameProbe begin
+    @kinds medium wall[frozen] cell
+    @parameters begin
+        J[kind, kind] = [0 0 8; 0 0 12; 8 12 4]
+    end
+    @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
+    @energy begin
+        cells(cell) => (volume - 9)^2
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@potts_model DiskMobileWallProbe begin
+    @kinds medium wall cell
+    @parameters begin
+        J[kind, kind] = [0 0 8; 0 0 12; 8 12 4]
+    end
+    @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
+    @energy begin
+        cells(cell) => (volume - 9)^2
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+# brute-force frame oracle: in-domain sites with a site outside the domain, or beyond a
+# closed lattice edge, within Chebyshev distance `w` (through the wrap on periodic axes)
+function _frame_oracle(mask, per, w)
+    dims = size(mask)
+    return [mask[i] &&
+            any(CartesianIndices(ntuple(_ -> (-w):w, ndims(mask)))) do o
+        j = Tuple(i) .+ Tuple(o)
+        all(d -> per[d] || 1 <= j[d] <= dims[d], 1:ndims(mask)) || return true
+        !mask[CartesianIndex(map((x, n, p) -> p ? mod1(x, n) : x, j, dims, per))]
+    end for i in CartesianIndices(mask)]
+end
+
 # two distinct cells touch (Moore(1)), through the wrap on axes marked periodic
 function _touching(σ, per)
     n = size(σ)
@@ -232,11 +272,81 @@ end
     # a lattice domain: cells must lie inside it
     lat = Lattice((10, 10); domain = OnIndices(x -> x[1] <= 5))
     @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:a]), lat), ownership)[6:end, :] == zeros(Int32, 5, 10)
-    @test_throws ArgumentError layout(Frame(:w), lat)
+    @test _op(layout(Frame(:w), lat), ownership) == _frame_oracle(lat.mask, (true, true), 1)   # P6.1a2 (periodic)
     # the same domain from a model's @lattice (LatticeSpec path)
     dsys = DomainLayoutProbe(; name = :d)
     @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:cell]), dsys), ownership)[6:end, :] == zeros(Int32, 5, 10)
     @test_throws r"outside the lattice domain" layout(Tiling((2, 2); kinds = [:cell]), dsys)
+end
+
+@testset "layouts: Frame on a lattice domain (P6.1a2)" begin
+    sys = DiskFrameProbe(; name = :disk)
+    mask = sys.lattice.domain
+    for w in (1, 2)
+        σ = _op(layout(Frame(:wall; width = w), sys), ownership)
+        ring = σ .== 1
+        @test ring == _frame_oracle(mask, (false, false), w)
+        # a ring: inside the domain, not the whole domain, and it seals the interior (no
+        # interior site is a Moore(1) neighbour of a site outside the domain)
+        inner = mask .& .!ring
+        @test !any(ring .& .!mask) && any(inner)
+        @test !any(i -> inner[i] && any(o -> (j = i + o; !checkbounds(Bool, mask, j) || !mask[j]),
+            CartesianIndices((-w:w, -w:w))), CartesianIndices(mask))
+        # the ring is w sites thick along the axes through the centre (row 12 of the disk: 2:23)
+        row = findall(mask[:, 12])
+        @test findall(ring[:, 12]) == [row[1:w]; row[(end - w + 1):end]]
+    end
+    # negative controls: the oracle distinguishes widths, and the unmasked rule on the same
+    # dims lies entirely outside the disk (the old behaviour, which the domain check rejects)
+    @test _frame_oracle(mask, (false, false), 1) != _frame_oracle(mask, (false, false), 2)
+    @test !any(mask .& (_op(layout(Frame(:wall), (24, 24)), ownership) .== 1))
+    # a domain that meets closed lattice edges and a periodic wrap
+    half = OnIndices(x -> x[1] <= 6)
+    σ = _op(layout(Frame(:w), Lattice((12, 12); boundary = (Periodic(), Closed()), domain = half)), ownership)
+    @test findall(==(1), σ) == findall(i -> i[1] <= 6 && (i[1] in (1, 6) || i[2] in (1, 12)), CartesianIndices(σ))
+    σ = _op(layout(Frame(:w), Lattice((12, 12); boundary = Periodic(), domain = half)), ownership)
+    @test findall(==(1), σ) == findall(i -> i[1] in (1, 6), CartesianIndices(σ))           # x = 1 meets 12 by wrap
+    @test_throws r"no boundary" layout(Frame(:w), Lattice((6, 6); boundary = Periodic(), domain = trues(6, 6)))
+    # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and
+    # no in-domain site off the ring has a Hex(1) neighbour outside the domain (it seals)
+    domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square()) = (σ = zeros(Int32, size(mask));
+        Potts.paint!(σ, Any[], Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry));
+        σ .== 1)
+    pacman = [(x - 9)^2 + (y - 9)^2 <= 49 && !(x > 9 && abs(y - 9) <= 2) for x in 1:18, y in 1:18]
+    hexlat = Lattice((18, 18); boundary = Closed(), geometry = Hexagonal())
+    hoffs = Potts.CorePotts.relation(Hex(1), hexlat).offsets
+    for w in 1:3
+        ring = domain_frame(pacman, Closed(), w; geometry = Hexagonal())
+        @test ring == _frame_oracle(pacman, (false, false), w)
+        inner = pacman .& .!ring
+        @test any(inner)
+        @test all(i -> !inner[i] || all(o -> ((in, y) = Potts.CorePotts.shift(hexlat, Tuple(i), o); in && pacman[y...]), hoffs),
+            CartesianIndices(pacman))
+    end
+    # 3D with mixed boundaries: random masks against the oracle
+    rng = Potts.StableRNG(3)
+    for _ in 1:40
+        per = (rand(rng, Bool), rand(rng, Bool), rand(rng, Bool))
+        m3 = rand(rng, rand(rng, 3:8), rand(rng, 3:8), rand(rng, 3:8)) .> rand(rng, (0.05, 0.2, 0.5))
+        (any(m3) && !(all(m3) && all(per))) || continue
+        w = rand(rng, 1:3)
+        @test domain_frame(m3, map(p -> p ? Periodic() : Closed(), per), w) == _frame_oracle(m3, per, w)
+    end
+    # a frozen frame on the disk: the model runs and the frame stays put
+    l = overlay(Frame(:wall), Tiling((3, 3); spacing = 1, region = (6:19, 6:19), kinds = [:cell]))
+    op = layout(l, sys)
+    σ0 = _op(op, ownership)
+    @test maximum(σ0) == 1 + 9
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        u = solve(PottsProblem(sys, op, (0, 20)), alg).u[end]
+        σ = Array(u.σ)
+        @test (σ .== 1) == (σ0 .== 1)                                       # the frame stays
+        @test σ != σ0 && all(σ[.!mask] .== 0)                               # cells move, never leave the disk
+        @test u.cell.volume[1:maximum(σ0)] == [count(==(c), σ) for c in 1:maximum(σ0)]
+    end
+    # negative control: the same frame with a mobile wall kind moves
+    u = solve(PottsProblem(DiskMobileWallProbe(; name = :mob), op, (0, 20)), SequentialCPM(; proposal = Moore(1))).u[end]
+    @test (Array(u.σ) .== 1) != (σ0 .== 1)
 end
 
 # The extension API: a layout defined outside Potts, through public names only.
@@ -290,6 +400,25 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     t = @elapsed layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299), kinds = [:b])),
         (300, 300))
     @test t < 5
+    # P6.1a4: the lattice-sized `visited` array is allocated only for a flood fill. Every
+    # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
+    # buffers (4096 cells), far below the 80³ Int32 array (2 MB).
+    lat = Potts.lattice_spec((80, 80, 80); boundary = Closed())
+    σ, kinds = zeros(Int32, lat.dims), Any[]
+    Potts.paint!(σ, kinds, Tiling((5, 5, 5); kinds = [:a]), lat)
+    Potts.paint!(σ, kinds, Frame(:w; width = 3), lat)
+    cut = Set{Int32}(1:(length(kinds) - 1))
+    Potts._warn_split(σ, kinds, cut, lat)
+    bytes = @allocated Potts._warn_split(σ, kinds, cut, lat)
+    @test bytes < sizeof(Int32) * 80^3 ÷ 4
+    # … and a genuinely split cell among them still warns (and allocates the array)
+    σ2 = copy(σ)
+    c = σ2[6, 6, 6]
+    σ2[6:10, 6:10, 8] .= 0                       # a medium slab through tile `c` = (6:10)³
+    @test_logs (:warn, r"split cell") Potts._warn_split(σ2, kinds, cut, lat)
+    Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+        @test (@allocated Potts._warn_split(σ2, kinds, cut, lat)) >= sizeof(Int32) * 80^3
+    end
 end
 
 @testset "layouts reproduce an existing state's geometry" begin

@@ -1322,3 +1322,12 @@ The maintainer approved F-1…F-6 (D-049).
 - **Queued as P6.0e2:** the `m′` error message, and the check for programmatically built
   systems.
 - **Gate on the merged tree (idle):** CPU cases 0.971–1.010. Metal openvt was flagged at 1.122; the A/B gives 1.001.
+
+## 2026-09-30 — follow-ups merged: P6.1a2, P6.1a4, P6.0b4 (D-062)
+
+- **P6.1a2:** `Frame` on masked lattices uses a Chebyshev ring.
+- **P6.1a4:** `_warn_split` allocates its visited array lazily: 378 KB against 2.4 MB
+  eagerly.
+- **P6.0b4:** a permanent Metal test of a model with relationship reads.
+- **Review:** 2 rounds. Round 1 added hex and 3D frame tests.
+

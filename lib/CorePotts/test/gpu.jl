@@ -344,4 +344,65 @@ using Metal
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
         @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
     end
+    @testset "relationship reads (shared read claims) on Metal" begin
+        # P6.0b4: a chain of two relationships whose link partners are reads (D-058): 1–2 a
+        # bond (rest 12), 2–3 a tether (len 18); every centroid distance starts at 25
+        latR = Lattice((64, 30))
+        σR = zeros(Int32, 64, 30); σR[5:10, 12:17] .= 1; σR[30:35, 12:17] .= 2; σR[55:60, 12:17] .= 3
+        cellR = merge(init_moments(σR, latR, 3), empty_links(1, 3, :bond; rest = Float32),
+            empty_links(1, 3, :tether; len = Float32))
+        add_link!((; links = cellR.links__bond, link_rest = cellR.link_rest), 1, 2; rest = 12.0f0)
+        add_link!((; links = cellR.links__tether, link_len = cellR.link_len), 2, 3; len = 18.0f0)
+        function dHR(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            E(v, c) = p.λ * (v - p.V0)^2
+            S1(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
+            S2(a, b, k, d) = p.k * (d - st.cell.link_len[k, a])^2
+            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+                   link_delta(Float32, st.cell, (; links = st.cell.links__bond), ctx, prop, S1) +
+                   link_delta(Float32, st.cell, (; links = st.cell.links__tether), ctx, prop, S2)
+        end
+        commitR!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        readsR(st, p, prop, ctx) = (link_claims((; links = st.cell.links__bond), prop, Val(1))...,
+            link_claims((; links = st.cell.links__tether), prop, Val(1))...)
+        f = CPMFunction(dHR; commit! = commitR!, temperature = gg_temperature, reads = readsR)
+        pR(k) = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = Float32(k))
+        prob(g, k, seed) = CPMProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
+        # write claims are device buffers with reads, ghost `nothing` without (P6.0b3)
+        wc = init(prob(f, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims
+        @test all(w -> w isa MtlArray && eltype(w) == UInt32 && length(w) == 3, wc)
+        @test init(prob(GG, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims === (nothing, nothing)
+        dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
+        runs(k, dev, seeds) = map(seeds) do seed
+            integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
+            dev && @test integ.state.σ isa MtlArray && integ.state.cell.links__bond isa MtlArray
+            sol = solve!(integ)
+            @test sol.retcode == ReturnCode.Success
+            sol.u[end]
+        end
+        us = runs(2, true, 1:4)
+        for u in us
+            σu = Array(u.σ)
+            @test u.cell.volume == [count(==(c), σu) for c in 1:3]
+            ref = merge(init_moments(σu, latR, 3), (; volume = u.cell.volume))
+            @test all(c -> all(isapprox.(centroid(u.cell, latR, c), centroid(ref, latR, c); atol = 1e-3)), 1:3)
+            # the links are intact and each store keeps only its own pair
+            B, Tt = (; links = Array(u.cell.links__bond)), (; links = Array(u.cell.links__tether))
+            @test linked(B, 1, 2) && linked(B, 2, 1) && !linked(B, 2, 3)
+            @test linked(Tt, 2, 3) && !linked(Tt, 1, 2)
+            @test Array(u.cell.link_rest)[1, 1] == 12.0f0 && Array(u.cell.link_len)[1, 2] == 18.0f0
+        end
+        gpu = dist.(us)
+        cpu = dist.(runs(2, false, 101:104))            # independent seeds (D-029)
+        m(x, i) = mean(getindex.(x, i))
+        @info "reads on Metal: bond, tether distance" metal = (m(gpu, 1), m(gpu, 2)) cpu = (m(cpu, 1), m(cpu, 2))
+        @test abs(m(gpu, 1) - 12) < 2.5 && abs(m(gpu, 2) - 18) < 2.5             # relaxed toward rest
+        # a consistency smoke check only: claim races are covered by the CPU kernel-mutation
+        # tests in relationships.jl ("claim protocol in the real propose/commit kernels")
+        @test abs(m(gpu, 1) - m(cpu, 1)) < 2.5 && abs(m(gpu, 2) - m(cpu, 2)) < 2.5  # comparable to CPU
+        # negative control: without the spring the chain stays far from its rest lengths
+        free = dist.(runs(0, true, 1:4))
+        @info "reads on Metal, k = 0" free = (m(free, 1), m(free, 2))
+        @test m(free, 1) > 18 && m(free, 2) > 21
+    end
 end

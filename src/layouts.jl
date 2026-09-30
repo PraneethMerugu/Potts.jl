@@ -200,6 +200,14 @@ One cell of `kind` owning every site within `width` of the lattice edge (a wall;
 with a `[frozen]` kind). Periodic axes have no edge: on a `(Periodic(), Closed())` lattice
 the frame is two walls, at both ends of y (a channel), that are still one cell (one id, one
 kind). A lattice periodic along every axis has no edge and throws an `ArgumentError`.
+
+On a lattice with a domain the frame follows the domain boundary: it owns every in-domain
+site within Chebyshev distance `width`, in lattice indices, of a site outside the domain or
+of a closed lattice edge (through the wrap on periodic axes). Without a domain this is the
+rule above. Chebyshev distance is Moore(1) graph distance on a square lattice; on a
+hexagonal lattice it is measured in axial indices and is conservative (hex neighbours are a
+subset of Moore(1)), so the frame seals the domain under any Moore(1)/Hex(1)
+neighbourhood. A domain whose only boundary would be periodic wrap throws, as above.
 """
 struct Frame{K} <: AbstractLayout
     kind::K
@@ -212,11 +220,49 @@ end
 
 function paint!(σ, kinds, l::Frame, lat::LatticeSpec)
     dims, per = lat.dims, _periodic(lat)
+    lat.domain === nothing || return _paint_domain_frame!(σ, kinds, l, lat.domain, dims, per)
     all(per) && throw(ArgumentError("Frame: every axis of the lattice is periodic, so it has no edge"))
     push!(kinds, l.kind)
     id, w = Int32(length(kinds)), l.width
     for i in CartesianIndices(σ)
         any(ntuple(d -> !per[d] && (i[d] <= w || i[d] > dims[d] - w), length(dims))) && (σ[i] = id)
+    end
+    return σ
+end
+
+# The frame on a domain: dilate the out-of-domain set (plus the virtual sites beyond each
+# closed edge) by a Chebyshev ball of radius `w`, one axis at a time (a box is the product
+# of its axis segments), and paint the in-domain sites it reaches. O(sites · w).
+function _paint_domain_frame!(σ, kinds, l::Frame, mask, dims, per)
+    w = l.width
+    near = .!mask
+    src = similar(near)
+    for d in eachindex(dims)
+        copyto!(src, near)
+        n = dims[d]
+        for i in CartesianIndices(near)
+            near[i] && continue
+            x = i[d]
+            if !per[d] && (x <= w || x > n - w)          # within `w` of a closed edge
+                near[i] = true
+                continue
+            end
+            for s in (-w):w
+                y = per[d] ? mod1(x + s, n) : x + s
+                1 <= y <= n || continue
+                if src[CartesianIndex(Base.setindex(Tuple(i), y, d))]
+                    near[i] = true
+                    break
+                end
+            end
+        end
+    end
+    any(i -> mask[i] && near[i], eachindex(mask)) ||
+        throw(ArgumentError("Frame: the domain has no boundary (it fills a lattice that is periodic along every axis)"))
+    push!(kinds, l.kind)
+    id = Int32(length(kinds))
+    for i in eachindex(σ)
+        mask[i] && near[i] && (σ[i] = id)
     end
     return σ
 end
@@ -263,7 +309,8 @@ end
 # One pass records each cut cell's first site, site count and bounding box in dense per-cell
 # buffers; a cell that is still a full box is connected (every neighbourhood holds the unit
 # axis steps) and skipped; the rest are flood-filled, stamping `visited` with the cell id so
-# it never needs a reset. O(sites).
+# it never needs a reset. O(sites). `visited` (lattice-sized) is allocated only when the
+# first cell needs a flood fill, so an overlay whose cut cells are all boxes skips it.
 function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
     K = length(kinds)
     iscut = falses(K)
@@ -290,12 +337,13 @@ function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
     clat = core_lattice(lat)
     offs = CorePotts.relation(lat.neighborhood, clat).offsets
     units = all(d -> all(s -> ntuple(k -> Int32(k == d ? s : 0), N) in offs, (-1, 1)), 1:N)
-    visited = zeros(Int32, size(σ))
+    visited = Array{Int32, N}(undef, ntuple(_ -> 0, N))    # lazily lattice-sized
     stack = Int[]
     li = LinearIndices(σ)
     for c in sort!(collect(cut))
         ncount[c] == 0 && continue
         units && ncount[c] == prod(hi[c] .- lo[c] .+ 1) && continue      # still a box
+        isempty(visited) && (visited = zeros(Int32, size(σ)))
         visited[first_site[c]] = c
         push!(stack, first_site[c])
         reached = 1

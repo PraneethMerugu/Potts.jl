@@ -832,3 +832,17 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    this empirically on square, hex and Metal.
 5. **Also fixed:** a model with two site terms broke ΔH, because the site-term loop
    reassigned `after`.
+
+## D-062 Frame on a domain lattice (2026-09-30, P6.1a2; addendum to D-057)
+
+On a lattice with a domain mask, `Frame(kind; width)` owns every in-domain site within
+Chebyshev distance `width`, in index space and through the wrap on periodic axes, of an
+out-of-domain site or a closed lattice edge. A domain frame that would be empty throws
+"the domain has no boundary".
+
+- **Why Chebyshev.** It reduces exactly to the unmasked rule, and it equals Moore(1) graph
+  distance on square lattices.
+- **Hex.** Chebyshev is conservative there: Hex(1) ⊂ Moore(1), so the ring always seals.
+  - The reviewer checked it against an independent BFS oracle: 400 trials, 0 mismatches.
+  - It is also tested on a concave hex domain and on 40 random 3D masks.
+
