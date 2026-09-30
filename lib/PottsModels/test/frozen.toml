@@ -9,8 +9,8 @@ decision = "D-071"
 
 [[file]]
 path = "acceptance/p6_0a_division_kinds.jl"
-sha256 = "27cade88bf8ef944ac2a6ebfa0bb6d75960f8e97928d2845f984bb46bcbc0e25"
-decision = "D-054"
+sha256 = "438fff835f2e5b5c54a24db1dbcdbf3bae40dc9c7fe431c925e8d3773d065544"
+decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_1a_layouts.jl"
