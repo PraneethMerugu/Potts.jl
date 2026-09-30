@@ -57,6 +57,24 @@ A split grade (for example "A / C") applies to two variants covered by one spec.
 
 ## 2. Unified feature list
 
+> **Pending revision (2026-09-30).** The architecture review
+> [`../feature-roadmap-review.md`](../feature-roadmap-review.md) (commits 91873f0, f53dc29;
+> a *proposal*, not yet approved) regroups G1–G21 into R0–R16 and corrects this list:
+> - G1: CorePotts has no create event (`lifecycle.jl` has divide, remove, transition only).
+> - G4 soft connectivity is an additive drive over a connectivity *value*
+>   (`@drive copy => E₀*(components(old) > 1)`), not a new constraint kind.
+> - G8: kind-restricted sources (`@constraint kind[new] == k`) and time-in-drive (a model
+>   variable) already work.
+> - G16 = frozen kinds + layouts; G18 (gathers) and G19 (`integral` with a mask) are covered;
+>   G20 is needed only for multi-cell 14c.
+> - New gaps not in G1–G21: division plane from an expression/draw (FBCA), field writes at
+>   copy time (08b), kind classes, ownership hooks on every ownership change, component
+>   scope across transitions, explicit phase order, declared footprints for non-local
+>   reads, a solver per field.
+>
+> Once the maintainer decides on the review, §2, §3 and §6 will be rewritten against the
+> R-list. Until then, G-ids here remain the spec-facing ids.
+
 ### 2.1 Crosswalk: spec-local G14+ ids → unified ids
 
 The base list G1–G13 is shared by every spec. Each spec proposed its own G14+, and the

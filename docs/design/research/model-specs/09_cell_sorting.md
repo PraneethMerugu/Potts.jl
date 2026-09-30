@@ -487,6 +487,17 @@ Tolerance policy (D-029 and performance-over-exactness): **ensemble and statisti
 
 ### 8.6 Audit of our port against 09c (read-only)
 
+> **Status update (commit 2a6697c, 2026-09-30, reported by the architecture session).**
+> Fixed: D3 (square 51×50 aggregate of staggered mixed-width bricks, height 5), D4 (plateau
+> check over the last 100 paper MCS), D5 (types drawn with p = ½; realised 33 dark / 31
+> light), D6 (measurements on a copy annealed 32 of our MCS at T = 0), D7 (fractions
+> include cell–medium bonds), D11 (λ survival at 800 paper MCS; a few light losses allowed
+> at λ = 0.5). Also added: engulfment check at 10³ paper MCS, log-law fit over 4–512 paper
+> MCS, checkerboard threshold > 0.45. Documented, not fixed: D1, D2, D14 (docstring and
+> provenance `differences`). D15: `metric_definition` was removed deliberately in the D-049
+> F-2 rewrite, so that reference below is stale. The audit text below describes the port
+> *before* these fixes.
+
 Files:
 - `lib/PottsModels/src/graner_glazier.jl` (GG)
 - `lib/PottsModels/data/graner/generate.jl` (GEN)
