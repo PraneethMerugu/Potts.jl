@@ -551,5 +551,34 @@ end
             SequentialCPM(; proposal = VonNeumann(1))).u[end]
         @test split_cells(u.σ, (true, false)) == 0
     end
+    # with clocks, every cell that becomes split does so in an MCS where it divided: a cell
+    # born that MCS took most of its sites from it (seed 3 splits one at MCS 200)
+    let o = akeeb_state(; lattice = (99, 60), seed = 3), X = 99
+        sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000,
+            seed = 3), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
+        pieces(σ, c) = (idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]];
+            while !isempty(st)
+                q = pop!(st)
+                for dx in -1:1, dy in -1:1
+                    y = q[2] + dy; 1 <= y <= size(σ, 2) || continue
+                    p = CartesianIndex(mod1(q[1] + dx, X), y)
+                    (σ[p] == c && !(p in seen)) && (push!(seen, p); push!(st, p))
+                end
+            end; length(seen) < length(idx))
+        split_ids(σ) = [c for c in unique(σ) if c != 0 && pieces(σ, c)]
+        newly, explained = 0, 0
+        for t in 2:length(sol.u)
+            a, b = sol.u[t - 1], sol.u[t]
+            was = Set(split_ids(a.σ))
+            for c in split_ids(b.σ)
+                c in was && continue
+                newly += 1
+                born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
+                        (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
+                explained += any(d -> 2 * count(i -> a.σ[i] == c, findall(==(d), b.σ)) > b.cell.volume[d], born)
+            end
+        end
+        @test newly >= 1 && explained == newly
+    end
     @test all(m -> m.divisions > 0, invade(30.0; nmcs = 300)) && all(m -> m.divisions == 0, invade(30.0; pp = 0.0, nmcs = 300))
 end

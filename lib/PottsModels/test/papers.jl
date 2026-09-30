@@ -155,7 +155,9 @@ end
     s(jlf) = [sim(; jlf, seed) for seed in 1:4]
     strong, mid, weak = s(-5.0), s(2.0), s(5.0)
     @test all(m -> m.singles == 0 && m.detached == 0, strong)
-    @test mean(m -> m.singles, weak) > mean(m -> m.singles, mid) >= 2
+    # the paper's ordering: strong 0 < mid, and mid > 0 < weak. The old `>= 2` floor sat about
+    # 0.4 SD below the mid mean at μ = 24; with four seeds P(all zero) ≈ 2e-4 (D-071)
+    @test mean(m -> m.singles, weak) > mean(m -> m.singles, mid) > 0
     # the published sample (500×300, J_LF = 2, μ = 24, 700 MCS): 578 divisions in the paper.
     # Band (D-068): mean ± 3 SD of our ensemble under the default seeding, seeds 1:40:
     # 585.0 ± 16.4 (range 555–617). It must hold the paper's 578 (a guard on the constants)
