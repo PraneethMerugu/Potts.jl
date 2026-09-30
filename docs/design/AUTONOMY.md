@@ -191,6 +191,14 @@ must justify it.
 - **Exclusive jobs.** Every timed or GPU job runs under `tools/exclusive.sh`, a
   machine-wide lock: `POTTS_GPU=metal` suites and the performance gate. CPU test suites
   may run in parallel.
+- **Gate under load.** The lock does not stop CPU suites or docs builds in other
+  worktrees, and these inflate timings. On 2026-09-30, P6.0a saw wortel at 3.07× on
+  Metal; the base commit under the same load also failed. So a gate failure counts only
+  if it reproduces:
+  - rerun it under `tools/exclusive.sh` while `pgrep -fl julia` shows no other busy
+    Julia process, then compare with the same run of the base commit;
+  - the coordinator runs the final pre-merge gate itself, on the merged tree, with no
+    agents running.
 - **Suites** (all must pass on the merged tree):
   - `GROUP=CorePotts`, `Potts` with `POTTS_GPU=metal`, `PottsModels` and `MakiePotts`;
   - `benchmark/gate.jl metal`.
