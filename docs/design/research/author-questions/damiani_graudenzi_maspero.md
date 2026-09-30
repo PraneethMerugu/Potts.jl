@@ -1,8 +1,9 @@
 # Questions for Chiara Damiani, Alex Graudenzi and Davide Maspero: FBCA (J Cell Automata 15:75) and its diffusion extension (Fundam Inform 171:279)
 
 Batch 1 — **draft, not sent.** The maintainer sends this personally. Internal traceability
-is in the comment block at the end of the file. **Q1 and Q2 are on HOLD** until the pre-send
-checks in README.md are done.
+is in the comment block at the end of the file. **Q2 is on HOLD**: the ACRI 2018 paper is closed
+access and has no repository copy (see the pre-send checklist in README.md). Q1 was narrowed
+after reading the Di Filippo 2016 supplementary model file.
 
 ---
 
@@ -19,14 +20,19 @@ with you.
 
 ## Blocking questions
 
-### Q1 [B] [HOLD] Code and the metabolic model
+### Q1 [B] Code and the metabolic model
 
 - **Context.** Both papers use MATLAB with the COBRA Toolbox (J Cell Automata 15, p.82; Fundam
   Inform 171, p.288) on HMR CORE (Di Filippo et al. 2016), with 272 reactions and 240
-  metabolites. Neither paper links code or a model file.
-- **Question.** Did you use the published HMR CORE unchanged? If not, which bounds, biomass
-  reaction or reaction IDs differ? Could you also share the MATLAB sources?
-- **Our assumption.** The published HMR CORE, unchanged.
+  metabolites. Neither paper links code or a model file. The core model in the Di Filippo et al.
+  supplementary (the first spreadsheet, `mmc1.xls`, with the `biomass_synthesis` objective)
+  has 274 reactions (28 of them exchange reactions) and 252 metabolites (15 of them
+  extracellular), so it does not match those counts as we read it.
+- **Question.** Which reactions and metabolites did you add, remove or merge relative to that
+  file, and did any bounds or the biomass reaction change? Could you share the model file you
+  used, and the MATLAB sources?
+- **Our assumption.** The published `mmc1.xls` model, unchanged, with the count difference
+  flagged.
 - **What changes.** The per-cell linear programme itself, and so every metabolic phenotype.
 
 ### Q2 [B] [HOLD] Parameters taken from the ACRI 2018 paper
@@ -86,8 +92,8 @@ With thanks,
 [Maintainer name]
 
 <!-- trace:
-Q1: spec 08 §1, §2.2, §7 item 13; specs README §4 X5; README §5 Damiani item 1. HOLD: obtain the HMR CORE file from the Di Filippo 2016 supplementary (Comput Biol Chem 62:60)
-Q2: spec 08 §1, §7 item 12; README §5 Damiani item 1. HOLD: obtain the ACRI 2018 paper (LNCS 11115, doi 10.1007/978-3-319-99813-8_2)
+Q1: spec 08 §1 (HMR core counts), §2.2, §7 item 13; specs README §4 X5; README §5 Damiani item 1. HOLD lifted 2026-09-30: Di Filippo 2016 mmc1.xls on disk, 274 rxn × 252 met vs stated 272 × 240; question narrowed
+Q2: spec 08 §1, §7 item 12; README §5 Damiani item 1. HOLD: ACRI 2018 paper (LNCS 11115, doi 10.1007/978-3-319-99813-8_2) not obtained: closed access, no repository copy (checked 2026-09-30)
 Q3: spec 08 §2.2, §7 item 10; README §5 Damiani item 2
 Q4: spec 08 §2.2, §7 item 8; specs README §4 X3; README §5 Damiani item 2
 Q5: spec 08 §2.2, §7 item 9; README §5 Damiani item 2

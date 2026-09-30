@@ -1,8 +1,10 @@
 # Questions for Roeland Merks: Merks et al. 2006 (Dev Biol) and 2008 (PLoS Comput Biol)
 
 Batch 1 — **draft, not sent.** The maintainer sends this personally. Internal traceability
-is in the comment block at the end of the file. **Q1 and Q2 are on HOLD** until the pre-send
-checks in README.md are done.
+is in the comment block at the end of the file. **Q1 is on HOLD** only for the 2006
+"Supplementary methods" file, which could not be located by script (see the pre-send checklist in
+README.md). If the maintainer finds it on ScienceDirect and it settles L, E₀ or the seeding,
+narrow Q1 and revise the intro sentence again. Q2 is no longer on HOLD.
 
 ---
 
@@ -15,9 +17,11 @@ a page, figure or code line, and every choice we make will be listed in a tutori
 publish and share with you.
 
 Thanks to Dataset S1 and the Tissue Simulation Toolkit 0.1.3 released with the 2008 paper, the
-2008 model is almost fully determined. The 2006 model is not, because we have not yet been able
-to consult its supplementary methods. Questions 1–2 block an exact reproduction; 3–5 are quick. We would like
-to reach a perfect reproduction together with you, and we would welcome any corrections.
+2008 model is almost fully determined. The 2006 model is less so: the paper, its supplementary
+movie and your Tissue Simulation Toolkit chapter (Methods Mol Biol 1214, 2015) leave the target
+length, the connectivity penalty and the initial set-up open, and we could not find the 2006
+supplementary methods online. Questions 1–2 block an exact reproduction; 3–5 are quick. We would
+like to reach a perfect reproduction together with you, and we would welcome any corrections.
 
 ## Blocking questions
 
@@ -25,19 +29,21 @@ to reach a perfect reproduction together with you, and we would welcome any corr
 
 - **Context.** The 2006 text gives a target length of "about 100 µm" (p.50), i.e. 50 px at
   2 µm per pixel, but every TST file labelled "Cf. Fig. 4 of Merks et al. 2006" uses L = 60 px
-  (`longcells.par:8`). The connectivity penalty is "E0 > 2000" (p.49); the files use 2000
+  (`longcells.par:8`), and the 2015 chapter suggests starting from `target_length = 60`
+  ("L = 120 µm"). The connectivity penalty is "E0 > 2000" (p.49); the files use 2000
   (`default.par`) or 5000 (`longcells.par`). The Fig 4 caption (p.48) describes 282 cells in a
   333 × 333 area within a 500 × 500 lattice, while the 2006-labelled files are a 100-cell,
-  200 × 200 demonstration.
+  200 × 200 demonstration. The first frame of the supplementary movie already shows compact
+  multi-pixel cells, so we cannot tell how they were made.
 - **Question.** Could you share the 2006 supplementary methods, or tell us (a) L, (b) E₀, and
-  (c) how the 282 cells were seeded: single pixels grown by Eden growth, or blobs at the target
-  area, and was there any relaxation before t = 0?
+  (c) how the 282 cells were seeded (single pixels grown by Eden growth, as `GrowInCells` does,
+  or blobs placed at the target area), and whether any relaxation ran before the first frame?
 - **Our assumption.** L = 50 px (the paper text), with L = 60 as a variant; E₀ = 5000 as a soft
   penalty (from the file labelled for Fig 4); the paper's 282-cell geometry.
 - **What changes.** The 2006 defaults. Cell length and the connectivity penalty drive network
   formation and the lacuna statistics we compare against.
 
-### Q2 [B] [HOLD] 2008: are the 100 relaxation MCS counted?
+### Q2 [B] 2008: are the 100 relaxation MCS counted?
 
 - **Context.** Every Dataset S1 file runs 100 MCS with no secretion or diffusion before the main
   run (`relaxation = 100`; `vessel.cpp:86`). The paper does not mention it.
@@ -75,8 +81,8 @@ With thanks,
 [Maintainer name]
 
 <!-- trace:
-Q1: spec 01 §2.9, §7.6, §7.8, §7.9 D-12, D-13, D-16, §8 A-1, A-3, A-15; specs README §4 M2, M3; README §5 Merks item 1. HOLD: 2006 ScienceDirect supplementary data, PMC manuscript, TST tutorial (Methods Mol Biol 1214, 2015)
-Q2: spec 01 §7.1 (relaxation :40), §7.9 D-5, §8 A-19; specs README §4 M6; README §5 Merks item 2. HOLD: same sources
+Q1: spec 01 §1 (01a-mov, 01a-PMC, 01c), §2.9, §7.6, §7.8, §7.9 D-12, D-13, D-16, §8 A-1, A-3, A-15; specs README §4 M2, M3; README §5 Merks item 1. Checked 2026-09-30: PMC manuscript (same text), supplementary movie (first frame), TST chapter 01c pp.11, 12, 14 (L = 60 ↔ 120 µm; GrowInCells; relaxation option); none settles L, E₀ or the 2006 seeding. HOLD remains only for the 2006 "Supplementary methods" file (not served by the publisher CDN; ScienceDirect page 403 to scripts)
+Q2: spec 01 §7.1 (relaxation :40), §7.9 D-5, §8 A-19; specs README §4 M6; README §5 Merks item 2. HOLD lifted 2026-09-30: 01c pp.12, 15–16 describe relaxation but not the 01b time axis; the 2006 supplementary is not relevant to 2008
 Q3: spec 01 §7.9 D-17, D-18, §8 A-14, A-18; README §5 Merks item 3
 Q4: spec 01 §3.3, §7.1, §7.9 D-2, D-3, §8 A-20; README §5 Merks item 4
 Q5: spec 01 §2.9, §8 A-9; specs README §4 M10; README §5 Merks item 5 (Fig 12 dropped in review round 1; former Q5(b) on the Fig 10 1024-cell lattice dropped in review round 2, answered by 01b p.9, see spec 01 §3.3 row 10 and §8 A-10)

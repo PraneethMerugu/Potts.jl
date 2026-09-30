@@ -1,8 +1,8 @@
 # Questions for James Osborne and Alexander Fletcher: Osborne et al. 2017 (PLoS Comput Biol 13:e1005387), cellular Potts sorting benchmark
 
 Batch 1 — **draft, not sent.** The maintainer sends this personally. Internal traceability
-is in the comment block at the end of the file. **Q4 is on HOLD** until the pre-send check in
-README.md is done.
+is in the comment block at the end of the file. No question is on HOLD: the former Q4 (contact
+neighbourhood in the 2017 Chaste core) was answered by the tagged Chaste sources and dropped.
 
 ---
 
@@ -15,7 +15,7 @@ figure or code line, and every choice we make will be listed in a tutorial that 
 and share with you. The `CellBasedComparison2017` code was invaluable; thank you for releasing
 it.
 
-One question affects how we describe the result; the others are small. Short answers are
+One question affects how we describe the result; the other three are small. Short answers are
 plenty.
 
 ## Blocking question
@@ -43,11 +43,7 @@ then labels them and continues. Is t = 0 in Fig 3 the labelling instant, and cou
 post-processing that divides by the t = 0 boundary length (it is not in the repository)? *We
 set t = 0 at labelling.*
 
-**Q4. [HOLD] Contacts in the 2017 Chaste core.** We read the update rules in current Chaste:
-von Neumann contacts and perimeter, Moore proposals. Did the 2017 release used for the paper do
-the same? *We follow the code, flagged.*
-
-**Q5. Fluctuation smoother.** The Fig 3 fluctuation metric uses "a 10 hour smoothing range"
+**Q4. Fluctuation smoother.** The Fig 3 fluctuation metric uses "a 10 hour smoothing range"
 (p.12). Which smoother was it — moving average, LOESS or other?
 
 Once the reproduction is published, we will send you the tutorial. Each of your answers will be
@@ -60,7 +56,7 @@ With thanks,
 Q1: spec 09 §2.2 (labels vs paper types), §7 A-OS1; specs README §4 S3; README §5 Osborne item 1
 Q2: spec 09 §7 A-OS2; README §5 Osborne item 2
 Q3: spec 09 §2.2 (protocol, metric), §7 A-OS3; specs README §4 S6; README §5 Osborne item 2
-Q4: spec 09 §1 (Chaste develop 44724eb caveat), §2.2, §7 A-OS4; specs README §4 S4; README §5 Osborne item 3. HOLD: check Chaste release_2017.1 AdhesionPottsUpdateRule.cpp and PottsMesh.cpp
-Q5: spec 09 §2.2 (fluctuation metric), §7 A-OS6; README §5 Osborne item 3
+Former Q4 (2017 contact neighbourhood): DROPPED 2026-09-30. Chaste tag paper/CellBasedComparison (8593aab, the revision CBC Summary.wiki names for the paper) and release_2017.1 (84a42f8) have the same Potts rules as develop 44724eb (spec 09 §1, §7 A-OS4; specs README §4 S4); see README "Resolved, not asked"
+Q4 (was Q5): spec 09 §2.2 (fluctuation metric), §7 A-OS6; README §5 Osborne item 3
 Tutorial (planned): Osborne CP benchmark, step 1, alongside 09_cell_sorting.jl (Graner–Glazier only)
 -->

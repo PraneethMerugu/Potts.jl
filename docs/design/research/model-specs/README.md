@@ -46,13 +46,13 @@ A split grade (for example "A / C") applies to two variants covered by one spec.
 | 5 | [05_bauer2009_ecm.md](05_bauer2009_ecm.md) | `05_Bauer2009_PLoSCB_ECM-topography-angiogenesis.pdf` | none; Figs S1/S2 not on disk (05 §2.6) | **C** | Pixel size, lattice and neighbourhood, recruitment trigger, phenotype assignment and PDE scheme are UNSPECIFIED (05 §3.3) | **Medium.** Speed/thickness vs ρ, alignment and cord counts; ≥ 10 replicates (05 §5 V1–V18). Internal speed inconsistency (05 §7.1 item 2) |
 | 6 | [06_jiang2005_tumor.md](06_jiang2005_tumor.md) | `06_Jiang2005_BiophysJ_multiscale-avascular-tumor.pdf`; erratum external (06 §3.4) | none | **C** | T, Eq 4 α and θ, lattice size, neighbourhood and γ are missing, and the Rb → E2F polarity blocks implementation (06 §3.3, §7.1 item 2) | **Medium.** Single-run simulation curves against experimental points: growth, rim, phase fractions (06 §5 T1–T12) |
 | 7 | [07_bauer2007_sprouting.md](07_bauer2007_sprouting.md) | `07_Bauer2007_BiophysJ_sprouting-angiogenesis.pdf` | none | **C** | Pixel size, tissue-cell layout, degradation rate and baseline proliferating cell are UNSPECIFIED (07 §3.3) | **Medium–strong.** Table 2 speeds and diameters with n = 12 (07 §5 W2–W3) |
-| 8 | [08_fbca.md](08_fbca.md) | `08a_Graudenzi2020_JCellAutomata_FBCA.pdf`, `08b_Maspero2020_FundInform_FBCA-nutrient-diffusion.pdf` | none; the ACRI 2018 base paper and the HMR CORE model file are not on disk (08 §1) | **C** | 08b's parameters are "as in [18]" (unavailable). The averaging coefficient D, the starvation rule and the edge efflux are UNSPECIFIED (08 §3, §7) | **Medium.** 20-run distributions for 08a SC1/SC2; digitised 08b curves (08 §5) |
-| 9 | [09_cell_sorting.md](09_cell_sorting.md) | `09a_GranerGlazier1992_PRL_cell-sorting.pdf`, `09b_Osborne2017_PLoSCB_comparing-individual-based-models.pdf` | `codebases/09b_Osborne2017_Chaste_CellBasedComparison2017/` (09 §1) | **A** (Osborne CP) / **B** (Graner–Glazier) | OS: paper Table 1–2 plus Chaste code (the core rules were read at 2026 develop, not the 2017 release) (09 §1). GG: energies and T are complete; lattice size, cell count and the relaxation recipe are in PRE 47, 2128 (1993), which is not on disk (09 §7 A-GG5) | **Strong.** OS Fig 3 curves with n = 10 across k_pert; GG Fig 2 log-law fractions (09 §5) |
+| 8 | [08_fbca.md](08_fbca.md) | `08a_Graudenzi2020_JCellAutomata_FBCA.pdf`, `08b_Maspero2020_FundInform_FBCA-nutrient-diffusion.pdf` | `supplementary/08_DiFilippo2016_CompBiolChem_mmc1–4.xls` (HMR core and three tissue models, 08 §1); the ACRI 2018 base paper is not on disk (closed access) | **C** | 08b's parameters are "as in [18]" (unavailable). The averaging coefficient D, the starvation rule and the edge efflux are UNSPECIFIED (08 §3, §7) | **Medium.** 20-run distributions for 08a SC1/SC2; digitised 08b curves (08 §5) |
+| 9 | [09_cell_sorting.md](09_cell_sorting.md) | `09a_GranerGlazier1992_PRL_cell-sorting.pdf`, `09b_Osborne2017_PLoSCB_comparing-individual-based-models.pdf` | `codebases/09b_Osborne2017_Chaste_CellBasedComparison2017/` (09 §1) | **A** (Osborne CP) / **B** (Graner–Glazier) | OS: paper Table 1–2 plus Chaste code (the core rules were read at 2026 develop and checked unchanged against the paper tag and `release_2017.1`) (09 §1). GG: energies and T are complete; lattice size, cell count and the relaxation recipe are in PRE 47, 2128 (1993), which is not on disk (09 §7 A-GG5) | **Strong.** OS Fig 3 curves with n = 10 across k_pert; GG Fig 2 log-law fractions (09 §5) |
 | 10 | [10_akeeb_invasion.md](10_akeeb_invasion.md) | `10_Akeeb2026_PLoSCB_tumor-invasion-fingering.pdf` | `codebases/10_Akeeb2026_Leader_Follower_Invasion_Model/` @ `0b9673f` with 13,310-run `Data/invasion_metrics.csv` (10 §1, §5.1) | **A** | CC3D XML and steppables plus the authors' full sweep output (10 §5.1) | **Strongest.** Per-point ensemble means ± SD from the authors' own data (10 §5.1–5.2) |
 | 11 | [11_multiscale.md](11_multiscale.md) (item 11 = 11a) | `11a_JafariNivlouei2021_PLoSCB_multiscale-tumor-angiogenesis.pdf` (`11b_Andasari2012_…` for the ODE test only) | `supplementary/11a_JafariNivlouei2021_S1Data.xlsx` (plotted data only); no code (11 §1, §9) | **C** | χ values, hypoxia and necrosis rules, the nutrient unit conversion, the Wnt input and the PDE solver are UNSPECIFIED (11 §7 items 1–8) | **Strong data, weak provenance.** S1 Data backs 10 figures, but most series are single runs and several are internally inconsistent (11 §9.3) |
 | 12 | [12_zajac_convergent_extension.md](12_zajac_convergent_extension.md) | `12a_Zajac2000_PRL_convergent-extension_arXiv.pdf` (analytic), `12b_Zajac2003_JTheorBiol_anisotropic-differential-adhesion.pdf` (CPM) | none; the 2002 thesis is unavailable (12 §1) | **C** | Almost every numeric value of the CPM is absent; only acceptance rates and anisotropy % are given (12 §3, §7 A-Z2) | **Weak.** One trajectory "chosen unscientifically" (12 §7 A-Z10). The analytic Eq. 7 is an exact unit test (12 §5 V-Z8) |
 | 13 | [13_starruss_myxobacteria.md](13_starruss_myxobacteria.md) | `13_Starruss2007_JStatPhys_myxobacteria.pdf` | none (13 §1) | **B** | Table I gives every energy parameter. The lattice size, MCS definition, θ normalisation and run lengths are UNSPECIFIED (13 §3, §7 items 1, 5) | **Medium–strong.** Ψ̄(κ) at 3 densities, velocity and efficiency vs κ with n = 15 (13 §5 V4–V12) |
-| 14 | [14_nucleus_migration.md](14_nucleus_migration.md) | `14a_Fortuna2020_BiophysJ_nucleus-migration.pdf` (base), `14b_Thomas2022_…_arXiv.pdf`, `14c_DalCastel2025_…_arXiv.pdf` | `codebases/14a_Fortuna2020_Crawling/` (SF1_Code), `codebases/14c_DalCastel2025_Single_Cell_Chemotaxis_2.3/`, `codebases/14c_DalCastel2025_CC3D-Chemotaxis-SuppMat/` (14 §1) | **A** | Both codes are released with Table 1/2 and SM tables. Provenance caveat: the 14a zip was repackaged in 2021 (14 §9 item 17) | **Strong.** Table 2 Fürth fits, the regime map and the 14c-SM efficiency tables (14 §7) |
+| 14 | [14_nucleus_migration.md](14_nucleus_migration.md) | `14a_Fortuna2020_BiophysJ_nucleus-migration.pdf` (base), `14b_Thomas2022_…_arXiv.pdf`, `14c_DalCastel2025_…_arXiv.pdf` | `codebases/14a_Fortuna2020_Crawling/` (SF1_Code), `codebases/14c_DalCastel2025_Single_Cell_Chemotaxis_2.3/`, `codebases/14c_DalCastel2025_CC3D-Chemotaxis-SuppMat/` (14 §1) | **A** | Both codes are released with Table 1/2 and SM tables. Provenance caveat: the 14a zip was repackaged in 2021 (14 §9 item 17). Document S1, `Instructions_To_Run.pdf`, the nanoHUB port and the CC3D solver source are now on disk (14 §1) | **Strong.** Table 2 Fürth fits, the regime map and the 14c-SM efficiency tables (14 §7) |
 
 ---
 
@@ -314,7 +314,7 @@ evidence. Such items need explicit re-approval.
 | # | Conflict | Options | Recommendation | Why |
 |---|---|---|---|---|
 | M1 | **Current defaults mix variants** (AUDIT P-14, pending). `MerksVasculogenesis` uses A = 50, λ = 25 (2008) with L = 30 px, λ_L = 5 and 282 cells in 333² of 500² (2006) | (a) two parameter sets, `variant = :merks2006 \| :merks2008`; (b) keep the mix | **(a)**. 2006: λ = 50, A = 100, λ_L = 5, 8-neighbourhood, α = ε = 1.8e-4 s⁻¹ (01 §7.8). 2008: Dataset S1 values (01 §7.1) | The spec says the two sets must not be mixed (01 §8 A-17). L = 30 px (60 µm) matches neither the paper (≈ 50 px) nor the code (60 px) (01 §7.9 D-12) |
-| M2 | 2006 target length L: paper "about 100 µm" = 50 px vs 60 px in every "Fig. 4 of Merks 2006" file (01 §7.9 D-12) | 50 / 60 | **50 px** default, `L = 60` variant | The files are a 200² "small field" demo, not the published run (01 §7.9 D-16). The paper text is the only statement about Fig 4. Ask Merks (§5) |
+| M2 | 2006 target length L: paper "about 100 µm" = 50 px vs 60 px in every "Fig. 4 of Merks 2006" file (01 §7.9 D-12); the 2015 TST chapter suggests `target_length = 60` "(L = 120 µm, if dx=2.0e-6)" (01 §8 A-1) | 50 / 60 | **50 px** default, `L = 60` variant | The files are a 200² "small field" demo, not the published run (01 §7.9 D-16). The paper text is the only statement about Fig 4. Ask Merks (§5) |
 | M3 | 2006 connectivity: soft threshold shift E₀ on 8-ring-breaking copies (code), vs today's hard one-arc veto (D-049) (01 §7.3) | soft E₀ = 5000 / soft 2000 / hard veto | **Soft E₀ = 5000** once G4 soft [R4] exists; hard veto as a variant (**reopens D-049**) | 5000 is in `longcells.par`, the file labelled for Fig 4, and satisfies "E₀ > 2000" strictly. 2000 is only the generic default (01 §7.9 D-13). The code applies E₀ only to the losing cell (01 §7.3) |
 | M4 | Frozen 1-px border with J(c,B) = 100, J(M,B) = 0 vs free closed walls (D-049) (01 §7.5) | frame / free walls | **Frame** via G16 [R2 `Frame`] (**reopens D-049**) | The paper states it (01 §2.1) and the code implements it |
 | M5 | Field: 15 FTCS 5-point substeps of Δt = 2 s, PDE **before** the CPM sweep, absorbing c = 0 ring, c₀ = 0; vs the fewest stable substeps (D-049) (01 §7.4) | paper/code schedule / fewest stable | **Paper/code schedule** (**reopens D-049**) | It costs almost nothing (D·Δt/Δx² = 0.05 is already stable, 01 §3.1). The absorbing BC matters on 200² (01 §7.9 D-10) |
@@ -371,7 +371,7 @@ evidence. Such items need explicit re-approval.
 | X2 | Impermeable cells: sequential random-order FBA with write-back (08 §2.2) vs parallel | sequential / parallel | **Sequential**, as written | It is a conservation rule, and LP cost dominates regardless |
 | X3 | Eq 6 averaging is non-conservative for D ≠ 1 (08 §2.2) | as written / conservative | **As written** (G18 [R5]), with D as a calibration parameter | The paper's operator. Ask the authors for the D values |
 | X4 | Biomass on division (08 §6 G9) | halve / by area | **Halve** | Consistent with ρ = 1/F at initialisation |
-| X5 | Metabolic model: HMR CORE (240 × 272) is not on disk (08 §7 item 13) | – | **Blocking**: obtain it (Di Filippo 2016 supplementary) | – |
+| X5 | Metabolic model: HMR CORE (240 × 272) (08 §7 item 13) | published file / authors' variant | **Published HMR core (Di Filippo 2016 mmc1.xls, on disk since 2026-09-30)**, flagged: it has 274 reactions and 252 metabolites, not the 272 × 240 the FBCA papers state (08 §1). Ask which changes | The only released core model |
 
 ### 4.6 Cell sorting (09)
 
@@ -380,7 +380,7 @@ evidence. Such items need explicit re-approval.
 | S1 | GG initial state follows PRE 47, 2128 (1993) §II D3 (D-049 F-2), a paper **not on disk** (09 §7 A-GG5) | – | Keep it, but mark it "external source, not verified on disk" in the tutorial until the PDF is added | Provenance honesty |
 | S2 | GG "two T = 0 annealing steps": on a copy vs on the trajectory (09 §7 A-GG4) | copy / trajectory | **On a copy** (a measurement), with a trajectory variant | "before calculating the statistical properties" reads as a measurement |
 | S3 | OS: which type is engulfed (09 §7 A-OS1) | – | **A engulfs B** (B = labelled) | Parameters, S1 Movie and Fig 2 agree; the p.11 wording is the outlier |
-| S4 | OS: VN contact / Moore proposal from 2026 Chaste develop, not the 2017 release (09 §7 A-OS4) | – | **Follow the code**, flagged | The only concrete source |
+| S4 | OS: VN contact / Moore proposal (09 §7 A-OS4) | – | **Follow the code** (RESOLVED 2026-09-30) | The paper tag `paper/CellBasedComparison` (2016-08-29), `release_2017.1` and 2026 develop have the same Potts rules (09 §1) |
 | S5 | OS: Binomial(400, 0.5) labels vs exactly 200 (09 §2.2) | – | **Binomial** (code) | What produced the figure |
 | S6 | OS: 10 h unlabelled equilibration (code only) and time origin (09 §7 A-OS3) | – | **Include**; t = 0 at labelling | Code |
 
@@ -434,10 +434,10 @@ The code is authoritative: the paper reports the code's quantities (10 §7 D12).
 | C1 | J_cyto–lamellipodium: 20 (Table 1) vs 10 (both released codes) (14 §9 item 3) | **10** default, `J_CL = 20` variant | Both codes agree. Ask which produced the figures |
 | C2 | Conversion law: paper p ∝ (1 − V₃/V₃ᵗ) vs code 0.1·(1 − V₃ᵗ(t)/(φ_F V_totᵗ)) on target volumes, which stops permanently (14 §2.9.5) | **Code** default; a paper-literal variant | Code, and 14b agrees ("until the lamellipodium target volume is attained") |
 | C3 | F-actin: PDE (14a code) vs binary indicator (14c) (14 §9 item 1) | **PDE** for 14a/14b; **indicator** (G18 [R5]) for 14c | Each paper's own code |
-| C4 | Secretion vs decay order inside CC3D `DiffusionSolverFE`: F ≈ 1 vs F ≈ 0.1 at the source, a **10× difference in protrusion strength** (14 §9 item 15) | **Blocking**: read the CC3D 3.7.9 source or ask. Calibrate against Table 2 in the meantime | – |
+| C4 | Secretion vs decay order inside CC3D `DiffusionSolverFE`: F ≈ 1 vs F ≈ 0.1 at the source, a **10× difference in protrusion strength** (14 §9 item 15) | **RESOLVED 2026-09-30: F ≈ 1** (diffusion + decay, then secretion; one call per MCS; face-neighbour contact test) | CC3D 3.7.9 and 3.6.2 source (14 §2.9.2) |
 | C5 | Initial condition: suspended cell (Fig 4A) vs tangent ball + 6³ nucleus (code, 14b) | **Code** | Resolved (14 §9 item 9) |
 | C6 | 14c gate: δ, strict "<" vs "≤", window includes the current MCS (14 §9 item 10) | **Code** (δ = 0, ≤, includes current) | – |
-| C7 | Protrusion on retraction (Medium overwriting FRONT) (14 §9 item 16) | **Eq 7** (FRONT source → Medium target only) | – |
+| C7 | Protrusion on retraction (Medium overwriting FRONT) (14 §9 item 16) | **Code (RESOLVED 2026-09-30):** both FRONT → Medium and Medium → FRONT, same formula; Eq 7 extension-only as a variant | CC3D 3.7.9 `Chemotaxis` source, default merks algorithm (14 §2.9.4) |
 
 ### 4.12 Cross-cutting accuracy-vs-performance choices
 
@@ -493,16 +493,16 @@ model's list.
 ### Rita de Almeida, Gilberto Thomas, Pedro Dal-Castel
 
 1. **[B]** J_cyto–lamellipodium: 20 (Table 1) or 10 (code) for the 14a figures (14 §9 item 3).
-2. **[B]** The F-actin magnitude at source sites (solver order) (item 15).
+2. ~~**[B]** The F-actin magnitude at source sites (solver order) (item 15).~~ RESOLVED 2026-09-30 from the CC3D 3.6.2/3.7.9 source (14 §2.9.2); not asked.
 3. The 14c gate details: δ used for the figures, "<" vs "≤", and whether the current MCS is in the window (item 10).
-4. The 14c-SM Table S1 S column (item 11); the Fig 8 caption (item 12); a diff of arXiv v1 against the 2025 version of record (item 13).
-5. The chemotaxis plugin on retraction (item 16); which polarization measure Fig 12 used (14 §2.9.7 item 12).
+4. The 14c-SM Table S1 S column (item 11); the Fig 8 caption (item 12); a diff of arXiv v1 against the 2025 version of record (item 13; checked 2026-09-30: arXiv has only v1 and the version of record is closed access, so the diff is still pending).
+5. ~~The chemotaxis plugin on retraction (item 16)~~ (RESOLVED 2026-09-30 from the CC3D 3.7.9 source); which polarization measure Fig 12 used (14 §2.9.7 item 12, §9 item 19).
 
 ### James Osborne / Alexander Fletcher
 
 1. **[B]** The engulfment-direction sentence on p.11 (09 §7 A-OS1).
 2. The units of the Fig 2/4 time labels (A-OS2); the Fig 3 time origin and the normalisation script (A-OS3).
-3. Whether the 2017 Chaste core used VN contacts and perimeter (A-OS4); the smoother used for the fluctuation metric (A-OS6).
+3. ~~Whether the 2017 Chaste core used VN contacts and perimeter (A-OS4)~~ (RESOLVED 2026-09-30: the paper tag `paper/CellBasedComparison` and `release_2017.1` match develop, 09 §1); the smoother used for the fluctuation metric (A-OS6).
 
 ### Andreas Deutsch / Jörn Starruß
 
