@@ -121,9 +121,13 @@ coordinator, each iteration:
   1. pick the first unchecked Phase 6 item whose dependencies are merged and whose gate
      (a maintainer or author answer) is not open; fill free implementer slots with
      independent items
-  2. FREEZE: write the item's acceptance tests from its ROADMAP "Accept" line and, for a
-     model, the spec's V-targets; the tests fail on the current tree for the right reason;
-     list them in lib/PottsModels/test/frozen.toml; commit ("freeze: <item>") on monorepo
+  2. FREEZE: create the worktree (`git worktree add ../PottsWorktrees/<item> -b feat/<item>
+     monorepo`); write the item's acceptance tests from its ROADMAP "Accept" line and, for
+     a model, the spec's V-targets, under lib/PottsModels/test/acceptance/; they fail on
+     the current tree for the right reason; list them in frozen.toml; commit
+     ("freeze: <item>") as the branch's FIRST commit. Frozen tests never land on monorepo
+     before their implementation, so monorepo stays green; the reviewer checks
+     `git diff <freeze-commit> feat/<item> -- <frozen files>` is empty
   3. DISPATCH an implementer in a worktree with: the item, the frozen files, the
      write set, the acceptance commands
   4. implementer: implement → own suites green → perf gate (§7.3) → report
