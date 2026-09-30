@@ -201,6 +201,13 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge + freeze, 2026-09-30; D-072) **P6.1c** reproduction 09 (V-target audit done 2026-09-30: freeze from spec 09 §9.1 only; the tutorial prose was ratified with 8 changes). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 
+- [ ] **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
+  per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
+  owner. There is no code change: the page is frozen (D-072).
+- [ ] **P6.0m** Confirmed small defects from the API synthesis (models session):
+  - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`);
+  - `connectivity(k)` accepts 0 components.
+
 ### Step 2 — Akeeb
 
 - [ ] **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
