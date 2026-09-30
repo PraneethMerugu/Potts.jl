@@ -98,12 +98,10 @@ nothing #hide
 
 # ## 3. Deviations
 
-cell_share = count(!=(0), σ0) / length(σ0)
 Markdown.parse("""
 | Item | Paper | Released code | Our default | Variant keyword | Reason |
 |---|---|---|---|---|---|
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t |
-| Attempts per cell per paper MCS | set by the medium share of the lattice, unknown (lattice size unstated) | — | cells cover $(round(cell_share; digits = 2)) of our lattice | — | Per-cell attempt rate differs by an unknown factor (spec §8.6 D9). Timed targets carry a ±2× time tolerance (spec §8.5) |
 | Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $ncells cells on $(join(size(σ0), " × ")) | `graner_glazier_state(scale)` tiles aggregates, it does not enlarge one | Cost. Boundary fractions scale with perimeter/area, and sorting levels off long before 10⁴ paper MCS (`GranerGlazier` docstring; `test/papers.jl`) |
 | Log-law window | 5–4000 paper MCS (spec §8.5 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
 | Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image; unsuitable for dispersal runs (spec §8.6 D2) |
@@ -214,7 +212,7 @@ times; the plot shows all $(length(ts))):
             for (j, t) in enumerate(ts) if t in shown], "\n"))
 
 # Side by side with PRE Fig. 13(c): the markers are values read by eye from the figure
-# (spec §8.5 V-PRE1; digitisation uncertainty ±0.02, drawn as bars). No digitised data
+# (spec §8.5 V-PRE1; digitisation uncertainty ±0.02 above 0.1 and ±0.01 below, drawn as bars). No digitised data
 # file exists yet (`reproductions/data/09/paper/` is pending).
 
 paper_t = [1, 10, 100, 1000, 10_000]
@@ -227,7 +225,7 @@ for (c, key, label) in zip(1:5, keys5, ("heterotypic", "dark–dark", "light–l
     band!(ax, ts, m(key) .- s(key), m(key) .+ s(key); color = (colors[c], 0.25))
     lines!(ax, ts, m(key); color = colors[c], label)
     if haskey(paper, key)
-        errorbars!(ax, paper_t, paper[key], fill(0.02, 5); color = colors[c])
+        errorbars!(ax, paper_t, paper[key], [v > 0.1 ? 0.02 : 0.01 for v in paper[key]]; color = colors[c])
         scatter!(ax, paper_t, paper[key]; color = colors[c], marker = :diamond, label = "$label, PRE Fig. 13(c)")
     end
 end
@@ -277,22 +275,27 @@ At $t_end paper MCS, n = $n each:
 # ### Pass/fail table
 #
 # The targets are copied from spec §8.5 (V-PRE1–V-PRE3 supersede V-GG1, V-GG3 and V-GG4
-# of §5.1). V-GG6 has no PRE counterpart and stays. Timed targets use the ±2× time
-# tolerance of §8.5: a value target passes if the ensemble mean meets it at some saved
-# time in [t/2, 2t]. The one extra row that is not in the spec is labelled as such. The
-# pre-registration commit of this table is pending; it must precede the first full run.
+# of §5.1). V-GG6 has no PRE counterpart and stays. Every verdict in the Result column is
+# taken at the paper's nominal times. The one extra row that is not in the spec is
+# labelled as such. The pre-registration commit of this table is pending; it must precede
+# the first full run.
+#
+# The last column is informational only. Spec §8.5 allows a ±2× time tolerance, but the
+# premise behind it is under revision. Instead of widening each row, we look for one global
+# time scale s ∈ [½, 2]. Every timed row is read at s × its nominal time, and we pick the s
+# that makes the most timed rows pass.
 
-row(t) = findfirst(==(t), ts)
-window(t) = findall(τ -> t / 2 <= τ <= 2t, ts)
 pf(ok) = ok ? "PASS" : "FAIL"
-## V-PRE1 value at t, ±0.05, with the ±2× time window
-function value_row(key, name, t, target)
-    t / 2 > last(ts) && return ("V-PRE1 $name @ $t", "≈ $target (Fig. 13c)", "not run", "± 0.05, t ± 2×", "pending full run")
-    w = window(t)
-    ours = "$(fmt(m(key)[row(t)])) ± $(fmt(s(key)[row(t)])) (window $(fmt(minimum(m(key)[w])))–$(fmt(maximum(m(key)[w]))))"
-    return ("V-PRE1 $name @ $t", "≈ $target (Fig. 13c)", ours, "± 0.05, t ± 2×",
-        pf(any(j -> abs(m(key)[j] - target) <= 0.05, w)))
+## ensemble mean of `key` at paper time τ, linear in log t between saves; `nothing` outside the run
+function at(key, τ)
+    (τ < first(ts) || τ > last(ts)) && return nothing
+    j = searchsortedlast(ts, τ)
+    j == length(ts) && return m(key)[j]
+    w = (log(τ) - log(ts[j])) / (log(ts[j + 1]) - log(ts[j]))
+    return (1 - w) * m(key)[j] + w * m(key)[j + 1]
 end
+medium(t) = at(:dM, t) + at(:lM, t)                  # our medium share of all boundary
+const PAPER_MEDIUM = 0.027 + 0.037                   # PRE Fig. 13(b) at t = 1 (spec §8.5 V-PRE3)
 function logfit(lo, hi)
     js = findall(t -> lo <= t <= hi, ts)
     x = log10.(ts[js])
@@ -302,68 +305,136 @@ end
 ## first saved time at which curve `a` exceeds curve `b`; `nothing` if never
 crossing(a, b) = (j = findfirst(j -> a[j] > b[j], eachindex(ts)); j === nothing ? nothing : ts[j])
 show_t(t) = t === nothing ? "none by $(last(ts))" : t == first(ts) ? "≤ $t (already at the first save)" : "$t"
-within_t(t, lo, hi) = t !== nothing && lo <= t <= hi
 
-targets = Any[]
-for (key, name, vals) in ((:dl, "heterotypic", paper[:dl]), (:dd, "dark–dark", paper[:dd]),
-        (:ll, "light–light", paper[:ll])), (t, v) in zip(paper_t[2:end], vals[2:end])
-    push!(targets, value_row(key, name, t, v))
+## a row: text columns, the nominal verdict, and `timed(s)` (nothing if the row has no time)
+targets = []
+addrow!(target, paper, ours, tol, result; timed = nothing, info = (;)) =
+    push!(targets, (; target, paper, ours, tol, result, timed, info))
+
+for (key, name) in ((:dl, "heterotypic"), (:dd, "dark–dark"), (:ll, "light–light")),
+        (t, v) in zip(paper_t[2:end], paper[key][2:end])
+    if t > last(ts)
+        addrow!("V-PRE1 $name @ $t", "≈ $v (Fig. 13c)", "not run", "± 0.05", "pending full run")
+        continue
+    end
+    ok(s) = (x = at(key, s * t); x !== nothing && abs(x - v) <= 0.05)
+    addrow!("V-PRE1 $name @ $t", "≈ $v (Fig. 13c)", "$(fmt(at(key, t))) ± $(fmt(s(key)[findfirst(==(t), ts)]))",
+        "± 0.05", pf(ok(1)); timed = ok, info = (; key, t, v))
 end
 r2, slope, t_hi = logfit(5, 4000)
-push!(targets, ("V-PRE1 log law, 5–4000", "linear in log₁₀ t (Fig. 13c)",
+addrow!("V-PRE1 log law, 5–4000", "linear in log₁₀ t (Fig. 13c)",
     "R² = $(fmt(r2)), slope $(fmt(slope))" * (t_hi < 4000 ? " (run ends at $t_hi)" : ""),
-    "R² > 0.95, slope < 0", pf(r2 > 0.95 && slope < 0)))
+    "R² > 0.95, slope < 0", pf(r2 > 0.95 && slope < 0))
 r2b, slopeb, _ = logfit(4, 512)
-push!(targets, ("extra (not in spec): log law, 4–512", "`test/papers.jl` window",
-    "R² = $(fmt(r2b)), slope $(fmt(slopeb))", "R² > 0.95, slope < 0", pf(r2b > 0.95 && slopeb < 0)))
-homo = m(:dd) .+ m(:ll)
-c_homo, c_dd, c_ll = crossing(homo, m(:dl)), crossing(m(:dd), m(:dl)), crossing(m(:ll), m(:dl))
-push!(targets, ("V-PRE2 summed homotypic > heterotypic", "within ≈ 4 MCS (p.2140)", show_t(c_homo),
-    "by t ≤ 10, t ± 2× (≤ 20)", pf(within_t(c_homo, 0, 20))))
-push!(targets, ("V-PRE2 dark–dark crosses heterotypic", "≈ 20 (Fig. 13c)", show_t(c_dd),
-    "[5, 100], t ± 2× ([2.5, 200])", pf(within_t(c_dd, 2.5, 200))))
-push!(targets, ("V-PRE2 light–light crosses heterotypic, after dark–dark", "≈ 45 (Fig. 13c)", show_t(c_ll),
-    "[5, 100], t ± 2× ([2.5, 200]); dd first", pf(within_t(c_ll, 2.5, 200) && within_t(c_dd, 0, c_ll))))
+addrow!("extra (not in spec): log law, 4–512", "`test/papers.jl` window",
+    "R² = $(fmt(r2b)), slope $(fmt(slopeb))", "R² > 0.95, slope < 0", pf(r2b > 0.95 && slopeb < 0))
+c_homo, c_dd, c_ll = crossing(m(:dd) .+ m(:ll), m(:dl)), crossing(m(:dd), m(:dl)), crossing(m(:ll), m(:dl))
+ok_homo(s) = c_homo !== nothing && c_homo <= 10s
+ok_dd(s) = c_dd !== nothing && 5s <= c_dd <= 100s
+ok_ll(s) = c_ll !== nothing && c_dd !== nothing && 5s <= c_ll <= 100s && c_dd <= c_ll
+addrow!("V-PRE2 summed homotypic > heterotypic", "within ≈ 4 MCS (p.2140)", show_t(c_homo), "by t ≤ 10",
+    pf(ok_homo(1)); timed = ok_homo)
+addrow!("V-PRE2 dark–dark crosses heterotypic", "≈ 20 (Fig. 13c)", show_t(c_dd), "[5, 100]", pf(ok_dd(1));
+    timed = ok_dd)
+gap = c_dd === nothing || c_ll === nothing ? "" : "; ll/dd crossing ratio $(fmt(c_ll / c_dd)) (paper ≈ $(fmt(45 / 20)))"
+addrow!("V-PRE2 light–light crosses heterotypic, after dark–dark", "≈ 45 (Fig. 13c)", show_t(c_ll) * gap,
+    "[5, 100]; dd first", pf(ok_ll(1)); timed = ok_ll)
 c_dM = (j = findfirst(<(0.003), m(:dM)); j === nothing ? nothing : ts[j])
-push!(targets, ("V-PRE3 dark–medium < 0.003", "≈ 0 by 300–600 (Fig. 13b)", show_t(c_dM),
-    "by 10³, t ± 2× (≤ 2000)", pf(within_t(c_dM, 0, 2000))))
-scale = sqrt(1000 / ncells)       # perimeter/area of a round aggregate ∝ 1/√N (spec V-PRE3)
-lo, hi = 0.050 * scale, 0.075 * scale
-late = findall(t -> t >= 2000, ts)
-push!(targets, ("V-PRE3 light–medium plateau, scaled by perimeter/area", "0.062–0.063 from ≈ 200 (Fig. 13b)",
-    "$(fmt(minimum(m(:lM)[late])))–$(fmt(maximum(m(:lM)[late]))) at t ≥ 2000",
-    "[0.050, 0.075] × √(1000/$ncells) = [$(fmt(lo)), $(fmt(hi))], by 10³ t ± 2×",
-    pf(all(j -> lo <= m(:lM)[j] <= hi, late))))
+ok_dM(s) = c_dM !== nothing && c_dM <= 1000s
+addrow!("V-PRE3 dark–medium < 0.003", "≈ 0 by 300–600 (Fig. 13b)", show_t(c_dM), "by 10³", pf(ok_dM(1));
+    timed = ok_dM)
+## plateau: first save after which light–medium stays within 5% of its last value
+lM_end = m(:lM)[end]
+j_plat = findfirst(j -> all(abs.(m(:lM)[j:end] .- lM_end) .<= 0.05lM_end), eachindex(ts))
+t_plat = ts[j_plat]
+ok_plat(s) = t_plat <= 1000s
+addrow!("V-PRE3 light–medium plateau reached", "from ≈ 200 (Fig. 13b)",
+    "$t_plat (within 5% of the value at $(last(ts)))", "before 10³", pf(ok_plat(1)); timed = ok_plat)
+## plateau level: raw against the spec band, and relative to the medium share at t = 1
+lM_1000 = at(:lM, 1000)
+ratio, paper_ratio = lM_1000 / medium(1), 0.0625 / PAPER_MEDIUM
+lo_r, hi_r = 0.050 / PAPER_MEDIUM, 0.075 / PAPER_MEDIUM
+addrow!("V-PRE3 light–medium plateau level @ 10³", "0.062–0.063 (Fig. 13b); plateau / medium share at t = 1 ≈ $(fmt(paper_ratio))",
+    "raw $(fmt(lM_1000)); plateau / medium share at t = 1 = $(fmt(ratio))",
+    "raw in [0.050, 0.075]; size-corrected ratio in [$(fmt(lo_r)), $(fmt(hi_r))]",
+    "raw $(pf(0.050 <= lM_1000 <= 0.075)); size-corrected $(pf(lo_r <= ratio <= hi_r))")
 area(kk) = mean(mean(count(==(c), σ) for c in eachindex(k0) if k0[c] == kk) for σ in sorted_states)
-push!(targets, ("V-GG6 mean area light < dark (at 10³)", "\"slightly smaller\" (PRL p.2014)",
-    "$(fmt(area(2))) vs $(fmt(area(1)))", "light < dark", pf(area(2) < area(1))))
+addrow!("V-GG6 mean area light < dark (at 10³)", "\"slightly smaller\" (PRL p.2014)",
+    "$(fmt(area(2))) vs $(fmt(area(1)))", "light < dark", pf(area(2) < area(1)))
+
+## informational: one global time scale for all timed rows
+timed_rows = filter(r -> r.timed !== nothing, targets)
+npass(s) = count(r -> r.timed(s), timed_rows)
+scales = 2.0 .^ range(-1, 1; length = 41)
+best = argmax(s -> (npass(s), -abs(log(s))), scales)
+at_s(r) = r.timed === nothing ? "—" : pf(r.timed(best))
+
 heading = FULL ? "Validation (n = $n)" :
           "**Smoke check (reduced, n = $n) — not validation.** Results below say whether this reduced run meets each target; the validation result is the pending full run."
 Markdown.parse("""
 $heading
 
-| Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Result |
-|---|---|---|---|---|
-""" * join(["| " * join(r, " | ") * " |" for r in targets], "\n"))
+| Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Result (nominal time) | at s = $(fmt(best)) (informational) |
+|---|---|---|---|---|---|
+""" * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.result) | $(at_s(r)) |" for r in targets], "\n") * """
+
+
+Informational: spec §8.5 ±2× (premise under revision). The single time scale
+s = $(fmt(best)) ∈ [½, 2], applied to all $(length(timed_rows)) timed rows at once, makes
+$(npass(best)) of them pass; $(npass(1.0)) pass at s = 1.
+""")
 
 # Diagnosis of the failing rows, generated from the table:
 
-failing = [r[1] for r in targets if r[end] == "FAIL"]
-Markdown.parse(isempty(failing) ? "No row fails in this run." : """
-Failing rows: $(join(failing, "; ")). Two effects are the leading suspects. First,
-aggregate size: our aggregate has $ncells cells rather than ≈ 1000 (PRE p.2129), so the
-medium boundary takes a larger share of all boundary and the cell–cell fractions are
-shifted. Second, timing: cells receive a different number of attempts per paper MCS
-(deviations table), which the ±2× window only partly absorbs.""" *
-    (any(startswith("V-PRE1 log law"), failing) ?
-     " The 5–4000 log-law fit also spans the plateau that our small aggregate reaches; compare the extra 4–512 row." : ""))
+function light_on_surface(σ, k)      # share of light cells with a Moore neighbour in the medium
+    nx, ny = size(σ)
+    surf = falses(length(k))
+    for y in 1:ny, x in 1:nx, dx in -1:1, dy in -1:1
+        c = σ[x, y]
+        c != 0 && σ[mod1(x + dx, nx), mod1(y + dy, ny)] == 0 && (surf[c] = true)
+    end
+    return count(c -> surf[c] && k[c] == 2, eachindex(k)) / count(==(2), k)
+end
+## a cell–cell fraction rescaled to the paper's medium share
+corrected(r) = at(r.info.key, r.info.t) / (1 - medium(r.info.t)) * (1 - PAPER_MEDIUM)
+failing = filter(r -> occursin("FAIL", r.result), targets)
+lines = String[]
+for r in failing
+    if haskey(r.info, :key)
+        x = corrected(r)
+        ok = abs(x - r.info.v) <= 0.05
+        push!(lines, "$(r.target): rescaled from our medium share ($(fmt(medium(r.info.t)))) to the " *
+            "paper's ($(fmt(PAPER_MEDIUM))), $(fmt(at(r.info.key, r.info.t))) becomes $(fmt(x)) against " *
+            "$(r.info.v), $(ok ? "which passes: the failure is the medium share of a small aggregate" :
+                                  "which still fails")."
+        )
+    end
+end
+if any(r -> startswith(r.target, "V-PRE1 light–light") && occursin("FAIL", r.result), failing)
+    push!(lines, "Light–light: at 10³, $(round(Int, 100mean(σ -> light_on_surface(σ, k0), sorted_states)))% " *
+        "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " *
+        "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " *
+        "$(count(r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) &&
+                      abs(corrected(r) - r.info.v) > 0.05, failing)) of the failing light–light rows failing; " *
+        "a larger aggregate is needed to test them.")
+end
+any(r -> startswith(r.target, "V-PRE2 light–light") && occursin("FAIL", r.result), failing) && gap != "" &&
+    push!(lines, "Crossings: shape, not only timing. Our dark–dark and light–light crossings are " *
+        "$(fmt(c_ll / c_dd))× apart in time; the paper's are ≈ $(fmt(45 / 20))× apart.")
+any(r -> startswith(r.target, "V-PRE1 log law"), failing) &&
+    push!(lines, "Log law: the 5–4000 fit spans the plateau our small aggregate reaches; compare the extra 4–512 row.")
+any(r -> startswith(r.target, "V-PRE3 light–medium plateau level"), failing) &&
+    push!(lines, "Plateau level: the raw value is set by aggregate size (perimeter/area); see the size-corrected ratio in the same row.")
+Markdown.parse(isempty(failing) ? "No row fails in this run." :
+               "Failing rows: $(join([r.target for r in failing], "; ")).\n\n" * join(["- " * l for l in lines], "\n"))
 
 # ## 6. Known limitations and open questions for the authors
 #
 # Questions for J.A. Glazier and F. Graner (spec §8.4, still open):
 #
-# - The lattice size of the PRE runs. This fixes the medium share and hence the time
-#   axis; the answer replaces the attempts-per-cell row of the deviations table.
+# - The lattice size of the PRE runs. With the boundary conditions it fixes the medium gap
+#   around the aggregate, which matters for runs in which cells detach. The answer
+#   replaces the lattice entry of the aggregate-size row.
 # - The boundary conditions. The answer replaces the boundary-conditions row.
 # - The dark/light fraction and how it was drawn. The answer replaces the type-fraction
 #   row and the initial-state generator.
