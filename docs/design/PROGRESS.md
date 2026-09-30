@@ -1513,3 +1513,22 @@ The maintainer approved F-1…F-6 (D-049).
   - Merks 0.981, OpenVT 1.006, Akeeb 0.994.
   - Wortel 1.068 (6 rounds) and 1.057 (8 rounds). Per-round medians spread 67–112 ns/site on BOTH sides, with the candidate faster in some rounds, and Wortel's generated code is byte-identical to base (canonicalised, round-3 review). Accepted as noise.
 - **Follow-ups in ROADMAP:** P6.0k2 (F1, F4, F6) and P6.0n (cell-ODE cross-cell reads).
+
+## 2026-09-30 — P6.0m merged: four confirmed defects (D-076)
+
+- **Review.** Two adversarial rounds. The round-1 blockers came from D-075, which landed after the branch was cut:
+  - `Chemotaxis(when = true)` must mean every copy;
+  - `a`/`b` must be reserved globally.
+- **Coordinator rulings:**
+  - the global reservation, with frozen p6_0f and p6_0a re-frozen as pure kind renames under D-076;
+  - the `:arc_or_pair` zero-arc change reverted to TST semantics, because D-074 covers the local rule only.
+  - Round 2 approved.
+- **Merge conflicts:**
+  - `src/codegen.jl`: P6.0m's integral-refresh readers now include the P6.0k discrete `next` rules;
+  - `frozen.toml`: 11 entries.
+- **Suites:** CorePotts (QA), PottsModels (with `POTTS_REFERENCES`), MakiePotts, Potts on Metal and docs all exit 0.
+- **Akeeb.** The frozen band was revalidated under D-074 (40/40 seeds).
+- **Gate.**
+  - CPU: 0.976–1.001, with zero allocations.
+  - Metal: two cases flagged. `ab.jl` against f554597 gives Wortel 1.015 and OpenVT 1.011, both within tolerance.
+- **Follow-up:** P6.0m3 (`integral(Pre(w))`), filed earlier.

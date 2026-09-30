@@ -9,8 +9,8 @@ decision = "D-071"
 
 [[file]]
 path = "acceptance/p6_0a_division_kinds.jl"
-sha256 = "27cade88bf8ef944ac2a6ebfa0bb6d75960f8e97928d2845f984bb46bcbc0e25"
-decision = "D-054"
+sha256 = "438fff835f2e5b5c54a24db1dbcdbf3bae40dc9c7fe431c925e8d3773d065544"
+decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_1a_layouts.jl"
@@ -34,8 +34,8 @@ decision = "D-060"
 
 [[file]]
 path = "acceptance/p6_0f_rule_cadence.jl"
-sha256 = "fd20be3c8614f2a417f80cde8983bad2a1c5c2966465e2cf6b46ce77c13b9f84"
-decision = "D-053"
+sha256 = "9bf38772b920b6c6b8abf8afa9e087bbe1de20c77de6c5c0d8bfbccefe480821"
+decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
@@ -51,3 +51,8 @@ decision = "D-069"
 path = "acceptance/p6_0k_boolean_network.jl"
 sha256 = "2efbf328d775cd80fe3236213807eb7069b6ceff44afbd1f871ca6ecb4cae1de"
 decision = "D-065"
+
+[[file]]
+path = "acceptance/p6_0m_defects.jl"
+sha256 = "b97cfefa4c30c528946a5ec4da1cb756306ebc675351f3d957320c82ea32e778"
+decision = "D-074"

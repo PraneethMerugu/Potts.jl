@@ -8,15 +8,15 @@ PrecompileTools.@setup_workload begin
         T = parameter(:T, 10.0)
         J = kind_parameter(:J, [0 16; 16 2])
         c = variable(only(Symbolics.@variables c(t)), :field; default = 0.0)
-        a = variable(only(Symbolics.@variables a(t)), :site; default = 0.0)
+        mark = variable(only(Symbolics.@variables mark(t)), :site; default = 0.0)
         sys = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
             lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
-            variables = Any[c, a],
+            variables = Any[c, mark],
             energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
                 energy(contacts => _index(J, kind, kind′))],
             drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(c, target) - _index(c, source)), 0.0))],
             constraints = [connectivity(1)],
-            updates = [update(:after_mcs, a ~ max(Pre(a) - 1, 0)), update(:on_copy, _index(a, target) ~ λ)],
+            updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],
             equations = [D(c) ~ λ * Δ(c) - λ * c],
             sweep = sweep_spec(:metropolis; temperature = T))
         csys = ModelingToolkitBase.mtkcompile(sys)

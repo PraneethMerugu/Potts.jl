@@ -6,10 +6,10 @@ audit_blocks() = (σ = zeros(Int32, 20, 20);
 
 @potts_model AuditPopCell begin
     @kinds medium A
-    @variables a(cell) = 1.0
+    @variables q(cell) = 1.0
     @lattice Lattice((20, 20))
     @energy cells => (volume - 9)^2
-    @after_mcs a ~ sum(a for c in cells)
+    @after_mcs q ~ sum(q for c in cells)
     @sweep Metropolis(; temperature = 5.0)
 end
 
@@ -17,9 +17,9 @@ end
     @kinds medium A
     @variables begin
         m(model) = 0.0
-        a(cell) = 0.0
+        ca(cell) = 0.0
         s(site) = 0.0
-        b(cell) = 10.0
+        cb(cell) = 10.0
         z(model) = 0.0
         y(cell) = 0.0
     end
@@ -27,10 +27,10 @@ end
     @energy cells => (volume - 9)^2
     @after_mcs begin
         m ~ Pre(m) + 1
-        a ~ Pre(m)
+        ca ~ Pre(m)
         s ~ Pre(m)
-        z ~ sum(Pre(b) for c in cells)
-        b ~ Pre(b) + 1
+        z ~ sum(Pre(cb) for c in cells)
+        cb ~ Pre(cb) + 1
         y ~ m + 1                          # bare: m's new value
     end
     @sweep Metropolis(; temperature = 5.0)
@@ -72,11 +72,11 @@ end
     op = [ownership => σ, kind => fill(1, 16)]
     # A-62: a fold in a cell update reads previous values, once per stage
     u = solve(PottsProblem(AuditPopCell(; name = :a), op, (0, 1)), SequentialCPM()).u[end]
-    @test all(==(16.0), u.cell.a[1:16])
+    @test all(==(16.0), u.cell.q[1:16])
     # A-63: Pre is the value before the block in every scope; bare reads are new values
     u = solve(PottsProblem(AuditJacobi(; name = :j), op, (0, 1)), SequentialCPM()).u[end]
-    @test u.model.m[1] == 1 && u.cell.a[1] == 0 && all(==(0), u.site.s) && u.model.z[1] == 160
-    @test u.cell.b[1] == 11 && u.cell.y[1] == 2
+    @test u.model.m[1] == 1 && u.cell.ca[1] == 0 && all(==(0), u.site.s) && u.model.z[1] == 160
+    @test u.cell.cb[1] == 11 && u.cell.y[1] == 2
     # cycles of new-value reads are errors
     @test_throws ArgumentError mtkcompile(AuditCycle(; name = :c))
     # A-60 / D-041: energy folds are per-MCS snapshots; ΔH is exact under that meaning
@@ -284,14 +284,14 @@ end
     @parameters begin
         V₀ = 9.0
         V2 = 2V₀
-        a = 2.0
-        b = 3a
+        pa = 2.0
+        pb = 3pa
         J[kind, kind] = [0 2; 2 1]
     end
     @variables x(cell) = V₀
     @lattice Lattice((12, 12))
     @energy begin
-        cells => (volume - V2 / 2)^2 + b * 0
+        cells => (volume - V2 / 2)^2 + pb * 0
         contacts => J[kind, kind′]
     end
     @sweep Metropolis(; temperature = 5.0)
@@ -312,12 +312,12 @@ end
     p = PottsProblem(AuditDerived(; name = :d), op, (0, 2))
     @test p.p.V2 == 18 && p.u0.cell.x[1] == 9                             # A-39
     @test PottsProblem(AuditDerived(; name = :d, V₀ = 4.0), op, (0, 2)).p.V2 == 8
-    q = remake(p; p = [:a => 10.0])
-    @test (q.p.a, q.p.b) == (10, 30)                                     # b follows a (MTK)
-    @test remake(p; p = [:a => 10.0, :b => 1.0]).p.b == 1                 # unless given
+    q = remake(p; p = [:pa => 10.0])
+    @test (q.p.pa, q.p.pb) == (10, 30)                                     # pb follows pa (MTK)
+    @test remake(p; p = [:pa => 10.0, :pb => 1.0]).p.pb == 1                 # unless given
     integ = init(p, SequentialCPM())
-    setp(integ, :a)(integ, 7.0)
-    @test integ.p.b == 21
+    setp(integ, :pa)(integ, 7.0)
+    @test integ.p.pb == 21
     @test_throws ArgumentError setp(integ, :J)(integ, [0 2; 5 1])       # A-53: contact tables stay symmetric
     @test_throws ArgumentError PottsProblem(AuditDerived(; name = :d), [op; :J => 2.0], (0, 2))   # A-57
     # A-15: reinit! validates shapes, takes symbolic maps, reruns callback initialization

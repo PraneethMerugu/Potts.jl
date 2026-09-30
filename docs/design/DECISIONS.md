@@ -1410,3 +1410,57 @@ session.
   - F6: cosmetic double `_nonzero`.
   - Cell ODEs reading other cells' ODE state are Gauss–Seidel and race on the GPU (N3),
     as its own item.
+
+## D-076 P6.0m semantics and the `a`/`b` re-freezes (2026-09-30, coordinator; implements D-074 and D-075 Q8)
+
+- **Chemotaxis `when` (D-075).** `Chemotaxis(c; strength, response, kinds, when)` defaults
+  to `when = (new != 0)`, so a retraction (where the medium gains) gets 0.
+  - `when = true` means every copy, retractions included. Any other condition selects
+    exactly its copies; for example, `old == 0` selects extensions only.
+  - The gate is `isempty(kinds) ? when : (kind[new] ∈ kinds) & when`, so with `kinds`
+    given, retractions stay 0 whatever `when` says.
+  - The frozen `p6_0m_defects.jl` has a header comment that says "default `when = true`".
+    This entry supersedes that comment. Its assertions already match D-075, so it is not
+    re-frozen.
+- **Connectivity (D-074).**
+  - `connectivity(k)` (`rule = :local`) is `local_components == 1`, and CorePotts
+    `locally_connected` is `old == 0 || local_components == 1`. Zero pieces (the last
+    site, an isolated fragment) are rejected like two.
+  - `rule = :arc_or_pair` keeps TST's `ConnectivityPreservedP` semantics
+    (`ring_arcs <= 1 || ring_cells == 2`; zero arcs pass). D-074 covers the local rule
+    only; changing Merks' ring rule is the maintainer's call.
+- **`a`/`b` reserved globally (D-075 Q8, coordinator's reading of "globally").** No kind,
+  parameter (vector and kind parameters included), structural parameter, variable,
+  observed quantity, relation, relationship or component may be named `a` or `b`.
+  - It is enforced in `@potts_model` (`_declare!`) and in the programmatic `PottsSystem`
+    (inner constructor `_check_reserved_names`), which also covers `extend`, `_replace`
+    and component flattening.
+  - The error suggests `a₀`/`b₀`.
+  - Component-internal names (`comp₊a`) and local bindings inside expressions are
+    unaffected.
+  - `src/precompile.jl` renames its site variable to `mark`.
+  - Open nit: `@extend a = Base()` still binds a local `a`; it is harmless, because
+    `_edge_scope` rebinds it.
+- **Fresh integrals (D-042).** When an update block writes a variable of `x` bare, a read of
+  `integral(x)` in that block sees the new values.
+  - The integral is recomputed after the writing stage and before the next reader. A
+    gated reader gets a gated refresh.
+  - There is an end-of-block refresh when equations, the lifecycle, link rules, discrete
+    ticks (D-077) or the temperature read it.
+  - Integrals whose operands no update writes cost no extra pass.
+- **Re-freezes.** Two frozen acceptance files declared kinds named `a`/`b`, which D-075 Q8
+  now rejects. Both are re-frozen under this entry as pure kind renames: no count,
+  tolerance, seed, run length or assertion changed. The review verified both.
+  - `acceptance/p6_0f_rule_cadence.jl` (was D-053): kinds `a, b` → `ka, kb`. The new
+    sha256 is `9bf38772…0821`.
+  - `acceptance/p6_0a_division_kinds.jl` (was D-054): `:a` → `:ka` at line 72. Without
+    this rename, the `@test_throws ArgumentError` would pass on the reserved-name error
+    instead of on the division conflict it tests. The new sha256 is `438fff83…5544`.
+  - The re-freeze commits follow the first fix commit, 9ddb3b3, rather than preceding it.
+    9ddb3b3 does not yet reserve kind names, so each commit is green.
+- **Akeeb.** The frozen `papers.jl` band was revalidated under D-074, and all checks
+  passed:
+  - band: 40/40 seeds, mean divisions 583.6 against 585.0 on base;
+  - singles: 40/40;
+  - motility: 12/12;
+  - adhesion regimes: identical to base.

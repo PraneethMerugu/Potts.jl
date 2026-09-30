@@ -343,25 +343,62 @@ function _integral_phases(c::CompiledPottsSystem, T)
                for x in _integrals(c.sys)]
 end
 
+# Indices (into `_integrals(sys)`) of the integrals `integral(x)` read in the expressions `xs`.
+function _integrals_read(xs, ints)
+    out = Int[]
+    for x in xs
+        _walk(x) do y
+            iscall(y) && operation(y) === cell_integral || return
+            j = findfirst(z -> isequal(z, _unwrap(arguments(y)[1])), ints)
+            j === nothing || j in out || push!(out, j)
+        end
+    end
+    return out
+end
+
+# Names the stage writes (its updates' left sides).
+_stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
+
 function _phases(c::CompiledPottsSystem, T, values)
     rn = c.gather_names
     integrals = _integral_phases(c, T)
     before = Any[]; after = Any[]
-    # integrals: fresh at every MCS boundary (and at init); refreshed after the sweep too when
-    # the after-MCS updates, equations or lifecycle read them
+    # integrals: fresh at every MCS boundary (and at init). An update block reads them fresh
+    # (D-042: a bare name in the block is its new value): the sweep moves σ, so each integral
+    # the after-MCS updates, equations or lifecycle read is refreshed after it, and an
+    # integral whose operand an update writes is refreshed after that write, just before
+    # the stage that next reads it. Integrals whose operands no update writes cost exactly
+    # the one refresh at the start of the after-MCS phases.
     s = c.sys
-    after_reads = Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., (eq.rhs for eq in s.equations)...,
-        (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in s.link_rules)..., (x for b in c.discrete for x in b.next)...]
-    any(x -> _has_op(x, cell_integral), after_reads) && append!(after, integrals)
+    ints = _integrals(s)
+    post = Any[(eq.rhs for eq in s.equations)..., (d.when for d in s.divisions)...,
+        (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))..., (r.when for r in s.link_rules)...,
+        (x for b in c.discrete for x in b.next)...]
+    after_read = _integrals_read(Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., post...], ints)
+    operands = [Set(n for (n, pre, _) in _reads(x) if !pre) for x in ints]
+    written(phase) = Set{Symbol}(_update_name(u) for u in s.updates if u.phase === phase)
+    dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
+    after_dirty = dirtied(:after_mcs)
+    isempty(after_read) || append!(after, integrals[j] for j in eachindex(ints) if !(j in after_dirty))
     # update blocks (D-042): snapshots of previous values, then the ordered stages, each
     # after its hoisted population folds
     for phase in (:before_mcs, :after_mcs)
         dst = phase === :before_mcs ? before : after
+        dirty = dirtied(phase)
+        # stale integrals: the after-MCS ones not refreshed above (the sweep moved σ); none
+        # before the MCS (the boundary refresh is fresh)
+        stale = Set{Int}(phase === :after_mcs && !isempty(after_read) ? after_dirty : Int[])
         for (scope, n) in c.pre_snapshots[phase]
             push!(dst, CorePotts.CopyPhase((scope, Symbol(n, :__pre)) => (scope, n)))
         end
         for stage in c.schedule[phase]
+            if !isempty(dirty)
+                for j in _integrals_read(Any[(u.eq.rhs for u in stage.updates)..., (x for (_, x) in stage.pops)...], ints)
+                    j in stale || continue
+                    push!(dst, stage.every == 1 ? integrals[j] : _Gated(stage.every, integrals[j]))
+                    stage.every == 1 && delete!(stale, j)      # a gated refresh leaves it stale
+                end
+            end
             if !isempty(stage.pops)
                 ph = _slots_phase(T, stage.pops, rn)
                 push!(dst, stage.every == 1 ? ph : _Gated(stage.every, ph))
@@ -373,6 +410,16 @@ function _phases(c::CompiledPottsSystem, T, values)
             else
                 push!(dst, CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, stage.updates, stage.every, rn))))
             end
+            if !isempty(dirty)
+                w = _stage_writes(stage)
+                foreach(j -> isempty(intersect(operands[j], w)) || push!(stale, j), dirty)
+            end
+        end
+        # what reads the integrals after the block: the equations and lifecycle (after the
+        # MCS) or the sweep's temperature (before it)
+        if !isempty(stale)
+            later = _integrals_read(phase === :after_mcs ? post : Any[s.sweep.temperature], ints)
+            append!(dst, integrals[j] for j in sort!(collect(stale)) if j in later)
         end
     end
     # energy snapshots (D-041): after the before-MCS updates, constant during the sweep

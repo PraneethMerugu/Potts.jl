@@ -82,7 +82,7 @@ using Statistics: mean, var
     ua = solve(PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-6)), [ownership => σa, kind => [:A, :B]], (0, 5);
         T = Float32), CheckerboardCPM(); backend).u[end]
     @test Array(ua.cell.y)[1:2] ≈ fill(exp(-0.3 * 5), 2) rtol = 1e-4
-    @test Array(ua.model.a)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
+    @test Array(ua.model.g)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
     # hexagonal lattice on the device
     σh = zeros(Int32, 30, 30); nh = 0
     for q in 4:6:26, r in 4:6:26
@@ -199,7 +199,7 @@ end
     backend = MetalBackend()
     σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
     function run(sys, tspan)
-        prob = PottsProblem(sys, [ownership => σ, kind => [:a]], tspan; capacity = 32, T = Float32)
+        prob = PottsProblem(sys, [ownership => σ, kind => [:ka]], tspan; capacity = 32, T = Float32)
         u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         live = findall(>(0), Array(u.cell.volume))
         return length(live), unique(Array(u.cell.x)[live])

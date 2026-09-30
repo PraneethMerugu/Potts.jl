@@ -159,7 +159,7 @@ expression may refer to:
 | `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
-| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells), `distance`, that relationship's edge variables |
+| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
 Examples:
@@ -250,8 +250,8 @@ Connectivity rules are then ordinary statements:
 
 | Rule | Statement |
 |---|---|
-| Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components <= 1` for losers of kind `k` |
-| Ring rule | `connectivity(k; rule = :arc_or_pair)` |
+| Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components == 1` for losers of kind `k` (D-074: zero pieces, the last site or an isolated fragment, is rejected too, so such a cell cannot die by copies) |
+| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs <= 1 \|\| ring_cells == 2` (zero arcs pass; D-074 covers the local rule only) |
 | Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
 
 An unknown `rule` is an error.
@@ -259,7 +259,11 @@ An unknown `rule` is an error.
 **Chemotaxis family.** `Chemotaxis(c; strength, response, kinds, when)`:
 - `response`: `identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
   `c/(s c + 1)`, or any function;
-- `when`: any copy condition, e.g. `old == 0` for extensions only.
+- `when`: the copy condition, default `new != 0` (the gaining cell is a cell, so
+  retractions get 0; D-075). `when = true` means every copy, retractions included; any
+  other condition selects exactly its copies, e.g. `old == 0` for extensions only.
+- `kinds`: additionally requires `kind[new] ∈ kinds`, so with `kinds` given retractions
+  stay 0 whatever `when` says.
 
 **Neighbourhood memory (Act family).** Write the mean as a fold:
 `geomean(x[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])`. `mean`
@@ -373,7 +377,7 @@ Rules are evaluated at the MCS boundary; conflicts resolve deterministically (st
 priority).
 
 **Cadence (P6.0f).** Each rule has its own `Every(n)`, written after the domain
-(`@divide cells(a) Every(2) when = …`) or as `every = n`
+(`@divide cells(ka) Every(2) when = …`) or as `every = n`
 (`@link tether when = …, every = 10`); a rule gets one cadence, and the default is `Every(1)`.
 A rule is checked at the MCS where `mcs % n == 0`, with MCS numbered from 0 as for updates.
 So `Every(2)` and `Every(3)` rules in one model fire at MCS 0, 2, 4, … and at MCS 0, 3, 6, ….
@@ -712,6 +716,10 @@ end
     starts (`at_init`, so `remake` is respected).
   - When after-MCS updates, equations, division rules or link rules read an integral,
     it is also recomputed right after the copy sweep.
+  - Read in an update block that writes one of its variables bare, it folds the new
+    values (D-042): it is recomputed after the writing stage, before the next stage that
+    reads it (and before the equations, lifecycle or temperature that read it after the
+    block). An integral whose variables no update writes costs no extra pass.
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the

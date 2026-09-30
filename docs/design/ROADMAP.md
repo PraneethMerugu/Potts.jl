@@ -234,7 +234,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
   per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
   owner. There is no code change: the page is frozen (D-072).
-- [ ] **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
+- [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
   - `connectivity(k)` accepts 0 components: a copy into an isolated fragment or into a

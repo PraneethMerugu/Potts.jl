@@ -69,7 +69,7 @@ end
 
 @testset "P6.0a: one kind cannot be divided by both a cell rule and a cluster rule" begin
     base = MixedDivision(; name = :m)
-    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :ka],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         divisions = [Potts.divide(Potts.cells(1); when = Potts.B.volume > 1),
             Potts.divide(Potts.clusters(1); when = Potts.B.volume > 1)]))

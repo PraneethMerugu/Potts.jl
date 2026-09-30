@@ -221,8 +221,11 @@ _displacement(c) = Num[_displacement(c, k) for k in 1:_lattice_dim()]
 
 """
 `integral(x)`: the sum of the site expression `x` over the cell's sites (cell scope; divide
-by `volume` for the mean). Recomputed at the start of the after-MCS phases (and of the
-before-MCS phases when they read it), so it reflects the state after the copy sweep.
+by `volume` for the mean). Read in an update block it is fresh (D-042): it reflects the
+state after the copy sweep, and the new value of every variable of `x` written bare in the
+same block (the reading update runs after the writer, and the integral is recomputed in
+between). Recomputed at the start of the after-MCS phases, after each update that writes
+one of its variables when something reads it later, and at the MCS boundary.
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
@@ -408,17 +411,20 @@ Forbid copies that locally disconnect a cell of `kinds` (every kind if empty). S
 a constraint over the proposal-scope connectivity values, applied when the losing cell is of
 `kinds`:
 
-- `rule = :local`: `local_components <= 1`, the losing cell's sites around the target stay
-  one piece (CompuCell3D `Connectivity`, Morpheus);
-- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, one arc of the neighbour
-  ring, or else exactly two cells on it (a looser 2D ring rule).
+- `rule = :local`: `local_components == 1`, the losing cell's sites around the target form
+  exactly one piece (CompuCell3D `Connectivity`, which rejects `!= 1`; D-074). Zero pieces
+  (the cell's last site, an isolated fragment) is rejected, so a cell under this rule
+  cannot die by copies;
+- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, at most one arc of the
+  neighbour ring, or else exactly two cells on it (TST's `ConnectivityPreservedP`, the
+  Merks reference; zero arcs pass, so the last site can be taken).
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """
 function connectivity(kinds::Integer...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
-    test = rule === :local ? (B.local_components <= 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
+    test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
     return Constraint(:connectivity, collect(Int, kinds), test)
 end
 """`no_extinction`: forbid copies that remove a cell's last site."""
@@ -635,17 +641,22 @@ Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength *
 """`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
 Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 """
-    Chemotaxis(c; strength, response = identity, kinds = (), when = true)
+    Chemotaxis(c; strength, response = identity, kinds = (), when = new != 0)
 
 `copy => -strength * (r(c[target]) - r(c[source]))` with a response `r` applied to each
 concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
-`c/(s c + 1)`, or any function). It acts when the gaining cell (`new`) is of `kinds` (any
-cell if empty) and the copy condition `when` holds, e.g. `old == 0` for extensions into the
-medium only, or `(kind[new] == a) | (kind[old] == a)` for copies involving kind `a`.
+`c/(s c + 1)`, or any function), on the copies where the copy condition `when` holds
+(D-075):
+- the default `when = new != 0` acts when the gaining cell is a cell, so a retraction
+  (`new == 0`) gets 0;
+- `when = true` acts on every copy, retractions included; any other condition selects
+  exactly its copies, e.g. `old == 0` for extensions into the medium only, or
+  `(kind[new] == A) | (kind[old] == A)` for every copy involving kind `A`;
+- `kinds` non-empty additionally requires the gaining cell to be of `kinds`
+  (`kind[new] ∈ kinds`), so retractions stay 0 whatever `when` says.
 """
-function Chemotaxis(c; strength, response::F = identity, kinds = (), when = true) where {F}
-    gain = isempty(kinds) ? (B.new != 0) : foldl(|, [_index(B.kind, B.new) == k for k in kinds])
-    gate = when === true ? gain : gain & when
+function Chemotaxis(c; strength, response::F = identity, kinds = (), when = (B.new != 0)) where {F}
+    gate = isempty(kinds) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in kinds]) & when)
     return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 

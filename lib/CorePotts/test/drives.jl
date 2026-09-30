@@ -1,7 +1,7 @@
 # Drives, biases and local connectivity (ROADMAP M2.5, M2.6).
 
 """Independent check: the owner's sites in the Moore neighbourhood of x (minus x) form one
-face-connected component (flood fill over explicit coordinates)."""
+face-connected component (flood fill over explicit coordinates); none at all is not one."""
 function brute_local(σ, lat::Lattice{N}, x, a) where {N}
     nb = [o for o in Iterators.product(ntuple(_ -> -1:1, N)...) if any(!=(0), o)]
     own = Set{NTuple{N, Int}}()
@@ -9,7 +9,7 @@ function brute_local(σ, lat::Lattice{N}, x, a) where {N}
         inside, y = shift(lat, x, Int32.(o))
         inside && σ[linear_index(lat, y)] == a && push!(own, o)
     end
-    isempty(own) && return true
+    isempty(own) && return false
     seen = Set([first(own)]); stack = [first(own)]
     while !isempty(stack)
         o = pop!(stack)

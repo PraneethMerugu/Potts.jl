@@ -45,11 +45,15 @@ const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, 
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells)
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
-
+# The link endpoints `a`, `b` are reserved globally (D-075 Q8): no declaration (kind,
+# parameter, variable, observed quantity, relation, relationship, component) may take their
+# name, so nothing an edge term or link rule reads is shadowed (`_check_reserved_names`
+# applies the same rule to a programmatic `PottsSystem`).
 """Record a declared name; reject built-in names and a second declaration of a name."""
 function _declare!(parts::_Parts, k::Symbol, what::String)
     k in _reserved_names() && throw(ArgumentError(
         "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
+    k in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, k)))
     haskey(parts.declared, k) && throw(ArgumentError("$what `$k`: `$k` is already declared as a $(parts.declared[k])"))
     parts.declared[k] = what
     return k
@@ -429,8 +433,8 @@ function _replace_call(ex, from, to, extra...)
     return Expr(:call, to, params..., extra..., rest...)
 end
 
-# Edge-scoped statements see the link endpoints `a`, `b` (bound only there, so parameters
-# named `a`/`b` elsewhere are unaffected).
+# Edge-scoped statements see the link endpoints `a`, `b` (bound only there). No
+# declaration can be named `a`/`b` (`_ENDPOINT_NAMES`), so nothing is shadowed.
 _edge_scope(ex) = :(let a = Potts.B.a, b = Potts.B.b
     $ex
 end)
