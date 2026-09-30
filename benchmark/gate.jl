@@ -5,8 +5,11 @@
 #     julia --project=benchmark benchmark/gate.jl update     # rewrite the baseline
 #     julia --project=benchmark benchmark/gate.jl metal      # also gate Metal
 #
-# A merge fails if any case is more than `TOLERANCE` slower than its baseline (minimum
-# over samples, ns per site per MCS) or allocates in a warm MCS. Run it alone on the
+# A merge fails if any CPU case is more than `TOLERANCE` slower than its baseline (minimum
+# over samples, ns per site per MCS) or any case allocates in a warm MCS. On this Mac the
+# GPU timing is bimodal (about 1.5x between power states, the same for any commit), so a
+# slow Metal case is only flagged: it is decided by `benchmark/ab.jl`, which interleaves
+# the base and the candidate (AUTONOMY §7.4). Run it alone on the
 # machine: parallel test suites make timings meaningless. It runs single-threaded: a
 # threaded KernelAbstractions launch allocates a fixed few KB for its tasks, which would
 # hide per-site allocations, and one thread gives steadier timings.
@@ -62,17 +65,20 @@ function main(args)
     base = isfile(BASELINE) ? TOML.parsefile(BASELINE) : Dict{String, Any}()
     new = Dict{String, Any}()
     failed = String[]
+    flagged = String[]
     for (aname, (alg, backend, T)) in algs, (name, make) in cases(T)
         key = "$name.$aname"
         ns, allocs = measure(make, alg; backend)
         new[key] = round(ns; digits = 3)
         old = get(base, key, nothing)
         ratio = old === nothing ? NaN : ns / old
-        bad = allocs > 0 || (!update && old !== nothing && ratio > 1 + TOLERANCE)
+        slow = !update && old !== nothing && ratio > 1 + TOLERANCE
+        bad = allocs > 0 || (slow && aname != "metal")
         bad && push!(failed, key)
+        slow && aname == "metal" && push!(flagged, key)
         @printf("%-36s %8.2f ns/site  baseline %8s  ratio %6s  allocs %d%s\n", key, ns,
             old === nothing ? "–" : @sprintf("%.2f", old), isnan(ratio) ? "–" : @sprintf("%.3f", ratio), allocs,
-            bad ? "  FAIL" : "")
+            bad ? "  FAIL" : key in flagged ? "  A/B" : "")
     end
     if update
         meta = Dict("machine" => Sys.cpu_info()[1].model, "threads" => Threads.nthreads(), "julia" => string(VERSION))
@@ -82,9 +88,10 @@ function main(args)
         println("baseline written: ", BASELINE)
         return 0
     end
+    isempty(flagged) || println("Metal flagged, decide with benchmark/ab.jl: ", join(flagged, ", "))
     isempty(failed) || (println("REGRESSION: ", join(failed, ", ")); return 1)
     println("performance gate: pass")
     return 0
 end
 
-exit(main(ARGS))
+abspath(PROGRAM_FILE) == (@__FILE__) && exit(main(ARGS))

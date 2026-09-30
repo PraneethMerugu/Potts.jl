@@ -199,6 +199,11 @@ must justify it.
     Julia process, then compare with the same run of the base commit;
   - the coordinator runs the final pre-merge gate itself, on the merged tree, with no
     agents running.
+  - Metal cases are only flagged by the gate. The GPU flips between power states (about
+    75 and 115 ns/site for OpenVT, whatever the commit). A flagged case is decided by
+    `julia benchmark/ab.jl <base checkout> <candidate checkout> <case> metal`, which runs
+    the two alternately in fresh processes and compares the fastest run median of each
+    side (tolerance 5 %).
 - **Suites** (all must pass on the merged tree):
   - `GROUP=CorePotts`, `Potts` with `POTTS_GPU=metal`, `PottsModels` and `MakiePotts`;
   - `benchmark/gate.jl metal`.
