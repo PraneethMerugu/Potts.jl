@@ -244,3 +244,30 @@ end
     sol = solve(mp, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 0:8)
     @test [Array(u.model.ctr₊dn)[1] for u in sol.u] == [3.0f0 * (t ÷ 2) for t in 0:8]
 end
+
+# several tick phases (cell and model scope, two clocks): scratch slots published on the device
+@potts_model GPUDiscreteScratch begin
+    @kinds medium A
+    @components cells(A) cc = xcell
+    @components model mm = mmodel
+    @components cells(A) zz = zslow
+    @components cells(A) yy = yfast
+    @equations begin
+        cc.ds ~ mm.dM > 0.5
+        mm.dq ~ 1.0 + count(true for c in cells)
+        yy.dw ~ zz.dZ
+    end
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "P6.0k scratch-published ticks on Metal (Float32)" begin
+    prob = PottsProblem(GPUDiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]], (0, 5); T = Float32)
+    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:5)
+    Z = [isodd(t ÷ 2) for t in 0:5]
+    @test [Array(u.model.mm₊dM)[1] for u in sol.u] == Float32[0; fill(3, 5)]
+    @test [Array(u.cell.cc₊dX)[1] for u in sol.u] == Float32[0, 0, 1, 1, 1, 1]
+    @test [Array(u.cell.zz₊dZ)[2] for u in sol.u] == Float32.(Z)
+    @test [Array(u.cell.yy₊dY)[2] for u in sol.u] == Float32.([false; Z[1:5]])
+end

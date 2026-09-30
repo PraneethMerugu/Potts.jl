@@ -809,8 +809,10 @@ end
   must be whole numbers of MCS, with `0 ≤ phase < dt`.
 - **Update order is MTK's.** Every rule reads the state before the tick (a `x(k - 1)` read
   is synchronous); a same-step read `x(k)` sees the new value, because `mtkcompile`
-  substitutes its rule. Several components on one clock share one phase, and a coupling
-  between them reads the pre-tick value.
+  substitutes its rule. Several components on one clock and scope share one phase. Every
+  component that ticks at a given MCS (cell or model scope, any clock) reads the other
+  components' pre-tick values, whatever the declaration order: with more than one tick
+  phase, new values go to scratch slots (`grn₊x__tick`) and are published after all ticks.
 - **Couplings (as D-038).** `@equations grn.p ~ expr` replaces a component parameter by a
   cell-scope expression (cell variables, `volume`, `integral`, population folds, other
   components' state, `rand()`). A `Bool` parameter coupled to a number reads it as
@@ -830,9 +832,11 @@ end
   `Clock(dt; phase)`. `ShiftIndex()` (an inferred clock) is not available.
 - Random-order asynchronous updating is written in MTK form: a per-cell draw
   `@equations grn.u ~ rand()` and rules `A(k) ~ ifelse(u < 1/3, f_A, A(k - 1))`.
-- Loading full `ModelingToolkit` (whose compiler rejects clocked systems) is supported: the
-  `PottsModelingToolkitExt` extension compiles discrete components through MTK's
-  discrete-pass hook, with the same result.
+- Loading full `ModelingToolkit` (11.45 or later; its compiler rejects clocked systems) is
+  supported: the `PottsModelingToolkitExt` extension compiles discrete components through
+  MTK's discrete-pass hook, with the same generated code. Full MTK also compiles
+  continuous components itself; it may order their unknowns differently (so the cell
+  variables are declared in another order), with the same results.
 
 **Randomness (implemented).**
 - `rand()` inside a model is a uniform draw in (0, 1), fresh every MCS for every cell or

@@ -604,36 +604,58 @@ function _ode_steps(solver, T, dt, ys, rates)
     end
 end
 
-# Discrete components (P6.0k, D-065 Q9): one fused phase per clock (scope, cadence), after the
-# ODEs and before the links and the lifecycle. Every new value is computed from the pre-tick
-# state before any slot is written (Jacobi; a same-step read `x(k)` arrives already substituted
-# by `mtkcompile`), for live cells of each component's kinds.
+# Discrete components (P6.0k, D-065 Q9): one fused phase per clock and scope, after the ODEs
+# and before the links and the lifecycle. Every new value is computed from the pre-tick state
+# before any slot is written (Jacobi; a same-step read `x(k)` arrives already substituted by
+# `mtkcompile`), for live cells of each component's kinds. With several phases (cell and model
+# scope, or several clocks that may tick at the same MCS) every phase first writes scratch
+# slots `x__tick`, and the slots are published only after all of them ran, so no block ever
+# reads another's post-tick value. A model with a single phase writes its slots directly.
+_tick_groups(c::CompiledPottsSystem) = unique((b.scope, b.every, b.offset) for b in c.discrete)
+_tick_scratch(c::CompiledPottsSystem) = length(_tick_groups(c)) > 1
+_tick_scratch_name(n::Symbol) = Symbol(n, :__tick)
+
+# MTK clock ticks at `t = offset + k·every` MCS happen after MCS `t - 1`: `mcs % every == mod(offset - 1, every)`
+_clocked(every, offset, ph) = every == 1 && offset == 0 ? ph : _Gated(every, mod(offset - 1, every), ph)
+
 function _discrete_phases(c::CompiledPottsSystem, T)
     isempty(c.discrete) && return Any[]
     rn = c.gather_names
-    out = Any[]
-    for key in unique((b.scope, b.every, b.offset) for b in c.discrete)
+    scratch = _tick_scratch(c)
+    computes = Any[]
+    commits = Any[]
+    for key in _tick_groups(c)
         scope, every, offset = key
         bs = [b for b in c.discrete if (b.scope, b.every, b.offset) == key]
-        phases = Any[]
         if scope === :cell
             used = Set(n for b in bs for x in b.next for (r, n) in _uses(x) if r === :model)
             pops = [s for s in c.discrete_pops if s.first in used]
-            isempty(pops) || push!(phases, _slots_phase(T, pops, rn))
-            push!(phases, CorePotts.CellPhase(_rgf(_tick_expr(bs, T, rn, :cell))))
+            isempty(pops) || push!(computes, _clocked(every, offset, _slots_phase(T, pops, rn)))
+            push!(computes, _clocked(every, offset, CorePotts.CellPhase(_rgf(_tick_expr(bs, T, rn, :cell; scratch)))))
         else
-            push!(phases, CorePotts.ModelPhase(_rgf(_tick_expr(bs, T, rn, :model))))
+            push!(computes, _clocked(every, offset, CorePotts.ModelPhase(_rgf(_tick_expr(bs, T, rn, :model; scratch)))))
         end
-        append!(out, every == 1 && offset == 0 ? phases : [_Ticked(every, offset, ph) for ph in phases])
+        scratch || continue
+        for b in bs, x in b.slots
+            n = info(x).name
+            push!(commits, _clocked(every, offset, CorePotts.CopyPhase((scope, n) => (scope, _tick_scratch_name(n)))))
+        end
     end
-    return out
+    return Any[computes..., commits...]
 end
 
-function _tick_expr(bs, T, rn, scope)
+function _tick_expr(bs, T, rn, scope; scratch = false)
     env = scope === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key) : _model_env(T, rn; key = :key)
+    arr(n) = scope === :cell ? :(st.cell.$n) : :(st.model.$n)
+    idx = scope === :cell ? :c : 1
+    dst(n) = arr(scratch ? _tick_scratch_name(n) : n)
     body = Any[]
-    scope === :cell && push!(body, :(@inbounds st.cell.volume[c] > 0 || return nothing))
-    scope === :cell && any(b -> !isempty(b.kinds), bs) && push!(body, :(kc = Potts._cellkind(st, c)))
+    if scope === :cell
+        # a dead cell does not tick (its scratch keeps its value, so publishing leaves it unchanged)
+        keep = scratch ? [:(@inbounds $(dst(info(x).name))[c] = $(arr(info(x).name))[c]) for b in bs for x in b.slots] : Any[]
+        push!(body, :(@inbounds st.cell.volume[c] > 0 || $(Expr(:block, keep..., :(return nothing)))))
+        any(b -> !isempty(b.kinds), bs) && push!(body, :(kc = Potts._cellkind(st, c)))
+    end
     writes = Any[]
     for (i, b) in enumerate(bs)
         gated = scope === :cell && !isempty(b.kinds)
@@ -642,27 +664,16 @@ function _tick_expr(bs, T, rn, scope)
         for (j, (x, r)) in enumerate(zip(b.slots, b.next))
             v = Symbol(:v_, i, :_, j)
             n = info(x).name
-            a = scope === :cell ? :(st.cell.$n) : :(st.model.$n)
-            idx = scope === :cell ? :c : 1
+            a = arr(n)
             new = :(convert(eltype($a), $(lower(r, env))))
             # another kind keeps its value (the component is not instantiated there)
             push!(body, :($v = $(gated ? :($g ? $new : (@inbounds $a[$idx])) : new)))
-            push!(writes, :(@inbounds $a[$idx] = $v))
+            push!(writes, :(@inbounds $(dst(n))[$idx] = $v))
         end
     end
     args = scope === :cell ? :((st, p, ctx, key, mcs, c)) : :((st, p, ctx, key, mcs))
     return :($args -> $(Expr(:block, body..., writes..., :(return nothing))))
 end
-
-"""A phase run after MCS `mcs` when `(mcs + 1 - offset) % every == 0`: MTK clock ticks at
-`t = offset + k·every` MCS (the end of MCS `t - 1`), `t = 0` being the initial state."""
-struct _Ticked{P}
-    every::Int
-    offset::Int
-    phase::P
-end
-(g::_Ticked{P})(st, p, ctx, key, mcs, backend) where {P} =
-    (mcs + 1 - g.offset) % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
 
 # `@link`/`@unlink` rules: host phases over the contact graph / existing links.
 function _link_phases(c::CompiledPottsSystem, T)
@@ -727,13 +738,18 @@ function _site_update_phases(c, T, us, every, rn)
     return phases
 end
 
-"""A phase that runs only every `every` MCS."""
+"""
+A phase that runs only after MCS `mcs` with `mcs % every == offset`: `Every(n)` (offset 0,
+MCS 0, n, …) and the clocks of discrete components (`_clocked`).
+"""
 struct _Gated{P}
     every::Int
+    offset::Int
     phase::P
 end
+_Gated(every::Integer, phase) = _Gated(every, 0, phase)
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
-    mcs % g.every == 0 ? g.phase(st, p, ctx, key, mcs, backend) : 0
+    mcs % g.every == g.offset ? g.phase(st, p, ctx, key, mcs, backend) : 0
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)

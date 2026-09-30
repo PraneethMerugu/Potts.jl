@@ -29,6 +29,9 @@ end
 # (`ShiftIndex(t, 0)`: no clock partitioning needed) pass through unchanged.
 (pass::PottsDiscretePass)(sys) = sys
 
+"""The loaded ModelingToolkit version (for incompatibility errors)."""
+mtk_version() = pkgversion(ModelingToolkit)
+
 """
 `mtkcompile` of a discrete component with full ModelingToolkit loaded.
 """

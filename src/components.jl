@@ -236,7 +236,12 @@ function _compile_discrete(comp)
     try
         return ext === nothing ? ModelingToolkitBase.mtkcompile(comp.system) : ext.compile_discrete(comp.system)
     catch e
-        e isa ArgumentError && rethrow()
+        (e isa ArgumentError || e isa InterruptException) && rethrow()
+        # the extension re-enters MTK internals (G1): a missing method or name is an
+        # incompatible ModelingToolkit, not a problem with the user's system
+        ext !== nothing && e isa Union{MethodError, UndefVarError} && throw(ErrorException(
+            "PottsModelingToolkitExt is incompatible with ModelingToolkit v$(ext.mtk_version()) " *
+            "(component `$(comp.name)`): $(first(sprint(showerror, e), 400))"))
         throw(ArgumentError("component `$(comp.name)`: ModelingToolkit cannot compile this discrete system: " *
                             first(sprint(showerror, e), 600)))
     end

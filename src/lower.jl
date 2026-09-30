@@ -235,8 +235,10 @@ function _lower_at(args, env)
     x = _unwrap(args[1])
     # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
+    # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
+    iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
     i = info(x)
-    i === nothing && error("cannot index `$x`")
+    i === nothing && error("cannot index `$(_standin_var(x))`")
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
         return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])

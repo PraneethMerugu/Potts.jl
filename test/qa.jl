@@ -99,7 +99,22 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+@potts_model QADiscreteScratch begin
+    @kinds medium A
+    @components cells(A) cc = xcell
+    @components model mm = mmodel
+    @components cells(A) zz = zslow
+    @equations begin
+        cc.ds ~ mm.dM > 0.5
+        mm.dq ~ 1.0 + count(true for c in cells)
+    end
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 @testset "QA: discrete components ($label, $T)" for (label, make) in (
+        ("scratch", () -> (QADiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]])),
         ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
         ("hybrid", () -> (DiscreteHybrid(; name = :h), [ownership => _discrete_blocks(2), kind => [1, 1]])),
         ("model clock", () -> (discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
@@ -116,7 +131,7 @@ end
     step!(integ)
     c = mtkcompile(sys)
     for b in c.discrete
-        ex = Potts._tick_expr([b], T, c.gather_names, b.scope)
+        ex = Potts._tick_expr([b], T, c.gather_names, b.scope; scratch = Potts._tick_scratch(c))
         fn = Core.eval(_QA_MOD, ex)
         args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :
                (integ.state, integ.p, integ.ctx, integ.key, 1)

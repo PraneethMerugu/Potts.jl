@@ -2536,6 +2536,67 @@ end
     @test only(ec.discrete).name === :fib && length(ec.cell_terms) == 2
 end
 
+# Several tick phases (cell and model scope, clocks that coincide) read only pre-tick values:
+# the result does not depend on declaration order (review P6.0k round 1).
+Potts.ModelingToolkitBase.@variables dX(_tc)::Bool = false dM(_tc) = 0.0 dZ(_tc)::Bool = false dY(_tc)::Bool = false
+@parameters ds::Bool = false dq = 0.0 dw::Bool = false
+@named xcell = System([dX(_kd) ~ ds], _tc)
+@named mmodel = System([dM(_kd) ~ dq], _tc)
+@named zslow = System([dZ(ShiftIndex(Clock(2.0))) ~ !dZ(ShiftIndex(Clock(2.0)) - 1)], _tc)
+@named yfast = System([dY(_kd) ~ dw], _tc)
+
+@testset "discrete components: ticks on one MCS are Jacobi across phases" begin
+    make(label, comps, eqs) = Base.invokelatest(eval(Potts._potts_model(:DiscreteOrder, quote
+        @kinds medium A
+        $(comps...)
+        @equations begin
+            $(eqs...)
+        end
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end, @__MODULE__)); name = label)
+    σ = _discrete_blocks(2)
+    run(sys) = solve(PottsProblem(sys, [ownership => σ, kind => [1, 1]], (0, 5)), SequentialCPM(); saveat = 0:5)
+    # cell and model scope on one clock: X reads M before the tick
+    cc = :(@components cells(A) cc = xcell)
+    mm = :(@components model mm = mmodel)
+    eqs = (:(cc.ds ~ mm.dM > 0.5), :(mm.dq ~ 1.0 + count(true for c in cells)))
+    for comps in ((cc, mm), (mm, cc))
+        sol = run(make(:xm, comps, eqs))
+        @test [u.model.mm₊dM[1] for u in sol.u] == [0.0; fill(3.0, 5)]
+        @test [u.cell.cc₊dX[1] for u in sol.u] == [0.0, 0.0, 1.0, 1.0, 1.0, 1.0]   # one tick behind M
+        @test :cc₊dX__tick in propertynames(sol.u[1].cell)                       # published after both
+    end
+    # two clocks coinciding on even t: Y reads Z before Z's tick
+    zz = :(@components cells(A) zz = zslow)
+    yy = :(@components cells(A) yy = yfast)
+    for comps in ((zz, yy), (yy, zz))
+        sol = run(make(:zy, comps, (:(yy.dw ~ zz.dZ),)))
+        Z = [isodd(t ÷ 2) for t in 0:5]
+        @test [u.cell.zz₊dZ[1] for u in sol.u] == Float64.(Z)
+        @test [u.cell.yy₊dY[1] for u in sol.u] == Float64.([false; Z[1:5]])
+    end
+    # a single phase writes its slots directly (no scratch)
+    @test !(:tg₊dA__tick in propertynames(PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1]], (0, 1)).u0.cell))
+end
+
+@testset "discrete components: a Bool node indexed by a cell" begin
+    @potts_model DiscreteIndexed begin
+        @kinds medium A
+        @variables got(cell) = 0.0
+        @components cells(A) tg = toggle
+        @after_mcs got ~ 1.0 + tg.dA[id]                    # an indexed node reads as 0/1
+        @lattice Lattice((8, 8))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 1.0e-6)
+    end
+    σ = _discrete_blocks(2, 8)
+    u = solve(PottsProblem(DiscreteIndexed(; name = :i), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 1)),
+        SequentialCPM()).u[end]
+    @test u.cell.got == [1.0, 2.0]                         # the update runs before the MCS-0 tick
+end
+
 # Gap G1: with full ModelingToolkit loaded (it replaces MTKBase's compiler, and its own
 # rejects clocked systems), `PottsModelingToolkitExt` compiles discrete components through
 # MTK's discrete-pass hook. Loading MTK is session-wide, so both sides run in fresh processes;
