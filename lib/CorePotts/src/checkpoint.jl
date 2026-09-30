@@ -70,7 +70,7 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)
     _restore_stats!(integ.stats, PottsStats())
-    integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> fill!(c, 0), (integ.cache.claims..., integ.cache.wclaims...)))
+    integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> c === nothing || fill!(c, 0), (integ.cache.claims..., integ.cache.wclaims...)))
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     for cb in integ.callbacks
