@@ -381,7 +381,14 @@ The programmatic form is `Potts.divide(domain, Potts.Every(n); when = …)`. A m
 rules all share one cadence pays nothing per MCS for it; the lifecycle pass is skipped
 outright on the other MCS. Under `@extend`, division rules accumulate. An extension's rule
 for kinds the base already divides at another cadence adds to the base's rule and does not
-replace it: both rules fire, each at its own cadence, and a warning names the two. Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
+replace it: both rules fire, each at its own cadence, and a warning names the two.
+
+**Several rules for one cell.** Rules are tried in model order (a base's before an
+extension's), and the first rule whose cadence, kinds and `when` all hold for a cell wins:
+it divides the cell, and only its daughter state rules run. A rule that was not checked, or
+did not fire, never writes the daughters' state, even when it names the same kind.
+
+Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 `Redraw(dist)`; the default is `Copy()`.
 
 ### Relationships

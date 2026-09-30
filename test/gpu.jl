@@ -194,3 +194,28 @@ end
         @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
     end
 end
+
+@testset "P6.0f rule-carrying events on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
+    function run(sys, tspan)
+        prob = PottsProblem(sys, [ownership => σ, kind => [:a]], tspan; capacity = 32, T = Float32)
+        u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        return length(live), unique(Array(u.cell.x)[live])
+    end
+    sys = SameKindCadences(; name = :s)
+    @test run(sys, (0, 1)) == (2, [1.0f0])
+    @test run(sys, (0, 4)) == (8, [2.0f0])
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 2, wb = 10^9), (0, 1)) == (2, [1.0f0])
+    # cluster rules: members take their root's rule
+    σc, kinds, groups = compartment_state()
+    cp = PottsProblem(ClusterCadences(; name = :cc), [ownership => σc, kind => kinds, cluster => groups], (0, 1);
+        capacity = 128, T = Float32)
+    for (tspan, mass) in (((0, 1), 3.0f0), ((0, 3), 5.0f0))
+        u = solve(remake(cp; tspan), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        @test unique(Array(u.cell.mass)[live]) == [mass]
+        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+    end
+end

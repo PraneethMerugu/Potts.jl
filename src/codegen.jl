@@ -724,33 +724,51 @@ end
 # whose `n` is not `g` is gated inside the trigger by `_cadence_gate`. A model whose rules
 # share one cadence (the default `Every(1)` included) generates no modulo gate at all.
 # Future lifecycle rules (`@remove`, `@transition`) that join the trigger take the same path:
-# include their cadence in `_lifecycle_every` and prefix their test with `_cadence_gate`.
+# include their cadence in `_lifecycle_every` and prefix their test with `_gated`.
 _lifecycle_every(rules) = isempty(rules) ? 1 : gcd((r.every for r in rules)...)
-_cadence_gate(n, g) = n == g ? true : :(mcs % $n == 0)
+_cadence_gate(n, g) = n == g ? nothing : :(mcs % $n == 0)
+_gated(gate, test) = gate === nothing ? test : :($gate && $test)
+
+# Two rules of one domain that can fire for the same cell (their kinds overlap): only the
+# rule that fired may run its daughter state rule, so the trigger reports which one it was
+# (`CorePotts.ruled_event`) and the state rules take its index. The first matching rule
+# (in model order) wins, its division and its state. Models without such overlaps generate
+# plain events and kind-gated state rules (no rule index at all).
+function _overlapping_rules(divisions)
+    for (i, a) in enumerate(divisions), b in divisions[(i + 1):end]
+        typeof(a.domain) == typeof(b.domain) && _kinds_overlap(a.domain, b.domain) && return true
+    end
+    return false
+end
 
 function _lifecycle(c::CompiledPottsSystem, T)
     isempty(c.divisions) && return nothing
     rn = c.gather_names
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     g = _lifecycle_every(c.divisions)
+    ruled = _overlapping_rules(c.divisions)
+    event(e, i) = ruled ? :(CorePotts.ruled_event($e, $i)) : e
     # each rule divides by its own domain (P6.0a): cells(k…) → the cell alone, clusters(k…) →
     # the whole cluster of the root (only the root's rule fires; compile.jl keeps kinds disjoint)
-    tests = map(c.divisions) do d
+    tests = map(enumerate(c.divisions)) do (i, d)
         gate = _cadence_gate(d.every, g)
         if d.domain isa ClusterDomain
-            :($gate && CorePotts.cluster_of(st.cell, c) == c && $(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) &&
-              $(lower(d.when, env)) && return CorePotts.EVENT_DIVIDE_CLUSTER)
+            _gated(gate, :(CorePotts.cluster_of(st.cell, c) == c && $(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) &&
+                           $(lower(d.when, env)) && return $(event(:(CorePotts.EVENT_DIVIDE_CLUSTER), i))))
         else
-            :($gate && $(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) && $(lower(d.when, env)) &&
-              return CorePotts.EVENT_DIVIDE)
+            _gated(gate, :($(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) && $(lower(d.when, env)) &&
+                           return $(event(:(CorePotts.EVENT_DIVIDE), i))))
         end
     end
     trigger = _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:block, tests..., :(return CorePotts.EVENT_NONE)))))
-    celldivs = filter(d -> d.domain isa CellDomain, c.divisions)
-    clusterdivs = filter(d -> d.domain isa ClusterDomain, c.divisions)
-    return CorePotts.Lifecycle(trigger; normal = _division_normal(celldivs, T),
-        cluster_normal = _division_normal(clusterdivs, T), divide! = _division_rules(c, celldivs, T, :parent, g),
-        cluster_divide! = _division_rules(c, clusterdivs, T, :(CorePotts.cluster_of(st.cell, parent)), g), every = g)
+    ids = eachindex(c.divisions)
+    cellids = filter(i -> c.divisions[i].domain isa CellDomain, ids)
+    clusterids = filter(i -> c.divisions[i].domain isa ClusterDomain, ids)
+    return CorePotts.Lifecycle(trigger; normal = _division_normal(c.divisions[cellids], T),
+        cluster_normal = _division_normal(c.divisions[clusterids], T),
+        divide! = _division_rules(c, cellids, T, :parent, ruled),
+        cluster_divide! = _division_rules(c, clusterids, T, :(CorePotts.cluster_of(st.cell, parent)), ruled),
+        every = g, rules = ruled)
 end
 
 # the plane of one domain's divisions (the rules of a domain share it)
@@ -765,13 +783,15 @@ function _division_normal(divisions, T)
            _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
 end
 
-# daughter state rules of one domain, each gated by the kinds of its rule: the parent's kind
-# for cell divisions, the kind of the parent's cluster root (`who`) for cluster divisions;
-# and by its cadence (a rule not checked at this MCS did not divide the parent)
-function _division_rules(c::CompiledPottsSystem, divisions, T, who, g)
+# daughter state rules of one domain (the rules `ids` of the model). Each runs for the rule
+# that fired: gated by its kinds (the parent's kind for cell divisions, the kind of the
+# parent's cluster root `who` for cluster divisions), which identify the rule when no two
+# rules of a domain share a kind; else (`ruled`) by the firing rule's index `rule`.
+function _division_rules(c::CompiledPottsSystem, ids, T, who, ruled)
     rn = c.gather_names
     rules = Any[]
-    for d in divisions
+    for i in ids
+        d = c.divisions[i]
         block = Any[]
         for (x, r) in d.rules
             name = info(x).name
@@ -783,13 +803,12 @@ function _division_rules(c::CompiledPottsSystem, divisions, T, who, g)
                 push!(block, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))
             end
         end
-        test = _kindtest(:(Potts._cellkind(st, $who)), d.domain.kinds)
-        gate = _cadence_gate(d.every, g)
-        gate === true || (test = Expr(:&&, gate, test))
+        test = ruled ? :(rule == $i) : _kindtest(:(Potts._cellkind(st, $who)), d.domain.kinds)
         isempty(block) || push!(rules, Expr(:&&, test, Expr(:block, block...)))
     end
     isempty(rules) && return CorePotts.no_divide_rule
-    return _rgf(:((st, p, ctx, key, mcs, parent, daughter) -> $(Expr(:block, rules..., :(return nothing)))))
+    args = ruled ? :((st, p, ctx, key, mcs, parent, daughter, rule)) : :((st, p, ctx, key, mcs, parent, daughter))
+    return _rgf(:($args -> $(Expr(:block, rules..., :(return nothing)))))
 end
 
 # ---------------------------------------------------------------------------------------

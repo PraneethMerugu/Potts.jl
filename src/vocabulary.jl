@@ -527,7 +527,8 @@ cadence (`@divide`, `@link`/`@unlink`, and future lifecycle rules) parses it her
 """
 function _rule_cadence(what, args, every)
     cadences = Every[a for a in args if a isa Every]
-    every === nothing || push!(cadences, every isa Every ? every : Every(every))
+    every === nothing || push!(cadences, every isa Every ? every : every isa Integer ? Every(every) :
+                                         throw(ArgumentError("$what: `every = n` takes an integer n ≥ 1 or `Every(n)`; got $(repr(every))")))
     length(cadences) <= 1 || throw(ArgumentError("$what: a rule has one cadence; got " *
                                                  join(("Every($(e.n))" for e in cadences), " and ")))
     return (isempty(cadences) ? 1 : only(cadences).n), Any[a for a in args if !(a isa Every)]

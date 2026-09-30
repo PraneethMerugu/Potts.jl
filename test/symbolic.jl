@@ -2136,6 +2136,11 @@ end
     @test_throws r"one cadence" Potts.divide(dom, Potts.Every(2); when = V >= 4, every = 2)
     @test_throws r"`3` is neither a cadence `Every\(n\)` nor a state rule" Potts.divide(dom, 3; when = V >= 4)
     @test_throws ArgumentError Potts.divide(dom; when = V >= 4, every = 0)
+    @test_throws r"`every = n` takes an integer n ≥ 1 or `Every\(n\)`; got 2.0" Potts.divide(dom; when = V >= 4, every = 2.0)
+    @test_throws ArgumentError Potts.link_rule(:link, Potts.RelationshipRef(:bond); when = true, every = 2.0)
+    @test occursin("divide  cells(1) Every(3) when", sprint(show, MIME"text/plain"(), Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+        lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+        divisions = [Potts.divide(dom, Potts.Every(3); when = V >= 4)])))
     # the macro passes a cadence through to @link as well (it used to be dropped silently)
     rel = Potts.RelationshipRef(:bond)
     @test Potts.link_rule(:link, rel, Potts.Every(4); when = true).every == 4
@@ -2147,29 +2152,113 @@ end
     @test Potts._describe(Potts.divide(dom; when = V >= 4)) == "@divide cells(1) when = volume >= 4"
 end
 
-# the daughter state rules of a rule apply only at MCS where its cadence checks it
+# Only the rule that fired writes the daughters' state (P6.0f review): rules sharing a kind
+# are tried in model order, and the first whose cadence, kinds and `when` hold wins, its
+# division and its state rules.
 @potts_model SameKindCadences begin
+    @structural_parameters begin
+        na = 2
+        nb = 3
+        wa = 4           # rule a is met when volume ≥ wa, rule b when volume ≥ wb
+        wb = 4
+        xa = 1.0
+        xb = 2.0
+    end
     @kinds medium a
     @variables x(cell) = 0.0
     @lattice Lattice((48, 32))
     @energy cells => (volume - 64.0)^2
     @constraint no_extinction
-    @divide cells(a) Every(2) when = volume >= 4, along = RandomPlane(), x => 1.0
-    @divide cells(a) Every(3) when = volume >= 4, along = RandomPlane(), x => 2.0
+    @divide cells(a) Every(na) when = volume >= wa, along = RandomPlane(), x => xa
+    @divide cells(a) Every(nb) when = volume >= wb, along = RandomPlane(), x => xb
     @sweep Metropolis(; temperature = 10.0)
 end
 
-@testset "P6.0f per-rule cadence: state rules follow their rule's cadence" begin
+@testset "P6.0f per-rule cadence: only the firing rule writes the daughters' state" begin
     σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
-    prob = PottsProblem(SameKindCadences(; name = :s), [ownership => σ, kind => [:a]], (0, 3); capacity = 16)
-    u = solve(prob, SequentialCPM()).u[end]
-    live = findall(>(0), u.cell.volume)
-    # MCS 0: both rules are checked (the first fires; both state rules apply, the second last);
-    # MCS 2: only Every(2) is checked, so the state is its 1.0 (2.0 if the Every(3) block ran)
-    @test length(live) == 4
-    @test all(==(1.0), u.cell.x[live])
-    u1 = solve(remake(prob; tspan = (0, 1)), SequentialCPM()).u[end]
-    @test all(==(2.0), u1.cell.x[findall(>(0), u1.cell.volume)])                   # control: MCS 0 alone
+    function run(sys, tspan; alg = SequentialCPM())
+        u = solve(PottsProblem(sys, [ownership => σ, kind => [:a]], tspan; capacity = 32), alg).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        return length(live), unique(Array(u.cell.x)[live])
+    end
+    sys = SameKindCadences(; name = :s)
+    @test PottsProblem(sys, [ownership => σ, kind => [:a]], (0, 1)).f.lifecycle.rules === Val(true)
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        # MCS 0: both are checked and met; the first (Every(2), x = 1) wins
+        @test run(sys, (0, 1); alg) == (2, [1.0])
+        # MCS 2: only Every(2) is checked
+        @test run(sys, (0, 3); alg) == (4, [1.0])
+        # MCS 3: only Every(3) is checked, so its state 2 (absolute MCS numbers: 3 % 3 == 0)
+        @test run(sys, (0, 4); alg) == (8, [2.0])
+        @test run(sys, (3, 4); alg) == (2, [2.0])
+        @test run(sys, (3, 5); alg) == (4, [1.0])                               # then MCS 4: Every(2)
+    end
+    # the review's case: a never-firing rule for the same kind must not write the state
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 2, wb = 10^9), (0, 1)) == (2, [1.0])
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 1, wb = 10^9), (0, 2)) == (4, [1.0])
+    # rule order: both fire for every cell; the first wins (one division, its state)
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 1), (0, 2)) == (4, [1.0])
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 1, xa = 2.0, xb = 1.0), (0, 2)) == (4, [2.0])
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 1, wa = 10^9), (0, 2)) == (4, [2.0])  # a unmet: b
+end
+
+@testset "P6.0f per-rule cadence: disjoint rules generate plain events" begin
+    sys = RuleCadences(; name = :rc, na = 2, nb = 3)
+    @test !occursin("ruled_event", trigger_code(sys)) && !occursin("true &&", trigger_code(sys))
+    σ, kinds = rule_cadence_state((48, 32))
+    lc = PottsProblem(sys, [ownership => σ, kind => kinds], (0, 1)).f.lifecycle
+    @test lc.rules === Val(false)
+    # the state rules take no rule index
+    ruled_rules(sys) = any(e -> occursin("daughter, rule)", string(e)), Potts.generated_code(sys).phases)
+    @test !ruled_rules(sys)
+    @test occursin("ruled_event", trigger_code(SameKindCadences(; name = :s))) && ruled_rules(SameKindCadences(; name = :s))
+end
+
+@testset "P6.0f per-rule cadence: absolute MCS after remake" begin
+    σ, kinds = rule_cadence_state((48, 32))
+    prob = PottsProblem(RuleCadences(; name = :rc, na = 2, nb = 3), [ownership => σ, kind => kinds], (0, 1); capacity = 128)
+    oracle(n, t0, t1) = 2^count(m -> m % n == 0, t0:(t1 - 1))
+    for (t0, t1) in ((3, 7), (1, 2), (5, 9))
+        @test live_kinds(solve(remake(prob; tspan = (t0, t1)), SequentialCPM()).u[end]) == (oracle(2, t0, t1), oracle(3, t0, t1))
+    end
+end
+
+# cluster rules at cadences that are not the gcd, sharing their kind (rule-carrying events
+# on the cluster path: every member takes its root's rule)
+@potts_model ClusterCadences begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 14 30; 16 30 14]
+        V₀[kind] = [0.0, 48.0, 16.0]
+    end
+    @variables mass(cell) = 0.0
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy begin
+        cells => (volume - V₀[kind])^2
+        contacts => ifelse(cluster[owner] == cluster[owner′], 2.0, J[kind, kind′])
+        clusters(cytoplasm) => (cluster_volume - 64.0)^2
+    end
+    @constraint no_extinction
+    @divide clusters(cytoplasm) Every(3) when = cluster_volume >= 16, along = (1.0, 0.0), mass => 3.0
+    @divide clusters(cytoplasm) Every(2) when = cluster_volume >= 16, along = (1.0, 0.0), mass => 5.0
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "P6.0f per-rule cadence: cluster rules" begin
+    σ, kinds, groups = compartment_state()
+    prob = PottsProblem(ClusterCadences(; name = :cc), [ownership => σ, kind => kinds, cluster => groups], (0, 1); capacity = 128)
+    @test prob.f.lifecycle.every == 1 && prob.f.lifecycle.rules === Val(true)
+    c = trigger_code(ClusterCadences(; name = :cc))
+    @test occursin("mcs % 2", c) && occursin("mcs % 3", c)
+    function run(tspan)
+        u = solve(remake(prob; tspan), SequentialCPM(; proposal = Moore(1))).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        return length(unique(Array(u.cell.cluster)[live])), length(live), unique(Array(u.cell.mass)[live])
+    end
+    @test run((0, 1)) == (18, 36, [3.0])       # MCS 0: both checked, the first (Every(3)) wins
+    @test run((0, 2)) == (18, 36, [3.0])       # MCS 1: neither
+    @test run((0, 3))[[1, 3]] == (36, [5.0])   # MCS 2: Every(2) alone (a small nucleus may miss the plane)
+    @test run((3, 4)) == (18, 36, [3.0])       # MCS 3: Every(3) alone
 end
 
 @potts_model CadenceDivBase begin
