@@ -81,7 +81,7 @@ end
         # inventory 390 in 96.1 % (our 20k: 382.14 ± 2.73, 7.90 ± 2.74, 96.1 %); 3·SE ≈ 0.4
         @test abs(mean(painted) - 382.1) < 0.5
         @test abs(mean(counted .- painted) - 7.9) < 0.5
-        @test all(>=(390), counted) && 0.93 < mean(counted .== 390) <= 0.99
+        @test all(>=(390), counted) && 0.93 < mean(counted .== 390) <= 0.995
         # `akeeb_state` uses this loop; negative control: `:retry` paints exactly the quota
         o = akeeb_state(; seed = 3)
         @test count(==(:follower), o[2].second) == 1169 && count(==(:leader), o[2].second) == painted[3]

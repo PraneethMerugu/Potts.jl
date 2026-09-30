@@ -56,8 +56,8 @@ ring_rule(σ, x, a, periodic) = one_arc(σ, x, a, periodic) ||
                                length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2
 
 """Cells whose sites are not one 8-connected piece (axes periodic as given)."""
-function split_cells(σ, periodic)
-    X, Y = size(σ); n = 0
+function split_ids(σ, periodic)
+    X, Y = size(σ); out = eltype(σ)[]
     for c in unique(σ)
         c == 0 && continue
         idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]]
@@ -71,10 +71,11 @@ function split_cells(σ, periodic)
                 (σ[p] == c && !(p in seen)) && (push!(seen, p); push!(st, p))
             end
         end
-        length(seen) < length(idx) && (n += 1)
+        length(seen) < length(idx) && push!(out, c)
     end
-    return n
+    return out
 end
+split_cells(σ, periodic) = length(split_ids(σ, periodic))
 
 blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 
@@ -551,34 +552,30 @@ end
             SequentialCPM(; proposal = VonNeumann(1))).u[end]
         @test split_cells(u.σ, (true, false)) == 0
     end
-    # with clocks, every cell that becomes split does so in an MCS where it divided: a cell
-    # born that MCS took most of its sites from it (seed 3 splits one at MCS 200)
-    let o = akeeb_state(; lattice = (99, 60), seed = 3), X = 99
+    # with clocks, every cell that becomes split does so in an MCS where it took part in a
+    # division: either a cell born that MCS took most of its sites from it (a split mother),
+    # or it was born that MCS with most of its sites from one cell (a split daughter)
+    newly = map((3, 5, 6, 24)) do seed
+        o = akeeb_state(; lattice = (99, 60), seed)
         sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000,
-            seed = 3), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
-        pieces(σ, c) = (idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]];
-            while !isempty(st)
-                q = pop!(st)
-                for dx in -1:1, dy in -1:1
-                    y = q[2] + dy; 1 <= y <= size(σ, 2) || continue
-                    p = CartesianIndex(mod1(q[1] + dx, X), y)
-                    (σ[p] == c && !(p in seen)) && (push!(seen, p); push!(st, p))
-                end
-            end; length(seen) < length(idx))
-        split_ids(σ) = [c for c in unique(σ) if c != 0 && pieces(σ, c)]
-        newly, explained = 0, 0
+            seed), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
+        n = 0
         for t in 2:length(sol.u)
             a, b = sol.u[t - 1], sol.u[t]
-            was = Set(split_ids(a.σ))
-            for c in split_ids(b.σ)
+            was = Set(split_ids(a.σ, (true, false)))
+            born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
+                    (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
+            from(d, m) = 2 * count(i -> a.σ[i] == m, findall(==(d), b.σ)) > b.cell.volume[d]
+            for c in split_ids(b.σ, (true, false))
                 c in was && continue
-                newly += 1
-                born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
-                        (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
-                explained += any(d -> 2 * count(i -> a.σ[i] == c, findall(==(d), b.σ)) > b.cell.volume[d], born)
+                n += 1
+                mother = any(d -> from(d, c), born)
+                daughter = c in born && any(m -> m != 0 && from(c, m), unique(a.σ[b.σ .== c]))
+                @test mother || daughter
             end
         end
-        @test newly >= 1 && explained == newly
+        n
     end
+    @test sum(newly) >= 1
     @test all(m -> m.divisions > 0, invade(30.0; nmcs = 300)) && all(m -> m.divisions == 0, invade(30.0; pp = 0.0, nmcs = 300))
 end
