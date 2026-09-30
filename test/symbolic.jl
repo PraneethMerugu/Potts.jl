@@ -132,7 +132,7 @@ end
 @testset "relationships: springs and link rules" begin
     σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[40:45, 12:17] .= 2
     prob = PottsProblem(Spring(; name = :spring), [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]], (0, 1000))
-    @test CorePotts.linked(prob.u0.cell, 1, 2) && prob.u0.cell.link_rest[1, 1] == 12.0
+    @test CorePotts.linked(CorePotts.link_store(prob.u0.cell, :bond), 1, 2) && prob.u0.cell.link_rest[1, 1] == 12.0
     # self-check with edge energies (partner centroids move with the copy)
     worst = 0.0
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 5)); mcs = (0, 5), n = 300)
@@ -157,11 +157,12 @@ end
     u = solve(tp, SequentialCPM()).u[end]            # the rule ran once, after MCS 0's sweep
     g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
     nlinks = 0
+    bonds = CorePotts.link_store(u.cell, :bond)
     for a in 1:n, b in (a + 1):n
         touching = b in CorePotts.neighbors(g, a)
         led = isodd(a) || isodd(b)
-        @test CorePotts.linked(u.cell, a, b) == (touching && led)
-        nlinks += CorePotts.linked(u.cell, a, b)
+        @test CorePotts.linked(bonds, a, b) == (touching && led)
+        nlinks += CorePotts.linked(bonds, a, b)
     end
     @test nlinks > 20
 end
@@ -177,6 +178,253 @@ function selfcheck(prob; n = 300)
         worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
     end
     return worst
+end
+
+# ---------------------------------------------------------------------------------------
+# Several named relationships (P6.0b): a link store, law, claim set and rules per name
+
+@potts_model Chain begin
+    @kinds medium blob
+    @parameters begin
+        k₁ = 0.7
+        k₂ = 1.3
+        J[kind, kind] = [0 16; 16 2]
+    end
+    @variables begin
+        rest(bond) = 6.0
+        len(tether) = 9.0
+    end
+    @relationship bond(cell, cell) capacity = 2
+    @relationship tether(cell, cell) capacity = 2
+    @lattice Lattice((36, 16); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells => (volume - 36)^2
+        contacts => J[kind, kind′]
+        edges(bond) => k₁ * (distance - rest)^2
+        edges(tether) => k₂ * (distance - len)^2
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+@potts_model HexChain begin
+    @kinds medium blob
+    @variables begin
+        rest(bond) = 5.0
+        len(tether) = 8.0
+    end
+    @relationship bond(cell, cell) capacity = 2
+    @relationship tether(cell, cell) capacity = 2
+    @lattice Lattice((36, 16); geometry = Hexagonal(), neighborhood = Hex(1))
+    @energy begin
+        cells => (volume - 30)^2
+        contacts => 6.0
+        edges(bond) => 0.7 * (distance - rest)^2
+        edges(tether) => 1.3 * (distance - len)^2
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+# the same model without link energies: the difference of total energies is the link energy
+@potts_model ChainNoLinks begin
+    @kinds medium blob
+    @parameters J[kind, kind] = [0 16; 16 2]
+    @lattice Lattice((36, 16); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells => (volume - 36)^2
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+# four touching 6×6 cells in a row; 2 has a bond partner (1) and a tether partner (3)
+function chain_state()
+    σ = zeros(Int32, 36, 16)
+    for c in 1:4
+        σ[(6c - 3):(6c + 2), 6:11] .= c
+    end
+    return σ
+end
+const CHAIN_LINKS = (:bond => [(1, 2), (3, 4)], :tether => [(2, 3), (1, 4)])
+
+# ΔH of random copies on relation `rel` against H(after) − H(before), over a short trajectory
+function edge_selfcheck(prob, rel; n = 600)
+    sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = rel); saveat = [0, 2, 4])
+    lat = prob.lattice
+    R = CorePotts.relation(rel, lat)
+    rng = Xoshiro(7)
+    worst = 0.0; linked_pairs = 0
+    for u in sol.u, _ in 1:n
+        t = rand(rng, 1:length(u.σ)); x = CorePotts.coordinates(lat, t)
+        ins, y = CorePotts.shift(lat, x, R.offsets[rand(rng, 1:length(R))])
+        ins || continue
+        s = CorePotts.linear_index(lat, y)
+        u.σ[t] == u.σ[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
+        a = deepcopy(u); a.σ[t] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        linked_pairs += any(r -> CorePotts.linked(CorePotts.link_store(u.cell, r), prop.old, prop.new), (:bond, :tether))
+    end
+    return worst, linked_pairs
+end
+
+@testset "several relationships: stores, brute-force ΔH, oracle" begin
+    prob = PottsProblem(Chain(; name = :chain), [ownership => chain_state(), CHAIN_LINKS...], (0, 20))
+    u0 = prob.u0
+    @test keys(u0.cell) ⊇ (:links__bond, :links__tether, :link_rest, :link_len)
+    B, Tt = CorePotts.link_store(u0.cell, :bond), CorePotts.link_store(u0.cell, :tether)
+    @test CorePotts.linked(B, 1, 2) && CorePotts.linked(B, 3, 4) && !CorePotts.linked(B, 2, 3)
+    @test CorePotts.linked(Tt, 2, 3) && CorePotts.linked(Tt, 1, 4) && !CorePotts.linked(Tt, 1, 2)
+    @test u0.cell.link_rest[CorePotts.link_slot(B, 2, 1), 2] == 6.0      # each store its own payload
+    @test u0.cell.link_len[CorePotts.link_slot(Tt, 2, 3), 2] == 9.0
+    # brute force: copies across bonded and tethered pairs, and cells with partners in both
+    for (p, rel) in ((prob, Moore(1)),
+            (PottsProblem(HexChain(; name = :hex), [ownership => chain_state(), CHAIN_LINKS...], (0, 20)), Hex(1)))
+        worst, npairs = edge_selfcheck(p, rel)
+        @test worst < 1e-9
+        @test npairs > 20
+    end
+    # independent oracle: total energy minus the link-free model is Σ over both stores
+    bare = PottsProblem(ChainNoLinks(; name = :bare), [ownership => chain_state()], (0, 20))
+    u = solve(prob, SequentialCPM()).u[end]
+    link_energy(store, k, ℓ) = sum(k * (CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b) - ℓ)^2
+                                   for (a, b) in store)
+    oracle = link_energy(((1, 2), (3, 4)), 0.7, 6.0) + link_energy(((2, 3), (1, 4)), 1.3, 9.0)
+    diff = total_energy(prob, u) - total_energy(bare, u)
+    @test diff ≈ oracle rtol = 1e-10
+    @test !isapprox(diff, link_energy(((1, 2), (3, 4)), 0.7, 6.0); rtol = 1e-3)    # negative control: one store
+end
+
+# The checkerboard claim protocol (CorePotts `checkerboard.jl`) on explicit copies: `writes`
+# (old, new) and shared `reads`, highest priority first. Returns which copies commit.
+function claim_protocol(copies, ncell)
+    claim = zeros(UInt32, ncell); wclaim = zeros(UInt32, ncell)
+    for (w, writes, reads) in copies
+        foreach(c -> (CorePotts._claim!(claim, Int32(c), w); CorePotts._claim!(wclaim, Int32(c), w)), writes)
+        foreach(c -> CorePotts._claim!(claim, Int32(c), w), reads)
+    end
+    return [all(c -> CorePotts._won(claim, Int32(c), w), writes) &&
+            all(c -> CorePotts._unwritten(wclaim, Int32(c), w), reads) for (w, writes, reads) in copies]
+end
+
+@testset "several relationships: the claim set holds partners from every relationship" begin
+    prob = PottsProblem(Chain(; name = :chain), [ownership => chain_state(), CHAIN_LINKS...], (0, 20))
+    u = deepcopy(prob.u0); ctx = ctx_of(prob); lat = prob.lattice
+    site(c) = CorePotts.linear_index(lat, (6c - 3, 5))                # a medium site below cell c
+    target(c) = CorePotts.linear_index(lat, (6c - 3, 6))              # cell c's bottom-left site
+    # X: medium invades cell 2 (moves 2's centroid); Y: medium invades cell 3
+    X = CorePotts.Proposal(target(2), site(2), CorePotts.coordinates(lat, target(2)), 1, Int32(2), Int32(0))
+    Y = CorePotts.Proposal(target(3), site(3), CorePotts.coordinates(lat, target(3)), 1, Int32(3), Int32(0))
+    reads = prob.f.reads(u, prob.p, X, ctx)
+    # (old's bond slots, new's bond slots, old's tether slots, new's tether slots); new = medium
+    @test reads == Int32.((1, 0, 0, 0, 3, 0, 0, 0))                    # bond partner 1, tether partner 3
+    @test prob.f.claims === CorePotts.no_claims                        # link partners are shared reads
+    readsY = prob.f.reads(u, prob.p, Y, ctx)
+    wX, wY = (2, 0), (3, 0)
+    for (pX, pY) in ((UInt32(5), UInt32(9)), (UInt32(9), UInt32(5)))
+        ok = claim_protocol([(pX, wX, reads), (pY, wY, readsY)], 4)
+        @test count(ok) == 1                                          # X reads 3, which Y writes
+    end
+    # negative control: a claim set with the bond store only misses 3, so both commit ...
+    bond_only(prop) = CorePotts.link_claims(CorePotts.link_store(u.cell, :bond), prop, Val(2))
+    @test bond_only(X) == Int32.((1, 0, 0, 0))
+    @test all(claim_protocol([(UInt32(5), wX, bond_only(X)), (UInt32(9), wY, bond_only(Y))], 4))
+    # ... although X's ΔH depends on Y: committing Y first changes it (a stale read)
+    dX = energy_change(prob, u, X)
+    v = deepcopy(u); v.σ[Y.target] = Y.new; prob.f.commit!(v, prob.p, Y, ctx)
+    @test abs(energy_change(prob, v, X) - dX) > 1e-3
+    # two copies that only share a partner (both read 2) commit together
+    Z = CorePotts.Proposal(target(1), site(1), CorePotts.coordinates(lat, target(1)), 1, Int32(1), Int32(0))
+    readsZ = prob.f.reads(u, prob.p, Z, ctx)
+    @test 2 in readsZ && 2 in readsY
+    @test all(claim_protocol([(UInt32(5), (1, 0), readsZ), (UInt32(9), wY, readsY)], 4))
+    @test count(claim_protocol([(UInt32(5), (1, 0, readsZ...), ()), (UInt32(9), (3, 0, readsY...), ())], 4)) == 1  # exclusive: one
+end
+
+@potts_model TwoRules begin
+    @kinds medium leader follower
+    @parameters J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
+    @variables begin
+        age(bond) = 1.0
+        strength(tether) = 2.0
+    end
+    @relationship bond(cell, cell) capacity = 8
+    @relationship tether(cell, cell) capacity = 8
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy contacts => J[kind, kind′]
+    @link bond when = new_contact(a, b) && kind[a] == leader && kind[b] == leader
+    @link tether when = new_contact(a, b) && kind[a] == follower && kind[b] == follower, every = 2
+    @unlink tether when = strength > 1.5, every = 3
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "several relationships: link rules fire per relationship" begin
+    σb = zeros(Int32, 30, 30)
+    for (c, (i, j)) in enumerate(Iterators.product(1:5:26, 1:5:26))
+        σb[i:(i + 4), j:(j + 4)] .= c
+    end
+    n = maximum(σb)
+    kinds = [isodd(c) ? :leader : :follower for c in 1:n]
+    tp = PottsProblem(TwoRules(; name = :two), [ownership => σb, kind => kinds], (0, 1))
+    u = solve(tp, SequentialCPM()).u[end]            # after MCS 0: every rule ran once
+    g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
+    B, Tt = CorePotts.link_store(u.cell, :bond), CorePotts.link_store(u.cell, :tether)
+    nb = nt = 0
+    for a in 1:n, b in (a + 1):n
+        touching = b in CorePotts.neighbors(g, a)
+        @test CorePotts.linked(B, a, b) == (touching && isodd(a) && isodd(b))
+        @test !CorePotts.linked(Tt, a, b)             # linked, then unlinked (strength 2 > 1.5) at MCS 0
+        nb += CorePotts.linked(B, a, b)
+    end
+    @test nb > 5 && all(==(1.0), u.cell.link_age[B.links .!= 0])
+    # the tether rule on its own: at MCS 2 the link rule runs, the unlink rule does not (every 3)
+    u2 = solve(remake(tp; tspan = (0, 3)), SequentialCPM()).u[end]
+    T2 = CorePotts.link_store(u2.cell, :tether)
+    g2 = CorePotts.contact_graph(u2.σ, tp.lattice, tp.contact, n)
+    for a in 1:n, b in (a + 1):n
+        touching = b in CorePotts.neighbors(g2, a)
+        CorePotts.linked(T2, a, b) && (nt += 1; @test iseven(a) && iseven(b))
+    end
+    @test nt > 5 && all(==(2.0), u2.cell.link_strength[T2.links .!= 0])
+    @test u2.cell.links__bond != u2.cell.links__tether
+end
+
+@potts_model AmbiguousEdge begin
+    @kinds medium blob
+    @variables rest(edge) = 1.0
+    @relationship bond(cell, cell) capacity = 1
+    @relationship tether(cell, cell) capacity = 1
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy edges(bond) => distance - rest
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model UnknownRelationship begin
+    @kinds medium blob
+    @variables rest(bnod) = 1.0
+    @relationship bond(cell, cell) capacity = 1
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy edges(bond) => distance - rest
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model CrossRead begin
+    @kinds medium blob
+    @variables len(tether) = 1.0
+    @relationship bond(cell, cell) capacity = 1
+    @relationship tether(cell, cell) capacity = 1
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy edges(bond) => distance - len
+    @link tether when = len > 0.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "several relationships: names are checked" begin
+    @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
+    @test_throws "neither a scope" mtkcompile(UnknownRelationship(; name = :u))
+    @test_throws "an edge variable of relationship `tether`" mtkcompile(CrossRead(; name = :c))
+    c = Chain(; name = :c)
+    @test_throws "declared twice" mtkcompile(Potts.PottsSystem(; name = :dup, kinds = [:medium, :blob],
+        lattice = c.lattice, relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = c.sweep))
+    @test isequal(mtkcompile(Spring(; name = :s)).edge_vars[:bond], Spring(; name = :s).variables)   # `rest(edge)`: the only one
 end
 
 function two_kind_blocks()

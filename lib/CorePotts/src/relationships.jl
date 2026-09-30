@@ -1,18 +1,45 @@
 # Cell–cell relationships (ROADMAP M2.9): symmetric links with payloads, stored as fixed-
-# degree padded adjacency `st.cell.links` (`maxdeg × capacity`, 0 = empty slot) plus any
-# payload matrices `st.cell.link_<name>` of the same shape. Being cell quantities, links
-# grow with `with_capacity`; the lifecycle clears a daughter's links and drops the
-# incident links of removed cells (the `RemoveIncident` policy).
+# degree padded adjacency (`maxdeg × capacity`, 0 = empty slot) plus any payload matrices
+# `st.cell.link_<name>` of the same shape. Being cell quantities, links grow with
+# `with_capacity`; the lifecycle clears a daughter's links and drops the incident links of
+# removed cells (the `RemoveIncident` policy).
+#
+# A *link store* is anything with a `links` adjacency matrix and its `link_<name>` payloads:
+# the cell state itself (one unnamed relationship, column `links`), or a NamedTuple view
+# `(; links = st.cell.links__bond, link_rest = st.cell.link_rest)` over the columns of a
+# named relationship (P6.0b). Several relationships live side by side as adjacency
+# columns `links__<name>` (`adjacency_name`); payload names are unique per model, so a
+# payload column belongs to exactly one relationship. Views are plain NamedTuples of the
+# state's arrays: building one costs nothing, on the host or in a kernel.
 
 """
     empty_links(maxdeg, ncell; payloads...) -> NamedTuple
+    empty_links(maxdeg, ncell, name; payloads...) -> NamedTuple
 
-Link storage to merge into the cell state: `links` plus `link_<name>` payload matrices
-(`payloads` gives the element type of each, e.g. `rest = Float64`).
+Link storage to merge into the cell state: the adjacency (`links`, or
+`links__<name>` for relationship `name`, see `adjacency_name`) plus `link_<p>` payload
+matrices (`payloads` gives the element type of each, e.g. `rest = Float64`).
 """
 empty_links(maxdeg::Integer, ncell::Integer; payloads...) =
-    merge((; links = zeros(Int32, maxdeg, ncell)),
-        NamedTuple(Symbol(:link_, k) => zeros(T, maxdeg, ncell) for (k, T) in payloads))
+    merge((; links = zeros(Int32, maxdeg, ncell)), _empty_payloads(maxdeg, ncell, payloads))
+empty_links(maxdeg::Integer, ncell::Integer, name::Symbol; payloads...) =
+    merge(NamedTuple{(adjacency_name(name),)}((zeros(Int32, maxdeg, ncell),)), _empty_payloads(maxdeg, ncell, payloads))
+_empty_payloads(maxdeg, ncell, payloads) =
+    NamedTuple(Symbol(:link_, k) => zeros(T, maxdeg, ncell) for (k, T) in payloads)
+
+"""`adjacency_name(name)`: the cell-state column of relationship `name`'s adjacency, `links__<name>`."""
+adjacency_name(name::Symbol) = Symbol(:links__, name)
+_is_adjacency(name::Symbol) = name === :links || startswith(String(name), "links__")
+
+"""
+    link_store(cell, name) -> NamedTuple
+
+Relationship `name`'s adjacency in cell state `cell`, as a link store `(; links)` for the
+queries `linked`, `link_slot`, `link_count` and `link_claims` (e.g.
+`linked(link_store(u.cell, :bond), 1, 2)`). Payloads are left out: which `link_<p>`
+columns belong to `name` is the model's knowledge (generated code builds full views).
+"""
+link_store(cell, name::Symbol) = (; links = getfield(cell, adjacency_name(name)))
 
 @inline maxdegree(cell) = size(cell.links, 1)
 
@@ -32,13 +59,19 @@ _payload_names(cell) = Tuple(k for k in keys(cell) if startswith(String(k), "lin
     add_link!(cell, a, b; payload...) -> Bool
 
 Link cells `a` and `b` symmetrically (host arrays), writing payload values
-(`rest = 5.0` → `link_rest`). Returns `false` if already linked or either row is full.
+(`rest = 5.0` → `link_rest`; the store's other payloads start at zero, so a slot's payload
+values are only meaningful while it holds a link). `cell` is a link store (the cell state
+or a view, see the file header). Returns `false` if already linked or either row is full.
 """
 function add_link!(cell, a, b; payload...)
     (a == b || a == 0 || b == 0 || linked(cell, a, b)) && return false
     ka = link_slot(cell, a, 0); kb = link_slot(cell, b, 0)
     (ka == 0 || kb == 0) && return false
     cell.links[ka, a] = b; cell.links[kb, b] = a
+    for name in _payload_names(cell)             # payloads not given start at zero
+        arr = getfield(cell, name)
+        arr[ka, a] = zero(eltype(arr)); arr[kb, b] = zero(eltype(arr))
+    end
     for (name, v) in payload
         arr = getfield(cell, Symbol(:link_, name))
         arr[ka, a] = v; arr[kb, b] = v
@@ -111,12 +144,16 @@ end
 
 """
     link_delta(T, cell, ctx, prop, E)
+    link_delta(T, cell, store, ctx, prop, E)
 
 Change of `Σ_links E(a, b, k, distance)` (each link once; `k` is the slot in `a`'s row, for
 payload lookup) when `prop` moves the target from `old` to `new`: every link incident to
-`old` or `new` sees their centroids shift (`centroid_shift`).
+`old` or `new` sees their centroids shift (`centroid_shift`). Centroids come from `cell`,
+links from `store` (default: `cell` itself); a model with several relationships sums one
+call per store.
 """
-@inline function link_delta(::Type{T}, cell, ctx, prop::Proposal{N}, E::F) where {T, N, F}
+@inline link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F} = link_delta(T, cell, cell, ctx, prop, E)
+@inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal{N}, E::F) where {T, N, F}
     lat = ctx.lattice
     a, b = prop.old, prop.new
     dH = zero(T)
@@ -125,8 +162,8 @@ payload lookup) when `prop` moves the target from `old` to `new`: every link inc
     for (c, sc, other, so) in ((a, sa, b, sb), (b, sb, a, sa))
         c == 0 && continue
         cc = centroid(T, cell, lat, c)
-        for k in 1:maxdegree(cell)
-            n = @inbounds cell.links[k, c]
+        for k in 1:maxdegree(store)
+            n = @inbounds store.links[k, c]
             n == 0 && continue
             n == other && c == b && continue          # the old–new link is counted once (from a)
             cn = centroid(T, cell, lat, n)
@@ -142,12 +179,15 @@ end
 """
     link_claims(cell, prop, Val(maxdeg))
 
-Checkerboard claims for link energies: the partners of `old` and `new` (whose centroids
-`link_delta` reads) as a static tuple (0 = none). Use as
-`CPMFunction(…; claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(4)))`.
-Exactness costs throughput: a linked component commits at most one copy per color
-(observed: spring relaxation ~2× slower in MCS). Omitting the claims reads partner
-centroids up to one color stale (a D-029-style trade, the user's choice).
+Checkerboard claims for link energies: the partners of `old` and `new` in link store `cell`
+(whose centroids `link_delta` reads) as a static tuple (0 = none). Use as
+`CPMFunction(…; reads = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(4)))`; with
+several relationships, splat one call per store into the tuple (a store left out lets a
+concurrent copy move a partner whose centroid this copy reads). As shared `reads`,
+copies that only read a partner commit together; as exclusive `claims` (also exact), a
+linked component commits at most one copy per color (observed: spring relaxation ~2×
+slower in MCS; a chain linked by two relationships slower still). Omitting them reads
+partner centroids up to one color stale (a D-029-style trade, the user's choice).
 """
 @inline function link_claims(cell, prop, ::Val{D}) where {D}
     a, b = prop.old, prop.new

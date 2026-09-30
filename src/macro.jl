@@ -285,7 +285,8 @@ function _section!(parts, sec, args, ln = nothing)
                 decl = decl.args[1]
             end
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
-                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`"))
+                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, " *
+                                    "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`"))
             k, scope = decl.args
             _declare!(parts, k, "variable")
             # `= default, [options…]`; a tuple without an options vector is the default itself

@@ -355,7 +355,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             copyto!(st.cell.cluster, clh)
         end
     end
-    haskey(st.cell, :links) && (any(removed) || !isempty(parents)) &&
+    any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(st, findall(removed), daughter[parents])
     _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
         lc.cluster_divide!, st, p, ctx, key, mcs))
@@ -434,15 +434,20 @@ function with_capacity(st::CPMState, capacity::Integer)
     return CPMState(st.σ, cell, st.site, st.model, st.history)
 end
 
-_is_link_data(name::Symbol) = name === :links || startswith(String(name), "link_")
+_is_link_data(name::Symbol) = _is_adjacency(name) || startswith(String(name), "link_")
 
-# RemoveIncident for removed cells; empty link rows for daughters (their ids may be reused).
+# RemoveIncident for removed cells; empty link rows for daughters (their ids may be reused),
+# in every relationship's adjacency. Payloads are left: `add_link!` rewrites a slot's.
 function _lifecycle_links!(st, removed, daughters)
-    names = Tuple(k for k in keys(st.cell) if _is_link_data(k))
-    host = NamedTuple{names}(map(k -> Array(getfield(st.cell, k)), names))
-    for c in Iterators.flatten((removed, daughters))
-        remove_incident!(host, c)
+    # `map` over (name, array) unrolls statically: each adjacency has its concrete type
+    map(keys(st.cell), values(st.cell)) do name, dev
+        _is_adjacency(name) || return nothing
+        host = (; links = Array(dev))
+        for c in Iterators.flatten((removed, daughters))
+            remove_incident!(host, c)
+        end
+        copyto!(dev, host.links)
+        return nothing
     end
-    foreach(k -> copyto!(getfield(st.cell, k), getfield(host, k)), names)
     return nothing
 end

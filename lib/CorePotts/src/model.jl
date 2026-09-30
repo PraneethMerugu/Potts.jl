@@ -107,7 +107,7 @@ end
 
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
-                temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
+                reads = no_claims, temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
                 acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
@@ -117,7 +117,12 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `commit!` → effects of an accepted copy beyond the ownership write (trackers, state)
 - `constraint` → `false` vetoes the proposal
 - `claims` → tuple of extra cell ids (beyond old/new) whose quantities the other
-  functions read; they are claimed in checkerboard execution
+  functions read and `commit!` writes; they are claimed exclusively in checkerboard
+  execution (0 = none)
+- `reads` → tuple of extra cell ids whose quantities `delta_H` reads but no `commit!`
+  writes except as some copy's old/new (e.g. link partners, whose centroids link energies
+  read); concurrent copies may share them, a copy that writes one excludes the readers
+  (0 = none). Claiming them in `claims` instead is also exact, only more conservative.
 - `temperature` → the copy temperature
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`, D-033)
@@ -128,11 +133,12 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, LC, AC, SYS}
+struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS}
     delta_H::DH
     commit!::CM
     constraint::CN
     claims::CL
+    reads::RD
     temperature::TT
     bias::BI
     phases::PH
@@ -144,30 +150,33 @@ struct CPMFunction{DH, CM, CN, CL, TT, BI, PH, LC, AC, SYS}
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
-        claims = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
+        claims = no_claims, reads = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
         sys = nothing)
-    return CPMFunction(delta_H, commit!, constraint, claims, temperature, bias, phases,
+    return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
         lifecycle, acceptance, footprint, UInt64(fingerprint), sys)
 end
 
 """
-The device-side part of a `CPMFunction`: the five per-proposal functions, without host-only
+The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, TT, BI}
+struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
     delta_H::DH
     commit!::CM
     constraint::CN
     claims::CL
+    reads::RD
     temperature::TT
     bias::BI
 end
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.temperature, f.bias)
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()
+"""Whether `f` has shared read claims (a type-level constant: no cost without them)."""
+@inline has_reads(f) = !(f.reads isa typeof(no_claims))
 @inline no_bias(st, p, prop, ctx) = false
 
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""

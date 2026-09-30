@@ -60,7 +60,7 @@ is sugar.
 | `@structural_parameters` | values baked into generated code (lattice size, orders) | same |
 | `@kinds` | cell kinds; the first is the medium (kind 0); `[frozen]` marks obstacles | — |
 | `@parameters` | numeric parameters, incl. kind-indexed arrays `J[kind, kind]` | same |
-| `@variables` | state with a **scope** in the signature: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(edge)` | `@variables`, scope is Potts |
+| `@variables` | state with a **scope** in the signature: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(edge)` or `e(rel)` (an edge variable of `@relationship rel`) | `@variables`, scope is Potts |
 | `@lattice` | `Lattice(dims; boundary, neighborhood, spacing)` | — |
 | `@energy` | Hamiltonian terms as `domain => expression` pairs | — |
 | `@drive` | non-energetic proposal biases (`copy => expr`) | — |
@@ -159,7 +159,7 @@ expression may refer to:
 | `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`, site state `x`/`x′`, and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
-| `edges(relationship)` | every relationship edge | `a`, `b` (cells), `distance`, edge state |
+| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
 Examples:
@@ -353,6 +353,53 @@ should not use the built-in stencils.
 Rules are evaluated at the MCS boundary; conflicts resolve deterministically (stable
 priority). Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 `Redraw(dist)`; the default is `Copy()`.
+
+### Relationships
+
+A model declares any number of named relationships (P6.0b). Each has its own link store,
+capacity, edge variables, `edges(name)` terms, `@link`/`@unlink` rules and claim set:
+
+```julia
+@variables begin
+    rest(bond) = 12.0            # an edge variable of `bond`
+    len(tether) = 18.0           # … of `tether`
+end
+@relationship bond(cell, cell)   capacity = 1
+@relationship tether(cell, cell) capacity = 2
+@energy begin
+    edges(bond)   => k₁ * (distance - rest)^2
+    edges(tether) => k₂ * (distance - len)^2
+end
+@link   tether when = new_contact(a, b) && kind[a] == follower, every = 10
+@unlink bond   when = distance > 30.0
+```
+
+- **Edge variables name their relationship as their scope**: `rest(bond)`. With exactly
+  one relationship `rest(edge)` still means that one; with several it is an error
+  ("ambiguous"), as is a scope that is neither a scope nor a relationship. An edge term or
+  link rule reads only its own relationship's edge variables (another relationship's
+  payload has no slot for its links).
+- **Initial links** are given per name in the operating point:
+  `PottsProblem(sys, [ownership => σ, :bond => [(1, 2)], :tether => [(2, 3)]], tspan)`. A
+  new link's edge variables start at their defaults.
+- **Storage.** Relationship `r` keeps its adjacency in the cell column `links__r`
+  (`maxdeg × capacity`, 0 = empty slot; `CorePotts.adjacency_name(r)`), and each edge
+  variable `x` its payload in `link_x` (edge variable names are unique per model, so a
+  payload column belongs to one relationship). The columns are flat cell quantities, so
+  capacity growth, division, checkpoints, device transfer and host phases treat them like
+  any other. Generated code works on a *link store view*, a NamedTuple
+  `(; links = st.cell.links__r, link_x = st.cell.link_x)` of the state's arrays: it costs
+  nothing and is valid in kernels. Query links with `CorePotts.link_store(u.cell, :r)`,
+  e.g. `CorePotts.linked(CorePotts.link_store(u.cell, :bond), 1, 2)`.
+- **Checkerboard claims.** A copy's ΔH reads the centroids of the link partners of `old`
+  and `new` in every relationship, so all of them are claimed; a claim set missing one
+  relationship would let a concurrent copy move a partner whose centroid this copy read.
+  Partners are *shared read claims* (`CPMFunction(…; reads)`): copies that only read a cell
+  may commit together, a copy that writes it excludes them. Exclusive partner claims would
+  also be exact, but they serialise a whole linked chain (a cell linked by two
+  relationships ties both chains together).
+- **Lifecycle.** Removed cells lose their links, daughters start unlinked, in every
+  relationship.
 
 ---
 

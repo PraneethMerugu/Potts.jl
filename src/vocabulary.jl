@@ -62,20 +62,32 @@ kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name
 
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
-"""`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope."""
-const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index)
+"""
+`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope. A scope
+outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@relationship
+bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
+to the model's only relationship.
+"""
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship)
 
-function variable(x, scope::Symbol; default = 0.0, unit = nothing, options...)
-    scope in SCOPES || throw(ArgumentError("unknown scope `$scope`; use one of $SCOPES"))
+function variable(x, scope::Symbol; default = 0.0, unit = nothing, kwargs...)
+    options = NamedTuple(kwargs)
+    if !(scope in SCOPES)
+        haskey(options, :relationship) && throw(ArgumentError("`relationship` is given twice"))
+        options = (; options..., relationship = scope)
+        scope = :edge
+    end
     u = Symbolics.unwrap(x)
     name = SymbolicUtils.iscall(u) ? nameof(SymbolicUtils.operation(u)) : nameof(u)
-    for (k, v) in options
+    haskey(options, :relationship) && scope !== :edge &&
+        throw(ArgumentError("variable `$name`: `relationship` applies to edge variables"))
+    for (k, v) in pairs(options)
         k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
                                                       "(options: `unit`, `clear_on_ownership_change`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
     end
-    return _with_unit(_tag(x, Info(scope, name, default, NamedTuple(options))), unit)
+    return _with_unit(_tag(x, Info(scope, name, default, options)), unit)
 end
 
 # ---------------------------------------------------------------------------------------

@@ -63,6 +63,22 @@ _edge_env(T, a, b, k, d, relname; mcs = nothing) = LowerEnv(T, :edge,
     Dict{Symbol, Any}(:a => a, :b => b, :distance => d, :__edge => (k, a),
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
+# Relationship `r`'s link store in cell state `cell` (CorePotts `relationships.jl`): a
+# NamedTuple view of its adjacency and, with `payloads`, its edge-variable columns.
+_adjacency(r::Symbol, cell = :(st.cell)) = :($cell.$(CorePotts.adjacency_name(r)))
+function _link_store(c::CompiledPottsSystem, r::Symbol, cell = :(st.cell); payloads::Bool = false)
+    cols = Any[Expr(:kw, :links, _adjacency(r, cell))]
+    payloads && for x in c.edge_vars[r]
+        n = Symbol(:link_, info(x).name)
+        push!(cols, Expr(:kw, n, :($cell.$n)))
+    end
+    return Expr(:tuple, Expr(:parameters, cols...))
+end
+# Edge energies grouped by relationship, in declaration order.
+_edge_energies(c::CompiledPottsSystem) =
+    [(r.name, sum(E for (q, E) in c.edge_terms if q === r.name)) for r in c.relationships
+     if any(t -> first(t) === r.name, c.edge_terms)]
+
 _kindtest(k, kinds) = isempty(kinds) ? true : foldl((a, b) -> :($a || $b), [:($k == $x) for x in kinds])
 
 const _PROP_LOCALS = quote
@@ -134,9 +150,10 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
     end
     append!(body, _cluster_delta_code(c, T))
-    if !isempty(c.edge_terms)
-        Ecode = lower(sum(c.edge_terms), _edge_env(T, :ea, :eb, :ek, :ed, rn))
-        push!(body, :(dH += CorePotts.link_delta($T, st.cell, ctx, prop, (ea, eb, ek, ed) -> $Ecode)))
+    for (r, E) in _edge_energies(c)
+        Ecode = lower(E, _edge_env(T, :ea, :eb, :ek, :ed, rn))
+        push!(body, :(dH += CorePotts.link_delta($T, st.cell, $(_link_store(c, r)), ctx, prop,
+            (ea, eb, ek, ed) -> $Ecode)))
     end
     for E in c.site_terms
         after = lower(isempty(after[:target]) ? E : Symbolics.substitute(E, after[:target]; fold = Val(false)),
@@ -576,30 +593,33 @@ end
 function _link_phases(c::CompiledPottsSystem, T)
     rn = c.gather_names
     out = Any[]
-    defaults = [Expr(:kw, info(x).name, T(info(x).default)) for x in c.sys.variables if info(x).role === :edge]
     for r in c.link_rules
+        store = _link_store(c, r.relationship, :cell; payloads = true)
+        defaults = [Expr(:kw, info(x).name, T(info(x).default)) for x in c.edge_vars[r.relationship]]
         body = if r.action === :unlink
             cond = lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs))
             quote
-                for ea in 1:length(cell.kind), ek in 1:size(cell.links, 1)
-                    eb = cell.links[ek, ea]
+                store = $store
+                for ea in 1:length(cell.kind), ek in 1:size(store.links, 1)
+                    eb = store.links[ek, ea]
                     eb > ea || continue
                     ed = CorePotts.centroid_distance($T, cell, ctx.lattice, ea, eb)
-                    $cond && CorePotts.remove_link!(cell, ea, eb)
+                    $cond && CorePotts.remove_link!(store, ea, eb)
                 end
             end
         else
             ab = lower(r.when, LowerEnv(T, :edge, Dict{Symbol, Any}(:a => :ea, :b => :eb, :distance => :ed, :mcs => :mcs), rn))
             ba = lower(r.when, LowerEnv(T, :edge, Dict{Symbol, Any}(:a => :eb, :b => :ea, :distance => :ed, :mcs => :mcs), rn))
             quote
+                store = $store
                 g = CorePotts.contact_graph(st.σ, ctx.lattice, ctx.contact, length(cell.kind))
                 for ea in 1:length(cell.kind)
                     cell.volume[ea] > 0 || continue
                     for eb in CorePotts.neighbors(g, ea)
                         eb > ea || continue
-                        CorePotts.linked(cell, ea, eb) && continue
+                        CorePotts.linked(store, ea, eb) && continue
                         ed = CorePotts.centroid_distance($T, cell, ctx.lattice, ea, eb)
-                        ($ab || $ba) && CorePotts.add_link!(cell, ea, eb; $(defaults...))
+                        ($ab || $ba) && CorePotts.add_link!(store, ea, eb; $(defaults...))
                     end
                 end
             end
@@ -790,11 +810,12 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
             end
         end)
     end
-    if !isempty(c.edge_terms)
-        Ecode = lower(sum(c.edge_terms), _edge_env(T, :ea, :eb, :ek, :ed, rn))
+    for (r, E) in _edge_energies(c)
+        Ecode = lower(E, _edge_env(T, :ea, :eb, :ek, :ed, rn))
+        L = _adjacency(r)
         push!(body, quote
-            for ea in 1:length(st.cell.kind), ek in 1:size(st.cell.links, 1)
-                eb = st.cell.links[ek, ea]
+            for ea in 1:length(st.cell.kind), ek in 1:size($L, 1)
+                eb = $L[ek, ea]
                 eb > ea || continue
                 ed = CorePotts.centroid_distance($T, st.cell, ctx.lattice, ea, eb)
                 H += $Ecode

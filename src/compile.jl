@@ -21,8 +21,9 @@ struct CompiledPottsSystem
     cell_odes::Vector{Tuple{Any, Any}}                # (cell variable, rate)
     model_odes::Vector{Tuple{Any, Any}}               # (model variable, rate)
     divisions::Vector{DivideRule}
-    relationship::Union{Nothing, RelationshipSpec}
-    edge_terms::Vector{Any}                           # link energies E(a, b, distance, edge vars)
+    relationships::Vector{RelationshipSpec}           # in declaration order (P6.0b)
+    edge_terms::Vector{Tuple{Symbol, Any}}            # (relationship, E(a, b, distance, its edge vars))
+    edge_vars::Dict{Symbol, Vector{Any}}              # relationship → its edge variables
     link_rules::Vector{LinkRule}
     uses_surface::Bool
     uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
@@ -102,6 +103,47 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     return nothing
 end
 
+# Relationships (P6.0b): names are unique; each edge variable belongs to one relationship,
+# named by its scope (`rest(bond)`) or, with a single relationship, `rest(edge)`.
+function _relationships(sys::PottsSystem)
+    rels = sys.relationships
+    names = [r.name for r in rels]
+    for (i, n) in enumerate(names)
+        n in view(names, 1:(i - 1)) && throw(ArgumentError("@relationship `$n` is declared twice"))
+    end
+    edge_vars = Dict{Symbol, Vector{Any}}(n => Any[] for n in names)
+    edge_rel = Dict{Symbol, Symbol}()                 # edge variable name → relationship
+    for x in sys.variables
+        i = info(x)
+        i.role === :edge || continue
+        r = get(i.options, :relationship, nothing)
+        if r === nothing
+            isempty(names) && throw(ArgumentError("edge variable `$(i.name)` needs a @relationship"))
+            length(names) == 1 || throw(ArgumentError(
+                "edge variable `$(i.name)(edge)` is ambiguous: the model has relationships " *
+                "$(join(names, ", ")); name one as its scope, e.g. `$(i.name)($(first(names)))`"))
+            r = only(names)
+        else
+            r in names || throw(ArgumentError(
+                "variable `$(i.name)($r)`: `$r` is neither a scope ($(join(SCOPES, ", "))) nor a @relationship" *
+                (isempty(names) ? "" : " (the model has $(join(names, ", ")))")))
+        end
+        edge_rel[i.name] = r
+        push!(edge_vars[r], x)
+    end
+    return rels, edge_vars, edge_rel
+end
+
+# An edge term or link rule of relationship `r` reads only `r`'s edge variables (another
+# relationship's payload has no slot for this link).
+function _check_edge_vars(x, r, edge_rel, what)
+    for (role, n) in _uses(x)
+        role === :edge && edge_rel[n] !== r && throw(ArgumentError(
+            "$what reads `$n`, an edge variable of relationship `$(edge_rel[n])`"))
+    end
+    return nothing
+end
+
 """
     mtkcompile(sys::PottsSystem) -> CompiledPottsSystem
 
@@ -114,9 +156,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     cluster_terms = Tuple{Vector{Int}, Any}[]
     contact_terms = Dict{Symbol, Any}()
     site_terms = Any[]
-    edge_terms = Any[]
-    length(sys.relationships) <= 1 || throw(ArgumentError("one @relationship per model is supported so far"))
-    relationship = isempty(sys.relationships) ? nothing : only(sys.relationships)
+    edge_terms = Tuple{Symbol, Any}[]
+    relationships, edge_vars, edge_rel = _relationships(sys)
     for e in sys.energies
         d = e.domain
         _located(sys, e) do
@@ -135,11 +176,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             E = _symmetrize(_cellvars_at_owner(e.expr))
             contact_terms[d.relation] = haskey(contact_terms, d.relation) ? contact_terms[d.relation] + E : E
         elseif d isa EdgeDomain
-            (relationship !== nothing && relationship.name === d.relationship) ||
+            haskey(edge_vars, d.relationship) ||
                 throw(ArgumentError("edges($(d.relationship)): no @relationship $(d.relationship)"))
             _check_names(e.expr, _EDGE_BUILTINS, "an edge term")
             _check_static(_strip_populations(e.expr)[1], "an edge term")
-            push!(edge_terms, e.expr)
+            _check_edge_vars(e.expr, d.relationship, edge_rel, "edges($(d.relationship))")
+            push!(edge_terms, (d.relationship, e.expr))
         elseif d isa SiteDomain
             _check_names(e.expr, _SITE_BUILTINS, "a site term")
             _check_static(_strip_populations(e.expr)[1], "a site term")
@@ -159,7 +201,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         x, idx = arguments(lhs)
         i = info(x)
         i === nothing && continue
-        readers = Any[(E for (_, E) in cluster_terms)..., values(contact_terms)..., edge_terms...,
+        readers = Any[(E for (_, E) in cluster_terms)..., values(contact_terms)..., last.(edge_terms)...,
             (i.role === :cell ? () : last.(cell_terms))..., (i.role === :cell ? site_terms : ())...]
         ok = _oncopy_side(i, idx) !== nothing
         if !ok
@@ -243,14 +285,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
                                          " divided by both @divide cells(…) and @divide clusters(…); a kind divides alone or with its cluster, not both"))
     for r in sys.link_rules
         _located(sys, r) do
-            (relationship !== nothing && relationship.name === r.relationship) ||
+            haskey(edge_vars, r.relationship) ||
                 throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
             _check_names(r.when, _LINK_BUILTINS, "a link rule"; between_copies = true)
+            _check_edge_vars(r.when, r.relationship, edge_rel, "@$(r.action) $(r.relationship)")
         end
-    end
-    for x in sys.variables
-        info(x).role === :edge && relationship === nothing &&
-            throw(ArgumentError("edge variable `$(info(x).name)` needs a @relationship"))
     end
 
     # one writer per target, phase and cadence (combine contributions with `+=`)
@@ -264,7 +303,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         writers[k] = u
     end
     geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
-    needs_moments = !isempty(sys.divisions) || relationship !== nothing ||
+    needs_moments = !isempty(sys.divisions) || !isempty(relationships) ||
                     any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,
                         (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
                         (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...,
@@ -366,7 +405,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
-        sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationship, edge_terms,
+        sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationships, edge_terms, edge_vars,
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
