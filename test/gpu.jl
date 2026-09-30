@@ -183,3 +183,14 @@ end
     @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(Array(v.cell.volume))]
     @test any(!=(0.5f0), Array(v.site.tag)) && count(==(0.5f0), Array(v.site.tag)) > 0   # copies cleared tags
 end
+
+@testset "P6.0f per-rule cadence on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ, kinds = rule_cadence_state((48, 32))
+    for (na, nb) in ((2, 3), (2, 4), (3, 3))
+        prob = PottsProblem(RuleCadences(; name = :rc, na, nb), [ownership => σ, kind => kinds], (0, 5); T = Float32, capacity = 128)
+        u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        @test live_kinds(u) == (cadence_oracle(na, 5), cadence_oracle(nb, 5))
+        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+    end
+end

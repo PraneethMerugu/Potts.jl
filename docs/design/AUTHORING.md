@@ -370,7 +370,18 @@ should not use the built-in stencils.
 ```
 
 Rules are evaluated at the MCS boundary; conflicts resolve deterministically (stable
-priority). Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
+priority).
+
+**Cadence (P6.0f).** Each rule has its own `Every(n)`, written after the domain
+(`@divide cells(a) Every(2) when = …`) or as `every = n`
+(`@link tether when = …, every = 10`); a rule gets one cadence, and the default is `Every(1)`.
+A rule is checked at the MCS where `mcs % n == 0`, with MCS numbered from 0 as for updates.
+So `Every(2)` and `Every(3)` rules in one model fire at MCS 0, 2, 4, … and at MCS 0, 3, 6, ….
+The programmatic form is `Potts.divide(domain, Potts.Every(n); when = …)`. A model whose
+rules all share one cadence pays nothing per MCS for it; the lifecycle pass is skipped
+outright on the other MCS. Under `@extend`, division rules accumulate. An extension's rule
+for kinds the base already divides at another cadence adds to the base's rule and does not
+replace it: both rules fire, each at its own cadence, and a warning names the two. Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 `Redraw(dist)`; the default is `Copy()`.
 
 ### Relationships

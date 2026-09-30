@@ -443,7 +443,11 @@ struct LinkRule
     when::Any
     every::Int
 end
-link_rule(action::Symbol, r::RelationshipRef; when, every::Integer = 1) = LinkRule(r.name, action, when, Int(every))
+function link_rule(action::Symbol, r::RelationshipRef, args...; when, every = nothing)
+    n, rest = _rule_cadence("@$action", args, every)
+    isempty(rest) || throw(ArgumentError("@$action: `$(first(rest))` is not a cadence `Every(n)`"))
+    return LinkRule(r.name, action, when, n)
+end
 
 """
 Bind each unscoped edge variable `x(edge)` of one model body to that body's only
@@ -473,7 +477,7 @@ struct Update
     eq::Equation
     every::Int
 end
-"""`Every(n)`: update cadence."""
+"""`Every(n)`: the cadence of an update or rule (`@divide`, `@link`): it runs at MCS where `mcs % n == 0`."""
 struct Every
     n::Int
     Every(n::Integer) = n >= 1 ? new(Int(n)) : throw(ArgumentError("Every(n) needs n ≥ 1; got $n"))
@@ -484,8 +488,8 @@ update(phase::Symbol, eqs::AbstractVector{<:Equation}) = [update(phase, eq) for 
 update(phase::Symbol, e::Every, eqs::AbstractVector{<:Equation}) = [update(phase, e, eq) for eq in eqs]
 
 """
-    @divide cells(kinds) when = cond, along = normal, x => rule, …
-    @divide clusters(kinds) when = cond, along = normal, x => rule, …
+    @divide cells(kinds) [Every(n)] when = cond, along = normal, x => rule, …
+    @divide clusters(kinds) [Every(n)] when = cond, along = normal, x => rule, …
 
 A division rule: `when` (cell scope, may use `mcs`), `along` (`principal_axis()`,
 `major_axis()`, `RandomPlane()`, or a vector expression), daughter state rules
@@ -493,12 +497,17 @@ A division rule: `when` (cell scope, may use `mcs`), `along` (`principal_axis()`
 a compartment cluster whose root is of `kinds` divides as a unit when `when` holds at the
 root (`cluster_volume` is the cluster's); every member splits along one plane through the
 cluster centroid and the state rules apply to every member.
+
+`Every(n)` (or `every = n`) checks the rule only at MCS where `mcs % n == 0` (MCS are
+numbered from 0, as for updates); the default is `Every(1)`, every MCS. Each rule of a model
+has its own cadence.
 """
 struct DivideRule
     domain::Union{CellDomain, ClusterDomain}
     when::Any
     along::Any
     rules::Vector{Pair{Any, Any}}
+    every::Int
 end
 struct AlongMinor end
 struct AlongMajor end
@@ -511,14 +520,29 @@ _random_plane() = AlongRandom()
 struct Split end
 
 divide(d::Union{typeof(cells), typeof(clusters)}, args...; kw...) = divide(_domain(d), args...; kw...)
-function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = AlongMinor())
-    all(a -> a isa Pair, args) || throw(ArgumentError("@divide state rules must be `x => rule`"))
+"""
+The cadence of a rule (P6.0f) from its positional `Every(n)` or its `every = n` keyword (at
+most one of them; default 1), and the other positional arguments. Every rule that takes a
+cadence (`@divide`, `@link`/`@unlink`, and future lifecycle rules) parses it here.
+"""
+function _rule_cadence(what, args, every)
+    cadences = Every[a for a in args if a isa Every]
+    every === nothing || push!(cadences, every isa Every ? every : Every(every))
+    length(cadences) <= 1 || throw(ArgumentError("$what: a rule has one cadence; got " *
+                                                 join(("Every($(e.n))" for e in cadences), " and ")))
+    return (isempty(cadences) ? 1 : only(cadences).n), Any[a for a in args if !(a isa Every)]
+end
+
+function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = AlongMinor(), every = nothing)
+    n, rest = _rule_cadence("@divide", args, every)
     rules = Pair{Any, Any}[]
-    for (x, r) in args     # vector quantities: component-wise (a scalar or `Split()` applies to all)
+    for a in rest
+        a isa Pair || throw(ArgumentError("@divide: `$a` is neither a cadence `Every(n)` nor a state rule `x => rule`"))
+        x, r = a       # vector quantities: component-wise (a scalar or `Split()` applies to all)
         x isa AbstractVector ? append!(rules, [c => (r isa AbstractVector ? r[i] : r) for (i, c) in enumerate(x)]) :
         push!(rules, x => r)
     end
-    return DivideRule(d, when, along, rules)
+    return DivideRule(d, when, along, rules, n)
 end
 
 # ---------------------------------------------------------------------------------------

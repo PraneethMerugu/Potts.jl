@@ -32,7 +32,7 @@ function _map_statements(f, sys::PottsSystem)
     fu(u::Update) = keep(u, Update(u.phase, f(u.eq.lhs) ~ f(u.eq.rhs), u.every))
     fq(eq::Equation) = keep(eq, f(eq.lhs) ~ f(eq.rhs))
     fv(d::DivideRule) = keep(d, DivideRule(d.domain, f(d.when), d.along,
-        Pair{Any, Any}[f(k) => (r isa Split ? r : f(r)) for (k, r) in d.rules]))
+        Pair{Any, Any}[f(k) => (r isa Split ? r : f(r)) for (k, r) in d.rules], d.every))
     fl(r::LinkRule) = keep(r, LinkRule(r.relationship, r.action, f(r.when), r.every))
     fo(o::ObservedEq) = keep(o, ObservedEq(o.var, f(o.expr)))
     fs = sys.sweep

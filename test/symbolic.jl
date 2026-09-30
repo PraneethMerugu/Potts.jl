@@ -2051,3 +2051,177 @@ end
     @test_throws msg ext(quote @extend cue, A = b = SiteContactsBase(); @variables cue′(cell) = 0.0 end)
     @test ext(quote @extend cue, A = b = SiteContactsBase(); @parameters cue2 = 2.0 end) isa Potts.PottsSystem   # control
 end
+
+# ---------------------------------------------------------------------------------------
+# P6.0f: `Every(n)` per lifecycle rule
+
+@potts_model RuleCadences begin
+    @structural_parameters begin
+        na = 1
+        nb = 1
+        dims = (48, 32)
+        geometry = CorePotts.Square()
+        near = Moore(1)
+    end
+    @kinds medium a b
+    @variables x(cell) = 0.0
+    @parameters T = 10.0
+    @lattice Lattice(dims; geometry, neighborhood = near)
+    @energy cells => (volume - 64.0)^2
+    @constraint no_extinction
+    @divide cells(a) Every(na) when = volume >= 4, along = RandomPlane(), x => 1.0
+    @divide cells(b) Every(nb) when = volume >= 4, along = RandomPlane(), x => 2.0
+    @sweep Metropolis(; temperature = T)
+end
+
+# one cell of each kind, `w` sites wide
+function rule_cadence_state(dims; w = 12)
+    σ = zeros(Int32, dims)
+    idx(o) = ntuple(d -> d == 1 ? (o:(o + w - 1)) : (2:(1 + min(w, dims[d] - 2))), length(dims))
+    σ[idx(2)...] .= 1
+    σ[idx(dims[1] ÷ 2 + 2)...] .= 2
+    return σ, [:a, :b]
+end
+live_kinds(u) = (v = Array(u.cell.volume); k = Array(u.cell.kind);
+    (count(c -> v[c] > 0 && k[c] == 1, eachindex(v)), count(c -> v[c] > 0 && k[c] == 2, eachindex(v))))
+# every live cell divides at each checked MCS: 2^(checked MCS in 0:N-1) cells
+cadence_oracle(n, N) = 2^count(m -> m % n == 0, 0:(N - 1))
+trigger_code(sys) = string(only(filter(e -> occursin("EVENT_DIVIDE", string(e)), Potts.generated_code(sys).phases)))
+
+@testset "P6.0f per-rule cadence: counts against the oracle (square, hex, 3D; sequential, checkerboard)" begin
+    for (label, sys_of, dims, prop) in (
+            ("square", (na, nb) -> RuleCadences(; name = :rc, na, nb), (48, 32), Moore(1)),
+            ("hex", (na, nb) -> RuleCadences(; name = :rc, na, nb, geometry = Hexagonal(), near = Hex(1)), (48, 32), Hex(1)),
+            ("3D", (na, nb) -> RuleCadences(; name = :rc, na, nb, dims = (32, 14, 14)), (32, 14, 14), Moore(1)))
+        σ, kinds = rule_cadence_state(dims)
+        for (na, nb) in ((2, 3), (2, 4), (3, 3), (1, 1))
+            prob = PottsProblem(sys_of(na, nb), [ownership => σ, kind => kinds], (0, 6); capacity = 128)
+            # the whole-lifecycle cadence: the gcd, so a shared cadence skips the pass entirely
+            @test prob.f.lifecycle.every == gcd(na, nb)
+            for alg in (SequentialCPM(; proposal = prop), CheckerboardCPM(; proposal = prop)), N in (1, 3, 5)
+                @test live_kinds(solve(remake(prob; tspan = (0, N)), alg).u[end]) == (cadence_oracle(na, N), cadence_oracle(nb, N))
+            end
+        end
+    end
+end
+
+@testset "P6.0f per-rule cadence: generated gates" begin
+    has_gate(code, n) = occursin("mcs % $n", code)
+    # Every(1) and a shared cadence generate no modulo gate (zero cost when unused)
+    @test !occursin("mcs %", trigger_code(RuleCadences(; name = :rc)))
+    @test !occursin("mcs %", trigger_code(RuleCadences(; name = :rc, na = 3, nb = 3)))
+    # mixed: gcd pass, gates only on the rules whose cadence is not the gcd
+    c = trigger_code(RuleCadences(; name = :rc, na = 2, nb = 3))
+    @test has_gate(c, 2) && has_gate(c, 3)
+    c = trigger_code(RuleCadences(; name = :rc, na = 2, nb = 4))
+    @test !has_gate(c, 2) && has_gate(c, 4)
+end
+
+@potts_model LinkCadence begin
+    @kinds medium A
+    @relationship bond(cell, cell) capacity = 1
+    @lattice Lattice((8, 8))
+    @link bond Every(7) when = new_contact(a, b)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "P6.0f per-rule cadence: API, errors" begin
+    V = Potts.B.volume
+    dom = Potts.cells(1)
+    @test Potts.divide(dom; when = V >= 4).every == 1
+    @test Potts.divide(dom, Potts.Every(3); when = V >= 4).every == 3
+    @test Potts.divide(dom; when = V >= 4, every = 3).every == 3                  # keyword form, as @link
+    @test Potts.divide(dom, Potts.B.volume => 1.0, Potts.Every(3); when = V >= 4).every == 3   # anywhere
+    @test_throws r"one cadence; got Every\(2\) and Every\(3\)" Potts.divide(dom, Potts.Every(2), Potts.Every(3); when = V >= 4)
+    @test_throws r"one cadence" Potts.divide(dom, Potts.Every(2); when = V >= 4, every = 2)
+    @test_throws r"`3` is neither a cadence `Every\(n\)` nor a state rule" Potts.divide(dom, 3; when = V >= 4)
+    @test_throws ArgumentError Potts.divide(dom; when = V >= 4, every = 0)
+    # the macro passes a cadence through to @link as well (it used to be dropped silently)
+    rel = Potts.RelationshipRef(:bond)
+    @test Potts.link_rule(:link, rel, Potts.Every(4); when = true).every == 4
+    @test Potts.link_rule(:link, rel; when = true, every = 4).every == 4
+    @test_throws r"`3` is not a cadence" Potts.link_rule(:link, rel, 3; when = true)
+    @test only(LinkCadence(; name = :l).link_rules).every == 7
+    # a division's description names a non-default cadence (errors located at the rule)
+    @test Potts._describe(Potts.divide(dom, Potts.Every(3); when = V >= 4)) == "@divide cells(1) Every(3) when = volume >= 4"
+    @test Potts._describe(Potts.divide(dom; when = V >= 4)) == "@divide cells(1) when = volume >= 4"
+end
+
+# the daughter state rules of a rule apply only at MCS where its cadence checks it
+@potts_model SameKindCadences begin
+    @kinds medium a
+    @variables x(cell) = 0.0
+    @lattice Lattice((48, 32))
+    @energy cells => (volume - 64.0)^2
+    @constraint no_extinction
+    @divide cells(a) Every(2) when = volume >= 4, along = RandomPlane(), x => 1.0
+    @divide cells(a) Every(3) when = volume >= 4, along = RandomPlane(), x => 2.0
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "P6.0f per-rule cadence: state rules follow their rule's cadence" begin
+    σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
+    prob = PottsProblem(SameKindCadences(; name = :s), [ownership => σ, kind => [:a]], (0, 3); capacity = 16)
+    u = solve(prob, SequentialCPM()).u[end]
+    live = findall(>(0), u.cell.volume)
+    # MCS 0: both rules are checked (the first fires; both state rules apply, the second last);
+    # MCS 2: only Every(2) is checked, so the state is its 1.0 (2.0 if the Every(3) block ran)
+    @test length(live) == 4
+    @test all(==(1.0), u.cell.x[live])
+    u1 = solve(remake(prob; tspan = (0, 1)), SequentialCPM()).u[end]
+    @test all(==(2.0), u1.cell.x[findall(>(0), u1.cell.volume)])                   # control: MCS 0 alone
+end
+
+@potts_model CadenceDivBase begin
+    @kinds medium a b
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 64.0)^2
+    @divide cells(a) Every(2) when = volume >= 4 + rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model CadenceDivOther begin
+    @kinds medium a b
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 64.0)^2
+    @divide cells(a) Every(3) when = volume >= 8 + rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "P6.0f per-rule cadence: extend accumulates division rules and warns on a new cadence" begin
+    ext(body) = Base.invokelatest(eval(Potts._potts_model(:CadenceDivExt, body, @__MODULE__)); name = :e)
+    sys = @test_logs (:warn, r"@divide cells\(1\) Every\(3\).*adds to the base's @divide cells\(1\) Every\(2\)") ext(quote
+        @extend base = CadenceDivBase()
+        @kinds medium a b
+        @divide cells(a) Every(3) when = volume >= 8 + rand()
+    end)
+    @test [d.every for d in sys.divisions] == [2, 3]                  # both rules stay, each with its cadence
+    # two separately built models: extend renumbers the draws of `sys` and keeps its cadences
+    other = @test_logs (:warn, r"adds to the base's") Potts.ModelingToolkitBase.extend(
+        CadenceDivOther(; name = :o), CadenceDivBase(; name = :b))
+    @test [d.every for d in other.divisions] == [2, 3]
+    @test string(other.divisions[2].when) != string(CadenceDivOther(; name = :o).divisions[1].when)   # renumbered
+    @test_logs ext(quote                                                    # same cadence: silent
+        @extend base = CadenceDivBase()
+        @kinds medium a b
+        @divide cells(a) Every(2) when = volume >= 8
+    end)
+    @test_logs ext(quote                                                    # other kinds: silent
+        @extend base = CadenceDivBase()
+        @kinds medium a b
+        @divide cells(b) Every(5) when = volume >= 8
+    end)
+end
+
+@potts_model CadenceComponents begin
+    @kinds medium A
+    @components cells(A) clock = clock
+    @lattice Lattice((20, 20))
+    @energy cells => (volume - 25.0)^2
+    @divide cells(A) Every(4) when = clock.m_c >= 1, along = (1.0, 0.0), clock.m_c => 0.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "P6.0f per-rule cadence survives @components" begin
+    @test only(mtkcompile(CadenceComponents(; name = :cc)).divisions).every == 4
+end
