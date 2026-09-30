@@ -96,3 +96,24 @@ using Statistics: mean, var
     @test Array(uh.cell.volume) == [count(==(k), σhh) for k in 1:nh]
     @test Array(uh.cell.surface) ≈ CorePotts.recompute_surface(σhh, ph.lattice, ph.relations.surface, nh; T = Float32)
 end
+
+@testset "Akeeb invasion on Metal (Float32) agrees with the CPU (Float64)" begin
+    # A-77: leaders' mean height after 150 MCS (the invasion) and the trackers
+    lat = (99, 60)
+    function leader_y(backend, T, seed)
+        op = PottsModels.akeeb_state(; lattice = lat, seed)
+        prob = PottsProblem(PottsModels.AkeebInvasion(; name = :a, lattice = lat), op, (0, 150); capacity = 1000, seed, T)
+        u = solve(prob, CheckerboardCPM(; proposal = VonNeumann(1)); backend).u[end]
+        σ = Array(u.σ); kinds = Array(u.cell.kind); vol = Array(u.cell.volume)
+        @test vol == [count(==(c), σ) for c in eachindex(vol)]
+        @test all(>(0), vol[1:length(op[2].second)])                    # no extinction
+        ys = [i[2] for i in CartesianIndices(σ) if σ[i] > 0 && kinds[σ[i]] == 1]
+        return mean(ys)
+    end
+    cpu = [leader_y(CorePotts.CPU(), Float64, s) for s in 1:4]
+    gpu = [leader_y(MetalBackend(), Float32, s) for s in 11:14]
+    t = (mean(cpu) - mean(gpu)) / sqrt(var(cpu) / 4 + var(gpu) / 4)
+    @info "Akeeb leader height, CPU vs Metal" cpu = mean(cpu) metal = mean(gpu) t
+    @test abs(t) < 4
+    @test all(>(20), gpu)          # leaders invade (start ≈ 11; ≈ 15.5 at 200 MCS without the cue)
+end

@@ -1,5 +1,5 @@
 # Test entry point for the whole monorepo.
-#   GROUP=All (default) | Potts | CorePotts | MakiePotts | PottsModels | GPU | Reference
+#   GROUP=All (default) | Potts | CorePotts | MakiePotts | PottsModels | GPU
 # Each group runs in the shared workspace environment of its own test project.
 const GROUP = get(ENV, "GROUP", "All")
 const ROOT = dirname(@__DIR__)
@@ -25,6 +25,3 @@ GROUP == "GPU" &&
 GROUP == "GPU" &&
     run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl");
         env = ("POTTS_GPU" => "metal", "POTTS_QA" => "false"))
-# Legacy reference stack (D-021): not part of All; needs its own pinned environment.
-GROUP == "Reference" &&
-    run_group(joinpath(ROOT, "reference"), joinpath(ROOT, "reference/graner.jl"))

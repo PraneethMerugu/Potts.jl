@@ -1,6 +1,6 @@
-# The legacy parity models, authored in the symbolic surface (lib/PottsModels): the generated
-# code must reproduce the hand-written ports in `models.jl` exactly (same ΔH, commit and
-# constraints on every proposal) and pass the legacy parity tests.
+# The published models from lib/PottsModels: the generated code must reproduce the
+# hand-written CorePotts ports in `models.jl` exactly (same ΔH, commit and constraints on
+# every proposal; test/symbolic.jl).
 using Potts, PottsModels
 
 # The published models come from lib/PottsModels (M3.3 acceptance: parity from its sources).

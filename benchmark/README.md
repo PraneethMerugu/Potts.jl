@@ -4,10 +4,9 @@
   first MCS after `remake`, warm throughput):
   `julia -t auto --project=benchmark benchmark/graner.jl [seq|cpu|metal] [mcs] [scale]`
 - `benchmarks.jl` — BenchmarkTools `SUITE` (AirspeedVelocity-compatible) of the warm MCS.
-- `data/graner/` — the pre-equilibrated 72² SCDPotts baseline (64 cells) and its provenance
-  (`provenance.toml`, legacy `metrics.tsv`).
+- `lib/PottsModels/data/graner/` — the pre-equilibrated 72² initial condition (64 cells).
 
-Legacy comparison: `julia --project=reference reference/graner.jl [mcs] [seed]`.
+The legacy rows below were measured with the since-removed `reference/` pin (D-048).
 
 ## 2026-09-29, Apple M1 Pro, Julia 1.12.6, 8 threads (MCS = N attempts)
 
@@ -20,7 +19,7 @@ Legacy comparison: `julia --project=reference reference/graner.jl [mcs] [seed]`.
 | checkerboard Metal 72² Float32 | 3.1 s | 0.03 s | 4470 MCS/s | 43 (launch-bound) |
 | checkerboard Metal 576² Float32 | 3.1 s | 0.03 s | 926 MCS/s | 3.25 |
 
-The reference environment's precompile alone takes 491 s; the workspace's CorePotts 1.9 s.
+The legacy environment's precompile alone took 491 s; the workspace's CorePotts 1.9 s.
 
 ### After audit group 1 and CPU `_launch` (2026-09-29, same machine, `-t auto` = 6 threads)
 

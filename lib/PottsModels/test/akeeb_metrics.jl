@@ -1,5 +1,4 @@
-# Akeeb leader/follower invasion metrics, shared by the legacy sampler
-# (reference/sample_akeeb.jl) and the parity test (test/parity/akeeb.jl). Base only.
+# Akeeb leader/follower invasion metrics for the model's mechanism tests. Base only.
 #
 # `akeeb_metrics(σ, isleader, n0)`:
 #   σ         labels, x × y (0 = medium); x periodic, y closed

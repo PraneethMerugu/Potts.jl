@@ -58,23 +58,26 @@ end
 akeeb_contacts(jlf) = [0.0 2.0 10.0; 2.0 16.0 jlf; 10.0 jlf 5.0]
 
 """
-    akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609) -> operating point
+    akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21) -> operating point
 
 The published initial slab:
-- **Followers.** 3×3 tiles fill `y ≤ 21`, clipped at the right edge.
+- **Followers.** 3×3 tiles fill `y ≤ slab` (rounded up to whole tiles), clipped at the
+  right edge. The lattice must be taller than the slab.
 - **Leaders.** One-site leaders are placed at random follower pixels (`2 ≤ x`,
-  `2 ≤ y ≤ 20`) until they are a quarter of all cells.
+  `2 ≤ y ≤ slab − 1`) until they are a quarter of all cells.
 - **Clocks.** Each follower has a mitotic clock with probability `pp`, drawn uniformly
   from `0:74`. Followers have `rate = 0.015`.
 - **Cue.** `y − 1`.
 
 Draws use `MersenneTwister(seed)` and `(seed + 1)`, as in the source.
 """
-function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609)
+function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21)
     X, Y = lattice
+    top = 3 * cld(slab, 3)                                   # the last tile row ends here
+    Y > top || throw(ArgumentError("akeeb_state: lattice height $Y must exceed the slab ($top rows)"))
     σ = zeros(Int32, X, Y)
     kinds = Symbol[]
-    for y in 1:3:21, x in 1:3:X
+    for y in 1:3:slab, x in 1:3:X
         push!(kinds, :follower)
         σ[x:min(x + 2, X), y:(y + 2)] .= length(kinds)
     end
@@ -82,7 +85,7 @@ function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609)
     rng = MersenneTwister(seed)
     leaders = 0
     while 4 * leaders < length(kinds)
-        x, y = rand(rng, 2:X), rand(rng, 2:20)
+        x, y = rand(rng, 2:X), rand(rng, 2:(slab - 1))
         1 <= σ[x, y] <= nf || continue
         push!(kinds, :leader)
         σ[x, y] = length(kinds)

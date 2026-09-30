@@ -1,5 +1,5 @@
-# New-side ports of the legacy PottsModels examples (de97149), hand-written against CorePotts
-# with the legacy semantics (Potts 427dc2e2): the oracle for M3's generated code.
+# Hand-written CorePotts ports of the published models (small configurations): an
+# independent oracle for the generated code (test/symbolic.jl compares them exactly).
 using CorePotts, StaticArrays
 
 endo(st, c) = c != 0 && @inbounds(st.cell.kind[c]) == 1

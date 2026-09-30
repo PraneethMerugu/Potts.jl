@@ -5,12 +5,10 @@ using Potts, Test
 end
 
 include(joinpath(@__DIR__, "..", "benchmark", "models.jl"))
-include("parity/models.jl")
-include("parity/symbolic_models.jl")
-include("parity/graner.jl")
-include("parity/legacy_models.jl")
-include("parity/akeeb.jl")
+include("ports/models.jl")
+include("ports/symbolic_models.jl")
 include("symbolic.jl")
+include("oracle.jl")
 include("audit.jl")
 include("units.jl")
 include("adaptive.jl")

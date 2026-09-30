@@ -1,6 +1,5 @@
 Manifest.toml
 Manifest-v*.toml
-!reference/Manifest.toml
 /docs/build/
 *.jl.cov
 *.jl.mem

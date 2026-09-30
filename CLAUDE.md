@@ -7,15 +7,14 @@ Design lives in `docs/design/` (read `AUTONOMY.md` first; `PROGRESS.md` is the r
 
 One Julia ≥ 1.12 workspace: the root `Project.toml` lists every package and test project
 under `[workspace]`, and there is a single, gitignored `Manifest.toml`. Never add a
-Manifest or a nested `[workspace]` anywhere else (the only exception is
-`reference/Manifest.toml`, which pins the legacy stack).
+Manifest or a nested `[workspace]` anywhere else.
 
 - `src/` — `Potts` (symbolic layer: MTK-style `@potts_model`, compiler, codegen)
 - `lib/CorePotts` — numerical solvers, no Symbolics dependency
 - `lib/MakiePotts` — plotting (renders CorePotts states and solutions)
-- `lib/PottsModels` — published models as `@potts_model` sources (+ reference data)
+- `lib/PottsModels` — published models as `@potts_model` sources
 
-Tests: `julia --project=test test/runtests.jl` with `GROUP=All|CorePotts|MakiePotts|PottsModels|Potts` (and opt-in `GPU`, `Reference`),
+Tests: `julia --project=test test/runtests.jl` with `GROUP=All|CorePotts|MakiePotts|PottsModels|Potts` (and opt-in `GPU`),
 or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl`.
 
 ## Code rules (INTERNALS §5)

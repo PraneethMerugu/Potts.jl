@@ -95,13 +95,13 @@ JuliaFormatter `style = "sciml"`.
 Decision: the GPU group runs locally (Metal) before every merge, by the implementer;
 hosted GPU CI is a later addition and not a blocker.
 
-## D-021 Reference environment
+## D-021 Reference environment (superseded by D-048)
 Decision: `reference/Project.toml` + committed `reference/Manifest.toml` pin the legacy
 set (LocalMath 041b930, CorePotts 6ec7316, Potts 427dc2e2, PottsModels de97149,
 MakiePotts a8a025f) by git revision. The only committed Manifest. Reference tests run
 in the `Reference` group only.
 
-## D-022 Parity dispute rule
+## D-022 Parity dispute rule (superseded by D-048)
 Decision: if the new implementation disagrees with the reference beyond statistical
 tolerance, the brute-force oracle decides. If the oracle sides with the new code, the
 discrepancy is recorded here with evidence and the reference is marked wrong for that
@@ -506,3 +506,28 @@ workload).
   approved as the published model's science. The justification is the legacy parity test
   (`test/parity/akeeb.jl`: every metric agrees under `:merks`).
 - **D-041, D-042, D-043, D-044, D-045**: approved as written.
+
+## D-048 No parity harness against the legacy codebase (2026-09-29, maintainer)
+
+Decision: models are verified by ordinary tests, not by statistical parity with the legacy
+implementations. `reference/` (the pinned legacy environment, its samplers and data), the
+`Reference` test group and the legacy parity tests are removed. The legacy code stays
+reachable through git history and the local `legacy/main` tags. Supersedes D-021 and D-022.
+
+Why: the maintainer's call. Audit group 4 also showed the parity tests were weak evidence:
+the legacy fixtures are 8×8 toy configurations in which the tested mechanism barely acts.
+Wortel's cells die by MCS 10, and Merks' chemotaxis energy (χ·Δc ≈ 0.08) is negligible
+against T = 6. Strong Act effects stay undetectable at 64 seeds even when the cells survive.
+
+What replaces it, per published model:
+- the brute-force check that ΔH equals the difference in total energy (already in place);
+- independent recomputation of the drives (chemotaxis, Act) and of the effects (on-copy
+  writes, phases, field steps, division) against the model's specification;
+- the exact transition-matrix oracle on tiny lattices for the generated code;
+- invariants: trackers against recounts, connectivity, conservation;
+- mechanism tests with negative controls: the mechanism must change the outcome in the
+  stated direction, and switching it off must remove the effect;
+- generated code equal to the hand-written CorePotts ports (test/ports), and CPU/Metal
+  statistical agreement.
+
+The scientific dispute rule becomes: brute-force oracle, then the paper.

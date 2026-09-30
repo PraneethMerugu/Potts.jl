@@ -262,7 +262,7 @@ Every parity test should get a **negative control**: a perturbed science paramet
 3. **Crashes on reachable input.**
    - A-19 (solution display), A-14, A-18, A-35, A-37, A-38, A-40, A-42;
    - A-55 (race), A-16, A-17, A-56.
-4. **Parity power.** Negative controls and A-70…A-77.
+4. **Model test power** (rescoped by D-048: no legacy parity). Ordinary tests with negative controls replace A-70…A-77.
 5. **Hex completion.**
    - A-04, A-05, A-06;
    - A-07 plus MakiePotts A-80/A-81;
@@ -285,3 +285,4 @@ Every parity test should get a **negative control**: a perturbed science paramet
 | (group 3a) | A-37, A-38, A-40, A-42, A-55 | `lookup` rebuilds vector quantities; an extension inherits the base's dimension; `v[end]`/`begin` and multi-iterator generators stay plain Julia; a tuple default is a default unless followed by an options vector; the observed-function cache is locked. |
 | (group 3b) | A-16, A-17, A-18, A-35, A-68 | 1D principal axis; a transitioning member of a dividing cluster keeps its transition (both halves); `setu` converts to the array's element type; every tracker flag scans the same statement set (observed, division rules, link rules, temperature); `rand()` in an `Adaptive` equation is rejected at `mtkcompile`. |
 | (group 3c) | A-56 | Units: a literal zero in comparisons, rules and updates takes any unit; `D(x) ~ rhs` must have x's units, or x's units per unit of time (the MCS clock is unitless). |
+| (group 4) | A-70…A-78 (rescoped, D-048) | Legacy parity is removed: `reference/`, the `Reference` group and test/parity's legacy comparisons are deleted; the hand-written ports stay in `test/ports`. New `lib/PottsModels/test/mechanisms.jl`, specification-level and independent of production code: per-proposal drive checks (chemotaxis, Act, Akeeb cue) and the Merks ring rule re-implemented; the Wortel on-copy write and after-MCS decay; Merks' field step recomputed exactly; OpenVT's division partition, mass split and trigger; Akeeb clocks and target-volume growth. Mechanisms with negative controls: sorting under differential J, none under equal J, mixing under reversed J; chemotaxis up, zero and down a static gradient; Act persistence against λ_act = 0; Akeeb invasion against μ = 0 and proliferation against pp = 0; H non-increasing at T → 0 for sequential and checkerboard. `test/oracle.jl`: the generated Graner–Glazier on a 3×3 torus against the exact chain (z = 1.6; the T = 5 mutant gives z = 21). A-72: OpenVT divides at `volume ≥ V₀`. A-75: `akeeb_state(; slab)` with a height check. A-76: the Wortel docstring now matches the code. A-77: Akeeb in Float32 on Metal against the CPU. A-73/A-74 are moot. |

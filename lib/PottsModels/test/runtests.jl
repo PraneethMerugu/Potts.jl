@@ -1,6 +1,5 @@
 # PottsModels: every model builds, compiles and runs, and its derived ΔH matches the brute-
-# force energy difference. Reference parity with the legacy implementations runs in the
-# Potts test group (test/parity), which authors its problems from these sources.
+# force energy difference; mechanism tests (mechanisms.jl) check what each model is for.
 using Test, Potts, PottsModels, Aqua
 using Potts: CorePotts
 
@@ -59,6 +58,8 @@ end
     @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end
+
+include("mechanisms.jl")
 
 @testset "Aqua" begin
     Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))

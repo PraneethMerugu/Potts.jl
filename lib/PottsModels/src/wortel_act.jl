@@ -4,8 +4,8 @@
 Actin-inspired protrusive migration (Niculescu, Textor & de Boer, PLoS Comput. Biol. 11,
 e1004280, 2015; the Wortel et al. 2021 parameterization used by the legacy code). A copy
 into a site gains `λ_act/max_act` times the difference of the geometric-mean activity
-around source and target (`geomean_shifted`, D-034); a gained site is fully active and
-activity decays by one per MCS. Cells stay connected (Merks ring rule).
+around source and target (`geomean_shifted`, D-034). An extension into the medium is fully
+active, any other gained site inactive; activity decays by one per MCS. Cells stay connected (Merks ring rule).
 """
 @potts_model WortelAct begin
     @structural_parameters begin

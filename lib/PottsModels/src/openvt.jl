@@ -22,6 +22,6 @@ reaches the target, splitting a cell mass variable (plane normal `(1, 0)`).
         cells(epithelial) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]
     end
-    @divide cells(epithelial) when = (mcs == 0) && (volume >= 8), along = (1.0, 0.0), mass => Split()
+    @divide cells(epithelial) when = (mcs == 0) && (volume >= V₀), along = (1.0, 0.0), mass => Split()
     @sweep Metropolis(; temperature = T)
 end

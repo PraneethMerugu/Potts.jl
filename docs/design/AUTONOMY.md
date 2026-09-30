@@ -39,8 +39,8 @@ Apply in order; record the outcome in `DECISIONS.md`:
 3. Prefer fewer types, fewer representations, and runtime values over type parameters.
 4. When two designs are both acceptable, pick the one with the smaller cold-compile
    footprint, measured, not guessed.
-5. Scientific disputes: brute-force oracle > reference implementation > literature
-   reading (D-022).
+5. Scientific disputes: brute-force oracle > literature reading (D-048; there is no
+   legacy reference to defer to).
 
 ## 3. Escalation list (the only reasons to ask the maintainer)
 
@@ -67,10 +67,9 @@ Everything else is decided and logged.
 
 ## 5. Cut-over checklist (pre-authorized when all pass)
 
-- ROADMAP.md complete; CI green on `monorepo` for Core, QA, Reference; GPU group green
-  locally.
-- Every published model matches the reference (KS p > 0.01 on every saved observable
-  over 16 seeds) or has a D-022 entry.
+- ROADMAP.md complete; CI green on `monorepo` for Core and QA; GPU group green locally.
+- Every published model passes its ordinary tests (D-048): brute-force ΔH, independent
+  drive and effect checks, invariants, and mechanism tests with negative controls.
 - Benchmarks: every model < 15 s build+first MCS on CPU with warm cache; `remake` zero
   compile; warm step zero allocations.
 - Docs build.

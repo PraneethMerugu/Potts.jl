@@ -1018,3 +1018,56 @@ explicit `substeps`; declared names may not shadow built-ins.
     D-047 QA testset gates this (AUTONOMY §5).
   - All groups pass, including CorePotts under `-t 4` with Metal, Potts with Metal and QA,
     PottsModels and MakiePotts.
+
+## 2026-09-29 — Audit group 4, rescoped: ordinary model tests replace legacy parity (D-048)
+
+- **Decision (maintainer):** no parity harness against the legacy codebase; models are
+  verified by ordinary tests. Removed:
+  - `reference/` (the pinned legacy environment, its samplers and data);
+  - the `Reference` test group;
+  - the legacy comparisons in `test/parity`.
+
+  The hand-written ports move to `test/ports`. The legacy code stays reachable through git
+  history and the `legacy/main` tags.
+- **Why the old tests were weak** (found while working on A-70/A-71): on the legacy 8×8
+  fixtures, the mechanism under test barely acts.
+  - Wortel's cells die by MCS 10 at any λ ≤ 1.
+  - Merks' chemotaxis energy (≈ 0.08) is negligible against T = 6.
+  - Even with surviving cells, λ_act = 20 against 0 is undetectable at 64 seeds.
+- **New tests** in `lib/PottsModels/test/mechanisms.jl`, about 12 s. They are written from each
+  model's specification and are independent of production code.
+  - **Drives and constraints, per proposal.** The drive is ΔH minus the energy change,
+    compared with the chemotaxis, Act (shifted geometric mean) and Akeeb cue formulas. The
+    constraint is compared with the Merks ring rule, re-implemented (plus no-extinction
+    for Akeeb).
+  - **Effects:**
+    - Wortel's on-copy activation and its decay (frozen cell: `max(act₀ − k, 0)`);
+    - Merks' field recomputed exactly each MCS (two Euler substeps, zero flux, clip at 0);
+    - OpenVT's exact division partition and mass halving, and its trigger invariant;
+    - Akeeb's clocks and target-volume growth.
+  - **Mechanisms with negative controls:**
+    - Graner–Glazier: sorting under the published J, none under equal J, mixing under
+      reversed J; H never rises at T → 0, for sequential and checkerboard;
+    - Merks: a cell climbs, holds and descends a static gradient for χ = 100, 0, −100;
+    - Wortel: Act gives persistent migration (median net displacement over 8 against
+      λ_act = 0);
+    - Akeeb: leaders invade (mean height > 28) and stay put without the cue (< 20);
+      proliferation needs clocks.
+- **Exact oracle on generated code.** The CorePotts oracle module moved to `oracle_core.jl`
+  and gained periodic boundaries. `test/oracle.jl` checks the generated Graner–Glazier on a
+  3×3 torus: χ² z = 1.6, TV at the noise level, and the T = 5 mutant gives z = 21. A
+  periodic checkerboard oracle is infeasible: it needs even axes ≥ 4, and 3¹⁶ states.
+- **Audit items:**
+  - A-72: OpenVT divides at `volume ≥ V₀`.
+  - A-75: `akeeb_state(; slab)`, with a height check.
+  - A-76: the Wortel docstring now matches the code.
+  - A-77: Akeeb in Float32 on Metal agrees with Float64 on the CPU (t = −0.9), with its
+    trackers checked.
+- **Findings for the maintainer:**
+  - The Merks ring rule does not keep cells globally connected. It falls back to "allowed
+    if exactly two distinct cells occupy the ring". After 200 MCS, 2–7 Akeeb cells are in
+    several pieces, with or without the cue.
+  - WortelAct keeps the legacy Act semantics chosen for parity (D-034): the shifted
+    geometric mean, and activation only on extension into the medium. The paper and
+    Artistoo use the plain geometric mean and activate every gained site.
+- All groups pass: CorePotts, Potts (with Metal and QA, 80 testsets) and PottsModels.
