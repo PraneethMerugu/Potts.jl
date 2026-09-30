@@ -758,7 +758,7 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 
   - `Tiling(size; spacing = 0, region, kinds)`: whole boxes filling `region` (a tuple of
     ranges; default the whole lattice) in column-major order; `kinds` is cycled.
-  - `Scatter(n, size; region, kinds, seed, gap = 1)`: `n` boxes at random positions, at
+  - `Scattered(n, size; region, kinds, seed, gap = 1)`: `n` boxes at random positions, at
     least `gap` medium sites apart (Chebyshev), by rejection with `StableRNG(seed)`.
     Throws an `ArgumentError` when they cannot be placed.
   - `Frame(kind; width = 1)`: one cell owning every site within `width` of the edge.

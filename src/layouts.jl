@@ -95,7 +95,7 @@ function paint!(σ, kinds, l::Tiling{N}, dims) where {N}
 end
 
 """
-    Scatter(n, size; region = <whole lattice>, kinds, seed, gap = 1)
+    Scattered(n, size; region = <whole lattice>, kinds, seed, gap = 1)
 
 `n` boxes of `size` at uniformly random positions inside `region`, at least `gap` medium
 sites apart along some axis (with `gap = 1` no two cells touch, Moore neighbourhood
@@ -103,7 +103,7 @@ included). Placement is by rejection with a `StableRNG(seed)`, so it is determin
 `seed` across Julia versions. `kinds` is cycled over the cells. Throws an `ArgumentError`
 when the boxes cannot be placed.
 """
-struct Scatter{N, K} <: AbstractLayout
+struct Scattered{N, K} <: AbstractLayout
     n::Int
     size::NTuple{N, Int}
     region::Union{Nothing, NTuple{N, UnitRange{Int}}}
@@ -111,12 +111,12 @@ struct Scatter{N, K} <: AbstractLayout
     seed::Int
     gap::Int
 end
-function Scatter(n::Integer, size; region = nothing, kinds, seed::Integer, gap::Integer = 1)
+function Scattered(n::Integer, size; region = nothing, kinds, seed::Integer, gap::Integer = 1)
     N = length(size)
-    n >= 0 || throw(ArgumentError("Scatter: the number of boxes must be non-negative, got $n"))
-    gap >= 0 || throw(ArgumentError("Scatter: gap must be non-negative, got $gap"))
-    sz = _check_size(_tuple(size, N), "Scatter")
-    return Scatter(Int(n), sz, _region_arg(region, N, "Scatter"), _kinds_arg(kinds, "Scatter"), Int(seed), Int(gap))
+    n >= 0 || throw(ArgumentError("Scattered: the number of boxes must be non-negative, got $n"))
+    gap >= 0 || throw(ArgumentError("Scattered: gap must be non-negative, got $gap"))
+    sz = _check_size(_tuple(size, N), "Scattered")
+    return Scattered(Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), Int(seed), Int(gap))
 end
 
 const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
@@ -124,15 +124,15 @@ const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
 # Boxes at lower corners `a` and `b` are at least `gap` sites apart along some axis.
 _apart(a, b, sz, gap) = any(ntuple(d -> a[d] + sz[d] + gap <= b[d] || b[d] + sz[d] + gap <= a[d], length(a)))
 
-function paint!(σ, kinds, l::Scatter{N}, dims) where {N}
-    _check_rank(l, N, dims, "Scatter")
-    reg = _region(l.region, dims, "Scatter")
+function paint!(σ, kinds, l::Scattered{N}, dims) where {N}
+    _check_rank(l, N, dims, "Scattered")
+    reg = _region(l.region, dims, "Scattered")
     ext = map(length, reg)
-    all(map(>=, ext, l.size)) || throw(ArgumentError("Scatter: boxes of size $(l.size) do not fit the region $reg"))
+    all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg"))
     # necessary: the boxes grown by `gap` on their upper sides are disjoint in the region
     # grown by `gap`
     prod(ext .+ l.gap) >= l.n * prod(l.size .+ l.gap) ||
-        throw(ArgumentError("Scatter: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
+        throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
     corners = NTuple{N, Int}[]
@@ -146,7 +146,7 @@ function paint!(σ, kinds, l::Scatter{N}, dims) where {N}
                 break
             end
         end
-        placed || throw(ArgumentError("Scatter: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
+        placed || throw(ArgumentError("Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
                                       "in the region $reg after $_SCATTER_ATTEMPTS draws; use fewer or smaller boxes"))
     end
     for (k, o) in enumerate(corners)

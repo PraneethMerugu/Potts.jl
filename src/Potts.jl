@@ -51,6 +51,6 @@ const cluster = B.cluster
 export kind, cluster
 
 include("layouts.jl")
-export AbstractLayout, Tiling, Scatter, Frame, overlay, layout
+export AbstractLayout, Tiling, Scattered, Frame, overlay, layout
 
 end

@@ -62,8 +62,8 @@ end
     @test occursin("`kinds` is empty", err(() -> Tiling((2, 2); kinds = Symbol[])))
     @test occursin("no box of size (6, 2) fits", err(() -> layout(Tiling((6, 2); region = (1:5, 1:5), kinds = [:a]), (10, 10))))
     @test occursin("width must be at least 1", err(() -> Frame(:w; width = 0)))
-    @test occursin("gap must be non-negative", err(() -> Scatter(2, (2, 2); kinds = [:a], seed = 1, gap = -1)))
-    @test occursin("do not fit", err(() -> layout(Scatter(1, (6, 6); kinds = [:a], seed = 1), (5, 20))))
+    @test occursin("gap must be non-negative", err(() -> Scattered(2, (2, 2); kinds = [:a], seed = 1, gap = -1)))
+    @test occursin("do not fit", err(() -> layout(Scattered(1, (6, 6); kinds = [:a], seed = 1), (5, 20))))
     @test occursin("positive", err(() -> layout(Frame(:w), (0, 4))))
     # negative control: a valid call raises nothing
     @test err(() -> layout(Tiling((2, 2); region = (1:10, 1:10), kinds = [:a]), (10, 10))) == ""
@@ -90,16 +90,16 @@ end
         Frame(:w)), (5, 5))
     @test _op(op, kind) == [:y, :w] && sort(unique(_op(op, ownership))) == Int32[0, 1, 2]
     # overlay is associative (nested overlays flatten)
-    a, b, c = Frame(:w), Tiling((3, 3); spacing = 1, kinds = [:a]), Scatter(3, (2, 2); kinds = [:s], seed = 4)
+    a, b, c = Frame(:w), Tiling((3, 3); spacing = 1, kinds = [:a]), Scattered(3, (2, 2); kinds = [:s], seed = 4)
     ref = layout(overlay(a, b, c), (20, 20))
     @test _same(layout(overlay(overlay(a, b), c), (20, 20)), ref) && _same(layout(overlay(a, overlay(b, c)), (20, 20)), ref)
     @test !_same(layout(overlay(c, b, a), (20, 20)), ref)             # negative control: order matters
 end
 
-@testset "layouts: Scatter" begin
+@testset "layouts: Scattered" begin
     # 3D, gap 2: every pair of cells is more than two sites apart, volumes by counting
     for seed in 1:3
-        σ = _op(layout(Scatter(8, (3, 3, 3); region = (2:19, 2:19, 2:19), kinds = [:a, :b], seed, gap = 2), (20, 20, 20)),
+        σ = _op(layout(Scattered(8, (3, 3, 3); region = (2:19, 2:19, 2:19), kinds = [:a, :b], seed, gap = 2), (20, 20, 20)),
             ownership)
         @test maximum(σ) == 8 && all(c -> length(_sites(σ, c)) == 27, 1:8)
         @test all(i -> all(d -> 2 <= i[d] <= 19, 1:3), findall(>(0), σ))
@@ -109,15 +109,15 @@ end
     σ = zeros(Int32, 10, 10); σ[1:2, 1:2] .= 1; σ[4:5, 4:5] .= 2
     @test _separated(σ, 1) && !_separated(σ, 2)
     # gap 0 allows touching boxes but never overlap: a denser packing keeps full volumes
-    σ = _op(layout(Scatter(8, (2, 2); kinds = [:a], seed = 3, gap = 0), (8, 8)), ownership)
+    σ = _op(layout(Scattered(8, (2, 2); kinds = [:a], seed = 3, gap = 0), (8, 8)), ownership)
     @test maximum(σ) == 8 && all(c -> length(_sites(σ, c)) == 4, 1:8)
     # deterministic in the seed (StableRNG): pinned lower corners, stable across Julia versions
-    corners(seed) = (σ = _op(layout(Scatter(3, (2, 2); kinds = [:a], seed), (30, 30)), ownership);
+    corners(seed) = (σ = _op(layout(Scattered(3, (2, 2); kinds = [:a], seed), (30, 30)), ownership);
         [Tuple(minimum(_sites(σ, c))) for c in 1:3])
     @test corners(7) == corners(7)
     @test corners(7) != corners(8)
     @test corners(7) == [(2, 27), (6, 8), (13, 6)]
-    @test_throws ArgumentError layout(Scatter(26, (4, 4); kinds = [:a], seed = 1), (24, 24))   # area bound
+    @test_throws ArgumentError layout(Scattered(26, (4, 4); kinds = [:a], seed = 1), (24, 24))   # area bound
 end
 
 @testset "layouts: lattices, systems and problems" begin
