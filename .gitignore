@@ -7,3 +7,6 @@ Manifest-v*.toml
 
 # Reference papers (copyrighted PDFs; local only)
 docs/references/
+
+# Author-question letters: local drafts only, never committed (maintainer, 2026-09-30)
+docs/design/research/author-questions/
