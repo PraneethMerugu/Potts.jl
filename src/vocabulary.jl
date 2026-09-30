@@ -272,7 +272,8 @@ _rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
 # Helpers the macro rewrites user syntax into
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
-_index(x::Num, i) = at(x, i)
+# a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
+_index(x::Num, i) = SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i)
 _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
 _index(x::Num, i, j) = at2(x, i, j)

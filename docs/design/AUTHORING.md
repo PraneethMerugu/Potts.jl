@@ -799,13 +799,16 @@ end
   the model's scalar type as exact 0/1, so `sol[:grn₊A]`, the operating point
   (`:grn₊A => [true, false, …]`), division copies and plotting treat it like any cell
   variable. Model statements read `grn.A` as a `Bool` (`grn.A & …`) or as 0/1 (`λ * grn.A`).
-  A deeper lag (`z(k - 2)`) keeps its own slot, `grn₊zₜ₋₁`.
+  A deeper lag (`z(k - 2)`) keeps its own slot, `grn₊zₜ₋₁`; an array variable `z[1:n]`
+  has one slot per element, `grn₊z_1 … grn₊z_n`. A node read at another cell
+  (`grn.A[j]`) is a `Bool` as well.
 - **Timing.** One fused phase per clock runs at the end of the MCS: after the updates, the
   fields and the ODEs, before the link rules and the lifecycle; for live cells
   (`volume > 0`) of the component's kinds only. Ticks follow MTK clock time: `Clock(dt;
   phase)` ticks at `t = phase + k·dt` (after MCS `t - 1`, in units of `mcs_duration`), and
   `t = 0` is the initial state. So `Clock(2)` ticks after MCS 1, 3, …, one MCS later than
-  `Every(2)` (MCS 0, 2, …): the state saved at `t` has had `t ÷ 2` ticks. `dt` and `phase`
+  `Every(2)` (MCS 0, 2, …): the state saved at `t` has had `t ÷ 2` ticks.
+  `Clock(n; phase = 1)` ticks after MCS 0, n, …, as `Every(n)` does. `dt` and `phase`
   must be whole numbers of MCS, with `0 ≤ phase < dt`.
 - **Update order is MTK's.** Every rule reads the state before the tick (a `x(k - 1)` read
   is synchronous); a same-step read `x(k)` sees the new value, because `mtkcompile`
@@ -813,6 +816,8 @@ end
   component that ticks at a given MCS (cell or model scope, any clock) reads the other
   components' pre-tick values, whatever the declaration order: with more than one tick
   phase, new values go to scratch slots (`grn₊x__tick`) and are published after all ticks.
+  The same holds across cells: a rule reading another cell's node (`grn.A[j]`, a gather, a
+  link partner) sees its pre-tick value, through the same scratch slots.
 - **Couplings (as D-038).** `@equations grn.p ~ expr` replaces a component parameter by a
   cell-scope expression (cell variables, `volume`, `integral`, population folds, other
   components' state, `rand()`). A `Bool` parameter coupled to a number reads it as
@@ -823,7 +828,8 @@ end
 - **Initial values** come from the MTK defaults and the operating point. MTK's
   initialization is never run (it is ill-posed for Boolean maps). A node or lag without a
   default must be given in the operating point.
-- **Rejected at `mtkcompile`**, with an `ArgumentError` naming the component: `D(x)` in a
+- **Rejected at `mtkcompile`**, with an `ArgumentError` naming the component: a node
+  without an update of its own ("every discrete variable needs an update"); `D(x)` in a
   discrete component (use a continuous and a discrete component, coupled); `Sample`/`Hold`;
   implicit rules and algebraic loops of same-step reads; several clocks in one component
   (one component per clock); a `Bool` node given a non-`Bool` rule; a period or phase that

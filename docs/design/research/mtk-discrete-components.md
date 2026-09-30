@@ -298,8 +298,23 @@ end
 | G8 | Initialization of output-only nodes, which MTK would solve | lowering | Require a default or an operating-point value, as for ODE components. |
 | G9 | Random-order asynchronous Boolean updating is not a deterministic MTK form | semantics | In MTK form: a coupled per-cell random input `@equations grn.u ~ rand()` and rules `A(k) ~ ifelse(u < 1/3, f_A, A(k-1))`. No Potts-side network representation. |
 | G10 | `x(k+1) ~ f(x(k))` is rejected ("only non-positive shifts") | MTKBase | Write `x(k) ~ f(x(k-1))`. Documentation only. |
-| G11 | Array variables add a `z ~ array_literal(…)` observed | MTKBase | Skip aggregate observed equations and store the scalar slots `grn₊z_1…`, the same convention as `QuantityVector`. |
+| G11 | Array variables add a `z ~ array_literal(…)` observed | MTKBase | **Implemented (P6.0k):** aggregate observed equations are skipped and each element is a scalar slot `grn₊z_1…` (a matrix: `grn₊z_i_j`), the `QuantityVector` convention; an element's default comes from the array's default. Two slots with one name are an `ArgumentError`. |
 | G12 | `Clock(dt, phase)` positional form is missing | SciMLBase | Use `Clock(dt; phase)`. Documentation only. |
+| G13 | A Bool node read at an index (`grn.A[j]`) is built by Potts' `at`, which is Real-typed, so `&`, `!` and `ifelse` on it failed | Potts `_index` | **Implemented (P6.0k):** `x[j]` of a `Bool` quantity is `_nonzero(at(x, j))`, a Bool read of the slot at `j`. (MTK initialization, ill-posed for Boolean maps, is never run: values come from defaults and the operating point; see G8.) |
+| G14 | `Clock(n)` ticks at MTK clock times `t = n, 2n, …` (after MCS `n − 1`, …), one MCS later than `Every(n)` (MCS 0, n, …) | semantics | Deliberate: the clock belongs to the MTK system. To align with `Every(n)`, use `Clock(n; phase = 1)`, which ticks at `t = 1, n + 1, …`, i.e. after MCS 0, n, …. |
+| G15 | An under-determined discrete system (a node read with no update of its own) surfaces MTK's `ExtraVariablesSystemException` | MTKBase | Wrapped in an `ArgumentError` naming the component and prefixed "every discrete variable needs an update `x(k) ~ …`". |
+
+**Implementation notes (P6.0k).**
+- A tick reads only pre-tick values across cells and phases: when a cell-scope rule reads a
+  slot at another index (`x[j]`, a gather, an unhoisted fold), or when several tick phases
+  exist (scopes, clocks), new values go to scratch slots `x__tick` published after all ticks.
+  Measured on the fixture network (21 cells, 3 slots, CPU): the scratch path adds about
+  45 ns per tick MCS (after-MCS phases 215 → 265 ns), with the MCS itself unchanged at
+  about 17–18 µs and zero allocations.
+- **N3 (out of scope, recorded).** The same Gauss–Seidel-across-cells effect exists for
+  cell ODEs (D-038): a cell ODE whose rate reads another cell's ODE state (`x[j]`) sees
+  the neighbour's updated value if that cell was already advanced in the same kernel, and
+  races on the GPU. No model does this yet; the same scratch treatment would apply.
 
 G1–G12 should become one DECISIONS entry that extends D-038, as the ROADMAP P6.0k
 acceptance requires. That entry should be written with the implementation, not in this

@@ -24,10 +24,25 @@ end
 
 _mtkname(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic && info(u) === nothing ?
                                  (try
-                                     SymbolicIndexingInterface.getname(u)
+                                     _slot_name(u)
                                  catch
                                      nothing
                                  end) : nothing)
+
+"""
+Name of an MTK variable as a Potts quantity: its name, or `z_i` for element `i` of an array
+variable `z` (`z_i_j` for a matrix), the convention of vector quantities.
+"""
+function _slot_name(u)
+    u = _unwrap(u)
+    if iscall(u) && operation(u) === getindex
+        idx = arguments(u)[2:end]
+        all(i -> SymbolicUtils.unwrap_const(_unwrap(i)) isa Integer, idx) &&
+            return Symbol(SymbolicIndexingInterface.getname(arguments(u)[1]), "_",
+                join((SymbolicUtils.unwrap_const(_unwrap(i)) for i in idx), "_"))
+    end
+    return SymbolicIndexingInterface.getname(u)
+end
 
 # Replace every expression of a model with `f(expr)`, keeping source locations.
 function _map_statements(f, sys::PottsSystem)
@@ -84,8 +99,9 @@ function _bind_components(sys::PottsSystem)
         if discrete
             # one slot per discrete variable (and per older lag): the value of its latest tick
             for (x, standin) in zip(plan.slots, plan.standins)
-                nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(x))
-                v = variable(only(Symbolics.@variables $nm(t)), scope; default = value(x))
+                nm = Symbol(comp.name, :₊, _slot_name(x))
+                haskey(names, nm) && throw(ArgumentError("component `$(comp.name)`: two discrete variables are both stored as `$nm`"))
+                v = variable(only(Symbolics.@variables $nm(t)), scope; default = _element_default(ics, x))
                 push!(vars, v)
                 names[nm] = standin(_unwrap(v))
             end
@@ -115,7 +131,7 @@ function _bind_components(sys::PottsSystem)
         end
         if discrete
             # lags read the pre-tick slot of their source; rules become the tick's new values
-            slotnames = [Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(x)) for x in plan.slots]
+            slotnames = [Symbol(comp.name, :₊, _slot_name(x)) for x in plan.slots]
             for (ℓ, j) in plan.lags
                 local_sub[ℓ] = names[slotnames[j]]
             end
@@ -222,27 +238,28 @@ replaces MTKBase's compiler and rejects clocked systems), the `PottsModelingTool
 extension compiles through MTK's discrete-pass hook (gap G1).
 """
 function _compile_discrete(comp)
-    for eq in ModelingToolkitBase.equations(comp.system), side in (eq.lhs, eq.rhs)
+    eqs = ModelingToolkitBase.equations(comp.system)
+    for eq in eqs, side in (eq.lhs, eq.rhs)            # Sample/Hold first: they come with D(x)
         _has_operator(side, Union{ModelingToolkitBase.Sample, ModelingToolkitBase.Hold}) && throw(ArgumentError(
             "component `$(comp.name)`: `Sample`/`Hold` are not supported (ModelingToolkitBase has no clock " *
             "partitioning); couple a continuous and a discrete component with `@equations` instead (the discrete " *
             "one samples at its tick, the continuous one holds the latest tick); got $eq"))
+    end
+    for eq in eqs, side in (eq.lhs, eq.rhs)
         _has_operator(side, Differential) && throw(ArgumentError(
             "component `$(comp.name)`: a discrete (clocked, `Shift`) component cannot also have `D(x)` equations " *
             "(hybrid systems are not supported); make two components, one continuous and one discrete, " *
             "coupled with `@equations`; got $eq"))
     end
     ext = Base.get_extension(@__MODULE__, :PottsModelingToolkitExt)
+    ext === nothing || ext.check_compatible()           # G1: the MTK hook, checked once per session
     try
         return ext === nothing ? ModelingToolkitBase.mtkcompile(comp.system) : ext.compile_discrete(comp.system)
     catch e
-        (e isa ArgumentError || e isa InterruptException) && rethrow()
-        # the extension re-enters MTK internals (G1): a missing method or name is an
-        # incompatible ModelingToolkit, not a problem with the user's system
-        ext !== nothing && e isa Union{MethodError, UndefVarError} && throw(ErrorException(
-            "PottsModelingToolkitExt is incompatible with ModelingToolkit v$(ext.mtk_version()) " *
-            "(component `$(comp.name)`): $(first(sprint(showerror, e), 400))"))
-        throw(ArgumentError("component `$(comp.name)`: ModelingToolkit cannot compile this discrete system: " *
+        e isa Union{ArgumentError, InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
+        hint = nameof(typeof(e)) === :ExtraVariablesSystemException ?
+               "every discrete variable needs an update `x(k) ~ …`; " : ""
+        throw(ArgumentError("component `$(comp.name)`: $(hint)ModelingToolkit cannot compile this discrete system: " *
                             first(sprint(showerror, e), 600)))
     end
 end
@@ -274,7 +291,7 @@ function _discrete_plan(comp, cs, mcs_duration)
     rules = Any[]
     # slots in name order: the generated code does not depend on MTK's observed order (a tick
     # computes every new value before writing any, so the order has no other effect)
-    for o in sort(obs; by = o -> string(SymbolicIndexingInterface.getname(o.lhs)))
+    for o in sort(obs; by = o -> string(_slot_name(o.lhs)))
         x = _unwrap(o.lhs)
         r = expand(o.rhs)
         SymbolicUtils.symtype(x) === Bool && SymbolicUtils.symtype(r) !== Bool && throw(ArgumentError(
@@ -284,7 +301,7 @@ function _discrete_plan(comp, cs, mcs_duration)
         push!(rules, r)
     end
     slot_of = Dict{Any, Int}(x => j for (j, x) in enumerate(slots))
-    for (ℓ, v) in sort!(collect(src); by = p -> string(SymbolicIndexingInterface.getname(p.first)))   # a lag of a lag keeps its own slot
+    for (ℓ, v) in sort!(collect(src); by = p -> string(_slot_name(p.first)))   # a lag of a lag keeps its own slot
         if v in unk && !haskey(slot_of, v)
             push!(slots, v)
             slot_of[v] = length(slots)
@@ -299,6 +316,19 @@ function _discrete_plan(comp, cs, mcs_duration)
     standins = [SymbolicUtils.symtype(x) === Bool ? (v -> _unwrap(_nonzero(Symbolics.wrap(v)))) : identity for x in slots]
     every, offset = _clock_cadence(comp, cs, slots, mcs_duration)
     return (; slots, rules, lags, standins, every, offset)
+end
+
+# the default of a slot: its own, or its entry in the default of its array variable (G11)
+function _element_default(ics, x)
+    const_of(y) = (v = get(ics, _unwrap(y), nothing); v === nothing ? nothing :
+                                                      (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : nothing))
+    v = const_of(x)
+    v isa Real && return Float64(v)
+    u = _unwrap(x)
+    (iscall(u) && operation(u) === getindex) || return nothing
+    a = const_of(arguments(u)[1])
+    idx = [SymbolicUtils.unwrap_const(_unwrap(i)) for i in arguments(u)[2:end]]
+    return a isa AbstractArray && all(i -> i isa Integer, idx) ? Float64(a[idx...]) : nothing
 end
 
 # the Potts variable behind a slot's stand-in (`_nonzero(grn₊A)` → `grn₊A`)

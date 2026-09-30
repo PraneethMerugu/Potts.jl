@@ -612,7 +612,26 @@ end
 # slots `x__tick`, and the slots are published only after all of them ran, so no block ever
 # reads another's post-tick value. A model with a single phase writes its slots directly.
 _tick_groups(c::CompiledPottsSystem) = unique((b.scope, b.every, b.offset) for b in c.discrete)
-_tick_scratch(c::CompiledPottsSystem) = length(_tick_groups(c)) > 1
+_tick_scratch(c::CompiledPottsSystem) = length(_tick_groups(c)) > 1 || _reads_other_cells_slots(c)
+
+# A cell-scope tick that reads a discrete slot of another cell (`x[j]`, a gather, a fold that is
+# not hoisted, a link partner) must not see cells that already ticked: it needs scratch slots
+# even in a single phase (review P6.0k round 2). Reads of the cell's own slots do not.
+function _reads_other_cells_slots(c::CompiledPottsSystem)
+    slots = Set{Symbol}(info(x).name for b in c.discrete if b.scope === :cell for x in b.slots)
+    isempty(slots) && return false
+    hit = Ref(false)
+    reads_slot(y) = (found = Ref(false);
+        _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in slots && (found[] = true)), y); found[])
+    for b in c.discrete, x in b.next
+        b.scope === :cell || continue
+        _walk_all(x) do y
+            hit[] && return
+            iscall(y) && operation(y) in (at, at2, gather, population) && reads_slot(y) && (hit[] = true)
+        end
+    end
+    return hit[]
+end
 _tick_scratch_name(n::Symbol) = Symbol(n, :__tick)
 
 # MTK clock ticks at `t = offset + k·every` MCS happen after MCS `t - 1`: `mcs % every == mod(offset - 1, every)`

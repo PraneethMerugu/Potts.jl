@@ -271,3 +271,14 @@ end
     @test [Array(u.cell.zz₊dZ)[2] for u in sol.u] == Float32.(Z)
     @test [Array(u.cell.yy₊dY)[2] for u in sol.u] == Float32.([false; Z[1:5]])
 end
+
+@testset "P6.0k Jacobi across cells on Metal (shift register, Float32)" begin
+    prob = PottsProblem(DiscreteShiftRegister(; name = :s), [ownership => _discrete_blocks(6, 16), kind => fill(1, 6)], (0, 4);
+        T = Float32)
+    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:4)
+    @test [Array(u.cell.xc₊dX) for u in sol.u] == [Float32.(shift_register_oracle(m)) for m in 0:4]
+    ua = solve(PottsProblem(DiscreteArray(; name = :a), [ownership => _discrete_blocks(1, 8), kind => [1]], (0, 5); T = Float32),
+        CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:5)
+    @test [(Array(u.cell.ar₊dz_1)[1], Array(u.cell.ar₊dz_2)[1]) for u in ua.u] ==
+          Tuple{Float32, Float32}[(0, 1), (0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
+end

@@ -51,6 +51,7 @@ canonical(exs) = join((string(Base.remove_linenums!(deepcopy(ex))) for ex in exs
     ext = Base.get_extension(Potts, :PottsModelingToolkitExt)
     @test (ext !== nothing) == WITH_MTK
     if WITH_MTK
+        @test ext.check_compatible() === nothing           # the MTK hook is present
         # the gap the extension closes: full MTK's own compiler rejects a clocked system
         @test_throws ModelingToolkit.HybridSystemNotSupportedException Potts.ModelingToolkitBase.mtkcompile(last(NETWORKS[3]))
     end

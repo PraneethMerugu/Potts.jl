@@ -2584,9 +2584,19 @@ end
 @testset "discrete components: a Bool node indexed by a cell" begin
     @potts_model DiscreteIndexed begin
         @kinds medium A
-        @variables got(cell) = 0.0
+        @variables begin
+            got(cell) = 0.0
+            amp(cell) = 0.0
+            neg(cell) = 0.0
+            sel(cell) = 0.0
+        end
         @components cells(A) tg = toggle
-        @after_mcs got ~ 1.0 + tg.dA[id]                    # an indexed node reads as 0/1
+        @after_mcs begin
+            got ~ 1.0 + tg.dA[id]                          # as a number: 0/1
+            amp ~ ifelse(tg.dA[id] & (volume > 1), 1.0, 0.0)   # as a Bool
+            neg ~ ifelse(!tg.dA[id], 1.0, 0.0)
+            sel ~ ifelse(tg.dA[id], 1.0, 0.0)
+        end
         @lattice Lattice((8, 8))
         @energy cells => (volume - 9.0)^2
         @sweep Metropolis(; temperature = 1.0e-6)
@@ -2594,7 +2604,62 @@ end
     σ = _discrete_blocks(2, 8)
     u = solve(PottsProblem(DiscreteIndexed(; name = :i), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 1)),
         SequentialCPM()).u[end]
-    @test u.cell.got == [1.0, 2.0]                         # the update runs before the MCS-0 tick
+    # the updates run before the MCS-0 tick
+    @test u.cell.got == [1.0, 2.0] && u.cell.amp == [0.0, 1.0] && u.cell.neg == [1.0, 0.0] && u.cell.sel == [0.0, 1.0]
+end
+
+# A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under both
+# algorithms: a shift register moves one cell per tick (review P6.0k round 2, B1).
+@named shiftcell = System([dX(_kd) ~ ds], _tc)
+@potts_model DiscreteShiftRegister begin
+    @kinds medium A
+    @components cells(A) xc = shiftcell
+    @equations xc.ds ~ ifelse(id > 1, xc.dX[max(id - 1, 1)] > 0.5, true)
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+shift_register_oracle(m) = Float64[c <= m for c in 1:6]
+
+@testset "discrete components: Jacobi across cells (shift register)" begin
+    prob = PottsProblem(DiscreteShiftRegister(; name = :s), [ownership => _discrete_blocks(6, 16), kind => fill(1, 6)], (0, 4))
+    @test :xc₊dX__tick in propertynames(prob.u0.cell)       # a cross-cell read ticks through scratch
+    for alg in _DISCRETE_ALGS
+        sol = solve(prob, alg; saveat = 0:4)
+        @test [u.cell.xc₊dX for u in sol.u] == shift_register_oracle.(0:4)
+    end
+end
+
+# Array variables: one scalar slot per element, `name₊z_i` (G11)
+Potts.ModelingToolkitBase.@variables dz(_tc)[1:2]::Bool = [false, true]
+@named ring = System([dz[1](_kd) ~ !dz[2](_kd - 1), dz[2](_kd) ~ dz[1](_kd - 1)], _tc)
+@potts_model DiscreteArray begin
+    @kinds medium A
+    @components cells(A) ar = ring
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "discrete components: array variables" begin
+    cs = mtkcompile(DiscreteArray(; name = :a))
+    @test Set(Potts.info(v).name for v in cs.sys.variables) == Set([:ar₊dz_1, :ar₊dz_2])
+    sol = solve(PottsProblem(cs, [ownership => _discrete_blocks(1, 8), kind => [1]], (0, 5)), SequentialCPM(); saveat = 0:5)
+    # (z1, z2) ← (!z2, z1) from the array default (0, 1): (0,1) → (0,0) → (1,0) → (1,1) → (0,1) → (0,0)
+    @test [(u.cell.ar₊dz_1[1], u.cell.ar₊dz_2[1]) for u in sol.u] ==
+          [(0.0, 1.0), (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.0, 0.0)]
+end
+
+@testset "discrete components: an under-determined node" begin
+    @named undet = System([dX(_kd) ~ ds & dY(_kd)], _tc)
+    _DISCRETE_SYS[] = undet
+    @potts_model DiscreteUndetermined begin
+        @kinds medium A
+        @components cells(A) ud = _DISCRETE_SYS[]
+        @lattice Lattice((8, 8))
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    @test_throws r"every discrete variable needs an update" mtkcompile(DiscreteUndetermined(; name = :u))
 end
 
 # Gap G1: with full ModelingToolkit loaded (it replaces MTKBase's compiler, and its own

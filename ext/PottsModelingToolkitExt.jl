@@ -17,7 +17,9 @@ MTK's discrete-compilation hook: compile the (whole, single-clock) system with M
 struct PottsDiscretePass
     sys::Any
 end
-ModelingToolkit.discrete_compile_pass(::PottsDiscretePass) = true
+if isdefined(ModelingToolkit, :discrete_compile_pass)      # else `check_compatible` reports it
+    ModelingToolkit.discrete_compile_pass(::PottsDiscretePass) = true
+end
 
 # Called by MTK for a system whose clock partitions are all discrete.
 function (pass::PottsDiscretePass)(_, tss, clocked_inputs, ci, id_to_clock)
@@ -29,8 +31,20 @@ end
 # (`ShiftIndex(t, 0)`: no clock partitioning needed) pass through unchanged.
 (pass::PottsDiscretePass)(sys) = sys
 
-"""The loaded ModelingToolkit version (for incompatibility errors)."""
-mtk_version() = pkgversion(ModelingToolkit)
+# The MTK internals this extension relies on, checked once (not by relabelling errors).
+const _HOOKS = (isdefined(ModelingToolkit, :discrete_compile_pass) &&
+                isdefined(ModelingToolkitBase, :with_reversible_transformation) &&
+                isdefined(ModelingToolkitBase, :UnhackSystemTransformation) &&
+                isdefined(ModelingToolkitBase, :__mtkcompile) &&
+                hasmethod(ModelingToolkitBase.__mtkcompile, Tuple{ModelingToolkitBase.AbstractSystem}))
+
+"""Throw if the loaded ModelingToolkit lacks the discrete-compilation hook this extension uses."""
+function check_compatible()
+    _HOOKS || throw(ErrorException("PottsModelingToolkitExt is incompatible with ModelingToolkit " *
+                                   "v$(pkgversion(ModelingToolkit)): its discrete-compilation hook " *
+                                   "(`discrete_compile_pass`, MTKBase `__mtkcompile`) is missing or changed"))
+    return nothing
+end
 
 """
 `mtkcompile` of a discrete component with full ModelingToolkit loaded.
