@@ -58,6 +58,21 @@ end
         @test solve(p0, SequentialCPM(; proposal = VonNeumann(1))).stats.lifecycle.divisions == 0
         @test akeeb_contacts(-2.0)[2, 3] == akeeb_contacts(-2.0)[3, 2] == -2.0
     end
+    @testset "graner_glazier_aggregate margin" begin
+        for margin in (0, 10, 30)
+            σm, km = graner_glazier_aggregate(200; seed = 1, margin)
+            occupied = σm .!= 0
+            rows = findall(vec(any(occupied; dims = 2))); cols = findall(vec(any(occupied; dims = 1)))
+            @test length(km) == 200 && size(σm, 1) == size(σm, 2)
+            # at least `margin` medium rows and columns on every side: a gap of ≥ 2margin to the periodic image
+            @test first(rows) > margin && first(cols) > margin
+            @test last(rows) <= size(σm, 1) - margin && last(cols) <= size(σm, 2) - margin
+        end
+        # the lattice grows by exactly twice the change of margin; the default is 10
+        @test size(graner_glazier_aggregate(200; seed = 1, margin = 30)[1], 1) ==
+              size(graner_glazier_aggregate(200; seed = 1)[1], 1) + 40
+        @test_throws ArgumentError graner_glazier_aggregate(200; seed = 1, margin = -1)
+    end
     @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end

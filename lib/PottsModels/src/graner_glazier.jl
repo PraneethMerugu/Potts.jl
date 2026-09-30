@@ -69,7 +69,10 @@ of `n` cells of about `V₀ = 40` sites, dark (1) and light (2) randomly mixed i
 numbers (±1; spec §8.4 A-GG5 leaves the fraction open), surrounded by a medium margin of
 `margin` sites on a square lattice sized to fit (use `lattice = size(labels)`). On the
 periodic `GranerGlazier` lattice the gap to the aggregate's image is `2margin`; runs in
-which cells detach need a wider margin (spec 09 §9.1 V-PRE14/15: at least 60). Built with the
+which cells detach need a wider margin (spec 09 §9.1 V-PRE14/15: at least 60). The
+aggregate is rebuilt on the larger lattice, not embedded: a different `margin` can move a
+few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
+10), so compare margins statistically, not site by site. Built with the
 [`VoronoiBall`](@ref) layout (a centroidal Voronoi tessellation of a disk of area `40n`),
 deterministic in `seed`.
 

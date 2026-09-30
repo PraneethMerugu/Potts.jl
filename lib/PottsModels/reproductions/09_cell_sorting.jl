@@ -140,7 +140,7 @@ Markdown.parse("""
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t. Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) |
 | Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $(n_state) cells on $(dims_state) (`graner_glazier_state`)$(FULL ? "; this run uses the variant" : "") | `graner_glazier_aggregate(n)`: one round aggregate of n cells on a lattice sized to fit (the full run: n = 1000, one per replicate) | Cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation |
 | Log-law window | 5–4000 paper MCS (spec §9.1 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
-| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). Unsuitable for dispersal runs, which need a margin of at least 60 sites (`graner_glazier_aggregate(n; margin)`; spec §8.6 D2, §9.1 V-PRE14/15) |
+| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). The full run's margin of $MARGIN was chosen by a separate check with 120-cell aggregates on lattices twice as wide (spec §9.1 ruling 3); the gap to the periodic image is twice the margin whatever the cell count. Unsuitable for dispersal runs, which need a margin of at least 60 sites (`graner_glazier_aggregate(n; margin)`; spec §8.6 D2, §9.1 V-PRE14/15) |
 | Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | $(FULL ? "Assumption; `graner_glazier_aggregate`, one draw per replicate" : "Assumption, recorded in `data/graner/provenance.toml`") |
 | Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | $(FULL ? "—" : "`graner_glazier_aggregate(n)`") | $(FULL ? "Paper size. " : "D-049 F-2; `data/graner/generate.jl`. ")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree at 1, 10 and 100 paper MCS (D-063; P6.1b2 review), and so does the V-PRE4 boundary drop (spec §9.1 V-PRE4) |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
@@ -290,18 +290,18 @@ nothing #hide
 # | V-PRE6 | PRE Table II | bulk ⟨n⟩, μ₂ against T | — | **parked** (neighbour rule for n undefined) | — |
 # | V-PRE7 | PRE Fig. 15 | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02. Order at 10³: `F_dl`(T=2) > `F_dl`(T=5) > `F_dl`(T=10). T = 40: `F_dl` > 0.07 at every save in [10³, 10⁴]. T = 80: > 50% of cells gone (volume 0) by 500 (verbatim) | FULL + T scan | ready | not yet on this page |
 # | V-PRE8 | PRE Fig. 16, Table III | λ = 0.1: 0 cells alive. λ = 0.2: 0 light, ≥ 90% dark alive. λ = 0.5: ≥ 90% light alive. λ ≥ 1: all alive. `t*(λ = 10) / t*(λ = 0.5)` ∈ [3, 30] (verbatim) | FULL + λ scan | fix applied | not yet on this page |
-# | V-PRE9 | PRE Figs. 7–8 | checkerboard: `F_dl`(10³) ≥ 0.72 and rising over [10, 2000]; `F_ll`, `F_dd` ≤ 0.12 | FULL | ready | not yet on this page |
+# | V-PRE9 | PRE Figs. 7–8 | checkerboard: mean `F_dl`(10³) ≥ 0.72 and log-slope of `F_dl` over [10, 2000] > 0; `F_ll`(10³), `F_dd`(10³) ≤ 0.12 (verbatim) | FULL | ready | not yet on this page |
 # | V-PRE10 | PRE Fig. 9, Table I | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02; `F_dl`(2000) at T = 15 and T = 40 < `F_dl`(2000) at T = 10 (verbatim) | FULL + T scan | fix applied | not yet on this page |
 # | V-PRE11 | PRE Figs. 18–19 | mean `F_dM`(10³) > 0.005 and decreasing across saves 10², 10³, 10⁴; log-slope of `F_dM` over [10³, 10⁴] < log-slope over [10², 10³] (accelerating on log axes); a linear-in-t fit of `F_dM` over [2000, 10⁴] reaches 0 at t ∈ [5×10³, 3×10⁴] (verbatim) | FULL | fix applied | not yet on this page |
 # | V-PRE12 | PRE Figs. 20–21 | `J_lM` = 30: `F_lM` < 0.005 from 200; `F_dl` within ± 0.05 of 0.38, 0.25, 0.13 at 10, 100, 10³ | FULL | fix applied | not yet on this page |
-# | V-PRE13 (a) | PRE Figs. 22–24 | partial sorting: mean `F_dM`(10³) > 0.01 | SMOKE+FULL | fix applied | computed |
-# | V-PRE13 (b) | same | partial sorting: mean `F_dl` within ± 0.05 of 0.325, 0.245, 0.17 at 10, 100, 10³ | FULL | fix applied | computed |
+# | V-PRE13 (a) | PRE Fig. 23(b), replotted in Fig. 24(b) | partial sorting: mean `F_dM`(10³) > 0.01 | SMOKE+FULL | fix applied | computed |
+# | V-PRE13 (b) | PRE Fig. 23(a) | partial sorting: mean `F_dl` within ± 0.05 of 0.325, 0.245, 0.17 at 10, 100, 10³ | FULL | fix applied | computed |
 # | V-PRE14 | PRE Fig. 25 | dispersal (`J_lM` = 2, `J_dd` = 4, T = 5), unannealed: > 20% of light cells outside the largest component at 480 | FULL, margin ≥ 60 (`graner_glazier_aggregate(n; margin)`) | ready | not yet on this page |
 # | V-PRE15 | PRE Figs. 26–27 | `J_ld` = 35: ≥ 2 components of ≥ 10% of cells; `J_ld` = 29: largest ≥ 95%, at 2000 | FULL, larger margin | fix applied | not yet on this page |
 # | V-PRE16 | PRE Figs. 4–5 | generator plateau: \|mean of the last 4 saves − mean of the first 4\| ≤ 2% of the window mean, over the last 100 of 400 MCS, for `F_lM` and `N_mm` on a 10-MCS T = 0 annealed copy (ruling of 2026-09-30; ⟨n⟩ part parked) | generator | ready (plateau) / **parked** (⟨n⟩) | generator: checked when `data/graner/generate.jl` regenerates the start, not in CI |
 # | V-PRE17 | PRE Fig. 2 | bulk ⟨n⟩ after 2 annealing MCS | — | **parked** | — |
 # | V-OS1–V-OS5 | Osborne et al. (2017) | CP benchmark (OS3, OS4 parked) | OS | waits for an OS port | — (separate model) |
-# | NC1 | D-048 | at 10³: mean `F_dl` ≥ 0.35; mean `F_dM` ≥ 0.01; 0 of n engulfed | SMOKE+FULL | ready | computed |
+# | NC1 | D-048 | at 10³: mean of `F_dl` / (1 − `F_dM` − `F_lM`) ≥ 0.40 (size-free heterotypic share of cell–cell bonds; ruling of 2026-09-30, calibrated on seeds 7001–7024 in P6.1c); mean `F_dM` ≥ 0.01; 0 of n engulfed. The old raw `F_dl` ≥ 0.35 is reported only | SMOKE+FULL | fix applied | computed |
 
 ## pre-registration status of this page, read from git and the frozen-test list
 page = joinpath(pkgdir(PottsModels), "reproductions", "09_cell_sorting.jl")
@@ -694,12 +694,18 @@ addrow!("V-GG6 light cells smaller than dark @ 10³", "\"slightly smaller\" (PRL
     mean(Δa) < 0 && abs(mean(Δa)) > 2se_Δa && abs(mean(Δa_sym)) < abs(mean(Δa)) / 2)
 
 ## NC1: symmetric contacts do not sort
-sym_dl = mean(i -> fractions(sym_states[i], kinds_of(i), prob_sym)[:dl], 1:n)
+## the heterotypic clause is size-free: the heterotypic share of cell–cell bonds only, which
+## random mixing puts near ½ at any aggregate size (spec §9.1 NC1)
+sym_f = [fractions(sym_states[i], kinds_of(i), prob_sym) for i in 1:n]
+sym_share = mean(f[:dl] / (1 - f[:dM] - f[:lM]) for f in sym_f)
+sym_dl = mean(f[:dl] for f in sym_f)
 sym_eng = count(i -> engulfed(sym_states[i], kinds_of(i), prob_sym), 1:n)
-addrow!("NC1 symmetric contacts @ 10³", "— (control; random mixing ≈ 0.47, spec §9.1)",
-    "heterotypic $(fmt(sym_dl)); dark–medium $(fmt(sym_dM)); engulfed $sym_eng of $n",
-    "heterotypic ≥ 0.35; dark–medium ≥ 0.01; 0 engulfed", "SMOKE+FULL",
-    sym_dl >= 0.35 && sym_dM >= 0.01 && sym_eng == 0)
+addrow!("NC1 symmetric contacts @ 10³", "— (control; random mixing gives a cell–cell heterotypic share ≈ ½, spec §9.1)",
+    "cell–cell heterotypic share $(fmt(sym_share)); dark–medium $(fmt(sym_dM)); engulfed $sym_eng of $n",
+    "share ≥ 0.40; dark–medium ≥ 0.01; 0 engulfed", "SMOKE+FULL",
+    sym_share >= 0.40 && sym_dM >= 0.01 && sym_eng == 0)
+addrow!("NC1 raw heterotypic @ 10³ (the old clause)", "— (assumed the paper-size medium share)", fmt(sym_dl), "≥ 0.35",
+    "reported", sym_dl >= 0.35)
 
 ## informational: one global time scale for all timed rows
 timed_rows = filter(r -> r.timed !== nothing, targets)
