@@ -12,10 +12,16 @@ using ExplicitImports
 end
 
 # The reproduction scripts are not modules, so ExplicitImports cannot see them: walk their
-# syntax instead. Every qualified access `Potts.x`, `CorePotts.x`, `PottsModels.x` (chains
-# included: `Potts.CorePotts.x` is checked link by link) and every `using/import M: x` of
-# those modules must name a public binding. Aliases (`const CP = CorePotts`) are not followed.
+# syntax instead. For the family modules `Potts`, `CorePotts` and `PottsModels`:
+# - every qualified access `M.x` must name a public binding, chains link by link
+#   (`Potts.CorePotts.x` checks `Potts.CorePotts`, then `CorePotts.x`);
+# - every `using/import` path must be public link by link, with or without a colon
+#   (`using Potts.CorePotts: x`, `import Potts.x`), and so must each imported name;
+# - a family module may not be bound to another name (`import Potts as P`,
+#   `using Potts: CorePotts as C`, `const P = Potts`): an alias would hide later accesses.
+# Not handled: reflection (`getproperty(Potts, :x)`, `getfield`, `@eval`).
 const POTTS_FAMILY = Dict(:Potts => Potts, :CorePotts => Potts.CorePotts, :PottsModels => PottsModels)
+_isfamily(v) = v isa Module && get(POTTS_FAMILY, nameof(v), nothing) === v
 
 function nonpublic_accesses(ex, bad = String[])
     ex isa Expr || return bad
@@ -26,16 +32,29 @@ function nonpublic_accesses(ex, bad = String[])
             Base.ispublic(m, x) || push!(bad, "$(nameof(m)).$x")
             return bad
         end
-    elseif ex.head in (:using, :import) && length(ex.args) == 1 && ex.args[1] isa Expr && ex.args[1].head === :(:)
-        path, items... = ex.args[1].args
-        m = length(path.args) == 1 ? get(POTTS_FAMILY, path.args[1], nothing) : nothing
-        if m !== nothing
+    elseif ex.head in (:using, :import)
+        if length(ex.args) == 1 && ex.args[1] isa Expr && ex.args[1].head === :(:)
+            path, items... = ex.args[1].args
+            m = _resolve_path(path.args, bad)
+            m isa Module || return bad
             for it in items
                 x = it.head === :as ? it.args[1].args[end] : it.args[end]
                 Base.ispublic(m, x) || push!(bad, "$(nameof(m)).$x (imported)")
+                it.head === :as && _isfamily(isdefined(m, x) ? getfield(m, x) : nothing) &&
+                    push!(bad, "alias $(it.args[2]) = $x")
+            end
+        else
+            for it in ex.args
+                path = it.head === :as ? it.args[1].args : it.args
+                v = _resolve_path(path, bad)
+                it.head === :as && _isfamily(v) && push!(bad, "alias $(it.args[2]) = $(join(path, '.'))")
             end
         end
         return bad
+    elseif ex.head === :(=) && length(ex.args) == 2
+        rhs = ex.args[2]
+        v = rhs isa Symbol ? get(POTTS_FAMILY, rhs, nothing) : _family_module(rhs, bad)
+        v === nothing || push!(bad, "alias $(ex.args[1]) = $(nameof(v))")
     end
     foreach(a -> nonpublic_accesses(a, bad), ex.args)
     return bad
@@ -49,8 +68,22 @@ function _family_module(p, bad)
     m === nothing && return nothing
     x = p.args[2].value
     v = isdefined(m, x) ? getfield(m, x) : nothing
-    (v isa Module && haskey(POTTS_FAMILY, nameof(v))) || return nothing
+    _isfamily(v) || return nothing
     Base.ispublic(m, x) || push!(bad, "$(nameof(m)).$x")
+    return v
+end
+# A `using/import` path (symbols) from a family module, checked link by link: every link
+# after the first must be public in the module before it. Returns what the path names
+# (`nothing` if it does not start at a family module).
+function _resolve_path(path, bad)
+    m = get(POTTS_FAMILY, first(path), nothing)
+    m === nothing && return nothing
+    v = m
+    for x in path[2:end]
+        v isa Module || return nothing
+        Base.ispublic(v, x) || push!(bad, "$(nameof(v)).$x")
+        v = isdefined(v, x) ? getfield(v, x) : nothing
+    end
     return v
 end
 nonpublic_accesses(src::AbstractString) = nonpublic_accesses(Meta.parseall(src))
@@ -69,7 +102,22 @@ nonpublic_accesses(src::AbstractString) = nonpublic_accesses(Meta.parseall(src))
     @test nonpublic_accesses("Potts.CorePotts._embed(g, x)") == ["Potts.CorePotts", "CorePotts._embed"]
     @test nonpublic_accesses("using Potts: layout, lattice_spec") == ["Potts.lattice_spec (imported)"]
     @test nonpublic_accesses("import Potts: lattice_spec as ls") == ["Potts.lattice_spec (imported)"]
-    @test isempty(nonpublic_accesses("Potts.paint!(σ, k, l, lat); CorePotts.shift(l, x, o); Makie.wong_colors()"))
+    @test nonpublic_accesses("using Potts.CorePotts: shift") == ["Potts.CorePotts"]
+    @test nonpublic_accesses("using CorePotts: shift, _embed") == ["CorePotts._embed (imported)"]
+    @test nonpublic_accesses("import Potts.lattice_spec") == ["Potts.lattice_spec"]
+    @test nonpublic_accesses("using Potts, Potts.CorePotts") == ["Potts.CorePotts"]
+    @test nonpublic_accesses("import Potts as P") == ["alias P = Potts"]
+    @test nonpublic_accesses("import CorePotts as C") == ["alias C = CorePotts"]
+    @test nonpublic_accesses("import Potts.CorePotts as C") == ["Potts.CorePotts", "alias C = Potts.CorePotts"]
+    @test nonpublic_accesses("using Potts: CorePotts as C") == ["Potts.CorePotts (imported)", "alias C = CorePotts"]
+    @test nonpublic_accesses("using PottsModels: PottsModels as PM") == ["alias PM = PottsModels"]
+    @test nonpublic_accesses("const P = Potts") == ["alias P = Potts"]
+    @test nonpublic_accesses("const CP = CorePotts") == ["alias CP = CorePotts"]
+    @test nonpublic_accesses("PM = PottsModels") == ["alias PM = PottsModels"]
+    @test isempty(nonpublic_accesses("""
+        using Potts, PottsModels; using Potts: layout, paint!; import CorePotts.shift
+        Potts.paint!(σ, k, l, lat); CorePotts.shift(l, x, o); Makie.wong_colors()
+        const alg = SequentialCPM(); f(x) = Potts.layout(x)"""))
 end
 
 @testset "every model builds from `using Potts` alone" begin
