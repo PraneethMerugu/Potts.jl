@@ -107,3 +107,32 @@ divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
         end
     end
 end
+
+@testset "rule-carrying events: the firing rule reaches the state rule; members take the root's" begin
+    lat = Lattice((40, 40))
+    # a lone cell 1 (rule 2) and a cluster {3 root, 4 member} (rule 5); cell 2 divides plain
+    σ = zeros(Int32, 40, 40); σ[3:10, 3:10] .= 1; σ[3:10, 20:27] .= 2
+    σ[20:35, 15:22] .= 3; σ[25:30, 17:20] .= 4
+    cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 2, 3, 3], lat))
+    st = with_capacity(initial_state(σ, Int32[1, 1, 1, 1]; cell = merge(cell, (; x = zeros(4)))), 10)
+    tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? CorePotts.ruled_event(EVENT_DIVIDE, 2) :
+                                  c == 2 ? CorePotts.ruled_event(EVENT_DIVIDE, 1) :
+                                  c == 3 ? CorePotts.ruled_event(EVENT_DIVIDE_CLUSTER, 5) :
+                                  c == 4 ? CorePotts.ruled_event(EVENT_DIVIDE, 7) : EVENT_NONE     # ignored: its cluster divides
+    seen = Dict{Int32, Int32}()
+    rule!(st, p, ctx, key, mcs, parent, daughter, rule) = (seen[parent] = rule; st.cell.x[daughter] = rule; nothing)
+    frozen(st, p, prop, ctx) = false
+    f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
+        lifecycle = Lifecycle(tr; divide! = rule!, rules = true))
+    sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+    @test sol.stats.lifecycle.divisions == 4
+    @test seen == Dict(Int32(1) => 2, Int32(2) => 1, Int32(3) => 5, Int32(4) => 5)
+    u = sol.u[end]
+    @test sort(u.cell.x[5:8]) == [1.0, 2.0, 5.0, 5.0]
+    # the plain path: a 7-argument state rule, events without a rule
+    plain(st, p, ctx, key, mcs, c) = mcs == 0 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
+    n = Ref(0)
+    f7 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
+        lifecycle = Lifecycle(plain; divide! = (st, p, ctx, key, mcs, parent, daughter) -> (n[] += 1; nothing)))
+    @test solve(CPMProblem(f7, st, lat, (0, 1), gg_params()), SequentialCPM()).stats.lifecycle.divisions == 1 && n[] == 1
+end

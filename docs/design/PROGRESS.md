@@ -1407,3 +1407,20 @@ The maintainer approved F-1…F-6 (D-049).
 - **Akeeb seeding:** handed to the P6.2b audit.
 - **Review:** 3 rounds.
 - **Found:** the link NaN freeze, now P6.0l.
+
+## 2026-09-30 — P6.0f merged: per-rule `Every(n)`; the firing rule alone writes daughter state (D-070)
+
+- **Cadence:** each division or link rule has its own cadence. The lifecycle pass is gated
+  by the gcd of the cadences, and only rules whose cadence differs from the gcd get a
+  modulo gate.
+- **Overlapping rules:** the firing rule's index travels in the event (CorePotts
+  `ruled_event`), and only models whose rules overlap generate it.
+- **Also fixed:** `@link` used to drop a positional `Every` silently.
+- **Review:** 2 rounds. Round 1 found the daughter-state cross-talk bug, which predated
+  this item.
+- **Suites on the merged tree:** CorePotts (QA on), PottsModels, MakiePotts, docs and
+  Potts on Metal all pass.
+- **Performance gate:** the CPU cases pass (ratios 0.996–1.037, run under load). Four Metal
+  cases were flagged; the A/B against the pre-merge tree gave Akeeb 0.997, OpenVT 1.018,
+  Merks 0.988 and Wortel 0.963 (Wortel's first 4-round run gave 1.49 under load; 8 rounds
+  settled it).

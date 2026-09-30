@@ -557,8 +557,9 @@ _describe(d::Drive) = "@drive copy => $(d.expr)"
 _describe(c::Constraint) = "@constraint $(c.expr)"
 _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
-_describe(d::DivideRule) = "@divide $(_domain_string(d.domain)) when = $(d.when)"
-_describe(r::LinkRule) = "@$(r.action) $(r.relationship) when = $(r.when)"
+_describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string(d.every)) when = $(d.when)"
+_cadence_string(n) = n == 1 ? "" : " Every($n)"
+_describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering

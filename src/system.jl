@@ -62,7 +62,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
         println(io, "  equation ", e)
     end
     for d in sys.divisions
-        println(io, "  divide  ", _domain_string(d.domain), " when ", d.when)
+        println(io, "  divide  ", _domain_string(d.domain), _cadence_string(d.every), " when ", d.when)
     end
     print(io, "  sweep: ", sys.sweep.law, "(temperature = ", sys.sweep.temperature, ")")
 end

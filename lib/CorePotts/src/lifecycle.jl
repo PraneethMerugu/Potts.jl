@@ -20,8 +20,27 @@ const _EVENT_DIVIDE_CLUSTER_TRANSITION = Int32(5)
 
 @inline _divides_with_cluster(e) = e == EVENT_DIVIDE_CLUSTER || e == _EVENT_DIVIDE_CLUSTER_TRANSITION
 
+# Rule-carrying events (`Lifecycle(…; rules = true)`): the trigger returns
+# `ruled_event(event, i)`, the event in the low byte and the index `i ≥ 1` of the rule that
+# fired above it, so the daughter state rule of that rule alone runs.
+const _RULE_SHIFT = 8
+const _EVENT_MASK = Int32(0xff)
+"""`ruled_event(event, i)`: `event` fired by rule `i` (for a `Lifecycle(…; rules = true)` trigger).
+Return `EVENT_NONE` itself, not `ruled_event(EVENT_NONE, i)`, when no rule fires: a nonzero
+value counts as an event and forces a host plan."""
+@inline ruled_event(event, i) = Int32(event) | (Int32(i) << _RULE_SHIFT)
+public ruled_event
+@inline _event(::Val{false}, raw) = raw
+@inline _event(::Val{true}, raw) = raw & _EVENT_MASK
+@inline _rule(raw) = raw >> _RULE_SHIFT
+# the daughter state rule: with rule-carrying events it also gets the index of the rule
+@inline _divide_rule!(::Val{false}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F} =
+    f(st, p, ctx, key, mcs, parent, daughter)
+@inline _divide_rule!(::Val{true}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F} =
+    f(st, p, ctx, key, mcs, parent, daughter, _rule(raw))
+
 """
-    Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1,
+    Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1, rules = false,
               cluster_normal = normal, cluster_divide! = divide!)
 
 The lifecycle of a model (generated from `@divide`, `@remove`, `@transition` rules, or
@@ -40,6 +59,10 @@ hand-written):
   cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
   here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
 - `every` — check triggers every `every` MCS.
+- `rules` — rule-carrying events (P6.0f). With `rules = true` the trigger returns
+  `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and `divide!`/`cluster_divide!`
+  take an eighth argument, that index (a cluster member gets its root's), so only the firing
+  rule's daughter state rule runs. Needed only when two rules can fire for one cell.
 - `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
 
 Both kinds of division can happen in one MCS (P6.0a):
@@ -56,7 +79,7 @@ Both kinds of division can happen in one MCS (P6.0a):
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, CN, KI, DV, CD, RB}
+struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val}
     trigger::TR
     normal::NO
     cluster_normal::CN
@@ -65,15 +88,18 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB}
     cluster_divide!::CD
     rebuild!::RB
     every::Int
+    rules::RU                   # Val(true): rule-carrying events
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
-    rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every))
+    rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
+    rules::Bool = false) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules))
 
 no_rebuild(st, p, ctx, backend) = nothing
 
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
+@inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter, rule) = nothing
 
 const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
 
@@ -153,8 +179,8 @@ end
     e != EVENT_NONE && Atomix.@atomic count[1] += Int32(1)
 end
 
-@inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs)
-    if @inbounds(events[c]) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
+@inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled)
+    if _event(ruled, @inbounds(events[c])) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
             @inbounds normals[d, c] = n[d]
@@ -182,15 +208,16 @@ end
     end
 end
 
-@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs)
-    e = @inbounds events[c]
+@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
+    raw = @inbounds events[c]
+    e = _event(ruled, raw)
     if e == EVENT_TRANSITION
         @inbounds st.cell.kind[c] = kindf(st, p, ctx, key, mcs, Int32(c))
     elseif e == EVENT_DIVIDE && @inbounds(daughter[c]) > 0
-        divide!(st, p, ctx, key, mcs, Int32(c), @inbounds daughter[c])
+        _divide_rule!(ruled, divide!, st, p, ctx, key, mcs, Int32(c), @inbounds(daughter[c]), raw)
     elseif _divides_with_cluster(e) && @inbounds(daughter[c]) > 0
         d = @inbounds daughter[c]
-        cluster_divide!(st, p, ctx, key, mcs, Int32(c), d)
+        _divide_rule!(ruled, cluster_divide!, st, p, ctx, key, mcs, Int32(c), d, raw)
         if e == _EVENT_DIVIDE_CLUSTER_TRANSITION         # both halves take the new kind
             k = kindf(st, p, ctx, key, mcs, Int32(c))
             @inbounds st.cell.kind[c] = k
@@ -254,6 +281,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = Array(cache.events)
+    # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the device
+    rule = lc.rules === Val(true) ? (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r) : nothing
     volume = Array(st.cell.volume)
     # a dead root still names its cluster while members live: never reuse its id
     held = _has_clusters(st) ? _referenced_clusters(Array(st.cell.cluster), volume) : Set{Int32}()
@@ -281,6 +310,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
                 for m in ms
                     events[m] = events[m] == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION :
                                 EVENT_DIVIDE_CLUSTER
+                    rule === nothing || (rule[m] = rule[c])      # members follow the root's rule
                     daughter[m] = free[nextfree]
                     nextfree += 1
                 end
@@ -312,7 +342,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION, events)
     copyto!(cache.daughter, daughter)
     copyto!(cache.removed, removed)
-    copyto!(cache.events, events)
+    copyto!(cache.events, rule === nothing ? events : events .| (rule .<< _RULE_SHIFT))
 
     if isempty(roots)
         fill!(cache.bias, zero(eltype(cache.bias)))
@@ -321,7 +351,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     end
     if any(c -> daughter[c] > 0 && events[c] == EVENT_DIVIDE, 1:cap)    # after the host planes
         _launch(_normal_body!, backend, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
-            ctx, key, mcs))
+            ctx, key, mcs, lc.rules))
         launches += 1
     end
     n = length(st.σ)
@@ -358,7 +388,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(st, findall(removed), daughter[parents])
     _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
-        lc.cluster_divide!, st, p, ctx, key, mcs))
+        lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules))
     launches += 1
 
     _has_clusters(st) && _fix_clusters!(st)

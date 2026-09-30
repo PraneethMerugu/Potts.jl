@@ -129,7 +129,7 @@ Every item's acceptance also includes the standing checks:
   becomes frozen after a transition stops moving; the negative control moves.
 - [x] (merge, 2026-09-30; D-061) **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
   contact term that reads a site field.
-- [ ] **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
+- [x] (merge, 2026-09-30; D-070; gate CPU ≤ 1.037, Metal A/B 0.96–1.02) **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
   at their counts.
 - [ ] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
   Accept: a Bauer-style model where the matrix is a cell kind uses class gates; the

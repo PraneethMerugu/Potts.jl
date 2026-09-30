@@ -1148,3 +1148,32 @@ session.
 - **Consistency check.** On the authors' released sample data, where the CSVs allow it
   (spec 10 §5.3.4), our metric reproduces their per-run finger counts.
 - There is no independent oracle for exactness. That is accepted.
+
+## D-070 Per-rule `Every(n)`; the firing rule alone writes daughter state (2026-09-30, P6.0f)
+
+- **Cadence.** Each lifecycle or link rule has its own cadence, given positionally as
+  `Every(n)` or as `every = n`.
+  - A rule fires when `mcs % n == 0`. MCS are numbered from 0 and are absolute under
+    `remake`, as for `Every` on updates.
+  - `Lifecycle.every` is the gcd of the rules' cadences, so the whole lifecycle pass is
+    skipped on the other MCS.
+  - Only a rule whose cadence differs from the gcd gets a `mcs % n == 0` gate, and its
+    daughter state rules get the same gate. `Every(1)`, or a cadence shared by all rules,
+    generates no gate.
+  - `@link`/`@unlink` now accept a positional `Every(n)`, which they used to drop silently.
+- **Several rules for one cell.** When division rules in one domain share a kind, rules
+  are tried in model order, a base's before an extension's. The first rule whose
+  cadence, kinds and `when` all hold divides the cell, and only its daughter state rules
+  run.
+  - CorePotts carries the firing rule's index in the event (`Lifecycle(…; rules = true)`,
+    `ruled_event`: the event in the low byte, the index above it).
+  - Only models with overlapping rules generate this. The others generate the same code
+    as before; the reviewer compared canonicalised text for 6 models.
+- **`extend`.** Division rules accumulate and are not replaced by target as updates are
+  (D-045). An overlapping rule at a different cadence gives a warning, and both rules
+  apply.
+- **Deferred.**
+  - The rule-carrying host plan allocates three temporaries per event MCS. Masking in
+    place would avoid them. This is not a warm path.
+  - SymbolicUtils operand order shifts with unrelated source edits, so the last bit of a
+    float result can change between builds. This predates P6.0f and is tracked here.

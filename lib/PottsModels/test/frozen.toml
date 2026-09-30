@@ -31,3 +31,8 @@ decision = "D-053"
 path = "acceptance/p6_1b2_gg_aggregate.jl"
 sha256 = "61a62a9a156478b2ee6b645626885c095466962ebbac4cef04207d6a547c143e"
 decision = "D-060"
+
+[[file]]
+path = "acceptance/p6_0f_rule_cadence.jl"
+sha256 = "fd20be3c8614f2a417f80cde8983bad2a1c5c2966465e2cf6b46ce77c13b9f84"
+decision = "D-053"

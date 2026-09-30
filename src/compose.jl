@@ -13,7 +13,8 @@ extension that declares them). Structural replacement: an update of `sys` replac
 updates of the same target in the same phase (whatever their cadences; a warning names a
 changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
-divisions, relationships and link rules accumulate, base first.
+divisions, relationships and link rules accumulate, base first (a division rule for kinds
+the base divides at another cadence warns: both rules apply, each at its own `Every`).
 """
 function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
     length(sys.kinds) >= length(base.kinds) && sys.kinds[1:length(base.kinds)] == base.kinds ||
@@ -22,6 +23,13 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     for u in sys.updates, b in base.updates
         _target_key(u) == _target_key(b) && u.every != b.every &&
             @warn "extend: `$(u.eq.lhs)` @$(u.phase) Every($(u.every)) replaces the base's Every($(b.every)) update"
+    end
+    # division rules accumulate: a rule of `sys` for kinds the base already divides at another
+    # cadence adds a check, it does not replace the base's (both fire at their own MCS)
+    for u in sys.divisions, b in base.divisions
+        typeof(u.domain) == typeof(b.domain) && u.every != b.every && _kinds_overlap(u.domain, b.domain) &&
+            @warn "extend: $(_describe(u)) adds to the base's $(_describe(b)) (division rules accumulate: " *
+                  "both fire at their own cadence; the base's rule is not replaced)"
     end
     byname(xs, ys) = (seen = Set(info(y).name for y in ys);
         Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
@@ -64,6 +72,8 @@ function _check_primed_names(sys::PottsSystem)
     end
     return sys
 end
+
+_kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
 
 """Items of `base` whose key no item of `new` shares."""
 _unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))

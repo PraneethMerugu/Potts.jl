@@ -387,9 +387,9 @@ function _section!(parts, sec, args, ln = nothing)
             :($k = $P.RelationshipRef($(QuoteNode(k)))))
     elseif sec in (Symbol("@link"), Symbol("@unlink"))
         action = QuoteNode(sec === Symbol("@link") ? :link : :unlink)
-        opts, _ = _options(args[2:end])
+        opts, rest = _options(args[2:end])      # `rest`: a cadence `Every(n)`, checked by link_rule
         kw = [Expr(:kw, o, rewrite(v)) for (o, v) in opts]
-        push!(code, _edge_scope(_located_push(:__links, :($P.link_rule($action, $(args[1]); $(kw...))), ln)))
+        push!(code, _edge_scope(_located_push(:__links, :($P.link_rule($action, $(args[1]), $(map(rewrite, rest)...); $(kw...))), ln)))
     elseif sec === Symbol("@drive")
         foreach(((l, lln),) -> push!(code, _located_push(:__drives, :($P.drive($(rewrite(_replace_copy(l))))), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@constraint")

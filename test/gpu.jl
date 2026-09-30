@@ -183,3 +183,39 @@ end
     @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(Array(v.cell.volume))]
     @test any(!=(0.5f0), Array(v.site.tag)) && count(==(0.5f0), Array(v.site.tag)) > 0   # copies cleared tags
 end
+
+@testset "P6.0f per-rule cadence on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ, kinds = rule_cadence_state((48, 32))
+    for (na, nb) in ((2, 3), (2, 4), (3, 3))
+        prob = PottsProblem(RuleCadences(; name = :rc, na, nb), [ownership => σ, kind => kinds], (0, 5); T = Float32, capacity = 128)
+        u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        @test live_kinds(u) == (cadence_oracle(na, 5), cadence_oracle(nb, 5))
+        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+    end
+end
+
+@testset "P6.0f rule-carrying events on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
+    function run(sys, tspan)
+        prob = PottsProblem(sys, [ownership => σ, kind => [:a]], tspan; capacity = 32, T = Float32)
+        u = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        return length(live), unique(Array(u.cell.x)[live])
+    end
+    sys = SameKindCadences(; name = :s)
+    @test run(sys, (0, 1)) == (2, [1.0f0])
+    @test run(sys, (0, 4)) == (8, [2.0f0])
+    @test run(SameKindCadences(; name = :s, na = 1, nb = 2, wb = 10^9), (0, 1)) == (2, [1.0f0])
+    # cluster rules: members take their root's rule
+    σc, kinds, groups = compartment_state()
+    cp = PottsProblem(ClusterCadences(; name = :cc), [ownership => σc, kind => kinds, cluster => groups], (0, 1);
+        capacity = 128, T = Float32)
+    for (tspan, mass) in (((0, 1), 3.0f0), ((0, 3), 5.0f0))
+        u = solve(remake(cp; tspan), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        live = findall(>(0), Array(u.cell.volume))
+        @test unique(Array(u.cell.mass)[live]) == [mass]
+        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+    end
+end
