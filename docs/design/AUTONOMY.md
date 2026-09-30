@@ -136,7 +136,10 @@ coordinator, each iteration:
      code, using the closest thing that already runs (for example the same fixture with one
      relationship instead of two), and check every expected count by hand. Triggers must hold
      with margin in the state the rule actually sees (D-054). On periodic lattices, distances
-     are minimum-image.
+     are minimum-image. Also run the file against a minimal stub of every API it names (stubs
+     that return values of the promised shape), so errors in the fixture itself, such as a
+     shadowed `Base.all` (D-060), show up before the freeze and not in the implementer's
+     run.
   3. DISPATCH an implementer in a worktree with: the item, the frozen files, the
      write set, the acceptance commands
   4. implementer: implement → own suites green → perf gate (§7.3) → report
