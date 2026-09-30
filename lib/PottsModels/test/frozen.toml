@@ -6,3 +6,8 @@
 path = "papers.jl"
 sha256 = "0bf4e3b7704d49e1c56efc097376aa2462285f06fff97fcad7cd76973eb7a801"
 decision = "D-050"
+
+[[file]]
+path = "acceptance/p6_0a_division_kinds.jl"
+sha256 = "d91356dff924ec2a5a4dbd1cae207eb77c807c5d302585d50e4402cd538c33f5"
+decision = "D-053"
