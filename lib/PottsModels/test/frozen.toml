@@ -11,3 +11,8 @@ decision = "D-050"
 path = "acceptance/p6_0a_division_kinds.jl"
 sha256 = "27cade88bf8ef944ac2a6ebfa0bb6d75960f8e97928d2845f984bb46bcbc0e25"
 decision = "D-054"
+
+[[file]]
+path = "acceptance/p6_1a_layouts.jl"
+sha256 = "eaae40fe9b32cdc2efa5120da36f959c683324a6ee493756bce2b153274afb89"
+decision = "D-053"
