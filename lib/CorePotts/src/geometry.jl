@@ -226,3 +226,40 @@ end
         elongation = major / minor, eccentricity = λ[1] > 0 ? sqrt(1 - λ[3] / λ[1]) : zero(T))
 end
 shape(cell, l::Lattice, c) = shape(Float64, cell, l, c)
+
+# Major length from the covariance upper triangle (square-lattice axes), as in `shape`
+@inline _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T} =
+    4sqrt(max(first(principal_moments(embed_covariance(l, C))), zero(T)))
+@inline _major_length(::Lattice{3}, C::NTuple{6, T}) where {T} =
+    2sqrt(5max(first(principal_moments(C)), zero(T)))
+
+"""
+    major_length(T, cell, lattice, c)
+
+`shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks et
+al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
+"""
+@inline function major_length(::Type{T}, cell, l::Lattice{N}, c) where {T, N}
+    @inbounds(cell.volume[c]) > 0 || return zero(T)
+    return _major_length(l, covariance(T, cell, c, Val(N)))
+end
+
+"""
+    major_length_after(T, cell, lattice, c, x, s)
+
+[`major_length`](@ref) of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`),
+from the moment sums without committing: the ΔH of a length constraint.
+"""
+@inline function major_length_after(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
+        s::Int) where {T, N}
+    V = Int(@inbounds cell.volume[c]) + s
+    V > 0 || return zero(T)
+    δ = V == 1 && s > 0 ? ntuple(_ -> 0, Val(N)) : min_image(l, x, anchor(cell, c, Val(N)))
+    m1 = ntuple(d -> T(@inbounds(cell.m1[d, c]) + s * δ[d]), Val(N))
+    C = ntuple(Val(npairs(N))) do p
+        d, e = _unpair(N, p)
+        (T(@inbounds(cell.m2[p, c]) + s * δ[d] * δ[e])) / T(V) - m1[d] * m1[e] / T(V)^2
+    end
+    return _major_length(l, C)
+end
+

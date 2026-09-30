@@ -43,7 +43,7 @@ end
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
-    :time, :site)
+    :time, :site, :major_length)
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
 
 """Record a declared name; reject built-in names and a second declaration of a name."""
@@ -62,6 +62,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
             _section!(parts, ex.args[1], filter(a -> !(a isa LineNumberNode), ex.args[3:end]), ex.args[2])
+        elseif _conditional_sections(ex)
+            push!(parts.code, _conditional!(parts, ex))
         else
             push!(parts.code, rewrite(ex))        # helper functions, local definitions
         end
@@ -127,6 +129,33 @@ function _potts_model(name::Symbol, body::Expr, mod)
             $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
         end
     end
+end
+
+# `if cond … else … end` around sections (conditions on structural parameters): the
+# sections of the taken branch are added when the model is constructed. Declarations stay
+# unconditional (the constructor's keywords are fixed when the macro expands).
+const _UNCONDITIONAL = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
+    Symbol("@variables"), Symbol("@extend"))
+_is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
+_conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
+                            any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
+function _conditional!(parts::_Parts, ex)
+    branch(b) = b isa Expr && b.head in (:if, :elseif) ? _conditional!(parts, b) : begin
+        sub = _Parts(parts.structural, parts.params, Any[], parts.mod, parts.declared)
+        for st in (b isa Expr && b.head === :block ? b.args : Any[b])
+            if st isa LineNumberNode
+                push!(sub.code, st)
+            elseif _is_section(st)
+                st.args[1] in _UNCONDITIONAL &&
+                    throw(ArgumentError("$(st.args[1]) cannot be conditional; declare it unconditionally"))
+                _section!(sub, st.args[1], filter(a -> !(a isa LineNumberNode), st.args[3:end]), st.args[2])
+            else
+                push!(sub.code, rewrite(st))
+            end
+        end
+        Expr(:block, sub.code...)
+    end
+    return Expr(ex.head, ex.args[1], map(branch, ex.args[2:end])...)
 end
 
 _lines(args) = length(args) == 1 && args[1] isa Expr && args[1].head === :block ?

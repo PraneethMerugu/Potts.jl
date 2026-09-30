@@ -207,7 +207,7 @@ Decision:
 - Supersedes INTERNALS §3's "used by CorePotts for…" list. Reversible if LocalMath's
   first-execution and warm costs reach parity.
 
-## D-034 Act model mean and legacy connectivity semantics
+## D-034 Act model mean and legacy connectivity semantics (Act part superseded by D-049)
 - **Act mean.** Legacy Potts averages activity as `exp(mean(log1p a)) − 1`. The published
   model (Niculescu et al. 2015, Artistoo) uses the plain geometric mean, which is zero if any
   owned neighbour has zero activity. `act_mean`/`act_delta` default to the published plain
@@ -531,3 +531,37 @@ What replaces it, per published model:
   statistical agreement.
 
 The scientific dispute rule becomes: brute-force oracle, then the paper.
+
+## D-049 Paper fidelity of the published models (2026-09-29, maintainer-approved)
+
+The maintainer approved every recommendation of the paper-fidelity round (AUDIT §11, F-1…F-6).
+The paper and its reference code define each model (D-048).
+
+- **F-1: models declare their copy neighbourhood.** `@sweep Metropolis(; proposal = …)`
+  sets the default for algorithms constructed without one. `GranerGlazier` declares
+  `Moore(1)`, as the paper copies from 8 neighbours.
+- **F-2: the Graner–Glazier initial state follows PRE §II D3.** Rectangular cells of area
+  40 are relaxed as one type (J_ll = 2, J_lM = 8, T = 5, λ = 1) for 400 paper MCS
+  (6400 here), then given random types, 32 dark and 32 light.
+- **F-3: Merks as in the 2006 paper.**
+  - Energies may read `major_length` (4√λ_max of the cell's inertia, Merks Eq. 5), and the
+    model has the length constraint `λ_L (major_length − L)²`.
+  - It has adhesion `J`, and `c` decays only in the medium.
+  - Chemotaxis applies to every copy, as in 2006; the 2008 contact-inhibited
+    extensions-only form is kept as an option.
+  - The defaults are paper-scale, in lattice units.
+- **F-4: WortelAct follows Niculescu et al. 2015 and Artistoo.**
+  - The plain geometric mean.
+  - The Act term applies to every copy, so retracting active sites is penalised.
+  - Every gained site becomes fully active.
+  - Connectivity is optional.
+  - The defaults are the amoeboid parameter set on a 200² torus. This supersedes the parity
+    choices in D-034.
+- **F-5: the OpenVT name belongs to the benchmark.**
+  - The single-division fixture is renamed `SingleDivisionFixture`.
+  - `OpenVTGrowingMonolayer` implements the OpenVT growing monolayer with the Artistoo
+    parameter set (A₀ = 25, λ = 20, τ = 84, T = 20, J_cc = J_cM = 20).
+  - Cells divide at a deterministic 2A₀ (the spec's baseline), along a random plane.
+  - Type-1 contact inhibition is on through β.
+- **F-6: `AkeebInvasion` uses `rule = :local`**, exactly CC3D 4.3.1's `Connectivity`. This
+  supersedes the parity-based approval of `:merks` (maintainer approvals, item 4).

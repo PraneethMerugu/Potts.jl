@@ -10,8 +10,6 @@ the dark ones.
 
 Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
 - one MCS here is `N` copy attempts, the paper's is `16N`, so paper time `t` is ours `16t`;
-- the paper copies from the 8 neighbours: solve with `SequentialCPM(; proposal = Moore(1))`
-  (the algorithm default is `VonNeumann(1)`);
 - 64 cells on a 72² torus (`graner_glazier_state`), against about 1000 in the paper, whose
   statistics are also taken after 2 MCS of T = 0 annealing on a copy.
 """
@@ -27,6 +25,7 @@ Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
         J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
     end
     @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))
+    @relations proposal = Moore(1)          # the paper copies from the 8 neighbours
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]

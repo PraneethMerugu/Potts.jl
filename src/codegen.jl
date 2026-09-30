@@ -31,6 +31,7 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key =
     LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, c)..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
+        :major_length => :(CorePotts.major_length($T, st.cell, ctx.lattice, $c)),
         :cluster => :(CorePotts.cluster_of(st.cell, $c)),
         :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $c)))),
         :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $c))),
@@ -123,7 +124,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         for (kinds, E) in _sorted(groups)
             ΔE = _cell_delta(E, dv; after = after[side])
             _nops(ΔE) == 0 && isequal(_unwrap(ΔE), 0) && continue
-            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, oc_binds...))
+            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs,
+                :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)), oc_binds...))
             push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))

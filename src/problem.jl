@@ -88,7 +88,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, Dict{Any, Any}()))
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
-    return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, relations,
+    return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
         spacing, frozen, seed, replica, repeat)
 end
 

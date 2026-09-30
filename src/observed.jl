@@ -34,7 +34,8 @@ function _observed_scope(x)
     end
     for n in _bare_builtins(x)
         n in (:owner, :position, :site) && return :site
-        n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface) && (scope = :cell)
+        n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface, :major_length) &&
+            (scope = :cell)
     end
     return scope
 end

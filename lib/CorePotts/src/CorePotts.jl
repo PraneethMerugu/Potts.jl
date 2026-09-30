@@ -23,7 +23,7 @@ export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
-    principal_moments, shape, min_image
+    principal_moments, shape, major_length, major_length_after, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
 export Phases, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!

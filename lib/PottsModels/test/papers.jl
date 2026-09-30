@@ -74,7 +74,7 @@ end
     mi(a) = a - G * round(a / G)
     function sim(pars, nmcs; seed)
         s = zeros(Int32, G, G); s[39:61, 39:61] .= 1                      # a 23² cell (area 529)
-        return solve(PottsProblem(WortelAct(; name = :w, lattice = (G, G)), vcat([ownership => s, kind => [:endothelial]],
+        return solve(PottsProblem(WortelAct(; name = :w, lattice = (G, G)), vcat([ownership => s, kind => [:cell]],
             base, pars), (0, nmcs); seed), SequentialCPM(; proposal = Moore(1)); saveat = 0:5:nmcs)
     end
     function track(sol; burn = 20)                                      # steps every 5 MCS

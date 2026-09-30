@@ -37,20 +37,43 @@ end
 drive(prob, u, prop, ctx) = prob.f.delta_H(u, prob.p, prop, ctx) - energy_change(prob, u, prop)
 kindof(u, c) = c == 0 ? 0 : Int(u.cell.kind[c])
 
-# The Merks et al. (2006) ring rule as specified: the losing cell's sites in the clockwise
-# Moore ring around the target form at most one arc, or else exactly two distinct cells
-# occupy the ring. Out-of-lattice ring sites count as medium.
+# Ring rules on the clockwise Moore ring around the target (out-of-lattice sites are
+# medium). CC3D's `Connectivity` (`one_arc`): the losing cell's ring sites form at most one
+# arc. The Merks et al. (2006) rule (`ring_rule`) also accepts when exactly two distinct
+# cells occupy the ring.
 const RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
-function ring_rule(σ, x, a, periodic)
+function ring_owners(σ, x, periodic)
     X, Y = size(σ)
-    own = map(RING) do (dx, dy)
+    return map(RING) do (dx, dy)
         u, v = x[1] + dx, x[2] + dy
         periodic[1] ? (u = mod1(u, X)) : (1 <= u <= X || return 0)
         periodic[2] ? (v = mod1(v, Y)) : (1 <= v <= Y || return 0)
         σ[u, v]
     end
-    count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8) <= 1 && return true
-    return length(unique(filter(>(0), collect(own)))) == 2
+end
+one_arc(σ, x, a, periodic) = (own = ring_owners(σ, x, periodic); count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8) <= 1)
+ring_rule(σ, x, a, periodic) = one_arc(σ, x, a, periodic) ||
+                               length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2
+
+"""Cells whose sites are not one 8-connected piece (axes periodic as given)."""
+function split_cells(σ, periodic)
+    X, Y = size(σ); n = 0
+    for c in unique(σ)
+        c == 0 && continue
+        idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]]
+        while !isempty(st)
+            q = pop!(st)
+            for dx in -1:1, dy in -1:1
+                x, y = q[1] + dx, q[2] + dy
+                periodic[1] ? (x = mod1(x, X)) : (1 <= x <= X || continue)
+                periodic[2] ? (y = mod1(y, Y)) : (1 <= y <= Y || continue)
+                p = CartesianIndex(x, y)
+                (σ[p] == c && !(p in seen)) && (push!(seen, p); push!(st, p))
+            end
+        end
+        length(seen) < length(idx) && (n += 1)
+    end
+    return n
 end
 
 blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
@@ -84,46 +107,113 @@ blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b.
     end
 end
 
+# Merks' cell length (Eq. 5), from σ: 4√λ_max of the covariance of the cell's site coordinates
+function merks_length(σ, c)
+    x = [Float64.(Tuple(i)) for i in findall(==(c), σ)]
+    isempty(x) && return 0.0
+    m = (mean(first, x), mean(last, x))
+    a, b, d = (mean(v -> (v[1] - m[1])^2, x), mean(v -> (v[1] - m[1]) * (v[2] - m[2]), x), mean(v -> (v[2] - m[2])^2, x))
+    return 4sqrt(max((a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2), 0.0))
+end
+"""Merks' Hamiltonian from σ alone (Eqs. 1, 4; J over Moore pairs, closed walls)."""
+function merks_energy(σ, p)
+    X, Y = size(σ)
+    H = 0.0
+    for x in 1:X, y in 1:Y, (dx, dy) in ((1, -1), (1, 0), (1, 1), (0, 1))
+        u, v = x + dx, y + dy
+        (1 <= u <= X && 1 <= v <= Y && σ[x, y] != σ[u, v]) || continue
+        H += p.J[(σ[x, y] != 0) + 1, (σ[u, v] != 0) + 1]
+    end
+    for c in unique(σ)
+        c == 0 && continue
+        H += p.λ * (count(==(c), σ) - p.V₀)^2 + p.λ_L * (merks_length(σ, c) - p.L)^2
+    end
+    return H
+end
+"""Components of `mask` (4-connected): sizes and whether each touches the lattice edge."""
+function components(mask)
+    lab = zeros(Int, size(mask)); sizes = Int[]; edge = Bool[]; parts = Vector{CartesianIndex{2}}[]
+    for I in CartesianIndices(mask)
+        (mask[I] && lab[I] == 0) || continue
+        push!(sizes, 0); push!(edge, false); push!(parts, CartesianIndex{2}[])
+        k = length(sizes); lab[I] = k; st = [I]
+        while !isempty(st)
+            J = pop!(st); sizes[k] += 1; push!(parts[k], J)
+            (J[1] in (1, size(mask, 1)) || J[2] in (1, size(mask, 2))) && (edge[k] = true)
+            for d in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                K = J + CartesianIndex(d)
+                checkbounds(Bool, mask, K) && mask[K] && lab[K] == 0 && (lab[K] = k; push!(st, K))
+            end
+        end
+    end
+    return sizes, edge, parts
+end
+_cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
+"""Area of the convex hull of points (Andrew's monotone chain)."""
+function hull_area(pts)
+    P = sort(unique(pts))
+    half(Q) = foldl((h, q) -> (while length(h) >= 2 && _cross(h[end - 1], h[end], q) <= 0; pop!(h); end; push!(h, q)), Q; init = eltype(Q)[])
+    h = [half(P)[1:(end - 1)]; half(reverse(P))[1:(end - 1)]]
+    return abs(sum(k -> h[k][1] * h[mod1(k + 1, end)][2] - h[mod1(k + 1, end)][1] * h[k][2], eachindex(h))) / 2
+end
+"""Largest cell cluster's area over the area of its convex hull (PLoS 2008 Fig. S1)."""
+function compactness(σ)
+    sizes, _, parts = components(σ .!= 0)
+    best = parts[argmax(sizes)]
+    return length(best) / hull_area([(i[1] + dx, i[2] + dy) for i in best for dx in 0:1 for dy in 0:1])
+end
+
 @testset "Merks vasculogenesis" begin
     L = 20
     σ0 = blockstate((L, L), (3:6, 3:6), (12:15, 4:7), (8:11, 13:16))
     c0 = [0.01 * (x + 2y) for x in 1:L, y in 1:L]
-    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)),
-        [ownership => σ0, kind => fill(:endothelial, 3), :c => c0, :χ => 50.0, :V₀ => 16.0], (0, 10))
+    op = [ownership => σ0, kind => fill(:endothelial, 3), :c => c0, :χ => 50.0, :V₀ => 16.0, :L => 6.0, :Dc => 0.08,
+          :σc => 0.02, :δc => 0.01]
+    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)), op, (0, 10))
     p = prob.p
-    # chemotaxis: extensions into the medium gain −χ (c[target] − c[source]); nothing else
-    # drifts; the constraint is the ring rule for endothelial losers
+    # chemotaxis on every copy: −χ (c[target] − c[source]) (Eq. 2); contact-inhibited, only
+    # on extensions of a cell into the medium (PLoS 2008). The constraint is CC3D's one-arc
+    # rule for endothelial losers.
     props = sampled_proposals(prob)
     @test length(props) > 500
-    @test all(props) do (u, prop, ctx)
+    @test all(((u, prop, ctx),) -> isapprox(drive(prob, u, prop, ctx),
+        -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]); atol = 1e-9), props)
+    ci = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L), contact_inhibited = true), op, (0, 10))
+    @test all(sampled_proposals(ci)) do (u, prop, ctx)
         want = prop.old == 0 && prop.new != 0 ? -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]) : 0.0
-        isapprox(drive(prob, u, prop, ctx), want; atol = 1e-9)
+        isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx) ==
-                                   (prop.old == 0 || ring_rule(u.σ, prop.x, prop.old, (false, false))), props)
+                                   (prop.old == 0 || one_arc(u.σ, prop.x, prop.old, (false, false))), props)
+    # the energy change is that of J adhesion, the area and the length constraint, with the
+    # cell length recomputed from σ (Eq. 5)
+    @test all(props) do (u, prop, ctx)
+        a = copy(u.σ); a[prop.target] = prop.new
+        isapprox(energy_change(prob, u, prop), merks_energy(a, p) - merks_energy(u.σ, p); rtol = 1e-9, atol = 1e-6)
+    end
 
-    # the field: after each sweep, two explicit Euler substeps of D Δc − δ c + σ·[cell],
-    # zero flux at the closed walls, clipped at 0, using the post-sweep ownership
+    # the field: after each sweep, two explicit Euler substeps of D Δc + α·[cell] − ε c·[medium]
+    # (Eq. 6), zero flux at the closed walls, clipped at 0, using the post-sweep ownership
     function euler2(c, σ)
         X, Y = size(c)
         for _ in 1:2
             nb(x, y, u, v) = (1 <= u <= X && 1 <= v <= Y) ? c[u, v] : c[x, y]
             c = [max(c[x, y] + 0.5 * (p.Dc * (nb(x, y, x + 1, y) + nb(x, y, x - 1, y) + nb(x, y, x, y + 1) +
-                                           nb(x, y, x, y - 1) - 4c[x, y]) - p.δc * c[x, y] + p.σc * (σ[x, y] != 0)), 0.0)
+                                           nb(x, y, x, y - 1) - 4c[x, y]) + p.σc * (σ[x, y] != 0) -
+                                      p.δc * c[x, y] * (σ[x, y] == 0)), 0.0)
                  for x in 1:X, y in 1:Y]
         end
         return c
     end
-    sol = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = 0:10)
+    sol = solve(prob, SequentialCPM(); saveat = 0:10)
     @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].σ); atol = 1e-12), 1:10)
 
-    # an explicit substep count is a minimum: the paper's diffusion constant (D ≈ 0.75 per
-    # MCS) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
+    # an explicit substep count is a minimum: the paper's diffusion constant (D = 0.75 per
+    # MCS, the default) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
     sp = zeros(Int32, 40, 40); sp[18:23, 18:23] .= 1
     fast = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (40, 40)),
-        [ownership => sp, kind => [:endothelial], :Dc => 0.75, :σc => 5.4e-3, :δc => 5.4e-3], (0, 200)),
-        SequentialCPM(; proposal = Moore(1))).u[end]
-    @test all(isfinite, fast.site.c) && maximum(fast.site.c) < 1
+        [ownership => sp, kind => [:endothelial]], (0, 200)), SequentialCPM()).u[end]
+    @test all(isfinite, fast.site.c) && maximum(fast.site.c) < 1.5
 
     # mechanism: in a static gradient (no secretion, diffusion or decay) a cell climbs it for
     # χ > 0, descends for χ < 0, and does not drift for χ = 0
@@ -133,51 +223,80 @@ end
         s = blockstate((G, G), (18:23, 18:23))
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (G, G)),
             [ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
-             :χ => χ, :V₀ => 36.0], (0, 200); seed), SequentialCPM(; proposal = Moore(1))).u[end]
+             :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2)], (0, 200); seed),
+            SequentialCPM()).u[end]
         mean(i[1] for i in findall(==(1), u.σ)) - 20.5
     end
     @test mean(drift(100.0)) > 10
     @test abs(mean(drift(0.0))) < 4
     @test mean(drift(-100.0)) < -10
+
+    # mechanism (Fig. 6; the paper's title claim): at the paper's parameters elongated cells
+    # (λ_L > 0, L = 30) form a network, a sparse cluster far from its convex hull, while
+    # round cells (λ_L = 0) aggregate into compact islands
+    function vasculo(λ_L, seed)
+        u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (140, 140)),
+            [merks_state(; lattice = (140, 140), n = 100, seed); :λ_L => λ_L], (0, 1500); seed),
+            SequentialCPM(); saveat = 1500).u[end]
+        el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:100)
+        return (; compact = compactness(u.σ), largest = maximum(components(u.σ .!= 0)[1]), elongation = mean(el))
+    end
+    net, isl = [vasculo(5.0, s) for s in 1:3], [vasculo(0.0, s) for s in 1:3]
+    @test mean(r -> r.compact, net) < 0.4 && mean(r -> r.compact, isl) > 0.5
+    @test mean(r -> r.largest, net) > 2 * mean(r -> r.largest, isl)
+    @test mean(r -> r.elongation, net) > 3 && mean(r -> r.elongation, isl) < 2
 end
 
 @testset "Wortel Act" begin
     L = 16
     σ0 = blockstate((L, L), (3:6, 3:6), (10:13, 9:12))
     prob = PottsProblem(WortelAct(; name = :w, lattice = (L, L)),
-        [ownership => σ0, kind => [:endothelial, :endothelial], :λ => 5.0, :V₀ => 16.0, :λ_act => 20.0], (0, 10))
+        [ownership => σ0, kind => [:cell, :cell], :λ => 5.0, :V₀ => 16.0, :λₛ => 0.5, :S₀ => 24.0, :λ_act => 20.0,
+         :J => [0.0 10.0; 10.0 20.0], :T => 10.0], (0, 10))
     p = prob.p
-    # the Act drive: for copies into a cell, −(λ_act/max_act)(A(source) − A(target)), where
-    # A(s) = exp(mean log1p act) − 1 over the Moore(1) sites (with s) owned like s
-    function A(u, i)
+    # the Act drive on every copy: −(λ_act/max_act)(GM(source) − GM(target)), GM(s) the
+    # geometric mean of act over s and its Moore(1) sites owned like s (0 if any is 0; the
+    # medium's is 0)
+    function GM(u, i)
         X, Y = size(u.σ); x = CP.coordinates(prob.lattice, i)
         own = u.σ[i]
+        own == 0 && return 0.0
         vals = [u.site.act[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] for dx in -1:1, dy in -1:1
                 if u.σ[mod1(x[1] + dx, X), mod1(x[2] + dy, Y)] == own]
-        return expm1(mean(log1p, vals))
+        return prod(vals)^(1 / length(vals))
     end
     props = sampled_proposals(prob)
     @test length(props) > 300
     @test all(props) do (u, prop, ctx)
-        want = prop.new != 0 ? -(p.λ_act / p.max_act) * (A(u, prop.source) - A(u, prop.target)) : 0.0
-        isapprox(drive(prob, u, prop, ctx), want; atol = 1e-9)
+        isapprox(drive(prob, u, prop, ctx), -(p.λ_act / p.max_act) * (GM(u, prop.source) - GM(u, prop.target)); atol = 1e-9)
     end
-    @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx) ==
-                                   (prop.old == 0 || ring_rule(u.σ, prop.x, prop.old, (true, true))), props)
-    # on copy: an extension into the medium is fully active, any other gained site inactive;
+    # retractions from active sites are penalised: start fully active
+    hot = remake(prob; u0 = [ownership => σ0, kind => [:cell, :cell], :act => p.max_act .* (σ0 .!= 0)])
+    hprops = sampled_proposals(hot; nmcs = 0)
+    @test count(((u, prop, ctx),) -> prop.new == 0 && GM(u, prop.target) > 0, hprops) > 10
+    @test all(hprops) do (u, prop, ctx)
+        isapprox(drive(hot, u, prop, ctx), -(p.λ_act / p.max_act) * (GM(u, prop.source) - GM(u, prop.target)); atol = 1e-9)
+    end
+    # connectivity is off by default; `connected = true` is the Merks ring rule
+    @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx), props)
+    cprob = PottsProblem(WortelAct(; name = :w, lattice = (L, L), connected = true),
+        [ownership => σ0, kind => [:cell, :cell], :λ => 5.0, :V₀ => 16.0, :λₛ => 0.5, :S₀ => 24.0, :λ_act => 20.0], (0, 10))
+    @test all(((u, prop, ctx),) -> cprob.f.constraint(u, cprob.p, prop, ctx) ==
+                                   (prop.old == 0 || ring_rule(u.σ, prop.x, prop.old, (true, true))), sampled_proposals(cprob))
+    # on copy: every site a cell gains is fully active, a site the medium takes inactive;
     # nothing else changes
     @test all(props) do (u, prop, ctx)
         a = deepcopy(u); a.σ[prop.target] = prop.new
         prob.f.commit!(a, p, prop, ctx)
-        want = copy(u.site.act); want[prop.target] = prop.old == 0 && prop.new != 0 ? p.max_act : 0.0
+        want = copy(u.site.act); want[prop.target] = prop.new != 0 ? p.max_act : 0.0
         a.site.act == want
     end
     # after each MCS activity decays by one to zero: with the cell frozen (no copy can pay
     # the volume cost) the field is max(act₀ − k, 0) after k MCS
     act0 = [Float64(mod(x + y, 7)) for x in 1:L, y in 1:L] .* (σ0 .!= 0)
     frozen = PottsProblem(WortelAct(; name = :w, lattice = (L, L)),
-        [ownership => σ0, kind => [:endothelial, :endothelial], :act => act0, :λ => 1e6, :V₀ => 16.0, :λ_act => 1.0], (0, 4))
-    sol = solve(frozen, SequentialCPM(; proposal = Moore(1)); saveat = 0:4)
+        [ownership => σ0, kind => [:cell, :cell], :act => act0, :λ => 1e6, :V₀ => 16.0, :λ_act => 1.0], (0, 4))
+    sol = solve(frozen, SequentialCPM(); saveat = 0:4)
     @test all(k -> sol.u[k + 1].σ == σ0 && sol.u[k + 1].site.act == max.(act0 .- k, 0.0), 0:4)
 
     # mechanism: Act makes a cell migrate persistently; without it the cell only jitters
@@ -188,9 +307,9 @@ end
         map(1:8) do seed
             s = blockstate((G, G), (35:44, 35:44))
             sol = solve(PottsProblem(WortelAct(; name = :w, lattice = (G, G)),
-                [ownership => s, kind => [:endothelial], :J => [0.0 20.0; 20.0 0.0], :λ => 5.0, :V₀ => 100.0,
+                [ownership => s, kind => [:cell], :J => [0.0 20.0; 20.0 0.0], :λ => 5.0, :V₀ => 100.0,
                  :λₛ => 0.5, :S₀ => 150.0, :T => 20.0, :λ_act => λ_act, :max_act => 40.0], (0, 300); seed),
-                SequentialCPM(; proposal = Moore(1)); saveat = 0:10:300)
+                SequentialCPM(); saveat = 0:10:300)
             cs = [(circ(u.σ, 1), circ(u.σ, 2)) for u in sol.u]
             hypot(sum(k -> mi(cs[k + 1][1] - cs[k][1]), 1:(length(cs) - 1)),
                   sum(k -> mi(cs[k + 1][2] - cs[k][2]), 1:(length(cs) - 1)))
@@ -201,12 +320,12 @@ end
     @test median(on) > 3 * median(off)
 end
 
-@testset "OpenVT monolayer" begin
+@testset "single-division fixture" begin
     # division at MCS 0 when the area has reached V₀, along x through the centroid, halving
     # the mass. The cell is frozen (no copy can pay the volume cost), so the partition is
     # exactly the sites right of the centroid.
     σ0 = blockstate((12, 8), (5:8, 4:5))                          # area 8, centroid x = 6.5
-    run(V₀) = solve(PottsProblem(OpenVTMonolayer(; name = :o),
+    run(V₀) = solve(PottsProblem(SingleDivisionFixture(; name = :o),
         [ownership => σ0, kind => [:epithelial], :λ => 1e6, :V₀ => V₀], (0, 1); capacity = 4),
         SequentialCPM(; proposal = Moore(1))).u[end]
     u = run(8.0)
@@ -217,7 +336,7 @@ end
     # under the normal dynamics the trigger reads the area after MCS 0's sweep, which is
     # what MCS 1 shows: one cell iff that area was below V₀, else two summing to it
     outcomes = map(1:40) do seed
-        v = solve(PottsProblem(OpenVTMonolayer(; name = :o), [ownership => σ0, kind => [:epithelial], :V₀ => 7.0],
+        v = solve(PottsProblem(SingleDivisionFixture(; name = :o), [ownership => σ0, kind => [:epithelial], :V₀ => 7.0],
             (0, 1); capacity = 4, seed), SequentialCPM(; proposal = Moore(1))).u[end].cell.volume
         live = filter(>(0), v)
         (length(live), sum(live))
@@ -225,9 +344,57 @@ end
     @test all(((n, a),) -> n == 1 ? a < 7 : (n == 2 && a >= 7), outcomes)
     @test any(o -> o[1] == 1, outcomes) && any(o -> o[1] == 2, outcomes)
     # no division after MCS 0
-    late = solve(PottsProblem(OpenVTMonolayer(; name = :o), [ownership => σ0, kind => [:epithelial], :V₀ => 100.0],
+    late = solve(PottsProblem(SingleDivisionFixture(; name = :o), [ownership => σ0, kind => [:epithelial], :V₀ => 100.0],
         (0, 30); capacity = 4), SequentialCPM(; proposal = Moore(1)))
     @test late.stats.lifecycle.divisions == 0
+end
+
+@testset "OpenVT growing monolayer" begin
+    live(u) = count(>(0), u.cell.volume)
+    function grow(; L = 160, n = 840, every = 42, seed = 1, p...)
+        op = [openvt_monolayer_state(; lattice = (L, L)); [k => v for (k, v) in p]]
+        integ = init(PottsProblem(OpenVTGrowingMonolayer(; name = :m, lattice = (L, L)), op, (0, n); seed, capacity = 4096),
+            SequentialCPM(); save_start = false, save_end = false)
+        counts, us = Int[], []
+        for k in 1:n
+            step!(integ)
+            k % every == 0 && (push!(counts, live(integ.state)); push!(us, deepcopy(integ.state)))
+        end
+        return counts, us
+    end
+    # growth law: an isolated cell's target area gains A₀/τ per MCS; with β > 1 it never grows
+    _, us = grow(; L = 40, n = 30, every = 1)
+    @test [u.cell.V_target[1] for u in us] ≈ 25 .+ (1:30) .* (25 / 84)
+    _, us = grow(; L = 40, n = 30, every = 1, β = 2.0)
+    @test all(u -> u.cell.V_target[1] == 25, us)
+    # exponential growth with a doubling time of about τ (the area lags the target a little);
+    # halving τ halves it
+    doubling(c, every) = every * (length(c) - 1) / log2(c[end] / c[1])
+    c84, _ = grow(; n = 840, every = 168)
+    c42, _ = grow(; n = 420, every = 84, τ = 42.0)
+    @test 84 <= doubling(c84[2:end], 168) <= 1.3 * 84
+    @test 42 <= doubling(c42[2:end], 84) <= 1.3 * 42
+    # contact inhibition (β = 0.95): compressed interior cells stop growing, so the colony
+    # grows more slowly; without it every cell grows
+    c0, u0 = grow()
+    cβ, uβ = grow(; β = 0.95)
+    quiescent(u) = count(c -> u.cell.volume[c] > 0 && u.cell.volume[c] < 0.95 * u.cell.V_target[c], eachindex(u.cell.volume))
+    @test cβ[end] < 0.7 * c0[end]
+    @test quiescent(uβ[end]) > 0.2 * cβ[end]
+    # the division plane is uniform: the doubled angle between the first two daughters'
+    # centroids has no preferred direction
+    angles = map(1:40) do seed
+        integ = init(PottsProblem(OpenVTGrowingMonolayer(; name = :m, lattice = (40, 40)),
+            openvt_monolayer_state(; lattice = (40, 40)), (0, 300); seed, capacity = 16), SequentialCPM())
+        while live(integ.state) < 2
+            step!(integ)
+        end
+        σ, v = integ.state.σ, integ.state.cell.volume
+        m = [(x = findall(==(c), σ); (mean(i[1] for i in x), mean(i[2] for i in x))) for c in findall(>(0), v)]
+        d = m[2] .- m[1]
+        2atan(d[2], d[1])
+    end
+    @test hypot(mean(cos.(angles)), mean(sin.(angles))) < 0.35
 end
 
 @testset "Akeeb invasion" begin
@@ -244,7 +411,7 @@ end
         isapprox(drive(prob, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(props) do (u, prop, ctx)
-        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && ring_rule(u.σ, prop.x, prop.old, (true, false)))
+        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && one_arc(u.σ, prop.x, prop.old, (true, false)))
         prob.f.constraint(u, p, prop, ctx) == want
     end
     # after each MCS: running clocks tick, target volumes grow by `rate` below V_max; no
@@ -266,5 +433,12 @@ end
     end
     on, off = invade(30.0), invade(0.0)
     @test all(m -> m.leader_mean_y > 28, on) && all(m -> m.leader_mean_y < 20, off)
+    # CC3D connectivity keeps every cell in one piece (the legacy `:merks` rule split 4–6)
+    for seed in 1:3
+        o = akeeb_state(; lattice = (99, 60), seed)
+        u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000, seed),
+            SequentialCPM(; proposal = VonNeumann(1))).u[end]
+        @test split_cells(u.σ, (true, false)) == 0
+    end
     @test all(m -> m.divisions > 0, invade(30.0; nmcs = 300)) && all(m -> m.divisions == 0, invade(30.0; pp = 0.0, nmcs = 300))
 end

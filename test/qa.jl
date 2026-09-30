@@ -36,8 +36,8 @@ end
 
 # D-047: every PottsModels model, Float64 and Float32. JET cannot see inside
 # RuntimeGeneratedFunction bodies, so the generated code is also `eval`'d into plain functions.
-using PottsModels: GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTMonolayer, AkeebInvasion, akeeb_state,
-    graner_glazier_state
+using PottsModels: GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, AkeebInvasion, akeeb_state,
+    graner_glazier_state, openvt_monolayer_state
 
 const _QA_MOD = Module(:PottsQA)
 Core.eval(_QA_MOD, :(using Potts; using Potts: CorePotts))
@@ -48,12 +48,10 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
 
 @testset "QA: generated code of $label ($T)" for (label, make) in (
         ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
-        ("Wortel", () -> (WortelAct(; name = :w), [ownership => (s = zeros(Int32, 8, 8); s[2:3, 2:3] .= 1; s[6:7, 6:7] .= 2; s),
-            kind => [:endothelial, :endothelial]], nothing)),
-        ("Merks", () -> (MerksVasculogenesis(; name = :m), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
+        ("Wortel", () -> (WortelAct(; name = :w, lattice = (16, 16)), [ownership => wortel_state(), kind => [:cell, :cell]], nothing)),
+        ("Merks", () -> (MerksVasculogenesis(; name = :m, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
             kind => [:endothelial]], nothing)),
-        ("OpenVT", () -> (OpenVTMonolayer(; name = :o), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s),
-            kind => [:epithelial]], nothing)),
+        ("OpenVT", () -> (OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)), 16)),
         ("Akeeb", () -> (AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), 1000))),
     T in (Float64, Float32)
     sys, op, cap = make()

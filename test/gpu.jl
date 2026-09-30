@@ -15,9 +15,10 @@ using Statistics: mean, var
     @info "symbolic Graner H, CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
     @test abs(t) < 4
     for (label, p) in (
-            ("wortel", PottsProblem(WORTEL, [ownership => (s = zeros(Int32, 8, 8); s[2:3, 2:3] .= 1; s[6:7, 6:7] .= 2; s),
-                kind => [1, 1]], (0, 20); T = Float32)),
-            ("merks", PottsProblem(MERKS, [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [1]], (0, 20); T = Float32)),
+            ("wortel", PottsProblem(WORTEL, [ownership => wortel_state(), kind => [1, 1]], (0, 20); T = Float32)),
+            ("merks", PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32)),
+            ("growing monolayer", PottsProblem(OpenVTGrowingMonolayer(; name = :g, lattice = (40, 40)),
+                [openvt_monolayer_state(; lattice = (40, 40)); :τ => 10.0], (0, 60); T = Float32, capacity = 64)),
             ("openvt", PottsProblem(MONOLAYER, [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [1]], (0, 10);
                 T = Float32, capacity = 8)))
         v = solve(p, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]

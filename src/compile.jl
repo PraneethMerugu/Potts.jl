@@ -31,6 +31,7 @@ struct CompiledPottsSystem
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
     contact_spec::Any
+    proposal_spec::Any                                # `@relations proposal = …`, or `VonNeumann(1)`
     gather_names::Dict{Any, Symbol}
     footprint::Footprint
     scratch::Set{Symbol}                              # field variables (double-buffered steps)
@@ -43,7 +44,7 @@ end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
-const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster)
+const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length)
 # cell updates, division rules (cluster trackers change with copies of other members, so
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
@@ -257,7 +258,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
         writers[k] = u
     end
-    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement)
+    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
     needs_moments = !isempty(sys.divisions) || relationship !== nothing ||
                     any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,
                         (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
@@ -267,9 +268,10 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)
+    proposal_spec = get(sys.relations, :proposal, CorePotts.VonNeumann(1))
     relations = Dict{Symbol, Any}()
     for (k, v) in sys.relations
-        k === :contact || (relations[k] = v)
+        k in (:contact, :proposal) || (relations[k] = v)
     end
     for r in keys(contact_terms)
         r === :contact || haskey(relations, r) || throw(ArgumentError("contacts($r): relation `$r` is not declared in @relations"))
@@ -361,7 +363,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationship, edge_terms,
         sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
-        needs_moments, relations, contact_spec, gather_names,
+        needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops)
 end
@@ -450,7 +452,7 @@ end
 function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
     sub = Dict{Any, Any}(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
-        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, after...)
+        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR, after...)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
     # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
     # metadata of scoped variables `x(t)` inside them: expand over placeholders instead

@@ -12,8 +12,9 @@ using Potts
 using DelimitedFiles: readdlm
 using Random: MersenneTwister
 
-export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTMonolayer, AkeebInvasion
-export graner_glazier_state, akeeb_state, akeeb_contacts
+export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
+    AkeebInvasion
+export graner_glazier_state, akeeb_state, akeeb_contacts, openvt_monolayer_state, merks_state
 
 include("graner_glazier.jl")
 include("wortel_act.jl")

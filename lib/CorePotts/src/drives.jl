@@ -56,12 +56,12 @@ end
 """
     act_delta(act, σ, ctx, prop, λ, maximum; relation = ctx.act, shifted = false)
 
-Act model drive `ΔH = −(λ/max)(GM(source, new) − GM(target, old))` for a copy by a cell
-(zero when `new` is the medium); gate by kind in the model.
+Act model drive `ΔH = −(λ/max)(GM(source, new) − GM(target, old))` for every copy (Niculescu
+et al. 2015, Artistoo): the medium's mean is zero, so a retraction by the medium costs
+`(λ/max)·GM(target, old)`.
 """
 @inline function act_delta(act, σ, ctx, prop, λ, maximum; relation = ctx.act,
         shifted::Bool = false)
-    prop.new == 0 && return zero(eltype(act))
     s = act_mean(act, σ, ctx, prop.source, prop.new; relation, shifted)
     t = act_mean(act, σ, ctx, prop.target, prop.old; relation, shifted)
     return -(λ / maximum) * (s - t)

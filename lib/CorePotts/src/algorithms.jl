@@ -42,26 +42,28 @@ end
 abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
 """
-    SequentialCPM(; acceptance = nothing, proposal = VonNeumann(1))
+    SequentialCPM(; acceptance = nothing, proposal = nothing)
 
 Random-site sequential dynamics on the host: one MCS is `N` copy attempts with
 replacement over the lattice sites. The fidelity reference. `acceptance = nothing` uses the
-model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`.
+model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
+the problem's copy neighbourhood (`CPMProblem(…; proposal)`, default `VonNeumann(1)`).
 """
 Base.@kwdef struct SequentialCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
-    proposal::R = VonNeumann(1)
+    proposal::R = nothing
 end
 
 """
-    CheckerboardCPM(; acceptance = nothing, proposal = VonNeumann(1))
+    CheckerboardCPM(; acceptance = nothing, proposal = nothing)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
 targets lie outside each other's read/write footprints; each MCS visits every site once in
 a random color order. Accepted proposals claim their cells with a unique priority and
 commit only if they win every claim, so each cell changes at most once per color.
+`acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
-    proposal::R = VonNeumann(1)
+    proposal::R = nothing
 end

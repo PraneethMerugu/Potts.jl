@@ -29,9 +29,12 @@ end
     two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
     cases = [
         ("Graner–Glazier", GranerGlazier(; name = :gg), [ownership => σ, kind => kinds]),
-        ("Wortel Act", WortelAct(; name = :act), [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:endothelial, :endothelial]]),
-        ("Merks", MerksVasculogenesis(; name = :merks), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]),
-        ("OpenVT", OpenVTMonolayer(; name = :openvt), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]]),
+        ("Wortel Act", WortelAct(; name = :act, lattice = (8, 8)), [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
+        ("Wortel Act (connected)", WortelAct(; name = :act, lattice = (8, 8), connected = true),
+            [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
+        ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]),
+        ("single-division fixture", SingleDivisionFixture(; name = :fixture), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]]),
+        ("OpenVT growing monolayer", OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24))),
     ]
     @testset "$label" for (label, sys, op) in cases
         prob = PottsProblem(sys, op, (0, 10))

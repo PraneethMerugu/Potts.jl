@@ -307,8 +307,8 @@ end
     @test Potts.info(first(sys2.parameters)).default == 2.0
     # constructing a model twice yields the same generated code (gathers numbered per model)
     σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1
-    a = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
-    b = PottsProblem(WortelAct(; name = :w), [ownership => σ, kind => [1]], (0, 1))
+    a = PottsProblem(WortelAct(; name = :w, lattice = (8, 8)), [ownership => σ, kind => [1]], (0, 1))
+    b = PottsProblem(WortelAct(; name = :w, lattice = (8, 8)), [ownership => σ, kind => [1]], (0, 1))
     @test a.f.fingerprint == b.f.fingerprint && typeof(a.f) === typeof(b.f)
 end
 

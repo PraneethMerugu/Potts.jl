@@ -67,6 +67,11 @@ end
         prop = Proposal(linear_index(lat, (1, 3)), centre, (1, 3), 1, Int32(0), Int32(1))
         @test act_delta(act, σ, ctx, prop, 4.0, 5.0; shifted = true) ≈
               -(4.0 / 5.0) * act_mean(act, σ, ctx, centre, 1; shifted = true)
+        # a retraction by the medium pays for the activity it removes (Niculescu 2015, D-049)
+        act[2, 2] = 4.0
+        edge = linear_index(lat, (2, 3))
+        back = Proposal(edge, linear_index(lat, (1, 3)), (2, 3), 1, Int32(1), Int32(0))
+        @test act_delta(act, σ, ctx, back, 4.0, 5.0) ≈ (4.0 / 5.0) * act_mean(act, σ, ctx, edge, 1) > 0
     end
 
     @testset "locally_connected equals a flood fill ($(N)-D)" for N in (2, 3)

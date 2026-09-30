@@ -5,7 +5,8 @@ Leader/follower collective invasion with proliferation (Akeeb, Marcus & Jiang; p
 `SCDPotts/scripts/run_akeeb_proliferative.jl`, audited against the authors' CompuCell3D
 source in `SCDPotts/research/akeeb_source_audit.md`):
 
-- **Kinds.** Leaders and followers, both kept connected and never extinct.
+- **Kinds.** Leaders and followers, both kept connected (CompuCell3D's `Connectivity`
+  plugin: the losing cell's sites in the 8-ring must form one arc) and never extinct.
 - **Energies.** A per-cell target volume, and adhesion
   `J = [0 2 10; 2 16 J_LF; 10 J_LF 5]` (medium, leader, follower).
 - **Migration cue.** A static field `cue = y − 1`. A copy whose source or target cell is a
@@ -17,12 +18,10 @@ source in `SCDPotts/research/akeeb_source_audit.md`):
 
 Use `akeeb_state` for the published initial slab.
 
-Fidelity to the authors' CompuCell3D model (Akeeb, Marcus & Jiang, PLoS Comput. Biol. 2026):
-everything matches except connectivity. CC3D's `Connectivity` plugin accepts a copy only if
-the losing cell's sites in the 8-ring form one arc; the `:merks` rule used here also accepts
-when exactly two cells occupy the ring (a legacy fallback), which lets cells split (60–73
-split cells in a full 500×300, 700-MCS run) and inflates the single-cell counts. `rule =
-:local` is the CC3D rule. One CC3D step here is 1 MCS; the source runs 701.
+Faithful to the authors' CompuCell3D model (Akeeb, Marcus & Jiang, PLoS Comput. Biol. 2026;
+D-049). One CC3D step is 1 MCS here; the source runs 701. The legacy port's `:merks` ring rule
+(which also accepted when exactly two cells occupy the ring) split cells and is no longer
+used.
 """
 @potts_model AkeebInvasion begin
     @structural_parameters begin
@@ -45,12 +44,13 @@ split cells in a full 500×300, 700-MCS run) and inflates the single-cell counts
         cue(site) = 0.0
     end
     @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+    @relations proposal = VonNeumann(1)     # CC3D Potts NeighborOrder 1
     @energy begin
         cells => λᵥ * (volume - V_target)^2
         contacts => J[kind, kind′]
     end
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
-    @constraint connectivity(leader, follower; rule = :merks)   # the legacy ring rule; see the docstring
+    @constraint connectivity(leader, follower)   # one arc in the 8-ring: CC3D's Connectivity plugin
     @constraint no_extinction
     @after_mcs begin
         V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))

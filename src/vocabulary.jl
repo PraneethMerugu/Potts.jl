@@ -35,7 +35,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site)
+    :cluster_volume, :cluster_surface, :time, :site, :major_length)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -44,6 +44,8 @@ const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, not
 const DVOLUME = _tag(_sym(:δvolume), Info(:delta, :volume, nothing, (;)))
 const DSURFACE = _tag(_sym(:δsurface), Info(:delta, :surface, nothing, (;)))
 const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, nothing, (;)))
+# not a delta: the cell's major length after the copy (not additive)
+const DMAJOR = _tag(_sym(:δmajor_length), Info(:delta, :major_length, nothing, (;)))
 
 # ---------------------------------------------------------------------------------------
 # Declarations

@@ -1,48 +1,54 @@
 """
-    WortelAct(; name, lattice = (8, 8), …)
+    WortelAct(; name, lattice = (200, 200), connected = false, …)
 
-Actin-inspired protrusive migration (Niculescu, Textor & de Boer, PLoS Comput. Biol. 11,
-e1004280, 2015; the Wortel et al. 2021 parameterization used by the legacy code). A copy
-into a site gains `λ_act/max_act` times the difference of the geometric-mean activity
-around source and target (`geomean_shifted`, D-034). An extension into the medium is fully
-active, any other gained site inactive; activity decays by one per MCS. Cells stay connected (Merks ring rule).
+The Act model of actin-driven cell migration (Niculescu, Textor & de Boer, PLoS Comput.
+Biol. 11, e1004280, 2015; Wortel et al., Biophys. J. 120, 2609, 2021), with the semantics of
+their reference code Artistoo (D-049):
 
-Legacy semantics that differ from the papers and Artistoo (the reference code):
-- the mean is the shifted geometric mean; the papers use the plain one (zero if any
-  same-cell neighbour is inactive);
-- copies by the medium (retractions) get no Act term; the papers penalise retracting active
-  sites (`+(λ_act/max_act)·GM(target)`), which about halves persistence when missing;
-- only extensions into the medium activate a site; the papers activate every gained site;
-- connectivity is always enforced, so the papers' "broken cell" regime cannot occur;
-- the defaults are a legacy 8×8 toy. Niculescu et al. 2015's amoeboid cell: 200² torus,
-  `T = 20`, `λ = 50`, `V₀ = 500`, `λₛ = 2`, `S₀ = 340`, `J = [0 20; 20 100]`,
-  `λ_act = 200`, `max_act = 20`.
+- **Activity.** Every site a cell gains becomes fully active (`max_act`); a site taken by the
+  medium is inactive; activity decays by one per MCS.
+- **Act term.** Every copy gains `−(λ_act/max_act)(GM(source) − GM(target))`, where `GM(s)`
+  is the plain geometric mean of the activity over `s` and its Moore neighbours owned like
+  `s` (zero if any is inactive, and zero for the medium). Retracting active sites is
+  therefore penalised.
+- **Energies.** Adhesion `J`, area `λ(V − V₀)²` and perimeter `λₛ(P − S₀)²`, where the
+  perimeter counts Moore neighbours owned by others.
+- **Connectivity.** `connected = true` adds the Merks ring rule, which Niculescu et al. use
+  for multicellular runs. Without it, cells can break at high `λ_act`, as Wortel et al.
+  report.
+
+The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 200² torus.
+`max_act = 80` gives the keratocyte-like cell. Copies come from the 8 neighbours.
 """
 @potts_model WortelAct begin
     @structural_parameters begin
-        lattice = (8, 8)
+        lattice = (200, 200)
+        connected = false
     end
-    @kinds medium endothelial
+    @kinds medium cell
     @parameters begin
-        λ = 1.0
-        V₀ = 6.0
-        λₛ = 0.05
-        S₀ = 8.0
-        λ_act = 4.0
-        max_act = 5.0
-        T = 8.0
-        J[kind, kind] = [0.0 6.0; 6.0 2.0]
+        λ = 50.0
+        V₀ = 500.0
+        λₛ = 2.0
+        S₀ = 340.0
+        λ_act = 200.0
+        max_act = 20.0
+        T = 20.0
+        J[kind, kind] = [0.0 20.0; 20.0 100.0]
     end
     @variables act(site) = 0.0
     @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))
+    @relations proposal = Moore(1)
     @energy begin
-        cells(endothelial) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
+        cells(cell) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
         contacts => J[kind, kind′]
     end
-    act_mean(s) = geomean_shifted(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
-    @drive copy => ifelse(kind[new] == endothelial, -(λ_act / max_act) * (act_mean(source) - act_mean(target)), 0.0)
-    @on_copy act[target] ~ ifelse((old == 0) && (new != 0), max_act, 0.0)
+    act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
+    @drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))
+    @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)
     @after_mcs act ~ max(Pre(act) - 1, 0)
-    @constraint connectivity(endothelial; rule = :merks)
+    if connected
+        @constraint connectivity(cell; rule = :merks)
+    end
     @sweep Metropolis(; temperature = T)
 end

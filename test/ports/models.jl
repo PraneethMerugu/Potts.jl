@@ -3,63 +3,72 @@
 using CorePotts, StaticArrays
 
 endo(st, c) = c != 0 && @inbounds(st.cell.kind[c]) == 1
-legacy_connectivity(st, p, prop, ctx) =
-    endo(st, prop.old) ? merks_connectivity(st.σ, ctx, prop) : true
+one_arc_connectivity(st, p, prop, ctx) =
+    endo(st, prop.old) ? locally_connected(st.σ, ctx, prop) : true
 
-# --- Merks et al. (2006) vasculogenesis, 8×8 closed ------------------------------------
+# --- Merks et al. (2006) vasculogenesis (D-049), 12×12 closed ----------------------------
 function merks_delta_H(st, p, prop, ctx)
+    J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
-    dH = volume_delta(st.cell.volume, prop, E)
-    chem = is_extension(prop) && endo(st, prop.new) ? chemotaxis_delta(st.site.c, prop, p.χ) :
-           zero(dH)
-    return dH + chem
+    Tf = typeof(p.λ)
+    ℓ(c, s) = c == 0 ? zero(Tf) :
+              p.λL * ((major_length_after(Tf, st.cell, ctx.lattice, c, prop.x, s) - p.L)^2 -
+                      (major_length(Tf, st.cell, ctx.lattice, c) - p.L)^2)
+    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+           ℓ(prop.old, -1) + ℓ(prop.new, 1) + chemotaxis_delta(st.site.c, prop, p.χ)   # every copy
+end
+function merks_commit!(st, p, prop, ctx)
+    commit_volume!(st, p, prop, ctx)
+    commit_moments!(st.cell, ctx.lattice, prop)
 end
 merks_rate(st, p, ctx, key, mcs, i, c) =
-    p.D * laplacian(c, ctx, i) - p.k * @inbounds(c[i]) + p.s * (owner_kind(st, i) == 1)
+    p.D * laplacian(c, ctx, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
 merks_temperature(st, p, prop, ctx) = p.T
 
+const MERKS_PORT_P = (; J = SMatrix{2, 2}(0.0, 5.0, 5.0, 8.0), λ = 2.0, V0 = 9.0, λL = 1.0, L = 5.0, χ = 50.0,
+    D = 0.2, s = 0.05, k = 0.02, T = 10.0)
+merks_state() = (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s[7:9, 6:8] .= 2; s)
 function merks_problem(; tspan = (0, 40), seed = 0)
-    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1
-    c = zeros(8, 8)
-    st = initial_state(σ, [1]; site = (; c, c_next = zero(c)))
+    σ = merks_state()
+    lat = Lattice((12, 12); boundary = Closed())
+    c = zeros(12, 12)
+    st = initial_state(σ, [1, 1]; cell = init_moments(σ, lat, 2), site = (; c, c_next = zero(c)))
     ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), merks_rate;
         dt = 1.0, substeps = 2, lower = 0.0),))
-    f = CPMFunction(merks_delta_H; temperature = merks_temperature,
-        constraint = legacy_connectivity, phases = ph)
-    p = (; λ = 1.0, V0 = 6.0, χ = 2.0, D = 0.08, s = 0.02, k = 0.01, T = 6.0)
-    return CPMProblem(f, st, Lattice((8, 8); boundary = Closed()), tspan, p; seed)
+    f = CPMFunction(merks_delta_H; commit! = merks_commit!, temperature = merks_temperature,
+        constraint = one_arc_connectivity, phases = ph)
+    return CPMProblem(f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed)
 end
 
-# --- Wortel et al. (2021) activity-driven migration, 8×8 periodic ---------------------
+# --- Niculescu et al. (2015) Act migration (Artistoo semantics, D-049), 16×16 periodic ------
 function wortel_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    act = endo(st, prop.new) ?
-          act_delta(st.site.act, st.σ, ctx, prop, p.λact, p.maxact; shifted = true) : 0.0
+    act = act_delta(st.site.act, st.σ, ctx, prop, p.λact, p.maxact)     # every copy, plain GM
     return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            surface_delta(st.cell.surface, prop, surface_change(st.σ, ctx, prop), S) + act
 end
 function wortel_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
     commit_surface!(st.cell.surface, prop, surface_change(st.σ, ctx, prop))
-    @inbounds st.site.act[prop.target] = is_extension(prop) ? p.maxact : zero(p.maxact)
+    @inbounds st.site.act[prop.target] = prop.new != 0 ? p.maxact : zero(p.maxact)
     return nothing
 end
 decay_act!(st, p, ctx, key, mcs, i) =
     (@inbounds st.site.act[i] = max(st.site.act[i] - one(p.maxact), zero(p.maxact)); nothing)
 
+const WORTEL_PORT_P = (; J = SMatrix{2, 2}(0.0, 10.0, 10.0, 20.0), λ = 5.0, V0 = 16.0, λs = 0.5,
+    S0 = 24.0, λact = 40.0, maxact = 10.0, T = 10.0)
+wortel_state() = (s = zeros(Int32, 16, 16); s[3:6, 3:6] .= 1; s[10:13, 9:12] .= 2; s)
 function wortel_problem(; tspan = (0, 40), seed = 0)
-    σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1; σ[6:7, 6:7] .= 2
-    lat = Lattice((8, 8))
+    σ = wortel_state()
+    lat = Lattice((16, 16))
     surface = recompute_surface(σ, lat, relation(Moore(1), lat), 2)
-    st = initial_state(σ, [1, 1]; cell = (; surface), site = (; act = zeros(8, 8)))
+    st = initial_state(σ, [1, 1]; cell = (; surface), site = (; act = zeros(16, 16)))
     f = CPMFunction(wortel_delta_H; commit! = wortel_commit!, temperature = merks_temperature,
-        constraint = legacy_connectivity,
         phases = Phases(after_mcs = (SitePhase(decay_act!),)))
-    p = (; J = SMatrix{2, 2}(0.0, 6.0, 6.0, 2.0), λ = 1.0, V0 = 6.0, λs = 0.05, S0 = 8.0,
-        λact = 4.0, maxact = 5.0, T = 8.0)
-    return CPMProblem(f, st, lat, tspan, p; contact = Moore(1),
+    return CPMProblem(f, st, lat, tspan, WORTEL_PORT_P; contact = Moore(1), proposal = Moore(1),
         relations = (; surface = Moore(1), act = Moore(1)), seed)
 end
 
