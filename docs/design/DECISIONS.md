@@ -506,6 +506,13 @@ workload).
   approved as the published model's science. The justification is the legacy parity test
   (`test/parity/akeeb.jl`: every metric agrees under `:merks`).
 - **D-041, D-042, D-043, D-044, D-045**: approved as written.
+- **D-049 implementation choices** (2026-09-29): approved as reported.
+  - Merks uses the one-arc connectivity rule, a hard veto standing in for the paper's
+    splitting penalty (E₀ > 2000).
+  - Merks keeps these differences: free closed walls (paper J_cB = 100), no dissipation
+    threshold E₀, and the fewest stable field substeps instead of 15.
+  - Two Graner–Glazier paper observables are re-set on the PRE §II D3 state: partial
+    sorting by the dark–medium share, and layer reversal at 4000 MCS.
 
 ## D-048 No parity harness against the legacy codebase (2026-09-29, maintainer)
 
