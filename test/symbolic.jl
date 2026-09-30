@@ -366,6 +366,7 @@ end
     n = maximum(σb)
     kinds = [isodd(c) ? :leader : :follower for c in 1:n]
     tp = PottsProblem(TwoRules(; name = :two), [ownership => σb, kind => kinds], (0, 1))
+    @test tp.f.reads === CorePotts.no_claims          # link rules run on the host: nothing to claim
     u = solve(tp, SequentialCPM()).u[end]            # after MCS 0: every rule ran once
     g = CorePotts.contact_graph(u.σ, tp.lattice, tp.contact, n)
     B, Tt = CorePotts.link_store(u.cell, :bond), CorePotts.link_store(u.cell, :tether)
@@ -417,6 +418,34 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+# a base whose `rest(edge)` means its only relationship, extended by a second relationship
+@potts_model SpringTether begin
+    @extend base = Spring()
+    @variables len(tether) = 18.0
+    @relationship tether(cell, cell) capacity = 1
+    @energy edges(tether) => 1.5 * (distance - len)^2
+end
+@potts_model CellRelationship begin
+    @kinds medium blob
+    @relationship cell(cell, cell) capacity = 1
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy contacts => 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "several relationships: @extend keeps a base's `x(edge)` bound to its relationship" begin
+    c = mtkcompile(SpringTether(; name = :st))
+    @test [r.name for r in c.relationships] == [:tether, :bond]
+    @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
+    @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
+    σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2; σ[40:45, 12:17] .= 3
+    prob = PottsProblem(c, [ownership => σ, kind => [:blob, :blob, :blob], :bond => [(1, 2)], :tether => [(2, 3)]], (0, 20))
+    @test prob.u0.cell.link_rest[1, 1] == 12.0 && prob.u0.cell.link_len[1, 2] == 18.0
+    @test selfcheck(prob) < 1e-9
+    # the rule is per body: one body declaring two relationships still may not use `x(edge)`
+    @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
+end
+
 @testset "several relationships: names are checked" begin
     @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
     @test_throws "neither a scope" mtkcompile(UnknownRelationship(; name = :u))
@@ -425,6 +454,7 @@ end
     @test_throws "declared twice" mtkcompile(Potts.PottsSystem(; name = :dup, kinds = [:medium, :blob],
         lattice = c.lattice, relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = c.sweep))
     @test isequal(mtkcompile(Spring(; name = :s)).edge_vars[:bond], Spring(; name = :s).variables)   # `rest(edge)`: the only one
+    @test_throws "is a variable scope" mtkcompile(CellRelationship(; name = :cr))
 end
 
 function two_kind_blocks()

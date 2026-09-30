@@ -110,6 +110,8 @@ function _relationships(sys::PottsSystem)
     names = [r.name for r in rels]
     for (i, n) in enumerate(names)
         n in view(names, 1:(i - 1)) && throw(ArgumentError("@relationship `$n` is declared twice"))
+        n in SCOPES && throw(ArgumentError("@relationship `$n`: the name is a variable scope " *
+                                           "($(join(SCOPES, ", "))); choose another"))
     end
     edge_vars = Dict{Symbol, Vector{Any}}(n => Any[] for n in names)
     edge_rel = Dict{Symbol, Symbol}()                 # edge variable name → relationship

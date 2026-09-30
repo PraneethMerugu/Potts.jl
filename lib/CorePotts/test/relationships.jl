@@ -237,4 +237,74 @@ end
             @test link_count(L, 2) > 0 && link_count(L, 3) > 0
         end
     end
+
+    # -----------------------------------------------------------------------------------
+    # The checkerboard claim protocol with shared reads (`CPMFunction(…; reads)`)
+
+    @testset "claim protocol: writers exclude readers, readers share" begin
+        # the propose/commit rule on explicit copies (priority, writes, reads): which commit
+        function protocol(copies, ncell)
+            claim = zeros(UInt32, ncell); wclaim = zeros(UInt32, ncell)
+            for (w, W, R) in copies
+                foreach(c -> (CorePotts._claim!(claim, Int32(c), w); CorePotts._claim!(wclaim, Int32(c), w)), W)
+                foreach(c -> CorePotts._claim!(claim, Int32(c), w), R)
+            end
+            return [all(c -> CorePotts._won(claim, Int32(c), w), W) &&
+                    all(c -> CorePotts._unwritten(wclaim, Int32(c), w), R) for (w, W, R) in copies]
+        end
+        # a pure reader below a writer of what it reads must not commit (a stale read) …
+        @test protocol([(UInt32(5), (1,), (2,)), (UInt32(9), (2,), ())], 2) == [false, true]
+        # … and a writer below a reader of what it writes must not either
+        @test protocol([(UInt32(9), (1,), (2,)), (UInt32(5), (2,), ())], 2) == [true, false]
+        @test protocol([(UInt32(5), (1,), (3,)), (UInt32(9), (2,), (3,))], 3) == [true, true]   # shared read
+        # randomized: no committed copy writes what another committed copy writes or reads,
+        # and the top priority always commits
+        rng = Xoshiro(3)
+        bad = 0; stuck = 0; shared = 0
+        for _ in 1:20_000
+            ncell = rand(rng, 2:6); n = rand(rng, 2:6)
+            prios = UInt32.(randperm(rng, 1000)[1:n])
+            copies = [(prios[i], Tuple(rand(rng, 0:ncell, rand(rng, 1:3))), Tuple(rand(rng, 0:ncell, rand(rng, 0:4))))
+                      for i in 1:n]
+            ok = protocol(copies, ncell)
+            for i in 1:n, j in 1:n
+                (i != j && ok[i] && ok[j]) || continue
+                Wi = filter(>(0), collect(copies[i][2]))
+                touched = filter(>(0), [collect(copies[j][2]); collect(copies[j][3])])
+                bad += !isempty(intersect(Wi, touched))
+                shared += !isempty(intersect(filter(>(0), collect(copies[i][3])), filter(>(0), collect(copies[j][3]))))
+            end
+            stuck += !ok[argmax(first.(copies))]
+        end
+        @test bad == 0 && stuck == 0
+        @test shared > 1000                              # readers did share (the test has teeth)
+    end
+
+    @testset "claim protocol in the real propose/commit kernels" begin
+        # one moving site (3, 3) of cell 1 amid cell 2; cell 3 elsewhere is a shared read
+        lat = Lattice((6, 6))
+        σ = fill(Int32(2), 6, 6); σ[3, 3] = 1; σ[6, 6] = 3
+        f = CPMFunction((st, p, prop, ctx) -> -100.0; temperature = (st, p, prop, ctx) -> 1.0,
+            reads = (st, p, prop, ctx) -> (Int32(3),))
+        integ = init(CPMProblem(f, initial_state(σ, Int32[1, 1, 1]), lat, (0, 1), (;)), CheckerboardCPM())
+        color = CorePotts.Color{2}((3, 3), (1, 1), (1, 1))
+        fresh() = (zeros(UInt32, 1), zeros(Int, 1), zeros(UInt32, 3), zeros(UInt32, 3))
+        prio, source, claim, wclaim = fresh()
+        st = deepcopy(integ.state)
+        CorePotts.propose_body!(1, prio, source, claim, wclaim, zeros(UInt32, 1), st, integ.kf, integ.p,
+            integ.ctx, integ.law, integ.key, 0, color, 1)
+        won = prio[1]
+        @test won != 0 && st.σ[source[1]] == 2
+        @test claim == [won, won, won]                  # old, new and the read are all claimed
+        @test wclaim == [won, won, 0]                   # only old and new are written
+        # commit: a higher-priority WRITER of the read cell 3 vetoes the copy …
+        commit(claim, wclaim) = (s = deepcopy(integ.state);
+            CorePotts.commit_body!(1, s, claim, zeros(UInt32, 3), wclaim, zeros(UInt32, 3), prio, source,
+                integ.kf, integ.p, integ.ctx, color, 0, 1); s.σ[3, 3])
+        @test commit([won, won, won + 1], [won, won, won + 1]) == 1
+        # … a higher-priority READER of cell 3 does not (reads are checked against writes only)
+        @test commit([won, won, won + 1], [won, won, 0]) == 2
+        # and losing a written cell still vetoes
+        @test commit([won + 1, won, won], [won + 1, won, 0]) == 1
+    end
 end

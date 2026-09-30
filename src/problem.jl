@@ -98,12 +98,14 @@ function _claims(c::CompiledPottsSystem)
     isempty(c.cluster_terms) && return CorePotts.no_claims
     return _rgf(:((st, p, prop, ctx) -> (CorePotts.cluster_claims(st.cell, prop)...,)))
 end
-# ... and, shared, the link partners of old/new in every relationship (link energies read
-# their centroids; a copy writes only its old/new). Leaving a relationship out would let a
-# concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
+# ... and, shared, the link partners of old/new in every relationship with an edge energy
+# (link energies read their centroids; a copy writes only its old/new). Leaving one out
+# would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
+# Relationships used only by link rules are read on the host between sweeps: no claims.
 function _reads(c::CompiledPottsSystem)
-    isempty(c.relationships) && return CorePotts.no_claims
-    parts = [:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in c.relationships]
+    rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
+    isempty(rels) && return CorePotts.no_claims
+    parts = [:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
     return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
 end
 

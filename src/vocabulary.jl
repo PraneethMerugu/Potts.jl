@@ -434,6 +434,22 @@ struct LinkRule
     every::Int
 end
 link_rule(action::Symbol, r::RelationshipRef; when, every::Integer = 1) = LinkRule(r.name, action, when, Int(every))
+
+"""
+Bind each unscoped edge variable `x(edge)` of one model body to that body's only
+relationship, when the body is built (before `@extend` merges it with others, so a base's
+`rest(edge)` stays its own relationship's). A body declaring several relationships leaves
+them unscoped; `mtkcompile` reports them as ambiguous.
+"""
+function _bind_edge_scope(vars, rels)
+    length(rels) == 1 || return vars
+    r = only(rels).name
+    return map(vars) do x
+        i = info(x)
+        (i.role === :edge && !haskey(i.options, :relationship)) || return x
+        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+    end
+end
 """`new_contact(a, b)`: the pair touches and is not yet linked (the candidates of `@link`)."""
 new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)
