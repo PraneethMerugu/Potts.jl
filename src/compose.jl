@@ -25,7 +25,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     end
     byname(xs, ys) = (seen = Set(info(y).name for y in ys);
         Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
-    return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
+    return _check_primed_names(PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
@@ -38,7 +38,31 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         observed = [_unreplaced(base.observed, sys.observed, o -> info(o.var).name); sys.observed],
         components = unique(c -> c.name, [sys.components; base.components]),
         sweep = sys.sweep, structural = merge(base.structural, sys.structural),
-        sources = merge(base.sources, sys.sources))
+        sources = merge(base.sources, sys.sources)))
+end
+
+"""
+`x′` is the contact-pair value of a site or field variable `x`: no quantity of the system
+(parameter, variable or observed quantity, inherited through `@extend` or not) may carry
+that name as well.
+"""
+function _check_primed_names(sys::PottsSystem)
+    names = Set{Symbol}()
+    for x in Iterators.flatten((sys.parameters, sys.variables, (o.var for o in sys.observed)))
+        i = info(x)
+        push!(names, i.name)
+        v = get(i.options, :vector, nothing)
+        v === nothing || push!(names, v)
+    end
+    for n in names
+        s = string(n)
+        endswith(s, '′') || continue
+        x = Symbol(chop(s))
+        _is_site_quantity(sys, x) && throw(ArgumentError(
+            "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
+            "site variable `$x`; rename one of them"))
+    end
+    return sys
 end
 
 """Items of `base` whose key no item of `new` shares."""

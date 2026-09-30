@@ -2042,3 +2042,12 @@ end
         kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts.B.target)],
         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)))
 end
+
+# an extension cannot declare `x′` beside an inherited site variable `x` (nor the reverse)
+@testset "P6.0e `x′` stays reserved through @extend" begin
+    ext(body) = Base.invokelatest(eval(Potts._potts_model(:PrimeClash, body, @__MODULE__)); name = :pc)
+    msg = r"`cue′` is declared, but `cue′` already means the contact-pair value of the site variable `cue`"
+    @test_throws msg ext(quote @extend cue, A = b = SiteContactsBase(); @parameters cue′ = 2.0 end)
+    @test_throws msg ext(quote @extend cue, A = b = SiteContactsBase(); @variables cue′(cell) = 0.0 end)
+    @test ext(quote @extend cue, A = b = SiteContactsBase(); @parameters cue2 = 2.0 end) isa Potts.PottsSystem   # control
+end
