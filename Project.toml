@@ -19,10 +19,12 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [weakdeps]
 DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
 [extensions]
 PottsDynamicQuantitiesExt = ["DynamicQuantities", "TermInterface"]
+PottsModelingToolkitExt = "ModelingToolkit"
 
 [sources]
 CorePotts = {path = "lib/CorePotts"}
@@ -31,6 +33,7 @@ CorePotts = {path = "lib/CorePotts"}
 Adapt = "4"
 CorePotts = "0.3"
 KernelAbstractions = "0.9.42"
+ModelingToolkit = "11"
 SciMLBase = "3"
 DynamicQuantities = "1"
 ModelingToolkitBase = "1"

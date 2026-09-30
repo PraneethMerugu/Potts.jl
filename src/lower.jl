@@ -152,7 +152,8 @@ function _integrals(sys::PottsSystem)
     out = Any[]
     xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
         (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature]
+        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
+        (x for b in sys.discrete for x in b.next)...]
     for x in xs
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
@@ -166,7 +167,7 @@ end
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
 _history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
     (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-    (r.when for r in sys.link_rules)...])
+    (r.when for r in sys.link_rules)..., (x for b in sys.discrete for x in b.next)...])
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
     for x in xs

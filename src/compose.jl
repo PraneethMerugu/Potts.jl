@@ -45,6 +45,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         link_rules = [base.link_rules; sys.link_rules],
         observed = [_unreplaced(base.observed, sys.observed, o -> info(o.var).name); sys.observed],
         components = unique(c -> c.name, [sys.components; base.components]),
+        discrete = unique(b -> b.name, [sys.discrete; base.discrete]),
         sweep = sys.sweep, structural = merge(base.structural, sys.structural),
         sources = merge(base.sources, sys.sources)))
 end
@@ -86,7 +87,8 @@ _target_key(u::Update) = (u.phase, string(u.eq.lhs))
 _draw_indices(xs) = (out = Int[]; foreach(x -> _walk_all(y -> (iscall(y) && operation(y) === random_uniform &&
     push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))), x), xs); out)
 _random_exprs(s::PottsSystem) = Any[(u.eq.rhs for u in s.updates)..., (eq.rhs for eq in s.equations)...,
-    (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules)..., (r.when for r in s.link_rules)...]
+    (d.when for d in s.divisions)..., (r for d in s.divisions for (_, r) in d.rules)..., (r.when for r in s.link_rules)...,
+    (x for b in s.discrete for x in b.next)...]
 function _renumber_draws(sys::PottsSystem, base::PottsSystem)
     mine = _draw_indices(_random_exprs(sys))
     theirs = _draw_indices(_random_exprs(base))

@@ -86,6 +86,50 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
     end
 end
 
+# P6.0k: discrete components' tick phases (kind-gated, fused with couplings, clocked, model
+# scope) are type stable, allocation free and, in Float32, free of Float64.
+@potts_model QADiscreteKinds begin
+    @kinds medium A B
+    @variables inp(cell) = 0.0
+    @components cells(A) tg = toggle
+    @components cells(B) smp = sampler
+    @equations smp.dsig ~ inp > 0.5
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "QA: discrete components ($label, $T)" for (label, make) in (
+        ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
+        ("hybrid", () -> (DiscreteHybrid(; name = :h), [ownership => _discrete_blocks(2), kind => [1, 1]])),
+        ("model clock", () -> (discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
+            [ownership => _discrete_blocks(3), kind => [1, 1, 1]]))),
+    T in (Float64, Float32)
+    sys, op = make()
+    prob = PottsProblem(sys, op, (0, 100); T)
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        integ = init(prob, alg; save_start = false, save_end = false)
+        @test minimum(_qa_warm_allocated(integ) for _ in 1:5) == 0
+        @test_opt target_modules = (CorePotts, Potts) step!(integ)
+    end
+    integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
+    step!(integ)
+    c = mtkcompile(sys)
+    for b in c.discrete
+        ex = Potts._tick_expr([b], T, c.gather_names, b.scope)
+        fn = Core.eval(_QA_MOD, ex)
+        args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :
+               (integ.state, integ.p, integ.ctx, integ.key, 1)
+        types = Tuple{typeof.(args)...}
+        @test isempty(JET.get_reports(Base.invokelatest(JET.report_opt, fn, types; target_modules = (CorePotts, Potts))))
+        @test isempty(Base.invokelatest(check_allocs, fn, types))
+        if T === Float32
+            @test _qa_float64_literals(ex) == 0
+            @test !occursin(r"\bdouble\b", sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types))
+        end
+    end
+end
+
 # D-051 R0: no model- or author-named code in the core packages. Identifiers, macro names,
 # symbols and non-doc strings are scanned (comments and docstrings may cite sources);
 # identifiers are split on `_` and camel case. Exceptions live in `privileged_allow.txt`.
@@ -176,6 +220,14 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_describe,           # statement labels for unit error messages
     # --- PottsDynamicQuantitiesExt -> MTK
     :get_unit,            # MTK's unit-inference function the extension extends; not public
+    # --- Potts -> MTKBase: discrete components (P6.0k). The clock of a compiled discrete
+    # system is only available as this variable metadata; no public accessor exists.
+    :VariableTimeDomain,  # metadata key holding a discrete variable's clock
+    :IntegerSequence,     # the clock of `ShiftIndex(t, 0)` (one tick per step, no period)
+    # --- PottsModelingToolkitExt -> MTK/MTKBase (gap G1; checked only when the extension is
+    # loaded): MTK's discrete-compilation hook and the MTKBase compiler it re-enters.
+    :discrete_compile_pass, :with_reversible_transformation, :UnhackSystemTransformation,
+    :__mtkcompile, :AbstractSystem,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (

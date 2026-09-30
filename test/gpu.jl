@@ -219,3 +219,28 @@ end
         @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
     end
 end
+
+# P6.0k: the frozen Boolean-network acceptance file, whose Metal testset runs only where Metal
+# is loaded (here), and discrete components with couplings and model scope on the device.
+module P60kOnMetal
+using Test, Potts
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0k_boolean_network.jl"))
+end
+
+@testset "P6.0k discrete components on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ = _discrete_blocks(2)
+    prob = PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 8);
+        T = Float32)
+    cpu = solve(prob, CheckerboardCPM(; proposal = Moore(1)); saveat = 0:8)
+    gpu = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 0:8)
+    for n in (:tg₊dA, :smp₊dB, :seen)
+        @test [Array(getproperty(u.cell, n)) for u in gpu.u] == [getproperty(u.cell, n) for u in cpu.u]
+    end
+    @test [Array(u.cell.rel₊yx) for u in gpu.u] ≈ [u.cell.rel₊yx for u in cpu.u] rtol = 1e-6
+    σ3 = _discrete_blocks(3)
+    mp = PottsProblem(discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model), [ownership => σ3, kind => [1, 1, 1]], (0, 8);
+        T = Float32)
+    sol = solve(mp, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 0:8)
+    @test [Array(u.model.ctr₊dn)[1] for u in sol.u] == [3.0f0 * (t ÷ 2) for t in 0:8]
+end
