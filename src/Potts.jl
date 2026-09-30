@@ -8,9 +8,12 @@ Models are authored as a global Hamiltonian with `@potts_model` (see
 module Potts
 
 using Adapt: Adapt
+# The bare `using CorePotts` only backs the re-export loop below (`export $name` needs each
+# exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
+# explicitly on the next line (ExplicitImports, P6.0j).
 using CorePotts
+using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore, init, saturating, saturating_linear
 using KernelAbstractions: KernelAbstractions
-using CorePotts: CorePotts, Footprint, Lattice, Periodic, Closed, Moore, saturating, saturating_linear
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions

@@ -882,3 +882,27 @@ out-of-domain site or a closed lattice edge. A domain frame that would be empty 
 - **Reproducibility.** Each FULL replicate of reproduction 09 draws its own aggregate
   (`seed = replica`).
 
+
+## D-064 ExplicitImports in every package; Potts keeps the bare `using CorePotts` (2026-09-30, P6.0j)
+
+- **Checks.** The QA of Potts, CorePotts and MakiePotts runs five ExplicitImports checks:
+  no implicit imports, explicit imports are public, no stale explicit imports, qualified
+  accesses go through owners, and qualified accesses are public.
+  - The first four are the acceptance checks. The public-access check runs with a reviewed
+    allowlist, and every allowlist entry is commented.
+  - The Potts QA loads DynamicQuantities, so `PottsDynamicQuantitiesExt` is always checked.
+- **The bare `using CorePotts`.** Potts keeps it, because the loop over `names(CorePotts)`
+  re-exports each name, and every name must resolve inside Potts.
+  - Every CorePotts name that Potts itself uses is also imported explicitly.
+  - The reviewer checked that removing one from the explicit list fails
+    `check_no_implicit_imports`, so the bare `using` hides nothing.
+- **Owners.** Qualified accesses go through the modules that own the names:
+  `SymbolicIndexingInterface.getname`, `Symbolics.rename`, and `TermInterface.maketerm` and
+  `TermInterface.metadata`.
+  - Each is the same function object as the old path, so behaviour is unchanged.
+  - TermInterface is a weakdep and a second trigger of `PottsDynamicQuantitiesExt`. It is
+    always loaded through SymbolicUtils, so the extension loads with DynamicQuantities alone.
+- **Allowlists match names, not modules.** A future non-public `Foo.zeros` would pass
+  silently. Reviewers check new entries by hand.
+- **Deferred.** Declaring CorePotts's hooks `public` would shrink the Potts allowlist. It
+  is not done yet.

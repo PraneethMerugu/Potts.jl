@@ -17,7 +17,7 @@ end
 
 _mtkname(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic && info(u) === nothing ?
                                  (try
-                                     ModelingToolkitBase.getname(u)
+                                     SymbolicIndexingInterface.getname(u)
                                  catch
                                      nothing
                                  end) : nothing)
@@ -69,14 +69,14 @@ function _bind_components(sys::PottsSystem)
                                                         (w = _unwrap(v); SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w))
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         for u in ModelingToolkitBase.unknowns(cs)
-            nm = Symbol(comp.name, :₊, ModelingToolkitBase.getname(u))
+            nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(u))
             v = variable(only(Symbolics.@variables $nm(t)), comp.domain === :model ? :model : :cell; default = value(u))
             push!(vars, v)
             names[nm] = _unwrap(v)
             local_sub[_unwrap(u)] = _unwrap(v)
         end
         for p in ModelingToolkitBase.parameters(cs)
-            nm = Symbol(comp.name, :₊, ModelingToolkitBase.getname(p))
+            nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(p))
             push!(coupleable, nm)
             if haskey(couplings, nm)
                 names[nm] = _unwrap(couplings[nm])
@@ -90,7 +90,7 @@ function _bind_components(sys::PottsSystem)
         obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(cs))
         expand(x) = _fixpoint(y -> Symbolics.substitute(y, obs; fold = Val(false)), _unwrap(x))
         for o in ModelingToolkitBase.observed(cs)          # `comp.y` for an observed y
-            names[Symbol(comp.name, :₊, ModelingToolkitBase.getname(o.lhs))] =
+            names[Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(o.lhs))] =
                 _unwrap(Symbolics.substitute(expand(o.rhs), local_sub; fold = Val(false)))
         end
         for eq in ModelingToolkitBase.equations(cs)

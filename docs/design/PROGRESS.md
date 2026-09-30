@@ -1360,3 +1360,18 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review:** 3 rounds. Round 2 found that Merks 2008 p.9 answers the Fig 10 lattice
   question; that answer is recorded in spec 01 §3.3 row 10 and §8 A-10. It also corrected
   the first author to Ismael Fortuna.
+
+## 2026-09-30 — P6.0j merged: ExplicitImports in Potts, CorePotts and MakiePotts (D-064)
+
+- **Checks:** five ExplicitImports checks in each package's QA, the extension included.
+  Negative controls failed as expected, run by both the implementer and the reviewer.
+- **Owner fixes:** `SymbolicIndexingInterface.getname`, `Symbolics.rename` and
+  `TermInterface.maketerm`/`metadata`. Each is the same function object as before.
+  TermInterface is now a weakdep of Potts and a second trigger of the units extension.
+- **Suites on the merged tree:** CorePotts (QA on), PottsModels, MakiePotts, docs, and
+  Potts on Metal all pass.
+- **Performance gate:** not run. The changes are import lines and qualified names that
+  resolve to identical function objects, so no generated code changes. The machine was
+  also busy with P6.0f.
+- **Review:** 1 round. Nits N3 (compat order) and N4 (testset name) were fixed at merge.
+  N1 (allowlists match by name only) is recorded in D-064.

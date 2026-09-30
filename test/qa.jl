@@ -135,3 +135,58 @@ end
         @test all(n -> isempty(_denied(string(n))), ns)
     end
 end
+
+# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name Potts uses is
+# imported explicitly and by its owner. The allowlists name each non-public access the
+# package genuinely needs; add to them only by review, with the reason.
+using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
+    check_no_stale_explicit_imports, check_all_qualified_accesses_via_owners, check_all_qualified_accesses_are_public
+
+# ExplicitImports analyses a package's loaded extensions with it: load DynamicQuantities
+# so that `PottsDynamicQuantitiesExt` is always checked, whatever ran before.
+using DynamicQuantities: DynamicQuantities
+
+const POTTS_NONPUBLIC_QUALIFIED = (
+    # --- Potts -> CorePotts internals. CorePotts is Potts's own numerical layer (same
+    # monorepo, path source, co-versioned); the symbolic layer generates code against its
+    # internal hooks.
+    :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
+    :RelationSpec,        # relation dispatch in the `Around` vocabulary
+    :_run_phases,         # runs the `at_init` phases when a problem is initialised
+    :_snapshot,           # host copy of a device state for the adaptive ODE phase
+    :adjacency_name,      # field name of a relation's adjacency store
+    :always,              # the no-constraint default
+    :no_claims,           # the no-claim-set default
+    :no_divide_rule,      # the no-division default
+    :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
+    :remake_parameters,
+    :remake_state,
+    :set_parameter,       # parameter-update hook Potts extends
+    :stream_id,           # named RNG stream for `draw` in generated code
+    # --- Potts -> Base: no public equivalent
+    Symbol("@__doc__"),   # attaching docstrings to macro-generated components
+    :setindex,            # non-mutating tuple `setindex`
+    # --- Potts -> Symbolics
+    :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
+    # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
+    # Potts's own symbolic operators their unit rules, so it reads Potts internals.
+    :at, :at2, :history_lag, :cell_integral, :Δ, :cell_centroid, :copy_displacement,
+    :random_uniform, :gather, :population,   # operators whose `get_unit` rules it defines
+    :_check_units,        # the unit-check hook `mtkcompile` calls, defined by the extension
+    :_describe,           # statement labels for unit error messages
+    # --- PottsDynamicQuantitiesExt -> MTK
+    :get_unit,            # MTK's unit-inference function the extension extends; not public
+)
+# Names imported with `using M: x` that are not public in `M`.
+const POTTS_NONPUBLIC_EXPLICIT = (
+    :Split, :info,                # ext -> Potts internals (system splitting, model info)
+    :get_unit, :ValidationError,  # ext -> MTK's unit-inference API; not declared public
+)
+
+@testset "QA: ExplicitImports (Potts)" begin
+    @test check_no_implicit_imports(Potts) === nothing
+    @test check_all_explicit_imports_are_public(Potts; ignore = POTTS_NONPUBLIC_EXPLICIT) === nothing
+    @test check_no_stale_explicit_imports(Potts) === nothing
+    @test check_all_qualified_accesses_via_owners(Potts) === nothing
+    @test check_all_qualified_accesses_are_public(Potts; ignore = POTTS_NONPUBLIC_QUALIFIED) === nothing
+end
