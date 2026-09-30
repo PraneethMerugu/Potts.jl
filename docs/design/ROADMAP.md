@@ -60,17 +60,18 @@ numbers that must hold). Tick with `[x] <commit> <date>` when merged.
 
 - [ ] (partial, D-038: MTK components as batched cell ODEs, Euler/RK4, CPU+Metal; model-scope ODEs and components; host adaptive/stiff integration via `Adaptive(alg)` done; DAE and MethodOfLines pending) **M4.1** `ODEComponent`/`DAEComponent` init-once integrators; batched per-cell ODEs; scheduling phases; `MethodOfLinesComponent`; Metal via `EnsembleGPUKernel`.
   Accept: Akeeb MTK-bridge targets bytewise vs discrete clock (as in `SCDPotts/research`).
-- [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity; Akeeb invasion ported, statistical parity vs SCDPotts pending) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI.
+- [ ] (started 2026-09-29: package + Graner–Glazier, Wortel Act, Merks, OpenVT with reference parity; Akeeb invasion ported, statistical parity vs SCDPotts pending) **M4.2** `lib/PottsModels`: Wortel, Merks, OpenVT, Graner–Glazier, Wortel-Act 150², Akeeb leader/follower; tutorials; tested in CI. The published-model subset (Graner–Glazier/Osborne sorting, Merks 2006/2008, Akeeb) follows `research/model-specs/README.md` (unified features G1–G21, per-model decisions §4) and ships one reproduction tutorial each per `research/model-specs/TUTORIAL_TEMPLATE.md`.
   Accept (D-048): per model, brute-force ΔH, independent drive/effect checks, invariants
   and mechanism tests with negative controls; TTFX table in docs.
 
 - [ ] **M4.3** extended model library per `research/legacy-spec-adjudication.md` §3 "Models" (Mombach 3D, Shirinifard CNV, Wang 2025, OpenVT categories, Jiang 2005, Bauer 2007/2009, Zajac, Jafari Nivlouei, Starruß, Fortuna, Jiang 1999 foam, FBCA via COBREXA, hard-model set). Each: ordinary tests per D-048, plus the paper's qualitative results as mechanism tests.
+  The 12 published models (Merks, Jiang 1999 foam, Bauer 2009, Jiang 2005, Bauer 2007, FBCA, sorting, Akeeb, item 11 = Jafari Nivlouei 2021, Zajac, Starruß, Fortuna/Thomas/Dal-Castel) are specified in `research/model-specs/` and built in the order of its README §6; each ships a reproduction tutorial per `research/model-specs/TUTORIAL_TEMPLATE.md` with ensemble validation against pre-registered tolerances.
 
 - [ ] (PIFF done 2026-09-29; MorpheusML pending) **M4.4** importers: PIFF (import/export) and MorpheusML (EzXML.jl → Symbolics); run the importable part of the Morpheus model repository as a regression corpus.
 
 ## Phase 5 — Slim, docs, cut-over
 
 - [x] ~~**M5.1** LocalMath slimming (INTERNALS §3); TTFX benchmark for 1/4/8/32-stage programs.~~ Withdrawn by D-040: `lib/LocalMath` removed from the monorepo.
-- [ ] **M5.2** docs site (Learn / Published models / API per package).
+- [ ] **M5.2** docs site (Learn / Published models / API per package). "Published models" renders the Literate reproduction tutorials `lib/PottsModels/reproductions/<nn>_<model>.jl` (structure: `research/model-specs/TUTORIAL_TEMPLATE.md`), one per published model.
 - [ ] **M5.2a** MakiePotts: vector/arrow channels, relationship overlays, lineage, tensor ellipses, true-3D volume, WGLMakie, DataInspector, rerun controller.
 - [ ] **M5.3** cut-over per AUTONOMY.md §5; registration; archive legacy repos; `PottsStudies` repo for SCD material.
