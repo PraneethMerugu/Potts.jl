@@ -238,11 +238,12 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 5 — Fortuna (14a/14b), 3D
 
-- [ ] **P6.5a0** Liveness survey (D-065 Q6): CompuCell3D, Morpheus and Artistoo death,
+- [x] (merge, 2026-09-30; D-066) **P6.5a0** Liveness survey (D-065 Q6): CompuCell3D, Morpheus and Artistoo death,
   id reuse and exclusion semantics. The output is `research/liveness-survey.md` and a
   decision amending D-035/D-037, with performance deviations recorded.
 - [ ] **P6.5a** R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
-  explicit liveness per the P6.5a0 decision; claim widening, with checkerboard validated
+  liveness per D-066 (alive ⇔ volume > 0; `birth` serial; `CellRef` references cleared
+  at allocation boundaries; exact self-check credits); claim widening, with checkerboard validated
   statistically against sequential (D-065 Q7).
 - [ ] **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
   transition > divide > create); `@convert`; ownership hooks fire `@on_copy` /

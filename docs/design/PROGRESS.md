@@ -1392,3 +1392,18 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review:** 1 round. The blocker was that the approved §4 rows had been overwritten; it
   was resolved by maintainer approval.
 - **Holds:** P6.1c and P6.2b are held for the V-target audit.
+
+## 2026-09-30 — P6.5a0 merged: liveness survey; D-066 adopted
+
+- **Survey:** CompuCell3D 3.7.9 and 4.9, Morpheus 2.4.1 and Artistoo, at pinned commits.
+  Citations were verified by two reviewers.
+- **D-066:** a cell is alive exactly while it owns a site.
+- **Deviations:**
+  - X1: slot reuse, measured. At 16× capacity, Akeeb checkerboard is +16 % and
+    sequential +5 %, and every growth allocates in a warm MCS.
+  - X2: a cell is born only when it receives a site. Signed off by the maintainer.
+  - X3: links are dropped at the next boundary. Not measured.
+- **`retain_empty`:** dropped (maintainer).
+- **Akeeb seeding:** handed to the P6.2b audit.
+- **Review:** 3 rounds.
+- **Found:** the link NaN freeze, now P6.0l.

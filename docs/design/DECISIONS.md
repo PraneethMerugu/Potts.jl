@@ -964,3 +964,129 @@ approved. The maintainer approved both changes in the coordinator session on 202
   maintainer's decision relayed verbatim by the models-and-publications session: "leave
   them as uncommitted references in the local repo". The maintainer chose untrack over
   rewriting history. Commit 6ec712a still contains batch 1.
+
+## D-066 Cell liveness is the standard CPM one: alive ⇔ owns a site (2026-09-30, P6.5a; maintainer signed off 2026-09-30 on X2 and on dropping retain_empty; amends D-035, D-037; replaces D-053 item 6's semantics)
+
+Survey: `research/liveness-survey.md` (CompuCell3D 3.7.9/4.9, Morpheus 2.4.1, Artistoo).
+D-065 Q6 authorises adopting the standard behaviour and keeping our faster mechanism
+where the standard costs measurable warm-MCS time or allocations. The maintainer confirms
+only the **need-based** items: X2, and dropping D-053 item 6's `retain_empty`/explicit
+liveness.
+
+Standard: a cell dies at once when it loses its last site or is removed; a dead cell
+leaves every energy, population, iteration, link and plot; the last-site copy pays the
+full volume ΔH; there is no "dead but present" state.
+
+1. **Alive** ⇔ the cell owns at least one site: `alive(c) ≡ volume[c] > 0`. `alive` is a
+   read-only built-in.
+   - **Birth** happens in one of three ways:
+     - the initial state;
+     - a division daughter that receives at least one site;
+     - `@create`/`@convert` (R8), which allocate and paint in one host routine.
+     A daughter or created cell that receives no site is not born, and its slot stays
+     free.
+   - **Death** happens when a copy takes the last site (at once); when a lifecycle rule
+     removes the cell (its sites go to medium or to `ref`); or when a conversion takes its
+     last site. Death is terminal for (slot, generation).
+   - There is no dying state and no empty-but-alive state. Morpheus-style shrinkage is a
+     `@transition` to a kind with V₀ = 0 plus `@remove … when volume <= n`.
+   - D-053 item 6's `retain_empty`/explicit liveness is dropped (need-based: no model
+     needs it, and it would change Fortuna's results; survey §5).
+2. **Deviations** (survey §4.1):
+
+   | # | Standard | Ours | Kind | Reason |
+   |---|---|---|---|---|
+   | X1 | Monotone ids | Slot reuse + `generation`; monotone `birth` shown to users | Performance, measured | A dead slot costs ≈ 3.0 ns/MCS (checkerboard), ≈ 1 ns (sequential). Akeeb at 16× capacity: +16.3 % / +5 %. Every capacity growth allocates in a warm MCS |
+   | X2 | Unpainted live cells (created cells, empty division children) | None: created and divided cells must receive a site to be born | Need-based, unmeasured; **signed off by the maintainer 2026-09-30** | Keeps liveness = site ownership, with no flag or emptiness checks. The only reference-model occurrence is Akeeb's seeding artefact |
+   | X3 | Links dropped at the killing copy (CC3D FPP) | Dropped at the next boundary; dead partner skipped meanwhile | Performance, unmeasured | A drop in the sweep is a hot-loop write that races on the checkerboard. No energy effect |
+
+   The total-H convention (item 4) is not a deviation: no tool has a total H.
+3. **Ids (amends D-035).**
+   - **Slots.** Reused lowest-first, with `generation` incremented. A slot is free when:
+     - it is not alive;
+     - it had no event this MCS;
+     - it is not the root of a cluster with alive members (as now).
+   - **`id`** in model expressions stays **the slot**: the `:cell` index sort, so `x[id]`,
+     the cluster env's `:id => r`, and `cluster == id` are unchanged.
+   - **`birth`** is a separate read-only built-in: a monotone, never-reused Int32 serial.
+     - Its counter `next_birth` is stored in the state and checkpointed. It is not max+1,
+       which would reissue a dead cell's serial.
+     - Initial cells get 1:n.
+     - The allocator (lifecycle plan and R8 routine) assigns `next_birth` and increments
+       it.
+     - `birth` is excluded from the daughter column copy (`lifecycle.jl:336-339`, like
+       `generation`).
+     - `with_capacity` grows it (new slots 0).
+     - Models without births have no column (`birth ≡ slot`).
+   - **User-visible outputs map slot → `birth`:**
+     - observables and SII `id`;
+     - `cluster`, as `birth[root]`;
+     - plots and id-based tracking;
+     - PIFF export (`write_piff(…; ids = birth)`).
+   - **Saved solutions** store σ with slot ids and save the `birth` column alongside it
+     (4 × capacity bytes per save, no per-site work). The σ → birth map is applied lazily
+     on read, at O(sites) per accessed frame.
+4. **Energies (amends D-037).**
+   - ΔH is unchanged. The last-site copy pays the full cell-term change to the empty state.
+   - `total_energy` sums:
+     - cell terms over alive cells;
+     - cluster terms over roots `r` (`cluster[r] == r`) of clusters with at least one
+       alive member (a copy-killed root still names its cluster until `_fix_clusters!`);
+     - edge terms over links whose two ends are both alive.
+     A dead cell contributes nothing.
+   - **Self-check**, for a copy whose old owner `o` it kills:
+
+         ΔE(copy) == H(after) − H(before) + E_cell(o, empty state)
+                     [+ E_cluster(cluster[o], empty state), if that cluster has no alive member left]
+                     + Σ_{n linked to o} E_edge(o, n; d(centroid_o before the copy, centroid_n after the copy))
+
+     - "Empty state" is o's tracked quantities after the copy (volume 0, surface 0, …).
+     - The edge credit exists because `centroid_shift` returns 0 for a cell going to V = 0
+       (`geometry.jl:146`). `link_delta` therefore leaves o's edges at o's pre-copy
+       centroid, while H(after) drops them.
+     - The check stays exact.
+5. **Folds, geometry, contacts, links, references.**
+   - Folds, counts, cell ODEs and updates, triggers, observables and plots range over
+     alive cells (unchanged: `volume > 0`).
+   - Centroid, position, shape and `major_length` are 0 for dead slots (unchanged).
+   - The contact graph is built from σ.
+   - **References** are cell variables of a declared reference type (e.g. `partner::CellRef`
+     in `@variables`), so the allocator can find them.
+     - Daughters copy reference variables like every other cell variable. A `divide!` rule
+       may reset them.
+     - Dereferencing a dead referent reads as `ref = 0`: kind 0 (medium), volume 0, cell
+       variables at their defaults. It costs one `volume[ref]` load and a select, in
+       reference-reading code only.
+     - So `J[kind, kind[partner]]` silently uses the medium row once the partner is dead.
+       Guard with `alive(partner)` where that matters.
+   - **Links:** `link_delta` and `total_energy` skip a partner with `volume == 0`. This
+     reuses `centroid`'s load and fixes the NaN freeze (P6.0l).
+   - **Boundaries.** Dead cells' links are dropped, references to them are reset to 0, and
+     dead roots are released:
+     - (a) in the lifecycle plan of an event MCS;
+     - (b) in R8's shared `@create`/`@convert`/`@retire` host routine (it runs every MCS
+       in 14a);
+     both before any id is allocated, so a reference never aliases a new cell;
+     - (c) at the start of each `@link`/`@unlink` host phase, before links are created,
+       so a stale degree or `linked` never blocks creation.
+     A relationship with none of these never creates links; the skip suffices there.
+6. **`no_extinction`** stays opt-in (D-037; CC3D and Artistoo). Morpheus's always-on veto
+   would break the Graner–Glazier λ scan.
+   - `no_extinction(k…)` forbids a copy that takes the last site of a cell of kinds k…
+     (default: all cell kinds), i.e. `old == 0 || volume[old] > 1 || kind[old] ∉ K`.
+   - Used by 10 and 13; offered to 05 and 07 (matrix, fluid); added by Morpheus ports.
+   - AUTHORING §5 is corrected.
+7. **Reproductions** (survey §5):
+   - 14a: FRONT is created by `@convert` and dies when it empties, losing its target as in
+     CC3D. The port counts FRONT deaths.
+   - 14c: a LAMEL death ends the run.
+   - 06: the first dying cell transitions into the necrotic-core kind.
+   - 13: `no_extinction` on segments.
+   - Spec edits: survey §5.
+
+Why: the standard behaviours are already ours (immediate death, full ΔH, exclusion
+through `volume > 0`) or free (the `link_delta` skip, `birth`, host-side cleanup). The one
+measurably costly standard, monotone slots, is kept only in its user-visible form.
+
+
+**Sign-off.** The maintainer approved both need-based items in the coordinator session on 2026-09-30: X2 (a cell must receive a site to be born) and dropping D-053 item 6's `retain_empty` and explicit liveness. The fallback `retain_empty` design stays in `research/liveness-survey.md` §6.2. Akeeb's seeding (V-A1) is handed to the P6.2b V-target audit.
