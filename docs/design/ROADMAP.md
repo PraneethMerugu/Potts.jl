@@ -239,6 +239,11 @@ Every item's acceptance also includes the standing checks:
     edge terms.
   - `integral` reads the previous MCS's site values when they are written in the same
     `@after_mcs`. Document the ordering, or fix it.
+- [ ] **P6.0m3** `s ~ integral(Pre(w))` in `@after_mcs` fails with `FieldError: no field
+  integral_…` (pre-existing on 8b14051; found by the P6.0m reviewer, `/tmp/p60m/rv1/probe_pre.jl`).
+  The start-of-after integral refresh also runs before the Pre-snapshot `CopyPhase`.
+  - Accept: an integral of a `Pre` operand reads the pre-MCS values.
+  - Accept: a regression test covering both orders.
 - [ ] **P6.0m2** (D-075, breaking batch part 1) `CPMProblem → PottsProblem`, supertype
   unchanged, no alias; `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`. Every
   package, test, benchmark and tutorial is updated in the same change. Accept: all suites
