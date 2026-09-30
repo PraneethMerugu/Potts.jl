@@ -827,7 +827,7 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     Cells left with no site are dropped. Partly covered cells keep what remains, which can
     be disconnected pieces: `layout` warns, naming the cell, when the remaining sites are
     not connected under the lattice neighbourhood (linear time; cells still a box are
-    skipped).
+    skipped, and the lattice-sized visited array is allocated only for a flood fill).
   - `layout(l, dims)`: `dims` means a closed square lattice with `Moore(1)`. For a
     hexagonal, periodic, domain or non-Moore lattice pass the `PottsSystem` (or
     `CompiledPottsSystem`): the layouts use its boundaries, neighbourhood, domain and

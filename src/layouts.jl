@@ -309,7 +309,8 @@ end
 # One pass records each cut cell's first site, site count and bounding box in dense per-cell
 # buffers; a cell that is still a full box is connected (every neighbourhood holds the unit
 # axis steps) and skipped; the rest are flood-filled, stamping `visited` with the cell id so
-# it never needs a reset. O(sites).
+# it never needs a reset. O(sites). `visited` (lattice-sized) is allocated only when the
+# first cell needs a flood fill, so an overlay whose cut cells are all boxes skips it.
 function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
     K = length(kinds)
     iscut = falses(K)
@@ -336,12 +337,13 @@ function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
     clat = core_lattice(lat)
     offs = CorePotts.relation(lat.neighborhood, clat).offsets
     units = all(d -> all(s -> ntuple(k -> Int32(k == d ? s : 0), N) in offs, (-1, 1)), 1:N)
-    visited = zeros(Int32, size(σ))
+    visited = Array{Int32, N}(undef, ntuple(_ -> 0, N))    # lazily lattice-sized
     stack = Int[]
     li = LinearIndices(σ)
     for c in sort!(collect(cut))
         ncount[c] == 0 && continue
         units && ncount[c] == prod(hi[c] .- lo[c] .+ 1) && continue      # still a box
+        isempty(visited) && (visited = zeros(Int32, size(σ)))
         visited[first_site[c]] = c
         push!(stack, first_site[c])
         reached = 1

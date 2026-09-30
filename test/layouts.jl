@@ -375,6 +375,23 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     t = @elapsed layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299), kinds = [:b])),
         (300, 300))
     @test t < 5
+    # P6.1a4: the lattice-sized `visited` array is allocated only for a flood fill. Every
+    # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
+    # buffers (4096 cells), far below the 80³ Int32 array (2 MB).
+    lat = Potts.lattice_spec((80, 80, 80); boundary = Closed())
+    σ, kinds = zeros(Int32, lat.dims), Any[]
+    Potts.paint!(σ, kinds, Tiling((5, 5, 5); kinds = [:a]), lat)
+    Potts.paint!(σ, kinds, Frame(:w; width = 3), lat)
+    cut = Set{Int32}(1:(length(kinds) - 1))
+    Potts._warn_split(σ, kinds, cut, lat)
+    bytes = @allocated Potts._warn_split(σ, kinds, cut, lat)
+    @test bytes < sizeof(Int32) * 80^3 ÷ 4
+    # … and a genuinely split cell among them still warns (and allocates the array)
+    σ2 = copy(σ)
+    c = σ2[6, 6, 6]
+    σ2[6:10, 6:10, 8] .= 0                       # a medium slab through tile `c` = (6:10)³
+    @test_logs (:warn, r"split cell") Potts._warn_split(σ2, kinds, cut, lat)
+    @test (@allocated Potts._warn_split(σ2, kinds, cut, lat)) >= sizeof(Int32) * 80^3
 end
 
 @testset "layouts reproduce an existing state's geometry" begin
