@@ -1345,3 +1345,18 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review:** 2 rounds.
 - **Peer:** tutorial rows 109–110 and one `##` comment await ratification by the peer.
 
+
+## 2026-09-30 — P6.0i merged: author question batch 1 (drafts, not sent)
+
+- **Letters:** 8 files under `docs/design/research/author-questions/`, with 59 questions in
+  all. 31 are blocking (30 distinct) and 11 are on HOLD.
+- **Sending:** the maintainer sends them personally. Nothing was sent, and the letters
+  carry no contact details.
+- **Before sending:** do the pre-send checklist in README.md. It lists the sources to
+  obtain (Document S1 of Biophys J 2020 and the nanoHUB gltcellcrawl code,
+  Instructions_To_Run.pdf, ACRI 2018, the Dal-Castel version of record, Chaste 2017.1 and
+  Merks 2006 supplementary). Then remove the [HOLD] tags, revise the context sentences
+  that depend on those checks, and confirm the spelling of Akeeb's first name.
+- **Review:** 3 rounds. Round 2 found that Merks 2008 p.9 answers the Fig 10 lattice
+  question; that answer is recorded in spec 01 §3.3 row 10 and §8 A-10. It also corrected
+  the first author to Ismael Fortuna.

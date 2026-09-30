@@ -143,7 +143,7 @@ Every item's acceptance also includes the standing checks:
     reviewed allowlist), `check_no_stale_explicit_imports` and
     `check_all_qualified_accesses_via_owners` pass in each package's QA.
   - Negative control: a deliberate implicit import fails the check.
-- [ ] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
+- [x] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
   README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
   send.
 
