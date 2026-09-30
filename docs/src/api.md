@@ -20,3 +20,10 @@ Private = false
 Modules = [PottsModels]
 Private = false
 ```
+
+## PottsModels.Analysis
+
+```@autodocs
+Modules = [PottsModels.Analysis]
+Private = false
+```

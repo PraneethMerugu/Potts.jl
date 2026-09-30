@@ -842,6 +842,17 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     of an out-of-domain site or a closed lattice edge, e.g. a ring on a disk. Chebyshev is
     Moore(1) graph distance on square lattices and conservative on hex, so the ring seals
     the domain.
+  - `InsertUntil(kind; into, fraction | number, seed, region, misses = :retry)` (P6.2a):
+    one-site cells of `kind` inserted at sites drawn uniformly from `region` with
+    `StableRNG(seed)`. A draw hits a site of a cell of a kind in `into` painted before this
+    layer; anything else misses. `misses = :count` counts a miss towards the stop rule
+    without creating a cell (CompuCell3D-style scripts' empty cells, D-068). One stop rule:
+    `number = n` (counted ≥ n) or `fraction = r` (K + counted ≥ r·(N + counted), N and K
+    the live cells, and those of `kind`, painted before the layer). The rule is checked
+    before the first draw and after each hit only, so `:count` can overshoot by trailing
+    misses. It throws when the region holds no allowed site or runs out of them.
+    `layout_tally(l, lat)` returns the point and one `(; painted, misses, counted)` per
+    `InsertUntil` layer.
   - `overlay(layers...)`: later layers overwrite earlier ones; ids follow layer order.
     Cells left with no site are dropped. Partly covered cells keep what remains, which can
     be disconnected pieces: `layout` warns, naming the cell, when the remaining sites are
@@ -863,7 +874,7 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     The method paints ids `length(kinds) + 1, …` over `σ` (`Int32`, 0 = medium) and
     pushes their kinds. A random layout owns its seed, so adding a layer never changes
     another layer's draws. Planned: Eden growth and splits, BrickWall, Chains, Spheres,
-    Fibres, InsertUntil, Plane, FromImage/FromMask.
+    Fibres, Plane, FromImage/FromMask.
 - **PIFF import/export** (pure Julia).
 - **MorpheusML importer** (pure Julia, EzXML.jl + expression translation to Symbolics):
   makes the Morpheus model repository a test corpus.

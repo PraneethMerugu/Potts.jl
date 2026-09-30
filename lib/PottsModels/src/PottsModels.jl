@@ -24,4 +24,7 @@ include("merks.jl")
 include("openvt.jl")
 include("akeeb.jl")
 
+include("analysis/Analysis.jl")
+public Analysis
+
 end
