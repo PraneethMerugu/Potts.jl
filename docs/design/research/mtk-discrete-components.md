@@ -200,8 +200,9 @@ The extraction (`discrete_update` in the appendix) does the following:
 ### 3.2 The per-cell phase
 
 There is **one `CellPhase` per distinct clock**. All discrete components on the same
-clock fuse into it, as D-038 fuses the ODEs. The generated body, from the prototype
-(`proto.jl`) with `T = Float32`, is:
+clock fuse into it, as D-038 fuses the ODEs. The generated body below is the prototype's
+(`proto.jl`, `T = Float32`) output, plus the two Potts gates (liveness and kinds), which
+the prototype did not emit:
 
 ```julia
 (st, p, mcs, c) -> begin
