@@ -194,7 +194,7 @@ Rule: models declare needs only through general public features. The core has no
 
 | Need (paper) | Feature ID | Notes |
 |---|---|---|
-| Rod made of s sub-cells, ordered head→tail; state is (cell, segment index) | **G10** cluster scope, member lookup; **G11** ordered relationships | A "segmented cell" is a cluster whose members carry an **index** ν. Energies need predecessor/successor lookups (ν ± 1, ν ± 2). No cell-level energy term exists. |
+| Rod made of s sub-cells, ordered head→tail; state is (cell, segment index) | **G10** cluster scope, member lookup; **G11** ordered relationships | A "segmented cell" is a cluster whose members carry an **index** ν. Energies need predecessor/successor lookups (ν ± 1, ν ± 2). No cell-level energy term exists. **Segment extinction (D-066; `../liveness-survey.md` §5):** a segment that loses its last site through copies dies at once, and its siblings' references would read ref = 0 (medium), so the rod would silently lose a segment. The paper keeps s fixed, so the port declares `@constraint no_extinction(segment kinds…)`, and a **diagnostic counts segment deaths per run and asserts zero** (a rod must never lose a segment). |
 | Per-segment area constraint λ(a − A)² | core volume term | Standard, per sub-cell. |
 | Contact J depends on (medium? / same cluster? / \|Δν\| = 1?) | **G3** contact scope + **G11** relationship predicate in contact energies | Contact energy must see whether two sub-cells are in the same cluster and how far apart their indices are: J_SS for adjacent, J_CC for non-adjacent in the same cell (Eq. 6). A pure type-pair table cannot express this. |
 | Length energy on consecutive segment COMs; curvature energy (circumradius) on COM triplets | **G11** ordered relationships + angle/geometry energies; **G2** shape descriptors (COM) in energies | These are 2-body (distance) and 3-body (circumradius) terms on sub-cell COMs. ΔH of a copy changes at most two COMs. The incremental update needs the terms that involve those segments (up to about 3 triplets and 2 pairs per segment). |
@@ -214,7 +214,7 @@ I assess this against what 13 and 14a/c actually require. A single **cluster-of-
 1. Members carry a kind (14: nucleus/cytoplasm/lamellipodium) **and/or** an index (13: ν = 1..s). Relationships between members are first-class: ordered adjacency for 13, sibling-by-kind for 14.
 2. Contact energy can depend on the cluster relationship between the two sub-cells: same cluster or not, kinds, and index distance. 13 needs index distance. 14 (Dal-Castel code) has separate intra- and inter-cluster tables.
 3. Energies and propulsion terms can read member COMs through relationships. 13 needs this for the length, curvature and θ terms. 14 needs no COM energies, only COM observables.
-4. Members may be empty (14 needs this; 13 does not) and may exchange sites (14 conversion; 13 does not).
+4. Members may be created on demand and may die (14: the lamellipodium is created by conversion and dies if it empties; 13: never, enforced by `no_extinction`), and may exchange sites (14 conversion; 13 does not). No member is ever kept empty (D-066).
 
 13 needs no cluster-level volume and no conversion. 14 needs no ordering. Neither of these conflicts with the shared abstraction, so a single design is sufficient. The only 13-specific geometry is the 3-point circumradius, which should be an expression over member COMs (G11) and not a core primitive.
 

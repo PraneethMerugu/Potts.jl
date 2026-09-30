@@ -354,7 +354,7 @@ and the published simulation.
 | G7 @convert | Not needed as site conversion (death relabels a whole cell → G14) | — |
 | G8 proposal law + time in scope | Fractional-MCS sweeps (1/4 MCS) interleaved with the PDE solve and rule evaluation | Fig 3 |
 | G9 per-cell component protocol | **Boolean network** with 11 nodes (Fig 2), staged tier updates in G1, stochastic updates gated by the Eq 4 factor level; a 16-stage cycle clock | 06 p.4 [3887] |
-| G10 cluster-scope / sibling / retain_empty | Sibling: division halves the volume and copies all state. retain_empty: the necrotic core ID 0 must exist before any death (or be created on first death). Spheroid radius (cluster scope) for the shedding gate R > 0.03 cm. | 06 p.3–5 |
+| G10 cluster-scope / sibling | Sibling: division halves the volume and copies all state. **Necrotic core (D-066; `../liveness-survey.md` §5):** no core exists at the start and none is allocated ahead of time. While no core exists, the **first dying cell transitions into the core kind** (R3 `@transition`) and becomes the core; its target volume is set from its volume. Every later necrotic cell retires into it (R8 absorb-retire, `@retire … sites => core`; G14 below). No separate allocation and no empty-but-alive core are needed. Spheroid radius (cluster scope) for the shedding gate R > 0.03 cm. | 06 p.3–5 |
 | G11 ordered relationships | Not needed | — |
 | G12 observables | Counts by state; spheroid volume and radius; necrotic-core radius; viable-rim thickness; cell-cycle phase fractions (G1/S/G2M from stage); Gompertz fit; radial concentration profiles | Figs 4–8 |
 | G13 initial layout | One cell at the lattice centre, top-tier proteins on | 06 p.4 [3887] |

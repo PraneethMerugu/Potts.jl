@@ -223,7 +223,12 @@ The model is written in Python `ElementCC3D` calls (codebases/14a_Fortuna2020_Cr
 - **Derived consequence.** The FRONT target only ever grows, so conversion **stops permanently** once the FRONT target reaches φ_F × total target. After this build-up, the lamellipodium is kept up only by its volume constraint (λ = 10) and ordinary copies.
   - This agrees with 14b ("until the lamellipodium target volume is attained", 14b p.8) and with 14a's "only … at early times" (p.2806).
   - It does not agree with a literal reading of 14a, where V_3 is the current volume and the rule re-fires whenever V_3 < V_3^target, and V_3^target = φ_l V is fixed from t = 0.
-- **Edge case.** If FRONT's volume reaches 0, CC3D removes the cell (CC3D-external). A new FRONT would then be seeded with target 1.5 while the CYTO target stays reduced. In practice the detachment check (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:407–411) normally stops the run first.
+- **Edge case: FRONT emptying is reachable** (corrected 2026-09-30 per D-066; `../liveness-survey.md` §5).
+  - If FRONT's volume reaches 0, CC3D removes the cell (CC3D-external), and its accrued target leaves CELLvol, which sums target volumes (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:127–138).
+  - The conversion step runs **every MCS** (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:121–165). With no FRONT, FRONTvol = 0, so pFRONT > 0, and the next MCS seeds a new FRONT with target 1.5 while CYTO loses another 1.5 (:149–159). The CYTO target reductions are never returned, so **each FRONT death permanently shrinks the cell's total target** by the dead FRONT's target.
+  - An early FRONT holds 1–2 sites and can lose them to any accepted copy.
+  - The detachment check does **not** stop the run first. It runs only at sample times, every deltaT = 50 MCS (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D.py:41; codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:303), and only when mcs > 10 (:407). It tests zero CYTO–FRONT contact at the sample MCS only, and a FRONT re-seeded from a CYTO site normally touches CYTO (derived).
+  - **Port (D-066).** FRONT is created on demand by `@convert` into the cell's cluster (R8), is born by receiving its first site, and dies when it empties, losing its target as in CC3D. The port counts FRONT deaths per run as a **diagnostic**.
 - There is no reverse conversion.
 
 #### 2.9.6 Order within one MCS
@@ -344,6 +349,7 @@ Method: both main scripts and both steppable files were diffed after stripping c
 | Gate | `random() < pLAMEL and LAMELvol/CELLvol − δ ≤ φ_EST`, where CELLvol = **Cyto target volume** + current Lamel + current Nuc. LAMELvol is incremented after each conversion, so the gate is re-evaluated pixel by pixel within the loop. | SS:107, 162–172 |
 | φ_EST | A ring buffer of the last 100 per-MCS values of LAMELvol/CELLvol. **It includes the current MCS.** For mcs < 100, φ_EST keeps its initial value φ_F, the target fraction. | SS:41, 110–114 |
 | Reverse conversion | None | whole file |
+| LAMEL death | LAMEL is created and painted only at start (SS:54–55, 75); nothing re-creates it. `step` binds `LAMELcell` only inside `for LAMELcell in self.cellListByType(self.LAMEL)` (SS:104–105) and then reads `get_cell_boundary_pixel_list(LAMELcell)` (SS:122). If LAMEL empties, CC3D removes it, `LAMELcell` is unbound, and the run fails (inferred from the code, not run). **Port (D-066):** a LAMEL death ends the run (`@terminate`), and the port counts LAMEL deaths per run. | SS:54–55, 75, 104–105, 122 |
 | Surface / connectivity plugins | None. The plugins are CellType, Volume, CenterOfMass, NeighborTracker, PixelTracker, BoundaryPixelTracker, Contact, ContactInternal and Chemotaxis. | SC:81–149 |
 | Initial condition | Cyto is a hemisphere of radius R_C = ((1−φ_F)V·2/4.19)^{1/3}, centred at (L_x/2, L_y/2, z = 1). Nuc is a sphere of radius R·φ_N^{1/3}, centred at z = R_C/2. **Lamel starts as a one-voxel-thick ring at z = 1** between R_C and R_F = √(φ_F V/3.14 + R_C²). | SS:59–80 |
 | Order per MCS | CC3D Potts sweep, then the steppable at frequency 1: first the F update, then the φ_EST update, then conversions. The ordering relative to the Potts sweep follows the standard CC3D steppable order (external). | SS:82–172; SC:172–173 |
@@ -523,7 +529,7 @@ Policy: agreement is statistical, over ensembles, with no bitwise parity. MSD-fi
 
 | Need | Feature ID | Notes |
 |---|---|---|
-| One cell = cluster of 3 compartment sub-cells (nucleus, cytoplasm, lamellipodium) with kind lookup | **G10** cluster scope + `sibling(kind)` lookup + **retain_empty** membership | The lamellipodium starts **empty** in 14a and 14b and must persist as a cluster member with V = 0 and target φ_l V. Contact energies need the (kind, kind) pair and, in 14c-code, intra- vs inter-cluster tables. |
+| One cell = cluster of 3 compartment sub-cells (nucleus, cytoplasm, lamellipodium) with kind lookup | **G10** cluster scope + `sibling(kind)` lookup; members **created on demand** (D-066) | 14a and 14b start with **no** lamellipodium. It is created by the first conversion (`@convert`, R8), born by receiving that site, and it dies if it empties (§2.9.5); no member is kept empty. `sibling(lamellipodium)` reads as ref = 0 (medium, volume 0) while no lamellipodium exists. Contact energies need the (kind, kind) pair and, in 14c-code, intra- vs inter-cluster tables. |
 | Per-compartment volume constraints | core volume | – |
 | Type-pair contact on a 4th-order (32-neighbour) shell; order-1 proposals | core | Separate neighbourhoods for energy and proposal |
 | Intra- vs inter-cluster contact tables (14c-code) | **G10/G3** | Contact scope must know whether both sites belong to the same cluster |
@@ -544,12 +550,12 @@ Policy: agreement is statistical, over ensembles, with no bitwise parity. MSD-fi
 ### One compartment/linked-subcell abstraction for 13 and 14
 
 The papers support **one** abstraction: a cluster of sub-cells whose members have a *kind* and optionally an *index*, with relationships between members.
-- **14 (unordered, typed).** Needs sibling-by-kind lookup, retain_empty members, intra- vs inter-cluster contact, site conversion between siblings, and per-member COM observables.
+- **14 (unordered, typed).** Needs sibling-by-kind lookup, members created on demand (born by receiving a site; D-066), intra- vs inter-cluster contact, site conversion between siblings, and per-member COM observables.
 - **13 (ordered, identical kind).** Needs index-ordered relationships, contact depending on index distance, and energies and work terms on member COMs (distance, circumradius, chord direction).
 
 Neither model needs anything that contradicts the other:
 - 14 needs no ordering and no COM energies.
-- 13 needs no empty members and no conversion.
+- 13 needs no conversion (and, under D-066, neither model keeps empty members).
 
 **Code caveat.** 14a-code *does* form a CC3D cluster and uses separate intra- and inter-cluster contact tables (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:116, 154; codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D.py:162, 218). This supports G10 intra/inter contact scope. 14c-code never actually forms a CC3D cluster (the compartments are independent cells). The paper-level model is still a single compartmentalised cell, and with one cell per simulation this is behaviourally equivalent, apart from which contact table applies.
 
