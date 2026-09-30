@@ -35,7 +35,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
-    :cluster_volume, :cluster_surface, :time, :site, :major_length, :local_components, :ring_arcs,
+    :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
     :ring_cells)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
@@ -267,6 +267,16 @@ _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the 
 _index(x::QuantityVector, i::Integer) = x.components[i]
 _index(x::Num, i, j) = at2(x, i, j)
 _index(x, i...) = getindex(x, i...)
+
+"""
+`x′` of a site (or field) variable `x`: its value at the other site `s′` of a contact pair
+(`x′ ≡ x[site′]`; a bare `x` in a contact term is `x[site]`, the pair's first site).
+"""
+function _primed(x::Num)
+    role(x) in (:site, :field) || throw(ArgumentError("`$(x)′`: only site and field variables have a value at `s′`"))
+    return at(x, B.site′)
+end
+_primed(x::QuantityVector) = QuantityVector(Symbol(x.name, '′'), Num[at(c, B.site′) for c in x.components])
 
 # `&&`, `||`, `!` in models become the symbolic `&`, `|`, `!` (operands are pure, so
 # non-short-circuit evaluation is equivalent).

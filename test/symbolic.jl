@@ -1775,3 +1775,214 @@ end
     sys = @test_logs (:warn, r"replaces the base's Every\(1\)") CadenceExt(; name = :c)
     @test solve(PottsProblem(sys, [ownership => σ, kind => [1]], (0, 4)), SequentialCPM()).u[end].model.n[1] == 0
 end
+
+# ---------------------------------------------------------------------------------------
+# P6.0e: contact energies read site values `x` (at s) and `x′` (at s′)
+
+using Statistics: Statistics
+
+@potts_model SiteContacts begin
+    @structural_parameters begin
+        dims = (24, 24)
+        geometry = CorePotts.Square()
+        near = Moore(1)
+        far = Moore(2)
+    end
+    @kinds medium A B
+    @parameters begin
+        λ = 1.0
+        T = 6.0
+        β = 3.0
+        γ = 0.4
+        J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
+    end
+    @variables cue(site) = 0.0
+    cue′ = Potts._primed(cue)
+    @lattice Lattice(dims; geometry, neighborhood = near)
+    @relations wide = far
+    @energy begin
+        cells(A, B) => λ * (volume - 16)^2
+        # asymmetric in s/s′ and in the kinds: the compiler averages it with its mirror
+        contacts => J[kind, kind′] + β * cue * (1 + cue′)^2 * (kind == A)
+        contacts(wide) => weight * γ * (cue - 2 * cue′) * (owner′ != 0)
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+"""Blocks of `side`ⁿ cells (kinds A/B alternating) with medium gaps, and a random cue."""
+function site_contact_state(dims; side = 4, rng = Xoshiro(3))
+    σ = zeros(Int32, dims...)
+    n = 0
+    for corner in Iterators.product((1:(side + 1):(d - side) for d in dims)...)
+        n += 1
+        σ[(c:(c + side - 1) for c in corner)...] .= n
+    end
+    return σ, [isodd(c) ? :A : :B for c in 1:n], rand(rng, dims...)
+end
+
+site_contact_problem(sys, dims; tspan = (0, 4), side = 4, kw...) =
+    ((σ, kinds, cue) = site_contact_state(dims; side);
+     PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue], tspan; kw...))
+
+const SITE_CONTACT_CASES = (
+    ("square", () -> SiteContacts(; name = :sq), (24, 24), Moore(1)),
+    ("hex", () -> SiteContacts(; name = :hx, geometry = Hexagonal(), near = Hex(1), far = Hex(2)), (24, 24), Hex(1)),
+    ("3D", () -> SiteContacts(; name = :cube, dims = (11, 11, 11)), (11, 11, 11), Moore(1)))
+
+"""ΔH of random copies against H(after) − H(before); `dH` defaults to the generated ΔH."""
+function site_selfcheck(prob, rel; n = 400, dH = (u, prop) -> energy_change(prob, u, prop))
+    sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = rel); saveat = [0, 2, 4])
+    lat = prob.lattice
+    R = CorePotts.relation(rel, lat)
+    rng = Xoshiro(5)
+    worst = 0.0
+    for u in sol.u, _ in 1:n
+        t = rand(rng, 1:length(u.σ)); x = CorePotts.coordinates(lat, t)
+        ins, y = CorePotts.shift(lat, x, R.offsets[rand(rng, 1:length(R))])
+        ins || continue
+        s = CorePotts.linear_index(lat, y)
+        u.σ[t] == u.σ[s] && continue
+        prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
+        a = deepcopy(u); a.σ[t] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+    end
+    return worst
+end
+
+# the generated ΔH with the pair's site reads exchanged (`x[target]` ↔ `x[s′]`): a mutant
+# lowering that confuses `x` and `x′`
+function swapped_sites_delta(sys)
+    swap(ex) = ex isa Expr ?
+               (ex.head === :ref && ex.args[1] == :(st.site.cue) && ex.args[2] in (:target, :sn) ?
+                Expr(:ref, ex.args[1], ex.args[2] === :target ? :sn : :target) : Expr(ex.head, map(swap, ex.args)...)) : ex
+    code = Potts.generated_code(sys).delta_H
+    @assert occursin("st.site.cue[sn]", string(code)) && occursin("st.site.cue[target]", string(code))
+    return Potts._rgf(swap(code))
+end
+
+@testset "P6.0e contact terms read site values: $name" for (name, mk, dims, rel) in SITE_CONTACT_CASES
+    sys = mk()
+    prob = site_contact_problem(sys, dims)
+    @test site_selfcheck(prob, rel) < 1e-9
+    # negative control: exchanging x and x′ in the lowering breaks ΔH
+    f = swapped_sites_delta(sys)
+    @test site_selfcheck(prob, rel; dH = (u, prop) -> f(u, prob.p, prop, ctx_of(prob))) > 1e-3
+    # site reads at s′ stay inside the contact radius: no extra reach, no extra claims
+    c = mtkcompile(sys)
+    @test c.footprint.read == CorePotts.radius(prob.relations.wide) == 2
+    @test c.footprint.source_read == -1 && c.footprint.source_write == -1
+end
+
+@testset "P6.0e x′ outside contact terms is rejected" begin
+    bad(E) = Potts.PottsSystem(; name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+        variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0))
+    c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :site)
+    @test_throws r"only available in contact terms" mtkcompile(bad(Potts.sites => Potts._primed(c)))
+    @test mtkcompile(bad(Potts.contacts => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
+    @test_throws ArgumentError Potts._primed(Potts.variable(only(Potts.Symbolics.@variables m(Potts.t)), :cell))
+end
+
+# an on-copy write and a clear-on-ownership-change variable read by contact (and site) terms:
+# ΔH sees the target's value after the copy (D-045)
+@potts_model SiteContactsOnCopy begin
+    @structural_parameters begin
+        write = true
+        clear = true
+    end
+    @kinds medium A
+    @parameters begin
+        T = 6.0
+        β = 2.0
+        γ = 1.5
+        J[kind, kind] = [0 8; 8 3]
+    end
+    @variables begin
+        mark(site) = 0.0
+        tag(site) = 0.5, [clear_on_ownership_change = clear]
+    end
+    mark′ = Potts._primed(mark)
+    tag′ = Potts._primed(tag)
+    @lattice Lattice((20, 20); neighborhood = Moore(1))
+    @energy begin
+        cells(A) => (volume - 16)^2
+        contacts => J[kind, kind′] + β * mark * (1 + mark′) * (owner != 0) + γ * (tag - tag′)^2
+        sites => 0.3 * mark * (kind == A)
+    end
+    if write
+        @on_copy mark[target] ~ 0.5 * mark[source] + 1.0
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@potts_model SourceWriteContacts begin
+    @kinds medium A
+    @variables mark(site) = 0.0
+    mark′ = Potts._primed(mark)
+    @lattice Lattice((8, 8))
+    @energy contacts => mark * mark′
+    @on_copy mark[source] ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "P6.0e contact terms see on-copy writes and clears (D-045)" begin
+    σ, kinds, cue = site_contact_state((20, 20); side = 4)
+    mk(; kw...) = PottsProblem(SiteContactsOnCopy(; name = :oc, kw...),
+        [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue, :tag => 2 .* cue], (0, 4))
+    prob = mk()
+    @test site_selfcheck(prob, Moore(1)) < 1e-9
+    # negative controls: ΔH of the model without the write (or the clear) misses the change
+    # the committed copy makes
+    nowrite, noclear = mk(; write = false), mk(; clear = false)
+    @test site_selfcheck(prob, Moore(1); dH = (u, prop) -> energy_change(nowrite, u, prop)) > 1e-3
+    @test site_selfcheck(prob, Moore(1); dH = (u, prop) -> energy_change(noclear, u, prop)) > 1e-3
+    @test site_selfcheck(nowrite, Moore(1)) < 1e-9 && site_selfcheck(noclear, Moore(1)) < 1e-9
+    # a write at the source changes pairs away from the target: rejected
+    @test_throws r"which this on-copy update writes" mtkcompile(SourceWriteContacts(; name = :sw))
+end
+
+@testset "P6.0e checkerboard equals sequential; Float32 never touches Float64" begin
+    prob = site_contact_problem(SiteContacts(; name = :sq), (24, 24); tspan = (0, 60))
+    H(alg, seeds) = [total_energy(prob, solve(remake(prob; seed), alg; save_start = false).u[end]) for seed in seeds]
+    xs, ys = H(SequentialCPM(), 1:8), H(CheckerboardCPM(), 11:18)
+    t = (Statistics.mean(xs) - Statistics.mean(ys)) / sqrt(Statistics.var(xs) / 8 + Statistics.var(ys) / 8)
+    @test abs(t) < 4
+    @test Statistics.mean(xs) < total_energy(prob, prob.u0) - 100           # the runs relax: the statistic is not trivial
+    p32 = site_contact_problem(SiteContacts(; name = :sq), (24, 24); T = Float32)
+    @test eltype(p32.u0.site.cue) === Float32
+    σ, kinds = p32.u0.σ, p32.u0.cell.kind
+    prop = CorePotts.Proposal(5 + 24 * 3, 6 + 24 * 3, (5, 4), 1, σ[5, 4], σ[6, 4])
+    io = IOBuffer()
+    code_llvm(io, p32.f.delta_H, typeof.((p32.u0, p32.p, prop, ctx_of(p32))); debuginfo = :none)
+    @test !occursin("double", String(take!(io)))
+    @test p32.f.delta_H(p32.u0, p32.p, prop, ctx_of(p32)) isa Float32
+end
+
+# a population fold in a contact term reads its own bound site: `cue` and `kind` there are
+# not the pair's (neither placed at `site` nor mirrored)
+@potts_model SiteContactsFold begin
+    @kinds medium A B
+    @variables cue(site) = 0.0
+    cue′ = Potts._primed(cue)
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @energy begin
+        cells(A, B) => (volume - 16)^2
+        contacts => cue * cue′ * sum(cue * (kind == A) for s in sites) / 100
+    end
+    @sweep Metropolis(; temperature = 6.0)
+end
+
+@testset "P6.0e population folds in contact terms keep their own site" begin
+    prob = site_contact_problem(SiteContactsFold(; name = :f), (24, 24))
+    u, lat = prob.u0, prob.lattice
+    m = sum(u.site.cue[i] for i in eachindex(u.σ) if u.σ[i] > 0 && u.cell.kind[u.σ[i]] == 1) / 100
+    H = 0.0
+    for i in eachindex(u.σ), o in prob.contact.offsets
+        ins, y = CorePotts.shift(lat, CorePotts.coordinates(lat, i), o)
+        j = CorePotts.linear_index(lat, y)
+        ins && u.σ[i] != u.σ[j] && (H += u.site.cue[i] * u.site.cue[j] * m / 2)
+    end
+    E0 = sum((u.cell.volume[c] - 16)^2 for c in eachindex(u.cell.volume))
+    @test total_energy(prob, u) ≈ H + E0 rtol = 1e-12
+    @test site_selfcheck(prob, Moore(1)) < 1e-9
+end
