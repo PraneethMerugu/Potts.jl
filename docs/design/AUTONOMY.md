@@ -209,6 +209,8 @@ must justify it.
     `julia benchmark/ab.jl <base checkout> <candidate checkout> <case> metal`, which runs
     the two alternately in fresh processes and compares the fastest run median of each
     side (tolerance 5 %).
+- **Docs build.** `julia --project=docs docs/make.jl` is a standing suite. P6.1a's docstrings
+  cross-referenced undocumented names, and only the merged-tree build caught it.
 - **Suites** (all must pass on the merged tree):
   - `GROUP=CorePotts`, `Potts` with `POTTS_GPU=metal`, `PottsModels` and `MakiePotts`;
   - `benchmark/gate.jl metal`.

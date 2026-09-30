@@ -1244,3 +1244,19 @@ The maintainer approved F-1…F-6 (D-049).
   - Spec 09 D9 and the §8.5 ±2× premise have been sent to the spec owner for revision
     before pre-registration.
 
+
+## 2026-09-30 — P6.1a merged: layout library, first slice (D-056, D-057)
+
+- **What merged:** `Tiling`, `Scattered`, `Frame`, `overlay` and `layout`, with 99 unit
+  tests and the frozen acceptance.
+- **Review:** 3 rounds. They fixed:
+  - the gap across the periodic wrap (touching on 42 of 200 seeds before);
+  - an untested jam path;
+  - an O(cut × L) split check (22 s at 200³, now 0.34 s);
+  - a non-public extension API.
+- **Rename:** `Scatter` → `Scattered` because of a clash with Makie (D-056).
+- **New dependency:** StableRNGs.
+- **Gate:** not run, because the change is host-only. No solver, kernel or step path
+  changed, and another agent was running heavy suites at the time.
+- **Nits queued:** P6.1a3.
+- Merge fix: two `@ref` links in the layout docstrings pointed at undocumented names (`overlay`, `PottsProblem`) and broke the docs build. They are now plain code. The docs build is now a standing suite.

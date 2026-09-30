@@ -137,9 +137,14 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 1 — Sorting (GG + Osborne CP), pilot reproduction
 
-- [ ] **P6.1a** R2 first slice: `Tiling`, `Scatter`, `Frame`, with an overlay algebra;
+- [x] (merge, 2026-09-30; D-056, D-057) **P6.1a** R2 first slice: `Tiling`, `Scatter`, `Frame`, with an overlay algebra;
   the output is an SII operating point. Accept: layouts round-trip through `PottsProblem`;
   3D and hex tilings.
+- [ ] **P6.1a3** P6.1a review nits:
+  - on periodic axes, clamp the grown box side to `min(s + gap, n)` in the Scattered area
+    bound (it now rejects feasible requests when gap ≥ n − s);
+  - warm the 300² split-timing test;
+  - optionally, dense per-cell buffers in the split bucketing.
 - [ ] **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy

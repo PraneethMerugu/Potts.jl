@@ -732,3 +732,45 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    representation, not a flag and an event code.
 6. Division planes: the rules within one domain share one plane, and the two domains may
    differ.
+
+## D-056 The random-box layout is `Scattered`, not `Scatter` (2026-09-30, coordinator; P6.1a)
+
+- **The clash.** Makie exports a `Scatter` plot type. With `using Potts, CairoMakie`, as
+  every reproduction tutorial does, a bare `Scatter` is ambiguous and so undefined.
+- **The decision.** The layout is `Scattered(n, size; region, kinds, seed, gap)`, a noun
+  that parallels `Tiling`. The frozen P6.1a test is amended to match; nothing else in it
+  changes.
+- **The rule for future public names:** check them against the exports of Makie,
+  SciMLBase, ModelingToolkit and Graphs before a surface is frozen.
+
+## D-057 Layout library: values, one extension method, and lattice-aware semantics (2026-09-30, P6.1a)
+
+- **Layouts are host-side values.** Each is a subtype of `AbstractLayout` with one
+  method, `paint!(σ, kinds, l, lat::LatticeSpec)`. The method sees the current `σ`, so
+  `InsertUntil`, "avoid existing cells" and splits fit as one method each.
+- **Public extension API:** `paint!`, `LatticeSpec` and `core_lattice`, together with the
+  CorePotts public names `shift`, `relation` and `embed`.
+- **`layout(l, x)`** returns `[ownership => σ, kind => kinds]`. `x` may be one of:
+  - dims, meaning a closed square lattice with Moore(1);
+  - a CorePotts `Lattice`, assumed Moore(1);
+  - a `LatticeSpec`, a `PottsSystem` or a `CompiledPottsSystem`.
+
+  Pass the system for hexagonal, periodic, domain or non-Moore lattices. Coordinates are
+  lattice indices, axial on hex.
+- **Randomness.** Every random layout owns its seed (`StableRNG`, `UInt64`), so adding a
+  layer never changes another layer's draws. StableRNGs is a Potts dependency.
+- **`overlay(layers...)`:**
+  - later layers overwrite earlier ones, and ids follow layer order;
+  - fully covered cells are dropped and the rest renumbered;
+  - a cell left disconnected under the lattice neighbourhood gets a `@warn`, from a check
+    that is linear in the lattice size.
+- **`Scattered`:**
+  - the gap is Chebyshev, measured both ways round periodic axes;
+  - boxes stay inside the region;
+  - an area bound gives an early error;
+  - random sequential placement can jam near half of the densest packing, so a feasible
+    dense request can throw.
+- **`Tiling`** drops trailing boxes that would come closer than `spacing` to the first box
+  through a wrap.
+- **`Frame`** walls only closed axes, so on (Periodic, Closed) it is one frozen cell made
+  of two walls. It throws when every axis is periodic.
