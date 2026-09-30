@@ -70,13 +70,14 @@ const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
 #
 # The starts: the reduced build shares the 64-cell `graner_glazier_state` between its
 # replicates; the full build gives replicate i its own paper-size aggregate
-# `graner_glazier_aggregate(1000; seed = i)`, so the kind assignments are independent (spec
+# `graner_glazier_aggregate(1000; seed = i, margin = MARGIN)`, so the kind assignments are independent (spec
 # §9.0). The published constructor carries the rest:
 
 n = FULL ? 10 : 4                       # replicates (spec §9.0: 4 smoke, 10 full)
 σ_state, k_state = graner_glazier_state()
 n_state, dims_state = length(k_state), join(size(σ_state), " × ")
-starts = [FULL ? graner_glazier_aggregate(1000; seed = i) : (σ_state, k_state) for i in 1:n]
+const MARGIN = 10                       # medium margin of the full-run aggregates (periodic check in §5)
+starts = [FULL ? graner_glazier_aggregate(1000; seed = i, margin = MARGIN) : (σ_state, k_state) for i in 1:n]
 σ0, k0 = starts[1]
 gg = GranerGlazier(; name = :gg, lattice = size(σ0))
 prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = 1)
@@ -138,7 +139,7 @@ Markdown.parse("""
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t. Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) |
 | Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $(n_state) cells on $(dims_state) (`graner_glazier_state`)$(FULL ? "; this run uses the variant" : "") | `graner_glazier_aggregate(n)`: one round aggregate of n cells on a lattice sized to fit (the full run: n = 1000, one per replicate) | Cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation |
 | Log-law window | 5–4000 paper MCS (spec §9.1 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
-| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5). Unsuitable for dispersal runs (spec §8.6 D2) |
+| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). Unsuitable for dispersal runs, which need a margin of at least 60 sites (`graner_glazier_aggregate(n; margin)`; spec §8.6 D2, §9.1 V-PRE14/15) |
 | Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | $(FULL ? "Assumption; `graner_glazier_aggregate`, one draw per replicate" : "Assumption, recorded in `data/graner/provenance.toml`") |
 | Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | $(FULL ? "—" : "`graner_glazier_aggregate(n)`") | $(FULL ? "Paper size. " : "D-049 F-2; `data/graner/generate.jl`. ")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree within 0.005 at 1, 10 and 100 paper MCS (D-063; P6.1b2 review, 6 seeds) |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
@@ -278,7 +279,7 @@ nothing #hide
 # | V-PRE1 dl, dd, ll | PRE Fig. 13(c); PRL Fig. 2(a) | mean at 10, 100, 10³, 10⁴ inside the two-run envelope ± 0.03 | FULL | fix applied | computed (10⁴ in the full run) |
 # | V-PRE1 log law | PRL Fig. 2 caption; PRE Fig. 13(c) | fit of mean `F_dl` on log₁₀ t over [5, 4000]: R² > 0.95, slope in [−0.15, −0.07] per decade | FULL | fix applied | computed |
 # | V-PRE2 | PRE Fig. 13(c); PRL Fig. 2(a); PRE p.2140 | dd crossing in [2.5, 40]; ll crossing in [19, 100]; dd first; dd + ll > dl at every save; NC1: no dd or ll crossing by 10³ | FULL | fix applied | computed |
-# | V-PRE3 (a) | PRE Fig. 13(b); PRL Fig. 2(b) | first save with mean `F_dM` < 0.003 is ≤ 10³; NC1: mean `F_dM`(10³) ≥ 0.01 | SMOKE+FULL | ready | computed |
+# | V-PRE3 (a) | PRE Fig. 13(b); PRL Fig. 2(b) | FULL: first save with mean `F_dM` < 0.003 is ≤ 10³. Size-free form (ruling of 2026-09-30), reported only: first save with mean `F_dM`(t) / mean `F_dM`(1) < 0.1; it was to bind the reduced build if 20 calibration seeds reached it by the 500 save, and they did not (P6.1c), so (a) is FULL-only. Both builds, NC1: mean `F_dM`(10³) ≥ 0.01 | FULL; NC1 clause SMOKE+FULL | ready | computed |
 # | V-PRE3 (b) | same | plateau `t_p` ≤ 10³ and last-decade log-slope of `F_lM` within ± 5% of its last value | FULL | ready | computed |
 # | V-PRE3 (c) | same; spec §8.5 | R = `F_lM`(10³) / [`F_dM`(1) + `F_lM`(1)] in [0.85, 1.10] | FULL | fix applied | computed |
 # | V-PRE3 (d) | same | raw `F_lM`(10³) in [0.050, 0.075] | FULL | ready | computed |
@@ -293,9 +294,9 @@ nothing #hide
 # | V-PRE12 | PRE Figs. 20–21 | `J_lM` = 30: `F_lM` < 0.005 from 200; `F_dl` within ± 0.05 of 0.38, 0.25, 0.13 at 10, 100, 10³ | FULL | fix applied | not yet on this page |
 # | V-PRE13 (a) | PRE Figs. 22–24 | partial sorting: mean `F_dM`(10³) > 0.01 | SMOKE+FULL | fix applied | computed |
 # | V-PRE13 (b) | same | partial sorting: mean `F_dl` within ± 0.05 of 0.325, 0.245, 0.17 at 10, 100, 10³ | FULL | fix applied | computed |
-# | V-PRE14 | PRE Fig. 25 | dispersal (`J_lM` = 2, `J_dd` = 4, T = 5), unannealed: > 20% of light cells outside the largest component at 480 | FULL, margin ≥ 60 | ready | not yet on this page |
+# | V-PRE14 | PRE Fig. 25 | dispersal (`J_lM` = 2, `J_dd` = 4, T = 5), unannealed: > 20% of light cells outside the largest component at 480 | FULL, margin ≥ 60 (`graner_glazier_aggregate(n; margin)`) | ready | not yet on this page |
 # | V-PRE15 | PRE Figs. 26–27 | `J_ld` = 35: ≥ 2 components of ≥ 10% of cells; `J_ld` = 29: largest ≥ 95%, at 2000 | FULL, larger margin | fix applied | not yet on this page |
-# | V-PRE16 | PRE Figs. 4–5 | generator plateau: \|log-slope\| of `F_lM` and `N_mm` ≤ 1% per decade over the last 100 of 400 MCS (⟨n⟩ part parked) | generator | ready (plateau) / **parked** (⟨n⟩) | generator script (`data/graner/generate.jl`) |
+# | V-PRE16 | PRE Figs. 4–5 | generator plateau: \|mean of the last 4 saves − mean of the first 4\| ≤ 2% of the window mean, over the last 100 of 400 MCS, for `F_lM` and `N_mm` on a 10-MCS T = 0 annealed copy (ruling of 2026-09-30; ⟨n⟩ part parked) | generator | ready (plateau) / **parked** (⟨n⟩) | generator: checked when `data/graner/generate.jl` regenerates the start, not in CI |
 # | V-PRE17 | PRE Fig. 2 | bulk ⟨n⟩ after 2 annealing MCS | — | **parked** | — |
 # | V-OS1–V-OS5 | Osborne et al. (2017) | CP benchmark (OS3, OS4 parked) | OS | waits for an OS port | — (separate model) |
 # | NC1 | D-048 | at 10³: mean `F_dl` ≥ 0.35; mean `F_dM` ≥ 0.01; 0 of n engulfed | SMOKE+FULL | ready | computed |
@@ -496,7 +497,8 @@ Periodic boundaries harmless for sorting at this size: **$(all(pad_oks) ? "PASS"
 # s never changes a verdict.
 #
 # The Class column is the verdict class of §9.0. In the reduced build, FULL rows are
-# reported as "in band" or "out of band" and carry no verdict. The one extra row that is not
+# reported as "in band" or "out of band" and carry no verdict. Rows of class "reported"
+# never carry one. The one extra row that is not
 # in the spec is labelled as such.
 
 pf(ok) = ok ? "PASS" : "FAIL"
@@ -555,7 +557,8 @@ addrow!("extra (not in spec): log law, 4–512", "`test/papers.jl` window",
 paper_cross = (pre = (dd = 18, ll = 49), prl = (dd = 5, ll = 38))
 c_dd, c_ll = crossing(m(:dd), m(:dl)), crossing(m(:ll), m(:dl))
 homo_all = all(m(:dd) .+ m(:ll) .> m(:dl))
-addrow!("V-PRE2 summed homotypic > heterotypic at every save", "already at t = 1 in both paper runs",
+addrow!("V-PRE2 summed homotypic > heterotypic at every save",
+    "already at t = 1 in both paper runs, so a sanity row that cannot discriminate (spec §9.1)",
     homo_all ? "at every save" : "not at every save", "every save", "FULL", homo_all)
 ok_dd(s) = c_dd !== nothing && 2.5s <= c_dd <= 40s
 addrow!("V-PRE2 dark–dark crosses heterotypic", "≈ $(paper_cross.pre.dd) (PRE), ≈ $(paper_cross.prl.dd) (PRL)",
@@ -580,7 +583,15 @@ addrow!("V-PRE2 NC1: no crossing by 10³", "— (control)",
 c_dM = (j = findfirst(<(0.003), m(:dM)); j === nothing ? nothing : ts[j])
 ok_dM(s) = c_dM !== nothing && c_dM <= 1000s
 addrow!("V-PRE3 (a) dark–medium < 0.003", "0.0026 at 200 (PRE); 0 by 300 (PRL)", show_t(c_dM), "by 10³",
-    "SMOKE+FULL", ok_dM(1); timed = ok_dM)
+    "FULL", ok_dM(1); timed = ok_dM)
+## size-free form (ruling of 2026-09-30, spec §9.1), reported only: it did not reach its
+## calibration bar (20 seeds by the 500 save), so it binds neither build
+paper_rel = 0.0026 / 0.0268                           # PRE Fig. 13(b) at 200 and at 1, 400 dpi (spec §8.5)
+rel_dM = m(:dM) ./ m(:dM)[1]
+c_rel = (j = findfirst(<(0.1), rel_dM); j === nothing ? nothing : ts[j])
+ok_rel(s) = c_rel !== nothing && c_rel <= 1000s
+addrow!("V-PRE3 (a) size-free: dark–medium below 0.1 × its t = 1 value", "$(fmt(paper_rel)) at 200 (PRE Fig. 13(b))",
+    show_t(c_rel), "by 10³", "reported", ok_rel(1); timed = ok_rel)
 sym_dM = mean(i -> fractions(sym_states[i], kinds_of(i), prob_sym)[:dM], 1:n)
 addrow!("V-PRE3 (a) NC1: dark–medium @ 10³", "— (control)", fmt(sym_dM), "≥ 0.01", "SMOKE+FULL", sym_dM >= 0.01)
 ## plateau: first save after which light–medium stays within 5% of its last value, and the
@@ -635,7 +646,7 @@ end
 ## V-PRE13: partial sorting
 part = [fractions(state_at(sol, t), kinds_of(i), prob_partial) for (i, sol) in enumerate(ens_partial.u), t in t_partial]
 mpart(key, j) = mean(part[i, j][key] for i in 1:n)
-addrow!("V-PRE13 (a) partial sorting: dark–medium @ 10³", "0.019 (PRE Figs. 22–24; spec §9.1)", fmt(mpart(:dM, 3)), "> 0.01",
+addrow!("V-PRE13 (a) partial sorting: dark–medium @ 10³", "0.019 (PRE Fig. 23(b), dark–medium bullets; replotted in Fig. 24(b))", fmt(mpart(:dM, 3)), "> 0.01",
     "SMOKE+FULL", mpart(:dM, 3) > 0.01)
 for (j, (t, v)) in enumerate(zip(t_partial, (0.325, 0.245, 0.17)))   # PRE Fig. 23(a), 300 dpi (spec §9.1)
     addrow!("V-PRE13 (b) partial sorting: heterotypic @ $t", "≈ $v (PRE Fig. 23(a))", fmt(mpart(:dl, j)),
@@ -739,7 +750,7 @@ for r in failing #hide
     end #hide
 end #hide
 any(r -> haskey(r.info, :key), failing) && #hide
-    push!(diag_lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value (0.027 dark + 0.037 light, " * #hide
+    push!(diag_lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value (0.0268 dark + 0.0367 light, " * #hide
         "PRE Fig. 13(b)); the paper's medium share stays at 0.063–0.064 at every time shown (t = 1…1000), so one " * #hide
         "value serves all times. Read-off uncertainty ≈ ±0.002 (spec §9).") #hide
 if any(r -> startswith(r.target, "V-PRE1 light–light"), failing) #hide
@@ -781,6 +792,10 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 #   unparks V-PRE6, V-PRE17 and the ⟨n⟩ parts of V-PRE10 and V-PRE16.
 # - The definition of the "type-type correlation" plotted in PRE Figs. 13(d) and 21(b).
 #   The answer adds it to the validation table.
+# - How the total boundary length of PRE Fig. 13(a) is counted (bond pairs once or twice,
+#   which neighbour range). Our count of the paper-size aggregate is below the paper's by a
+#   factor that is not 2 (spec §9.1 V-PRE4). The V-PRE4 drop D is a ratio and does not
+#   depend on it; the answer lets the page compare absolute lengths.
 #
 # We would welcome corrections, the original input files, or a joint check of these
 # results. Contact: the PottsModels maintainer. Answers are recorded as a new row in the

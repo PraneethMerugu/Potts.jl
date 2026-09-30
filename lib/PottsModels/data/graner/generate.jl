@@ -5,7 +5,9 @@
 #    (mean area 40), so the relaxation must break the parallel walls and round the square;
 # 2. relaxed as one type (J_ll = 2, J_lM = 8, T = 5, λ = 1) for 400 paper MCS (6400 here:
 #    a paper MCS is 16N copy attempts), checking that total boundary length and the
-#    cell–medium fraction are flat over the last 100 paper MCS (Fig. 5);
+#    cell–medium fraction are flat over the last 100 paper MCS (Fig. 5). As in Fig. 5, both
+#    are measured on a copy annealed 10 paper MCS at T = 0; the saved start is not annealed.
+#    The check is spec 09 §9.1 V-PRE16 (plateau part), a regeneration-time check, not CI;
 # 3. each cell dark or light with probability ½ (separately seeded).
 #
 #     julia --project=lib/PottsModels/test lib/PottsModels/data/graner/generate.jl [outdir]
@@ -59,6 +61,16 @@ function boundary(σ)
     return n, m / n
 end
 
+# a copy of `σ` annealed 10 paper MCS at T = 0 with the relaxation energies (PRE Fig. 5 caption)
+function annealed(σ, n)
+    q = PottsProblem(GranerGlazier(; name = :anneal), [ownership => copy(σ), kind => fill(:light, n),
+            :J => [0 8 8; 8 2 2; 8 2 2], :T => 0.0, :λ => 1.0, :V₀ => 40.0], (0, 160); seed = SEED + 2)
+    return solve(q, SequentialCPM(); saveat = 160).u[end].σ
+end
+
+# relative drift of a window: |mean of the last 4 − mean of the first 4| / window mean
+drift_of(v) = abs(sum(v[(end - 3):end]) - sum(v[1:4])) / 4 / (sum(v) / length(v))
+
 function generate(outdir)
     rng = MersenneTwister(SEED)
     σ0 = brick_aggregate(rng)
@@ -68,14 +80,15 @@ function generate(outdir)
     sol = solve(relax, SequentialCPM(); saveat = 0:100:6400)
     σ = sol.u[end].σ
     all(c -> any(==(c), σ), 1:n) || error("a cell vanished during relaxation")
-    # equilibrated (Fig. 5): over the last 100 paper MCS neither the total boundary nor the
-    # cell–medium fraction drifts by more than 2%
-    late = [boundary(u.σ) for u in sol.u[(end - 16):end]]
-    for f in (first, last)
-        v = f.(late)
-        drift = abs(sum(v[(end - 3):end]) - sum(v[1:4])) / 4
-        drift <= 0.02 * sum(v) / length(v) || error("not equilibrated: $(f === first ? "total boundary" : "medium fraction") drifts by $drift")
-    end
+    # equilibrated (Fig. 5; spec 09 §9.1 V-PRE16): over the last 100 paper MCS (17 saves,
+    # one every 6.25 paper MCS) neither the total boundary nor the cell–medium fraction
+    # drifts by more than 2% (|mean of the last 4 − mean of the first 4| ≤ 2% of the window
+    # mean), each measured on a copy annealed 10 paper MCS (160 here) at T = 0
+    late = [boundary(annealed(u.σ, n)) for u in sol.u[(end - 16):end]]
+    drift_total, drift_medium = drift_of(first.(late)), drift_of(last.(late))
+    @info "equilibrated (annealed copies, last 100 paper MCS)" drift_total drift_medium
+    drift_total <= 0.02 || error("not equilibrated: total boundary drifts by $drift_total of its mean")
+    drift_medium <= 0.02 || error("not equilibrated: medium fraction drifts by $drift_medium of its mean")
     @info "relaxed" cells = n boundary_start = boundary(σ0) boundary_end = boundary(σ)
     trng = MersenneTwister(SEED + 1)
     kinds = [rand(trng, Bool) ? 1 : 2 for _ in 1:n]
