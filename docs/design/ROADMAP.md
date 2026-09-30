@@ -208,8 +208,8 @@ Every item's acceptance also includes the standing checks:
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
   - `connectivity(k)` accepts 0 components: a copy into an isolated fragment or into a
-    cell's last pixel is allowed. The shipped Akeeb deviates from CC3D's `!= 1` rule, so
-    this changes the science and needs a DECISIONS entry.
+    cell's last pixel is allowed. Fix it to match CC3D's `!= 1` rule (D-074, maintainer), and
+    revalidate the frozen Akeeb tests.
   - `a` and `b` are not reserved: a parameter `b` is shadowed by the edge endpoint inside
     edge terms.
   - `integral` reads the previous MCS's site values when they are written in the same

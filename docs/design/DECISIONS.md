@@ -1256,3 +1256,19 @@ session.
 - **Author data.** On the authors' four stored profiles we reproduce their finger counts
   (12/12/0/0) and areas exactly. Their released data has no lattice snapshots, so the
   cluster metrics cannot be checked against it.
+
+## D-074 `connectivity(k)` matches CC3D: a copy must leave exactly one component (2026-09-30, maintainer)
+
+- **The defect.** `connectivity(k)` accepted 0 components, so a copy could take a cell's
+  last pixel or fill an isolated fragment. The API-synthesis review confirmed this with a
+  script.
+- **The standard.** The authors' CC3D rule rejects any copy whose result is not exactly
+  one component (`!= 1`). The shipped Akeeb model therefore allowed copies that CC3D
+  forbids.
+- **Decision (maintainer, coordinator session, 2026-09-30, "Match CC3D").** The
+  constraint rejects any copy after which a constrained cell is not exactly one connected
+  component. That includes taking its last pixel, so a connectivity-constrained cell
+  cannot die by copies. This is consistent with D-066, where liveness is unchanged: such
+  a cell simply cannot lose its last site under this constraint.
+- **Frozen tests.** The frozen Akeeb tests in `papers.jl` are revalidated under this entry
+  in P6.0m.
