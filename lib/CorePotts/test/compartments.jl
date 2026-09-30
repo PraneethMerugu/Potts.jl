@@ -221,6 +221,54 @@ end
         @test findall(==(1.0), u2.cell.alone) == [2, 6] && !any(==(1.0), u2.cell.together)
     end
 
+    @testset "capacity-limited mixed division ($(nameof(typeof(alg))))" for alg in (
+        SequentialCPM(), CheckerboardCPM())
+        # cluster {1, 2, 3}: cytoplasm 1 with nuclei 2 and 3 side by side in x; lone cell 4.
+        # Root 1 divides its cluster, nuclei 2 and 3 and lone cell 4 divide alone (D-055 item 4);
+        # every plane is normal to y, through y = 17.5 for the cluster and each nucleus
+        lat = Lattice((40, 40))
+        σ = zeros(Int32, 40, 40)
+        σ[11:30, 11:24] .= 1; σ[13:18, 15:20] .= 2; σ[23:28, 15:20] .= 3
+        σ[33:38, 30:37] .= 4
+        tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER : EVENT_DIVIDE
+        run(capacity) = begin
+            cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 1, 1, 4], lat))
+            st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1]; cell), capacity)
+            f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0),
+                    cluster_normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0)))
+            solve(CPMProblem(f, st, lat, (0, 1), gg_params()), alg)
+        end
+        brute(u, cap) = Int32[count(==(c), u.σ) for c in 1:cap]
+
+        # 2 free slots < 3 members: only the root's event is deferred; nuclei 2 and 3 take
+        # the slots (2 → 5, 3 → 6) and stay in cluster 1; lone cell 4 finds none and waits
+        sol = @test_logs (:warn, r"deferred") match_mode = :any run(6)
+        u = sol.u[end]
+        @test sol.stats.lifecycle.divisions == 2
+        @test sol.stats.lifecycle.deferred == 2                           # root 1 and lone cell 4
+        @test u.cell.volume == Int32[208, 18, 18, 48, 18, 18]
+        @test u.cell.cluster == Int32[1, 1, 1, 4, 1, 1]
+        ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.σ[i] == c)
+        @test maximum(ys(2)) < minimum(ys(5)) && maximum(ys(3)) < minimum(ys(6))   # their own (y) planes
+        @test u.cell.volume == brute(u, 6)
+        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
+        @test u.cell.cluster_volume[1] == 280
+        m = init_moments(u.σ, lat, 6)
+        @test u.cell.m1 == m.m1 && u.cell.m2 == m.m2
+
+        # control, 3 free slots: the cluster fits and takes precedence over its members' own
+        # events (1 → 5, 2 → 6, 3 → 7, one cluster plane); now only lone cell 4 is deferred
+        solc = @test_logs (:warn, r"deferred") match_mode = :any run(7)
+        uc = solc.u[end]
+        @test solc.stats.lifecycle.divisions == 3
+        @test solc.stats.lifecycle.deferred == 1
+        @test uc.cell.volume == Int32[104, 18, 18, 48, 104, 18, 18]
+        @test uc.cell.cluster == Int32[1, 1, 1, 4, 5, 5, 5]
+        @test uc.cell.volume == brute(uc, 7)
+        @test uc.cell.cluster_volume == recompute_cluster_volume(uc.σ, uc.cell.cluster)
+    end
+
     @testset "EVENT_DIVIDE_CLUSTER needs cluster state" begin
         lat = Lattice((20, 20))
         σ = zeros(Int32, 20, 20); σ[5:10, 5:10] .= 1
