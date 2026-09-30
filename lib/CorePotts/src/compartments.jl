@@ -2,7 +2,7 @@
 # clusterId). `st.cell.cluster[c]` is the cluster of cell `c`, named by one of its live
 # members (the root, `cluster[r] == r`); a cell alone is its own cluster. Internal vs
 # external contact energies are plain model code (`same_cluster`); cluster volume and
-# surface are trackers indexed by cluster id; `Lifecycle(…; clusters = true)` divides a
+# surface are trackers indexed by cluster id; `EVENT_DIVIDE_CLUSTER` divides a
 # cluster as a unit.
 
 """Cluster of cell `c` (`0` for the medium)."""
@@ -206,7 +206,7 @@ function _cluster_planes!(normals, bias, lc, st, p, ctx, key, mcs, roots, member
     cell = (; volume = Array(st.cell.volume), anchor = Array(st.cell.anchor), m1 = Array(st.cell.m1))
     nh = zeros(T, N, cap); bh = zeros(T, cap)
     for r in roots
-        n = lc.normal(stK, p, ctx, key, mcs, Int32(r))
+        n = lc.cluster_normal(stK, p, ctx, key, mcs, Int32(r))
         cK = centroid(T, cellK, lat, r)
         for m in members[r]
             cm = centroid(T, cell, lat, m)

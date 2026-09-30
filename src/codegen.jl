@@ -687,19 +687,44 @@ end
 function _lifecycle(c::CompiledPottsSystem, T)
     isempty(c.divisions) && return nothing
     rn = c.gather_names
-    alongs = unique(d -> d.along isa Tuple ? ("tuple", d.along) : typeof(d.along), c.divisions)
-    length(alongs) == 1 || throw(ArgumentError("divisions with different planes are not supported yet"))
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
-    tests = [:($(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) && $(lower(d.when, env)) && return CorePotts.EVENT_DIVIDE)
-             for d in c.divisions]
+    # each rule divides by its own domain (P6.0a): cells(k…) → the cell alone, clusters(k…) →
+    # the whole cluster of the root (only the root's rule fires; compile.jl keeps kinds disjoint)
+    tests = map(c.divisions) do d
+        if d.domain isa ClusterDomain
+            :(CorePotts.cluster_of(st.cell, c) == c && $(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) &&
+              $(lower(d.when, env)) && return CorePotts.EVENT_DIVIDE_CLUSTER)
+        else
+            :($(_kindtest(:(Potts._cellkind(st, c)), d.domain.kinds)) && $(lower(d.when, env)) &&
+              return CorePotts.EVENT_DIVIDE)
+        end
+    end
     trigger = _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:block, tests..., :(return CorePotts.EVENT_NONE)))))
-    along = c.divisions[1].along
-    normal = along isa AlongMinor ? CorePotts.AlongMinorAxis{T}() :
-             along isa AlongMajor ? CorePotts.AlongMajorAxis{T}() :
-             along isa AlongRandom ? CorePotts.RandomPlane{T}() :
-             _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
+    celldivs = filter(d -> d.domain isa CellDomain, c.divisions)
+    clusterdivs = filter(d -> d.domain isa ClusterDomain, c.divisions)
+    return CorePotts.Lifecycle(trigger; normal = _division_normal(celldivs, T),
+        cluster_normal = _division_normal(clusterdivs, T), divide! = _division_rules(c, celldivs, T, :parent),
+        cluster_divide! = _division_rules(c, clusterdivs, T, :(CorePotts.cluster_of(st.cell, parent))))
+end
+
+# the plane of one domain's divisions (the rules of a domain share it)
+function _division_normal(divisions, T)
+    isempty(divisions) && return CorePotts.AlongMinorAxis{T}()
+    alongs = unique(d -> d.along isa Tuple ? ("tuple", d.along) : typeof(d.along), divisions)
+    length(alongs) == 1 || throw(ArgumentError("divisions of one domain with different planes are not supported yet"))
+    along = divisions[1].along
+    return along isa AlongMinor ? CorePotts.AlongMinorAxis{T}() :
+           along isa AlongMajor ? CorePotts.AlongMajorAxis{T}() :
+           along isa AlongRandom ? CorePotts.RandomPlane{T}() :
+           _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
+end
+
+# daughter state rules of one domain, each gated by the kinds of its rule: the parent's kind
+# for cell divisions, the kind of the parent's cluster root (`who`) for cluster divisions
+function _division_rules(c::CompiledPottsSystem, divisions, T, who)
+    rn = c.gather_names
     rules = Any[]
-    for d in c.divisions
+    for d in divisions
         block = Any[]
         for (x, r) in d.rules
             name = info(x).name
@@ -711,14 +736,10 @@ function _lifecycle(c::CompiledPottsSystem, T)
                 push!(block, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))
             end
         end
-        # each division's rules apply to its own kinds (the parent keeps its kind)
-        # cluster divisions: every member, gated by the kind of its cluster's root
-        who = c.cluster_division ? :(CorePotts.cluster_of(st.cell, parent)) : :parent
         isempty(block) || push!(rules, Expr(:&&, _kindtest(:(Potts._cellkind(st, $who)), d.domain.kinds), Expr(:block, block...)))
     end
-    divide! = isempty(rules) ? CorePotts.no_divide_rule :
-              _rgf(:((st, p, ctx, key, mcs, parent, daughter) -> $(Expr(:block, rules..., :(return nothing)))))
-    return CorePotts.Lifecycle(trigger; normal, divide!, clusters = c.cluster_division)
+    isempty(rules) && return CorePotts.no_divide_rule
+    return _rgf(:((st, p, ctx, key, mcs, parent, daughter) -> $(Expr(:block, rules..., :(return nothing)))))
 end
 
 # ---------------------------------------------------------------------------------------

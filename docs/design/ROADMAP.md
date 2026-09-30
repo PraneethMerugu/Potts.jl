@@ -103,7 +103,7 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 0 — composition fixes and infrastructure
 
-- [ ] **P6.0a** division kinds per rule domain: cell division and cluster division in one
+- [x] (merge, 2026-09-30; gate CPU ≤ 1.013, Metal A/B = base) **P6.0a** division kinds per rule domain: cell division and cluster division in one
   model (lift `compile.jl` mutual exclusion).
   - Write set: `src/compile.jl`, `src/codegen.jl`, `lib/CorePotts/src/lifecycle.jl`.
   - Accept: a model with both kinds runs both; ΔH self-check; a sibling.
@@ -136,6 +136,7 @@ Every item's acceptance also includes the standing checks:
   3D and hex tilings.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
+- [ ] **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
 - [ ] **P6.1b2** follow-ups from the P6.0h review:
   - `graner_glazier_state` gains a paper-size single-aggregate generator (≈ 1000 cells),
     so the FULL run can test the size-driven targets.

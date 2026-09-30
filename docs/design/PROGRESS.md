@@ -1201,3 +1201,24 @@ The maintainer approved F-1…F-6 (D-049).
   `papers.jl` is frozen under D-050. The negative control is a one-line edit, which fails
   the check.
 - **`tools/exclusive.sh`:** a machine-wide lock for GPU suites and the gate.
+
+## 2026-09-30 — P6.0a merged: cell and cluster division in one model (D-054, D-055)
+
+- **Process:** the first item through the agent protocol. Freeze `ee52f55`, implementation
+  `beba0a5`, freeze amendment `13513b3` (D-054, a fixture error), reviewer APPROVE with 4
+  nits.
+- **Behaviour:** per-domain division, in one lifecycle pass, on CPU and Metal, under
+  sequential and checkerboard.
+  - `Lifecycle(; clusters = true)` (entries above) is replaced by `EVENT_DIVIDE_CLUSTER`.
+  - The lone-cell daughter fusion is fixed.
+- **Reviewer's check:** a scratch run on 3D, hex and square lattices with capacity overflow
+  matched brute-force volume, cluster volume and moments.
+- **Open nit (queued):** a capacity-limited mixed-division test in
+  `lib/CorePotts/test/compartments.jl`.
+- **Performance gate on the merged tree:** every CPU case is ≤ 1.013 against the baseline.
+  - Metal first showed openvt at 1.15. The base commit, rerun in the same session, showed
+    the same slowdowns: wortel 3.3×, akeeb 1.8×.
+  - An interleaved A/B test of openvt on Metal had equal medians for base and merged
+    (117.8/118.6 and 119.5/119.2).
+  - The GPU's timing is bimodal (about 75 or about 115 ns/site), so Metal is now gated by
+    A/B (AUTONOMY §7.4).

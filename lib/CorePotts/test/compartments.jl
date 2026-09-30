@@ -113,14 +113,14 @@ end
         lat = Lattice((40, 40))
         σ = zeros(Int32, 40, 40); σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2   # elongated in x
         cluster = Int32[1, 1]
-        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE : EVENT_NONE
+        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
         half!(st, p, ctx, key, mcs, parent, daughter) =
             (st.cell.mass[daughter] = st.cell.mass[parent] /= 2; nothing)
         cell = merge(init_moments(σ, lat, 2), init_clusters(σ, cluster, lat), (; mass = [8.0, 2.0]))
         st = with_capacity(initial_state(σ, Int32[1, 2]; cell), 6)
         @test st.cell.cluster == Int32[1, 1, 3, 4, 5, 6]
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-            lifecycle = Lifecycle(tr; clusters = true, divide! = half!))
+            lifecycle = Lifecycle(tr; divide! = half!))
         sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions == 2
@@ -131,7 +131,7 @@ end
         side(c) = unique(coordinates(lat, i)[1] > 20.5 for i in 1:nsites(lat) if u.σ[i] == c)
         @test length(side(3)) == 1 && side(3) == side(4) != side(1) == side(2)
 
-        # without `clusters`, compartments divide on their own and daughters stay in the cluster
+        # `EVENT_DIVIDE`: compartments divide on their own and daughters stay in the cluster
         f2 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 2 ? EVENT_DIVIDE : EVENT_NONE))
         u2 = solve(CPMProblem(f2, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
@@ -149,8 +149,7 @@ end
         std.cell.cluster[1:4] .= Int32[1, 1, 3, 3]          # cell 1 (the root of {1, 2}) has died
         std.cell.cluster_volume .= recompute_cluster_volume(σd, std.cell.cluster)
         fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE : EVENT_NONE;
-                clusters = true))
+            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE))
         ud = solve(CPMProblem(fd, std, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test ud.cell.cluster[2] == 2                         # re-rooted at its surviving member
         @test ud.cell.cluster[3] == ud.cell.cluster[4] == 3
@@ -170,5 +169,64 @@ end
 
         # init: the root is the lowest member of a preferred kind
         @test init_clusters(σr, Int32[1, 2, 2], lat; kind = Int32[1, 2, 1], prefer = (1,)).cluster == Int32[1, 3, 3]
+    end
+
+    @testset "cells and clusters divide in one lifecycle pass ($(nameof(typeof(alg))))" for alg in (
+        SequentialCPM(), CheckerboardCPM())
+        # cluster {1, 2} elongated in x; lone cell 3; cluster {4, 5}
+        lat = Lattice((40, 40))
+        σ = zeros(Int32, 40, 40)
+        σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2
+        σ[3:8, 30:37] .= 3
+        σ[33:38, 28:37] .= 4; σ[34:37, 30:35] .= 5
+        cell = merge(init_moments(σ, lat, 5), init_clusters(σ, Int32[1, 1, 3, 4, 4], lat),
+            (; alone = zeros(5), together = zeros(5)))
+        st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1, 2]; cell), 10)
+        alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.alone[parent] = st.cell.alone[daughter] = 1.0; nothing)
+        together!(st, p, ctx, key, mcs, parent, daughter) =
+            (st.cell.together[parent] = st.cell.together[daughter] = 1.0; nothing)
+        run(tr) = solve(CPMProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
+                    cluster_normal = along_minor_axis, cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
+        # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
+        tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER :
+                                      c in (2, 3, 5) ? EVENT_DIVIDE : EVENT_NONE
+        sol = run(tr)
+        u = sol.u[end]
+        @test sol.stats.lifecycle.divisions == 4
+        # daughters lowest-first: the cluster first (1 → 6, 2 → 7), then cells (3 → 8, 5 → 9)
+        @test count(>(0), u.cell.volume) == 9 && u.cell.volume[10] == 0
+        @test u.cell.cluster[1:9] == Int32[1, 1, 3, 4, 4, 6, 6, 8, 4]
+        @test u.cell.volume[[1, 2, 6, 7]] == Int32[68, 12, 68, 12]         # one plane (x) through the cluster
+        @test u.cell.volume[[3, 8, 5, 9]] == Int32[24, 24, 12, 12]         # each cell along its own (y) plane
+        ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.σ[i] == c)
+        @test maximum(ys(3)) < minimum(ys(8)) && maximum(ys(5)) < minimum(ys(9))
+        # each division ran its own domain's rule
+        @test findall(==(1.0), u.cell.alone) == [3, 5, 8, 9]
+        @test findall(==(1.0), u.cell.together) == [1, 2, 6, 7]
+        # trackers exact after the mixed division (brute force from σ)
+        @test u.cell.volume == Int32[count(==(c), u.σ) for c in 1:10]
+        @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
+        m = init_moments(u.σ, lat, 10)
+        @test u.cell.m1 == m.m1 && u.cell.m2 == m.m2
+
+        # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without its
+        # root's cluster event, member 2 divides alone and its daughter stays in cluster 1
+        tr2(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 2 ? EVENT_DIVIDE :
+                                       c == 4 ? EVENT_NONE : c == 5 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
+        sol2 = run(tr2)
+        u2 = sol2.u[end]
+        @test sol2.stats.lifecycle.divisions == 1
+        @test u2.cell.cluster[[1, 2, 6]] == Int32[1, 1, 1] && u2.cell.volume[1] == 136
+        @test findall(==(1.0), u2.cell.alone) == [2, 6] && !any(==(1.0), u2.cell.together)
+    end
+
+    @testset "EVENT_DIVIDE_CLUSTER needs cluster state" begin
+        lat = Lattice((20, 20))
+        σ = zeros(Int32, 20, 20); σ[5:10, 5:10] .= 1
+        st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 2)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> EVENT_DIVIDE_CLUSTER))
+        @test_throws ArgumentError solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
     end
 end

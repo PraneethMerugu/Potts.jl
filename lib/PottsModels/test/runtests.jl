@@ -67,6 +67,7 @@ include("papers.jl")
 include("siblings.jl")
 include("guardrails.jl")
 include("frozen.jl")
+foreach(f -> include(joinpath(@__DIR__, "acceptance", f)), sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))
 
 @testset "Aqua" begin
     Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))

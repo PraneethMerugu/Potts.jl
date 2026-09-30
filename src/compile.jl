@@ -233,9 +233,14 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         _located(() -> _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true),
             sys, d)
     end
+    # each rule divides by its own domain (P6.0a); a kind is divided by one domain only
     cluster_division = any(d -> d.domain isa ClusterDomain, sys.divisions)
-    cluster_division && !all(d -> d.domain isa ClusterDomain, sys.divisions) &&
-        throw(ArgumentError("a model divides either cells or clusters; mix of @divide cells(…) and clusters(…)"))
+    domain_kinds(D) = unique(Iterators.flatten(isempty(d.domain.kinds) ? (1:(length(sys.kinds) - 1)) : d.domain.kinds
+                                               for d in sys.divisions if d.domain isa D))
+    both = intersect(domain_kinds(CellDomain), domain_kinds(ClusterDomain))
+    isempty(both) || throw(ArgumentError("kind$(length(both) == 1 ? "" : "s") " *
+                                         join(("`$(sys.kinds[k + 1])`" for k in sort(both)), ", ") *
+                                         " divided by both @divide cells(…) and @divide clusters(…); a kind divides alone or with its cluster, not both"))
     for r in sys.link_rules
         _located(sys, r) do
             (relationship !== nothing && relationship.name === r.relationship) ||

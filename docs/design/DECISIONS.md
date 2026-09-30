@@ -687,3 +687,48 @@ recommendations are adopted.
   - acceptance tests are frozen before implementation;
   - a performance gate against a stored baseline;
   - the adversarial reviewer.
+
+## D-054 P6.0a acceptance fixture: free-cell division threshold (2026-09-30, coordinator)
+
+The frozen P6.0a test (`acceptance/p6_0a_division_kinds.jl`) gated free-cell division on
+`volume >= 20`. With V₀ = 25, λ = 1, J(free, medium) = 16 and T = 10, a corner copy into
+the medium gains about 32 in contact energy for 1 in volume energy. The free cells
+therefore shrink to 19–21 by the time the rule first runs, which is after the sweep of
+MCS 2. Only some of them divided: 3 of 3 stayed whole on checkerboard, 1 of 3 on
+sequential.
+
+This was a mistake in the fixture, not in the implementation and not a science question.
+The threshold is now `volume >= 12`. With that change the implementation (`beba0a5`)
+passes all 15 checks on both algorithms, and the unchanged tree still fails on the old
+"either cells or clusters" error.
+
+The rule for fixtures: a frozen test's division or transition trigger must hold with
+margin in the state the rule actually sees. This is the post-sweep state (AUTHORING
+§12.7), not the initial state.
+
+## D-055 Cell and cluster division per rule domain (2026-09-30, P6.0a; amends D-036)
+
+1. Each `@divide` rule divides by its own domain, all in one lifecycle pass:
+   - `cells(k…)` divides the cell alone;
+   - `clusters(k…)` divides the whole cluster of a root of kind k.
+2. A kind may be divided by only one domain. Naming it in both a `cells(…)` and a
+   `clusters(…)` rule, including the bare forms, is an `ArgumentError` at `mtkcompile`,
+   and the message names the kind.
+3. A cell divided alone behaves as follows:
+   - A member of a multi-cell cluster divides alone, and its daughter joins the parent's
+     cluster (for example a nucleus dividing inside its cytoplasm).
+   - A lone cell's daughter is a lone cell. Before this, the daughter joined the parent,
+     which made a 2-cell cluster.
+   - "Lone" is decided by the members alive at planning time. A cytoplasm whose nucleus
+     has died therefore divides into two clusters (reviewer's note).
+   - Cluster membership is runtime data, so the choice could not be a compile-time error.
+4. A dividing cluster takes precedence over its members' own cell divisions in the same
+   MCS.
+   - Clusters get daughter ids first, in root order, then cells.
+   - When capacity cannot fit a cluster, only the root's event is deferred. Its members'
+     own `EVENT_DIVIDE` may then use the remaining slots.
+5. CorePotts: `EVENT_DIVIDE_CLUSTER` plus the `Lifecycle` keywords `cluster_normal` and
+   `cluster_divide!` replace `Lifecycle(; clusters = true)`, which is removed. One
+   representation, not a flag and an event code.
+6. Division planes: the rules within one domain share one plane, and the two domains may
+   differ.

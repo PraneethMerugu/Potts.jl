@@ -513,10 +513,78 @@ end
     @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         energies = [Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume)]))
-    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+    # P6.0a: cell and cluster divisions mix per kind, but one kind divides by one domain
+    divsys(cellk, clusterk) = Potts.PottsSystem(; name = :x, kinds = [:medium, :a, :b],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-        divisions = [Potts.divide(Potts.cells(1); when = Potts.B.volume > 1),
-            Potts.divide(Potts.clusters(1); when = Potts.B.volume > 1)]))
+        divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)])
+    err = try
+        mtkcompile(divsys(Potts.cells(1), Potts.clusters(1, 2)))
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("`a`", err.msg) && !occursin("`b`", err.msg)
+    @test_throws ArgumentError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
+    @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa Potts.CompiledPottsSystem
+end
+
+# P6.0a: a nucleus dividing alone inside a cluster runs only its cell rule, and its daughter
+# stays in the cluster; the cluster division runs only the cluster rule
+@potts_model NucleusDivision begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 14 30; 16 30 14]
+        Jint = 2.0
+        V₀[kind] = [0.0, 48.0, 16.0]
+        λ = 10.0
+        λc = 1.0
+        Vc = 64.0
+        T = 10.0
+    end
+    @variables begin
+        mass(cell) = 2.0
+        ndiv(cell) = 0.0
+    end
+    @lattice Lattice((30, 30); neighborhood = Moore(1))
+    @energy begin
+        cells => λ * (volume - V₀[kind])^2
+        contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])
+        clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
+    end
+    @constraint no_extinction
+    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
+    @divide cells(nucleus) when = (mcs == 3) && (volume >= 2), along = (0.0, 1.0), ndiv => ndiv + 1
+    @sweep Metropolis(; temperature = T)
+end
+
+function check_nucleus_division(v)
+    live = findall(>(0), Array(v.cell.volume))
+    kd = Array(v.cell.kind)
+    cl = Array(v.cell.cluster)
+    roots = unique(cl[live])
+    @test length(live) == 54 && length(roots) == 18
+    @test all(r -> sort(kd[filter(c -> cl[c] == r, live)]) == [1, 2, 2], roots)   # nuclei stay inside
+    @test all(==(1), Array(v.cell.mass)[live])                    # Split once, by the cluster rule
+    cnt = Array(v.cell.ndiv)
+    @test all(c -> cnt[c] == (kd[c] == 2 ? 1 : 0), live)           # the cell rule once, nuclei only
+    @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.σ), cl)
+    @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(kd)]
+end
+
+@testset "cell and cluster divisions in one model" begin
+    σ, kinds, groups = compartment_state()
+    prob = PottsProblem(NucleusDivision(; name = :nd), [ownership => σ, kind => kinds, cluster => groups], (0, 5))
+    @test selfcheck(remake(prob; tspan = (0, 1))) < 1e-9
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        check_nucleus_division(solve(prob, alg).u[end])
+    end
+end
+
+get(ENV, "POTTS_GPU", "") == "metal" && @eval using Metal
+get(ENV, "POTTS_GPU", "") == "metal" && @testset "cell and cluster divisions in one model on Metal" begin
+    σ, kinds, groups = compartment_state()
+    prob = PottsProblem(NucleusDivision(; name = :nd), [ownership => σ, kind => kinds, cluster => groups], (0, 5);
+        T = Float32)
+    check_nucleus_division(solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = Metal.MetalBackend()).u[end])
 end
 
 @testset "ensembles and callbacks of generated problems" begin

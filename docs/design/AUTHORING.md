@@ -728,8 +728,22 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     so a cell-local ΔH would be wrong.
   - `cluster` itself never changes on a copy, so any energy can use it.
 - **Dividing clusters.** `@divide clusters(…)` divides a cluster as a unit:
+  - Only the root's condition counts (`clusters(k)` matches the root's kind).
   - Every member splits along one plane through the cluster centroid.
-  - The state rules apply to every member.
+  - The state rules apply to every member. The daughters form a new cluster.
+- **Cell and cluster divisions in one model (P6.0a).** Each `@divide` rule divides by its
+  own domain, in the same lifecycle pass: `cells(k)` divides the cell alone,
+  `clusters(k)` the whole cluster of the root.
+  - A kind is divided by one domain only: naming it in both a `cells(…)` and a
+    `clusters(…)` rule (bare `cells`/`clusters` name every kind) is an error at
+    `mtkcompile`.
+  - A `cells(k)` rule divides a member of a multi-cell cluster alone, and its daughter
+    joins the parent's cluster (a nucleus dividing inside its cytoplasm). A lone cell's
+    daughter is a lone cell (its own cluster).
+  - When a cluster divides, its members' own `cells(…)` divisions in that MCS are dropped
+    (the members already divide with the cluster).
+  - Each domain has one plane (`along`): the rules of one domain must agree; the two
+    domains may differ.
 
 ### 12.8 Initialization, import and steering
 

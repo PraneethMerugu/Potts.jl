@@ -298,13 +298,32 @@ using Metal
         latd = Lattice((40, 40))
         cell = merge(init_moments(σd, latd, 2), init_clusters(σd, [1, 1], latd))
         std = with_capacity(initial_state(σd, Int32[1, 2]; cell), 6)
-        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE : EVENT_NONE
+        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
         fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
-            lifecycle = Lifecycle(tr; clusters = true, normal = AlongMinorAxis{Float32}()))
+            lifecycle = Lifecycle(tr; cluster_normal = AlongMinorAxis{Float32}()))
         pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
         ud = solve(CPMProblem(fd, std, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
         @test ud.cell.volume[1:4] == Int32[68, 12, 68, 12]
         @test ud.cell.cluster[1:4] == Int32[1, 1, 3, 3]
+
+        # cells and clusters divide in one pass on the device (P6.0a): root 1 divides its
+        # cluster (member 2's own EVENT_DIVIDE yields to it); lone cell 3 divides alone
+        σm = copy(σd); σm[3:8, 30:37] .= 3
+        cm = merge(init_moments(σm, latd, 3), init_clusters(σm, [1, 1, 3], latd), (; tag = zeros(Float32, 3)))
+        stm = with_capacity(initial_state(σm, Int32[1, 2, 2]; cell = cm), 8)
+        trm(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER :
+                                       c in (2, 3) ? EVENT_DIVIDE : EVENT_NONE
+        alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.tag[parent] = st.cell.tag[daughter] = 1.0f0; nothing)
+        together!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.tag[parent] = st.cell.tag[daughter] = 2.0f0; nothing)
+        fm = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+            lifecycle = Lifecycle(trm; normal = (st, p, ctx, key, mcs, c) -> (0.0f0, 1.0f0), divide! = alone!,
+                cluster_normal = AlongMinorAxis{Float32}(), cluster_divide! = together!))
+        um = solve(CPMProblem(fm, stm, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
+        @test Array(um.cell.volume)[1:6] == Int32[68, 12, 24, 68, 12, 24]
+        @test Array(um.cell.cluster)[1:6] == Int32[1, 1, 3, 4, 4, 6]
+        @test Array(um.cell.tag)[1:6] == Float32[2, 2, 1, 2, 2, 1]
+        @test Array(um.cell.volume) == Int32[count(==(c), Array(um.σ)) for c in 1:8]
+        @test Array(um.cell.cluster_volume) == recompute_cluster_volume(Array(um.σ), Array(um.cell.cluster))
     end
 
     @testset "lattice domains on Metal" begin
