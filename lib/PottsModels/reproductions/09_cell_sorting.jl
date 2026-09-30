@@ -51,6 +51,7 @@ using Markdown
 CairoMakie.activate!(type = "png")
 
 const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
+const SEED = 1                          # base seed of every ensemble on this page
 
 # ## 2. The model, term by term
 #
@@ -80,7 +81,7 @@ const MARGIN = 10                       # medium margin of the full-run aggregat
 starts = [FULL ? graner_glazier_aggregate(1000; seed = i, margin = MARGIN) : (σ_state, k_state) for i in 1:n]
 σ0, k0 = starts[1]
 gg = GranerGlazier(; name = :gg, lattice = size(σ0))
-prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = 1)
+prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = SEED)
 J = getp(prob0, :J)(prob0)
 par(name) = getp(prob0, name)(prob0)
 ncells, ndark, nlight = length(k0), count(==(1), k0), count(==(2), k0)
@@ -141,7 +142,7 @@ Markdown.parse("""
 | Log-law window | 5–4000 paper MCS (spec §9.1 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
 | Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). Unsuitable for dispersal runs, which need a margin of at least 60 sites (`graner_glazier_aggregate(n; margin)`; spec §8.6 D2, §9.1 V-PRE14/15) |
 | Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | $(FULL ? "Assumption; `graner_glazier_aggregate`, one draw per replicate" : "Assumption, recorded in `data/graner/provenance.toml`") |
-| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | $(FULL ? "—" : "`graner_glazier_aggregate(n)`") | $(FULL ? "Paper size. " : "D-049 F-2; `data/graner/generate.jl`. ")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree within 0.005 at 1, 10 and 100 paper MCS (D-063; P6.1b2 review, 6 seeds) |
+| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | $(FULL ? "—" : "`graner_glazier_aggregate(n)`") | $(FULL ? "Paper size. " : "D-049 F-2; `data/graner/generate.jl`. ")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree at 1, 10 and 100 paper MCS (D-063; P6.1b2 review), and so does the V-PRE4 boundary drop (spec §9.1 V-PRE4) |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
 | Target area per kind | one value except the cavity run (PRE Fig. 28) | — | one `V₀` | — | Per-kind targets not expressible yet (spec §8.6 D14) |
 | Boundary length | mismatched bonds on the 8-neighbour lattice, medium included (PRE p.2133) | — | the same, each bond once | — | Once/twice counting cancels in fractions (spec §8.6 D8) |
@@ -269,7 +270,8 @@ nothing #hide
 # binding in both builds; **FULL** rows are paper comparisons with a verdict only in the full
 # run, reported as information here. Times are paper MCS; fractions are of all mismatched
 # bonds on the annealed copy. NC1 is the symmetric-contact control, J = [0 16 16; 16 11 11;
-# 16 11 11].
+# 16 11 11]. Rules marked "verbatim" are copied from §9.1; the others are abridged, and for
+# every row §9.1 is the binding text.
 #
 # | Target | Source | Pass rule (spec §9.1) | Class | Status (spec §9.1) | On this page |
 # |---|---|---|---|---|---|
@@ -286,11 +288,11 @@ nothing #hide
 # | V-PRE4 | PRE Fig. 13(a) | D = [`N_mm`(1) − mean `N_mm` over [100, 10³]] / `N_mm`(1) in [0.005, 0.03]; \|log-slope of `N_mm` over [10³, 10⁴]\| ≤ 0.005 `N_mm`(10³) per decade | FULL | fix applied | computed; start check in the full run |
 # | V-PRE5 | PRE Fig. 12 | mean dark-cluster count non-increasing over 10, 100, 10³, 10⁴; largest dark cluster ≥ 90% of dark cells at 10⁴; mean `F_dM`(10⁴) < 0.001 | FULL | fix applied | computed (10⁴ in the full run) |
 # | V-PRE6 | PRE Table II | bulk ⟨n⟩, μ₂ against T | — | **parked** (neighbour rule for n undefined) | — |
-# | V-PRE7 | PRE Fig. 15 | T scan: T = 0 frozen; order at 10³ T = 2 > 5 > 10; T = 40 `F_dl` > 0.07; T = 80 > 50% of cells gone by 500 | FULL + T scan | ready | not yet on this page |
-# | V-PRE8 | PRE Fig. 16, Table III | λ scan at T = 5: survival per class at 10³; `t*(λ = 10) / t*(λ = 0.5)` in [3, 30] | FULL + λ scan | fix applied | not yet on this page |
+# | V-PRE7 | PRE Fig. 15 | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02. Order at 10³: `F_dl`(T=2) > `F_dl`(T=5) > `F_dl`(T=10). T = 40: `F_dl` > 0.07 at every save in [10³, 10⁴]. T = 80: > 50% of cells gone (volume 0) by 500 (verbatim) | FULL + T scan | ready | not yet on this page |
+# | V-PRE8 | PRE Fig. 16, Table III | λ = 0.1: 0 cells alive. λ = 0.2: 0 light, ≥ 90% dark alive. λ = 0.5: ≥ 90% light alive. λ ≥ 1: all alive. `t*(λ = 10) / t*(λ = 0.5)` ∈ [3, 30] (verbatim) | FULL + λ scan | fix applied | not yet on this page |
 # | V-PRE9 | PRE Figs. 7–8 | checkerboard: `F_dl`(10³) ≥ 0.72 and rising over [10, 2000]; `F_ll`, `F_dd` ≤ 0.12 | FULL | ready | not yet on this page |
-# | V-PRE10 | PRE Fig. 9, Table I | checkerboard T scan (μ₂ clause parked) | FULL + T scan | fix applied | not yet on this page |
-# | V-PRE11 | PRE Figs. 18–19 | engulfment start: `F_dM`(10³) > 0.005, decreasing, accelerating on log axes; linear extrapolation to 0 in [5×10³, 3×10⁴] | FULL | fix applied | not yet on this page |
+# | V-PRE10 | PRE Fig. 9, Table I | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02; `F_dl`(2000) at T = 15 and T = 40 < `F_dl`(2000) at T = 10 (verbatim) | FULL + T scan | fix applied | not yet on this page |
+# | V-PRE11 | PRE Figs. 18–19 | mean `F_dM`(10³) > 0.005 and decreasing across saves 10², 10³, 10⁴; log-slope of `F_dM` over [10³, 10⁴] < log-slope over [10², 10³] (accelerating on log axes); a linear-in-t fit of `F_dM` over [2000, 10⁴] reaches 0 at t ∈ [5×10³, 3×10⁴] (verbatim) | FULL | fix applied | not yet on this page |
 # | V-PRE12 | PRE Figs. 20–21 | `J_lM` = 30: `F_lM` < 0.005 from 200; `F_dl` within ± 0.05 of 0.38, 0.25, 0.13 at 10, 100, 10³ | FULL | fix applied | not yet on this page |
 # | V-PRE13 (a) | PRE Figs. 22–24 | partial sorting: mean `F_dM`(10³) > 0.01 | SMOKE+FULL | fix applied | computed |
 # | V-PRE13 (b) | same | partial sorting: mean `F_dl` within ± 0.05 of 0.325, 0.245, 0.17 at 10, 100, 10³ | FULL | fix applied | computed |
@@ -351,7 +353,7 @@ s(key) = vec(std(F[key]; dims = 1))
 fmt(x) = string(round(x; digits = 3))
 shown = filter(t -> t in (1, 10, 100, 1000, 2000, 4000, 10_000, T_FULL), ts)
 Markdown.parse("""
-n = $n replicates (`seed = 1`, replicas 1:$n), `SequentialCPM(; proposal = Moore(1))`, CPU,
+n = $n replicates (`seed = $SEED`, replicas 1:$n), `SequentialCPM(; proposal = Moore(1))`, CPU,
 $(Threads.nthreads()) thread(s). Fractions of all mismatched bonds, mean ± SD (selected
 times; the plot shows all $(length(ts))):
 
@@ -454,13 +456,37 @@ At $t_end paper MCS, n = $n each:
 # The boundary-conditions row of §3 claims that the aggregate does not feel its periodic
 # image. The same starts, embedded in the middle of a lattice twice as wide, are run to 10³
 # paper MCS and their annealed bond counts compared with the main ensemble (spec §8.5 made
-# this check for the 64-cell start). The test: at every compared time the difference of the
-# means is within 3 standard errors of the difference.
+# this check for the 64-cell start). The test is a two-sample t test on each of the 9
+# comparisons (3 times × 3 bond counts), Bonferroni-corrected to a family-wise level of 5%:
+# every difference of the means must lie within q standard errors, q the two-sided
+# t-quantile at 5%/9 with 2n − 2 degrees of freedom. It is class FULL: a verdict in the full
+# build, information here. The full run's margin was chosen by a separate check at n = 6
+# (spec §9.1, ruling 3).
+
+pf(ok) = ok ? "PASS" : "FAIL"
+binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
+result(ok, class) = binding(class) ? pf(ok) : "info: $(ok ? "in band" : "out of band")"
+## Student-t CDF for ν degrees of freedom: with x = √ν tan θ the density is ∝ cos^(ν−1) θ;
+## integrated by Simpson's rule. The quantile is found by bisection.
+function simpson(f, a, b; m = 2000)
+    h = (b - a) / m
+    return h / 3 * (f(a) + f(b) + sum((isodd(i) ? 4 : 2) * f(a + i * h) for i in 1:(m - 1)))
+end
+tcdf(x, ν) = 0.5 + 0.5sign(x) * simpson(θ -> cos(θ)^(ν - 1), 0, atan(abs(x) / sqrt(ν))) /
+                              simpson(θ -> cos(θ)^(ν - 1), 0, π / 2)
+function tquantile(p, ν)
+    lo, hi = 0.0, 1000.0
+    for _ in 1:200
+        mid = (lo + hi) / 2
+        tcdf(mid, ν) < p ? (lo = mid) : (hi = mid)
+    end
+    return (lo + hi) / 2
+end
 
 t_pad = [10, 100, t_end]
 σp = padded(σ0)
 prob_pad = PottsProblem(GranerGlazier(; name = :gg_padded, lattice = size(σp)),
-    [ownership => σp, kind => k0], (0, PAPER_MCS * t_end); seed = 1)
+    [ownership => σp, kind => k0], (0, PAPER_MCS * t_end); seed = SEED)
 pad_start(q, ctx) = FULL ? remake(q; u0 = [ownership => padded(starts[ctx.sim_id][1]), kind => starts[ctx.sim_id][2]]) : q
 ens_pad = solve(EnsembleProblem(prob_pad; prob_func = pad_start), alg, EnsembleThreads(); trajectories = n,
     saveat = PAPER_MCS .* t_pad)
@@ -468,24 +494,26 @@ pad_counts = [bond_counts(annealed(state_at(sol, t), kinds_of(i), prob_pad), kin
               for (i, sol) in enumerate(ens_pad.u), t in t_pad]
 pad_rows = String[]
 pad_oks = Bool[]
+n_cmp = length(t_pad) * 3
+q_pad = tquantile(1 - 0.05 / (2n_cmp), 2n - 2)
 for (j, t) in enumerate(t_pad), key in (:dl, :dM, :total)
     base = key === :total ? Nmm[:, findfirst(==(t), ts)] : Cb[key][:, findfirst(==(t), ts)]
     wide = [key === :total ? sum(values(pad_counts[i, j])) : pad_counts[i, j][key] for i in 1:n]
     Δ, se = mean(wide) - mean(base), sqrt(var(base) / n + var(wide) / n)
-    ok = abs(Δ) <= 3se
+    ok = abs(Δ) <= q_pad * se
     push!(pad_oks, ok)
     push!(pad_rows, "| $t | $key | $(fmt(mean(base))) ± $(fmt(std(base))) | $(fmt(mean(wide))) ± $(fmt(std(wide))) | " *
-                    "$(fmt(Δ)) | $(fmt(3se)) | $(ok ? "PASS" : "FAIL") |")
+                    "$(fmt(Δ)) | $(fmt(q_pad * se)) | $(ok ? "yes" : "no") |")
 end
 Markdown.parse("""
 Bond counts (mean ± SD, n = $n each), $(join(size(σ0), " × ")) against $dims_pad:
 
-| paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | 3 SE | Result |
+| paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | q SE (q = $(fmt(q_pad))) | within |
 |---|---|---|---|---|---|---|
 """ * join(pad_rows, "\n") * """
 
 
-Periodic boundaries harmless for sorting at this size: **$(all(pad_oks) ? "PASS" : "FAIL")**.
+Periodic boundaries harmless for sorting at this size (class FULL): **$(result(all(pad_oks), "FULL"))**.
 """)
 
 # ### Pass/fail table
@@ -501,9 +529,6 @@ Periodic boundaries harmless for sorting at this size: **$(all(pad_oks) ? "PASS"
 # never carry one. The one extra row that is not
 # in the spec is labelled as such.
 
-pf(ok) = ok ? "PASS" : "FAIL"
-binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
-result(ok, class) = binding(class) ? pf(ok) : "info: $(ok ? "in band" : "out of band")"
 ## ensemble mean of `key` at paper time τ, linear in log t between saves; `nothing` outside the run
 function at(key, τ)
     (τ < first(ts) || τ > last(ts)) && return nothing
@@ -720,7 +745,9 @@ if FULL
     Markdown.parse("V-PRE4 start check, replicates $(relax_ids): D = $(fmt(mean(Dmm[relax_ids]))) from the Voronoi " *
                    "starts against $(fmt(mean(D_relaxed))) from their relaxed copies.")
 else
-    Markdown.parse("The start check runs in the full build; the reduced build's start is already relaxed.")
+    Markdown.parse("The start check runs in the full build; the reduced build's start is already relaxed. " *
+                   "The pre-freeze check (1000 cells, 6 seeds, Voronoi against relaxed starts) found no start " *
+                   "effect on D; its values are recorded in spec §9.1 V-PRE4.")
 end
 
 # Diagnosis of the rows that fail or fall out of band, generated from the table:
@@ -752,7 +779,7 @@ end #hide
 any(r -> haskey(r.info, :key), failing) && #hide
     push!(diag_lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value (0.0268 dark + 0.0367 light, " * #hide
         "PRE Fig. 13(b)); the paper's medium share stays at 0.063–0.064 at every time shown (t = 1…1000), so one " * #hide
-        "value serves all times. Read-off uncertainty ≈ ±0.002 (spec §9).") #hide
+        "value serves all times. Read-off uncertainty ≈ ±0.001 per medium fraction (spec §9.0).") #hide
 if any(r -> startswith(r.target, "V-PRE1 light–light"), failing) #hide
     push!(diag_lines, "Light–light: at 10³, $(round(Int, 100mean(i -> light_on_surface(sorted_states[i], kinds_of(i)), eachindex(sorted_states))))% " * #hide
         "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " * #hide
