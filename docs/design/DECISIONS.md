@@ -1090,3 +1090,31 @@ measurably costly standard, monotone slots, is kept only in its user-visible for
 
 
 **Sign-off.** The maintainer approved both need-based items in the coordinator session on 2026-09-30: X2 (a cell must receive a site to be born) and dropping D-053 item 6's `retain_empty` and explicit liveness. The fallback `retain_empty` design stays in `research/liveness-survey.md` §6.2. Akeeb's seeding (V-A1) is handed to the P6.2b V-target audit.
+
+## D-068 Akeeb seeding emulates the authors' CC3D code (2026-09-30, maintainer MD-1)
+
+**Source.** The maintainer's answer, relayed verbatim by the models-and-publications
+session from its spec 10 pre-freeze audit.
+- The question was: "Akeeb's published runs started with ~382 real leaders + ~8 empty
+  'ghost' cells; which should our default reproduce?"
+- The answer was "Emulate authors (Recommended)", with this option text: "Default: count a
+  missed draw toward the 390 quota without creating a cell (zero cost) — exactly what
+  produced the published data. Keep today's retry (390 real leaders) as a variant keyword.
+  Also fix the frozen test's issues the audit found (±50 divisions ≈ 4% false-fail; sim
+  helper defaulting to μ=30)."
+
+**Evidence.**
+- In the authors' code, `CCIecmSteppables.py:68` calls `new_cell` on every draw, `:73–74`
+  paint only on a follower pixel, and `:75` recomputes the ratio after a hit.
+- A seeding-only simulation (20k repetitions) gives 7.9 ± 2.8 empty and 382.1 ± 2.7 painted
+  leaders. The inventory is 390 in 96.1 % of repetitions.
+
+**Decision.**
+- `akeeb_state` by default counts a missed draw toward the leader quota without creating a
+  cell. Under D-066 X2 a ghost is never alive, so it is not allocated at all.
+- Today's retry, which gives exactly 390 painted leaders, stays as a variant keyword.
+- The frozen `lib/PottsModels/test/papers.jl` Akeeb testset is edited under this entry:
+  - the ±50-division tolerance, which fails falsely about 4 % of the time, is replaced by
+    a band derived from the ensemble;
+  - the sim helper's default μ becomes 24 (D-050 A5).
+- The performance-gate Akeeb case is re-baselined in the same change.
