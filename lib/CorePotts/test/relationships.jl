@@ -199,7 +199,15 @@ end
             link_claims((; links = st.cell.links__tether), prop, Val(1))...)
         f = CPMFunction(dH; commit!, temperature = gg_temperature, reads)
         @test CorePotts.has_reads(f) && !CorePotts.has_reads(GG)
+        # P6.0b3: without reads, the write-claim buffers are `nothing`, i.e. ghost kernel
+        # arguments, so the kernels compile to the pre-P6.0b signature (a dead buffer
+        # argument cost 3 % on Metal); with reads they are real per-cell buffers.
         p = merge(gg_params(), (; V0 = 36.0, k = 2.0))
+        let cache(g) = init(CPMProblem(g, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1), p),
+                CheckerboardCPM(); save_start = false).cache
+            @test cache(GG).wclaims === (nothing, nothing)
+            @test all(w -> w isa Vector{UInt32} && length(w) == 3, cache(f).wclaims)
+        end
         for alg in (SequentialCPM(), CheckerboardCPM())
             ds = map(1:4) do seed
                 u = solve(CPMProblem(f, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1500), p; seed), alg).u[end]

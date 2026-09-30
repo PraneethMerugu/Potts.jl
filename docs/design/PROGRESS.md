@@ -1296,3 +1296,14 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge fix:** a missing `[[file]]` header in frozen.toml after a conflict. The frozen
   check caught it.
 
+## 2026-09-30 — P6.0b3 merged: no-reads kernels pay nothing again
+
+- **Cause:** P6.0b passed two dead length-1 `wclaim` buffers to the propose and commit
+  kernels of models without reads. The IR diff showed identical bodies, with the extra
+  arguments only in the signatures.
+- **Fix:** `wclaims = (nothing, nothing)` through a `CheckerboardCache` type parameter.
+- **A/B against the pre-P6.0b base (implementer):** akeeb 0.993, openvt 0.996, merks 1.001.
+  The reviewer's A/B was inconclusive because the GPU stayed in its slow power state. The
+  reviewer approved on the code and IR evidence.
+- **Rule recorded:** D-058 item 4.
+

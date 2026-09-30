@@ -136,11 +136,13 @@ end
     end
 end
 
-struct CheckerboardCache{N, P, S, C, B, K1, K2}
+struct CheckerboardCache{N, P, S, C, W, B, K1, K2}
     prio::P
     source::S
     claims::NTuple{2, C}
-    wclaims::NTuple{2, C}             # write claims; length 1 (unused) without `f.reads`
+    # write claims; `nothing` without `f.reads`, so the kernels get ghost (zero-size)
+    # arguments instead of dead buffers (P6.0b3: two dead buffer arguments cost 3 % on Metal)
+    wclaims::NTuple{2, W}
     status::B
     colors::Vector{Color{N}}
     groupsize::Vector{Int}            # per color; 0 = let the backend choose
@@ -175,7 +177,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),
         (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))),
-        has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (zeros_u32(1), zeros_u32(1)),
+        has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (nothing, nothing),
         zeros_u32(1), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
         collect(1:length(cs)), Ref(1), idbits,
         propose_kernel!(backend), commit_kernel!(backend))

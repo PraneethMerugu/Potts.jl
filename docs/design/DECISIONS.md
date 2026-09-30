@@ -806,3 +806,8 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
 3. **Storage.** Link columns stay flat in `st.cell`, so capacity growth, division,
    checkpoints and device adapt keep iterating flat arrays. Generated code builds a
    zero-cost NamedTuple store view per relationship.
+4. **Zero cost when switched off (P6.0b3).** A feature that is off must pass `nothing` to
+   device kernels, not a placeholder array. Two dead length-1 buffer arguments cost 3 % on
+   Metal, even though the kernel bodies were identical. The A/B against 5258ab9 now gives
+   akeeb 0.993, openvt 0.996 and merks 1.001.
+
