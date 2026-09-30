@@ -811,3 +811,13 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    Metal, even though the kernel bodies were identical. The A/B against 5258ab9 now gives
    akeeb 0.993, openvt 0.996 and merks 1.001.
 
+
+## D-059 papers.jl anneals each Graner–Glazier regime under its own Hamiltonian (2026-09-30, coordinator; P6.1b2)
+
+- **The bias.** The frozen `papers.jl` measured every regime on a copy annealed at T = 0
+  under the default sorting J. The partial-sorting, checkerboard and reversed-layer runs
+  were therefore annealed under a Hamiltonian that was not theirs. The P6.0h reviewer
+  measured a bias of 0.005–0.01 toward the effect being tested.
+- **The fix.** `anneal(σ, pars)` takes the run's own parameters, with T overridden to 0, as
+  PRE §II D2 describes. The measurement helpers pass `pars` through.
+- **The check.** All 12 GG checks still pass.

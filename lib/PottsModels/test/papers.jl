@@ -24,11 +24,12 @@ using LinearAlgebra: Symmetric, eigen, dot
         return n
     end
     # PRE p.2133: fractions of all mismatched bonds, medium included; measured on a copy
-    # annealed for 2 paper MCS (32 here) at T = 0, the simulation itself untouched (p.2134)
-    anneal(σ; seed = 1) = solve(PottsProblem(GranerGlazier(; name = :gg), [ownership => copy(σ), kind => k, :T => 0.0],
-        (0, 32); seed), SequentialCPM(); saveat = 32).u[end].σ
-    medium_fraction(σ, key) = (n = bonds(anneal(σ)); n[key] / sum(values(n)))
-    hetero(σ) = (n = bonds(anneal(σ)); n[:dl] / sum(values(n)))
+    # annealed for 2 paper MCS (32 here) at T = 0 under the run's own Hamiltonian (`pars`,
+    # PRE §II D2; D-059), the simulation itself untouched (p.2134)
+    anneal(σ, pars = []; seed = 1) = solve(PottsProblem(GranerGlazier(; name = :gg),
+        [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed), SequentialCPM(); saveat = 32).u[end].σ
+    medium_fraction(σ, key, pars = []) = (n = bonds(anneal(σ, pars)); n[key] / sum(values(n)))
+    hetero(σ, pars = []) = (n = bonds(anneal(σ, pars)); n[:dl] / sum(values(n)))
     function radius_ratio(σ)                 # mean distance to the aggregate centroid, dark / light
         sites = findall(!=(0), σ); c = (mean(i[1] for i in sites), mean(i[2] for i in sites))
         r(kk) = mean(hypot(i[1] - c[1], i[2] - c[2]) for i in sites if k[σ[i]] == kk)
@@ -43,10 +44,12 @@ using LinearAlgebra: Symmetric, eigen, dot
     end
     # partial sorting (PRE §III E: J_ll = 11, J_dl = 14, T = 5) never forms the monolayer:
     # dark cells keep a share of the surface (≈ 5%, against ≤ 1% under engulfment)
-    @test all(s -> medium_fraction(sim([:J => [0 16 16; 16 2 14; 16 14 11], :T => 5.0], 10_000; seed = s).u[end].σ, :dM) > 0.03, 1:3)
+    partial = [:J => [0 16 16; 16 2 14; 16 14 11], :T => 5.0]
+    @test all(s -> medium_fraction(sim(partial, 10_000; seed = s).u[end].σ, :dM, partial) > 0.03, 1:3)
     # checkerboard when heterotypic bonds are cheapest (PRE §III A, Fig. 8b): about half of
     # all boundaries (medium included) are heterotypic, twice the sorting run's share
-    @test all(s -> hetero(sim([:J => [0 12 12; 12 8 6; 12 6 10]], 1000; seed = s).u[end].σ) > 0.45, 1:3)
+    checker = [:J => [0 12 12; 12 8 6; 12 6 10]]
+    @test all(s -> hetero(sim(checker, 1000; seed = s).u[end].σ, checker) > 0.45, 1:3)
     # sorting is logarithmic in time (PRL Fig. 2a): heterotypic fraction linear in ln t over
     # 4–512 paper MCS (our 64-cell aggregate levels off near 0.18 after that; the paper's
     # 1000 cells keep sorting to 10⁴)
@@ -74,9 +77,10 @@ using LinearAlgebra: Symmetric, eigen, dot
     @test Δarea(sim([], 1000).u[end].σ) > 1
     @test abs(Δarea(sim([:J => [0 16 16; 16 8 11; 16 11 8]], 1000).u[end].σ)) < 0.5
     # expensive light–medium bonds reverse the layers: dark cells outside (PRE §III D, Fig. 20)
+    reversed = [:J => [0 16 30; 16 2 11; 30 11 14]]
     rev = map(1:3) do seed
-        σ = sim([:J => [0 16 30; 16 2 11; 30 11 14]], 4000; seed).u[end].σ
-        (medium_fraction(σ, :lM), radius_ratio(σ))
+        σ = sim(reversed, 4000; seed).u[end].σ
+        (medium_fraction(σ, :lM, reversed), radius_ratio(σ))
     end
     @test all(r -> r[1] < 0.005 && r[2] > 1.15, rev) && mean(last, rev) > 1.3
 end

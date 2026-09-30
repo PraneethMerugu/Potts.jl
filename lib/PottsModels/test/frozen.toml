@@ -4,8 +4,8 @@
 # same commit. Hash: shasum -a 256 <file>
 [[file]]
 path = "papers.jl"
-sha256 = "0bf4e3b7704d49e1c56efc097376aa2462285f06fff97fcad7cd76973eb7a801"
-decision = "D-050"
+sha256 = "802d4d7ef03e406f520ce11455b5aa211526888ec5a3dbf177c4624f5086b95b"
+decision = "D-059"
 
 [[file]]
 path = "acceptance/p6_0a_division_kinds.jl"
@@ -20,4 +20,9 @@ decision = "D-056"
 [[file]]
 path = "acceptance/p6_0b_relationships.jl"
 sha256 = "146da9cc0946865fa9bee0cb023dfacab0360aa83c48d9393698f43440f8d2a1"
+decision = "D-053"
+
+[[file]]
+path = "acceptance/p6_1b2_gg_aggregate.jl"
+sha256 = "1d21ef11ceae88a627ca4bc89a22873c6f07f2d74d4157f8662a4bb12887b0d7"
 decision = "D-053"
