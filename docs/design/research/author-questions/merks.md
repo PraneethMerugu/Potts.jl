@@ -15,8 +15,8 @@ a page, figure or code line, and every choice we make will be listed in a tutori
 publish and share with you.
 
 Thanks to Dataset S1 and the Tissue Simulation Toolkit 0.1.3 released with the 2008 paper, the
-2008 model is almost fully determined. The 2006 model is not, because we could not obtain its
-supplementary methods. Questions 1–2 block an exact reproduction; 3–5 are quick. We would like
+2008 model is almost fully determined. The 2006 model is not, because we have not yet been able
+to consult its supplementary methods. Questions 1–2 block an exact reproduction; 3–5 are quick. We would like
 to reach a perfect reproduction together with you, and we would welcome any corrections.
 
 ## Blocking questions
@@ -64,9 +64,9 @@ sweeps of Figs 3, 5 and 7–10, the 1024-cell Fig 10 runs, the 256-cell Figs 12�
 supports χ(c,c) ∈ {0, χ(c,M)}. *We expose χ(c,c) as a real parameter, a superset of the
 released code.*
 
-**Q5. Lattice sizes.** (a) The enclosing lattice of 2008 Fig 2 is garbled in our PDF
-("1,00 µm × 1,00 µm", p.4). Is it 500 × 500? (b) The Fig 10 1024-cell runs are given as
-400×400. Is that pixels, or 400 µm (200 px) as for Figs 5–11? *We assume 500 × 500 for Fig 2.*
+**Q5. Enclosing lattice of Fig 2.** The size of the lattice enclosing the 2008 Fig 2 seed region
+is printed as "1,00 µm × 1,00 µm" (p.4, also in the online version). Is it 1,000 µm, i.e.
+500 × 500 px, as for Fig 12? *We assume 500 × 500.*
 
 Once the reproduction is published, we will send you the tutorial, with separate 2006 and 2008
 parameter sets. Each of your answers will be recorded there with a dated entry.
@@ -79,6 +79,6 @@ Q1: spec 01 §2.9, §7.6, §7.8, §7.9 D-12, D-13, D-16, §8 A-1, A-3, A-15; spe
 Q2: spec 01 §7.1 (relaxation :40), §7.9 D-5, §8 A-19; specs README §4 M6; README §5 Merks item 2. HOLD: same sources
 Q3: spec 01 §7.9 D-17, D-18, §8 A-14, A-18; README §5 Merks item 3
 Q4: spec 01 §3.3, §7.1, §7.9 D-2, D-3, §8 A-20; README §5 Merks item 4
-Q5: spec 01 §2.9, §3.3, §8 A-9, A-10; specs README §4 M10; README §5 Merks item 5 (Fig 12 dropped in review round 1)
+Q5: spec 01 §2.9, §8 A-9; specs README §4 M10; README §5 Merks item 5 (Fig 12 dropped in review round 1; former Q5(b) on the Fig 10 1024-cell lattice dropped in review round 2, answered by 01b p.9, see spec 01 §3.3 row 10 and §8 A-10)
 Tutorial (planned): 01_merks.jl, step 3
 -->

@@ -78,9 +78,9 @@ old input files or notes are all very welcome.
 ### Q5 [B] Jiang 2005: glucose rate 162 vs 216, and how rates are applied
 
 - **Context.** Table 1 (p.3888) gives b₀(P) = 162; the erratum (Biophys J 91 (2006) 775) says it
-  should read 216. The erratum also corrects the Table 1 unit to mM/h. With 162, C₀ = 240 ≈ 1.5 ×
-  162 and the quiescent-to-proliferating glucose-rate ratio 80/162 ≈ ½, as the text says; with
-  216 neither holds.
+  should read 216. The erratum also corrects the Table 1 footnote unit from mM/h/cm³ to mM/h.
+  With 162, C₀ = 240 ≈ 1.5 × 162 and the quiescent-to-proliferating glucose-rate ratio
+  80/162 ≈ ½, as the text says; with 216 neither holds.
 - **Question.** Did Figs 5–8 use 162 or 216, and should C₀ = 240 and b₀(Q) = 80 change with it?
   How is a rate in mM/h applied to the coarse-grid nodes a cell covers (per cell, or per cell
   volume)?
@@ -125,7 +125,7 @@ with OR? *We follow the text and OR.*
 edge, special J)? At T = 0, was a flip with ΔH′ = 0 accepted (Eq 3 puts it in the exponential
 branch)? *We choose the wall whose relaxed ordered foam gives μ₂(n) ≈ 0.44, and accept ties.*
 
-**Q12. Akeeb et al. 2026 (for Sherif Akeeb).** (1) Which classifier variant generated Fig 5 and
+**Q12. Akeeb et al. 2026 (for S. Akeeb).** (1) Which classifier variant generated Fig 5 and
 S1 Table? (2) Is the third term of Eq (1) shorthand for the CC3D form ΔH = λ(c_source −
 c_target), applied once when either cell is a leader? (3) Which repository and commit produced
 the 13,310 runs (the paper gives two URLs, the repository README a third)? (4) Does CC3D sweep at
@@ -144,7 +144,7 @@ Q1: spec 05 §2.1, §7.2, §7.4 q1; spec 07 §2.1, §7.3 q1; specs README §4 B2
 Q2: spec 05 §2.4, §7.4 q4–q5; README §5 Jiang item 6
 Q3: spec 06 §2.4, §7.1 item 2, §7.3 q2; specs README §4 J3; README §5 Jiang item 2
 Q4: spec 06 §2.2, §3.3, §7.3 q1; specs README §1 (grade C); README §5 Jiang item 3
-Q5: spec 06 §3.2, §3.4, §7.1 items 4 and 8, §7.3 q5; specs README §4 J1; erratum unit correction per review round 1 (spec 06 §3.4 does not yet record the erratum text); README §5 Jiang item 4
+Q5: spec 06 §3.2, §3.4, §7.1 items 4 and 8, §7.3 q5; specs README §4 J1; erratum text (PMC1483097): glucose rate for proliferating cells should read 216 (not 162); unit [mM/h/cm3] should read [mM/h] (spec 06 §3.4 does not yet record it); README §5 Jiang item 4
 Q6: spec 04 §2.2, §7 A-1, A-10; specs README §4 F1; README §5 Jiang item 5 / Glazier item 6
 Q7: spec 05 §7.4 q12; spec 07 §7.3 q11; spec 06 §7.3 q12
 Q8: spec 07 §7.1 item 3, §7.3 q2–q3; specs README §4 B9

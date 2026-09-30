@@ -22,7 +22,8 @@
 **Version caveat.** The 14c on disk is arXiv **v1 (2023)**, not the 2025 Physica A version of record. Parameters and equations may differ in the published version. The code commit (Jan 2023) predates the arXiv v1.
 
 **Not read.**
-- 14a Supporting Material (Sections S1–S3, Figs. S1–S5, Video S1; cited at 14a p.2806 and p.2810). It is not on disk.
+- 14a Supporting Material: Document S1 (`mmc1.pdf`; Sections S1–S3, Figs. S1–S5, Table S1; with Video S1; cited at 14a p.2806 and p.2810). **Public (Biophys J, PMC7264849), not yet obtained.** 14a states that its CC3D code and run instructions are in the Supporting Materials and Methods, so Document S1 may differ from or confirm `SF1_Code.zip`.
+- 14a model on nanoHUB (tool `gltcellcrawl`, DOI 10.21981/YXKM-4E26). **Public, not yet obtained.** To be diffed against `SF1_Code.zip` (pre-send check for the de Almeida/Thomas letter, `../author-questions/README.md`).
 - 14b Supplementary (Tables S1–S2, Figs. S1–S21). Not on disk.
 - `Instructions_To_Run.pdf` (392 KB) from the same directory as `SF1_Code.zip`. It is not on disk. The code itself (`SF1_Code.zip`) **has been read in full**; see §2.9.
 

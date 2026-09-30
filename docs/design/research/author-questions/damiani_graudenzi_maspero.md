@@ -32,7 +32,7 @@ with you.
 ### Q2 [B] [HOLD] Parameters taken from the ACRI 2018 paper
 
 - **Context.** The Fundamenta Informaticae paper takes its defaults "as in [18]" (p.285), i.e.
-  Graudenzi et al., ACRI 2018 (LNCS 11115), which we could not obtain.
+  Graudenzi et al., ACRI 2018 (LNCS 11115), which we have not yet been able to consult.
 - **Question.** What values of λ, k_BT, attempts per MCS and initial field values were used in
   the Fundamenta Informaticae simulations?
 - **Our assumption.** None yet.

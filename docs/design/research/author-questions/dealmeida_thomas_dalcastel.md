@@ -2,9 +2,10 @@
 
 Batch 1 — **draft, not sent.** The maintainer sends this personally. Internal traceability
 is in the comment block at the end of the file.
-- cc James Glazier (co-author of Fortuna et al. 2020). Add Ignacio Fortuna as addressee if he
+- cc James Glazier (co-author of Fortuna et al. 2020). Add Ismael Fortuna as addressee if he
   can be reached.
-- **Q2, Q4 and Q5 are on HOLD** until the pre-send checks in README.md are done.
+- **All six questions (Q1–Q6) are on HOLD** until the pre-send checks in README.md are done.
+  Q1, Q3 and Q6 may be settled by the Biophys J 2020 Document S1 and the nanoHUB code.
 
 ---
 
@@ -23,7 +24,7 @@ reproduction; 4–6 are quick. We would be glad to reach an exact reproduction t
 
 ## Blocking questions
 
-### Q1 [B] J between cytoplasm and lamellipodium: 20 or 10?
+### Q1 [B] [HOLD] J between cytoplasm and lamellipodium: 20 or 10?
 
 - **Context.** Fortuna et al., Biophys J 118 (2020), Table 1 (p.2807) gives
   J_cyto–lamellipodium = 20. Both released codes use 10: `CellMig3D.py:230` (ContactInternal
@@ -46,7 +47,7 @@ reproduction; 4–6 are quick. We would be glad to reach an exact reproduction t
 - **What changes.** The effective protrusion strength, and therefore speeds and the Table 2
   Fürth fits.
 
-### Q3 [B] Did `SF1_Code.zip` produce the 2020 figures?
+### Q3 [B] [HOLD] Did `SF1_Code.zip` produce the 2020 figures?
 
 - **Context.** The code header says it was "written between 2014-2015" (`CellMig3D.py:9`). The
   Python and XML files in the zip are dated 2021-08, i.e. repackaged after publication, and the
@@ -69,7 +70,7 @@ the 100-MCS mean? *We follow the code: δ = 0, "≤", current MCS included.*
 φ_f = 0.05, but the Fig 6 caption and Table S2 give φ_f = 0.20. Is 0.20 correct? *We read it
 as 0.20.*
 
-**Q6. Polarization measure (Fortuna Fig 12).** Fig 12 uses the "lamellipodium–nucleus"
+**Q6. [HOLD] Polarization measure (Fortuna Fig 12).** Fig 12 uses the "lamellipodium–nucleus"
 centre-of-mass distance, while the code logs `dcm_F_CN`, the xy distance between the
 lamellipodium (FRONT) centre of mass and the volume-weighted centre of mass of cytoplasm plus
 nucleus ("CN") (`CellMig3D_Steppables.py:359–369`). Which quantity is plotted?
@@ -81,11 +82,11 @@ With thanks,
 [Maintainer name]
 
 <!-- trace:
-Q1: spec 14 §2.9.7 item 1, §9 item 3; specs README §4 C1; README §5 de Almeida item 1
+Q1: spec 14 §2.9.7 item 1, §9 item 3; specs README §4 C1; README §5 de Almeida item 1. HOLD: Biophys J 2020 Document S1 (mmc1.pdf, with Table S1) and nanoHUB gltcellcrawl (DOI 10.21981/YXKM-4E26), diffed against SF1_Code.zip
 Q2: spec 14 §2.9.2, §9 item 15; specs README §4 C4; README §5 de Almeida item 2 / Glazier item 3. HOLD: CC3D 3.7.9 DiffusionSolverFE source; Instructions_To_Run.pdf from the SF1 directory
-Q3: spec 14 §1 (14a-code row), §2.9.7 items 1, 2, 16, §9 item 17; README §5 Glazier item 3 (moved here in review round 1)
+Q3: spec 14 §1 (14a-code row), §2.9.7 items 1, 2, 16, §9 item 17; README §5 Glazier item 3 (moved here in review round 1). HOLD: same Document S1 / nanoHUB diff; if the codes match, rewrite as whether the same settings were used for Figs 5–12
 Q4: spec 14 §9 item 10; specs README §4 C6; README §5 de Almeida item 3. HOLD: diff arXiv v1 against the 2025 Physica A version of record
 Q5: spec 14 §9 item 12; README §5 de Almeida item 4. HOLD: same diff
-Q6: spec 14 §2.9.1 (output row), §2.9.7 item 12; README §5 de Almeida item 5
+Q6: spec 14 §2.9.1 (output row), §2.9.7 item 12; README §5 de Almeida item 5. HOLD: same Document S1 / nanoHUB diff
 Tutorial (planned): 14_nucleus_migration.jl, steps 5 and 7b
 -->

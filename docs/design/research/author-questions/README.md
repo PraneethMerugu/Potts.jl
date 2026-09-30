@@ -13,9 +13,11 @@ personally. The drafts contain no contact details; `[Maintainer name]` marks the
 
 ## Conventions
 
-- **Send version.** The letter body (from "Dear …" to the signature) is ready to send. It
-  cites only the papers' own pages, equations, figures and the authors' released files. The
-  short header above the body holds routing notes (cc, HOLD) for the maintainer and is not sent.
+- **Send version.** The letter body (from "Dear …" to the signature) is the text to be sent,
+  but it is not send-ready as it stands: first work through the pre-send checklist, which
+  includes removing the **[HOLD]** tags from the body. It cites only the papers' own pages,
+  equations, figures and the authors' released files. The short header above the body holds
+  routing notes (cc, HOLD) for the maintainer and is not sent.
 - **Traceability.** An HTML comment `<!-- trace: … -->` at the end of each file maps every
   question to its spec section ("spec NN §x" = `../model-specs/NN_*.md`), to the decision row
   in `../model-specs/README.md` §4 that holds our current assumption, and to its README §5
@@ -44,12 +46,12 @@ personally. The drafts contain no contact details; `[Maintainer name]` marks the
 | Yi Jiang (with co-authors) | [jiang.md](jiang.md) | 04, 05, 06, 07, 10 | 12 | 6 | – | draft — not sent |
 | James A. Glazier (cc/co-addressee F. Graner for Q7) | [glazier.md](glazier.md) | 12, 09, 04 | 7 | 5 | – | draft — not sent |
 | Roeland Merks | [merks.md](merks.md) | 01 | 5 | 2 | Q1, Q2 | draft — not sent |
-| Rita de Almeida, Gilberto Thomas, Pedro Dal-Castel (cc J.A. Glazier; add I. Fortuna if reachable) | [dealmeida_thomas_dalcastel.md](dealmeida_thomas_dalcastel.md) | 14 | 6 | 3 | Q2, Q4, Q5 | draft — not sent |
+| Rita de Almeida, Gilberto Thomas, Pedro Dal-Castel (cc J.A. Glazier; add Ismael Fortuna if reachable) | [dealmeida_thomas_dalcastel.md](dealmeida_thomas_dalcastel.md) | 14 | 6 | 3 | Q1–Q6 | draft — not sent |
 | James Osborne, Alexander Fletcher | [osborne_fletcher.md](osborne_fletcher.md) | 09 | 5 | 1 | Q4 | draft — not sent |
 | Andreas Deutsch, Jörn Starruß | [deutsch_starruss.md](deutsch_starruss.md) | 13 | 8 (Q0–Q7) | 3 | – | draft — not sent |
 | Chiara Damiani, Alex Graudenzi, Davide Maspero | [damiani_graudenzi_maspero.md](damiani_graudenzi_maspero.md) | 08 | 9 | 5 | Q1, Q2 | draft — not sent |
 | Sahar Jafari Nivlouei, Madjid Soltani, Rui Travasso | [jafari_soltani_travasso.md](jafari_soltani_travasso.md) | 11 | 7 | 6 | – | draft — not sent |
-| **Total** | | | **59** | **31** | **8** | |
+| **Total** | | | **59** | **31** | **11** | |
 
 - **The foam question.** One blocking question, the Eq 2 shear term, appears in two letters
   (jiang.md Q6 = glazier.md Q5), so there are 30 distinct blocking questions. **Recommendation:
@@ -62,16 +64,25 @@ personally. The drafts contain no contact details; `[Maintainer name]` marks the
 ## Pre-send checklist (HOLD questions)
 
 Do each check before sending. If the check answers a question, drop the question or narrow it,
-and record the answer in the spec.
+and record the answer in the spec. Then, for every letter:
+
+1. **Revise the intro/context sentence if the check succeeds.** Two sentences assume a source is
+   still unread: merks.md intro ("we have not yet been able to consult its supplementary
+   methods", tied to Q1/Q2) and damiani_graudenzi_maspero.md Q2 context ("which we have not yet
+   been able to consult", the ACRI 2018 paper). Reword or delete them once the source is read.
+2. **Remove the [HOLD] tags from the body before sending.** They are internal markers and appear
+   in the question headings of the letter bodies.
 
 | Letter / question | Check that decides it |
 |---|---|
+| dealmeida_thomas_dalcastel Q1 (J cyto–lamellipodium), Q2, Q3 (SF1 provenance), Q6 (polarization measure) | Obtain Biophys J 2020 Document S1 (mmc1.pdf) and the nanoHUB gltcellcrawl code; diff them against SF1_Code.zip; settle or drop Q1/Q2/Q3/Q6. If the codes match, rewrite Q3 as whether the same settings (J cyto–lamellipodium, conversion rule) were used for Figs 5–12. (The paper, Biophys J 118:2801, PMC7264849, says its CC3D code and run instructions are in Document S1, with Table S1; nanoHUB DOI 10.21981/YXKM-4E26.) |
 | dealmeida_thomas_dalcastel Q2 (F-actin secretion/decay order) | Read the CC3D 3.7.9 `DiffusionSolverFE` source (and `SecretionOnContact` neighbour test). Obtain `Instructions_To_Run.pdf` from the same directory as `SF1_Code.zip`. |
 | dealmeida_thomas_dalcastel Q4 (Eq 6 gate details), Q5 (Fig 8 caption) | Diff arXiv:2312.00776v1 against the 2025 Physica A version of record. |
 | damiani_graudenzi_maspero Q1 (metabolic model) | Obtain the HMR CORE file from the Di Filippo et al. 2016 supplementary (Comput Biol Chem 62:60) and compare with 272 reactions / 240 metabolites. |
-| damiani_graudenzi_maspero Q2 (ACRI 2018 parameters) | Obtain Graudenzi et al., ACRI 2018 (LNCS 11115, doi 10.1007/978-3-319-99813-8_2). |
+| damiani_graudenzi_maspero Q2 (ACRI 2018 parameters) | Obtain Graudenzi et al., ACRI 2018 (LNCS 11115, doi 10.1007/978-3-319-99813-8_2). Revise the Q2 context sentence if it is obtained (step 1). |
 | osborne_fletcher Q4 (2017 contact neighbourhood) | Read Chaste `release_2017.1` `AdhesionPottsUpdateRule.cpp` and `PottsMesh.cpp`. |
-| merks Q1 (2006 L, E₀, seeding), Q2 (2008 relaxation) | Check the 2006 ScienceDirect supplementary data, the PMC author manuscript, and the TST tutorial chapter (Methods Mol Biol 1214, 2015). |
+| merks Q1 (2006 L, E₀, seeding), Q2 (2008 relaxation) | Check the 2006 ScienceDirect supplementary data, the PMC author manuscript, and the TST tutorial chapter (Methods Mol Biol 1214, 2015). Revise the intro sentence if the 2006 supplementary is found (step 1). |
+| jiang Q12 (Akeeb et al. 2026) | Confirm Akeeb's first-name spelling; the body uses "S. Akeeb" until then. |
 
 ## Resolved, not asked
 
@@ -84,12 +95,15 @@ README §5 items that the specs have since answered:
   cell count (≈1000, p.2129) and the initial aggregate shape (spec 09 §8.4). Only the lattice
   size, boundary conditions and type fraction remain (glazier.md Q7).
 - **Merks lattices (Merks item 5, A-10), in part.** Dataset S1 fixes 200 × 200 px with 128 cells
-  for Figs 5–11 (spec 01 §8 A-10). Only Fig 10's 1024-cell runs are asked (merks.md Q5); Fig 12
-  was dropped in review.
+  for Figs 5–11 (spec 01 §8 A-10). The paper answers the Fig 10 1024-cell lattice: "1,024-cell
+  clusters (dashed-dotted curve) on 400×400-pixel lattices (∼800 µm×800 µm)" (Merks et al. 2008,
+  PLoS Comput Biol 4:e1000163, p.9; spec 01 §3.3 row 10, §8 A-10). Only the Fig 2 enclosing
+  lattice is asked (merks.md Q5); Fig 12 was dropped in review.
 - **Merks compactness convention (Merks item 3, A-14), in part.** The released `Compactness()`
   settles the hull convention (spec 01 §8 A-14). merks.md Q3 asks only for the figure scripts.
 - **J_cyto–lamellipodium (de Almeida item 1).** Resolved for the code, since both codes use 10
-  (spec 14 §9 item 3). Still asked, narrowed to which value produced the 2020 figures.
+  (spec 14 §9 item 3). Still asked, narrowed to which value produced the 2020 figures, and on
+  HOLD until Document S1 and the nanoHUB code are checked.
 
 ## Deferred to batch 2
 
@@ -128,7 +142,7 @@ Non-blocking README §5 items not in batch 1:
 ## Notes for the spec owner
 
 - **Spec 06 §3.4** must record the text of the Jiang 2005 erratum (Biophys J 91 (2006) 775,
-  PMC1483097). According to the review, it corrects b₀(P) from 162 to 216 and the Table 1 unit to
-  mM/h. jiang.md Q5 relies on this.
+  PMC1483097): the glucose rate for proliferating cells should read 216 (not 162), and the unit
+  [mM/h/cm3] should read [mM/h]. jiang.md Q5 relies on this.
 - **Spec 11 §7 item 9** (β-catenin precedence) can be resolved from the paper's Fig 3 table:
   Wnt ∨ (Akt ∧ ¬cadherin ∧ ¬APC). jafari_soltani_travasso.md Q7 asks only for confirmation.
