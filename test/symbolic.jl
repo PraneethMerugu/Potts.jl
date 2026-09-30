@@ -1983,3 +1983,62 @@ end
     @test total_energy(prob, u) ≈ H + E0 rtol = 1e-12
     @test site_selfcheck(prob, Moore(1)) < 1e-9
 end
+
+# `x′` in an extension: bound next to `x` by `@extend`, or named explicitly (scalar and vector)
+@potts_model SiteContactsBase begin
+    @kinds medium A B
+    @parameters J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
+    @variables begin
+        cue(site) = 0.0
+        v(site)[1:2] = 0.0
+    end
+    @lattice Lattice((24, 24); neighborhood = Moore(1))
+    @energy begin
+        cells(A, B) => (volume - 16)^2
+        contacts => J[kind, kind′] + cue * cue′ + v[1] * v′[2]
+    end
+    @sweep Metropolis(; temperature = 6.0)
+end
+@potts_model SiteContactsExt1 begin
+    @extend cue, v = base = SiteContactsBase()
+    @energy contacts => 2 * cue * (1 + cue′)^2 + v[2] * v′[1]
+end
+@potts_model SiteContactsExt2 begin
+    @extend cue, cue′, v′, A = base = SiteContactsBase()
+    @energy contacts => 2 * cue * (1 + cue′)^2 * (kind == A) + v′[1]
+end
+
+@testset "P6.0e x′ in extensions" begin
+    for sys in (SiteContactsExt1(; name = :e1), SiteContactsExt2(; name = :e2))
+        σ, kinds, cue = site_contact_state((24, 24))
+        prob = PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue, :v_1 => 1 .- cue, :v_2 => cue .^ 2], (0, 4))
+        @test length(sys.energies) == 3             # the base's two terms and the extension's
+        @test site_selfcheck(prob, Moore(1)) < 1e-9
+    end
+    @test Potts.lookup(SiteContactsBase(; name = :b), :v′) isa Potts.QuantityVector
+    @test_throws ArgumentError Potts.lookup(SiteContactsBase(; name = :b), :J′)       # not a site variable
+end
+
+# two site terms and an on-copy write both read: each site term sees the written value
+@potts_model TwoSiteTermsOnCopy begin
+    @kinds medium A
+    @variables mark(site) = 0.0
+    @lattice Lattice((20, 20); neighborhood = Moore(1))
+    @energy begin
+        cells(A) => (volume - 16)^2
+        sites => 0.7 * mark * (kind == A)
+        sites => 0.2 * mark^2
+    end
+    @on_copy mark[target] ~ 0.5 * mark[source] + 1.0
+    @sweep Metropolis(; temperature = 6.0)
+end
+
+@testset "P6.0e two site terms reading an on-copy write" begin
+    σ, kinds, cue = site_contact_state((20, 20))
+    prob = PottsProblem(TwoSiteTermsOnCopy(; name = :t), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue], (0, 4))
+    @test site_selfcheck(prob, Moore(1)) < 1e-9
+    # names a user cannot write stay out of the error text
+    @test_throws r"^(?!.*site′).*not available in a contact term"s mtkcompile(Potts.PottsSystem(; name = :bad,
+        kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts.B.target)],
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)))
+end

@@ -79,9 +79,12 @@ _replace(sys::PottsSystem; kw...) =
     lookup(sys::PottsSystem, name::Symbol)
 
 The quantity called `name` in a model: a parameter, variable, observed quantity, kind
-(its number), relation or relationship. `@extend` binds names with it.
+(its number), relation or relationship; `x′` for a site or field variable `x` is its value
+at the other site of a contact pair. `@extend` binds names with it.
 """
 function lookup(sys::PottsSystem, name::Symbol)
+    x = _lookup_primed(sys, name)
+    x === nothing || return x
     for x in Iterators.flatten((sys.parameters, sys.variables))
         info(x).name === name && return x
     end
@@ -96,4 +99,17 @@ function lookup(sys::PottsSystem, name::Symbol)
     haskey(sys.relations, name) && return RelationRef(name)
     any(r -> r.name === name, sys.relationships) && return RelationshipRef(name)
     throw(ArgumentError("$(nameof(sys)) has no parameter, variable, kind or relation `$name`"))
+end
+
+# `x′` of a site or field variable `x` (scalar or vector) of `sys`, or `nothing`
+function _lookup_primed(sys::PottsSystem, name::Symbol)
+    s = string(name)
+    endswith(s, '′') || return nothing
+    base = Symbol(chop(s))
+    _is_site_quantity(sys, base) || return nothing
+    return _primed(lookup(sys, base))
+end
+function _is_site_quantity(sys::PottsSystem, name::Symbol)
+    return any(x -> (i = info(x); i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
+        sys.variables)
 end

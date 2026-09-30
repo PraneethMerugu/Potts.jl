@@ -82,6 +82,9 @@ end
 
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
 
+# names a user can write (`site′` only arises from `x′`)
+_visible(names) = filter(!=(:site′), collect(names))
+
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
 function _check_names(x, allowed, what; between_copies::Bool = false)
@@ -96,11 +99,11 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     for n in _bare_builtins(x)
         n === :site′ && !(n in allowed) &&
             throw(ArgumentError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
-        n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
+        n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
-            throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")))"))
+            throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
     end
     return nothing
 end
