@@ -56,3 +56,8 @@ decision = "D-065"
 path = "acceptance/p6_0m_defects.jl"
 sha256 = "b97cfefa4c30c528946a5ec4da1cb756306ebc675351f3d957320c82ea32e778"
 decision = "D-074"
+
+[[file]]
+path = "acceptance/p6_0m2_potts_problem.jl"
+sha256 = "d256d213d3784cfae6a0b40e37766e505eb4b0116e6d8801a864e5083f1c8712"
+decision = "D-075"
