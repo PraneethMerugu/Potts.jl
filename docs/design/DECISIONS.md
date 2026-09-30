@@ -687,3 +687,21 @@ recommendations are adopted.
   - acceptance tests are frozen before implementation;
   - a performance gate against a stored baseline;
   - the adversarial reviewer.
+
+## D-054 P6.0a acceptance fixture: free-cell division threshold (2026-09-30, coordinator)
+
+The frozen P6.0a test (`acceptance/p6_0a_division_kinds.jl`) gated free-cell division on
+`volume >= 20`. With V₀ = 25, λ = 1, J(free, medium) = 16 and T = 10, a corner copy into
+the medium gains about 32 in contact energy for 1 in volume energy. The free cells
+therefore shrink to 19–21 by the time the rule first runs, which is after the sweep of
+MCS 2. Only some of them divided: 3 of 3 stayed whole on checkerboard, 1 of 3 on
+sequential.
+
+This was a mistake in the fixture, not in the implementation and not a science question.
+The threshold is now `volume >= 12`. With that change the implementation (`beba0a5`)
+passes all 15 checks on both algorithms, and the unchanged tree still fails on the old
+"either cells or clusters" error.
+
+The rule for fixtures: a frozen test's division or transition trigger must hold with
+margin in the state the rule actually sees. This is the post-sweep state (AUTHORING
+§12.7), not the initial state.

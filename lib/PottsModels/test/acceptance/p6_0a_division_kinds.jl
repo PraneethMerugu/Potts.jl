@@ -22,7 +22,7 @@ using Potts: CorePotts
     end
     @constraint no_extinction
     @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
-    @divide cells(free) when = (mcs == 2) && (volume >= 20), along = (0.0, 1.0), mass => Split()
+    @divide cells(free) when = (mcs == 2) && (volume >= 12), along = (0.0, 1.0), mass => Split()
     @sweep Metropolis(; temperature = T)
 end
 

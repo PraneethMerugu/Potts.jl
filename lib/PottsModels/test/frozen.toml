@@ -9,5 +9,5 @@ decision = "D-050"
 
 [[file]]
 path = "acceptance/p6_0a_division_kinds.jl"
-sha256 = "d91356dff924ec2a5a4dbd1cae207eb77c807c5d302585d50e4402cd538c33f5"
-decision = "D-053"
+sha256 = "27cade88bf8ef944ac2a6ebfa0bb6d75960f8e97928d2845f984bb46bcbc0e25"
+decision = "D-054"
