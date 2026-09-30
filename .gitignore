@@ -4,3 +4,6 @@ Manifest-v*.toml
 *.jl.cov
 *.jl.mem
 .DS_Store
+
+# Reference papers (copyrighted PDFs; local only)
+docs/references/
