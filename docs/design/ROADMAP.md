@@ -198,7 +198,7 @@ Every item's acceptance also includes the standing checks:
   - a caveat on the time-dependence and uncertainty of `PAPER_MEDIUM`;
   - a plateau criterion that also checks the slope over the last decade;
   - hide the diagnosis helper code (`#hide`).
-- [ ] **P6.1c** **HOLD: V-target audit** (maintainer approved, being run by the models session; do not pre-register or freeze until it reports). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
+- [ ] **P6.1c** reproduction 09 (V-target audit done 2026-09-30: freeze from spec 09 §9.1 only; the tutorial prose was ratified with 8 changes). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 
 ### Step 2 — Akeeb
