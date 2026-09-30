@@ -161,6 +161,12 @@ Every item's acceptance also includes the standing checks:
   needs a flood fill (it is 32 MB at 200³ today).
 - [ ] **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
+- [ ] **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
+  a core layout, next to the planned `Spheres`. It needs a DSL and export review, and moves
+  the StableRNGs dependency to Potts only.
+- [ ] **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
+  error ("primes exist only for site/field variables"). Also check programmatically built
+  `PottsSystem`s for declarations named `x′`.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
 - [x] (merge, 2026-09-30) **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
