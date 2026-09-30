@@ -572,3 +572,33 @@ The paper and its reference code define each model (D-048).
   - Type-1 contact inhibition is on through β.
 - **F-6: `AkeebInvasion` uses `rule = :local`**, exactly CC3D 4.3.1's `Connectivity`. This
   supersedes the parity-based approval of `:merks` (maintainer approvals, item 4).
+
+## D-050 Per-model paper-vs-code decisions for the 12 published models (2026-09-30, maintainer-approved)
+
+Decision: the recommendations in `research/model-specs/README.md` §4.1–§4.12 are the
+decided defaults, and each named alternative there ships as a documented variant keyword.
+The maintainer replied "approve all" in the models-and-publications session, which relayed
+the approval here; the README header records it. Items blocked on an author question (§5)
+keep the recommended default until the author answers.
+
+Heuristic: default to whatever produced the published figures (usually the released code),
+and ship the other reading as a variant. Every default appears in the tutorial's deviations
+table.
+
+This reopens and supersedes these parts of D-049 (F-3) for Merks:
+- M1: separate 2006 and 2008 parameter sets instead of today's mixed defaults (resolves
+  AUDIT P-14);
+- M2: 2006 target length 50 px, with 60 px as a variant;
+- M3: a soft connectivity penalty E₀ = 5000 on ring-breaking copies of the losing cell
+  (once a soft-constraint feature exists), with the hard one-arc veto as a variant;
+- M4: a frozen border with J_cB = 100 instead of free walls;
+- M5: the paper's field schedule (15 FTCS substeps of Δt = 2 s before the sweep, absorbing
+  c = 0 ring) instead of the fewest stable substeps;
+- M7: real χ(c,c) and χ(c,M) parameters with an extension/retraction mode switch, which
+  replaces `contact_inhibited` and removes the model-named `extension_only` (AUDIT P-15).
+
+It also changes the Akeeb default μ from 30 to 24 (A5).
+
+Status: implementation pending. The feature roadmap that these decisions need (the G1–G21
+list and build order in the README) is under review first, so that every model is composed
+only from general public primitives.

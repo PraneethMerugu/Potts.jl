@@ -6,7 +6,7 @@ together:
 - §1 lists the 12 models with their sources and reproducibility grade.
 - §2 gives one renumbered feature list (G1–G21) and a crosswalk from each spec's local ids.
 - §3 is the feature × model matrix.
-- §4 lists the decisions the maintainer must sign off, per model.
+- §4 lists the per-model decisions (all approved by the maintainer on 2026-09-30).
 - §5 lists questions for the authors, grouped by recipient.
 - §6 gives the recommended build sequence.
 
@@ -162,9 +162,14 @@ Notes on the matrix:
 
 ---
 
-## 4. Decisions needed from the maintainer
+## 4. Decisions (approved)
 
-The user chose "decide per model" for paper-vs-code conflicts. Nothing below is decided.
+The user chose "decide per model" for paper-vs-code conflicts. **On 2026-09-30 the
+maintainer approved every recommendation in §4.1–§4.12 as written ("approve all"),
+including the items marked "(reopens D-049)".** Each "Recommendation" column below is
+therefore the decided default, and each named alternative is the documented variant.
+Items that depend on an unanswered author question (§5) keep the recommended default
+until the author answers.
 
 **Heuristic.** Default to whatever produced the published figures, which is usually the
 released code. Ship the other reading as a documented variant keyword. Where no code

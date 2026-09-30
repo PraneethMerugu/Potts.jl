@@ -23,29 +23,37 @@ using LinearAlgebra: Symmetric, eigen, dot
         end
         return n
     end
-    medium_fraction(σ, key) = (n = bonds(σ); n[key] / sum(values(n)))
-    hetero(σ) = (n = bonds(σ); n[:dl] / (n[:dl] + n[:dd] + n[:ll]))
+    # PRE p.2133: fractions of all mismatched bonds, medium included; measured on a copy
+    # annealed for 2 paper MCS (32 here) at T = 0, the simulation itself untouched (p.2134)
+    anneal(σ; seed = 1) = solve(PottsProblem(GranerGlazier(; name = :gg), [ownership => copy(σ), kind => k, :T => 0.0],
+        (0, 32); seed), SequentialCPM(); saveat = 32).u[end].σ
+    medium_fraction(σ, key) = (n = bonds(anneal(σ)); n[key] / sum(values(n)))
+    hetero(σ) = (n = bonds(anneal(σ)); n[:dl] / sum(values(n)))
     function radius_ratio(σ)                 # mean distance to the aggregate centroid, dark / light
         sites = findall(!=(0), σ); c = (mean(i[1] for i in sites), mean(i[2] for i in sites))
         r(kk) = mean(hypot(i[1] - c[1], i[2] - c[2]) for i in sites if k[σ[i]] == kk)
         return r(1) / r(2)
     end
 
-    # light cells engulf the dark ones: no dark–medium boundary is left (PRL Fig. 2b)
+    # light cells engulf the dark ones: dark–medium boundary below 0.003 by 10³ paper MCS
+    # (PRE Fig. 13b; PRL Fig. 2b)
     for seed in 1:3
-        σ = sim([], 10_000; seed).u[end].σ
-        @test medium_fraction(σ, :dM) <= 0.01 && radius_ratio(σ) < 0.75
+        σ = sim([], 16_000; seed).u[end].σ
+        @test medium_fraction(σ, :dM) < 0.003 && radius_ratio(σ) < 0.75
     end
     # partial sorting (PRE §III E: J_ll = 11, J_dl = 14, T = 5) never forms the monolayer:
     # dark cells keep a share of the surface (≈ 5%, against ≤ 1% under engulfment)
     @test all(s -> medium_fraction(sim([:J => [0 16 16; 16 2 14; 16 14 11], :T => 5.0], 10_000; seed = s).u[end].σ, :dM) > 0.03, 1:3)
-    # checkerboard when heterotypic bonds are cheapest (PRE §III A, Fig. 8b)
-    @test all(s -> hetero(sim([:J => [0 12 12; 12 8 6; 12 6 10]], 1000; seed = s).u[end].σ) > 0.75, 1:3)
-    # sorting is logarithmic in time (PRL Fig. 2a): heterotypic fraction linear in ln t
-    ts = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    # checkerboard when heterotypic bonds are cheapest (PRE §III A, Fig. 8b): about half of
+    # all boundaries (medium included) are heterotypic, twice the sorting run's share
+    @test all(s -> hetero(sim([:J => [0 12 12; 12 8 6; 12 6 10]], 1000; seed = s).u[end].σ) > 0.45, 1:3)
+    # sorting is logarithmic in time (PRL Fig. 2a): heterotypic fraction linear in ln t over
+    # 4–512 paper MCS (our 64-cell aggregate levels off near 0.18 after that; the paper's
+    # 1000 cells keep sorting to 10⁴)
+    ts = 16 .* [4, 8, 16, 32, 64, 128, 256, 512]
     H = zeros(length(ts))
     for seed in 1:4
-        sol = sim([], 4096; seed, saveat = ts)
+        sol = sim([], ts[end]; seed, saveat = ts)
         H .+= [hetero(sol.u[findfirst(==(t), sol.t)].σ) for t in ts] ./ 4
     end
     x = log.(ts)
@@ -53,9 +61,14 @@ using LinearAlgebra: Symmetric, eigen, dot
     # … and frozen at T = 0 (PRE §III B4)
     sol = sim([:T => 0.0], 1000; saveat = [100, 1000])
     @test abs(hetero(sol.u[end].σ) - hetero(sol.u[1].σ)) < 0.02
-    # the area constraint's strength decides survival (PRE §III B5, Table III, T = 5)
+    # the area constraint's strength decides survival (PRE §III B5, Table III, Fig. 16, T = 5):
+    # by 800 paper MCS λ = 0.1 loses every cell, λ = 0.2 every light cell, λ = 0.5 at most a
+    # few light cells. Survival classes only; our 64-cell aggregate is not timed like the paper's
+    nd, nl = count(==(1), k), count(==(2), k)
     alive(σ) = (v = [count(==(c), σ) for c in eachindex(k)]; (count(>(0), v[k .== 1]), count(>(0), v[k .== 2])))
-    @test [alive(sim([:λ => λ, :T => 5.0], 1600).u[end].σ) for λ in (0.1, 0.2, 0.5)] == [(0, 0), (32, 0), (32, 32)]
+    a1, a2, a5 = [alive(sim([:λ => λ, :T => 5.0], 12_800).u[end].σ) for λ in (0.1, 0.2, 0.5)]
+    @test a1 == (0, 0) && a2 == (nd, 0)
+    @test a5[1] == nd && nl - 4 <= a5[2] <= nl
     # light cells are slightly smaller (PRL p. 2014); not with symmetric self-adhesion
     Δarea(σ) = (v = [count(==(c), σ) for c in eachindex(k)]; mean(v[k .== 1]) - mean(v[k .== 2]))
     @test Δarea(sim([], 1000).u[end].σ) > 1
