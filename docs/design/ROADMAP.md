@@ -122,9 +122,34 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30) **P6.0b4** a permanent Metal (Float32) test of a model with reads in
   `lib/CorePotts/test/gpu.jl` (the P6.0b3 reviewer used a scratch version,
   `/tmp/rv-p6-0b3-metal.jl`).
-- [ ] **P6.0c** solver metadata per equation block or component (replaces the single
-  `field_solver`). Accept: a stiff component (`Adaptive(Rodas5P())`) beside an explicit
-  field in one model; conformance against each solver alone.
+- [ ] **P6.0c** (D-075) solver placement. `field_solver` (required when the model has a
+  field), `ode_solver` and a symbolic-keyed `solvers = [V => …]` map become **`PottsProblem`
+  construction keywords**. They are compiled at the existing codegen point and removed from
+  `@sweep`; there are no algorithm fields. `Adaptive(alg; abstol, reltol)` stays as the
+  bundle, and `ExplicitEuler(; substeps, lower)` keeps `lower`. `track` is a construction
+  keyword too.
+  - Accept: a stiff component (`Adaptive(Rodas5P())`) beside an explicit field in one
+    model; conformance against each solver alone.
+  - Accept: every `PottsProblem(MerksVasculogenesis(…), …)` call passes
+    `field_solver = ExplicitEuler(substeps = 2, lower = 0.0)` explicitly
+    (`benchmark/gate.jl:29`, `mechanisms.jl:324-348`, the tutorials). The Merks mechanism
+    tests and the `merks_100` gate case are unchanged in result, and a bare call is a
+    construction error.
+  - Accept: the D-016 fingerprint hashes a **canonical string of the solver spec**, not the
+    host objects (the `Adaptive` objects are not in the code strings). A checkpoint from
+    before the change, or from a differently discretised problem, fails the check.
+  - Accept: `remake(prob; field_solver/ode_solver/solvers/track = …)` goes through a
+    Potts-side rebuild hook. CorePotts `remake` accepts only fixed keywords
+    (`problem.jl:72-73`) today.
+    - The hook rebuilds `f` and keeps `u0`, `p` and the RNG key.
+    - Changing `track` re-lays out the state.
+    - Measure and document the cost: full codegen plus JIT, in seconds, with identical
+      specs reusing the compiled RGF specialisations.
+    - Test that `remake(prob; p/u0/seed)` never regenerates.
+  - Accept: CorePotts' ensemble `__solve(::AbstractEnsembleProblem, ::AbstractPottsAlgorithm)`
+    (Threads on CPU, Serial otherwise) forwards `backend` explicitly to the three-argument
+    call, and `detect_ambiguities` stays clean (verified at the pinned versions in
+    `/tmp/apirev/ens3.jl`).
 - [ ] **P6.0d** frozen-kind mask recomputed on lifecycle events. Accept: a kind that
   becomes frozen after a transition stops moving; the negative control moves.
 - [x] (merge, 2026-09-30; D-061) **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
@@ -214,9 +239,14 @@ Every item's acceptance also includes the standing checks:
     edge terms.
   - `integral` reads the previous MCS's site values when they are written in the same
     `@after_mcs`. Document the ordering, or fix it.
+- [ ] **P6.0m2** (D-075, breaking batch part 1) `CPMProblem → PottsProblem`, supertype
+  unchanged, no alias; `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`. Every
+  package, test, benchmark and tutorial is updated in the same change. Accept: all suites
+  pass, the gate is unchanged, and no `CPMProblem` remains outside DECISIONS and PROGRESS.
 - [ ] **P6.2a2** Refactor `akeeb_state` onto `InsertUntil` (`misses = :count`, `fraction = 1//4`)
   and expose the counted inventory (spec 10 V-A1(a)). This changes the RNG stream from
   MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
+  StableRNG only (D-075): the `clock`/`cue` expression defaults move to P6.4a.
 
 ### Step 2 — Akeeb
 
@@ -234,8 +264,20 @@ Every item's acceptance also includes the standing checks:
 
 - [ ] **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
   placeholder. Accept: the soft-connectivity sibling; hex and 3D ring tests.
+  - D-075: `track = (:ΔH,)` → `stats.accepted_ΔH` (01 F9); `nothing` when off, and the
+    A/B is unchanged.
+  - Accept: sequential `track` needs a CorePotts hook, so the generated accumulator sees
+    `dH` inside `sequential_mcs!`. This changes the CPMFunction signature.
+  - Accept: on the checkerboard (§2.13), propose writes ΔH, and likewise `count`, to
+    **per-colour scratch**. Commit adds it to the lattice-indexed accumulator only if the
+    copy won, so earlier sub-cycles are never zeroed.
+  - Accept: the per-MCS reduction into a host `Float64` is a device sync. Either reduce
+    only at save points, or state and measure the per-MCS sync on Metal.
 - [ ] **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
-  placement and an explicit phase order.
+  placement and an explicit phase order. The phase order **is** `@schedule`, with the
+  `step!` restructuring of api-synthesis §2.12; D-035 is amended (D-075) in the same change.
+  - Accept: the gate is unchanged on CPU, and the Metal A/B is ≤ 1.01 for the five gate
+    models.
   - Accept: the absorbing frame keeps c = 0 on the ring after every substep.
   - Accept: PDE-before-sweep ordering is observable in a two-phase test.
 - [ ] **P6.3c** R2 `Eden` + splits.
@@ -247,11 +289,20 @@ Every item's acceptance also includes the standing checks:
 ### Step 4 — Foam
 
 - [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
+  - D-075: **R17** initialization, as the `at_init` host phase: `A(cell) = volume`,
+    `remake(u0 = sol[end])`, and `at_init` re-run on `remake(p = …)`.
+  - D-075: the small folds (`argmax`/`only`/`var`, `init`/`default`, `Pre(neighbors(c))`)
+    and the §2.6 energy ban.
+  - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
+    streams. They get their own `papers.jl` re-baseline.
 - [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
   - Accept: the enumeration oracle for `MetropolisHastings()`.
   - Accept: the performance gate is unchanged for the default law.
+  - D-075: the checkerboard thinning form (stream `CorePotts.thinning`); a sub-cycle index
+    in `draw`/`_color_order!` for `attempts > 1`, bit-identical at 1; `@sweep
+    MetropolisHastings` is an error.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
@@ -267,8 +318,10 @@ Every item's acceptance also includes the standing checks:
   at allocation boundaries; exact self-check credits); claim widening, with checkerboard validated
   statistically against sequential (D-065 Q7).
 - [ ] **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
-  transition > divide > create); `@convert`; ownership hooks fire `@on_copy` /
-  `clear_on_ownership_change`. Fixes A-17.
+  transition > divide > create); `@convert` (block form with `Fresh`, `created`,
+  `budget`, each one a named `@schedule` phase costed per D-035 as amended by D-075);
+  ownership hooks apply `clear_on_ownership_change`, and `@on_copy` never fires from the
+  lifecycle (D-075 clarify). Fixes A-17.
 - [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
 - [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
 
@@ -281,11 +334,14 @@ merges (phase-end checkpoint).
   - R9 3-body terms and ordered chains;
   - R7 unwrapped centroids and cluster moments;
   - related centroids with declared footprints;
-  - R2 `Chains`. Gate: Y1, Y2.
+  - R2 `Chains`;
+  - D-075: `ordered = true`, `prev`/`next`/`rank`/`linked`, `angles(rel)` energies. Gate: Y1, Y2.
 - **P6.7** Zajac:
   - R7 tensor ΔH;
   - R11a `neighbors`/`contact`;
   - R11b exact pair trackers (D-051 item 3);
+  - D-075: `interfaces(k, k)` sequential-exact first; the checkerboard form behind an A/B,
+    or a time-boxed D-051 item 5 exception; `count = true`;
   - the 12a Eq 7 unit test. Labelled as a reconstruction.
 - **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
 - **P6.8** Bauer 2007:
@@ -293,9 +349,19 @@ merges (phase-end checkpoint).
   - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
   - R15 `CellOperator` and `uptake` (once per MCS, D-065 Q8);
   - R10 `UnlikeNeighbor`;
-  - R2 `Fibres`. Gate: B2.
+  - R2 `Fibres`;
+  - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
+    `solvers = [V => …]` for the steady/implicit field. Gate: B2.
 - **P6.9** Bauer 2009:
-  - R4 `Global()` on both algorithms;
+  - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
+    - a deferred kernel over the compacted list of local-test failures, with an
+      `MVector` stack and an AllocCheck proof on the CPU path;
+    - the deferred kernel also raises the claims, so commit runs unchanged;
+    - `window` on `components`/`Global()`, and a conservative-rejection counter;
+    - state the extra launches: 4 per MCS in 2D;
+    - a late-state benchmark via `benchmark/ab.jl`;
+    - record `exp(−α/T)` for 05 and 11. Where it fails, widen `W` or fall back to
+      sequential; that fallback is a D-051 item 5 exception under D-075's time-boxed row;
   - R8 `@create`;
   - R16 branch and loop detection. Gate: B2.
 - **P6.10** Jafari Nivlouei:
@@ -303,15 +369,20 @@ merges (phase-end checkpoint).
   - Boolean networks as MTK discrete (clocked, `Shift`) components lowered into the
     per-cell phases (D-065 Q9: no Potts helper; record MTK gaps and workarounds);
   - two periodic PDEs with EC clamps;
+  - D-075: `directed = true`, `links(c, rel)`, integer-indexed tables;
   - the Andasari ODE conformance test. Gate: N1–N3.
 - **P6.11** Jiang 2005:
   - 3D;
   - fractional attempts;
   - coarse field grids (D-051 item 4);
   - R14 implicit transient;
-  - `@retire … sites => ref`. Gate: J3.
+  - `@retire … sites => ref`;
+  - D-075: `Coarse(k; clamp = All())` default, with T10 run under `Any()` and `All()`. Gate: J3.
 - **P6.12** FBCA (X5 settled by D-067: published `mmc1.xls`, flagged):
   - R15 FBA `CellOperator` (COBREXA/JuMP extension, warm start);
   - the Eq 6 averaging operator;
   - division plane by draw;
-  - copy-time field writes. Gate: X5.
+  - copy-time field writes: the `@on_copy` neighbour-target form, sequential first with the
+    08b conservation test. The checkerboard form (write footprint, 4 → 9 colours) is a
+    second item with an A/B. Until it lands, `CheckerboardCPM` rejects the model
+    (D-075). Gate: X5.

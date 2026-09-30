@@ -1272,3 +1272,85 @@ session.
   a cell simply cannot lose its last site under this constraint.
 - **Frozen tests.** The frozen Akeeb tests in `papers.jl` are revalidated under this entry
   in P6.0m.
+
+## D-075 The target API (api-synthesis round 3) and its breaking batch (2026-09-30, maintainer)
+
+- **Source.** `research/api-synthesis.md` at round 3, written by the spec-owner session
+  and reviewed adversarially three times by the coordinator's reviewer. Round 3 was
+  approved for ratification with no blockers (`/tmp/api-synthesis-review-r3.md`).
+  The spec-owner session asked the maintainer "How do you want to ratify the nine §8.1
+  answers of the API synthesis?" and relayed the answer verbatim: "Ratify all nine
+  (Recommended)". The chosen option was: one decision entry for the whole design and its
+  breaking batch, built inside the existing Phase 6 steps, with the reviewer's should-fixes
+  as acceptance text.
+- **§8.1 answers adopted.**
+  - **Q1.** The model's default law and its physics live in `@sweep` (`Metropolis`/`Barker`).
+    `MetropolisHastings()` is algorithm-only, as in D-052; `@sweep MetropolisHastings` is an
+    error. Precedence is `_law(alg, f)`.
+  - **Q2.** Rename `CPMProblem → PottsProblem`. The supertype stays `AbstractSciMLProblem`;
+    it is not a DE problem. `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`.
+  - **Q3.** No `Wall(kind)`. The frozen frame stays, and the ≈ 4 % null-attempt deviation is
+    recorded (01), optionally corrected with `attempts`.
+  - **Q4.** Units stay check-only (D-039). A documented `lattice_units` helper goes in
+    `reproductions/`.
+  - **Q5.** The coarse-grid clamp default is `All()`, with `Any()`/`Majority()` one keyword
+    away. P6.11 sweeps it in T10, and it is an author question for Jiang.
+  - **Q6.** `components`/`Global()` runs on the checkerboard. A deferred windowed-BFS
+    kernel works through a compacted list of local-test failures. Beyond the window it
+    rejects conservatively and counts the rejection. A late-state benchmark is the gate.
+    `window` is on `components`/`Global()`, not `connectivity(k)` (D-074).
+  - **Q7.** The `@on_copy` neighbour-target scatter uses a declared write footprint.
+    Sequential lands first; the checkerboard form (4 → 9 colours in 2D) comes second,
+    behind the interim D-051 item 5 exception.
+  - **Q8.** `a` and `b` are reserved globally; the error suggests `a₀`/`b₀`.
+  - **Q9.** One breaking batch with no aliases (D-028 precedent), landed across P6.0m/P6.0m2
+    and P6.0c.
+- **Amendments** (the §6.1 table is authoritative for the wording):
+  - **D-016:** the fingerprint also hashes the solver specification (`field_solver`,
+    `ode_solver`, `solvers`, `track`), as a canonical spec string.
+  - **D-031 F-1/F-2:** new streams `CorePotts.thinning` and `Potts.init.<var>`. A sub-cycle
+    index goes into `draw`'s `local_index` slot and `_color_order!` when `attempts > 1`;
+    `attempts == 1` stays bit-identical.
+  - **D-032 / AUTHORING §12.2:** `centroid` is allowed in energies once R7 lands.
+  - **D-035:** plus one device↔host round trip per declared host pass per firing, each a
+    named `@schedule` phase.
+  - **D-038:** "the problem's `ode_solver`" (default `ExplicitEuler()`).
+  - **D-051 item 5:** time-boxed exceptions. `@on_copy` neighbour-target writes and
+    `interfaces(k,k)` energies are sequential-only until P6.12/P6.7; `CheckerboardCPM`
+    rejects such a model by name. Q6's per-model sequential fallback is covered here too.
+  - **D-057:** `paint!(op::LayoutState, l, lat)`; every layer is rewritten in the same
+    change.
+  - **D-068/D-071:** Akeeb `clock`/`cue` become `at_init` expression defaults at P6.4a,
+    with their own `papers.jl` re-baseline (separate from P6.2a2's StableRNG one).
+  - **R4:** `components` is also a cell-scope built-in with an exact after-value.
+  - **AUTHORING §6 / P6.0c:** `field_solver` (required when a field exists), `ode_solver`
+    and a symbolic-keyed `solvers` map become `PottsProblem` construction keywords.
+    They are compiled at the existing codegen point, removed from `@sweep`, and are not
+    algorithm fields. `remake` is the override. `Adaptive(alg; abstol, reltol)` stays as
+    the bundle; `ExplicitEuler(; substeps, lower)`.
+  - **Clarify only:** D-052 (law versus correction), D-049 F-1 (proposal in
+    `@relations`), D-051 item 2 (Bernoulli thinning on the checkerboard), and P6.5b
+    (ownership hooks apply `clear_on_ownership_change` only; `@on_copy` never fires from
+    the lifecycle).
+  - **Unchanged, applied:** D-029, D-031 F-13 (`PottsStats` names stay), D-046 (`track`
+    and `solvers` resolve in Potts; algorithms carry only run-time values), D-058 item 4,
+    D-053 item 9 / D-065 Q9, D-066 item 5, D-074.
+- **The breaking batch (Q9).**
+  - `CPMProblem → PottsProblem`.
+  - `field_solver`/`ode_solver` leave `@sweep` and become `PottsProblem` keywords, with
+    the `solvers` map. Every Merks call passes `ExplicitEuler(substeps = 2, lower = 0.0)`
+    explicitly, and a bare call is a construction error.
+  - `track` becomes a construction keyword.
+  - The D-016 fingerprint extension; checkpoints taken before it fail by design.
+  - `Adaptive` kept as the bundle; `ExplicitEuler(; substeps, lower)`.
+  - `a`/`b` reserved; the `Chemotaxis` `when` default; `connectivity` per D-074; the P6.0c
+    and P6.5b rewordings.
+  - Not in the batch: the `PottsStats` names.
+- **New R-items:** R0b, R17 (initialization as the `at_init` host phase, first consumer
+  P6.4a) and R18 (named terms). The widened or decided R-items are as in §6.2.
+- **Build.** No new step order. §6.4 maps each primitive onto the ROADMAP row that first
+  consumes it. The round-3 reviewer's should-fixes are acceptance text on those rows
+  (P6.0c, P6.3a, P6.9 and P6.4b in ROADMAP).
+- **Coordinator scheduling note.** §6.4 places the rename and `isdiscrete` in P6.0m.
+  P6.0m's frozen test and implementation were already in flight, so they land as
+  **P6.0m2**, immediately after P6.0m and before P6.0c.

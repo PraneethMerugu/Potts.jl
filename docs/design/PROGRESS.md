@@ -1478,3 +1478,18 @@ The maintainer approved F-1…F-6 (D-049).
   CPU and docs pass.
 - **Gate:** not run; no kernels changed.
 - **Follow-up:** P6.2a2 moves `akeeb_state` onto `InsertUntil`.
+
+## 2026-09-30 — D-075: the target API ratified (coordinator)
+
+- **Ratified.** The maintainer ratified `research/api-synthesis.md` at round 3, all nine
+  §8.1 answers ("Ratify all nine (Recommended)", relayed verbatim by the spec-owner
+  session).
+- **Review history.** Round 1 found 4 blockers and round 2 found 2 new blockers. Round 3
+  was approved for ratification.
+- **Recorded as D-075.** It covers the §6.1 amendments and the Q9 breaking batch.
+- **ROADMAP changes.**
+  - The §6.4 build plan is folded into the Phase 6 rows (P6.0c, P6.2a2, P6.3a, P6.3b,
+    P6.4a, P6.4b, P6.5b, P6.6–P6.12).
+  - The round-3 should-fixes are acceptance text on those rows.
+  - P6.0m2 is added for the `PottsProblem` rename, because P6.0m was already in flight.
+- **Still untracked:** the draft sketches in `model-specs/sketches/`.
