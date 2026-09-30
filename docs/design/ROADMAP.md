@@ -150,6 +150,14 @@ Every item's acceptance also includes the standing checks:
   - Accept: zero warm allocations.
   - Every part of MTK's discrete support that is not usable yet is recorded in DECISIONS
     with its workaround.
+- [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
+  linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
+  NaN, `accept` rejects every copy touching the partner so it freezes silently, and
+  `total_energy` is NaN. Links are dropped only on `EVENT_REMOVE` (`lifecycle.jl:358`).
+  - Accept: a regression test where two linked cells lose one partner through copies; the
+    survivor keeps moving, with finite ΔH and a finite total H.
+  - Accept: the link is dropped at a named boundary, per the D-066 liveness decision, or
+    skipped while the partner has zero volume.
 - [ ] **P6.0i2** author-letter pre-send checks (D-065): fetch the openly available sources,
   settle the HOLD questions, and list what could not be obtained for the maintainer.
 - [x] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
