@@ -203,8 +203,9 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 2 — Akeeb
 
-- [ ] **P6.2a** R2 `InsertUntil`; R16 code-definition metrics (per-column areas, peaks, BFS
-  clusters).
+- [ ] **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
+  seeding onto it, with a counted-miss option); R16 code-definition metrics (per-column
+  areas, the `find_peaks` port per D-069, BFS clusters).
 - [ ] **P6.2c** Akeeb seeding per D-068 (MD-1).
   - Default: emulate the authors' ghost leaders; keyword variant: retry.
   - Re-baseline the frozen `papers.jl` Akeeb testset (ensemble band; μ = 24) and the gate's Akeeb case.

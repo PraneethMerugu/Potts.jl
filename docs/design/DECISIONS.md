@@ -1118,3 +1118,33 @@ session from its spec 10 pre-freeze audit.
     a band derived from the ensemble;
   - the sim helper's default μ becomes 24 (D-050 A5).
 - The performance-gate Akeeb case is re-baselined in the same change.
+
+## D-069 Finger detection: port SciPy 1.7 `find_peaks` from source, with no SciPy download (2026-09-30, maintainer)
+
+**Source.** The maintainer's answer, relayed verbatim by the models-and-publications
+session.
+- The question was: "How should we get reference outputs [for SciPy 1.7 find_peaks]?"
+- The answer was "No download: port from source", with this option text: "Port find_peaks
+  from SciPy's BSD-licensed source and test against hand-built cases with known answers.
+  No external download, but no independent oracle for exactness."
+
+**Decision.**
+- Port `scipy.signal.find_peaks` v1.7.x to Julia, reading SciPy's source as text, which is
+  not an installation. The port covers:
+  - `_local_maxima_1d`, with plateau midpoints;
+  - `_select_by_peak_distance`, including its priority order;
+  - `_peak_prominences` and `_peak_widths` with `wlen = nothing`;
+  - the filter order distance → prominence → width.
+- Carry the BSD-3 notice and attribution in the file.
+- Then the authors' merge step: keep a peak only if it is more than 15 samples from the
+  last kept one (spec 10 §5.3.3).
+- **Tests.** Hand-built profiles with analytically known answers:
+  - plateaus of even and odd width;
+  - equal-height ties under the distance filter;
+  - edge samples, which are never peaks;
+  - prominence bases with nested peaks;
+  - widths at `rel_height = 0.5` with interpolation;
+  - the merge rule.
+- **Consistency check.** On the authors' released sample data, where the CSVs allow it
+  (spec 10 §5.3.4), our metric reproduces their per-run finger counts.
+- There is no independent oracle for exactness. That is accepted.
