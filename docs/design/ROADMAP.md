@@ -158,7 +158,7 @@ Every item's acceptance also includes the standing checks:
     survivor keeps moving, with finite ΔH and a finite total H.
   - Accept: the link is dropped at a named boundary, per the D-066 liveness decision, or
     skipped while the partner has zero volume.
-- [ ] **P6.0i2** author-letter pre-send checks (D-065): fetch the openly available sources,
+- [x] (merge, 2026-09-30; D-067) **P6.0i2** author-letter pre-send checks (D-065): fetch the openly available sources,
   settle the HOLD questions, and list what could not be obtained for the maintainer.
 - [x] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
   README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
@@ -198,14 +198,14 @@ Every item's acceptance also includes the standing checks:
   - a caveat on the time-dependence and uncertainty of `PAPER_MEDIUM`;
   - a plateau criterion that also checks the slope over the last decade;
   - hide the diagnosis helper code (`#hide`).
-- [ ] **P6.1c** reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
+- [ ] **P6.1c** **HOLD: V-target audit** (maintainer approved, being run by the models session; do not pre-register or freeze until it reports). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 
 ### Step 2 — Akeeb
 
 - [ ] **P6.2a** R2 `InsertUntil`; R16 code-definition metrics (per-column areas, peaks, BFS
   clusters).
-- [ ] **P6.2b** reproduction 10 against the authors' 13,310-run data (10 §5).
+- [ ] **P6.2b** **HOLD: V-target audit** (as for P6.1c). Reproduction 10 against the authors' 13,310-run data (10 §5).
   Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
   confirmation).
 
@@ -288,7 +288,7 @@ merges (phase-end checkpoint).
   - coarse field grids (D-051 item 4);
   - R14 implicit transient;
   - `@retire … sites => ref`. Gate: J3.
-- **P6.12** FBCA:
+- **P6.12** FBCA (X5 settled by D-067: published `mmc1.xls`, flagged):
   - R15 FBA `CellOperator` (COBREXA/JuMP extension, warm start);
   - the Eq 6 averaging operator;
   - division plane by draw;

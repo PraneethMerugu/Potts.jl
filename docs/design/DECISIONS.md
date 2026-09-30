@@ -941,3 +941,26 @@ D-053 items 6–10 where the two differ.
   on the pre-send checklist from legitimate public sources, with no paywall
   circumvention. The resolved HOLD questions are then dropped or narrowed (P6.0i2). The
   maintainer still sends the letters personally.
+
+## D-067 C7 and X5 changed on new source evidence (2026-09-30, maintainer approved)
+
+The P6.0i2 pre-send checks read sources that were not available when the §4 decisions were
+approved. The maintainer approved both changes in the coordinator session on 2026-09-30
+("theyre approved").
+- **C7, chemotaxis direction (14a, 14c).** Follow the code: the term applies to both
+  extension (FRONT → Medium) and retraction (Medium → FRONT), with the same formula.
+  - Evidence: CC3D's default `merks` chemotaxis algorithm is used by both codes, which set
+    no `<Algorithm>`. See CC3D 3.6.2 and 3.7.9 `ChemotaxisPlugin.cpp`, spec 14 §2.9.4.
+    14c runs on CC3D 4.2.3, which was not checked but is very likely the same.
+  - The paper's extension-only Eq 7 is a variant.
+  - Previously: Eq 7, FRONT → Medium only.
+  - The authors are still asked about it (the de Almeida letter, as a provenance question).
+- **X5, HMR core model (08 FBCA).** The published Di Filippo 2016 supplementary `mmc1.xls`
+  is the default, flagged. It has 274 reactions (272 without `biomass_synthesis` and
+  `Ex_biomass[s]`) and 252 metabolites, against the papers' 272 × 240.
+  - The authors are asked how they counted.
+  - Previously: blocking until obtained.
+- **Author-question letters.** They are local, untracked files (`.gitignore`), per the
+  maintainer's decision relayed verbatim by the models-and-publications session: "leave
+  them as uncommitted references in the local repo". The maintainer chose untrack over
+  rewriting history. Commit 6ec712a still contains batch 1.

@@ -1375,3 +1375,20 @@ The maintainer approved F-1…F-6 (D-049).
   also busy with P6.0f.
 - **Review:** 1 round. Nits N3 (compat order) and N4 (testset name) were fixed at merge.
   N1 (allowlists match by name only) is recorded in D-064.
+
+## 2026-09-30 — P6.0i2 merged: author-letter pre-send checks (D-067); letters untracked
+
+- **Sources obtained (legitimate public only):** Fortuna 2020 Document S1, the nanoHUB
+  gltcellcrawl port, `Instructions_To_Run.pdf`, the CC3D 3.7.9 and 3.6.2 solver and
+  chemotaxis sources, the Chaste release_2017.1 and paper-tag Potts sources, the HMR core
+  xls files, the Merks 2006 PMC manuscript and the TST chapter. They are catalogued in the
+  gitignored `docs/references/codebases/SOURCES.md`.
+- **Not obtained (the maintainer will get them):** the Merks 2006 supplementary methods,
+  the Dal-Castel 2025 version of record, and ACRI 2018.
+- **Letters:** 57 questions, 30 blocking, 4 HOLD.
+- **Specs:** spec answers recorded in 01, 08, 09 and 14. C7 and X5 are changed (approved,
+  D-067).
+- **Letters untracked:** they are local, untracked files, per the maintainer (4275f24).
+- **Review:** 1 round. The blocker was that the approved §4 rows had been overwritten; it
+  was resolved by maintainer approval.
+- **Holds:** P6.1c and P6.2b are held for the V-target audit.
