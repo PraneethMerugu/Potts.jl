@@ -602,3 +602,32 @@ It also changes the Akeeb default μ from 30 to 24 (A5).
 Status: implementation pending. The feature roadmap that these decisions need (the G1–G21
 list and build order in the README) is under review first, so that every model is composed
 only from general public primitives.
+
+## D-051 Feature roadmap review: maintainer answers (2026-09-30)
+
+Answers to `research/feature-roadmap-review.md` §7 (questions 1–5 and 12). The rest of the
+review (R0–R16) remains a proposal until each step is taken up.
+
+1. **Guardrails and R0 renames: adopt now.** Guardrails (a)–(e) go into the test suite,
+   together with the family-general replacements for `rule = :merks`, `extension_only` and
+   the Act helpers (review §2).
+2. **Fractional MCS: allowed.** This amends D-031's "1 MCS = N attempts".
+   - An MCS may be declared as a fraction of N attempts, for Jiang 2005's ¼-MCS sweeps.
+   - It must cost nothing when unused: the whole-MCS path compiles to exactly today's
+     loops, with no extra branch or allocation.
+   - It must be easy to author: one keyword on the sweep.
+3. **Zajac: build the exact per-copy form** (interface pair trackers with exact ΔH) as the
+   reference. The lagged director is a variant.
+4. **Coarse field grids: build them.** Fields may live on their own grid, coarser than
+   the cell lattice, with restriction and prolongation.
+5. **Global connectivity is allowed on the checkerboard.** Most, if not all, features must
+   work across both algorithms (sequential and checkerboard). A feature that cannot needs
+   an explicit exception here.
+6. **Analysis.**
+   - A separate composable analysis package only if it has real merit as a reusable
+     library.
+   - Otherwise analysis lives as clean, readable, teachable Julia in Potts.jl's docs and
+     tutorials.
+   - Prefer MTK's own path where it is performant: `@observed` quantities evaluated through
+     SymbolicIndexingInterface on solutions.
+   - Else use the most Julian, teachable code.
