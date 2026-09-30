@@ -125,6 +125,12 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; docs build ≈ 2 min) **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`
   rendered for Graner–Glazier as the pilot. Accept: `julia --project=docs docs/make.jl`
   builds offline.
+- [ ] **P6.0j** ExplicitImports checks for Potts, CorePotts and MakiePotts, as the
+  CLAUDE.md code rules require. Only PottsModels is checked today (found during P6.1a).
+  - Accept: `check_no_implicit_imports`, `check_all_explicit_imports_are_public` (with a
+    reviewed allowlist), `check_no_stale_explicit_imports` and
+    `check_all_qualified_accesses_via_owners` pass in each package's QA.
+  - Negative control: a deliberate implicit import fails the check.
 - [ ] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
   README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
   send.
