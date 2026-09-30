@@ -817,7 +817,12 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     earlier ones, so keep it off a `Frame` with a `region` (as above).
   - `Frame(kind; width = 1)`: one cell owning every site within `width` of the edge of
     each closed axis. Periodic axes have no edge: on `(Periodic(), Closed())` the frame is
-    two walls that are still one (frozen) cell; all-periodic is an error.
+    two walls that are still one (frozen) cell; all-periodic is an error. On a lattice
+    with a domain (P6.1a2) it paints the domain boundary instead: every in-domain site
+    within Chebyshev distance `width` (lattice indices, through the wrap on periodic axes)
+    of an out-of-domain site or a closed lattice edge, e.g. a ring on a disk. Chebyshev is
+    Moore(1) graph distance on square lattices and conservative on hex, so the ring seals
+    the domain.
   - `overlay(layers...)`: later layers overwrite earlier ones; ids follow layer order.
     Cells left with no site are dropped. Partly covered cells keep what remains, which can
     be disconnected pieces: `layout` warns, naming the cell, when the remaining sites are
