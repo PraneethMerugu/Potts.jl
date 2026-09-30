@@ -122,7 +122,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
   Accept: a Bauer-style model where the matrix is a cell kind uses class gates; the
   denylist and DSL snapshots are updated with the reviewer's justification.
-- [ ] **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`
+- [x] (merge, 2026-09-30; docs build ≈ 2 min) **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`
   rendered for Graner–Glazier as the pilot. Accept: `julia --project=docs docs/make.jl`
   builds offline.
 - [ ] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
@@ -143,6 +143,11 @@ Every item's acceptance also includes the standing checks:
   - `papers.jl` anneals each regime with that run's own J and T. The frozen file is edited
     under a DECISIONS entry. The reviewer measured a bias of 0.005–0.01 toward the effect.
   - The public-names guardrail (`guardrails.jl`) is extended to `lib/PottsModels/reproductions/`.
+- [ ] **P6.0h2** P6.0h review nits for the 09 tutorial:
+  - "consistent with the medium share" instead of "which passes";
+  - a caveat on the time-dependence and uncertainty of `PAPER_MEDIUM`;
+  - a plateau criterion that also checks the slope over the last decade;
+  - hide the diagnosis helper code (`#hide`).
 - [ ] **P6.1c** reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 

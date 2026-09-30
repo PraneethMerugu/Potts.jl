@@ -1222,3 +1222,25 @@ The maintainer approved F-1…F-6 (D-049).
     (117.8/118.6 and 119.5/119.2).
   - The GPU's timing is bimodal (about 75 or about 115 ns/site), so Metal is now gated by
     A/B (AUTONOMY §7.4).
+
+## 2026-09-30 — P6.0h merged: docs pipeline, pilot reproduction 09 (sorting)
+
+- **Build:** `docs/` workspace project (Documenter, Literate, CairoMakie, Markdown) and
+  `docs/make.jl`. It builds offline in about 2 minutes, with `checkdocs = :exports`.
+  - Literate pages go into a gitignored `docs/src/published/`.
+  - After adding a workspace project, the shared Manifest needs `Pkg.resolve()`.
+- **Pilot:** `lib/PottsModels/reproductions/09_cell_sorting.jl`. It took three review
+  rounds.
+- **Verdicts:** they use the nominal times of spec §8.5 (V-PRE1/2/3). The spec's ±2×
+  time-scale check is informational only, with a best s = 1.0.
+- **Reduced run (n = 4, 64 cells):**
+  - Fails: heterotypic @10, light–light @10/100/10³, the 5–4000 log law, the light–light
+    crossing (128), and the raw light–medium plateau.
+  - Passes: the rest. The 10⁴ rows are pending.
+  - The failures come from aggregate size (a 1000-cell generator is queued as P6.1b2).
+- **Science correction (reviewer):** the medium share does not change the time axis.
+  - The sampler draws attempts uniformly over all sites, and a padded-lattice test gave
+    identical curves.
+  - Spec 09 D9 and the §8.5 ±2× premise have been sent to the spec owner for revision
+    before pre-registration.
+
