@@ -221,8 +221,11 @@ _displacement(c) = Num[_displacement(c, k) for k in 1:_lattice_dim()]
 
 """
 `integral(x)`: the sum of the site expression `x` over the cell's sites (cell scope; divide
-by `volume` for the mean). Recomputed at the start of the after-MCS phases (and of the
-before-MCS phases when they read it), so it reflects the state after the copy sweep.
+by `volume` for the mean). Read in an update block it is fresh (D-042): it reflects the
+state after the copy sweep, and the new value of every variable of `x` written bare in the
+same block (the reading update runs after the writer, and the integral is recomputed in
+between). Recomputed at the start of the after-MCS phases, after each update that writes
+one of its variables when something reads it later, and at the MCS boundary.
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
@@ -395,19 +398,23 @@ const _CONNECTIVITY_RULES = (:local, :arc_or_pair)
 
 Forbid copies that locally disconnect a cell of `kinds` (every kind if empty). Shorthand for
 a constraint over the proposal-scope connectivity values, applied when the losing cell is of
-`kinds`:
+`kinds`. Every rule requires the losing cell to keep at least one site around the target
+(D-074): a copy that takes its last site or fills an isolated fragment is rejected, so a
+connectivity-constrained cell cannot die by copies.
 
-- `rule = :local`: `local_components <= 1`, the losing cell's sites around the target stay
-  one piece (CompuCell3D `Connectivity`, Morpheus);
-- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, one arc of the neighbour
-  ring, or else exactly two cells on it (a looser 2D ring rule).
+- `rule = :local`: `local_components == 1`, the losing cell's sites around the target form
+  exactly one piece (CompuCell3D `Connectivity`, `!= 1` rejected);
+- `rule = :arc_or_pair`: `ring_arcs == 1 || (ring_arcs > 1 && ring_cells == 2)`, one arc of
+  the neighbour ring, or else several arcs with exactly two cells on it (a looser 2D ring
+  rule).
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """
 function connectivity(kinds::Integer...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
-    test = rule === :local ? (B.local_components <= 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
+    test = rule === :local ? (B.local_components == 1) :
+           ((B.ring_arcs == 1) | ((B.ring_arcs > 1) & (B.ring_cells == 2)))
     return Constraint(:connectivity, collect(Int, kinds), test)
 end
 """`no_extinction`: forbid copies that remove a cell's last site."""
@@ -628,13 +635,22 @@ Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 
 `copy => -strength * (r(c[target]) - r(c[source]))` with a response `r` applied to each
 concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
-`c/(s c + 1)`, or any function). It acts when the gaining cell (`new`) is of `kinds` (any
-cell if empty) and the copy condition `when` holds, e.g. `old == 0` for extensions into the
-medium only, or `(kind[new] == a) | (kind[old] == a)` for copies involving kind `a`.
+`c/(s c + 1)`, or any function). Which copies it acts on:
+- `kinds` non-empty: the gaining cell (`new`) is of `kinds` and the copy condition `when`
+  holds.
+- `kinds` empty, `when` given: exactly the copies where `when` holds, including
+  retractions (`new == 0`), which get `-strength * (c[target] - c[source])` like any other
+  copy. E.g. `old == 0` for extensions into the medium only, or
+  `(kind[new] == A) | (kind[old] == A)` for every copy involving kind `A`.
+- neither (the default): the gaining cell is a cell (`new != 0`), so retractions get 0.
 """
 function Chemotaxis(c; strength, response::F = identity, kinds = (), when = true) where {F}
-    gain = isempty(kinds) ? (B.new != 0) : foldl(|, [_index(B.kind, B.new) == k for k in kinds])
-    gate = when === true ? gain : gain & when
+    gate = if isempty(kinds)
+        when === true ? (B.new != 0) : when
+    else
+        gain = foldl(|, [_index(B.kind, B.new) == k for k in kinds])
+        when === true ? gain : gain & when
+    end
     return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 

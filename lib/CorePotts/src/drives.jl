@@ -88,14 +88,19 @@ end
 Number of pieces the losing cell's (`prop.old`) sites around the target would form if the
 copy were accepted: face-connected components of its sites in the target's Moore
 neighbourhood (3ᴺ − 1 ≤ 26 sites, bitmask flood fill), or arcs of the 6-ring on a hexagonal
-lattice. Out-of-domain sites are not part of the cell. Zero for the medium or when the target
-is the cell's last site here. Connectivity rules are expressions over it:
-`local_components <= 1` (hard), `λ * (local_components > 1)` (soft).
+lattice. Out-of-domain sites are not part of the cell. Zero for the medium, when the target
+is the cell's last site, or when it is an isolated fragment. Connectivity rules are
+expressions over it: `local_components == 1` (hard, exactly one piece as in CompuCell3D,
+D-074), `λ * (local_components > 1)` (soft).
 """
 @inline local_components(σ, ctx, prop::Proposal) = _local_components(ctx.lattice, σ, prop)
 
-"""`locally_connected(σ, ctx, prop)`: `local_components(σ, ctx, prop) <= 1`."""
-@inline locally_connected(σ, ctx, prop::Proposal) = local_components(σ, ctx, prop) <= 1
+"""
+`locally_connected(σ, ctx, prop)`: the losing cell stays exactly one local piece,
+`prop.old == 0 || local_components(σ, ctx, prop) == 1` (D-074). Zero pieces (the cell's last
+site, an isolated fragment) is rejected like two.
+"""
+@inline locally_connected(σ, ctx, prop::Proposal) = prop.old == 0 || local_components(σ, ctx, prop) == 1
 
 """
     ring_arcs(σ, ctx, prop) -> Int

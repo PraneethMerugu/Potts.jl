@@ -38,9 +38,10 @@ drive(prob, u, prop, ctx) = prob.f.delta_H(u, prob.p, prop, ctx) - energy_change
 kindof(u, c) = c == 0 ? 0 : Int(u.cell.kind[c])
 
 # Ring rules on the clockwise Moore ring around the target (out-of-lattice sites are
-# medium). CC3D's `Connectivity` (`one_arc`): the losing cell's ring sites form at most one
-# arc. The Merks et al. (2006) rule (`ring_rule`) also accepts when exactly two distinct
-# cells occupy the ring.
+# medium). CC3D's `Connectivity` (`one_arc`): the losing cell's ring sites form exactly one
+# arc (none, i.e. its last site or an isolated fragment, is rejected: D-074). The Merks et al.
+# (2006) rule (`ring_rule`) also accepts several arcs when exactly two distinct cells occupy
+# the ring.
 const RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
 function ring_owners(σ, x, periodic)
     X, Y = size(σ)
@@ -51,9 +52,11 @@ function ring_owners(σ, x, periodic)
         σ[u, v]
     end
 end
-one_arc(σ, x, a, periodic) = (own = ring_owners(σ, x, periodic); count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8) <= 1)
-ring_rule(σ, x, a, periodic) = one_arc(σ, x, a, periodic) ||
-                               length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2
+arcs(σ, x, a, periodic) = (own = ring_owners(σ, x, periodic); n = count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8);
+    n == 0 && all(==(a), own) ? 1 : n)
+one_arc(σ, x, a, periodic) = arcs(σ, x, a, periodic) == 1
+ring_rule(σ, x, a, periodic) = one_arc(σ, x, a, periodic) || (arcs(σ, x, a, periodic) > 1 &&
+                               length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2)
 
 """Cells whose sites are not one 8-connected piece (axes periodic as given)."""
 function split_ids(σ, periodic)

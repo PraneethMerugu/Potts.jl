@@ -45,11 +45,18 @@ const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, 
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells)
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
+# The link endpoints, bound inside edge terms and link rules (`_edge_scope`): a parameter or
+# variable of that name would be silently shadowed there, so they are reserved for those
+# declarations. Kind names `a`/`b` stay allowed (a kind is compared through `kind[a]`).
+const _ENDPOINT_NAMES = (:a, :b)
+const _ENDPOINT_DECLS = ("parameter", "structural parameter", "variable")
 
 """Record a declared name; reject built-in names and a second declaration of a name."""
 function _declare!(parts::_Parts, k::Symbol, what::String)
     k in _reserved_names() && throw(ArgumentError(
         "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
+    k in _ENDPOINT_NAMES && what in _ENDPOINT_DECLS && throw(ArgumentError(
+        "$what `$k`: `$k` is reserved (`a` and `b` are the link endpoints in edge terms and link rules); choose another name"))
     haskey(parts.declared, k) && throw(ArgumentError("$what `$k`: `$k` is already declared as a $(parts.declared[k])"))
     parts.declared[k] = what
     return k
@@ -429,8 +436,8 @@ function _replace_call(ex, from, to, extra...)
     return Expr(:call, to, params..., extra..., rest...)
 end
 
-# Edge-scoped statements see the link endpoints `a`, `b` (bound only there, so parameters
-# named `a`/`b` elsewhere are unaffected).
+# Edge-scoped statements see the link endpoints `a`, `b` (bound only there). Parameters and
+# variables cannot be named `a`/`b` (`_ENDPOINT_NAMES`), so nothing is shadowed.
 _edge_scope(ex) = :(let a = Potts.B.a, b = Potts.B.b
     $ex
 end)

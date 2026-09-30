@@ -9,14 +9,14 @@ function adaptive_model(solver)
         @variables begin
             y(cell) = 1.0
             s(cell) = 0.0
-            a(model) = 1.0
+            g(model) = 1.0
         end
         @lattice Lattice((20, 20))
         @energy cells => (volume - 16.0)^2
         @equations begin
             D(y) ~ -k * y                                    # cell ODE
             D(s) ~ -1000 * (s - cos(time))                   # stiff cell ODE
-            D(a) ~ -0.5 * a + count(true for c in cells(B))  # model ODE with a population input
+            D(g) ~ -0.5 * g + count(true for c in cells(B))  # model ODE with a population input
         end
         @sweep Metropolis(; temperature = 1.0, ode_solver = solver)
     end
@@ -33,7 +33,7 @@ end
         for alg in (SequentialCPM(), CheckerboardCPM())
             u = solve(p, alg).u[end]
             @test u.cell.y[1:2] ≈ fill(exp(-0.3t), 2) rtol = 1e-6
-            @test u.model.a[1] ≈ 2 + (1 - 2) * exp(-0.5t) rtol = 1e-6            # one B cell: a → 2
+            @test u.model.g[1] ≈ 2 + (1 - 2) * exp(-0.5t) rtol = 1e-6            # one B cell: g → 2
             @test u.cell.s[1:2] ≈ fill(sa(t), 2) rtol = 1e-4
         end
     end
@@ -45,9 +45,9 @@ end
 
 @potts_model RndBase begin
     @kinds medium A
-    @variables b(cell) = 0.0
+    @variables rb(cell) = 0.0
     @lattice Lattice((6, 6, 6))
-    @after_mcs b ~ rand()
+    @after_mcs rb ~ rand()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -55,10 +55,10 @@ end
     @kinds medium A
     @lattice Lattice((16, 16))
     @variables begin
-        a(cell) = 0.0
+        ra(cell) = 0.0
         pos(cell)[1:2] = 0.0
     end
-    @after_mcs a ~ rand()
+    @after_mcs ra ~ rand()
     @extend base = RndBase()
     @after_mcs pos ~ centroid()             # the outer 2D lattice, not the base's 3D one
     @sweep Metropolis(; temperature = 1.0)
@@ -78,7 +78,7 @@ end
     # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
     σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1
     u = solve(PottsProblem(RndOuter(; name = :o), [ownership => σ2, kind => [1]], (0, 1)), SequentialCPM()).u[end]
-    @test u.cell.a[1] != u.cell.b[1]
+    @test u.cell.ra[1] != u.cell.rb[1]
     @test u.cell.pos_1[1] ≈ 6.0 atol = 1.5
     # replacement respects cadence; reinit! refreshes integrals
     @test_throws ArgumentError PottsProblem(VectorBits(; name = :v), [ownership => zeros(Int32, 12, 12), kind => Int[],

@@ -73,7 +73,7 @@ end
             grown == comp && break
             comp = grown
         end
-        @test locally_connected(σ, ctx, prop) == (length(comp) == length(members))
+        @test locally_connected(σ, ctx, prop) == (!isempty(members) && length(comp) == length(members))
     end
     # the adjacent pair (1,0),(0,1) is one arc of the hex ring
     σ = zeros(Int32, 12, 12); σ[6, 6] = 1; σ[7, 6] = 1; σ[6, 7] = 1

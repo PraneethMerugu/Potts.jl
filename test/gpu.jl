@@ -82,7 +82,7 @@ using Statistics: mean, var
     ua = solve(PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-6)), [ownership => σa, kind => [:A, :B]], (0, 5);
         T = Float32), CheckerboardCPM(); backend).u[end]
     @test Array(ua.cell.y)[1:2] ≈ fill(exp(-0.3 * 5), 2) rtol = 1e-4
-    @test Array(ua.model.a)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
+    @test Array(ua.model.g)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
     # hexagonal lattice on the device
     σh = zeros(Int32, 30, 30); nh = 0
     for q in 4:6:26, r in 4:6:26

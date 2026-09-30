@@ -1608,6 +1608,83 @@ end
     @test solve(q, SequentialCPM()).u[end].cell.mb[1] ≈ 5 * 72
 end
 
+# P6.0m (D-042): an integral read in a block that writes its operand bare folds the new
+# values; readers after the block (equations, the temperature) see them too.
+@potts_model FreshIntegrals begin
+    @kinds medium A
+    @variables begin
+        w(site) = 0.0
+        u(site) = 0.0
+        sb(cell) = 0.0
+        sa(cell) = 0.0
+        s2(cell) = 0.0
+        r(cell) = 0.0
+    end
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 16)^2
+    @before_mcs begin
+        w ~ Pre(w) + 1
+        sb ~ integral(w)
+    end
+    @after_mcs begin
+        u ~ Pre(u) + 1
+        sa ~ integral(u) + integral(w)
+    end
+    @after_mcs Every(2) s2 ~ integral(2u)
+    @equations D(r) ~ integral(u)
+    @sweep Metropolis(; temperature = 0.0)
+end
+
+@testset "integral(x) is fresh after a write in the same block (P6.0m, D-042)" begin
+    # a 4×4 cell at T = 0 keeps its 16 sites (every copy costs +1); after MCS k, w = u = k
+    σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        sol = solve(PottsProblem(FreshIntegrals(; name = :f), [ownership => σ, kind => [:A]], (0, 4)), alg; saveat = 0:4)
+        k = 0:4
+        @test [Array(u.cell.volume)[1] for u in sol.u] == fill(16, 5)
+        @test [Array(u.cell.sb)[1] for u in sol.u] == 16.0 .* k                    # before block
+        @test [Array(u.cell.sa)[1] for u in sol.u] == 32.0 .* k                    # after block, two integrals
+        # gated reader (Every(2) runs in MCS 1, 3): 2·16k fresh; stale would be 0, 0, 0, 64, 64
+        @test [Array(u.cell.s2)[1] for u in sol.u] == [0, 32, 32, 96, 96]
+        # the equation (explicit Euler, dt = 1) integrates the fresh value: Σ_{j ≤ k} 16 j
+        @test [Array(u.cell.r)[1] for u in sol.u] == [16.0 * sum(1:j; init = 0) for j in k]
+        @test [16.0 * sum(0:(j - 1); init = 0) for j in k] != [16.0 * sum(1:j; init = 0) for j in k]   # stale differs
+    end
+    # no extra pass: w (not written after the sweep) once at the start of the after block;
+    # u once before `sa` (which also serves the ODE); 2u gated with its reader; w once before `sb`
+    c = mtkcompile(FreshIntegrals(; name = :f))
+    ph = Potts._phases(c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in c.sys.parameters))
+    reduces(t) = count(x -> x isa CorePotts.CellReduce || (x isa Potts._Gated && x.phase isa CorePotts.CellReduce), t)
+    @test reduces(ph.before_mcs) == 1                  # w written, sb reads it
+    @test reduces(ph.after_mcs) == 3
+    @test count(x -> x isa Potts._Gated && x.phase isa CorePotts.CellReduce, ph.after_mcs) == 1
+end
+
+# P6.0m (D-074): the ring rule also rejects zero arcs (the last site, an isolated fragment)
+@potts_model ArcOrPair begin
+    @kinds medium A
+    @lattice Lattice((12, 12); neighborhood = Moore(1))
+    @energy cells => (volume - 1)^2
+    @constraint connectivity(A; rule = :arc_or_pair)
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "connectivity(rule = :arc_or_pair) needs at least one arc (P6.0m, D-074)" begin
+    allows(σ, x, y) = (p = PottsProblem(ArcOrPair(; name = :r), [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1));
+        prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
+        p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p)))
+    σ = zeros(Int32, 12, 12); σ[6, 6] = 1
+    @test !allows(σ, (6, 6), (7, 6))                     # the last site: 0 arcs
+    σ[2:3, 2:3] .= 1
+    @test !allows(σ, (6, 6), (7, 6))                     # an isolated fragment: 0 arcs
+    σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1
+    @test !allows(σ, (6, 6), (6, 7))                     # a bridge, one cell on the ring: 2 arcs
+    σ[6, 5] = 2
+    @test allows(σ, (6, 6), (6, 5))                      # 2 arcs, exactly two cells on the ring: the pair
+    σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
+    @test allows(σ, (6, 4), (7, 4))                      # an ordinary boundary copy: 1 arc
+end
+
 @potts_model Compound begin
     @kinds medium A
     @variables begin
@@ -1690,10 +1767,10 @@ Potts.ModelingToolkitBase.@variables drug_c(_tc) = 0.0
 
 @potts_model Systemic begin
     @kinds medium A
-    @variables a(model) = 1.0
+    @variables g(model) = 1.0
     @components model pk = drug
     @equations begin
-        D(a) ~ -0.5 * a
+        D(g) ~ -0.5 * g
         pk.drug_dose ~ count(true for c in cells)           # dosing ∝ the number of live cells
     end
     @lattice Lattice((20, 20))
@@ -1708,10 +1785,10 @@ end
     for alg in (SequentialCPM(), CheckerboardCPM())
         u = solve(p, alg).u[end]
         x = 0.5 / 4
-        @test u.model.a[1] ≈ (1 - x + x^2 / 2 - x^3 / 6 + x^4 / 24)^40 rtol = 1e-12  # RK4, 4 substeps per MCS
+        @test u.model.g[1] ≈ (1 - x + x^2 / 2 - x^3 / 6 + x^4 / 24)^40 rtol = 1e-12  # RK4, 4 substeps per MCS
         @test u.model.pk₊drug_c[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-5
     end
-    @test_throws ArgumentError PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1], :a => nothing], (0, 1))
+    @test_throws ArgumentError PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1], :g => nothing], (0, 1))
 end
 
 @potts_model HexSorting begin

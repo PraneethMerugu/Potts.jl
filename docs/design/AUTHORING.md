@@ -159,7 +159,7 @@ expression may refer to:
 | `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
-| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells), `distance`, that relationship's edge variables |
+| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no parameter or variable may be named `a` or `b`, P6.0m), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
 Examples:
@@ -250,8 +250,8 @@ Connectivity rules are then ordinary statements:
 
 | Rule | Statement |
 |---|---|
-| Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components <= 1` for losers of kind `k` |
-| Ring rule | `connectivity(k; rule = :arc_or_pair)` |
+| Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components == 1` for losers of kind `k` (D-074: zero pieces, the last site or an isolated fragment, is rejected too, so such a cell cannot die by copies) |
+| Ring rule | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs == 1 \|\| (ring_arcs > 1 && ring_cells == 2)` |
 | Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
 
 An unknown `rule` is an error.
@@ -259,7 +259,9 @@ An unknown `rule` is an error.
 **Chemotaxis family.** `Chemotaxis(c; strength, response, kinds, when)`:
 - `response`: `identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
   `c/(s c + 1)`, or any function;
-- `when`: any copy condition, e.g. `old == 0` for extensions only.
+- `when`: any copy condition, e.g. `old == 0` for extensions only. Without `kinds` an
+  explicit `when` selects exactly the copies it admits, retractions (`new == 0`) included;
+  the default (no `kinds`, no `when`) acts when the gaining cell is a cell.
 
 **Neighbourhood memory (Act family).** Write the mean as a fold:
 `geomean(x[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])`. `mean`
@@ -712,6 +714,10 @@ end
     starts (`at_init`, so `remake` is respected).
   - When after-MCS updates, equations, division rules or link rules read an integral,
     it is also recomputed right after the copy sweep.
+  - Read in an update block that writes one of its variables bare, it folds the new
+    values (D-042): it is recomputed after the writing stage, before the next stage that
+    reads it (and before the equations, lifecycle or temperature that read it after the
+    block). An integral whose variables no update writes costs no extra pass.
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the
