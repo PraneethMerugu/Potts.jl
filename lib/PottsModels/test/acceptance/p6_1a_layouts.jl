@@ -5,7 +5,7 @@
 #   Tiling(size; spacing = 0, region = <whole lattice>, kinds)   boxes of `size`, `spacing`
 #       medium sites apart, filling `region` (a tuple of ranges) in column-major order;
 #       `kinds` is cycled over the cells in placement order
-#   Scatter(n, size; region = <whole lattice>, kinds, seed, gap = 1)   `n` boxes at random
+#   Scattered(n, size; region = <whole lattice>, kinds, seed, gap = 1)   `n` boxes at random
 #       positions, at least `gap` medium sites apart; deterministic in `seed`; throws an
 #       ArgumentError when they cannot be placed
 #   Frame(kind; width = 1)   one cell of `kind` owning every site within `width` of the edge
@@ -52,8 +52,8 @@ end
     @test Array(u.σ)[border] == σ[border]
 end
 
-@testset "P6.1a: Scatter" begin
-    sc(seed) = layout(Scatter(10, (4, 4); kinds = [:dark], seed), (40, 40))
+@testset "P6.1a: Scattered" begin
+    sc(seed) = layout(Scattered(10, (4, 4); kinds = [:dark], seed), (40, 40))
     σ = opget(sc(1), ownership)
     @test maximum(σ) == 10 && all(c -> count(==(c), σ) == 16, 1:10)
     @test opget(sc(1), kind) == fill(:dark, 10)
@@ -66,7 +66,7 @@ end
     @test apart
     @test opget(sc(1), ownership) == σ                              # deterministic in seed
     @test opget(sc(2), ownership) != σ
-    @test_throws ArgumentError layout(Scatter(200, (4, 4); kinds = [:dark], seed = 1), (40, 40))
+    @test_throws ArgumentError layout(Scattered(200, (4, 4); kinds = [:dark], seed = 1), (40, 40))
 end
 
 @testset "P6.1a: layouts in 3D" begin

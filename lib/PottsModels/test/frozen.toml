@@ -14,5 +14,5 @@ decision = "D-054"
 
 [[file]]
 path = "acceptance/p6_1a_layouts.jl"
-sha256 = "eaae40fe9b32cdc2efa5120da36f959c683324a6ee493756bce2b153274afb89"
-decision = "D-053"
+sha256 = "7e4ba57efb48930591a2edb6ce0a67667ad0bdb1042ed68434aa27ba303a5f31"
+decision = "D-056"

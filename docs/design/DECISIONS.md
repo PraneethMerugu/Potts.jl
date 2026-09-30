@@ -732,3 +732,13 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    representation, not a flag and an event code.
 6. Division planes: the rules within one domain share one plane, and the two domains may
    differ.
+
+## D-056 The random-box layout is `Scattered`, not `Scatter` (2026-09-30, coordinator; P6.1a)
+
+- **The clash.** Makie exports a `Scatter` plot type. With `using Potts, CairoMakie`, as
+  every reproduction tutorial does, a bare `Scatter` is ambiguous and so undefined.
+- **The decision.** The layout is `Scattered(n, size; region, kinds, seed, gap)`, a noun
+  that parallels `Tiling`. The frozen P6.1a test is amended to match; nothing else in it
+  changes.
+- **The rule for future public names:** check them against the exports of Makie,
+  SciMLBase, ModelingToolkit and Graphs before a surface is frozen.
