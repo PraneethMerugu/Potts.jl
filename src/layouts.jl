@@ -166,7 +166,8 @@ function paint!(σ, kinds, l::Scattered{N}, lat::LatticeSpec) where {N}
     # necessary: the boxes grown by `gap` on their upper sides are disjoint in the region
     # grown by `gap`; on a periodic axis they are disjoint around the ring, so at most `n`
     room = map((e, n, p) -> p ? min(e + l.gap, n) : e + l.gap, ext, dims, per)
-    prod(room) >= l.n * prod(l.size .+ l.gap) ||
+    grown = map((s, n, p) -> p ? min(s + l.gap, n) : s + l.gap, l.size, dims, per)
+    prod(room) >= l.n * prod(grown) ||
         throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
@@ -259,38 +260,44 @@ function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
 end
 
 # Warn about cut cells whose remaining sites are not connected under the neighbourhood.
-# One pass buckets the cut cells' sites; a cell that is still a full box is connected
-# (every neighbourhood holds the unit axis steps) and skipped; the rest are flood-filled
-# with one shared `visited` array, reset per cell. O(sites).
+# One pass records each cut cell's first site, site count and bounding box in dense per-cell
+# buffers; a cell that is still a full box is connected (every neighbourhood holds the unit
+# axis steps) and skipped; the rest are flood-filled, stamping `visited` with the cell id so
+# it never needs a reset. O(sites).
 function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
-    buckets = Dict{Int32, Vector{Int}}(c => Int[] for c in cut)
-    lo = Dict{Int32, NTuple{N, Int}}()
-    hi = Dict{Int32, NTuple{N, Int}}()
+    K = length(kinds)
+    iscut = falses(K)
+    for c in cut
+        iscut[c] = true
+    end
+    first_site = zeros(Int, K)
+    nsites = zeros(Int, K)
+    lo = fill(ntuple(_ -> typemax(Int), N), K)
+    hi = fill(ntuple(_ -> typemin(Int), N), K)
+    alive = falses(K)
     ci = CartesianIndices(σ)
     for i in eachindex(σ)
         c = σ[i]
-        (c > 0 && haskey(buckets, c)) || continue
-        push!(buckets[c], i)
+        c > 0 || continue
+        alive[c] = true
+        iscut[c] || continue
+        nsites[c] == 0 && (first_site[c] = i)
+        nsites[c] += 1
         x = Tuple(ci[i])
-        lo[c] = min.(get(lo, c, x), x)
-        hi[c] = max.(get(hi, c, x), x)
+        lo[c] = min.(lo[c], x)
+        hi[c] = max.(hi[c], x)
     end
     clat = core_lattice(lat)
     offs = CorePotts.relation(lat.neighborhood, clat).offsets
     units = all(d -> all(s -> ntuple(k -> Int32(k == d ? s : 0), N) in offs, (-1, 1)), 1:N)
-    visited = falses(size(σ))
+    visited = zeros(Int32, size(σ))
     stack = Int[]
     li = LinearIndices(σ)
-    alive = falses(length(kinds))
-    for s in σ
-        s > 0 && (alive[s] = true)
-    end
     for c in sort!(collect(cut))
-        sites = buckets[c]
-        isempty(sites) && continue
-        units && length(sites) == prod(hi[c] .- lo[c] .+ 1) && continue      # still a box
-        visited[first(sites)] = true
-        push!(stack, first(sites))
+        nsites[c] == 0 && continue
+        units && nsites[c] == prod(hi[c] .- lo[c] .+ 1) && continue      # still a box
+        visited[first_site[c]] = c
+        push!(stack, first_site[c])
         reached = 1
         while !isempty(stack)
             x = Tuple(ci[pop!(stack)])
@@ -298,14 +305,13 @@ function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
                 inside, y = CorePotts.shift(clat, x, o)
                 inside || continue
                 k = li[y...]
-                (σ[k] == c && !visited[k]) || continue
-                visited[k] = true
+                (σ[k] == c && visited[k] != c) || continue
+                visited[k] = c
                 reached += 1
                 push!(stack, k)
             end
         end
-        visited[sites] .= false
-        reached < length(sites) &&
+        reached < nsites[c] &&
             @warn "overlay: later layers split cell $(count(view(alive, 1:c))) (kind $(kinds[c])) into disconnected pieces"
     end
     return nothing
