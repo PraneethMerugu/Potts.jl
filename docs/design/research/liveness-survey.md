@@ -3,12 +3,16 @@
 Research for ROADMAP P6.5a (R6, "explicit liveness", D-053 item 6). The maintainer's rule
 (2026-09-30): follow standard CPM liveness behaviour where performance allows.
 
-**Revision 2** (after review round 1). Main changes:
-- The recommended decision (D-066, §6.1) drops `retain_empty`. No model needs it, and it
-  would change Fortuna's results (§5).
-- A fully repaired `retain_empty` design is kept as Option B (§6.2).
-- The numbers in §7 are measured.
-- Every deviation is listed with its reason (§4.1).
+**Revision 3** (after review rounds 1 and 2). Main changes:
+- Status: **D-066 is PROPOSED**, pending the maintainer's sign-off on its need-based
+  deviations (§6.1).
+- The recommended decision drops `retain_empty`. No model needs it, and it would change
+  Fortuna's results (§5). A repaired `retain_empty` design is kept as Option B (§6.2).
+- `id` stays the slot in model code. A separate `birth` serial is the user-visible id
+  (§6.1 item 3).
+- The self-check credit now covers link energies (§6.1 item 4).
+- The B2 numbers are corrected from the reviewer's interleaved rerun (§7).
+- Akeeb is moved out of D-066 into an open item (§9).
 
 **Contents.** §1 sources · §2 our current behaviour · §3 comparison table · §4 standard
 behaviour, disagreements, our deviations · §5 tie-in to the 12 models · §6 proposed
@@ -146,12 +150,23 @@ Outside our scope: Artistoo's `nr_cells` is decremented but never incremented
 
 ### 4.1 Our deviations under the proposed D-066, with reasons
 
-| # | Standard | Ours | Reason | Observable effect |
-|---|---|---|---|---|
-| X1 | Monotone ids (item 7) | Slot reuse, lowest-first, with `generation` (D-035 kept) | Performance. Every per-cell loop runs over capacity; monotone ids make capacity ≥ cumulative births, and growth reallocates on a warm MCS (§7, measured) | **None outside kernels.** The user-visible id is a monotone `birth` serial (§6.1 item 3) |
-| X2 | Unpainted live cells exist (item 6) | `@create` allocates and paints in one host routine. A created cell that receives no site is not born | An unpainted cell has no centroid or shape. Its only occurrence in the 12 models is an artefact (Akeeb seeding, §5). Keeping "alive ⇔ owns a site" keeps every liveness test at zero cost | Akeeb: emulated exactly at init (§5) |
-| X3 | Links of a dead cell dropped **at the killing copy** (CC3D FPP) | Dropped at the next boundary (§6.1 item 5). Until then the dead partner is skipped in `link_delta` and `total_energy` | Dropping inside the sweep writes the link store from the hot loop, a race on the checkerboard | Energetically none: a dead partner contributes 0 from the killing copy on. A stale link slot occupies the partner's degree until the boundary (bounded by the link-rule cadence) |
-| — | (no standard) | `total_energy` over alive cells | Not a deviation: no tool uses a total H (item 5). This is our convention | — |
+A deviation is either **performance-based** (the standard would cost measurable warm-MCS
+time or allocations, which D-065 Q6 allows us to avoid) or **need-based** (no
+performance reason, so the maintainer must confirm it).
+
+| # | Standard | Ours | Kind | Reason | Observable effect |
+|---|---|---|---|---|---|
+| X1 | Monotone ids, never reused (consensus item 7) | Slot reuse, lowest-first, with `generation` (D-035 kept). A monotone `birth` serial is the user-visible id | **Performance** (measured, §7) | Every per-cell loop runs over capacity. A dead slot costs about 3.0 ns per MCS (checkerboard) and about 1 ns (sequential). At 16× capacity Akeeb is +16.3 % and +5 %. With monotone ids every capacity growth allocates in a warm MCS (§7 B3) | None in outputs: users see `birth`. RNG streams are keyed by `generation & 0xff` (`rng.jl:92-93`), so they repeat after 256 reuses of one slot (see note) |
+| X2 | Unpainted live cells exist (consensus item 6): CC3D `new_cell`, Artistoo `makeNewCellID`, and CC3D division children that receive no pixel | `@create`/`@convert` allocate and paint in one host routine. A created cell or division daughter that receives no site is **not born**, and its slot stays free | **Need-based, unmeasured** (maintainer sign-off) | Keeps "alive ⇔ owns a site", so no liveness state, no emptiness check in geometry, and no clearing of a flag on first paint. The only occurrence of an unpainted cell in the 12 models is Akeeb's seeding artefact (§5, §9). The cost of the alternative (an "unpainted" flag set at create and cleared on first paint) was not measured | Akeeb's initial state differs from CC3D by about 8 unpainted leaders (handed to P6.2b, §9). Empty division daughters (counted in `empty_daughters`) are not cells |
+| X3 | Links of a dead cell dropped **at the killing copy** (CC3D FPP, `FocalPointPlasticityPlugin.cpp:865-875`) | Dropped at the next boundary (§6.1 item 5). Until then the dead partner is skipped in `link_delta` and `total_energy` | **Performance, not measured** | Dropping inside the sweep writes the link store from the hot loop and races on the checkerboard. The cost of that write was not measured | Energetically none after the killing copy. A stale link slot occupies the partner's degree until the boundary |
+| — | `retain_empty` (D-053 item 6) | Dropped | **Standard behaviour** (consensus item 3), so no deviation. D-065 Q6 authorises it | Replacing D-053 item 6's semantics is listed for confirmation because it withdraws an earlier answer | Fortuna matches CC3D (§5) |
+| — | (no standard) | `total_energy` over alive cells | Not a deviation | No tool uses a total H (item 5) | — |
+
+**Note on X1 and RNG.** `cell_entity(id, generation)` packs `generation & 0xff`. After 256
+reuses of one slot, a new cell replays an old cell's cell-addressed streams (also mixed
+with `mcs`, so an exact replay also needs the same MCS). This is pre-existing (D-035) and
+unlikely at our capacities. It can be fixed by widening the packing if a turnover model
+reaches it.
 
 ---
 
@@ -161,111 +176,128 @@ Spec ids are from `model-specs/README.md` §1.
 
 ### Model 14: Fortuna 2020 / Thomas / Dal Castel (CC3D). Depends on this decision.
 
-The spec's G10 note asks for a `retain_empty` lamellipodium (14 §8). **The authors' code
-does not keep an empty lamellipodium, and keeping one would change results.**
+Spec 14 asks for a `retain_empty` lamellipodium (14 §8, lines 495 and 516). **The authors'
+code keeps no empty lamellipodium, and keeping one would change results.**
 
-**14a (`codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py`).**
-- The FRONT-creation step runs **every MCS** (`:121-164`). Whenever the cell has no FRONT
-  and `pFRONT > 0`, a conversion calls `potts.createCell()`, paints the pixel at once
-  (`:150-153`), gives the new FRONT a target of 1.5, and lowers CYTO's target by 1.5
+**14a** (`codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py`):
+- The FRONT-creation step runs **every MCS** (`:121-164`). Whenever there is no FRONT and
+  `pFRONT > 0`, a conversion calls `potts.createCell()` and paints the pixel at once
+  (`:150-153`). It gives FRONT a target of 1.5 and lowers CYTO's target by 1.5
   (`:155-157`).
-- `CELLvol` is a sum of **target** volumes (`:127-138`, `CELLvol = cell.targetVolume +
-  FRONTvol + NUCLvol`, where FRONTvol and NUCLvol are targets).
-- So when FRONT empties, CC3D destroys it (§3). Its target leaves `CELLvol`; `pFRONT` is
-  recomputed from FRONTvol = 0; a new FRONT is created with target 1.5 and CYTO loses
-  another 1.5. **Every FRONT death permanently shrinks the cell's total target volume.**
-- The detachment check that stops a failed run runs only every `deltaT = 50` MCS
-  (`CellMig3D.py:41`; `CellMig3D_Steppables.py:303`) and only after MCS 10 (`:407`).
-- An early 1-site FRONT (target 1.5) can lose its only site to any accepted copy. FRONT
-  emptying is therefore **reachable**, and probably most likely early. Revision 1 said it
-  was unreachable; that was overstated.
+- `CELLvol` is a sum of **target** volumes (`:127-138`).
+- When FRONT empties, CC3D destroys it (§3), so its target leaves `CELLvol`. `pFRONT` is
+  recomputed with FRONTvol = 0, and a new FRONT is created with target 1.5 while CYTO loses
+  another 1.5. **Every FRONT death permanently shrinks the cell's total target.**
+- The detachment check runs only every `deltaT = 50` MCS (`CellMig3D.py:41`;
+  `CellMig3D_Steppables.py:303`) and only after MCS 10 (`:407`).
+- An early 1-site FRONT can lose its site to any accepted copy. FRONT emptying is
+  therefore **reachable**, and it is re-seeded at the next MCS.
+- Spec 14 §2.9.5 (line 210) says "the detachment check … normally stops the run first".
+  That is inconsistent with per-MCS re-seeding and is listed for correction (§5 spec
+  edits).
+- Under `retain_empty`, a retained empty FRONT would keep its target and `pFRONT ≤ 0`: no
+  re-seeding, no target loss, and it stays empty. **This is not what the CC3D code does.**
 
-**Consequence for `retain_empty`.** With it, a retained empty FRONT keeps its target, so
-`pFRONT ≤ 0`: there is no re-seeding and no loss of target volume. The empty FRONT stays
-empty, because conversion is gated off and copies cannot reach a cell with no sites.
-**This differs from the CC3D code.**
+**14c** (`codebases/14c_DalCastel2025_Single_Cell_Chemotaxis_2.3/SCellSign_DISTRIBUTED/Simulation/SCellSignSteppables.py`):
+- LAMEL is created and painted at start (`:54-55, 75`).
+- `step` binds `LAMELcell` only in `for LAMELcell in self.cellListByType(self.LAMEL)`
+  (`:104-105`) and then reads `get_cell_boundary_pixel_list(LAMELcell)` (`:122`).
+- A dead LAMEL leaves `LAMELcell` unbound, so the run fails (inferred, not run).
 
-**14c (`codebases/14c_DalCastel2025_Single_Cell_Chemotaxis_2.3/SCellSign_DISTRIBUTED/Simulation/SCellSignSteppables.py`).**
-- LAMEL is created **and painted** at start (`:54-55, 75`).
-- `step` rebinds `LAMELcell` only inside `for LAMELcell in self.cellListByType(self.LAMEL)`
-  (`:104-105`), then reads `get_cell_boundary_pixel_list(LAMELcell)` (`:122`).
-- If LAMEL has died, the loop body never runs, `LAMELcell` is unbound, and the run ends
-  with a Python error (inferred, not run). An empty LAMEL is a failed run in the authors'
-  code, not a state to keep.
-
-**Proposal.**
+**Under D-066:**
 - 14a: FRONT is created on demand by `@convert` into the cluster (R8), and it dies when it
-  empties. This is standard behaviour and matches CC3D, target loss included.
-- 14c: a LAMEL death is a failed run (`@terminate`).
-- **Check:** the port counts FRONT and LAMEL deaths per run (a per-kind death counter in
-  `LifecycleStats`, or an observable). If they are frequent, that is a finding to report
-  to the authors (spec §5 questions).
+  empties, as in CC3D, target loss included.
+- 14c: a LAMEL death ends the run (`@terminate`).
+- The port counts FRONT and LAMEL deaths per run.
+- 14a's conversion runs every MCS through R8's shared routine. That routine is therefore a
+  boundary where links, references and dead roots are cleaned up (§6.1 item 5).
 
 ### Model 06: Jiang 2005 tumour. Depends on it.
 
-- The necrotic core is "a special cell with ID 0" that "must exist before any death (or
-  be created on first death)" (06 §G10, G14).
-- Under the standard behaviour it is created at the first death by the retire-into routine
-  (R8 `@retire … sites => ref`, creating the target if it is absent), and it is an
-  ordinary cell from then on.
+The necrotic core is "a special cell with ID 0" that "must exist before any death (or be
+created on first death)" (06 §G10, line 341; G14). Under D-066, while no core exists, **the
+first cell to die transitions into the core kind and becomes the core**.
+- This needs no allocation. It is an R3 `@transition` plus R8's retire-into, which uses the
+  core as `ref`.
+- Its target volume is then set from its volume, and later deaths retire their sites into
+  it (`@retire … sites => core`).
+- The alternative is an explicit create-if-absent in R8. R8's priority order is remove >
+  convert > transition > divide > create, so create runs last. And `sites => ref` with
+  ref = 0 reads as "retire to medium". Create-if-absent would therefore need its own rule
+  that runs before the retire. The transition route avoids this.
 - No empty-but-alive state is needed.
 
-### Model 10: Akeeb 2026 (CC3D 4.6.0). Depends on it.
+### Model 10: Akeeb 2026 (CC3D 4.6.0). Affected, but handled outside D-066.
 
 **CC3D seeding** (`DEMO/Main_Simulation/cclc_math_path/Simulation/CCIecmSteppables.py:46-57`):
-- It calls `self.new_cell(self.LC)` on **every** draw, and paints only when the pixel is a
-  follower's (`c1.type == 2`, where FC = 2 and LC = 1 in `CCIecm.xml:38-39`).
-- A draw that lands on an existing leader leaves an unpainted leader in the inventory.
-- `i = LC/(LC+FC)` is recomputed only after a hit and counts those unpainted leaders, so
-  the loop stops when the counted total reaches 390.
-- Expected unpainted leaders: Σ_{n<390} n/9481 ≈ **8**, with 9481 = 499 × 19 drawable
-  pixels. So there are ≈ **382 painted** leaders (inferred, not run).
-- The unpainted ones are inert:
+- It calls `self.new_cell(self.LC)` on every draw but paints only on a follower's pixel
+  (`c1.type == 2`; FC = 2 and LC = 1, `CCIecm.xml:38-39`).
+- `i = LC/(LC+FC)` is recomputed only after a hit, and it counts the unpainted leaders.
+- Expected unpainted leaders: Σ_{n<390} n/9481 ≈ **8**, so there are ≈ **382 painted**
+  (inferred, not run).
+- The unpainted leaders are inert:
   - they never gain a pixel;
-  - the growth and mitosis steps touch only FC (`:93-97`, `:118-129`);
-  - they fail `yCOM > min_tumor_y` in the singles metric (`:504-513`).
-- They are, however, counted in the CSV leader count (spec V-A1: "390 throughout").
+  - growth and mitosis touch only FC (`:93-97`, `:118-129`);
+  - they fail `yCOM > min_tumor_y` (`:504-513`).
+- They are counted in the CSV leader count (spec V-A1, "390").
 
-**Our `akeeb_state`** (`lib/PottsModels/src/akeeb.jl:92-99`):
-- It **retries** a missed draw (`1 <= σ[x, y] <= nf || continue`), so it paints **390**
-  leaders. That is about 8 more than CC3D, about 2 %.
+**Our `akeeb_state`** (`lib/PottsModels/src/akeeb.jl:92-99`) retries a missed draw, so it
+paints **390**. `akeeb_state` also feeds the frozen `lib/PottsModels/test/papers.jl:142-163`.
 
-**Exact emulation at zero cost:**
-- On a miss, count one leader toward the quota without creating or painting a cell. Stop
-  after a hit once `4 * counted >= counted + nf`.
-- Painted leaders are then 390 − misses, distributed as in CC3D.
-- V-A1 then compares the **painted** leader count (≈ 382 ± sd) with CC3D. The CSV's 390
-  also counts ≈ 8 unpainted leaders.
-- This changes `akeeb_state`, so the gate's Akeeb case must be re-baselined in the same
-  change.
+**Handling.** Reproduction 10 is on HOLD, so D-066 does not change Akeeb. The possible
+change (count a miss toward the quota without painting, and compare painted leaders in
+V-A1) is handed to **P6.2b**, the maintainer-approved V-target audit, as an open item
+(§9). Akeeb's `no_extinction` is unchanged, and it has no deaths.
 
-Other Akeeb points:
-- Akeeb uses `no_extinction` together with connectivity; that is unchanged.
-- It has no deaths, so no id is ever freed.
-- Its cross-frame cluster tracking by member ids (`:844-856`) is unaffected. It would also
-  be safe under reuse, because it would read the `birth` id (§6.1 item 3).
+### Models 05 and 07: matrix and fluid collectives
 
-### Models 08, 11, 09 and 01: nothing changes
+The specs ask for "retain_empty-like persistence" of the matrix and fluid collective cells
+(05 G10, `05_bauer2009_ecm.md:266`; 07 G10, `07_bauer2007_sprouting.md:253`).
+- These are huge, multiply connected cells, so losing every site through copies is
+  implausible, and nothing needs them empty.
+- Under D-066 they are ordinary cells.
+- A zero-cost guard is available if wanted: `@constraint no_extinction(matrix, fluid)`.
+  It is one compile-time compare on the already-loaded `k_old`.
+- 05's `@create` recruitment gets new slots and `birth` ids.
 
-- **08 FBCA** has deaths (open boundary, therapy, starvation) plus division.
-- **11 Jafari Nivlouei** has apoptosis, necrosis, and removal of migrated cells.
-- For both, dead cells leave populations today (`volume > 0`), and they will under D-066.
-  Ids are reused today and will be reused under D-066. The user-visible `birth` id is the
-  only addition.
-- **09 Graner–Glazier** needs extinction allowed (λ scan, 09 V-PRE8). `no_extinction`
-  stays opt-in.
+### Model 13: Starruss myxobacteria
+
+Rods are clusters of s segments with ordered, sibling-by-index relationships (13 §G10/G11,
+lines 197, 202, 214).
+- A segment can go extinct through copies. Its siblings' references would then read
+  ref = 0 (medium) under D-066 item 5, and the rod would silently lose a segment.
+- The paper keeps s fixed, so the port declares `@constraint no_extinction(segment kinds…)`.
+  It also asserts a diagnostic: zero segment deaths per run.
+
+### Models 08, 11, 09, 01: nothing changes
+
+- **08 FBCA** and **11 Jafari Nivlouei** have deaths plus division. Dead cells already
+  leave populations (`volume > 0`), ids are already reused, and nothing changes except
+  that outputs show `birth` ids.
+- **09 Graner–Glazier** needs extinction allowed (λ scan, 09 V-PRE8). `no_extinction` stays
+  opt-in.
 - **01 Merks**: TST's apoptosis at area 0 (01 D-11) is death on emptying, as now.
 
-### Models 04, 05, 07, 12, 13
+### Models 04 and 12
 
-These have no death (05 and 07 explicitly; 12 and 13 have a fixed cell count). 05's
-`@create` recruitment gets new slots and `birth` ids.
+No death; nothing changes.
 
-**Summary.**
-- None of the 12 models needs an empty-but-alive cell.
-- 14 and 06 need cells created on demand (R8).
-- 10 needs one change to its initial state.
-- 08, 11, 09, 01, 04, 05, 07, 12 and 13 see no behavioural change.
+### Spec edits implied by D-066
+
+These are listed only; the specs are not edited in this branch.
+
+| File:line | Current text (gist) | Edit |
+|---|---|---|
+| `14_nucleus_migration.md:210` | "the detachment check … normally stops the run first" | FRONT emptying is reachable and re-seeded every MCS (`:121-164`); detachment is checked every 50 MCS after MCS 10. Each death loses FRONT's target from `CELLvol` |
+| `14_nucleus_migration.md:495` | "retain_empty membership … persist as a cluster member with V = 0" | FRONT is created on demand by `@convert` (R8) and dies when it empties (D-066) |
+| `14_nucleus_migration.md:516` | "retain_empty members" | "members created on demand; sibling lookups read ref = 0 when absent" |
+| `README.md:122` (R6 row) | "Explicit liveness, separate from volume > 0 … retain-empty MISSING" | "Liveness = owns a site (D-066); `birth` ids; references cleared at boundaries" |
+| `README.md:567` (step 5 row) | "retain-empty, explicit liveness (open question 6)" | "liveness per D-066 (no retain-empty)" |
+| `06_jiang2005_tumor.md:341` (G10) | "retain_empty: the necrotic core … must exist before any death" | "the first dying cell transitions into the core (D-066)" |
+| `05_bauer2009_ecm.md:266`, `07_bauer2007_sprouting.md:253` | "retain_empty-like persistence" | "ordinary cells; optional `no_extinction(matrix, fluid)`" |
+| `13_starruss_myxobacteria.md` §G10 | — | Add "`no_extinction` on segments; diagnostic: zero segment deaths" |
+| `10_akeeb_invasion.md` V-A1 | "Leaders constant (390 throughout)" | Left to P6.2b (§9) |
+| `AUTHORING.md:235` (§5) | "no extinction (default; can be disabled)" | "opt-in `@constraint no_extinction(k…)`" |
 
 ---
 
@@ -274,165 +306,180 @@ These have no death (05 and 07 explicitly; 12 and 13 have a fixed cell count). 0
 ### 6.1 Recommended: D-066 (draft DECISIONS text)
 
 ```markdown
-## D-066 Cell liveness is the standard CPM one: alive ⇔ owns a site (2026-09-30, P6.5a; amends D-035, D-037; revises D-053 item 6)
+## D-066 Cell liveness is the standard CPM one: alive ⇔ owns a site (2026-09-30, P6.5a; PROPOSED — pending maintainer sign-off; amends D-035, D-037; replaces D-053 item 6's semantics)
 
 Survey: `research/liveness-survey.md` (CompuCell3D 3.7.9/4.9, Morpheus 2.4.1, Artistoo).
+D-065 Q6 authorises adopting the standard behaviour and keeping our faster mechanism
+where the standard costs measurable warm-MCS time or allocations. The maintainer confirms
+only the **need-based** items: X2, and dropping D-053 item 6's `retain_empty`/explicit
+liveness.
+
 Standard: a cell dies at once when it loses its last site or is removed; a dead cell
 leaves every energy, population, iteration, link and plot; the last-site copy pays the
 full volume ΔH; there is no "dead but present" state.
 
 1. **Alive** ⇔ the cell owns at least one site: `alive(c) ≡ volume[c] > 0`. `alive` is a
-   read-only built-in with that meaning.
-   - Birth happens in one of three ways:
+   read-only built-in.
+   - **Birth** happens in one of three ways:
      - the initial state;
-     - a division daughter that receives at least one site (a daughter with none is not
-       born, and its slot stays free, as now);
+     - a division daughter that receives at least one site;
      - `@create`/`@convert` (R8), which allocate and paint in one host routine.
-   - Death happens when a copy takes the last site (at once), when a lifecycle rule
-     removes the cell (its sites go to medium or to the named target), or when a
-     conversion takes its last site. Death is terminal for (id, generation).
+     A daughter or created cell that receives no site is not born, and its slot stays
+     free.
+   - **Death** happens when a copy takes the last site (at once); when a lifecycle rule
+     removes the cell (its sites go to medium or to `ref`); or when a conversion takes its
+     last site. Death is terminal for (slot, generation).
    - There is no dying state and no empty-but-alive state. Morpheus-style shrinkage is a
      `@transition` to a kind with V₀ = 0 plus `@remove … when volume <= n`.
-   - D-053 item 6 ("explicit liveness separate from volume > 0") is withdrawn. No tool
-     keeps or kills cells on anything but site ownership, and none of the 12 models needs
-     it (survey §5). Fortuna's lamellipodium and Jiang's necrotic core are created on
-     demand, as in their authors' code.
-2. **Deviations from the standard**, each with its reason (survey §4.1):
-   - X1: slot ids are reused (performance; item 3).
-   - X2: no unpainted live cells, because `@create` paints at allocation (liveness stays
-     free; the only reference-model occurrence is an artefact).
-   - X3: links of a copy-killed cell are dropped at the next boundary, not at the copy
-     (a drop in the sweep would be a racy hot-loop write). This has no energy effect.
+   - D-053 item 6's `retain_empty`/explicit liveness is dropped (need-based: no model
+     needs it, and it would change Fortuna's results; survey §5).
+2. **Deviations** (survey §4.1):
+
+   | # | Standard | Ours | Kind | Reason |
+   |---|---|---|---|---|
+   | X1 | Monotone ids | Slot reuse + `generation`; monotone `birth` shown to users | Performance, measured | A dead slot costs ≈ 3.0 ns/MCS (checkerboard), ≈ 1 ns (sequential). Akeeb at 16× capacity: +16.3 % / +5 %. Every capacity growth allocates in a warm MCS |
+   | X2 | Unpainted live cells (created cells, empty division children) | None: created and divided cells must receive a site to be born | Need-based, unmeasured; **maintainer sign-off** | Keeps liveness = site ownership, with no flag or emptiness checks. The only reference-model occurrence is Akeeb's seeding artefact |
+   | X3 | Links dropped at the killing copy (CC3D FPP) | Dropped at the next boundary; dead partner skipped meanwhile | Performance, unmeasured | A drop in the sweep is a hot-loop write that races on the checkerboard. No energy effect |
+
    The total-H convention (item 4) is not a deviation: no tool has a total H.
 3. **Ids (amends D-035).**
-   - Slots are reused lowest-first, with `generation` incremented, as now.
-   - A slot is free when it is not alive, had no event this MCS, and is not the root of a
-     cluster with alive members, as now.
-   - References (R6) are **not** held. The lifecycle planner clears references to dead
-     cells before it allocates ids, so a reference never aliases a new cell.
-   - **`birth`, a monotone never-reused Int32 serial, is the user-visible id.**
-     - Every model with a Lifecycle or `@create` gets `st.cell.birth`. Initial cells get
-       1:n; the host planner assigns `max + 1` at each birth.
-     - `id` in observables, saved solutions and SII, id-based tracking, plots and PIFF
-       export (`write_piff(…; ids = birth)`) is `birth`.
-     - Kernels index by slot. The `id` built-in in model expressions lowers to
-       `birth[c]` (one load, only where it is read).
-     - Models without births have `birth ≡ slot`, and no column.
+   - **Slots.** Reused lowest-first, with `generation` incremented. A slot is free when:
+     - it is not alive;
+     - it had no event this MCS;
+     - it is not the root of a cluster with alive members (as now).
+   - **`id`** in model expressions stays **the slot**: the `:cell` index sort, so `x[id]`,
+     the cluster env's `:id => r`, and `cluster == id` are unchanged.
+   - **`birth`** is a separate read-only built-in: a monotone, never-reused Int32 serial.
+     - Its counter `next_birth` is stored in the state and checkpointed. It is not max+1,
+       which would reissue a dead cell's serial.
+     - Initial cells get 1:n.
+     - The allocator (lifecycle plan and R8 routine) assigns `next_birth` and increments
+       it.
+     - `birth` is excluded from the daughter column copy (`lifecycle.jl:336-339`, like
+       `generation`).
+     - `with_capacity` grows it (new slots 0).
+     - Models without births have no column (`birth ≡ slot`).
+   - **User-visible outputs map slot → `birth`:**
+     - observables and SII `id`;
+     - `cluster`, as `birth[root]`;
+     - plots and id-based tracking;
+     - PIFF export (`write_piff(…; ids = birth)`).
+   - **Saved solutions** store σ with slot ids and save the `birth` column alongside it
+     (4 × capacity bytes per save, no per-site work). The σ → birth map is applied lazily
+     on read, at O(sites) per accessed frame.
 4. **Energies (amends D-037).**
-   - ΔH is unchanged: the last-site copy pays λ[(0−V₀)² − (1−V₀)²].
+   - ΔH is unchanged. The last-site copy pays the full cell-term change to the empty state.
    - `total_energy` sums:
      - cell terms over alive cells;
-     - cluster terms over the roots `r` (`cluster[r] == r`) of clusters with at least one
+     - cluster terms over roots `r` (`cluster[r] == r`) of clusters with at least one
        alive member (a copy-killed root still names its cluster until `_fix_clusters!`);
      - edge terms over links whose two ends are both alive.
      A dead cell contributes nothing.
-   - Self-check: `ΔE(copy) == H(after) − H(before) + E_cell(o, V = 0)
-     [+ E_cluster(cluster[o], V = 0) if the copy emptied that cluster]`, where `o` is the
-     old owner, when this copy killed it. It stays exact.
-5. **Folds, populations, geometry, contacts, links, references.**
-   - Folds, counts, cell ODEs and updates, lifecycle triggers, observables and plots range
-     over alive cells. The code is unchanged: it already tests `volume > 0`.
-   - Centroid, position, shape and `major_length` are defined for alive cells and are 0
-     for dead slots, as now.
-   - The contact graph is built from σ, so dead cells have no contacts.
-   - Links:
-     - `link_delta` and `total_energy` skip a partner with `volume == 0`. This reuses the
-       load `centroid` already makes, and it fixes the NaN freeze (P6.0l).
-     - Links incident to dead cells are dropped (a) in the lifecycle plan of an event
-       MCS, before ids are allocated, and (b) at the start of each `@link`/`@unlink` host
-       phase of that relationship, before new links are made, so a stale degree or
-       `linked` never blocks creation.
-     - A relationship with no link rules and no lifecycle never creates links; the skip
-       alone suffices there.
-   - References:
-     - Dereferencing a dead referent (`x[ref]`, `kind[ref]`, `volume[ref]`, …) reads as
-       `ref = 0`: kind 0 (medium), volume 0, and cell variables at their defaults. This
-       costs one `volume[ref]` load and a select per dereference, in reference-reading
-       code only.
-     - References to dead cells are reset to 0 at the same boundaries as links.
-     - A copy-killed slot's stale kind and cell variables are never observable: every read
-       of a dead slot is either gated by liveness or goes through a dereference.
+   - **Self-check**, for a copy whose old owner `o` it kills:
+
+         ΔE(copy) == H(after) − H(before) + E_cell(o, empty state)
+                     [+ E_cluster(cluster[o], empty state), if that cluster has no alive member left]
+                     + Σ_{n linked to o} E_edge(o, n; d(centroid_o before the copy, centroid_n after the copy))
+
+     - "Empty state" is o's tracked quantities after the copy (volume 0, surface 0, …).
+     - The edge credit exists because `centroid_shift` returns 0 for a cell going to V = 0
+       (`geometry.jl:146`). `link_delta` therefore leaves o's edges at o's pre-copy
+       centroid, while H(after) drops them.
+     - The check stays exact.
+5. **Folds, geometry, contacts, links, references.**
+   - Folds, counts, cell ODEs and updates, triggers, observables and plots range over
+     alive cells (unchanged: `volume > 0`).
+   - Centroid, position, shape and `major_length` are 0 for dead slots (unchanged).
+   - The contact graph is built from σ.
+   - **References** are cell variables of a declared reference type (e.g. `partner::CellRef`
+     in `@variables`), so the allocator can find them.
+     - Daughters copy reference variables like every other cell variable. A `divide!` rule
+       may reset them.
+     - Dereferencing a dead referent reads as `ref = 0`: kind 0 (medium), volume 0, cell
+       variables at their defaults. It costs one `volume[ref]` load and a select, in
+       reference-reading code only.
+     - So `J[kind, kind[partner]]` silently uses the medium row once the partner is dead.
+       Guard with `alive(partner)` where that matters.
+   - **Links:** `link_delta` and `total_energy` skip a partner with `volume == 0`. This
+     reuses `centroid`'s load and fixes the NaN freeze (P6.0l).
+   - **Boundaries.** Dead cells' links are dropped, references to them are reset to 0, and
+     dead roots are released:
+     - (a) in the lifecycle plan of an event MCS;
+     - (b) in R8's shared `@create`/`@convert`/`@retire` host routine (it runs every MCS
+       in 14a);
+     both before any id is allocated, so a reference never aliases a new cell;
+     - (c) at the start of each `@link`/`@unlink` host phase, before links are created,
+       so a stale degree or `linked` never blocks creation.
+     A relationship with none of these never creates links; the skip suffices there.
 6. **`no_extinction`** stays opt-in (D-037; CC3D and Artistoo). Morpheus's always-on veto
    would break the Graner–Glazier λ scan.
-   - `@constraint no_extinction` or `no_extinction(k…)` forbids a copy that takes the last
-     site of a cell of kinds k… (default: every cell kind), i.e.
-     `old == 0 || volume[old] > 1 || kind[old] ∉ K`.
-   - A model ported from Morpheus adds it.
-   - AUTHORING §5 is corrected (it calls no-extinction a default).
+   - `no_extinction(k…)` forbids a copy that takes the last site of a cell of kinds k…
+     (default: all cell kinds), i.e. `old == 0 || volume[old] > 1 || kind[old] ∉ K`.
+   - Used by 10 and 13; offered to 05 and 07 (matrix, fluid); added by Morpheus ports.
+   - AUTHORING §5 is corrected.
 7. **Reproductions** (survey §5):
    - 14a: FRONT is created by `@convert` and dies when it empties, losing its target as in
      CC3D. The port counts FRONT deaths.
-   - 14c: a LAMEL death ends the run (`@terminate`).
-   - 06: the necrotic core is created at the first death.
-   - 10: `akeeb_state` counts a missed draw toward the leader quota without painting,
-     emulating CC3D's unpainted `new_cell`. Painted leaders ≈ 382; V-A1 compares painted
-     leaders. The gate's Akeeb case is re-baselined in the same change.
+   - 14c: a LAMEL death ends the run.
+   - 06: the first dying cell transitions into the necrotic-core kind.
+   - 13: `no_extinction` on segments.
+   - Spec edits: survey §5.
 
-Why: the standard behaviours are either already ours (immediate death, full ΔH, exclusion
-through `volume > 0`) or cost nothing (the skip in `link_delta`, the `birth` serial,
-host-side reference and link cleanup). The one costly standard, monotone slots, was
-measured (survey §7): 0.7–3 ns per dead slot per MCS, plus a warm-MCS allocation at each
-capacity growth. Only its user-visible part (`birth`) is adopted.
+Why: the standard behaviours are already ours (immediate death, full ΔH, exclusion
+through `volume > 0`) or free (the `link_delta` skip, `birth`, host-side cleanup). The one
+measurably costly standard, monotone slots, is kept only in its user-visible form.
 ```
 
 ### 6.2 Option B (not recommended): `retain_empty`, repaired
 
-This is the design to use if the maintainer wants paper-literal empty members despite §5.
-It fixes the three problems found in review (B1 a–c).
+This is the design to use if the maintainer rejects dropping it.
 
 - **Declaration and state.**
   - `@kinds k[retain_empty]` declares the kinds.
   - Such models get a `retained::Vector{Bool}` column. It is set at birth for those kinds
     and cleared on removal.
   - `alive(c) = volume[c] > 0 || retained[c]`. The extra load happens only on the
-    `volume == 0` branch; models without such kinds have no column and today's code.
-  - Kind 0 is **not** used as a dead marker. Kind tables index with `Int(k) + 1`
-    (`src/lower.jl:241`), but CorePotts per-kind vectors are 1-indexed by kind, and name
-    maps are built from `cell_kinds`, so a kind-0 cell slot is unsafe without an audit.
-- **Cluster semantics** (fixes B1a). `alive(c)` replaces site ownership in:
+    `volume == 0` branch; models without such kinds have no column.
+  - Kind 0 is **not** a dead marker. Kind tables index with `Int(k) + 1`
+    (`src/lower.jl:241`), but CorePotts per-kind vectors are 1-indexed by kind and name
+    maps are built from `cell_kinds`.
+- **Clusters.** `alive(c)` replaces site ownership in:
   - `_live` and `_normalize_clusters!` (`compartments.jl:28, 34, 57-59, 174`);
   - the lifecycle member lists (`lifecycle.jl:270`);
   - `_referenced_clusters` (`compartments.jl:63`);
   - the trigger kernel (`lifecycle.jl:147-154`);
   - the free list (`:260`).
-  An empty retained member therefore stays in its cluster at init and across events.
-- **No implicit cluster death** (fixes B1b and B1c).
+- **No implicit cluster death.**
   - A retained cell dies only by explicit removal of itself or of its cluster, or by a
-    transition to a non-retained kind while it is empty. A lone retained cell (Jiang's
-    core) never dies implicitly.
-  - To remove orphans, write `@remove cells(k) when cluster_volume == 0`. The ordinary
-    trigger kernel evaluates it for every alive cell on checked MCS, so no new trigger
-    and no new synchronisation are needed.
+    transition to a non-retained kind while empty. A lone retained cell never dies
+    implicitly.
+  - Orphans are removed with `@remove cells(k) when cluster_volume == 0`, in the ordinary
+    trigger kernel. No new trigger or synchronisation is needed.
 - **Divisions and transitions.**
-  - An empty cell is never divided: the planner skips `volume == 0`, since there is no
-    centroid.
-  - A retained-kind daughter that receives no site is not born, as for any kind.
+  - An empty cell is never divided.
+  - A retained daughter that receives no site is not born.
   - An empty retained cell that transitions to a non-retained kind dies at that event.
-- **Geometry.**
-  - Centroid, position, shape and `major_length` stay `volume > 0` checks (0 when empty).
-  - Link creation stays `volume > 0` (an empty cell has no contacts).
-  - Folds, ODEs, updates and triggers switch to `alive`.
-  - An empty retained cell contributes E(V = 0) to `total_energy`.
-- **Cost.** A measured +0.02 to +0.06 ns per slot per fold (§7, B1), in retain models
-  only.
+- **Geometry and energy.**
+  - Geometry and link creation stay `volume > 0` checks (0 when empty).
+  - Folds, ODEs, updates and triggers use `alive`.
+  - An empty retained cell contributes E(empty state) to `total_energy`.
+- **Cost.** Within B1's noise band (§7).
 - **Deviation.** It contradicts consensus item 3 and changes Fortuna's results (§5).
-  Adopting it needs a reproduction reason, which §5 does not find.
 
 ---
 
 ## 7. Performance, measured
 
 **Setup.**
-- Apple M1 Pro, Julia 1.12.6, single-threaded.
-- Run under `tools/exclusive.sh` from the main repo (`PottsMonorepo` @ `71372a0`), with
-  the `benchmark` project.
-- Scripts are in §8 (`/tmp/liveness_bench/`). The full gate was not run.
-- Gate context: CPU baselines of 13.7–94.3 ns/site and a 5 % tolerance
-  (`benchmark/baseline.toml`, `benchmark/gate.jl:20`). There are 10 CPU cases plus 5
-  Metal cases, which are flagged but not gated.
+- Apple M1 Pro, Julia 1.12.6, single-threaded, under `tools/exclusive.sh`, from the main
+  repo (`PottsMonorepo` @ `71372a0`) with the `benchmark` project.
+- Scripts are in §8. The full gate was not run.
+- Gate context: CPU baselines of 13.7–94.3 ns/site, 5 % tolerance, and zero warm
+  allocations (`benchmark/gate.jl:8-20`). There are 10 CPU cases, plus 5 Metal cases that
+  are flagged but not gated.
 
-**B1: liveness tests in a fold.** Minimum time per slot for a fold that sums a Float64
-per live slot. 20 % of slots are dead, either at the tail or scattered.
+**B1: liveness tests in a fold.** Minimum time per slot, 20 % dead slots at the tail or
+scattered, 10³ or 10⁴ slots.
 
 | Variant | tail, 10³ | tail, 10⁴ | random, 10³ | random, 10⁴ |
 |---|---|---|---|---|
@@ -443,81 +490,79 @@ per live slot. 20 % of slots are dead, either at the tail or scattered.
 | `volume > 0` + kind filter | 0.583 | 0.615 | 0.638 | 0.978 |
 | `\|\| retained[c]` + kind filter | 0.638 | 0.634 | 0.696 | 0.732 |
 
-All values are in ns/slot. Every encoding is within ±0.07 ns/slot of today's, which is
-about run-to-run noise. At MCS cadence that is below 0.002 ns/site for Akeeb (308 cells,
-5940 sites).
+Values are in ns/slot. The run-to-run noise band is about **±0.35 ns/slot**: the same
+`volume > 0` + kind-filter loop ranges from 0.58 to 0.98. No encoding is distinguishable
+from today's. At MCS cadence even 0.35 ns/slot is under 0.02 ns/site for Akeeb (1000
+slots on 5940 sites). How liveness is stored does not matter in folds. A stored flag
+would cost something only if the sweep had to clear it, which is an implementation choice.
 
-**How liveness is stored does not matter in folds.** A stored flag would cost something
-only in the *sweep*, where a copy that empties a cell would have to clear it: a branch
-plus a store, and on the checkerboard the value returned by the atomic decrement. That is
-an implementation choice, not a standard to reject. D-066 needs no flag.
+**B2: warm cost of dead slots.** Akeeb 99×60 (308 cells, 5940 sites, gate capacity
+1000 = 1×).
 
-**B2: warm ns/site against capacity** (the tax of dead slots). 1× is the gate's capacity:
-Akeeb 1000 slots for 308 initial cells (5940 sites); OpenVT 64 slots (10⁴ sites).
+My single pass (`/tmp/liveness_bench/b23.jl`), in ns/site:
 
-| Case | 1× | 2× | 4× | 16× | Slope (ns per dead slot per MCS) |
-|---|---|---|---|---|---|
-| akeeb_99x60 sequential | 47.78 | 47.75 | 47.64 | 49.50 | ≈ 0.7 |
-| akeeb_99x60 checkerboard | 46.18 | 46.38 | **49.85** | **54.00** | ≈ 3.1 |
-| openvt_monolayer_100 sequential | 14.00 | 14.02 | 14.03 | 14.11 | ≈ 1.1 |
-| openvt_monolayer_100 checkerboard | 15.45 | 15.48 | 15.52 | 15.57 | ≈ 1.2 |
+| Case | 1× | 2× | 4× | 16× |
+|---|---|---|---|---|
+| akeeb sequential | 47.78 | 47.75 | 47.64 | 49.50 |
+| akeeb checkerboard | 46.18 | 46.38 | 49.85 | 54.00 |
+| openvt sequential (64 = 1×, 10⁴ sites) | 14.00 | 14.02 | 14.03 | 14.11 |
+| openvt checkerboard | 15.45 | 15.48 | 15.52 | 15.57 |
 
-Values are ns/site. Every case had 0 warm allocations. The slope is Δ(ns/site) × sites /
-Δ(slots), taken from 1× to 16×.
+All B2 cases had 0 warm allocations.
 
-**Reading B2.**
-- Dead slots cost 0.7–3 ns each per MCS.
-- On Akeeb with checkerboard, 4× capacity is already **+7.9 %**, past the 5 % gate, and
-  16× is +17 %.
-- Monotone ids make the number of dead slots equal cumulative deaths plus headroom, which
-  grows without bound in turnover models:
-  - 08a: continuous expulsion plus division over thousands of MCS;
-  - 06: growth with death;
-  - 11: apoptosis and necrosis.
-- The tax is (dead slots per site) × (0.7–3.1 ns). At 25 sites per cell, once cumulative
-  deaths reach 10× the live count there are 0.4 dead slots per site, which costs
-  0.3–1.2 ns/site per MCS. That is 1–8 % of a 15–50 ns/site model, and it keeps rising.
+**The reviewer's interleaved rerun** (`/tmp/rev2_bench/cb.jl`: checkerboard 3 rounds,
+sequential 2 rounds, capacities interleaved) is the one to use:
 
-**B3: one capacity growth** (doubling with `with_capacity`, on the host).
+| Case | 2× | 4× | 16× |
+|---|---|---|---|
+| akeeb checkerboard | +1.3 % | +3.3 to +4.0 % | **+16.3 %** |
+| akeeb sequential | — | +1.3 to +1.8 % | **+5 %** |
+
+- My single-pass 4× checkerboard figure (+7.9 %) was an outlier.
+- Slopes: about **3.0 ns per dead slot per MCS** on checkerboard, about **1 ns**
+  sequential. OpenVT: about 1.1–1.2 ns (few slots, so small effect).
+
+**B3: one capacity doubling** (`with_capacity`, host):
 - Akeeb, 1000 → 2000: min 8.1 µs, median 9.2 µs, **31 allocations, 169 KiB**.
 - OpenVT, 64 → 128: 0.9 µs, 20 allocations, 9.3 KiB.
-- This is a lower bound. It excludes rebuilding the `LifecycleCache`, history rings and
-  link stores, GPU re-upload, and the integrator's `reinit!` shape change
-  (`checkpoint.jl:65`).
-- With monotone slots every doubling is a **warm-MCS allocation**, which the gate forbids
-  (zero warm allocations). Doubling keeps it to O(log births) events, but never to zero.
+- This is a lower bound: it excludes rebuilding the `LifecycleCache`, rings and link
+  stores, GPU re-upload, and `reinit!` (`checkpoint.jl:65`).
 
-**Assessment per item.**
+**Conclusion, based on the 16× numbers and B3.**
+- Monotone slots make dead slots equal cumulative deaths plus headroom.
+- In turnover models (08a, 06, 11) that reaches 16× the gate capacity: +16 % checkerboard
+  and +5 % sequential on Akeeb. Both are over the 5 % tolerance, and the cost keeps
+  growing.
+- Every capacity growth allocates in a warm MCS, which the gate forbids.
+- Slot reuse (X1) is therefore a measured, performance-based deviation.
 
-| # | Standard behaviour | Cost in our design (measured where marked) | D-066 |
+| # | Standard behaviour | Cost in our design | D-066 |
 |---|---|---|---|
 | P1 | Immediate death on the last site | None: the volume commit | Adopted (already ours) |
-| P2 | Liveness test in cell loops | Any encoding ±0.07 ns/slot (B1) | `volume > 0`, unchanged code |
-| P3 | Monotone slots | 0.7–3 ns per dead slot per MCS (B2); +7.9 % at 4× on Akeeb checkerboard; a warm allocation of 169 KiB or more per growth (B3); unbounded memory | **Deviation X1.** Reuse is kept; monotone `birth` serial as the user-visible id, zero warm cost (written by the host at birth) |
-| P4 | A dead id never aliases a new cell | Reuse plus references | References cleared before allocation (host, event MCS only); dead referent reads as none (one load per dereference, reference-reading code only) |
-| P5 | Links dropped at death | A drop at the copy is a hot-loop, racy write | **Deviation X3.** `volume == 0` skip, reusing the centroid's load; drop at the lifecycle plan and at link phases |
+| P2 | Liveness test in cell loops | Any encoding within the ±0.35 ns/slot noise (B1) | `volume > 0`, unchanged |
+| P3 | Monotone slots | ≈ 3.0 ns (checkerboard) / ≈ 1 ns (sequential) per dead slot per MCS; Akeeb +16.3 % / +5 % at 16×; a warm allocation of ≥ 169 KiB per growth (B3) | **X1**: reuse kept; `birth` shown to users (host writes at birth only) |
+| P4 | A dead id never aliases a new cell | Reuse plus references | References reset at every allocator boundary; a dead referent reads as 0 (one load, reference code only) |
+| P5 | Links dropped at death | A drop at the copy is a hot-loop write (unmeasured) | **X3**: skip, then drop at boundaries |
 | P6 | Last-site ΔH with no special case | None | Adopted |
-| P7 | `no_extinction(k…)` | `k_old` is already loaded (`src/codegen.jl:91`); one compile-time compare | Adopted |
-| P8 | Total H over alive cells, death credit in the self-check | Host brute force and tests only | Adopted (convention) |
-| P9 | Unpainted live cells | They would make centroid and shape undefined for alive cells, and add an emptiness check in every geometry read | **Deviation X2** |
+| P7 | `no_extinction(k…)` | One compile-time compare on the loaded `k_old` (`src/codegen.jl:91`) | Adopted |
+| P8 | Total H over alive cells, self-check credits | Host and tests only | Adopted (convention) |
+| P9 | Unpainted live cells | Not measured | **X2**, need-based |
 
-**Net.** D-066 leaves every sweep and cell loop byte-identical except the `link_delta`
-skip, which only relationship models have. The expected gate effect is none. The Akeeb
-case moves only because its initial state changes (§5), so it is re-baselined in that
-change.
+**Net.** D-066 leaves every sweep and cell loop unchanged except the `link_delta` skip,
+which only relationship models have. The expected gate effect is none.
 
 ---
 
 ## 8. Benchmark scripts (as run)
 
-Run from the main repo root:
+From the main repo root:
 
 ```sh
 tools/exclusive.sh sh -c 'julia -t 1 --project=benchmark /tmp/liveness_bench/b1.jl; \
                           julia -t 1 --project=benchmark /tmp/liveness_bench/b23.jl'
 ```
 
-**B1** (`/tmp/liveness_bench/b1.jl`). Plain Julia.
+**B1** (`/tmp/liveness_bench/b1.jl`):
 
 ```julia
 using BenchmarkTools, Random
@@ -538,7 +583,8 @@ end
 for layout in (:tail, :random), cap in (1_000, 10_000); run(cap, layout); end
 ```
 
-**B2 and B3** (`/tmp/liveness_bench/b23.jl`). These use the gate's own `measure`.
+**B2 and B3** (`/tmp/liveness_bench/b23.jl`; the reviewer's interleaved variant is
+`/tmp/rev2_bench/cb.jl`):
 
 ```julia
 using BenchmarkTools, Potts, PottsModels, CorePotts, Printf
@@ -550,7 +596,7 @@ lcases = [
 for (name, base, mk) in lcases, alg in (SequentialCPM(), CheckerboardCPM()), mult in (1, 2, 4, 16)
     ns, allocs = measure(mk(mult * base), alg)                # warm ns/site, warm allocations
 end
-# B3: st = init(prob, SequentialCPM(); save_start = false, save_end = false) |> (i -> (step!(i); i.state))
+# B3: st = (i = init(prob, SequentialCPM(); save_start = false, save_end = false); step!(i); i.state)
 #     @benchmark CorePotts.with_capacity($st, 2 * length($st.cell.kind))
 ```
 
@@ -558,24 +604,37 @@ end
 
 ## 9. Open items
 
-1. **Maintainer confirmation that D-053 item 6 is withdrawn** (§6.1 item 1). That item
-   asked for liveness separate from `volume > 0`. The survey finds it is neither standard
-   nor needed, and that it would change Fortuna's results. Option B (§6.2) is the fallback.
-2. **Akeeb re-baseline.** Emulating CC3D's unpainted leaders changes `akeeb_state` and the
-   Akeeb gate case. Re-baseline both in that change, and restate V-A1 in the 10 spec as
-   painted leaders ≈ 382.
+1. **Maintainer sign-off on D-066** (PROPOSED). The items to confirm are the need-based
+   ones:
+   - X2: no unpainted live cells or empty daughters;
+   - dropping D-053 item 6's `retain_empty` and explicit liveness. Option B (§6.2) is the
+     fallback.
+   The rest is authorised by D-065 Q6.
+2. **Akeeb seeding → P6.2b** (V-target audit; reproduction 10 is on HOLD).
+   - CC3D paints ≈ 382 leaders and counts ≈ 8 unpainted ones in its "390".
+   - Our `akeeb_state` retries misses and paints 390.
+   - Possible change: count a missed draw toward the quota without painting, and restate
+     V-A1 as painted leaders.
+   - Any change to `akeeb_state` touches the frozen `lib/PottsModels/test/papers.jl:142-163`
+     and the gate's Akeeb case. Both need re-baselining under that audit.
 3. **Fortuna diagnostics.** Count FRONT (14a) and LAMEL (14c) deaths in the port. If they
-   are frequent, add a question for the authors: FRONT re-seeding loses target volume in
-   14a.
-4. **Morpheus ports.** None of the 12 models is one. A future Morpheus port adds
-   `no_extinction`.
-5. **Recipe.** `CellDeath`-style shrinkage (`remove-volume`, default 3) goes into the R3
-   tutorial as the recipe for 11's unspecified apoptosis.
-6. **Regression tests (P6.0l).**
-   - Link two cells, let one go extinct by copies, and check that the partner still moves
-     and `total_energy` is finite.
-   - Self-check with a copy that kills a cluster root, and with one that kills a lone
-     cell (the cluster death credit).
-7. **CC3D 4.x `ConnectivityGlobal`.** Its fast path looks undefined on a last-pixel copy
-   (`ConnectivityPlugin.cpp:300`). This matters only if we cite CC3D connectivity
-   behaviour.
+   are frequent, ask the authors about target loss on re-seeding.
+4. **`_fix_clusters!` re-rooting** (pre-existing, not caused by D-066). When a root dies
+   and no live member shares its kind, `_normalize_clusters!` re-roots to the lowest live
+   member of any kind (`compartments.jl:45-53`). Cluster terms are selected by the root's
+   kind, so H jumps at that event. Worth a separate note or decision.
+5. **RNG stream repetition** after 256 reuses of one slot (`rng.jl:92-93`, §4.1 note).
+   Widen the packing if a turnover model reaches it.
+6. **Regression tests (P6.0l and D-066).**
+   - A linked cell goes extinct by copies: its partner keeps moving and `total_energy` is
+     finite.
+   - Self-check on a copy that kills a linked cell (edge credit), a cluster root, and a
+     lone cell (cluster credit).
+   - A dead `partner` reads kind 0.
+   - The `birth` serial survives a checkpoint round trip and is not copied to daughters.
+7. **Recipes and ports.**
+   - `CellDeath`-style shrinkage (`remove-volume`, default 3) goes into the R3 tutorial
+     for 11's apoptosis.
+   - Morpheus ports add `no_extinction`.
+8. **CC3D 4.x `ConnectivityGlobal`.** Its fast path looks undefined on a last-pixel copy
+   (`ConnectivityPlugin.cpp:300`). This matters only if we cite it.
