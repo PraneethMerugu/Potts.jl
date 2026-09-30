@@ -774,3 +774,35 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
   through a wrap.
 - **`Frame`** walls only closed axes, so on (Periodic, Closed) it is one frozen cell made
   of two walls. It throws when every axis is periodic.
+
+## D-058 Several relationships per model; shared read claims on checkerboard (2026-09-30, P6.0b; amends D-036)
+
+1. **Relationships.** A model may declare several named `@relationship`s. Each has its own
+   adjacency (`links__<name>`), capacity, edge variables, `edges(name)` terms and
+   `@link`/`@unlink` rules, and initial pairs are given per name (`:bond => [(1, 2)]`).
+   - Edge variables are scoped by relationship, as in `rest(bond)`.
+   - An unscoped `x(edge)` binds to the declaring body's only relationship when that body
+     is built, before `@extend` merges. It remains an "ambiguous" error only in a single
+     body that has several relationships.
+   - An edge term or rule reads only its own relationship's edge variables.
+   - A relationship may not be named after a scope.
+   - Payload values in empty link slots are unspecified: `add_link!` zeroes the payloads it
+     is not given.
+2. **Claims** (amends D-036's exclusive `link_claims`). `CPMFunction(…; reads)` declares
+   cells that a copy reads but does not write. Link partners of relationships with edge
+   energies are reads.
+   - Each accepted copy raises `claim` on every cell it touches (old, new, claims and
+     reads) and `wclaim` on the cells it writes.
+   - It commits only if it holds the top `claim` on every cell it writes, and no
+     higher-priority copy writes a cell it reads (`wclaim ≤ own priority`).
+   - **Exact:** no committed copy's ΔH saw a cell that another committed copy changed. A
+     reviewer brute force of 200k trials found no violations, and the tests kill five
+     kernel mutations.
+   - Readers share. Exclusive partner claims serialised linked chains and slowed
+     relaxation: bond distance at 1000 MCS was 15.2, against 13.5 with shared reads and
+     11.9 sequential. Equilibria agree within error (16 seeds × 10k MCS).
+   - Sequential ignores claims, as before.
+   - Models without reads keep the old kernel path, via a type-level switch.
+3. **Storage.** Link columns stay flat in `st.cell`, so capacity growth, division,
+   checkpoints and device adapt keep iterating flat arrays. Generated code builds a
+   zero-cost NamedTuple store view per relationship.

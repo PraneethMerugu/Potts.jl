@@ -44,8 +44,16 @@ ncolorsites(c::Color) = prod(c.count)
     return nothing
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
+# a shared read of `c` survives unless a higher-priority copy writes `c`
+@inline _unwritten(wclaim, c::Int32, won::UInt32) = c <= 0 || @inbounds(wclaim[c]) <= won
 
-@inline function propose_body!(j, prio, source, claim, status, st, f, p, ctx, law, key,
+# Claims. Every cell a copy touches (old, new, `f.claims`, `f.reads`) takes `claim[c] max won`;
+# the cells it writes (old, new, `f.claims`) also take `wclaim[c] max won`. A copy commits
+# if it has the top priority on every cell it writes and no higher-priority copy writes a
+# cell it reads, so two committed copies never write the same cell nor one read what the
+# other writes, while readers share. Without `f.reads`, `wclaim` is never touched.
+
+@inline function propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
         mcs, color, idbits)
     lat = ctx.lattice
     x = color_site(color, j)
@@ -73,8 +81,19 @@ end
                     won = ((rp >> idbits) << idbits) | UInt32(j)
                     _claim!(claim, a, won)
                     _claim!(claim, b, won)
-                    for c in f.claims(st, p, prop, ctx)
+                    writes = f.claims(st, p, prop, ctx)
+                    for c in writes
                         _claim!(claim, Int32(c), won)
+                    end
+                    if has_reads(f)
+                        _claim!(wclaim, a, won)
+                        _claim!(wclaim, b, won)
+                        for c in writes
+                            _claim!(wclaim, Int32(c), won)
+                        end
+                        for c in f.reads(st, p, prop, ctx)
+                            _claim!(claim, Int32(c), won)
+                        end
                     end
                 end
             end
@@ -84,11 +103,12 @@ end
     @inbounds source[j] = s
 end
 
-@inline function commit_body!(j, st, claim, next_claim, prio, source, f, p,
+@inline function commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p,
         ctx, color, nclear, nthreads)
     c = j
-    while c <= nclear                     # clear the other claim buffer for the next color
+    while c <= nclear                     # clear the other claim buffers for the next color
         @inbounds next_claim[c] = UInt32(0)
+        has_reads(f) && (@inbounds next_wclaim[c] = UInt32(0))
         c += nthreads
     end
     won = @inbounds prio[j]
@@ -104,6 +124,11 @@ end
         for extra in f.claims(st, p, prop, ctx)
             ok &= _won(claim, Int32(extra), won)
         end
+        if has_reads(f)
+            for r in f.reads(st, p, prop, ctx)
+                ok &= _unwritten(wclaim, Int32(r), won)
+            end
+        end
         if ok
             @inbounds st.σ[t] = b
             f.commit!(st, p, prop, ctx)
@@ -115,6 +140,7 @@ struct CheckerboardCache{N, P, S, C, B, K1, K2}
     prio::P
     source::S
     claims::NTuple{2, C}
+    wclaims::NTuple{2, C}             # write claims; length 1 (unused) without `f.reads`
     status::B
     colors::Vector{Color{N}}
     groupsize::Vector{Int}            # per color; 0 = let the backend choose
@@ -126,13 +152,14 @@ struct CheckerboardCache{N, P, S, C, B, K1, K2}
 end
 
 # Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
-@kernel function propose_kernel!(prio, source, claim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+@kernel function propose_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
     j = @index(Global, Linear)
-    propose_body!(j, prio, source, claim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
 end
-@kernel function commit_kernel!(st, claim, next_claim, @Const(prio), @Const(source), f, p, ctx, color, nclear, nthreads)
+@kernel function commit_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
+        color, nclear, nthreads)
     j = @index(Global, Linear)
-    commit_body!(j, st, claim, next_claim, prio, source, f, p, ctx, color, nclear, nthreads)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads)
 end
 
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
@@ -148,6 +175,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),
         (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))),
+        has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (zeros_u32(1), zeros_u32(1)),
         zeros_u32(1), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
         collect(1:length(cs)), Ref(1), idbits,
         propose_kernel!(backend), commit_kernel!(backend))
@@ -169,10 +197,11 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         color = cache.colors[ci]
         n = ncolorsites(color)
         claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
+        wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
         g = cache.groupsize[ci]
-        pargs = (cache.prio, cache.source, claim, cache.status, st, f, p, ctx, law, key, mcs,
+        pargs = (cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
             color, cache.idbits)
-        cargs = (st, claim, next_claim, cache.prio, cache.source, f, p, ctx, color, ncell, n)
+        cargs = (st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n)
         if g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
             for j in 1:n
                 propose_body!(j, pargs...)

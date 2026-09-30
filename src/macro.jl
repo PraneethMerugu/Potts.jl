@@ -110,7 +110,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
-        variables = __vars, relations = __relations, energies = __energies, drives = __drives,
+        variables = $P._bind_edge_scope(__vars, __relationships), relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
@@ -285,7 +285,8 @@ function _section!(parts, sec, args, ln = nothing)
                 decl = decl.args[1]
             end
             decl isa Expr && decl.head === :call && length(decl.args) == 2 ||
-                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`"))
+                throw(ArgumentError("variables are declared with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, " *
+                                    "`e(edge)` or `e(rel)` for an edge variable of `@relationship rel`"))
             k, scope = decl.args
             _declare!(parts, k, "variable")
             # `= default, [options…]`; a tuple without an options vector is the default itself

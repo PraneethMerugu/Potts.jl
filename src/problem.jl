@@ -81,7 +81,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
             total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
     end
     f = CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
-        claims = _claims(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
+        claims = _claims(c), reads = _reads(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint,
         # every generated function, without line numbers: independent of the install path (D-016)
         fingerprint = _code_hash(generated, hash((core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T))),
@@ -92,14 +92,20 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         spacing, frozen, seed, replica, repeat)
 end
 
-# Checkerboard claims beyond old/new: link partners (link energies read their centroids) and
-# the clusters of old/new (cluster energies read cluster trackers).
+# Checkerboard claims beyond old/new: the clusters of old/new (cluster energies read cluster
+# trackers, which the copy writes) ...
 function _claims(c::CompiledPottsSystem)
-    parts = Any[]
-    c.relationship === nothing ||
-        push!(parts, :(CorePotts.link_claims(st.cell, prop, Val($(c.relationship.capacity)))...))
-    isempty(c.cluster_terms) || push!(parts, :(CorePotts.cluster_claims(st.cell, prop)...))
-    isempty(parts) && return CorePotts.no_claims
+    isempty(c.cluster_terms) && return CorePotts.no_claims
+    return _rgf(:((st, p, prop, ctx) -> (CorePotts.cluster_claims(st.cell, prop)...,)))
+end
+# ... and, shared, the link partners of old/new in every relationship with an edge energy
+# (link energies read their centroids; a copy writes only its old/new). Leaving one out
+# would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
+# Relationships used only by link rules are read on the host between sweeps: no claims.
+function _reads(c::CompiledPottsSystem)
+    rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
+    isempty(rels) && return CorePotts.no_claims
+    parts = [:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
     return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
 end
 
@@ -302,13 +308,14 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     elseif haskey(opd, ckey)
         throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
     end
-    if c.relationship !== nothing
-        payloads = [info(x).name => T for x in sys.variables if info(x).role === :edge]
-        links = CorePotts.empty_links(c.relationship.capacity, ncell; payloads...)
-        defaults = (; (info(x).name => T(info(x).default) for x in sys.variables if info(x).role === :edge)...)
-        for (x, y) in get(opd, c.relationship.name, ())
-            CorePotts.add_link!(links, x, y; defaults...) ||
-                throw(ArgumentError("cannot link cells $x and $y (full row or duplicate)"))
+    for r in c.relationships                       # one link store per relationship (P6.0b)
+        vars = c.edge_vars[r.name]
+        links = CorePotts.empty_links(r.capacity, ncell, r.name; (info(x).name => T for x in vars)...)
+        store = (; links = links[CorePotts.adjacency_name(r.name)], Base.tail(links)...)
+        defaults = (; (info(x).name => T(info(x).default) for x in vars)...)
+        for (x, y) in get(opd, r.name, ())
+            CorePotts.add_link!(store, x, y; defaults...) ||
+                throw(ArgumentError("$(r.name): cannot link cells $x and $y (full row or duplicate)"))
         end
         append!(cell, pairs(links))
     end

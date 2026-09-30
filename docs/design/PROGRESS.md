@@ -1279,3 +1279,20 @@ The maintainer approved F-1…F-6 (D-049).
   shadowed the exported function. The ±0.014 read-off uncertainty is marked as our own
   estimate.
 
+## 2026-09-30 — P6.0b merged: several relationships per model (D-058)
+
+- **What merged:** named link stores; edge variables scoped by relationship; `x(edge)`
+  bound per body before `@extend`; and shared read claims on checkerboard, which are
+  exact.
+- **Review:** 2 rounds.
+  - Round 1 found an untested exactness check and broken `@extend` composition.
+  - Round 2 killed all 5 kernel mutations.
+- **Gate on the merged tree, idle machine:** every CPU case is within 0.978–1.001.
+- **Metal A/B against the base** (4 rounds):
+  - openvt 0.995;
+  - akeeb 1.031, consistent across rounds. That is within the 5 % tolerance, but it is
+    real. Akeeb has no relationships, so the no-reads path costs about 3 % on Metal.
+    Queued as P6.0b3.
+- **Merge fix:** a missing `[[file]]` header in frozen.toml after a conflict. The frozen
+  check caught it.
+

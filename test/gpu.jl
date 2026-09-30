@@ -98,6 +98,49 @@ using Statistics: mean, var
     @test Array(uh.cell.surface) ≈ CorePotts.recompute_surface(σhh, ph.lattice, ph.relations.surface, nh; T = Float32)
 end
 
+# P6.0b: two relationships, each with its own store, law and shared read claims, on the device
+@potts_model MetalSprings begin
+    @kinds medium blob
+    @parameters begin
+        k₁ = 2.0
+        k₂ = 2.0
+        J[kind, kind] = [0 16; 16 2]
+    end
+    @variables begin
+        rest(bond) = 12.0
+        len(tether) = 18.0
+    end
+    @relationship bond(cell, cell) capacity = 1
+    @relationship tether(cell, cell) capacity = 2
+    @lattice Lattice((64, 30); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(blob) => (volume - 36)^2
+        contacts => J[kind, kind′]
+        edges(bond) => k₁ * (distance - rest)^2
+        edges(tether) => k₂ * (distance - len)^2
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "several relationships on Metal (Float32)" begin
+    backend = MetalBackend()
+    σ = zeros(Int32, 64, 30); σ[5:10, 12:17] .= 1; σ[30:35, 12:17] .= 2; σ[55:60, 12:17] .= 3
+    mp = PottsProblem(MetalSprings(; name = :ms), [ownership => σ, kind => [:blob, :blob, :blob],
+        :bond => [(1, 2)], :tether => [(2, 3)]], (0, 1500); T = Float32)
+    @test eltype(mp.u0.cell.link_rest) == Float32 && eltype(mp.u0.cell.link_len) == Float32
+    @test CorePotts.has_reads(mp.f)
+    d = map(1:4) do seed
+        u = solve(remake(mp; seed), CheckerboardCPM(); backend).u[end]
+        @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in 1:3]
+        @test Array(u.cell.links__bond) == mp.u0.cell.links__bond          # sweeps never touch links
+        (CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 1, 2),
+            CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 2, 3))
+    end
+    @info "two relationships on Metal" bond = mean(first.(d)) tether = mean(last.(d))
+    @test abs(mean(first.(d)) - 12.0) < 2.5
+    @test abs(mean(last.(d)) - 18.0) < 2.5
+end
+
 @testset "Akeeb invasion on Metal (Float32) agrees with the CPU (Float64)" begin
     # A-77: leaders' mean height after 150 MCS (the invasion) and the trackers
     lat = (99, 60)

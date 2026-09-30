@@ -107,9 +107,18 @@ Every item's acceptance also includes the standing checks:
   model (lift `compile.jl` mutual exclusion).
   - Write set: `src/compile.jl`, `src/codegen.jl`, `lib/CorePotts/src/lifecycle.jl`.
   - Accept: a model with both kinds runs both; ΔH self-check; a sibling.
-- [ ] **P6.0b** several named relationships per model, each with its own link store and
+- [x] (merge, 2026-09-30; D-058) **P6.0b** several named relationships per model, each with its own link store and
   claim set. Depends: none. Accept: two relationships with different laws, checked by the
   springs oracle on each; checkerboard equals sequential statistically.
+- [ ] **P6.0b2** P6.0b review follow-ups:
+  - An extension that re-declares a base edge variable while adding its own single
+    relationship re-binds it to the new relationship, which gives a confusing error. Keep
+    the base's binding, or improve the message.
+  - Edge-variable values in the operating point (`:rest => 9.0`) are accepted but ignored.
+    Honour them in `_initial_state` or reject them. This predates P6.0b.
+- [ ] **P6.0b3** Find the ≈ 3 % Metal cost that P6.0b added to akeeb_99x60, a model with
+  no relationships (A/B 1.031, consistent). The no-reads path is meant to be free. Accept:
+  A/B ≤ 1.01 against 5258ab9.
 - [ ] **P6.0c** solver metadata per equation block or component (replaces the single
   `field_solver`). Accept: a stiff component (`Adaptive(Rodas5P())`) beside an explicit
   field in one model; conformance against each solver alone.
