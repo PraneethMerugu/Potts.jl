@@ -15,6 +15,7 @@ using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @na
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
+using StableRNGs: StableRNG
 using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
@@ -48,5 +49,8 @@ include("precompile.jl")
 const kind = B.kind
 const cluster = B.cluster
 export kind, cluster
+
+include("layouts.jl")
+export AbstractLayout, Tiling, Scatter, Frame, overlay, layout
 
 end

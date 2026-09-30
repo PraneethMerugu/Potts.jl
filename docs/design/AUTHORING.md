@@ -747,8 +747,32 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 
 ### 12.8 Initialization, import and steering
 
-- Layouts: `UniformSeeds`, `RejectionPlacement`, `Rectangles`, `Spheres`, `Blobs`,
-  `FromImage`, `FromMask`.
+- **Layouts (P6.1a, implemented).** Host-side initial conditions built from layers and
+  returned as an operating point:
+
+  ```julia
+  tiles = Tiling((5, 5); spacing = 1, region = (3:28, 3:28), kinds = [:dark, :light])
+  op = layout(overlay(Frame(:wall), tiles), (30, 30))   # [ownership => σ, kind => kinds]
+  prob = PottsProblem(sys, op, (0, 100))
+  ```
+
+  - `Tiling(size; spacing = 0, region, kinds)`: whole boxes filling `region` (a tuple of
+    ranges; default the whole lattice) in column-major order; `kinds` is cycled.
+  - `Scatter(n, size; region, kinds, seed, gap = 1)`: `n` boxes at random positions, at
+    least `gap` medium sites apart (Chebyshev), by rejection with `StableRNG(seed)`.
+    Throws an `ArgumentError` when they cannot be placed.
+  - `Frame(kind; width = 1)`: one cell owning every site within `width` of the edge.
+  - `overlay(layers...)`: later layers overwrite earlier ones; ids follow layer order.
+    Cells left with no site are dropped; partly covered cells keep what remains.
+  - `layout(l, dims)`: also takes a `Lattice`, a `PottsSystem` or a
+    `CompiledPottsSystem`. On a lattice with a domain, no cell may cover a site outside it.
+  - Coordinates are lattice indices, so layouts are N-D. On a hexagonal lattice they are
+    axial, and a box is a rhombus.
+  - **Adding a layout.** Subtype `AbstractLayout` and add one method,
+    `Potts.paint!(σ, kinds, l, dims)`. It paints ids `length(kinds) + 1, …` over `σ`
+    (`Int32`, 0 = medium) and pushes their kinds. A random layout owns its seed, so adding
+    a layer never changes another layer's draws. Planned: Eden growth and splits,
+    BrickWall, Chains, Spheres, Fibres, InsertUntil, Plane, FromImage/FromMask.
 - **PIFF import/export** (pure Julia).
 - **MorpheusML importer** (pure Julia, EzXML.jl + expression translation to Symbolics):
   makes the Morpheus model repository a test corpus.
