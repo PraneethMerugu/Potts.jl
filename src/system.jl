@@ -30,6 +30,33 @@ Base.@kwdef struct PottsSystem
     sweep::SweepSpec
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
+    PottsSystem(args...) = _check_reserved_names(new(args...))
+end
+
+# The link endpoints `a`, `b` (bound in edge terms and link rules) are reserved globally
+# (D-075 Q8); `@potts_model` rejects them at expansion (`_declare!`), this at construction.
+const _ENDPOINT_NAMES = (:a, :b)
+_endpoint_message(what, k) = "$what `$k`: `$k` is reserved (`a` and `b` are the link endpoints in edge terms and " *
+                             "link rules); choose another name, e.g. `$(k)₀`"
+
+function _check_reserved_names(sys)
+    check(what, n) = n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, n)))
+    foreach(k -> check("kind", k), sys.kinds)
+    for (what, xs) in (("parameter", sys.parameters), ("variable", sys.variables))
+        for x in xs
+            i = info(x)
+            i === nothing && continue
+            check(what, i.name)
+            v = get(i.options, :vector, nothing)
+            v === nothing || check(what, v)
+        end
+    end
+    foreach(o -> (i = info(o.var); i === nothing || check("observed quantity", i.name)), sys.observed)
+    foreach(k -> check("relation", k), keys(sys.relations))
+    foreach(r -> check("relationship", r.name), sys.relationships)
+    foreach(c -> check("component", c.name), sys.components)
+    foreach(k -> check("structural parameter", k), keys(sys.structural))
+    return sys
 end
 
 Base.nameof(sys::PottsSystem) = sys.name

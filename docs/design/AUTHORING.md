@@ -251,7 +251,7 @@ Connectivity rules are then ordinary statements:
 | Rule | Statement |
 |---|---|
 | Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components == 1` for losers of kind `k` (D-074: zero pieces, the last site or an isolated fragment, is rejected too, so such a cell cannot die by copies) |
-| Ring rule | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs == 1 \|\| (ring_arcs > 1 && ring_cells == 2)` |
+| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs <= 1 \|\| ring_cells == 2` (zero arcs pass; D-074 covers the local rule only) |
 | Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
 
 An unknown `rule` is an error.
@@ -259,9 +259,11 @@ An unknown `rule` is an error.
 **Chemotaxis family.** `Chemotaxis(c; strength, response, kinds, when)`:
 - `response`: `identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
   `c/(s c + 1)`, or any function;
-- `when`: any copy condition, e.g. `old == 0` for extensions only. Without `kinds` an
-  explicit `when` selects exactly the copies it admits, retractions (`new == 0`) included;
-  the default (no `kinds`, no `when`) acts when the gaining cell is a cell.
+- `when`: the copy condition, default `new != 0` (the gaining cell is a cell, so
+  retractions get 0; D-075). `when = true` means every copy, retractions included; any
+  other condition selects exactly its copies, e.g. `old == 0` for extensions only.
+- `kinds`: additionally requires `kind[new] ∈ kinds`, so with `kinds` given retractions
+  stay 0 whatever `when` says.
 
 **Neighbourhood memory (Act family).** Write the mean as a fold:
 `geomean(x[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])`. `mean`
@@ -375,7 +377,7 @@ Rules are evaluated at the MCS boundary; conflicts resolve deterministically (st
 priority).
 
 **Cadence (P6.0f).** Each rule has its own `Every(n)`, written after the domain
-(`@divide cells(a) Every(2) when = …`) or as `every = n`
+(`@divide cells(ka) Every(2) when = …`) or as `every = n`
 (`@link tether when = …, every = 10`); a rule gets one cadence, and the default is `Every(1)`.
 A rule is checked at the MCS where `mcs % n == 0`, with MCS numbered from 0 as for updates.
 So `Every(2)` and `Every(3)` rules in one model fire at MCS 0, 2, 4, … and at MCS 0, 3, 6, ….

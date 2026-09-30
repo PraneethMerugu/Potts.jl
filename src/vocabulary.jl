@@ -398,23 +398,22 @@ const _CONNECTIVITY_RULES = (:local, :arc_or_pair)
 
 Forbid copies that locally disconnect a cell of `kinds` (every kind if empty). Shorthand for
 a constraint over the proposal-scope connectivity values, applied when the losing cell is of
-`kinds`. Every rule requires the losing cell to keep at least one site around the target
-(D-074): a copy that takes its last site or fills an isolated fragment is rejected, so a
-connectivity-constrained cell cannot die by copies.
+`kinds`:
 
 - `rule = :local`: `local_components == 1`, the losing cell's sites around the target form
-  exactly one piece (CompuCell3D `Connectivity`, `!= 1` rejected);
-- `rule = :arc_or_pair`: `ring_arcs == 1 || (ring_arcs > 1 && ring_cells == 2)`, one arc of
-  the neighbour ring, or else several arcs with exactly two cells on it (a looser 2D ring
-  rule).
+  exactly one piece (CompuCell3D `Connectivity`, which rejects `!= 1`; D-074). Zero pieces
+  (the cell's last site, an isolated fragment) is rejected, so a cell under this rule
+  cannot die by copies;
+- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, at most one arc of the
+  neighbour ring, or else exactly two cells on it (TST's `ConnectivityPreservedP`, the
+  Merks reference; zero arcs pass, so the last site can be taken).
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """
 function connectivity(kinds::Integer...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
-    test = rule === :local ? (B.local_components == 1) :
-           ((B.ring_arcs == 1) | ((B.ring_arcs > 1) & (B.ring_cells == 2)))
+    test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
     return Constraint(:connectivity, collect(Int, kinds), test)
 end
 """`no_extinction`: forbid copies that remove a cell's last site."""
@@ -631,26 +630,22 @@ Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength *
 """`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
 Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 """
-    Chemotaxis(c; strength, response = identity, kinds = (), when = true)
+    Chemotaxis(c; strength, response = identity, kinds = (), when = new != 0)
 
 `copy => -strength * (r(c[target]) - r(c[source]))` with a response `r` applied to each
 concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
-`c/(s c + 1)`, or any function). Which copies it acts on:
-- `kinds` non-empty: the gaining cell (`new`) is of `kinds` and the copy condition `when`
-  holds.
-- `kinds` empty, `when` given: exactly the copies where `when` holds, including
-  retractions (`new == 0`), which get `-strength * (c[target] - c[source])` like any other
-  copy. E.g. `old == 0` for extensions into the medium only, or
-  `(kind[new] == A) | (kind[old] == A)` for every copy involving kind `A`.
-- neither (the default): the gaining cell is a cell (`new != 0`), so retractions get 0.
+`c/(s c + 1)`, or any function), on the copies where the copy condition `when` holds
+(D-075):
+- the default `when = new != 0` acts when the gaining cell is a cell, so a retraction
+  (`new == 0`) gets 0;
+- `when = true` acts on every copy, retractions included; any other condition selects
+  exactly its copies, e.g. `old == 0` for extensions into the medium only, or
+  `(kind[new] == A) | (kind[old] == A)` for every copy involving kind `A`;
+- `kinds` non-empty additionally requires the gaining cell to be of `kinds`
+  (`kind[new] ∈ kinds`), so retractions stay 0 whatever `when` says.
 """
-function Chemotaxis(c; strength, response::F = identity, kinds = (), when = true) where {F}
-    gate = if isempty(kinds)
-        when === true ? (B.new != 0) : when
-    else
-        gain = foldl(|, [_index(B.kind, B.new) == k for k in kinds])
-        when === true ? gain : gain & when
-    end
+function Chemotaxis(c; strength, response::F = identity, kinds = (), when = (B.new != 0)) where {F}
+    gate = isempty(kinds) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in kinds]) & when)
     return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 

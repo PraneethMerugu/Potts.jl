@@ -785,14 +785,14 @@ end
 end
 
 @testset "compartment validation" begin
-    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :ka],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         energies = [Potts.EnergyTerm(Potts.CellDomain(Int[]), Potts.B.cluster_volume^2)]))
-    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+    @test_throws ArgumentError mtkcompile(Potts.PottsSystem(; name = :x, kinds = [:medium, :ka],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         energies = [Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume)]))
     # P6.0a: cell and cluster divisions mix per kind, but one kind divides by one domain
-    divsys(cellk, clusterk) = Potts.PottsSystem(; name = :x, kinds = [:medium, :a, :b],
+    divsys(cellk, clusterk) = Potts.PottsSystem(; name = :x, kinds = [:medium, :ka, :kb],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)])
     err = try
@@ -800,7 +800,7 @@ end
     catch e
         e
     end
-    @test err isa ArgumentError && occursin("`a`", err.msg) && !occursin("`b`", err.msg)
+    @test err isa ArgumentError && occursin("`ka`", err.msg) && !occursin("`kb`", err.msg)
     @test_throws ArgumentError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
     @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa Potts.CompiledPottsSystem
 end
@@ -912,7 +912,7 @@ end
     kt2 = remake(kt; u0 = [ownership => σk2, kind => [:wall, :dark]])
     @test kt2.frozen == (σk2 .== 1)
     # clusters used only in a division condition or an observed quantity still get storage
-    base = (; name = :x, kinds = [:medium, :a], lattice = Potts.lattice_spec((8, 8)),
+    base = (; name = :x, kinds = [:medium, :ka], lattice = Potts.lattice_spec((8, 8)),
         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0))
     @test mtkcompile(Potts.PottsSystem(; base..., divisions = [Potts.divide(Potts.cells(1);
         when = Potts.B.cluster == Potts.B.id)])).uses_clusters
@@ -1660,7 +1660,8 @@ end
     @test count(x -> x isa Potts._Gated && x.phase isa CorePotts.CellReduce, ph.after_mcs) == 1
 end
 
-# P6.0m (D-074): the ring rule also rejects zero arcs (the last site, an isolated fragment)
+# P6.0m: the ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
+# rule, so D-074 leaves it alone: at most one arc (zero included) or exactly two ring cells
 @potts_model ArcOrPair begin
     @kinds medium A
     @lattice Lattice((12, 12); neighborhood = Moore(1))
@@ -1668,21 +1669,73 @@ end
     @constraint connectivity(A; rule = :arc_or_pair)
     @sweep Metropolis(; temperature = 1.0)
 end
+@potts_model LocalOne begin
+    @kinds medium A
+    @lattice Lattice((12, 12); neighborhood = Moore(1))
+    @energy cells => (volume - 1)^2
+    @constraint connectivity(A)
+    @sweep Metropolis(; temperature = 1.0)
+end
 
-@testset "connectivity(rule = :arc_or_pair) needs at least one arc (P6.0m, D-074)" begin
-    allows(σ, x, y) = (p = PottsProblem(ArcOrPair(; name = :r), [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1));
+@testset "connectivity(rule = :arc_or_pair) keeps TST's zero-arc pass (P6.0m, D-074 scope)" begin
+    allows(M, σ, x, y) = (p = PottsProblem(M(; name = :r), [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1));
         prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
         p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p)))
     σ = zeros(Int32, 12, 12); σ[6, 6] = 1
-    @test !allows(σ, (6, 6), (7, 6))                     # the last site: 0 arcs
+    @test allows(ArcOrPair, σ, (6, 6), (7, 6))            # the last site: 0 arcs pass
+    @test !allows(LocalOne, σ, (6, 6), (7, 6))            # negative control: the local rule rejects it
     σ[2:3, 2:3] .= 1
-    @test !allows(σ, (6, 6), (7, 6))                     # an isolated fragment: 0 arcs
+    @test allows(ArcOrPair, σ, (6, 6), (7, 6))            # an isolated fragment: 0 arcs pass
+    @test !allows(LocalOne, σ, (6, 6), (7, 6))
     σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1
-    @test !allows(σ, (6, 6), (6, 7))                     # a bridge, one cell on the ring: 2 arcs
+    @test !allows(ArcOrPair, σ, (6, 6), (6, 7))           # a bridge, one cell on the ring: 2 arcs
     σ[6, 5] = 2
-    @test allows(σ, (6, 6), (6, 5))                      # 2 arcs, exactly two cells on the ring: the pair
+    @test allows(ArcOrPair, σ, (6, 6), (6, 5))            # 2 arcs, exactly two cells on the ring: the pair
     σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
-    @test allows(σ, (6, 4), (7, 4))                      # an ordinary boundary copy: 1 arc
+    @test allows(ArcOrPair, σ, (6, 4), (7, 4))            # an ordinary boundary copy: 1 arc
+end
+
+# P6.0m (D-075): `Chemotaxis`'s `when` defaults to `new != 0`; `when = true` is every copy;
+# `kinds` requires `kind[new] ∈ kinds`, so retractions stay 0 with `kinds` given
+@testset "Chemotaxis `when` (P6.0m, D-075)" begin
+    function chemo(dr)
+        m = eval(:(@potts_model _ChemoWhen begin
+            @kinds medium A
+            @variables c(site) = 0.0
+            @lattice Lattice((12, 12))
+            @energy cells => (volume - 16)^2
+            @drive $dr
+            @sweep Metropolis(; temperature = 1.0)
+        end))
+        σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+        p = PottsProblem(Base.invokelatest(m; name = :c), [ownership => σ, kind => [:A], :c => [Float64(i) for i in 1:12, j in 1:12]], (0, 1))
+        d(x, y) = (prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
+            p.f.delta_H(p.u0, p.p, prop, Potts._host_ctx(p)) - energy_change(p, p.u0, prop))
+        return d((7, 5), (8, 5)), d((8, 5), (7, 5))     # (retraction, extension)
+    end
+    @test all(isapprox.(chemo(:(Chemotaxis(c; strength = 1.0, when = true))), (1.0, -1.0)))      # every copy
+    @test all(isapprox.(chemo(:(Chemotaxis(c; strength = 1.0))), (0.0, -1.0)))                    # default new != 0
+    @test all(isapprox.(chemo(:(Chemotaxis(c; strength = 1.0, when = old == 0))), (0.0, -1.0)))   # extensions only
+    @test all(isapprox.(chemo(:(Chemotaxis(c; strength = 1.0, kinds = (A,), when = true))), (0.0, -1.0)))   # S2
+end
+
+# P6.0m (D-075 Q8): `a` and `b` are reserved for every declaration, and for a programmatic
+# PottsSystem; the error suggests `a₀`/`b₀`
+@testset "`a` and `b` are reserved globally (P6.0m, D-075 Q8)" begin
+    expand(body) = Potts._potts_model(:X, body, @__MODULE__)
+    for decl in (:(@kinds medium a), :(@kinds medium A b), :(@observed b ~ volume), :(@relations a = Moore(1)),
+                 :(@structural_parameters a = 1), :(@relationship b(cell, cell) capacity = 1))
+        body = decl.args[1] === Symbol("@kinds") ? quote $decl end : quote @kinds medium A; $decl end
+        @test_throws r"`[ab]` is reserved.*`[ab]₀`" expand(body)
+    end
+    @test expand(quote @kinds medium ka kb; @observed b₀ ~ volume end) isa Expr     # control
+    V = Potts.B.volume
+    prog(; kinds = [:medium, :cell], variables = Any[]) = Potts.PottsSystem(; name = :prog, kinds,
+        lattice = Potts.lattice_spec((12, 12)), variables, energies = [Potts.energy(Potts.cells(1) => (V - 16)^2)],
+        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0))
+    @test prog() isa Potts.PottsSystem                                               # control
+    @test_throws r"variable `b`: `b` is reserved" prog(; variables = Any[Potts.variable(only(Potts.Symbolics.@variables b(Potts.t)), :cell; default = 0.0)])
+    @test_throws r"kind `a`: `a` is reserved" prog(; kinds = [:medium, :a])
 end
 
 @potts_model Compound begin
@@ -2140,14 +2193,14 @@ end
         geometry = CorePotts.Square()
         near = Moore(1)
     end
-    @kinds medium a b
+    @kinds medium ka kb
     @variables x(cell) = 0.0
     @parameters T = 10.0
     @lattice Lattice(dims; geometry, neighborhood = near)
     @energy cells => (volume - 64.0)^2
     @constraint no_extinction
-    @divide cells(a) Every(na) when = volume >= 4, along = RandomPlane(), x => 1.0
-    @divide cells(b) Every(nb) when = volume >= 4, along = RandomPlane(), x => 2.0
+    @divide cells(ka) Every(na) when = volume >= 4, along = RandomPlane(), x => 1.0
+    @divide cells(kb) Every(nb) when = volume >= 4, along = RandomPlane(), x => 2.0
     @sweep Metropolis(; temperature = T)
 end
 
@@ -2157,7 +2210,7 @@ function rule_cadence_state(dims; w = 12)
     idx(o) = ntuple(d -> d == 1 ? (o:(o + w - 1)) : (2:(1 + min(w, dims[d] - 2))), length(dims))
     σ[idx(2)...] .= 1
     σ[idx(dims[1] ÷ 2 + 2)...] .= 2
-    return σ, [:a, :b]
+    return σ, [:ka, :kb]
 end
 live_kinds(u) = (v = Array(u.cell.volume); k = Array(u.cell.kind);
     (count(c -> v[c] > 0 && k[c] == 1, eachindex(v)), count(c -> v[c] > 0 && k[c] == 2, eachindex(v))))
@@ -2215,7 +2268,7 @@ end
     @test_throws ArgumentError Potts.divide(dom; when = V >= 4, every = 0)
     @test_throws r"`every = n` takes an integer n ≥ 1 or `Every\(n\)`; got 2.0" Potts.divide(dom; when = V >= 4, every = 2.0)
     @test_throws ArgumentError Potts.link_rule(:link, Potts.RelationshipRef(:bond); when = true, every = 2.0)
-    @test occursin("divide  cells(1) Every(3) when", sprint(show, MIME"text/plain"(), Potts.PottsSystem(; name = :x, kinds = [:medium, :a],
+    @test occursin("divide  cells(1) Every(3) when", sprint(show, MIME"text/plain"(), Potts.PottsSystem(; name = :x, kinds = [:medium, :ka],
         lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
         divisions = [Potts.divide(dom, Potts.Every(3); when = V >= 4)])))
     # the macro passes a cadence through to @link as well (it used to be dropped silently)
@@ -2241,25 +2294,25 @@ end
         xa = 1.0
         xb = 2.0
     end
-    @kinds medium a
+    @kinds medium ka
     @variables x(cell) = 0.0
     @lattice Lattice((48, 32))
     @energy cells => (volume - 64.0)^2
     @constraint no_extinction
-    @divide cells(a) Every(na) when = volume >= wa, along = RandomPlane(), x => xa
-    @divide cells(a) Every(nb) when = volume >= wb, along = RandomPlane(), x => xb
+    @divide cells(ka) Every(na) when = volume >= wa, along = RandomPlane(), x => xa
+    @divide cells(ka) Every(nb) when = volume >= wb, along = RandomPlane(), x => xb
     @sweep Metropolis(; temperature = 10.0)
 end
 
 @testset "P6.0f per-rule cadence: only the firing rule writes the daughters' state" begin
     σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
     function run(sys, tspan; alg = SequentialCPM())
-        u = solve(PottsProblem(sys, [ownership => σ, kind => [:a]], tspan; capacity = 32), alg).u[end]
+        u = solve(PottsProblem(sys, [ownership => σ, kind => [:ka]], tspan; capacity = 32), alg).u[end]
         live = findall(>(0), Array(u.cell.volume))
         return length(live), unique(Array(u.cell.x)[live])
     end
     sys = SameKindCadences(; name = :s)
-    @test PottsProblem(sys, [ownership => σ, kind => [:a]], (0, 1)).f.lifecycle.rules === Val(true)
+    @test PottsProblem(sys, [ownership => σ, kind => [:ka]], (0, 1)).f.lifecycle.rules === Val(true)
     for alg in (SequentialCPM(), CheckerboardCPM())
         # MCS 0: both are checked and met; the first (Every(2), x = 1) wins
         @test run(sys, (0, 1); alg) == (2, [1.0])
@@ -2339,18 +2392,18 @@ end
 end
 
 @potts_model CadenceDivBase begin
-    @kinds medium a b
+    @kinds medium ka kb
     @lattice Lattice((16, 16))
     @energy cells => (volume - 64.0)^2
-    @divide cells(a) Every(2) when = volume >= 4 + rand()
+    @divide cells(ka) Every(2) when = volume >= 4 + rand()
     @sweep Metropolis(; temperature = 1.0)
 end
 
 @potts_model CadenceDivOther begin
-    @kinds medium a b
+    @kinds medium ka kb
     @lattice Lattice((16, 16))
     @energy cells => (volume - 64.0)^2
-    @divide cells(a) Every(3) when = volume >= 8 + rand()
+    @divide cells(ka) Every(3) when = volume >= 8 + rand()
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -2358,8 +2411,8 @@ end
     ext(body) = Base.invokelatest(eval(Potts._potts_model(:CadenceDivExt, body, @__MODULE__)); name = :e)
     sys = @test_logs (:warn, r"@divide cells\(1\) Every\(3\).*adds to the base's @divide cells\(1\) Every\(2\)") ext(quote
         @extend base = CadenceDivBase()
-        @kinds medium a b
-        @divide cells(a) Every(3) when = volume >= 8 + rand()
+        @kinds medium ka kb
+        @divide cells(ka) Every(3) when = volume >= 8 + rand()
     end)
     @test [d.every for d in sys.divisions] == [2, 3]                  # both rules stay, each with its cadence
     # two separately built models: extend renumbers the draws of `sys` and keeps its cadences
@@ -2369,13 +2422,13 @@ end
     @test string(other.divisions[2].when) != string(CadenceDivOther(; name = :o).divisions[1].when)   # renumbered
     @test_logs ext(quote                                                    # same cadence: silent
         @extend base = CadenceDivBase()
-        @kinds medium a b
-        @divide cells(a) Every(2) when = volume >= 8
+        @kinds medium ka kb
+        @divide cells(ka) Every(2) when = volume >= 8
     end)
     @test_logs ext(quote                                                    # other kinds: silent
         @extend base = CadenceDivBase()
-        @kinds medium a b
-        @divide cells(b) Every(5) when = volume >= 8
+        @kinds medium ka kb
+        @divide cells(kb) Every(5) when = volume >= 8
     end)
 end
 
