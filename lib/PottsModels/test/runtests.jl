@@ -2,6 +2,7 @@
 # force energy difference; mechanism tests (mechanisms.jl) check what each model is for.
 using Test, Potts, PottsModels, Aqua
 using Potts: CorePotts
+using Statistics: mean
 
 function selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))
@@ -46,14 +47,15 @@ end
     end
     @testset "Akeeb invasion (99×60)" begin
         op = akeeb_state(; lattice = (99, 60))
-        @test length(op[2].second) == 308 && count(==(:leader), op[2].second) == 77     # as in the MTK-bridge check
+        n0 = length(op[2].second)
+        @test count(==(:follower), op[2].second) == 231 && 70 <= count(==(:leader), op[2].second) <= 77
         prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 200); capacity = 1000)
         @test selfcheck(prob) < 1e-9
         sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)))
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions > 0
-        @test all(>(0), u.cell.volume[1:308])                                             # no extinction
-        @test all(c -> u.cell.clock[c] >= 0 || u.cell.clock[c] == -1, 1:308)
+        @test all(>(0), u.cell.volume[1:n0])                                             # no extinction
+        @test all(c -> u.cell.clock[c] >= 0 || u.cell.clock[c] == -1, 1:n0)
         p0 = remake(prob; u0 = akeeb_state(; lattice = (99, 60), pp = 0.0))
         @test solve(p0, SequentialCPM(; proposal = VonNeumann(1))).stats.lifecycle.divisions == 0
         @test akeeb_contacts(-2.0)[2, 3] == akeeb_contacts(-2.0)[3, 2] == -2.0
@@ -72,6 +74,34 @@ end
         @test size(graner_glazier_aggregate(200; seed = 1, margin = 30)[1], 1) ==
               size(graner_glazier_aggregate(200; seed = 1)[1], 1) + 40
         @test_throws ArgumentError graner_glazier_aggregate(200; seed = 1, margin = -1)
+    end
+    @testset "Akeeb seeding emulates the authors' CC3D loop (D-068, spec 10 §5.3.6)" begin
+        # the bare follower slab of `akeeb_state` at the published 500×300, slab 21
+        function slab()
+            σ = zeros(Int32, 500, 300); kinds = Symbol[]
+            for y in 1:3:21, x in 1:3:500
+                push!(kinds, :follower); σ[x:min(x + 2, 500), y:(y + 2)] .= length(kinds)
+            end
+            return σ, kinds
+        end
+        n = 400
+        painted, counted = zeros(Int, n), zeros(Int, n)
+        for s in 1:n
+            σ, kinds = slab()
+            counted[s] = PottsModels._seed_leaders!(σ, kinds, PottsModels.MersenneTwister(s), 21, false)
+            painted[s] = count(==(:leader), kinds)
+            @test sort(σ[σ .> 1169]) == 1170:(1169 + painted[s])             # one site per leader
+        end
+        # the spec owner's 20k-rep seeding simulation: 382.1 ± 2.7 painted, 7.9 ± 2.8 empty,
+        # inventory 390 in 96.1 % (our 20k: 382.14 ± 2.73, 7.90 ± 2.74, 96.1 %); 3·SE ≈ 0.4
+        @test abs(mean(painted) - 382.1) < 0.5
+        @test abs(mean(counted .- painted) - 7.9) < 0.5
+        @test all(>=(390), counted) && 0.93 < mean(counted .== 390) <= 0.995
+        # `akeeb_state` uses this loop; negative control: `:retry` paints exactly the quota
+        o = akeeb_state(; seed = 3)
+        @test count(==(:follower), o[2].second) == 1169 && count(==(:leader), o[2].second) == painted[3]
+        @test all(s -> count(==(:leader), akeeb_state(; seed = s, seeding = :retry)[2].second) == 390, 1:5)
+        @test_throws ArgumentError akeeb_state(; seeding = :other)
     end
     @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))

@@ -65,42 +65,68 @@ end
 akeeb_contacts(jlf) = [0.0 2.0 10.0; 2.0 16.0 jlf; 10.0 jlf 5.0]
 
 """
-    akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21) -> operating point
+    akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21,
+                seeding = :authors) -> operating point
 
-The published initial slab:
+The published initial slab (spec 10 §2.3, §5.2 V-A1, §5.3.6; D-068):
 - **Followers.** 3×3 tiles fill `y ≤ slab` (rounded up to whole tiles), clipped at the
   right edge. The lattice must be taller than the slab.
-- **Leaders.** One-site leaders are placed at random follower pixels (`2 ≤ x`,
-  `2 ≤ y ≤ slab − 1`) until they are a quarter of all cells.
+- **Leaders.** One-site leaders go on random follower pixels (`2 ≤ x`, `2 ≤ y ≤ slab − 1`)
+  until leaders are a quarter of all cells. `seeding` chooses how a missed draw (a pixel
+  that is not a follower's) is treated:
+  - `:authors` (default) emulates the authors' CompuCell3D loop: every draw counts one
+    leader toward the quota, a leader is painted only on a hit, and the quota is tested
+    only after a hit. A miss leaves no cell (a zero-site cell is never alive, D-066 X2),
+    so fewer leaders are painted than counted: at 500×300, ≈ 382 of a counted 390.
+  - `:retry` redraws a miss, so exactly the quota is painted (390 at 500×300).
 - **Clocks.** Each follower has a mitotic clock with probability `pp`, drawn uniformly
   from `0:74`. Followers have `rate = 0.015`.
 - **Cue.** `y − 1`.
 
 Draws use `MersenneTwister(seed)` and `(seed + 1)`, as in the source.
 """
-function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21)
+function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21,
+        seeding::Symbol = :authors)
     X, Y = lattice
     top = 3 * cld(slab, 3)                                   # the last tile row ends here
     Y > top || throw(ArgumentError("akeeb_state: lattice height $Y must exceed the slab ($top rows)"))
+    seeding in (:authors, :retry) ||
+        throw(ArgumentError("akeeb_state: seeding must be :authors or :retry, got :$seeding"))
     σ = zeros(Int32, X, Y)
     kinds = Symbol[]
     for y in 1:3:slab, x in 1:3:X
         push!(kinds, :follower)
         σ[x:min(x + 2, X), y:(y + 2)] .= length(kinds)
     end
-    nf = length(kinds)
-    rng = MersenneTwister(seed)
-    leaders = 0
-    while 4 * leaders < length(kinds)
-        x, y = rand(rng, 2:X), rand(rng, 2:(slab - 1))
-        1 <= σ[x, y] <= nf || continue
-        push!(kinds, :leader)
-        σ[x, y] = length(kinds)
-        leaders += 1
-    end
+    _seed_leaders!(σ, kinds, MersenneTwister(seed), slab, seeding === :retry)
     rng = MersenneTwister(seed + 1)
     clocks = [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]
     rates = [k === :leader ? 0.0 : 0.015 for k in kinds]
     cue = [Float64(y - 1) for x in 1:X, y in 1:Y]
     return [ownership => σ, kind => kinds, :clock => clocks, :rate => rates, :cue => cue]
+end
+
+# Paints one-site leaders on follower pixels until leaders are a quarter of all cells, and
+# returns the counted leaders. The authors' loop (`CCIecmSteppables.py`, Main_Simulation_Scan
+# S:67–75) is
+#     while i < k/100:                      # S:67, k = 25; i = LC/(LC+FC), 0 at the start
+#         lc = self.new_cell(self.LC)       # S:68, on every draw: counted += 1
+#         x1 = randint(1, dim.x); y1 = randint(1, 20)     # S:70–71 (0-based)
+#         if cellField[x1, y1].type == 2:   # S:73, FC only (a leader's pixel is a miss)
+#             cellField[x1, y1] = lc        # S:74, paint
+#             i = LC/(LC+FC)                # S:75, LC counts every created cell
+# so the quota is tested only after a hit. With `retry`, a miss is redrawn and not counted.
+function _seed_leaders!(σ, kinds, rng, slab, retry::Bool)
+    X = size(σ, 1)
+    nf = length(kinds)
+    counted = 0
+    while true
+        x, y = rand(rng, 2:X), rand(rng, 2:(slab - 1))
+        hit = 1 <= σ[x, y] <= nf
+        (hit || !retry) && (counted += 1)
+        hit || continue
+        push!(kinds, :leader)
+        σ[x, y] = length(kinds)
+        4 * counted >= counted + nf && return counted
+    end
 end

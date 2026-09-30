@@ -1208,3 +1208,19 @@ session.
     global scale s ∈ [½, 2] is information only.
 - **Review.** Three rounds (two adversarial reviews plus a coordinator check). The spec owner
   ratified the page.
+
+## D-071 Akeeb adhesion check: mid singles `> 0`, not `>= 2` (2026-09-30, coordinator; P6.2c)
+
+- **The failing check.** `lib/PottsModels/test/papers.jl:158` asserted
+  `mean(weak singles) > mean(mid singles) >= 2`. Under D-068's μ = 24 default it fails
+  every time on seeds 1:4: mid singles are [2, 0, 2, 0], mean 1.0.
+  - It fails in 2 of 10 disjoint four-seed groups (seeds 1:40).
+  - The old retry seeding fails it at μ = 24 as well (mean 1.5), and at μ = 30 one group
+    in ten failed.
+  - So the fragility comes from the μ default, not the seeding. The `>= 2` floor sat about
+    0.4 SD below the mid mean of about 2.4.
+- **Change.** The check becomes `… > mean(mid singles) > 0`. It keeps the paper's
+  ordering: strong adhesion gives no single-cell escape (0 on 40 of 40 seeds), mid gives
+  some, and weak gives more (weak > mid in 10 of 10 groups).
+  - With four seeds, P(all mid zero) ≈ 2e-4 from the ensemble.
+- **Frozen file.** Edited under this entry; its `frozen.toml` decision is D-071.

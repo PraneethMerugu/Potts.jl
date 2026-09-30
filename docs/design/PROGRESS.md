@@ -1444,3 +1444,25 @@ The maintainer approved F-1…F-6 (D-049).
   committed with this merge.
 - **Next:** the FULL run, 1000 cells per replicate, 25–40 CPU-min per replicate on 6
   threads.
+
+## 2026-09-30 — P6.2c merged: Akeeb seeding emulates the authors (D-068, D-071)
+
+- **Seeding:** `akeeb_state(; seeding = :authors | :retry)`. The default counts a missed
+  draw toward the quota without creating a cell.
+  - An independent CC3D-loop emulation by the reviewer matches it on 5000 of 5000 seeds.
+  - Statistics: 382.1 ± 2.7 painted and 7.9 ± 2.8 empty, matching the spec owner's audit.
+  - `:retry` is identical to the old code in 468 of 468 cases.
+- **Frozen `papers.jl`:**
+  - μ = 24 by default;
+  - an ensemble divisions band, 585.0 ± 16.4 over 40 seeds, giving [535.8, 634.2] with the
+    paper's 578 inside;
+  - the adhesion floor is now `> 0` (D-071).
+- **`mechanisms.jl`:** every split cell at pp = 0.5 must be a divided mother or daughter,
+  checked on seeds (3, 5, 6, 24). The connectivity check runs at pp = 0.
+- **Gate:** the Akeeb case changes state (75 leaders instead of 77 at 99×60). The reviewer
+  measured CPU sequential at 46.7–46.8 and checkerboard at 45.2–45.9 ns/site against
+  baselines of 47.2 and 46.5, with 0 allocations, so no re-baseline is needed. Metal was
+  covered by the Metal suite's Akeeb CPU-vs-Metal test, not timed.
+- **Suites on the merged tree:** PottsModels and Potts on Metal pass. CorePotts passed on
+  the branch.
+- **Review:** 1 round plus one targeted fix, the check for split daughters.
