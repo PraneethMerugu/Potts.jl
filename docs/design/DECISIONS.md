@@ -821,3 +821,14 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
 - **The fix.** `anneal(σ, pars)` takes the run's own parameters, with T overridden to 0, as
   PRE §II D2 describes. The measurement helpers pass `pars` through.
 - **The check.** All 12 GG checks still pass.
+
+## D-060 P6.1b2 acceptance fixture: a variable shadowed `Base.all` (2026-09-30, coordinator)
+
+- **The bug.** In the frozen `acceptance/p6_1b2_gg_aggregate.jl`, `unlike = all = 0` made
+  `all` a local of the testset body. That shadowed `Base.all`, so the file's first `@test`
+  threw an UndefVarError on every implementation.
+- **The fix.** The variable is renamed `nall`. No target or tolerance changes.
+- **The lesson.** Before freezing, the coordinator runs the test file against a stub of
+  the API it names, not only against the unchanged tree (where it errors at the first
+  undefined name). This catches errors in the fixture itself. AUTONOMY §7.2 is extended to
+  require it.

@@ -38,15 +38,15 @@ end
     h, w = length(rows), length(cols)
     @test max(h, w) / min(h, w) <= 1.2                                 # round
     @test abs(count(cells) / (h * w) - π / 4) <= 0.08
-    unlike = all = 0                                                   # randomly mixed
+    unlike = nall = 0                                                   # randomly mixed
     for s in CartesianIndices(σ), d in ((1, 0), (0, 1))
         t = s + CartesianIndex(d)
         checkbounds(Bool, σ, t) || continue
         a, b = σ[s], σ[t]
         (a == 0 || b == 0 || a == b) && continue
-        all += 1; unlike += k[a] != k[b]
+        nall += 1; unlike += k[a] != k[b]
     end
-    @test unlike / all >= 0.35
+    @test unlike / nall >= 0.35
     @test graner_glazier_aggregate(n; seed = 1)[1] == σ                # deterministic
     @test graner_glazier_aggregate(n; seed = 2)[1] != σ
     prob = PottsProblem(GranerGlazier(; name = :gg, lattice = size(σ)), [ownership => σ, kind => k], (0, 2))

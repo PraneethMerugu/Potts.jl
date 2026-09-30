@@ -24,5 +24,5 @@ decision = "D-053"
 
 [[file]]
 path = "acceptance/p6_1b2_gg_aggregate.jl"
-sha256 = "1d21ef11ceae88a627ca4bc89a22873c6f07f2d74d4157f8662a4bb12887b0d7"
-decision = "D-053"
+sha256 = "61a62a9a156478b2ee6b645626885c095466962ebbac4cef04207d6a547c143e"
+decision = "D-060"
