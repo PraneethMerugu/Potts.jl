@@ -170,7 +170,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
 - [x] (merge, 2026-09-30) **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
-- [ ] **P6.1b2** follow-ups from the P6.0h review:
+- [x] (merge, 2026-09-30; D-059, D-060, D-063) **P6.1b2** follow-ups from the P6.0h review:
   - `graner_glazier_state` gains a paper-size single-aggregate generator (≈ 1000 cells),
     so the FULL run can test the size-driven targets.
   - `papers.jl` anneals each regime with that run's own J and T. The frozen file is edited

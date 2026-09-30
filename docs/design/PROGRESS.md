@@ -1331,3 +1331,17 @@ The maintainer approved F-1…F-6 (D-049).
 - **P6.0b4:** a permanent Metal test of a model with relationship reads.
 - **Review:** 2 rounds. Round 1 added hex and 3D frame tests.
 
+## 2026-09-30 — P6.1b2 merged: paper-size GG aggregate, papers.jl annealing, tutorial guardrail
+
+- **`graner_glazier_aggregate` / `VoronoiBall`:** connected cells across 1,040 reviewer
+  layouts; n = 1000 in 0.026 s.
+- **papers.jl:** each regime is annealed under its own Hamiltonian (D-059).
+- **Public-names guardrail** for `reproductions/*.jl`, covering multi-part imports and
+  family-module aliases.
+- **09 FULL:** each replicate runs from its own 1000-cell aggregate, at an estimated 25–40
+  min on 6 threads (not run yet).
+- **Freeze bug:** a fixture shadowed `Base.all` (D-060), so a stub run is now part of every
+  freeze.
+- **Review:** 2 rounds.
+- **Peer:** tutorial rows 109–110 and one `##` comment await ratification by the peer.
+

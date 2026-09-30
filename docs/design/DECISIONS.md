@@ -812,6 +812,27 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    akeeb 0.993, openvt 0.996 and merks 1.001.
 
 
+## D-059 papers.jl anneals each Graner–Glazier regime under its own Hamiltonian (2026-09-30, coordinator; P6.1b2)
+
+- **The bias.** The frozen `papers.jl` measured every regime on a copy annealed at T = 0
+  under the default sorting J. The partial-sorting, checkerboard and reversed-layer runs
+  were therefore annealed under a Hamiltonian that was not theirs. The P6.0h reviewer
+  measured a bias of 0.005–0.01 toward the effect being tested.
+- **The fix.** `anneal(σ, pars)` takes the run's own parameters, with T overridden to 0, as
+  PRE §II D2 describes. The measurement helpers pass `pars` through.
+- **The check.** All 12 GG checks still pass.
+
+## D-060 P6.1b2 acceptance fixture: a variable shadowed `Base.all` (2026-09-30, coordinator)
+
+- **The bug.** In the frozen `acceptance/p6_1b2_gg_aggregate.jl`, `unlike = all = 0` made
+  `all` a local of the testset body. That shadowed `Base.all`, so the file's first `@test`
+  threw an UndefVarError on every implementation.
+- **The fix.** The variable is renamed `nall`. No target or tolerance changes.
+- **The lesson.** Before freezing, the coordinator runs the test file against a stub of
+  the API it names, not only against the unchanged tree (where it errors at the first
+  undefined name). This catches errors in the fixture itself. AUTONOMY §7.2 is extended to
+  require it.
+
 ## D-061 Contact energies read site values: `x` and `x′` (2026-09-30, P6.0e)
 
 1. **Naming.** In a `contacts`/`contacts(relation)` term, a bare site or field variable `x`
@@ -845,4 +866,19 @@ out-of-domain site or a closed lattice edge. A domain frame that would be empty 
 - **Hex.** Chebyshev is conservative there: Hex(1) ⊂ Moore(1), so the ring always seals.
   - The reviewer checked it against an independent BFS oracle: 400 trials, 0 mismatches.
   - It is also tested on a concave hex domain and on 40 random 3D masks.
+
+## D-063 Paper-size Graner–Glazier start: a centroidal Voronoi disk without relaxation (2026-09-30, P6.1b2)
+
+- **The generator.** `graner_glazier_aggregate(n; seed)` is `VoronoiBall`: a centroidal
+  Voronoi disk of area 40n with 30 Lloyd iterations.
+  - Kinds are exactly equal (±1) and randomly placed, which spec 09 §8.4 A-GG5 allows.
+  - There is no Potts relaxation. The reviewer measured heterotypic fractions within 0.005
+    of a paper-relaxed start at 1, 10 and 100 paper MCS (6 seeds).
+  - The area spread is SD 7.6, against 1.6 relaxed. This is stated in the docstring.
+- **Connectivity.** `VoronoiBall` cells are connected under the geometry's nearest-neighbour
+  steps, derived from `embed`. That is stricter than the lattice neighbourhood.
+  - Stray pieces join the neighbouring cell whose largest piece they touch most.
+  - A cell's largest piece never moves, so no cell vanishes.
+- **Reproducibility.** Each FULL replicate of reproduction 09 draws its own aggregate
+  (`seed = replica`).
 

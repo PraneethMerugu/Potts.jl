@@ -8,11 +8,12 @@
 # !!! warning "Reduced run"
 #     The docs build runs a reduced ensemble (`POTTS_FULL_REPRODUCTION` unset), so the
 #     tables below are a smoke check, not validation. The full run
-#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length. It
-#     still uses the same small aggregate from `graner_glazier_state`, so the differences
-#     that come from aggregate size (deviations table) remain until a paper-size generator
-#     exists. The committed full-run outputs (`lib/PottsModels/reproductions/data/09/`) are
-#     **pending**: no full run has been made yet.
+#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length, and
+#     replaces the small aggregate of `graner_glazier_state` with a paper-size one of 1000
+#     cells (`graner_glazier_aggregate`), so the differences that come from aggregate size
+#     (deviations table) can be tested there. The committed full-run outputs
+#     (`lib/PottsModels/reproductions/data/09/`) are **pending**: no full run has been made
+#     yet.
 #
 # ## 1. Paper and sources
 #
@@ -69,8 +70,8 @@ const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
 #
 # The published constructor carries all of it:
 
-@named gg = GranerGlazier()
-σ0, k0 = graner_glazier_state()
+σ0, k0 = FULL ? graner_glazier_aggregate(1000; seed = 1) : graner_glazier_state()
+gg = GranerGlazier(; name = :gg, lattice = size(σ0))
 prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = 1)
 J = getp(prob0, :J)(prob0)
 par(name) = getp(prob0, name)(prob0)
@@ -102,11 +103,11 @@ Markdown.parse("""
 | Item | Paper | Released code | Our default | Variant keyword | Reason |
 |---|---|---|---|---|---|
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t |
-| Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $ncells cells on $(join(size(σ0), " × ")) | `graner_glazier_state(scale)` tiles aggregates, it does not enlarge one | Cost. Boundary fractions scale with perimeter/area, and sorting levels off long before 10⁴ paper MCS (`GranerGlazier` docstring; `test/papers.jl`) |
+| Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $ncells cells on $(join(size(σ0), " × ")) | `graner_glazier_aggregate(n)`: one round aggregate of n cells (the full run uses n = 1000) | Cost. Boundary fractions scale with perimeter/area, and sorting levels off long before 10⁴ paper MCS (`GranerGlazier` docstring; `test/papers.jl`) |
 | Log-law window | 5–4000 paper MCS (spec §8.5 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
 | Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image; unsuitable for dispersal runs (spec §8.6 D2) |
-| Type fraction | unstated (spec §8.4) | — | probability ½ per cell ($ndark dark / $nlight light) | — | Assumption, recorded in `data/graner/provenance.toml` |
-| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | the same recipe with $ncells cells | — | D-049 F-2; `data/graner/generate.jl` |
+| Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | $(FULL ? "Assumption; `graner_glazier_aggregate`, one draw per replicate" : "Assumption, recorded in `data/graner/provenance.toml`") |
+| Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | — | $(FULL ? "Paper size. Areas are more spread than after a Potts relaxation (SD 7.6 against 1.6), but heterotypic fractions from either start agree within 0.005 at 1, 10 and 100 paper MCS (measured in the P6.1b2 review, 6 seeds)" : "D-049 F-2; `data/graner/generate.jl`") |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
 | Target area per kind | one value except the cavity run (PRE Fig. 28) | — | one `V₀` | — | Per-kind targets not expressible yet (spec §8.6 D14) |
 | Boundary length | mismatched bonds on the 8-neighbour lattice, medium included (PRE p.2133) | — | the same, each bond once | — | Once/twice counting cancels in fractions (spec §8.6 D8) |
@@ -114,8 +115,8 @@ Markdown.parse("""
 
 # ## 4. Build and run
 #
-# One replicate to 10³ paper MCS, sequential CPU solver, timed after a warm-up solve. This
-# is our small aggregate, not paper size.
+# One replicate to 10³ paper MCS, sequential CPU solver, timed after a warm-up solve. In
+# the reduced build this is our small aggregate, not paper size.
 
 alg = SequentialCPM(; proposal = Moore(1))
 prob = remake(prob0; tspan = (0, PAPER_MCS * 1000))
@@ -156,7 +157,7 @@ end
 
 ## anneal a copy at T = 0 with the energies of the run `run` (a PottsProblem)
 function annealed(σ, k, run; seed = 1)
-    q = PottsProblem(GranerGlazier(; name = :anneal),
+    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(σ)),
         [ownership => copy(σ), kind => k, :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
             :V₀ => getp(run, :V₀)(run), :T => 0.0], (0, 2PAPER_MCS); seed)
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
@@ -184,15 +185,21 @@ nothing #hide
 # ### Ensemble
 
 n = FULL ? 10 : 4
+## FULL: replicate i starts from its own aggregate, `graner_glazier_aggregate(1000; seed = i)`,
+## so the kind assignments are independent (spec §8.5); the reduced run shares the 64-cell state
+starts = [FULL ? graner_glazier_aggregate(1000; seed = i) : (σ0, k0) for i in 1:n]
+kinds_of(i) = starts[i][2]
+from_start(q, ctx) = FULL ? remake(q; u0 = [ownership => starts[ctx.sim_id][1], kind => starts[ctx.sim_id][2]]) : q
 ts = [1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320,
     400, 500, 640, 800, 1000, 1280, 1600, 2000]
 FULL && append!(ts, [2560, 3200, 4000, 5000, 6400, 8000, 10_000, 12_800, 16_000, 20_000])
-ens = solve(EnsembleProblem(remake(prob; tspan = (0, PAPER_MCS * last(ts)))), alg, EnsembleThreads();
+ens = solve(EnsembleProblem(remake(prob; tspan = (0, PAPER_MCS * last(ts))); prob_func = from_start), alg,
+    EnsembleThreads();
     trajectories = n, saveat = PAPER_MCS .* ts)
 keys5 = (:dl, :dd, :ll, :dM, :lM)
 F = Dict(key => zeros(n, length(ts)) for key in keys5)
 for (i, sol) in enumerate(ens.u), (j, t) in enumerate(ts)
-    f = fractions(ownership(sol.u[findfirst(==(PAPER_MCS * t), sol.t)]), k0, prob)
+    f = fractions(ownership(sol.u[findfirst(==(PAPER_MCS * t), sol.t)]), kinds_of(i), prob)
     for key in keys5
         F[key][i, j] = f[key]
     end
@@ -255,13 +262,14 @@ fig
 t_end = 1000
 last_states(ens) = [ownership(sol.u[end]) for sol in ens.u]
 sorted_states = [ownership(sol.u[findfirst(==(PAPER_MCS * t_end), sol.t)]) for sol in ens.u]
-partial_states = last_states(solve(EnsembleProblem(prob_partial), alg, EnsembleThreads(); trajectories = n,
+partial_states = last_states(solve(EnsembleProblem(prob_partial; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
     saveat = [PAPER_MCS * t_end]))
 prob_sym = remake(prob; p = [:J => [0 16 16; 16 11 11; 16 11 11]])
-sym_states = last_states(solve(EnsembleProblem(prob_sym), alg, EnsembleThreads(); trajectories = n,
+sym_states = last_states(solve(EnsembleProblem(prob_sym; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
     saveat = [PAPER_MCS * t_end]))
-regime(states, run) = (count(σ -> engulfed(σ, k0, run), states),
-    mean(σ -> fractions(σ, k0, run)[:dM], states), mean(σ -> fractions(σ, k0, run)[:dl], states))
+regime(states, run) = (count(i -> engulfed(states[i], kinds_of(i), run), eachindex(states)),
+    mean(i -> fractions(states[i], kinds_of(i), run)[:dM], eachindex(states)),
+    mean(i -> fractions(states[i], kinds_of(i), run)[:dl], eachindex(states)))
 rows = [("sorting (PRL defaults)", "engulfment", regime(sorted_states, prob)),
     ("partial sorting (PRE §III E)", "no monolayer", regime(partial_states, prob_partial)),
     ("symmetric contacts (control)", "no sorting", regime(sym_states, prob_sym))]
@@ -369,7 +377,8 @@ addrow!("V-PRE3 light–medium plateau level @ 10³", "0.062–0.063 (Fig. 13b);
     "raw $(fmt(lM_1000)); plateau / medium share at t = 1 = $(fmt(ratio))",
     "raw in [0.050, 0.075]; size-corrected ratio in [$(fmt(lo_r)), $(fmt(hi_r))]",
     "raw $(pf(0.050 <= lM_1000 <= 0.075)); size-corrected $(pf(lo_r <= ratio <= hi_r))")
-area(kk) = mean(mean(count(==(c), σ) for c in eachindex(k0) if k0[c] == kk) for σ in sorted_states)
+area(kk) = mean(mean(count(==(c), σ) for c in eachindex(kinds_of(i)) if kinds_of(i)[c] == kk)
+                for (i, σ) in enumerate(sorted_states))
 addrow!("V-GG6 mean area light < dark (at 10³)", "\"slightly smaller\" (PRL p.2014)",
     "$(fmt(area(2))) vs $(fmt(area(1)))", "light < dark", pf(area(2) < area(1)))
 
@@ -425,7 +434,7 @@ any(r -> haskey(r.info, :key), failing) && #hide
     push!(lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value, applied at all " * #hide
         "times, and is read off Fig. 13(b) (our estimate of the read-off uncertainty: ≈ ±0.014).") #hide
 if any(r -> startswith(r.target, "V-PRE1 light–light") && occursin("FAIL", r.result), failing) #hide
-    push!(lines, "Light–light: at 10³, $(round(Int, 100mean(σ -> light_on_surface(σ, k0), sorted_states)))% " * #hide
+    push!(lines, "Light–light: at 10³, $(round(Int, 100mean(i -> light_on_surface(sorted_states[i], kinds_of(i)), eachindex(sorted_states))))% " * #hide
         "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " * #hide
         "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " * #hide
         "$(count(r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) && #hide
@@ -468,3 +477,4 @@ Markdown.parse(isempty(failing) ? "No row fails in this run." : #hide
 # | Date | Change | Reason |
 # |---|---|---|
 # | 2026-09-30 | First version (pilot tutorial, reduced run) | ROADMAP P6.0h |
+# | 2026-09-30 | The full run uses a 1000-cell aggregate (`graner_glazier_aggregate`) | ROADMAP P6.1b2 |
