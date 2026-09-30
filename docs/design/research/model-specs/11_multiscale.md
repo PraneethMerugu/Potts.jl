@@ -75,7 +75,7 @@ Normal host cells are used in some runs (11a p.21–23), but **no J row or other
 
 | Node | Rule |
 |---|---|
-| β-Catenin | "Wnt Or Akt And Not cadherin AND Not APC" |
+| β-Catenin | "Wnt Or Akt And Not cadherin AND Not APC" (read as Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC); §7 item 9) |
 | Grb-2/Sos | "RTK And Scr" (sic; Src) |
 | Src | FAK |
 | FAK | ITG |
@@ -115,7 +115,7 @@ Normal host cells are used in some runs (11a p.21–23), but **no J row or other
 | Cadherin OFF | 1101 | 0011 | 0010 | 0010 | 1101 | 0011 | 0010 | 0010 |
 | Cadherin ON | 1101 | 0011 | 0010 | 0010 | **1100** | 0010 | 0010 | 0010 |
 
-  Rule in words: apoptosis unless ITG = RTK = 1. Cadherin ON with Wnt OFF blocks migration (case 110) (p.14).
+  Rule in words: apoptosis unless ITG = RTK = 1. Cadherin ON with Wnt OFF blocks migration (case 110) (p.14). Table values re-checked against the p.12 page image. Cell 100 / Cadherin OFF (0011) is not reproduced by the Table 1 network (§7 item 9).
 - **Quiescence** is **not** a Boolean output. Hypoxic, oxygen-starved cells "reach the quiescent state" and "stop growing" (p.14, p.18). The quiescence threshold is **UNSPECIFIED**.
 
 **Input mapping (field/contact → Boolean inputs)**
@@ -362,7 +362,7 @@ Policy: ensemble statistics, no bitwise parity.
 
 | ID | Target | Source | Type | Tolerance |
 |---|---|---|---|---|
-| V11a-1 | Boolean network: with APC = NF1 = OFF, every input combination gives the Fig 3 table; all 2^29 internal initial states converge to the same attractors | p.12, p.15, Fig 3, Table 1 | exact (logic) | exact match. This is a pure unit test of the G9 Boolean component; synchronous update. Note: β-Catenin rule precedence must be fixed first (§7) |
+| V11a-1 | Boolean network: with APC = NF1 = OFF, every input combination gives the Fig 3 table; all 2^29 internal initial states converge to the same attractors | p.12, p.15, Fig 3, Table 1 | exact (logic) | exact match on 15 of 16 cells with β-Catenin = Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC) (§7 item 9). The cell ITG RTK Wnt = 100, Cadherin OFF is printed 0011, but the network gives 0010; mark it as a known paper inconsistency. This is a pure unit test of the G9 Boolean component; synchronous update |
 | V11a-2 | Sprout speed vs time, with signalling (n = 5). Key points: 37.9 (t = 0.2), 22.3 (1), 15.2 (2), 12.6 (4), 11.5 (6), 10.2 (8), 10.2 (10), 9.9 (12), 9.3 μm/h (14). Summaries: initial (mean of t = 0.2, 1, 2) 25.1; 10-h value 12.6 (the sheet takes the MEDIAN of t = 0.2–10); Table 3 gives initial 25 ± 3.7, in progress 11 ± 1.2, 10-h 13 ± 1.6. Time unit: see §9.3 item 1 | Table 3 p.15; Fig 4 p.16; S1 Data (supplementary/11a_JafariNivlouei2021_S1Data.xlsx, sheet "Figure 4", cells D3:E15) | quantitative | Ensemble mean (≥ 5 runs) within ±2 SD of the Table 3 value: initial 25.1 ± 7.4, in progress 11 ± 2.4, 10-h 12.6 ± 3.2 μm/h. Per-point: ±25% for t ≥ 4, ±40% for t ≤ 2 (the steep transient). Speed must decrease monotonically, allowing up to 1 μm/h of noise |
 | V11a-2b | Ablation, no signalling: 32.2 (t = 0.2), 22.1 (2), 12.2 (4), 10.0 (6), 7.3 (8), 6.4 (10), 6.5 (12), 6.3 μm/h (14). Late speed is ≈35% below the with-signalling run | S1 Data (supplementary/11a_JafariNivlouei2021_S1Data.xlsx, sheet "Figure 4", cells G3:H12) | qualitative ordering | For t ≥ 8, the no-signalling mean is below the with-signalling mean in the ensemble (one-sided test, p < 0.05). Late plateau 6.4 ± 2 μm/h |
 | V11a-3 | High T_V: 10-h sprout speed ≈3.65 μm/h | p.26 | quantitative | ±30% |
@@ -456,7 +456,7 @@ Tolerance policy for all S1-Data-backed rows: compare an **ensemble** of our run
 6. **STILL OPEN** (rule). **Calibration target added** (data): the early doubling time is ≈1 d. Evidence: cell counts double daily (sheet "Figure 11" cells B6:B13; sheet "Figure 13" cells B5:B8), and the area doubling time over days 0–4 is 1.03 d (sheet "Figure 9"). This agrees with "cell cycle time … ~24h" (p.13). The division trigger and cleavage rule are still unspecified.
 7. **STILL OPEN.** χ values and sign conventions for Eqs 4–5. Neighbour order. Sprout speeds (V11a-2) constrain χ_EC only jointly with J, T_V and the VEGF field. A fitted χ would be our calibration.
 8. **STILL OPEN.** Normal host cells: J entries, γ_e, uptake, death rule under hypoxia (p.22). S1 Data has only with-host vs without-host cell counts (sheets "Figure 11", "Figure 13").
-9. **STILL OPEN** (not a data question). β-Catenin rule precedence: "Wnt Or Akt And Not cadherin AND Not APC". Is it (Wnt ∨ Akt) ∧ ¬cad ∧ ¬APC, or Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC)? The Fig 3 table should disambiguate. Also "RTK And Scr" should presumably read Src.
+9. **RESOLVED (from Fig 3 and Table 1; our logic check, not an author statement).** β-Catenin = **Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC)**, i.e. And binds tighter than Or. Evidence: the output code order follows the Table 1 output rows (growth, proliferation, apoptosis, migration; 11a p.8), so the 4th bit is Migration = Actin ∧ SNAIL with SNAIL = β-Catenin (Table 1 p.8). In Fig 3 (p.12, read from the page image) ITG RTK Wnt = 111 with Cadherin ON gives 1101 and 101 with Cadherin ON gives 0011. Both have migration on, so β-Catenin must be on while cadherin is on. (Wnt ∨ Akt) ∧ ¬cad ∧ ¬APC would force it off, so that parse is ruled out. With 110 and Cadherin ON the table gives 1100 (migration off), which matches Akt ∧ ¬cad = 0 under the chosen parse. APC is OFF in every Fig 3 row, so the table cannot tell Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC) apart from (Wnt ∨ (Akt ∧ ¬cad)) ∧ ¬APC. We use the first form, the plain And-before-Or reading; it only matters if APC is ever switched on. Cross-check: we ran the Table 1 network synchronously from 300 random initial states per input with APC = NF1 = OFF and Src for "Scr". Wnt ∨ (Akt ∧ ¬cad ∧ ¬APC) reproduces 15 of the 16 Fig 3 cells; the other parse reproduces 13. **Remaining discrepancy (NEW, OPEN):** ITG RTK Wnt = 100 with Cadherin OFF is printed 0011 (migration on). The network gives 0010 under either parse: with RTK = 0, Grb-2/Sos = RTK ∧ Src = 0, so Ras, PI3K and Akt are off, and with Wnt = 0 β-Catenin is off. This is a figure error or an unstated rule; the runtime lookup table (README §4 N4) uses the printed value. Also "RTK And Scr" should presumably read Src; the check above assumes that. The legend calls 0011 "Apoptosis", but the 4th (migration) bit is set, so 0011 means apoptosis with the migration node on.
 10. **STILL OPEN.** The therapy runs: which receptor(s) were clamped, and whether the clamp applies to all cells including ECs. Sheet "Figure 18" gives only area curves per start day.
 11. **STILL OPEN.** Pre-existing vessel geometry (only shown in figures).
 12. **Code: STILL OPEN** (not released; ask for the CC3D project). **S1 Data: RESOLVED.** Now on disk (supplementary/11a_JafariNivlouei2021_S1Data.xlsx, sheets "Figure 4" to "Figure 19").

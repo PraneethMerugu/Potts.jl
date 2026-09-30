@@ -4,9 +4,10 @@
 Avascular Tumor Growth.* Biophysical Journal 89(6): 3884–3894.
 **DOI:** 10.1529/biophysj.105.060640
 **PDF:** `docs/references/06_Jiang2005_BiophysJ_multiscale-avascular-tumor.pdf` (11 pp.)
-**External erratum (not in our PDFs):** Biophys J 2006 91(2):775, PMC1483097. Table 1 glucose
-metabolic rate for proliferating cells should be **216**, not 162. We record it as supplied by the
-task brief; the erratum text itself was not read. See §3.4.
+**Erratum:** Biophys J 2006 91(2):775, PMC1483097, saved as
+`docs/references/06b_Jiang2006_BiophysJ_erratum.html` (PMC HTML page; the PMC PDF is behind a
+proof-of-work page). It makes two corrections to Table 1: the proliferating-cell glucose rate is
+**216**, not 162, and the footnote unit [mM/h/cm³] should be **[mM/h]**. See §3.4.
 
 **Citation convention.** `(06 p.N [JJJJ], …)`: N = PDF page, JJJJ = journal page
 (PDF p.1 = 3884, so JJJJ = 3883 + N). Eq 4, Fig 2 (network), Fig 3 (flow chart), Table 1 and the
@@ -192,10 +193,10 @@ Factor level = (1 + e^{−α((gF − ihF)/initGF − θ)})^{−1}
 ### 3.1 Stated
 | Symbol | Value | Units | Meaning | Source |
 |---|---|---|---|---|
-| a₀ (P) | 108 | "mM/h/cm³" (as printed) | O₂ consumption, proliferating | Table 1 p.5 [3888] |
+| a₀ (P) | 108 | mM/h (printed "mM/h/cm³"; corrected by the erratum) | O₂ consumption, proliferating | Table 1 p.5 [3888]; erratum 06b |
 | a₀ (Q) | 50 | same | O₂, quiescent | Table 1 |
 | a₀ (N) | 0 | same | O₂, necrotic | Table 1 |
-| b₀ (P) | 162 (**216 per external erratum**) | same | glucose, proliferating | Table 1; erratum |
+| b₀ (P) | 162 as printed; **216 per the erratum** | same | glucose, proliferating | Table 1; erratum 06b |
 | b₀ (Q) | 80 | same | glucose, quiescent | Table 1 |
 | b₀ (N) | 0 | same | glucose, necrotic | Table 1 |
 | C₀ (P) | 240 | same | waste (lactate) production, proliferating | Table 1 |
@@ -265,12 +266,27 @@ Inferred sign convention (not explicit): O₂, glucose and GF are consumed (a, b
 Waste and IF are produced (c, e > 0). The basis is the text on p.4 [3887] and p.5 [3888] ("glucose
 consumed", "waste produced", "quiescent cells produce a small amount of inhibitory factors").
 
-### 3.4 External erratum
-Biophys J 2006 91(2):775, PMC1483097 (external, not in our PDFs): Table 1 glucose rate for
-proliferating cells = **216**, not 162. We did not read the erratum text, so any other corrections
-it contains are unknown. The reference model should use 216 and keep a flag that switches back to
-162 for replicating the published figures. Which value produced the published Figs 5–8 is unknown;
-see §7.
+### 3.4 Erratum
+Biophys J 2006 91(2):775, doi 10.1529/biophysj.106.0900135, PMC1483097. Read from the PMC HTML
+page, saved as `docs/references/06b_Jiang2006_BiophysJ_erratum.html` (retrieved 2026-09-30). The
+PMC PDF (`pdf/775a.pdf`) returned a proof-of-work HTML page and was not obtained. The erratum makes
+exactly two corrections, both to Table 1:
+
+1. The proliferating-cell glucose rate (row 1, column 2) "should read 216 (not 162)" (06b).
+2. The footnote unit [mM/h/cm³] should read [mM/h] (06b). In our PDF this is the `*` footnote on
+   the O₂, glucose and waste rates (108, 50; 162, 80; 240, 110) (06 p.5 [3888] Table 1). The `†`
+   footnote [%/h/cm³] on the growth- and inhibitory-factor rates is **not** corrected.
+
+The erratum does not say whether the published simulations (Figs 5–8) used 162 or 216. It does not
+change the waste rate (240) or the quiescent glucose rate (80), which were described as derived
+from the glucose rate (§3.2 stoichiometry check; §7.1 item 4).
+
+**Decision (README §4.4 J1, unchanged):** default 162, variant `erratum = true` → 216. The unit
+correction does not change any number. It settles §7.1 item 8 for the O₂, glucose and waste rates:
+they are rates of concentration change (mM/h) and enter Eq 3 directly as source terms, with no
+per-volume factor. The Appendix necrotic waste secretion "10 mM/h" (06 p.10 [3893]) now has the
+same unit as the Table 1 rates. The unit questions for GF/IF (%/h/cm³) and necrotic secretion remain open
+(§7.1 item 5).
 
 ---
 
@@ -294,7 +310,7 @@ see §7.
 | 14 | Necrotic onset | CONFIRMED | Fig 7; "initial rapid expansion of necrotic core" (06 p.7 [3890]) |
 | 15 | Phase fractions | CONFIRMED | Fig 6 |
 | 16 | Other O₂/glucose conditions | CONFIRMED | Fig 8: 0.28 mM O₂ / 16.5 mM glucose (one example condition shown) |
-| E | Erratum: glucose P rate 216, not 162 | RECORDED (external) | Not in our PDF (the PDF shows 162); external erratum Biophys J 2006 91(2):775, PMC1483097 |
+| E | Erratum: glucose P rate 216, not 162 | CONFIRMED (erratum read) | Not in our PDF (the PDF shows 162). Erratum Biophys J 2006 91(2):775, PMC1483097 (06b) says 216. It also corrects the `*` footnote unit to mM/h (§3.4) |
 
 **Tally (06): CONFIRMED 12, CORRECTED 4, NOT IN PAPER 0** (16 claims; the erratum is recorded
 separately).
@@ -365,6 +381,8 @@ and the published simulation.
 4. **Erratum vs stoichiometry.** With b₀ = 216 (erratum), C₀ = 240 no longer equals 1.5 × b₀
    (= 324), and Q/P ≈ 0.37 is no longer "approximately half". Either the waste value was also
    derived from 162, or the erratum changes only the printed value and not the simulations.
+   The erratum (06b) corrects only the glucose number and the unit footnote; it says nothing about
+   the waste rate or which value the simulations used.
 5. **Necrotic inhibitor secretion.** Table 1 gives 2 %/h/cm³; the Appendix gives "0.1 ml/h". The
    units are incompatible.
 6. **Initial and typical cell volume.** A typical cell is 27 voxels and the maximal cell is 64
@@ -372,8 +390,10 @@ and the published simulation.
 7. **Consumption above optimal.** a = a₀(u − u^T)/(u^O − u^T) exceeds a₀ when u > u^O (for example
    glucose at 16.5 mM > 5.5 mM in Fig 8 gives b ≈ 3 b₀). The paper does not say whether this is
    capped.
-8. Table 1 metabolic units "mM/h/cm³" are dimensionally odd (mM is already per volume). We need the
-   intended units (probably per 10⁸ cells, or mmol/h/cm³ of cells).
+8. **RESOLVED by the erratum (06b).** Table 1 metabolic units "mM/h/cm³" were dimensionally odd.
+   The erratum corrects the `*` footnote to [mM/h], so the O₂, glucose and waste rates are rates of
+   concentration change. The GF/IF footnote "%/h/cm³" is not corrected and remains odd (see item 5
+   and §3.3).
 
 ### 7.2 Underspecified
 - T, α, θ, J_QQ, the γ values, lattice size, neighbourhood order.
@@ -397,8 +417,10 @@ and the published simulation.
    of being on, or of flipping? Is the E2F check made every step or at the end of G1?
 4. Fig 3 vs text: which state dies under unfavourable chemistry, P or Q? Are the three necrosis
    conditions combined with OR?
-5. Erratum: did the published simulations use 162 or 216 for glucose? Should waste (240) and the
-   quiescent glucose rate (80) change accordingly? What are the true units in Table 1?
+5. Erratum: did the published simulations use 162 or 216 for glucose? The erratum (06b) is silent
+   on this. Should waste (240) and the quiescent glucose rate (80) change accordingly? The erratum
+   fixes the O₂/glucose/waste unit to mM/h. What is the intended unit of the GF/IF rates
+   (%/h/cm³)?
 6. Which GF/IF diffusivities produced Figs 5–8 (Table 1 gives 10⁻⁶ for both; the text gives 10⁻⁷
    for one)?
 7. Necrotic secretion: 2 %/h/cm³ (Table 1) or 0.1 ml/h (Appendix)? How does it map to the PDE?

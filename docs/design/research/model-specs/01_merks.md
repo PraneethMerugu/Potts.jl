@@ -132,7 +132,7 @@ None. 01b p.11: "we assume that ECs do not divide or grow during patterning". 01
 ### 2.9 Initial conditions
 
 - **01a standard (Fig. 4, p.48; p.50):** "We randomly distributed 282 virtual endothelial cells over a 333 × 333 pixel area, which we positioned in a 500 × 500 lattice". The text also says "a simulated area of 666 µm × 666 µm", and the caption says "total simulated area is 1000 µm × 1000 µm". The initial cell shape and size at seeding are UNSPECIFIED (single pixels vs. target-area blobs). TST seeds point cells and grows them by Eden growth (§7.6). That is a 2008-code method, assumed for 2006, and the 2006-labelled files do not reproduce the 282-cell geometry.
-- **01b vasculogenesis (Fig. 2, p.4):** "randomly distributed 1,000 ECs, each with an area of ~200 µm² over an area of ≈700 µm × 700 µm (333×333 lattice sites …) … inside a larger lattice of 1,00 µm×1,00 µm". The enclosing lattice size is garbled in the PDF (A-9).
+- **01b vasculogenesis (Fig. 2, p.4):** "randomly distributed 1,000 ECs, each with an area of ~200 µm² over an area of ≈700 µm × 700 µm (333×333 lattice sites …) … inside a larger lattice of 1,00 µm×1,00 µm". The enclosing lattice size is garbled in the PDF (A-9). *Code (§7.1, §7.6):* the de novo files seed 360 point cells over the whole 198² interior and grow each for 10 Eden rounds (≈ 355 cells of ≈ 47 px), with no division. This is a different construction from the sprout blob below.
 - **01b sprouting:** "a large cluster of endothelial cells representing a blood vessel's surface after degradation of the ECM" (p.5). "rounded clusters" (p.5). Fig. 4A shows a disc (p.6). The packing method is UNSPECIFIED in the paper. *Code (§7.6):* one central Eden blob (50 rounds), split 7× into 128 cells, then 100 relaxation MCS. Cluster sizes and lattices per figure are in §3.3.
 
 ### 2.10 Time scale
@@ -234,7 +234,7 @@ Citation shorthand in these tables:
 | Field BC | absorbing c = 0 on the outer 1-px ring | — | — | pde.cpp:189-194, :270-285 |
 | PDE scheme | per MCS: 15 × (forward-Euler secretion/decay, then FTCS 5-point diffusion), then the CPM sweep | — | — | vessel.cpp:86-94, :151-168; pde.cpp:178-219 |
 | Relaxation | first 100 MCS without PDE (so without chemotaxis) — **not in paper** | MCS | — | sprout_extensionretraction_t50.par:40; vessel.cpp:86 |
-| Initial cells (files) | sprout: 1 Eden blob (50 rounds) → 7 divisions = 128 cells on 200². denovo: 360 seeds × 10 Eden rounds on 200² | — | see D-1, D-2 | sprout_*.par:32-36; denovo_*.par:32-36 |
+| Initial cells (files) | sprout: 1 Eden blob (50 rounds) → 7 divisions = 128 cells on 200². denovo: 360 seeds × 10 Eden rounds, no division (≈ 355 cells of ≈ 47 px) on 200². Separate families; §7.1 | — | see D-1, D-2 | sprout_*.par:32-36; denovo_*.par:32-36 |
 | Energy arithmetic | integer ΔH, each term truncated | — | — | ca.cpp:197-270 (D-7) |
 
 **Derived (01b):**
@@ -368,7 +368,7 @@ Compactness C = A_cluster / A_hull, where A_hull is the convex-hull area (01b p.
 - **Dataset S1** (01b parameter files): `supplementary/01b_Merks2008_DatasetS1_parameter-files/ParameterFiles/`. It has 12 `.par` files (`{denovo,sprout}_{extensionretraction,extensiononly}_{t50,t200,t50_vecadko}.par`), plus `J.dat`, `default.ctb` (colour table only), `README` and `index.html`. Cited as (supplementary/01b_.../<file>:line).
 - **Protocol S1** (Tissue Simulation Toolkit v0.1.3 C++ source): `codebases/01b_Merks2008_TissueSimulationToolkit-v0.1.3/TST0.1.3/`. Cited as (codebases/01b_.../TST0.1.3/<file>:line). The files that matter are `vessel.cpp` (main loop, secretion), `ca.cpp` (CPM), `cell.h`/`cell.cpp` (J table, moments, length), `pde.cpp` (diffusion), `dish.cpp` (set-up) and `parameter.cpp` (defaults). The build compiles `vessel.cpp` as the main file (codebases/01b_.../TST0.1.3/CellularPotts2.pro:11).
 
-All statements below were read from source. None were checked by compiling or running TST. The only exception is the Eden-growth area estimates in §7.6, which come from a quick independent Python re-implementation of `GrowInCells` (2 seeds). Treat them as estimates.
+All statements below were read from source. None were checked by compiling or running TST. The only exception is the Eden-growth area estimates in §7.6, which come from a quick independent Python re-implementation of `GrowInCells` (de novo: 2 seeds; sprout: 8 seeds). Treat them as estimates.
 
 ### 7.1 Dataset S1: the 2008 parameter set (all 12 files)
 
@@ -397,14 +397,23 @@ All 12 files share every value except `T`, `extensiononly`, `vecadherinknockout`
 | `dt` (:27) | 2. | Δt (s) | ✓ |
 | `dx` (:28) | 2e-6 | Δx (m) | ✓ |
 | `pde_its` (:29) | 15 | PDE sub-steps per MCS | ✓ |
-| `n_init_cells` (:32) | sprout 1 / denovo 360 | seed count | see D-1, D-2 |
+| `n_init_cells` (:32) | sprout 1 / denovo 360 | seed count (see the set-up table below) | see D-1, D-2 |
 | `size_init_cells` (:33) | sprout 50 / denovo 10 | **number of Eden-growth rounds**, not an area (§7.6) | — |
 | `sizex`, `sizey` (:34-35) | 200 × 200 | lattice including the 1-px frozen frame | see D-1, D-2 |
-| `divisions` (:36) | sprout 7 / denovo 0 | Blob halved 7× → **128 cells** | Figs. 5–11 (128 cells) |
+| `divisions` (:36) | sprout 7 / denovo 0 | Number of `DivideCells` passes. Each pass halves every cell (vessel.cpp:59-61). Sprout: 1 blob → 2⁷ = **128 cells**. De novo: no division | sprout: Figs. 5–11 (128 cells); de novo: Fig. 2 (D-1) |
 | `mcs` (:37) | 20001 | run length | see D-4 |
 | `rseed` (:38) | -1 | time-based seed | — |
 | `subfield` (:39) | 1 | seed region = whole interior | see D-1 |
 | `relaxation` (:40) | 100 | MCS with no secretion, diffusion or (effective) chemotaxis | **not in paper** (D-5) |
+
+**The two initial-condition families (do not mix them).** Values are from the files, which differ only in lines 32, 33 and 36 (checked for all 12 files). The geometry column is our Python re-implementation of `GrowInCells`/`DivideCells` (§7.6), not a TST run.
+
+| Family | Files | `n_init_cells` / `size_init_cells` / `divisions` (:32, :33, :36) | Construction (code) | Resulting geometry (estimate, §7.6) | Paper figures |
+|---|---|---|---|---|---|
+| **De novo** (vasculogenesis) | `denovo_*.par` (6 files) | 360 / 10 / 0 | 360 point seeds, uniform over the 198² interior (subfield = 1), drawn with replacement. Then 10 synchronous Eden rounds. **No division.** | ≈ 355 separate cells (354–359) of ≈ 47 px each; ≈ 17,000 px; area fraction ≈ 0.43 | Fig. 2 set-up ("as in Figure 2", index.html:39), density-matched on a smaller lattice (D-1, A-9) |
+| **Sprout** (angiogenesis) | `sprout_*.par` (6 files) | 1 / 50 / 7 | **One** seed at the lattice centre (ca.cpp:1080-1081, :1122). Then 50 Eden rounds grow one blob, which is split 7 times into **128 cells** (vessel.cpp:52-61; ca.cpp:901-1002) | one compact blob of ≈ 1,850–2,300 px → 128 cells of ≈ 15–18 px, which inflate to A = 50 during relaxation | Figs. 5–11 (128-cell clusters on 200²; D-2). index.html:53 says "as in Figs. 4-13" |
+
+In both families all target areas are then set to 50 (dish.cpp:54-57), and the first 100 MCS run without the field (`relaxation`, :40). The Eden-round count means different things in the two families. For de novo, 10 rounds sets the **per-cell** size (≈ 47 px). For sprout, 50 rounds sets the **whole-cluster** size, and the per-cell size (≈ 17 px) follows from the 7 splits.
 
 The per-file differences are as follows. `denovo_*` has n_init_cells = 360, size_init_cells = 10, divisions = 0 (supplementary/01b_.../denovo_extensionretraction_t50.par:32-36). `*_t200` has T = 200 (:5). `*_extensiononly_*` has extensiononly = true (:13). `*_vecadko` has vecadherinknockout = true (:12). `index.html` labels vecadko as "no contact-inhibition" (supplementary/01b_.../index.html:44, :50, :58, :64), but those four links point at the non-vecadko file (a link bug in the HTML only; the `_vecadko.par` files exist).
 
@@ -447,7 +456,7 @@ The per-file differences are as follows. `denovo_*` has n_init_cells = 360, size
 - **`DivideCells`** (ca.cpp:901-1002). Each cell is split by the line through its centroid perpendicular to its long axis, so `divisions = 7` turns one blob into 128 cells. After `Init`, all target areas are reset to `target_area` (dish.cpp:54-57).
 - **Estimated resulting geometry** (Python re-implementation, not TST itself; 2 seeds):
   - **denovo:** 354–359 cells of ≈ 47–48 px, ≈ 17,000 px total on a 198² interior. Area fraction ≈ 0.43 (target: 360 × 50 / 198² ≈ 0.46).
-  - **sprout:** one Eden blob of ≈ 1,800–2,000 px split into 128 cells of ≈ 15 px. These are far below A = 50 and inflate to ≈ 6,400 px during the 100 relaxation MCS.
+  - **sprout:** one Eden blob of ≈ 1,850–2,300 px (8 seeds, re-run 2026-09-30; the first run gave 1,800–2,000) split into 128 cells of ≈ 15–18 px. These are far below A = 50, and the cluster inflates towards 128 × 50 = 6,400 px during and after the 100 relaxation MCS.
 - **Relaxation.** For the first 100 MCS the field stays at 0, so chemotaxis ΔH = 0 and cells relax under adhesion and area only.
 
 ### 7.7 Observables in the release
@@ -489,7 +498,7 @@ Other shipped files:
 
 | # | Topic | Paper | Code / Dataset S1 | Impact |
 |---|---|---|---|---|
-| D-1 | 01b Fig. 2 de novo set-up | 1000 ECs of ~200 µm² over a 333² seed region inside a larger lattice (01b p.4) | 360 seeds (≤ 360 cells) × 10 Eden rounds (≈ 47 px) on **200 × 200, subfield = 1** (supplementary/01b_.../denovo_extensionretraction_t50.par:32-39). `index.html:39` says "as in Figure 2" | About the same area fraction (≈ 0.45), but a 2.8× smaller domain. Use the paper geometry for Fig. 2 validation. The files give a density-matched smaller variant |
+| D-1 | 01b Fig. 2 de novo set-up | 1000 ECs of ~200 µm² over a 333² seed region inside a larger lattice (01b p.4) | 360 seeds (≤ 360 cells; ≈ 355 in our re-implementation, §7.1) × 10 Eden rounds (≈ 47 px each), no division, on **200 × 200, subfield = 1** (supplementary/01b_.../denovo_extensionretraction_t50.par:32-39). `index.html:39` says "as in Figure 2" | About the same area fraction (≈ 0.45), but a 2.8× smaller domain. Use the paper geometry for Fig. 2 validation. The files give a density-matched smaller variant |
 | D-2 | Sprouting set-up | Fig. 4 unspecified (Videos S4–S6: 256 cells). Fig. 12: 256 cells on 500² | 128 cells (1 blob, 7 divisions) on 200² in **all** sprout files (sprout_*.par:32-36). `index.html` claims "as in Figs. 4-13" | Matches Figs. 5–11 (128 cells, 200²). **No file for Fig. 12/13 (256 cells, 500²)** or the 1024-cell Fig. 10 runs; those need divisions = 8 and sizex = sizey = 500 (inferred) |
 | D-3 | χ(c,c)/χ(c,M) sweeps (Figs. 4, 5, 7–9 no-CI curves) | continuous ratio 0…1 | Only a boolean: χ(c,c) ∈ {0, χ(c,M)} (ca.cpp:264) | The Fig. 5 ratio sweep **cannot be run** with the released code. The authors' sweep code is not released |
 | D-4 | Run length | 10,000 MCS (Figs. 2, 4, 5); 5000 (Figs. 7–12) | `mcs = 20001` (:37) | Harmless; truncate |
