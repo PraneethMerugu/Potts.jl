@@ -1071,3 +1071,41 @@ explicit `substeps`; declared names may not shadow built-ins.
     geometric mean, and activation only on extension into the medium. The paper and
     Artistoo use the plain geometric mean and activate every gained site.
 - All groups pass: CorePotts, Potts (with Metal and QA, 80 testsets) and PottsModels.
+
+## 2026-09-29 — Paper-fidelity round (AUDIT §11)
+
+- Five reviewers compared each published model with its paper and reference code: the
+  Graner–Glazier PRL/PRE, Merks 2006/2008, Niculescu 2015 with Wortel 2021 and Artistoo, the
+  OpenVT monolayer spec with its Morpheus/CC3D/Artistoo implementations, and the Akeeb CC3D
+  source.
+- I re-ran the load-bearing claims:
+  - Akeeb splits 4–6 cells under `:merks` and 0 under `:local`;
+  - CC3D 4.3.1 accepts one arc only;
+  - Merks diverges at the paper's D;
+  - the Graner–Glazier λ table matches PRE Table III exactly.
+- **Faithful:**
+  - Graner–Glazier: energy and parameters;
+  - Akeeb: everything except connectivity.
+- **Reduced or legacy:**
+  - Merks: no length constraint, the paper's key term;
+  - Wortel: Act has no retraction term, uses the shifted mean, and activates on extension
+    only;
+  - OpenVT: our model is not the benchmark at all;
+  - Graner–Glazier: the time unit is 1/16 of the paper's and the proposal default is
+    4-neighbour.
+- **Fixed now:**
+  - explicit field substeps are a stability minimum (the paper's Merks D diverged
+    silently);
+  - capacity-deferred divisions warn;
+  - honest docstrings for all five models;
+  - the Graner `provenance.toml` gap line.
+- **Tests:** `lib/PottsModels/test/papers.jl` reproduces the papers' own results on the
+  current models, 27 tests in about 35 s:
+  - Graner–Glazier: engulfment, checkerboard, the log law, the λ survival table, cell sizes
+    and layer reversal, each with the paper's contrasting regime as the control;
+  - Act: speed–persistence coupling, stationary weak Act, amoeboid vs keratocyte
+    orientation;
+  - Akeeb: motility grading, adhesion vs single-cell escape, and the published sample's 578
+    divisions.
+- **Decisions F-1…F-6** (science changes) are listed in AUDIT §11 for the maintainer.
+- All groups pass: PottsModels, CorePotts, and Potts with Metal and QA.

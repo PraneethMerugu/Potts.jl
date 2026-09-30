@@ -30,7 +30,7 @@ type_assignment_seed = "97329218"
 volume_strength = 1.0
 corepotts_revision = "b1f0e2f6e02f17416d7b535607164d7955d0a58a"
 initialization = "6×6 rectangular cells, 400 MCS of one-type aggregate relaxation at 16 attempts per site, then seeded random type assignment"
-scientific_gaps = ["Pre-equilibration uses an illustrative uniform contact energy J=8; the paper does not state this preparation energy explicitly", "ForbidExtinction prevents complete cell loss; the paper uses an area penalty rather than a hard extinction constraint", "This run ends at 100 MCS, shorter than the paper's 10000 MCS trajectory, and uses one seed; it does not test logarithmic kinetics or final topology", "Boundary metrics are unweighted lattice bond counts; the paper reports boundary-length fractions after two T=0 annealing steps"]
+scientific_gaps = ["Pre-equilibration uses a uniform contact energy J=8 on 6×6 cells (area 36) with a hard extinction constraint; the paper (Phys. Rev. E 47, 2128, §II D3) relaxes rectangular cells of area 40 with J_ll = 2, J_lM = 8, T = 5, λ = 1 for 400 paper MCS", "ForbidExtinction prevents complete cell loss; the paper uses an area penalty rather than a hard extinction constraint", "This run ends at 100 MCS, shorter than the paper's 10000 MCS trajectory, and uses one seed; it does not test logarithmic kinetics or final topology", "Boundary metrics are unweighted lattice bond counts; the paper reports boundary-length fractions after two T=0 annealing steps"]
 title = "Graner–Glazier differential-adhesion study"
 paper_doi = "10.1103/PhysRevLett.69.2013"
 J_dark_dark = 2.0

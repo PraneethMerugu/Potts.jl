@@ -45,3 +45,31 @@ function akeeb_metrics(σ::AbstractMatrix{<:Integer}, isleader::AbstractVector{B
     return (divisions = length(live) - n0, outer_front = outer, leader_front = lfront,
         leader_mean_y = ln == 0 ? 0.0 : lsum / ln, components = comps)
 end
+
+# `core_singles(σ)`: the invasion's architecture (Akeeb, Marcus & Jiang 2026), with cells
+# adjacent when they share a von Neumann bond (x periodic, y closed):
+#   core      max y reached by cells connected, through the cell graph, to the row y = 1
+#   singles   cells touching no other cell
+#   detached  cells not connected to the row y = 1
+function core_singles(σ::AbstractMatrix{<:Integer})
+    X, Y = size(σ); adj = Dict{Int, Set{Int}}()
+    for y in 1:Y, x in 1:X
+        c = Int(σ[x, y]); c == 0 && continue
+        get!(adj, c, Set{Int}())
+        for (ii, jj) in ((mod1(x + 1, X), y), (x, y + 1))
+            jj <= Y || continue
+            d = Int(σ[ii, jj]); (d == 0 || d == c) && continue
+            push!(adj[c], d); push!(get!(adj, d, Set{Int}()), c)
+        end
+    end
+    base = Set(Int(σ[x, 1]) for x in 1:X if σ[x, 1] != 0)
+    reach = copy(base); st = collect(base)
+    while !isempty(st)
+        c = pop!(st)
+        for d in adj[c]
+            d in reach || (push!(reach, d); push!(st, d))
+        end
+    end
+    core = maximum((y for y in 1:Y, x in 1:X if Int(σ[x, y]) in reach); init = 0)
+    return (core = core, singles = count(c -> isempty(adj[c]), keys(adj)), detached = length(adj) - length(reach))
+end

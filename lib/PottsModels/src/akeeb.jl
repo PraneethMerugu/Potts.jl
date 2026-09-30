@@ -16,6 +16,13 @@ source in `SCDPotts/research/akeeb_source_audit.md`):
   division plane is random, the target volume is split, and clocks restart.
 
 Use `akeeb_state` for the published initial slab.
+
+Fidelity to the authors' CompuCell3D model (Akeeb, Marcus & Jiang, PLoS Comput. Biol. 2026):
+everything matches except connectivity. CC3D's `Connectivity` plugin accepts a copy only if
+the losing cell's sites in the 8-ring form one arc; the `:merks` rule used here also accepts
+when exactly two cells occupy the ring (a legacy fallback), which lets cells split (60–73
+split cells in a full 500×300, 700-MCS run) and inflates the single-cell counts. `rule =
+:local` is the CC3D rule. One CC3D step here is 1 MCS; the source runs 701.
 """
 @potts_model AkeebInvasion begin
     @structural_parameters begin
@@ -43,7 +50,7 @@ Use `akeeb_state` for the published initial slab.
         contacts => J[kind, kind′]
     end
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
-    @constraint connectivity(leader, follower; rule = :merks)   # legacy LocalConnectivity: the Merks (2006) ring rule
+    @constraint connectivity(leader, follower; rule = :merks)   # the legacy ring rule; see the docstring
     @constraint no_extinction
     @after_mcs begin
         V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))

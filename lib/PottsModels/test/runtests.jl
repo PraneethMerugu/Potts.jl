@@ -60,6 +60,7 @@ end
 end
 
 include("mechanisms.jl")
+include("papers.jl")
 
 @testset "Aqua" begin
     Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))

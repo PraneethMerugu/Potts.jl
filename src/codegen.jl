@@ -351,8 +351,7 @@ function _phases(c::CompiledPottsSystem, T, values)
     for (x, rate) in c.fields
         name = info(x).name
         f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key)))))
-        sub = c.sys.sweep.field_solver.substeps
-        sub === nothing && (sub = _auto_substeps(x, rate, values, dt, c.sys.lattice))
+        sub = _auto_substeps(x, rate, values, dt, c.sys.lattice, c.sys.sweep.field_solver.substeps)
         lowerclip = c.sys.sweep.field_solver.lower
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
@@ -662,18 +661,21 @@ end
 
 # Explicit-Euler substeps from the diffusion coefficient (the factor multiplying Δ(x)),
 # computed from the current parameters every MCS (a `remake(p = …)` keeps the step stable).
-# A coefficient that varies in space is taken at its build-time value where constant.
-function _auto_substeps(x, rate, values, dt, lattice)
+# An explicit `substeps = n` is a minimum: an unstable step silently diverges, so the stable
+# count wins when it is larger. A coefficient that is not a parameter expression needs `n`.
+function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
     L = _unwrap(Symbolics.variable(:__Lap))
     lap = Dict{Any, Any}()
     _walk(y -> (iscall(y) && operation(y) === Δ && (lap[y] = L)), rate)
-    isempty(lap) && return 1
+    isempty(lap) && return something(n, 1)
     coef = _unwrap(Symbolics.derivative(Symbolics.substitute(rate, lap; fold = Val(false)), Symbolics.wrap(L)))
     h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
     if all(u -> first(u) === :param, _uses(coef))
         body = lower(coef, _model_env(Float64, Dict{Any, Symbol}()))
-        return _rgf(:(p -> CorePotts.stable_substeps(abs(Float64($body)), $(Float64(dt)), $h)))
+        least = something(n, 1)
+        return _rgf(:(p -> max($least, CorePotts.stable_substeps(abs(Float64($body)), $(Float64(dt)), $h))))
     end
+    n === nothing || return n
     throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not a parameter expression; " *
                         "set `field_solver = ExplicitEuler(; substeps = n)` explicitly"))
 end

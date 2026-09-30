@@ -215,6 +215,14 @@ Base.@kwdef mutable struct LifecycleStats
     empty_daughters::Int = 0
 end
 
+"""A division with no free cell slot waits for one; the first per run warns (silently fewer
+divisions otherwise skew any proliferation result)."""
+function _defer!(stats, cap)
+    stats.deferred == 0 && @warn "lifecycle: all $cap cell slots are in use; divisions are deferred until slots free up. Pass a larger `capacity`."
+    stats.deferred += 1
+    return nothing
+end
+
 """
 Run the lifecycle for MCS `mcs`. Returns the number of kernel launches. Synchronizes once
 (reads the event count); quiet MCS return after the trigger kernel.
@@ -263,7 +271,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
                 push!(roots, Int32(c))
                 stats.divisions += length(ms)
             else
-                stats.deferred += 1
+                _defer!(stats, cap)
             end
         elseif events[c] == EVENT_DIVIDE
             if nextfree <= length(free)
@@ -271,7 +279,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
                 nextfree += 1
                 stats.divisions += 1
             else
-                stats.deferred += 1
+                _defer!(stats, cap)
             end
         elseif events[c] == EVENT_REMOVE
             removed[c] = true

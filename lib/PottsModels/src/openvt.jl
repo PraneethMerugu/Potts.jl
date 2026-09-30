@@ -1,9 +1,15 @@
 """
     OpenVTMonolayer(; name, lattice = (12, 8), …)
 
-The OpenVT growing-monolayer benchmark in its legacy reduced form: epithelial cells with an
-area constraint and cell–medium adhesion on a closed lattice divide at MCS 0 when their area
-reaches the target, splitting a cell mass variable (plane normal `(1, 0)`).
+A single-division fixture inherited from the legacy code under the OpenVT name. It is *not*
+the OpenVT growing-monolayer benchmark: epithelial cells with an area constraint and
+cell–medium adhesion on a closed lattice divide once, at MCS 0, when their area has reached
+the target, splitting a cell mass variable (plane normal `(1, 0)`).
+
+The benchmark (OpenVT reference models, `monolayer/`) grows one central cell into a colony:
+target area grows by `A₀/τ` per MCS, cells divide at `2A₀` along a random plane, there is no
+net adhesion (`J_cc = J_cM`), optional contact inhibition, and it measures cell count,
+colony area and radius against time.
 """
 @potts_model OpenVTMonolayer begin
     @structural_parameters begin

@@ -272,6 +272,65 @@ Every parity test should get a **negative control**: a perturbed science paramet
 
 ---
 
+## 11. Paper-fidelity round (2026-09-29)
+
+Five reviewers, one per published model, read the paper and its reference code and compared
+our `@potts_model` term by term (D-048: the paper, not legacy code, is the reference). I
+verified the load-bearing claims before recording them. Sources are cited in each model's
+docstring.
+
+| ID | Model | Finding | Class | Status |
+|---|---|---|---|---|
+| P-01 | Graner–Glazier | Energy, J, λ, V₀, T and the acceptance rule are the paper's | faithful | – |
+| P-02 | Graner–Glazier | One MCS here is 1/16 of the paper's (N vs 16N attempts) | undocumented | docstring |
+| P-03 | Graner–Glazier | The paper copies from 8 neighbours; `SequentialCPM()` defaults to 4, and a model cannot declare its proposal relation (`problem.jl:152`, although AUTHORING says it can) | API gap | **decision F-1** |
+| P-04 | Graner–Glazier | The initial state uses a legacy recipe (6×6 cells, J = 8, hard extinction); PRE §II D3 relaxes area-40 cells with J_ll = 2, J_lM = 8, T = 5 for 400 paper MCS. `provenance.toml` said the paper gives no recipe | legacy | provenance fixed; **decision F-2** |
+| P-05 | Merks | No cell-length constraint `λ_L(l − L)²`, the paper's title claim; energies cannot read `major_length` yet (moment trackers exist) | missing core term | **decision F-3** |
+| P-06 | Merks | No adhesion (paper J_cc = 40, J_cM = 20); chemotaxis on extensions only (the 2008 contact-inhibited form); decay everywhere (paper: medium only); legacy 8×8 defaults | legacy / reduced | docstring; **decision F-3** |
+| P-07 | Merks | The paper's D (≈ 0.75 per MCS) diverged silently with the fixed 2 substeps (max c = 8e65 by MCS 200) | bug | **fixed**: explicit substeps are a stability minimum |
+| P-08 | Wortel Act | No Act term for retractions (the papers penalise retracting active sites); halves persistence at the paper's parameters | legacy deviation | **decision F-4** |
+| P-09 | Wortel Act | Shifted geometric mean; activation only on extension into the medium (D-034); connectivity always on; legacy 8×8 defaults | legacy deviation | docstring; **decision F-4** |
+| P-10 | OpenVT | Not the OpenVT growing-monolayer benchmark: no growth, one division at MCS 0, fixed plane, strong adhesion, no benchmark outputs. A faithful model is writable today (contact-inhibition type 2 needs neighbour reductions) | misnamed fixture | docstring; **decision F-5** |
+| P-11 | Akeeb | Matches the authors' CC3D source except connectivity: CC3D 4.3.1 accepts one arc only; `:merks` adds a two-cell fallback (commented out in CC3D) that splits 4–6 cells per 200-MCS run on 99×60 and 60–73 on the full run, inflating singles. `rule = :local` is exactly CC3D's rule and splits none | legacy deviation | docstring; **decision F-6** |
+| P-12 | Akeeb | Divisions beyond `capacity` were deferred silently (0 divisions in a full-size run at capacity 1000) | bug | **fixed**: warns once per run |
+| P-13 | Akeeb | Paper Table 1 is an image; λ_V and T must be checked by eye against the source (2, 10) | – | maintainer check |
+
+Tests added (`lib/PottsModels/test/papers.jl`, all pass on the current models):
+- **Graner–Glazier:**
+  - engulfment, with partial sorting as the control;
+  - checkerboard;
+  - the logarithmic sorting law, frozen at T = 0;
+  - the λ survival table (PRE Table III, exact);
+  - light cells smaller, with symmetric J as the control;
+  - layer reversal.
+- **Act:**
+  - speed–persistence coupling;
+  - no persistence without Act;
+  - weak Act stationary;
+  - amoeboid vs keratocyte orientation and elongation.
+- **Akeeb:**
+  - motility grades invasion;
+  - adhesion decides collective vs single-cell escape;
+  - the published sample: 578 ± 50 divisions, with a leader at the front.
+
+Decisions for the maintainer:
+- **F-1:** let models declare a default proposal relation. `GranerGlazier` → `Moore(1)`.
+- **F-2:** regenerate `graner_glazier_state` with the PRE §II D3 recipe.
+- **F-3:** Merks:
+  - add `major_length` to energies and the length constraint;
+  - add adhesion;
+  - decay in the medium only;
+  - choose the chemotaxis scope (2006 all copies vs 2008 extensions);
+  - adopt paper-scale defaults.
+- **F-4:** WortelAct:
+  - the retraction term;
+  - the plain geometric mean;
+  - activating every gained site;
+  - optional connectivity;
+  - Niculescu 2015 defaults.
+- **F-5:** rename `OpenVTMonolayer` to what it is and add `OpenVTGrowingMonolayer`. Choose the Artistoo (A₀ = 25, τ = 84) or Morpheus (A₀ = 50, τ = 86) parameter set, and whether the division size is deterministic.
+- **F-6:** switch `AkeebInvasion` to `rule = :local`. This supersedes the parity-based approval of `:merks`.
+
 ## Fix log
 
 | Commit | IDs | Notes |

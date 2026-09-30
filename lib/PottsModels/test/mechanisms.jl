@@ -117,6 +117,14 @@ end
     sol = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = 0:10)
     @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].σ); atol = 1e-12), 1:10)
 
+    # an explicit substep count is a minimum: the paper's diffusion constant (D ≈ 0.75 per
+    # MCS) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
+    sp = zeros(Int32, 40, 40); sp[18:23, 18:23] .= 1
+    fast = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (40, 40)),
+        [ownership => sp, kind => [:endothelial], :Dc => 0.75, :σc => 5.4e-3, :δc => 5.4e-3], (0, 200)),
+        SequentialCPM(; proposal = Moore(1))).u[end]
+    @test all(isfinite, fast.site.c) && maximum(fast.site.c) < 1
+
     # mechanism: in a static gradient (no secretion, diffusion or decay) a cell climbs it for
     # χ > 0, descends for χ < 0, and does not drift for χ = 0
     G = 40

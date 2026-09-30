@@ -6,6 +6,17 @@ e1004280, 2015; the Wortel et al. 2021 parameterization used by the legacy code)
 into a site gains `λ_act/max_act` times the difference of the geometric-mean activity
 around source and target (`geomean_shifted`, D-034). An extension into the medium is fully
 active, any other gained site inactive; activity decays by one per MCS. Cells stay connected (Merks ring rule).
+
+Legacy semantics that differ from the papers and Artistoo (the reference code):
+- the mean is the shifted geometric mean; the papers use the plain one (zero if any
+  same-cell neighbour is inactive);
+- copies by the medium (retractions) get no Act term; the papers penalise retracting active
+  sites (`+(λ_act/max_act)·GM(target)`), which about halves persistence when missing;
+- only extensions into the medium activate a site; the papers activate every gained site;
+- connectivity is always enforced, so the papers' "broken cell" regime cannot occur;
+- the defaults are a legacy 8×8 toy. Niculescu et al. 2015's amoeboid cell: 200² torus,
+  `T = 20`, `λ = 50`, `V₀ = 500`, `λₛ = 2`, `S₀ = 340`, `J = [0 20; 20 100]`,
+  `λ_act = 200`, `max_act = 20`.
 """
 @potts_model WortelAct begin
     @structural_parameters begin
