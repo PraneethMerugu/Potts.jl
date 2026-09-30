@@ -24,6 +24,39 @@ _separated(σ, gap) = (n = maximum(σ);
     @sweep Metropolis(; temperature = 4.0)
 end
 
+@potts_model PeriodicLayoutProbe begin
+    @kinds medium cell
+    @lattice Lattice((12, 12); boundary = Periodic())
+    @energy contacts => 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model ChannelLayoutProbe begin
+    @kinds medium wall cell
+    @lattice Lattice((11, 11); boundary = (Periodic(), Closed()))
+    @energy contacts => 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model DomainLayoutProbe begin
+    @kinds medium cell
+    @lattice Lattice((10, 10); boundary = Closed(), domain = OnIndices(x -> x[1] <= 5))
+    @energy contacts => 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+# two distinct cells touch (Moore(1)), through the wrap on axes marked periodic
+function _touching(σ, per)
+    n = size(σ)
+    for i in CartesianIndices(σ), d in CartesianIndices(ntuple(_ -> -1:1, ndims(σ)))
+        j = Tuple(i + d)
+        all(k -> per[k] || 1 <= j[k] <= n[k], 1:ndims(σ)) || continue
+        s = σ[CartesianIndex(map((x, m, p) -> p ? mod1(x, m) : x, j, n, per))]
+        σ[i] != 0 && s != 0 && σ[i] != s && return true
+    end
+    return false
+end
+
 @testset "layouts: Tiling" begin
     # counts, volumes and bounds, checked against the arithmetic of whole boxes
     for (sz, sp, reg, dims) in (((3, 2), (1, 0), (2:19, 4:11), (20, 12)), ((4, 4), (2, 2), (1:17, 1:17), (17, 17)),
@@ -89,8 +122,15 @@ end
     op = layout(overlay(Tiling((1, 1); region = (1:1, 1:1), kinds = [:x]), Tiling((1, 1); region = (3:3, 3:3), kinds = [:y]),
         Frame(:w)), (5, 5))
     @test _op(op, kind) == [:y, :w] && sort(unique(_op(op, ownership))) == Int32[0, 1, 2]
+    # a later layer that cuts a cell in two warns, naming the cell (Moore(1) neighbourhood)
+    bar = Tiling((6, 2); region = (1:6, 3:4), kinds = [:a])
+    cutter = Tiling((2, 2); region = (3:4, 3:4), kinds = [:b])
+    @test_logs (:warn, r"split cell 1 \(kind a\)") layout(overlay(bar, cutter), (6, 6))
+    # negative control: trimming its end leaves it connected, no warning
+    @test_logs min_level = Base.CoreLogging.Warn layout(overlay(bar, Tiling((2, 2); region = (5:6, 3:4), kinds = [:b])), (6, 6))
     # overlay is associative (nested overlays flatten)
-    a, b, c = Frame(:w), Tiling((3, 3); spacing = 1, kinds = [:a]), Scattered(3, (2, 2); kinds = [:s], seed = 4)
+    a, b = Frame(:w), Tiling((3, 3); spacing = 1, region = (2:19, 2:19), kinds = [:a])
+    c = Scattered(3, (2, 2); region = (2:19, 2:19), kinds = [:s], seed = 4)
     ref = layout(overlay(a, b, c), (20, 20))
     @test _same(layout(overlay(overlay(a, b), c), (20, 20)), ref) && _same(layout(overlay(a, overlay(b, c)), (20, 20)), ref)
     @test !_same(layout(overlay(c, b, a), (20, 20)), ref)             # negative control: order matters
@@ -118,6 +158,41 @@ end
     @test corners(7) != corners(8)
     @test corners(7) == [(2, 27), (6, 8), (13, 6)]
     @test_throws ArgumentError layout(Scattered(26, (4, 4); kinds = [:a], seed = 1), (24, 24))   # area bound
+    # within the area bound (300·25 ≤ 101²) but random sequential placement jams
+    msg = try
+        layout(Scattered(300, (4, 4); kinds = [:a], seed = 1), (100, 100)); ""
+    catch e
+        e.msg
+    end
+    @test occursin(r"could not place box \d+ of 300", msg) && occursin("jammed", msg)
+    # seeds are UInt64: seeds above typemax(Int) work and differ; negative seeds are rejected
+    big = layout(Scattered(3, (2, 2); kinds = [:a], seed = typemax(UInt64)), (30, 30))
+    @test maximum(_op(big, ownership)) == 3 && _op(big, ownership) != _op(layout(Scattered(3, (2, 2); kinds = [:a], seed = 0), (30, 30)), ownership)
+    @test_throws ArgumentError Scattered(3, (2, 2); kinds = [:a], seed = -1)
+end
+
+@testset "layouts: periodic lattices" begin
+    sys = PeriodicLayoutProbe(; name = :p)
+    per = (true, true)
+    sc(seed) = layout(Scattered(4, (3, 3); kinds = [:cell], seed), sys)
+    # the gap holds through the wrap on a periodic system
+    @test !any(seed -> _touching(_op(sc(seed), ownership), per), 1:100)
+    @test all(seed -> all(c -> count(==(c), _op(sc(seed), ownership)) == 9, 1:4), 1:100)
+    # negative control: the same layers laid on a closed 12×12 lattice touch through the
+    # wrap for some seeds (the gap is only enforced inside the lattice there)
+    @test any(seed -> _touching(_op(layout(Scattered(4, (3, 3); kinds = [:cell], seed), (12, 12)), ownership), per), 1:100)
+    # Tiling: on a periodic axis the last box closer than `spacing` to the first is skipped
+    t = Tiling((3, 3); spacing = 1, kinds = [:cell])
+    @test maximum(_op(layout(t, PeriodicLayoutProbe(; name = :q)), ownership)) == 9       # 12 = 3·4: all fit
+    ch = ChannelLayoutProbe(; name = :c)                                               # 11×11, x periodic
+    σ = _op(layout(t, ch), ownership)
+    @test maximum(σ) == 2 * 3 && !_touching(σ, (true, false))
+    @test maximum(_op(layout(t, (11, 11)), ownership)) == 9                            # control: closed keeps 3×3
+    @test _touching(_op(layout(t, (11, 11)), ownership), (true, false))
+    # Frame: walls only across the closed axis (a channel); no edge when all axes wrap
+    σ = _op(layout(Frame(:wall), ch), ownership)
+    @test findall(==(1), σ) == findall(i -> i[2] in (1, 11), CartesianIndices(σ))
+    @test_throws ArgumentError layout(Frame(:wall), sys)
 end
 
 @testset "layouts: lattices, systems and problems" begin
@@ -128,7 +203,7 @@ end
     σ = _op(op, ownership)
     @test size(σ) == (18, 14) && maximum(σ) == 1 + 3 * 2
     @test _same(layout(l, mtkcompile(sys)), op) && _same(layout(l, (18, 14)), op) &&
-          _same(layout(l, Lattice((18, 14); geometry = Hexagonal())), op)
+          _same(layout(l, Lattice((18, 14); boundary = Closed(), geometry = Hexagonal())), op)
     prob = PottsProblem(sys, op, (0, 5))
     @test prob.lattice.geometry isa Hexagonal
     u = solve(prob, SequentialCPM(proposal = Hex(1))).u[end]
@@ -138,6 +213,10 @@ end
     lat = Lattice((10, 10); domain = OnIndices(x -> x[1] <= 5))
     @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:a]), lat), ownership)[6:end, :] == zeros(Int32, 5, 10)
     @test_throws ArgumentError layout(Frame(:w), lat)
+    # the same domain from a model's @lattice (LatticeSpec path)
+    dsys = DomainLayoutProbe(; name = :d)
+    @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:cell]), dsys), ownership)[6:end, :] == zeros(Int32, 5, 10)
+    @test_throws r"outside the lattice domain" layout(Tiling((2, 2); kinds = [:cell]), dsys)
 end
 
 @testset "layouts reproduce an existing state's geometry" begin

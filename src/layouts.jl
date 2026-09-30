@@ -2,8 +2,10 @@
 # and returned as an SII operating point `[ownership => σ, kind => kinds]`.
 #
 # Every layout is a subtype of `AbstractLayout` with one method,
-# `paint!(σ, kinds, l, dims)`: it writes new cell ids `length(kinds) + 1, …` into `σ` (an
-# `Int32` array of size `dims`, 0 = medium) and pushes their kinds. Randomized layouts own
+# `paint!(σ, kinds, l, lat::LatticeSpec)`: it writes new cell ids `length(kinds) + 1, …` into
+# `σ` (an `Int32` array of size `lat.dims`, 0 = medium) and pushes their kinds. `lat` carries
+# the boundaries, the neighbourhood, the domain mask and the geometry; `core_lattice(lat)`
+# gives the CorePotts `Lattice` for `shift`, `relation` and `embed`. Randomized layouts own
 # their seed, so adding a layer never changes another layer's draws. Coordinates are lattice
 # indices: axial `(q, r)` on a hexagonal lattice, where a box is a rhombus.
 
@@ -11,7 +13,9 @@
     AbstractLayout
 
 A layer of an initial condition. A new layout is a subtype with one method,
-`paint!(σ, kinds, l, dims)`, that paints new cells over `σ` and pushes their kinds. Turn
+`paint!(σ, kinds, l, lat)`, that paints new cells over `σ` and pushes their kinds. `lat` is
+the model's `LatticeSpec` (dims, boundaries, neighbourhood, domain, geometry; a bare `dims`
+tuple becomes a closed `Moore(1)` lattice); `core_lattice(lat)` is the CorePotts `Lattice`. Turn
 layouts into an operating point with [`layout`](@ref); compose them with [`overlay`](@ref).
 """
 abstract type AbstractLayout end
@@ -43,8 +47,6 @@ end
 # The region of a layer on a lattice of size `dims` (default: the whole lattice).
 function _region(region, dims::NTuple{N, Int}, what) where {N}
     region === nothing && return map(d -> 1:d, dims)
-    length(region) == N ||
-        throw(ArgumentError("$what: region $region is $(length(region))D, the lattice $(N)D"))
     for d in 1:N
         (first(region[d]) >= 1 && last(region[d]) <= dims[d]) ||
             throw(ArgumentError("$what: region $region lies outside the lattice $dims"))
@@ -56,6 +58,9 @@ function _check_rank(l, N, dims, what)
     N == length(dims) || throw(ArgumentError("$what: the layout is $(N)D, the lattice $(length(dims))D"))
 end
 
+_periodic(lat::LatticeSpec{N}) where {N} = (b = lat.boundary;
+    map(x -> x isa Periodic, b isa CorePotts.AbstractBoundary ? ntuple(_ -> b, N) : Tuple(b)))
+
 _paint_box!(σ, id, lo, sz) = (σ[CartesianIndices(map((o, s) -> o:(o + s - 1), lo, sz))] .= id)
 
 """
@@ -63,7 +68,9 @@ _paint_box!(σ, id, lo, sz) = (σ[CartesianIndices(map((o, s) -> o:(o + s - 1), 
 
 Boxes of `size` (a tuple, one entry per axis), `spacing` medium sites apart (an integer or
 a tuple), filling `region` (a tuple of ranges) in column-major order from its lower corner.
-Only whole boxes are placed. `kinds` is cycled over the cells in placement order.
+Only whole boxes are placed. `kinds` is cycled over the cells in placement order. On a
+periodic axis, trailing boxes closer than `spacing` to the first box through the wrap are
+skipped, so the spacing also holds across the boundary.
 """
 struct Tiling{N, K} <: AbstractLayout
     size::NTuple{N, Int}
@@ -79,10 +86,19 @@ function Tiling(size; spacing = 0, region = nothing, kinds)
     return Tiling(sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"))
 end
 
-function paint!(σ, kinds, l::Tiling{N}, dims) where {N}
+function paint!(σ, kinds, l::Tiling{N}, lat::LatticeSpec) where {N}
+    dims = lat.dims
     _check_rank(l, N, dims, "Tiling")
     reg = _region(l.region, dims, "Tiling")
-    starts = map((r, s, p) -> first(r):(s + p):(last(r) - s + 1), reg, l.size, l.spacing)
+    per = _periodic(lat)
+    starts = map(reg, l.size, l.spacing, dims, per) do r, s, p, n, wrap
+        st = first(r):(s + p):(last(r) - s + 1)
+        # sites between the last box and the first through the wrap
+        while wrap && length(st) > 1 && n - (last(st) + s - 1) + first(st) - 1 < p
+            st = first(st):step(st):(last(st) - step(st))
+        end
+        st
+    end
     any(isempty, starts) &&
         throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg"))
     n = 0
@@ -98,34 +114,52 @@ end
     Scattered(n, size; region = <whole lattice>, kinds, seed, gap = 1)
 
 `n` boxes of `size` at uniformly random positions inside `region`, at least `gap` medium
-sites apart along some axis (with `gap = 1` no two cells touch, Moore neighbourhood
-included). Placement is by rejection with a `StableRNG(seed)`, so it is deterministic in
-`seed` across Julia versions. `kinds` is cycled over the cells. Throws an `ArgumentError`
-when the boxes cannot be placed.
+sites apart along some axis (Chebyshev: with `gap = 1` no two cells touch under Moore(1)).
+On a periodic axis the separation is measured through the wrap. On a hexagonal lattice the
+gap is Chebyshev in axial coordinates, which is conservative (hex neighbours are a subset of
+Moore(1)). Like every layer it overwrites earlier layers (pass a `region` to keep clear of a
+[`Frame`](@ref)).
+
+Placement is random sequential: box after box is drawn with a `StableRNG(seed)` (so it is
+deterministic in `seed` across Julia versions) and rejected while it is too close to a
+placed box. `kinds` is cycled over the cells. Throws an `ArgumentError` when the boxes
+cannot fit the region, and also when a box cannot be placed after 10,000 draws: random
+sequential placement jams at about half of the densest packing, so a feasible but dense
+request can throw.
 """
 struct Scattered{N, K} <: AbstractLayout
     n::Int
     size::NTuple{N, Int}
     region::Union{Nothing, NTuple{N, UnitRange{Int}}}
     kinds::Vector{K}
-    seed::Int
+    seed::UInt64
     gap::Int
 end
 function Scattered(n::Integer, size; region = nothing, kinds, seed::Integer, gap::Integer = 1)
     N = length(size)
     n >= 0 || throw(ArgumentError("Scattered: the number of boxes must be non-negative, got $n"))
     gap >= 0 || throw(ArgumentError("Scattered: gap must be non-negative, got $gap"))
+    0 <= seed <= typemax(UInt64) || throw(ArgumentError("Scattered: seed must be in 0:typemax(UInt64), got $seed"))
     sz = _check_size(_tuple(size, N), "Scattered")
-    return Scattered(Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), Int(seed), Int(gap))
+    return Scattered(Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), UInt64(seed),
+        Int(gap))
 end
 
 const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
 
-# Boxes at lower corners `a` and `b` are at least `gap` sites apart along some axis.
-_apart(a, b, sz, gap) = any(ntuple(d -> a[d] + sz[d] + gap <= b[d] || b[d] + sz[d] + gap <= a[d], length(a)))
+# Boxes at lower corners `a` and `b` are at least `gap` sites apart along some axis; on a
+# periodic axis of length `n` in both directions around the ring.
+function _apart1(a, b, s, gap, n, wrap)
+    wrap || return a + s + gap <= b || b + s + gap <= a
+    δ = mod(b - a, n)
+    return δ - s >= gap && n - δ - s >= gap
+end
+_apart(a, b, sz, gap, dims, per) = any(ntuple(d -> _apart1(a[d], b[d], sz[d], gap, dims[d], per[d]), length(a)))
 
-function paint!(σ, kinds, l::Scattered{N}, dims) where {N}
+function paint!(σ, kinds, l::Scattered{N}, lat::LatticeSpec) where {N}
+    dims = lat.dims
     _check_rank(l, N, dims, "Scattered")
+    per = _periodic(lat)
     reg = _region(l.region, dims, "Scattered")
     ext = map(length, reg)
     all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg"))
@@ -140,14 +174,15 @@ function paint!(σ, kinds, l::Scattered{N}, dims) where {N}
         placed = false
         for _ in 1:_SCATTER_ATTEMPTS
             o = map(r -> rand(rng, r), ranges)
-            if all(c -> _apart(o, c, l.size, l.gap), corners)
+            if all(c -> _apart(o, c, l.size, l.gap, dims, per), corners)
                 push!(corners, o)
                 placed = true
                 break
             end
         end
         placed || throw(ArgumentError("Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
-                                      "in the region $reg after $_SCATTER_ATTEMPTS draws; use fewer or smaller boxes"))
+                                      "in the region $reg after $_SCATTER_ATTEMPTS draws (random sequential placement " *
+                                      "jammed); use fewer or smaller boxes, a smaller gap or a larger region"))
     end
     for (k, o) in enumerate(corners)
         push!(kinds, l.kinds[mod1(k, length(l.kinds))])
@@ -160,7 +195,8 @@ end
     Frame(kind; width = 1)
 
 One cell of `kind` owning every site within `width` of the lattice edge (a wall; pair it
-with a `[frozen]` kind).
+with a `[frozen]` kind). Periodic axes have no edge: on a lattice periodic along x only,
+the frame is a wall at both ends of y (a channel).
 """
 struct Frame{K} <: AbstractLayout
     kind::K
@@ -171,11 +207,13 @@ function Frame(kind; width::Integer = 1)
     return Frame(kind, Int(width))
 end
 
-function paint!(σ, kinds, l::Frame, dims)
+function paint!(σ, kinds, l::Frame, lat::LatticeSpec)
+    dims, per = lat.dims, _periodic(lat)
+    all(per) && throw(ArgumentError("Frame: every axis of the lattice is periodic, so it has no edge"))
     push!(kinds, l.kind)
     id, w = Int32(length(kinds)), l.width
     for i in CartesianIndices(σ)
-        any(ntuple(d -> i[d] <= w || i[d] > dims[d] - w, length(dims))) && (σ[i] = id)
+        any(ntuple(d -> !per[d] && (i[d] <= w || i[d] > dims[d] - w), length(dims))) && (σ[i] = id)
     end
     return σ
 end
@@ -185,7 +223,9 @@ end
 
 Layers painted in order: later layers overwrite earlier ones, and cell ids follow layer
 order. Cells left with no site are dropped (ids stay consecutive); a partly covered cell
-keeps its remaining sites.
+keeps its remaining sites, which may fall apart into pieces: `layout` warns, naming the cell,
+when a later layer splits a cell into pieces that are not connected under the lattice
+neighbourhood.
 """
 struct Overlay <: AbstractLayout
     layers::Vector{AbstractLayout}
@@ -198,11 +238,45 @@ function overlay(layers::AbstractLayout...)
     return Overlay(flat)
 end
 
-function paint!(σ, kinds, l::Overlay, dims)
-    for x in l.layers
-        paint!(σ, kinds, x, dims)
+function paint!(σ, kinds, l::Overlay, lat::LatticeSpec)
+    cut = Set{Int32}()                      # cells that lost sites to a later layer
+    for (j, x) in enumerate(l.layers)
+        prev = j == 1 ? σ : copy(σ)
+        paint!(σ, kinds, x, lat)
+        j == 1 && continue
+        for i in eachindex(σ)
+            0 < prev[i] != σ[i] && push!(cut, prev[i])
+        end
     end
+    isempty(cut) || _warn_split(σ, kinds, cut, lat)
     return σ
+end
+
+# Warn about cut cells whose remaining sites are not connected under the neighbourhood.
+function _warn_split(σ, kinds, cut, lat::LatticeSpec{N}) where {N}
+    clat = core_lattice(lat)
+    offs = CorePotts.relation(lat.neighborhood, clat).offsets
+    alive = falses(length(kinds))
+    for s in σ
+        s > 0 && (alive[s] = true)
+    end
+    for c in sort!(collect(cut))
+        alive[c] || continue
+        sites = findall(==(c), σ)
+        seen = Set{CartesianIndex{N}}((first(sites),))
+        stack = [first(sites)]
+        while !isempty(stack)
+            x = pop!(stack)
+            for o in offs
+                inside, y = CorePotts.shift(clat, Tuple(x), o)
+                yi = CartesianIndex(y)
+                inside && σ[yi] == c && !(yi in seen) && (push!(seen, yi); push!(stack, yi))
+            end
+        end
+        length(seen) < length(sites) &&
+            @warn "overlay: later layers split cell $(count(view(alive, 1:c))) (kind $(kinds[c])) into disconnected pieces"
+    end
+    return nothing
 end
 
 """
@@ -210,21 +284,27 @@ end
 
 Paint the layout `l` (see [`overlay`](@ref)) on an empty lattice and return an operating
 point for [`PottsProblem`](@ref): `σ` is an `Int32` array (0 = medium). In place of `dims`
-pass a `Lattice`, a `PottsSystem` or a `CompiledPottsSystem`; on a lattice with a domain,
-no cell may cover a site outside it.
+(a closed lattice with the `Moore(1)` neighbourhood) pass a `Lattice`, a `PottsSystem` or a
+`CompiledPottsSystem`, whose boundaries, neighbourhood, domain and geometry the layouts
+use. On a lattice with a domain, no cell may cover a site outside it.
 """
-layout(l::AbstractLayout, dims::Tuple{Vararg{Integer}}) = _layout(l, Int.(dims), nothing)
-layout(l::AbstractLayout, lat::Lattice) = _layout(l, lat.dims, lat.mask)
-layout(l::AbstractLayout, lat::LatticeSpec) = _layout(l, lat.dims, lat.domain)
+function layout(l::AbstractLayout, dims::Tuple{Vararg{Integer}})
+    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))
+    return _layout(l, lattice_spec(dims; boundary = Closed()))
+end
+layout(l::AbstractLayout, lat::Lattice) = _layout(l,
+    LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing, Moore(1), lat.mask,
+        lat.geometry))
+layout(l::AbstractLayout, lat::LatticeSpec) = _layout(l, lat)
 layout(l::AbstractLayout, sys::PottsSystem) = layout(l, sys.lattice)
 layout(l::AbstractLayout, sys::CompiledPottsSystem) = layout(l, sys.sys)
 
-function _layout(l, dims::NTuple{N, Int}, mask) where {N}
-    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims"))
-    σ = zeros(Int32, dims)
+function _layout(l, lat::LatticeSpec)
+    σ = zeros(Int32, lat.dims)
     kinds = Any[]
-    paint!(σ, kinds, l, dims)
+    paint!(σ, kinds, l, lat)
     σ, kinds = _compact(σ, kinds)
+    mask = lat.domain
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
         bad === nothing ||
