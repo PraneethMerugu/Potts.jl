@@ -62,12 +62,17 @@ function graner_glazier_state(scale::Integer = 1)
 end
 
 """
-    graner_glazier_aggregate(n = 1000; seed = 1) -> (labels, kinds)
+    graner_glazier_aggregate(n = 1000; seed = 1, margin = 10) -> (labels, kinds)
 
 A paper-size initial condition (PRE 47, p. 2129: "about 1000 cells"): one round aggregate
 of `n` cells of about `V₀ = 40` sites, dark (1) and light (2) randomly mixed in equal
-numbers (±1; spec §8.4 A-GG5 leaves the fraction open), surrounded by a medium margin of 10
-sites on a square lattice sized to fit (use `lattice = size(labels)`). Built with the
+numbers (±1; spec §8.4 A-GG5 leaves the fraction open), surrounded by a medium margin of
+`margin` sites on a square lattice sized to fit (use `lattice = size(labels)`). On the
+periodic `GranerGlazier` lattice the gap to the aggregate's image is `2margin`; runs in
+which cells detach need a wider margin (spec 09 §9.1 V-PRE14/15: at least 60). The
+aggregate is rebuilt on the larger lattice, not embedded: a different `margin` can move a
+few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
+10), so compare margins statistically, not site by site. Built with the
 [`VoronoiBall`](@ref) layout (a centroidal Voronoi tessellation of a disk of area `40n`),
 deterministic in `seed`.
 
@@ -78,9 +83,10 @@ The sorting time course does not see the difference: the heterotypic boundary fr
 this start and from a relaxed one agree within 0.005 at 1, 10 and 100 paper MCS (measured
 in the P6.1b2 review, 6 seeds). The area term evens the cells out within the first MCS.
 """
-function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1)
+function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1, margin::Integer = 10)
+    margin >= 0 || throw(ArgumentError("graner_glazier_aggregate: margin must be non-negative, got $margin"))
     radius = sqrt(40n / π)
-    L = 2ceil(Int, radius) + 1 + 2 * 10
+    L = 2ceil(Int, radius) + 1 + 2margin
     op = layout(VoronoiBall(n; radius, kinds = Int32[1, 2], seed), (L, L))
     return op[1].second, op[2].second
 end

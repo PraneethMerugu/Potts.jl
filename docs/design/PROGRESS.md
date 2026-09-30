@@ -1424,3 +1424,23 @@ The maintainer approved F-1…F-6 (D-049).
   cases were flagged; the A/B against the pre-merge tree gave Akeeb 0.997, OpenVT 1.018,
   Merks 0.988 and Wortel 0.963 (Wortel's first 4-round run gave 1.49 under load; 8 rounds
   settled it).
+
+## 2026-09-30 — P6.1c merged: reproduction 09 frozen (pre-registered, D-072)
+
+- **Page:** `reproductions/09_cell_sorting.jl` is rebuilt from spec 09 §9.1, following the
+  spec owner's audit, and frozen.
+- **Smoke CI verdicts:** V-GG6, V-PRE13(a), NC1 (size-free) and the V-PRE3(a) NC1 clause
+  all pass.
+- **Calibrations:**
+  - V-PRE3(a) is FULL-only; its size-free form first drops below 0.1 at the 640 save.
+  - NC1's size-free clause: six four-seed means 0.442–0.500.
+  - The margin stays 10 (largest difference 1.10 SE at n = 6).
+- **V-PRE4 measurement:** Voronoi start D = 0.0214 vs relaxed start D = 0.0212; paper 0.014.
+- **New:** a `margin` keyword on `graner_glazier_aggregate`, and V-PRE16 checked in
+  `generate.jl` (regenerated data is byte-identical).
+- **Suites on the merged tree:** PottsModels and docs pass.
+- **Review:** 2 adversarial rounds plus a coordinator check.
+- **Spec owner:** ratified the page and made 7 rulings. Spec 09 §9.1 and README §5 are
+  committed with this merge.
+- **Next:** the FULL run, 1000 cells per replicate, 25–40 CPU-min per replicate on 6
+  threads.

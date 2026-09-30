@@ -5,7 +5,7 @@ generator = "lib/PottsModels/data/graner/generate.jl"
 lattice = [72, 72]
 boundary = "Periodic"
 initial_cells = 64
-initialization = "A square 51×50 aggregate of 64 staggered rectangular cells, height 5, random widths 5–12 per row (rows of 6 and 7 cells; mean area 39.8), relaxed as one type with J_ll = 2, J_lM = 8, T = 5, λ = 1, V₀ = 40 for 6400 MCS (400 paper MCS of 16N attempts), Moore(1) contacts and proposals; equilibration checked (total mismatched bonds and cell–medium fraction drift < 2% over the last 100 paper MCS); then each cell dark or light with probability 1/2"
+initialization = "A square 51×50 aggregate of 64 staggered rectangular cells, height 5, random widths 5–12 per row (rows of 6 and 7 cells; mean area 39.8), relaxed as one type with J_ll = 2, J_lM = 8, T = 5, λ = 1, V₀ = 40 for 6400 MCS (400 paper MCS of 16N attempts), Moore(1) contacts and proposals; equilibration checked on copies annealed 10 paper MCS at T = 0 as in PRE Fig. 5 (total mismatched bonds and cell–medium fraction drift ≤ 2% over the last 100 paper MCS; spec 09 §9.1 V-PRE16, plateau part); the saved start is not annealed; then each cell dark or light with probability 1/2"
 relaxation_mcs = 6400
 dark_cells = 33
 light_cells = 31
@@ -17,5 +17,5 @@ differences = [
     "64 cells on 72² rather than about 1000: bulk topology is not measurable and boundary fractions scale with perimeter/area",
     "periodic boundary (the paper's is unstated): unsuitable for dispersal runs",
     "the type fraction is unstated (A-GG5): probability ½ each is an assumption; the draw gave 33/31",
-    "the relaxation's statistics are checked without the paper's 10 MCS of T = 0 annealing",
+    "the equilibration check is the generator's drift rule (≤ 2% of the window mean, spec 09 §9.1 V-PRE16), not the paper's visual reading of Fig. 5",
 ]

@@ -492,7 +492,7 @@ model's list.
 2. **[B] Zajac:** the definition of "57 % anisotropy" (A-Z3); segment definition and averaging (A-Z4); trial-energy evaluation order (A-Z8).
 3. **[B] Fortuna:** ~~secretion/decay order in CC3D 3.7.9 `DiffusionSolverFE`~~ (RESOLVED 2026-09-30 from the CC3D source: diffusion + decay, then secretion; steady F ≈ 1 at source sites, effective λ_F = nominal; 14 §9 item 15), and whether the SF1 code produced the figures (14 §9 item 17).
 4. Zajac: the extension measure plotted in Fig 5 (A-Z5); I in the shape constraint (A-Z7); the proposal neighbourhood (A-Z9).
-5. Graner–Glazier: lattice size, boundary conditions and the dark/light fraction of the PRE runs; the "type-type correlation" of PRE Figs 13(d), 21(b); whether PRL Fig 2 and PRE Fig 13 are different runs of the sorting set (they differ by up to 0.07 in the dark–dark fraction); the cell-adjacency rule behind the neighbour counts n of Tables I–III (09 §8.4, §9.3). N, the relaxation parameters and annealing on a copy are settled by the PRE (09 §8.4).
+5. Graner–Glazier: lattice size, boundary conditions and the dark/light fraction of the PRE runs; the "type-type correlation" of PRE Figs 13(d), 21(b); whether PRL Fig 2 and PRE Fig 13 are different runs of the sorting set (they differ by up to 0.07 in the dark–dark fraction); the cell-adjacency rule behind the neighbour counts n of Tables I–III (09 §8.4, §9.3). How the total boundary length of Fig. 13(a) (≈ 66 850) is counted: pairs once or twice, and over which neighbour range (our Moore(1) count, each pair once, gives ≈ 37 000 for 1000 cells; 09 §9.1 V-PRE4). N, the relaxation parameters and annealing on a copy are settled by the PRE (09 §8.4).
 6. Foam (co-author): the same as items 5 and 7 of the Jiang list.
 
 ### Roeland Merks

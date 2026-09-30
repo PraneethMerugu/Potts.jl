@@ -1177,3 +1177,34 @@ session.
     place would avoid them. This is not a warm path.
   - SymbolicUtils operand order shifts with unrelated source edits, so the last bit of a
     float result can change between builds. This predates P6.0f and is tracked here.
+
+## D-072 Reproduction 09 pre-registered: the tutorial page is frozen (2026-09-30, P6.1c)
+
+- **What is frozen.** `lib/PottsModels/reproductions/09_cell_sorting.jl` is added to
+  `frozen.toml`. Its pre-registered table (spec 09 §9.1) and verdict code can change only
+  under a DECISIONS entry. This commit precedes the first FULL run.
+- **CI-binding rows (SMOKE+FULL).**
+  - V-GG6: the paired 2 SE rule, with the symmetric-J control.
+  - V-PRE13(a): mean F_dM(10³) > 0.01.
+  - NC1, three clauses: the size-free heterotypic share of cell–cell bonds, mean
+    F_dl/(1 − F_dM − F_lM) at 10³ ≥ 0.40; mean F_dM ≥ 0.01; 0 engulfed.
+  - The NC1 clause of V-PRE3(a): F_dM(10³) ≥ 0.01.
+- **FULL-only rows.** All other §9.1 rows, including V-PRE3(a) itself. **Parked:** V-PRE6,
+  V-PRE17, V-OS3 and V-OS4, plus the ⟨n⟩/μ₂ clauses. **Superseded:** V-GG1–5.
+- **Rulings.** These are spec-owner rulings, relayed by the models-and-publications session,
+  with calibration by the coordinator's agents.
+  - **V-PRE3(a)** is FULL-only. The size-free smoke form failed calibration: on seeds
+    1001–1020 the 20-seed mean first drops below 0.1 at the 640 save, and 3 of 5 four-seed
+    sets fail "by 500".
+  - **NC1** became size-free, because the raw F_dl ≥ 0.35 failed one four-seed set in six at
+    64 cells. Calibration on seeds 7001–7024: the six four-seed means are 0.442–0.500, and
+    the per-seed values are 0.472 ± 0.051.
+  - **Aggregate margin** stays at 10 (`graner_glazier_aggregate(n; seed, margin)`). At
+    n = 6 the largest difference from a doubled lattice is 1.10 SE. Dispersal runs
+    (V-PRE14/15) need a margin of at least 60.
+  - **V-PRE16** is checked in `data/graner/generate.jl`, with a 2 % drift rule on annealed
+    copies. It is not part of CI.
+  - **Time.** Verdicts are taken at the paper's nominal times, with no time tolerance. The
+    global scale s ∈ [½, 2] is information only.
+- **Review.** Three rounds (two adversarial reviews plus a coordinator check). The spec owner
+  ratified the page.
