@@ -162,6 +162,29 @@ routine lands with R8, claim widening with R6.
    phenotypes.
 6. Foam shear on `direction`/`time` + Graner–Glazier sorting + Zajac anisotropic adhesion.
 
+**More composition gaps**, found by writing cross-model sketches (the reviewer's letters in
+brackets):
+
+| Gap | Why | Fix |
+|---|---|---|
+| Kind classes [j] | Gates like `old == 0` assume the matrix is the medium; in Bauer, fluid and matrix are cells | First-class kind sets (`@kinds` groups, `kind[x] ∈ ecm`) used in every gate |
+| Ownership hooks [f] | `@convert`, divide, retire and create change ownership without firing `@on_copy` / `clear_on_ownership_change`, so site state such as `act` goes stale | Every ownership change fires the site hooks (part of R8's shared routine) |
+| Scope across transitions [g] | Components and drives scoped to one kind are lost after `@transition` | Scope by kind set or predicate; component state survives transitions |
+| Phase order [h] | The order between components, host operators (LP) and lifecycle rules is undefined | Explicit phase order (with R5 field placement) |
+| Non-local reads [i] | Related centroids, BFS and pair energies silently break checkerboard exactness | A declared footprint: the compiler adds claims or rejects checkerboard with a clear error |
+| Solvers [e] | One global `field_solver` | Solver per field or equation block (same fix as the stiffness row) |
+
+**Too-narrow shapes to avoid:**
+- `@convert` must take any `from`/`to` expressions, a predicate, a probability, a budget
+  and field writes (not a matrix → fluid flag).
+- "Tip / leading cell" is a population argmax of any cell expression.
+- `sibling(kind)` must allow several members, so it is a `members(c, kind)` fold.
+- Chain order is a mutable cell index, so a reversal clock can swap head and tail.
+- A pair energy takes any function of both cells' tensors and interface aggregates.
+- Uptake site sets are a site predicate relative to the cell.
+- Boolean networks are MTK clocked/discrete components, not a new type (question 9).
+- Per-MCS Bernoulli gates stay `rand() < p`. JumpProcesses is used only inside components.
+
 ## 5. Per-model compositions
 
 All 12 are writable from existing primitives plus R-features, with no model-specific hook.
