@@ -36,7 +36,8 @@ end
 """
     graner_glazier_state(scale = 1) -> (labels, kinds)
 
-The legacy pre-equilibrated 72×72 initial condition (32 dark and 32 light cells), tiled
+The 72×72 initial condition of PRE §II D3 (D-049 F-2): 64 cells of area 40 relaxed as one
+type, then 32 made dark and 32 light at random (`data/graner/generate.jl`), tiled
 `scale × scale` times. Kinds are numbers (1 = dark, 2 = light).
 """
 function graner_glazier_state(scale::Integer = 1)

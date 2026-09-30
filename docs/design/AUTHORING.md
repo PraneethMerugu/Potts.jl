@@ -73,6 +73,21 @@ is sugar.
 | `@observed` | derived quantities | `observed` |
 | `@sweep` | protocol: `Metropolis(; temperature, offset)` (1 MCS = N attempts) | solver options |
 
+**Conditional sections (implemented).** An `if`/`elseif`/`else` whose branches hold section
+macros is evaluated when the model is constructed, so a structural parameter can switch
+statements on or off:
+
+```julia
+@structural_parameters begin connected = false end
+…
+if connected
+    @constraint connectivity(cell; rule = :merks)
+end
+```
+
+Declaring sections (`@structural_parameters`, `@kinds`, `@parameters`, `@variables`,
+`@extend`) cannot be conditional.
+
 ---
 
 ## 3. Lattices and neighborhoods
@@ -105,7 +120,9 @@ is sugar.
   copies and fields.
 - **Relation roles are separate.** `neighborhood` sets the contact and surface
   relations. The proposal relation defaults to the first shell (`VonNeumann(1)`: 4 in
-  2D, 6 in 3D) unless set with `proposal = …`. Widening contact never widens proposals.
+  2D, 6 in 3D) unless the model sets `@relations proposal = …`. That becomes the
+  problem's proposal; `SequentialCPM(; proposal)` and `CheckerboardCPM(; proposal)`
+  override it per solve (D-049 F-1). Widening contact never widens proposals.
 - **Neighborhoods** are relations with an order or radius:
   - `Moore(k)`: Chebyshev distance ≤ k (order 1 = 8 neighbours in 2D, 26 in 3D)
   - `VonNeumann(k)`: Manhattan distance ≤ k
@@ -400,74 +417,47 @@ and `all`. Without units, or without DynamicQuantities, the check is skipped.
 
 ### Graner–Glazier sorting — §1 above.
 
-### Wortel Act migration
+The sources in `lib/PottsModels/src` are the reference (each docstring names the paper, the
+parameter set and the remaining differences); D-049 records the fidelity decisions.
+
+### Wortel Act migration (`WortelAct`, Artistoo semantics)
 
 ```julia
-@potts_model WortelAct begin
-    @structural_parameters begin lattice = (150, 150) end
-    @kinds medium endothelial
-    @parameters begin
-        λ = 1.0; V₀ = 500.0; λₛ = 0.05; S₀ = 320.0; T = 20.0
-        λ_act = 200.0; max_act = 80.0
-        J[kind, kind] = [0 20; 20 40]
-    end
-    @variables act(site) = 0.0, [clear_on_ownership_change = true]
-    @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))
-    @energy begin
-        cells(endothelial) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
-        contacts           => J[kind, kind′]
-    end
-    geomean_act(s) = geomean(act[n] for n in Moore(1)(s) if owner[n] == owner[s])
-    @drive copy => -(λ_act / max_act) * (geomean_act(source) - geomean_act(target))
-    @on_copy   act[target] ~ max_act
-    @after_mcs act ~ max(Pre(act) - 1, 0)
-    @constraint connectivity(endothelial)
-    @sweep Metropolis(; temperature = T)
+act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
+@drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))     # every copy
+@on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)                          # gained sites active
+@after_mcs act ~ max(Pre(act) - 1, 0)
+if connected
+    @constraint connectivity(cell; rule = :merks)
 end
 ```
 
-### Merks vasculogenesis (chemotaxis with a secreted field)
+### Merks vasculogenesis (`MerksVasculogenesis`, Merks et al. 2006)
 
 ```julia
-@potts_model Merks begin
-    @structural_parameters begin lattice = (200, 200) end
-    @kinds medium endothelial
-    @parameters begin
-        λ = 5.0; V₀ = 50.0; T = 50.0; μ = 500.0
-        Dc = 1e-13; σ = 1.8e-4; δ = 1.8e-4
-        J[kind, kind] = [0 25; 25 50]
-    end
-    @variables c(field) = 0.0
-    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-    @energy begin
-        cells(endothelial) => λ * (volume - V₀)^2
-        contacts           => J[kind, kind′]
-    end
-    @equations D(c) ~ Dc * Δ(c) + σ * (kind == endothelial) - δ * c
-    @drive copy => -μ * (c[target] - c[source]) * (kind[source] == endothelial)
-    @sweep Metropolis(; temperature = T, mcs_duration = 30.0u"s",
-                      field_solver = ExplicitEuler(substeps = 15))
+@energy begin
+    cells(endothelial) => λ * (volume - V₀)^2 + λ_L * (major_length - L)^2
+    contacts => J[kind, kind′]
 end
+if contact_inhibited                                   # PLoS 2008 extension-only form
+    @drive copy => ifelse((old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]), 0.0)
+else                                                   # 2006: every copy
+    @drive copy => -χ * (c[target] - c[source])
+end
+@equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
+@constraint connectivity(endothelial; rule = :local)
 ```
 
-### OpenVT monolayer (growth and division)
+### OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameter set)
 
 ```julia
-@potts_model Monolayer begin
-    @structural_parameters begin lattice = (100, 100) end
-    @kinds medium epithelial
-    @parameters begin λ = 1.0; V₀ = 40.0; T = 10.0; g = 0.5; J[kind,kind] = [0 8; 8 4] end
-    @variables target(cell) = 40.0
-    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-    @energy begin
-        cells(epithelial) => λ * (volume - target)^2
-        contacts          => J[kind, kind′]
-    end
-    @after_mcs target ~ Pre(target) + g
-    @divide cells(epithelial) when = target >= 2V₀, along = principal_axis(),
-                              target => V₀
-    @sweep Metropolis(; temperature = T)
+@variables V_target(cell) = A₀
+@energy begin
+    cells(cell) => λ * (volume - V_target)^2
+    contacts => J[kind, kind′]
 end
+@after_mcs V_target ~ ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target))
+@divide cells(cell) when = volume >= 2A₀, along = RandomPlane(), V_target => A₀
 ```
 
 ### Akeeb–Marcus–Jiang leader/follower invasion (relationships + MTK ODE)
@@ -621,6 +611,13 @@ end
 `inertia` (tensor), `major_length`, `minor_length` (2D: `4√(λ/V)` of the inertia
 eigenvalues), `semiaxes`, `orientation`, `elongation = major_length / minor_length`,
 `eccentricity`. These names replace any informal "elongation".
+
+**Implemented:** `major_length` is a cell built-in, readable in energies, cell updates,
+division rules and observed quantities (D-049 F-3). It is `4√λ₁` of the covariance of the
+cell's sites in 2D (Merks et al. 2006, Eq. 5) and `2√(5λ₁)` in 3D, from the exact moment
+trackers. In an energy its ΔH is exact: `CorePotts.major_length_after` evaluates the length
+with the target site added or removed. The length constraint is
+`cells(k) => λ_L * (major_length - L)^2`.
 
 ### 12.5 Fields
 

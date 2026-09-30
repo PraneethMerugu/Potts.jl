@@ -78,8 +78,35 @@ moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, 
         cell3 = merge(init_moments(σ3, l3, 1), (; volume = Int32[216]))
         s3 = shape(cell3, l3, 1)
         @test all(isapprox.(s3.semiaxes, sqrt.(5 .* ((12, 6, 3) .^ 2 .- 1) ./ 12)))
+        @test major_length(Float64, cell3, l3, 1) ≈ s3.major_length
         @test s3.elongation ≈ sqrt((12^2 - 1) / (3^2 - 1))
         @test all(isapprox.(centroid(cell3, l3, 1), mod.((6.5, 3.5, 2.0) .- (4, 2, 1) .- 1, 30) .+ 1))
+    end
+
+    @testset "major_length_after equals the committed length" begin
+        # every add/remove of a boundary site, on cells that straddle periodic seams, in 2D
+        # (square and hex) and 3D
+        for (lat, σ) in ((Lattice((24, 20)), circshift((s = zeros(Int32, 24, 20); s[1:9, 1:4] .= 1; s[3:5, 5:7] .= 1; s), (-3, -2))),
+                         (Lattice((24, 24); geometry = Hexagonal()), (s = zeros(Int32, 24, 24); s[5:12, 6:9] .= 1; s)),
+                         (Lattice((12, 12, 12)), circshift((s = zeros(Int32, 12, 12, 12); s[1:6, 1:3, 1:2] .= 1; s), (-2, -1, -1))))
+            N = ndims(σ)
+            V = count(==(1), σ)
+            base = merge(init_moments(σ, lat, 1), (; volume = Int32[V]))
+            for i in CartesianIndices(σ)
+                x = Tuple(i)
+                s = σ[i] == 1 ? -1 : 1
+                s == 1 && !any(o -> (y = mod1.(x .+ o, size(σ)); σ[y...] == 1),
+                               [ntuple(k -> k == d ? e : 0, N) for d in 1:N for e in (-1, 1)]) && continue
+                s == -1 && V == 1 && continue
+                σ2 = copy(σ); σ2[i] = s == 1 ? 1 : 0
+                after = merge(init_moments(σ2, lat, 1), (; volume = Int32[V + s]))
+                @test major_length_after(Float64, base, lat, 1, x, s) ≈ major_length(Float64, after, lat, 1) atol = 1e-9
+            end
+        end
+        # a first site: length zero
+        lat = Lattice((8, 8))
+        empty = merge(init_moments(zeros(Int32, 8, 8), lat, 1), (; volume = Int32[0]))
+        @test major_length_after(Float64, empty, lat, 1, (3, 3), 1) == 0 && major_length(Float64, empty, lat, 1) == 0
     end
 
     @testset "centroid_shift equals the committed centroid change" begin

@@ -392,3 +392,89 @@ end
     @test PottsProblem(AuditPopCell(; name = :a), [ownership => σ, kind => [1]], (0, 1)).f.fingerprint == a.f.fingerprint
     @test haskey(Potts.generated_code(AuditPopCell(; name = :a)), :phases)
 end
+
+# D-049: conditional sections, model-declared proposals, `major_length` in energies
+@potts_model AuditBranches begin
+    @structural_parameters begin
+        mode = :none
+    end
+    @kinds medium A
+    @parameters begin
+        μ = 3.0
+    end
+    @lattice Lattice((12, 12); boundary = Closed())
+    @energy cells(A) => (volume - 9)^2
+    if mode == :drive
+        @drive copy => μ
+    elseif mode == :energy
+        @energy cells(A) => μ * volume
+    else
+        @relations proposal = Moore(1)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@potts_model AuditLength begin
+    @structural_parameters begin
+        lattice = (16, 16)
+        geometry = Square()
+    end
+    @kinds medium A
+    @parameters begin
+        λ_L = 2.0
+        L = 7.0
+    end
+    @lattice Lattice(lattice; geometry)
+    @energy begin
+        cells(A) => (volume - 12)^2 + λ_L * (major_length - L)^2
+        contacts => 1.0 * (kind != kind′)
+    end
+    @observed len(cell) ~ major_length
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@testset "D-049: conditional sections and model proposals" begin
+    σ = zeros(Int32, 12, 12); σ[4:6, 4:6] .= 1
+    prob(mode) = PottsProblem(AuditBranches(; name = :b, mode), [ownership => σ, kind => [1]], (0, 1))
+    grow = CorePotts.Proposal(CorePotts.linear_index(Lattice((12, 12)), (7, 5)), CorePotts.linear_index(Lattice((12, 12)), (6, 5)),
+        (7, 5), 1, Int32(0), Int32(1))
+    dH(p) = p.f.delta_H(p.u0, p.p, grow, (; lattice = p.lattice, contact = p.contact, p.relations...))
+    @test dH(prob(:drive)) - dH(prob(:none)) ≈ 3.0
+    @test dH(prob(:energy)) - dH(prob(:none)) ≈ 3.0
+    # the else branch declared the proposal; the others keep the default, and algorithms
+    # override the model's
+    @test prob(:none).proposal isa Moore && prob(:drive).proposal isa VonNeumann
+    @test CorePotts._proposal(SequentialCPM(), prob(:none)) isa Moore
+    @test CorePotts._proposal(SequentialCPM(; proposal = VonNeumann(1)), prob(:none)) isa VonNeumann
+    @test_throws Exception @eval @potts_model AuditBadBranch begin
+        @structural_parameters begin
+            flag = true
+        end
+        if flag
+            @parameters begin
+                q = 1.0
+            end
+        end
+    end
+end
+
+@testset "D-049: major_length in energies (square, hex, 3D)" begin
+    for (lattice, geometry, σ) in (((16, 16), Square(), (s = zeros(Int32, 16, 16); s[3:8, 4:5] .= 1; s[10:12, 9:12] .= 2; s)),
+                                   ((16, 16), Hexagonal(), (s = zeros(Int32, 16, 16); s[3:8, 4:5] .= 1; s[10:12, 9:12] .= 2; s)),
+                                   ((8, 8, 8), Square(), (s = zeros(Int32, 8, 8, 8); s[2:5, 2:3, 2:3] .= 1; s)))
+        n = maximum(σ)
+        p = PottsProblem(AuditLength(; name = :l, lattice, geometry), [ownership => σ, kind => fill(1, n)], (0, 20))
+        # ΔH equals the difference of the brute-force energy along a trajectory
+        worst = 0.0
+        for (u, prop) in proposal_states(p; mcs = (0, 10, 20), n = 150)
+            a = deepcopy(u); a.σ[prop.target] = prop.new
+            p.f.commit!(a, p.p, prop, (; lattice = p.lattice, contact = p.contact, p.relations...))
+            worst = max(worst, abs(energy_change(p, u, prop) - (total_energy(p, a) - total_energy(p, u))))
+        end
+        @test worst < 1e-8
+        # the built-in is the CorePotts shape descriptor
+        sol = solve(p, SequentialCPM())
+        u = sol.u[end]
+        @test sol[:len][end] ≈ [CorePotts.shape(u.cell, p.lattice, c).major_length for c in 1:n]
+    end
+end
