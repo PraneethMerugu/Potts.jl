@@ -542,9 +542,11 @@ end
     end
     on, off = invade(30.0), invade(0.0)
     @test all(m -> m.leader_mean_y > 28, on) && all(m -> m.leader_mean_y < 20, off)
-    # CC3D connectivity keeps every cell in one piece (the legacy `:merks` rule split 4–6)
+    # CC3D connectivity keeps every cell in one piece under copies (the legacy `:merks` rule
+    # split 4–6). Without clocks (pp = 0): a random-plane division may cut a non-convex
+    # follower into pieces, as in CC3D (2 of 30 seeds with pp = 0.5, D-068 seeding)
     for seed in 1:3
-        o = akeeb_state(; lattice = (99, 60), seed)
+        o = akeeb_state(; lattice = (99, 60), seed, pp = 0.0)
         u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000, seed),
             SequentialCPM(; proposal = VonNeumann(1))).u[end]
         @test split_cells(u.σ, (true, false)) == 0
