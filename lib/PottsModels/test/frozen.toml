@@ -21,3 +21,8 @@ decision = "D-056"
 path = "acceptance/p6_0b_relationships.jl"
 sha256 = "146da9cc0946865fa9bee0cb023dfacab0360aa83c48d9393698f43440f8d2a1"
 decision = "D-053"
+
+[[file]]
+path = "acceptance/p6_0e_contact_sites.jl"
+sha256 = "246e0ba071bed5d32d90df8127b1ba538ccfbf2153661673e26bfe762d44dd58"
+decision = "D-053"
