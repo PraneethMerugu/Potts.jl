@@ -72,7 +72,7 @@ A split grade (for example "A / C") applies to two variants covered by one spec.
 > - analysis lives in the docs unless a package has real merit (item 6).
 >
 > Every other R-row stays a proposal until its step is taken up (D-051 preamble). The specs
-> still use G-ids, which §2.3 maps to R-ids. Review §7 questions 6–11 are open (§2.5).
+> still use G-ids, which §2.3 maps to R-ids. Review §7 questions 6–10 are answered (§2.5, D-065).
 
 ### 2.1 Rules for every feature
 
@@ -230,16 +230,23 @@ acceptance is plain Metropolis on the model's proposal law, as in the papers and
 reproduction tutorial; an opt-in `MetropolisHastings()` acceptance type (each R10 proposal
 law defines `proposal_ratio`) is built alongside R10, zero-cost when unused, on both
 algorithms, and validated against exact Boltzmann enumeration on a tiny lattice.
-Questions **6–10 are open**.
+Questions 6–10 were answered by the maintainer on 2026-09-30 (D-065, amending D-053
+items 6, 7 and 9):
 
-6. Explicit liveness (R6) changes id reuse (D-035) and the empty-cell energy (D-037). Is
-   that a new decision or an amendment?
-7. Cell references widen claim sets (R6). Is Sequential the reference for every energy
-   that reads a reference?
-8. Uptake split (R15): once per MCS or inside substeps? The review recommends per MCS.
-9. Boolean networks (R13): a Potts helper first, or MTK `Shift` components? The review
-   recommends the helper first.
-10. Float32 moment after-values on Metal (R7): accept statistical agreement (D-029)?
+6. **Explicit liveness (R6): follow standard CPM behaviour where performance allows.** A
+   survey of CompuCell3D, Morpheus and Artistoo (`../liveness-survey.md`, P6.5a0) leads to a
+   new decision amending D-035 (id reuse) and D-037 (empty-cell energy). Each deviation that
+   keeps our faster mechanism, because the standard one costs warm-MCS time or allocations
+   on the performance gate, is recorded.
+7. **Cell references and claim sets (R6): approved.** Sequential is the reference for every
+   energy that reads a cell reference. Checkerboard is validated statistically, as with Y2
+   (it is not required to be exact).
+8. **Uptake split (R15): approved, once per MCS.**
+9. **Boolean networks (R13): MTK discrete (clocked, `Shift`) components**, extending D-038,
+   with a well-tested lowering into the per-cell phases. No Potts expansion helper is
+   built. Any gaps in MTK's discrete support are recorded with their workaround.
+10. **Float32 moment after-values on Metal (R7): approved.** Statistical agreement with
+    Float64 (D-029).
 
 (Question 11, adopting guardrails (a)–(e) with the R0 renames, is answered by D-051 item 1.)
 

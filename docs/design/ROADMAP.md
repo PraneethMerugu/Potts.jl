@@ -143,6 +143,15 @@ Every item's acceptance also includes the standing checks:
     reviewed allowlist), `check_no_stale_explicit_imports` and
     `check_all_qualified_accesses_via_owners` pass in each package's QA.
   - Negative control: a deliberate implicit import fails the check.
+- [ ] **P6.0k** MTK discrete-component spike (D-065 Q9, unparked 2026-09-30). A per-cell
+  MTK clocked component (`Shift`, a Boolean update rule) lowered into the per-cell phases.
+  - Accept: a 3-node Boolean network per cell matches a hand-written truth-table
+    reference, under both algorithms and on Metal.
+  - Accept: zero warm allocations.
+  - Every part of MTK's discrete support that is not usable yet is recorded in DECISIONS
+    with its workaround.
+- [ ] **P6.0i2** author-letter pre-send checks (D-065): fetch the openly available sources,
+  settle the HOLD questions, and list what could not be obtained for the maintainer.
 - [x] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
   README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
   send.
@@ -221,8 +230,12 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 5 — Fortuna (14a/14b), 3D
 
+- [ ] **P6.5a0** Liveness survey (D-065 Q6): CompuCell3D, Morpheus and Artistoo death,
+  id reuse and exclusion semantics. The output is `research/liveness-survey.md` and a
+  decision amending D-035/D-037, with performance deviations recorded.
 - [ ] **P6.5a** R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
-  explicit liveness (`alive`, D-053 item 6, amends D-035/D-037); claim widening (item 7).
+  explicit liveness per the P6.5a0 decision; claim widening, with checkerboard validated
+  statistically against sequential (D-065 Q7).
 - [ ] **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
   transition > divide > create); `@convert`; ownership hooks fire `@on_copy` /
   `clear_on_ownership_change`. Fixes A-17.
@@ -248,7 +261,7 @@ merges (phase-end checkpoint).
 - **P6.8** Bauer 2007:
   - R3 symbolic `@transition` with scope that survives it;
   - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
-  - R15 `CellOperator` and `uptake` (once per MCS, D-053 item 8);
+  - R15 `CellOperator` and `uptake` (once per MCS, D-065 Q8);
   - R10 `UnlikeNeighbor`;
   - R2 `Fibres`. Gate: B2.
 - **P6.9** Bauer 2009:
@@ -257,7 +270,8 @@ merges (phase-end checkpoint).
   - R16 branch and loop detection. Gate: B2.
 - **P6.10** Jafari Nivlouei:
   - R13 tables;
-  - Boolean networks as MTK discrete components (D-053 item 9);
+  - Boolean networks as MTK discrete (clocked, `Shift`) components lowered into the
+    per-cell phases (D-065 Q9: no Potts helper; record MTK gaps and workarounds);
   - two periodic PDEs with EC clamps;
   - the Andasari ODE conformance test. Gate: N1–N3.
 - **P6.11** Jiang 2005:

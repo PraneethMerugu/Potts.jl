@@ -906,3 +906,38 @@ out-of-domain site or a closed lattice edge. A domain frame that would be empty 
   silently. Reviewers check new entries by hand.
 - **Deferred.** Declaring CorePotts's hooks `public` would shrink the Potts allowlist. It
   is not done yet.
+
+## D-065 Maintainer answers to review questions 6–10 (2026-09-30, maintainer; amends D-053 items 6, 7 and 9)
+
+The maintainer gave these answers in the coordinator session on 2026-09-30. They replace
+D-053 items 6–10 where the two differ.
+
+- **Q7, cell references and claim sets: approved, and relaxed.**
+  - Sequential is the reference for every energy that reads a cell reference.
+  - The checkerboard sweep is validated **statistically** against sequential, as for Y2.
+    This replaces D-053 item 7's requirement that the checkerboard stay exact under
+    widened claims. Widened claims remain the implementation route, but exactness is no
+    longer an acceptance criterion.
+- **Q8, uptake split: approved.** The split runs once per MCS (D-053 item 8, unchanged).
+- **Q10, Float32 moments on Metal: approved.** Statistical agreement with Float64 (D-029;
+  D-053 item 10, unchanged).
+- **Q9, Boolean networks: MTK, with no Potts helper.**
+  - Boolean and discrete networks are MTK discrete-time (clocked, `Shift`) components,
+    extending D-038, with a well-tested lowering into the per-cell phases.
+  - **No Potts truth-table expansion helper is built**, which withdraws the "sugar" clause
+    of D-053 item 9.
+  - Where MTK's discrete support is not usable yet, record the gap and the workaround in
+    DECISIONS. Do not design around a Potts-only representation.
+- **Q6, explicit liveness: follow standard CPM behaviour, where performance allows.**
+  - First survey CompuCell3D, Morpheus and Artistoo: when a cell counts as dead (zero
+    volume, explicit removal), whether ids are reused, and how dead cells are excluded from
+    energies and populations. The survey is `research/liveness-survey.md` (P6.5a0).
+  - Then adopt that behaviour as a new decision that amends D-035 and D-037 and says
+    exactly what changes. It replaces the specific semantics of D-053 item 6.
+  - Keep our faster mechanism wherever the standard behaviour would cost measurable
+    warm-MCS time or allocations, as measured by the performance gate. Record each such
+    deviation.
+- **Author letters:** the maintainer authorised fetching every openly available source
+  on the pre-send checklist from legitimate public sources, with no paywall
+  circumvention. The resolved HOLD questions are then dropped or narrowed (P6.0i2). The
+  maintainer still sends the letters personally.
