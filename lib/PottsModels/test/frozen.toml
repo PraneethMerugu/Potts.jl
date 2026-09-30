@@ -34,8 +34,8 @@ decision = "D-060"
 
 [[file]]
 path = "acceptance/p6_0f_rule_cadence.jl"
-sha256 = "fd20be3c8614f2a417f80cde8983bad2a1c5c2966465e2cf6b46ce77c13b9f84"
-decision = "D-053"
+sha256 = "9bf38772b920b6c6b8abf8afa9e087bbe1de20c77de6c5c0d8bfbccefe480821"
+decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
