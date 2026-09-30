@@ -50,7 +50,7 @@ const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :clus
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
-const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight)
+const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight, :site′)   # `site′`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
 const _PROPOSAL_BUILTINS = (:source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells)
 const _EDGE_BUILTINS = (:a, :b, :distance)
@@ -82,6 +82,9 @@ end
 
 const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
 
+# names a user can write (`site′` only arises from `x′`)
+_visible(names) = filter(!=(:site′), collect(names))
+
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
 function _check_names(x, allowed, what; between_copies::Bool = false)
@@ -94,11 +97,13 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
         _check_names(cond, (allowed..., inner...), what; between_copies)
     end
     for n in _bare_builtins(x)
-        n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
+        n === :site′ && !(n in allowed) &&
+            throw(ArgumentError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
+        n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
-            throw(ArgumentError("`$n` is not available in $what (available: $(join(allowed, ", ")))"))
+            throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
     end
     return nothing
 end
@@ -195,7 +200,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
     end
     # energies may read on-copy-written variables only where ΔH can apply the write (D-045):
-    # cell terms at the written cell (`x[new]`, `x[old]`), site terms at the target
+    # cell terms at the written cell (`x[new]`, `x[old]`), site and contact terms (`x`, `x′`)
+    # at the target
     for u in sys.updates
         u.phase === :on_copy || continue
         lhs = _unwrap(u.eq.lhs)
@@ -203,15 +209,16 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         x, idx = arguments(lhs)
         i = info(x)
         i === nothing && continue
-        readers = Any[(E for (_, E) in cluster_terms)..., values(contact_terms)..., last.(edge_terms)...,
-            (i.role === :cell ? () : last.(cell_terms))..., (i.role === :cell ? site_terms : ())...]
+        readers = Any[(E for (_, E) in cluster_terms)..., last.(edge_terms)...,
+            (i.role === :cell ? (site_terms..., values(contact_terms)...) : last.(cell_terms))...]
         ok = _oncopy_side(i, idx) !== nothing
         if !ok
-            readers = Any[readers..., last.(cell_terms)..., site_terms...]
+            readers = Any[readers..., last.(cell_terms)..., site_terms..., values(contact_terms)...]
         end
         any(E -> any(==((i.role, i.name)), _uses(E)), readers) && _located(sys, u) do
             throw(ArgumentError("an energy reads `$(i.name)`, which this on-copy update writes; ΔH applies the " *
-                                "write only for cell terms reading `$(i.name)[new]`/`[old]` and site terms at the target"))
+                                "write only for cell terms reading `$(i.name)[new]`/`[old]`, and site and contact terms " *
+                                "reading a site variable written at the target"))
         end
     end
     drive = isempty(sys.drives) ? nothing : sum(d -> d.expr, sys.drives)
@@ -426,20 +433,24 @@ function _check_static(x, what)
     return nothing
 end
 
-# In a contact term a bare cell variable means its value at the owner (`x[owner]`), so that
-# mirroring (owner ↔ owner′) sees it; bare site variables are ambiguous there.
+# In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
+# bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[site′]`), so
+# that mirroring (owner ↔ owner′, site ↔ site′) sees them.
 function _cellvars_at_owner(E)
     sub = Dict{Any, Any}()
     for x in _bare_vars(E)
         i = info(x)
         i.role === :cell && (sub[x] = _unwrap(at(Symbolics.wrap(x), B.owner)))
-        i.role in (:site, :field) && throw(ArgumentError("site variable `$(i.name)` in a contact term: the pair has two sites; not supported"))
+        i.role in (:site, :field) && (sub[x] = _unwrap(at(Symbolics.wrap(x), B.site)))
     end
     isempty(sub) && return E
-    return Symbolics.substitute(E, sub; fold = Val(false), filterer = _not_indexed)
+    return Symbolics.substitute(E, sub; fold = Val(false), filterer = _pair_scope)
 end
 _not_indexed(ex) = !(iscall(ex) && (operation(ex) === at || operation(ex) === at2)) &&
                    SymbolicUtils.default_substitute_filter(ex)
+# the pair's names, not inside a population fold (its body reads the bound cell or site)
+_outside_population(ex) = !(iscall(ex) && operation(ex) === population) && SymbolicUtils.default_substitute_filter(ex)
+_pair_scope(ex) = _not_indexed(ex) && _outside_population(ex)
 
 # Scoped variables used bare (not as the array of `x[i]`).
 function _bare_vars(x, out = Set{Any}())
@@ -466,13 +477,14 @@ function _leaves(x)
 end
 
 # Contact energies are summed over unordered pairs; an asymmetric expression is averaged
-# with its mirror (kind ↔ kind′, owner ↔ owner′).
+# with its mirror (kind ↔ kind′, owner ↔ owner′, site ↔ site′).
 # Kind tables used in contact terms must be symmetric (checked against their values when the
 # problem is built), so their entries are compared up to index order.
 function _symmetrize(E)
     swap = Dict(_unwrap(B.kind) => _unwrap(B.kind′), _unwrap(B.kind′) => _unwrap(B.kind),
-        _unwrap(B.owner) => _unwrap(B.owner′), _unwrap(B.owner′) => _unwrap(B.owner))
-    M = Symbolics.substitute(E, swap; fold = Val(false))
+        _unwrap(B.owner) => _unwrap(B.owner′), _unwrap(B.owner′) => _unwrap(B.owner),
+        _unwrap(B.site) => _unwrap(B.site′), _unwrap(B.site′) => _unwrap(B.site))
+    M = Symbolics.substitute(E, swap; fold = Val(false), filterer = _outside_population)
     flips = Dict{Any, Any}()
     _walk(M) do y
         if iscall(y) && operation(y) === at2 && role(arguments(y)[1]) === :kindtable
@@ -560,7 +572,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             d = e.domain
             d isa CellDomain ? lower(e.expr, _cell_env(T, :c, rn)) :
             d isa ClusterDomain ? lower(e.expr, _cluster_env(T, :r, rn)) :
-            d isa ContactDomain ? lower(_cellvars_at_owner(e.expr), _contact_env(T, :a, :ka, :n, :kn, :w, :i, rn)) :
+            d isa ContactDomain ? lower(_cellvars_at_owner(e.expr), _contact_env(T, :a, :ka, :n, :kn, :w, :i, :j, rn)) :
             d isa SiteDomain ? lower(e.expr, _site_env(T, :i, rn)) :
             d isa EdgeDomain ? lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn)) : nothing
         end

@@ -127,7 +127,7 @@ Every item's acceptance also includes the standing checks:
   field in one model; conformance against each solver alone.
 - [ ] **P6.0d** frozen-kind mask recomputed on lifecycle events. Accept: a kind that
   becomes frozen after a transition stops moving; the negative control moves.
-- [ ] **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
+- [x] (merge, 2026-09-30; D-061) **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
   contact term that reads a site field.
 - [ ] **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
   at their counts.

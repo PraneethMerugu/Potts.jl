@@ -158,7 +158,7 @@ expression may refer to:
 |---|---|---|
 | `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
-| `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`, site state `x`/`x′`, and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
+| `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
 | `edges(relationship)` | every edge of that relationship | `a`, `b` (cells), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
@@ -173,6 +173,25 @@ Examples:
     contacts(contact)  => weight * J[kind, kind′]              # weighted, order 2
     sites              => μ * c * (kind == tumor)              # field-coupled site energy
     edges(bond)        => k * (distance - ℓ₀)^2                # spring between linked cells
+end
+```
+
+Site values in contact terms. A contact term may read any site or field variable `x` as
+`x` (at `s`) and `x′` (at `s′`). An asymmetric term is averaged with its mirror
+(`kind ↔ kind′`, `owner ↔ owner′`, `x ↔ x′`), like every contact term. The value read is the
+site's current value. Updates, field equations and on-copy writes change it; the copy itself
+does not. A copy changes only the owner of the target, so ΔH covers the contact pairs around
+the target. An `@on_copy x[target] ~ …` write, and a variable with
+`clear_on_ownership_change`, enter ΔH with their after-copy value at the target (D-045). An
+on-copy write at the source, which would change pairs away from the target, is rejected. The
+reads at `s′` lie within the contact radius, so they add no reach and no checkerboard claims.
+`x′` exists only in contact terms.
+
+```julia
+@variables cue(site) = 0.0
+@energy begin
+    contacts        => J[kind, kind′] + β * (kind != kind′) * (cue + cue′) / 2   # cue-gated adhesion
+    contacts(outer) => weight * γ * (cue - cue′)^2                               # any contact relation
 end
 ```
 

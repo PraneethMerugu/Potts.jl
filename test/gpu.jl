@@ -161,3 +161,25 @@ end
     @test abs(t) < 4
     @test all(>(20), gpu)          # leaders invade (start ≈ 11; ≈ 15.5 at 200 MCS without the cue)
 end
+
+@testset "P6.0e contact terms reading site values on Metal (Float32)" begin
+    backend = MetalBackend()
+    sys = SiteContacts(; name = :sq)
+    p64 = site_contact_problem(sys, (24, 24); tspan = (0, 60))
+    p32 = site_contact_problem(sys, (24, 24); tspan = (0, 60), T = Float32)
+    u = solve(p32, CheckerboardCPM(); backend).u[end]
+    @test eltype(u.site.cue) === Float32 && Array(u.site.cue) == p32.u0.site.cue       # site values stay put
+    @test Array(u.cell.volume) == [count(==(c), Array(u.σ)) for c in eachindex(Array(u.cell.volume))]
+    xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
+    ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
+    t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
+    @info "P6.0e site-value contacts H, CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
+    @test abs(t) < 4
+    # an on-copy write read by the contact term, on the device
+    σ, kinds, cue = site_contact_state((20, 20); side = 4)
+    oc = PottsProblem(SiteContactsOnCopy(; name = :oc), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue,
+        :tag => 2 .* cue], (0, 20); T = Float32)
+    v = solve(oc, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+    @test Array(v.cell.volume) == [count(==(c), Array(v.σ)) for c in eachindex(Array(v.cell.volume))]
+    @test any(!=(0.5f0), Array(v.site.tag)) && count(==(0.5f0), Array(v.site.tag)) > 0   # copies cleared tags
+end

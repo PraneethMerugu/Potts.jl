@@ -25,7 +25,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     end
     byname(xs, ys) = (seen = Set(info(y).name for y in ys);
         Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
-    return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
+    return _check_primed_names(PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
@@ -38,7 +38,31 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         observed = [_unreplaced(base.observed, sys.observed, o -> info(o.var).name); sys.observed],
         components = unique(c -> c.name, [sys.components; base.components]),
         sweep = sys.sweep, structural = merge(base.structural, sys.structural),
-        sources = merge(base.sources, sys.sources))
+        sources = merge(base.sources, sys.sources)))
+end
+
+"""
+`x′` is the contact-pair value of a site or field variable `x`: no quantity of the system
+(parameter, variable or observed quantity, inherited through `@extend` or not) may carry
+that name as well.
+"""
+function _check_primed_names(sys::PottsSystem)
+    names = Set{Symbol}()
+    for x in Iterators.flatten((sys.parameters, sys.variables, (o.var for o in sys.observed)))
+        i = info(x)
+        push!(names, i.name)
+        v = get(i.options, :vector, nothing)
+        v === nothing || push!(names, v)
+    end
+    for n in names
+        s = string(n)
+        endswith(s, '′') || continue
+        x = Symbol(chop(s))
+        _is_site_quantity(sys, x) && throw(ArgumentError(
+            "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
+            "site variable `$x`; rename one of them"))
+    end
+    return sys
 end
 
 """Items of `base` whose key no item of `new` shares."""
@@ -79,9 +103,12 @@ _replace(sys::PottsSystem; kw...) =
     lookup(sys::PottsSystem, name::Symbol)
 
 The quantity called `name` in a model: a parameter, variable, observed quantity, kind
-(its number), relation or relationship. `@extend` binds names with it.
+(its number), relation or relationship; `x′` for a site or field variable `x` is its value
+at the other site of a contact pair. `@extend` binds names with it.
 """
 function lookup(sys::PottsSystem, name::Symbol)
+    x = _lookup_primed(sys, name)
+    x === nothing || return x
     for x in Iterators.flatten((sys.parameters, sys.variables))
         info(x).name === name && return x
     end
@@ -96,4 +123,17 @@ function lookup(sys::PottsSystem, name::Symbol)
     haskey(sys.relations, name) && return RelationRef(name)
     any(r -> r.name === name, sys.relationships) && return RelationshipRef(name)
     throw(ArgumentError("$(nameof(sys)) has no parameter, variable, kind or relation `$name`"))
+end
+
+# `x′` of a site or field variable `x` (scalar or vector) of `sys`, or `nothing`
+function _lookup_primed(sys::PottsSystem, name::Symbol)
+    s = string(name)
+    endswith(s, '′') || return nothing
+    base = Symbol(chop(s))
+    _is_site_quantity(sys, base) || return nothing
+    return _primed(lookup(sys, base))
+end
+function _is_site_quantity(sys::PottsSystem, name::Symbol)
+    return any(x -> (i = info(x); i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
+        sys.variables)
 end

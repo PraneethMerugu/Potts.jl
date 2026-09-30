@@ -1307,3 +1307,18 @@ The maintainer approved F-1…F-6 (D-049).
   reviewer approved on the code and IR evidence.
 - **Rule recorded:** D-058 item 4.
 
+
+## 2026-09-30 — P6.0e merged: contact energies read site values (D-061)
+
+- **Process.**
+  - The write set had to be widened twice: `src/macro.jl` (my scoping error) and
+    `src/compose.jl`.
+  - The review ran 3 rounds. They fixed `x′` in `@extend`, a silently inconsistent
+    user-declared `x′`, and a missing regression test.
+- **Exactness.** It was verified adversarially: contact relations of radius 2–3, on-copy
+  writes and clears, two site terms, square, hex and 3D, all below 1e-9.
+- **Wortel.** Its generated code is bitwise-equal apart from new locals. A/B on CPU gives
+  1.000 sequential and 0.999 checkerboard.
+- **Queued as P6.0e2:** the `m′` error message, and the check for programmatically built
+  systems.
+- **Gate on the merged tree (idle):** CPU cases 0.971–1.010. Metal openvt was flagged at 1.122; the A/B gives 1.001.

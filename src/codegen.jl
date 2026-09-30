@@ -55,9 +55,11 @@ _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => 
     :ring_arcs => :(Int32(CorePotts.ring_arcs(st.σ, ctx, prop))),
     :ring_cells => :(Int32(CorePotts.ring_cells(st.σ, ctx, prop)))), relname)
 
-_contact_env(T, a, ka, n, kn, w, site, relname) = LowerEnv(T, :contact,
+# a contact pair (s, s′): owners `a`, `n`, their kinds, the relation weight, and the sites
+# (site variables `x ≡ x[site]`, `x′ ≡ x[site′]`)
+_contact_env(T, a, ka, n, kn, w, site, site′, relname; extra = ()) = LowerEnv(T, :contact,
     Dict{Symbol, Any}(:kind => ka, :kind′ => kn, :owner => a, :owner′ => n, :weight => w,
-        :__site => site, :__cell => a), relname)
+        :__site => site, :site => site, :site′ => site′, :__cell => a, extra...), relname)
 
 _edge_env(T, a, b, k, d, relname; mcs = nothing) = LowerEnv(T, :edge,
     Dict{Symbol, Any}(:a => a, :b => b, :distance => d, :__edge => (k, a),
@@ -101,11 +103,18 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if c.uses_surface
         push!(body, :(δs_old = zero(eltype(st.cell.surface))), :(δs_new = zero(eltype(st.cell.surface))))
     end
+    # on-copy writes the energies read (D-045): the state after the copy has them applied
+    after, oc_binds, oc_vals = _oncopy_after(c, T, rn)
+    append!(body, oc_vals)
+    # contact pairs around the target: site values stay with the copy except those written
+    # at the target, which the after-copy pairs read (`x[site]` at `site = target`)
+    contact_after = Dict{Any, Any}(_unwrap(at(Symbolics.wrap(x), B.site)) => v for (x, v) in after[:target])
     for (rel, E) in _sorted(c.contact_terms)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
         ctxname = rel === :contact ? :contact : rel
-        Enew = lower(E, _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, rn))
-        Eold = lower(E, _contact_env(T, :old, :k_old, :n, :k_n, :w, :target, rn))
+        Ea = isempty(contact_after) ? E : Symbolics.substitute(E, contact_after; fold = Val(false))
+        Enew = lower(Ea, _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, :sn, rn; extra = oc_binds))
+        Eold = lower(E, _contact_env(T, :old, :k_old, :n, :k_n, :w, :target, :sn, rn))
         fuse = c.uses_surface && !fused_surface && _same_relation(c, ctxname, :surface)
         fused_surface |= fuse
         surfacc = fuse ? quote
@@ -117,7 +126,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             for kk in 1:length($R)
                 ins, y = CorePotts.shift(ctx.lattice, prop.x, @inbounds $R.offsets[kk])
                 if ins
-                    n = @inbounds st.σ[CorePotts.linear_index(ctx.lattice, y)]
+                    sn = CorePotts.linear_index(ctx.lattice, y)
+                    n = @inbounds st.σ[sn]
                     w = CorePotts.weight($R, kk)
                     k_n = Potts._cellkind(st, n)
                     n != new && (dH += $Enew)
@@ -130,9 +140,6 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if c.uses_surface && !fused_surface
         push!(body, :((δs_old, δs_new) = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
     end
-    # on-copy writes the energies read (D-045): the state after the copy has them applied
-    after, oc_binds, oc_vals = _oncopy_after(c, T, rn)
-    append!(body, oc_vals)
     # cell terms, grouped by kind filter
     groups = Dict{Vector{Int}, Any}()
     for (kinds, E) in c.cell_terms
@@ -156,12 +163,12 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             (ea, eb, ek, ed) -> $Ecode)))
     end
     for E in c.site_terms
-        after = lower(isempty(after[:target]) ? E : Symbolics.substitute(E, after[:target]; fold = Val(false)),
+        Eafter = lower(isempty(after[:target]) ? E : Symbolics.substitute(E, after[:target]; fold = Val(false)),
             LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :new, :kind => :k_new, :__site => :target,
             :position => :(Potts._position($T, ctx, target)), :site => :target, oc_binds...), rn))
         before = lower(E, LowerEnv(T, :site, Dict{Symbol, Any}(:owner => :old, :kind => :k_old, :__site => :target,
             :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
-        push!(body, :(dH += $after - $before))
+        push!(body, :(dH += $Eafter - $before))
     end
     drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
     push!(body, :(return $T(dH)))
@@ -203,13 +210,20 @@ _same_relation(c::CompiledPottsSystem, a::Symbol, b::Symbol) =
 """
 On-copy updates whose targets the energies read, as after-copy stand-ins: `after[side]`
 maps a cell variable written at `new`/`old` (or a site variable written at `target`) to a
-local holding its on-copy value, computed as `commit!` will.
+local holding its on-copy value, computed as `commit!` will. A site variable cleared on
+ownership change (and not written) is its default after the copy.
 """
 function _oncopy_after(c::CompiledPottsSystem, T, rn)
     after = Dict(:new => Dict{Any, Any}(), :old => Dict{Any, Any}(), :target => Dict{Any, Any}())
     binds = Pair{Symbol, Any}[]
     vals = Any[]
-    read = Set{Symbol}(n for E in Any[last.(c.cell_terms)..., c.site_terms...] for (r, n) in _uses(E) if r in SCOPES)
+    read = Set{Symbol}(n for E in Any[last.(c.cell_terms)..., c.site_terms..., values(c.contact_terms)...]
+                       for (r, n) in _uses(E) if r in SCOPES)
+    for x in c.sys.variables                         # `commit!` resets these before the writes
+        i = info(x)
+        (i.role in (:site, :field) && i.name in read && get(i.options, :clear_on_ownership_change, false) === true) || continue
+        after[:target][_unwrap(x)] = i.default isa Real ? T(i.default) : zero(T)
+    end
     for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
         x, idx = arguments(_unwrap(u.eq.lhs))
         i = info(x)
@@ -792,7 +806,7 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
     end
     for (rel, E) in _sorted(c.contact_terms)
         R = rel === :contact ? :(ctx.contact) : :(ctx.$rel)
-        e = lower(E, _contact_env(T, :a, :ka, :n, :kn, :w, :i, rn))
+        e = lower(E, _contact_env(T, :a, :ka, :n, :kn, :w, :i, :j, rn))
         push!(body, quote
             for i in 1:length(st.σ)
                 a = st.σ[i]
@@ -801,7 +815,8 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
                 for kk in 1:length($R)
                     ins, y = CorePotts.shift(ctx.lattice, x, $R.offsets[kk])
                     ins || continue
-                    n = st.σ[CorePotts.linear_index(ctx.lattice, y)]
+                    j = CorePotts.linear_index(ctx.lattice, y)
+                    n = st.σ[j]
                     n == a && continue
                     w = CorePotts.weight($R, kk)
                     kn = Potts._cellkind(st, n)

@@ -811,3 +811,24 @@ margin in the state the rule actually sees. This is the post-sweep state (AUTHOR
    Metal, even though the kernel bodies were identical. The A/B against 5258ab9 now gives
    akeeb 0.993, openvt 0.996 and merks 1.001.
 
+
+## D-061 Contact energies read site values: `x` and `x′` (2026-09-30, P6.0e)
+
+1. **Naming.** In a `contacts`/`contacts(relation)` term, a bare site or field variable `x`
+   means `x[site]`, and `x′` means `x[site′]`.
+   - `@variables` binds `x′` for every site or field variable, and `@extend` binds it next
+     to every bound site or field name. `lookup(sys, :x′)` resolves it.
+   - `_symmetrize` mirrors `site ↔ site′`.
+   - `x′` exists only in contact terms. The name is reserved: declaring a quantity named
+     `x′` alongside a site or field `x` is an error, in a model body or through `@extend`.
+2. **On-copy writes (extends D-045).** A contact pair that includes the target reads the
+   value written at the target on copy.
+   - `clear_on_ownership_change` counts as an on-copy write for every energy, contact and
+     site terms alike, so ΔH uses the default at the target.
+   - An on-copy write at the source is rejected for any energy that reads the variable.
+3. **Population folds** inside contact terms are neither placed at the pair nor mirrored.
+4. **Claims.** Reading `x` at `s′` stays within the contact radius, on sites whose `σ` the
+   pair already reads, so no new checkerboard claims are needed. The reviewer confirmed
+   this empirically on square, hex and Metal.
+5. **Also fixed:** a model with two site terms broke ΔH, because the site-term loop
+   reassigned `after`.

@@ -220,7 +220,7 @@ function _sort(x)
     if i !== nothing
         i.role in (:bound, :bound_site) && return :site
         i.role === :bound_cell && return :cell
-        i.role === :builtin && return i.name in (:source, :target) ? :site :
+        i.role === :builtin && return i.name in (:source, :target, :site, :site′) ? :site :
                i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
     end
     if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at

@@ -301,6 +301,10 @@ function _section!(parts, sec, args, ln = nothing)
                 push!(code, :($k = $P.vector_variable($(QuoteNode(k)), $range, $(QuoteNode(scope)); $(kw...))),
                     :(append!(__vars, $k.components)))
             end
+            if scope in (:site, :field)                  # `x′`: the value at s′ of a contact pair
+                k′ = _declare!(parts, Symbol(k, '′'), "variable (the contact-pair value of `$k`)")
+                push!(code, :($k′ = $P._primed($k)))
+            end
         end
     elseif sec === Symbol("@extend")
         # `@extend Base()`, `@extend base = Base()` or `@extend a, b = base = Base()` (MTK)
@@ -327,6 +331,12 @@ function _section!(parts, sec, args, ln = nothing)
         push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)),
             :($P._DIM[] == 0 && ($P._DIM[] = length($bname.lattice.dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
+        # a bound site or field variable `x` brings its contact-pair value `x′` along
+        for n in names
+            n′ = Symbol(n, '′')
+            n′ in names && continue
+            push!(code, :($P._is_site_quantity($bname, $(QuoteNode(n))) && ($n′ = $P.lookup($bname, $(QuoteNode(n′))))))
+        end
     elseif sec === Symbol("@components")
         # `@components clock = sys`, `@components cells(k) grn = sys`, or a block of `name = sys`
         domain = length(args) == 2 ? args[1] : :($P.cells)
