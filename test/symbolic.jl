@@ -1661,6 +1661,98 @@ end
     @test count(x -> x isa Potts._Gated && x.phase isa CorePotts.CellReduce, ph.after_mcs) == 1
 end
 
+# P6.0m3 (D-042, D-076): `integral(Pre(w))` is its own slot, refreshed at the start of the
+# after block (σ post-sweep, w at its block-start value). It needs no `w__pre` snapshot and
+# is left intact when another read does snapshot `w`; in @before_mcs the boundary refresh is
+# already the block-start fold.
+@potts_model IntegralPre begin
+    @kinds medium A
+    @variables begin
+        w(site) = 0.0
+        v(site) = 0.0
+        x(site) = 0.0
+        s(cell) = 0.0
+        sb(cell) = 0.0
+        f(cell) = 0.0
+    end
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 16)^2
+    @before_mcs begin
+        sb ~ integral(Pre(x))
+        x ~ Pre(x) + 1
+    end
+    @after_mcs begin
+        v ~ Pre(w)                              # another update reads Pre(w): snapshots w
+        s ~ integral(Pre(w)) + integral(Pre(v))
+        w ~ Pre(w) + 1
+        f ~ integral(w)
+    end
+    @sweep Metropolis(; temperature = 0.0)
+end
+
+@testset "integral(Pre(w)) folds the block-start values (P6.0m3, D-042)" begin
+    σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+    c = mtkcompile(IntegralPre(; name = :ip))
+    @test (:site, :w) in c.pre_snapshots[:after_mcs]                    # from `v`, not from `s`
+    @test !any(t -> last(t) === :v, c.pre_snapshots[:after_mcs])       # `v` read only in an integral
+    @test isempty(c.pre_snapshots[:before_mcs])
+    # a snapshotted `Pre(w)` both outside and inside an integral: only the outside one is rewritten
+    w = only(filter(x -> Potts.info(x).name === :w, c.sys.variables))
+    snap = Dict{Symbol, Any}(:w => Potts._standin(:site, :w__pre))
+    iw = Potts._unwrap(Potts._integral(Potts.Pre(w)))
+    @test isequal(Potts._to_snapshots(Potts._unwrap(Potts.Pre(w) + iw), snap, _ -> false), Potts._unwrap(snap[:w] + iw))
+    ph = Potts._phases(c, Float64, Dict{Any, Any}(), Potts._resolve_solvers(c))
+    reduces(t) = count(x -> x isa CorePotts.CellReduce, t)
+    @test reduces(ph.before_mcs) == 0                  # the boundary refresh serves `sb`
+    @test reduces(ph.after_mcs) == 4                   # Pre(w), Pre(v), Pre(x) at the start; w after its writer
+    i1 = findfirst(x -> x isa CorePotts.CellReduce, ph.after_mcs)
+    @test i1 < findfirst(x -> x isa CorePotts.CopyPhase, ph.after_mcs)  # refreshed before the snapshot copy
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        sol = solve(PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 4)), alg; saveat = 0:4)
+        k = 0:4
+        @test [Array(u.cell.volume)[1] for u in sol.u] == fill(16, 5)
+        # s = Σ w_start + Σ v_start; w_start = k - 1, v_start = k - 2 (v lags w by one MCS)
+        @test [Array(u.cell.s)[1] for u in sol.u] == [j == 0 ? 0.0 : 16.0 * ((j - 1) + max(j - 2, 0)) for j in k]
+        @test [Array(u.cell.f)[1] for u in sol.u] == 16.0 .* k                       # fresh (D-076)
+        @test [Array(u.cell.sb)[1] for u in sol.u] == [16.0 * max(j - 1, 0) for j in k]  # before block
+    end
+    integ = init(PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 100)), SequentialCPM())
+    warm() = (step!(integ); @allocated step!(integ))
+    @test minimum(warm() for _ in 1:5) == 0
+
+    # misuse: an integral mixing Pre and bare reads of block-written variables; and
+    # `integral(Pre(w))` outside update blocks, where Pre is the stored value
+    for body in (:(@after_mcs begin
+                     w ~ Pre(w) + 1
+                     s ~ integral(Pre(w) + w)
+                 end),
+                 :(@after_mcs begin
+                     w ~ Pre(w) + 1
+                     s ~ integral(Pre(w) * f)
+                     f ~ Pre(f)
+                 end),
+                 :(@equations D(r) ~ integral(Pre(w))),
+                 :(@divide cells(A) when = integral(Pre(w)) > 100),
+                 :(@observed q(cell) ~ integral(Pre(w))))
+        m = eval(:(@potts_model _BadIntegralPre begin
+            @kinds medium A
+            @variables begin
+                w(site) = 0.0
+                f(site) = 0.0
+                s(cell) = 0.0
+                r(cell) = 0.0
+            end
+            @lattice Lattice((8, 8))
+            @energy cells => (volume - 16)^2
+            $(body)
+            @sweep Metropolis(; temperature = 1.0)
+        end))
+        @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
+    end
+    p = PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 1))
+    @test_throws ArgumentError p[Potts._integral(Potts.Pre(w))]
+end
+
 # P6.0m: the ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
 # rule, so D-074 leaves it alone: at most one arc (zero included) or exactly two ring cells
 @potts_model ArcOrPair begin

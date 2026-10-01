@@ -52,6 +52,7 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
         c = info.csys
         T = info.T
         e = _expand_observed(c, _unwrap(x))
+        _check_integral_pre_outside(e)
         rn = c.gather_names
         scope = _observed_scope(e)
         f = if scope === :cell

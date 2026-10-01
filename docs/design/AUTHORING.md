@@ -784,6 +784,15 @@ end
     values (D-042): it is recomputed after the writing stage, before the next stage that
     reads it (and before the equations, lifecycle or temperature that read it after the
     block). An integral whose variables no update writes costs no extra pass.
+  - `integral(Pre(x))` in an update block folds the values before the block (D-042) over
+    the cell's sites as the block sees them (after the sweep): it is its own slot,
+    refreshed once at the start of the block, needs no `x__pre` snapshot, and is distinct
+    from `integral(x)` in the same block. An integral mixing `Pre` and bare reads of
+    variables the block writes is an error (no single refresh point gives both).
+  - Outside update blocks (equations, division conditions and rules, link rules, discrete
+    ticks, the temperature, observed quantities) `Pre(x)` is the stored value, so
+    `integral(Pre(x))` would silently be the post-block fold; it is an error there. Keep
+    the block-start fold in a cell variable (`s ~ integral(Pre(x))` in the block).
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the

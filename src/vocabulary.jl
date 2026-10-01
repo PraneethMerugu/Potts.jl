@@ -226,6 +226,7 @@ state after the copy sweep, and the new value of every variable of `x` written b
 same block (the reading update runs after the writer, and the integral is recomputed in
 between). Recomputed at the start of the after-MCS phases, after each update that writes
 one of its variables when something reads it later, and at the MCS boundary.
+`integral(Pre(x))` (update blocks only) folds the values before the block.
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)

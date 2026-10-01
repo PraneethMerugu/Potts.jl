@@ -29,13 +29,17 @@ end
 const _VAR_ROLES = (:site, :field, :cell, :model)
 
 # Variable reads in `x` as (name, through Pre, non-local): non-local reads are inside a
-# gather, population, index or Laplacian, i.e. possibly at another entity.
-function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false)
+# gather, population, index or Laplacian, i.e. possibly at another entity. With
+# `integral_pre = false`, `Pre` reads inside an `integral` are left out: `integral(Pre(w))`
+# is its own cell slot, refreshed at the start of the block's phases while `w` still holds
+# its block-start value (D-042), so it needs neither a snapshot nor a writer dependency.
+function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool = false;
+        integral_pre::Bool = true)
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return out
     i = info(x)
     if i !== nothing && i.role in _VAR_ROLES
-        push!(out, (i.name, pre, nonlocal))
+        (pre && inint && !integral_pre) || push!(out, (i.name, pre, nonlocal))
         return out
     end
     iscall(x) || return out
@@ -43,31 +47,62 @@ function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false)
     op === history_lag && return out                  # reads the ring, not the variable
     p = pre || op isa ModelingToolkitBase.Pre
     nl = nonlocal || op === gather || op === population || op === at || op === at2 || op === Δ
-    foreach(a -> _reads!(out, a, p, nl), arguments(x))
+    ii = inint || op === cell_integral
+    foreach(a -> _reads!(out, a, p, nl, ii; integral_pre), arguments(x))
     return out
 end
 _reads(x) = _reads!(Tuple{Symbol, Bool, Bool}[], x)
+# The reads that order an update block and decide its snapshots (see `_reads!`).
+_block_reads(x) = _reads!(Tuple{Symbol, Bool, Bool}[], x; integral_pre = false)
+
+# Whether `x` reads a variable through `Pre` inside an `integral`.
+function _integral_pre(x)
+    found = Ref(false)
+    _walk(x) do y
+        iscall(y) && operation(y) === cell_integral &&
+            any(r -> r[2], _reads(arguments(y)[1])) && (found[] = true)
+    end
+    return found[]
+end
 
 # A symbolic stand-in read as a stored array `st.<scope>.name` (role :site/:cell/:model).
 _standin(role::Symbol, name::Symbol) = _unwrap(_tag(_sym(name), Info(role, name, nothing, (;))))
 
 # Replace `Pre(x)` (and bare `x` when `self(x)`) for snapshotted names by their snapshot.
+# Integrals are left intact: `integral(Pre(x))` and `integral(x)` are cell slots of their
+# own (refreshed by the phase schedule, D-042/D-076), and a rewritten operand would name a
+# slot that does not exist.
 function _to_snapshots(x, snap::Dict{Symbol, Any}, self)
     isempty(snap) && return x
     sub = Dict{Any, Any}()
-    _walk_all(x) do y
+    inside = Set{Any}()                                # matches inside an integral: kept
+    function visit(y, inint)
+        y = _unwrap(y)
+        y isa SymbolicUtils.BasicSymbolic || return
+        key = nothing
         if iscall(y) && operation(y) isa ModelingToolkitBase.Pre
-            a = _unwrap(arguments(y)[1])
-            i = info(a)
-            i !== nothing && haskey(snap, i.name) && (sub[y] = snap[i.name])
+            i = info(_unwrap(arguments(y)[1]))
+            i !== nothing && haskey(snap, i.name) && (key = snap[i.name])
         else
             i = info(y)
-            i !== nothing && i.role in _VAR_ROLES && self(i.name) && haskey(snap, i.name) &&
-                (sub[y] = snap[i.name])
+            i !== nothing && i.role in _VAR_ROLES && self(i.name) && haskey(snap, i.name) && (key = snap[i.name])
         end
+        key === nothing || (inint ? push!(inside, y) : (sub[y] = key))
+        iscall(y) && foreach(a -> visit(a, inint || operation(y) === cell_integral), arguments(y))
+        return
     end
+    visit(x, false)
     isempty(sub) && return x
-    return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
+    any(in(inside), keys(sub)) || return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
+    # a term both outside and inside an integral: shield the integrals from the substitution
+    ints = Dict{Any, Any}()
+    _walk_all(x) do y
+        iscall(y) && operation(y) === cell_integral && !haskey(ints, y) &&
+            (ints[y] = _unwrap(_sym(Symbol(:__integral_, length(ints) + 1))))
+    end
+    y = _unwrap(Symbolics.substitute(x, ints; fold = Val(false)))
+    y = _unwrap(Symbolics.substitute(y, sub; fold = Val(false)))
+    return _unwrap(Symbolics.substitute(y, Dict{Any, Any}(v => k for (k, v) in ints); fold = Val(false)))
 end
 
 # Whether a population fold can be computed once, outside any cell or site (its body does
@@ -103,6 +138,24 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
 end
 
+# An integral that reads a variable written in the block both through `Pre` (block-start
+# values) and bare (new values) has no single refresh point: reject it.
+function _check_integral_pre(sys, u::Update, writers)
+    _walk(u.eq.rhs) do y
+        iscall(y) && operation(y) === cell_integral || return
+        rs = filter(r -> haskey(writers, r[1]), _reads(arguments(y)[1]))
+        pres = unique(first(r) for r in rs if r[2])
+        bares = unique(first(r) for r in rs if !r[2])
+        (isempty(pres) || isempty(bares)) && return
+        _located(sys, u) do
+            throw(ArgumentError("`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
+                                "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
+                                "same block; split it into `integral(…Pre…)` and `integral(…)` terms"))
+        end
+    end
+    return nothing
+end
+
 _update_scope(u::Update) = (r = info(_unwrap(u.eq.lhs)).role; r === :field ? :site : r)
 _update_name(u::Update) = info(_unwrap(u.eq.lhs)).name
 
@@ -130,7 +183,8 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     deps = [Int[] for _ in us]
     snapnames = Set{Symbol}()
     for (j, u) in enumerate(us)
-        for (n, pre, nl) in _reads(u.eq.rhs)
+        _check_integral_pre(sys, u, writers)
+        for (n, pre, nl) in _block_reads(u.eq.rhs)
             haskey(writers, n) || continue
             if pre || same(n, j)
                 # a previous-value read: free only at the writer's own entity
