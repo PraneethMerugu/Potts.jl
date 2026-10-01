@@ -104,10 +104,15 @@ decision = "D-083"
 
 [[file]]
 path = "acceptance/p6_0v_transfer_counters.jl"
-sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
-decision = "D-085"
+sha256 = "0261ce2d6edc78ba9c713ac642159aa442eb054886855ecc2fecc7f8ce32c4cf"
+decision = "D-096"
 
 [[file]]
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
 sha256 = "6a5ee19416dd47c74ee6e9427eaffae73141e1e881304a65b3a3f2f6d27ad888"
 decision = "D-081"
+
+[[file]]
+path = "acceptance/p6_0v1_device_lifecycle.jl"
+sha256 = "aa78f51312b9462d268b9639bf22cd243d20054a00f8dbba930180665642538b"
+decision = "D-096"

@@ -352,6 +352,14 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
 end
 
+# P6.0v1: the frozen device-lifecycle acceptance file, whose Metal testsets run only where
+# Metal is loaded (here). It wraps `Metal.wait_cmdbuf!` for its own wait count;
+# `transfer_counts.jl` below re-wraps it for its own.
+module P60v1OnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v1_device_lifecycle.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")
