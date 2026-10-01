@@ -140,13 +140,13 @@ end
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = connected)
         hot = merge(gg_params(), (; T = 40.0, V0 = length(dims) == 2 ? 36.0 : 64.0))
         for alg in (SequentialCPM(), CheckerboardCPM())
-            u = solve(CPMProblem(f, initial_state(σ, kinds), lat, (0, 30), hot), alg).u[end]
+            u = solve(PottsProblem(f, initial_state(σ, kinds), lat, (0, 30), hot), alg).u[end]
             @test u.σ != σ
             @test all(c -> u.cell.volume[c] == 0 || components(u.σ, lat, c) == 1, eachindex(kinds))
         end
         # without the constraint, hot cells fragment
         f0 = CPMFunction(gg_delta_H; temperature = gg_temperature)
-        u0 = solve(CPMProblem(f0, initial_state(σ, kinds), lat, (0, 30), hot), SequentialCPM()).u[end]
+        u0 = solve(PottsProblem(f0, initial_state(σ, kinds), lat, (0, 30), hot), SequentialCPM()).u[end]
         @test any(c -> components(u0.σ, lat, c) > 1, eachindex(kinds))
     end
 
@@ -157,7 +157,7 @@ end
         shrink(st, p, prop, ctx) = volume_delta(st.cell.volume, prop, (v, c) -> 5.0 * v)   # favours loss
         for (f, alive) in ((CPMFunction(shrink; temperature = gg_temperature, constraint = keep), true),
                 (CPMFunction(shrink; temperature = gg_temperature), false))
-            u = solve(CPMProblem(f, initial_state(σ, [1, 1]), lat, (0, 40), gg_params()),
+            u = solve(PottsProblem(f, initial_state(σ, [1, 1]), lat, (0, 40), gg_params()),
                 SequentialCPM()).u[end]
             @test all(>(0), u.cell.volume) == alive
         end
@@ -172,8 +172,8 @@ end
         fb = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b)
         fe = CPMFunction(dH; temperature = gg_temperature)
         for alg in (SequentialCPM(), CheckerboardCPM())
-            ub = solve(CPMProblem(fb, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
-            ue = solve(CPMProblem(fe, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
+            ub = solve(PottsProblem(fb, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
+            ue = solve(PottsProblem(fe, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
             @test ub.σ == ue.σ
         end
     end

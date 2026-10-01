@@ -35,7 +35,7 @@ save_checkpoint(path::AbstractString, ck::PottsCheckpoint) =
 """Read a checkpoint written by `save_checkpoint`."""
 load_checkpoint(path::AbstractString) = open(Serialization.deserialize, path)
 
-function _from_checkpoint(prob::CPMProblem, ck::PottsCheckpoint)
+function _from_checkpoint(prob::PottsProblem, ck::PottsCheckpoint)
     ck.fingerprint == prob.f.fingerprint || throw(ArgumentError(
         "checkpoint fingerprint $(ck.fingerprint) does not match the model's $(prob.f.fingerprint)"))
     prob.tspan[1] <= ck.t <= prob.tspan[2] ||

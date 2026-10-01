@@ -4,7 +4,7 @@ using SciMLBase: ContinuousCallback
 
 @testset "SciML ensembles and callbacks" begin
     σ, kinds = blocks((40, 40), 5)
-    prob = CPMProblem(GG, initial_state(σ, kinds), Lattice((40, 40)), (0, 10), gg_params(); seed = 3)
+    prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((40, 40)), (0, 10), gg_params(); seed = 3)
     alg = SequentialCPM(; proposal = Moore(1))
 
     @testset "ensembles: trajectory i is replica i" begin

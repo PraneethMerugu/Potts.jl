@@ -1,5 +1,5 @@
-# `PottsProblem`: operating point + compiled model → `CorePotts.CPMProblem` with generated
-# functions (the analogue of MTK's `ODEProblem(sys, op, tspan)`).
+# `PottsProblem(sys, op, tspan)`: operating point + compiled model → `CorePotts.PottsProblem`
+# with generated functions (the analogue of MTK's `ODEProblem(sys, op, tspan)`).
 
 # `ownership => labels` in an operating point uses CorePotts' `ownership` accessor as the key.
 const ownership = CorePotts.ownership
@@ -23,7 +23,7 @@ end
     PottsProblem(sys, op, tspan; T = Float64, capacity, seed = 0, replica = 0, repeat = 0,
                  expression = Val(false))
 
-Build a `CorePotts.CPMProblem` from a `PottsSystem` (compiled with `mtkcompile` if
+Build a `PottsProblem` from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
 `kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
 compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
@@ -49,11 +49,11 @@ function generated_code(sys; T::Type = Float64)
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
         delta_E = _delta_H_expr(c, T; drives = false), phases)
 end
-function PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
-    return PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
+function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
+    return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end
 
-function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
+function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false))
     sys = c.sys
     opd = _operating_point(sys, op)
@@ -88,7 +88,7 @@ function PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capa
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, Dict{Any, Any}()))
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
-    return CorePotts.CPMProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
+    return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
         spacing, frozen, seed, replica, repeat)
 end
 
@@ -378,7 +378,7 @@ _host_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relati
 
 The authored energy change of proposal `prop` in state `u` (the model's ΔH without drives).
 """
-energy_change(prob::CorePotts.CPMProblem, u, prop) = prob.f.sys.delta_E(u, prob.p, prop, _host_ctx(prob))
+energy_change(prob::CorePotts.PottsProblem, u, prop) = prob.f.sys.delta_E(u, prob.p, prop, _host_ctx(prob))
 
 """
     total_energy(prob, u = prob.u0)
@@ -388,7 +388,7 @@ terms as the model's ΔH, so `ΔH == H(after) − H(before)` is a self-check. Ce
 over every cell slot: an emptied cell keeps contributing `E(volume = 0)`, as in the ΔH of
 the copy that emptied it (legacy and CompuCell3D semantics).
 """
-function total_energy(prob::CorePotts.CPMProblem, u = prob.u0)
+function total_energy(prob::CorePotts.PottsProblem, u = prob.u0)
     info = prob.f.sys
     info isa PottsModelInfo || throw(ArgumentError("not a PottsProblem"))
     return info.total_energy(u, prob.p, _host_ctx(prob))

@@ -39,7 +39,7 @@ moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, 
         σ = circshift(σ, ntuple(_ -> 3, length(dims)))      # cells straddle the seams
         lat = Lattice(dims)
         p = merge(gg_params(), (; V0 = length(dims) == 2 ? 36.0 : 64.0))
-        mprob = CPMProblem(GM, moment_state(σ, kinds, lat), lat, (0, 40), p)
+        mprob = PottsProblem(GM, moment_state(σ, kinds, lat), lat, (0, 40), p)
         u = solve(mprob, alg).u[end]
         @test u.σ != σ
         for c in eachindex(kinds)
@@ -147,7 +147,7 @@ moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, 
             commit_site_sum!(st.cell.vsum, prop, v[prop.target]);
             commit_site_min!(st.cell.vmin, st.cell.stale, prop, v[prop.target]))
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature)
-        u = solve(CPMProblem(f, st, lat, (0, 10), gg_params()), SequentialCPM()).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 10), gg_params()), SequentialCPM()).u[end]
         @test u.cell.vsum ≈ recompute_site_sum(u.σ, v, length(kinds))
         truth = recompute_site_min!(fill(Inf, length(kinds)), falses(length(kinds)), u.σ, v; all = true)
         @test all(u.cell.vmin[.!u.cell.stale] .== truth[.!u.cell.stale])   # exact unless stale
@@ -161,7 +161,7 @@ moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, 
         c2!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
             commit_site_sum!(st.cell.wsum, prop, w[prop.target]))
         f2 = CPMFunction(gg_delta_H; commit! = c2!, temperature = gg_temperature)
-        u2 = solve(CPMProblem(f2, st2, lat, (0, 10), gg_params()), CheckerboardCPM()).u[end]
+        u2 = solve(PottsProblem(f2, st2, lat, (0, 10), gg_params()), CheckerboardCPM()).u[end]
         @test u2.cell.wsum ≈ recompute_site_sum(u2.σ, w, length(kinds))
         @test getindex.(u2.cell.wsum, 3) == u2.cell.volume
     end

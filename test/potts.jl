@@ -1,7 +1,8 @@
 using Potts, Test
 
 @testset "Potts re-exports CorePotts" begin
-    @test isdefined(Potts, :CPMProblem)
+    @test isdefined(Potts, :PottsProblem)
+    @test Potts.PottsProblem === Potts.CorePotts.PottsProblem
 end
 
 include(joinpath(@__DIR__, "..", "benchmark", "models.jl"))

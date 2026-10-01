@@ -6,7 +6,7 @@ KernelAbstractions 0.9, RuntimeGeneratedFunctions 0.5.
 
 ```
 Potts (symbolic)          lib/CorePotts (numerical)
-PottsSystem ──mtkcompile──▶ CompiledPottsSystem ──codegen──▶ CPMFunction ──▶ CPMProblem
+PottsSystem ──mtkcompile──▶ CompiledPottsSystem ──codegen──▶ CPMFunction ──▶ PottsProblem
                                                                   │
                                             init ──▶ PottsIntegrator ──▶ step!/solve!
                                                                   │
@@ -313,7 +313,7 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
   `generate_phase_laws` (LocalMath laws with RGF evaluators), `generate_lifecycle`,
   `generate_observed`. Each goes through `build_function(...; expression = Val(false),
   cse)` conventions and `drop_expr`. `expression = Val(true)` returns the code.
-- Returns `CorePotts.CPMProblem` with `f.sys = sys`. SII: `symbolic_container(prob) =
+- Returns `CorePotts.PottsProblem` with `f.sys = sys`. SII: `symbolic_container(prob) =
   f.sys`; `getu`, `setp`, `observed`, `remake` work as in MTK.
 - `EnsembleProblem(prob; prob_func)` changes only `seed`/`replica`, reusing `f`.
 

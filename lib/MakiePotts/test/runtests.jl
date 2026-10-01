@@ -40,7 +40,7 @@ function render_fixture(; dimensions = 2)
     temperature(st, p, prop, ctx) = p.T
     energy(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> (v - 4.0)^2)
     f = CorePotts.CPMFunction(energy; temperature)
-    problem = CorePotts.CPMProblem(f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
+    problem = CorePotts.PottsProblem(f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
         (; T = 2.0); seed = 1)
     state = dimensions == 2 ?
             only(CorePotts.solve(problem, CorePotts.SequentialCPM()).u) :

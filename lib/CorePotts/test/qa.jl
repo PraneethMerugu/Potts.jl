@@ -3,7 +3,7 @@ using JET, AllocCheck
 
 @testset "QA" begin
     σ0, kinds0 = blocks((36, 36), 5)
-    prob = CPMProblem(GG, initial_state(σ0, kinds0), Lattice((36, 36)), (0, 20), gg_params())
+    prob = PottsProblem(GG, initial_state(σ0, kinds0), Lattice((36, 36)), (0, 20), gg_params())
     integ = init(prob, SequentialCPM(); save_start = false)
     args = (integ.state, integ.kf, integ.p, integ.ctx, integ.law, integ.key, 0)
     @test_opt target_modules = (CorePotts,) CorePotts.sequential_mcs!(args...)
@@ -21,7 +21,7 @@ using JET, AllocCheck
     # with phases
     u0 = zeros(36, 36)
     ph = Phases(after_mcs = (SitePhase(jacobi!), CopyPhase((:site, :u) => (:site, :u_next))))
-    pprob = CPMProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph),
+    pprob = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph),
         initial_state(σ0, kinds0; site = (; u = u0, u_next = copy(u0))), Lattice((36, 36)),
         (0, 5), merge(gg_params(), (; D = 0.1)))
     pinteg = init(pprob, CheckerboardCPM(); save_start = false)

@@ -43,7 +43,7 @@ end
         ph = Phases(after_mcs = (SitePhase(jacobi!), CopyPhase((:site, :u) => (:site, :u_next))))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
         p = merge(gg_params(), (; D = 0.05))
-        sol = solve(CPMProblem(f, st, lat, (0, 6), p), alg)
+        sol = solve(PottsProblem(f, st, lat, (0, 6), p), alg)
         ref = u0
         for _ in 1:6
             ref = host_jacobi(ref, lat, relation(Moore(1), lat), 0.05)
@@ -59,7 +59,7 @@ end
         st = initial_state(σ, kinds; site = (; u = zeros(24, 24)))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature,
             phases = Phases(after_mcs = (SitePhase(noise!),)))
-        prob = CPMProblem(f, st, lat, (0, 3), gg_params(); seed = 11)
+        prob = PottsProblem(f, st, lat, (0, 3), gg_params(); seed = 11)
         u = solve(prob, CheckerboardCPM()).u[end].site.u
         key = CorePotts.RNGKey(11)
         @test vec(u) == [CorePotts.uniform(Float64, CorePotts.draw(key, 2, i, const_stream)[1]) for i in 1:nsites(lat)]
@@ -75,7 +75,7 @@ end
         st = initial_state(σ, kinds; cell = (; target = fill(16.0, length(kinds))))
         f = CPMFunction(dH; temperature = gg_temperature,
             phases = Phases(before_mcs = (CellPhase(grow!),)))
-        u = solve(CPMProblem(f, st, lat, (0, 20), merge(gg_params(), (; rate = 0.5))),
+        u = solve(PottsProblem(f, st, lat, (0, 20), merge(gg_params(), (; rate = 0.5))),
             CheckerboardCPM()).u[end]
         @test all(u.cell.target .== 26.0)
         @test sum(u.cell.volume) / length(kinds) > 20
@@ -87,7 +87,7 @@ end
         st = initial_state(σ, kinds; site = (; u = u0), history = (; u = history_buffer(u0, 3)))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = Phases(
             after_mcs = (SitePhase(stamp!), HistoryPush(:u => (:site, :u)))))
-        h = solve(CPMProblem(f, st, lat, (0, 7), gg_params()), SequentialCPM()).u[end].history.u
+        h = solve(PottsProblem(f, st, lat, (0, 7), gg_params()), SequentialCPM()).u[end].history.u
         last_mcs = 6                                        # MCS 0…6 ran
         for lag in 0:2
             @test all(h[:, :, history_slot(3, last_mcs, lag)] .== last_mcs - lag)
@@ -102,7 +102,7 @@ end
         st = initial_state(σ, kinds; site = (; age = zeros(Int32, 24, 24), copies = zeros(Int32, 24, 24)))
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature,
             phases = Phases(after_mcs = (SitePhase(age!),)))
-        sol = solve(CPMProblem(f, st, lat, (0, 8), gg_params()), SequentialCPM();
+        sol = solve(PottsProblem(f, st, lat, (0, 8), gg_params()), SequentialCPM();
             saveat = 0:8)
         u = sol.u[end]
         a, n = u.site.age, u.site.copies

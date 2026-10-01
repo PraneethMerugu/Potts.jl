@@ -76,7 +76,7 @@ end
         @test link_claims(cell, Proposal(1, 1, (1, 1), 1, Int32(1), Int32(0)), Val(1)) == (Int32(2), Int32(0))
         d0 = centroid_distance(Float64, initial_state(σ, [1, 1]; cell).cell, lat, 1, 2)
         ds = map(1:6) do seed
-            u = solve(CPMProblem(f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
+            u = solve(PottsProblem(f, initial_state(σ, [1, 1]; cell), lat, (0, 1000),
                 merge(gg_params(), (; V0 = 36.0, k = 2.0)); seed), CheckerboardCPM()).u[end]
             centroid_distance(Float64, u.cell, lat, 1, 2)
         end
@@ -102,7 +102,7 @@ end
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             phases = Phases(after_mcs = (HostPhase(link_touching!; every = 100),)),
             lifecycle = Lifecycle(remove_first))
-        u = solve(CPMProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
         g0 = contact_graph(σ, lat, vn, n)
         for a in 3:n, b in neighbors(g0, a)                    # untouched pairs stay linked
             (b == 1 || b == 2) && continue
@@ -203,14 +203,14 @@ end
         # arguments, so the kernels compile to the pre-P6.0b signature (a dead buffer
         # argument cost 3 % on Metal); with reads they are real per-cell buffers.
         p = merge(gg_params(), (; V0 = 36.0, k = 2.0))
-        let cache(g) = init(CPMProblem(g, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1), p),
+        let cache(g) = init(PottsProblem(g, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1), p),
                 CheckerboardCPM(); save_start = false).cache
             @test cache(GG).wclaims === (nothing, nothing)
             @test all(w -> w isa Vector{UInt32} && length(w) == 3, cache(f).wclaims)
         end
         for alg in (SequentialCPM(), CheckerboardCPM())
             ds = map(1:4) do seed
-                u = solve(CPMProblem(f, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1500), p; seed), alg).u[end]
+                u = solve(PottsProblem(f, initial_state(σ, [1, 1, 1]; cell = deepcopy(cell)), lat, (0, 1500), p; seed), alg).u[end]
                 (centroid_distance(Float64, u.cell, lat, 1, 2), centroid_distance(Float64, u.cell, lat, 2, 3))
             end
             @test abs(mean(first.(ds)) - 12.0) < 2.5 && abs(mean(last.(ds)) - 18.0) < 2.5
@@ -236,7 +236,7 @@ end
             cell = merge(init_moments(σ, lat, n), empty_links(8, n, :bond), empty_links(8, n, :tether))), n + 4)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             phases = Phases(after_mcs = (HostPhase(link_both!; every = 100),)), lifecycle = Lifecycle(remove_first))
-        u = solve(CPMProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 2), gg_params()), SequentialCPM()).u[end]
         daughter = findfirst(c -> c > n && u.cell.volume[c] > 0, 1:(n + 4))
         for r in (:bond, :tether)
             L = CorePotts.link_store(u.cell, r)
@@ -294,7 +294,7 @@ end
         σ = fill(Int32(2), 6, 6); σ[3, 3] = 1; σ[6, 6] = 3
         f = CPMFunction((st, p, prop, ctx) -> -100.0; temperature = (st, p, prop, ctx) -> 1.0,
             reads = (st, p, prop, ctx) -> (Int32(3),))
-        integ = init(CPMProblem(f, initial_state(σ, Int32[1, 1, 1]), lat, (0, 1), (;)), CheckerboardCPM())
+        integ = init(PottsProblem(f, initial_state(σ, Int32[1, 1, 1]), lat, (0, 1), (;)), CheckerboardCPM())
         color = CorePotts.Color{2}((3, 3), (1, 1), (1, 1))
         fresh() = (zeros(UInt32, 1), zeros(Int, 1), zeros(UInt32, 3), zeros(UInt32, 3))
         prio, source, claim, wclaim = fresh()

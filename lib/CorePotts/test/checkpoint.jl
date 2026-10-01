@@ -23,7 +23,7 @@ function everything_problem()
         phases = Phases(before_mcs = (CellPhase(grow!),), after_mcs = (
             FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 2), SitePhase(noise!))),
         lifecycle = Lifecycle(big; divide! = reset!))
-    return CPMProblem(f, st, lat, (0, 30), gg_params(); seed = 5)
+    return PottsProblem(f, st, lat, (0, 30), gg_params(); seed = 5)
 end
 
 @testset "checkpoint and continuation are exact ($(nameof(typeof(alg))))" for alg in (
