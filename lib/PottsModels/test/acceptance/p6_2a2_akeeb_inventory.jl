@@ -25,7 +25,7 @@
 #       -> [ownership => σ, kind => kinds, :clock => …, :rate => …, :cue => …]
 #     Keys and order unchanged (the frozen papers.jl reads `o[2].second`). `σ` and `kinds`
 #     are exactly `layout(akeeb_layout(; lattice, seed, slab, seeding), lattice)`.
-#     Clocks are drawn from `StableRNG(seed + 1)`, one cell at a time in id order: a leader
+#     Clocks are drawn from `StableRNG(Potts._substream_seed(seed, :clock))` (P6.0w, D-093), one cell at a time in id order: a leader
 #     draws nothing (clock −1); a follower draws u = rand(rng), and its clock is −1 if
 #     u > pp, else Float64(rand(rng, 0:74)). This is today's recipe with MersenneTwister
 #     replaced by StableRNG (D-075: StableRNG only), so the state is the same on every
@@ -64,8 +64,8 @@ end
 p62a2_oracle(X, slab, seed, misses) = overlay(P62a2Slab(X, slab),
     InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1))))
 
-# The clock recipe on StableRNG(seed + 1) over the kinds as returned (id order).
-function p62a2_clocks(kinds, pp, seed; rng = PottsModels.StableRNG(seed + 1))
+# The clock recipe on the `:clock` sub-stream (D-093) over the kinds as returned (id order).
+function p62a2_clocks(kinds, pp, seed; rng = PottsModels.StableRNG(Potts._substream_seed(seed, :clock)))
     return [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]
 end
 

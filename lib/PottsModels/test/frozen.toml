@@ -79,8 +79,8 @@ decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_2a2_akeeb_inventory.jl"
-sha256 = "d0e36abb98abc68a2f0cbbeb0087eab71a459f0e3c3f51d00b9052e156e5d513"
-decision = "D-091"
+sha256 = "e4a582e710ce83d28e669e50223bc53138281f024af42443d3b57246169bbc67"
+decision = "D-093"
 
 [[file]]
 path = "acceptance/p6_0k2_component_rejections.jl"
@@ -121,3 +121,8 @@ decision = "D-090"
 path = "acceptance/p6_1a6_layout_protocol.jl"
 sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
 decision = "D-091"
+
+[[file]]
+path = "acceptance/p6_0w_substream_seeds.jl"
+sha256 = "c868d9a7d6563ebb583446f174ba4eff618462c3d89f0459ff8c5ecc77dce109"
+decision = "D-093"
