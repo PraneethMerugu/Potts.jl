@@ -227,6 +227,8 @@ CorePotts. Full ModelingToolkit, MethodOfLines and Unitful are extensions.
 
 ### 2.1 `PottsSystem <: ModelingToolkitBase.AbstractSystem`
 
+> Planned (P6.0o, D-075 §0.1): today `PottsSystem` is a plain struct; the subtype and the MTK accessor contract land with P6.0o.
+
 Fields: `name`, `lattice`, `kinds`, `unknowns` (with scope metadata: Site, Cell,
 Medium, Model, Field, History), `ps`, `energies::Vector{EnergyTerm}`,
 `drives`, `constraints`, `updates::Vector{PhaseUpdate}`, `lifecycle::Vector{LifecycleRule}`,

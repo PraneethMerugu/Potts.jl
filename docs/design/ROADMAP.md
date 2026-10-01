@@ -184,6 +184,16 @@ Every item's acceptance also includes the standing checks:
     - Accept: generated code and fingerprints for existing models are byte-identical.
     - Accept: build time and first MCS are unchanged within noise.
 - [ ] **P6.0n** Cell ODEs that read another cell's ODE state are Gauss–Seidel across cells and race on the GPU (P6.0k review N3). Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
+- [ ] **P6.0o** (D-075 §0.1, maintainer-approved 2026-09-30; MTK-native review, `research/mtk-native-review.md`) `PottsSystem <: ModelingToolkitBase.AbstractSystem`. Land it before P6.4a. MTK's `getproperty(::AbstractSystem)` takes over field access, so the ≈281 internal `sys.<field>` reads must change.
+  - Accept: `PottsSystem` mirrors the `System` field names read by the MTK accessors it supports. It has an all-fields constructor taking `checks`, sets `namespacing`, and defines Potts-owned `complete`, `extend` and `show`.
+  - Accept: every internal `sys.<field>` read uses `getfield` or an accessor. `sys.x` returns the namespaced symbolic, as in MTK.
+  - Accept: `equations`, `unknowns`, `parameters`, `observed`, `nameof`, `getmetadata` and `setmetadata` each return a documented value or throw a clear error, never a silently partial view.
+  - Accept: `compose` (D-039), `ODEProblem`/`JumpProblem`, and `extend` with a plain `System` throw clear errors.
+  - Accept: Aqua (ambiguities, piracy), JET and ExplicitImports are clean.
+  - Accept: every PottsModels model and test fixture generates byte-identical code with the same fingerprint.
+  - Latency: `@potts_model` construction, `mtkcompile` and `PottsProblem` build time each within +5 % of the pre-change baseline on the five gate models.
+  - Latency: fresh-process time to first MCS (`benchmark/graner.jl`, D-047 target under 15 s) within +5 %.
+  - Latency: the warm-MCS gate is unchanged.
 - [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
   linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
   NaN, `accept` rejects every copy touching the partner so it freezes silently, and

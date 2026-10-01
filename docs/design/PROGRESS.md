@@ -1552,3 +1552,16 @@ The maintainer approved F-1…F-6 (D-049).
 - **Gate.**
   - CPU: 0.969–1.001, with zero allocations.
   - Metal: three cases flagged. `ab.jl` against 9b4cf48 gives Akeeb 1.025, Wortel 0.953 and OpenVT 0.995, all within tolerance.
+
+## 2026-09-30 — MTK-native investigation reviewed; P6.0o added (maintainer)
+
+- **Research report.** `research/mtk-native-investigation.md` (spec owner) concluded that fully MTK-native Potts is not achievable.
+- **Coordinator's review.** `research/mtk-native-review.md`.
+  - **Confirmed:** that conclusion.
+  - **Corrected:** five supporting claims. The largest: about 99 % of the 64² `ODEProblem` cost is the `InitializationProblem`, not scalarized codegen.
+  - **Items:** adopted `PottsSystem <: AbstractSystem`; deferred per-entity MTK initialization and `PDESystem` input; rejected `mtkcompile` of model ODEs, SymbolicDiscreteCallback storage and the 64² gate.
+  - **New defect:** `@components` silently ignores component initialization equations, events and bindings. Filed as P6.0k2 F7.
+- **Maintainer.**
+  - "Approve P6.0o (Recommended)". P6.0o is added with the review's acceptance and latency conditions. AUTHORING and INTERNALS now mark the subtype as planned.
+  - "Correct, then commit (Recommended)". The report is committed with its corrections marked inline.
+- **Upstream.** No amendment and no upstream post.
