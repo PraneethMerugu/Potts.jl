@@ -309,9 +309,9 @@ end
     @test_throws r"no boundary" layout(Frame(:w), Lattice((6, 6); boundary = Periodic(), domain = trues(6, 6)))
     # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and
     # no in-domain site off the ring has a Hex(1) neighbour outside the domain (it seals)
-    domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square()) = (σ = zeros(Int32, size(mask));
-        Potts.paint!(σ, Any[], Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry));
-        σ .== 1)
+    domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square()) =
+        _op(layout(Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry)),
+            ownership) .== 1
     pacman = [(x - 9)^2 + (y - 9)^2 <= 49 && !(x > 9 && abs(y - 9) <= 2) for x in 1:18, y in 1:18]
     hexlat = Lattice((18, 18); boundary = Closed(), geometry = Hexagonal())
     hoffs = Potts.CorePotts.relation(Hex(1), hexlat).offsets
@@ -358,24 +358,25 @@ struct Sites{N} <: AbstractLayout
     idx::Vector{NTuple{N, Int}}
     k::Symbol
 end
-function Potts.paint!(σ, kinds, l::Sites, lat::Potts.LatticeSpec)
+function Potts.paint!(op::Potts.LayoutState, l::Sites, lat)
     clat = Potts.core_lattice(lat)                      # CorePotts view, e.g. for `shift`
-    push!(kinds, l.k)
+    id = Potts.new_cell!(op, l.k)
     for i in l.idx
         _, j = CorePotts.shift(clat, i, ntuple(_ -> Int32(0), length(i)))
-        σ[j...] = length(kinds)
+        Potts.assign!(op, Tuple(j), id)
     end
-    return σ
+    Potts.record!(op; requested = 1, painted = 1)
 end
 # every qualified access above, as ExplicitImports' `check_all_qualified_accesses_are_public` sees them
-const QUALIFIED = ((Potts, :paint!), (Potts, :LatticeSpec), (Potts, :core_lattice), (CorePotts, :shift))
+const QUALIFIED = ((Potts, :paint!), (Potts, :LayoutState), (Potts, :core_lattice), (Potts, :new_cell!),
+    (Potts, :assign!), (Potts, :record!), (CorePotts, :shift))
 end
 
 _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.CoreLogging.Warn)[1]]
 
 @testset "layouts: extension API and split warnings" begin
     @test all(((m, n),) -> Base.ispublic(m, n), ScratchLayouts.QUALIFIED)
-    @test !Base.ispublic(Potts, :_warn_split)                          # control: internals are not
+    @test !Base.ispublic(Potts, :_disconnected)                        # control: internals are not
     S = ScratchLayouts.Sites
     op = layout(overlay(Frame(:w), S([(3, 3), (4, 4)], :a)), (6, 6))
     @test _op(op, kind) == [:w, :a] && findall(==(2), _op(op, ownership)) == CartesianIndex.([(3, 3), (4, 4)])
@@ -404,21 +405,19 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
     # buffers (4096 cells), far below the 80³ Int32 array (2 MB).
     lat = Potts.lattice_spec((80, 80, 80); boundary = Closed())
-    σ, kinds = zeros(Int32, lat.dims), Any[]
-    Potts.paint!(σ, kinds, Tiling((5, 5, 5); kinds = [:a]), lat)
-    Potts.paint!(σ, kinds, Frame(:w; width = 3), lat)
-    cut = Set{Int32}(1:(length(kinds) - 1))
-    Potts._warn_split(σ, kinds, cut, lat)
-    bytes = @allocated Potts._warn_split(σ, kinds, cut, lat)
-    @test bytes < sizeof(Int32) * 80^3 ÷ 4
-    # … and a genuinely split cell among them still warns (and allocates the array)
+    σ = _op(layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), lat), ownership)
+    check = [trues(maximum(σ) - 1); false]       # every tile, not the frame
+    split = Int[]
+    Potts._disconnected(c -> push!(split, c), σ, check, lat)
+    bytes = @allocated Potts._disconnected(c -> push!(split, c), σ, check, lat)
+    @test isempty(split) && bytes < sizeof(Int32) * 80^3 ÷ 4
+    # … and a genuinely split cell among them is found (and allocates the array)
     σ2 = copy(σ)
     c = σ2[6, 6, 6]
     σ2[6:10, 6:10, 8] .= 0                       # a medium slab through tile `c` = (6:10)³
-    @test_logs (:warn, r"split cell") Potts._warn_split(σ2, kinds, cut, lat)
-    Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
-        @test (@allocated Potts._warn_split(σ2, kinds, cut, lat)) >= sizeof(Int32) * 80^3
-    end
+    Potts._disconnected(c -> push!(split, c), σ2, check, lat)
+    @test split == [c]
+    @test (@allocated Potts._disconnected(c -> nothing, σ2, check, lat)) >= sizeof(Int32) * 80^3
 end
 
 @testset "layouts reproduce an existing state's geometry" begin
@@ -456,6 +455,11 @@ end
     @sweep Metropolis(; temperature = 4.0)
 end
 
+# the point and the InsertUntil rows of the layout report as (; painted, misses, counted)
+function _tally(l, x)
+    op, rep = layout(l, x; report = true)
+    return op, [(; r.painted, r.misses, r.counted) for r in rep if r.type === :InsertUntil]
+end
 _kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> σ[i] > 0 && ks[σ[i]] == k, CartesianIndices(σ)))
 
 @testset "layouts: InsertUntil stop rules (hand-derived counts)" begin
@@ -465,13 +469,13 @@ _kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> 
     hosts = Tiling((1, 1); spacing = 1, region = (1:8, 1:8), kinds = [:host])        # 16 one-site cells
     guests = Tiling((3, 3); spacing = 1, region = (11:18, 11:18), kinds = [:guest])   # 4 cells
     l = overlay(hosts, guests, InsertUntil(:guest; into = [:host], fraction = 1 // 2, seed = 5))
-    op, t = layout_tally(l, (20, 20))
+    op, t = _tally(l, (20, 20))
     @test only(t).painted == 6 && only(t).counted == 6
     ks = _op(op, kind)
     @test count(==(:host), ks) == 10 && count(==(:guest), ks) == 10
     # `number` counts hits (retry) exactly; `number = 0` draws nothing
     for n in (0, 1, 7)
-        op, t = layout_tally(overlay(hosts, InsertUntil(:guest; into = [:host], number = n, seed = 1)), (20, 20))
+        op, t = _tally(overlay(hosts, InsertUntil(:guest; into = [:host], number = n, seed = 1)), (20, 20))
         @test only(t) == (; painted = n, misses = only(t).misses, counted = n)
         @test length(_kind_sites(op, :guest)) == n
     end
@@ -480,11 +484,11 @@ _kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> 
     @test length(_kind_sites(layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 16, seed = 1)), (20, 20)),
         :guest)) == 16
     # inserted cells are never drawn again as hits, even when their kind is allowed
-    op, t = layout_tally(overlay(hosts, InsertUntil(:host; into = [:host], number = 16, seed = 2)), (20, 20))
+    op, t = _tally(overlay(hosts, InsertUntil(:host; into = [:host], number = 16, seed = 2)), (20, 20))
     @test only(t).painted == 16 && count(==(:host), _op(op, kind)) == 16     # every host replaced once
     @test_throws ArgumentError layout(overlay(hosts, InsertUntil(:host; into = [:host], number = 17, seed = 2)), (20, 20))
-    # no InsertUntil layer: no tallies; the point equals `layout`
-    op, t = layout_tally(hosts, (20, 20))
+    # no InsertUntil layer: no InsertUntil row; the point equals `layout`
+    op, t = _tally(hosts, (20, 20))
     @test isempty(t) && _same(op, layout(hosts, (20, 20)))
 end
 
@@ -499,7 +503,7 @@ end
     end
     @test all(h -> abs(h - 500) < 5 * sqrt(2000 * 0.25 * 0.75), hits)         # 5 SD
     # under :count with the region twice the hosts' area, about half the draws miss
-    ts = [only(last(layout_tally(overlay(hosts,
+    ts = [only(last(_tally(overlay(hosts,
         InsertUntil(:guest; into = [:host], number = 4, seed, misses = :count, region = (3:4, 3:6))), (6, 6))))
           for seed in 1:400]
     @test all(t -> t.painted + t.misses == t.counted && t.counted >= 4, ts)
@@ -520,7 +524,7 @@ end
     @test count(==(:x), _op(op, kind)) == 7                                  # 27 + n ≤ 5n ⇒ n = 7
     # a domain: draws outside it land on medium and miss
     sys = InsertProbe(; name = :ins)
-    op, t = layout_tally(overlay(Tiling((4, 4); region = (1:12, 1:12), kinds = [:host]),
+    op, t = _tally(overlay(Tiling((4, 4); region = (1:12, 1:12), kinds = [:host]),
         InsertUntil(:guest; into = [:host], number = 6, seed = 9)), sys)
     @test only(t).painted == 6 && only(t).misses > 0
     @test all(i -> i[1] + i[2] <= 26, findall(>(0), _op(op, ownership)))

@@ -177,8 +177,8 @@ end
     sys = HexSorting(; name = :hs)
     l = overlay(Tiling((5, 5); region = (1:30, 1:15), kinds = [:dark]),
         InsertUntil(:light; into = [:dark], fraction = 1 // 3, seed = 11, misses = :count, region = (1:30, 1:20)))
-    op, tallies = Base.CoreLogging.with_logger(() -> layout_tally(l, sys), Base.CoreLogging.NullLogger())
-    t = only(tallies)
+    op, report = Base.CoreLogging.with_logger(() -> layout(l, sys; report = true), Base.CoreLogging.NullLogger())
+    t = only(r for r in report if r.type === :InsertUntil)
     ks = last(op[2])
     @test count(==(:light), ks) == t.painted && t.painted + t.misses == t.counted
     @test 3 * t.counted >= 18 + t.counted                   # 18 dark tiles: at least 9 counted

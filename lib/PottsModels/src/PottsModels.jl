@@ -9,11 +9,10 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 module PottsModels
 
 using Potts: Potts, @potts_model, AbstractLayout, Closed, Lattice, Metropolis, Moore, Periodic, RandomPlane,
-    VonNeumann, embed, kind, layout, major_length, ownership, overlay, InsertUntil
+    VonNeumann, embed, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling
 using DelimitedFiles: readdlm
 using Random: MersenneTwister
 using StableRNGs: StableRNG
-using Logging: NullLogger, with_logger
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
     AkeebInvasion
