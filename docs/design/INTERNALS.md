@@ -328,17 +328,21 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
   closures by their captures, dictionaries and keyword bundles sorted) when the model
   integrates anything.
 - **Jacobi scratch.** A scope (cell, model) with several solver groups, or a cell scope
-  whose rates read another cell's ODE unknowns (`_ode_reads_other_cells`: an `at`, `at2`,
-  `gather` or unhoisted `population` node reading a cell-ODE unknown, `x[id]` excepted;
-  P6.0n), gets state slots `x__ode` for its ODE unknowns (`_ode_layout`, applied at
+  whose rates read another cell's ODE unknowns (`_ode_reads_other_cells`: an `at`/`at2`
+  whose indexed variable is a cell-ODE unknown, `x[id]` excepted, or an unhoisted
+  `population` reading one; a gather counts through the `at`s in its body; P6.0n), gets state slots `x__ode` for its ODE unknowns (`_ode_layout`, applied at
   construction, `remake_state` and the solver remake). Each group's phase reads the
   variables and writes the scratch (an empty cell slot copies its value through; the
   adaptive phase writes its host scratch and copies that to the device), then one
-  `CopyPhase` per unknown publishes after the scope's last group. Cell groups publish before the model groups run (D-077 N3).
+  `CopyPhase` per unknown publishes after the scope's last group. Cell groups publish
+  before the model groups run (D-077 N3).
   One group without cross-cell reads: no scratch, direct writes, unchanged code. The ODE
-  locals are substituted outside folds and indexed reads (`_substitute_locals` skips
-  `population` and `at` nodes, so `y[j]` reads the stored state), except `x[id]`, which is
-  the local.
+  locals are substituted outside folds and outside the variable of indexed reads
+  (`_substitute_locals` skips `population` and `at` nodes, after `_index_reads!`
+  has substituted the indices, so `y[j]` reads the stored state while `w[f(y)]` indexes
+  with the stepped local). Only a bare `x` and a literal `x[id]` outside folds are the
+  local; any other read that lands on the cell itself (`y[owner[n]]` in a gather,
+  `y[max(id, 1)]`, the own term of a fold) sees the start-of-step value.
 - **Rebuild hook.** CorePotts `remake` passes keywords beyond its fixed ones to
   `remake_function(f.sys, prob; kwargs...)` (default: an `ArgumentError`). Potts'
   method on `PottsModelInfo` (which keeps the compiled system, `T`, the host context and

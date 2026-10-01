@@ -516,8 +516,8 @@ end
 # length `dt` with that fixed-step `solver` (a batched system over the cell dimension: one
 # work item per cell, CPU or GPU). The state is read into locals `y_i`, the right-hand sides
 # see them (and `time`), and the result is written back: to the variables, or with `scratch`
-# (several solver groups) to `x__ode`, where an empty cell slot copies its value through so
-# the whole-array publish is exact.
+# (several solver groups, or reads of other cells' unknowns: `_ode_scratch`) to `x__ode`,
+# where an empty cell slot copies its value through so the whole-array publish is exact.
 function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = false)
     rn = c.gather_names
     ys, locals, bind = _ode_locals(odes)
@@ -670,20 +670,45 @@ function _ode_locals(odes)
     return ys, locals, bind
 end
 
-# The ODE locals replace the current entity's unknowns, but not inside population folds or
-# indexed reads: `sum(h for c in cells)` and `h[j]` read the cells' stored values (the state
-# at the start of the MCS step, D-029, held over the whole step through scratch `x__ode`,
-# P6.0n), not `ncells` copies of this cell's local. `h[id]` is this cell's own unknown, so
-# it is the local (`_own_read`). (Model unknowns are one value everywhere, so model ODEs
-# substitute inside folds too.)
+# The ODE locals replace the current entity's unknowns, but not inside population folds nor
+# as the variable of an indexed read: `sum(h for c in cells)` and `h[j]` read the cells'
+# stored values (the state at the start of the MCS step, D-029, held over the whole step
+# through scratch `x__ode`, P6.0n), not `ncells` copies of this cell's local. The index of
+# a read is this cell's expression, so it does see the locals (`w[ifelse(h > 0, id, j)]`
+# follows the stepped `h`; `_index_reads!`). A literal `h[id]` is this cell's own
+# unknown, so it is the local (`_own_read`). (Model unknowns are one value everywhere, so
+# model ODEs substitute inside folds too.)
 function _substitute_locals(rate, locals, scope = :cell)
     scope === :model && return Symbolics.substitute(rate, locals; fold = Val(false))
     subs = Dict{Any, Any}(locals)
     foreach(((x, l),) -> subs[_own_read(x)] = l, collect(locals))
-    return Symbolics.substitute(rate, subs; fold = Val(false), filterer = _outside_populations)
+    return _substitute_cell(rate, subs)
+end
+
+# The indexed reads `at(x, i)` outside population folds whose index `i` holds a local map
+# to `at(x, i′)` (`_index_reads!`); one substitution then applies them with the locals. A
+# rate without such reads substitutes exactly as before (same code).
+function _substitute_cell(x, subs)
+    x = _unwrap(x)
+    reads = _index_reads!(Dict{Any, Any}(), x, subs)
+    return Symbolics.substitute(x, isempty(reads) ? subs : merge(subs, reads); fold = Val(false),
+        filterer = _outside_populations)
 end
 _outside_populations(ex) = !(iscall(ex) && operation(ex) in (population, at)) &&
                            SymbolicUtils.default_substitute_filter(ex)
+
+function _index_reads!(out, x, subs)
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x)) || return out
+    (haskey(subs, x) || operation(x) === population) && return out
+    if operation(x) === at
+        v, i = arguments(x)
+        j = _substitute_cell(i, subs)
+        isequal(j, i) || (out[x] = _unwrap(at(Symbolics.wrap(v), Symbolics.wrap(j))))
+        return out
+    end
+    foreach(a -> _index_reads!(out, a, subs), arguments(x))
+    return out
+end
 
 # `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`.
 function _ode_steps(solver, T, dt, ys, rates)

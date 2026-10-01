@@ -362,3 +362,30 @@ end
     @test Potts._ode_reads_other_cells(mtkcompile(P60nGather(; name = :g)))
     @test !Potts._ode_reads_other_cells(mtkcompile(P60nOwnIndex(; name = :o)))
 end
+
+# The index of a read is this cell's expression: it follows the stepped local, while the read
+# variable is the stored one (P6.0n review round 2). Cell 1 (y = 0.4) reads w[2] = 1 until
+# y > 0.5, then w[1] = 2: four Euler substeps of 1/4 give 0.65, 1.15, 1.65, 2.15; cell 2
+# reads w[1] = 2, then w[2] = 1: 0.9, 1.15, 1.4, 1.65. (Indexing with the held y gives
+# [1.4, 2.4].) `w` is not an ODE unknown, so there is no cross-cell read and no scratch.
+@potts_model P60nIndexLocal begin
+    @kinds medium A
+    @variables begin
+        y(cell) = 0.0
+        w(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ w[ifelse(y > 0.5, id, 3 - id)]
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "P6.0n: an index follows the stepped local" begin
+    op = [ownership => p60n_two(), kind => [:A, :A], :y => [0.4, 0.4], :w => [2.0, 1.0]]
+    prob = PottsProblem(P60nIndexLocal(; name = :d), op, (0, 1); ode_solver = ExplicitEuler(substeps = 4))
+    @test !haskey(prob.u0.cell, :y__ode)
+    @test !Potts._ode_reads_other_cells(mtkcompile(P60nIndexLocal(; name = :d)))
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        @test solve(prob, alg).u[end].cell.y ≈ [2.15, 1.65]
+    end
+end

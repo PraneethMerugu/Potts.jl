@@ -365,9 +365,13 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   the ODEs). Every such read sees the other cell's state at the start of the MCS, held over
   the whole step (all stages and substeps), under both algorithms, on the GPU, whatever
   the cell labels: the cell ODEs then write scratch `x__ode` even with one solver group.
-  The cell's own unknowns (`y`, or `y[id]`) advance through the stages as usual. A cell
-  scope with one group and no such reads writes its variables directly (no scratch; the
-  code of such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
+  Only a bare `y` and a literal `y[id]` outside folds are the cell's own unknown, which
+  advances through the stages and substeps as usual; so does any index expression
+  (`w[ifelse(y > 0.5, id, j)]` follows the stepped `y`). Every other indexed or fold read
+  sees the start-of-step value, even when it lands on the cell itself: a gather's
+  `y[owner[n]]` with `owner[n] == id`, `y[max(id, 1)]`, or the cell's own term of a fold
+  left in the kernel. A cell scope with one group and no such reads writes its variables
+  directly (no scratch; the code of such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
   values (D-077 N3, unchanged).
 - `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code through the
   same codegen point and keeps `u0` (re-laid out for the scratch slots, values kept), `p`,

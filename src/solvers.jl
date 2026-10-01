@@ -152,11 +152,12 @@ _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
     length(_ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)) > 1 ||
     (scope === :cell && _ode_reads_other_cells(c))
 
-# A cell ODE whose rate reads a cell-ODE unknown of another cell (`y[j]`, a population fold
-# left in the kernel because it reads `time`, a gather whose body indexes cells) must not see
-# cells that already stepped: it needs scratch slots even with one solver group, as discrete
-# ticks do (`_reads_other_cells_slots`). Reads of the cell's own unknowns (`y`, `y[id]`) do
-# not; nor do folds hoisted to model slots (`cell_ode_pops`, computed before the ODEs).
+# A cell ODE whose rate reads a cell-ODE unknown of another cell (`y[j]`, also in a gather's
+# body or an index, or a population fold left in the kernel because it reads `time`) must not
+# see cells that already stepped: it needs scratch slots even with one solver group, as
+# discrete ticks do (`_reads_other_cells_slots`). Reads of the cell's own unknowns (`y`,
+# `y[id]`, `w[f(y)]`) do not; nor do folds hoisted to model slots (`cell_ode_pops`,
+# computed before the ODEs).
 function _ode_reads_other_cells(c::CompiledPottsSystem)
     names = Set{Symbol}(info(x).name for (x, _) in c.cell_odes)
     isempty(names) && return false
@@ -166,7 +167,13 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
     for (_, r) in c.cell_odes
         _walk_all(r) do y
             hit[] && return
-            iscall(y) && operation(y) in (at, at2, gather, population) && !_is_own_read(y) && reads(y) && (hit[] = true)
+            iscall(y) || return
+            op = operation(y)
+            # an indexed read crosses cells through its variable, not its index (this cell's
+            # expression; a read nested in it is visited on its own); a gather's body reads
+            # this cell's unknowns unless indexed; a fold's body reads every cell's
+            hit[] = op in (at, at2) ? !_is_own_read(y) && reads(arguments(y)[1]) :
+                    op === population && reads(y)
         end
     end
     return hit[]
