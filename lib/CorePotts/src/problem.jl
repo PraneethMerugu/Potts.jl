@@ -368,8 +368,10 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     if integ.f.lifecycle !== nothing
+        sc = integ.mscratch
+        nread = sc !== nothing && sc.pending ? 3 : 1
         launches, events, read = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
-            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
+            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle; nread)
         integ.stats.launches += launches
         read && _take_counts!(integ)                # a deferred refresh's counts, if any
         # a transition, division or removal may move sites into or out of frozen kinds;
@@ -433,6 +435,12 @@ any work; for a static mask (none, the domain, a user `frozen`) it returns at on
 standard rule (`frozen_kinds`) runs as one kernel on the integrator's backend; called
 directly, it then reads back its counts (one small transfer). A custom rule
 (`remake_frozen`) runs on a host copy of the state.
+
+On a device, after the integrator's own refresh on an event MCS, `integrator.nmobile` and
+`integrator.stats.attempts` lag by that refresh's change until the next lifecycle read-back
+(the mask itself is current at once). `solve!`, `checkpoint` and any direct
+`refresh_frozen!` bring them up to date; code that calls `step!` directly and reads them
+between those points sees the lagging values.
 """
 refresh_frozen!(integ::PottsIntegrator) = (_refresh_frozen!(integ, false); integ)
 

@@ -270,18 +270,22 @@ end
 Run the lifecycle for MCS `mcs`. Returns `(launches, events, read)`: the number of kernel
 launches, whether any cell had an event (then kinds, owners and cell ids may have changed,
 and the integrator refreshes the frozen mask), and whether `cache.count` was read into
-`cache.host` (on every MCS the lifecycle runs). Synchronizes once: one transfer of
-`cache.count`, which also carries the counts of a deferred frozen-mask refresh (D-081);
-quiet MCS return after the trigger kernel.
+`cache.host` (on every MCS the lifecycle runs). Synchronizes once and makes one transfer:
+the event count (4 B, the D-035 read), or with `nread = 3` also the counts of a deferred
+frozen-mask refresh (12 B, only on the lifecycle MCS after such a refresh; D-081). Quiet MCS
+return after the trigger kernel.
 """
 function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
-        stats::LifecycleStats)
+        stats::LifecycleStats; nread::Int = 1)
     mcs % lc.every == 0 || return 0, false, false
     cap = length(st.cell.kind)
     # `count` is all zero here except a deferred mask refresh's counts (entries 2 and 3)
     _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
-    copyto!(cache.host, cache.count)                # synchronizes: the MCS's one transfer
+    KernelAbstractions.synchronize(backend)
+    # the MCS's one transfer: 4 B, or 12 B while a refresh's counts are pending (entries 2
+    # and 3 are zero otherwise, so nothing is lost)
+    copyto!(cache.host, 1, cache.count, 1, nread)
     fill!(cache.count, Int32(0))                    # enqueued; read above
     cache.host[1] == 0 && return launches, false, true
 
