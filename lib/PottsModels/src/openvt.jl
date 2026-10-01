@@ -2,7 +2,7 @@
     OpenVTGrowingMonolayer(; name, lattice = (400, 400), …)
 
 The OpenVT growing-monolayer benchmark (OpenVT reference models, `monolayer/`) with the
-Artistoo parameter set (D-049 F-5). One cell grows into a colony on a closed lattice:
+Artistoo parameter set. One cell grows into a colony on a closed lattice:
 
 - area constraint `λ (volume - V_target)²` with no net adhesion (`J_cc = J_cM = 20`);
 - the target area grows by `A₀/τ` per MCS, so an unconstrained cell doubles in `τ` MCS;
