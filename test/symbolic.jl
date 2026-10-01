@@ -2806,3 +2806,26 @@ end
     @test length(base) == 4
     @test full == base
 end
+
+# P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H
+@potts_model P60rFreeSlots begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        V₀[kind] = [0.0, 6.0, 3.0]
+    end
+    @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells => (volume - V₀[kind])^2 + 0.3 * surface + 5.0
+        contacts => 4.0
+        clusters(cytoplasm) => 1.3 * (cluster_volume - 10.0)^2 + 2.0
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+@testset "P6.0r: free slots add nothing to total_energy" begin
+    σc = zeros(Int32, 20, 20); σc[5, 5] = 1; σc[5, 6] = 2; σc[12:14, 12:14] .= 3; σc[13, 13] = 4
+    op = [ownership => σc, kind => [:cytoplasm, :nucleus, :cytoplasm, :nucleus], cluster => [1, 1, 3, 3]]
+    a = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5))
+    b = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5); capacity = 50)
+    @test length(b.u0.cell.volume) == 50
+    @test total_energy(b) ≈ total_energy(a)
+end

@@ -462,8 +462,8 @@ So `ΔH == H(after) − H(before)` for every copy except a killing one (the copy
 old owner `o`'s last site), whose ΔH pays o's cell terms down to the empty state (and its
 cluster's, if no alive member is left): there `ΔH == H(after) − H(before) + E_cell(o,
 empty) [+ E_cluster(empty)]`. Links carry no such credit: the killing copy's ΔH removes
-o's edges at their pre-copy energy. With `E_cell(empty) = 0` (e.g. `λ·volume²`) ΔH equals
-the H difference for every copy.
+o's edges at their pre-copy energy. With `E_cell(empty) = 0` (e.g. `λ·volume²`) and no
+cluster term with `E_cluster(empty) ≠ 0`, ΔH equals the H difference for every copy.
 """
 function total_energy(prob::CorePotts.PottsProblem, u = prob.u0)
     info = prob.f.sys

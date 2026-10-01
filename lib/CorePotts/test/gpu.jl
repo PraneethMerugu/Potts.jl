@@ -294,9 +294,9 @@ using Metal
 
     @testset "a killing copy removes the dying cell's links on Metal (P6.0r)" begin
         # cell 2 owns one site, 22.5 from blob 1's centroid, on a spring of rest 3 and
-        # stiffness 1 (≈ 110 stretched). Dying costs it +λd = 50 (E = λd·v(v − 2)), growing
+        # stiffness 1 (≈ 380 stretched). Dying costs it +λd = 50 (E = λd·v(v − 2)), growing
         # +50, and medium contacts with it are free: at T = 1 only the killing copy, whose
-        # ΔH drops the spring (≈ 50 − 110), is ever accepted (D-083).
+        # ΔH drops the spring (≈ 50 − 380), is ever accepted (D-083).
         latK = Lattice((60, 30))
         σK = zeros(Int32, 60, 30); σK[4:9, 12:17] .= 1; σK[29, 15] = 2
         function dHK(st, p, prop, ctx)
