@@ -358,10 +358,16 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   canonical string) step together in one phase. When a scope has several such groups,
   each writes scratch slots `x__ode` and one publish per scope copies them back after the
   last group, so every rate's reads of its own cell's (or the model's) unknowns see the
-  state at the start of the step, whatever the solvers or the equation order. Reads of
-  *other* cells' ODE unknowns within one group (`y[j]`, folds over cells) stay
-  Gauss–Seidel as before (D-077 N3, P6.0n). A scope with one group writes its variables directly (no scratch; the code of
-  such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
+  state at the start of the step, whatever the solvers or the equation order.
+- **Jacobi across cells (P6.0n).** A cell ODE may read other cells' ODE unknowns: `y[j]`
+  (`y[3 - id]`, `y[owner[n]]` in a gather) or a population fold over cells that stays in
+  the ODE kernel because it reads `time` (folds without `time` are computed once before
+  the ODEs). Every such read sees the other cell's state at the start of the MCS, held over
+  the whole step (all stages and substeps), under both algorithms, on the GPU, whatever
+  the cell labels: the cell ODEs then write scratch `x__ode` even with one solver group.
+  The cell's own unknowns (`y`, or `y[id]`) advance through the stages as usual. A cell
+  scope with one group and no such reads writes its variables directly (no scratch; the
+  code of such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
   values (D-077 N3, unchanged).
 - `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code through the
   same codegen point and keeps `u0` (re-laid out for the scratch slots, values kept), `p`,
