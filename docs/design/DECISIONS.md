@@ -1634,3 +1634,9 @@ session.
   - P6.0d's deferred mask counts (D-081) must move off the read-back too: they stay on the device until a host read that already happens (save, `solve!` end, `checkpoint`), and `stats.attempts` on a device is exact only there.
   - The lifecycle statistics (`stats.lifecycle`) are read at those same points.
 
+
+## D-090 P6.0s + P6.0v7: a fair machine lock; Metal timings to GPU completion (2026-10-01; coordinator, from the P6.0v audit)
+
+- **Fair lock (P6.0s).** `tools/exclusive.sh` becomes a FIFO ticket queue: waiters are served in arrival order, so a waiter queued before an A/B runs before the A/B's second round (holding one lock for all A/B rounds cannot satisfy this: a waiter would wait for the whole A/B). All lock and queue state lives under paths starting with `/tmp/potts-exclusive`. Mutual exclusion, exit-status pass-through and the stale rule (a dead holder's state older than 3 h no longer blocks; live holders and waiters refresh their tickets) are kept.
+- **Metal timings (P6.0v7).** Whenever a gate or `ab_one` measurement runs on a device backend, the timed expression is `step!` followed by `KernelAbstractions.synchronize(backend)`. Before this, Graner–Glazier and Wortel Metal numbers measured host enqueue only (gate 15 vs 86–140 ns/site with synchronize for GG; 46–60 vs 150–210 for Wortel), so earlier Metal A/B verdicts on those two models said nothing about GPU cost. CPU rows are unchanged. The Metal rows of `benchmark/baseline.toml` are re-measured once, under one lock.
+- **Frozen acceptance** `benchmark/test/p6_0s_v7_tooling.jl` (listed in PottsModels' frozen.toml by relative path): ticket fairness against a sandboxed `ab.jl`, mutual exclusion, exit status, stale rule; a mock-device synchronize check for `gate.jl`'s `measure`; a structural check on `ab_one`; and a Metal part comparing GG 72 timings with `step!` + `synchronize`.

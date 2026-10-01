@@ -101,3 +101,8 @@ decision = "D-061"
 path = "acceptance/p6_0r_killing_copy_energy.jl"
 sha256 = "0ba7ccfaca27fae5549a523524b232d7a02f4a24c032f80e60a07f521c1e9172"
 decision = "D-083"
+
+[[file]]
+path = "../../../benchmark/test/p6_0s_v7_tooling.jl"
+sha256 = "1b001ef00a7aa94594e869280083518af5677739a2b8418283f758e1553d743a"
+decision = "D-090"
