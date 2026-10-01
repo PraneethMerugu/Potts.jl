@@ -1551,3 +1551,18 @@ session.
   - The self-check helpers do not credit it yet.
 - **Unchanged code.** The generated code of the six published models is unchanged once operand order is canonicalised (D-070).
 - **ROADMAP correction.** Before this fix the solve ended with `Failure` (`STATUS_NONFINITE`) within about one MCS of the death, rather than freezing silently as the ROADMAP row said.
+
+## D-083 P6.0r: a killing copy's ΔH drops the dying cell's links (2026-10-01, P6.0r; maintainer; amends D-066 item 4)
+
+- **Maintainer decision** (2026-10-01, asked by the coordinator): "Yes, ΔH = H change (Recommended)".
+- **ΔH.** For a copy that kills its old owner `o` (o's last site), `link_delta` evaluates o's edges at the pre-copy state only and removes them: the edge term goes from E(before) to 0. So for every copy
+
+      ΔE(copy) == H(after) − H(before) + E_cell(o, empty state)
+                  [+ E_cluster(cluster[o], empty state), if that cluster has no alive member left]
+
+  with no edge credit. In linked models with E_cell(empty) = 0 (e.g. `λ·volume²`), ΔH equals the H difference exactly. The cell and cluster credits stay as in D-066: ΔH pays the full cell-term change to the empty state.
+- **Dynamics.** A linked cell under spring tension can now be copied away (its springs vanish with it). No published model uses links, so no published result changes.
+- **`total_energy`** sums cell terms over alive cells and cluster terms over roots with an alive member (one marking pass, not O(n²)); free slots contribute nothing.
+- **Self-check helpers** (`lib/PottsModels/test/runtests.jl`, `test/symbolic.jl`, `test/audit.jl`) add the cell and cluster credits for killing copies and no edge credit.
+- **Cost.** One volume load of `o` (shared with `centroid_shift`) and one branch per link of `o`; a killing copy evaluates fewer terms than before.
+- **Acceptance:** frozen `p6_0r_killing_copy_energy.jl` (brute force over every copy of a linked state; Sequential and Checkerboard trajectories through a killing copy; dead cells and clusters leave H; a stretched one-site cell is killed in a run on CPU and Metal; negative controls).

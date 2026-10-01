@@ -71,3 +71,8 @@ decision = "D-075"
 path = "acceptance/p6_0l_link_partner_death.jl"
 sha256 = "19e10050922bd0a8c046d1d06dbbb8ce35d15e153cc7879e73350de7558c1da3"
 decision = "D-066"
+
+[[file]]
+path = "acceptance/p6_0r_killing_copy_energy.jl"
+sha256 = "0ba7ccfaca27fae5549a523524b232d7a02f4a24c032f80e60a07f521c1e9172"
+decision = "D-083"
