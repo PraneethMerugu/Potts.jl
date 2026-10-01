@@ -59,9 +59,10 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
   value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`);
 - `ode_solver` integrates the cell and model ODEs (`D(x) ~ …`, components): `ExplicitEuler(;
   substeps)` (the default, one step per MCS), `RK4(; substeps)` or `Adaptive(alg; reltol, …)`;
-- `solvers = [x => solver, …]`, keyed by integrated variables, overrides them for those
-  variables only (a stiff ODE under `Adaptive(Rodas5P())` beside explicit ones). The ODEs of
-  one solver step together (Jacobi); each solver's group sees the earlier groups' results.
+- `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its
+  unknowns), overrides them for those variables only (a stiff ODE under
+  `Adaptive(Rodas5P())` beside explicit ones). Every ODE step reads the state at the start
+  of the step (Jacobi), across solvers too.
 
 `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
 it names and keeps the others, `u0`, `p` and the seed; the D-016 fingerprint hashes a
@@ -87,7 +88,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
         "`expression = Val(true)` is not supported (D-014); use `Potts.generated_code(sys; T)` to inspect the code"))
-    st = _initial_state(c, opd, T, capacity, values)
+    st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
     spacing = sys.lattice.spacing === nothing ? nothing : map(T, sys.lattice.spacing)
@@ -124,8 +125,9 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
 end
 
 # `remake(prob; field_solver | ode_solver | solvers = …)`: the problem's code rebuilt through
-# the codegen point with the named keywords replaced and the others kept (CorePotts keeps
-# u0, p, the seed and the frozen mask). Never reached by `remake(prob; p | u0 | seed)`.
+# the codegen point with the named keywords replaced and the others kept, and `u0` re-laid
+# out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
+# Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
         ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, kwargs...)
     isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
@@ -133,7 +135,22 @@ function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.s
     c = mi.csys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = _derived_parameters(c, prob.p, Set(info(x).name for x in c.sys.parameters))
-    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache)
+    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache), _ode_layout(prob.u0, c, spec)
+end
+
+# The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
+# scope, `_ode_scratch`), each starting as a copy of its variable; any others removed. The
+# same state if its layout already fits.
+function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
+    scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !endswith(String(k), "__ode"))
+    function add(nt, scope, odes)
+        _ode_scratch(c, spec, scope) || return nt
+        return merge(nt, NamedTuple(_ode_scratch_name(info(x).name) => copy(getproperty(nt, info(x).name)) for (x, _) in odes))
+    end
+    cell = add(scratchless(st.cell), :cell, c.cell_odes)
+    model = add(scratchless(st.model), :model, c.model_odes)
+    keys(cell) == keys(st.cell) && keys(model) == keys(st.model) && return st
+    return CorePotts.CPMState(st.σ, cell, st.site, model, st.history)
 end
 
 # Checkerboard claims beyond old/new: the clusters of old/new (cluster energies read cluster
@@ -494,6 +511,6 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
     values = _derived_parameters(info.csys, prob.p, Set(Potts.info(x).name for x in info.csys.sys.parameters))
-    st = _initial_state(info.csys, opd, info.T, max(old, ncell + free), values)
+    st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values), info.csys, info.solvers)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
 end

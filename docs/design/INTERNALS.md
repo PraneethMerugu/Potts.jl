@@ -320,17 +320,31 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
   keywords resolved in Potts (`src/solvers.jl`: `_resolve_solvers` → `SolverSpec`, one
   solver per integrated variable by name) and compiled at the one codegen point
   (`_problem_function` → `_phases`): each field's `FieldStep` takes its `ExplicitEuler`;
-  the cell and model ODEs are grouped by solver (`_ode_groups`), one phase per group
-  (a fixed-step `CellPhase`/`ModelPhase`, or a host `_AdaptiveODE`). A model whose ODEs
-  share one solver generates exactly the code it did before. Nothing reaches CorePotts
-  algorithm types (D-046). The fingerprint seed adds the spec's canonical string (types
-  printed fully qualified, keyword bundles sorted) when the model integrates anything.
+  the cell and model ODEs are grouped by solver (`_ode_groups`, `isequal` of the resolved
+  objects), one phase per group (a fixed-step `CellPhase`/`ModelPhase`, or a host
+  `_AdaptiveODE`). A model whose ODEs share one solver generates exactly the code it did
+  before. Nothing reaches CorePotts algorithm types (D-046). The fingerprint seed adds the
+  spec's canonical string (types printed fully qualified, primitives and ranges by `repr`,
+  closures by their captures, dictionaries and keyword bundles sorted) when the model
+  integrates anything.
+- **Jacobi scratch.** A scope (cell, model) with several solver groups gets state slots
+  `x__ode` for its ODE unknowns (`_ode_layout`, applied at construction, `remake_state`
+  and the solver remake). Each group's phase reads the variables and writes the scratch
+  (an empty cell slot copies its value through; the adaptive phase writes its host
+  scratch and copies that to the device), then one `CopyPhase` per unknown publishes after
+  the scope's last group. Cell groups publish before the model groups run (D-077 N3).
+  One group: no scratch, direct writes, unchanged code.
 - **Rebuild hook.** CorePotts `remake` passes keywords beyond its fixed ones to
   `remake_function(f.sys, prob; kwargs...)` (default: an `ArgumentError`). Potts'
   method on `PottsModelInfo` (which keeps the compiled system, `T`, the host context and
   the `SolverSpec`) merges the named solver keywords into the stored ones, re-resolves and
-  calls `_problem_function`; CorePotts then keeps `u0`, `p`, `seed`/`replica`/`repeat`
-  and the frozen mask. `remake(prob; p | u0 | seed)` never calls it.
+  returns `(f, u0)`: `_problem_function`'s new `f` and `prob.u0` re-laid out for its
+  scratch. CorePotts keeps `p`, `seed`/`replica`/`repeat` and the frozen mask (a `u0` given
+  in the same call goes through `remake_state` for the new `f` instead).
+  `remake(prob; p | u0 | seed)` never calls it.
+- **Fingerprint and paths.** `_code_hash` strips every line number, including the
+  `LineNumberNode`s macro calls carry (`@inbounds` records the generating file), so the
+  fingerprint depends neither on the checkout path nor on line moves (D-016).
 
 ### 2.7 Hybrid coupling (extensions)
 

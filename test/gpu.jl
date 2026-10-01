@@ -286,3 +286,23 @@ end
     @test [(Array(u.cell.ar₊dz_1)[1], Array(u.cell.ar₊dz_2)[1]) for u in ua.u] ==
           Tuple{Float32, Float32}[(0, 1), (0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
 end
+
+# P6.0c: several ODE solver groups step through scratch `x__ode` on the device (fixed-step
+# kernels) and through the host (adaptive), then publish: the CPU result in Float32.
+@testset "solver groups on Metal (Jacobi scratch)" begin
+    backend = MetalBackend()
+    sys = SolverTriple(; name = :t)
+    v(n) = solver_var(sys, n)
+    for kw in ((; solvers = [v(:s) => RK4(), v(:h) => RK4()]),
+               (; solvers = [v(:s) => RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1e-6)]))
+        prob = PottsProblem(sys, solver_op(), (0, 5); T = Float32, kw...)
+        @test haskey(prob.u0.cell, :s__ode)
+        cpu = solve(prob, CheckerboardCPM()).u[end]
+        gpu = solve(prob, CheckerboardCPM(); backend).u[end]
+        @test Array(gpu.σ) == Array(cpu.σ)
+        for n in (:y, :s, :w)
+            @test Array(getproperty(gpu.cell, n)) ≈ Array(getproperty(cpu.cell, n)) rtol = 1e-5
+        end
+        @test Array(gpu.model.g) ≈ Array(cpu.model.g) rtol = 1e-5
+    end
+end

@@ -22,7 +22,17 @@ end
 
 """Hash of generated code, independent of line numbers and the install path (D-016)."""
 _code_hash(exprs, h::UInt = zero(UInt)) =
-    foldl((h, ex) -> hash(string(Base.remove_linenums!(deepcopy(ex))), h), exprs; init = h)
+    foldl((h, ex) -> hash(string(_strip_lines!(deepcopy(ex))), h), exprs; init = h)
+
+# Every line number out of an expression, including those macro calls carry (`@inbounds`
+# records the generating file's path, which would tie the fingerprint to the checkout).
+function _strip_lines!(ex)
+    ex isa Expr || return ex
+    Base.remove_linenums!(ex)
+    ex.head === :macrocall && length(ex.args) >= 2 && ex.args[2] isa LineNumberNode && (ex.args[2] = nothing)
+    foreach(_strip_lines!, ex.args)
+    return ex
+end
 
 # `key`: the RNG key in scope (functions of the MCS phases and lifecycle); enables `rand()`.
 _draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity),)
@@ -436,16 +446,24 @@ function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
-    # cell then model ODEs, one phase per solver (`_ode_groups`; one group unless `solvers`
-    # sets a variable apart), after the population folds their rates read
+    # cell then model ODEs (model ODEs see the cells' new values; D-077 N3), one phase per
+    # solver (`_ode_groups`; one group unless `solvers` sets a variable apart), after the
+    # population folds their rates read. Several groups in a scope write scratch `x__ode`,
+    # published after the scope's last group, so every rate reads the pre-step state.
     isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
-    for (solver, odes) in _ode_groups(c.cell_odes, spec)
-        push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, :cell, odes, solver) :
-                     CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver))))
-    end
-    for (solver, odes) in _ode_groups(c.model_odes, spec)
-        push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, :model, odes, solver) :
-                     CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver))))
+    for scope in (:cell, :model)
+        groups = _ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)
+        scratch = length(groups) > 1
+        for (solver, odes) in groups
+            push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch) :
+                         scope === :cell ? CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch))) :
+                         CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver; scratch))))
+        end
+        scratch || continue
+        for (x, _) in (scope === :cell ? c.cell_odes : c.model_odes)
+            n = info(x).name
+            push!(after, CorePotts.CopyPhase((scope, n) => (scope, _ode_scratch_name(n))))
+        end
     end
     append!(after, _discrete_phases(c, T))
     append!(after, _link_phases(c, T))
@@ -470,32 +488,40 @@ end
 # all of them unless `solvers` sets some apart) advance together, per cell, over one MCS of
 # length `dt` with that fixed-step `solver` (a batched system over the cell dimension: one
 # work item per cell, CPU or GPU). The state is read into locals `y_i`, the right-hand sides
-# see them (and `time`), and the result is written back.
-function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver)
+# see them (and `time`), and the result is written back: to the variables, or with `scratch`
+# (several solver groups) to `x__ode`, where an empty cell slot copies its value through so
+# the whole-array publish is exact.
+function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = false)
     rn = c.gather_names
     ys, locals, bind = _ode_locals(odes)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
+    outs = scratch ? _ode_scratch_name.(names) : names
     body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
+    live = scratch ? :(if !(@inbounds st.cell.volume[c] > 0)
+                         $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
+                         return nothing
+                     end) : :(@inbounds st.cell.volume[c] > 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> begin
-        @inbounds st.cell.volume[c] > 0 || return nothing
+        $live
         $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in eachindex(ys)]...)
         $body
-        $([:(@inbounds st.cell.$(names[i])[c] = $(ys[i])) for i in eachindex(ys)]...)
+        $([:(@inbounds st.cell.$(outs[i])[c] = $(ys[i])) for i in eachindex(ys)]...)
         return nothing
     end)
 end
 
 # Model ODEs (`D(x) ~ rhs` on model variables): the same fixed-step solver, one work item.
-function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver)
+function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = false)
     ys, locals, bind = _ode_locals(odes)
     env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
+    outs = scratch ? _ode_scratch_name.(names) : names
     body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes])
     return :((st, p, ctx, key, mcs) -> begin
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
-        $([:(@inbounds st.model.$(names[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
+        $([:(@inbounds st.model.$(outs[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
         return nothing
     end)
 end
@@ -504,7 +530,7 @@ end
 # SciML right-hand side `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered rates of
 # the ODEs `odes` of that solver, and a phase that keeps one integrator (created on first
 # use) and re-initializes it per cell / per MCS.
-function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver)
+function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scratch = false)
     ys, locals, bind = _ode_locals(odes)
     env = scope === :cell ? _cell_env(T, :c, c.gather_names; mcs = :mcs, extra = (bind..., :time => :tt)) :
           _model_env(T, c.gather_names; extra = (bind..., :time => :tt))
@@ -515,8 +541,9 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver)
         $([:(du[$i] = $(rates[i])) for i in eachindex(ys)]...)
         return nothing
     end))
-    return _AdaptiveODE(f, solver.alg, solver.kwargs, [info(x).name for (x, _) in odes], scope, T, Float64(dt),
-        Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+    names = [info(x).name for (x, _) in odes]
+    return _AdaptiveODE(f, solver.alg, solver.kwargs, names, scratch ? _ode_scratch_name.(names) : names, scope, T,
+        Float64(dt), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
 end
 
 # One SciML integrator per trajectory, keyed by the identity of its live state array (held
@@ -527,6 +554,7 @@ struct _AdaptiveODE{F, A, K}
     alg::A
     kwargs::K
     names::Vector{Symbol}
+    outs::Vector{Symbol}         # where the results go: `names`, or their `x__ode` scratch
     scope::Symbol
     T::Type
     dt::Float64
@@ -543,6 +571,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     hctx = merge(ctx, (; lattice = CorePotts.host_lattice(ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
+    outs = [getfield(part, n) for n in ph.outs]
     u = zeros(ph.T, length(arrays))
     t0 = mcs * ph.dt
     advance!(P, c) = begin
@@ -552,8 +581,8 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
             integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, ph.kwargs...)
             lock(() -> _cache_integrator!(ph.integrators, owner, integ), ph.lock)
         else
+            integ.p = P                       # before `reinit!`: its initial-dt guess evaluates the rate
             SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true, reset_dt = true)
-            integ.p = P
         end
         SciMLBase.solve!(integ)
         SciMLBase.successful_retcode(integ.sol) || error("Adaptive ODE integration failed at MCS $mcs" *
@@ -562,13 +591,16 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     end
     if ph.scope === :cell
         for c in 1:length(host.cell.kind)
-            host.cell.volume[c] > 0 || continue
+            if !(host.cell.volume[c] > 0)
+                outs === arrays || foreach(((o, a),) -> o[c] = a[c], zip(outs, arrays))
+                continue
+            end
             for (i, a) in enumerate(arrays)
                 u[i] = a[c]
             end
             v = advance!((host, hp, hctx, mcs, c), c)
-            for (i, a) in enumerate(arrays)
-                a[c] = v[i]
+            for (i, o) in enumerate(outs)
+                o[c] = v[i]
             end
         end
     else
@@ -576,13 +608,13 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
             u[i] = a[1]
         end
         v = advance!((host, hp, hctx, mcs, 0), 0)
-        for (i, a) in enumerate(arrays)
-            a[1] = v[i]
+        for (i, o) in enumerate(outs)
+            o[1] = v[i]
         end
     end
     if !cpu
         dst = ph.scope === :cell ? st.cell : st.model
-        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.names)
+        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.outs)
     end
     return 0
 end

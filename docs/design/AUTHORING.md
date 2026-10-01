@@ -338,26 +338,42 @@ prob = PottsProblem(sys, op, (0, 500);
 prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
 ```
 
-- `field_solver = ExplicitEuler(; substeps, lower)` has **no default**: a model with a
-  field needs it, and a model without one rejects it. `substeps = nothing` takes the
-  stable count from the diffusion coefficient; an explicit `n` is a minimum. `lower` clips
-  after every substep. A published model's docstring gives its value (Merks:
-  `ExplicitEuler(substeps = 2, lower = 0.0)`).
+- `field_solver = ExplicitEuler(; substeps, lower)` has **no default**: a model with an
+  integrated field (`D(c) ~ …`) needs it, even when `solvers` names every field, and a
+  model without one rejects it. `substeps = nothing` takes the stable count from the
+  diffusion coefficient; an explicit `n` is a minimum. `lower` clips after every substep. A
+  published model's docstring gives its value (Merks: `ExplicitEuler(substeps = 2,
+  lower = 0.0)`).
 - `ode_solver` integrates every cell and model ODE (`D(x) ~ …`, components):
-  `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; kwargs...)`.
-- `solvers = [x => solver, …]` keys integrated variables (the symbolic variable or its
-  name) and overrides `ode_solver` (or, with an `ExplicitEuler`, `field_solver`) for those
-  only. A key that is a parameter or a variable without an equation is an error. The ODEs
-  of one solver step together in one phase (Jacobi, every rate sees the start-of-step
-  state); the phases of different solvers run in order of each solver's first variable,
-  cell ODEs before model ODEs, and a later one sees the earlier ones' results.
+  `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; kwargs...)`. It has a
+  default, so a model without ODEs accepts it silently (it changes nothing, fingerprint
+  included), unlike `field_solver`. For an ODE, `ExplicitEuler()` is one step per MCS,
+  the same as `ExplicitEuler(substeps = 1)`.
+- `solvers = [x => solver, …]` overrides `ode_solver` (or, with an `ExplicitEuler`,
+  `field_solver`) for the integrated variables it names: by the Potts variable, its name
+  (`:x`), a component variable (`grn.x` or `Symbol("grn₊x")`), or a component system
+  (`grn`: all its integrated unknowns). A key that is a parameter, a variable without an
+  equation, or named twice is an error.
+- **Jacobi across solvers.** The ODEs of one solver (equal solver objects, `isequal`) step
+  together in one phase. When a scope has several such groups, each writes scratch slots
+  `x__ode` and one publish per scope copies them back after the last group, so every
+  rate reads the state at the start of the step whatever the solvers or the equation
+  order. A scope with one group writes its variables directly (no scratch; the code of
+  such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
+  values (D-077 N3, unchanged).
 - `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code through the
-  same codegen point and keeps `u0`, `p`, the seed and the solver keywords it does not
-  name. `remake(prob; p | u0 | seed)` never regenerates (`f` is the same object).
+  same codegen point and keeps `u0` (re-laid out for the scratch slots, values kept), `p`,
+  the seed and the solver keywords it does not name. `remake(prob; p | u0 | seed)` never
+  regenerates (`f` is the same object). Cost: a new specification on Merks 100² takes
+  about 0.3 s of code generation plus 0.4 s of compilation at the first solve; an
+  identical one reuses the compiled functions (a few ms). A first `Adaptive` algorithm also
+  compiles OrdinaryDiffEq (seconds).
 - The D-016 fingerprint hashes a canonical string of the resolved per-variable solvers
-  (`Adaptive`'s algorithm, by type and fields, and its sorted keywords; the
-  `ExplicitEuler`/`RK4` fields), so a checkpoint loads only into an equally discretised
-  problem; equal specifications built from fresh objects match.
+  (`Adaptive`'s algorithm by fully qualified type and fields, closures' captures
+  included, and its sorted keywords; the `ExplicitEuler`/`RK4` fields), so a checkpoint
+  loads only into an equally discretised problem; equal specifications built from fresh
+  objects match. The algorithm's type and fields belong to the solver package, so the
+  fingerprint can change with its version (as it does with Julia's).
 
 **Adaptive and stiff solvers (implemented).**
 `ode_solver = Adaptive(Rodas5P(); reltol = 1e-8)` (or a `solvers` entry) integrates cell

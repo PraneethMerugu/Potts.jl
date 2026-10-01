@@ -69,7 +69,8 @@ remake_state(sys, prob, u0) = u0
 # the frozen mask of a remade state (models whose mask derives from the state override this)
 remake_frozen(sys, prob, u0) = prob.frozen
 # `remake` keywords beyond the fixed ones (a symbolic layer's problem-construction keywords,
-# e.g. Potts' solvers): a new `f` built from them, keeping everything else
+# e.g. Potts' solvers): `(f, u0)`, a new `f` built from them and `prob.u0` re-laid out for it
+# if its state layout depends on them (values kept); everything else is kept
 function remake_function(sys, prob; kwargs...)
     throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                         "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
@@ -77,16 +78,19 @@ end
 
 function SciMLBase.remake(prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan,
         p = prob.p, seed = prob.seed, replica = prob.replica, repeat = prob.repeat, kwargs...)
+    relaid = prob.u0
     if !isempty(kwargs)
         f === prob.f || throw(ArgumentError("remake: give `f` or the keywords it is rebuilt from " *
                                             "($(join(("`$k`" for k in keys(kwargs)), ", "))), not both"))
-        f = remake_function(f.sys, prob; kwargs...)
+        f, relaid = remake_function(f.sys, prob; kwargs...)
     end
     p === prob.p || (p = remake_parameters(f.sys, prob, p))
     frozen = prob.frozen
     if u0 !== prob.u0
         u0 = remake_state(f.sys, prob, u0)
         frozen = remake_frozen(f.sys, prob, u0)
+    else
+        u0 = relaid
     end
     return PottsProblem(f, u0, prob.lattice, tspan, p; contact = prob.contact,
         proposal = prob.proposal, relations = prob.relations, spacing = prob.spacing, frozen, seed,
