@@ -1677,6 +1677,13 @@ session.
 - **Expected values.** The 16 Akeeb digests are today's (ec544d8) outputs: the port must reproduce Akeeb's layouts bit for bit.
 - **Review and merge.** One round, approved. Beyond the spec: `record!(…; counted = painted)`; under `fraction`, `InsertUntil` reports `requested = counted`; `assign!`, `owner` and `indomain` take a `CartesianIndex`; `remake` of a custom layer or an overlay throws. No `owner` collision (the DSL's `owner` is a codegen key). `Logging` left PottsModels' deps. Painting is at parity or faster except 1×1 tiling (+1.4 ns per box of accessor overhead; accepted). Coordinator doc fixes: `paint!` docstring, `assign!` does not wrap, a delegating layer calls `record!` last.
 
+## D-094 P6.1a7: `Scattered` overlap test on an occupancy mask (2026-10-01, P6.1a7; coordinator)
+
+- **Frozen acceptance** `p6_1a7_scattered_mask.jl`: σ, kinds and the report row identical to a5a2819 over 26 cases × gap ∈ {0, 1, 2} × 5 seeds (2D closed and periodic on all or one axis, 3D, hex, edge regions where the gap dilation wraps, dense near-jam requests, the D-087 Merks request) and 3 layered cases; the jam error names the same failing box; the 10 000-draw limit is pinned from both sides.
+- **Timing.** `layout(…)` as a whole (it sets up `record!`'s leaf context), min over runs after warm-up: 10⁴ cubes of 5³ at 200³ ≤ 50 ms, closed and fully periodic (the periodic bound goes beyond the ROADMAP line so the wrap has no slow path); time per box at 4·10⁴ squares (3000²) ≤ 2.5 × that at 4·10³ (949², same density). Each timed σ is checked against its digest.
+- **Report `misses`.** `Scattered` still reports 0; rejected draws are documented in the case table only.
+- **Review and merge.** One round, approved: 2·10⁶ random decisions and 10⁵ random layouts identical to the pairwise test; 10⁴ cubes of 5³ at 200³ in 17 ms (closed and periodic), per-box scaling 1.2.
+
 ## D-095 Early cut-over to GitHub Potts.jl (2026-10-01; user; overrides AUTONOMY §5's all-pass gate)
 
 - **User decisions** (2026-10-01), relayed verbatim by the peer session and confirmed by the user in the coordinator chat ("Yes, all of it (Recommended)"; "Now, at current monorepo (Recommended)"): "we should force pr merge to Potts.jl , renaming the folder names to have the .jl suffix and lining up with the names"; merge style "PR, merge commit (Recommended)"; rename "Neither, follow SciML"; old repos "Now"; lab audience "Mixed"; docs online: "we want them online".

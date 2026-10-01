@@ -312,7 +312,7 @@ Every item's acceptance also includes the standing checks:
   - `akeeb_layout = overlay(Tiling(…; partial = :clip), InsertUntil(…; splits = :allow))`; `_AkeebSlab` and the `NullLogger` in `akeeb_state` are deleted; the width check stays.
   - Accept: Akeeb σ, kinds and painted/misses/counted byte-identical to today at 500×300 and 99×60, both seedings, ≥ 4 seeds (reproducer `/tmp/initstate-review/p1_akeeb_clip.jl`); `akeeb_state` emits no log record while an unrelated `@warn` inside a layer still surfaces; the custom test layer uses no `LatticeSpec` field; `remake(Scattered(…); seed = 2)` and `remake(InsertUntil(…); misses = :retry)` work and validate; re-freeze (D-060 style, assertions unchanged, API calls only) of `acceptance/p6_2a_akeeb_analysis.jl` and `acceptance/p6_2a2_akeeb_inventory.jl`; gate and fingerprints unchanged; Aqua, JET, ExplicitImports clean.
   - Not in this row: `into`, `shortfall`, `set_column!`, `add_link!`, shapes.
-- [ ] **P6.1a7** `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
+- [x] **P6.1a7** (merge, 2026-10-01; D-094) `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
   - Accept: σ identical to the pre-change version over a seed grid, closed and periodic (the dilation wraps), 2D, 3D and hex; 10⁴ cubes of 5³ at 200³ under 50 ms (≈ 480 ms today, `/tmp/initstate-review/p3_scattered_cost.jl`).
 - [x] (merge, 2026-10-01; D-088) **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
