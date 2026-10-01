@@ -116,13 +116,20 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # every generated function, without line numbers: independent of the install path, and
     # the canonical solver spec (D-016 as amended by D-075; a model with no field or ODE has
     # none and keeps its fingerprint)
-    h = hash((core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T))
+    h = hash(_fingerprint_seed(sys, T))
     isempty(spec.canonical) || (h = hash(spec.canonical, h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec))
 end
+
+# The fingerprint's structural part as a canonical string: the lattice (dims, boundaries,
+# domain, geometry), spacing, neighbourhood and scalar type by content. Hashing the objects
+# would fall back to `objectid` for package structs and tie the fingerprint to the build.
+_fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(core_lattice(sys.lattice)),
+    ";spacing=", _canonical_value(sys.lattice.spacing), ";neighborhood=", _canonical_value(sys.lattice.neighborhood),
+    ";T=", string(T))
 
 # `remake(prob; field_solver | ode_solver | solvers = …)`: the problem's code rebuilt through
 # the codegen point with the named keywords replaced and the others kept, and `u0` re-laid
@@ -142,7 +149,8 @@ end
 # scope, `_ode_scratch`), each starting as a copy of its variable; any others removed. The
 # same state if its layout already fits.
 function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
-    scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !endswith(String(k), "__ode"))
+    slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes)))
+    scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !(k in slots))
     function add(nt, scope, odes)
         _ode_scratch(c, spec, scope) || return nt
         return merge(nt, NamedTuple(_ode_scratch_name(info(x).name) => copy(getproperty(nt, info(x).name)) for (x, _) in odes))
@@ -503,6 +511,10 @@ function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i:
 end
 
 CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
+
+# a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
+# problem of the model): its values, laid out for this problem's ODE scratch
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = _operating_point(info.csys.sys, u0)

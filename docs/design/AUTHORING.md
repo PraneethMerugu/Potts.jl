@@ -354,11 +354,13 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   (`:x`), a component variable (`grn.x` or `Symbol("grn₊x")`), or a component system
   (`grn`: all its integrated unknowns). A key that is a parameter, a variable without an
   equation, or named twice is an error.
-- **Jacobi across solvers.** The ODEs of one solver (equal solver objects, `isequal`) step
-  together in one phase. When a scope has several such groups, each writes scratch slots
-  `x__ode` and one publish per scope copies them back after the last group, so every
-  rate reads the state at the start of the step whatever the solvers or the equation
-  order. A scope with one group writes its variables directly (no scratch; the code of
+- **Jacobi across solvers.** The ODEs of one solver (equal specifications, by their
+  canonical string) step together in one phase. When a scope has several such groups,
+  each writes scratch slots `x__ode` and one publish per scope copies them back after the
+  last group, so every rate's reads of its own cell's (or the model's) unknowns see the
+  state at the start of the step, whatever the solvers or the equation order. Reads of
+  *other* cells' ODE unknowns within one group (`y[j]`, folds over cells) stay
+  Gauss–Seidel as before (D-077 N3, P6.0n). A scope with one group writes its variables directly (no scratch; the code of
   such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
   values (D-077 N3, unchanged).
 - `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code through the
@@ -379,7 +381,10 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
 `ode_solver = Adaptive(Rodas5P(); reltol = 1e-8)` (or a `solvers` entry) integrates cell
 and model ODEs on the host with any SciML ODE algorithm. The user loads OrdinaryDiffEq;
 Potts depends only on SciMLBase. An equation with `rand()` cannot be integrated
-adaptively (the solver re-evaluates the rate at trial steps).
+adaptively (the solver re-evaluates the rate at trial steps). The integrator's parameter
+tuple is set to the current cell and MCS before each `reinit!` (P6.0c; before, the
+initial-step guess evaluated the rate with the previous cell's tuple, a stale host
+snapshot on a device), so adaptive trajectories changed within tolerance.
 - One integrator is created on first use and re-initialized per cell and per MCS
   (`reinit!`, set `p`, `solve!` to `t + mcs_duration`).
 - A device state is copied to the host and back once per MCS.

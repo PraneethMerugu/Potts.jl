@@ -339,12 +339,23 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
   method on `PottsModelInfo` (which keeps the compiled system, `T`, the host context and
   the `SolverSpec`) merges the named solver keywords into the stored ones, re-resolves and
   returns `(f, u0)`: `_problem_function`'s new `f` and `prob.u0` re-laid out for its
-  scratch. CorePotts keeps `p`, `seed`/`replica`/`repeat` and the frozen mask (a `u0` given
-  in the same call goes through `remake_state` for the new `f` instead).
+  scratch. CorePotts keeps `p`, `seed`/`replica`/`repeat` and the frozen mask. A `u0`
+  given in the same call, or to `remake`/`reinit!` alone, goes through `remake_state`
+  for the (new) `f`: a symbolic map builds a fresh state, a `CPMState` is re-laid out
+  for the scratch (`_ode_layout`, which touches only the `x__ode` slots of the ODE
+  unknowns; declared names may not end in `__ode`, `__tick` or `__next`).
   `remake(prob; p | u0 | seed)` never calls it.
 - **Fingerprint and paths.** `_code_hash` strips every line number, including the
   `LineNumberNode`s macro calls carry (`@inbounds` records the generating file), so the
-  fingerprint depends neither on the checkout path nor on line moves (D-016).
+  fingerprint depends neither on the checkout path nor on line moves (D-016). The
+  structural seed is a canonical string (`_fingerprint_seed`: lattice, spacing,
+  neighbourhood, `T` by content), not a hash of package structs, which falls back to
+  `objectid` and so to the build. Symbolics orders the terms of sums and products by
+  hashes involving function identities, so the operand order of generated `+`/`*` calls
+  can differ between builds of one source; `_code_hash` reads those operands in printed
+  order (`_commutative_order!`). The same source at another path or build fingerprints
+  alike (checked against a `git archive` copy, P6.0c review 2); the code itself may differ
+  in operand order, i.e. in rounding only.
 
 ### 2.7 Hybrid coupling (extensions)
 

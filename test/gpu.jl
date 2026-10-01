@@ -304,5 +304,6 @@ end
             @test Array(getproperty(gpu.cell, n)) ≈ Array(getproperty(cpu.cell, n)) rtol = 1e-5
         end
         @test Array(gpu.model.g) ≈ Array(cpu.model.g) rtol = 1e-5
+        @test Array(gpu.model.h) ≈ Array(cpu.model.h) rtol = 1e-5
     end
 end

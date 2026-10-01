@@ -22,7 +22,21 @@ end
 
 """Hash of generated code, independent of line numbers and the install path (D-016)."""
 _code_hash(exprs, h::UInt = zero(UInt)) =
-    foldl((h, ex) -> hash(string(_strip_lines!(deepcopy(ex))), h), exprs; init = h)
+    foldl((h, ex) -> hash(string(_commutative_order!(_strip_lines!(deepcopy(ex)))), h), exprs; init = h)
+
+# Symbolics orders the terms of a sum or product by hashes that involve function identities,
+# so the operand order of generated `+`/`*` calls can differ between builds of the same
+# source. The fingerprint reads them in a canonical order (by printed operand): the same
+# model on another checkout or build fingerprints alike (operand order changes rounding
+# only, not the model).
+function _commutative_order!(ex)
+    ex isa Expr || return ex
+    foreach(_commutative_order!, ex.args)
+    if ex.head === :call && length(ex.args) > 2 && any(f -> ex.args[1] === f, (:+, :*, +, *))
+        sort!(view(ex.args, 2:length(ex.args)); by = string)
+    end
+    return ex
+end
 
 # Every line number out of an expression, including those macro calls carry (`@inbounds`
 # records the generating file's path, which would tie the fingerprint to the checkout).
@@ -592,7 +606,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     if ph.scope === :cell
         for c in 1:length(host.cell.kind)
             if !(host.cell.volume[c] > 0)
-                outs === arrays || foreach(((o, a),) -> o[c] = a[c], zip(outs, arrays))
+                ph.outs != ph.names && foreach(((o, a),) -> o[c] = a[c], zip(outs, arrays))
                 continue
             end
             for (i, a) in enumerate(arrays)

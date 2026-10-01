@@ -224,4 +224,80 @@ end
     @test any(hasmacroline, exprs)                                   # the case the hash must ignore
     @test Potts._code_hash(exprs) == Potts._code_hash(map(moved, exprs))
     @test Potts._code_hash(exprs) != Potts._code_hash(exprs[2:end])  # negative control
+    # Symbolics' term order is build dependent: sums and products hash in a canonical order
+    @test Potts._code_hash([:(f(x) = (+)(a, (*)(-1, b), c))]) == Potts._code_hash([:(f(x) = (+)(c, a, (*)(b, -1)))])
+    @test Potts._code_hash([:(f(x) = (-)(a, b))]) != Potts._code_hash([:(f(x) = (-)(b, a))])
+end
+
+@testset "states given as such are laid out for the scratch (remake, reinit!)" begin
+    sys = SolverPairYS(; name = :p)
+    multi = PottsProblem(sys, solver_op(), (0, 4); solvers = [:s => RK4()])
+    single = PottsProblem(sys, solver_op(), (0, 4))
+    plain = solve(single, SequentialCPM()).u[end]                     # a state without scratch
+    @test !haskey(plain.cell, :s__ode)
+    # R1: remake of a multi-group problem with a scratchless state
+    r1 = remake(multi; u0 = plain)
+    @test haskey(r1.u0.cell, :s__ode) && r1.u0.cell.s == plain.cell.s
+    @test solve(r1, SequentialCPM()).t[end] == 4
+    # R2: reinit! with a scratchless state
+    integ = init(multi, SequentialCPM()); step!(integ)
+    reinit!(integ, plain)
+    @test integ.u.cell.y == plain.cell.y && haskey(integ.u.cell, :s__ode)
+    # R3: a solver remake together with a state
+    r3 = remake(single; solvers = [:s => RK4()], u0 = plain)
+    @test haskey(r3.u0.cell, :s__ode) && r3.f.fingerprint == multi.f.fingerprint
+    @test solve(r3, SequentialCPM()).u[end].cell.s == solve(remake(multi; u0 = plain), SequentialCPM()).u[end].cell.s
+    # and back: a scratch state into a single-group problem loses the scratch
+    @test !haskey(remake(single; u0 = solve(multi, SequentialCPM()).u[end]).u0.cell, :s__ode)
+    # an incompatible state names what differs
+    e = solver_err(() -> reinit!(init(single, SequentialCPM()), Potts.CorePotts.with_capacity(plain, 9)))
+    @test e isa ArgumentError
+end
+
+@testset "internal slot suffixes are reserved for declared names" begin
+    for suf in ("__ode", "__tick", "__next")
+        nm = Symbol(:SuffixClash, suf)
+        e = solver_err() do
+            Core.eval(@__MODULE__, quote
+                @potts_model $nm begin
+                    @kinds medium A
+                    @variables $(Symbol(:q, suf))(cell) = 1.0
+                    @lattice Lattice((8, 8))
+                    @energy cells => (volume - 9.0)^2
+                    @sweep Metropolis(; temperature = 1.0)
+                end
+            end)
+            Base.invokelatest(Base.invokelatest(getglobal, @__MODULE__, nm); name = :x)
+        end
+        while e isa LoadError
+            e = e.error
+        end
+        @test e isa ArgumentError && occursin(suf, sprint(showerror, e))
+    end
+end
+
+@testset "equal specifications share a phase and a fingerprint" begin
+    sys = SolverPairYS(; name = :p)
+    A() = Adaptive(Tsit5(); abstol = [1e-8, 1e-8], reltol = 1e-8)
+    @test !isequal(A(), A())                                         # fresh, not egal
+    whole = PottsProblem(sys, solver_op(), (0, 2); ode_solver = A())
+    split = PottsProblem(sys, solver_op(), (0, 2); solvers = [:y => A(), :s => A()])
+    @test split.f.fingerprint == whole.f.fingerprint
+    @test count(ph -> ph isa Potts._AdaptiveODE, split.f.phases.after_mcs) == 1
+    @test keys(split.u0.cell) == keys(whole.u0.cell)
+    @test solve(split, SequentialCPM()).u[end].cell.s == solve(whole, SequentialCPM()).u[end].cell.s
+end
+
+@testset "D-016: the structural seed is a canonical string" begin
+    gg = graner_state()
+    sys = mtkcompile(GranerGlazier(; name = :gg))
+    seed = Potts._fingerprint_seed(sys.sys, Float64)
+    @test seed isa String && occursin("T=Float64", seed) && occursin("Moore", seed)
+    @test !occursin("0x", seed)                                       # no addresses
+    p64 = PottsProblem(sys, [ownership => gg[1], kind => gg[2]], (0, 1))
+    p32 = PottsProblem(sys, [ownership => gg[1], kind => gg[2]], (0, 1); T = Float32)
+    @test p64.f.fingerprint != p32.f.fingerprint
+    @test Potts._fingerprint_seed(mtkcompile(SolverPairYS(; name = :p)).sys, Float64) != seed
+    @test Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))).sys, Float64) !=
+          Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (30, 30))).sys, Float64)
 end

@@ -63,7 +63,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
     for (k, s) in given, n in _solver_keys(k, [fields; odes])
-        n in named && throw(ArgumentError("`solvers`: `$n` is given twice"))
+        n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
+                                          (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
         if n in fields
             s isa ExplicitEuler || throw(ArgumentError(
@@ -125,21 +126,23 @@ function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
 end
 
 """
-The ODE unknowns `odes` (`(x, rate)` pairs, in model order) grouped by solver (`isequal` of
-the resolved solver objects: solvers that differ in any way, a closure's captures included,
-never share a phase), in order of first appearance: each group is one phase. Every rate
+The ODE unknowns `odes` (`(x, rate)` pairs, in model order) grouped by solver (by canonical
+string, the fingerprint's: equal specifications built afresh share a phase, and solvers
+that differ, a closure's captures included, do not), in order of first appearance: each
+group is one phase. Every rate
 sees the state at the start of the step (Jacobi, D-038): with one group the phase writes
 the variables directly; with several, each writes scratch `x__ode` and one publish per
 scope copies them back after all groups ran (`_ode_scratch`).
 """
 function _ode_groups(odes, spec::SolverSpec)
-    groups = Tuple{Any, Vector{Tuple{Any, Any}}}[]
+    groups = Tuple{String, Any, Vector{Tuple{Any, Any}}}[]
     for (x, r) in odes
         s = spec.resolved[_solver_name(x)]
-        j = findfirst(g -> isequal(g[1], s), groups)
-        j === nothing ? push!(groups, (s, Tuple{Any, Any}[(x, r)])) : push!(groups[j][2], (x, r))
+        k = _canonical(s)
+        j = findfirst(g -> g[1] == k, groups)
+        j === nothing ? push!(groups, (k, s, Tuple{Any, Any}[(x, r)])) : push!(groups[j][3], (x, r))
     end
-    return groups
+    return [(s, o) for (_, s, o) in groups]
 end
 
 """Whether the ODEs of `scope` (`:cell`, `:model`) run in several solver groups, and so step

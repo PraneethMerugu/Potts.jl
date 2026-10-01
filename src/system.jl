@@ -68,6 +68,7 @@ function _check_reserved_names(sys)
             i = info(x)
             i === nothing && continue
             check(what, i.name)
+            _check_internal_suffix(what, i.name)
             v = get(i.options, :vector, nothing)
             v === nothing || check(what, v)
         end
@@ -78,6 +79,17 @@ function _check_reserved_names(sys)
     foreach(c -> check("component", c.name), sys.components)
     foreach(k -> check("structural parameter", k), keys(sys.structural))
     return sys
+end
+
+# Suffixes of the state slots Potts adds (ODE and tick scratch, double-buffered fields): a
+# declared name ending in one would collide with them.
+const _INTERNAL_SUFFIXES = ("__ode", "__tick", "__next")
+function _check_internal_suffix(what, n::Symbol)
+    for suf in _INTERNAL_SUFFIXES
+        endswith(String(n), suf) && throw(ArgumentError(
+            "$what `$n`: names ending in `$suf` are reserved for Potts' internal state slots; choose another name"))
+    end
+    return nothing
 end
 
 Base.nameof(sys::PottsSystem) = sys.name

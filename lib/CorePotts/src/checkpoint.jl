@@ -60,10 +60,12 @@ allocation of device storage), clearing saved values, statistics and the return 
 function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         t0::Integer = integ.prob.tspan[1])
     KernelAbstractions.synchronize(integ.backend)
-    u0 isa CPMState || (u0 = remake_state(integ.f.sys, integ.prob, u0))     # symbolic maps
+    # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
+    u0 = remake_state(integ.f.sys, integ.prob, u0)
     _same_shape(integ.state, u0) || throw(ArgumentError(
         "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
-        "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))); use `remake` and `init`"))
+        "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))$(_key_difference(integ.state, u0))); " *
+        "use `remake` and `init`"))
     _reset_mobility!(integ.ctx.mobility, mobility(remake_frozen(integ.f.sys, integ.prob, u0), integ.prob.lattice))
     _copy_state!(integ.state, u0)
     integ.t = t0
@@ -78,6 +80,17 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     end
     integ.save_start && _save!(integ)
     return integ
+end
+
+function _key_difference(a::CPMState, b::CPMState)
+    parts = String[]
+    for f in (:cell, :site, :model)
+        ka, kb = keys(getfield(a, f)), keys(getfield(b, f))
+        missing_ = setdiff(ka, kb); extra = setdiff(kb, ka)
+        isempty(missing_) || push!(parts, "missing $f arrays $(join(missing_, ", "))")
+        isempty(extra) || push!(parts, "extra $f arrays $(join(extra, ", "))")
+    end
+    return isempty(parts) ? "" : "; " * join(parts, "; ")
 end
 
 _same_shape(a::AbstractArray, b) = b isa AbstractArray && size(a) == size(b)
