@@ -213,6 +213,25 @@ Every item's acceptance also includes the standing checks:
 - [x] **P6.0i** author question batch 1, drafted for the maintainer to send (model-specs
   README §5). Accept: the drafts exist in `research/author-questions/`; this is not a
   send.
+- [ ] **P6.0p** D-016 gap: the fingerprint ignores the discrete tick cadence (found by the P6.0k2 test author). The P6.0k fixture with `Clock(2.0)` fingerprints the same as with `ShiftIndex(t, 0)`, so a checkpoint loads into a problem with a different schedule. Hash the resolved cadence (every/offset of each `_Gated` phase, or the clock spec).
+  - Accept: two problems that differ only in a clock's period or phase have different fingerprints, and a checkpoint of one fails to load into the other with an `ArgumentError`.
+  - Accept: fingerprints of models without clocked components are unchanged.
+- [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
+  - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
+  - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
+    - naming consistency, e.g. the `CPM*` names left after `PottsProblem` (`CPMAlgorithm`, `CPMFunction`, `CPMState`, `SequentialCPM`, `CheckerboardCPM`), and SciML/MTK conventions (D-075);
+    - keyword names and defaults that are consistent across constructors, `solve`, `remake` and layouts;
+    - names that should not be public (internal helpers reachable through exports or the ExplicitImports allowlists);
+    - public names missing a docstring, and docstrings that are stale after D-075/D-076/D-077/D-078;
+    - leftovers: names no code path, test or tutorial uses;
+    - the `POTTS_NONPUBLIC_QUALIFIED` and other ExplicitImports allowlists, each entry justified or removed.
+  - **Correction.**
+    - Non-breaking fixes land directly: docstrings, `public` markers, error messages, allowlist trimming.
+    - Breaking ones (renames, removals, keyword changes) are collected into ONE proposal for the maintainer to ratify as a single DECISIONS entry, as D-075 was. They land with no aliases (D-028), with PottsModels, tests, benchmarks and tutorials updated in the same change.
+  - Accept: the audit document exists and every finding is resolved, ratified for later, or rejected with a reason.
+  - Accept: a frozen public-API snapshot test lists every exported or `public` name per package, so any later change to the surface needs a DECISIONS entry.
+  - Accept: Documenter `checkdocs = :exports` passes with no missing docstrings, and Aqua and ExplicitImports are clean, with allowlists no larger than before.
+  - Accept: the gate is unchanged, and generated code and fingerprints are unchanged except where a ratified rename touches them.
 
 ### Step 1 — Sorting (GG + Osborne CP), pilot reproduction
 
