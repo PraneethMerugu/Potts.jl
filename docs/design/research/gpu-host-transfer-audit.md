@@ -486,9 +486,20 @@ the CPU keeps the host plan of §6–7 unchanged.
     daughters (one site kernel); cluster trackers are recounted on event rounds only.
   - Cluster planes: the root's work item sums its members' exact moments (O(capacity) per
     dividing cluster, on event rounds only).
-- **Launches:** a quiet lifecycle MCS enqueues 5 launches (trigger, plan, partition,
-  cells, finalize), +1 with a surface tracker, +2–4 with clusters, +2 with frozen kinds;
-  every work item after the trigger returns at once on a quiet round.
+- **Launches:** up to 2¹⁶ sites and 2¹³ cell slots (every published model) the whole
+  lifecycle is one launch of one 256-item workgroup, its stages separated by workgroup
+  barriers: a quiet MCS costs that one launch, as the trigger alone did. Larger problems
+  launch one kernel per stage (5 on a quiet MCS, +1 with a surface tracker, +2–4 with
+  clusters, +2 with frozen kinds); every work item after the trigger returns at once on a
+  quiet round.
+- **Akeeb 99×60 on Metal** (`/tmp/p60v1_impl_probe.jl`, 600 MCS from MCS 288, seed 0,
+  126 divisions in both): throughput (one synchronize per 600 MCS) 4750 → 561 µs/MCS; the
+  counters over 1200 MCS go from (707 syncs, 2847 transfers, 14.6 MB) per 600 MCS to
+  (0, 0, 0). Per-MCS latency to completion (`step!` + `synchronize`) is dominated by the
+  GPU's power state on this machine (median 2.6 ms base, 1.5–2.0 ms after). The gate's
+  quiet MCS (`benchmark/ab.jl … akeeb_99x60 metal 8`): candidate/base = 0.824, faster in
+  all 8 rounds (fused form; 1.009 with one kernel per stage, whose 4 extra launches cost
+  about what the read-back did).
 - **Read points:** `stats.lifecycle`, `stats.attempts` (P6.0d) and `stats.refreshes` are
   folded at `current_state` (saves, `integ.u`, `checkpoint`), the end of `solve!`, a
   direct `refresh_frozen!` and `reinit!`: one transfer of 24 B, plus 24 B for models with
