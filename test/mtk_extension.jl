@@ -6,7 +6,7 @@ const WITH_MTK = get(ARGS, 1, "") == "mtk"
 if WITH_MTK
     using ModelingToolkit: ModelingToolkit
 end
-using Potts, Test
+using Potts, Test, Statistics
 using Potts.ModelingToolkitBase: System, ShiftIndex, Clock, @variables, @parameters
 
 const t = Potts.t
@@ -119,4 +119,24 @@ end
         end
         @test err isa MethodError
     end
+end
+
+@testset "P6.0k2 review: stdlib frames are not Potts', brownians are rejected" begin
+    # a stdlib frame (recorded under the build machine's path) is not Potts code
+    bt = try
+        Statistics.quantile([1.0], 2.0)
+    catch
+        catch_backtrace()
+    end
+    @test !Potts._raised_in_potts(bt)
+    @variables y(Potts.t) = 1.0
+    @parameters k = 0.3
+    Potts.ModelingToolkitBase.@brownians B
+    noisy = System([Potts.D(y) ~ -k * y + 5.0 * B], Potts.t; name = :noisy)
+    err = try
+        Potts._reject_ignored_features(Potts.ComponentSpec(:noisy, noisy, :model)); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("brownians", err.msg)
 end

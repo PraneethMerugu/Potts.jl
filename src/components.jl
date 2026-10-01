@@ -202,7 +202,9 @@ function _reject_ignored_features(comp)
             ("continuous_events", ModelingToolkitBase.continuous_events(sys),
                 "Potts does not root-find inside a cell ODE step; write the event as a Potts update (`@after_mcs`)"),
             ("jumps", ModelingToolkitBase.jumps(sys),
-                "write the jump as a Potts update with `rand()`"))
+                "write the jump as a Potts update with `rand()`"),
+            ("brownians", ModelingToolkitBase.brownians(sys),
+                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"))
         isempty(items) || throw(ArgumentError("component `$(comp.name)`: MTK $field are not supported " *
                                               "(they would be ignored): $(what(items)); $why"))
     end
@@ -212,7 +214,8 @@ end
 # An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
 # `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
 # value of its own (it is a per-cell or model expression), so such a binding would be wrong or
-# dropped (P6.0k2 F7). Bindings of uncoupled parameters are unaffected.
+# dropped (P6.0k2 F7). Other bindings are not supported either, but are rejected elsewhere
+# (unknown symbol, missing initial value).
 function _reject_coupled_bindings(comp, cs, couplings)
     namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
     leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
@@ -344,14 +347,17 @@ end
 
 # Whether the innermost frame of `bt` outside Julia's Base and standard library is Potts code
 # (its `src/` or `ext/`): where the error was raised, as opposed to inside ModelingToolkit.
+# This is who raised it, not whose bug it is: a Potts misuse that SymbolicUtils or MTK
+# rejects is relabelled. Julia records stdlib frames under the build machine's path.
 function _raised_in_potts(bt)
     own = (joinpath(pkgdir(@__MODULE__), "src"), joinpath(pkgdir(@__MODULE__), "ext"))
     for fr in stacktrace(bt)
         m = parentmodule(fr)
         (m === Base || m === Core) && continue
         file = String(fr.file)
-        (isabspath(file) && !startswith(file, Sys.STDLIB)) || continue    # Base (inlined), stdlib
-        return any(d -> startswith(file, d * '/'), own)
+        (isabspath(file) && !startswith(file, Sys.STDLIB) &&
+         !occursin(joinpath("share", "julia", "stdlib", ""), file)) || continue    # Base (inlined), stdlib
+        return any(d -> startswith(file, joinpath(d, "")), own)
     end
     return false
 end
