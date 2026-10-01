@@ -5,7 +5,7 @@
 > `julia --project=.` (and `--project=test` for the one probe that needs a solver). Their
 > output is quoted in §6.
 
-> **Corrected after adversarial review (2026-09-30; review at `/tmp/mtknative-review.md`, probes `/tmp/mtkrev/r1–r11`, nothing run on Metal).** The headline holds: full MTK-nativeness is not achievable, and Levels B and C are rejected. Three supporting facts were wrong and one cost was missing; they are corrected inline (marked **[Corrected]**):
+> **Corrected after adversarial review (2026-09-30; review at `mtk-native-review.md`, probes `/tmp/mtkrev/r1–r11`, nothing run on Metal).** The headline holds: full MTK-nativeness is not achievable, and Levels B and C are rejected. Three supporting facts were wrong and one cost was missing; they are corrected inline (marked **[Corrected]**):
 > 1. **Build time.** The 64² `ODEProblem` time reproduces (1.4 / 16.7 / 217 s at 16² / 32² / 64²), but ≈ 99 % of it is building the `InitializationProblem`. With `build_initializeprob = false` it is 0.15 / 0.16 / 1.39 s. Scalarized codegen is *not* the bottleneck at this size; the #5139 argument and the "re-run the 64² probe" gate rested on the mis-attribution.
 > 2. **`compose`** keeps the metadata on the subsystem; only `mtkcompile` of the composed (flattened) system loses it. "D-039 reinforced" is withdrawn.
 > 3. **`resize!`**: `sol[V]` stays correct (8 declared entries); the 9th entry simply has no symbol, so SII cannot address it. It is not a silent desync of existing variables.
