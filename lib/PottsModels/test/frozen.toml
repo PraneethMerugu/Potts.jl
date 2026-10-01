@@ -111,3 +111,8 @@ decision = "D-085"
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
 sha256 = "6a5ee19416dd47c74ee6e9427eaffae73141e1e881304a65b3a3f2f6d27ad888"
 decision = "D-081"
+
+[[file]]
+path = "../../../benchmark/test/p6_0s_v7_tooling.jl"
+sha256 = "1b001ef00a7aa94594e869280083518af5677739a2b8418283f758e1553d743a"
+decision = "D-090"

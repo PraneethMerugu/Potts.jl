@@ -223,7 +223,7 @@ Every item's acceptance also includes the standing checks:
   - The self-check helpers get the same credit: `selfcheck` in `lib/PottsModels/test/runtests.jl:7-25`, `test/symbolic.jl:141` and `test/audit.jl:473`.
   - Add a Metal test in which the partner is killed during the run (`lib/CorePotts/test/gpu.jl:264-293` only has a partner that is dead from the start).
   - Accept: for every copy, including a killing copy, ΔH equals the H difference on a linked model.
-- [ ] **P6.0s** Fair machine lock (tooling; found 2026-10-01).
+- [x] **P6.0s** Fair machine lock (tooling; found 2026-10-01). (merge, 2026-10-01; D-090)
   - `benchmark/ab.jl` takes `tools/exclusive.sh` per process and re-takes it at once, so a waiter polling every 20 s starved for the whole A/B (a P6.0n Metal suite waited about 40 minutes).
   - Fix: `ab.jl` holds one lock for all its rounds (its per-run calls skip the lock when the holder is the parent), or the lock becomes a ticket queue.
   - Accept: a waiter queued before an A/B starts runs before the A/B's second round.
@@ -255,7 +255,7 @@ Every item's acceptance also includes the standing checks:
   - Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale with the columns used, not with all cell quantities; results unchanged up to floating-point tolerance.
 - [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first).
   - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
-- [ ] **P6.0v7** (top priority within P6.0v, before v1–v3; from the P6.0v audit and review) `benchmark/gate.jl` and `benchmark/ab_one.jl` time Metal `step!` to GPU completion (`synchronize`), then rebaseline Metal once. Today Graner–Glazier and Wortel Metal numbers measure only host enqueue time, so Metal A/B verdicts on them say nothing about GPU cost.
+- [x] **P6.0v7** (merge, 2026-10-01; D-090) (top priority within P6.0v, before v1–v3; from the P6.0v audit and review) `benchmark/gate.jl` and `benchmark/ab_one.jl` time Metal `step!` to GPU completion (`synchronize`), then rebaseline Metal once. Today Graner–Glazier and Wortel Metal numbers measure only host enqueue time, so Metal A/B verdicts on them say nothing about GPU cost.
   - Accept: a Metal gate case's time includes a synchronize; baseline.toml's Metal rows re-measured under one lock; CPU rows unchanged.
 - [ ] **P6.0v4** Shared-storage host-visible scalars (from the P6.0v audit): values the host reads at saves and checkpoints (status word, lifecycle stats, P6.0d counts) live in shared-storage buffers instead of a private-storage copy (≈ 200 µs → 0.3 µs per read here), still counted as transfers. Decide with ab.jl after P6.0v7.
 - [ ] **P6.0v5** (optional backlog) Device adaptive ODE solves and a device `@link` contact graph (audit A5, H5).
