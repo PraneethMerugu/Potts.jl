@@ -153,7 +153,7 @@ end
         @test all(i -> isequal(a[i], b[i]), 1:5)
         ks = p62a2_get(a, kind)
         clocks = p62a2_get(a, :clock)
-        # the clock stream is StableRNG(seed + 1) in id order
+        # the clock stream is the `:clock` sub-stream (D-093) in id order
         @test clocks == p62a2_clocks(ks, pp, seed)
         # negative control: the oracle depends on the stream (another StableRNG seed differs)
         pp > 0 && @test p62a2_clocks(ks, pp, seed) != p62a2_clocks(ks, pp, seed; rng = PottsModels.StableRNG(seed + 2))

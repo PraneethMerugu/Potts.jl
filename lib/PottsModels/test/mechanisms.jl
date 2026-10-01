@@ -560,14 +560,13 @@ end
         @test split_cells(u.σ, (true, false)) == 0
     end
     # with clocks, every cell that becomes split does so in an MCS where it took part in a
-    # division: either a cell born that MCS took most of its sites from it (a split mother),
-    # or it was born that MCS with most of its sites from one cell (a split daughter).
-    # 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds hold a split cell.
-    # The "most of its sites" attribution is per saved MCS, so a daughter that takes sites from
-    # its neighbours after its birth in the same MCS can miss it: about 1 seed in 10 has such
-    # a daughter (5 of seeds 1:28 under the D-093 clocks, 2 of 28 under the old ones). Seeds
-    # re-picked for P6.0w to ones without it; seeds 2 and 3 have one each
-    newly = map((1, 4, 5, 6)) do seed
+    # division. The lifecycle runs after the sweep and `@divide` resets both clocks to 0
+    # (division needs clock > 75, and running clocks tick before the lifecycle), so at a save
+    # `clock == 0` marks exactly the cells that divided that MCS: one mother per daughter.
+    # (A majority-of-sites attribution misses a non-convex mother whose sites gained in the
+    # sweep go to the daughter.) 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds
+    # hold a split cell
+    newly = map(1:4) do seed
         o = akeeb_state(; lattice = (99, 60), seed)
         sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 300); capacity = 1000,
             seed), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
@@ -577,13 +576,12 @@ end
             was = Set(split_ids(a.σ, (true, false)))
             born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
                     (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
-            from(d, m) = 2 * count(i -> a.σ[i] == m, findall(==(d), b.σ)) > b.cell.volume[d]
+            divided = Set(c for c in eachindex(b.cell.volume) if b.cell.volume[c] > 0 && b.cell.clock[c] == 0)
+            @test issubset(born, divided) && length(divided) == 2 * length(born)
             for c in split_ids(b.σ, (true, false))
                 c in was && continue
                 n += 1
-                mother = any(d -> from(d, c), born)
-                daughter = c in born && any(m -> m != 0 && from(c, m), unique(a.σ[b.σ .== c]))
-                @test mother || daughter
+                @test c in divided
             end
         end
         n
