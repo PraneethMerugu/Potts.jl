@@ -127,6 +127,43 @@ p60vx_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
     end
 end
 
+# A HostPhase body gets the live `p` (P6.0v2 review): an in-place change of a parameter array
+# between MCS is seen (no stale host copy), and a body's writes to a parameter array persist.
+function p60vx_param_problem(body!; T = Float32, declared = true)
+    σ = zeros(Int32, 12, 12)
+    σ[3:6, 3:6] .= 1
+    u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; y = zeros(T, 2)))
+    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    ph = declared ? CorePotts.HostPhase(body!; reads = (), writes = (:y,)) : CorePotts.HostPhase(body!)
+    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = CorePotts.Phases(; after_mcs = (ph,)))
+    return CorePotts.PottsProblem(f, u0, CorePotts.Lattice(size(σ)), (0, 4),
+        (; λ = T(1), V0 = T(16), T = T(2), Q = T[1, 1], acc = T[0]))
+end
+p60vx_read_q!(cell, st, p, ctx, mcs) = (cell.y[1] += Array(p.Q)[1]; nothing)
+p60vx_write_acc!(cell, st, p, ctx, mcs) = (p.acc .+= 1; nothing)
+
+@testset "P6.0v2: HostPhase bodies see and write the live p (Metal)" begin
+    if get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+        alg = CheckerboardCPM()
+        out = map((CorePotts.CPU(), Main.Metal.MetalBackend())) do backend
+            integ = init(p60vx_param_problem(p60vx_read_q!), alg; backend, save_start = false, save_end = false)
+            step!(integ); step!(integ)
+            integ.p.Q .= 10                                  # in place, between MCS
+            step!(integ); step!(integ)
+            y = Array(integ.state.cell.y)[1]
+            integ = init(p60vx_param_problem(p60vx_write_acc!; declared = false), alg; backend,
+                save_start = false, save_end = false)
+            foreach(_ -> step!(integ), 1:3)
+            (y, Array(integ.p.acc)[1])
+        end
+        @test out[1] == (22.0f0, 3.0f0)                      # 1 + 1 + 10 + 10; the body ran 3 times
+        @test out[2] == out[1]
+    else
+        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+    end
+end
+
 # Every GPU wait of a quiet MCS is a counted one (P6.0v3 / proposed P6.0v8). On Metal a
 # counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the copy
 # and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`. Waits the

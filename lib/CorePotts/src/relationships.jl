@@ -225,8 +225,8 @@ end
 
 Phase that synchronizes and calls `f!(cell, st, p, ctx, mcs)` on host copies every `every`
 MCS (`cell` is `st.cell`), e.g. relationship creation/removal/retuning from the contact
-graph. Host-shaped and rare by design. `ctx.lattice` and the arrays of `p` are host copies
-too (made once per run: they do not change).
+graph. Host-shaped and rare by design. `ctx.lattice` is a host copy (made once per run: the
+domain mask never changes); `p` is the live parameter object, as given to the integrator.
 
 `reads` and `writes` declare what the body touches, as tuples of `:σ` (the labels) and cell
 column names, so that on a device only those leaves cross (D-092):
@@ -237,8 +237,10 @@ column names, so that on a device only those leaves cross (D-092):
   state down; `writes = nothing` writes every cell column back (and so copies every cell
   column down).
 
-What the body sees in leaves it does not declare is unspecified (on a device it is the
-device array, which must not be read on the host). A name that is neither `:σ` nor a cell
+`reads` columns are read-only. Writing a `reads`-only or undeclared leaf is undefined: on
+the host the change persists (the body runs on the live arrays), on a device it is dropped
+(only `writes` go back). What the body sees in leaves it does not declare is unspecified (on
+a device it is the device array, which must not be read on the host). A name that is neither `:σ` nor a cell
 column of the state is an `ArgumentError` the first time the phase runs, on every backend.
 Model, site and history quantities are not declarable: a body that reads them leaves
 `reads = nothing`; it never writes them back.
@@ -273,8 +275,7 @@ function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) wher
     mcs % ph.every == 0 || return 0
     _sync!(stats, backend)
     host = _host_state(ph, stats, backend, st)
-    hp = backend isa KernelAbstractions.CPU ? p : _adapt_host_cached(stats, p)
-    ph.f!(host.cell, host, hp, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
+    ph.f!(host.cell, host, p, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
     if ph.writes === nothing
         foreach(keys(st.cell)) do name
             _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))

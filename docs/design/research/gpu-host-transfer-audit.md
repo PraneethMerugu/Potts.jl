@@ -236,6 +236,15 @@ This is the phase of `ode_solver = Adaptive(alg)`: a host SciML integrator per l
 | A5 | `:621-641` host loop over cells, one adaptive solve each | every MCS | host O(cells) solves | yes for SciML's host solvers | a device adaptive ensemble kernel (DiffEqGPU `GPUTsit5` style) | proposed P6.0v5 (optional) |
 | A6 | `:644-647` `_copy!` of `ph.outs` | every MCS | O(cells × ODE columns) up | yes while the solve is on the host (already column-only) | – | keep |
 
+**Status (P6.0v2, D-092).** A2 resolved: on a device the phase copies down only the
+unknowns, the leaves its rates read (`_state_reads` over the generated rates; a use the scan
+cannot follow falls back to the whole state) and `volume` for cell ODEs; scratch outputs are
+host buffers. A3 is a no-op for Potts: `PottsParameters` is isbits, so `_adapt_host(stats, p)`
+copies nothing (kept as is; no parameter cache, since parameter arrays may be written in
+place). A4 resolved: the host domain mask is cached per device mask (`_cached_host`), copied
+once per run. A1 stays with the host solve. Measured on the frozen fixture (Float32, Metal):
+5388 → 1032 B per MCS, the same with extra quantities and on a 32² lattice.
+
 ## 5. `HostPhase` (`lib/CorePotts/src/relationships.jl:222-235`) and the `@link` phases
 
 A `HostPhase` runs on the host every `every` MCS. Potts generates one per `@link`/`@unlink`
@@ -252,6 +261,14 @@ rule (`src/codegen.jl:818-855`). No gate model has one.
 The `HostPhase` fixture of `test/transfer_counts.jl` (two cells; σ, `kind`, `volume`,
 `generation`, `x`, `y`) costs 1 sync / 11 transfers / 656 B per MCS: σ plus 5 columns down,
 then 5 columns up. With H2 and H4, a body that reads `x` and writes `y` moves 2 columns.
+
+**Status (P6.0v2, D-092).** H2 and H4 resolved: `HostPhase(f!; every, reads, writes)` copies
+only the declared leaves down and only `writes` back; Potts declares its `@link`/`@unlink`
+phases (a `when` reading model, site or history values keeps the whole-state copy down). H3
+resolved: the host domain mask is cached once per run. H1 stays while the body runs on the
+host. The body gets the live `p` (no parameter copy). Measured (Float32, Metal): a body
+reading `x` and writing `y` moves 384 B per MCS (2000 before); the frozen `@link` fixture
+10752 → 4864 B.
 
 ## 6. The lifecycle trigger readback (`lifecycle.jl:285-292`): the only sync on a quiet MCS
 

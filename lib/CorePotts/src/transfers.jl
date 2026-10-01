@@ -78,13 +78,12 @@ counted). Does not synchronize."""
 _snapshot(stats, backend, st) = _adapt_host(stats, st)
 _snapshot(stats, ::KernelAbstractions.CPU, st) = deepcopy(st)
 
-# Host copies of device arrays that do not change during a run: the domain mask and the
-# parameter arrays (D-092; audit A3, A4, H3). Copied (counted) the first time host code asks,
-# then reused while the device array lives: keyed by its identity, held weakly (as
-# `_AdaptiveODE` keys its integrators), so concurrent trajectories each get their own entry
-# and a freed array's entry is dropped. The copy is shared: host code must not write it.
-# Parameter arrays are replaced, never written in place, by `set_parameter!` (a new array
-# gets a new entry).
+# Host copies of device arrays that nothing writes during a run: the lattice's domain mask
+# (D-092; audit A4, H3). Copied (counted) the first time host code asks, then reused while
+# the device array lives: keyed by its identity, held weakly (as `_AdaptiveODE` keys its
+# integrators), so concurrent trajectories each get their own entry and a freed array's
+# entry is dropped. The copy is shared: host code must not write it. Not for parameter
+# arrays: a user or a host phase may write those in place.
 const _HOST_CACHE = Dict{UInt, Tuple{WeakRef, Any}}()
 const _HOST_CACHE_LOCK = ReentrantLock()
 
@@ -107,8 +106,8 @@ struct _CachedHostCopy{S}
 end
 Adapt.adapt_storage(h::_CachedHostCopy, a::AbstractArray) = _cached_host(h.stats, a)
 
-"""`Adapt.adapt(Array, x)` for run-constant `x` (lattice, parameters): each device array leaf
-is copied once per run (`_cached_host`)."""
+"""`Adapt.adapt(Array, x)` for run-constant `x` (the lattice): each device array leaf is
+copied once per run (`_cached_host`)."""
 _adapt_host_cached(stats, x) = Adapt.adapt(_CachedHostCopy(stats), x)
 
 """Uninitialized host array shaped like `a` (no transfer): a buffer host code fills."""

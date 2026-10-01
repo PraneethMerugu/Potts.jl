@@ -216,7 +216,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
     :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
-    :_adapt_host_cached,  # counted, once-per-run host copy of run-constant arrays (D-092)
+    :_adapt_host,         # counted `Adapt.adapt(Array, …)` (D-085)
     :_host_leaves,        # counted host copies of the state leaves a host phase uses (D-092)
     :_host_buffer,        # uninitialized host buffer (no transfer) for adaptive ODE outputs (D-092)
     :_host_lattice,       # counted host copy of the lattice's domain mask (D-085)

@@ -658,7 +658,7 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
     owner = st.σ                                   # identifies the trajectory
     cpu = backend isa KernelAbstractions.CPU
     host = cpu ? st : _adaptive_host_state(ph, stats, backend, st)
-    hp = cpu ? p : CorePotts._adapt_host_cached(stats, p)
+    hp = cpu ? p : CorePotts._adapt_host(stats, p)     # Potts' parameters are isbits: nothing to copy
     hctx = merge(ctx, (; lattice = CorePotts._host_lattice(stats, ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
