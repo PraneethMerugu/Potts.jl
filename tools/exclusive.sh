@@ -54,7 +54,7 @@ drop_stale() {
 
 # the numbered entries of the queue, lowest first
 tickets() {
-    ls "$QUEUE" 2>/dev/null | grep -E '^[0-9]+$' | sort -n
+    ls "$QUEUE" 2>/dev/null | grep -E '^[1-9][0-9]*$' | sort -n
 }
 
 take_ticket() {
@@ -106,7 +106,8 @@ done
 # reading our stdout to EOF is not held open by it.
 sh -c '
     while sleep "$4"; do
-        [ "$(ps -o ppid= -p $$ | tr -d " ")" = "$1" ] || exit 0
+        p=$(ps -o ppid= -p $$ | tr -d " ")
+        [ -z "$p" ] || [ "$p" = "$1" ] || exit 0          # empty: ps failed, skip the check
         touch -c "$2" "$3"
     done
 ' keeper $$ "$QUEUE/$ticket" "$LOCK" $REFRESH </dev/null >/dev/null 2>&1 &
