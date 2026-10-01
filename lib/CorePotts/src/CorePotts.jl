@@ -10,7 +10,7 @@ module CorePotts
 using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
-using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
+using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, @localmem, @synchronize, CPU
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
@@ -66,6 +66,7 @@ include("spatial.jl")
 include("relationships.jl")
 include("compartments.jl")
 include("lifecycle.jl")
+include("lifecycle_device.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

@@ -1,8 +1,8 @@
 # Exact host-transfer counts of the CURRENT device code paths (P6.0v; not frozen). An
 # ordinary regression test proving `stats.syncs`, `stats.transfers` and
 # `stats.transfer_bytes` count exactly: each expected value is hand-counted from the call
-# sites. Later rows that remove transfers (P6.0v1: lifecycle on the device; P6.0v2:
-# column-only HostPhase / _AdaptiveODE copies) update the formulas here. Metal only
+# sites. Later rows that remove transfers update the formulas here (P6.0v1 did: the
+# lifecycle on the device; P6.0v2: column-only HostPhase / _AdaptiveODE copies). Metal only
 # (POTTS_GPU=metal with Metal loaded); on the CPU nothing is counted (the frozen
 # acceptance file `lib/PottsModels/test/acceptance/p6_0v_transfer_counters.jl` checks that).
 #
@@ -35,29 +35,18 @@ function p60vx_divide_problem(; T = Float64, tspan = (0, 4))
         T, capacity = 6)
 end
 
-"""Hand count of the event MCS of the division fixture on a device backend, from
-`run_lifecycle!` and `rebuild_trackers!` (lifecycle.jl, as of 1554d56 + P6.0d ee2331b). `u0` is the
-problem's host state, whose arrays have the device arrays' sizes. Returns
-`(syncs, transfers, bytes)`: (2, 18, 1098) at capacity 6 on 16×8 with Float32."""
-function p60vx_division_counts(u0)
-    cell = u0.cell
-    C = length(cell.kind)
-    @assert keys(cell) == (:kind, :volume, :generation, :m, :anchor, :m1, :m2)   # no surface, links, clusters
-    i32 = sizeof(Int32)
-    down = [i32,                         # event count (`_readback(cache.count)`)
-        i32 * C,                         # `Array(cache.events)`
-        sizeof(cell.volume)]             # `Array(st.cell.volume)` (free slots)
-    up = [i32 * C,                       # `copyto!(cache.daughter, …)`
-        sizeof(Bool) * C,                # `copyto!(cache.removed, …)`
-        i32 * C]                         # `copyto!(cache.events, …)`
-    for name in (:kind, :m)              # `_copy_columns!`: every non-tracker column, down and up
-        push!(down, sizeof(cell[name])); push!(up, sizeof(cell[name]))
-    end
-    push!(down, sizeof(cell.generation)); push!(up, sizeof(cell.generation))   # generation round trip
-    push!(down, sizeof(u0.σ))                                                    # `rebuild_trackers!`: σ down
-    append!(up, sizeof.((cell.volume, cell.anchor, cell.m1, cell.m2)))          # trackers up
-    push!(down, sizeof(cell.volume))                                             # empty-daughter count
-    return (2, length(down) + length(up), sum(down) + sum(up))  # syncs: trigger, rebuild_trackers!
+"""Hand count of the event MCS of the division fixture on a device backend. Since P6.0v1
+(D-089) the lifecycle is planned and applied on the device (`run_lifecycle_device!`
+enqueues kernels only): (0, 0, 0). Before it, the D-035 host plan made (2, 18, 1098)."""
+p60vx_division_counts(u0) = (0, 0, 0)
+
+"""Hand count of `integ.u` (a host read point) for a model with a device lifecycle: one
+sync (`current_state`), the fold of the device lifecycle statistics (`_fold_lifecycle!`:
+one transfer of the `Int32` accumulators), and the snapshot (one transfer per array leaf
+of the state, `sizeof` bytes each). `u0` is the problem's host state."""
+function p60vx_read_counts(u0)
+    leaves = Any[u0.σ, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
+    return (1, 1 + length(leaves), CorePotts._NACC * sizeof(Int32) + sum(sizeof, leaves))
 end
 
 # HostPhase fixture (CorePotts level): a no-op host phase after every sweep.
@@ -84,8 +73,12 @@ p60vx_hostphase_counts(u0) =
         integ = init(prob, alg; backend, save_start = false, save_end = false)
         c0 = p60vx_counts(integ.stats)
         step!(integ)                                                     # MCS 0: both cells divide
-        @test integ.stats.lifecycle.divisions == 2
         @test p60vx_counts(integ.stats) .- c0 == p60vx_division_counts(prob.u0)
+        c1 = p60vx_counts(integ.stats)
+        u = integ.u                                                      # a host read point
+        @test p60vx_counts(integ.stats) .- c1 == p60vx_read_counts(prob.u0)
+        @test integ.stats.lifecycle.divisions == 2                       # folded at the read
+        @test count(>(0), u.cell.volume) == 4
         prob = p60vx_hostphase_problem(; T = Float32)
         integ = init(prob, alg; backend, save_start = false, save_end = false)
         for _ in 1:3
@@ -178,16 +171,16 @@ const P60VX_STATS = Ref{Any}(nothing)
                 end
             end
         end
-        # the event MCS of the division fixture (the runtime backstop for raw copies on the
-        # event path until P6.0v1): 2 syncs + 2 × 18 transfers = 38 waits today
+        # the event MCS of the division fixture: planned on the device (P6.0v1, D-089), no
+        # wait at all (2 syncs + 2 × 18 transfers = 38 waits on the D-035 host plan)
         prob = p60vx_divide_problem(; T = Float32)
         integ = init(prob, alg; backend, save_start = false, save_end = false)
         P60VX_STATS[] = integ.stats
         Main.Metal.synchronize()
         waits, d = p60vx_waits(() -> step!(integ))
-        @test integ.stats.lifecycle.divisions == 2
         @test waits == d[1] + 2 * d[2]
-        @test waits == 38
+        @test waits == 0
+        @test checkpoint(integ).stats.lifecycle.divisions == 2           # control: the event fired
         # HostPhase MCS
         integ = init(p60vx_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_end = false)
         P60VX_STATS[] = integ.stats

@@ -278,6 +278,7 @@ end
         for _ in 1:15
             step!(integ)
         end
+        integ.u                                                   # a host read point (D-089)
         @test integ.stats.lifecycle.transitions == 2 && mobile_ok(integ)
         ck = checkpoint(integ)                                    # after the transition
         integ2 = init(prob, alg; checkpoint = ck)
