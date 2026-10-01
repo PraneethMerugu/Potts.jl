@@ -268,14 +268,24 @@ end
 # counted helpers in `lib/CorePotts/src/transfers.jl`. A raw call anywhere else must be in
 # this allowlist, with the reason it is not in the step path (or not a transfer).
 const RAW_TRANSFER_ALLOW = Dict(
-    "lib/CorePotts/src/lattice.jl" => 3,     # Lattice `==` and `hash` (host utilities, 79-80)
-    "lib/CorePotts/src/problem.jl" => 2,     # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`)
+    # Lattice `==` and `hash` (host utilities, 79-80); `Array{Bool}` of host masks: the domain
+    # (66, construction), `mobility` (366, construction), `_set_mobility!` (392, converts the
+    # host mask; its device copy is the counted `_copy!`)
+    "lib/CorePotts/src/lattice.jl" => 6,
+    # `initial_state` builds host arrays (53 `Vector{Int32}`, 66 `Array{Int32}`; setup)
+    "lib/CorePotts/src/model.jl" => 2,
+    # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`;
+    # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted)
+    "lib/CorePotts/src/problem.jl" => 3,
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
     "lib/CorePotts/src/fields.jl" => 1,      # FieldStep device→device copy: not a transfer; Metal waits in it (P6.0v3)
     "lib/CorePotts/src/phases.jl" => 1,      # CopyPhase device→device copy: idem (P6.0v3)
-    "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup)
+    "src/layouts.jl" => 3,                   # initial layouts on host arrays (setup; 241, 419, 463)
 )
-const RAW_TRANSFER = r"KernelAbstractions\.synchronize\(|(?<![\w.])Array\(|Adapt\.adapt\(Array|(?<![\w!])copyto!\("
+# `synchronize` of any module, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,
+# `Adapt.adapt(Array`, `convert(Array`, `copyto!(`, `unsafe_copyto!(`. `collect` and `copy`
+# are left to the runtime wait-identity test (test/transfer_counts.jl).
+const RAW_TRANSFER = r"\w+\.synchronize\(|(?<![\w.])Array\(|Base\.Array\(|(?<![\w.])Array\{[^{}]*\}\(|(?<![\w.])Vector(\{[^{}]*\})?\(|Adapt\.adapt\(Array|convert\(Array|(?<![\w!])copyto!\(|(?<![\w!])unsafe_copyto!\("
 function _raw_transfer_hits(path)
     n = 0
     for line in eachline(path)

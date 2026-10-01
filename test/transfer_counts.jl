@@ -135,22 +135,42 @@ function p60vx_instrument_waits!()
     return nothing
 end
 
-const P60VX_WAITS_ON = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal) &&
-                      isdefined(Main, :P60vOnMetal) && pkgversion(Main.Metal) == v"1.10.0"
-P60VX_WAITS_ON && p60vx_instrument_waits!()      # at top level: the testset must see the new methods
+# On Metal (from test/gpu.jl) the instrumentation must apply: a Metal upgrade fails here
+# loudly instead of silently disabling the Merks reminder (update the copied bodies above).
+const P60VX_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal) &&
+                       isdefined(Main, :P60vOnMetal)
+const P60VX_METAL_VERSION = P60VX_ON_METAL ? pkgversion(Main.Metal) : nothing
+const P60VX_WAITS_ON = P60VX_ON_METAL && P60VX_METAL_VERSION == v"1.10.0"
+P60VX_WAITS_ON && p60vx_instrument_waits!()      # at top level: the testsets must see the new methods
 
-@testset "P6.0v: every GPU wait of a quiet MCS is counted (Metal)" begin
+"""GPU waits and counter deltas of `f()`."""
+function p60vx_waits(f)
+    c0, w0 = p60vx_counts(P60VX_STATS[]), P60VX_WAITS[]
+    f()
+    d = p60vx_counts(P60VX_STATS[]) .- c0
+    return P60VX_WAITS[] - w0, d
+end
+const P60VX_STATS = Ref{Any}(nothing)
+
+@testset "P6.0v: every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" begin
+    if P60VX_ON_METAL
+        @test P60VX_METAL_VERSION == v"1.10.0"
+        P60VX_METAL_VERSION == v"1.10.0" || @error "test/transfer_counts.jl copies Metal.jl 1.10.0's " *
+            "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $P60VX_METAL_VERSION: update the copies and the version"
+    else
+        @test_skip "POTTS_GPU=metal with Metal loaded, from test/gpu.jl"
+    end
     if P60VX_WAITS_ON
         backend = Main.Metal.MetalBackend()
+        alg = CheckerboardCPM()
+        # quiet MCS of every gate model
         for (label, _, make) in Main.P60vOnMetal.p60v_gate_models(Float32)
-            integ = init(make(), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            integ = init(make(), alg; backend, save_start = false, save_end = false)
+            P60VX_STATS[] = integ.stats
             step!(integ); step!(integ)
             Main.Metal.synchronize()
             for _ in 1:3
-                c0, w0 = p60vx_counts(integ.stats), P60VX_WAITS[]
-                step!(integ)
-                d = p60vx_counts(integ.stats) .- c0
-                waits = P60VX_WAITS[] - w0
+                waits, d = p60vx_waits(() -> step!(integ))
                 if label == "Merks"          # FieldStep's device→device copies wait (P6.0v3)
                     @test_broken waits == d[1] + 2 * d[2]
                 else
@@ -158,7 +178,23 @@ P60VX_WAITS_ON && p60vx_instrument_waits!()      # at top level: the testset mus
                 end
             end
         end
-    else
-        @test_skip "Metal.jl 1.10.0 (POTTS_GPU=metal with Metal loaded, from test/gpu.jl)"
+        # the event MCS of the division fixture (the runtime backstop for raw copies on the
+        # event path until P6.0v1): 2 syncs + 2 × 18 transfers = 38 waits today
+        prob = p60vx_divide_problem(; T = Float32)
+        integ = init(prob, alg; backend, save_start = false, save_end = false)
+        P60VX_STATS[] = integ.stats
+        Main.Metal.synchronize()
+        waits, d = p60vx_waits(() -> step!(integ))
+        @test integ.stats.lifecycle.divisions == 2
+        @test waits == d[1] + 2 * d[2]
+        @test waits == 38
+        # HostPhase MCS
+        integ = init(p60vx_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_end = false)
+        P60VX_STATS[] = integ.stats
+        Main.Metal.synchronize()
+        for _ in 1:2
+            waits, d = p60vx_waits(() -> step!(integ))
+            @test d[2] > 0 && waits == d[1] + 2 * d[2]
+        end
     end
 end

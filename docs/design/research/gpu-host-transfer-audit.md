@@ -65,13 +65,22 @@ Regression tests:
 - `test/transfer_counts.jl` also checks, on Metal, that every GPU wait of a quiet MCS is a
   counted one: waits = `syncs + 2 × transfers` (§2.1). Merks is `@test_broken` until P6.0v3
   removes its uncounted waits.
+  - The same identity holds on the division fixture's event MCS (38 waits) and on a
+    `HostPhase` MCS. Until P6.0v1, this is the runtime backstop for raw copies on the event
+    path.
+  - A Metal.jl version other than 1.10.0 fails the test with a message instead of skipping
+    it.
 - `test/qa.jl` "no raw host transfer outside the counted helpers":
   - It scans `lib/CorePotts/src` and `src` (except `transfers.jl`) for raw
-    `KernelAbstractions.synchronize(`, `Array(`, `Adapt.adapt(Array` and `copyto!(`, and
+    `<Module>.synchronize(`, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,
+    `Adapt.adapt(Array`, `convert(Array`, `copyto!(` and `unsafe_copyto!(`, and
     compares the hits with a `file => count` allowlist that gives a reason for each entry:
-    Lattice `==`/`hash`, `_standard_frozen` on a host state, `reinit!`, the
+    Lattice `==`/`hash` and host-mask conversions, `initial_state`, `_standard_frozen` and
+    `_set_state_array!` on host values, `reinit!`, the
     `FieldStep`/`CopyPhase` device→device copies (until P6.0v3), and the setup layouts.
-  - A new `Array(st.σ)` in `run_lifecycle!` makes it fail (checked).
+  - A new `Array(st.σ)`, `Base.Array(st.σ)` or `unsafe_copyto!(…)` in `run_lifecycle!`
+    makes it fail (checked).
+  - `collect` and `copy` are left to the runtime wait-identity test.
 - `lib/CorePotts/test/phases.jl` (CPU) and `lib/CorePotts/test/gpu.jl` (Metal) test the
   helpers themselves:
   - exact bytes for each direction;
