@@ -1619,3 +1619,12 @@ The maintainer approved F-1…F-6 (D-049).
 - **Code.** All 18 fingerprints (published models and P6.0k fixtures) byte-identical.
 - **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
 - **Gate: pass.** CPU 0.984–1.017. Metal flags on Graner–Glazier, Wortel and OpenVT; `ab.jl` against a213e39 (6 rounds): 0.952, 0.980, 0.983. The A/B base checkout needed its own `Pkg.resolve()` for P6.2a2's `Logging` dependency.
+
+## 2026-10-01 — P6.0n merged: cell ODEs Jacobi across cells (D-086); initial-state decisions (D-087, user)
+
+- **The change.** A cell ODE that reads other cells' ODE unknowns (`y[j]`, a gather, an unhoisted fold) gets Jacobi scratch even with one solver group, so results are independent of cell order and labels; `y[j]` on a same-group variable compiles (D-086, superseding D-078's Gauss–Seidel note).
+- **Review.** Two rounds. Round 1 found that index expressions had silently switched to the held value (`w[ifelse(y > 0.5, id, 3 - id)]`); fixed in round 2. Follow-up P6.0x (gather allocation in cell-ODE rates, pre-existing).
+- **Code.** Fingerprints of every published model unchanged.
+- **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
+- **Gate: pass.** CPU 0.996–1.029. One Metal flag, Graner–Glazier (1.129): `ab.jl` against 23933c2 gave 1.052 at 6 rounds under load, then 1.013 at 10 rounds.
+- **User (2026-10-01).** "i like both recs" (also relayed by the peer session): `merks_state` moves to `Scattered` at P6.3d, and `BrickWall`/`Plane`/`Spheres` are replaced by general layers with doc recipes at P6.4d/P6.5c (D-087, amends D-075 §3.3).

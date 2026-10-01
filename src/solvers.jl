@@ -145,10 +145,43 @@ function _ode_groups(odes, spec::SolverSpec)
     return [(s, o) for (_, s, o) in groups]
 end
 
-"""Whether the ODEs of `scope` (`:cell`, `:model`) run in several solver groups, and so step
-through scratch slots `x__ode` (Jacobi across groups)."""
+"""Whether the ODEs of `scope` (`:cell`, `:model`) step through scratch slots `x__ode`:
+when they run in several solver groups (Jacobi across groups, D-078), or when a cell ODE
+reads another cell's ODE unknowns (Jacobi across cells, P6.0n)."""
 _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
-    length(_ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)) > 1
+    length(_ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)) > 1 ||
+    (scope === :cell && _ode_reads_other_cells(c))
+
+# A cell ODE whose rate reads a cell-ODE unknown of another cell (`y[j]`, also in a gather's
+# body or an index, or a population fold left in the kernel because it reads `time`) must not
+# see cells that already stepped: it needs scratch slots even with one solver group, as
+# discrete ticks do (`_reads_other_cells_slots`). Reads of the cell's own unknowns (`y`,
+# `y[id]`, `w[f(y)]`) do not; nor do folds hoisted to model slots (`cell_ode_pops`,
+# computed before the ODEs).
+function _ode_reads_other_cells(c::CompiledPottsSystem)
+    names = Set{Symbol}(info(x).name for (x, _) in c.cell_odes)
+    isempty(names) && return false
+    hit = Ref(false)
+    reads(y) = (found = Ref(false);
+        _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in names && (found[] = true)), y); found[])
+    for (_, r) in c.cell_odes
+        _walk_all(r) do y
+            hit[] && return
+            iscall(y) || return
+            op = operation(y)
+            # an indexed read crosses cells through its variable, not its index (this cell's
+            # expression; a read nested in it is visited on its own); a gather's body reads
+            # this cell's unknowns unless indexed; a fold's body reads every cell's
+            hit[] = op in (at, at2) ? !_is_own_read(y) && reads(arguments(y)[1]) :
+                    op === population && reads(y)
+        end
+    end
+    return hit[]
+end
+
+"""`x[id]`: the current cell's own `x`."""
+_own_read(x) = _unwrap(at(Symbolics.wrap(x), Symbolics.wrap(B.id)))
+_is_own_read(y) = operation(y) === at && isequal(arguments(y)[2], B.id)
 _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 
 # ---------------------------------------------------------------------------------------

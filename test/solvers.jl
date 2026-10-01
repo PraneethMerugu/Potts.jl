@@ -305,3 +305,87 @@ end
     @test Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))).sys, Float64) !=
           Potts._fingerprint_seed(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (30, 30))).sys, Float64)
 end
+
+# Cross-cell reads in cell ODEs (P6.0n, beyond its frozen acceptance): `y[id]` is the cell's
+# own unknown (it advances through the stages, no scratch); a gather whose body indexes cells
+# reads the other cells' start-of-step state (Jacobi, scratch); a fold hoisted to a model
+# slot needs no scratch. Two 4×4 cells side by side, x = 3:6 and 7:10.
+p60n_two() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
+@potts_model P60nOwnIndex begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ -y[id]
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+@potts_model P60nOwnPlain begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ -y
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+# the gather is anchored at site (6, 4), on the interface: its Moore neighbours belong to
+# both cells, so each cell reads the other's `y` (medium reads 0, below the positive values)
+@potts_model P60nGather begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ maximum(y[owner[n]] for n in Moore(1)(42) if owner[n] != id) - y
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "P6.0n: y[id] is the own unknown, a gather over other cells is Jacobi" begin
+    op(y) = [ownership => p60n_two(), kind => [:A, :A], :y => y]
+    rk4 = 1 - 1 + 1 / 2 - 1 / 6 + 1 / 24                     # one RK4 step of y' = −y, h = 1
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        own = PottsProblem(P60nOwnIndex(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = RK4())
+        plain = PottsProblem(P60nOwnPlain(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = RK4())
+        @test !haskey(own.u0.cell, :y__ode)                   # an own read needs no scratch
+        u = solve(own, alg).u[end].cell.y
+        @test u == solve(plain, alg).u[end].cell.y
+        # held at its start-of-step value, `y[id]` would give y + h·(−y) = 0 every step
+        @test u ≈ [1.0, 2.0] .* rk4^2 && all(>(0), u)
+        g = PottsProblem(P60nGather(; name = :g), op([1.0, 2.0]), (0, 3))
+        @test haskey(g.u0.cell, :y__ode)
+        traj = [Vector(x.cell.y) for x in solve(g, alg; saveat = 0:3).u]
+        @test traj == [[1.0, 2.0], [2.0, 1.0], [1.0, 2.0], [2.0, 1.0]]    # Jacobi: swaps
+        # (in place in cell order, cell 2 would read cell 1's new value: (2, 2) after one MCS)
+        # (no allocation test here: a gather inside a cell-ODE rate allocates with or without
+        # cross-cell reads, a separate defect; the frozen P6.0n file covers `y[j]` and folds)
+    end
+    # the detector: a hoisted fold or reads of non-ODE cell variables need no scratch
+    @test !Potts._ode_reads_other_cells(mtkcompile(SolverPairYS(; name = :p)))
+    @test Potts._ode_reads_other_cells(mtkcompile(P60nGather(; name = :g)))
+    @test !Potts._ode_reads_other_cells(mtkcompile(P60nOwnIndex(; name = :o)))
+end
+
+# The index of a read is this cell's expression: it follows the stepped local, while the read
+# variable is the stored one (P6.0n review round 2). Cell 1 (y = 0.4) reads w[2] = 1 until
+# y > 0.5, then w[1] = 2: four Euler substeps of 1/4 give 0.65, 1.15, 1.65, 2.15; cell 2
+# reads w[1] = 2, then w[2] = 1: 0.9, 1.15, 1.4, 1.65. (Indexing with the held y gives
+# [1.4, 2.4].) `w` is not an ODE unknown, so there is no cross-cell read and no scratch.
+@potts_model P60nIndexLocal begin
+    @kinds medium A
+    @variables begin
+        y(cell) = 0.0
+        w(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ w[ifelse(y > 0.5, id, 3 - id)]
+    @sweep Metropolis(; temperature = 1.0e-6)
+end
+
+@testset "P6.0n: an index follows the stepped local" begin
+    op = [ownership => p60n_two(), kind => [:A, :A], :y => [0.4, 0.4], :w => [2.0, 1.0]]
+    prob = PottsProblem(P60nIndexLocal(; name = :d), op, (0, 1); ode_solver = ExplicitEuler(substeps = 4))
+    @test !haskey(prob.u0.cell, :y__ode)
+    @test !Potts._ode_reads_other_cells(mtkcompile(P60nIndexLocal(; name = :d)))
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        @test solve(prob, alg).u[end].cell.y ≈ [2.15, 1.65]
+    end
+end

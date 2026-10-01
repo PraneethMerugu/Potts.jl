@@ -86,3 +86,8 @@ decision = "D-075"
 path = "acceptance/p6_0k2_component_rejections.jl"
 sha256 = "140bed96e6bff6e8f3720d299f49e10cb2666646ada01db1c305a6cf9a5f0118"
 decision = "D-077"
+
+[[file]]
+path = "acceptance/p6_0n_cell_ode_jacobi.jl"
+sha256 = "42c940660b14cf9a53f649505bca8c9f79faa5f390cdf96cbbe63103c9d7c0be"
+decision = "D-078"

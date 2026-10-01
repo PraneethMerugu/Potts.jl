@@ -1581,3 +1581,20 @@ session.
 - **Code.** Fingerprints of every published model and the P6.0k fixtures are byte-identical. Build time for component models +1–3 % (noise level); published models have no components.
 - **Observation.** The `Clock(2)` and `ShiftIndex` fixtures fingerprint the same: P6.0p.
 
+## D-086 P6.0n: cell ODEs are Jacobi across cells (2026-10-01, P6.0n; amends D-078, D-077 N3)
+
+- **Supersedes** D-078's "cross-cell reads within a group stay Gauss–Seidel (P6.0n)".
+- **Which reads.** A cell ODE rate may read other cells' ODE unknowns: an indexed read `y[j]` (including inside a gather), or a population fold left in the kernel because it reads `time`.
+- **Start-of-step state.** Every such read sees the state at the start of the MCS's ODE step, held over all stages and substeps, under both algorithms, on the GPU, for every solver (adaptive included) and whatever the cell labels.
+- **Scratch trigger.** `_ode_reads_other_cells` flags an `at`/`at2` whose indexed variable is a cell-ODE unknown (except a literal `x[id]`), a gather through the `at` nodes in its body, and an unhoisted `population` whose body reads one. When it fires, the cell scope writes scratch `x__ode` even with one solver group. Without such reads and with one group, code and fingerprint are unchanged.
+- **Own reads.** Only bare `x` and a literal `x[id]` outside folds read the cell's advancing stage value. Index expressions also see the stepped locals (`w[f(y)]`). Every other indexed or fold read sees the held start-of-step value, including one that lands on the current cell (`y[max(id, 1)]`, a gather's `y[owner[n]]` with `owner[n] == id`, the own term of a fold left in the kernel).
+- **Unchanged.** Model ODEs still see the cells' new values (D-077 N3). Hoisted folds are computed once before the cell ODEs.
+- **Review.** Two rounds; round 1 found that index expressions had silently switched from the stage value to the held value (fixed). Fingerprints of every published model and of the cell-ODE fixtures without cross-cell reads unchanged; Metal device code of the frozen fixtures unchanged between rounds. Follow-up: P6.0x (gather allocation in cell-ODE rates, pre-existing).
+
+## D-087 Initial-state follow-ups approved (2026-10-01; user; amends D-075 §3.3)
+
+- **User decision** (2026-10-01), on the coordinator's two recommendations from `research/initial-state-review.md`: "i like both recs".
+- **Also relayed verbatim by the peer session** (spec owner) from the user's answers: (1) "Approve (Recommended)" for the `merks_state` port (delete the hand loop; Merks uses `Scattered` with StableRNG and gets the P6.1a7 mask speed-up; gates are statistical, re-run, not bit-matched); (2) "Replace, with doc recipes (Recommended)" for `BrickWall`/`Plane`/`Spheres` (removed as named layers; the docs show each as a short recipe).
+- **`merks_state` → `Scattered`** at P6.3d: `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` replaces the hand-written loop. Same algorithm (draw-for-draw identical under a shared StableRNG); the stream moves from MersenneTwister to StableRNG, so each seed gives a different layout with the same law. The gate's Merks case changes its initial state: re-check the gate (no re-baseline unless it fails, D-048) and re-pick test seeds where needed.
+- **General layers replace named ones** (amends D-075 §3.3): `BrickWall` becomes `Tiling(size; stagger, widths, partial = :wrap)` at P6.4d (confirm 04's layout reproduces exactly); `Plane`/`Spheres` become `Fill(region)` and `Objects(Sphere(…), points)` at P6.5c. No named aliases: the docs show each as a short recipe (e.g. a staggered `Tiling` for a brick wall).
+

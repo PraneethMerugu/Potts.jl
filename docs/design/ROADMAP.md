@@ -183,7 +183,7 @@ Every item's acceptance also includes the standing checks:
     - Accept: one negative test per case.
     - Accept: generated code and fingerprints for existing models are byte-identical.
     - Accept: build time and first MCS are unchanged within noise.
-- [ ] **P6.0n** Cell ODEs that read another cell's ODE state (P6.0k review N3). As found by the P6.0n test author: `y[j]` on a variable of the same solver group does not compile today (`cannot index __y1`, `_substitute_locals`), and only unhoisted population folds (those reading `time`) are Gauss–Seidel and order-dependent. Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
+- [x] (merge, 2026-10-01; D-086) **P6.0n** Cell ODEs that read another cell's ODE state (P6.0k review N3). As found by the P6.0n test author: `y[j]` on a variable of the same solver group does not compile today (`cannot index __y1`, `_substitute_locals`), and only unhoisted population folds (those reading `time`) are Gauss–Seidel and order-dependent. Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
 - [ ] **P6.0o** (D-075 §0.1, maintainer-approved 2026-09-30; MTK-native review, `research/mtk-native-review.md`) `PottsSystem <: ModelingToolkitBase.AbstractSystem`. Land it before P6.4a. MTK's `getproperty(::AbstractSystem)` takes over field access, so the ≈281 internal `sys.<field>` reads must change.
   - Accept: `PottsSystem` mirrors the `System` field names read by the MTK accessors it supports. It has an all-fields constructor taking `checks`, sets `namespacing`, and defines Potts-owned `complete`, `extend` and `show`.
   - Accept: every internal `sys.<field>` read uses `getfield` or an accessor. `sys.x` returns the namespaced symbolic, as in MTK.
@@ -254,6 +254,8 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first).
   - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
 - **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers on Metal apart from the single lifecycle event-count readback when the model has a lifecycle, on every gate model; event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
+- [ ] **P6.0x** A `gather` inside a cell-ODE rate allocates on every warm step (544–1408 B per MCS, e.g. `sum(volume[owner[n]] for n in Moore(1)(42))`), on base too (found by the P6.0n implementer). The ODE's `rhs` closure is heap-allocated and dispatched dynamically.
+  - Accept: zero warm allocations for a cell ODE whose rate contains a gather, on both algorithms; fingerprints of models without one unchanged.
 - [ ] **P6.0w** Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
   - StableRNG (Lehmer) streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. New code derives sub-stream seeds as `seed + k` (e.g. `akeeb_state`'s clocks use `StableRNG(seed + 1)`, the leader stream of `seed + 1`).
   - Fix: one internal helper (splitmix64 of `(seed, stream)`) used wherever a sub-stream seed is derived; changing `akeeb_state`'s clock seed changes its state, so revalidate the frozen `papers.jl` band as in P6.2a2.
@@ -386,7 +388,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.3c** R2 `Eden` + splits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Eden`, a host-routine `Splits` (not the lifecycle routine), `RandomPoints(replace = true)`, and `shortfall` with its first `:allow` consumer.
 - [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
-  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **pending the user's approval**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **user-approved 2026-10-01 (D-087)**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
@@ -411,7 +413,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
-  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, needs the maintainer's ratification.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
 ### Step 5 — Fortuna (14a/14b), 3D
@@ -429,7 +431,7 @@ Every item's acceptance also includes the standing checks:
   ownership hooks apply `clear_on_ownership_change`, and `@on_copy` never fires from the
   lifecycle (D-075 clarify). Fixes A-17.
 - [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
-  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, needs the maintainer's ratification.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; the docs show `Plane`/`Spheres` recipes.
 - [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
 
 ### Steps 6–12

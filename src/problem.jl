@@ -146,8 +146,8 @@ function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.s
 end
 
 # The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
-# scope, `_ode_scratch`), each starting as a copy of its variable; any others removed. The
-# same state if its layout already fits.
+# scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
+# copy of its variable; any others removed. The same state if its layout already fits.
 function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
     slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes)))
     scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !(k in slots))
