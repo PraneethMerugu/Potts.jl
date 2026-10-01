@@ -2,7 +2,8 @@
 # unknowns become cell variables (`clock.m` is the cell variable `clock₊m`), its parameters
 # become model parameters (`clock₊τ`) unless coupled to a cell-scope expression with
 # `@equations clock.τ ~ …`, and its equations become cell ODEs, advanced for every cell of
-# the component's kinds by the sweep's `ode_solver` in one batched kernel (CPU or GPU).
+# the component's kinds by the problem's `ode_solver` (or its `solvers` entry) in one batched
+# kernel (CPU or GPU).
 #
 # A discrete-time component (clocked, `Shift`; D-065 Q9, P6.0k) is `mtkcompile`d the same
 # way; each of its discrete variables `x` becomes the cell variable `name₊x` holding the value
@@ -59,7 +60,7 @@ function _map_statements(f, sys::PottsSystem)
     fo(o::ObservedEq) = keep(o, ObservedEq(o.var, f(o.expr)))
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
     fs = sys.sweep
-    sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration, fs.field_solver, fs.ode_solver)
+    sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
     return (; energies = map(fe, sys.energies), drives = map(fd, sys.drives),
         constraints = map(fc, sys.constraints), updates = map(fu, sys.updates),
         equations = map(fq, sys.equations), divisions = map(fv, sys.divisions),

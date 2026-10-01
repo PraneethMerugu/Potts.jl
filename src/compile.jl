@@ -421,14 +421,6 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         Any[_hoist_populations(x, discrete_pops, gather_names, :__tickpop) for x in b.next], b.every, b.offset) : b
                              for b in sys.discrete]
 
-    if sys.sweep.ode_solver isa Adaptive              # A-68: an adaptive step cannot replay draws
-        for eq in sys.equations
-            _has_op(eq.rhs, random_uniform) && _located(sys, eq) do
-                throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
-                                    "the rate at trial steps; use `RK4`/`ExplicitEuler`, or draw in an update"))
-            end
-        end
-    end
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_units(sys)
 

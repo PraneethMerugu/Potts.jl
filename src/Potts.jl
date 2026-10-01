@@ -33,7 +33,7 @@ for name in names(CorePotts)
     (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, extend,
-    total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive
+    total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, RK4
 
 include("vocabulary.jl")
 include("system.jl")
@@ -41,6 +41,7 @@ include("macro.jl")
 include("lower.jl")
 include("schedule.jl")
 include("compile.jl")
+include("solvers.jl")
 include("codegen.jl")
 include("problem.jl")
 include("observed.jl")

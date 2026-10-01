@@ -33,12 +33,13 @@ end
         ("Wortel Act", WortelAct(; name = :act, lattice = (8, 8)), [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
         ("Wortel Act (connected)", WortelAct(; name = :act, lattice = (8, 8), connected = true),
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
-        ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]]),
+        ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
+            (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
         ("single-division fixture", SingleDivisionFixture(; name = :fixture), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]]),
         ("OpenVT growing monolayer", OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24))),
     ]
-    @testset "$label" for (label, sys, op) in cases
-        prob = PottsProblem(sys, op, (0, 10))
+    @testset "$label" for (label, sys, op, kw...) in cases
+        prob = PottsProblem(sys, op, (0, 10); get(kw, 1, (;))...)
         @test selfcheck(prob) < 1e-9
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
         @test Symbol(sol.retcode) === :Success

@@ -12,7 +12,7 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
   contact-inhibited model of Merks et al., PLoS Comput. Biol. 4, e1000163, 2008).
 - `∂c/∂t = D∇²c + α δ_cell − ε c (1 − δ_cell)` (Eq. 6): cells secrete, the chemoattractant
   decays only in the matrix. The field is advanced by explicit Euler with as many substeps
-  as `D` needs for stability, clipped at zero.
+  as `D` needs for stability (at least 2), clipped at zero.
 - Cells stay connected: a copy may not split a cell (a hard veto for the paper's
   connectivity penalty; the CompuCell3D one-arc rule).
 - Differences: the closed walls cost nothing (paper: frozen border cells with `J_cB = 100`),
@@ -23,6 +23,14 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
 Defaults are the paper's in lattice units (2 µm/px, 30 s/MCS): `T = 50`, `χ = 1000`,
 `J_cc = 40`, `J_cM = 20`, `D = 0.75`, `α = ε = 5.4·10⁻³`, and the PLoS 2008 cell size
 `A = 50`, `λ = 25` with `L = 30`, `λ_L = 5`. Seed with [`merks_state`](@ref).
+
+The field solver is a problem keyword (D-075) with no default; this model's is
+`field_solver = ExplicitEuler(substeps = 2, lower = 0.0)`:
+
+```julia
+prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_000);
+    field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+```
 """
 @potts_model MerksVasculogenesis begin
     @structural_parameters begin
@@ -56,7 +64,7 @@ Defaults are the paper's in lattice units (2 µm/px, 30 s/MCS): `T = 50`, `χ = 
     end
     @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
     @constraint connectivity(endothelial; rule = :local)
-    @sweep Metropolis(; temperature = T, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+    @sweep Metropolis(; temperature = T)
 end
 
 """

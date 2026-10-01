@@ -12,6 +12,8 @@ using Statistics: mean, median
 include("akeeb_metrics.jl")
 
 const CP = CorePotts
+# Merks' field solver (its docstring; a `PottsProblem` keyword, D-075)
+const MERKS_SOLVER = ExplicitEuler(substeps = 2, lower = 0.0)
 
 """Interface proposals (source and target owned differently) on states along a trajectory of
 `prob`, up to `n` per state, evenly spread: a vector of (u, prop, ctx)."""
@@ -282,7 +284,7 @@ end
     c0 = [0.01 * (x + 2y) for x in 1:L, y in 1:L]
     op = [ownership => σ0, kind => fill(:endothelial, 3), :c => c0, :χ => 50.0, :V₀ => 16.0, :L => 6.0, :Dc => 0.08,
           :σc => 0.02, :δc => 0.01]
-    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)), op, (0, 10))
+    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)), op, (0, 10); field_solver = MERKS_SOLVER)
     p = prob.p
     # chemotaxis on every copy: −χ (c[target] − c[source]) (Eq. 2); contact-inhibited, only
     # on extensions of a cell into the medium (PLoS 2008). The constraint is CC3D's one-arc
@@ -291,7 +293,8 @@ end
     @test length(props) > 500
     @test all(((u, prop, ctx),) -> isapprox(drive(prob, u, prop, ctx),
         -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]); atol = 1e-9), props)
-    ci = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L), contact_inhibited = true), op, (0, 10))
+    ci = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L), contact_inhibited = true), op, (0, 10);
+        field_solver = MERKS_SOLVER)
     @test all(sampled_proposals(ci)) do (u, prop, ctx)
         want = prop.old == 0 && prop.new != 0 ? -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]) : 0.0
         isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
@@ -325,7 +328,7 @@ end
     # MCS, the default) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
     sp = zeros(Int32, 40, 40); sp[18:23, 18:23] .= 1
     fast = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (40, 40)),
-        [ownership => sp, kind => [:endothelial]], (0, 200)), SequentialCPM()).u[end]
+        [ownership => sp, kind => [:endothelial]], (0, 200); field_solver = MERKS_SOLVER), SequentialCPM()).u[end]
     @test all(isfinite, fast.site.c) && maximum(fast.site.c) < 1.5
 
     # mechanism: in a static gradient (no secretion, diffusion or decay) a cell climbs it for
@@ -336,7 +339,8 @@ end
         s = blockstate((G, G), (18:23, 18:23))
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (G, G)),
             [ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
-             :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2)], (0, 200); seed),
+             :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2)], (0, 200); seed,
+            field_solver = MERKS_SOLVER),
             SequentialCPM()).u[end]
         mean(i[1] for i in findall(==(1), u.σ)) - 20.5
     end
@@ -349,7 +353,7 @@ end
     # round cells (λ_L = 0) aggregate into compact islands
     function vasculo(λ_L, seed)
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (140, 140)),
-            [merks_state(; lattice = (140, 140), n = 100, seed); :λ_L => λ_L], (0, 1500); seed),
+            [merks_state(; lattice = (140, 140), n = 100, seed); :λ_L => λ_L], (0, 1500); seed, field_solver = MERKS_SOLVER),
             SequentialCPM(); saveat = 1500).u[end]
         el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:100)
         return (; compact = compactness(u.σ), largest = maximum(components(u.σ .!= 0)[1]), elongation = mean(el))

@@ -1,8 +1,9 @@
-# Adaptive host integration of cell and model ODEs (`ode_solver = Adaptive(alg)`, M4.1).
+# Adaptive host integration of cell and model ODEs (`PottsProblem(…; ode_solver = Adaptive(alg))`,
+# M4.1; the solver is a problem keyword, D-075).
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P
 
-function adaptive_model(solver)
+function adaptive_model()
     @potts_model AdaptiveODEs begin
         @kinds medium A B
         @parameters k = 0.3
@@ -18,7 +19,7 @@ function adaptive_model(solver)
             D(s) ~ -1000 * (s - cos(time))                   # stiff cell ODE
             D(g) ~ -0.5 * g + count(true for c in cells(B))  # model ODE with a population input
         end
-        @sweep Metropolis(; temperature = 1.0, ode_solver = solver)
+        @sweep Metropolis(; temperature = 1.0)
     end
     return AdaptiveODEs(; name = :ad)
 end
@@ -29,7 +30,7 @@ end
     t = 5.0
     sa(t) = (1000 * (1000 * cos(t) + sin(t)) - 1000^2 * exp(-1000t)) / (1000^2 + 1)   # s(0) = 0
     for solver in (Adaptive(Tsit5(); reltol = 1e-10, abstol = 1e-12), Adaptive(Rodas5P(); reltol = 1e-8, abstol = 1e-10))
-        p = PottsProblem(adaptive_model(solver), op, (0, 5))
+        p = PottsProblem(adaptive_model(), op, (0, 5); ode_solver = solver)
         for alg in (SequentialCPM(), CheckerboardCPM())
             u = solve(p, alg).u[end]
             @test u.cell.y[1:2] ≈ fill(exp(-0.3t), 2) rtol = 1e-6
@@ -38,7 +39,7 @@ end
         end
     end
     # the integrator is created once and reused (init-once), and remake keeps working
-    p = PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-8)), op, (0, 3))
+    p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1e-8))
     q = remake(p; p = [:k => 0.0])
     @test solve(q, SequentialCPM()).u[end].cell.y[1] ≈ 1.0
 end
@@ -67,13 +68,13 @@ end
 @testset "review 5 regressions" begin
     σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
     op = [ownership => σ, kind => [:A, :B]]
-    p = PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-8)), op, (0, 3))
+    p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1e-8))
     # one integrator per trajectory (ensembles), rebuilt for another parameter-tuple type
     ens = solve(EnsembleProblem(p), SequentialCPM(), EnsembleThreads(); trajectories = 8)
     @test all(s -> s.u[end].cell.y[1] ≈ exp(-0.9), ens.u)
     @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
     # a failing solve is an error, not a silent truncation
-    bad = PottsProblem(adaptive_model(Adaptive(Tsit5(); maxiters = 5)), op, (0, 1))
+    bad = PottsProblem(adaptive_model(), op, (0, 1); ode_solver = Adaptive(Tsit5(); maxiters = 5))
     @test_throws ErrorException solve(bad, SequentialCPM())
     # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
     σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1

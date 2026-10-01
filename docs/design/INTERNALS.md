@@ -316,6 +316,21 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
 - Returns `CorePotts.PottsProblem` with `f.sys = sys`. SII: `symbolic_container(prob) =
   f.sys`; `getu`, `setp`, `observed`, `remake` work as in MTK.
 - `EnsembleProblem(prob; prob_func)` changes only `seed`/`replica`, reusing `f`.
+- **Solvers (D-075, P6.0c).** `field_solver`, `ode_solver` and `solvers` are construction
+  keywords resolved in Potts (`src/solvers.jl`: `_resolve_solvers` → `SolverSpec`, one
+  solver per integrated variable by name) and compiled at the one codegen point
+  (`_problem_function` → `_phases`): each field's `FieldStep` takes its `ExplicitEuler`;
+  the cell and model ODEs are grouped by solver (`_ode_groups`), one phase per group
+  (a fixed-step `CellPhase`/`ModelPhase`, or a host `_AdaptiveODE`). A model whose ODEs
+  share one solver generates exactly the code it did before. Nothing reaches CorePotts
+  algorithm types (D-046). The fingerprint seed adds the spec's canonical string (types
+  printed fully qualified, keyword bundles sorted) when the model integrates anything.
+- **Rebuild hook.** CorePotts `remake` passes keywords beyond its fixed ones to
+  `remake_function(f.sys, prob; kwargs...)` (default: an `ArgumentError`). Potts'
+  method on `PottsModelInfo` (which keeps the compiled system, `T`, the host context and
+  the `SolverSpec`) merges the named solver keywords into the stored ones, re-resolves and
+  calls `_problem_function`; CorePotts then keeps `u0`, `p`, `seed`/`replica`/`repeat`
+  and the frozen mask. `remake(prob; p | u0 | seed)` never calls it.
 
 ### 2.7 Hybrid coupling (extensions)
 
