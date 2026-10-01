@@ -6,7 +6,7 @@ const WITH_MTK = get(ARGS, 1, "") == "mtk"
 if WITH_MTK
     using ModelingToolkit: ModelingToolkit
 end
-using Potts, Test
+using Potts, Test, Statistics
 using Potts.ModelingToolkitBase: System, ShiftIndex, Clock, @variables, @parameters
 
 const t = Potts.t
@@ -69,4 +69,74 @@ canonical(exs) = join((string(Base.remove_linenums!(deepcopy(ex))) for ex in exs
         traj = [Tuple(getproperty(u.cell, n)[1] for n in slots) for u in sol.u]
         println("P60K|", label, "|", slots, "|", hash(code), "|", traj)
     end
+end
+
+# P6.0k2 F4: `_compile_discrete` turns ModelingToolkit's compile errors into `ArgumentError`s
+# naming the component, but an error raised in Potts' own code (a Potts bug, e.g. in the
+# extension's pass, which MTK calls) propagates unchanged
+@testset "discrete compile errors: MTK's relabelled, Potts' own propagate ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
+    comp = Potts.ComponentSpec(:grn, last(NETWORKS[1]), :model)
+    # an MTK failure (an unknown with no update) names the component
+    @variables X(t)::Bool = false Y(t)::Bool = false
+    bad = Potts.ComponentSpec(:grn, System([X(ShiftIndex(t, 0)) ~ Y(ShiftIndex(t, 0) - 1)], t; name = :grn), :model)
+    err = try
+        Potts._compile_discrete(bad); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("component `grn`", sprint(showerror, err))
+    # a non-Potts error raised inside the compile call: relabelled
+    err = try
+        Potts._mtk_compile_call(sys -> throw(DomainError(sys, "outside Potts")), comp); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("ModelingToolkit cannot compile", sprint(showerror, err))
+    # a Potts internal broken on purpose (a MethodError raised in components.jl): unchanged
+    err = try
+        Potts._mtk_compile_call(sys -> Potts._clock_cadence(comp, nothing, Any[], 1.0), comp); nothing
+    catch e
+        e
+    end
+    @test err isa MethodError
+    err = try
+        Potts._mtk_compile_call(sys -> Potts._discrete_plan(comp, nothing, 1.0), comp); nothing
+    catch e
+        e
+    end
+    @test err isa MethodError
+    if WITH_MTK
+        # the extension's pass, called by MTK's compile of a clocked system (`Clock(2)`: MTK
+        # partitions it and calls the pass), broken on purpose (no system to re-enter)
+        ext = Base.get_extension(Potts, :PottsModelingToolkitExt)
+        clocked = Potts.ComponentSpec(:grn, last(NETWORKS[3]), :model)
+        @test Potts._mtk_compile_call(ext.compile_discrete, clocked) !== nothing      # control: intact pass
+        broken(sys) = Potts.ModelingToolkitBase.mtkcompile(sys; additional_passes = Any[ext.PottsDiscretePass(nothing)])
+        err = try
+            Potts._mtk_compile_call(broken, clocked); nothing
+        catch e
+            e
+        end
+        @test err isa MethodError
+    end
+end
+
+@testset "P6.0k2 review: stdlib frames are not Potts', brownians are rejected" begin
+    # a stdlib frame (recorded under the build machine's path) is not Potts code
+    bt = try
+        Statistics.quantile([1.0], 2.0)
+    catch
+        catch_backtrace()
+    end
+    @test !Potts._raised_in_potts(bt)
+    @variables y(Potts.t) = 1.0
+    @parameters k = 0.3
+    Potts.ModelingToolkitBase.@brownians B
+    noisy = System([Potts.D(y) ~ -k * y + 5.0 * B], Potts.t; name = :noisy)
+    err = try
+        Potts._reject_ignored_features(Potts.ComponentSpec(:noisy, noisy, :model)); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("brownians", err.msg)
 end

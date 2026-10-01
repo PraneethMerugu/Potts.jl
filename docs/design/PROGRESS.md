@@ -1611,3 +1611,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge checks.** The first run failed at precompile: the main checkout's workspace Manifest lacked the new `Logging` stdlib dependency; `Pkg.resolve()` fixed it. Then PottsModels, docs and Potts exit 0.
 - **Gate: pass.** CPU 0.983–1.013 (Akeeb 0.996 / 1.013); Akeeb Metal 1.047. Three Metal flags on untouched models, `ab.jl` against 1554d56 (6 rounds): Graner–Glazier 0.959, Wortel 0.731, OpenVT 0.941.
 - **User (2026-10-01).** New ROADMAP rows P6.0v (GPU host-transfer audit and transfer counters), P6.0v1 (lifecycle on the device), P6.0v2 (ODE/`HostPhase` column-only copies), P6.0v3 (launch fusion and Metal codegen fixes), with the overall accept; P6.0d round 2 builds the frozen mask on the device. The sub-stream seed row is renumbered P6.0w.
+
+## 2026-10-01 — P6.0k2 merged: `@components` rejections and fixes (D-084)
+
+- **The change.** F1 (`Pre` of component variables), F4 (only MTK's compile call is relabelled; Potts' own errors propagate), F6 (no double `_nonzero`), F7 (MTK features Potts would drop are `ArgumentError`s naming the component) (D-084).
+- **Review.** Approved in round 1. The coordinator added the review's fixes (60e4ec0): stdlib frames recognised by path, `brownians` rejected, comments. Follow-up P6.0u (`tstops`/`assertions`, component names in binding errors).
+- **Code.** All 18 fingerprints (published models and P6.0k fixtures) byte-identical.
+- **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
+- **Gate: pass.** CPU 0.984–1.017. Metal flags on Graner–Glazier, Wortel and OpenVT; `ab.jl` against a213e39 (6 rounds): 0.952, 0.980, 0.983. The A/B base checkout needed its own `Pkg.resolve()` for P6.2a2's `Logging` dependency.

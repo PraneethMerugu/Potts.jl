@@ -175,7 +175,7 @@ Every item's acceptance also includes the standing checks:
   - Accept: zero warm allocations.
   - Every part of MTK's discrete support that is not usable yet is recorded in DECISIONS
     with its workaround.
-- [ ] **P6.0k2** P6.0k round-3 follow-ups (D-077):
+- [x] (merge, 2026-10-01; D-084) **P6.0k2** P6.0k round-3 follow-ups (D-077):
   - F1: `Pre(grn.x)[j]` and `Pre(grn.x[j])` on a discrete node fail with "cannot index" (`lower.jl:236-241`). Support them, since they equal `x[j]` inside a tick, or give a clear message.
   - F4: `_compile_discrete`'s catch still relabels internal Potts `MethodError`/`BoundsError` as "ModelingToolkit cannot compile" (`components.jl:258-263`).
   - F6: the generated code has a cosmetic `_nonzero(_nonzero(…))`.

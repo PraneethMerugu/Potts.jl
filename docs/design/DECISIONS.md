@@ -1572,3 +1572,12 @@ session.
 - **Gate.** `akeeb_99x60` warm cost unchanged in-process (ratio ≤ 1.006); no re-baseline.
 - **Known limitation.** StableRNG streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. No coupling was measurable here (3000 seeds), but sub-stream seeds should come from a stable mixer, not `seed + k`: P6.0w.
 
+## D-084 P6.0k2: `@components` rejections and fixes (2026-10-01, P6.0k2; amends D-077)
+
+- **F7, rejected component features.** Before compiling, a component System with MTK `initialization_eqs`, `discrete_events`, `continuous_events`, `jumps` or `brownians` is an `ArgumentError` naming the component, the field and a workaround (`brownians` was added at merge from the review: they were silently dropped, giving deterministic trajectories). After compiling, a binding whose left side is, or whose right side reads, a coupled parameter is an `ArgumentError`. `guesses` stay ignored (Potts runs no MTK initialisation; documented). Other bindings were already rejected elsewhere; their messages not naming the component, and MTK `tstops`/`assertions` being ignored, are P6.0u.
+- **F1.** `Pre(name)` of a component variable is substituted whole; for a discrete slot `Pre(x)` is the slot itself (`lower` already lowers `Pre(x)` to `x`, D-077 Jacobi), so `Pre(grn.x)[j]` and `Pre(grn.x[j])` compile and match the plain reads.
+- **F6.** `lower` collapses `_nonzero(at(_nonzero(v), j))` (also under `Pre`); the inner value is always a Bool.
+- **F4.** Only MTK's compile call is wrapped (`_mtk_compile_call`). An error whose innermost frame outside Base and the stdlib is Potts' `src/` or `ext/` propagates unchanged; others are relabelled "ModelingToolkit cannot compile" with the G15 hint. This is "who raised it", not "whose bug it is": a Potts misuse that MTK rejects is still relabelled. Julia 1.12 records stdlib frames under the build machine's path; the check matches `share/julia/stdlib/` (fixed at merge from the review).
+- **Code.** Fingerprints of every published model and the P6.0k fixtures are byte-identical. Build time for component models +1–3 % (noise level); published models have no components.
+- **Observation.** The `Clock(2)` and `ShiftIndex` fixtures fingerprint the same: P6.0p.
+

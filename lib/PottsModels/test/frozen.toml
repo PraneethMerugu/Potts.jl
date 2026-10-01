@@ -81,3 +81,8 @@ decision = "D-076"
 path = "acceptance/p6_2a2_akeeb_inventory.jl"
 sha256 = "1805cb4a1e1dd8290545a027e1dbcd37b500b482406cc4a6e611893981bb86b0"
 decision = "D-075"
+
+[[file]]
+path = "acceptance/p6_0k2_component_rejections.jl"
+sha256 = "140bed96e6bff6e8f3720d299f49e10cb2666646ada01db1c305a6cf9a5f0118"
+decision = "D-077"

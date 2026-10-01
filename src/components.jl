@@ -16,6 +16,9 @@
 parameters, couplings to model-scope expressions such as `sum(volume for c in cells)`).
 The system is continuous (`D(x) ~ f`, cell or model ODEs) or discrete-time (clocked, `Shift`:
 Boolean and discrete networks, ticking after the ODEs of each period of its clock).
+A system with `initialization_eqs`, `discrete_events`, `continuous_events` or `jumps`, or
+with a binding (`y(t) = 2k`, `k2 = 2k`) that involves a parameter coupled with `@equations`,
+is rejected by name; `guesses` are ignored (MTK initialisation is not run).
 """
 struct ComponentSpec
     name::Symbol
@@ -87,9 +90,12 @@ function _bind_components(sys::PottsSystem)
     time = _unwrap(B.time)
     coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
     blocks = copy(sys.discrete)
+    slotnames_all = Set{Symbol}()               # every discrete slot (`Pre` of one is the slot)
     for comp in sys.components
+        _reject_ignored_features(comp)
         discrete = _is_discrete(comp.system)
         cs = discrete ? _compile_discrete(comp) : ModelingToolkitBase.mtkcompile(comp.system)
+        _reject_coupled_bindings(comp, cs, couplings)
         ics = ModelingToolkitBase.initial_conditions(cs)
         # a missing value stays `nothing`: the operating point must give it (checked there)
         value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
@@ -105,6 +111,7 @@ function _bind_components(sys::PottsSystem)
                 v = variable(only(Symbolics.@variables $nm(t)), scope; default = _element_default(ics, x))
                 push!(vars, v)
                 names[nm] = standin(_unwrap(v))
+                push!(slotnames_all, nm)
             end
         else
             for u in ModelingToolkitBase.unknowns(cs)
@@ -163,11 +170,12 @@ function _bind_components(sys::PottsSystem)
                                                "(component unknowns evolve by their own equations)"))
     end
     # couplings may read other components' state (`dec.k ~ clock.m`)
-    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names)) for eq in odes]
-    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[_substitute_names(x, names) for x in b.next], b.every, b.offset)
+    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names, slotnames_all)) for eq in odes]
+    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[_substitute_names(x, names, slotnames_all) for x in b.next],
+                  b.every, b.offset)
               for b in blocks]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
-    sub(x) = _substitute_names(x, names)
+    sub(x) = _substitute_names(x, names, slotnames_all)
     m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
         lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
         energies = sys.energies, drives = sys.drives, constraints = sys.constraints, updates = sys.updates,
@@ -179,6 +187,54 @@ function _bind_components(sys::PottsSystem)
         m.energies, m.drives, m.constraints, m.updates, equations = [m.equations; odes], m.divisions,
         relationships = sys.relationships, m.link_rules, m.observed, discrete = blocks, m.sweep, structural = sys.structural,
         sources = merge(sys.sources, m.sources))
+end
+
+# What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
+# `guesses` only seed MTK's initialisation, which Potts does not run (G8): they are ignored.
+function _reject_ignored_features(comp)
+    sys = comp.system
+    what(x) = first(join(string.(x), ", "), 200)
+    for (field, items, why) in (
+            ("initialization_eqs", ModelingToolkitBase.initialization_equations(sys),
+                "Potts does not run MTK initialisation; give the values as variable defaults or in the operating point"),
+            ("discrete_events", ModelingToolkitBase.discrete_events(sys),
+                "write the event as a Potts update (`@after_mcs`) or a discrete component"),
+            ("continuous_events", ModelingToolkitBase.continuous_events(sys),
+                "Potts does not root-find inside a cell ODE step; write the event as a Potts update (`@after_mcs`)"),
+            ("jumps", ModelingToolkitBase.jumps(sys),
+                "write the jump as a Potts update with `rand()`"),
+            ("brownians", ModelingToolkitBase.brownians(sys),
+                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"))
+        isempty(items) || throw(ArgumentError("component `$(comp.name)`: MTK $field are not supported " *
+                                              "(they would be ignored): $(what(items)); $why"))
+    end
+    return nothing
+end
+
+# An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
+# `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
+# value of its own (it is a per-cell or model expression), so such a binding would be wrong or
+# dropped (P6.0k2 F7). Other bindings are not supported either, but are rejected elsewhere
+# (unknown symbol, missing initial value).
+function _reject_coupled_bindings(comp, cs, couplings)
+    namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
+    leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
+    for (lhs, rhs) in ModelingToolkitBase.bindings(cs)
+        touched = Symbol[]
+        n = leafname(_unwrap(lhs))
+        n !== nothing && haskey(couplings, n) && push!(touched, n)
+        _walk_all(rhs) do y
+            m = leafname(y)
+            m !== nothing && haskey(couplings, m) && !(m in touched) && push!(touched, m)
+        end
+        isempty(touched) && continue
+        throw(ArgumentError("component `$(comp.name)`: the MTK binding `$lhs = $rhs` touches the coupled " *
+                            "parameter$(length(touched) > 1 ? "s" : "") $(join(("`$c`" for c in touched), ", ")) " *
+                            "(`@equations $(first(touched)) ~ …`); a coupled parameter has no value of its own for MTK " *
+                            "to bind with. Write the expression inline in the component's equations instead, or give " *
+                            "a plain value"))
+    end
+    return nothing
 end
 
 _kind_in(kinds) = foldl(|, [B.kind == k for k in kinds])
@@ -193,11 +249,26 @@ function _fixpoint(f, x; n = 32)
 end
 
 # Substitute leaves that are MTK variables of components (no Potts metadata) by name.
-function _substitute_names(x, names)
+# `Pre(x)` of such a leaf is substituted whole (`substitute` does not enter operators):
+# `Pre(names[x])`, or, for a discrete slot (`slots`), `names[x]` itself — a slot changes only
+# at its tick, and a tick reads every slot's pre-tick value (Jacobi, D-077), so `Pre(x)` is
+# `x` wherever it is read, and lowers to the same code.
+function _substitute_names(x, names, slots = ())
     u = _unwrap(x)
     u isa SymbolicUtils.BasicSymbolic || return x
     sub = Dict{Any, Any}()
     _walk_all(u) do y
+        if iscall(y) && operation(y) isa ModelingToolkitBase.Pre
+            a = arguments(y)[1]
+            n = _mtkname(a)
+            if n !== nothing && haskey(names, n)
+                sub[y] = n in slots ? names[n] : _unwrap(ModelingToolkitBase.Pre(Symbolics.wrap(names[n])))
+            else                                        # `Pre` of an expression: inside it
+                b = _substitute_names(a, names, slots)
+                b === a || (sub[y] = _unwrap(ModelingToolkitBase.Pre(Symbolics.wrap(b))))
+            end
+            return
+        end
         n = _mtkname(y)
         n !== nothing && haskey(names, n) && (sub[y] = names[n])
     end
@@ -254,15 +325,41 @@ function _compile_discrete(comp)
     end
     ext = Base.get_extension(@__MODULE__, :PottsModelingToolkitExt)
     ext === nothing || ext.check_compatible()           # G1: the MTK hook, checked once per session
+    compile = ext === nothing ? ModelingToolkitBase.mtkcompile : ext.compile_discrete
+    return _mtk_compile_call(compile, comp)
+end
+
+# ModelingToolkit's compile of a discrete component. Only errors ModelingToolkit raises become
+# `ArgumentError`s naming the component: an error raised in Potts' own code (the extension's
+# pass runs inside MTK's compile) is a Potts bug and propagates unchanged (P6.0k2 F4).
+function _mtk_compile_call(compile::F, comp) where {F}
     try
-        return ext === nothing ? ModelingToolkitBase.mtkcompile(comp.system) : ext.compile_discrete(comp.system)
+        return compile(comp.system)
     catch e
         e isa Union{ArgumentError, InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
+        _raised_in_potts(catch_backtrace()) && rethrow()
         hint = nameof(typeof(e)) === :ExtraVariablesSystemException ?
                "every discrete variable needs an update `x(k) ~ …`; " : ""
         throw(ArgumentError("component `$(comp.name)`: $(hint)ModelingToolkit cannot compile this discrete system: " *
                             first(sprint(showerror, e), 600)))
     end
+end
+
+# Whether the innermost frame of `bt` outside Julia's Base and standard library is Potts code
+# (its `src/` or `ext/`): where the error was raised, as opposed to inside ModelingToolkit.
+# This is who raised it, not whose bug it is: a Potts misuse that SymbolicUtils or MTK
+# rejects is relabelled. Julia records stdlib frames under the build machine's path.
+function _raised_in_potts(bt)
+    own = (joinpath(pkgdir(@__MODULE__), "src"), joinpath(pkgdir(@__MODULE__), "ext"))
+    for fr in stacktrace(bt)
+        m = parentmodule(fr)
+        (m === Base || m === Core) && continue
+        file = String(fr.file)
+        (isabspath(file) && !startswith(file, Sys.STDLIB) &&
+         !occursin(joinpath("share", "julia", "stdlib", ""), file)) || continue    # Base (inlined), stdlib
+        return any(d -> startswith(file, joinpath(d, "")), own)
+    end
+    return false
 end
 
 """
