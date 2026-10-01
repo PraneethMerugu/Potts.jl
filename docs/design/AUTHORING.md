@@ -185,7 +185,13 @@ the target. An `@on_copy x[target] ~ …` write, and a variable with
 `clear_on_ownership_change`, enter ΔH with their after-copy value at the target (D-045). An
 on-copy write at the source, which would change pairs away from the target, is rejected. The
 reads at `s′` lie within the contact radius, so they add no reach and no checkerboard claims.
-`x′` exists only in contact terms.
+`x′` exists only in contact terms, and only for site and field variables. Writing `m′` for
+a cell or model variable, a parameter or any other declared name is an error when
+`@potts_model` expands ("primes exist only for site/field variables"); the neighbouring
+cell's value of a cell variable is `m[owner′]`. Because `x′` is reserved next to a site or
+field variable `x`, no quantity may be named `x′` beside it; a programmatically built
+`PottsSystem` is checked for this at construction, like `@potts_model` and `@extend`
+(D-061).
 
 ```julia
 @variables cue(site) = 0.0

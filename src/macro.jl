@@ -72,6 +72,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
             push!(parts.code, rewrite(ex))        # helper functions, local definitions
         end
     end
+    _check_primes(parts, body)
     kws = Any[Expr(:kw, :name, QuoteNode(name))]
     for (k, v) in parts.structural
         k in parts.params && throw(ArgumentError("`$k` is both a structural parameter and a parameter"))
@@ -133,6 +134,45 @@ function _potts_model(name::Symbol, body::Expr, mod)
             $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
         end
     end
+end
+
+# `x′` is bound only for a site or field variable `x` (the value at the other site of a
+# contact pair; `@variables` declares it alongside `x`). A section that writes `x′` for any
+# other declared name (a cell or model variable, a parameter, …) is rejected here, while the
+# macro expands, instead of failing later as a bare `UndefVarError`. Declarations, `@extend`
+# and `@components` are not scanned; neither is helper code outside sections.
+const _UNSCANNED = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@variables"),
+    Symbol("@extend"), Symbol("@components"))
+function _check_primes(parts::_Parts, body::Expr)
+    scopes = Dict{Symbol, Any}()                 # declared variable → its scope
+    for ex in body.args
+        _is_section(ex) && ex.args[1] === Symbol("@variables") || continue
+        for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
+            decl = l isa Expr && l.head === :(=) ? l.args[1] : l
+            decl isa Expr && decl.head === :ref && (decl = decl.args[1])
+            decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
+        end
+    end
+    function check(n::Symbol)
+        s = String(n)
+        endswith(s, '′') && !haskey(parts.declared, n) || return
+        x = Symbol(chop(s))
+        haskey(parts.declared, x) || return
+        what = haskey(scopes, x) ? "a $(scopes[x]) variable" : "a $(parts.declared[x])"
+        hint = get(scopes, x, nothing) === :cell ?
+               "; in a contact term, `$x[owner′]` reads it for the cell on the other side" : ""
+        throw(ArgumentError("`$n`: primes exist only for site/field variables (`y′` is the value of a site or " *
+                            "field variable `y` at the other site of a contact pair), and `$x` is $what$hint"))
+    end
+    walk(ex) = ex isa Symbol ? check(ex) : ex isa Expr && ex.head !== :quote ? foreach(walk, ex.args) : nothing
+    for ex in body.args
+        if _is_section(ex)
+            ex.args[1] in _UNSCANNED || walk(ex)
+        elseif _conditional_sections(ex)
+            walk(ex)
+        end
+    end
+    return nothing
 end
 
 # `if cond … else … end` around sections (conditions on structural parameters): the
