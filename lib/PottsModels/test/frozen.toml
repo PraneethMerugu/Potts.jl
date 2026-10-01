@@ -121,3 +121,8 @@ decision = "D-090"
 path = "acceptance/p6_1a6_layout_protocol.jl"
 sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
 decision = "D-091"
+
+[[file]]
+path = "acceptance/p6_1a7_scattered_mask.jl"
+sha256 = "6aaaf0001aad707832892a045cd21abedbe287568b3087c2243f1a45e6203038"
+decision = "D-094"
