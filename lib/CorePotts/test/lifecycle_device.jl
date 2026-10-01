@@ -1,5 +1,5 @@
 # The device lifecycle planner (D-089, `src/lifecycle_device.jl`) runs on every GPU backend.
-# Here it runs on the CPU backend (`_FORCE_DEVICE_LIFECYCLE`), so the lifecycle, compartment
+# Here it runs on the CPU backend, in both of its forms, (`_FORCE_DEVICE_LIFECYCLE`), so the lifecycle, compartment
 # and relationship tests below check its kernels (scan-based id allocation, deferral,
 # cluster units and planes, links, trackers, the P6.0d mask counts) without a GPU, against
 # the same oracles as the host planner. By design (D-089), the device planner's statistics
@@ -18,6 +18,7 @@
         prob = PottsProblem(f, st, lat, (0, 4), gg_params())
         integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false)
         @test integ.lcache.device isa CorePotts.DeviceLifecycle
+        @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
         @test init(prob, CheckerboardCPM()).lcache.device === nothing
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
@@ -40,9 +41,21 @@
         g, h = (solve(pg, CheckerboardCPM(); saveat = 5) for _ in 1:2)
         @test g.stats.lifecycle.divisions == h.stats.lifecycle.divisions >= 2
         @test all(i -> g.u[i].σ == h.u[i].σ && g.u[i].cell == h.u[i].cell, eachindex(g.u))
-        include("lifecycle.jl")
-        include("compartments.jl")
-        include("relationships.jl")
+        # both forms: the fused one-workgroup kernel (these problems are small) and one
+        # kernel per stage (what larger problems use)
+        @testset "$form" for (form, sites) in (("fused", CorePotts.FUSE_SITES[]), ("staged", 0))
+            fuse = CorePotts.FUSE_SITES[]
+            CorePotts.FUSE_SITES[] = sites
+            try
+                integ = init(prob, CheckerboardCPM())
+                @test (integ.lcache.device.fused! === nothing) == (form == "staged")
+                include("lifecycle.jl")
+                include("compartments.jl")
+                include("relationships.jl")
+            finally
+                CorePotts.FUSE_SITES[] = fuse
+            end
+        end
     finally
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
     end

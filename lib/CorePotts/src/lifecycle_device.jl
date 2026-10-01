@@ -50,11 +50,12 @@ end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
 buffers (`acc`/`mask` are read at host read points; `seen` are the values already folded)."""
-struct DeviceLifecycle{DV, CO, LI, K}
+struct DeviceLifecycle{DV, CO, LI, K, KF}
     dv::DV
     cols::CO            # the cell columns a daughter copies from its parent
     links::LI           # the adjacency matrices of the relationships
     plan!::K
+    fused!::KF          # the whole lifecycle in one workgroup (small problems), or nothing
     round::Base.RefValue{Int}
     acc::Vector{Int32}
     acc_seen::Vector{Int32}
@@ -62,11 +63,18 @@ struct DeviceLifecycle{DV, CO, LI, K}
     mask_seen::Vector{Int64}
 end
 
+# Up to these sizes the whole lifecycle runs as one launch of one workgroup (a quiet MCS
+# then costs one launch, as the trigger alone did); larger problems launch one kernel per
+# stage over all sites or cells. `Ref`s so that tests can exercise both forms.
+const FUSE_SITES = Ref(1 << 16)
+const FUSE_CELLS = Ref(1 << 13)
+
 function DeviceLifecycle(backend, N::Int, cap::Int, st)
     names = keys(st.cell)
     cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k))
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
-    return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG),
+    fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
+    return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
         Ref(0), zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
 
@@ -657,34 +665,47 @@ the number of kernel launches.
 function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
     mcs % lc.every == 0 || return 0
     D = cache.device
-    dv = D.dv
     r = (D.round[] += 1)
     par = Int32(isodd(r) ? 1 : 2)
     round = Int32(r % typemax(Int32))
+    T = eltype(cache.normals)
+    buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
+    fns = (; lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
+        lc.cluster_divide!)
+    opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
+        cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
+        csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
+                st.cell.cluster_surface : nothing,
+        rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh)
+    CL = Val(_has_clusters(st))
+    if D.fused! !== nothing
+        D.fused!(buf, D.dv, D.cols, D.links, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG)
+        return 1
+    end
+    return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+end
+
+# one kernel per stage (large problems)
+function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs, backend)
+    dv = D.dv
     cap = length(st.cell.kind)
     n = length(st.σ)
     lat = ctx.lattice
-    CL = Val(_has_clusters(st))
-    surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing
-    _launch(_dtrigger_body!, backend, cap, (cache.events, dv, par, round, lc.trigger, st, p, ctx, key, mcs, CL))
-    T = eltype(cache.normals)
-    D.plan!(cache.events, cache.daughter, cache.removed, cache.normals, cache.bias, dv, par, round,
-        _plane(lc.normal, T), _plane(lc.cluster_normal, T), lc.rules, st, p, ctx, key, mcs, CL, surf;
-        ndrange = PLAN_WG)
-    _launch(_dpartition_body!, backend, n, (dv, par, st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
-        st.cell, lat))
-    _launch(_dcells_body!, backend, cap, (dv, par, cache.events, cache.daughter, cache.removed, D.cols, D.links,
-        lc.kind, lc.divide!, lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules, CL))
+    surf, cvol, csurf, refresh = opt.surf, opt.cvol, opt.csurf, opt.refresh
+    _launch(_dtrigger_body!, backend, cap, (buf.events, dv, par, round, fns.trigger, st, p, ctx, key, mcs, CL))
+    D.plan!(buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round, fns.normal, fns.cnormal,
+        ruled, st, p, ctx, key, mcs, CL, surf; ndrange = PLAN_WG)
+    _launch(_dpartition_body!, backend, n, (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
+    _launch(_dcells_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links,
+        fns.kind, fns.divide!, fns.cluster_divide!, st, p, ctx, key, mcs, ruled, CL))
     launches = 4
     if surf !== nothing
         _launch(_dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
         launches += 1
     end
-    _launch(_dfinalize_body!, backend, cap, (dv, par, cache.daughter, cache.removed, st.cell, surf, lat))
+    _launch(_dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
     launches += 1
     if _has_clusters(st)
-        cvol = haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing
-        csurf = haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ? st.cell.cluster_surface : nothing
         _launch(_dcluster_mark_body!, backend, cap, (dv, par, st.cell))
         _launch(_dcluster_root_body!, backend, cap, (dv, par, st.cell, cvol, csurf))
         launches += 2
@@ -703,6 +724,91 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         launches += 2
     end
     return launches
+end
+
+# ---------------------------------------------------------------------------------------
+# The fused form: every stage above as a section of one workgroup, the barriers between
+# sections in place of the kernel boundaries (device memory is coherent within the
+# workgroup across a barrier). Item `t` takes the slots or sites `t, t + PLAN_WG, …`.
+
+@inline function _each!(body::B, t, n, args::A) where {B, A}
+    i = Int(t)                          # a local index may be 32-bit on a device
+    while i <= n
+        body(i, args...)
+        i += PLAN_WG
+    end
+    return nothing
+end
+@inline _each_if!(body::B, t, n, x::Nothing, args::A) where {B, A} = nothing
+@inline _each_if!(body::B, t, n, x, args::A) where {B, A} = _each!(body, t, n, args)
+@inline _clusters_each!(::Val{false}, body::B, t, n, args::A) where {B, A} = nothing
+@inline _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A} = _each!(body, t, n, args)
+@inline _refresh_each!(body::B, t, n, ::Nothing, dv, par, st, lat) where {B} = nothing
+@inline _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B} =
+    _each!(body, t, n, (dv, par, r.frozen, st.σ, st.cell.kind, r.kinds, lat))
+@inline _refresh_fold!(t, ::Nothing, dv, par, mcs) = nothing
+@inline _refresh_fold!(t, r, dv, par, mcs) = (t == 1 && _dmask_fold_body!(1, dv, par, mcs); nothing)
+
+@kernel function _fused_kernel!(buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs)
+    cnt = @localmem Int32 (PLAN_WG, 3)
+    tot = @localmem Int32 (3,)
+    t0 = @index(Local, Linear)
+    _each!(_dtrigger_body!, t0, length(buf.events),
+        (buf.events, dv, par, round, fns.trigger, st, p, ctx, key, mcs, clusters))
+    @synchronize
+    ta = @index(Local, Linear)
+    _plan_a!(ta, cnt, buf.events, buf.daughter, buf.removed, buf.bias, dv, par, round, ruled, st, clusters)
+    @synchronize
+    tb = @index(Local, Linear)
+    _plan_b!(tb, buf.events, dv, par, ruled, st, clusters)
+    @synchronize
+    tc = @index(Local, Linear)
+    _plan_c!(tc, cnt, buf.events, dv, par, ruled, clusters)
+    @synchronize
+    td = @index(Local, Linear)
+    _plan_d!(td, cnt, tot, buf.events, dv, par, ruled)
+    @synchronize
+    te = @index(Local, Linear)
+    _plan_e!(te, cnt, tot, buf.events, dv, par, round, ruled, st, clusters)
+    @synchronize
+    tf = @index(Local, Linear)
+    _plan_f!(tf, cnt, tot, dv, par)
+    @synchronize
+    tg = @index(Local, Linear)
+    _plan_g!(tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
+        st, p, ctx, key, mcs, clusters)
+    @synchronize
+    th = @index(Local, Linear)
+    _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
+    @synchronize
+    tp = @index(Local, Linear)
+    _each!(_dpartition_body!, tp, length(st.σ),
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice))
+    @synchronize
+    tq = @index(Local, Linear)
+    _each!(_dcells_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
+        fns.kind, fns.divide!, fns.cluster_divide!, st, p, ctx, key, mcs, ruled, clusters))
+    @synchronize
+    ts = @index(Local, Linear)
+    _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
+    @synchronize
+    tz = @index(Local, Linear)
+    _each!(_dfinalize_body!, tz, length(buf.events), (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
+    @synchronize
+    tk = @index(Local, Linear)
+    _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))
+    @synchronize
+    tl = @index(Local, Linear)
+    _clusters_each!(clusters, _dcluster_root_body!, tl, length(buf.events), (dv, par, st.cell, opt.cvol, opt.csurf))
+    @synchronize
+    tm = @index(Local, Linear)
+    _each_if!(_dcluster_volume_body!, tm, length(buf.events), opt.cvol, (dv, par, st.cell, opt.cvol))
+    _each_if!(_dcluster_surface_body!, tm, length(st.σ), opt.csurf,
+        (dv, par, st.σ, st.cell, opt.csurf, opt.rel, ctx.lattice))
+    _refresh_each!(_dfrozen_body!, tm, length(st.σ), opt.refresh, dv, par, st, ctx.lattice)
+    @synchronize
+    tr = @index(Local, Linear)
+    _refresh_fold!(tr, opt.refresh, dv, par, mcs)
 end
 
 """
