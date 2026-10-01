@@ -343,9 +343,11 @@ end
 struct AllMobile end
 
 """
-Sites with `frozen[i] = true` never change owner and never donate; `sites` lists the rest.
-The number of mobile sites is `length(sites)`: a refresh (`refresh_frozen!`, `reinit!`)
-rewrites `frozen` and resizes `sites` in place, so the integrator's context stays valid.
+Sites with `frozen[i] = true` never change owner and never donate. On the host, `sites`
+lists the mobile sites (SequentialCPM draws its targets from them; the count is
+`length(sites)`). On a device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and
+the integrator keeps the mobile count on the host. A refresh (`refresh_frozen!`, `reinit!`)
+rewrites both in place, so the integrator's context stays valid.
 """
 struct MaskMobility{M, S}
     frozen::M
@@ -356,31 +358,58 @@ Adapt.@adapt_structure MaskMobility
 function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
     frozen === nothing && return AllMobile()
     size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
-    return MaskMobility(Array{Bool}(frozen), _mobile_sites(frozen))
+    any(!, frozen) || throw(ArgumentError("every site is frozen"))     # at construction only
+    sites = Int32[]
+    _mobile_sites!(sites, frozen)
+    return MaskMobility(Array{Bool}(frozen), sites)
 end
-function _mobile_sites(frozen)
-    sites = Int32[i for i in eachindex(IndexLinear(), frozen) if !frozen[i]]
-    isempty(sites) && throw(ArgumentError("every site is frozen"))
+
+# The mobility in the integrator's context: on a device, the mask alone (see `MaskMobility`).
+_backend_mobility(backend, m::AllMobile) = m
+_backend_mobility(::KernelAbstractions.CPU, m::MaskMobility) = m
+_backend_mobility(backend, m::MaskMobility) = MaskMobility(_to_backend(backend, m.frozen), nothing)
+
+# `sites` ← the mobile sites of a host mask, in place (no allocation within capacity). A run
+# may freeze every site: the list is then empty and an MCS makes no attempt.
+function _mobile_sites!(sites::Vector{Int32}, frozen)
+    resize!(sites, length(frozen))
+    j = 0
+    @inbounds for i in eachindex(IndexLinear(), frozen)
+        frozen[i] && continue
+        j += 1
+        sites[j] = i
+    end
+    resize!(sites, j)
     return sites
 end
 
-# Rewrite a mask mobility in place from a host mask: `frozen` is overwritten, `sites` resized
-# only when the mobile count changed (a device `resize!` may reallocate; the context holds
-# the array object, so later launches see the new buffer).
-_set_mobility!(::AllMobile, ::Nothing) = nothing
+# Overwrite a mask mobility from a host mask (the custom-rule fallback of `refresh_frozen!`).
 function _set_mobility!(m::MaskMobility, frozen::AbstractArray{Bool})
-    sites = _mobile_sites(frozen)
     copyto!(m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
-    length(m.sites) == length(sites) || resize!(m.sites, length(sites))
-    copyto!(m.sites, sites)
+    m.sites === nothing || _mobile_sites!(m.sites, frozen)
     return nothing
 end
 _set_mobility!(m, frozen) = throw(ArgumentError(
     "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
 
+# The standard rule, one work item per site: a site is frozen when it lies outside the
+# lattice domain or its owner's kind is one of `kinds`. Counts, in `counter`, the change of
+# the mobile count (1) and the number of sites that changed (2).
+@inline function _frozen_body!(i, frozen, counter, σ, kind, kinds, lat)
+    s = @inbounds σ[i]
+    f = !in_domain(lat, i) || (s != 0 && _in_kinds(@inbounds(kind[s]), kinds))
+    if f != @inbounds(frozen[i])
+        @inbounds frozen[i] = f
+        Atomix.@atomic counter[1] += f ? Int32(-1) : Int32(1)
+        Atomix.@atomic counter[2] += Int32(1)
+    end
+    return nothing
+end
+@inline _in_kinds(k, kinds::Tuple) = any(==(k), kinds)
+
 @inline is_mobile(::AllMobile, i) = true
 @inline is_mobile(m::MaskMobility, i) = !@inbounds(m.frozen[i])
 nmobile(::AllMobile, l::Lattice) = nsites(l)
-nmobile(m::MaskMobility, l::Lattice) = length(m.sites)
+nmobile(m::MaskMobility{<:Any, <:AbstractVector}, l::Lattice) = length(m.sites)
 @inline mobile_site(::AllMobile, j) = j
 @inline mobile_site(m::MaskMobility, j) = Int(@inbounds m.sites[j])

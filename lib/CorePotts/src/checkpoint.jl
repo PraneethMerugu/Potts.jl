@@ -66,8 +66,8 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
         "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))$(_key_difference(integ.state, u0))); " *
         "use `remake` and `init`"))
-    _set_mobility!(integ.ctx.mobility, _frozen_sites(integ, u0))
     _copy_state!(integ.state, u0)
+    refresh_frozen!(integ)          # the frozen mask of the new state (static masks: nothing to do)
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)

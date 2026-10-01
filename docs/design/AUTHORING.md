@@ -465,15 +465,26 @@ Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 **Frozen kinds follow the lifecycle (P6.0d, D-081).** The sites of cells of `[frozen]`
 kinds never change owner. The mask is recomputed after every MCS that had a lifecycle
 event (transition, division, removal), so a cell that becomes frozen stops moving from the
-next sweep, a released cell moves, and a removed frozen cell's sites become mobile. MCS
-without events pay nothing. The attempt count per MCS (`stats.attempts`) follows the
-number of mobile sites. A `DiscreteCallback` whose `affect!` writes `kind` directly is
-not tracked: call `refresh_frozen!(integrator)` after the write (or `reinit!`, which
-recomputes the mask and accepts a state with a different number of frozen sites).
+next sweep, a released cell moves, and a removed frozen cell's sites become mobile. It is
+built on the integrator's backend by one kernel (a site is frozen when its owner's kind is
+frozen or it lies outside the domain); MCS without events, and models without a frozen
+kind (a domain alone included), pay nothing. The attempt count per MCS
+(`stats.attempts`) follows the number of mobile sites, which may reach zero mid-run (the
+MCS then makes no attempt); `stats.refreshes` counts the recomputations.
+
+State written outside the lifecycle:
+- `setu`/`set_state!` on `kind` refreshes the mask itself.
+- A `DiscreteCallback` that writes `integrator.state.cell.kind` directly must call
+  `refresh_frozen!(integrator)` or SciML's `u_modified!(integrator, true)`; otherwise the
+  change reaches the mask at the next lifecycle event.
+- `reinit!` recomputes the mask and accepts a state with a different number of frozen
+  sites.
+- `frozen_sites(prob, u)` is the mask of a saved state (MakiePotts draws each frame's
+  obstacles from it).
 
 ```julia
 freeze = DiscreteCallback((u, t, integ) -> t == 100,
-    integ -> (integ.state.cell.kind[3] = 2; refresh_frozen!(integ)))   # kind 2 is `wall[frozen]`
+    integ -> (integ.state.cell.kind[3] = 2; u_modified!(integ, true)))   # kind 2 is `wall[frozen]`
 ```
 
 ### Relationships

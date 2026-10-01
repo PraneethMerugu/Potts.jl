@@ -210,15 +210,26 @@ applied at the boundary.
 - `PottsSolution <: AbstractTimeseriesSolution`; `sol[x]`, `sol(t)`, SII through
   `f.sys`.
 - **Mobility (frozen sites, D-081).** `ctx.mobility` is `AllMobile()` (no mask) or
-  `MaskMobility(frozen, sites)`: a device Bool mask (Checkerboard reads `is_mobile`) and
-  the mobile sites as `Int32` (Sequential draws targets from them). The mobile count is
-  `length(sites)`, host metadata, so reading it never synchronizes. `run_lifecycle!`
-  returns `(launches, events)`; on an MCS with events (which has already synchronized,
-  D-035) `step!` calls `refresh_frozen!`: host state (`_snapshot` off the CPU) →
-  `remake_frozen(f.sys, prob, u)` (Potts: sites of `[frozen]` kinds) `.| .!lattice.mask`
-  → `copyto!(frozen)`, `resize!(sites)` + `copyto!` in place (`_set_mobility!`; the
-  context is immutable, its arrays are not). `reinit!` takes the same path, so the frozen
-  count may change. `stats.attempts` adds the count read before the sweep.
+  `MaskMobility(frozen, sites)`: the Bool mask (Checkerboard reads `is_mobile`) and, on
+  the host only, the mobile sites as `Int32` (Sequential draws targets from them; on a
+  device `sites === nothing`). The integrator keeps the mobile count on the host
+  (`integ.nmobile`, the attempts of an MCS, read before the sweep).
+  - Hooks on `f.sys`: `frozen_varies(sys)` (default `false`: a static mask, never
+    recomputed) and `frozen_kinds(sys)` (a tuple of `Int32` kinds: the standard rule, or
+    `nothing`: the custom rule `remake_frozen`). Potts: `!isempty(frozen_kinds)` and its
+    frozen kinds.
+  - `run_lifecycle!` returns `(launches, events)`; on an MCS with events (already
+    synchronized, D-035) `step!` calls `refresh_frozen!`. `reinit!`, `set_state!` on
+    `kind` and `u_modified!(integ, true)` call it too.
+  - Standard rule: one `_frozen_body!` launch over the sites (frozen when outside the
+    domain or the owner's kind is listed) that rewrites `frozen` in place and counts, with
+    atomics in a 2-element device array, the change of the mobile count and the number of
+    changed sites. The host reads those two integers (the only transfer); on the CPU the
+    site list is rebuilt in place when a site changed.
+  - Custom rule: a host copy of the state (`_snapshot` off the CPU), `frozen_sites`, copy
+    of the mask to the device.
+  - `frozen_sites(prob, u)` is the same rule on a host state, with the domain complement;
+    MakiePotts uses it per saved frame.
 - `checkpoint(integ)` = host copy of `CPMState` + `mcs` + RNG key + `fingerprint` + `p`.
   `init(prob, alg; checkpoint = ck)` continues the run (statistically correct; D-029).
   Fingerprint mismatch is an error.

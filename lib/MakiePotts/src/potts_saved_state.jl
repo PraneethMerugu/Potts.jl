@@ -154,7 +154,9 @@ function renderframe(
     )
     checkbounds(solution.u, index)
     return renderframe(solution.u[index], request; mcs = solution.t[index], channels,
-        frozen = solution.prob.frozen, spacing = solution.prob.spacing)
+        # the saved state's own obstacles: a frozen mask that follows the state (D-081) differs
+        # from the problem's t0 mask once a cell enters or leaves a frozen kind
+        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]), spacing = solution.prob.spacing)
 end
 
 """Eagerly materialize independent frames from a retained solution."""

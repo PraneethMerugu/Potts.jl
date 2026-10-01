@@ -139,11 +139,20 @@ end
 
 # P6.0d (D-081): a frozen mask that derives from the state (as Potts' `[frozen]` kinds) is
 # recomputed after every MCS with a lifecycle event, by `refresh_frozen!` and by `reinit!`.
-# `FrozenKind(k)`: the sites of cells of kind `k` never change owner.
+# `FrozenKind(k)`: the standard rule (built on the device), the sites of cells of kind `k`
+# are frozen. `HostFrozen(k)`: the same rule given as a custom `remake_frozen` (the host
+# fallback). `nothing`: a static mask.
 struct FrozenKind
     k::Int32
 end
-CorePotts.remake_frozen(s::FrozenKind, prob, u) = map(c -> c != 0 && Array(u.cell.kind)[c] == s.k, Array(u.σ))
+CorePotts.frozen_varies(::FrozenKind) = true
+CorePotts.frozen_kinds(s::FrozenKind) = (s.k,)
+struct HostFrozen
+    k::Int32
+end
+CorePotts.frozen_varies(::HostFrozen) = true
+fk_mask(u, k) = (kinds = Array(u.cell.kind); map(c -> c != 0 && kinds[c] == k, Array(u.σ)))
+CorePotts.remake_frozen(s::HostFrozen, prob, u) = fk_mask(u, s.k)
 
 # 30×30 periodic, cell 1 (kind 1) and cell 2 (kind 2), both 6×6 and growing toward V0 = 40
 function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = Float64,
@@ -154,30 +163,44 @@ function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = 
     lc = trigger === nothing ? nothing :
          Lifecycle(trigger; normal = AlongMinorAxis{T}(), (kind === nothing ? (;) : (; kind))...)
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc, sys)
-    return PottsProblem(f, st, lat, tspan, gg_params(T); seed,
-        frozen = CorePotts.remake_frozen(FrozenKind(2), nothing, st))
+    return PottsProblem(f, st, lat, tspan, gg_params(T); seed, frozen = fk_mask(st, 2))
 end
 fk_sites(u, c) = Array(u.σ) .== c
 # saved states i-1 → i in which cell c's site set changed
 fk_moved(sol, c, is) = count(i -> fk_sites(sol.u[i], c) != fk_sites(sol.u[i - 1], c), is)
 fk_flip(S) = (st, p, ctx, key, mcs, c) -> mcs == S ? EVENT_TRANSITION : EVENT_NONE
 fk_swap(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
+# a disk domain with no frozen kind (a static mask) and a division at MCS 2
+function fk_domain_problem(; T = Float64)
+    lat = Lattice((30, 30); boundary = Closed(), domain = x -> (x[1] - 15.5)^2 + (x[2] - 15.5)^2 <= 13^2)
+    σ = zeros(Int32, 30, 30); σ[10:19, 12:19] .= 1
+    st = lc_state(σ, Int32[1], lat; capacity = 3)
+    lc = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 2 && c == 1 ? EVENT_DIVIDE : EVENT_NONE;
+        normal = AlongMinorAxis{T}())
+    f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc)
+    return PottsProblem(f, st, lat, (0, 8), gg_params(T))
+end
 
 @testset "the frozen mask follows lifecycle events, callbacks and reinit! (P6.0d)" begin
     S = 10
     before, after = 2:(S + 2), (S + 3):31       # saved u at t = 1 … S+1 and t = S+2 … 30
-    @testset "transition into and out of the frozen kind ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
-        sol = solve(fk_problem(fk_flip(S); kind = fk_swap), alg; saveat = 1)
+    @testset "transition into and out of the frozen kind ($(nameof(typeof(alg))), $(nameof(typeof(sys))))" for alg in (SequentialCPM(), CheckerboardCPM()),
+                                                                                                             sys in (FrozenKind(2), HostFrozen(2))
+        sol = solve(fk_problem(fk_flip(S); kind = fk_swap, sys), alg; saveat = 1)
         @test sol.retcode == ReturnCode.Success && sol.stats.lifecycle.transitions == 2
+        @test sol.stats.refreshes == 1                           # the one event MCS
         @test Array(sol.u[end].cell.kind)[1:2] == [2, 1]
         @test fk_moved(sol, 1, before) >= length(before) ÷ 2
         @test fk_moved(sol, 2, before) == 0
         @test fk_moved(sol, 1, after) == 0                       # frozen from the next sweep on
         @test fk_moved(sol, 2, after) >= length(after) ÷ 2       # released
-        # negative control: a static mask (no state-derived `remake_frozen`) does not follow
+        @test frozen_sites(sol.prob, sol.u[end]) == fk_mask(sol.u[end], 2)
+        # negative control: a static mask (no state-derived rule) does not follow
         ctl = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = nothing), alg; saveat = 1)
+        @test ctl.stats.refreshes == 0
         @test fk_moved(ctl, 1, after) >= length(after) ÷ 2
         @test fk_moved(ctl, 2, after) == 0
+        @test frozen_sites(ctl.prob, ctl.u[end]) == ctl.prob.frozen
     end
 
     @testset "removal of a frozen cell: its sites become mobile; attempts follow ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
@@ -188,21 +211,56 @@ fk_swap(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
         @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
         quiet = solve(fk_problem((st, p, ctx, key, mcs, c) -> EVENT_NONE), alg)
         @test quiet.stats.attempts == 30 * (900 - 36)            # control: no event, no change
+        @test quiet.stats.refreshes == 0
     end
 
-    @testset "a callback that writes kind calls refresh_frozen!" begin
-        cb(refresh) = DiscreteCallback((u, t, integ) -> t == S,
-            integ -> (integ.state.cell.kind[1] = 2; refresh && refresh_frozen!(integ); nothing))
-        sol = solve(fk_problem(), SequentialCPM(); saveat = 1, callback = cb(true))
-        @test fk_moved(sol, 1, 2:(S + 1)) >= S ÷ 2
-        @test fk_moved(sol, 1, (S + 2):31) == 0                  # frozen from sweep S on
-        @test sol.stats.attempts == S * (900 - 36) + (30 - S) * (900 - 36 - Int(sol.u[end].cell.volume[1]))
-        # without the refresh the mask is stale and the cell keeps moving
-        stale = solve(fk_problem(), SequentialCPM(); saveat = 1, callback = cb(false))
-        @test fk_moved(stale, 1, (S + 2):31) >= (30 - S) ÷ 2
+    @testset "every site frozen mid-run: no attempts, no error ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        lat = Lattice((10, 10))
+        σ = zeros(Int32, 10, 10); σ[:, 1:5] .= 1; σ[:, 6:10] .= 2
+        st = lc_state(σ, Int32[1, 2], lat)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, sys = FrozenKind(2),
+            lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 3 && c == 1 ? EVENT_TRANSITION : EVENT_NONE;
+                kind = (st, p, ctx, key, mcs, c) -> Int32(2)))
+        sol = solve(PottsProblem(f, st, lat, (0, 8), gg_params(); frozen = fk_mask(st, 2)), alg; saveat = 1)
+        @test sol.retcode == ReturnCode.Success
+        @test sol.stats.attempts == 4 * 50                       # sweeps 0 … 3, then none
+        @test all(i -> sol.u[i].σ == sol.u[5].σ, 5:9)            # nothing moves from t = 4 on
+        # at construction a fully frozen lattice is still an error
+        @test_throws ArgumentError init(PottsProblem(f, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
+    end
+
+    @testset "a domain without frozen kinds never refreshes ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        prob = fk_domain_problem()
+        sol = solve(prob, alg)
+        @test sol.stats.lifecycle.divisions == 1
+        @test sol.stats.refreshes == 0
+        @test sol.stats.attempts == 8 * count(prob.lattice.mask)
+        @test all(Array(sol.u[end].σ)[.!prob.lattice.mask] .== 0)
+        @test frozen_sites(prob, sol.u[end]) == .!prob.lattice.mask
+    end
+
+    @testset "a callback that writes kind: refresh_frozen!, u_modified!, set_state!" begin
+        writes = (
+            refresh = integ -> (integ.state.cell.kind[1] = 2; refresh_frozen!(integ)),
+            u_modified = integ -> (integ.state.cell.kind[1] = 2; SciMLBase.u_modified!(integ, true)),
+            set_state = integ -> CorePotts.SymbolicIndexingInterface.set_state!(integ, Int32[2, 2], StateIndex(:cell, :kind)),
+            stale = integ -> (integ.state.cell.kind[1] = 2))
+        for (name, w) in pairs(writes)
+            sol = solve(fk_problem(), SequentialCPM(); saveat = 1,
+                callback = DiscreteCallback((u, t, integ) -> t == S, integ -> (w(integ); nothing)))
+            @test fk_moved(sol, 1, 2:(S + 1)) >= S ÷ 2
+            if name === :stale        # without a refresh the mask is stale and the cell keeps moving
+                @test fk_moved(sol, 1, (S + 2):31) >= (30 - S) ÷ 2
+                @test sol.stats.refreshes == 0
+            else                      # frozen from sweep S on
+                @test fk_moved(sol, 1, (S + 2):31) == 0
+                @test sol.stats.refreshes == 1
+                @test sol.stats.attempts == S * (900 - 36) + (30 - S) * (900 - 36 - Int(sol.u[end].cell.volume[1]))
+            end
+        end
         # refresh_frozen! on a problem without a mask is a no-op
         integ = init(PottsProblem(GG, initial_state(blocks((20, 20), 5)...), Lattice((20, 20)), (0, 2), gg_params()), SequentialCPM())
-        @test refresh_frozen!(integ) === integ && integ.ctx.mobility isa AllMobile
+        @test refresh_frozen!(integ) === integ && integ.ctx.mobility isa AllMobile && integ.stats.refreshes == 0
     end
 
     @testset "reinit! accepts a state with a different frozen-site count ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
@@ -218,5 +276,9 @@ fk_swap(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
         sol = solve!(integ)
         @test fk_sites(sol.u[end], 1) != fk_sites(prob.u0, 1)
         @test sol.stats.attempts == 10 * (900 - 36)
+        # a static mask is not recomputed by reinit!
+        integ = init(fk_problem(; sys = nothing, tspan = (0, 2)), alg)
+        reinit!(integ, u2)
+        @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
     end
 end

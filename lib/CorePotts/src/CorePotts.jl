@@ -11,7 +11,7 @@ using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
-using SciMLBase: SciMLBase, remake, reinit!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
+using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
@@ -42,15 +42,16 @@ export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!, cluster_claims
 export FieldStep, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
-export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, StateIndex, getu, setu, getp, setp
+export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them
-export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!
+export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!, u_modified!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models
-# and generated code (ExplicitImports checks qualified accesses against this list).
-public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey
+# and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
+# checks qualified accesses against this list).
+public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey, frozen_varies, frozen_kinds
 
 include("rng.jl")
 include("lattice.jl")
