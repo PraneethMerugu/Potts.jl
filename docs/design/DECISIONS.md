@@ -1598,3 +1598,11 @@ session.
 - **`merks_state` → `Scattered`** at P6.3d: `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` replaces the hand-written loop. Same algorithm (draw-for-draw identical under a shared StableRNG); the stream moves from MersenneTwister to StableRNG, so each seed gives a different layout with the same law. The gate's Merks case changes its initial state: re-check the gate (no re-baseline unless it fails, D-048) and re-pick test seeds where needed.
 - **General layers replace named ones** (amends D-075 §3.3): `BrickWall` becomes `Tiling(size; stagger, widths, partial = :wrap)` at P6.4d (confirm 04's layout reproduces exactly); `Plane`/`Spheres` become `Fill(region)` and `Objects(Sphere(…), points)` at P6.5c. No named aliases: the docs show each as a short recipe (e.g. a staggered `Tiling` for a brick wall).
 
+## D-088 P6.0e2: primes of non-site quantities are Potts errors (2026-10-01, P6.0e2; amends D-061)
+
+- `x′` is bound only for a site/field variable `x`. Reading `x′` where `x` is any other declared or `@extend`-inherited quantity (cell or model variable, parameter, kind, observed quantity, relation or edge variable) is an `ArgumentError` naming `x′` and saying "primes exist only for site/field variables"; cell variables get the hint `x[owner′]`.
+- **Where.** The generated constructor runs its section code under `try`/`catch` and translates an `UndefVarError` for a name ending in `′` (`Potts._prime_error`, with a name ⇒ description table built at expansion, and the `@extend` bases). Local names `x′` (`let`, generators, closures, keyword names) are never affected; other errors and ordinary typos are rethrown unchanged; the happy path pays nothing. Round 1's static scan of the sections was dropped because it rejected such locals.
+- **Declarations.** Every `PottsSystem` construction (macro, `extend`, components, programmatic) runs `_check_primed_names`: a declared `x′` beside a site/field `x` is rejected. Lone primed declarations stay legal (coordinator scope).
+- **Residual.** An untranslated `x′` error from a hand-written (non-`@potts_model`) `@extend` base is labelled with the outer model's description: P6.0u.
+- **Code.** Fingerprints of every published model unchanged; constructor time within noise.
+

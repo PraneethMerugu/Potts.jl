@@ -234,6 +234,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
   - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
   - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
+  - Hand-written (non-`@potts_model`) `@extend` bases: an untranslated `x′` error from inside the base is labelled with the outer model's description (P6.0e2 review; wrap the base call in its own catch, about 3 lines).
   - The temperature's `integral(Pre)` error lacks its "in @sweep" location (P6.0m3 review nit).
 - [ ] **P6.0v** GPU host-transfer audit and instrumentation (user, 2026-10-01). Goal: every synchronize, device↔host copy or host-side work during a Metal MCS is either unavoidable or removed.
   - **Audit** `docs/design/research/gpu-host-transfer-audit.md`: every `synchronize`, `Array(…)`, `_snapshot`, `_readback`, host↔device `copyto!`, and every host loop over sites or cells that runs during `step!` on a non-CPU backend, in CorePotts, Potts and the generated code. Per entry: when it fires (every MCS / event MCS / setup), how much it moves (O(1), O(events), O(cells), O(cells × quantities), O(sites)), whether it is necessary, and the device-side replacement. Measure before assuming (Akeeb: 185 ns/site Metal vs 47 CPU).
@@ -306,7 +307,7 @@ Every item's acceptance also includes the standing checks:
   - Not in this row: `into`, `shortfall`, `set_column!`, `add_link!`, shapes.
 - [ ] **P6.1a7** `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
   - Accept: σ identical to the pre-change version over a seed grid, closed and periodic (the dilation wraps), 2D, 3D and hex; 10⁴ cubes of 5³ at 200³ under 50 ms (≈ 480 ms today, `/tmp/initstate-review/p3_scattered_cost.jl`).
-- [ ] **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
+- [x] (merge, 2026-10-01; D-088) **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
   `PottsSystem`s for declarations named `x′`.
 - [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy

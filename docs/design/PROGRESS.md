@@ -1628,3 +1628,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
 - **Gate: pass.** CPU 0.996–1.029. One Metal flag, Graner–Glazier (1.129): `ab.jl` against 23933c2 gave 1.052 at 6 rounds under load, then 1.013 at 10 rounds.
 - **User (2026-10-01).** "i like both recs" (also relayed by the peer session): `merks_state` moves to `Scattered` at P6.3d, and `BrickWall`/`Plane`/`Spheres` are replaced by general layers with doc recipes at P6.4d/P6.5c (D-087, amends D-075 §3.3).
+
+## 2026-10-01 — P6.0e2 merged: primes of non-site quantities are Potts errors (D-088)
+
+- **The change.** `m′` for a cell or model variable, parameter, kind, observed quantity or inherited name is an `ArgumentError` ("primes exist only for site/field variables"), raised by translating the constructor's `UndefVarError`; every `PottsSystem` construction rejects a declared `x′` beside a site/field `x` (D-088).
+- **Review.** Two rounds. Round 1's static scan rejected valid local names (`let λ′`, `for n′ in …`); round 2 replaced it with catch-and-translate, which also closed the `@extend` gap. Residual (hand-written `@extend` bases) filed under P6.0u.
+- **Code.** Fingerprints unchanged; constructor time within noise.
+- **Merge checks.** Potts, PottsModels, docs, MakiePotts and Potts on Metal exit 0.
+- **Gate.** Under parallel-agent load every CPU checkerboard case read 1.06–1.11 and OpenVT Metal 1.072. `ab.jl` against 6d4b51e (6 rounds): checkerboard Merks 1.019, OpenVT 1.000, Graner–Glazier 1.004; Metal OpenVT 0.982.

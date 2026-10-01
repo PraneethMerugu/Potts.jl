@@ -119,10 +119,16 @@ function _potts_model(name::Symbol, body::Expr, mod)
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
         sweep = __sweep, structural = $structural))
+    targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
             $preamble
-            $(parts.code...)
+            try
+                $(parts.code...)
+            catch __e
+                $P._prime_error(__e, $targets, __bases)
+                rethrow()
+            end
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare
                 __lattice === nothing && (__lattice = b.lattice)
                 __sweep === nothing && (__sweep = b.sweep)
@@ -133,6 +139,77 @@ function _potts_model(name::Symbol, body::Expr, mod)
             $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
         end
     end
+end
+
+# `x′` is bound only for a site or field variable `x` (the value at the other site of a
+# contact pair; `@variables` declares it alongside `x`). Any other `x′` the section code
+# reads is unbound, so the constructor fails with an `UndefVarError`; the constructor
+# catches it and, when `x` is a declared or inherited quantity that is not a site/field
+# variable, rethrows it as a Potts error (`_prime_error`). A local named `x′` (a `let`,
+# generator or closure variable) never raises, so it stays valid Julia; the happy path pays
+# nothing.
+"""Name → description (`"a cell variable"`, `"a parameter"`, …) of the declared quantities of
+the model being expanded whose prime is not bound (everything but site/field variables)."""
+function _prime_targets(parts::_Parts, body::Expr)
+    scopes = Dict{Symbol, Any}()                 # declared variable → its scope
+    for ex in body.args
+        _is_section(ex) && ex.args[1] === Symbol("@variables") || continue
+        for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
+            decl = l isa Expr && l.head === :(=) ? l.args[1] : l
+            decl isa Expr && decl.head === :ref && (decl = decl.args[1])
+            decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
+        end
+    end
+    out = Dict{Symbol, String}()
+    for (x, what) in parts.declared
+        haskey(parts.declared, Symbol(x, '′')) && continue
+        sc = get(scopes, x, nothing)
+        out[x] = sc isa Symbol ? (sc in SCOPES ? _scope_description(sc, nothing) : _scope_description(:edge, sc)) :
+                 _with_article(what)
+    end
+    return out
+end
+_with_article(what) = (first(what) in "aeiou" ? "an " : "a ") * what
+_scope_description(role, rel) = role === :edge ? (rel === nothing ? "an edge variable" : "an edge variable of `$rel`") :
+                                "a $role variable"
+
+"""What `x` is in one of `bases` (for `_prime_error`), or `nothing`."""
+function _base_description(bases, x::Symbol)
+    named(i) = i !== nothing && (i.name === x || get(i.options, :vector, nothing) === x)
+    for b in bases
+        for v in b.variables
+            i = info(v)
+            named(i) || continue
+            i.role in (:site, :field) && return nothing
+            return _scope_description(i.role, get(i.options, :relationship, nothing))
+        end
+        any(p -> named(info(p)), b.parameters) && return "a parameter"
+        x in b.kinds && return "a kind"
+        any(o -> named(info(o.var)), b.observed) && return "an observed quantity"
+        haskey(b.relations, x) && return "a relation"
+        any(r -> r.name === x, b.relationships) && return "a relationship"
+    end
+    return nothing
+end
+
+"""
+Called by a `@potts_model` constructor that failed with `e`: if `e` is the `UndefVarError`
+of `x′` for a quantity `x` that is not a site/field variable (declared in the model,
+`targets`, or inherited from one of `bases`), throw the Potts error. Otherwise return, and
+the caller rethrows `e`.
+"""
+function _prime_error(e, targets::Dict{Symbol, String}, bases)
+    e isa UndefVarError || return nothing
+    n = e.var
+    s = String(n)
+    endswith(s, '′') || return nothing
+    x = Symbol(chop(s))
+    what = get(targets, x, nothing)
+    what === nothing && (what = _base_description(bases, x))
+    what === nothing && return nothing
+    hint = what == "a cell variable" ? "; in a contact term, `$x[owner′]` reads it for the cell on the other side" : ""
+    throw(ArgumentError("`$n`: primes exist only for site/field variables (`y′` is the value of a site or " *
+                        "field variable `y` at the other site of a contact pair), and `$x` is $what$hint"))
 end
 
 # `if cond … else … end` around sections (conditions on structural parameters): the

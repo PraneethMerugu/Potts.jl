@@ -33,7 +33,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     end
     byname(xs, ys) = (seen = Set(info(y).name for y in ys);
         Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
-    return _check_primed_names(PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
+    return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
@@ -47,18 +47,20 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         components = unique(c -> c.name, [sys.components; base.components]),
         discrete = unique(b -> b.name, [sys.discrete; base.discrete]),
         sweep = sys.sweep, structural = merge(base.structural, sys.structural),
-        sources = merge(base.sources, sys.sources)))
+        sources = merge(base.sources, sys.sources))
 end
 
 """
 `x′` is the contact-pair value of a site or field variable `x`: no quantity of the system
 (parameter, variable or observed quantity, inherited through `@extend` or not) may carry
-that name as well.
+that name as well. Checked whenever a `PottsSystem` is constructed (`@potts_model`,
+`extend` or a programmatic build).
 """
 function _check_primed_names(sys::PottsSystem)
     names = Set{Symbol}()
     for x in Iterators.flatten((sys.parameters, sys.variables, (o.var for o in sys.observed)))
         i = info(x)
+        i === nothing && continue
         push!(names, i.name)
         v = get(i.options, :vector, nothing)
         v === nothing || push!(names, v)
@@ -69,7 +71,7 @@ function _check_primed_names(sys::PottsSystem)
         x = Symbol(chop(s))
         _is_site_quantity(sys, x) && throw(ArgumentError(
             "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
-            "site variable `$x`; rename one of them"))
+            "site variable `$x` (primes exist only for site/field variables); rename one of them"))
     end
     return sys
 end
@@ -146,6 +148,6 @@ function _lookup_primed(sys::PottsSystem, name::Symbol)
     return _primed(lookup(sys, base))
 end
 function _is_site_quantity(sys::PottsSystem, name::Symbol)
-    return any(x -> (i = info(x); i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
+    return any(x -> (i = info(x); i !== nothing && i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
         sys.variables)
 end
