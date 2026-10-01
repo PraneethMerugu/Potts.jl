@@ -30,11 +30,13 @@ Private = false
 
 ## PottsModels
 
-Published models as `@potts_model` constructors, and their initial states.
+Published models as `@potts_model` constructors, and their initial states. The model
+constructors and their state functions are documented on their [Models](@ref models) pages.
 
 ```@autodocs
 Modules = [PottsModels]
 Private = false
+Filter = t -> !Main.on_model_page(t)
 ```
 
 ## PottsModels.Analysis

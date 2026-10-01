@@ -62,6 +62,20 @@ function model_links(pairs::Pair...)
     return join(items, ", ")
 end
 
+# Names that a Models page documents with an `@docs` block; the API page leaves them out,
+# since Documenter allows each docstring on one page only.
+const MODEL_PAGE_NAMES = let names = Set{Symbol}()
+    for f in (isdir(MODELS) ? readdir(MODELS; join = true) : String[])
+        endswith(f, ".md") || continue
+        for m in eachmatch(r"```@docs\n(.*?)```"s, read(f, String)), l in split(m[1], '\n')
+            l = strip(l)
+            isempty(l) || push!(names, Symbol(l))
+        end
+    end
+    names
+end
+on_model_page(x) = x isa Union{Function, Type} && nameof(x) in MODEL_PAGE_NAMES
+
 const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
 """
