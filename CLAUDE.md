@@ -34,7 +34,6 @@ or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePott
 
 ## Git
 
-Local only: no pushes, PRs or tag pushes until the cut-over checklist (`AUTONOMY.md` §5).
-Local Phase 0 cleanup is authorized (pruning stale worktrees, deleting local branches that
-are merged or tagged, local `archive/*` and `legacy/*` tags; see §4). Never force-push
-(D-025). Work on branch `monorepo`.
+The repository is `PraneethMerugu/Potts.jl` (early cut-over, D-095). Merged work reaches
+`main` through ordinary pushes or PRs; never force-push (D-025). Never commit `docs/references/`
+(copyrighted PDFs) or author letters. Work on branch `monorepo`; feature branches stay local.
