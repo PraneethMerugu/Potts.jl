@@ -312,16 +312,16 @@ function _connect_pieces!(owner, sites, index, n, steps)
     end
 end
 
-function Potts.paint!(σ, kinds, l::VoronoiBall, lat)
+function Potts.paint!(op::Potts.LayoutState, l::VoronoiBall, lat)
     clat = Potts.core_lattice(lat)
-    owner, sites, index, _ = _voronoi_cells(l, clat, lat.domain, size(σ))
-    _connect_pieces!(owner, sites, index, l.n, _nearest_steps(clat, Val(ndims(σ))))
-    base = length(kinds)
-    for k in 1:(l.n)
-        push!(kinds, l.kinds[mod1(k, length(l.kinds))])
-    end
+    dims = size(lat)
+    mask = [Potts.indomain(lat, Tuple(x)) for x in CartesianIndices(dims)]
+    owner, sites, index, _ = _voronoi_cells(l, clat, all(mask) ? nothing : mask, dims)
+    _connect_pieces!(owner, sites, index, l.n, _nearest_steps(clat, Val(length(dims))))
+    ids = [Potts.new_cell!(op, l.kinds[mod1(k, length(l.kinds))]) for k in 1:(l.n)]
     for (i, x) in enumerate(sites)
-        σ[x] = Int32(base + owner[i])
+        Potts.assign!(op, x, ids[owner[i]])
     end
-    return σ
+    Potts.record!(op; requested = l.n, painted = l.n)
+    return nothing
 end

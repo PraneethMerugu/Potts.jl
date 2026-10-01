@@ -52,7 +52,10 @@ end
         @test count(==(:follower), op[2].second) == 231 && 70 <= count(==(:leader), op[2].second) <= 77
         # 300 MCS: about 1 in 4 state seeds has no division by MCS 200 (MersenneTwister and
         # StableRNG states alike, 120 seeds each); by 300 every seed has divided
-        @test_throws ArgumentError layout(akeeb_layout(; lattice = (99, 60)), (500, 300))  # wrong width
+        # a layout carries no lattice (D-091): on a wider lattice the 99-wide slab is painted
+        # and the rest stays medium
+        wide = layout(akeeb_layout(; lattice = (99, 60)), (500, 300))[1].second
+        @test all(>(0), wide[1:99, 1:21]) && all(==(0), wide[100:end, :]) && all(==(0), wide[:, 22:end])
         @test_throws ArgumentError layout(akeeb_layout(; lattice = (99, 60)), (99, 60, 4)) # 3D
         @test_throws ArgumentError akeeb_layout(; lattice = (99, 20))                      # below the slab
         prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 300); capacity = 1000)
@@ -87,9 +90,9 @@ end
         painted, counted = zeros(Int, n), zeros(Int, n)
         quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
         for s in 1:n
-            point, tallies = quiet(() -> layout_tally(akeeb_layout(; seed = s), (500, 300)))
+            point, report = quiet(() -> layout(akeeb_layout(; seed = s), (500, 300); report = true))
             σ, kinds = point[1].second, point[2].second
-            t = only(tallies)
+            t = only(r for r in report if r.type === :InsertUntil)
             counted[s], painted[s] = t.counted, t.painted
             @test count(==(:leader), kinds) == painted[s]
             @test sort(σ[σ .> 1169]) == 1170:(1169 + painted[s])             # one site per leader

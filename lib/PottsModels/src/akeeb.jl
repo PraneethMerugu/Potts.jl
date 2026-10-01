@@ -69,57 +69,51 @@ akeeb_contacts(jlf) = [0.0 2.0 10.0; 2.0 16.0 jlf; 10.0 jlf 5.0]
         -> AbstractLayout
 
 The published initial slab of [`akeeb_state`](@ref) as a layout value (spec 10 §2.3, V-A1;
-D-068, D-073):
+D-068, D-073, D-091), written with the public layers only:
+
+```julia
+overlay(Tiling((3, 3); region = (1:X, 1:3cld(slab, 3)), kinds = [:follower], partial = :clip),
+        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses,
+                    region = (2:X, 2:(slab - 1)), splits = :allow))
+```
+
+with `X = lattice[1]`.
 
 - **Followers.** 3×3 tiles fill `y ≤ slab` (rounded up to whole tiles), clipped at the
   right edge, ids row by row with `x` fastest.
-- **Leaders.** One layer
-  `InsertUntil(:leader; into = [:follower], fraction = 1//4, seed, misses, region = (2:X, 2:(slab - 1)))`,
-  the draw ranges of the authors' CompuCell3D seeding loop. One-site leaders go on random
-  follower pixels until leaders are a quarter of all cells. `seeding` chooses `misses`:
+- **Leaders.** One-site leaders go on random follower pixels, drawn over the ranges of the
+  authors' CompuCell3D seeding loop, until leaders are a quarter of all cells. `seeding`
+  chooses `misses`:
   - `:authors` (default) gives `misses = :count`, the authors' loop: every draw counts one
     leader toward the quota, a leader is painted only on a hit, and the quota is tested
     only after a hit. A miss leaves no cell (an empty "ghost" leader, D-068), so fewer
     leaders are painted than counted: at 500×300, ≈ 382 of a counted 390.
   - `:retry` gives `misses = :retry`: a miss is redrawn, so exactly the quota is painted.
 
-The counted inventory (spec 10 V-A1(a)) is the leader layer's tally:
+Several leaders inside one follower can cut it in two; that is the published slab, so the
+leader layer has `splits = :allow` and painting the layout does not warn.
+
+The layout carries no lattice: painted on a lattice wider than `X`, the `X`-wide slab is
+painted and the rest stays medium. The counted inventory (spec 10 V-A1(a)) is the leader
+layer's row of the layout report:
 
 ```julia
-t = only(last(layout_tally(akeeb_layout(; lattice, seed), lattice)))
+point, report = layout(akeeb_layout(; lattice, seed), lattice; report = true)
+t = only(r for r in report if r.type === :InsertUntil)
 t.painted, t.misses, t.counted     # leaders created, missed draws, the CC3D inventory
 ```
-
-Several leaders inside one follower can cut it in two, so painting this layout may warn
-about a split cell; that is the published slab. `akeeb_state` paints it silently.
 """
 function akeeb_layout(; lattice = (500, 300), seed = 0x5cd2609, slab = 21, seeding::Symbol = :authors)
     seeding in (:authors, :retry) ||
         throw(ArgumentError("akeeb_layout: seeding must be :authors or :retry, got :$seeding"))
+    length(lattice) == 2 || throw(ArgumentError("akeeb_layout: the lattice must be 2D, got $lattice"))
     X, Y = lattice
     top = 3 * cld(slab, 3)                                   # the last tile row ends here
     Y > top || throw(ArgumentError("akeeb_layout: lattice height $Y must exceed the slab ($top rows)"))
     misses = seeding === :authors ? :count : :retry
-    return overlay(_AkeebSlab(X, slab),
-        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1))))
-end
-
-# The follower slab: 3×3 tiles over `y ≤ slab` (rounded up to whole tiles), clipped at the
-# right edge, ids x-fastest row by row.
-struct _AkeebSlab <: AbstractLayout
-    X::Int
-    slab::Int
-end
-function Potts.paint!(σ, kinds, l::_AkeebSlab, lat::Potts.LatticeSpec)
-    dims = lat.dims
-    length(dims) == 2 && dims[1] == l.X && dims[2] >= 3 * cld(l.slab, 3) ||
-        throw(ArgumentError("akeeb_layout: built for a $(l.X)-wide 2D lattice at least " *
-                            "$(3 * cld(l.slab, 3)) rows tall, painted on $(join(dims, "×"))"))
-    for y in 1:3:(l.slab), x in 1:3:(l.X)
-        push!(kinds, :follower)
-        σ[x:min(x + 2, l.X), y:(y + 2)] .= length(kinds)
-    end
-    return σ
+    return overlay(Tiling((3, 3); region = (1:X, 1:top), kinds = [:follower], partial = :clip),
+        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)),
+            splits = :allow))
 end
 
 """
@@ -131,7 +125,8 @@ The published initial slab (spec 10 §2.3, §5.2 V-A1, §5.3.6; D-068):
   (see [`akeeb_layout`](@ref)): a follower slab of 3×3 tiles over `y ≤ slab`, then one-site
   leaders inserted until leaders are a quarter of all cells, under the authors' counting
   of missed draws (`seeding = :authors`) or with misses redrawn (`:retry`). The lattice
-  must be taller than the slab. The counted leader inventory is read with `layout_tally`.
+  must be taller than the slab. The counted leader inventory is the leader layer's row of
+  `layout(akeeb_layout(…), lattice; report = true)`.
 - **Clocks.** Each follower has a mitotic clock with probability `pp`, drawn uniformly
   from `0:74`. Followers have `rate = 0.015`.
 - **Cue.** `y − 1`.
@@ -148,9 +143,7 @@ function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 
     seeding in (:authors, :retry) ||
         throw(ArgumentError("akeeb_state: seeding must be :authors or :retry, got :$seeding"))
     l = akeeb_layout(; lattice, seed, slab, seeding)
-    # The only record `layout` logs for this layout is overlay's split-cell warning, which
-    # the published slab triggers by design (several leaders inside one follower)
-    point = with_logger(() -> layout(l, lattice), NullLogger())
+    point = layout(l, lattice)               # the leader layer allows split followers: no warning
     σ, kinds = point[1].second, point[2].second
     rng = StableRNG(seed + 1)
     clocks = [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]

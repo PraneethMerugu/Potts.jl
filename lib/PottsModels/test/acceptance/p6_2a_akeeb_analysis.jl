@@ -22,10 +22,11 @@
 #       Throws an ArgumentError if `region` holds no site of an `into` kind (instead of
 #       looping forever), and for a bad stop rule or `misses` value.
 #
-#   layout_tally(l, lat) -> (point, tallies)                              (Potts, src/layouts.jl)
-#       `point == layout(l, lat)`; `tallies` holds one `(; painted, misses, counted)`
-#       NamedTuple per InsertUntil layer, in paint order. `misses` counts missed draws in
-#       both modes.
+#   layout(l, lat; report = true) -> (point, report)                     (Potts, src/layouts.jl)
+#       `point == layout(l, lat)`; `report` has one row per leaf layer in paint order. The
+#       `p62a_tally` helper below keeps the rows of the InsertUntil layers as
+#       `(; painted, misses, counted)` NamedTuples, in paint order (the former
+#       `layout_tally`, removed in P6.1a6). `misses` counts missed draws in both modes.
 #
 #   PottsModels.Analysis                     (lib/PottsModels/src/analysis/, D-051 item 6)
 #       find_peaks(x; distance = nothing, prominence = nothing, width = nothing,
@@ -58,6 +59,11 @@
 using Potts: CorePotts
 
 p62a_get(op, key) = only(last(p) for p in op if isequal(first(p), key))
+# The InsertUntil rows of the layout report as (; painted, misses, counted), in paint order.
+function p62a_tally(l, lat)
+    op, report = layout(l, lat; report = true)
+    return op, [(; r.painted, r.misses, r.counted) for r in report if r.type === :InsertUntil]
+end
 # Operating points hold symbolic keys, so `==` on them is symbolic: compare the values.
 p62a_same(a, b) = p62a_get(a, ownership) == p62a_get(b, ownership) && p62a_get(a, kind) == p62a_get(b, kind)
 
@@ -315,7 +321,7 @@ p62a_leaders(seed; misses = :retry, region = nothing) =
 
 @testset "P6.2a: InsertUntil stops at the ratio" begin
     for seed in 1:5
-        op, tallies = layout_tally(overlay(p62a_followers(), p62a_leaders(seed)), (24, 24))
+        op, tallies = p62a_tally(overlay(p62a_followers(), p62a_leaders(seed)), (24, 24))
         σ, kinds = p62a_get(op, ownership), p62a_get(op, kind)
         t = only(tallies)
         @test t.painted == 12 && t.counted == 12
@@ -326,12 +332,12 @@ p62a_leaders(seed; misses = :retry, region = nothing) =
         @test p62a_same(op, layout(overlay(p62a_followers(), p62a_leaders(seed)), (24, 24)))
     end
     # `number`: exactly n cells under :retry
-    op, tallies = layout_tally(overlay(p62a_followers(),
+    op, tallies = p62a_tally(overlay(p62a_followers(),
         InsertUntil(:leader; into = [:follower], number = 5, seed = 1)), (24, 24))
     @test count(==(:leader), p62a_get(op, kind)) == 5 && only(tallies).counted == 5
     # Already satisfied: a second layer counts the 12 leaders of the first (12 ≥ 48/4) and
     # draws nothing.
-    op, tallies = layout_tally(overlay(p62a_followers(), p62a_leaders(1), p62a_leaders(2)), (24, 24))
+    op, tallies = p62a_tally(overlay(p62a_followers(), p62a_leaders(1), p62a_leaders(2)), (24, 24))
     @test count(==(:leader), p62a_get(op, kind)) == 12
     @test tallies[2] == (; painted = 0, misses = 0, counted = 0)
     @test p62a_get(op, ownership) == p62a_get(layout(overlay(p62a_followers(), p62a_leaders(1)), (24, 24)), ownership)
@@ -376,7 +382,7 @@ end
 @testset "P6.2a: InsertUntil counted misses (CC3D ghosts, D-068)" begin
     # Draw over 24 × 48 while followers fill only the lower half: about half the draws miss.
     ts = map(1:20) do seed
-        op, tallies = layout_tally(overlay(p62a_followers(), p62a_leaders(seed; misses = :count)), (24, 48))
+        op, tallies = p62a_tally(overlay(p62a_followers(), p62a_leaders(seed; misses = :count)), (24, 48))
         t = only(tallies)
         ks = p62a_get(op, kind)
         @test count(==(:leader), ks) == t.painted                 # ghosts are never cells
@@ -394,15 +400,15 @@ end
     @test any(t -> t.counted > 12, ts)
     # The same draws under :retry paint the full quota.
     for seed in 1:20
-        t = only(last(layout_tally(overlay(p62a_followers(), p62a_leaders(seed)), (24, 48))))
+        t = only(last(p62a_tally(overlay(p62a_followers(), p62a_leaders(seed)), (24, 48))))
         @test t.painted == 12 && t.counted == 12
     end
 end
 
 @testset "P6.2a: InsertUntil is reproducible under a seed" begin
     l(seed) = overlay(p62a_followers(), p62a_leaders(seed; misses = :count))
-    a, ta = layout_tally(l(3), (24, 48))
-    b, tb = layout_tally(l(3), (24, 48))
+    a, ta = p62a_tally(l(3), (24, 48))
+    b, tb = p62a_tally(l(3), (24, 48))
     @test p62a_same(a, b) && ta == tb
     @test p62a_same(layout(l(3), (24, 48)), a)
     σs = [p62a_get(layout(l(s), (24, 48)), ownership) for s in 1:5]
@@ -422,12 +428,12 @@ end
     @test length(p62a_get(layout(slab, (500, 40)), kind)) == 1169
     # Several leaders in one follower can cut it in pieces, and `overlay` warns: silenced.
     quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
-    t = only(last(quiet(() -> layout_tally(seeding(1, :retry), (500, 40)))))
+    t = only(last(quiet(() -> p62a_tally(seeding(1, :retry), (500, 40)))))
     @test t.painted == 390 && t.counted == 390
     # Emulation: the spec's 20,000-run seeding simulation gives 7.9 ± 2.8 empty leaders and
     # inventory 390 in 96.1 % of runs (spec 10 §5.3.6; analytic Σ_{n<390} n/9481 ≈ 8.0).
     # 200 seeds: the mean miss count has SE 0.2, so ±1.0 is 5 SE; P(390) ≥ 0.9 is 4.5 SD.
-    ts = quiet(() -> [only(last(layout_tally(seeding(s, :count), (500, 40)))) for s in 1:200])
+    ts = quiet(() -> [only(last(p62a_tally(seeding(s, :count), (500, 40)))) for s in 1:200])
     @test abs(sum(t -> t.misses, ts) / 200 - 7.9) <= 1.0
     @test count(t -> t.counted == 390, ts) >= 180
     @test all(t -> t.painted + t.misses == t.counted && 390 <= t.counted <= 390 + t.misses, ts)

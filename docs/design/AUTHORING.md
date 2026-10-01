@@ -1058,10 +1058,12 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
   prob = PottsProblem(sys, op, (0, 100))              # or layout(…, sys): its lattice
   ```
 
-  - `Tiling(size; spacing = 0, region, kinds)`: whole boxes filling `region` (a tuple of
-    ranges; default the whole lattice) in column-major order; `kinds` is cycled. On a
-    periodic axis a last box closer than `spacing` to the first (through the wrap) is
-    skipped.
+  - `Tiling(size; spacing = 0, region, kinds, partial = :skip)`: boxes filling `region` (a
+    tuple of ranges; default the whole lattice) in column-major order; `kinds` is cycled.
+    `partial = :skip` places whole boxes only; `partial = :clip` also starts boxes up to the
+    end of the region and keeps the part of each inside region ∩ lattice (CompuCell3D
+    clips at the lattice only). On a periodic axis a last box closer than `spacing` to the
+    first (through the wrap) is skipped.
   - `Scattered(n, size; region, kinds, seed, gap = 1)`: `n` boxes at random positions, at
     least `gap` medium sites apart (Chebyshev; through the wrap on periodic axes; in axial
     coordinates on hex, which is conservative). Random sequential placement with
@@ -1086,29 +1088,41 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     the live cells, and those of `kind`, painted before the layer). The rule is checked
     before the first draw and after each hit only, so `:count` can overshoot by trailing
     misses. It throws when the region holds no allowed site or runs out of them.
-    `layout_tally(l, lat)` returns the point and one `(; painted, misses, counted)` per
-    `InsertUntil` layer.
   - `overlay(layers...)`: later layers overwrite earlier ones; ids follow layer order.
     Cells left with no site are dropped. Partly covered cells keep what remains, which can
     be disconnected pieces: `layout` warns, naming the cell, when the remaining sites are
     not connected under the lattice neighbourhood (linear time; cells still a box are
     skipped, and the lattice-sized visited array is allocated only for a flood fill).
+    Every built-in layer takes `splits = :warn | :allow`: a split cell is not warned about
+    when every layer that cut it (took one of its sites) has `splits = :allow`.
+  - `remake(l; kw...)` rebuilds a built-in layer with some keywords changed, through its
+    keyword constructor (so it validates): `remake(Scattered(…); seed = 2)`.
   - `layout(l, dims)`: `dims` means a closed square lattice with `Moore(1)`. For a
     hexagonal, periodic, domain or non-Moore lattice pass the `PottsSystem` (or
     `CompiledPottsSystem`): the layouts use its boundaries, neighbourhood, domain and
     geometry. A CorePotts `Lattice` also works but has no neighbourhood, so `Moore(1)` is
     assumed. On a lattice with a domain, no cell may cover a site outside it.
+  - `layout(l, x; report = true)` returns `(point, report)` (P6.1a6, D-091): one row per
+    leaf layer in paint order (an `overlay` contributes its flattened leaves), with `type`
+    (`nameof` the layer's type), `requested`, `painted` (cells created), `dropped` (of
+    those, cells left with no site), `misses` and `counted` (`InsertUntil`'s missed draws
+    and stop-rule count; `counted = painted` for other layers) and `splits` (cells cut only
+    by this layer that end up disconnected, whatever its `splits` setting).
   - Coordinates are lattice indices, so layouts are N-D. On a hexagonal lattice they are
     axial, and a box is a rhombus.
-  - **Adding a layout.** Subtype `AbstractLayout` and add one method,
-    `Potts.paint!(σ, kinds, l, lat)`. `paint!`, `LatticeSpec` and `core_lattice` are
-    declared `public` (so a layout in another package passes ExplicitImports'
-    qualified-access check), as are CorePotts' `shift`, `relation` and `embed`. `lat` is the model's `LatticeSpec`: `lat.dims`,
-    boundaries, `lat.neighborhood`, the domain mask `lat.domain` and `lat.geometry`;
-    `core_lattice(lat)` is the CorePotts `Lattice` for `shift`, `relation` and `embed`.
-    The method paints ids `length(kinds) + 1, …` over `σ` (`Int32`, 0 = medium) and
-    pushes their kinds. A random layout owns its seed, so adding a layer never changes
-    another layer's draws. Planned: Eden growth and splits, BrickWall, Chains, Spheres,
+  - **Adding a layout** (P6.1a6, D-091). Subtype `AbstractLayout` and add one method,
+    `Potts.paint!(op::Potts.LayoutState, l, lat)` (its return value is ignored). `op` is
+    opaque, used only through the accessors `new_cell!(op, kind) -> id` (the next id,
+    `ncells(op) + 1`), `assign!(op, x, id) -> sites written` (a site tuple or a box of
+    unit ranges), `owner(op, x)` (0 = medium), `kindof(op, id)`, `ncells(op)` and
+    `record!(op; requested, painted, misses = 0, counted = painted)` (the layer's report
+    row). The lattice is read only through `size(lat)`, `isperiodic(lat, d)` and
+    `indomain(lat, x)`; `core_lattice(lat)` is the CorePotts `Lattice` for `shift`,
+    `relation` and `embed`. All of these and `LayoutState`, `paint!` are declared `public`
+    (so a layout in another package passes ExplicitImports' qualified-access check), as
+    are CorePotts' `shift`, `relation` and `embed`. Ids are those of the paint so far;
+    cells with no site are dropped after the whole layout. A random layout owns its seed,
+    so adding a layer never changes another layer's draws. Planned: Eden growth and splits, BrickWall, Chains, Spheres,
     Fibres, Plane, FromImage/FromMask.
 - **PIFF import/export** (pure Julia).
 - **MorpheusML importer** (pure Julia, EzXML.jl + expression translation to Symbolics):

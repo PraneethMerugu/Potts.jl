@@ -54,8 +54,10 @@ const cluster = B.cluster
 export kind, cluster
 
 include("layouts.jl")
-export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout, layout_tally
-# the layout extension API: `Potts.paint!(σ, kinds, l, lat::LatticeSpec)`, `core_lattice(lat)`
-public paint!, core_lattice, LatticeSpec
+export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
+# the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
+# accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
+public paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,
+    core_lattice, LatticeSpec
 
 end
