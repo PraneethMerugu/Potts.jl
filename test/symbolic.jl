@@ -48,7 +48,7 @@ ctx_of(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations
         # self-check: ΔE equals H(after) − H(before)
         H0 = total_energy(sp, u)
         H1 = total_energy(sp, a)
-        worst_e = max(worst_e, abs(energy_change(sp, u, prop) - (H1 - H0)))
+        worst_e = max(worst_e, abs(energy_change(sp, u, prop) - (H1 - H0 + Potts._killing_credit(sp, u, prop, a))))
     end
     @test worst_h < 1e-9
     @test agree_c
@@ -138,7 +138,7 @@ end
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 5)); mcs = (0, 5), n = 300)
         a = deepcopy(u); a.σ[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     @test worst < 1e-9
     ds = map(1:4) do seed
@@ -175,7 +175,7 @@ function selfcheck(prob; n = 300)
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 3)); mcs = (0, 3), n)
         a = deepcopy(u); a.σ[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     return worst
 end
@@ -262,7 +262,7 @@ function edge_selfcheck(prob, rel; n = 600)
         prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
         a = deepcopy(u); a.σ[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
         linked_pairs += any(r -> CorePotts.linked(CorePotts.link_store(u.cell, r), prop.old, prop.new), (:bond, :tether))
     end
     return worst, linked_pairs
@@ -1976,7 +1976,7 @@ function site_selfcheck(prob, rel; n = 400, dH = (u, prop) -> energy_change(prob
         prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
         a = deepcopy(u); a.σ[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     return worst
 end

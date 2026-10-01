@@ -156,18 +156,28 @@ A partner with `volume == 0` (dead: it lost its last site to copies) is skipped,
 links contribute nothing until a boundary drops them (D-066 X3, item 5): its centroid
 would be 0/0. The skip tests the volume load the centroid uses anyway (one load, so a
 racing write cannot slip a zero in between). `old` and `new` own a site each, so they are
-alive. Device-safe: no allocation, no `throw`.
+alive.
+
+A killing copy (`old` owns one site, the target) removes `old`'s links: each edge of `old`
+contributes `-E(before)`, its pre-copy energy, and no post-copy term (D-083). So for every
+copy ΔH equals the change of the brute-force sum over links with two alive ends. The kill
+test reads the same volume load as `old`'s centroid. Device-safe: no allocation, no
+`throw`.
 """
 @inline link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F} = link_delta(T, cell, cell, ctx, prop, E)
 @inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal{N}, E::F) where {T, N, F}
     lat = ctx.lattice
     a, b = prop.old, prop.new
     dH = zero(T)
-    sa = a == 0 ? ntuple(_ -> zero(T), Val(N)) : centroid_shift(T, cell, lat, a, prop.x, -1)
-    sb = b == 0 ? ntuple(_ -> zero(T), Val(N)) : centroid_shift(T, cell, lat, b, prop.x, +1)
-    for (c, sc, other, so) in ((a, sa, b, sb), (b, sb, a, sa))
+    z = ntuple(_ -> zero(T), Val(N))
+    Va = a == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[a]
+    Vb = b == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[b]
+    kill = Va == 1                                    # the copy takes a's last site: a dies (D-083)
+    sa = (a == 0 || kill) ? z : centroid_shift(T, cell, lat, a, prop.x, -1)
+    sb = b == 0 ? z : centroid_shift(T, cell, lat, b, prop.x, +1)
+    for (c, Vc, sc, other, so) in ((a, Va, sa, b, sb), (b, Vb, sb, a, sa))
         c == 0 && continue
-        cc = centroid(T, cell, lat, c)
+        cc = _centroid(T, cell, lat, c, Vc)
         for k in 1:maxdegree(store)
             n = @inbounds store.links[k, c]
             n == 0 && continue
@@ -175,10 +185,14 @@ alive. Device-safe: no allocation, no `throw`.
             Vn = @inbounds cell.volume[n]
             Vn == 0 && continue                       # dead partner: skipped (D-066 item 5)
             cn = _centroid(T, cell, lat, n, Vn)
-            sn = n == other ? so : ntuple(_ -> zero(T), Val(N))
             before = _periodic_norm(T, lat, ntuple(d -> cc[d] - cn[d], Val(N)))
-            after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
-            dH += E(c, n, k, after) - E(c, n, k, before)
+            if kill && c == a                         # a's links die with it: E(before) → 0
+                dH -= E(c, n, k, before)
+            else
+                sn = n == other ? so : z
+                after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
+                dH += E(c, n, k, after) - E(c, n, k, before)
+            end
         end
     end
     return dH

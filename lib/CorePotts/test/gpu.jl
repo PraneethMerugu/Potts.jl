@@ -292,6 +292,45 @@ using Metal
         @test abs(mean(ds) - 12.0) < 2.5                            # the live spring still acts
     end
 
+    @testset "a killing copy removes the dying cell's links on Metal (P6.0r)" begin
+        # cell 2 owns one site, 22.5 from blob 1's centroid, on a spring of rest 3 and
+        # stiffness 1 (≈ 110 stretched). Dying costs it +λd = 50 (E = λd·v(v − 2)), growing
+        # +50, and medium contacts with it are free: at T = 1 only the killing copy, whose
+        # ΔH drops the spring (≈ 50 − 110), is ever accepted (D-083).
+        latK = Lattice((60, 30))
+        σK = zeros(Int32, 60, 30); σK[4:9, 12:17] .= 1; σK[29, 15] = 2
+        function dHK(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            E(v, c) = @inbounds(st.cell.kind[c]) == 2 ? p.λd * v * (v - 2) : p.λ * (v - p.V0)^2
+            S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
+            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+                   link_delta(Float32, st.cell, ctx, prop, S)
+        end
+        commitK!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        f = CPMFunction(dHK; commit! = commitK!, temperature = gg_temperature,
+            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
+        pK = (; J = SMatrix{3, 3, Float32}(0, 16, 0, 16, 2, 16, 0, 16, 2), λ = 1.0f0, V0 = 36.0f0, λd = 50.0f0,
+            T = 1.0f0, k = 1.0f0)
+        st(linkit) = (cell = merge(init_moments(σK, latK, 2), empty_links(1, 2; rest = Float32));
+            linkit && add_link!(cell, 1, 2; rest = 3.0f0); initial_state(σK, [1, 2]; cell))
+        p0 = PottsProblem(f, st(true), latK, (0, 20), pK)
+        li = LinearIndices(σK)
+        props = [Proposal(li[29, 15 + j], li[29, 15], (29, 15 + j), 1, Int32(0), Int32(2)) for j in (-1, 1)]
+        kill = Proposal(li[29, 15], li[30, 15], (29, 15), 1, Int32(2), Int32(0))
+        ctxK = (; lattice = latK, contact = p0.contact)
+        @test dHK(p0.u0, pK, kill, ctxK) < -40                       # the spring leaves with the cell
+        @test all(q -> dHK(p0.u0, pK, q, ctxK) > 30, props)          # growth never pays
+        for seed in 1:3
+            sol = solve(remake(p0; seed), CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1)
+            @test sol.retcode == ReturnCode.Success
+            @test sol.u[1].cell.volume[2] == 1 && sol.u[end].cell.volume[2] == 0
+            @test all(u -> u.cell.volume[1] > 0, sol.u)
+        end
+        # negative control: unlinked, the cell is never killed
+        free = PottsProblem(f, st(false), latK, (0, 20), pK; seed = 1)
+        @test all(u -> u.cell.volume[2] == 1, solve(free, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1).u)
+    end
+
     @testset "checkpoint continuation on Metal" begin
         σc, kc = blocks((48, 48), 6)
         latc = Lattice((48, 48))
