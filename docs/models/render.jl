@@ -45,24 +45,22 @@ function _fragment(lines, fragment, name)
     return [isempty(strip(l)) ? "" : l[(indent + 1):end] for l in body]
 end
 
-_format(v::AbstractVector) = join(v, " × ")
-_format(v) = string(v)
+# the paper-run video of each page (file stem in docs/src/assets/paper_runs/)
+const PAPER_RUN_STEMS = Dict("graner_glazier" => "graner_glazier", "merks" => "merks_vasculogenesis",
+    "akeeb" => "akeeb_invasion", "wortel_act" => "wortel_act", "openvt" => "openvt_monolayer")
 
-# the sidecar as one caption line: `paper` and `here` first, then the run's settings
-function _caption(meta)
-    order = ["paper", "here", "lattice", "mcs", "seed", "backend", "wall_time"]
-    ks = [k for k in order if haskey(meta, k)]
-    append!(ks, sort([k for k in keys(meta) if !(k in order) && !(meta[k] isa AbstractDict)]))
-    return "*" * join(["$(replace(k, '_' => ' ')): $(_format(meta[k]))" for k in ks], " · ") * "*"
-end
+# the sidecar's one-line `caption` entry (the other entries are provenance, not for readers)
+_caption(meta) = replace(strip(get(meta, "caption", "")), r"\s*\n\s*" => " ")
 
 function _paper_run(name)
-    video, sidecar = joinpath.(PAPER_RUNS, name .* (".mp4", ".toml"))
+    stem = get(PAPER_RUN_STEMS, name, name)
+    video, sidecar = joinpath.(PAPER_RUNS, stem .* (".mp4", ".toml"))
     if isfile(video)
         lines = ["```@raw html",
-            "<video src=\"../../assets/paper_runs/$name.mp4\" controls loop muted playsinline width=\"560\"></video>",
+            "<video src=\"../../assets/paper_runs/$stem.mp4\" controls loop muted playsinline width=\"560\"></video>",
             "```"]
-        isfile(sidecar) && push!(lines, "", _caption(TOML.parsefile(sidecar)))
+        caption = isfile(sidecar) ? _caption(TOML.parsefile(sidecar)) : ""
+        isempty(caption) || push!(lines, "", "*" * replace(caption, "*" => "\\*") * "*")
     else
         lines = ["!!! note \"Paper run\"", "    The video of the paper run is being generated and will appear here."]
     end

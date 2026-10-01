@@ -34,6 +34,7 @@ git clone https://github.com/PraneethMerugu/Potts.jl
 using Pkg
 Pkg.develop([PackageSpec(path = "Potts.jl/lib/CorePotts"), PackageSpec(path = "Potts.jl"),
              PackageSpec(path = "Potts.jl/lib/PottsModels"), PackageSpec(path = "Potts.jl/lib/MakiePotts")])
+Pkg.add("CairoMakie")   # a Makie backend, for figures and videos
 ```
 
 GPU runs use any KernelAbstractions backend (Metal is tested): load the backend package and
@@ -49,7 +50,7 @@ julia --project=docs docs/make.jl
 ```
 
 and open `docs/build/index.html`. It covers getting started, tutorials, the modelling
-language, and the published models, each reproduced from its public constructor.
+language, and the published models, each built step by step from its public constructor.
 
 ## History
 

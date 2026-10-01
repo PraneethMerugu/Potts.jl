@@ -228,6 +228,7 @@ fig
 # | Implementation | the Tissue Simulation Toolkit | the semantics of Artistoo, the authors' later reference code (Wortel et al. 2021): activity written on copy, decay after each MCS, geometric mean over the Moore neighbours of the same cell |
 # | Connectivity | used in the multicellular runs: a split is allowed when exactly two cells and no medium are on the ring | off by default; `connected = true` adds a rule that allows two cells on the ring whether or not medium is there too. It matters only with several cells |
 # | Run length | long tracks for speed and persistence statistics | one 1000-MCS track |
+# | Initial cell shape | not stated | a 22 × 22 square |
 #
 # The lattice, temperature, contact energies, area and perimeter constraints and the Act
 # parameters are the paper's amoeboid cell.

@@ -188,13 +188,13 @@ sol.stats.lifecycle.divisions
 
 # ## The run as a movie
 #
-# Leaders are blue, followers green, the matrix black; `boundaries = true` outlines each
-# cell:
+# Leaders are red and followers green, as in the paper's Fig. 4, on a white matrix;
+# `boundaries = true` outlines each cell:
 
 using MakiePotts, CairoMakie
 mkpath("akeeb") #hide
 record_potts("akeeb/invasion.mp4", sol; framerate = 15, title = "Leader–follower invasion", figure = (; size = (640, 420)),
-    plot = (; boundaries = true))
+    plot = (; boundaries = true, category_palette = [:red3, :forestgreen], medium_color = :white))
 nothing #hide
 
 # ```@raw html

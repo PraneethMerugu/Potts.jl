@@ -1,7 +1,10 @@
 # Build the documentation offline: `julia --project=docs docs/make.jl`.
-# Every `lib/PottsModels/reproductions/*.jl` is rendered by Literate into
-# `docs/src/published/` (generated, gitignored) and executed by Documenter.
-# `POTTS_FULL_REPRODUCTION=true` makes the tutorials run their full-size ensembles.
+#
+# The Models pages are rendered from the Literate scripts in `docs/models/` (see
+# `docs/models/render.jl`). The paper reproductions in `lib/PottsModels/reproductions/*.jl`
+# are not part of the site yet; `POTTS_DOCS_PUBLISHED=true` renders them by Literate into
+# `docs/src/published/` (generated, gitignored) and adds a "Published models" section.
+# `POTTS_FULL_REPRODUCTION=true` makes those pages run their full-size ensembles.
 using Documenter, Literate, TOML
 using Potts, CorePotts, PottsModels, MakiePotts
 
@@ -9,30 +12,33 @@ const SRC = joinpath(@__DIR__, "src")
 const REPRODUCTIONS = joinpath(dirname(@__DIR__), "lib", "PottsModels", "reproductions")
 const PUBLISHED = joinpath(SRC, "published")
 const MODELS = joinpath(SRC, "models")
+const WITH_PUBLISHED = get(ENV, "POTTS_DOCS_PUBLISHED", "false") == "true"
 
-for f in readdir(PUBLISHED)
+# stale generated pages would be built even when they are not in `pages`
+for f in (isdir(PUBLISHED) ? readdir(PUBLISHED) : String[])
     endswith(f, ".md") && rm(joinpath(PUBLISHED, f))
 end
 published = String[]
-for f in sort(readdir(REPRODUCTIONS))
-    endswith(f, ".jl") || continue
-    Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false)
-    push!(published, joinpath("published", splitext(f)[1] * ".md"))
+if WITH_PUBLISHED
+    for f in sort(readdir(REPRODUCTIONS))
+        endswith(f, ".jl") || continue
+        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false)
+        push!(published, joinpath("published", splitext(f)[1] * ".md"))
+    end
+    # the section's index page lists the generated pages
+    write(joinpath(PUBLISHED, "index.md"), """
+    # [Published models](@id published-models)
+
+    Each page reproduces one paper from the public constructor in `PottsModels`. The pages
+    are generated from the Literate scripts in `lib/PottsModels/reproductions/`. The docs
+    build runs a reduced ensemble; `POTTS_FULL_REPRODUCTION=true` runs the full one.
+
+    ```@contents
+    Pages = $(repr([basename(p) for p in published]))
+    Depth = 1
+    ```
+    """)
 end
-
-# the section's index page lists the generated pages
-write(joinpath(PUBLISHED, "index.md"), """
-# [Published models](@id published-models)
-
-Each page reproduces one paper from the public constructor in `PottsModels`. The pages
-are generated from the Literate scripts in `lib/PottsModels/reproductions/`. The docs
-build runs a reduced ensemble; `POTTS_FULL_REPRODUCTION=true` runs the full one.
-
-```@contents
-Pages = $(repr([basename(p) for p in published]))
-Depth = 1
-```
-""")
 
 # The "Models" section: rendered by `docs/models/render.jl` when it exists (its pages go to
 # `docs/src/models/`); otherwise `models/index.md` and every other `models/*.md` found at
@@ -45,21 +51,6 @@ elseif isdir(MODELS)
     isfile(joinpath(MODELS, "index.md")) ? ["models/index.md"; rest] : rest
 else
     String[]
-end
-
-"""
-    model_links(pairs...)
-
-Markdown for a "see also" line linking the per-model pages, used by the tutorials through
-`@eval` blocks: each `file => (id, text)` becomes `[text](@ref id)` when
-`docs/src/models/file` exists, and plain `text` otherwise (so the tutorials build with or
-without the Models section).
-"""
-function model_links(pairs::Pair...)
-    items = map(pairs) do (file, (id, text))
-        isfile(joinpath(MODELS, file)) ? "[`$text`](@ref $id)" : "`$text`"
-    end
-    return join(items, ", ")
 end
 
 # Names that a Models page documents with an `@docs` block; the API page leaves them out,
@@ -83,7 +74,7 @@ const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
 HTML for the committed full paper run of a published model: the video
 `docs/src/assets/paper_runs/<stem>.mp4` with a caption from its sidecar `<stem>.toml` (the
-`caption` entry, else its scalar entries as `key = value`). `prefix` is the path from the
+`caption` entry; the other entries are provenance). `prefix` is the path from the
 page's built location to the build root (`""` for `index.md`, `"../"` for a top-level page,
 `"../../"` for a page in a section folder, with pretty URLs). A missing video gives a short
 note instead. Used by the tutorials as `Main.paper_run(…) # hide` in an `@example` block.
@@ -93,18 +84,10 @@ function paper_run(stem::AbstractString, prefix::AbstractString = "")
     isfile(video) || return Base.Docs.HTML("<p><em>The full paper run of this model is being generated " *
                                            "and will appear here.</em></p>")
     side = joinpath(PAPER_RUNS, stem * ".toml")
-    caption = ""
-    if isfile(side)
-        meta = TOML.parsefile(side)
-        caption = get(meta, "caption", "")
-        if isempty(caption)
-            caption = join(("$k = $v" for (k, v) in sort!(collect(meta); by = first)
-                            if v isa Union{AbstractString, Number, Bool}), "; ")
-        end
-    end
+    caption = isfile(side) ? strip(get(TOML.parsefile(side), "caption", "")) : ""
     esc_html(s) = replace(String(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
     return Base.Docs.HTML("""<figure><video src="$(prefix)assets/paper_runs/$stem.mp4" controls loop muted playsinline width="480"></video>""" *
-                          "<figcaption>Full paper run. $(esc_html(caption))</figcaption></figure>")
+                          "<figcaption>$(esc_html(caption))</figcaption></figure>")
 end
 
 tutorials = [
@@ -144,12 +127,11 @@ pages = Any[
     "Home" => "index.md",
     "Getting started" => "getting_started.md",
     "Tutorials" => tutorials,
-    "Workshop" => "workshop.md",
-    "Manual" => manual,
 ]
 isempty(models) || push!(pages, "Models" => models)
+push!(pages, "Workshop" => "workshop.md", "Manual" => manual)
+WITH_PUBLISHED && push!(pages, "Published models" => ["published/index.md"; published])
 append!(pages, Any[
-    "Published models" => ["published/index.md"; published],
     "Coming from CompuCell3D or Morpheus" => "coming_from.md",
     "FAQ and common errors" => "faq.md",
     "API" => "api.md",

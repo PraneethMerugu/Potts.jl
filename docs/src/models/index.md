@@ -30,9 +30,9 @@ tutorial, and ends with the constructor that PottsModels ships for it.
    state or layout helpers. The test suite checks that the tutorial's model compiles to
    the same code, with the same defaults, as the shipped constructor, so the two cannot
    drift apart.
-5. **Reproduction.** Where a reproduction page exists, the model page links to it. A
-   reproduction runs the shipped constructor against the paper's figures, with a
-   deviations table and a validation table (see [Published models](@ref published-models)).
+5. **Paper run.** Each page shows a video of the shipped constructor run at the paper's
+   size and length. Full reproduction pages, which compare the model with the paper's
+   figures, are in preparation.
 
 ## The models
 

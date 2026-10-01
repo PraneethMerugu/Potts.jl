@@ -216,8 +216,7 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
     axis = (xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic boundary fraction"))
 
 # The fraction falls about linearly in the logarithm of time, the slow coarsening the
-# papers report (PRL Fig. 2, PRE Fig. 13). The reproduction page below compares it with
-# their figures.
+# papers report (PRL Fig. 2, PRE Fig. 13).
 #
 # ## Differences from the paper
 #
@@ -229,7 +228,7 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 # | Starting aggregate | relaxed as one kind for 400 paper MCS before the kinds are assigned (PRE §II D3) | Voronoi cells of mean area 40, not relaxed |
 # | Boundary | not stated | periodic, with a 10-site medium margin |
 # | Measurement | on a copy annealed for 2 paper MCS at ``T = 0`` (PRE p. 2134) | on the raw states |
-# | Target area per kind | one value, except the cavity run (PRE Fig. 28) | one `V₀`; per-kind targets for the cavity run are not yet expressible |
+# | Target area per kind | one value, except the cavity run (PRE Fig. 28) | one `V₀`; a per-kind table `V₀[kind]` gives the cavity run's targets |
 #
 # Every energy, parameter, neighbourhood and the temperature are the paper's.
 #
@@ -254,6 +253,6 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 #
 # ## Reproduction
 #
-# The page [Reproducing Graner & Glazier (1992)](../published/09_cell_sorting.md) runs
-# `GranerGlazier` against the papers' figures: the sorting time course, the engulfment end
-# state, partial sorting and a negative control.
+# A full reproduction page, which runs `GranerGlazier` against the papers' figures (the
+# sorting time course, the engulfment end state, partial sorting and a negative control),
+# is in preparation.
