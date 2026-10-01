@@ -5,6 +5,35 @@
   `julia -t auto --project=benchmark benchmark/graner.jl [seq|cpu|metal] [mcs] [scale]`
 - `benchmarks.jl` — BenchmarkTools `SUITE` (AirspeedVelocity-compatible) of the warm MCS.
 - `lib/PottsModels/data/graner/` — the pre-equilibrated 72² initial condition (64 cells).
+- `gate.jl` — the performance gate (D-053) against `baseline.toml`; run it under the machine
+  lock: `tools/exclusive.sh julia --project=benchmark benchmark/gate.jl metal`.
+- `ab.jl` / `ab_one.jl` — interleaved A/B of one gate case between two checkouts
+  (AUTONOMY §7.4); each run is a fresh `ab_one.jl` process that takes the lock itself.
+- `test/p6_0s_v7_tooling.jl` (frozen, D-090) and `test/exclusive_transition.jl` — tests of
+  the lock and of the gate's timing.
+
+### Device timings run to GPU completion (D-090)
+
+On a device backend `step!` only enqueues kernels. Every Metal timing in `gate.jl` and
+`ab_one.jl` is therefore `step!` followed by `KernelAbstractions.synchronize(backend)`
+(`timed_step!` in `gate.jl`), and each sample's setup synchronizes too, so no setup work is
+still in flight when the clock starts. CPU rows time `step!` alone and must allocate nothing.
+Before 2026-10-01 the Metal rows timed host enqueue only, so Graner–Glazier and Wortel read
+far below their GPU cost; the Metal rows of `baseline.toml` were re-measured once then (the
+CPU rows were left as they were). Metal A/B verdicts from before that date on those models
+say nothing about GPU cost, and an `ab.jl` run against a base checkout older than D-090
+compares enqueue time (base) with completion time (candidate).
+
+### The machine lock (`tools/exclusive.sh`, D-090)
+
+A FIFO ticket queue in front of the directory lock `/tmp/potts-exclusive.lock`. Each call
+takes a numbered ticket in `/tmp/potts-exclusive.q`; the lowest ticket is next and must
+still take the directory lock by `mkdir`, so it excludes holders of the earlier script
+(a bare `mkdir` loop polling every 20 s) as well. Waiters poll about once a second, so a run
+queued before an A/B gets the lock before the A/B's next round. A ticket or lock older than
+3 hours belongs to a dead process and no longer blocks; live waiters and holders refresh
+theirs. The command's exit status is passed through, and the ticket and lock are removed on
+exit, INT or TERM.
 
 The legacy rows below were measured with the since-removed `reference/` pin (D-048).
 
