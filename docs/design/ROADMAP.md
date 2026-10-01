@@ -258,7 +258,7 @@ Every item's acceptance also includes the standing checks:
   - StableRNG (Lehmer) streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. New code derives sub-stream seeds as `seed + k` (e.g. `akeeb_state`'s clocks use `StableRNG(seed + 1)`, the leader stream of `seed + 1`).
   - Fix: one internal helper (splitmix64 of `(seed, stream)`) used wherever a sub-stream seed is derived; changing `akeeb_state`'s clock seed changes its state, so revalidate the frozen `papers.jl` band as in P6.2a2.
   - Accept: consecutive top-level seeds give uncorrelated first draws of each sub-stream.
-- [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
+- [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
     - naming consistency, e.g. the `CPM*` names left after `PottsProblem` (`CPMAlgorithm`, `CPMFunction`, `CPMState`, `SequentialCPM`, `CheckerboardCPM`), and SciML/MTK conventions (D-075);
@@ -290,8 +290,20 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30) **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
 - [ ] **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): shapes and points scoped to 09/11 (`Sphere`, `RandomPoints`, `Voronoi(points; region, lloyd)`, `Center()`); the GeometryBasics decision (Q1: reuse only round shapes and `Point`, closed membership; index boxes stay ranges); `Voronoi` replaces `VoronoiBall` only if it reproduces its σ or D-063's area statistics (Q3); shape layers clip to the domain and report `clipped` (Q5, D-057 amendment).
   a core layout, next to the planned `Spheres`. It needs a DSL and export review, and moves
   the StableRNGs dependency to Potts only.
+- [ ] **P6.1a6** Layout protocol of D-075 (amends D-057): `paint!(op::LayoutState, l, lat)`, the layout report, `Tiling(partial)` and `splits`. From `research/initial-state-review.md` §4 (coordinator-adopted 2026-10-01; peer research from the user's "using morpheus as a heavy heavy inspiration"). Land before P6.0z.
+  - The public extension method becomes `paint!(op::LayoutState, l, lat)`; every layer is rewritten in the same change (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Overlay`, PottsModels' `VoronoiBall`). Public accessors `new_cell!`, `assign!`, `owner`, `kindof`, `ncells`, `record!`, plus lattice queries so no layer reads `LatticeSpec` fields. `paint!(σ, kinds, …)` and `layout_tally` are removed, no alias (D-028).
+  - `layout(l, x; report = true) -> (op, report)`: one row per leaf layer in paint order (`requested`, `painted`, `dropped`, `misses`, `counted`, `splits`).
+  - `Tiling(…; partial = :skip | :clip)`: `:clip` keeps boxes cut by region ∩ lattice; the docstring states the CC3D difference (CC3D clips at the lattice only).
+  - `splits = :warn | :allow` on every layer; a cell is exempt from the split warning only if every layer that cut it allows splits.
+  - `SciMLBase.remake(::AbstractLayout; kw...)` re-runs the keyword constructor (it throws today).
+  - `akeeb_layout = overlay(Tiling(…; partial = :clip), InsertUntil(…; splits = :allow))`; `_AkeebSlab` and the `NullLogger` in `akeeb_state` are deleted; the width check stays.
+  - Accept: Akeeb σ, kinds and painted/misses/counted byte-identical to today at 500×300 and 99×60, both seedings, ≥ 4 seeds (reproducer `/tmp/initstate-review/p1_akeeb_clip.jl`); `akeeb_state` emits no log record while an unrelated `@warn` inside a layer still surfaces; the custom test layer uses no `LatticeSpec` field; `remake(Scattered(…); seed = 2)` and `remake(InsertUntil(…); misses = :retry)` work and validate; re-freeze (D-060 style, assertions unchanged, API calls only) of `acceptance/p6_2a_akeeb_analysis.jl` and `acceptance/p6_2a2_akeeb_inventory.jl`; gate and fingerprints unchanged; Aqua, JET, ExplicitImports clean.
+  - Not in this row: `into`, `shortfall`, `set_column!`, `add_link!`, shapes.
+- [ ] **P6.1a7** `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
+  - Accept: σ identical to the pre-change version over a seed grid, closed and periodic (the dilation wraps), 2D, 3D and hex; 10⁴ cubes of 5³ at 200³ under 50 ms (≈ 480 ms today, `/tmp/initstate-review/p3_scattered_cost.jl`).
 - [ ] **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
   `PottsSystem`s for declarations named `x′`.
@@ -372,7 +384,9 @@ Every item's acceptance also includes the standing checks:
   - Accept: the absorbing frame keeps c = 0 on the ring after every substep.
   - Accept: PDE-before-sweep ordering is observable in a two-phase test.
 - [ ] **P6.3c** R2 `Eden` + splits.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Eden`, a host-routine `Splits` (not the lifecycle routine), `RandomPoints(replace = true)`, and `shortfall` with its first `:allow` consumer.
 - [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **pending the user's approval**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
@@ -397,6 +411,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, needs the maintainer's ratification.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
 ### Step 5 — Fortuna (14a/14b), 3D
@@ -414,6 +429,7 @@ Every item's acceptance also includes the standing checks:
   ownership hooks apply `clear_on_ownership_change`, and `@on_copy` never fires from the
   lifecycle (D-075 clarify). Fixes A-17.
 - [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, needs the maintainer's ratification.
 - [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
 
 ### Steps 6–12
