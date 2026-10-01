@@ -410,14 +410,14 @@ _splits(l::Scattered) = l.splits
 
 const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
 
-# The overlap test runs on an occupancy mask of the region (`occ`, offset `off`): a draw is
+# The overlap test runs on an occupancy mask of the region (`occ`, indexed from `first(r)`): a draw is
 # rejected iff a site of an earlier box of this layer lies in the draw's box grown by `gap`
 # on every side. Per axis this is exactly the Chebyshev rule `a + s + gap <= b || b + s + gap
 # <= a` (closed) or `δ - s >= gap && n - δ - s >= gap` with `δ = mod(b - a, n)` (periodic):
 # the grown window wraps on a periodic axis and covers the whole ring once `s + 2gap >= n`.
 # Only boxes of this layer count, as before: sites painted by earlier layers do not.
 #
-# The window along one axis as at most two pieces of `1:n`, each cut to the region `r` and
+# The window along one axis is at most two pieces of `1:n`, each cut to the region `r` and
 # shifted into mask indices.
 function _scatter_window(a, s, gap, n, wrap, r)
     lo, hi = a - gap, a + s - 1 + gap
@@ -469,8 +469,8 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
         placed = false
         for _ in 1:_SCATTER_ATTEMPTS
             o = map(r -> rand(rng, r), ranges)
-            _scatter_hit(occ, map((a, s, n, p, r) -> _scatter_window(a, s, l.gap, n, p, r), o, l.size, dims, per, reg)) &&
-                continue
+            win = map((a, s, n, p, r) -> _scatter_window(a, s, l.gap, n, p, r), o, l.size, dims, per, reg)
+            _scatter_hit(occ, win) && continue
             fill!(view(occ, map((a, s, r) -> (a - first(r) + 1):(a - first(r) + s), o, l.size, reg)...), true)
             corners[k] = o
             placed = true
