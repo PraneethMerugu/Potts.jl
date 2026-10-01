@@ -1690,3 +1690,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds: round 1 found host phases handed a cached `p` (stale after in-place writes); round 2 passes the live `p`, caches only the mask, and adds sentinel tests for the scanned read sets. R4 filed as P6.0v2b; the idle second sync under P6.0v3.
 - **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
 - **Gate: pass.** CPU 1.004–1.032. Metal rows all flagged together (1.32–1.89) under load; `ab.jl` against 3df39655 (6 rounds): Akeeb 0.991, OpenVT 0.959.
+
+## 2026-10-01 — P6.0w merged: sub-stream seeds through a stable mixer (D-093)
+
+- **The change.** `Potts._substream_seed(seed, stream)` (SplitMix64 of the seed and the stream name's FNV-1a id) derives every sub-stream seed; `akeeb_state`'s clocks use the `:clock` stream instead of `StableRNG(seed + 1)`. σ and kinds are unchanged; clocks differ per seed with the same law. `p6_2a2` re-frozen (oracle stream and a comment).
+- **Review.** One round; the coordinator replaced a seed re-pick in `mechanisms.jl` with a correct attribution (the clock reset marks exactly the cells that divided). Akeeb divisions over 80 seeds: mean 585.8, SD 18.7 (band 585.0 ± 3×16.4; no re-baseline).
+- **Merge checks.** PottsModels and Potts exit 0 (branch: also CorePotts, docs, Potts on Metal). No step-loop change; gate not rerun.

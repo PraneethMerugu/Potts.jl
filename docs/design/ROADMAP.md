@@ -264,7 +264,7 @@ Every item's acceptance also includes the standing checks:
 - **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers and zero GPU waits (counted or implicit) on Metal, on every gate model, lifecycle models included (D-089); event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
 - [ ] **P6.0x** A `gather` inside a cell-ODE rate allocates on every warm step (544–1408 B per MCS, e.g. `sum(volume[owner[n]] for n in Moore(1)(42))`), on base too (found by the P6.0n implementer). The ODE's `rhs` closure is heap-allocated and dispatched dynamically.
   - Accept: zero warm allocations for a cell ODE whose rate contains a gather, on both algorithms; fingerprints of models without one unchanged.
-- [ ] **P6.0w** Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
+- [x] **P6.0w** (merge, 2026-10-01; D-093) Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
   - StableRNG (Lehmer) streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. New code derives sub-stream seeds as `seed + k` (e.g. `akeeb_state`'s clocks use `StableRNG(seed + 1)`, the leader stream of `seed + 1`).
   - Fix: one internal helper (splitmix64 of `(seed, stream)`) used wherever a sub-stream seed is derived; changing `akeeb_state`'s clock seed changes its state, so revalidate the frozen `papers.jl` band as in P6.2a2.
   - Accept: consecutive top-level seeds give uncorrelated first draws of each sub-stream.
