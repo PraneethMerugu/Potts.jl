@@ -1603,3 +1603,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **Code.** 75 of 81 fingerprints unchanged; the 6 that changed use `integral(Pre)`. Published models unchanged.
 - **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
 - **Gate.** Under parallel-agent load CPU flagged Graner–Glazier and Wortel sequential (1.050, 1.055) and Metal flagged four cases (1.21–2.24). `ab.jl` against 8b953b6: Metal Wortel 0.985, Merks 0.986, OpenVT 1.015, Akeeb 0.618 (8 rounds; base drew the slow power state); CPU Graner–Glazier 1.005, Wortel 0.995 (6 rounds).
+
+## 2026-10-01 — P6.2a2 merged: `akeeb_state` on `InsertUntil` and StableRNG (D-082); GPU host-transfer rows (user)
+
+- **The change.** `akeeb_state = layout(akeeb_layout(...))` (follower slab + `InsertUntil` leaders), clocks from `StableRNG(seed + 1)`; `akeeb_layout` exported, with the counted inventory via `layout_tally` (D-082).
+- **Review.** Approved in round 1. 120-seed onset study: division onset unchanged (MCS 184.0 vs 186.1). The coordinator added lattice validation to `akeeb_layout` and fixed two test comments (5ec3e5a). Follow-up: P6.0w (sub-stream seeds through a stable mixer).
+- **Merge checks.** The first run failed at precompile: the main checkout's workspace Manifest lacked the new `Logging` stdlib dependency; `Pkg.resolve()` fixed it. Then PottsModels, docs and Potts exit 0.
+- **Gate: pass.** CPU 0.983–1.013 (Akeeb 0.996 / 1.013); Akeeb Metal 1.047. Three Metal flags on untouched models, `ab.jl` against 1554d56 (6 rounds): Graner–Glazier 0.959, Wortel 0.731, OpenVT 0.941.
+- **User (2026-10-01).** New ROADMAP rows P6.0v (GPU host-transfer audit and transfer counters), P6.0v1 (lifecycle on the device), P6.0v2 (ODE/`HostPhase` column-only copies), P6.0v3 (launch fusion and Metal codegen fixes), with the overall accept; P6.0d round 2 builds the frozen mask on the device. The sub-stream seed row is renumbered P6.0w.

@@ -1562,3 +1562,13 @@ session.
 - Generated code is unchanged for models without `integral(Pre(…))`: 75 of 81 fingerprints identical; the 6 that changed all use `integral(Pre)`.
 - Review: approved in round 1; the coordinator corrected the AUTHORING wording and the mixed-integral hint. Follow-ups: P6.0t (refresh waste), P6.0u (temperature location nit).
 
+## D-082 P6.2a2: `akeeb_state` on `InsertUntil` and StableRNG (2026-10-01, P6.2a2; amends D-068, D-075)
+
+- **Construction.** `akeeb_state` is `layout(akeeb_layout(...))`: an internal follower-slab layer (`_AkeebSlab`, using the D-057 `paint!` API, because `Tiling` cannot express the clipped right column with x-fastest ids) overlaid with `InsertUntil(:leader; into = [:follower], fraction = 1//4, misses = :count | :retry, region = (2:X, 2:slab−1))`, plus clocks from `StableRNG(seed + 1)` with the old recipe. `akeeb_layout` is exported and validates the lattice (width, rank, height above the slab).
+- **Counted inventory.** `only(last(layout_tally(akeeb_layout(...), lattice)))`.
+- **Split warning.** The overlay's split-cell warning is expected for the published slab; `akeeb_state` silences it with `Logging.with_logger(NullLogger())`, which would also hide any other log raised inside that `layout` call (none today; errors still throw).
+- **Same law as before.** MersenneTwister → StableRNG leaves the 99×60 division onset unchanged (120 seeds each): first division at MCS 184.0 ± 20.4 vs 186.1 ± 20.3; no division by MCS 200 in 28/120 seeds for both; 48.8 vs 49.4 divisions by MCS 300. The smoke tests move from 200 to 300 MCS, removing a latent flake of about 23 % per seed.
+- **Published ensemble.** Under StableRNG 589.7 ± 14.7 divisions (seeds 1:40, range 557–616), inside the frozen band [535.8, 634.2]; seed 1 gives 595 divisions and 196 singles.
+- **Gate.** `akeeb_99x60` warm cost unchanged in-process (ratio ≤ 1.006); no re-baseline.
+- **Known limitation.** StableRNG streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. No coupling was measurable here (3000 seeds), but sub-stream seeds should come from a stable mixer, not `seed + k`: P6.0w.
+

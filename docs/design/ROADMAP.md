@@ -235,6 +235,29 @@ Every item's acceptance also includes the standing checks:
   - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
   - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
   - The temperature's `integral(Pre)` error lacks its "in @sweep" location (P6.0m3 review nit).
+- [ ] **P6.0v** GPU host-transfer audit and instrumentation (user, 2026-10-01). Goal: every synchronize, device↔host copy or host-side work during a Metal MCS is either unavoidable or removed.
+  - **Audit** `docs/design/research/gpu-host-transfer-audit.md`: every `synchronize`, `Array(…)`, `_snapshot`, `_readback`, host↔device `copyto!`, and every host loop over sites or cells that runs during `step!` on a non-CPU backend, in CorePotts, Potts and the generated code. Per entry: when it fires (every MCS / event MCS / setup), how much it moves (O(1), O(events), O(cells), O(cells × quantities), O(sites)), whether it is necessary, and the device-side replacement. Measure before assuming (Akeeb: 185 ns/site Metal vs 47 CPU).
+  - **Codegen quality on Metal** (same document): kernel launches per MCS and phases that could be fused; Float64 leaking into Float32 kernels; dynamic dispatch, allocations or boxed values in device code; redundant per-MCS passes over all sites (e.g. P6.0t).
+  - **Known starting points** (verify; not complete):
+    1. Lifecycle on an event MCS (`lib/CorePotts/src/lifecycle.jl:274-403`): host-planned divisions copy down `events`, `volume`, `cluster`; every cell column is copied down, edited and copied back (`_copy_columns!`); `generation` round-trips; `σ` and all trackers come down for `rebuild_trackers!` (host O(sites) recompute); `volume` comes down again to count empty daughters.
+    2. P6.0d's `refresh_frozen!` copies the whole state to rebuild a Bool mask, even for a domain-only mask. **Handled in P6.0d round 2** (device kernel for the standard rule, host hook only as fallback, skip when no kind is frozen).
+    3. `_AdaptiveODE` (`src/codegen.jl:591-599`) copies the whole state and `p` to the host every MCS it runs; it needs only the ODE columns.
+    4. `HostPhase` (`relationships.jl:222-229`) copies the whole state down and every cell column back up; copy only the columns it reads and writes.
+    5. The lifecycle trigger readback (`lifecycle.jl:281-282`): confirm it is the only synchronize on a quiet MCS.
+  - **Instrumentation:** route every device→host and host→device transfer and every synchronize in the step path through one helper that counts transfers and bytes in `integ.stats` (as `stats.launches` counts launches).
+  - The implementation is split into P6.0v1–P6.0v4; the audit assigns each entry to one of them, files it as its own row, or justifies it as unavoidable.
+  - Accept: the audit document with every entry classified; the transfer counters exist and count exactly on a fixture with known transfers (CPU: always zero); on Metal, a quiet MCS of every gate model reports its current transfers (recorded in the audit as the baseline).
+- [ ] **P6.0v1** Lifecycle on the device (after P6.0v). Daughter column copies run as a device kernel; trackers update on the device (or incrementally from the partition kernel's changes); no host O(sites) or O(cells × quantities) work on an event MCS.
+  - Accept: on Metal, total host traffic on an event MCS is O(events): bytes independent of lattice size and of the number of cell quantities, on a division fixture scaled in both; Akeeb Metal improves measurably in `ab.jl` against the pre-change base; results unchanged up to floating-point differences ordinary tests allow (D-048).
+- [ ] **P6.0v2** ODE and `HostPhase` column-only copies (after P6.0v). `_AdaptiveODE` and `HostPhase` move only the columns they read and write, or run on the device.
+  - Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale with the columns used, not with all cell quantities; results unchanged up to floating-point tolerance.
+- [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first).
+  - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
+- **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers on Metal apart from the single lifecycle event-count readback when the model has a lifecycle, on every gate model; event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
+- [ ] **P6.0w** Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
+  - StableRNG (Lehmer) streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. New code derives sub-stream seeds as `seed + k` (e.g. `akeeb_state`'s clocks use `StableRNG(seed + 1)`, the leader stream of `seed + 1`).
+  - Fix: one internal helper (splitmix64 of `(seed, stream)`) used wherever a sub-stream seed is derived; changing `akeeb_state`'s clock seed changes its state, so revalidate the frozen `papers.jl` band as in P6.2a2.
+  - Accept: consecutive top-level seeds give uncorrelated first draws of each sub-stream.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -311,7 +334,7 @@ Every item's acceptance also includes the standing checks:
   unchanged, no alias; `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`. Every
   package, test, benchmark and tutorial is updated in the same change. Accept: all suites
   pass, the gate is unchanged, and no `CPMProblem` remains outside DECISIONS and PROGRESS.
-- [ ] **P6.2a2** Refactor `akeeb_state` onto `InsertUntil` (`misses = :count`, `fraction = 1//4`)
+- [x] (merge, 2026-10-01; D-082) **P6.2a2** Refactor `akeeb_state` onto `InsertUntil` (`misses = :count`, `fraction = 1//4`)
   and expose the counted inventory (spec 10 V-A1(a)). This changes the RNG stream from
   MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
   StableRNG only (D-075): the `clock`/`cue` expression defaults move to P6.4a.
