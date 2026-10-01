@@ -51,7 +51,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         field_solver === nothing && throw(ArgumentError(
             "model `$(nameof(sys))` has the field$(length(fields) == 1 ? "" : "s") " *
             "$(join(("`$n`" for n in fields), ", ")), so `PottsProblem` needs `field_solver = ExplicitEuler(; substeps, lower)` " *
-            "(no default, D-075; a published model's docstring gives its value)"))
+            "(no default; a published model's docstring gives its value)"))
         field_solver isa ExplicitEuler || throw(ArgumentError(
             "`field_solver` takes an `ExplicitEuler(; substeps, lower)`; got $(repr(field_solver))"))
     end

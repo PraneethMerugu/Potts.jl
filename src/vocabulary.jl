@@ -636,7 +636,7 @@ end
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
     for k in keys(kwargs)
         k in (:field_solver, :ode_solver, :solvers) && throw(ArgumentError(
-            "`@sweep` no longer takes `$k` (D-075): pass it to the problem, " *
+            "`@sweep` no longer takes `$k`: pass it to the problem, " *
             "`PottsProblem(sys, op, tspan; $k = …)`"))
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *

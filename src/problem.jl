@@ -87,7 +87,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     end
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
-        "`expression = Val(true)` is not supported (D-014); use `Potts.generated_code(sys; T)` to inspect the code"))
+        "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
     st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
