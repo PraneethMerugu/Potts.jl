@@ -26,14 +26,26 @@ _code_hash(exprs, h::UInt = zero(UInt)) =
 
 # Symbolics orders the terms of a sum or product by hashes that involve function identities,
 # so the operand order of generated `+`/`*` calls can differ between builds of the same
-# source. The fingerprint reads them in a canonical order (by printed operand): the same
-# model on another checkout or build fingerprints alike (operand order changes rounding
-# only, not the model).
+# source, and so can their grouping into nested binary calls. The fingerprint reads them
+# flattened across same-operator nesting and in a canonical order (by printed operand): the
+# same model on another checkout or build fingerprints alike (order and grouping change
+# rounding only, not the model).
 function _commutative_order!(ex)
     ex isa Expr || return ex
     foreach(_commutative_order!, ex.args)
     if ex.head === :call && length(ex.args) > 2 && any(f -> ex.args[1] === f, (:+, :*, +, *))
-        sort!(view(ex.args, 2:length(ex.args)); by = string)
+        op = ex.args[1]
+        flat = Any[]
+        for a in @view ex.args[2:end]
+            if a isa Expr && a.head === :call && length(a.args) > 2 && a.args[1] === op
+                append!(flat, @view a.args[2:end])
+            else
+                push!(flat, a)
+            end
+        end
+        sort!(flat; by = string)
+        resize!(ex.args, 1)
+        append!(ex.args, flat)
     end
     return ex
 end

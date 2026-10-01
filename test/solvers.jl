@@ -227,6 +227,10 @@ end
     # Symbolics' term order is build dependent: sums and products hash in a canonical order
     @test Potts._code_hash([:(f(x) = (+)(a, (*)(-1, b), c))]) == Potts._code_hash([:(f(x) = (+)(c, a, (*)(b, -1)))])
     @test Potts._code_hash([:(f(x) = (-)(a, b))]) != Potts._code_hash([:(f(x) = (-)(b, a))])
+    # regrouping of nested sums/products is read flattened (Symbolics' grouping is build-dependent)
+    @test Potts._code_hash(Any[:(x + (y + z))]) == Potts._code_hash(Any[:(y + (z + x))])
+    @test Potts._code_hash(Any[:(a * (b * c))]) == Potts._code_hash(Any[:((c * a) * b)])
+    @test Potts._code_hash(Any[:(a * (b + c))]) != Potts._code_hash(Any[:(a * b + c)])   # nesting across operators kept
 end
 
 @testset "states given as such are laid out for the scratch (remake, reinit!)" begin

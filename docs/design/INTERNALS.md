@@ -320,7 +320,7 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
   keywords resolved in Potts (`src/solvers.jl`: `_resolve_solvers` → `SolverSpec`, one
   solver per integrated variable by name) and compiled at the one codegen point
   (`_problem_function` → `_phases`): each field's `FieldStep` takes its `ExplicitEuler`;
-  the cell and model ODEs are grouped by solver (`_ode_groups`, `isequal` of the resolved
+  the cell and model ODEs are grouped by solver (`_ode_groups`, by the canonical string of the resolved
   objects), one phase per group (a fixed-step `CellPhase`/`ModelPhase`, or a host
   `_AdaptiveODE`). A model whose ODEs share one solver generates exactly the code it did
   before. Nothing reaches CorePotts algorithm types (D-046). The fingerprint seed adds the
