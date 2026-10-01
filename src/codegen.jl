@@ -20,7 +20,7 @@ function _recording(f)
     return r, log
 end
 
-"""Hash of generated code, independent of line numbers and the install path (D-016)."""
+"""Hash of generated code, independent of line numbers and the install path."""
 _code_hash(exprs, h::UInt = zero(UInt)) =
     foldl((h, ex) -> hash(string(_commutative_order!(_strip_lines!(deepcopy(ex)))), h), exprs; init = h)
 
@@ -1182,7 +1182,7 @@ struct _VacatedEnergy end     # `PottsModelInfo.cache` key of the compiled `_vac
 """
     Potts._killing_credit(prob, u, prop, a)
 
-Self-check credit of copy `prop` from state `u` to state `a` (D-083): the energy that leaves
+Self-check credit of copy `prop` from state `u` to state `a`: the energy that leaves
 `H` with the cell the copy kills (`prop.old` owned one site), or zero when it kills none, so
 that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
 credit` for every copy. Internal, host.

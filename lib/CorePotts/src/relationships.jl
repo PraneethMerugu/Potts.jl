@@ -153,13 +153,13 @@ links from `store` (default: `cell` itself); a model with several relationships 
 call per store.
 
 A partner with `volume == 0` (dead: it lost its last site to copies) is skipped, so its
-links contribute nothing until a boundary drops them (D-066 X3, item 5): its centroid
+links contribute nothing until a boundary drops them: its centroid
 would be 0/0. The skip tests the volume load the centroid uses anyway (one load, so a
 racing write cannot slip a zero in between). `old` and `new` own a site each, so they are
 alive.
 
 A killing copy (`old` owns one site, the target) removes `old`'s links: each edge of `old`
-contributes `-E(before)`, its pre-copy energy, and no post-copy term (D-083). So for every
+contributes `-E(before)`, its pre-copy energy, and no post-copy term. So for every
 copy ΔH equals the change of the brute-force sum over links with two alive ends. The kill
 test reads the same volume load as `old`'s centroid. Device-safe: no allocation, no
 `throw`.
@@ -209,7 +209,7 @@ concurrent copy move a partner whose centroid this copy reads). As shared `reads
 copies that only read a partner commit together; as exclusive `claims` (also exact), a
 linked component commits at most one copy per color (observed: spring relaxation ~2×
 slower in MCS; a chain linked by two relationships slower still). Omitting them reads
-partner centroids up to one color stale (a D-029-style trade, the user's choice).
+partner centroids up to one color stale (a speed-for-accuracy trade, the user's choice).
 """
 @inline function link_claims(cell, prop, ::Val{D}) where {D}
     a, b = prop.old, prop.new

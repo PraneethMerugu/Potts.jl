@@ -87,7 +87,7 @@ end
 
 The mean site coordinate (lattice indices, with no unwrapping across periodic boundaries)
 of each cell `1:maximum(σ)`; `NaN`s for an id that owns no site. (Unlike the model-level
-reading of a dead slot, which is 0 under D-066, a missing cell is NaN here so it cannot pass
+reading of a dead slot, which is 0, a missing cell is NaN here so it cannot pass
 as a real position.)
 """
 function centroids(σ::AbstractArray{<:Integer, N}) where {N}

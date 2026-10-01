@@ -4,7 +4,7 @@
 """
     DiscreteBlock
 
-A discrete-time (clocked, `Shift`) MTK component lowered into Potts terms (D-065 Q9, P6.0k):
+A discrete-time (clocked, `Shift`) MTK component lowered into Potts terms:
 one tick replaces every slot (`slots[j]`, a cell or model variable holding the node's latest
 value) by `next[j]`, an expression of the pre-tick state (Jacobi reads: every `next` sees the
 values before the tick). A tick follows MCS `m` when `(m + 1 - offset) % every == 0` (MTK

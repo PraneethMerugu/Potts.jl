@@ -171,7 +171,7 @@ const NO_PHASES = Phases((), (), (), ())
 
 """
 Enqueue every phase; returns the number of launches. `stats` (the integrator's
-`PottsStats`, or `nothing`) counts the host transfers of phases that make them (D-085).
+`PottsStats`, or `nothing`) counts the host transfers of phases that make them.
 """
 _run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing) =
     sum(ph -> _run_phase(ph, st, p, ctx, key, mcs, backend, stats), phases; init = 0)

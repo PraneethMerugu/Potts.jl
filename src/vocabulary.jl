@@ -221,7 +221,7 @@ _displacement(c) = Num[_displacement(c, k) for k in 1:_lattice_dim()]
 
 """
 `integral(x)`: the sum of the site expression `x` over the cell's sites (cell scope; divide
-by `volume` for the mean). Read in an update block it is fresh (D-042): it reflects the
+by `volume` for the mean). Read in an update block it is fresh: it reflects the
 state after the copy sweep, and the new value of every variable of `x` written bare in the
 same block (the reading update runs after the writer, and the integral is recomputed in
 between). Recomputed at the start of the after-MCS phases, after each update that writes
@@ -253,8 +253,7 @@ _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1"))
 """
 `_nonzero(x)`: a Boolean node of a discrete component read from its slot (stored in the
 model's scalar type as exact 0/1): `true` unless the stored value is zero. Symbolically it
-has symtype `Bool`, so it stands in for the MTK `Bool` variable in the component's rules
-(P6.0k).
+has symtype `Bool`, so it stands in for the MTK `Bool` variable in the component's rules.
 """
 _nonzero(x::Real) = !iszero(x)
 _nonzero(x::Bool) = x
@@ -377,7 +376,7 @@ struct ContactDomain
 end
 struct SiteDomain end
 struct CopyDomain end
-"""Compartment clusters (D-036) whose root cell is of `kinds`: `clusters(k) => E(cluster_volume, …)`."""
+"""Compartment clusters whose root cell is of `kinds`: `clusters(k) => E(cluster_volume, …)`."""
 struct ClusterDomain
     kinds::Vector{Int}
 end
@@ -413,7 +412,7 @@ a constraint over the proposal-scope connectivity values, applied when the losin
 `kinds`:
 
 - `rule = :local`: `local_components == 1`, the losing cell's sites around the target form
-  exactly one piece (CompuCell3D `Connectivity`, which rejects `!= 1`; D-074). Zero pieces
+  exactly one piece (CompuCell3D `Connectivity`, which rejects `!= 1`). Zero pieces
   (the cell's last site, an isolated fragment) is rejected, so a cell under this rule
   cannot die by copies;
 - `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, at most one arc of the
@@ -539,7 +538,7 @@ struct Split end
 
 divide(d::Union{typeof(cells), typeof(clusters)}, args...; kw...) = divide(_domain(d), args...; kw...)
 """
-The cadence of a rule (P6.0f) from its positional `Every(n)` or its `every = n` keyword (at
+The cadence of a rule from its positional `Every(n)` or its `every = n` keyword (at
 most one of them; default 1), and the other positional arguments. Every rule that takes a
 cadence (`@divide`, `@link`/`@unlink`, and future lifecycle rules) parses it here.
 """
@@ -595,9 +594,9 @@ Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neig
 
 Explicit Euler over one MCS in `substeps` steps, clipping the result at `lower` after every
 step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
-`PottsProblem` keyword, D-075), `substeps = nothing` derives the stable count from the
-diffusion coefficient and an explicit `n` is a minimum; as an `ode_solver` (the default,
-D-038), `nothing` is one step.
+`PottsProblem` keyword), `substeps = nothing` derives the stable count from the
+diffusion coefficient and an explicit `n` is a minimum; as an `ode_solver` (the default),
+`nothing` is one step.
 """
 Base.@kwdef struct ExplicitEuler
     substeps::Union{Nothing, Int} = nothing
@@ -626,7 +625,7 @@ Base.@kwdef struct RK4
 end
 
 """The sweep protocol: acceptance law, temperature expression and MCS duration. The solvers
-are `PottsProblem` keywords (D-075), not part of the model."""
+are `PottsProblem` keywords, not part of the model."""
 struct SweepSpec
     law::Symbol
     temperature::Any          # copy scope, or cell scope (`T[kind]`, a cell variable)
@@ -659,8 +658,7 @@ Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 
 `copy => -strength * (r(c[target]) - r(c[source]))` with a response `r` applied to each
 concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)` =
-`c/(s c + 1)`, or any function), on the copies where the copy condition `when` holds
-(D-075):
+`c/(s c + 1)`, or any function), on the copies where the copy condition `when` holds:
 - the default `when = new != 0` acts when the gaining cell is a cell, so a retraction
   (`new == 0`) gets 0;
 - `when = true` acts on every copy, retractions included; any other condition selects
@@ -698,7 +696,7 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
 """
     PottsParameters
 
-The parameter object of a generated problem (D-012): an isbits wrapper of a `NamedTuple` of
+The parameter object of a generated problem: an isbits wrapper of a `NamedTuple` of
 scalars and kind tables in the model's scalar type. `p.λ` reads a parameter (generated code
 does this); `remake(prob; p = [λ => 2.0])` changes values without changing the type, so
 nothing recompiles.
