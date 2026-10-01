@@ -512,7 +512,10 @@ function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i:
     return _finish_parameters(info, p, q, Set([i]))
 end
 
-CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
+# `[frozen]` kinds: the mask follows the kinds, by CorePotts' standard rule (built on the
+# device after lifecycle events, D-081; `frozen_varies` follows from it)
+CorePotts.frozen_kinds(info::PottsModelInfo) =
+    isempty(info.csys.sys.frozen_kinds) ? nothing : Tuple(Int32.(info.csys.sys.frozen_kinds))
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch

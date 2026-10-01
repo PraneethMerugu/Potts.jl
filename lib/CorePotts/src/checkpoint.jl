@@ -25,6 +25,7 @@ end
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
+    _flush_counts!(integ)                           # exact `stats.attempts` in the checkpoint
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
         prob.repeat, _adapt_host(integ.stats, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
 end
@@ -66,8 +67,8 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
         "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))$(_key_difference(integ.state, u0))); " *
         "use `remake` and `init`"))
-    _reset_mobility!(integ.ctx.mobility, mobility(remake_frozen(integ.f.sys, integ.prob, u0), integ.prob.lattice))
     _copy_state!(integ.state, u0)
+    refresh_frozen!(integ)          # the frozen mask of the new state (static masks: nothing to do)
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)
@@ -97,13 +98,3 @@ _same_shape(a::AbstractArray, b) = b isa AbstractArray && size(a) == size(b)
 _same_shape(a::NamedTuple, b) = b isa NamedTuple && keys(a) == keys(b) && all(k -> _same_shape(a[k], b[k]), keys(a))
 _same_shape(a::CPMState, b) = false
 _same_shape(a::CPMState, b::CPMState) = all(f -> _same_shape(getfield(a, f), getfield(b, f)), fieldnames(CPMState))
-
-# The mobility of a reinitialized state: storage is reused, so the frozen sites may move but
-# their number must stay (it sizes the proposal draw).
-_reset_mobility!(::AllMobile, ::AllMobile) = nothing
-function _reset_mobility!(m::MaskMobility, new::MaskMobility)
-    m.n == new.n || throw(ArgumentError("reinit!: the number of frozen sites changed; use `remake` and `init`"))
-    copyto!(m.frozen, new.frozen); copyto!(m.sites, new.sites)
-    return nothing
-end
-_reset_mobility!(m, new) = throw(ArgumentError("reinit!: the frozen sites changed; use `remake` and `init`"))

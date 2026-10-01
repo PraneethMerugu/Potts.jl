@@ -462,6 +462,39 @@ did not fire, never writes the daughters' state, even when it names the same kin
 Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 `Redraw(dist)`; the default is `Copy()`.
 
+**Frozen kinds follow the lifecycle (P6.0d, D-081).** The sites of cells of `[frozen]`
+kinds never change owner. The mask is recomputed after every MCS that had a lifecycle
+event (transition, division, removal), so a cell that becomes frozen stops moving from the
+next sweep, a released cell moves, and a removed frozen cell's sites become mobile. It is
+built on the integrator's backend by one kernel (a site is frozen when its owner's kind is
+frozen or it lies outside the domain); MCS without events, and models without a frozen
+kind (a domain alone included), pay nothing. On a device the refresh adds no
+synchronization: the mask is current for the next sweep at once, and its counts travel
+with the next lifecycle read-back. `stats.refreshes` counts the recomputations.
+
+`stats.attempts` is the sum over MCS of the number of mobile sites at that MCS's sweep,
+which may reach zero mid-run (the MCS then makes no attempt). On the CPU it is exact after
+every `step!`. On a device, after an MCS with a lifecycle event the new count is learned
+at the next MCS on which the lifecycle runs; the MCS in between are added with the old
+count and corrected then. So it is exact whenever `solve!` returns, at `checkpoint`, after
+`refresh_frozen!`/`reinit!`, and after any `step!` on which the lifecycle ran; between
+those it may lag by the change of one refresh.
+
+State written outside the lifecycle:
+- `setu`/`set_state!` on `kind` refreshes the mask itself.
+- A `DiscreteCallback` that writes `integrator.state.cell.kind` directly must call
+  `refresh_frozen!(integrator)` or SciML's `u_modified!(integrator, true)`; otherwise the
+  change reaches the mask at the next lifecycle event.
+- `reinit!` recomputes the mask and accepts a state with a different number of frozen
+  sites.
+- `frozen_sites(prob, u)` is the mask of a saved state (MakiePotts draws each frame's
+  obstacles from it).
+
+```julia
+freeze = DiscreteCallback((u, t, integ) -> t == 100,
+    integ -> (integ.state.cell.kind[3] = 2; u_modified!(integ, true)))   # kind 2 is `wall[frozen]`
+```
+
 ### Relationships
 
 A model declares any number of named relationships (P6.0b). Each has its own link store,

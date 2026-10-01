@@ -36,7 +36,7 @@ function p60vx_divide_problem(; T = Float64, tspan = (0, 4))
 end
 
 """Hand count of the event MCS of the division fixture on a device backend, from
-`run_lifecycle!` and `rebuild_trackers!` (lifecycle.jl, as of 1554d56). `u0` is the
+`run_lifecycle!` and `rebuild_trackers!` (lifecycle.jl, as of 1554d56 + P6.0d ee2331b). `u0` is the
 problem's host state, whose arrays have the device arrays' sizes. Returns
 `(syncs, transfers, bytes)`: (2, 18, 1098) at capacity 6 on 16×8 with Float32."""
 function p60vx_division_counts(u0)

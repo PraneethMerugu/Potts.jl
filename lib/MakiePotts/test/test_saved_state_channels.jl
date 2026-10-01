@@ -115,3 +115,35 @@ end
         channels = (RenderChannel(site_key, valid_site),),
     )
 end
+
+# P6.0d (D-081): a solution's frames draw each saved state's own obstacles. A frozen cell
+# released at MCS 5 leaves its sites; they are medium, not obstacles, in the last frame.
+struct _ReleasedFrozenKind
+    k::Int32
+end
+CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
+
+@testset "solution frames follow a frozen mask that changes during the run" begin
+    kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
+    function dH(st, p, prop, ctx)
+        J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+        return CorePotts.contact_delta(st.σ, ctx, prop, J) +
+               CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    end
+    lat = CorePotts.Lattice((30, 30))
+    σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
+    st = CorePotts.with_capacity(CorePotts.initial_state(σ, Int32[1, 2]; cell = CorePotts.init_moments(σ, lat, 2)), 2)
+    release = CorePotts.Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 5 && c == 2 ? CorePotts.EVENT_TRANSITION : CorePotts.EVENT_NONE;
+        kind = (st, p, ctx, key, mcs, c) -> Int32(1))
+    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T, lifecycle = release, sys = _ReleasedFrozenKind(2))
+    p = (; J = [0.0 16 16; 16 2 11; 16 11 14], λ = 1.0, V0 = 40.0, T = 10.0)
+    sol = CorePotts.solve(CorePotts.PottsProblem(f, st, lat, (0, 40), p; frozen = σ .== 2), CorePotts.SequentialCPM())
+    obstacles(fr) = count(o -> o.kind === MakiePotts.ObstacleSite, fr.owners)
+    @test CorePotts.frozen_sites(sol.prob, sol.u[1]) == (σ .== 2)
+    @test CorePotts.frozen_sites(sol.prob, sol.u[end]) == falses(30, 30)
+    @test obstacles(renderframe(sol)) == 0                      # released: no obstacle left
+    # negative control: the problem's t0 mask draws the vacated medium sites as obstacles
+    vacated = count((σ .== 2) .& (CorePotts.ownership(sol.u[end]) .== 0))
+    @test vacated > 0
+    @test obstacles(renderframe(sol.u[end]; frozen = sol.prob.frozen)) == vacated
+end

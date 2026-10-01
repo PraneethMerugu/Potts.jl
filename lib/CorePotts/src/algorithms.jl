@@ -50,7 +50,9 @@ SciMLBase.isdiscrete(::CPMAlgorithm) = true
     SequentialCPM(; acceptance = nothing, proposal = nothing)
 
 Random-site sequential dynamics on the host: one MCS is `N` copy attempts with
-replacement over the lattice sites. The fidelity reference. `acceptance = nothing` uses the
+replacement over the mobile (not frozen) lattice sites, so `N` is the number of mobile
+sites, which can change during a run when the frozen mask follows the state (D-081). The
+fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
 the problem's copy neighbourhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
 """

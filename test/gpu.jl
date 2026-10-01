@@ -308,6 +308,43 @@ end
     end
 end
 
+# P6.0d: the frozen acceptance scenario on Metal (Float32, CheckerboardCPM). The `[frozen]`
+# kinds are the standard rule, so the mask is rebuilt on the device after the transition.
+module P60dOnMetal
+using Test, Potts
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0d_frozen_kind_mask.jl"))
+end
+
+@testset "P6.0d frozen-kind transitions on Metal (Float32, device-built mask)" begin
+    M = P60dOnMetal
+    backend = MetalBackend()
+    σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
+    function metal_problem(moves...)
+        prob = PottsProblem(M.P60dKinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.P60D_T1);
+            seed = 1, T = Float32)
+        f = prob.f
+        sw = M.P60dSwitch(moves)
+        lc = Lifecycle(M.P60dTrigger(sw); kind = M.P60dKind(sw), normal = AlongMinorAxis{Float32}())
+        g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.phases,
+            lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
+        return remake(prob; f = g)
+    end
+    prob = metal_problem(M.P60D_CELL => M.P60D_WALL, M.P60D_WALL => M.P60D_CELL)
+    @test Potts.CorePotts.frozen_varies(prob.f.sys) && Potts.CorePotts.frozen_kinds(prob.f.sys) == (M.P60D_WALL,)
+    sol = solve(prob, CheckerboardCPM(); backend, saveat = 1)
+    @test Symbol(sol.retcode) === :Success && sol.stats.lifecycle.transitions == 2
+    @test sol.stats.refreshes == 1
+    @test M.p60d_moved(sol, 1, M.P60D_BEFORE) >= length(M.P60D_BEFORE) ÷ 2
+    @test M.p60d_moved(sol, 2, M.P60D_BEFORE) == 0
+    @test M.p60d_moved(sol, 1, M.P60D_AFTER) == 0                       # frozen after the transition
+    @test M.p60d_moved(sol, 2, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2   # released
+    @test frozen_sites(prob, sol.u[end]) == (Array(sol.u[end].σ) .== 1)
+    # negative control: the transition into a free kind keeps moving
+    ctl = solve(metal_problem(M.P60D_CELL => M.P60D_OTHER), CheckerboardCPM(); backend, saveat = 1)
+    @test M.p60d_moved(ctl, 1, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2
+    @test M.p60d_moved(ctl, 2, 2:(M.P60D_T1 + 1)) == 0
+end
+
 # P6.0v: the frozen transfer-counter acceptance file, whose Metal testset runs only where
 # Metal is loaded (here)
 module P60vOnMetal

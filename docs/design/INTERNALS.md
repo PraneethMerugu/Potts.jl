@@ -209,6 +209,36 @@ applied at the boundary.
   `DiscreteCallback` support, `stats` (attempts, accepted, launches), `retcode`.
 - `PottsSolution <: AbstractTimeseriesSolution`; `sol[x]`, `sol(t)`, SII through
   `f.sys`.
+- **Mobility (frozen sites, D-081).** `ctx.mobility` is `AllMobile()` (no mask) or
+  `MaskMobility(frozen, sites)`: the Bool mask (Checkerboard reads `is_mobile`) and, on
+  the host only, the mobile sites as `Int32` (Sequential draws targets from them; on a
+  device `sites === nothing`). The integrator keeps the mobile count on the host
+  (`integ.nmobile`, the attempts of an MCS, read before the sweep).
+  - Hooks on `f.sys`: `frozen_kinds(sys)` (a tuple of `Int32` kinds: the standard rule;
+    default `nothing`) and `frozen_varies(sys)` (default `frozen_kinds(sys) !== nothing`;
+    `false`: a static mask, never recomputed). The default `remake_frozen` applies the
+    standard rule when kinds are named, else returns `prob.frozen`; `PottsProblem` builds
+    the mask from the rule when kinds are named and rejects a different `frozen` (a user
+    mask cannot be combined with frozen kinds). **A custom rule overrides `remake_frozen`
+    and must also define `frozen_varies(sys) = true`**; otherwise the mask is static
+    (`init` warns once). Potts defines only `frozen_kinds` (`nothing` without `[frozen]`).
+  - `run_lifecycle!` returns `(launches, events, read)`; on an MCS with events `step!`
+    refreshes. `reinit!`, `set_state!` on `kind` and `u_modified!(integ, true)` refresh
+    too (immediately, reading the counts).
+  - Standard rule: one `_frozen_body!` launch over the sites (frozen when outside the
+    domain or the owner's kind is listed) rewrites `frozen` in place and counts, with
+    atomics, the change of the mobile count and the number of changed sites into entries 2
+    and 3 of the lifecycle's `count` array (entry 1: the trigger's event count). After an
+    event MCS on a device nothing is read: the counts wait (`MobileCounters.pending`) for
+    the next lifecycle MCS, whose one read-back of `count` brings them; `nmobile` and
+    `stats.attempts` (for the `stale` MCS swept with the old count) are corrected then.
+    `solve!` end, `checkpoint` and a direct refresh read pending counts first. Nothing on
+    the device needs the count (CheckerboardCPM reads only the mask). On the CPU the counts
+    are read at once and the site list is rebuilt in place when a site changed.
+  - Custom rule: a host copy of the state (`_snapshot` off the CPU), `frozen_sites`, copy
+    of the mask to the device.
+  - `frozen_sites(prob, u)` is the same rule on a host state, with the domain complement;
+    MakiePotts uses it per saved frame.
 - `checkpoint(integ)` = host copy of `CPMState` + `mcs` + RNG key + `fingerprint` + `p`.
   `init(prob, alg; checkpoint = ck)` continues the run (statistically correct; D-029).
   Fingerprint mismatch is an error.

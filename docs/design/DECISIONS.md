@@ -1563,6 +1563,14 @@ session.
 - Review: approved in round 1; the coordinator corrected the AUTHORING wording and the mixed-integral hint. Follow-ups: P6.0t (refresh waste), P6.0u (temperature location nit).
 
 
+## D-081 P6.0d: the frozen-kind mask follows lifecycle events (2026-10-01, P6.0d; coordinator)
+
+- **Where.** The mobility mask is refreshed by CorePotts' integrator after `run_lifecycle!` on every MCS that had lifecycle events (transitions, divisions, removals), through the existing `remake_frozen(f.sys, prob, state)` hook. Not in Potts' generated lifecycle: CorePotts' own `Lifecycle(trigger; kind)` transitions must be covered, and P6.4c's `@transition` then inherits the fix.
+- **Cost.** Nothing on quiet MCS (`run_lifecycle!` already returns early); one O(sites) pass on MCS with events, which already synchronise with the host (D-035).
+- **Count.** The number of mobile sites may change, so it can no longer be a constant of the integrator context; `reinit!` accepts a state whose frozen-site count differs.
+- **Callbacks.** A `DiscreteCallback` that writes `kind` directly is not tracked; it must call the public refresh (or `reinit!`). Not pinned by the frozen test.
+- **Acceptance** (frozen `p6_0d_frozen_kind_mask.jl`): a cell that becomes frozen by a transition never moves again; a released cell moves; the negative control (a transition to an unfrozen kind) keeps moving. Sequential and Checkerboard. The fixture installs a CorePotts `Lifecycle` with `remake(prob; f = g)` because Potts has no symbolic transition before P6.4c.
+
 ## D-085 P6.0v: GPU host-transfer counters and audit (2026-10-01, P6.0v; user request)
 
 - **User (2026-10-01):** every synchronise, host↔device copy or host-side work during a Metal MCS must be either unavoidable or removed. P6.0v is the audit and the instrumentation; P6.0v1–v3 remove what the audit finds (ROADMAP).
