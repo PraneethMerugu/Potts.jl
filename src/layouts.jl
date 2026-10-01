@@ -96,6 +96,8 @@ end
 
 Paint the site `x` (a tuple of integers or a `CartesianIndex`) or the box `x` (a tuple of
 unit ranges) with cell `id` (0 paints medium) and return the number of sites written.
+Sites and boxes are lattice indices on the lattice: nothing wraps (a box crossing a periodic
+edge is two `assign!` calls; `CorePotts.shift` maps a displaced site back).
 """
 function assign!(op::LayoutState{N}, x::NTuple{N, Integer}, id::Integer) where {N}
     _assign_site!(op, CartesianIndex(x), _cell_id(op, id))
@@ -172,7 +174,8 @@ kindof(op::LayoutState, id::Integer) = op.kinds[id]
 """
     ncells(op::LayoutState) -> Int
 
-The number of cells allocated so far (the largest id).
+The number of cells allocated so far (the largest id). Not `CorePotts.ncells`, which
+counts the cells of a simulation state.
 """
 ncells(op::LayoutState) = length(op.kinds)
 
@@ -181,7 +184,9 @@ ncells(op::LayoutState) = length(op.kinds)
 
 Set the current leaf layer's entry in the layout report (see [`layout`](@ref)): what it was
 asked for, the cells it created, the draws that missed and what a stop rule counted. A layer
-that does not call it reports `requested = painted =` the cells it allocated.
+that does not call it reports `requested = painted =` the cells it allocated. A layer that
+paints built-in layers inside its own `paint!` calls `record!` last: their entries go to the
+same row.
 """
 function record!(op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
         counted::Integer = painted)
@@ -212,7 +217,8 @@ isperiodic(lat::LatticeSpec, d::Integer) = _periodic(lat)[d]
     indomain(lat, x) -> Bool
 
 Whether site `x` (a tuple of integers or a `CartesianIndex`) lies on the lattice and inside
-its domain (every lattice site, without a domain).
+its domain (every lattice site, without a domain). Unlike CorePotts' `in_domain(lattice, i)`
+it checks bounds and takes a layout's `lat`.
 """
 indomain(lat::LatticeSpec{N}, x::NTuple{N, Integer}) where {N} = indomain(lat, CartesianIndex(x))
 function indomain(lat::LatticeSpec{N}, x::CartesianIndex{N}) where {N}
@@ -310,6 +316,18 @@ function Tiling(size; spacing = 0, region = nothing, kinds, partial::Symbol = :s
         _splits_arg(splits, "Tiling"))
 end
 _splits(l::Tiling) = l.splits
+
+"""
+    Potts.paint!(op::LayoutState, l::AbstractLayout, lat)
+
+Paint layer `l` into the layout state `op` on lattice `lat`: the one method a new layout
+defines (see [`AbstractLayout`](@ref)). It allocates cells with [`new_cell!`](@ref), paints
+with [`assign!`](@ref), may read the paint so far with [`owner`](@ref), [`kindof`](@ref) and
+[`ncells`](@ref), and may report with [`record!`](@ref); `lat` is read with `size`,
+[`isperiodic`](@ref) and [`indomain`](@ref). The return value is ignored. Call it only from
+another layer's `paint!`; [`layout`](@ref) runs a layout.
+"""
+function paint! end
 
 function paint!(op::LayoutState, l::Tiling{N}, lat) where {N}
     dims = size(lat)
