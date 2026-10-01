@@ -1645,3 +1645,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
 - **Gate: pass.** CPU 1.004–1.021. Metal flags OpenVT (1.319) and Akeeb (1.076); `ab.jl` against 1a9b5d3 (8 rounds): 0.997 and 1.002.
 - **P6.0v review and user decision.** The P6.0v audit review asked for a QA guard on the counting helpers (round 2 in progress, which also merges the approved P6.0d). User: "Remove it, device-side (Recommended)": on GPU the lifecycle is planned on the device and a quiet MCS costs 0 syncs / 0 transfers (D-089, amends D-035 and D-085). New rows P6.0v7 (gate times Metal to completion; top priority), P6.0v4, P6.0v5; P6.0v8 folded into P6.0v3.
+
+## 2026-10-01 — P6.0d merged: the frozen-kind mask follows lifecycle events (D-081)
+
+- **The change.** After an MCS with lifecycle events the mobility mask is recomputed: on a device by one kernel (standard rule: frozen kind or outside the domain), on the host for a custom `remake_frozen`. Models whose mask cannot vary never refresh. New public `refresh_frozen!`, `frozen_sites`, `u_modified!` (re-exported), hooks `frozen_varies`/`frozen_kinds`; MakiePotts frames use each state's own mask (D-081).
+- **Review.** Three implementer rounds. Round 2 moved the mask to the device and dropped the whole-state snapshot (user's GPU standard, P6.0v); round 3 fixed the hook defaults (checkpoint resume and `remake` saw the t0 mask) and removed the blocking 8-byte read-back by carrying the counts in the lifecycle's read-back. The coordinator applied the final fix (ee2331b: the read-back stays 4 B with its sync, 12 B only while counts are pending).
+- **Note.** A P6.0d implementer's broad `pkill -f` killed another agent's Metal run mid-session; agents are now told to kill only their own PIDs.
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0. Fingerprints unchanged.
+- **Gate: pass.** CPU 0.993–1.039. Metal flags (Wortel 1.40, Merks 1.51, OpenVT 1.73, Akeeb 1.91) under parallel load; `ab.jl` against ec544d8 (8 rounds): 1.005, 1.040, 0.980, 1.028 (enqueue-timed, P6.0v7 pending).

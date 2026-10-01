@@ -150,7 +150,7 @@ Every item's acceptance also includes the standing checks:
     (Threads on CPU, Serial otherwise) forwards `backend` explicitly to the three-argument
     call, and `detect_ambiguities` stays clean (verified at the pinned versions in
     `/tmp/apirev/ens3.jl`).
-- [ ] **P6.0d** frozen-kind mask recomputed on lifecycle events. Accept: a kind that
+- [x] (merge, 2026-10-01; D-081) **P6.0d** frozen-kind mask recomputed on lifecycle events. Accept: a kind that
   becomes frozen after a transition stops moving; the negative control moves.
 - [x] (merge, 2026-09-30; D-061) **P6.0e** contact energies read site values (`x`, `x′`). Accept: brute-force ΔH on a
   contact term that reads a site field.
@@ -235,6 +235,7 @@ Every item's acceptance also includes the standing checks:
   - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
   - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
   - Hand-written (non-`@potts_model`) `@extend` bases: an untranslated `x′` error from inside the base is labelled with the outer model's description (P6.0e2 review; wrap the base call in its own catch, about 3 lines).
+  - `init`'s `frozen_varies` warning cannot be silenced by a system that deliberately keeps a mask static (P6.0d review N1): skip it when `frozen_varies` is defined outside CorePotts.
   - The temperature's `integral(Pre)` error lacks its "in @sweep" location (P6.0m3 review nit).
 - [ ] **P6.0v** GPU host-transfer audit and instrumentation (user, 2026-10-01). Goal: every synchronize, device↔host copy or host-side work during a Metal MCS is either unavoidable or removed.
   - **Audit** `docs/design/research/gpu-host-transfer-audit.md`: every `synchronize`, `Array(…)`, `_snapshot`, `_readback`, host↔device `copyto!`, and every host loop over sites or cells that runs during `step!` on a non-CPU backend, in CorePotts, Potts and the generated code. Per entry: when it fires (every MCS / event MCS / setup), how much it moves (O(1), O(events), O(cells), O(cells × quantities), O(sites)), whether it is necessary, and the device-side replacement. Measure before assuming (Akeeb: 185 ns/site Metal vs 47 CPU).

@@ -475,4 +475,45 @@ using Metal
         @info "reads on Metal, k = 0" free = (m(free, 1), m(free, 2))
         @test m(free, 1) > 18 && m(free, 2) > 21
     end
+
+    @testset "the frozen mask follows a lifecycle transition on Metal (P6.0d)" begin
+        # fixture in lifecycle.jl: cell 1 → frozen kind 2, cell 2 → free kind 1 at MCS 10
+        S = 10
+        for sys in (FrozenKind(2), HostFrozen(2))       # device rule, host fallback
+            sol = solve(fk_problem(fk_flip(S); kind = fk_swap, sys, T = Float32), CheckerboardCPM(); backend, saveat = 1)
+            @test sol.retcode == ReturnCode.Success && sol.stats.lifecycle.transitions == 2
+            @test sol.stats.refreshes == 1
+            @test fk_moved(sol, 1, 2:(S + 2)) >= (S + 1) ÷ 2
+            @test fk_moved(sol, 2, 2:(S + 2)) == 0
+            @test fk_moved(sol, 1, (S + 3):31) == 0              # frozen from the next sweep on
+            @test fk_moved(sol, 2, (S + 3):31) >= 9              # released
+        end
+        # on the device the context holds the mask only; the count lives on the host
+        integ = init(fk_problem(fk_flip(S); kind = fk_swap, T = Float32), CheckerboardCPM(); backend)
+        @test integ.ctx.mobility.sites === nothing && integ.nmobile == 900 - 36
+        # the counts of a refresh after an event MCS arrive with the next lifecycle read-back
+        rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
+        integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)
+        for _ in 0:S
+            step!(integ)
+        end
+        @test integ.mscratch.pending && integ.nmobile == 900 - 36     # mask current, count deferred
+        @test count(!, Array(integ.ctx.mobility.frozen)) == 900
+        step!(integ)                                                  # MCS S+1: its read-back
+        @test !integ.mscratch.pending && integ.nmobile == 900
+        @test integ.stats.attempts == (S + 1) * (900 - 36) + 900      # MCS S+1 corrected
+        # removal of the frozen cell: the mobile-site count grows by the device count
+        sol = solve(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)
+        @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
+        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+        # negative control: a static mask does not follow the transition
+        ctl = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = nothing, T = Float32), CheckerboardCPM(); backend, saveat = 1)
+        @test fk_moved(ctl, 1, (S + 3):31) >= 9 && ctl.stats.refreshes == 0
+        # a domain without frozen kinds: a division, and no refresh
+        dp = fk_domain_problem(; T = Float32)
+        sol = solve(dp, CheckerboardCPM(); backend)
+        @test sol.stats.lifecycle.divisions == 1 && sol.stats.refreshes == 0
+        @test sol.stats.attempts == 8 * count(dp.lattice.mask)
+        @test all(sol.u[end].σ[.!dp.lattice.mask] .== 0)
+    end
 end
