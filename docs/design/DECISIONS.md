@@ -1612,6 +1612,15 @@ session.
 - **Code.** Fingerprints of every published model and the P6.0k fixtures are byte-identical. Build time for component models +1–3 % (noise level); published models have no components.
 - **Observation.** The `Clock(2)` and `ShiftIndex` fixtures fingerprint the same: P6.0p.
 
+## D-085 P6.0v: GPU host-transfer counters and audit (2026-10-01, P6.0v; user request)
+
+- **User (2026-10-01):** every synchronise, host↔device copy or host-side work during a Metal MCS must be either unavoidable or removed. P6.0v is the audit and the instrumentation; P6.0v1–v3 remove what the audit finds (ROADMAP).
+- **Counters.** `PottsStats` gains `syncs` (explicit `KernelAbstractions.synchronize`), `transfers` (host↔device copies; one contiguous array = 1, and each array leaf of an `Adapt.adapt(Array, …)` snapshot = 1) and `transfer_bytes` (`sizeof` of the device array copied). They are summed by `merge` and restored with checkpoints. Every such call in the step path goes through one helper that counts. Device→device copies and device `fill!` are not counted; on the CPU backend nothing is counted.
+- **Scope.** `step!` and the paths it reaches (lifecycle, `HostPhase`, `_AdaptiveODE`, refresh), plus saves and `integ.u` (counted; tests assert lower bounds only for those).
+- **Frozen acceptance** (`p6_0v_transfer_counters.jl`): exact long-term targets only. CPU counters are 0 on every gate model. On Metal, a quiet MCS costs 0/0/0 B on Graner–Glazier, Wortel Act and Merks, and exactly 1 sync / 1 transfer / 4 B (the D-035 event-count readback) on OpenVT, Akeeb and a division fixture. Event and `HostPhase` MCS: invariants only (≥ 1, non-decreasing), because P6.0v1/v2 change them. Exact current-path counts live in an ordinary, non-frozen regression test that later rows update.
+- **Audit document** `docs/design/research/gpu-host-transfer-audit.md`: every call site with when it fires, how much it moves, whether it is necessary, and its device-side replacement; codegen quality on Metal; the quiet-MCS baseline per gate model.
+- **Review and merge.** Two review rounds plus a polish commit. A QA guard fails on any raw `synchronize`/`Array(`/`copyto!`/`unsafe_copyto!`/`Vector(`/`convert(Array` outside the counting helpers, against a `file => count` allowlist with reasons. On Metal, a test-only counter on `Metal.wait_cmdbuf!` checks that GPU waits = `syncs + 2·transfers` on quiet and event MCS of every gate model; Merks (6 implicit waits per MCS from Metal.jl's device→device `copyto!`) is `@test_broken` until P6.0v3, and a Metal.jl version other than 1.10.0 fails loudly. Partial read-backs count `n·sizeof(T)` bytes, so a quiet lifecycle MCS stays 1 / 1 / 4 B. **Implicit waits** (device→device `copyto!`, `UInt8` `fill!`, pointer conversions) are syncs under the user's standard and go to P6.0v3 (rule P6.0v8). D-089 later sets the quiet-MCS target to 0 / 0 / 0 (P6.0v1).
+
 ## D-086 P6.0n: cell ODEs are Jacobi across cells (2026-10-01, P6.0n; amends D-078, D-077 N3)
 
 - **Supersedes** D-078's "cross-cell reads within a group stay Gauss–Seidel (P6.0n)".

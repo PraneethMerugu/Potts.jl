@@ -157,6 +157,11 @@ Base.@kwdef mutable struct PottsStats
     accepted::Int = -1          # -1: not counted by this algorithm (checkerboard)
     launches::Int = 0
     refreshes::Int = 0          # frozen-mask recomputations (`refresh_frozen!`)
+    # host↔device traffic (D-085; never counted on the CPU): explicit synchronizations,
+    # host↔device array copies, and the bytes they moved
+    syncs::Int = 0
+    transfers::Int = 0
+    transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
 end
 
@@ -211,7 +216,9 @@ function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
     return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
-        launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes, lifecycle = l)
+        launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
+        syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
+        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -256,7 +263,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility, lcache))
     integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
     end
@@ -319,14 +326,12 @@ end
 """
 Host snapshot of the current state: independent of the live state on every backend
 (`Adapt.adapt(Array, …)` alone would alias host arrays). Synchronizes the device. The live
-device state is `integ.state`.
+device state is `integ.state`. Counted in `integ.stats` (D-085).
 """
 function current_state(integ::PottsIntegrator)
-    KernelAbstractions.synchronize(integ.backend)
-    return _snapshot(integ.backend, integ.state)
+    _sync!(integ.stats, integ.backend)
+    return _snapshot(integ.stats, integ.backend, integ.state)
 end
-_snapshot(backend, st) = Adapt.adapt(Array, st)
-_snapshot(::KernelAbstractions.CPU, st) = deepcopy(st)
 
 function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :u && return current_state(integ)
@@ -342,7 +347,7 @@ end
 
 function _check_status!(integ::PottsIntegrator)
     integ.alg isa CheckerboardCPM || return integ.retcode
-    st = _readback(integ.cache.status)
+    st = _readback(integ.stats, integ.cache.status)
     st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     return integ.retcode
 end
@@ -355,7 +360,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
     _count_stale!(integ.mscratch)
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     if integ.alg isa SequentialCPM
         acc, status = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t)
@@ -366,12 +371,12 @@ function CommonSolve.step!(integ::PottsIntegrator)
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
     end
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     if integ.f.lifecycle !== nothing
         sc = integ.mscratch
         nread = sc !== nothing && sc.pending ? 3 : 1
         launches, events, read = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
-            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle; nread)
+            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats; nread)
         integ.stats.launches += launches
         read && _take_counts!(integ)                # a deferred refresh's counts, if any
         # a transition, division or removal may move sites into or out of frozen kinds;
@@ -379,7 +384,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
         events && _refresh_frozen!(integ, true)
     end
     integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += attempts
@@ -415,7 +420,7 @@ end
 function _flush_counts!(integ)
     sc = integ.mscratch
     (sc === nothing || !sc.pending) && return nothing
-    copyto!(sc.host, sc.device)
+    _copy!(integ.stats, sc.host, sc.device)
     fill!(sc.device, Int32(0))
     _take_counts!(integ)
     return nothing
@@ -465,7 +470,7 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple, defer::Bool)
     if defer
         sc.pending, sc.stale = true, 0
     else
-        copyto!(sc.host, sc.device)                 # synchronizes (a no-op copy on the CPU)
+        _copy!(integ.stats, sc.host, sc.device)     # synchronizes (a no-op copy on the CPU)
         fill!(sc.device, Int32(0))
         integ.nmobile += sc.host[2]
         sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
@@ -474,10 +479,10 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple, defer::Bool)
 end
 # a custom rule: `remake_frozen` on a host copy of the state
 function _refresh_frozen!(integ, m::MaskMobility, ::Nothing, defer::Bool)
-    KernelAbstractions.synchronize(integ.backend)
-    u = integ.backend isa CPU ? integ.state : _snapshot(integ.backend, integ.state)
+    _sync!(integ.stats, integ.backend)
+    u = integ.backend isa CPU ? integ.state : _snapshot(integ.stats, integ.backend, integ.state)
     fz = frozen_sites(integ.prob, u)
-    _set_mobility!(m, fz)
+    _set_mobility!(integ.stats, m, fz)
     integ.nmobile = count(!, fz)
     return nothing
 end
@@ -567,6 +572,7 @@ end
 function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
     dst.refreshes = src.refreshes
+    dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end
@@ -630,16 +636,18 @@ end
 _state_array(st::CPMState, i::StateIndex) = getfield(getfield(st, i.scope), i.name)
 function Base.getindex(st::CPMState, i::StateIndex)
     a = _state_array(st, i)
-    return i.scope === :model ? only(Array(a)) : a
+    return i.scope === :model ? only(_to_host(nothing, a)) : a      # user read: not counted
 end
-function Base.setindex!(st::CPMState, v, i::StateIndex)
+Base.setindex!(st::CPMState, v, i::StateIndex) = _set_state_array!(nothing, st, v, i)
+# `stats`: the integrator's `PottsStats` counting the host→device copy (D-085), or `nothing`
+function _set_state_array!(stats, st::CPMState, v, i::StateIndex)
     a = _state_array(st, i)
     if v isa Number
         fill!(a, convert(eltype(a), v))      # a Float64 must not reach a Float32 device array
     else
         size(v) == size(a) ||
             throw(DimensionMismatch("$(i.scope) variable $(i.name) has size $(size(a)); got $(size(v))"))
-        copyto!(a, convert(Array{eltype(a)}, v))
+        _copy!(stats, a, convert(Array{eltype(a)}, v))
     end
     return v
 end
@@ -657,8 +665,8 @@ end
 # snapshot) and take effect from the next MCS. A problem's parameters are immutable (isbits):
 # change them with `remake`.
 function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::StateIndex)
-    KernelAbstractions.synchronize(integ.backend)
-    integ.state[i] = v
+    _sync!(integ.stats, integ.backend)
+    _set_state_array!(integ.stats, integ.state, v, i)
     # the owner or kind decides which sites are frozen
     (i.scope === :cell && i.name === :kind) && refresh_frozen!(integ)
     return v

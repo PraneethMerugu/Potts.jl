@@ -344,3 +344,14 @@ end
     @test M.p60d_moved(ctl, 1, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2
     @test M.p60d_moved(ctl, 2, 2:(M.P60D_T1 + 1)) == 0
 end
+
+# P6.0v: the frozen transfer-counter acceptance file, whose Metal testset runs only where
+# Metal is loaded (here)
+module P60vOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
+end
+
+# P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
+# update its formulas)
+include("transfer_counts.jl")

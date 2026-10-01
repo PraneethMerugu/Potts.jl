@@ -350,6 +350,39 @@ using Metal
         @test rest.cell.volume == whole.cell.volume
     end
 
+    @testset "transfer counters (D-085): exact counts of the helpers on Metal" begin
+        stats = CorePotts.PottsStats()
+        counts() = (stats.syncs, stats.transfers, stats.transfer_bytes)
+        d = MtlArray(Float32[1, 2, 3, 4]); d2 = MtlArray(zeros(Float32, 4))
+        CorePotts._sync!(stats, backend)
+        @test counts() == (1, 0, 0)
+        @test CorePotts._to_host(stats, d) == Float32[1, 2, 3, 4]
+        @test counts() == (1, 1, 16)
+        CorePotts._copy!(stats, d2, Float32[5, 6, 7, 8])                     # host → device
+        @test counts() == (1, 2, 32)
+        h = zeros(Float32, 4)
+        CorePotts._copy!(stats, h, d2)                                       # device → host
+        @test h == Float32[5, 6, 7, 8] && counts() == (1, 3, 48)
+        CorePotts._copy!(stats, d, d2)                                       # device → device: not a transfer
+        @test counts() == (1, 3, 48)
+        @test CorePotts._readback(stats, MtlArray(Int32[7])) == 7
+        @test counts() == (1, 4, 52)
+        # a snapshot: one transfer per device leaf
+        st = CorePotts._to_backend(backend, initial_state(Int32[1 0; 0 2], Int32[1, 1]))
+        before = counts()
+        snap = CorePotts._snapshot(stats, backend, st)
+        leaves = (st.σ, values(st.cell)...)
+        @test snap.σ isa Array && snap.σ == Array(st.σ)
+        @test counts() .- before == (0, length(leaves), sum(sizeof, leaves))
+        # a lattice domain mask on the device: one transfer
+        ml = CorePotts._to_backend(backend, Lattice((4, 4); domain = trues(4, 4)))
+        before = counts()
+        @test CorePotts._host_lattice(stats, ml).mask isa Array
+        @test counts() .- before == (0, 1, 16)
+        CorePotts._to_host(nothing, d)                                       # nothing counts into `nothing`
+        @test counts() .- before == (0, 1, 16)
+    end
+
     @testset "compartments on Metal" begin
         σ, kinds, cluster = compartment_cells((48, 48), 8, 4)
         lat = Lattice((48, 48))

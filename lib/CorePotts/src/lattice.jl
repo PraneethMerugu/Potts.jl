@@ -106,8 +106,10 @@ end
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
 """The lattice with its domain mask on the host (for host code given a device context)."""
-host_lattice(l::Lattice{N, Nothing}) where {N} = l
-host_lattice(l::Lattice) = Adapt.adapt(Array, l)
+host_lattice(l::Lattice) = _host_lattice(nothing, l)
+# `stats` counts the mask copy (D-085; `_adapt_host`), or `nothing`
+_host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
+_host_lattice(stats, l::Lattice) = _adapt_host(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 nsites(l::Lattice) = prod(l.dims)
@@ -385,12 +387,13 @@ function _mobile_sites!(sites::Vector{Int32}, frozen)
 end
 
 # Overwrite a mask mobility from a host mask (the custom-rule fallback of `refresh_frozen!`).
-function _set_mobility!(m::MaskMobility, frozen::AbstractArray{Bool})
-    copyto!(m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
+# `stats` counts the host→device copy (D-085), or `nothing`.
+function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
+    _copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
     m.sites === nothing || _mobile_sites!(m.sites, frozen)
     return nothing
 end
-_set_mobility!(m, frozen) = throw(ArgumentError(
+_set_mobility!(stats, m, frozen) = throw(ArgumentError(
     "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
 
 # The standard rule, one work item per site: a site is frozen when it lies outside the

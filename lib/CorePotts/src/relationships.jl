@@ -233,13 +233,16 @@ struct HostPhase{F}
 end
 HostPhase(f!; every::Integer = 1) = HostPhase(f!, Int(every))
 
-function (ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F}
+(ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F} =
+    _run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+
+function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where {F}
     mcs % ph.every == 0 || return 0
-    KernelAbstractions.synchronize(backend)
-    host = _snapshot(backend, st)
-    ph.f!(host.cell, host, p, merge(ctx, (; lattice = host_lattice(ctx.lattice))), mcs)
+    _sync!(stats, backend)
+    host = _snapshot(stats, backend, st)
+    ph.f!(host.cell, host, p, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
     foreach(keys(st.cell)) do name
-        copyto!(getfield(st.cell, name), getfield(host.cell, name))
+        _copy!(stats, getfield(st.cell, name), getfield(host.cell, name))
     end
     return 0
 end

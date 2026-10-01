@@ -113,3 +113,28 @@ end
         @test any(changed_last) && all(a[changed_last] .== 1)
     end
 end
+
+# P6.0v (D-085): the counted transfer helpers. On host arrays they copy as before and count
+# nothing; the counters add under `merge` and survive `_restore_stats!` (checkpoints).
+@testset "transfer counters: host arrays count nothing; merge and restore" begin
+    s = CorePotts.PottsStats()
+    h = Int32[1, 2, 3]
+    g = CorePotts._to_host(s, h)
+    @test g == h && g !== h                                   # a copy, as `Array(a)`
+    @test CorePotts._copy!(s, zeros(Int32, 3), h) == h
+    @test CorePotts._readback(s, h) == 1
+    st = initial_state(Int32[1 0; 0 2], Int32[1, 1])
+    snap = CorePotts._snapshot(s, CorePotts.CPU(), st)
+    @test snap.σ == st.σ && snap.σ !== st.σ                   # independent (deepcopy)
+    @test CorePotts._adapt_host(s, (; a = h)).a === h         # host leaves kept, as `adapt(Array, …)`
+    CorePotts._sync!(s, CorePotts.CPU())
+    @test (s.syncs, s.transfers, s.transfer_bytes) == (0, 0, 0)
+    # the one counter (what a device copy calls)
+    CorePotts._count_transfer!(s, 1, 2, 12)
+    @test (s.syncs, s.transfers, s.transfer_bytes) == (1, 2, 12)
+    CorePotts._count_transfer!(nothing, 1, 1, 4)              # outside an integrator: no-op
+    m = merge(s, CorePotts.PottsStats(; syncs = 2, transfers = 3, transfer_bytes = 5))
+    @test (m.syncs, m.transfers, m.transfer_bytes) == (3, 5, 17)
+    r = CorePotts._restore_stats!(CorePotts.PottsStats(), m)
+    @test (r.syncs, r.transfers, r.transfer_bytes) == (3, 5, 17)
+end

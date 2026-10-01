@@ -103,6 +103,11 @@ sha256 = "0ba7ccfaca27fae5549a523524b232d7a02f4a24c032f80e60a07f521c1e9172"
 decision = "D-083"
 
 [[file]]
+path = "acceptance/p6_0v_transfer_counters.jl"
+sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
+decision = "D-085"
+
+[[file]]
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
 sha256 = "6a5ee19416dd47c74ee6e9427eaffae73141e1e881304a65b3a3f2f6d27ad888"
 decision = "D-081"

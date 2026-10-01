@@ -52,10 +52,6 @@ end
 _inline(backend, n) = false
 _inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
 
-"""The first element of a 1-element device array, on the host (no copy on the CPU)."""
-_readback(a::Array) = a[1]
-_readback(a) = Array(a)[1]
-
 @inline _site_phase_body!(i, f!::F, st, p, ctx, key, mcs) where {F} =
     (in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i); nothing)
 @inline _cell_phase_body!(c, f!::F, st, p, ctx, key, mcs) where {F} =
@@ -173,9 +169,24 @@ Phases(; before_mcs = (), after_mcs = (), end_mcs = (), at_init = ()) =
 Phases(before_mcs, after_mcs) = Phases(before_mcs, after_mcs, (), ())
 const NO_PHASES = Phases((), (), (), ())
 
-"""Enqueue every phase; returns the number of launches."""
-_run_phases(phases::Tuple, st, p, ctx, key, mcs, backend) =
-    sum(ph -> ph(st, p, ctx, key, mcs, backend), phases; init = 0)
+"""
+Enqueue every phase; returns the number of launches. `stats` (the integrator's
+`PottsStats`, or `nothing`) counts the host transfers of phases that make them (D-085).
+"""
+_run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing) =
+    sum(ph -> _run_phase(ph, st, p, ctx, key, mcs, backend, stats), phases; init = 0)
+
+"""
+    _run_phase(phase, st, p, ctx, key, mcs, backend, stats)
+
+Internal: run one phase, `phase(st, p, ctx, key, mcs, backend)`, with the integrator's
+transfer counters. Not an extension point for users: host work in a phase goes through the
+public `HostPhase`, which counts its copies. CorePotts' and Potts' own phases that copy
+between the host and a device add a method that routes the copies through the counted
+helpers (`_sync!`, `_to_host`, `_copy!`, `_snapshot`); a wrapper phase forwards `stats` to
+the phase it wraps.
+"""
+_run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx, key, mcs, backend)
 
 """Accepted-copy affect: reset `array[target]` to `value` when ownership changes."""
 @inline clear_on_copy!(array, prop, value) = (@inbounds array[prop.target] = value; nothing)

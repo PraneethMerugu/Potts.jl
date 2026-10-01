@@ -1653,3 +1653,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Note.** A P6.0d implementer's broad `pkill -f` killed another agent's Metal run mid-session; agents are now told to kill only their own PIDs.
 - **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0. Fingerprints unchanged.
 - **Gate: pass.** CPU 0.993–1.039. Metal flags (Wortel 1.40, Merks 1.51, OpenVT 1.73, Akeeb 1.91) under parallel load; `ab.jl` against ec544d8 (8 rounds): 1.005, 1.040, 0.980, 1.028 (enqueue-timed, P6.0v7 pending).
+
+## 2026-10-01 — P6.0v merged: host-transfer audit and counters (D-085)
+
+- **The change.** `research/gpu-host-transfer-audit.md` lists every synchronize, host↔device copy and host-side step in an MCS, with a verdict for each (remove, file or justify). One set of counted helpers (`_sync!`, `_to_host`, `_copy!`, `_readback`, `_snapshot`; `transfers.jl`) feeds `stats.syncs`, `stats.transfers` and `stats.transfer_bytes` on devices; the CPU compiles to what it was. A QA guard rejects raw transfers in the integrator; a Metal wait-identity test wraps `Metal.wait_cmdbuf!` (Metal pinned to 1.10.0). Frozen `p6_0v_transfer_counters.jl`; Merks' wait count is `@test_broken` until P6.0v3.
+- **Findings carried forward.** Device→device `copyto!` waits on the GPU twice (P6.0v3/P6.0v8); Akeeb event MCS move about 137 KB (P6.0v1); the old gate timed only enqueue for Graner–Glazier and Wortel (P6.0v7). Rows P6.0v1–P6.0v5 and P6.0v7 carry the work; D-089 (user) sets a quiet MCS to 0/0/0.
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
+- **Gate: pass.** CPU 0.995–1.031. Metal flags (Wortel 2.90, Merks 1.50, OpenVT 1.67, Akeeb 1.86) under parallel load; `ab.jl` against f133b69: Wortel 1.000, Akeeb 1.034 (6 rounds), Merks 0.988, OpenVT 0.994 (10 rounds; 6-round reads of 1.36 and 1.46 were load).

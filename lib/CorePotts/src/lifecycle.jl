@@ -273,29 +273,31 @@ and the integrator refreshes the frozen mask), and whether `cache.count` was rea
 `cache.host` (on every MCS the lifecycle runs). Synchronizes once and makes one transfer:
 the event count (4 B, the D-035 read), or with `nread = 3` also the counts of a deferred
 frozen-mask refresh (12 B, only on the lifecycle MCS after such a refresh; D-081). Quiet MCS
-return after the trigger kernel.
+return after the trigger kernel. `pstats` is the integrator's `PottsStats` (lifecycle
+counts, host transfers; D-085).
 """
 function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
-        stats::LifecycleStats; nread::Int = 1)
+        pstats; nread::Int = 1)
     mcs % lc.every == 0 || return 0, false, false
+    stats = pstats.lifecycle
     cap = length(st.cell.kind)
     # `count` is all zero here except a deferred mask refresh's counts (entries 2 and 3)
     _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
-    KernelAbstractions.synchronize(backend)
+    _sync!(pstats, backend)
     # the MCS's one transfer: 4 B, or 12 B while a refresh's counts are pending (entries 2
     # and 3 are zero otherwise, so nothing is lost)
-    copyto!(cache.host, 1, cache.count, 1, nread)
+    _copy!(pstats, cache.host, 1, cache.count, 1, nread)
     fill!(cache.count, Int32(0))                    # enqueued; read above
     cache.host[1] == 0 && return launches, false, true
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
-    events = Array(cache.events)
+    events = _to_host(pstats, cache.events)
     # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the device
     rule = lc.rules === Val(true) ? (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r) : nothing
-    volume = Array(st.cell.volume)
+    volume = _to_host(pstats, st.cell.volume)
     # a dead root still names its cluster while members live: never reuse its id
-    held = _has_clusters(st) ? _referenced_clusters(Array(st.cell.cluster), volume) : Set{Int32}()
+    held = _has_clusters(st) ? _referenced_clusters(_to_host(pstats, st.cell.cluster), volume) : Set{Int32}()
     free = [c for c in 1:cap if volume[c] == 0 && events[c] == EVENT_NONE && !(Int32(c) in held)]
     daughter = zeros(Int32, cap)
     removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
@@ -303,7 +305,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     has_clusters = _has_clusters(st)
     roots = Int32[]
     if has_clusters
-        cl = Array(st.cell.cluster)
+        cl = _to_host(pstats, st.cell.cluster)
         members = Dict{Int32, Vector{Int32}}()
         for c in 1:cap
             volume[c] > 0 && push!(get!(members, cl[c], Int32[]), Int32(c))
@@ -350,14 +352,14 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         end
     end
     stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION, events)
-    copyto!(cache.daughter, daughter)
-    copyto!(cache.removed, removed)
-    copyto!(cache.events, rule === nothing ? events : events .| (rule .<< _RULE_SHIFT))
+    _copy!(pstats, cache.daughter, daughter)
+    _copy!(pstats, cache.removed, removed)
+    _copy!(pstats, cache.events, rule === nothing ? events : events .| (rule .<< _RULE_SHIFT))
 
     if isempty(roots)
         fill!(cache.bias, zero(eltype(cache.bias)))
     else
-        _cluster_planes!(cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
+        _cluster_planes!(pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
     end
     if any(c -> daughter[c] > 0 && events[c] == EVENT_DIVIDE, 1:cap)    # after the host planes
         _launch(_normal_body!, backend, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
@@ -376,14 +378,14 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
         map(keys(st.cell), values(st.cell)) do name, a
             (name in (:volume, :surface, :anchor, :m1, :m2, :generation) || _is_link_data(name)) ||
-                _copy_columns!(a, ds, parents)          # daughters start unlinked
+                _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
             nothing
         end
-        gen = Array(st.cell.generation)
+        gen = _to_host(pstats, st.cell.generation)
         gen[ds] .+= Int32(1)
-        copyto!(st.cell.generation, gen)
+        _copy!(pstats, st.cell.generation, gen)
         if has_clusters
-            clh = Array(st.cell.cluster)
+            clh = _to_host(pstats, st.cell.cluster)
             for m in parents
                 d = daughter[m]
                 if _divides_with_cluster(events[m])      # the root's daughter names the new cluster
@@ -392,35 +394,35 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
                     clh[d] = d
                 end                                      # else it stays in the parent's cluster
             end
-            copyto!(st.cell.cluster, clh)
+            _copy!(pstats, st.cell.cluster, clh)
         end
     end
     any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
-        _lifecycle_links!(st, findall(removed), daughter[parents])
+        _lifecycle_links!(pstats, st, findall(removed), daughter[parents])
     _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
         lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules))
     launches += 1
 
-    _has_clusters(st) && _fix_clusters!(st)
-    rebuild_trackers!(st, ctx, backend)
+    _has_clusters(st) && _fix_clusters!(pstats, st)
+    _rebuild_trackers!(pstats, st, ctx, backend)
     lc.rebuild!(st, p, ctx, backend)
     if !isempty(parents)
-        v = Array(st.cell.volume)
+        v = _to_host(pstats, st.cell.volume)
         stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
     end
     return launches, true, true
 end
 
-function _copy_columns!(a::AbstractVector, dst, src)
-    h = Array(a)
+function _copy_columns!(stats, a::AbstractVector, dst, src)
+    h = _to_host(stats, a)
     h[dst] .= h[src]
-    copyto!(a, h)
+    _copy!(stats, a, h)
 end
-function _copy_columns!(a::AbstractArray, dst, src)
-    h = Array(a)
+function _copy_columns!(stats, a::AbstractArray, dst, src)
+    h = _to_host(stats, a)
     sel(x) = ntuple(d -> d == ndims(h) ? x : Colon(), ndims(h))
     h[sel(dst)...] .= h[sel(src)...]
-    copyto!(a, h)
+    _copy!(stats, a, h)
 end
 
 """
@@ -431,25 +433,28 @@ Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`
 trackers (`cluster_volume`, `cluster_surface`). Host-side; used at
 lifecycle events and after host edits of `σ`.
 """
-function rebuild_trackers!(st, ctx, backend)
-    KernelAbstractions.synchronize(backend)
-    σ = Array(st.σ)
-    lat = host_lattice(ctx.lattice)
+rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
+
+# `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
+function _rebuild_trackers!(stats, st, ctx, backend)
+    _sync!(stats, backend)
+    σ = _to_host(stats, st.σ)
+    lat = _host_lattice(stats, ctx.lattice)
     ctx = merge(ctx, (; lattice = lat))
     cap = length(st.cell.kind)
     volume = zeros(Int32, cap)
     for s in σ
         s > 0 && (volume[s] += Int32(1))
     end
-    copyto!(st.cell.volume, volume)
+    _copy!(stats, st.cell.volume, volume)
     if haskey(st.cell, :surface) && haskey(ctx, :surface)
-        copyto!(st.cell.surface, _recompute_surface(eltype(st.cell.surface), σ, lat, ctx.surface, cap))
+        _copy!(stats, st.cell.surface, _recompute_surface(eltype(st.cell.surface), σ, lat, ctx.surface, cap))
     end
     if haskey(st.cell, :m1)
         m = init_moments(σ, lat, cap)
-        copyto!(st.cell.anchor, m.anchor); copyto!(st.cell.m1, m.m1); copyto!(st.cell.m2, m.m2)
+        _copy!(stats, st.cell.anchor, m.anchor); _copy!(stats, st.cell.m1, m.m1); _copy!(stats, st.cell.m2, m.m2)
     end
-    _has_clusters(st) && _rebuild_cluster_trackers!(st, σ, ctx)
+    _has_clusters(st) && _rebuild_cluster_trackers!(stats, st, σ, ctx)
     return st
 end
 
@@ -478,15 +483,15 @@ _is_link_data(name::Symbol) = _is_adjacency(name) || startswith(String(name), "l
 
 # RemoveIncident for removed cells; empty link rows for daughters (their ids may be reused),
 # in every relationship's adjacency. Payloads are left: `add_link!` rewrites a slot's.
-function _lifecycle_links!(st, removed, daughters)
+function _lifecycle_links!(stats, st, removed, daughters)
     # `map` over (name, array) unrolls statically: each adjacency has its concrete type
     map(keys(st.cell), values(st.cell)) do name, dev
         _is_adjacency(name) || return nothing
-        host = (; links = Array(dev))
+        host = (; links = _to_host(stats, dev))
         for c in Iterators.flatten((removed, daughters))
             remove_incident!(host, c)
         end
-        copyto!(dev, host.links)
+        _copy!(stats, dev, host.links)
         return nothing
     end
     return nothing
