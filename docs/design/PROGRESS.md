@@ -1595,3 +1595,11 @@ The maintainer approved F-1…F-6 (D-049).
   - CPU: Graner–Glazier sequential 0.990, Wortel checkerboard 1.000 (6 rounds).
 - **Tooling.** `ab.jl` starves other `exclusive.sh` waiters; filed as P6.0s. `ab.jl` needs absolute checkout paths.
 
+
+## 2026-10-01 — P6.0m3 merged: `integral(Pre(x))` (D-080)
+
+- **The change.** In an update block, `integral(Pre(x))` is the fold of the block-start values over the σ the block sees, in its own slot with no `x__pre` snapshot. An integral mixing `Pre` and bare reads of block-written variables, and `integral(Pre(x))` outside update blocks, are `ArgumentError`s (D-080).
+- **Review.** Approved in round 1. The coordinator corrected the AUTHORING wording and the mixed-integral hint (253caab). Follow-ups: P6.0t (integral refresh waste), P6.0u (`@components` gaps; temperature error location).
+- **Code.** 75 of 81 fingerprints unchanged; the 6 that changed use `integral(Pre)`. Published models unchanged.
+- **Merge checks.** Potts, PottsModels, docs and Potts on Metal exit 0.
+- **Gate.** Under parallel-agent load CPU flagged Graner–Glazier and Wortel sequential (1.050, 1.055) and Metal flagged four cases (1.21–2.24). `ab.jl` against 8b953b6: Metal Wortel 0.985, Merks 0.986, OpenVT 1.015, Akeeb 0.618 (8 rounds; base drew the slow power state); CPU Graner–Glazier 1.005, Wortel 0.995 (6 rounds).

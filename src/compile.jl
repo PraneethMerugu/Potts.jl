@@ -659,6 +659,13 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], sys.divisions))
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N), vcat(x(i))), sys, i), items)
     end
+    # `integral(Pre(x))` is the block-start fold of an update block (D-042). Outside the
+    # blocks `Pre(x)` is the stored value, so the integral would silently be another one.
+    for (x, items) in ((eq -> eq.rhs, sys.equations), (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], sys.divisions),
+            (r -> r.when, sys.link_rules), (b -> b.next, sys.discrete), (o -> o.expr, sys.observed))
+        foreach(i -> _located(() -> foreach(_check_integral_pre_outside, vcat(x(i))), sys, i), items)
+    end
+    _check_integral_pre_outside(sys.sweep.temperature)
     for o in sys.observed
         _located(sys, o) do
             _check_geometry(o.expr, N)
@@ -678,6 +685,14 @@ has its variable's unit, and equations, conditions and observed quantities are c
 Implemented by the DynamicQuantities extension; without it (or without units) a no-op.
 """
 _check_units(sys) = nothing
+
+function _check_integral_pre_outside(x)
+    _integral_pre(x) && throw(ArgumentError(
+        "`integral(Pre(x))` is only available in update blocks, where it folds the values before the " *
+        "block (D-042); elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
+        "the block (`s ~ integral(Pre(x))`), or write `integral(x)`"))
+    return nothing
+end
 
 """Axes of `centroid`/`displacement` must be lattice axes; `centroid` has no ΔH in energies."""
 function _check_geometry(x, N; energy = false)

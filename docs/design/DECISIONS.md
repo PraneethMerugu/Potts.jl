@@ -1551,3 +1551,14 @@ session.
   - The self-check helpers do not credit it yet.
 - **Unchanged code.** The generated code of the six published models is unchanged once operand order is canonicalised (D-070).
 - **ROADMAP correction.** Before this fix the solve ended with `Failure` (`STATUS_NONFINITE`) within about one MCS of the death, rather than freezing silently as the ROADMAP row said.
+
+## D-080 P6.0m3: `integral(Pre(x))` (2026-10-01, P6.0m3; refines D-042, D-076)
+
+- **In an update block,** `integral(Pre(x))` is the fold of x's block-start values over σ as the block sees it (post-sweep in `@after_mcs`). It is its own cell slot, refreshed once at the start of the after-MCS phases; in `@before_mcs` the MCS-boundary refresh serves it.
+- It creates no `x__pre` snapshot and no dependency on x's writer. `_to_snapshots` never rewrites inside integrals.
+- An integral reading block-written variables both through `Pre` and bare is an `ArgumentError`, because no single refresh point gives both.
+- **Outside update blocks** (equations, division conditions and rules, link rules, discrete ticks, temperature, `@observed`, `sol[…]`), `integral(Pre(x))` is an `ArgumentError`. Before P6.0m3 it read the block-start fold through the shared slot in equations and the lifecycle, but the post fold in observed queries, while a bare `Pre(x)` there is the stored value. Rejecting it is safer than either meaning; keep the fold in a cell variable (`s ~ integral(Pre(x))` in the block).
+- `Pre(x, k)` inside integrals is unaffected.
+- Generated code is unchanged for models without `integral(Pre(…))`: 75 of 81 fingerprints identical; the 6 that changed all use `integral(Pre)`.
+- Review: approved in round 1; the coordinator corrected the AUTHORING wording and the mixed-integral hint. Follow-ups: P6.0t (refresh waste), P6.0u (temperature location nit).
+

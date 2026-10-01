@@ -227,6 +227,14 @@ Every item's acceptance also includes the standing checks:
   - `benchmark/ab.jl` takes `tools/exclusive.sh` per process and re-takes it at once, so a waiter polling every 20 s starved for the whole A/B (a P6.0n Metal suite waited about 40 minutes).
   - Fix: `ab.jl` holds one lock for all its rounds (its per-run calls skip the lock when the holder is the parent), or the lock becomes a ticket queue.
   - Accept: a waiter queued before an A/B starts runs before the A/B's second round.
+- [ ] **P6.0t** Integral refresh waste (from the P6.0m3 review; low priority).
+  - `src/codegen.jl` refreshes every integral that is not dirty after the sweep at the start of the after block once any after reader exists, including integrals read only by the before block or the temperature (fresh from `end_mcs`). `end_mcs` also refreshes observed-only integrals, which observed queries recompute anyway.
+  - Fix: filter the start-of-after refresh to integrals read after the sweep; give observed-only integrals no slot or refresh.
+  - Accept: probe `PWaste` (`/tmp/p60m3/rv1/`) emits 1 `CellReduce` at the start of the after block and none for the observed integral; fingerprints of models without such integrals unchanged.
+- [ ] **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
+  - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
+  - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
+  - The temperature's `integral(Pre)` error lacks its "in @sweep" location (P6.0m3 review nit).
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -294,10 +302,10 @@ Every item's acceptance also includes the standing checks:
     edge terms.
   - `integral` reads the previous MCS's site values when they are written in the same
     `@after_mcs`. Document the ordering, or fix it.
-- [ ] **P6.0m3** `s ~ integral(Pre(w))` in `@after_mcs` fails with `FieldError: no field
+- [x] (merge, 2026-10-01; D-080) **P6.0m3** `s ~ integral(Pre(w))` in `@after_mcs` fails with `FieldError: no field
   integral_…` (pre-existing on 8b14051; found by the P6.0m reviewer, `/tmp/p60m/rv1/probe_pre.jl`).
   The start-of-after integral refresh also runs before the Pre-snapshot `CopyPhase`.
-  - Accept: an integral of a `Pre` operand reads the pre-MCS values.
+  - Accept: an integral of a `Pre` operand reads the block-start values over the σ the block sees (post-sweep in `@after_mcs`; the frozen test's definition).
   - Accept: a regression test covering both orders.
 - [x] (merge, 2026-09-30) **P6.0m2** (D-075, breaking batch part 1) `CPMProblem → PottsProblem`, supertype
   unchanged, no alias; `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`. Every
