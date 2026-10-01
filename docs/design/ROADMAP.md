@@ -218,8 +218,8 @@ Every item's acceptance also includes the standing checks:
   - Accept: fingerprints of models without clocked components are unchanged.
 - [ ] **P6.0q** An unhoisted population fold that reads `time` inside a cell ODE fails to compile for Metal (`InvalidIRError`, `jl_new_opaque_closure_jlcall`), with or without the P6.0n fix. Found by the P6.0n test author. A fold that reads `mcs` is hoisted and runs on Metal.
   - Accept: the P6.0n fold fixture runs on Metal and matches the CPU in Float32.
-- [ ] **P6.0r** D-066 item 4 (from the P6.0l review).
-  - `total_energy` sums cell and cluster terms over alive cells only, and the killing copy's ΔH credits the dead cell's edge energy.
+- [x] (merge, 2026-10-01; D-083, maintainer) **P6.0r** D-066 item 4 (from the P6.0l review).
+  - `total_energy` sums cell and cluster terms over alive cells only, and the killing copy's ΔH removes the dying cell's edges; no edge credit (D-083).
   - The self-check helpers get the same credit: `selfcheck` in `lib/PottsModels/test/runtests.jl:7-25`, `test/symbolic.jl:141` and `test/audit.jl:473`.
   - Add a Metal test in which the partner is killed during the run (`lib/CorePotts/test/gpu.jl:264-293` only has a partner that is dead from the start).
   - Accept: for every copy, including a killing copy, ΔH equals the H difference on a linked model.
@@ -248,13 +248,18 @@ Every item's acceptance also includes the standing checks:
   - **Instrumentation:** route every device→host and host→device transfer and every synchronize in the step path through one helper that counts transfers and bytes in `integ.stats` (as `stats.launches` counts launches).
   - The implementation is split into P6.0v1–P6.0v4; the audit assigns each entry to one of them, files it as its own row, or justifies it as unavoidable.
   - Accept: the audit document with every entry classified; the transfer counters exist and count exactly on a fixture with known transfers (CPU: always zero); on Metal, a quiet MCS of every gate model reports its current transfers (recorded in the audit as the baseline).
-- [ ] **P6.0v1** Lifecycle on the device (after P6.0v). Daughter column copies run as a device kernel; trackers update on the device (or incrementally from the partition kernel's changes); no host O(sites) or O(cells × quantities) work on an event MCS.
+- [ ] **P6.0v1** Lifecycle on the device (after P6.0v and P6.0v7). Per D-089 (user): the whole lifecycle, including event planning, runs on the device with no host decision and no trigger read-back; re-freeze `p6_0v_transfer_counters.jl` target (b) to 0 / 0 / 0 B. Daughter column copies run as a device kernel; trackers update on the device (or incrementally from the partition kernel's changes); no host O(sites) or O(cells × quantities) work on an event MCS.
   - Accept: on Metal, total host traffic on an event MCS is O(events): bytes independent of lattice size and of the number of cell quantities, on a division fixture scaled in both; Akeeb Metal improves measurably in `ab.jl` against the pre-change base; results unchanged up to floating-point differences ordinary tests allow (D-048).
 - [ ] **P6.0v2** ODE and `HostPhase` column-only copies (after P6.0v). `_AdaptiveODE` and `HostPhase` move only the columns they read and write, or run on the device.
   - Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale with the columns used, not with all cell quantities; results unchanged up to floating-point tolerance.
 - [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first).
   - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
-- **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers on Metal apart from the single lifecycle event-count readback when the model has a lifecycle, on every gate model; event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
+- [ ] **P6.0v7** (top priority within P6.0v, before v1–v3; from the P6.0v audit and review) `benchmark/gate.jl` and `benchmark/ab_one.jl` time Metal `step!` to GPU completion (`synchronize`), then rebaseline Metal once. Today Graner–Glazier and Wortel Metal numbers measure only host enqueue time, so Metal A/B verdicts on them say nothing about GPU cost.
+  - Accept: a Metal gate case's time includes a synchronize; baseline.toml's Metal rows re-measured under one lock; CPU rows unchanged.
+- [ ] **P6.0v4** Shared-storage host-visible scalars (from the P6.0v audit): values the host reads at saves and checkpoints (status word, lifecycle stats, P6.0d counts) live in shared-storage buffers instead of a private-storage copy (≈ 200 µs → 0.3 µs per read here), still counted as transfers. Decide with ab.jl after P6.0v7.
+- [ ] **P6.0v5** (optional backlog) Device adaptive ODE solves and a device `@link` contact graph (audit A5, H5).
+- **P6.0v3 also includes P6.0v8** (from the audit): every device→device copy in the step path goes through a `_device_copy!` KA kernel (Metal.jl's `copyto!` waits on the GPU twice per copy; Merks makes 6 per MCS, probe 306 → 60 ns/site), and a Metal test wraps `Metal.synchronize` to assert that the GPU waits in a quiet MCS equal the counted syncs (Merks: 0).
+- **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers and zero GPU waits (counted or implicit) on Metal, on every gate model, lifecycle models included (D-089); event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
 - [ ] **P6.0x** A `gather` inside a cell-ODE rate allocates on every warm step (544–1408 B per MCS, e.g. `sum(volume[owner[n]] for n in Moore(1)(42))`), on base too (found by the P6.0n implementer). The ODE's `rhs` closure is heap-allocated and dispatched dynamically.
   - Accept: zero warm allocations for a cell ODE whose rate contains a gather, on both algorithms; fingerprints of models without one unchanged.
 - [ ] **P6.0w** Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).

@@ -48,7 +48,7 @@ ctx_of(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations
         # self-check: ΔE equals H(after) − H(before)
         H0 = total_energy(sp, u)
         H1 = total_energy(sp, a)
-        worst_e = max(worst_e, abs(energy_change(sp, u, prop) - (H1 - H0)))
+        worst_e = max(worst_e, abs(energy_change(sp, u, prop) - (H1 - H0 + Potts._killing_credit(sp, u, prop, a))))
     end
     @test worst_h < 1e-9
     @test agree_c
@@ -138,7 +138,7 @@ end
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 5)); mcs = (0, 5), n = 300)
         a = deepcopy(u); a.σ[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     @test worst < 1e-9
     ds = map(1:4) do seed
@@ -175,7 +175,7 @@ function selfcheck(prob; n = 300)
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 3)); mcs = (0, 3), n)
         a = deepcopy(u); a.σ[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     return worst
 end
@@ -262,7 +262,7 @@ function edge_selfcheck(prob, rel; n = 600)
         prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
         a = deepcopy(u); a.σ[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
         linked_pairs += any(r -> CorePotts.linked(CorePotts.link_store(u.cell, r), prop.old, prop.new), (:bond, :tether))
     end
     return worst, linked_pairs
@@ -2068,7 +2068,7 @@ function site_selfcheck(prob, rel; n = 400, dH = (u, prop) -> energy_change(prob
         prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
         a = deepcopy(u); a.σ[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     return worst
 end
@@ -2960,4 +2960,27 @@ end
     base, full = lines(run_script()), lines(run_script("mtk"))
     @test length(base) == 4
     @test full == base
+end
+
+# P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H
+@potts_model P60rFreeSlots begin
+    @kinds medium cytoplasm nucleus
+    @parameters begin
+        V₀[kind] = [0.0, 6.0, 3.0]
+    end
+    @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells => (volume - V₀[kind])^2 + 0.3 * surface + 5.0
+        contacts => 4.0
+        clusters(cytoplasm) => 1.3 * (cluster_volume - 10.0)^2 + 2.0
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+@testset "P6.0r: free slots add nothing to total_energy" begin
+    σc = zeros(Int32, 20, 20); σc[5, 5] = 1; σc[5, 6] = 2; σc[12:14, 12:14] .= 3; σc[13, 13] = 4
+    op = [ownership => σc, kind => [:cytoplasm, :nucleus, :cytoplasm, :nucleus], cluster => [1, 1, 3, 3]]
+    a = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5))
+    b = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5); capacity = 50)
+    @test length(b.u0.cell.volume) == 50
+    @test total_energy(b) ≈ total_energy(a)
 end

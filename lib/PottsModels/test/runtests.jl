@@ -19,7 +19,7 @@ function selfcheck(prob; n = 200)
         prop = CorePotts.Proposal(t, s, x, 1, u.σ[t], u.σ[s])
         a = deepcopy(u); a.σ[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx)
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u))))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
     end
     return worst
 end

@@ -1059,29 +1059,48 @@ function _division_rules(c::CompiledPottsSystem, ids, T, who, ruled)
 end
 
 # ---------------------------------------------------------------------------------------
-# Total energy (host, brute force): the self-check of the derived ΔH
+# Total energy (host, brute force): the self-check of the derived ΔH. A dead cell leaves H
+# (D-066 item 4, D-083): cell terms sum over alive cells, cluster terms over roots of
+# clusters with an alive member, edge terms over links with two alive ends.
 
-function _total_energy_expr(c::CompiledPottsSystem, T)
-    rn = c.gather_names
-    body = Any[:(H = zero($T))]
+# the cell terms of one model, summed per kind group
+function _cell_term_groups(c::CompiledPottsSystem)
     groups = Dict{Vector{Int}, Any}()
     for (kinds, E) in c.cell_terms
         groups[kinds] = haskey(groups, kinds) ? groups[kinds] + E : E
     end
-    for (kinds, E) in _sorted(groups)
+    return _sorted(groups)
+end
+
+# `live[r]`: cluster root `r` has an alive member (one pass over the slots)
+_live_roots_expr() = quote
+    live = falses(length(st.cell.kind))
+    for m in 1:length(st.cell.kind)
+        rm = st.cell.cluster[m]
+        (rm > 0 && st.cell.volume[m] > 0) && (live[rm] = true)
+    end
+end
+
+function _total_energy_expr(c::CompiledPottsSystem, T)
+    rn = c.gather_names
+    body = Any[:(H = zero($T))]
+    for (kinds, E) in _cell_term_groups(c)
         env = _cell_env(T, :c, rn; kind = :k)
         push!(body, quote
-            for c in 1:length(st.cell.kind)           # every slot, empty ones at E(0): consistent with ΔH
+            for c in 1:length(st.cell.kind)           # alive cells only: a dead cell leaves H
+                st.cell.volume[c] > 0 || continue
                 k = Potts._cellkind(st, c)
                 $(_kindtest(:k, kinds)) && (H += $(lower(E, env)))
             end
         end)
     end
-    for (kinds, E) in _sorted(_group_terms(c.cluster_terms))
+    cterms = _sorted(_group_terms(c.cluster_terms))
+    isempty(cterms) || push!(body, _live_roots_expr())
+    for (kinds, E) in cterms
         e = lower(E, _cluster_env(T, :r, rn))
         push!(body, quote
-            for r in 1:length(st.cell.kind)           # every root (free slots are their own cluster)
-                st.cell.cluster[r] == r || continue
+            for r in 1:length(st.cell.kind)           # roots of clusters with an alive member
+                (st.cell.cluster[r] == r && live[r]) || continue
                 $(_kindtest(:(Potts._cellkind(st, r)), kinds)) && (H += $e)
             end
         end)
@@ -1128,4 +1147,47 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
     end
     push!(body, :(return H))
     return :((st, p, ctx) -> $(Expr(:block, body...)))
+end
+
+# The energy that leaves H when slot `o` dies, evaluated in `st` (the state after its death):
+# o's cell terms, plus its cluster's terms when that cluster has no alive member left. A
+# killing copy's ΔH pays the cell (and cluster) term change to the empty state, while H
+# drops the dead cell, so ΔH == H(after) − H(before) + this (D-083; edges carry no credit).
+# Host, internal: for the self-check helpers (`Potts._killing_credit`).
+function _vacated_energy_expr(c::CompiledPottsSystem, T)
+    rn = c.gather_names
+    body = Any[:(H = zero($T))]
+    for (kinds, E) in _cell_term_groups(c)
+        push!(body, :($(_kindtest(:(Potts._cellkind(st, c)), kinds)) && (H += $(lower(E, _cell_env(T, :c, rn))))))
+    end
+    cterms = _sorted(_group_terms(c.cluster_terms))
+    if !isempty(cterms)
+        push!(body, :(r = st.cell.cluster[c]), _live_roots_expr())
+        for (kinds, E) in cterms
+            e = lower(E, _cluster_env(T, :r, rn))
+            push!(body, :((r > 0 && !live[r] && $(_kindtest(:(Potts._cellkind(st, r)), kinds))) && (H += $e)))
+        end
+    end
+    push!(body, :(return H))
+    return :((st, p, ctx, c) -> $(Expr(:block, body...)))
+end
+
+struct _VacatedEnergy end     # `PottsModelInfo.cache` key of the compiled `_vacated_energy_expr`
+
+"""
+    Potts._killing_credit(prob, u, prop, a)
+
+Self-check credit of copy `prop` from state `u` to state `a` (D-083): the energy that leaves
+`H` with the cell the copy kills (`prop.old` owned one site), or zero when it kills none, so
+that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
+credit` for every copy. Internal, host.
+"""
+function _killing_credit(prob, u, prop, a)
+    o = prop.old
+    info = prob.f.sys
+    (o == 0 || u.cell.volume[o] != 1) && return zero(info.T)
+    f = lock(_OBSERVED_LOCK) do
+        get!(() -> _rgf(_vacated_energy_expr(info.csys, info.T)), info.cache, _VacatedEnergy())
+    end
+    return f(a, prob.p, _host_ctx(prob), o)
 end

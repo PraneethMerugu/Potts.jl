@@ -470,7 +470,7 @@ end
         for (u, prop) in proposal_states(p; mcs = (0, 10, 20), n = 150)
             a = deepcopy(u); a.σ[prop.target] = prop.new
             p.f.commit!(a, p.p, prop, (; lattice = p.lattice, contact = p.contact, p.relations...))
-            worst = max(worst, abs(energy_change(p, u, prop) - (total_energy(p, a) - total_energy(p, u))))
+            worst = max(worst, abs(energy_change(p, u, prop) - (total_energy(p, a) - total_energy(p, u) + Potts._killing_credit(p, u, prop, a))))
         end
         @test worst < 1e-8
         # the built-in is the CorePotts shape descriptor

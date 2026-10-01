@@ -227,12 +227,16 @@ Chemotaxis(c; strength = μ)                           # a @drive, see §5
 8. **Self-verification:** because the user wrote `H`, the compiler also generates
    `total_energy(sys)`. The test suite checks `ΔH == H(after) − H(before)` on random
    flips of every model automatically. No hand-written oracle is needed.
-   - **TODO (D-066 item 4, not implemented yet):** `total_energy` should sum cell terms
-     over alive cells only, cluster terms over clusters with an alive member, and edge
-     terms over links with both ends alive. Only the edge part is in (P6.0l); cell and
-     cluster terms still sum over every slot (`src/problem.jl`, `total_energy`, and
-     `_total_energy_expr` in `src/codegen.jl`). A copy that kills a linked cell already
-     needs the D-066 edge credit in the `ΔH == H(after) − H(before)` check.
+   - **A dead cell leaves `H`** (D-066 item 4, D-083): `total_energy` sums cell terms
+     over alive cells (`volume > 0`), cluster terms over roots of clusters with an alive
+     member, and edge terms over links with both ends alive; free slots add nothing.
+   - **Killing copies.** A copy that takes the old owner `o`'s last site pays o's cell
+     terms down to the empty state (and its cluster's terms, when no alive member is
+     left), while `H(after)` no longer contains them. So the check is
+     `ΔH == H(after) − H(before) + E_cell(o, empty) [+ E_cluster(empty)]`; the test
+     helpers add this credit with the internal `Potts._killing_credit(prob, u, prop, a)`.
+     Links carry no credit: the killing copy's ΔH removes o's edges at their pre-copy
+     energy (`link_delta`). A term with `E(empty) = 0` (e.g. `λ·volume²`) needs no credit.
 
 ---
 

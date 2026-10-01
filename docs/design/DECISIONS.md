@@ -1572,6 +1572,24 @@ session.
 - **Gate.** `akeeb_99x60` warm cost unchanged in-process (ratio ≤ 1.006); no re-baseline.
 - **Known limitation.** StableRNG streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. No coupling was measurable here (3000 seeds), but sub-stream seeds should come from a stable mixer, not `seed + k`: P6.0w.
 
+## D-083 P6.0r: a killing copy's ΔH drops the dying cell's links (2026-10-01, P6.0r; maintainer; amends D-066 item 4)
+
+- **Maintainer decision** (2026-10-01, asked by the coordinator): "Yes, ΔH = H change (Recommended)".
+- **ΔH.** For a copy that kills its old owner `o` (o's last site), `link_delta` evaluates o's edges at the pre-copy state only and removes them: the edge term goes from E(before) to 0. So for every copy
+
+      ΔE(copy) == H(after) − H(before) + E_cell(o, empty state)
+                  [+ E_cluster(cluster[o], empty state), if that cluster has no alive member left]
+
+  with no edge credit. In linked models with E_cell(empty) = 0 (e.g. `λ·volume²`), ΔH equals the H difference exactly. The cell and cluster credits stay as in D-066: ΔH pays the full cell-term change to the empty state.
+- **Dynamics.** A linked cell under spring tension can now be copied away (its springs vanish with it). No published model uses links, so no published result changes.
+- **`total_energy`** sums cell terms over alive cells and cluster terms over roots with an alive member (one marking pass, not O(n²)); free slots contribute nothing.
+- **Self-check helpers** (`lib/PottsModels/test/runtests.jl`, `test/symbolic.jl`, `test/audit.jl`) add the cell and cluster credits for killing copies and no edge credit.
+- **Cost.** One volume load of `o` (shared with `centroid_shift`) and one branch per link of `o`; a killing copy evaluates fewer terms than before.
+- **Acceptance:** frozen `p6_0r_killing_copy_energy.jl` (brute force over every copy of a linked state; Sequential and Checkerboard trajectories through a killing copy; dead cells and clusters leave H; a stretched one-site cell is killed in a run on CPU and Metal; negative controls).
+
+- **Fingerprints** (merge, from the review). `total_energy`'s generated code is part of the D-016 hash, so every published model's fingerprint changes with this item; checkpoints taken before it fail to load, by design. The ΔH change itself lives in `CorePotts.link_delta`, which is not hashed: a linked model's fingerprint is unchanged although its dynamics changed. No stored checkpoints exist.
+- **Review.** Approved in round 1. `link_delta` cost in-process, base vs HEAD (64 cells × 4 bonds, 72²): sequential 59.38 vs 59.43 ns/site, checkerboard 61.00 vs 61.36, zero warm allocations. Killing copies brute-forced on hex Hex(2) periodic (surface, `major_length`, links), 3D Moore(1) and dead-root clusters: worst gap ≤ 2.4e-12. The coordinator added a free-slot `total_energy` test and fixed a docstring and a test comment (b3c9559).
+
 ## D-084 P6.0k2: `@components` rejections and fixes (2026-10-01, P6.0k2; amends D-077)
 
 - **F7, rejected component features.** Before compiling, a component System with MTK `initialization_eqs`, `discrete_events`, `continuous_events`, `jumps` or `brownians` is an `ArgumentError` naming the component, the field and a workaround (`brownians` was added at merge from the review: they were silently dropped, giving deterministic trajectories). After compiling, a binding whose left side is, or whose right side reads, a coupled parameter is an `ArgumentError`. `guesses` stay ignored (Potts runs no MTK initialisation; documented). Other bindings were already rejected elsewhere; their messages not naming the component, and MTK `tstops`/`assertions` being ignored, are P6.0u.
@@ -1605,4 +1623,14 @@ session.
 - **Declarations.** Every `PottsSystem` construction (macro, `extend`, components, programmatic) runs `_check_primed_names`: a declared `x′` beside a site/field `x` is rejected. Lone primed declarations stay legal (coordinator scope).
 - **Residual.** An untranslated `x′` error from a hand-written (non-`@potts_model`) `@extend` base is labelled with the outer model's description: P6.0u.
 - **Code.** Fingerprints of every published model unchanged; constructor time within noise.
+
+## D-089 No synchronize on a quiet MCS: lifecycle planned on the device (2026-10-01; user; amends D-035, D-085)
+
+- **User decision** (2026-10-01), asked by the coordinator after the P6.0v audit: "Remove it, device-side (Recommended)".
+- **Rule.** On a GPU backend, lifecycle events are planned and applied on the device every lifecycle MCS, with no host decision and no read-back of the event count. Events keep their exact MCS (no backend difference). A quiet MCS of every model costs 0 syncs / 0 transfers / 0 B. D-035's "one 4-byte readback per checked MCS" is withdrawn for GPU backends; the CPU path is unchanged.
+- **Consequences.**
+  - P6.0v1 builds the device planner (daughter-id allocation, rule-carrying events, cluster handling, link updates and tracker updates on the device) and drops the trigger read-back.
+  - Frozen target (b) of `p6_0v_transfer_counters.jl` (1 / 1 / 4 B per quiet lifecycle MCS) changes to 0 / 0 / 0 B: P6.0v1 re-freezes that file under this decision (D-060 style; only (b)'s numbers change).
+  - P6.0d's deferred mask counts (D-081) must move off the read-back too: they stay on the device until a host read that already happens (save, `solve!` end, `checkpoint`), and `stats.attempts` on a device is exact only there.
+  - The lifecycle statistics (`stats.lifecycle`) are read at those same points.
 

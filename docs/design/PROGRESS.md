@@ -1636,3 +1636,12 @@ The maintainer approved F-1…F-6 (D-049).
 - **Code.** Fingerprints unchanged; constructor time within noise.
 - **Merge checks.** Potts, PottsModels, docs, MakiePotts and Potts on Metal exit 0.
 - **Gate.** Under parallel-agent load every CPU checkerboard case read 1.06–1.11 and OpenVT Metal 1.072. `ab.jl` against 6d4b51e (6 rounds): checkerboard Merks 1.019, OpenVT 1.000, Graner–Glazier 1.004; Metal OpenVT 0.982.
+
+## 2026-10-01 — P6.0r merged: a killing copy's ΔH drops the dying cell's links (D-083, maintainer); no quiet-MCS sync on GPU (D-089, user)
+
+- **The change.** For a copy that kills its old owner, `link_delta` removes that cell's edges at their pre-copy energy (no edge credit), so ΔH equals the H difference plus the empty-state cell/cluster credit; `total_energy` sums alive cells and live clusters only, free slots add nothing; the self-check helpers use `_killing_credit` (D-083, maintainer: "Yes, ΔH = H change").
+- **Review.** Approved in round 1; the coordinator added a free-slot test and fixed a docstring and a test comment (b3c9559). `link_delta` cost unchanged (59.38 vs 59.43 ns/site).
+- **Fingerprints.** Every published model's fingerprint changes (`total_energy` is hashed); per-MCS kernels unchanged; no stored checkpoints exist.
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
+- **Gate: pass.** CPU 1.004–1.021. Metal flags OpenVT (1.319) and Akeeb (1.076); `ab.jl` against 1a9b5d3 (8 rounds): 0.997 and 1.002.
+- **P6.0v review and user decision.** The P6.0v audit review asked for a QA guard on the counting helpers (round 2 in progress, which also merges the approved P6.0d). User: "Remove it, device-side (Recommended)": on GPU the lifecycle is planned on the device and a quiet MCS costs 0 syncs / 0 transfers (D-089, amends D-035 and D-085). New rows P6.0v7 (gate times Metal to completion; top priority), P6.0v4, P6.0v5; P6.0v8 folded into P6.0v3.

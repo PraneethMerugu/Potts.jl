@@ -400,7 +400,7 @@ needs its ordered folds, collections or keyed reductions.
 
 | Layer | Oracle |
 |---|---|
-| `delta_H` | brute-force total Hamiltonian difference on random flips, every model |
+| `delta_H` | brute-force total Hamiltonian difference on random flips, every model; a killing copy adds the dead cell's cell (and emptied cluster's) terms at the empty state, never its edges (D-083, `Potts._killing_credit`) |
 | trackers | full recomputation after N steps equals the maintained value |
 | checkerboard | sequential statistics (heterotypic fraction, cell counts, volume histograms) over ≥ 12 seeds |
 | determinism | same seed + backend → same run (debug aid); CPU vs GPU agree statistically |
