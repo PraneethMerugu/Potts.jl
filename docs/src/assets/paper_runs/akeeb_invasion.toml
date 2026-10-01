@@ -1,6 +1,6 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
-caption = "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is still 30)."
+caption = "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is 30)."
 date = "2026-10-01T17:42:15.580"
 deviations = "μ = 24 passed explicitly (constructor default 30; D-050 A5 sets 24, not yet in code). Dynamics seed differs from the authors' unseeded CC3D run."
 framerate = 24
