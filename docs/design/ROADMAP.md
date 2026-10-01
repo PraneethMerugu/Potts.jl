@@ -183,7 +183,7 @@ Every item's acceptance also includes the standing checks:
     - Accept: one negative test per case.
     - Accept: generated code and fingerprints for existing models are byte-identical.
     - Accept: build time and first MCS are unchanged within noise.
-- [ ] **P6.0n** Cell ODEs that read another cell's ODE state are Gauss–Seidel across cells and race on the GPU (P6.0k review N3). Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
+- [ ] **P6.0n** Cell ODEs that read another cell's ODE state (P6.0k review N3). As found by the P6.0n test author: `y[j]` on a variable of the same solver group does not compile today (`cannot index __y1`, `_substitute_locals`), and only unhoisted population folds (those reading `time`) are Gauss–Seidel and order-dependent. Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
 - [ ] **P6.0o** (D-075 §0.1, maintainer-approved 2026-09-30; MTK-native review, `research/mtk-native-review.md`) `PottsSystem <: ModelingToolkitBase.AbstractSystem`. Land it before P6.4a. MTK's `getproperty(::AbstractSystem)` takes over field access, so the ≈281 internal `sys.<field>` reads must change.
   - Accept: `PottsSystem` mirrors the `System` field names read by the MTK accessors it supports. It has an all-fields constructor taking `checks`, sets `namespacing`, and defines Potts-owned `complete`, `extend` and `show`.
   - Accept: every internal `sys.<field>` read uses `getfield` or an accessor. `sys.x` returns the namespaced symbolic, as in MTK.
@@ -216,6 +216,8 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0p** D-016 gap: the fingerprint ignores the discrete tick cadence (found by the P6.0k2 test author). The P6.0k fixture with `Clock(2.0)` fingerprints the same as with `ShiftIndex(t, 0)`, so a checkpoint loads into a problem with a different schedule. Hash the resolved cadence (every/offset of each `_Gated` phase, or the clock spec).
   - Accept: two problems that differ only in a clock's period or phase have different fingerprints, and a checkpoint of one fails to load into the other with an `ArgumentError`.
   - Accept: fingerprints of models without clocked components are unchanged.
+- [ ] **P6.0q** An unhoisted population fold that reads `time` inside a cell ODE fails to compile for Metal (`InvalidIRError`, `jl_new_opaque_closure_jlcall`), with or without the P6.0n fix. Found by the P6.0n test author. A fold that reads `mcs` is hoisted and runs on Metal.
+  - Accept: the P6.0n fold fixture runs on Metal and matches the CPU in Float32.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
