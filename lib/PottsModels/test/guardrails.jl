@@ -116,7 +116,7 @@ nonpublic_accesses(src::AbstractString) = nonpublic_accesses(Meta.parseall(src))
     @test nonpublic_accesses("PM = PottsModels") == ["alias PM = PottsModels"]
     @test isempty(nonpublic_accesses("""
         using Potts, PottsModels; using Potts: layout, paint!; import CorePotts.shift
-        Potts.paint!(σ, k, l, lat); CorePotts.shift(l, x, o); Makie.wong_colors()
+        Potts.paint!(op, l, lat); Potts.new_cell!(op, k); CorePotts.shift(l, x, o); Makie.wong_colors()
         const alg = SequentialCPM(); f(x) = Potts.layout(x)"""))
 end
 

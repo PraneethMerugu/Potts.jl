@@ -13,7 +13,13 @@
 # machine: parallel test suites make timings meaningless. It runs single-threaded: a
 # threaded KernelAbstractions launch allocates a fixed few KB for its tasks, which would
 # hide per-site allocations, and one thread gives steadier timings.
+#
+# On a device backend `step!` only enqueues kernels, so every device timing is `step!`
+# followed by `KernelAbstractions.synchronize(backend)`, and each sample's setup waits for
+# its own work too (D-090): the number is the GPU's cost, not the host's enqueue cost. CPU
+# rows (`backend === nothing`) time `step!` alone.
 using BenchmarkTools, Potts, PottsModels, TOML, Printf
+import KernelAbstractions
 const METAL = "metal" in ARGS
 METAL && using Metal
 
@@ -45,14 +51,30 @@ function warm_allocs(integ)
     return m
 end
 
+# Wait until all work queued on `backend` has finished; nothing to wait for on the CPU rows.
+settle(::Nothing) = nothing
+settle(backend) = (KernelAbstractions.synchronize(backend); nothing)
+
+# The timed expression of every gate and A/B measurement: one MCS, to completion.
+timed_step!(integ, ::Nothing) = (step!(integ); nothing)
+timed_step!(integ, backend) = (step!(integ); KernelAbstractions.synchronize(backend); nothing)
+
+# A warmed-up integrator (two MCS) with no work still in flight.
+function fresh_integrator(prob, alg, backend)
+    kw = backend === nothing ? (;) : (; backend)
+    integ = init(prob, alg; save_start = false, save_end = false, kw...)
+    step!(integ)
+    step!(integ)
+    settle(backend)
+    return integ
+end
+
 function measure(make, alg; backend = nothing)
     prob = make()
-    kw = backend === nothing ? (;) : (; backend)
-    fresh() = (i = init(prob, alg; save_start = false, save_end = false, kw...); step!(i); step!(i); i)
-    integ = fresh()
-    step!(integ)
+    integ = fresh_integrator(prob, alg, backend)
+    timed_step!(integ, backend)
     allocs = backend === nothing ? warm_allocs(integ) : 0
-    b = run(@benchmarkable step!(i) setup = (i = $fresh()) evals = 1 samples = 40 seconds = 30)
+    b = run(@benchmarkable timed_step!(i, $backend) setup = (i = fresh_integrator($prob, $alg, $backend)) evals = 1 samples = 40 seconds = 30)
     n = length(integ.state.σ)
     return minimum(b).time / n, allocs
 end

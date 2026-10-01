@@ -280,7 +280,7 @@ const RAW_TRANSFER_ALLOW = Dict(
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
     "lib/CorePotts/src/fields.jl" => 1,      # FieldStep device→device copy: not a transfer; Metal waits in it (P6.0v3)
     "lib/CorePotts/src/phases.jl" => 1,      # CopyPhase device→device copy: idem (P6.0v3)
-    "src/layouts.jl" => 3,                   # initial layouts on host arrays (setup; 241, 419, 463)
+    "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup; Frame masks)
 )
 # `synchronize` of any module, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,
 # `Adapt.adapt(Array`, `convert(Array`, `copyto!(`, `unsafe_copyto!(`. `collect` and `copy`

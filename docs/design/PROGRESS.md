@@ -1660,3 +1660,19 @@ The maintainer approved F-1…F-6 (D-049).
 - **Findings carried forward.** Device→device `copyto!` waits on the GPU twice (P6.0v3/P6.0v8); Akeeb event MCS move about 137 KB (P6.0v1); the old gate timed only enqueue for Graner–Glazier and Wortel (P6.0v7). Rows P6.0v1–P6.0v5 and P6.0v7 carry the work; D-089 (user) sets a quiet MCS to 0/0/0.
 - **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
 - **Gate: pass.** CPU 0.995–1.031. Metal flags (Wortel 2.90, Merks 1.50, OpenVT 1.67, Akeeb 1.86) under parallel load; `ab.jl` against f133b69: Wortel 1.000, Akeeb 1.034 (6 rounds), Merks 0.988, OpenVT 0.994 (10 rounds; 6-round reads of 1.36 and 1.46 were load).
+
+## 2026-10-01 — P6.0s + P6.0v7 merged: a fair machine lock; Metal timed to GPU completion (D-090)
+
+- **The change.** `tools/exclusive.sh` is a FIFO ticket queue in front of the old lock (tickets stale after 5 min without refresh, the lock after 3 h; stray entries ignored; keeper exits with its holder). `gate.jl` and `ab_one.jl` time device `step!` followed by `synchronize`; the Metal baseline was re-measured once (GG 86.3, Wortel 139.3, Merks 179.7, OpenVT 80.6, Akeeb 187.8 ns/site).
+- **Review.** Two rounds (dead-ticket starvation and stray entries fixed in round 2); the coordinator added the two optional nits (keeper skips a failed `ps`; ids without leading zeros).
+- **Merge checks.** Tooling only (no library code). Frozen check 69/69; transition test 15/15 and 23/23; tooling acceptance on Metal 32/32 (GG 72: `ab_one` 149.6 vs `step!`+`synchronize` 148.2 ns/site).
+- **Gate: pass.** CPU 0.982–1.019. Every Metal row flagged together (1.50–2.08, median 1.79) while three agents ran: a common-mode GPU slowdown, not a per-case change (no device code changed). The P6.0v3 follow-up normalises Metal flags by the run's median Metal ratio.
+- **Transition.** `ab-base` moves to this commit; live worktrees call the main checkout's `tools/exclusive.sh` by absolute path.
+
+## 2026-10-01 — P6.1a6 merged: the layout protocol (D-091)
+
+- **The change.** Every layer, built-in or user, is one method `paint!(op::LayoutState, l, lat)` on an opaque state (`new_cell!`, `assign!`, `owner`, `kindof`, `ncells`, `record!`) and the lattice queries `size`, `isperiodic`, `indomain`. `layout(l, x; report = true)` returns one report row per leaf layer; `Tiling(partial = :skip | :clip)`; `splits = :warn | :allow`; `remake` on layers. `paint!(σ, kinds, l, lat)`, `layout_tally` and `_AkeebSlab` are removed with no alias; `akeeb_layout` is a plain `overlay(Tiling, InsertUntil)` and reproduces all 16 Akeeb digests bit for bit. `p6_2a` and `p6_2a2` re-frozen (API calls only).
+- **Review.** One round, approved; coordinator doc fixes. Painting at parity or faster (Akeeb 1.55 → 0.95 ms) except 1×1 tiling (+1.4 ns per box).
+- **Merge fix.** P6.0v's raw-transfer allowlist pinned `src/layouts.jl` at 3; the rewrite leaves 2 (Frame masks, setup only).
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs and Potts on Metal exit 0.
+- **Gate: pass.** CPU 0.991–1.032. Metal rows all flagged together (1.52–2.07) while agents ran, as on the previous merge; this change has no device code.
