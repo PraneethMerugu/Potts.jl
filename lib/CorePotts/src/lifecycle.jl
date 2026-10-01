@@ -114,7 +114,8 @@ const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
 """
     AlongMinorAxis{T}(), AlongMajorAxis{T}(), RandomPlane{T}()
 
-Division plane normals, computed in float type `T` (use `Float32` on Metal):
+Division plane normals, computed in float type `T` (on a device, in the device's float type,
+`Float32`; a hand-written normal or state rule runs on the device and must be device code):
 `AlongMinorAxis` divides across the long axis (the plane contains the minor axis; normal =
 major axis), `AlongMajorAxis` divides along it, `RandomPlane` draws a uniform plane
 addressed by cell id and generation. `along_minor_axis` etc. are the `Float64` instances.

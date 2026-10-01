@@ -30,7 +30,8 @@ const _ACC_REMOVALS = 2
 const _ACC_TRANSITIONS = 3
 const _ACC_DEFERRED = 4
 const _ACC_EMPTY = 5
-const _ACC_ERROR = 6                # an EVENT_DIVIDE_CLUSTER without cluster state
+const _ACC_ERROR = 6                # bits: 1 = EVENT_DIVIDE_CLUSTER without cluster state,
+                                    # 2 = a dividing cell too large for the Int32 moment scratch
 const _NACC = 6
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
@@ -122,7 +123,7 @@ end
             raw = @inbounds events[c]
             e = _event(ruled, raw)
             if e == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
-                CL || (@inbounds dv.acc[_ACC_ERROR] = Int32(1))
+                CL || Atomix.@atomic dv.acc[_ACC_ERROR] |= Int32(1)
                 e = EVENT_NONE
                 @inbounds events[c] = EVENT_NONE
             end
@@ -260,6 +261,7 @@ end
         if @inbounds(dv.req[c]) == 1
             if rk < nfree
                 @inbounds daughter[c] = dv.freelist[rk + 1]
+                _check_scratch!(dv, st.cell, c, Val(ndims(ctx.lattice)))
                 n = normal(st, p, ctx, key, mcs, Int32(c))
                 for d in 1:length(n)
                     @inbounds normals[d, c] = n[d]
@@ -272,6 +274,18 @@ end
             _plan_cluster!(Int32(c), events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs)
         end
     end
+    return nothing
+end
+
+# A daughter's moment sums (about the parent's anchor) accumulate in Int32 scratch: exact
+# while the parent's own second moments fit in Int32 (the daughter's are a part of them).
+# A larger cell sets an error bit, raised at the next host read point.
+@inline function _check_scratch!(dv, cell, c, ::Val{N}) where {N}
+    ok = true
+    for k in 1:N
+        ok &= @inbounds(cell.m2[_pair(N, k, k), c]) < typemax(Int32)
+    end
+    ok || Atomix.@atomic dv.acc[_ACC_ERROR] |= Int32(2)
     return nothing
 end
 
@@ -316,6 +330,7 @@ end
         em == EVENT_REMOVE && continue
         @inbounds daughter[m] = dv.freelist[j + 1]
         j += Int32(1)
+        _check_scratch!(dv, cell, m, Val(N))
         ev = em == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
         @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
     end
@@ -627,6 +642,13 @@ end
 # ---------------------------------------------------------------------------------------
 # Host orchestration (enqueue only)
 
+# The built-in planes compute in the device's float type (the planner compiles every plane
+# of the model, also those of rules that never fire: a `Float64` default must not reach Metal)
+_plane(::AlongMinorAxis, ::Type{T}) where {T} = AlongMinorAxis{T}()
+_plane(::AlongMajorAxis, ::Type{T}) where {T} = AlongMajorAxis{T}()
+_plane(::RandomPlane, ::Type{T}) where {T} = RandomPlane{T}()
+_plane(normal, ::Type) = normal
+
 """
 Enqueue the lifecycle of MCS `mcs` on a device (D-089): no synchronization, no transfer.
 `refresh` is `nothing` or `(frozen, kinds)` of a standard-rule frozen mask (P6.0d). Returns
@@ -645,8 +667,10 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     CL = Val(_has_clusters(st))
     surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing
     _launch(_dtrigger_body!, backend, cap, (cache.events, dv, par, round, lc.trigger, st, p, ctx, key, mcs, CL))
-    D.plan!(cache.events, cache.daughter, cache.removed, cache.normals, cache.bias, dv, par, round, lc.normal,
-        lc.cluster_normal, lc.rules, st, p, ctx, key, mcs, CL, surf; ndrange = PLAN_WG)
+    T = eltype(cache.normals)
+    D.plan!(cache.events, cache.daughter, cache.removed, cache.normals, cache.bias, dv, par, round,
+        _plane(lc.normal, T), _plane(lc.cluster_normal, T), lc.rules, st, p, ctx, key, mcs, CL, surf;
+        ndrange = PLAN_WG)
     _launch(_dpartition_body!, backend, n, (dv, par, st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
         st.cell, lat))
     _launch(_dcells_body!, backend, cap, (dv, par, cache.events, cache.daughter, cache.removed, D.cols, D.links,
@@ -702,7 +726,7 @@ function _fold_lifecycle!(integ)
     s.transitions += δ(_ACC_TRANSITIONS)
     s.deferred += deferred
     s.empty_daughters += δ(_ACC_EMPTY)
-    err = D.acc[_ACC_ERROR] != 0
+    err = D.acc[_ACC_ERROR]
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
         _copy!(stats, D.mask, D.dv.mask)
@@ -714,6 +738,8 @@ function _fold_lifecycle!(integ)
         stats.refreshes += Int(D.mask[3] - D.mask_seen[3])
         D.mask_seen .= D.mask
     end
-    err && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    err & 1 != 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    err & 2 != 0 && throw(ArgumentError("lifecycle: a dividing cell's second moments exceed the device " *
+                                        "planner's Int32 scratch (a cell far larger than any in use); run it on the CPU"))
     return nothing
 end
