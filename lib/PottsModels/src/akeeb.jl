@@ -96,7 +96,9 @@ about a split cell; that is the published slab. `akeeb_state` paints it silently
 function akeeb_layout(; lattice = (500, 300), seed = 0x5cd2609, slab = 21, seeding::Symbol = :authors)
     seeding in (:authors, :retry) ||
         throw(ArgumentError("akeeb_layout: seeding must be :authors or :retry, got :$seeding"))
-    X = lattice[1]
+    X, Y = lattice
+    top = 3 * cld(slab, 3)                                   # the last tile row ends here
+    Y > top || throw(ArgumentError("akeeb_layout: lattice height $Y must exceed the slab ($top rows)"))
     misses = seeding === :authors ? :count : :retry
     return overlay(_AkeebSlab(X, slab),
         InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1))))
@@ -109,6 +111,10 @@ struct _AkeebSlab <: AbstractLayout
     slab::Int
 end
 function Potts.paint!(σ, kinds, l::_AkeebSlab, lat::Potts.LatticeSpec)
+    dims = lat.dims
+    length(dims) == 2 && dims[1] == l.X && dims[2] >= 3 * cld(l.slab, 3) ||
+        throw(ArgumentError("akeeb_layout: built for a $(l.X)-wide 2D lattice at least " *
+                            "$(3 * cld(l.slab, 3)) rows tall, painted on $(join(dims, "×"))"))
     for y in 1:3:(l.slab), x in 1:3:(l.X)
         push!(kinds, :follower)
         σ[x:min(x + 2, l.X), y:(y + 2)] .= length(kinds)

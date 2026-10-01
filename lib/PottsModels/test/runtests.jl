@@ -50,7 +50,11 @@ end
         op = akeeb_state(; lattice = (99, 60))
         n0 = length(op[2].second)
         @test count(==(:follower), op[2].second) == 231 && 70 <= count(==(:leader), op[2].second) <= 77
-        # 300 MCS: divisions start near MCS 200 (0–5 by then, 40–74 by 300 over six state seeds)
+        # 300 MCS: about 1 in 4 state seeds has no division by MCS 200 (MersenneTwister and
+        # StableRNG states alike, 120 seeds each); by 300 every seed has divided
+        @test_throws ArgumentError layout(akeeb_layout(; lattice = (99, 60)), (500, 300))  # wrong width
+        @test_throws ArgumentError layout(akeeb_layout(; lattice = (99, 60)), (99, 60, 4)) # 3D
+        @test_throws ArgumentError akeeb_layout(; lattice = (99, 20))                      # below the slab
         prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 300); capacity = 1000)
         @test selfcheck(prob) < 1e-9
         sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)))
