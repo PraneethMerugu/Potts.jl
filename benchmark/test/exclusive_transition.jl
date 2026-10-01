@@ -1,6 +1,8 @@
 # Transition safety of `tools/exclusive.sh` (P6.0s, D-090): while other checkouts still run
 # the earlier script (a bare `mkdir` lock on /tmp/potts-exclusive.lock, stale after 3 h),
-# a holder of the earlier script and a holder of the queued script never overlap.
+# a holder of the earlier script and a holder of the queued script never overlap. Also the
+# queue's robustness: a SIGKILLed waiter's ticket, stray entries and a vanished ticket do
+# not block the queue, while the lock keeps the earlier 3-hour stale rule.
 #
 #     julia benchmark/test/exclusive_transition.jl
 #
@@ -74,6 +76,9 @@ function intervals(ev)
 end
 disjoint(iv) = all(iv[k][3] <= iv[k + 1][2] for k in 1:(length(iv) - 1))
 
+"""Kill only processes this test started (by PID), if they are still running."""
+reap!(procs) = foreach(p -> process_running(p) && kill(p, Base.SIGKILL), procs)
+
 """Run `jobs` (pairs `tag => cmd`, each started once the previous one holds or is queued)."""
 function scenario(sb, jobs; stagger = 0.5)
     procs = Base.Process[]
@@ -87,9 +92,7 @@ function scenario(sb, jobs; stagger = 0.5)
         ok = wait_until(() -> !any(process_running, procs), 120)
         return (; ok, allok = ok && all(success, procs), iv = intervals(events(sb.log)))
     finally
-        for p in procs                   # only processes this test started, by PID
-            process_running(p) && kill(p, Base.SIGKILL)
-        end
+        reap!(procs)
     end
 end
 
@@ -129,5 +132,90 @@ lockfree(sb) = !ispath(joinpath(sb.lockroot, "potts-exclusive.lock")) &&
         @test r.allok
         @test length(r.iv) == 2
         @test !disjoint(r.iv)
+    end
+end
+
+# ---------------------------------------------------------------------------- queue robustness
+queue(sb) = joinpath(sb.lockroot, "potts-exclusive.q")
+lockdir(sb) = joinpath(sb.lockroot, "potts-exclusive.lock")
+age!(p, minutes) = run(`touch -h -t $(Libc.strftime("%Y%m%d%H%M.%S", time() - 60 * minutes)) $p`)
+finished_within(p, t) = wait_until(() -> !process_running(p), t)
+
+@testset "exclusive.sh: queue robustness" begin
+    @testset "a SIGKILLed waiter's ticket stops blocking after 5 min" begin
+        sb = sandbox()
+        procs = Base.Process[]
+        try
+            push!(procs, spawn(holder(sb, sb.new, "H", 4)))
+            @test wait_until(() -> started(sb, "H"), 30)
+            w = spawn(holder(sb, sb.new, "W", 1))
+            push!(procs, w)
+            @test wait_until(() -> isdir(joinpath(queue(sb), "2")), 10)    # W waits on ticket 2
+            kill(w, Base.SIGKILL)                                          # no trap runs
+            @test wait_until(() -> !process_running(procs[1]), 30)        # H done
+            @test isdir(joinpath(queue(sb), "2"))                          # W's ticket is left
+            n = spawn(holder(sb, sb.new, "N", 0))
+            push!(procs, n)
+            # negative control: a fresh dead ticket still blocks (the queue is honored)
+            @test !wait_until(() -> started(sb, "N"), 3)
+            age!(joinpath(queue(sb), "2"), 6)                              # past the 5 min rule
+            @test wait_until(() -> started(sb, "N"), 5)
+            @test finished_within(n, 10) && success(n)
+            @test !started(sb, "W")
+            @test lockfree(sb)
+        finally
+            reap!(procs)
+        end
+    end
+    @testset "stray entries in the queue" begin
+        sb = sandbox()
+        mkpath(queue(sb))
+        # a regular file with a ticket's name (what a bare `touch` could create): removed
+        # once stale, like a dead ticket
+        touch(joinpath(queue(sb), "1"))
+        age!(joinpath(queue(sb), "1"), 6)
+        # a name that is not a ticket is ignored, however fresh
+        touch(joinpath(queue(sb), "junk"))
+        p = spawn(Cmd([sb.new, "true"]))
+        @test finished_within(p, 5) && success(p)
+        @test !ispath(joinpath(queue(sb), "1"))
+        @test readdir(queue(sb)) == ["junk"]
+        @test !ispath(lockdir(sb))
+        reap!([p])
+    end
+    @testset "a waiter whose ticket vanishes requeues without leaving a file" begin
+        sb = sandbox()
+        procs = Base.Process[]
+        try
+            push!(procs, spawn(holder(sb, sb.new, "H", 4)))
+            @test wait_until(() -> started(sb, "H"), 30)
+            push!(procs, spawn(holder(sb, sb.new, "W", 1)))
+            t2 = joinpath(queue(sb), "2")
+            @test wait_until(() -> isdir(t2), 10)
+            rm(t2)                                                         # pruned under W
+            files = false
+            ok = wait_until(30) do
+                files |= any(f -> !isdir(joinpath(queue(sb), f)), readdir(queue(sb)))
+                !any(process_running, procs)
+            end
+            @test ok && all(success, procs)
+            @test !files                                                   # never a regular file
+            @test started(sb, "W")
+            @test disjoint(intervals(events(sb.log)))
+            @test lockfree(sb)
+        finally
+            reap!(procs)
+        end
+    end
+    @testset "the lock keeps the 3 h stale rule (earlier holders never refresh it)" begin
+        sb = sandbox()
+        mkdir(lockdir(sb))
+        age!(lockdir(sb), 60)                     # an earlier-script holder 1 h into its run
+        p = spawn(Cmd([sb.new, "true"]))
+        @test !finished_within(p, 3)               # still held
+        age!(lockdir(sb), 4 * 60)                 # past 3 h: the holder is dead
+        @test finished_within(p, 5) && success(p)
+        @test lockfree(sb)
+        reap!([p])
     end
 end

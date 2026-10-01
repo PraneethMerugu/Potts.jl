@@ -17,7 +17,11 @@
 On a device backend `step!` only enqueues kernels. Every Metal timing in `gate.jl` and
 `ab_one.jl` is therefore `step!` followed by `KernelAbstractions.synchronize(backend)`
 (`timed_step!` in `gate.jl`), and each sample's setup synchronizes too, so no setup work is
-still in flight when the clock starts. CPU rows time `step!` alone and must allocate nothing.
+still in flight when the clock starts. A Metal row is therefore the latency of one MCS
+launched on an idle GPU and waited for, not throughput: a run of MCS without a synchronize
+in between may overlap host and GPU work, which this timing excludes. Metal flags stay
+advisory: the gate only flags a slow Metal row, and `ab.jl` decides it. CPU rows time
+`step!` alone and must allocate nothing.
 Before 2026-10-01 the Metal rows timed host enqueue only, so Graner–Glazier and Wortel read
 far below their GPU cost; the Metal rows of `baseline.toml` were re-measured once then (the
 CPU rows were left as they were). Metal A/B verdicts from before that date on those models
@@ -30,10 +34,14 @@ A FIFO ticket queue in front of the directory lock `/tmp/potts-exclusive.lock`. 
 takes a numbered ticket in `/tmp/potts-exclusive.q`; the lowest ticket is next and must
 still take the directory lock by `mkdir`, so it excludes holders of the earlier script
 (a bare `mkdir` loop polling every 20 s) as well. Waiters poll about once a second, so a run
-queued before an A/B gets the lock before the A/B's next round. A ticket or lock older than
-3 hours belongs to a dead process and no longer blocks; live waiters and holders refresh
-theirs. The command's exit status is passed through, and the ticket and lock are removed on
-exit, INT or TERM.
+queued before an A/B gets the lock before the A/B's next round. Waiters touch their ticket
+every poll and holders every minute, so a ticket untouched for 5 minutes (e.g. of a
+SIGKILLed waiter) is removed; queue entries whose names are not numbers are ignored. The
+lock keeps the earlier script's 3-hour stale rule, because that script never refreshes it.
+The command's exit status is passed through, and the ticket and lock are removed on exit,
+HUP, INT, QUIT, PIPE or TERM. During the transition a waiter of the earlier script (20 s
+poll) can lose the lock repeatedly to queued waiters (1 s poll), but never overlaps them.
+`test/exclusive_transition.jl` covers both scripts together and the queue's stale rules.
 
 The legacy rows below were measured with the since-removed `reference/` pin (D-048).
 
