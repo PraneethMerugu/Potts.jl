@@ -9,7 +9,7 @@ function run_lifecycle(σ, kinds, lat, lifecycle; capacity = length(kinds) + 4, 
         phases = Phases(), backend = CPU())
     st = lc_state(σ, kinds, lat; capacity, cell)
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint, lifecycle, phases)
-    return solve(CPMProblem(f, st, lat, tspan, p), alg; backend)
+    return solve(PottsProblem(f, st, lat, tspan, p), alg; backend)
 end
 
 divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
@@ -95,7 +95,7 @@ divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
         f = CPMFunction(dH; commit!, temperature = gg_temperature,
             phases = Phases(before_mcs = (CellPhase(grow!),)),
             lifecycle = Lifecycle(big; divide! = reset!))
-        sol = solve(CPMProblem(f, st, lat, (0, 120), gg_params()), alg)
+        sol = solve(PottsProblem(f, st, lat, (0, 120), gg_params()), alg)
         u = sol.u[end]
         live = findall(>(0), u.cell.volume)
         @test length(live) >= 4
@@ -124,7 +124,7 @@ end
     frozen(st, p, prop, ctx) = false
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
         lifecycle = Lifecycle(tr; divide! = rule!, rules = true))
-    sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+    sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
     @test sol.stats.lifecycle.divisions == 4
     @test seen == Dict(Int32(1) => 2, Int32(2) => 1, Int32(3) => 5, Int32(4) => 5)
     u = sol.u[end]
@@ -134,5 +134,5 @@ end
     n = Ref(0)
     f7 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
         lifecycle = Lifecycle(plain; divide! = (st, p, ctx, key, mcs, parent, daughter) -> (n[] += 1; nothing)))
-    @test solve(CPMProblem(f7, st, lat, (0, 1), gg_params()), SequentialCPM()).stats.lifecycle.divisions == 1 && n[] == 1
+    @test solve(PottsProblem(f7, st, lat, (0, 1), gg_params()), SequentialCPM()).stats.lifecycle.divisions == 1 && n[] == 1
 end

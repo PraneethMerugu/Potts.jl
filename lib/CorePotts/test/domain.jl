@@ -17,10 +17,10 @@
     ids = sort!(unique(filter(>(0), σ)))
     σ = map(s -> s == 0 ? Int32(0) : Int32(searchsortedfirst(ids, s)), σ)
     kinds = kinds[ids]
-    @test_throws ArgumentError CPMProblem(GG, initial_state(fill(Int32(1), 40, 40), [1]), lat, (0, 1), gg_params())
+    @test_throws ArgumentError PottsProblem(GG, initial_state(fill(Int32(1), 40, 40), [1]), lat, (0, 1), gg_params())
     st = initial_state(σ, kinds)
     for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-        prob = CPMProblem(GG, st, lat, (0, 30), gg_params(); seed = 2)
+        prob = PottsProblem(GG, st, lat, (0, 30), gg_params(); seed = 2)
         @test count(prob.frozen) == count(!, lat.mask)
         u = solve(prob, alg).u[end]
         @test all(u.σ[.!lat.mask] .== 0)                             # nothing crosses the edge
@@ -29,7 +29,7 @@
     end
 
     # ΔH equals the brute-force energy difference next to the domain edge
-    prob = CPMProblem(GG, st, lat, (0, 1), gg_params())
+    prob = PottsProblem(GG, st, lat, (0, 1), gg_params())
     ctx = (; lattice = lat, contact = prob.contact)
     moore = relation(Moore(1), lat)
     worst = 0.0
@@ -52,7 +52,7 @@
     ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 2),))
     c0 = zeros(40, 40); c0[18:23, 18:23] .= 1.0; c0[1, 1] = 7.0              # (1, 1) is outside
     sf = initial_state(zeros(Int32, 40, 40), Int32[]; site = (; c = c0, c_next = copy(c0)))
-    fp = CPMProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph), sf, lat, (0, 200), gg_params())
+    fp = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph), sf, lat, (0, 200), gg_params())
     uf = solve(fp, SequentialCPM()).u[end]
     @test sum(uf.site.c[lat.mask]) ≈ 36.0
     @test uf.site.c[1, 1] == 7.0

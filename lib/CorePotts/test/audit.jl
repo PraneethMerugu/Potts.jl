@@ -7,20 +7,20 @@
     st = CPMState(st.σ, st.cell, st.site, st.model, (; vh = history_buffer(zeros(Int32, 50), 3)))
     f = CPMFunction(gg_delta_H; temperature = gg_temperature,
         phases = Phases(; end_mcs = (HistoryPush(:vh => (:cell, :volume)),)))
-    sol = solve(CPMProblem(f, st, lat, (0, 3), gg_params()), SequentialCPM())
+    sol = solve(PottsProblem(f, st, lat, (0, 3), gg_params()), SequentialCPM())
     @test sol.u[end].history.vh[1:length(kinds), mod1(3, 3)] == sol.u[end].cell.volume[1:length(kinds)]
     # a mismatched ring is an error, not an out-of-bounds write
     bad = initial_state(σ, kinds; history = (; vh = history_buffer(zeros(Int32, 2), 3)))
-    @test_throws DimensionMismatch solve(CPMProblem(f, bad, lat, (0, 1), gg_params()), SequentialCPM())
+    @test_throws DimensionMismatch solve(PottsProblem(f, bad, lat, (0, 1), gg_params()), SequentialCPM())
 end
 
 @testset "A-11 asymmetric contact relations are rejected" begin
     lat = Lattice((12, 12))
     σ, kinds = blocks((12, 12), 4)
     st = initial_state(σ, kinds)
-    prob = CPMProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (0, 1)]))
+    prob = PottsProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (0, 1)]))
     @test_throws ArgumentError solve(prob, SequentialCPM())
-    ok = CPMProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (-1, 0)]))
+    ok = PottsProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (-1, 0)]))
     @test solve(ok, SequentialCPM()).retcode == ReturnCode.Success
 end
 
@@ -35,7 +35,7 @@ end
     commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop);
         commit_site_sum!(st.cell.vsum, prop, @inbounds v[prop.target]))
     f = CPMFunction(gg_delta_H; commit!, temperature = (a...) -> 0.0, lifecycle = lc)
-    u = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+    u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
     @test u.cell.volume[2] > 0
     @test u.cell.vsum ≈ recompute_site_sum(u.σ, v, 4)
 end
@@ -43,7 +43,7 @@ end
 @testset "A-19 solution display and integer indexing; A-14 scalar saveat" begin
     lat = Lattice((12, 12))
     σ, kinds = blocks((12, 12), 4)
-    prob = CPMProblem(GG, initial_state(σ, kinds), lat, (0, 10), gg_params())
+    prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 10), gg_params())
     sol = solve(prob, SequentialCPM(); saveat = 2)
     @test sol.t == [0, 2, 4, 6, 8, 10]
     @test sol[end] === sol.u[end]
@@ -109,7 +109,7 @@ end
     @test CorePotts.reach(Footprint(), relation(Moore(2), L)) == (2, 0)
     @test CorePotts.reach(Footprint(; source_read = 2, source_write = 0), relation(Moore(2), L)) == (4, 2)
     σ, kinds = blocks((24, 24), 4)
-    prob = CPMProblem(GG, initial_state(σ, kinds), L, (0, 3), gg_params())
+    prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 3), gg_params())
     u = solve(prob, CheckerboardCPM(; proposal = Moore(2))).u[end]
     @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(u.cell.volume)]
 end
@@ -121,7 +121,7 @@ end
     st = CPMState(st.σ, merge(st.cell, init_moments(σ, lat, 4)), st.site, st.model, st.history)
     lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE)
     f = CPMFunction(gg_delta_H; temperature = (a...) -> 0.0, lifecycle = lc)
-    u = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM(; proposal = VonNeumann(1))).u[end]
+    u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM(; proposal = VonNeumann(1))).u[end]
     @test count(>(0), u.cell.volume) == 2
 end
 
@@ -134,7 +134,7 @@ end
     frozen(st, p, prop, ctx) = false
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
         lifecycle = Lifecycle(tr; kind = (st, p, ctx, key, mcs, c) -> Int32(1)))
-    sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+    sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
     u = sol.u[end]
     @test sol.stats.lifecycle.divisions == 2 && sol.stats.lifecycle.transitions == 1
     @test u.cell.kind[1:4] == Int32[1, 1, 1, 1]          # member 2 and its daughter took kind 1
@@ -148,7 +148,7 @@ end
     @test out == 3 .* (1:100)
     L = Lattice((48, 48))
     σ, kinds = blocks((48, 48), 6)
-    prob = CPMProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
+    prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())
     alg = CheckerboardCPM(; proposal = Moore(1))
     a, b = init(prob, alg), init(prob, alg)
     b.cache.groupsize .= 64                     # several workgroups per color

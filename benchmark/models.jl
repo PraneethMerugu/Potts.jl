@@ -27,6 +27,6 @@ end
 
 function graner_problem(; scale = 1, nmcs = 100, T = Float64, seed = 97329219)
     σ, kinds = graner_state(scale)
-    return CPMProblem(GRANER, initial_state(σ, kinds), Lattice(size(σ)), (0, nmcs),
+    return PottsProblem(GRANER, initial_state(σ, kinds), Lattice(size(σ)), (0, nmcs),
         graner_params(T); contact = Moore(1), seed)
 end

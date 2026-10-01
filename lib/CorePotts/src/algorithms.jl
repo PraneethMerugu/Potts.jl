@@ -41,13 +41,18 @@ end
 
 abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
+# Potts dynamics advance in whole MCS: a discrete-time algorithm (D-075 Q2). Keep this
+# method when the planned `AbstractPottsAlgorithm <: AbstractDEAlgorithm` lands: it
+# overrides SciMLBase's default `false`.
+SciMLBase.isdiscrete(::CPMAlgorithm) = true
+
 """
     SequentialCPM(; acceptance = nothing, proposal = nothing)
 
 Random-site sequential dynamics on the host: one MCS is `N` copy attempts with
 replacement over the lattice sites. The fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
-the problem's copy neighbourhood (`CPMProblem(…; proposal)`, default `VonNeumann(1)`).
+the problem's copy neighbourhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
 """
 Base.@kwdef struct SequentialCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing

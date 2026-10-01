@@ -37,7 +37,7 @@ function merks_problem(; tspan = (0, 40), seed = 0)
         dt = 1.0, substeps = 2, lower = 0.0),))
     f = CPMFunction(merks_delta_H; commit! = merks_commit!, temperature = merks_temperature,
         constraint = one_arc_connectivity, phases = ph)
-    return CPMProblem(f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed)
+    return PottsProblem(f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed)
 end
 
 # --- Niculescu et al. (2015) Act migration (Artistoo semantics, D-049), 16×16 periodic ------
@@ -69,7 +69,7 @@ function wortel_problem(; tspan = (0, 40), seed = 0)
     st = initial_state(σ, [1, 1]; cell = (; surface), site = (; act = zeros(16, 16)))
     f = CPMFunction(wortel_delta_H; commit! = wortel_commit!, temperature = merks_temperature,
         phases = Phases(after_mcs = (SitePhase(decay_act!),)))
-    return CPMProblem(f, st, lat, tspan, WORTEL_PORT_P; contact = Moore(1), proposal = Moore(1),
+    return PottsProblem(f, st, lat, tspan, WORTEL_PORT_P; contact = Moore(1), proposal = Moore(1),
         relations = (; surface = Moore(1), act = Moore(1)), seed)
 end
 
@@ -96,5 +96,5 @@ function openvt_problem(; tspan = (0, 20), seed = 0)
     f = CPMFunction(openvt_delta_H; commit! = openvt_commit!, temperature = merks_temperature,
         lifecycle = Lifecycle(openvt_trigger; normal = openvt_normal, divide! = openvt_split!))
     p = (; λ = 2.0, V0 = 8.0, Jt = 0.0, Jm = 4.0, T = 2.0)
-    return CPMProblem(f, st, lat, tspan, p; contact = Moore(1), seed)
+    return PottsProblem(f, st, lat, tspan, p; contact = Moore(1), seed)
 end

@@ -12,7 +12,7 @@ include("oracle_core.jl")
 
     lat = Lattice(dims; boundary = Closed())
     p = (; J = SMatrix{3, 3}(Jk), λ = 1.0, V0 = 2.0, T = 4.0)
-    prob = CPMProblem(GG, initial_state(reshape(Int32.(σ0), dims), [1, 2]), lat, (0, 2), p)
+    prob = PottsProblem(GG, initial_state(reshape(Int32.(σ0), dims), [1, 2]), lat, (0, 2), p)
 
     @test sort(sort.(Oracle.color_classes(tiny, 2))) ==
           sort([sort([CorePotts.linear_index(lat, CorePotts.color_site(c, j))
@@ -51,7 +51,7 @@ end
 @testset "preflight rejects an undeclared read radius" begin
     lat = Lattice((20, 20))
     σ, k = blocks((20, 20), 3)
-    wide = CPMProblem(GG, initial_state(σ, k), lat, (0, 1), gg_params();
+    wide = PottsProblem(GG, initial_state(σ, k), lat, (0, 1), gg_params();
         contact = NeighborOrder(3))
     @test_throws ArgumentError init(wide, CheckerboardCPM())
     @test init(wide, SequentialCPM()) isa PottsIntegrator

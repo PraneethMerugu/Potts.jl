@@ -91,7 +91,7 @@ end
         function run(Jint)
             f, p = compartment_model(; λs = 0.05, Jint)
             st = initial_state(σ, kinds; cell = init_clusters(σ, cluster, lat; relation = Moore(1)))
-            return solve(CPMProblem(f, st, lat, (0, 150), p; relations = (; surface = Moore(1))), alg).u[end]
+            return solve(PottsProblem(f, st, lat, (0, 150), p; relations = (; surface = Moore(1))), alg).u[end]
         end
         m = n ÷ 2
         function internal_fraction(u)       # nuclei's interface shared with their own cytoplasm
@@ -121,7 +121,7 @@ end
         @test st.cell.cluster == Int32[1, 1, 3, 4, 5, 6]
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle(tr; divide! = half!))
-        sol = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+        sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions == 2
         @test u.cell.volume[1:4] == Int32[68, 12, 68, 12]              # one plane through the cluster
@@ -134,13 +134,13 @@ end
         # `EVENT_DIVIDE`: compartments divide on their own and daughters stay in the cluster
         f2 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 2 ? EVENT_DIVIDE : EVENT_NONE))
-        u2 = solve(CPMProblem(f2, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        u2 = solve(PottsProblem(f2, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test u2.cell.cluster[1:3] == Int32[1, 1, 1]
 
         # removing the root re-roots the cluster
         f3 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 1 ? EVENT_REMOVE : EVENT_NONE))
-        u3 = solve(CPMProblem(f3, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        u3 = solve(PottsProblem(f3, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test u3.cell.cluster[1:2] == Int32[1, 2] && u3.cell.cluster_volume[2] == 24
         # a dead root keeps naming its cluster: its id is never handed to a daughter
         σd = zeros(Int32, 40, 40); σd[3:8, 3:8] .= 2; σd[11:30, 15:22] .= 3; σd[18:23, 17:20] .= 4
@@ -150,7 +150,7 @@ end
         std.cell.cluster_volume .= recompute_cluster_volume(σd, std.cell.cluster)
         fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE))
-        ud = solve(CPMProblem(fd, std, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        ud = solve(PottsProblem(fd, std, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test ud.cell.cluster[2] == 2                         # re-rooted at its surviving member
         @test ud.cell.cluster[3] == ud.cell.cluster[4] == 3
         daughters = findall(c -> c > 4 && ud.cell.volume[c] > 0, 1:8)
@@ -164,7 +164,7 @@ end
         @test str.cell.cluster[1:3] == Int32[1, 2, 2]
         fr = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE : EVENT_NONE))
-        ur = solve(CPMProblem(fr, str, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+        ur = solve(PottsProblem(fr, str, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
         @test ur.cell.volume[1] > 0 && ur.cell.cluster[1:3] == Int32[2, 2, 2]
 
         # init: the root is the lowest member of a preferred kind
@@ -185,7 +185,7 @@ end
         alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.alone[parent] = st.cell.alone[daughter] = 1.0; nothing)
         together!(st, p, ctx, key, mcs, parent, daughter) =
             (st.cell.together[parent] = st.cell.together[daughter] = 1.0; nothing)
-        run(tr) = solve(CPMProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+        run(tr) = solve(PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
                     cluster_normal = along_minor_axis, cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
         # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
@@ -237,7 +237,7 @@ end
             f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0),
                     cluster_normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0)))
-            solve(CPMProblem(f, st, lat, (0, 1), gg_params()), alg)
+            solve(PottsProblem(f, st, lat, (0, 1), gg_params()), alg)
         end
         brute(u, cap) = Int32[count(==(c), u.σ) for c in 1:cap]
 
@@ -275,6 +275,6 @@ end
         st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 2)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> EVENT_DIVIDE_CLUSTER))
-        @test_throws ArgumentError solve(CPMProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+        @test_throws ArgumentError solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
     end
 end

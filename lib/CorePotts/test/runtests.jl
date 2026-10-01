@@ -228,21 +228,21 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         σ, kinds = blocks((30, 30), 5)
         lat = Lattice((30, 30))
         sspec = Weighted(Moore(1), invdist)
-        sprob = CPMProblem(GS, surface_state(σ, kinds, lat, sspec), lat, (0, 30), gs_params();
+        sprob = PottsProblem(GS, surface_state(σ, kinds, lat, sspec), lat, (0, 30), gs_params();
             relations = (; surface = sspec))
         sol = solve(sprob, alg)
         @test sol.retcode == ReturnCode.Success
         u = sol.u[end]
         @test u.σ != σ
         @test u.cell.surface ≈ brute_surface(u.σ, lat, relation(sspec, lat), length(kinds)) rtol = 1e-12
-        bad = CPMProblem(GS, sprob.u0, lat, (0, 1), gs_params();
+        bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
             relations = (; surface = Moore(1; include_self = true)))
         @test_throws ArgumentError init(bad, alg)
     end
 
     σ0, kinds0 = blocks((36, 36), 5)
     lat = Lattice((36, 36))
-    prob = CPMProblem(GG, initial_state(σ0, kinds0), lat, (0, 20), gg_params(); seed = 7)
+    prob = PottsProblem(GG, initial_state(σ0, kinds0), lat, (0, 20), gg_params(); seed = 7)
 
     for alg in (SequentialCPM(), CheckerboardCPM(), CheckerboardCPM(; proposal = Moore(1)))
         @testset "$(nameof(typeof(alg))) with $(typeof(alg.proposal))" begin
@@ -284,7 +284,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
     @testset "claim buffer is clean at every color (odd color count)" begin
         lat13 = Lattice((13, 13))                     # 3 classes per axis at stride 2 → 9 colors
         σ, k = blocks((13, 13), 3)
-        oprob = CPMProblem(GG, initial_state(σ, k), lat13, (0, 10), gg_params())
+        oprob = PottsProblem(GG, initial_state(σ, k), lat13, (0, 10), gg_params())
         integ = init(oprob, CheckerboardCPM(); save_start = false)
         @test isodd(length(integ.cache.colors))
         for _ in 1:4
@@ -295,7 +295,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
 
     @testset "non-finite ΔH fails the solve" begin
         bad = CPMFunction((st, p, prop, ctx) -> NaN; temperature = gg_temperature)
-        bprob = CPMProblem(bad, initial_state(σ0, kinds0), lat, (0, 3), gg_params())
+        bprob = PottsProblem(bad, initial_state(σ0, kinds0), lat, (0, 3), gg_params())
         @test solve(bprob, SequentialCPM()).retcode == ReturnCode.Failure
         @test solve(bprob, CheckerboardCPM()).retcode == ReturnCode.Failure
     end
@@ -317,7 +317,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             σr[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= 6i + j + 1
         end
         kr = Int32[isodd(i + (i ÷ 6)) ? 1 : 2 for i in 1:36]
-        sprob = CPMProblem(GG, initial_state(σr, kr), lat, (0, 60),
+        sprob = PottsProblem(GG, initial_state(σr, kr), lat, (0, 60),
             merge(gg_params(), (; V0 = 36.0)))
         h0 = hetero(initial_state(σr, kr))
         hs = [hetero(solve(remake(sprob; seed), SequentialCPM()).u[end]) for seed in 1:4]

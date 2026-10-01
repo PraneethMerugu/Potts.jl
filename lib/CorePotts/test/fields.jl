@@ -8,7 +8,7 @@ function field_problem(σ, kinds, lat, c0, rate, p; dt = 1.0, substeps = 1, spac
     st = initial_state(σ, kinds; site = (; c = copy(c0), c_next = zero(c0)))
     ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate; dt, substeps),))
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint, phases = ph)
-    return CPMProblem(f, st, lat, tspan, p; spacing)
+    return PottsProblem(f, st, lat, tspan, p; spacing)
 end
 
 @testset "fields" begin

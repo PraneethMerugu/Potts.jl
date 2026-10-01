@@ -144,7 +144,7 @@ Evaluate the model quantity or expression `x` (e.g. `volume`, an `@observed` nam
 `count(true for c in cells(tumor))` written with the model's symbols) on state `u`
 (default: the problem's initial state, or every saved state of a solution).
 """
-observe(prob::CorePotts.CPMProblem, x, u = prob.u0) = _observed_function(prob.f.sys, x)(u, prob.p, prob.tspan[1])
+observe(prob::CorePotts.PottsProblem, x, u = prob.u0) = _observed_function(prob.f.sys, x)(u, prob.p, prob.tspan[1])
 observe(sol::CorePotts.PottsSolution, x) = map((u, s) -> _observed_function(sol.prob.f.sys, x)(u, sol.prob.p, s), sol.u, sol.t)
 
 SII.parameter_values(p::PottsParameters) = p

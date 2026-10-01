@@ -6,7 +6,7 @@
         σ, kinds = blocks((30, 30), 5; gap = 0)
         lat = Lattice((30, 30))
         frozen = falses(30, 30); frozen[:, 1:3] .= true; frozen[12:18, 12:18] .= true
-        prob = CPMProblem(GG, initial_state(σ, kinds), lat, (0, 20),
+        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 20),
             merge(gg_params(), (; T = 30.0)); frozen)
         sol = solve(prob, alg)
         u = sol.u[end]
@@ -14,7 +14,7 @@
         @test u.σ[.!frozen] != σ[.!frozen]
         @test sol.stats.attempts == 20 * count(!, frozen)
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
-        @test_throws ArgumentError CPMProblem(GG, initial_state(σ, kinds), lat, (0, 1),
+        @test_throws ArgumentError PottsProblem(GG, initial_state(σ, kinds), lat, (0, 1),
             gg_params(); frozen = falses(3, 3))
     end
 
@@ -43,7 +43,7 @@
             CellReduce((:cell, :vmax), (st, p, ctx, key, mcs, i) -> st.site.v[i]; op = max),
             CellReduce((:cell, :rim), (st, p, ctx, key, mcs, i) -> is_boundary_site(st.σ, ctx, i))))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frz, phases = ph)
-        u = solve(CPMProblem(f, st, lat, (0, 1), gg_params()), CheckerboardCPM()).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), CheckerboardCPM()).u[end]
         for c in 1:n
             owned = findall(==(c), σ)
             if isempty(owned)                              # identities for empty cells
@@ -86,7 +86,7 @@
         st = initial_state(σ1, Int32[]; site = (; c = zeros(40, 4), c_next = zeros(40, 4)))
         ph = Phases(after_mcs = (FieldStep((:site, :c) => (:site, :c_next), rate; substeps = 4),))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
-        c = solve(CPMProblem(f, st, lat1, (0, 8000), merge(gg_params(), (; D = 0.4, bc))),
+        c = solve(PottsProblem(f, st, lat1, (0, 8000), merge(gg_params(), (; D = 0.4, bc))),
             SequentialCPM()).u[end].site.c
         exact = [1 - (x - 0.5) / 40 for x in 1:40]          # faces at x = 0.5 and 40.5
         @test maximum(abs.(c[:, 1] .- exact)) < 1e-6
@@ -104,7 +104,7 @@
             st = initial_state(σ, kinds; cell = empty_contacts(8, n; T = Float64))
             f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
                 phases = Phases(after_mcs = (ContactPhase(name),)))
-            prob = CPMProblem(f, st, lat, (0, 1), gg_params(); contact = VonNeumann(1),
+            prob = PottsProblem(f, st, lat, (0, 1), gg_params(); contact = VonNeumann(1),
                 relations = name === :touch ? (; touch = spec) : (;))
             u = solve(prob, CheckerboardCPM()).u[end]
             g = contact_graph(u.σ, lat, relation(spec, lat), n)

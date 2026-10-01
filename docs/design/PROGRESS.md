@@ -1532,3 +1532,23 @@ The maintainer approved F-1…F-6 (D-049).
   - CPU: 0.976–1.001, with zero allocations.
   - Metal: two cases flagged. `ab.jl` against f554597 gives Wortel 1.015 and OpenVT 1.011, both within tolerance.
 - **Follow-up:** P6.0m3 (`integral(Pre(w))`), filed earlier.
+
+## 2026-09-30 — P6.0m2 merged: `CPMProblem → PottsProblem` (D-075, breaking batch part 1)
+
+- **The change.**
+  - The CorePotts type is renamed to `PottsProblem`, with the supertype unchanged and no alias.
+  - The Potts symbolic constructors are now methods of `CorePotts.PottsProblem`, so the two are one function.
+  - `SciMLBase.isdiscrete(::CPMAlgorithm) = true`.
+- **Frozen acceptance.** `p6_0m2_potts_problem.jl` (D-075).
+- **Review.** Round 1 approved.
+  - Checkpoints don't serialise the type name, so old ones still load.
+  - `isdiscrete` changes no dispatch at the pinned SciMLBase/DiffEqBase.
+- **Coordinator fixes at merge.**
+  - The symbolic `PottsProblem(sys, op, tspan)` docstring was orphaned before this change. It is now attached, so `?PottsProblem` shows both forms.
+  - Docstring alignment.
+  - A note on `isdiscrete` for when `AbstractPottsAlgorithm` lands.
+- **Leftover `CPMProblem` mentions.** They remain only in the historical records (DECISIONS, PROGRESS, research/, the M1.4 ROADMAP line) and in this row's own text.
+- **Merge checks.** CorePotts (QA), PottsModels, MakiePotts, Potts on Metal and docs all exit 0.
+- **Gate.**
+  - CPU: 0.969–1.001, with zero allocations.
+  - Metal: three cases flagged. `ab.jl` against 9b4cf48 gives Akeeb 1.025, Wortel 0.953 and OpenVT 0.995, all within tolerance.

@@ -249,7 +249,7 @@ Every item's acceptance also includes the standing checks:
   The start-of-after integral refresh also runs before the Pre-snapshot `CopyPhase`.
   - Accept: an integral of a `Pre` operand reads the pre-MCS values.
   - Accept: a regression test covering both orders.
-- [ ] **P6.0m2** (D-075, breaking batch part 1) `CPMProblem → PottsProblem`, supertype
+- [x] (merge, 2026-09-30) **P6.0m2** (D-075, breaking batch part 1) `CPMProblem → PottsProblem`, supertype
   unchanged, no alias; `SciMLBase.isdiscrete(::AbstractPottsAlgorithm) = true`. Every
   package, test, benchmark and tutorial is updated in the same change. Accept: all suites
   pass, the gate is unchanged, and no `CPMProblem` remains outside DECISIONS and PROGRESS.

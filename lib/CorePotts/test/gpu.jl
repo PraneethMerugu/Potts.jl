@@ -23,7 +23,7 @@ using Metal
     f = CPMFunction(delta_H; commit!, temperature = gg_temperature)
     p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
         λs = 0.2f0, S0 = 22.0f0)
-    prob = CPMProblem(f, initial_state(σ, kinds; cell), lat, (0, 50), p;
+    prob = PottsProblem(f, initial_state(σ, kinds; cell), lat, (0, 50), p;
         relations = (; surface = sspec))
     sol = solve(prob, CheckerboardCPM(); backend)
     @test sol.retcode == ReturnCode.Success
@@ -56,7 +56,7 @@ using Metal
             HistoryPush(:u => (:site, :u))))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
         pp = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 16.0f0, T = 10.0f0, D = 0.05f0)
-        prob = CPMProblem(f, st, latp, (0, 5), pp)
+        prob = PottsProblem(f, st, latp, (0, 5), pp)
         g = solve(prob, CheckerboardCPM(); backend).u[end]
         c = solve(prob, CheckerboardCPM()).u[end]
         @test g.site.u ≈ c.site.u rtol = 1e-5
@@ -89,7 +89,7 @@ using Metal
             CellReduce((:cell, :vmax), (st, p, ctx, key, mcs, i) -> st.site.v[i]; op = max)))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = ph)
         pz = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 20.0f0)
-        u = solve(CPMProblem(f, st, latz, (0, 10), pz; frozen), CheckerboardCPM(); backend).u[end]
+        u = solve(PottsProblem(f, st, latz, (0, 10), pz; frozen), CheckerboardCPM(); backend).u[end]
         @test u.σ[frozen] == σz[frozen]
         for c in 1:n
             owned = findall(==(c), u.σ)
@@ -117,7 +117,7 @@ using Metal
             phases = Phases(before_mcs = (CellPhase(grow!),)),
             lifecycle = Lifecycle(big; divide! = reset!, normal = AlongMinorAxis{Float32}()))
         pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, T = 10.0f0)
-        sol = solve(CPMProblem(f, st, latd, (0, 120), pd), CheckerboardCPM(); backend)
+        sol = solve(PottsProblem(f, st, latd, (0, 120), pd), CheckerboardCPM(); backend)
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions >= 3
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:64]
@@ -150,7 +150,7 @@ using Metal
         pA = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
             λact = 30.0f0, maxact = 20.0f0, χ = 200.0f0)
         stA = initial_state(σA, kA; site = (; act = zeros(Float32, 64, 64), c = grad))
-        probA = CPMProblem(fA, stA, latA, (0, 60), pA; contact = Moore(1), relations = (; act = Moore(1)))
+        probA = PottsProblem(fA, stA, latA, (0, 60), pA; contact = Moore(1), relations = (; act = Moore(1)))
         uA = solve(probA, CheckerboardCPM(); backend).u[end]
         @test uA.cell.volume == [count(==(c), uA.σ) for c in 1:nA]
         @test all(c -> components(uA.σ, latA, c) == 1, 1:nA)
@@ -173,7 +173,7 @@ using Metal
         okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 || ring_cells(st.σ, ctx, prop) == 2
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = okM)
         pM = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 12.0f0)
-        prob = CPMProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))
+        prob = PottsProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))
         u = solve(prob, CheckerboardCPM(acceptance = Barker()); backend).u[end]
         @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kM)]
         @test u.σ != σM
@@ -203,7 +203,7 @@ using Metal
         f = CPMFunction(dH3; commit! = commit3!, temperature = gg_temperature)
         p3 = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 125.0f0, T = 10.0f0,
             λs = 0.01f0, S0 = 200.0f0)
-        prob = CPMProblem(f, initial_state(σ3, k3; cell), lat3, (0, 15), p3;
+        prob = PottsProblem(f, initial_state(σ3, k3; cell), lat3, (0, 15), p3;
             contact = NeighborOrder(2), relations = (; surface = sspec))
         u = solve(prob, CheckerboardCPM(); backend).u[end]
         @test u.σ != σ3
@@ -230,7 +230,7 @@ using Metal
             claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(1)))
         pL = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
         ds = map(1:4) do seed
-            u = solve(CPMProblem(f, initial_state(σL, [1, 1]; cell = cellL), latL, (0, 1000), pL; seed),
+            u = solve(PottsProblem(f, initial_state(σL, [1, 1]; cell = cellL), latL, (0, 1000), pL; seed),
                 CheckerboardCPM(); backend).u[end]
             centroid_distance(Float64, u.cell, latL, 1, 2)
         end
@@ -250,7 +250,7 @@ using Metal
         fH = CPMFunction(gg_delta_H; temperature = gg_temperature,
             phases = Phases(after_mcs = (HostPhase(link_touching!; every = 100), ContactPhase())))
         pH = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 10.0f0)
-        u = solve(CPMProblem(fH, st, lat, (0, 3), pH; contact = VonNeumann(1)), CheckerboardCPM(); backend).u[end]
+        u = solve(PottsProblem(fH, st, lat, (0, 3), pH; contact = VonNeumann(1)), CheckerboardCPM(); backend).u[end]
         g0 = contact_graph(σ, lat, vn, n)
         @test all(a -> all(b -> linked(u.cell, a, b), neighbors(g0, a)), 1:n)
         g = contact_graph(u.σ, lat, vn, n)
@@ -266,7 +266,7 @@ using Metal
         latc = Lattice((48, 48))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, fingerprint = 0x7)
         pc = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
-        prob = CPMProblem(f, initial_state(σc, kc), latc, (0, 20), pc; seed = 3)
+        prob = PottsProblem(f, initial_state(σc, kc), latc, (0, 20), pc; seed = 3)
         whole = solve(prob, CheckerboardCPM(); backend).u[end]
         again = solve(prob, CheckerboardCPM(); backend).u[end]
         @test whole.σ == again.σ                        # the device run is reproducible
@@ -288,7 +288,7 @@ using Metal
         p = (; J = SMatrix{3, 3, Float32}(p64.J), Jint = 2.0f0, λ = 1.0f0, V0 = (48.0f0, 16.0f0),
             λc = 1.0f0, Vc = 64.0f0, λs = 0.05f0, Sc = 32.0f0, T = 10.0f0)
         st = initial_state(σ, kinds; cell = init_clusters(σ, cluster, lat; relation = Moore(1), T = Float32))
-        u = solve(CPMProblem(f, st, lat, (0, 60), p; relations = (; surface = Moore(1))), CheckerboardCPM(); backend).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 60), p; relations = (; surface = Moore(1))), CheckerboardCPM(); backend).u[end]
         @test u.σ != σ
         @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
         @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.σ, u.cell.cluster, lat, Moore(1)) rtol = 1e-5
@@ -302,7 +302,7 @@ using Metal
         fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
             lifecycle = Lifecycle(tr; cluster_normal = AlongMinorAxis{Float32}()))
         pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
-        ud = solve(CPMProblem(fd, std, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
+        ud = solve(PottsProblem(fd, std, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
         @test ud.cell.volume[1:4] == Int32[68, 12, 68, 12]
         @test ud.cell.cluster[1:4] == Int32[1, 1, 3, 3]
 
@@ -318,7 +318,7 @@ using Metal
         fm = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
             lifecycle = Lifecycle(trm; normal = (st, p, ctx, key, mcs, c) -> (0.0f0, 1.0f0), divide! = alone!,
                 cluster_normal = AlongMinorAxis{Float32}(), cluster_divide! = together!))
-        um = solve(CPMProblem(fm, stm, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
+        um = solve(PottsProblem(fm, stm, latd, (0, 1), pd), CheckerboardCPM(); backend).u[end]
         @test Array(um.cell.volume)[1:6] == Int32[68, 12, 24, 68, 12, 24]
         @test Array(um.cell.cluster)[1:6] == Int32[1, 1, 3, 4, 4, 6]
         @test Array(um.cell.tag)[1:6] == Float32[2, 2, 1, 2, 2, 1]
@@ -339,7 +339,7 @@ using Metal
         st = with_capacity(initial_state(σ, Int32[1, 2]; cell = init_moments(σ, lat, 2),
             site = (; c = c0, c_next = copy(c0))), 4)
         p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 60.0f0, T = 10.0f0)
-        u = solve(CPMProblem(f, st, lat, (0, 40), p), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
+        u = solve(PottsProblem(f, st, lat, (0, 40), p), CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
         @test all(u.σ[.!lat.mask] .== 0)
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
         @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
@@ -367,7 +367,7 @@ using Metal
             link_claims((; links = st.cell.links__tether), prop, Val(1))...)
         f = CPMFunction(dHR; commit! = commitR!, temperature = gg_temperature, reads = readsR)
         pR(k) = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = Float32(k))
-        prob(g, k, seed) = CPMProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
+        prob(g, k, seed) = PottsProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
         # write claims are device buffers with reads, ghost `nothing` without (P6.0b3)
         wc = init(prob(f, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims
         @test all(w -> w isa MtlArray && eltype(w) == UInt32 && length(w) == 3, wc)
