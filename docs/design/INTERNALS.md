@@ -318,6 +318,46 @@ PottsProblem(sys, op, tspan; seed, replica, repeat, eval_expression = false,
 - Returns `CorePotts.PottsProblem` with `f.sys = sys`. SII: `symbolic_container(prob) =
   f.sys`; `getu`, `setp`, `observed`, `remake` work as in MTK.
 - `EnsembleProblem(prob; prob_func)` changes only `seed`/`replica`, reusing `f`.
+- **Solvers (D-075, P6.0c).** `field_solver`, `ode_solver` and `solvers` are construction
+  keywords resolved in Potts (`src/solvers.jl`: `_resolve_solvers` → `SolverSpec`, one
+  solver per integrated variable by name) and compiled at the one codegen point
+  (`_problem_function` → `_phases`): each field's `FieldStep` takes its `ExplicitEuler`;
+  the cell and model ODEs are grouped by solver (`_ode_groups`, by the canonical string of the resolved
+  objects), one phase per group (a fixed-step `CellPhase`/`ModelPhase`, or a host
+  `_AdaptiveODE`). A model whose ODEs share one solver generates exactly the code it did
+  before. Nothing reaches CorePotts algorithm types (D-046). The fingerprint seed adds the
+  spec's canonical string (types printed fully qualified, primitives and ranges by `repr`,
+  closures by their captures, dictionaries and keyword bundles sorted) when the model
+  integrates anything.
+- **Jacobi scratch.** A scope (cell, model) with several solver groups gets state slots
+  `x__ode` for its ODE unknowns (`_ode_layout`, applied at construction, `remake_state`
+  and the solver remake). Each group's phase reads the variables and writes the scratch
+  (an empty cell slot copies its value through; the adaptive phase writes its host
+  scratch and copies that to the device), then one `CopyPhase` per unknown publishes after
+  the scope's last group. Cell groups publish before the model groups run (D-077 N3).
+  One group: no scratch, direct writes, unchanged code.
+- **Rebuild hook.** CorePotts `remake` passes keywords beyond its fixed ones to
+  `remake_function(f.sys, prob; kwargs...)` (default: an `ArgumentError`). Potts'
+  method on `PottsModelInfo` (which keeps the compiled system, `T`, the host context and
+  the `SolverSpec`) merges the named solver keywords into the stored ones, re-resolves and
+  returns `(f, u0)`: `_problem_function`'s new `f` and `prob.u0` re-laid out for its
+  scratch. CorePotts keeps `p`, `seed`/`replica`/`repeat` and the frozen mask. A `u0`
+  given in the same call, or to `remake`/`reinit!` alone, goes through `remake_state`
+  for the (new) `f`: a symbolic map builds a fresh state, a `CPMState` is re-laid out
+  for the scratch (`_ode_layout`, which touches only the `x__ode` slots of the ODE
+  unknowns; declared names may not end in `__ode`, `__tick` or `__next`).
+  `remake(prob; p | u0 | seed)` never calls it.
+- **Fingerprint and paths.** `_code_hash` strips every line number, including the
+  `LineNumberNode`s macro calls carry (`@inbounds` records the generating file), so the
+  fingerprint depends neither on the checkout path nor on line moves (D-016). The
+  structural seed is a canonical string (`_fingerprint_seed`: lattice, spacing,
+  neighbourhood, `T` by content), not a hash of package structs, which falls back to
+  `objectid` and so to the build. Symbolics orders the terms of sums and products by
+  hashes involving function identities, so the operand order of generated `+`/`*` calls
+  can differ between builds of one source; `_code_hash` reads those operands in printed
+  order (`_commutative_order!`). The same source at another path or build fingerprints
+  alike (checked against a `git archive` copy, P6.0c review 2); the code itself may differ
+  in operand order, i.e. in rounding only.
 
 ### 2.7 Hybrid coupling (extensions)
 

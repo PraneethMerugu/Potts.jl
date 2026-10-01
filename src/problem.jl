@@ -8,7 +8,9 @@ const ownership = CorePotts.ownership
     PottsModelInfo
 
 What a generated problem keeps about its model (`prob.f.sys`): the compiled system, the
-scalar type and the generated `total_energy(st, p, ctx)`.
+scalar type, the generated `total_energy(st, p, ctx)` and the solver specification the
+phases were generated for (what `remake(prob; field_solver | ode_solver | solvers)`
+rebuilds `f` from).
 """
 struct PottsModelInfo{C, E, DE, X}
     csys::C
@@ -17,27 +19,30 @@ struct PottsModelInfo{C, E, DE, X}
     delta_E::DE          # ΔH without drives: the energy change the self-check compares
     ctx::X               # host context (lattice, relations) for observed quantities
     cache::Dict{Any, Any}    # compiled observed functions, by expression
+    solvers::SolverSpec
 end
 
 """
-    generated_code(sys; T = Float64)
+    generated_code(sys; T = Float64, field_solver, ode_solver, solvers)
 
 The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in scalar
-type `T`, as expressions: `delta_H`, `commit!`, `constraint`, `temperature`, `total_energy`,
-`delta_E` (ΔH without drives), and `phases`, every other function (MCS phases, lifecycle), in
-build order. Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
+type `T` with the solver keywords of `PottsProblem`, as expressions: `delta_H`, `commit!`,
+`constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives), and `phases`,
+every other function (MCS phases, lifecycle), in build order. Each is `(args…) -> body` and
+can be `eval`'d into a plain function (e.g. for JET).
 """
-function generated_code(sys; T::Type = Float64)
+function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in c.sys.parameters)
-    _, phases = _recording(() -> (_phases(c, T, values), _lifecycle(c, T)))
+    _, phases = _recording(() -> (_phases(c, T, values, spec), _lifecycle(c, T)))
     return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
         delta_E = _delta_H_expr(c, T; drives = false), phases)
 end
 """
-    PottsProblem(sys, op, tspan; T = Float64, capacity, seed = 0, replica = 0, repeat = 0,
-                 expression = Val(false))
+    PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],
+                 T = Float64, capacity, seed = 0, replica = 0, repeat = 0, expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
@@ -47,14 +52,32 @@ compartment groups (any ids; equal ids form one cluster; default: every cell alo
 name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). The generated code is
 `Potts.generated_code(sys; T)`.
+
+How fields and ODEs are integrated is part of the problem, compiled into its code (D-075):
+- `field_solver = ExplicitEuler(; substeps, lower)` is required when the model has a field
+  and an error otherwise; there is no default (a published model's docstring gives its
+  value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`);
+- `ode_solver` integrates the cell and model ODEs (`D(x) ~ …`, components): `ExplicitEuler(;
+  substeps)` (the default, one step per MCS), `RK4(; substeps)` or `Adaptive(alg; reltol, …)`;
+- `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its
+  unknowns), overrides them for those variables only (a stiff ODE under
+  `Adaptive(Rodas5P())` beside explicit ones). Every ODE step reads the state at the start
+  of the step (Jacobi), across solvers too.
+
+`remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
+it names and keeps the others, `u0`, `p` and the seed; the D-016 fingerprint hashes a
+canonical form of the resolved solvers, so a checkpoint loads only into an equally
+discretised problem.
 """
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end
 
 function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
-        seed = 0, replica = 0, repeat = 0, expression = Val(false))
+        seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
+        ode_solver = ExplicitEuler(), solvers = ())
     sys = c.sys
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     opd = _operating_point(sys, op)
     values = _parameter_values(c, opd)
     p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in sys.parameters))
@@ -65,30 +88,77 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
         "`expression = Val(true)` is not supported (D-014); use `Potts.generated_code(sys; T)` to inspect the code"))
-    st = _initial_state(c, opd, T, capacity, values)
+    st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
     spacing = sys.lattice.spacing === nothing ? nothing : map(T, sys.lattice.spacing)
     hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...)
-    fns, generated = _recording() do
-        ce = _constraint_expr(c, T)
-        (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
-            constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
-            phases = _phases(c, T, values), lifecycle = _lifecycle(c, T),
-            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
-    end
-    f = CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
-        claims = _claims(c), reads = _reads(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
-        footprint = c.footprint,
-        # every generated function, without line numbers: independent of the install path (D-016)
-        fingerprint = _code_hash(generated, hash((core_lattice(sys.lattice), sys.lattice.spacing, sys.lattice.neighborhood, T))),
-        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, Dict{Any, Any}()))
+    f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}())
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
         spacing, frozen, seed, replica, repeat)
+end
+
+# The one codegen point: every generated function of a problem for compiled model `c`, scalar
+# type `T` and solvers `spec`, as a `CPMFunction` (construction, and `remake` with solvers).
+function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache)
+    sys = c.sys
+    fns, generated = _recording() do
+        ce = _constraint_expr(c, T)
+        (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
+            constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
+            phases = _phases(c, T, values, spec), lifecycle = _lifecycle(c, T),
+            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
+    end
+    # every generated function, without line numbers: independent of the install path, and
+    # the canonical solver spec (D-016 as amended by D-075; a model with no field or ODE has
+    # none and keeps its fingerprint)
+    h = hash(_fingerprint_seed(sys, T))
+    isempty(spec.canonical) || (h = hash(spec.canonical, h))
+    return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
+        claims = _claims(c), reads = _reads(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
+        footprint = c.footprint, fingerprint = _code_hash(generated, h),
+        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec))
+end
+
+# The fingerprint's structural part as a canonical string: the lattice (dims, boundaries,
+# domain, geometry), spacing, neighbourhood and scalar type by content. Hashing the objects
+# would fall back to `objectid` for package structs and tie the fingerprint to the build.
+_fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(core_lattice(sys.lattice)),
+    ";spacing=", _canonical_value(sys.lattice.spacing), ";neighborhood=", _canonical_value(sys.lattice.neighborhood),
+    ";T=", string(T))
+
+# `remake(prob; field_solver | ode_solver | solvers = …)`: the problem's code rebuilt through
+# the codegen point with the named keywords replaced and the others kept, and `u0` re-laid
+# out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
+# Never reached by `remake(prob; p | u0 | seed)`.
+function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
+        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, kwargs...)
+    isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
+                                           "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
+    c = mi.csys
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+    values = _derived_parameters(c, prob.p, Set(info(x).name for x in c.sys.parameters))
+    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache), _ode_layout(prob.u0, c, spec)
+end
+
+# The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
+# scope, `_ode_scratch`), each starting as a copy of its variable; any others removed. The
+# same state if its layout already fits.
+function _ode_layout(st, c::CompiledPottsSystem, spec::SolverSpec)
+    slots = Set(_ode_scratch_name(info(x).name) for (x, _) in Iterators.flatten((c.cell_odes, c.model_odes)))
+    scratchless(nt) = NamedTuple(k => v for (k, v) in pairs(nt) if !(k in slots))
+    function add(nt, scope, odes)
+        _ode_scratch(c, spec, scope) || return nt
+        return merge(nt, NamedTuple(_ode_scratch_name(info(x).name) => copy(getproperty(nt, info(x).name)) for (x, _) in odes))
+    end
+    cell = add(scratchless(st.cell), :cell, c.cell_odes)
+    model = add(scratchless(st.model), :model, c.model_odes)
+    keys(cell) == keys(st.cell) && keys(model) == keys(st.model) && return st
+    return CorePotts.CPMState(st.σ, cell, st.site, model, st.history)
 end
 
 # Checkerboard claims beyond old/new: the clusters of old/new (cluster energies read cluster
@@ -442,6 +512,10 @@ end
 
 CorePotts.remake_frozen(info::PottsModelInfo, prob, u0) = _frozen_mask(info.csys.sys, u0)
 
+# a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
+# problem of the model): its values, laid out for this problem's ODE scratch
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
+
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = _operating_point(info.csys.sys, u0)
     # keep the old capacity and the old number of free slots (room for divisions)
@@ -449,6 +523,6 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
     values = _derived_parameters(info.csys, prob.p, Set(Potts.info(x).name for x in info.csys.sys.parameters))
-    st = _initial_state(info.csys, opd, info.T, max(old, ncell + free), values)
+    st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values), info.csys, info.solvers)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
 end

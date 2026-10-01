@@ -551,14 +551,14 @@ end
 
 @testset "Float32 models never touch Float64" begin
     σ = zeros(Int32, 16, 16); σ[5:10, 5:10] .= 1
-    prob = PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2); T = Float32)
+    prob = PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2); T = Float32, field_solver = ExplicitEuler())
     ctx = ctx_of(prob)
     prop = CorePotts.Proposal(4 + 16 * 5, 5 + 16 * 5, (4, 6), 1, Int32(0), Int32(1))
     io = IOBuffer()
     code_llvm(io, prob.f.delta_H, typeof.((prob.u0, prob.p, prop, ctx)); debuginfo = :none)
     @test !occursin("double", String(take!(io)))
     @test prob.f.delta_H(prob.u0, prob.p, prop, ctx) isa Float32
-    @test selfcheck(PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2))) < 1e-9
+    @test selfcheck(PottsProblem(FloatModel(; name = :fm), [ownership => σ, kind => [1]], (0, 2); field_solver = ExplicitEuler())) < 1e-9
 end
 
 @potts_model Helpers begin
@@ -942,14 +942,14 @@ end
     σ, kinds = two_kind_blocks()
     σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= σ
     @test all(mask[σd .> 0])
-    prob = PottsProblem(sys, [ownership => σd, kind => kinds], (0, 30))
+    prob = PottsProblem(sys, [ownership => σd, kind => kinds], (0, 30); field_solver = ExplicitEuler())
     @test count(prob.frozen) == count(!, mask)
     @test selfcheck(prob) < 1e-9
     u = solve(prob, CheckerboardCPM(; proposal = Moore(1))).u[end]
     @test all(u.σ[.!mask] .== 0) && all(u.site.c[.!mask] .== 0)
     @test sum(u.site.c) > 0
     σbad = copy(σd); σbad[1, 1] = 1
-    @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1))
+    @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1); field_solver = ExplicitEuler())
 end
 
 # Composition: a chemotactic extension of the Graner model and an obstacle kind added to it.
@@ -975,7 +975,7 @@ end
     @test length(ext.energies) == 2 && length(ext.drives) == 1 && ext.lattice == SORTING.sys.lattice
     σ, kinds = graner_state()
     a = symbolic_graner_problem(; nmcs = 5)
-    b = PottsProblem(ext, [ownership => σ, kind => kinds], (0, 5))
+    b = PottsProblem(ext, [ownership => σ, kind => kinds], (0, 5); field_solver = ExplicitEuler())
     # without the drive the extension's energy is the base's
     @test all(((u, prop),) -> energy_change(a, u, prop) == energy_change(b, u, prop), proposal_states(a; mcs = (0, 5), n = 100))
     @test b.p.χ == 50.0 && haskey(b.u0.site, :c)
@@ -1043,7 +1043,7 @@ Potts.ModelingToolkitBase.@variables y_c(_tc) = 1.0 m_c(_tc) = 0.0
 @named decay = System([Potts.D(y_c) ~ -k_c * y_c], _tc)
 @named clock = System([Potts.D(m_c) ~ r_c / τ_c], _tc)
 
-function component_model(solver)
+function component_model()
     @potts_model Decaying begin
         @kinds medium A B
         @parameters T = 1.0
@@ -1055,7 +1055,7 @@ function component_model(solver)
         @lattice Lattice((20, 20))
         @energy cells => (volume - 25.0)^2
         @divide cells(A) when = clock.m_c >= 1, along = (1.0, 0.0), clock.m_c => 0.0
-        @sweep Metropolis(; temperature = T, ode_solver = solver)
+        @sweep Metropolis(; temperature = T)
     end
     return Decaying(; name = :decaying)
 end
@@ -1066,12 +1066,12 @@ end
     frozen(sys) = PottsProblem(sys, op, (0, 10); T = Float64)
     for (solver, exact, tol) in ((Potts.ExplicitEuler(), t -> (1 - 0.3)^t, 1e-12),
             (Potts.RK4(substeps = 2), t -> (1 + (z = -0.15) + z^2 / 2 + z^3 / 6 + z^4 / 24)^(2t), 1e-12))
-        sys = component_model(solver)
+        sys = component_model()
         cs = mtkcompile(sys)
         @test Set(Potts.info(v).name for v in cs.sys.variables) == Set([:decay₊y_c, :clock₊m_c])
         @test Set(Potts.info(v).name for v in cs.sys.parameters) == Set([:T, :decay₊k_c, :clock₊τ_c])   # r_c is coupled
         # no copies (T = 0 and frozen cells) so the volume coupling is exact
-        prob = remake(PottsProblem(cs, op, (0, 10)); p = [:T => 1e-9])
+        prob = remake(PottsProblem(cs, op, (0, 10); ode_solver = solver); p = [:T => 1e-9])
         sol = solve(prob, SequentialCPM(); saveat = 0:10)
         ys = [u.cell.decay₊y_c[1] for u in sol.u]
         @test maximum(abs.(ys .- exact.(0:10))) < tol
@@ -1080,7 +1080,7 @@ end
         @test sol[:decay₊y_c][end] == sol.u[end].cell.decay₊y_c
     end
     # coupling and division: the clock runs at volume/25/τ per MCS and resets on division
-    sys = component_model(Potts.ExplicitEuler())
+    sys = component_model()
     prob = remake(PottsProblem(sys, op, (0, 12)); p = [:T => 1e-9, Symbol("clock₊τ_c") => 8.0])
     sol = solve(prob, SequentialCPM(); saveat = 0:12)
     m = [u.cell.clock₊m_c[1] for u in sol.u]
@@ -1127,7 +1127,7 @@ end
         σ[i:(i + 3), j:(j + 3), k:(k + 3)] .= n
     end
     kinds = [isodd(c) ? :dark : :light for c in 1:n]
-    prob = PottsProblem(Sorting3D(; name = :s3), [ownership => σ, kind => kinds], (0, 6))
+    prob = PottsProblem(Sorting3D(; name = :s3), [ownership => σ, kind => kinds], (0, 6); field_solver = ExplicitEuler())
     @test ndims(prob.lattice) == 3 && length(prob.contact) == 18                      # NeighborOrder(2) in 3D
     @test selfcheck(prob) < 1e-9
     for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
@@ -1204,8 +1204,8 @@ end
     # models with domains fingerprint by content: checkpoints resume across rebuilds
     σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= first(two_kind_blocks())
     kd = last(two_kind_blocks())
-    p1 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6))
-    p2 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6))
+    p1 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6); field_solver = ExplicitEuler())
+    p2 = PottsProblem(DiskSorting(; name = :disk), [ownership => σd, kind => kd], (0, 6); field_solver = ExplicitEuler())
     @test p1.f.fingerprint == p2.f.fingerprint && DiskSorting(; name = :a).lattice == DiskSorting(; name = :b).lattice
     integ = init(p1, SequentialCPM()); foreach(_ -> step!(integ), 1:3)
     ck = checkpoint(integ)
@@ -1653,7 +1653,8 @@ end
     # no extra pass: w (not written after the sweep) once at the start of the after block;
     # u once before `sa` (which also serves the ODE); 2u gated with its reader; w once before `sb`
     c = mtkcompile(FreshIntegrals(; name = :f))
-    ph = Potts._phases(c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in c.sys.parameters))
+    ph = Potts._phases(c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in c.sys.parameters),
+        Potts._resolve_solvers(c))
     reduces(t) = count(x -> x isa CorePotts.CellReduce || (x isa Potts._Gated && x.phase isa CorePotts.CellReduce), t)
     @test reduces(ph.before_mcs) == 1                  # w written, sb reads it
     @test reduces(ph.after_mcs) == 3
@@ -1828,12 +1829,12 @@ Potts.ModelingToolkitBase.@variables drug_c(_tc) = 0.0
     end
     @lattice Lattice((20, 20))
     @energy cells => (volume - 9.0)^2
-    @sweep Metropolis(; temperature = 1.0, ode_solver = RK4(substeps = 4))
+    @sweep Metropolis(; temperature = 1.0)
 end
 
 @testset "model-scope ODEs and components" begin
     σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1; σ[10:12, 10:12] .= 2; σ[15:17, 3:5] .= 3
-    p = PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1]], (0, 10))
+    p = PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1, 1, 1]], (0, 10); ode_solver = RK4(substeps = 4))
     @test :pk₊drug_c in propertynames(p.u0.model) && :pk₊drug_k in propertynames(p.p)
     for alg in (SequentialCPM(), CheckerboardCPM())
         u = solve(p, alg).u[end]
@@ -1873,7 +1874,8 @@ end
             CorePotts._hexdist(Tuple(x) .- (q, r)) <= 2 && (σ[x] = n)
         end
     end
-    p = PottsProblem(HexSorting(; name = :h), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n], :c => c0], (0, 20))
+    p = PottsProblem(HexSorting(; name = :h), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n], :c => c0], (0, 20);
+        field_solver = ExplicitEuler())
     @test p.lattice.geometry isa Hexagonal && length(p.contact) == 18
     for alg in (SequentialCPM(proposal = Hex(1)), CheckerboardCPM(proposal = Hex(1)))
         u = solve(p, alg).u[end]

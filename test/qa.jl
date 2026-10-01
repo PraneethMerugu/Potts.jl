@@ -10,7 +10,7 @@ using InteractiveUtils: code_llvm
         ("compartments", () -> (c = compartment_state(); PottsProblem(Compartments(; name = :comp),
             [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))),
         ("components", () -> (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
-            PottsProblem(component_model(Potts.RK4(substeps = 2)), [ownership => σ, kind => [:A, :B]], (0, 5)))),
+            PottsProblem(component_model(), [ownership => σ, kind => [:A, :B]], (0, 5); ode_solver = Potts.RK4(substeps = 2)))),
         ("persistent", () -> (σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
             remake(PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 5)); p = [:μ => 500.0]))),
         ("lags", () -> (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
@@ -18,7 +18,7 @@ using InteractiveUtils: code_llvm
         ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
             PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))),
         ("systemic", () -> (σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
-            PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5)))))
+            PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = RK4(substeps = 4)))))
     prob = make()
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
     step!(integ)
@@ -50,12 +50,13 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
         ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
         ("Wortel", () -> (WortelAct(; name = :w, lattice = (16, 16)), [ownership => wortel_state(), kind => [:cell, :cell]], nothing)),
         ("Merks", () -> (MerksVasculogenesis(; name = :m, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
-            kind => [:endothelial]], nothing)),
+            kind => [:endothelial]], nothing, (; field_solver = MERKS_SOLVER))),
         ("OpenVT", () -> (OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)), 16)),
         ("Akeeb", () -> (AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), 1000))),
     T in (Float64, Float32)
-    sys, op, cap = make()
-    prob = PottsProblem(sys, op, (0, 3); T, capacity = cap)
+    sys, op, cap, kw... = make()
+    skw = get(kw, 1, (;))      # solver keywords (D-075)
+    prob = PottsProblem(sys, op, (0, 3); T, capacity = cap, skw...)
     integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false)
     step!(integ)
     st, p, ctx = integ.state, integ.p, integ.ctx
@@ -69,10 +70,10 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
     # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors that
     # fit one CPU workgroup run as plain loops (`CorePotts._launch`; AUTONOMY §5)
     for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-        wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap), alg; save_start = false, save_end = false)
+        wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg; save_start = false, save_end = false)
         @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
     end
-    gc = generated_code(sys; T)
+    gc = generated_code(sys; T, skw...)
     for name in (:delta_H, :commit!, :temperature, :constraint)
         ex = getproperty(gc, name)
         ex === nothing && continue
@@ -218,6 +219,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :no_claims,           # the no-claim-set default
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
+    :remake_function,
     :remake_parameters,
     :remake_state,
     :set_parameter,       # parameter-update hook Potts extends

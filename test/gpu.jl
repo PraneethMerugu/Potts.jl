@@ -16,7 +16,8 @@ using Statistics: mean, var
     @test abs(t) < 4
     for (label, p) in (
             ("wortel", PottsProblem(WORTEL, [ownership => wortel_state(), kind => [1, 1]], (0, 20); T = Float32)),
-            ("merks", PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32)),
+            ("merks", PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
+                field_solver = MERKS_SOLVER)),
             ("growing monolayer", PottsProblem(OpenVTGrowingMonolayer(; name = :g, lattice = (40, 40)),
                 [openvt_monolayer_state(; lattice = (40, 40)); :τ => 10.0], (0, 60); T = Float32, capacity = 64)),
             ("openvt", PottsProblem(MONOLAYER, [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [1]], (0, 10);
@@ -44,7 +45,8 @@ using Statistics: mean, var
     @test count(>(0), Array(uk.cell.volume)) == 36
     # components: the batched RK4 cell-ODE kernel in Float32 on the device
     σo = zeros(Int32, 20, 20); σo[3:7, 3:7] .= 1; σo[12:16, 12:16] .= 2
-    po = remake(PottsProblem(component_model(Potts.RK4(substeps = 2)), [ownership => σo, kind => [:A, :B]], (0, 10); T = Float32);
+    po = remake(PottsProblem(component_model(), [ownership => σo, kind => [:A, :B]], (0, 10); T = Float32,
+            ode_solver = Potts.RK4(substeps = 2));
         p = [:T => 1.0f-9])
     yo = solve(po, CheckerboardCPM(); backend).u[end].cell.decay₊y_c
     @test Array(yo)[1:2] ≈ fill(Float32((1 - 0.15 + 0.15^2 / 2 - 0.15^3 / 6 + 0.15^4 / 24)^20), 2) rtol = 1e-5
@@ -74,13 +76,14 @@ using Statistics: mean, var
     @test Array(ui.cell.mass) ≈ [sum(wi[σh .== k]) for k in 1:2]
     # model-scope ODEs and a model component (single-item kernel)
     σs2 = zeros(Int32, 20, 20); σs2[2:4, 2:4] .= 1; σs2[10:12, 10:12] .= 2; σs2[15:17, 3:5] .= 3
-    us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32),
+    us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32,
+            ode_solver = RK4(substeps = 4)),
         CheckerboardCPM(); backend).u[end]
     @test Array(us.model.pk₊drug_c)[1] ≈ 3 / 0.2 * (1 - exp(-0.2 * 10)) rtol = 1e-4
     # adaptive host ODEs with a device state (copied once per MCS)
     σa = zeros(Int32, 20, 20); σa[3:6, 3:6] .= 1; σa[12:15, 12:15] .= 2
-    ua = solve(PottsProblem(adaptive_model(Adaptive(Tsit5(); reltol = 1e-6)), [ownership => σa, kind => [:A, :B]], (0, 5);
-        T = Float32), CheckerboardCPM(); backend).u[end]
+    ua = solve(PottsProblem(adaptive_model(), [ownership => σa, kind => [:A, :B]], (0, 5);
+        T = Float32, ode_solver = Adaptive(Tsit5(); reltol = 1e-6)), CheckerboardCPM(); backend).u[end]
     @test Array(ua.cell.y)[1:2] ≈ fill(exp(-0.3 * 5), 2) rtol = 1e-4
     @test Array(ua.model.g)[1] ≈ 2 - exp(-2.5) rtol = 1e-4
     # hexagonal lattice on the device
@@ -91,7 +94,8 @@ using Statistics: mean, var
             CorePotts._hexdist(Tuple(x) .- (q, r)) <= 2 && (σh[x] = nh)
         end
     end
-    ph = PottsProblem(HexSorting(; name = :h), [ownership => σh, kind => [isodd(k) ? :dark : :light for k in 1:nh]], (0, 20); T = Float32)
+    ph = PottsProblem(HexSorting(; name = :h), [ownership => σh, kind => [isodd(k) ? :dark : :light for k in 1:nh]], (0, 20); T = Float32,
+        field_solver = ExplicitEuler())
     uh = solve(ph, CheckerboardCPM(proposal = Hex(1)); backend).u[end]
     σhh = Array(uh.σ)
     @test Array(uh.cell.volume) == [count(==(k), σhh) for k in 1:nh]
@@ -281,4 +285,25 @@ end
         CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:5)
     @test [(Array(u.cell.ar₊dz_1)[1], Array(u.cell.ar₊dz_2)[1]) for u in ua.u] ==
           Tuple{Float32, Float32}[(0, 1), (0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
+end
+
+# P6.0c: several ODE solver groups step through scratch `x__ode` on the device (fixed-step
+# kernels) and through the host (adaptive), then publish: the CPU result in Float32.
+@testset "solver groups on Metal (Jacobi scratch)" begin
+    backend = MetalBackend()
+    sys = SolverTriple(; name = :t)
+    v(n) = solver_var(sys, n)
+    for kw in ((; solvers = [v(:s) => RK4(), v(:h) => RK4()]),
+               (; solvers = [v(:s) => RK4(), v(:w) => Adaptive(Tsit5(); reltol = 1e-6)]))
+        prob = PottsProblem(sys, solver_op(), (0, 5); T = Float32, kw...)
+        @test haskey(prob.u0.cell, :s__ode)
+        cpu = solve(prob, CheckerboardCPM()).u[end]
+        gpu = solve(prob, CheckerboardCPM(); backend).u[end]
+        @test Array(gpu.σ) == Array(cpu.σ)
+        for n in (:y, :s, :w)
+            @test Array(getproperty(gpu.cell, n)) ≈ Array(getproperty(cpu.cell, n)) rtol = 1e-5
+        end
+        @test Array(gpu.model.g) ≈ Array(cpu.model.g) rtol = 1e-5
+        @test Array(gpu.model.h) ≈ Array(cpu.model.h) rtol = 1e-5
+    end
 end

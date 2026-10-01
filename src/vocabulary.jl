@@ -589,8 +589,15 @@ Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b
     a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
 Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain, l.geometry), h)
 
-"""Field solver of `@sweep`: explicit Euler with `substeps` (auto if `nothing`) and an
-optional lower clip (legacy Potts clips concentrations at 0)."""
+"""
+    ExplicitEuler(; substeps = nothing, lower = nothing)
+
+Explicit Euler over one MCS in `substeps` steps, clipping the result at `lower` after every
+step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
+`PottsProblem` keyword, D-075), `substeps = nothing` derives the stable count from the
+diffusion coefficient and an explicit `n` is a minimum; as an `ode_solver` (the default,
+D-038), `nothing` is one step.
+"""
 Base.@kwdef struct ExplicitEuler
     substeps::Union{Nothing, Int} = nothing
     lower::Union{Nothing, Float64} = nothing
@@ -601,9 +608,10 @@ end
 
 Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`,
 `Rodas5P()`, … from OrdinaryDiffEq, loaded by the user), with `kwargs` (`reltol`, `abstol`,
-…) passed to `init`. One integrator is created on first use and re-initialized per cell
-and per MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for
-intracellular or systemic models, at host speed (a device state is copied once per MCS).
+…) passed to `init`: a `PottsProblem`'s `ode_solver`, or a variable's entry in its
+`solvers` map. One integrator is created on first use and re-initialized per cell and per
+MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
+systemic models, at host speed (a device state is copied once per MCS).
 """
 struct Adaptive{A, K}
     alg::A
@@ -611,25 +619,30 @@ struct Adaptive{A, K}
 end
 Adaptive(alg; kwargs...) = Adaptive(alg, NamedTuple(kwargs))
 
-"""Classic fourth-order Runge–Kutta for cell ODEs, `substeps` steps per MCS."""
+"""Classic fourth-order Runge–Kutta for cell and model ODEs, `substeps` steps per MCS."""
 Base.@kwdef struct RK4
     substeps::Int = 1
 end
 
-"""The sweep protocol: acceptance law, temperature expression, MCS duration, field and
-cell-ODE solvers."""
+"""The sweep protocol: acceptance law, temperature expression and MCS duration. The solvers
+are `PottsProblem` keywords (D-075), not part of the model."""
 struct SweepSpec
     law::Symbol
     temperature::Any          # copy scope, or cell scope (`T[kind]`, a cell variable)
     combine::Any              # combines the source and target cells' temperatures
     offset::Float64
     mcs_duration::Float64
-    field_solver::ExplicitEuler
-    ode_solver::Union{ExplicitEuler, RK4, Adaptive}   # cell and model ODEs (`D(x) ~ …`, components)
 end
-sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0,
-    field_solver = ExplicitEuler(), ode_solver = ExplicitEuler()) = SweepSpec(law, temperature, combine, Float64(offset),
-    Float64(mcs_duration), field_solver, ode_solver)
+function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
+    for k in keys(kwargs)
+        k in (:field_solver, :ode_solver, :solvers) && throw(ArgumentError(
+            "`@sweep` no longer takes `$k` (D-075): pass it to the problem, " *
+            "`PottsProblem(sys, op, tspan; $k = …)`"))
+    end
+    isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
+                                           "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
+    return SweepSpec(law, temperature, combine, Float64(offset), Float64(mcs_duration))
+end
 
 # ---------------------------------------------------------------------------------------
 # Library one-liners (AUTHORING §4): functions returning the same `domain => expr` pairs

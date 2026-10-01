@@ -1464,3 +1464,73 @@ session.
   - singles: 40/40;
   - motility: 12/12;
   - adhesion regimes: identical to base.
+
+## D-078 P6.0c solver placement: the semantics settled in review (2026-10-01, P6.0c; implements D-075 AUTHORING §6, amends D-016 and D-038)
+
+- **Placement.** `field_solver`, `ode_solver` and `solvers` are `PottsProblem` construction
+  keywords. They are resolved in Potts (`_resolve_solvers` → `SolverSpec`, one solver per
+  integrated variable, by name) and compiled at the one codegen point (`_problem_function`).
+  - `@sweep` rejects them, and any unknown keyword. CorePotts algorithm types carry none
+    (D-046).
+  - `field_solver` is required when the model has an integrated field, even if `solvers`
+    covers every field, and is an `ArgumentError` otherwise.
+  - `ode_solver` defaults to `ExplicitEuler()`; `substeps = nothing` means 1 for ODEs. It
+    is accepted, with no effect, on a model without ODEs.
+  - A `solvers` key is a variable, a name, an MTK component variable (`comp.x` /
+    `Symbol("comp₊x")`) or a component (all its integrated unknowns). A field key takes
+    only `ExplicitEuler`.
+  - Duplicate keys (including one given through a component), parameters and
+    non-integrated variables are `ArgumentError`s.
+  - `track` moves to P6.3a.
+- **Several solvers stay Jacobi** (D-038, D-077). A scope's ODE unknowns are grouped by the
+  solver's canonical string, one phase per group, in order of first appearance.
+  - With one group, the phase writes directly and the generated code is unchanged.
+  - With several, each phase writes scratch `x__ode`, and one `CopyPhase` per unknown
+    publishes after the scope's last group. Every rate then reads the start-of-step value
+    of its own cell's (or the model's) unknowns.
+  - Cell groups publish before model groups run, and cross-cell reads within a group stay
+    Gauss–Seidel (D-077 N3, P6.0n).
+  - After-MCS order is unchanged: updates, then field steps, then cell ODEs, then model
+    ODEs, then discrete ticks, then links.
+  - `_ode_layout` adds or removes exactly the scratch slots. It is applied at
+    construction, at a solver `remake`, and to every `u0` through `remake_state` (symbolic
+    maps and `CPMState`s, in `remake` and `reinit!`).
+  - Declared names ending in `__ode`, `__tick` or `__next` are rejected.
+- **`remake`.** `remake(prob; field_solver | ode_solver | solvers)` goes through CorePotts
+  `remake_function(f.sys, prob; kw...)`. The default is an ArgumentError naming the
+  keywords.
+  - Potts rebuilds `f` and re-lays out `u0`, keeping p, seed/replica/repeat (the RNG key)
+    and the frozen mask.
+  - `remake(prob; p | u0 | seed)` never regenerates code.
+  - Cost on Merks 100²: about 0.3 s codegen plus 0.4 s JIT for a new spec, a few ms for a
+    spec already compiled.
+- **D-016, amended.** The fingerprint is `_code_hash` of every generated function, seeded
+  by two strings:
+  - a canonical structural string (lattice dims, boundaries, domain, geometry, spacing,
+    neighbourhood and `T`, by content), never by `hash` of package structs, which falls
+    back to `objectid`;
+  - when anything is integrated, the canonical solver string: fully qualified types,
+    primitives and ranges by `repr`, closures by their captures, sorted dicts, sets and
+    kwargs. It depends on solver package versions.
+
+  `_code_hash` strips all line numbers, including those inside macro calls. It reads
+  `+`/`*` calls flattened across same-operator nesting, with operands in printed order:
+  Symbolics' term order and grouping depend on the build and change rounding only.
+
+  So the same source at another path or build fingerprints alike. The coordinator verified
+  this at merge against a `git archive` copy, for 7 problems including Merks. Checkpoints
+  from before P6.0c fail by design (D-075 Q9).
+- **Adaptive.** The integrator's `p` is set before `reinit!`. Before, its initial-dt guess
+  evaluated the previous cell's tuple on the CPU, and a stale host snapshot on a device.
+  This changes CPU `Adaptive` trajectories within solver tolerance; Metal now matches the
+  CPU exactly. Fixed-step results are unchanged.
+- **Ensembles.** `solve(ens, ::CPMAlgorithm)` with no ensemble algorithm runs
+  `EnsembleThreads` on the CPU and `EnsembleSerial` otherwise, forwarding `backend`. It is
+  not piracy and adds no ambiguities.
+- **Merks.** It needs `field_solver = ExplicitEuler(substeps = 2, lower = 0.0)`. Its results
+  are bitwise unchanged: the five digests recorded on 1092ada match.
+- **Review.** Three adversarial rounds.
+  - Round 1 blocker: split solver groups were Gauss–Seidel.
+  - Rounds 2–3 blocker: build-dependent fingerprints. The last residual, nested `+`
+    grouping, was fixed by the coordinator with the round-3 reviewer's verified patch.
+  - Follow-ups are in P6.0c2.

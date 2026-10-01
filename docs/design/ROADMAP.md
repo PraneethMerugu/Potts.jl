@@ -122,12 +122,12 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30) **P6.0b4** a permanent Metal (Float32) test of a model with reads in
   `lib/CorePotts/test/gpu.jl` (the P6.0b3 reviewer used a scratch version,
   `/tmp/rv-p6-0b3-metal.jl`).
-- [ ] **P6.0c** (D-075) solver placement. `field_solver` (required when the model has a
+- [x] (merge, 2026-10-01; D-078) **P6.0c** (D-075) solver placement. `field_solver` (required when the model has a
   field), `ode_solver` and a symbolic-keyed `solvers = [V => …]` map become **`PottsProblem`
   construction keywords**. They are compiled at the existing codegen point and removed from
   `@sweep`; there are no algorithm fields. `Adaptive(alg; abstol, reltol)` stays as the
-  bundle, and `ExplicitEuler(; substeps, lower)` keeps `lower`. `track` is a construction
-  keyword too.
+  bundle, and `ExplicitEuler(; substeps, lower)` keeps `lower`. `track` moved to P6.3a
+  (D-078); the `remake` re-layout for `track` lands there.
   - Accept: a stiff component (`Adaptive(Rodas5P())`) beside an explicit field in one
     model; conformance against each solver alone.
   - Accept: every `PottsProblem(MerksVasculogenesis(…), …)` call passes
@@ -194,6 +194,12 @@ Every item's acceptance also includes the standing checks:
   - Latency: `@potts_model` construction, `mtkcompile` and `PottsProblem` build time each within +5 % of the pre-change baseline on the five gate models.
   - Latency: fresh-process time to first MCS (`benchmark/graner.jl`, D-047 target under 15 s) within +5 %.
   - Latency: the warm-MCS gate is unchanged.
+- [ ] **P6.0c2** P6.0c round-3 follow-ups (D-078):
+  - Document the after-MCS phase order in AUTHORING §6 and INTERNALS §1.6: updates, then field steps, then cell ODEs, then model ODEs, then discrete ticks, then links.
+  - `_canonical_value` prints only the type below depth 8, so two `Adaptive` solvers that differ deeper would share a group and a fingerprint. Error at the cap, or group by `isequal` within equal strings.
+  - `_check_internal_suffix` misses component unknowns (`comp₊x__ode`), `:vector` option names and observed names.
+  - Closure canonical strings embed the closure type name (`#12#13`). This is conservative, but makes fingerprints session-dependent for closure-carrying kwargs.
+  - Add a script that compares fingerprints across a `git archive` copy (as the coordinator did at merge).
 - [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
   linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
   NaN, `accept` rejects every copy touching the partner so it freezes silently, and

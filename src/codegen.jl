@@ -22,7 +22,43 @@ end
 
 """Hash of generated code, independent of line numbers and the install path (D-016)."""
 _code_hash(exprs, h::UInt = zero(UInt)) =
-    foldl((h, ex) -> hash(string(Base.remove_linenums!(deepcopy(ex))), h), exprs; init = h)
+    foldl((h, ex) -> hash(string(_commutative_order!(_strip_lines!(deepcopy(ex)))), h), exprs; init = h)
+
+# Symbolics orders the terms of a sum or product by hashes that involve function identities,
+# so the operand order of generated `+`/`*` calls can differ between builds of the same
+# source, and so can their grouping into nested binary calls. The fingerprint reads them
+# flattened across same-operator nesting and in a canonical order (by printed operand): the
+# same model on another checkout or build fingerprints alike (order and grouping change
+# rounding only, not the model).
+function _commutative_order!(ex)
+    ex isa Expr || return ex
+    foreach(_commutative_order!, ex.args)
+    if ex.head === :call && length(ex.args) > 2 && any(f -> ex.args[1] === f, (:+, :*, +, *))
+        op = ex.args[1]
+        flat = Any[]
+        for a in @view ex.args[2:end]
+            if a isa Expr && a.head === :call && length(a.args) > 2 && a.args[1] === op
+                append!(flat, @view a.args[2:end])
+            else
+                push!(flat, a)
+            end
+        end
+        sort!(flat; by = string)
+        resize!(ex.args, 1)
+        append!(ex.args, flat)
+    end
+    return ex
+end
+
+# Every line number out of an expression, including those macro calls carry (`@inbounds`
+# records the generating file's path, which would tie the fingerprint to the checkout).
+function _strip_lines!(ex)
+    ex isa Expr || return ex
+    Base.remove_linenums!(ex)
+    ex.head === :macrocall && length(ex.args) >= 2 && ex.args[2] isa LineNumberNode && (ex.args[2] = nothing)
+    foreach(_strip_lines!, ex.args)
+    return ex
+end
 
 # `key`: the RNG key in scope (functions of the MCS phases and lifecycle); enables `rand()`.
 _draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity),)
@@ -359,7 +395,7 @@ end
 # Names the stage writes (its updates' left sides).
 _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 
-function _phases(c::CompiledPottsSystem, T, values)
+function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     rn = c.gather_names
     integrals = _integral_phases(c, T)
     before = Any[]; after = Any[]
@@ -430,19 +466,30 @@ function _phases(c::CompiledPottsSystem, T, values)
     for (x, rate) in c.fields
         name = info(x).name
         f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key)))))
-        sub = _auto_substeps(x, rate, values, dt, c.sys.lattice, c.sys.sweep.field_solver.substeps)
-        lowerclip = c.sys.sweep.field_solver.lower
+        solver = spec.resolved[name]
+        sub = _auto_substeps(x, rate, values, dt, c.sys.lattice, solver.substeps)
+        lowerclip = solver.lower
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
     end
-    if c.sys.sweep.ode_solver isa Adaptive
-        isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
-        isempty(c.cell_odes) || push!(after, _adaptive_phase(c, T, dt, :cell))
-        isempty(c.model_odes) || push!(after, _adaptive_phase(c, T, dt, :model))
-    else
-        isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
-        isempty(c.cell_odes) || push!(after, CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt))))
-        isempty(c.model_odes) || push!(after, CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt))))
+    # cell then model ODEs (model ODEs see the cells' new values; D-077 N3), one phase per
+    # solver (`_ode_groups`; one group unless `solvers` sets a variable apart), after the
+    # population folds their rates read. Several groups in a scope write scratch `x__ode`,
+    # published after the scope's last group, so every rate reads the pre-step state.
+    isempty(c.cell_ode_pops) || push!(after, _slots_phase(T, c.cell_ode_pops, rn))
+    for scope in (:cell, :model)
+        groups = _ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)
+        scratch = length(groups) > 1
+        for (solver, odes) in groups
+            push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch) :
+                         scope === :cell ? CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch))) :
+                         CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver; scratch))))
+        end
+        scratch || continue
+        for (x, _) in (scope === :cell ? c.cell_odes : c.model_odes)
+            n = info(x).name
+            push!(after, CorePotts.CopyPhase((scope, n) => (scope, _ode_scratch_name(n))))
+        end
     end
     append!(after, _discrete_phases(c, T))
     append!(after, _link_phases(c, T))
@@ -463,44 +510,53 @@ function _slots_phase(T, slots, rn)
     return CorePotts.ModelPhase(_rgf(:((st, p, ctx, key, mcs) -> $(Expr(:block, body..., :(return nothing))))))
 end
 
-# All cell ODEs (`D(x) ~ f` on cell variables, component equations) advance together, per
-# cell, over one MCS of length `dt` with the sweep's `ode_solver` (a batched system over the
-# cell dimension: one work item per cell, CPU or GPU). The state is read into locals
-# `y_i`, the right-hand sides see them (and `time`), and the result is written back.
-function _cell_ode_expr(c::CompiledPottsSystem, T, dt)
+# The cell ODEs `odes` of one solver (`D(x) ~ f` on cell variables, component equations;
+# all of them unless `solvers` sets some apart) advance together, per cell, over one MCS of
+# length `dt` with that fixed-step `solver` (a batched system over the cell dimension: one
+# work item per cell, CPU or GPU). The state is read into locals `y_i`, the right-hand sides
+# see them (and `time`), and the result is written back: to the variables, or with `scratch`
+# (several solver groups) to `x__ode`, where an empty cell slot copies its value through so
+# the whole-array publish is exact.
+function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = false)
     rn = c.gather_names
-    ys, locals, bind = _ode_locals(c.cell_odes)
+    ys, locals, bind = _ode_locals(odes)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
-    names = [info(x).name for (x, _) in c.cell_odes]
-    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in c.cell_odes])
+    names = [info(x).name for (x, _) in odes]
+    outs = scratch ? _ode_scratch_name.(names) : names
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
+    live = scratch ? :(if !(@inbounds st.cell.volume[c] > 0)
+                         $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
+                         return nothing
+                     end) : :(@inbounds st.cell.volume[c] > 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> begin
-        @inbounds st.cell.volume[c] > 0 || return nothing
+        $live
         $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in eachindex(ys)]...)
         $body
-        $([:(@inbounds st.cell.$(names[i])[c] = $(ys[i])) for i in eachindex(ys)]...)
+        $([:(@inbounds st.cell.$(outs[i])[c] = $(ys[i])) for i in eachindex(ys)]...)
         return nothing
     end)
 end
 
 # Model ODEs (`D(x) ~ rhs` on model variables): the same fixed-step solver, one work item.
-function _model_ode_expr(c::CompiledPottsSystem, T, dt)
-    ys, locals, bind = _ode_locals(c.model_odes)
+function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = false)
+    ys, locals, bind = _ode_locals(odes)
     env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
-    names = [info(x).name for (x, _) in c.model_odes]
-    body = _ode_steps(c.sys.sweep.ode_solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in c.model_odes])
+    names = [info(x).name for (x, _) in odes]
+    outs = scratch ? _ode_scratch_name.(names) : names
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes])
     return :((st, p, ctx, key, mcs) -> begin
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
-        $([:(@inbounds st.model.$(names[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
+        $([:(@inbounds st.model.$(outs[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
         return nothing
     end)
 end
 
-# Adaptive host integration (`ode_solver = Adaptive(alg)`): an in-place SciML right-hand side
-# `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered rates, and a phase that keeps one
-# integrator (created on first use) and re-initializes it per cell / per MCS.
-function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope)
-    odes = scope === :cell ? c.cell_odes : c.model_odes
+# Adaptive host integration (`ode_solver = Adaptive(alg)`, or a `solvers` entry): an in-place
+# SciML right-hand side `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered rates of
+# the ODEs `odes` of that solver, and a phase that keeps one integrator (created on first
+# use) and re-initializes it per cell / per MCS.
+function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scratch = false)
     ys, locals, bind = _ode_locals(odes)
     env = scope === :cell ? _cell_env(T, :c, c.gather_names; mcs = :mcs, extra = (bind..., :time => :tt)) :
           _model_env(T, c.gather_names; extra = (bind..., :time => :tt))
@@ -511,9 +567,9 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope)
         $([:(du[$i] = $(rates[i])) for i in eachindex(ys)]...)
         return nothing
     end))
-    solver = c.sys.sweep.ode_solver
-    return _AdaptiveODE(f, solver.alg, solver.kwargs, [info(x).name for (x, _) in odes], scope, T, Float64(dt),
-        Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+    names = [info(x).name for (x, _) in odes]
+    return _AdaptiveODE(f, solver.alg, solver.kwargs, names, scratch ? _ode_scratch_name.(names) : names, scope, T,
+        Float64(dt), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
 end
 
 # One SciML integrator per trajectory, keyed by the identity of its live state array (held
@@ -524,6 +580,7 @@ struct _AdaptiveODE{F, A, K}
     alg::A
     kwargs::K
     names::Vector{Symbol}
+    outs::Vector{Symbol}         # where the results go: `names`, or their `x__ode` scratch
     scope::Symbol
     T::Type
     dt::Float64
@@ -540,6 +597,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     hctx = merge(ctx, (; lattice = CorePotts.host_lattice(ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
+    outs = [getfield(part, n) for n in ph.outs]
     u = zeros(ph.T, length(arrays))
     t0 = mcs * ph.dt
     advance!(P, c) = begin
@@ -549,8 +607,8 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
             integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, ph.kwargs...)
             lock(() -> _cache_integrator!(ph.integrators, owner, integ), ph.lock)
         else
+            integ.p = P                       # before `reinit!`: its initial-dt guess evaluates the rate
             SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true, reset_dt = true)
-            integ.p = P
         end
         SciMLBase.solve!(integ)
         SciMLBase.successful_retcode(integ.sol) || error("Adaptive ODE integration failed at MCS $mcs" *
@@ -559,13 +617,16 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     end
     if ph.scope === :cell
         for c in 1:length(host.cell.kind)
-            host.cell.volume[c] > 0 || continue
+            if !(host.cell.volume[c] > 0)
+                ph.outs != ph.names && foreach(((o, a),) -> o[c] = a[c], zip(outs, arrays))
+                continue
+            end
             for (i, a) in enumerate(arrays)
                 u[i] = a[c]
             end
             v = advance!((host, hp, hctx, mcs, c), c)
-            for (i, a) in enumerate(arrays)
-                a[c] = v[i]
+            for (i, o) in enumerate(outs)
+                o[c] = v[i]
             end
         end
     else
@@ -573,13 +634,13 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
             u[i] = a[1]
         end
         v = advance!((host, hp, hctx, mcs, 0), 0)
-        for (i, a) in enumerate(arrays)
-            a[1] = v[i]
+        for (i, o) in enumerate(outs)
+            o[1] = v[i]
         end
     end
     if !cpu
         dst = ph.scope === :cell ? st.cell : st.model
-        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.names)
+        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.outs)
     end
     return 0
 end
@@ -618,7 +679,7 @@ _substitute_locals(rate, locals, scope = :cell) = scope === :model ?
 _outside_populations(ex) = !(iscall(ex) && operation(ex) === population) &&
                            SymbolicUtils.default_substitute_filter(ex)
 
-# `substeps` fixed steps of the sweep's `ode_solver` over one MCS (`dt`), on locals `ys`.
+# `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`.
 function _ode_steps(solver, T, dt, ys, rates)
     n = length(ys)
     substeps = something(solver.substeps, 1)
@@ -855,7 +916,8 @@ function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
     end
     n === nothing || return n
     throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not a parameter expression; " *
-                        "set `field_solver = ExplicitEuler(; substeps = n)` explicitly"))
+                        "give `PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` " *
+                        "(or `solvers = [$(info(x).name) => ExplicitEuler(; substeps = n)]`)"))
 end
 
 # ---------------------------------------------------------------------------------------

@@ -188,9 +188,10 @@ end
 @testset "A-64 field substeps follow the current parameters" begin
     σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1
     c0 = zeros(16, 16); c0[8, 8] = 100.0
-    p = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0], (0, 10))
+    p = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0], (0, 10); field_solver = ExplicitEuler())
     q = remake(p; p = [:Dc => 5.0])
-    fresh = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0, :Dc => 5.0], (0, 10))
+    fresh = PottsProblem(AuditDiffusion(; name = :d), [ownership => σ, kind => [1], :c => c0, :Dc => 5.0], (0, 10);
+        field_solver = ExplicitEuler())
     uq = solve(q, SequentialCPM()).u[end].site.c
     @test uq ≈ solve(fresh, SequentialCPM()).u[end].site.c
     @test maximum(abs, uq) < 100

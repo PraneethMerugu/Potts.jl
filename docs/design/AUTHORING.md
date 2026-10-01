@@ -323,17 +323,75 @@ end
 
 ### Differential equations, in MTK syntax
 
+**Solvers are problem keywords (D-075, P6.0c; implemented).** The model states the
+equations; the problem states how each field and ODE is integrated. The solvers are
+compiled into the phase code when the problem is built (MethodOfLines' `discretize`
+placement), so a different scheme is a different problem. They are not `@sweep` keywords
+(`@sweep` with `field_solver` or `ode_solver` is an error naming the keyword) and not
+algorithm fields.
+
+```julia
+prob = PottsProblem(sys, op, (0, 500);
+    field_solver = ExplicitEuler(substeps = 15, lower = 0.0),   # required when the model has a field
+    ode_solver = ExplicitEuler(),                                # the default: one step per MCS (D-038)
+    solvers = [V => Adaptive(Rodas5P(); reltol = 1e-8)])         # per variable, keyed symbolically
+prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
+```
+
+- `field_solver = ExplicitEuler(; substeps, lower)` has **no default**: a model with an
+  integrated field (`D(c) ~ …`) needs it, even when `solvers` names every field, and a
+  model without one rejects it. `substeps = nothing` takes the stable count from the
+  diffusion coefficient; an explicit `n` is a minimum. `lower` clips after every substep. A
+  published model's docstring gives its value (Merks: `ExplicitEuler(substeps = 2,
+  lower = 0.0)`).
+- `ode_solver` integrates every cell and model ODE (`D(x) ~ …`, components):
+  `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; kwargs...)`. It has a
+  default, so a model without ODEs accepts it silently (it changes nothing, fingerprint
+  included), unlike `field_solver`. For an ODE, `ExplicitEuler()` is one step per MCS,
+  the same as `ExplicitEuler(substeps = 1)`.
+- `solvers = [x => solver, …]` overrides `ode_solver` (or, with an `ExplicitEuler`,
+  `field_solver`) for the integrated variables it names: by the Potts variable, its name
+  (`:x`), a component variable (`grn.x` or `Symbol("grn₊x")`), or a component system
+  (`grn`: all its integrated unknowns). A key that is a parameter, a variable without an
+  equation, or named twice is an error.
+- **Jacobi across solvers.** The ODEs of one solver (equal specifications, by their
+  canonical string) step together in one phase. When a scope has several such groups,
+  each writes scratch slots `x__ode` and one publish per scope copies them back after the
+  last group, so every rate's reads of its own cell's (or the model's) unknowns see the
+  state at the start of the step, whatever the solvers or the equation order. Reads of
+  *other* cells' ODE unknowns within one group (`y[j]`, folds over cells) stay
+  Gauss–Seidel as before (D-077 N3, P6.0n). A scope with one group writes its variables directly (no scratch; the code of
+  such a model is unchanged). Cell ODEs run before model ODEs, which see the cells' new
+  values (D-077 N3, unchanged).
+- `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code through the
+  same codegen point and keeps `u0` (re-laid out for the scratch slots, values kept), `p`,
+  the seed and the solver keywords it does not name. `remake(prob; p | u0 | seed)` never
+  regenerates (`f` is the same object). Cost: a new specification on Merks 100² takes
+  about 0.3 s of code generation plus 0.4 s of compilation at the first solve; an
+  identical one reuses the compiled functions (a few ms). A first `Adaptive` algorithm also
+  compiles OrdinaryDiffEq (seconds).
+- The D-016 fingerprint hashes a canonical string of the resolved per-variable solvers
+  (`Adaptive`'s algorithm by fully qualified type and fields, closures' captures
+  included, and its sorted keywords; the `ExplicitEuler`/`RK4` fields), so a checkpoint
+  loads only into an equally discretised problem; equal specifications built from fresh
+  objects match. The algorithm's type and fields belong to the solver package, so the
+  fingerprint can change with its version (as it does with Julia's).
+
 **Adaptive and stiff solvers (implemented).**
-`@sweep Metropolis(; …, ode_solver = Adaptive(Rodas5P(); reltol = 1e-8))` integrates the
-cell and model ODEs on the host with any SciML ODE algorithm. The user loads
-OrdinaryDiffEq; Potts depends only on SciMLBase.
+`ode_solver = Adaptive(Rodas5P(); reltol = 1e-8)` (or a `solvers` entry) integrates cell
+and model ODEs on the host with any SciML ODE algorithm. The user loads OrdinaryDiffEq;
+Potts depends only on SciMLBase. An equation with `rand()` cannot be integrated
+adaptively (the solver re-evaluates the rate at trial steps). The integrator's parameter
+tuple is set to the current cell and MCS before each `reinit!` (P6.0c; before, the
+initial-step guess evaluated the rate with the previous cell's tuple, a stale host
+snapshot on a device), so adaptive trajectories changed within tolerance.
 - One integrator is created on first use and re-initialized per cell and per MCS
   (`reinit!`, set `p`, `solve!` to `t + mcs_duration`).
 - A device state is copied to the host and back once per MCS.
 - The fixed-step `ExplicitEuler`/`RK4` stay the GPU-resident default.
 
 **Model scope (implemented).**
-- `D(x) ~ rhs` on a model variable advances with the sweep's `ode_solver`, in a
+- `D(x) ~ rhs` on a model variable advances with the problem's `ode_solver`, in a
   single-work-item kernel. The right side may use population folds, `mcs` and `time`.
 - `@components model name = sys` instantiates an MTK system once for the whole model.
   Its unknowns are model variables and its parameters are model parameters, which can be
@@ -346,8 +404,10 @@ OrdinaryDiffEq; Potts depends only on SciMLBase.
     D(g) ~ r * g * (1 - g / K)                                # per-cell ODE (g(cell))
     D(h) ~ -h                                                 # model ODE (h(model))
 end
-@sweep Metropolis(; temperature = T, mcs_duration = 1.0u"min", ode_solver = Tsit5(),
-                  field_solver = ExplicitEuler(substeps = 4))
+@sweep Metropolis(; temperature = T, mcs_duration = 1.0u"min")
+# …
+prob = PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(substeps = 4),
+    ode_solver = Adaptive(Tsit5()))
 ```
 
 The variable's scope decides what the equation is: a field variable with `Δ`/`∇`
@@ -523,7 +583,7 @@ and `all`. Without units, or without DynamicQuantities, the check is skipped.
 | `ProposalContext(:copy)`, `SiteBinding`, `CellBinding` | bound names `source`, `target`, `owner[·]` |
 | `Observation(:name, expr)` | `@observed name ~ expr` |
 | `NativeComponent`/`ODEComponent(...)` | `@components` + coupling equations |
-| `DiscreteFieldEuler(...)` | `field_solver = ExplicitEuler(substeps = n)` in `@sweep` |
+| `DiscreteFieldEuler(...)` | `PottsProblem(…; field_solver = ExplicitEuler(substeps = n))` |
 | `PottsSavedState` | `sol[t]` state view with `[volume]`, `[act]`, `.ownership` |
 
 ---
@@ -563,6 +623,9 @@ end
 @constraint connectivity(endothelial; rule = :local)
 ```
 
+Its problem gives the field solver (D-075): `PottsProblem(MerksVasculogenesis(…), op, tspan;
+field_solver = ExplicitEuler(substeps = 2, lower = 0.0))`.
+
 ### OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameter set)
 
 ```julia
@@ -599,8 +662,9 @@ end
     @link   bond when = new_contact(a, b) && kind[a] == leader && kind[b] == follower
     @unlink bond when = distance > 2ℓ₀
     @divide cells(follower) when = clock.m >= 1, along = RandomPlane(), clock.m => 0
-    @sweep Metropolis(; temperature = T, mcs_duration = 1.0u"min", ode_solver = Tsit5())
+    @sweep Metropolis(; temperature = T, mcs_duration = 1.0u"min")
 end
+# PottsProblem(…; field_solver = ExplicitEuler(), ode_solver = Adaptive(Tsit5()))
 ```
 
 ---
@@ -776,8 +840,8 @@ end; solver = Tsit5(), dt = 0.1, time_scale = 1.0
   - `@equations clock.r ~ volume / V₀` couples a component parameter to a cell-scope
     expression. Uncoupled parameters become model parameters (`clock₊τ`), which can be
     set by `remake(prob; p = [:clock₊τ => …])`.
-- Cell ODEs advance with `@sweep …; ode_solver = ExplicitEuler(substeps = n) |
-  RK4(substeps = n)`.
+- Cell ODEs advance with the problem's `PottsProblem(…; ode_solver = ExplicitEuler(substeps = n) |
+  RK4(substeps = n) | Adaptive(alg))`, or per variable with `solvers` (§6).
 
 **Discrete-time components: Boolean and discrete networks (P6.0k, D-065 Q9, implemented).**
 A Boolean or discrete network is a plain MTK discrete-time `System`; Potts has no network

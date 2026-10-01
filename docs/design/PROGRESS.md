@@ -1565,3 +1565,21 @@ The maintainer approved F-1…F-6 (D-049).
   - "Approve P6.0o (Recommended)". P6.0o is added with the review's acceptance and latency conditions. AUTHORING and INTERNALS now mark the subtype as planned.
   - "Correct, then commit (Recommended)". The report is committed with its corrections marked inline.
 - **Upstream.** No amendment and no upstream post.
+
+## 2026-10-01 — P6.0c merged: solver placement on PottsProblem (D-078; D-075 breaking batch complete)
+
+- **The change.** `field_solver`, `ode_solver` and `solvers` are now `PottsProblem` construction keywords.
+  - Several solver groups stay Jacobi, through `x__ode` scratch.
+  - `remake` takes a rebuild hook.
+  - The fingerprint is canonical and independent of the checkout path or build. This was verified against a `git archive` copy: 7 problems, Merks included.
+- **Review.** Three adversarial rounds. The round-3 residual (flattening nested `+`/`*` in the code hash) was fixed by the coordinator with the reviewer's verified patch.
+- **Merks.** Bitwise unchanged: all 5 digests recorded on 1092ada match.
+- **Merge checks.** CorePotts (QA), PottsModels, MakiePotts, Potts on Metal and docs all exit 0.
+- **Gate.**
+  - CPU: 0.983–1.002, with zero allocations.
+  - Metal: three cases flagged. `ab.jl` against 424bd63:
+    - OpenVT 1.006, Wortel 0.794;
+    - Akeeb 1.544 under parallel-agent load, then 1.016 over 10 rounds.
+  - None of these three models has ODEs or a field, so their generated code is unchanged.
+- **Follow-ups.** P6.0c2 (filed).
+- **Note.** The disk filled up during the parallel batch. With the user's approval, the Julia 1.10/1.11 precompile caches (about 22 GB) were removed.

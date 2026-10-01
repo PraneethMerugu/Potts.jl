@@ -23,8 +23,8 @@ PrecompileTools.@setup_workload begin
         σ = zeros(Int32, 16, 16)
         σ[4:8, 4:8] .= 1
         for S in (Float64, Float32)
-            generated_code(csys; T = S)
-            PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S)
+            generated_code(csys; T = S, field_solver = ExplicitEuler())
+            PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
         end
     end
 end
