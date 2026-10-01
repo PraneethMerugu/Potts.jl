@@ -184,13 +184,16 @@ Event-driven and validate-then-commit:
 
 1. `lifecycle.trigger(st, p, c)` (generated) marks candidate cells; a device counter
    accumulates the count. All later kernels exit immediately when the count is zero, so
-   the pipeline costs one tiny launch on quiet MCS and never synchronizes.
-2. Plan: per candidate, the generated `plan` computes the event (partition plane,
-   destination kind, state rule). Conflicts resolve by stable priority (same claim
-   pattern as proposals). Capacity is checked here.
-3. Apply: LocalMath `Collect`/`KeyedReduce` stages assign sites to daughters, allocate
-   ids (`generation += 1`), apply state rules (split conservatively, copy, redraw,
-   reset…), update relationships, then rebuild trackers of affected cells.
+   the pipeline costs a few launches on quiet MCS and never synchronizes (D-089; the CPU
+   keeps the D-035 host plan, whose one read of the count is free there).
+2. Plan (one workgroup, `lifecycle_device.jl`): daughter ids lowest-first among free ids
+   by prefix scans in slot order (deterministic), clusters first in root order with the
+   D-035 greedy deferral when capacity runs out, then cells dividing alone; cluster planes
+   from the members' exact moments; cell normals.
+3. Apply: partition by plane (the daughter's volume and moment sums accumulate in integer
+   scratch), daughter column copies, `generation += 1`, cluster ids, links, state rules,
+   then the trackers of parents, daughters and removed cells, cluster re-rooting and the
+   cluster trackers. Statistics stay on the device until a host read point.
 
 All lifecycle vocabulary from the survival matrix maps onto (trigger, plan, apply) plus
 a small set of CorePotts primitives (partition by plane, place at stencil, retire id).
@@ -222,19 +225,24 @@ applied at the boundary.
     mask cannot be combined with frozen kinds). **A custom rule overrides `remake_frozen`
     and must also define `frozen_varies(sys) = true`**; otherwise the mask is static
     (`init` warns once). Potts defines only `frozen_kinds` (`nothing` without `[frozen]`).
-  - `run_lifecycle!` returns `(launches, events, read)`; on an MCS with events `step!`
-    refreshes. `reinit!`, `set_state!` on `kind` and `u_modified!(integ, true)` refresh
-    too (immediately, reading the counts).
+  - On the host lifecycle path (the CPU; a device with a host hook), `run_lifecycle!`
+    returns `(launches, events)` and on an MCS with events `step!` refreshes at once. On
+    the device lifecycle path (D-089, `lifecycle_device.jl`) the refresh kernel is
+    enqueued with the lifecycle every lifecycle MCS and returns at once on quiet rounds.
+    `reinit!`, `set_state!` on `kind` and `u_modified!(integ, true)` refresh too
+    (immediately, reading the counts).
   - Standard rule: one `_frozen_body!` launch over the sites (frozen when outside the
     domain or the owner's kind is listed) rewrites `frozen` in place and counts, with
-    atomics, the change of the mobile count and the number of changed sites into entries 2
-    and 3 of the lifecycle's `count` array (entry 1: the trigger's event count). After an
-    event MCS on a device nothing is read: the counts wait (`MobileCounters.pending`) for
-    the next lifecycle MCS, whose one read-back of `count` brings them; `nmobile` and
-    `stats.attempts` (for the `stale` MCS swept with the old count) are corrected then.
-    `solve!` end, `checkpoint` and a direct refresh read pending counts first. Nothing on
-    the device needs the count (CheckerboardCPM reads only the mask). On the CPU the counts
-    are read at once and the site list is rebuilt in place when a site changed.
+    atomics, the change of the mobile count and the number of changed sites (entries 2
+    and 3 of a 3-entry counter). A direct refresh and the host lifecycle path read the
+    counts at once (on the CPU the site list is rebuilt in place when a site changed). On
+    the device lifecycle path a one-item kernel folds each round's change `d` into
+    `mask = [Σ d, Σ d·mcs, refreshes]` (Int64, on the device); the host reads it only at
+    its read points (`_fold_lifecycle!`: `current_state`, so saves, `integ.u` and
+    `checkpoint`; the end of `solve!`; a direct refresh; `reinit!`) and corrects
+    `nmobile` and `stats.attempts` exactly (the MCS `m + 1 … t − 1` after a refresh at
+    MCS `m` ran with the old count). Nothing on the device needs the count
+    (CheckerboardCPM reads only the mask).
   - Custom rule: a host copy of the state (`_snapshot` off the CPU), `frozen_sites`, copy
     of the mask to the device.
   - `frozen_sites(prob, u)` is the same rule on a host state, with the domain complement;

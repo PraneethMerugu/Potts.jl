@@ -465,3 +465,33 @@ With a kernel copy it runs at 60 ns/site (F2).
 | P6.0v5 (ROADMAP, optional) | A5, H5 |
 | P6.0v7 (ROADMAP) | gate semantics (§2) |
 | unavoidable or kept (justified) | F5 (no grid barrier); A6 (column-only already); R1, R3; L16 (user hook); P4, P5; outside the MCS: saves and `integ.u` (`problem.jl:331-334`: sync and snapshot, the user asked for the state), `_check_status!` at saves (`:348-353`, 4 B), `checkpoint` (`checkpoint.jl:26-31`), `reinit!` (`:63`, setup; the counters are reset after it), `set_state!` (`problem.jl:667-673`, 1 sync and 1 upload per user write, plus P6.0d's refresh on `kind`), model-scope `getindex(st, ::StateIndex)` (`problem.jl:637-640`, a user read through `_to_host(nothing, …)`, not counted), `_standard_frozen` on host states (problem construction, `remake`, `frozen_sites`), `init` uploads, `src/layouts.jl:241,419` and `src/problem.jl:419` (setup, host), `Lattice` `==`/`hash` (`lattice.jl:79-80`, host utility) |
+
+## 11. Status after P6.0v1 (D-089, D-096)
+
+The lifecycle runs on the device on every GPU backend (`lib/CorePotts/src/lifecycle_device.jl`);
+the CPU keeps the host plan of §6–7 unchanged.
+
+- **Quiet lifecycle MCS:** 0 syncs / 0 transfers / 0 B and no Metal wait (was 1 / 1 / 4 B
+  and two waits: T1, T2, R2). T3 is gone with it (no `fill!` of the count: the event flag is
+  double-buffered by round parity and reset by the planner).
+- **Event MCS:** 0 / 0 / 0 for every event kind, cluster divisions and link updates
+  included (was (2, 18, 1098 B) on the 16×8 division fixture, O(sites + cells ×
+  quantities)): L1–L15 and L17 are device kernels.
+  - Plan: one workgroup of 256 items; daughter ids by prefix scans over the slots (no
+    atomics-order dependence); clusters by the D-035 greedy pass only when capacity runs out.
+  - Trackers: the partition kernel accumulates each daughter's volume and moment sums in
+    `Int32` scratch about the parent's anchor (exact while the parent's own second moments
+    fit in `Int32`, far above any cell size in use; the planner checks it and a larger cell
+    raises an error at the next read point); surfaces change only for parents and
+    daughters (one site kernel); cluster trackers are recounted on event rounds only.
+  - Cluster planes: the root's work item sums its members' exact moments (O(capacity) per
+    dividing cluster, on event rounds only).
+- **Launches:** a quiet lifecycle MCS enqueues 5 launches (trigger, plan, partition,
+  cells, finalize), +1 with a surface tracker, +2–4 with clusters, +2 with frozen kinds;
+  every work item after the trigger returns at once on a quiet round.
+- **Read points:** `stats.lifecycle`, `stats.attempts` (P6.0d) and `stats.refreshes` are
+  folded at `current_state` (saves, `integ.u`, `checkpoint`), the end of `solve!`, a
+  direct `refresh_frozen!` and `reinit!`: one transfer of 24 B, plus 24 B for models with
+  frozen kinds. The deferral warning is emitted there.
+- **Kept on the host:** a `Lifecycle` with a `rebuild!` hook (L16) or a custom
+  `remake_frozen` rule (R4) is planned on the host as before, because the hook is host code.
