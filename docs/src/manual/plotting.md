@@ -34,8 +34,8 @@ CairoMakie.activate!(type = "png") # hide
 end
 @named mix = Mix()
 op = layout(Tiling((5, 5); region = (11:30, 11:30), kinds = [:dark, :light]), mix)
-sol = solve(PottsProblem(mix, op, (0, 100); field_solver = ExplicitEuler(substeps = 2), seed = 1),
-    SequentialCPM(); saveat = 50)
+sol = solve(PottsProblem(mix, op, (0, 300); field_solver = ExplicitEuler(substeps = 2), seed = 1),
+    SequentialCPM(); saveat = 10)
 
 u = sol.u[end]
 key = SiteChannelKey(:c, Float64)
@@ -57,7 +57,7 @@ and `plot` are named tuples passed to the Makie figure, axis and `pottsplot`. To
 field, pass a vector of frames with channels, as in [Tutorial 2](@ref tutorial-chemotaxis).
 
 ```@example plotting
-record_potts("plotting_mix.mp4", sol; framerate = 4, title = "Mix", plot = (; boundaries = true),
+record_potts("plotting_mix.mp4", sol; framerate = 10, title = "Mix", plot = (; boundaries = true),
     figure = (; size = (300, 300)))
 nothing # hide
 ```

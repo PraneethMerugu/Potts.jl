@@ -139,8 +139,47 @@ shows what `Chemotaxis(c; strength = χ)` expands to:
 gradient
 ```
 
-The drive line reads `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`, and you
-can write exactly that in `@drive` instead. `c[target]` is the field at the target site. Written out, the rule is easy to change: for
+The printout is Potts's internal form of the model: `Potts.at(c(t), target)` is the field at
+the target site, and `Potts.at2(J, kind, kind′)` is the table entry. In the notation of
+`@potts_model` the drive line reads
+`copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
+with that line in place of `Chemotaxis`:
+
+```@example chemo
+@potts_model GradientByHand begin
+    @kinds medium cell
+    @parameters begin
+        λ = 2.0
+        V₀ = 25.0
+        T = 8.0
+        J[kind, kind] = [0 10; 10 8]
+        Dc = 1.0
+        s = 0.1
+        k = 0.001
+        χ = 300.0
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((80, 40); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
+    @energy begin
+        cells(cell) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+    end
+    @equations D(c) ~ Dc * Δ(c) + s * (position[1] > 75) - k * c
+    @drive copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)
+    @sweep Metropolis(; temperature = T)
+end
+
+@named by_hand = GradientByHand()
+function short(sys)
+    start = layout(Scattered(12, (5, 5); region = (8:30, 1:40), kinds = [:cell], seed = 1), sys)
+    prob = PottsProblem(sys, start, (0, 100); field_solver = ExplicitEuler(substeps = 8, lower = 0.0), seed = 1)
+    return solve(remake(prob; p = [:χ => 300.0]), SequentialCPM())
+end
+short(by_hand).u[end].σ == short(gradient).u[end].σ
+```
+
+With the same seed both runs make the same copies, so the drive is the same.
+Written out, the rule is easy to change: for
 example `kind[new] == leader` would restrict it to one kind. `Chemotaxis` has keywords
 for the common variants: `kinds = (leader,)`, `when = old == 0` (extensions into the
 medium only) and `response = saturating(s)` (``c/(s + c)``, a receptor that saturates).
@@ -214,11 +253,6 @@ clusters, and the clusters grow by collecting more cells.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.
 
-```@eval
-using Markdown
-Markdown.parse("**See also:** the published vasculogenesis model " *
-    Main.model_links("merks.md" => ("model-merks", "MerksVasculogenesis")) *
-    ", in which endothelial cells secrete a chemoattractant and form networks.")
-```
+**See also:** the published vasculogenesis model [`MerksVasculogenesis`](@ref model-merks), in which endothelial cells secrete a chemoattractant and form networks.
 
 Next, [Tutorial 3](@ref tutorial-growth) makes cells grow, divide and die.

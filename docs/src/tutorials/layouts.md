@@ -22,7 +22,7 @@ kind marked `[frozen]` never move, which makes walls and obstacles.
 ```@example layouts
 @potts_model Tissue begin
     @kinds medium wall[frozen] dark light
-    @parameters J[kind, kind] = [0 20 16 16; 20 0 20 20; 16 20 2 11; 16 20 11 14]
+    @parameters J[kind, kind] = [0 0 16 16; 0 0 20 20; 16 20 2 11; 16 20 11 14]
     @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
         Volume(dark, light; target = 25.0, strength = 1.0)
@@ -85,7 +85,14 @@ op = layout(overlay(Frame(:wall), seeds), tissue)
 show_layout(op)
 ```
 
-With a frozen `wall` kind the frame is a box the cells cannot leave or push.
+With a frozen `wall` kind the frame is a box the cells cannot leave or push. Whether cells
+spread along it depends on the contact energies. Each unit of boundary a cell lays
+against the wall turns wall–medium contact into wall–cell contact and saves the same
+length of cell–medium contact, so it pays
+``J(\text{cell}, \text{wall}) - J(\text{medium}, \text{wall}) - J(\text{cell}, \text{medium})``.
+The cell stays off the wall when this is positive, ``J(\text{cell}, \text{wall}) > J(\text{medium}, \text{wall}) +
+J(\text{cell}, \text{medium})``. Here ``J(\text{medium}, \text{wall}) = 0`` and
+``J(\text{cell}, \text{wall}) = 20 > 0 + 16``, so the wall is not wetted.
 
 ## InsertUntil
 
@@ -190,10 +197,6 @@ see [Layouts](@ref manual-layouts).
 - `layout(l, sys)` gives the operating point; `report = true` explains what each layer did.
 - A custom layer is a struct and a `Potts.paint!` method.
 
-```@eval
-using Markdown
-Markdown.parse("**See also:** " * Main.model_links("akeeb.md" => ("model-akeeb", "AkeebInvasion")) *
-    " for the layout of a published model.")
-```
+**See also:** [`AkeebInvasion`](@ref model-akeeb) for the layout of a published model.
 
 Next, [Tutorial 5](@ref tutorial-cell-odes) puts ODEs inside cells.

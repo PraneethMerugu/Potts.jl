@@ -117,11 +117,15 @@ area term squeezes it out:
 @potts_model GrowthAndDeath begin
     @extend V_target, A₀, τ, β = base = GrowingMonolayer()
     @parameters p_death = 0.002
-    @variables dying(cell) = 0.0
+    @variables begin
+        dying(cell) = 0.0
+        deaths(model) = 0.0                       # cells that have started to die
+    end
     @after_mcs begin
         dying ~ ifelse((Pre(dying) > 0) || (rand() < p_death), 1.0, 0.0)
         V_target ~ ifelse(Pre(dying) > 0, 0.0,
             ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target)))
+        deaths ~ Pre(deaths) + count(true for c in cells if (dying > 0) && (Pre(dying) == 0))
     end
 end
 nothing # hide
@@ -133,6 +137,9 @@ nothing # hide
   variable); `dying` is new.
 - `rand()` is a uniform random number, drawn fresh for every cell at every MCS from the
   problem's seed.
+- `deaths(model)` is one number for the whole model. Its update counts the cells that
+  started dying in this MCS (a fold over the cells with a condition) and adds them up, so it
+  counts every death of the run.
 
 This extension starts from four cells (a `Tiling` layout, see [Tutorial 4](@ref
 tutorial-layouts)) so that the colony survives early deaths:
@@ -152,18 +159,20 @@ nothing # hide
 
 ```@example growth
 alive = [count(>(0), v) for v in sol_death[:volume]]
-dead = [count(i -> v[i] == 0 && d[i] > 0, eachindex(v)) for (v, d) in zip(sol_death[:volume], sol_death[:dying])]
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "cells")
 lines!(ax, sol_death.t, alive; label = "alive")
-lines!(ax, sol_death.t, dead; label = "dead")
+lines!(ax, sol_death.t, sol_death[:deaths]; label = "deaths so far")
 axislegend(ax; position = :lt)
 fig
 ```
 
 !!! note "How a cell dies"
     A cell is gone when it has no site left. Any rule that drives its area to zero does
-    it: a zero target, as here, or a contact term that makes the cell lose every copy.
+    it: a zero target, as here, or a contact term that makes the cell lose every copy. The
+    dead cell's number is then free, and a later division may give it to a daughter, so
+    count deaths as they happen (as `deaths` does) rather than from the dead cells of a
+    saved state.
     `@constraint no_extinction` forbids copies that would take a cell's last site, for
     models where cells must never disappear.
 
@@ -186,16 +195,12 @@ fig
 - `@extend` builds a new model on an existing one; an update of the same variable replaces
   the base's.
 
-The full run of the benchmark, on its 400×400 lattice:
+The full run of the benchmark, from one cell to 10⁴ cells:
 
 ```@example growth
-Main.paper_run("openvt", "../../") # hide
+Main.paper_run("openvt_monolayer", "../../") # hide
 ```
 
-```@eval
-using Markdown
-Markdown.parse("**See also:** " * Main.model_links("openvt.md" => ("model-openvt", "OpenVTGrowingMonolayer")) *
-    " for the full construction of the benchmark.")
-```
+**See also:** [`OpenVTGrowingMonolayer`](@ref model-openvt) for the full construction of the benchmark.
 
 Next, [Tutorial 4](@ref tutorial-layouts) builds initial states from layouts.

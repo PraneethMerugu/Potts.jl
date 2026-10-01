@@ -117,7 +117,7 @@ with a higher temperature.
 
 !!! note "This model ships with Potts"
     `PottsModels` contains this model as `GranerGlazier`, with its documentation and a
-    [reproduction of the paper](@ref published-models). Writing it out here shows how a
+    [model page](@ref model-graner-glazier) that follows the paper. Writing it out here shows how a
     model is built; `@named sorting = GranerGlazier()` gives the same model.
 
 ## Step 3: the initial state
@@ -146,8 +146,8 @@ prob = PottsProblem(sorting, [ownership => σ0, kind => kinds0], (0, 3200); seed
 nothing # hide
 ```
 
-Building the problem compiles the model, so the first problem of a session takes a few
-seconds. `seed` fixes the random numbers: the same seed gives the same run.
+Building the problem compiles the model, so the first problem of a fresh session takes
+about a minute; later problems of the same session take seconds. `seed` fixes the random numbers: the same seed gives the same run.
 
 !!! note "Time units"
     One of our MCS is one copy attempt per site. Graner and Glazier count 16 attempts per
@@ -236,7 +236,7 @@ end
 mixed = mixed_contacts.(sol.u)
 fig = Figure(size = (600, 300))
 ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "dark–light contacts")
-lines!(ax, sol.t, mixed)
+lines!(ax, sol.t, mixed; label = "J(dark, light) = 11 (paper)")
 fig
 ```
 
@@ -250,14 +250,16 @@ total_energy(prob, sol.u[1]), total_energy(prob, sol.u[end])
 
 `remake` changes parameters without recompiling. Here we change one entry of the paper's
 table: the dark–light energy goes from 11 to 8, the mean of the dark–dark (2) and
-light–light (14) energies. Then a mixed boundary costs the same as a sorted one, and the
-aggregate stays mixed:
+light–light (14) energies. Then a dark–light boundary costs no more than like boundaries,
+and the sorting is much weaker (the kinds' different energies against the medium still
+pull some light cells outwards):
 
 ```@example start
 J_neutral = [0 16 16; 16 2 8; 16 8 14]      # paper: J(dark, light) = 11; here: 8
 prob_neutral = remake(prob; p = [:J => J_neutral])
 sol_neutral = solve(prob_neutral, SequentialCPM(); saveat = 50)
 lines!(ax, sol_neutral.t, mixed_contacts.(sol_neutral.u); label = "J(dark, light) = 8")
+axislegend(ax; position = :rt)
 fig
 ```
 

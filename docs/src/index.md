@@ -49,7 +49,7 @@ The repository holds four packages:
 |---|---|
 | **Potts** | The modelling language: `@potts_model`, `PottsProblem`, layouts, components. It re-exports CorePotts. |
 | **CorePotts** | The numerical layer: lattices, solvers, solutions, ensembles, callbacks, GPU kernels. |
-| **PottsModels** | Published models as ordinary `@potts_model` constructors, with reproductions. |
+| **PottsModels** | Published models as ordinary `@potts_model` constructors. |
 | **MakiePotts** | Plotting of states and solutions with [Makie](https://docs.makie.org). |
 
 ## A complete example
@@ -109,8 +109,8 @@ Main.paper_run("graner_glazier", "") # hide
 - **Looking something up?** The [Manual](@ref manual-models) has one page per part of the
   model language, and the [API](@ref api) lists every exported function.
 - **Coming from CompuCell3D or Morpheus?** See the [translation tables](@ref coming-from).
-- **Want a published model?** The [Published models](@ref published-models) section
-  reproduces papers from the constructors in `PottsModels`.
+- **Want a published model?** The [Models](@ref models) section builds five published
+  models step by step, each with a video of a full paper-scale run.
 
 ## Citing
 
@@ -128,4 +128,4 @@ A paper describing Potts.jl is in preparation. Until it is out, please cite the 
 Please also cite the papers of the models you use. The cellular Potts model itself is due
 to F. Graner and J. A. Glazier, *Phys. Rev. Lett.* **69**, 2013 (1992),
 doi:[10.1103/PhysRevLett.69.2013](https://doi.org/10.1103/PhysRevLett.69.2013). Each
-published model's docstring and reproduction page give its references.
+published model's docstring and model page give its references.

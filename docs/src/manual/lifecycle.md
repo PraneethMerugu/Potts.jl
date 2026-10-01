@@ -88,6 +88,9 @@ sol = solve(PottsProblem(apoptosis, op, (0, 100); seed = 1), SequentialCPM(); sa
 [count(>(0), v) for v in sol[:volume]]
 ```
 
-Cells 1 and 2 are doomed at MCS 20 and gone soon after. A dead cell keeps its number, with
-volume 0, and drops out of energies, folds and plots. `@constraint no_extinction` forbids
+Cells 1 and 2 are doomed at MCS 20 and gone soon after. A dead cell has volume 0 and drops out of
+energies, folds and plots. Its number becomes free: a later division may reuse it for a
+daughter (which starts from the parent's state), so count deaths when they happen, for
+example with a `model` variable updated in `@after_mcs` (see [Tutorial 3](@ref
+tutorial-growth)), not by counting empty cells in a saved state. `@constraint no_extinction` forbids
 the copies that would empty a cell, for models in which cells must not die.

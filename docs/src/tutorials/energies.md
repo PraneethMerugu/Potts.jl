@@ -81,7 +81,7 @@ fig
 
 `surface` is the number of bonds between the cell and its neighbours (here the 8 Moore
 neighbours of each boundary site). A target surface that is small for the area makes the
-cell round; a large one makes it ragged and elongated:
+cell round; a larger one makes it irregular, and a very large one tears it into pieces:
 
 ```@example energies
 fig = Figure(size = (700, 260))
@@ -89,10 +89,14 @@ for (i, S₀) in enumerate((40.0, 70.0, 110.0))
     s = solve(remake(prob; p = [:λₛ => 1.0, :S₀ => S₀]), SequentialCPM())
     ax = Axis(fig[1, i]; title = "S₀ = $S₀", aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]))
+    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
 end
 fig
 ```
+
+At ``S_0 = 110`` the surface term rewards boundary so much that the cell splits off
+fragments. Nothing in the energy keeps a cell in one piece; `@constraint connectivity(cell)`
+does (see [Constraints](@ref manual-constraint)).
 
 ## Adhesion between kinds
 
@@ -139,7 +143,7 @@ for (i, (label, J)) in enumerate(tables)
     s = solve(remake(base; p = [:J => J]), SequentialCPM())
     ax = Axis(fig[1, i]; title = label, aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]))
+    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
 end
 fig
 ```
@@ -157,8 +161,8 @@ apart.
 ## Temperature
 
 The temperature sets how often a copy that raises ``H`` is accepted. At low ``T`` the
-membranes are smooth and the cells barely move; at high ``T`` the cells are ragged and the
-tissue becomes fluid, or falls apart:
+cells barely move and the tiled start stays frozen in place; at ``T = 10`` the
+kinds sort; at high ``T`` the boundaries are ragged and the sorting is noisier:
 
 ```@example energies
 fig = Figure(size = (900, 300))
@@ -166,7 +170,7 @@ for (i, T) in enumerate((2.0, 10.0, 30.0))
     s = solve(remake(base; p = [:T => T], tspan = (0, 300)), SequentialCPM())
     ax = Axis(fig[1, i]; title = "T = $T", aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]))
+    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
 end
 fig
 ```

@@ -131,10 +131,6 @@ The full run of the sorting model, as long as in the paper:
 Main.paper_run("graner_glazier", "../../") # hide
 ```
 
-```@eval
-using Markdown
-Markdown.parse("**See also:** " * Main.model_links("graner_glazier.md" => ("model-graner-glazier", "GranerGlazier")) *
-    " and the [reproduction of the paper](@ref published-models), which runs this scan's kind of ensemble at full size.")
-```
+**See also:** the model page [`GranerGlazier`](@ref model-graner-glazier), which builds this model step by step.
 
 Next, [Tutorial 8](@ref tutorial-gpu) runs models on a GPU.

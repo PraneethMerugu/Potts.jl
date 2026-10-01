@@ -4,7 +4,7 @@
 
 **Why is the first run of a session slow?**
 Julia compiles code the first time it runs, and `PottsProblem` generates and compiles code
-for your model. The first problem of a session takes tens of seconds; later problems of the
+for your model. The first problem of a fresh session takes about a minute; later problems of the
 same model, `remake`, and new solves take a fraction of a second. Keep one Julia session open
 while you work (the REPL, a notebook, or VS Code).
 
@@ -25,9 +25,13 @@ A cell disappears when it loses its last site. Common causes: a weak area constr
 `@constraint no_extinction` prevents it.
 
 **Why do my cells stick to the edges of the lattice?**
-A closed boundary has no neighbours, so a cell at the edge pays no contact energy there.
-Use a periodic boundary, a `Frame` of a frozen wall kind with a high contact energy, or start
-the cells away from the edges.
+A closed boundary has no neighbours, so a cell at the edge pays no contact energy there and
+the edge attracts it. Use a periodic boundary, start the cells away from the edges, or
+surround the lattice with a `Frame` of a frozen wall kind whose contact energies keep cells
+off it: a cell does not spread on the wall when
+``J(\text{cell}, \text{wall}) > J(\text{medium}, \text{wall}) + J(\text{cell}, \text{medium})``,
+for example ``J(\text{medium}, \text{wall}) = 0`` and ``J(\text{cell}, \text{wall})`` above
+``J(\text{cell}, \text{medium})`` (see [Tutorial 4](@ref tutorial-layouts)).
 
 **Why is `sol[:surface]` (or another built-in) an error?**
 Potts tracks only the quantities the model uses. Add a term that uses it (its strength can be

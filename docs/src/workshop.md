@@ -41,8 +41,10 @@ Main.paper_run("graner_glazier", "../") # hide
     dark–light contacts among all cell–cell contacts.
 
 !!! details "Answer"
-    With `J(dark, light) = 8` (paper: 11) the tension is zero, so mixing costs nothing. We
-    compare the fraction of heterotypic contacts at the end of both runs:
+    The paper's table has ``J_{dl} - (J_{dd} + J_{ll})/2 = 11 - 8 = 3 > 0``. With
+    `J(dark, light) = 6` (paper: 11) the tension is negative, so dark–light contacts are
+    cheaper than like contacts and the kinds mix. We compare the fraction of heterotypic
+    contacts at the start and at the end of both runs:
 
     ```@example workshop
     function heterotypic_fraction(u)
@@ -58,33 +60,44 @@ Main.paper_run("graner_glazier", "../") # hide
         return mixed / total
     end
     paper = solve(prob, SequentialCPM())
-    neutral = solve(remake(prob; p = [:J => [0 16 16; 16 2 8; 16 8 14]]), SequentialCPM())
+    mixing = solve(remake(prob; p = [:J => [0 16 16; 16 2 6; 16 6 14]]), SequentialCPM())
     (start = heterotypic_fraction(prob.u0), paper = heterotypic_fraction(paper.u[end]),
-     neutral = heterotypic_fraction(neutral.u[end]))
+     mixing = heterotypic_fraction(mixing.u[end]))
     ```
 
-    In the paper's model the fraction falls; with the neutral table it stays near its
-    starting value.
+    In the paper's model the fraction falls as the kinds sort; with `J(dark, light) = 6`
+    it rises well above its starting value. The neutral value `J(dark, light) = 8` is not
+    enough: the fraction still falls (to about 0.37 against 0.25 for the paper's table),
+    because the two kinds' different energies against the medium still push the light
+    cells outwards.
 
 ## Exercise 2: temperature
 
 **How does the temperature change sorting?** Run the paper's model at `T = 2`, `10` (the
-paper's value) and `40`, and compare the heterotypic fraction after 100 paper MCS.
+paper's value), `20` and `80`, and compare the heterotypic fraction and the number of
+cells after 100 paper MCS.
 
 !!! details "Answer"
     ```@example workshop
-    [T => heterotypic_fraction(solve(remake(prob; p = [:T => T]), SequentialCPM()).u[end]) for T in (2.0, 10.0, 40.0)]
+    function at_temperature(T)
+        s = solve(remake(prob; p = [:T => T]), SequentialCPM())
+        return (T = T, fraction = round(heterotypic_fraction(s.u[end]); digits = 3),
+                cells = count(>(0), s[:volume][end]))
+    end
+    at_temperature.([2.0, 10.0, 20.0, 80.0])
     ```
 
-    At low temperature the membranes barely fluctuate and the cells are stuck: sorting is
-    slow. At high temperature the fluctuations randomise the contacts and the aggregate
-    starts to break up. Graner and Glazier scan the temperature in their 1993 paper.
+    At `T = 2` the membranes barely fluctuate and the cells are stuck: the fraction falls least
+    from its start (0.47). Raising the temperature speeds sorting up, up to about
+    `T = 20`. Beyond that, the fluctuations work against sorting: at `T = 80` the fraction
+    is higher again and some of the 64 cells have vanished. Graner and Glazier scan the
+    temperature in their 1993 paper.
 
 ## Exercise 3: add chemotaxis to one kind
 
 Here is a generic teaching model with two kinds and a fixed gradient of `c`, increasing to
 the right. **Make only the `leader` cells chemotactic** and show that they move right
-while the followers do not.
+further than the followers. Runs are random, so compare a few seeds.
 
 ```@example workshop
 @potts_model Two begin
@@ -116,14 +129,23 @@ nothing # hide
     @named twochemo = TwoChemo()
     op = layout(Scattered(12, (5, 5); region = (10:30, 1:40), kinds = [:leader, :follower], seed = 1), twochemo)
     c0 = [x / 80 for x in 1:80, y in 1:40]
-    sol = solve(PottsProblem(twochemo, [op; :c => c0; :χ => 400.0], (0, 600); seed = 1), SequentialCPM())
     function mean_x(u, k)
         xs = [x[1] for x in CartesianIndices(u.σ) if u.σ[x] != 0 && u.cell.kind[u.σ[x]] == k]
         return mean(xs)
     end
-    (leaders = (mean_x(sol.u[1], 1), mean_x(sol.u[end], 1)),
-     followers = (mean_x(sol.u[1], 2), mean_x(sol.u[end], 2)))
+    chemo = PottsProblem(twochemo, [op; :c => c0; :χ => 400.0], (0, 600); seed = 1)
+    map(1:3) do seed
+        sol = solve(remake(chemo; seed), SequentialCPM())
+        (leaders = mean_x(sol.u[end], 1) - mean_x(sol.u[1], 1),
+         followers = mean_x(sol.u[end], 2) - mean_x(sol.u[1], 2))
+    end
     ```
+
+    The numbers are how far each kind's mean x position moved, in sites. The leaders move
+    right in every run, about twice as far as the followers. The followers are not
+    chemotactic, yet they move right too: they stick to the leaders (all cell–cell contacts
+    cost the same, `J = 8`) and are dragged and pushed along. A higher
+    `J(leader, follower)` weakens that coupling.
 
 ## Exercise 4: scan a parameter with an ensemble
 
@@ -149,31 +171,32 @@ Using your answer to Exercise 3, **measure how far the leaders travel as a funct
 
 The OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameters) grows without
 inhibition by default (`β = 0`); the benchmark's inhibited runs use `β = 0.9`. **Compare
-the cell counts of both after 500 MCS.** (Benchmark lattice: 400×400; here: 80×80.)
+the cell counts of both after 900 MCS.** (Benchmark lattice: 400×400; here: 150×150.)
 
 !!! details "Answer"
     ```@example workshop
-    @named openvt = OpenVTGrowingMonolayer(; lattice = (80, 80))
-    start = openvt_monolayer_state(; lattice = (80, 80))
-    p0 = PottsProblem(openvt, start, (0, 500); seed = 1, capacity = 200)
+    @named openvt = OpenVTGrowingMonolayer(; lattice = (150, 150))
+    start = openvt_monolayer_state(; lattice = (150, 150))
+    p0 = PottsProblem(openvt, start, (0, 900); seed = 1, capacity = 1200)
     count_cells(s) = count(>(0), s[:volume][end])
     (free = count_cells(solve(p0, SequentialCPM())),
      inhibited = count_cells(solve(remake(p0; p = [:β => 0.9]), SequentialCPM())))
     ```
 
-    In a small, young colony the difference is small: inhibition matters once cells are
-    crowded. Try a longer run on a larger lattice.
+    With inhibition the colony has about a fifth fewer cells: squeezed cells in the
+    interior stop growing, so they divide later. In a young colony of a few dozen cells the
+    two runs hardly differ; inhibition matters once the cells are crowded.
 
 The benchmark's full run:
 
 ```@example workshop
-Main.paper_run("openvt", "../") # hide
+Main.paper_run("openvt_monolayer", "../") # hide
 ```
 
 ## Exercise 6: your own layout
 
 **Write a layer that paints a ring of `n` square cells** around the centre of the lattice,
-and use it to start a sorting model.
+and draw the starting state it gives the Graner–Glazier model.
 
 !!! details "Answer"
     ```@example workshop
