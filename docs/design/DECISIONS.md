@@ -1634,3 +1634,14 @@ session.
   - P6.0d's deferred mask counts (D-081) must move off the read-back too: they stay on the device until a host read that already happens (save, `solve!` end, `checkpoint`), and `stats.attempts` on a device is exact only there.
   - The lifecycle statistics (`stats.lifecycle`) are read at those same points.
 
+
+## D-091 P6.1a6: the layout protocol (2026-10-01, P6.1a6; amends D-057, D-075, D-082)
+
+- **Surface** as written in the header of `lib/PottsModels/test/acceptance/p6_1a6_layout_protocol.jl` (frozen): `paint!(op::LayoutState, l, lat)` with opaque `op` and the accessors `new_cell!`, `assign!`, `owner`, `kindof`, `ncells`, `record!`; lattice queries `size`, `isperiodic`, `indomain`; `layout(l, x; report = true)`; `Tiling(partial = :skip | :clip)`; `splits = :warn | :allow`; `remake` on layers. `paint!(σ, kinds, l, lat)` and `layout_tally` are removed with no alias (D-028).
+- **Coordinator rulings on the test author's open points.**
+  - Report rows carry `type::Symbol` (`nameof` of the leaf layer's type) besides the six ROADMAP fields; more properties are allowed.
+  - Under `partial = :clip` a region reaching past the lattice is clipped to region ∩ lattice; under `:skip` it still throws (D-057).
+  - The accessors are public (`public`), not exported. `owner` must not collide with the DSL's `owner`/`owner′`: the implementer checks the `@potts_model` expansion and the exported names, and renames only if a collision is real (recorded here if so).
+  - **Width check.** A composed layout carries no lattice, so `layout(akeeb_layout(; lattice = (99, 60)), (500, 300))` no longer throws: the 99-wide slab is painted and the rest stays medium. `runtests.jl`'s "wrong width" assertion becomes that documented behaviour; the 3D and "below the slab" assertions stay if the general layers still raise them, otherwise they move into `akeeb_layout`'s own argument check.
+- **Re-freeze (D-060 style).** `p6_2a_akeeb_analysis.jl` and `p6_2a2_akeeb_inventory.jl` change only their API calls (`layout_tally` → `layout(…; report = true)`); expected values unchanged. New hashes: `1f6ef1aebf04c33c89de8632137818c8f8dd5c4bf18cc7c84d244ec5729f7462` and `d0e36abb98abc68a2f0cbbeb0087eab71a459f0e3c3f51d00b9052e156e5d513`.
+- **Expected values.** The 16 Akeeb digests are today's (ec544d8) outputs: the port must reproduce Akeeb's layouts bit for bit.

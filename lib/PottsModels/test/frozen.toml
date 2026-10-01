@@ -44,8 +44,8 @@ decision = "D-072"
 
 [[file]]
 path = "acceptance/p6_2a_akeeb_analysis.jl"
-sha256 = "7522372532f9cddbdc285991d3aadecea86b0c58ac08e5f213fa671e60453149"
-decision = "D-069"
+sha256 = "1f6ef1aebf04c33c89de8632137818c8f8dd5c4bf18cc7c84d244ec5729f7462"
+decision = "D-091"
 
 [[file]]
 path = "acceptance/p6_0k_boolean_network.jl"
@@ -79,8 +79,8 @@ decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_2a2_akeeb_inventory.jl"
-sha256 = "1805cb4a1e1dd8290545a027e1dbcd37b500b482406cc4a6e611893981bb86b0"
-decision = "D-075"
+sha256 = "d0e36abb98abc68a2f0cbbeb0087eab71a459f0e3c3f51d00b9052e156e5d513"
+decision = "D-091"
 
 [[file]]
 path = "acceptance/p6_0k2_component_rejections.jl"
@@ -101,3 +101,8 @@ decision = "D-061"
 path = "acceptance/p6_0r_killing_copy_energy.jl"
 sha256 = "0ba7ccfaca27fae5549a523524b232d7a02f4a24c032f80e60a07f521c1e9172"
 decision = "D-083"
+
+[[file]]
+path = "acceptance/p6_1a6_layout_protocol.jl"
+sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
+decision = "D-091"

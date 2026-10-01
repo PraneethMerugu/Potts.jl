@@ -14,8 +14,9 @@
 #                     region = (2:X, 2:(slab - 1)))
 #     (the draw ranges of the authors' CCIecmSteppables.py S:70–71; the seed is passed
 #     through unchanged). The counted inventory (spec 10 V-A1(a)) is that layer's tally,
-#     read with the existing public API:
-#         only(last(layout_tally(akeeb_layout(; lattice, seed, slab, seeding), lattice)))
+#     read with the public layout report (P6.1a6; `p62a2_tally` below keeps its
+#     InsertUntil rows as `(; painted, misses, counted)`):
+#         only(last(p62a2_tally(akeeb_layout(; lattice, seed, slab, seeding), lattice)))
 #     `painted` = leaders created, `misses` = missed draws (the authors' empty "ghost"
 #     leaders under :authors, D-068), `counted` = the CC3D inventory (390 at 500 × 300,
 #     occasionally 391 or 392 under :authors). Bad `seeding` throws an ArgumentError.
@@ -39,19 +40,26 @@ using Potts: CorePotts
 
 p62a2_get(op, key) = only(last(p) for p in op if isequal(first(p), key))
 p62a2_quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
+# The InsertUntil rows of the layout report as (; painted, misses, counted), in paint order.
+function p62a2_tally(l, lat)
+    op, report = layout(l, lat; report = true)
+    return op, [(; r.painted, r.misses, r.counted) for r in report if r.type === :InsertUntil]
+end
 
 # Independent oracle for the follower slab: today's hand loop (ids x-fastest, row by row),
-# written through the public layout extension API `Potts.paint!`.
+# written through the public layout extension API `Potts.paint!` (P6.1a6 protocol).
 struct P62a2Slab <: Potts.AbstractLayout
     X::Int
     slab::Int
 end
-function Potts.paint!(σ, kinds, l::P62a2Slab, lat::Potts.LatticeSpec)
+function Potts.paint!(op::Potts.LayoutState, l::P62a2Slab, lat)
+    n = 0
     for y in 1:3:(l.slab), x in 1:3:(l.X)
-        push!(kinds, :follower)
-        σ[x:min(x + 2, l.X), y:(y + 2)] .= length(kinds)
+        Potts.assign!(op, (x:min(x + 2, l.X), y:(y + 2)), Potts.new_cell!(op, :follower))
+        n += 1
     end
-    return σ
+    Potts.record!(op; requested = n, painted = n)
+    return nothing
 end
 p62a2_oracle(X, slab, seed, misses) = overlay(P62a2Slab(X, slab),
     InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1))))
@@ -95,10 +103,10 @@ end
     for (lat, slab, seed) in cases, (seeding, misses) in ((:authors, :count), (:retry, :retry))
         o = p62a2_quiet(() -> akeeb_state(; lattice = lat, slab, seed, seeding))
         σ, ks = p62a2_get(o, ownership), p62a2_get(o, kind)
-        ref, tref = p62a2_quiet(() -> layout_tally(p62a2_oracle(lat[1], slab, seed, misses), lat))
+        ref, tref = p62a2_quiet(() -> p62a2_tally(p62a2_oracle(lat[1], slab, seed, misses), lat))
         @test p62a2_same_cells(σ, ks, p62a2_get(ref, ownership), p62a2_get(ref, kind))
         # the counted inventory through the public API: one InsertUntil layer, the same tally
-        op, t = p62a2_quiet(() -> layout_tally(PottsModels.akeeb_layout(; lattice = lat, slab, seed, seeding), lat))
+        op, t = p62a2_quiet(() -> p62a2_tally(PottsModels.akeeb_layout(; lattice = lat, slab, seed, seeding), lat))
         @test t == tref && length(t) == 1
         @test p62a2_get(op, ownership) == σ && p62a2_get(op, kind) == ks       # akeeb_state paints it
         @test count(==(:leader), ks) == only(t).painted
@@ -110,7 +118,7 @@ end
     for seed in (0x5cd2609, 1)
         o = p62a2_quiet(() -> akeeb_state(; lattice = lat, seed))
         σ, ks = p62a2_get(o, ownership), p62a2_get(o, kind)
-        t = only(last(p62a2_quiet(() -> layout_tally(PottsModels.akeeb_layout(; lattice = lat, seed), lat))))
+        t = only(last(p62a2_quiet(() -> p62a2_tally(PottsModels.akeeb_layout(; lattice = lat, seed), lat))))
         np = count(==(:leader), ks)
         # followers: all 1169, none erased, ids first
         @test count(==(:follower), ks) == nf && ks[1:nf] == fill(:follower, nf)
@@ -131,7 +139,7 @@ end
         # full quota, and the :authors leaders are exactly its first `np` leaders
         or = p62a2_quiet(() -> akeeb_state(; lattice = lat, seed, seeding = :retry))
         σr, kr = p62a2_get(or, ownership), p62a2_get(or, kind)
-        tr = only(last(p62a2_quiet(() -> layout_tally(PottsModels.akeeb_layout(; lattice = lat, seed, seeding = :retry), lat))))
+        tr = only(last(p62a2_quiet(() -> p62a2_tally(PottsModels.akeeb_layout(; lattice = lat, seed, seeding = :retry), lat))))
         @test count(==(:leader), kr) == 390 == tr.painted == tr.counted
         @test σr[sites] == σ[sites] && tr.misses >= t.misses
         @test count(>(nf), σr) == 390 && all(i -> σr[i] <= nf + np, sites)
