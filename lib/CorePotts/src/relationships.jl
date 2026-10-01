@@ -221,28 +221,92 @@ partner centroids up to one color stale (a D-029-style trade, the user's choice)
 end
 
 """
-    HostPhase(f!; every = 1)
+    HostPhase(f!; every = 1, reads = nothing, writes = nothing)
 
-Phase that synchronizes and calls `f!(cell, st, p, ctx, mcs)` on host copies (`cell` is a
-host copy of `st.cell` whose changes are written back), e.g. relationship
-creation/removal/retuning from the contact graph. Host-shaped and rare by design.
+Phase that synchronizes and calls `f!(cell, st, p, ctx, mcs)` on host copies every `every`
+MCS (`cell` is `st.cell`), e.g. relationship creation/removal/retuning from the contact
+graph. Host-shaped and rare by design. `ctx.lattice` and the arrays of `p` are host copies
+too (made once per run: they do not change).
+
+`reads` and `writes` declare what the body touches, as tuples of `:σ` (the labels) and cell
+column names, so that on a device only those leaves cross (D-092):
+- `reads`: copied to the host before the body;
+- `writes`: copied to the host before the body (bodies update them in place) and back after
+  it; they are the only leaves written back.
+- `nothing` (the default) keeps the whole-state behaviour: `reads = nothing` copies the whole
+  state down; `writes = nothing` writes every cell column back (and so copies every cell
+  column down).
+
+What the body sees in leaves it does not declare is unspecified (on a device it is the
+device array, which must not be read on the host). A name that is neither `:σ` nor a cell
+column of the state is an `ArgumentError` the first time the phase runs, on every backend.
+Model, site and history quantities are not declarable: a body that reads them leaves
+`reads = nothing`; it never writes them back.
+
+```julia
+HostPhase((cell, st, p, ctx, mcs) -> (cell.y .+= cell.x; nothing); reads = (:x,), writes = (:y,))
+```
 """
-struct HostPhase{F}
+struct HostPhase{F, R, W}
     f!::F
     every::Int
+    reads::R                     # `nothing` or a tuple of Symbols
+    writes::W
 end
-HostPhase(f!; every::Integer = 1) = HostPhase(f!, Int(every))
+HostPhase(f!; every::Integer = 1, reads = nothing, writes = nothing) =
+    HostPhase(f!, Int(every), _declared(reads), _declared(writes))
+HostPhase(f!, every::Integer) = HostPhase(f!, Int(every), nothing, nothing)
+_declared(::Nothing) = nothing
+_declared(s::Symbol) = (s,)
+function _declared(names)
+    t = Tuple(names)
+    all(n -> n isa Symbol, t) || throw(ArgumentError("HostPhase `reads`/`writes` take Symbols (`:σ` or cell column names); got $(repr(names))"))
+    return t
+end
 
 (ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F} =
     _run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
 function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where {F}
+    _check_declared(ph.reads, st)
+    _check_declared(ph.writes, st)
     mcs % ph.every == 0 || return 0
     _sync!(stats, backend)
-    host = _snapshot(stats, backend, st)
-    ph.f!(host.cell, host, p, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
-    foreach(keys(st.cell)) do name
-        _copy!(stats, getfield(st.cell, name), getfield(host.cell, name))
+    host = _host_state(ph, stats, backend, st)
+    hp = backend isa KernelAbstractions.CPU ? p : _adapt_host_cached(stats, p)
+    ph.f!(host.cell, host, hp, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
+    if ph.writes === nothing
+        foreach(keys(st.cell)) do name
+            _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
+        end
+    else
+        foreach(ph.writes) do name
+            name === :σ ? _write_back!(stats, st.σ, host.σ) :
+            _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
+        end
     end
     return 0
 end
+
+_check_declared(::Nothing, st) = nothing
+function _check_declared(names, st)
+    for n in names
+        n === :σ || haskey(st.cell, n) || throw(ArgumentError(
+            "HostPhase declares `$n`, which is neither `:σ` nor a cell column of the state " *
+            "(cell columns: $(join(keys(st.cell), ", ")))"))
+    end
+    return nothing
+end
+
+# The body's host state: the whole state (`reads = nothing`, as before D-092), or only the
+# declared leaves (written columns too; every cell column when `writes = nothing`). On the
+# host, declared leaves are the live arrays (no copy).
+function _host_state(ph::HostPhase, stats, backend, st)
+    ph.reads === nothing && return _snapshot(stats, backend, st)
+    used = ph.writes === nothing ? (ph.reads..., keys(st.cell)...) : (ph.reads..., ph.writes...)
+    cell = unique(n for n in used if n !== :σ)
+    return _host_leaves(stats, st; σ = :σ in used, cell)
+end
+
+# a host copy back to its live array (nothing when the body ran on the live array itself)
+_write_back!(stats, live, host) = live === host ? nothing : (_copy!(stats, live, host); nothing)

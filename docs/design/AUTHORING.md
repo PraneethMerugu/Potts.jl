@@ -414,7 +414,11 @@ initial-step guess evaluated the rate with the previous cell's tuple, a stale ho
 snapshot on a device), so adaptive trajectories changed within tolerance.
 - One integrator is created on first use and re-initialized per cell and per MCS
   (`reinit!`, set `p`, `solve!` to `t + mcs_duration`).
-- A device state is copied to the host and back once per MCS.
+- On a device, each MCS copies to the host only what the solve uses: the unknowns, the
+  state leaves the rates read (found in the generated code) and, for cell ODEs, `volume`;
+  only the results go back (D-092). The domain mask and parameter arrays are copied once
+  per run. A rate that uses the state in a way the scan does not follow copies the whole
+  state, as before.
 - The fixed-step `ExplicitEuler`/`RK4` stay the GPU-resident default.
 
 **Model scope (implemented).**
@@ -562,6 +566,12 @@ end
   relationships ties both chains together).
 - **Lifecycle.** Removed cells lose their links, daughters start unlinked, in every
   relationship.
+- **Host phases.** `@link`/`@unlink` rules run on the host as `CorePotts.HostPhase`s whose
+  `reads`/`writes` Potts fills in (D-092): on a device each run copies σ (for `@link`), the
+  columns the rule reads (centroid trackers, `volume`, the variables in `when`) and the
+  relationship's adjacency and payload columns down, and only the latter back. A hand-written
+  `HostPhase(f!; every, reads, writes)` declares the same way (`:σ` or cell column names;
+  `nothing`, the default, copies the whole state down and every cell column back).
 
 ---
 

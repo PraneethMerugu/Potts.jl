@@ -105,11 +105,12 @@ end
 @inline in_domain(::Lattice{N, Nothing}, i) where {N} = true
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
-"""The lattice with its domain mask on the host (for host code given a device context)."""
+"""The lattice with its domain mask on the host (for host code given a device context). The
+mask is static: its host copy is made once per device mask and reused (read-only)."""
 host_lattice(l::Lattice) = _host_lattice(nothing, l)
-# `stats` counts the mask copy (D-085; `_adapt_host`), or `nothing`
+# `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit A4/H3)
 _host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
-_host_lattice(stats, l::Lattice) = _adapt_host(stats, l)
+_host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 nsites(l::Lattice) = prod(l.dims)

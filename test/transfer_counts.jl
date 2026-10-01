@@ -2,7 +2,7 @@
 # ordinary regression test proving `stats.syncs`, `stats.transfers` and
 # `stats.transfer_bytes` count exactly: each expected value is hand-counted from the call
 # sites. Later rows that remove transfers (P6.0v1: lifecycle on the device; P6.0v2:
-# column-only HostPhase / _AdaptiveODE copies) update the formulas here. Metal only
+# column-only HostPhase / _AdaptiveODE copies, done) update the formulas here. Metal only
 # (POTTS_GPU=metal with Metal loaded); on the CPU nothing is counted (the frozen
 # acceptance file `lib/PottsModels/test/acceptance/p6_0v_transfer_counters.jl` checks that).
 #
@@ -76,6 +76,24 @@ every cell column up. (1, 11, 656) for this fixture with Float32."""
 p60vx_hostphase_counts(u0) =
     (1, 1 + 2 * length(u0.cell), sizeof(u0.σ) + 2 * sum(sizeof, values(u0.cell)))
 
+# Declared HostPhase on a domain-masked lattice (P6.0v2, D-092): y += x, reads (:x,),
+# writes (:y,).
+function p60vx_declared_problem(; T = Float64)
+    σ = zeros(Int32, 12, 12)
+    σ[3:6, 3:6] .= 1
+    σ[8:11, 7:10] .= 2
+    u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; x = ones(T, 2), y = zeros(T, 2), z = zeros(T, 2)))
+    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    body!(cell, st, p, ctx, mcs) = (cell.y .+= cell.x; nothing)
+    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase(body!; reads = (:x,), writes = (:y,)),)))
+    lat = CorePotts.Lattice(size(σ); domain = trues(size(σ)))
+    return CorePotts.PottsProblem(f, u0, lat, (0, 4), (; λ = T(1), V0 = T(16), T = T(2)))
+end
+"""Declared `HostPhase`: 1 sync; `x` and `y` down, `y` up. The domain mask (for
+`ctx.lattice`) comes down on the first run only (then cached)."""
+p60vx_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
+
 @testset "P6.0v: exact transfer counts of the current paths (Metal)" begin
     if get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
         backend = Main.Metal.MetalBackend()
@@ -93,6 +111,17 @@ p60vx_hostphase_counts(u0) =
             step!(integ)
             @test p60vx_counts(integ.stats) .- c0 == p60vx_hostphase_counts(prob.u0)
         end
+        prob = p60vx_declared_problem(; T = Float32)
+        integ = init(prob, alg; backend, save_start = false, save_end = false)
+        c0 = p60vx_counts(integ.stats)
+        step!(integ)                                                     # the mask comes down once
+        @test p60vx_counts(integ.stats) .- c0 == p60vx_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
+        for _ in 1:2
+            c0 = p60vx_counts(integ.stats)
+            step!(integ)
+            @test p60vx_counts(integ.stats) .- c0 == p60vx_declared_counts(prob.u0)
+        end
+        @test Array(integ.state.cell.y) == 3 .* Array(integ.state.cell.x)    # the body ran
     else
         @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
     end

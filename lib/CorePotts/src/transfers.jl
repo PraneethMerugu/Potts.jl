@@ -77,3 +77,52 @@ _adapt_host(stats, x) = Adapt.adapt(_HostCopy(stats), x)
 counted). Does not synchronize."""
 _snapshot(stats, backend, st) = _adapt_host(stats, st)
 _snapshot(stats, ::KernelAbstractions.CPU, st) = deepcopy(st)
+
+# Host copies of device arrays that do not change during a run: the domain mask and the
+# parameter arrays (D-092; audit A3, A4, H3). Copied (counted) the first time host code asks,
+# then reused while the device array lives: keyed by its identity, held weakly (as
+# `_AdaptiveODE` keys its integrators), so concurrent trajectories each get their own entry
+# and a freed array's entry is dropped. The copy is shared: host code must not write it.
+# Parameter arrays are replaced, never written in place, by `set_parameter!` (a new array
+# gets a new entry).
+const _HOST_CACHE = Dict{UInt, Tuple{WeakRef, Any}}()
+const _HOST_CACHE_LOCK = ReentrantLock()
+
+"""Host copy of the run-constant device array `a`, copied (counted) once and then reused."""
+function _cached_host(stats, a::AbstractArray)
+    _ondevice(a) || return Adapt.adapt_storage(Array, a)
+    return lock(_HOST_CACHE_LOCK) do
+        e = get(_HOST_CACHE, objectid(a), nothing)
+        e !== nothing && e[1].value === a && return e[2]
+        filter!(kv -> kv[2][1].value !== nothing, _HOST_CACHE)     # drop freed arrays
+        h = _to_host(stats, a)
+        _HOST_CACHE[objectid(a)] = (WeakRef(a), h)
+        return h
+    end::Array{eltype(a), ndims(a)}
+end
+
+"""Adaptor: each device array leaf becomes its cached host copy (`_cached_host`)."""
+struct _CachedHostCopy{S}
+    stats::S
+end
+Adapt.adapt_storage(h::_CachedHostCopy, a::AbstractArray) = _cached_host(h.stats, a)
+
+"""`Adapt.adapt(Array, x)` for run-constant `x` (lattice, parameters): each device array leaf
+is copied once per run (`_cached_host`)."""
+_adapt_host_cached(stats, x) = Adapt.adapt(_CachedHostCopy(stats), x)
+
+"""Uninitialized host array shaped like `a` (no transfer): a buffer host code fills."""
+_host_buffer(a::AbstractArray) = Array{eltype(a)}(undef, size(a))
+
+"""
+Host state for host code that touches only some leaves of `st`: `σ` (when `σ`) and the
+leaves named in `cell`, `site`, `model` and `history` are host copies (counted on a device;
+the live arrays themselves on the host); every other leaf is the live array, which on a
+device must not be read on the host.
+"""
+function _host_leaves(stats, st::CPMState; σ::Bool = false, cell = (), site = (), model = (), history = ())
+    part(nt, names) = isempty(names) ? nt :
+                      merge(nt, NamedTuple{Tuple(names)}(map(n -> _adapt_host(stats, getfield(nt, n)), Tuple(names))))
+    return CPMState(σ ? _adapt_host(stats, st.σ) : st.σ, part(st.cell, cell), part(st.site, site),
+        part(st.model, model), part(st.history, history))
+end

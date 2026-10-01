@@ -93,3 +93,52 @@ end
     reinit!(integ); step!(integ)
     @test integ.u.cell.mb[1] == m1 == 36
 end
+
+# D-092 (P6.0v2): host phases copy only the state leaves their generated code reads
+@testset "state reads of generated host code" begin
+    R = Potts._state_reads
+    @test R([:(st.cell.r[c] * p.k)]) == (; σ = false, cell = (:r,), site = (), model = (), history = ())
+    @test R([:(Potts._cellkind(st, c) + st.model.g[1] + st.site.h[i])]).cell == (:kind,)
+    @test R([:(CorePotts.owner_kind(st, i))]) == (; σ = true, cell = (:kind,), site = (), model = (), history = ())
+    @test R([:(length(st.cell.kind) + size(cell.links, 1))]; alias = :cell).cell == ()        # shape only
+    @test R([:(CorePotts.centroid_distance(T, cell, ctx.lattice, a, b))]; alias = :cell).cell == (:anchor, :m1, :volume)
+    # uses the scan does not follow: everything (negative controls)
+    @test R([:(f(st))]) === nothing
+    @test R([:(f(st.cell))]) === nothing
+    @test R([:(f(cell))]; alias = :cell) === nothing
+    @test R([:(f(cell))]) == (; σ = false, cell = (), site = (), model = (), history = ())      # `cell` is no alias here
+    # the adaptive phases of a model: the cell ODEs read nothing else; the model ODE's
+    # population fold reads `volume` and `kind`
+    σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
+    p = PottsProblem(adaptive_model(), [ownership => σ, kind => [:A, :B]], (0, 1); ode_solver = Adaptive(Tsit5()))
+    phs = [ph for ph in p.f.phases.after_mcs if ph isa Potts._AdaptiveODE]
+    @test Set(ph.scope for ph in phs) == Set([:cell, :model])
+    for ph in phs
+        @test ph.reads !== nothing && !ph.reads.σ
+        ph.scope === :model && @test issubset((:kind, :volume), ph.reads.cell)
+    end
+end
+
+@testset "@link phases declare their reads and writes" begin
+    @potts_model DeclLink begin
+        @kinds medium A
+        @variables begin
+            rest(bond) = 3.0
+            w(cell) = 1.0
+        end
+        @relationship bond(cell, cell) capacity = 2
+        @lattice Lattice((16, 16); neighborhood = Moore(1))
+        @energy cells => 100 * (volume - 16)^2
+        @link bond when = new_contact(a, b) && w[a] > 0
+        @unlink bond when = distance > 10.0
+        @sweep Metropolis(; temperature = 0.0)
+    end
+    σ = zeros(Int32, 16, 16); σ[3:6, 3:6] .= 1; σ[7:10, 3:6] .= 2
+    p = PottsProblem(DeclLink(; name = :d), [ownership => σ, kind => [:A, :A]], (0, 2))
+    link, unlink = [ph for ph in p.f.phases.after_mcs if ph isa CorePotts.HostPhase]
+    @test link.writes == unlink.writes == (:links__bond, :link_rest)
+    @test Set(link.reads) == Set([:σ, :volume, :anchor, :m1, :w])           # `w[a]` in `when`
+    @test Set(unlink.reads) == Set([:volume, :anchor, :m1])                 # no contact graph: no σ
+    u = solve(p, SequentialCPM()).u[end]
+    @test CorePotts.linked(CorePotts.link_store(u.cell, :bond), 1, 2)
+end
