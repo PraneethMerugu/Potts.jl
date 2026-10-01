@@ -352,6 +352,12 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
 end
 
+# P6.0v2: the frozen column-copy acceptance file (Metal testsets run only here)
+module P60v2OnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2_column_copies.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")

@@ -1683,3 +1683,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** One round, approved: 2·10⁶ random decisions and 10⁵ random layouts identical to the old pairwise test; coordinator nits (comment wording, a long line).
 - **Numbers.** 10⁴ cubes of 5³ at 200³: 17 ms closed and periodic (was 480 and 860 ms); per-box time at 4·10⁴ vs 4·10³ squares: 1.2× (was 9.9×).
 - **Merge checks.** Host-only layout code: PottsModels (P6.1a7 126/126), Potts and docs exit 0. No gate case paints with `Scattered`; gate not rerun.
+
+## 2026-10-01 — P6.0v2 merged: ODE and `HostPhase` copy only the columns they use (D-092)
+
+- **The change.** `HostPhase(f!; every, reads, writes)` copies only the declared leaves (σ or cell columns); adaptive-ODE phases copy only the unknowns and the leaves their rates read (a scan of the generated code, falling back to the whole state); generated `@link`/`@unlink` phases declare their reads and writes; the static domain mask comes down once per run. Per-MCS Metal bytes: adaptive ODE 5388 → 1032, `@link` 10752 → 4864, declared HostPhase 2000 → 384, all independent of unused columns and lattice size.
+- **Review.** Two rounds: round 1 found host phases handed a cached `p` (stale after in-place writes); round 2 passes the live `p`, caches only the mask, and adds sentinel tests for the scanned read sets. R4 filed as P6.0v2b; the idle second sync under P6.0v3.
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
+- **Gate: pass.** CPU 1.004–1.032. Metal rows all flagged together (1.32–1.89) under load; `ab.jl` against 3df39655 (6 rounds): Akeeb 0.991, OpenVT 0.959.
