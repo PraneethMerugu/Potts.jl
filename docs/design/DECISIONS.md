@@ -1656,3 +1656,10 @@ session.
   - P6.0d's deferred mask counts (D-081) must move off the read-back too: they stay on the device until a host read that already happens (save, `solve!` end, `checkpoint`), and `stats.attempts` on a device is exact only there.
   - The lifecycle statistics (`stats.lifecycle`) are read at those same points.
 
+
+## D-092 P6.0v2: ODE and `HostPhase` copy only the columns they use (2026-10-01, P6.0v2; coordinator; refines D-085)
+
+- **Frozen acceptance** `lib/PottsModels/test/acceptance/p6_0v2_column_copies.jl`, wired into `test/gpu.jl` (`P60v2OnMetal`). On a device, the per-MCS (syncs, transfers, bytes) of an adaptive-ODE, a `HostPhase` and an `@link` fixture are steady, identical between fixtures that differ only in unused cell/model/site quantities and parameter tables, independent of lattice size where σ is not read, and at most columns read + 2 × columns written + 16 B (up to four 4-byte scalar read-backs; changing the slack needs a DECISIONS entry).
+- **`HostPhase(f!; every = 1, reads = nothing, writes = nothing)`** (public, additive). Entries are `:σ` or cell-column names. `writes` columns are copied down and back; `reads` columns down only; `nothing` keeps the whole-state behaviour. An unknown name is an `ArgumentError` on every backend by the first MCS the phase runs. Leaves not declared are unspecified inside the body. Potts declares the reads and writes of its generated `@link`/`@unlink` phases. Model and site quantities are not declarable yet (no current host body needs them); P6.0z revisits the surface.
+- **In scope:** parameter tables are not copied per MCS (adapt `p` once, or copy only the tables read; audit A3); the static domain mask is cached on the host rather than copied per MCS (audit A4/H3).
+- **Not in this item:** audit R4 (custom-rule `refresh_frozen!` snapshot) moves to P6.0v1's lifecycle work if it touches the same path, else stays filed under P6.0v2 as untested follow-up; an adaptive group reading another group's column (`x__ode` scratch) is allowed by the bound but not tested.
