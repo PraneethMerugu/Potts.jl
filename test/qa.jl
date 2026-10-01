@@ -263,3 +263,35 @@ const POTTS_NONPUBLIC_EXPLICIT = (
     @test check_all_qualified_accesses_via_owners(Potts) === nothing
     @test check_all_qualified_accesses_are_public(Potts; ignore = POTTS_NONPUBLIC_QUALIFIED) === nothing
 end
+
+# P6.0v (D-085): every synchronize and host↔device copy of the step path goes through the
+# counted helpers in `lib/CorePotts/src/transfers.jl`. A raw call anywhere else must be in
+# this allowlist, with the reason it is not in the step path (or not a transfer).
+const RAW_TRANSFER_ALLOW = Dict(
+    "lib/CorePotts/src/lattice.jl" => 3,     # Lattice `==` and `hash` (host utilities, 79-80)
+    "lib/CorePotts/src/problem.jl" => 2,     # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`)
+    "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
+    "lib/CorePotts/src/fields.jl" => 1,      # FieldStep device→device copy: not a transfer; Metal waits in it (P6.0v3)
+    "lib/CorePotts/src/phases.jl" => 1,      # CopyPhase device→device copy: idem (P6.0v3)
+    "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup)
+)
+const RAW_TRANSFER = r"KernelAbstractions\.synchronize\(|(?<![\w.])Array\(|Adapt\.adapt\(Array|(?<![\w!])copyto!\("
+function _raw_transfer_hits(path)
+    n = 0
+    for line in eachline(path)
+        code = replace(first(split(line, '#'; limit = 2)), r"`[^`]*`" => "")   # no comments, no doc code
+        n += length(collect(eachmatch(RAW_TRANSFER, code)))
+    end
+    return n
+end
+@testset "QA: no raw host transfer outside the counted helpers (D-085)" begin
+    root = joinpath(@__DIR__, "..")
+    hits = Dict{String, Int}()
+    for d in ("lib/CorePotts/src", "src"), f in readdir(joinpath(root, d))
+        (endswith(f, ".jl") && f != "transfers.jl") || continue
+        n = _raw_transfer_hits(joinpath(root, d, f))
+        n > 0 && (hits["$d/$f"] = n)
+    end
+    hits == RAW_TRANSFER_ALLOW || @error "raw synchronize/Array/adapt/copyto! outside transfers.jl" hits RAW_TRANSFER_ALLOW
+    @test hits == RAW_TRANSFER_ALLOW
+end

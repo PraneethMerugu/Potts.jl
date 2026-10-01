@@ -3,8 +3,16 @@
 2026-10-01, ROADMAP P6.0v, D-085. The goal (user): every synchronize, host↔device copy or
 host-side work during a Metal MCS is either unavoidable or removed. This document is the
 audit and the measured baseline. The removals are P6.0v1–P6.0v3 (ROADMAP) plus the rows
-proposed in §9. Line numbers are at `feat/p6-0v` (1554d56 + P6.0v). The P6.0d mask refresh
-is audited at `feat/p6-0d` 87a6e5b (round 3), which merges first (§3).
+proposed in §9. Line numbers are at `feat/p6-0v` round 2: 1554d56 + P6.0v + the approved
+P6.0d (ee2331b), merged into this branch. The baseline numbers (§2, §7.1, §8) were measured
+before that merge; P6.0d does not change them, since no gate model has frozen kinds.
+
+**Status after the user's D-089 (2026-10-01).** On a GPU backend the lifecycle will be
+planned and applied entirely on the device, with no trigger read-back, so a quiet MCS costs
+0 / 0 / 0 B for every model. P6.0v1 builds this and re-freezes target (b). Until then, (b)
+and the D-035 read-back are unchanged here. The pending P6.0d counts and `stats.lifecycle`
+are then read only at the existing host reads: saves, the end of `solve!`, and `checkpoint`.
+Rows P6.0v4, P6.0v5 and P6.0v7 are filed in the ROADMAP; P6.0v8 is folded into P6.0v3.
 
 Machine: Apple M1 Pro, macOS 27, Metal.jl 1.10.0, Julia 1.12.6, single thread. Metal timings
 on this machine flip between two power states (about 1.5–2×, D-053). Ratios measured in one
@@ -54,6 +62,16 @@ Regression tests:
   division event MCS (2 syncs, 18 transfers, 1098 B) and of a `HostPhase` MCS (1 sync, 11
   transfers, 656 B). P6.0v1 and P6.0v2 update its formulas.
 - The frozen `p6_0v_transfer_counters.jl` pins the long-term quiet-MCS targets.
+- `test/transfer_counts.jl` also checks, on Metal, that every GPU wait of a quiet MCS is a
+  counted one: waits = `syncs + 2 × transfers` (§2.1). Merks is `@test_broken` until P6.0v3
+  removes its uncounted waits.
+- `test/qa.jl` "no raw host transfer outside the counted helpers":
+  - It scans `lib/CorePotts/src` and `src` (except `transfers.jl`) for raw
+    `KernelAbstractions.synchronize(`, `Array(`, `Adapt.adapt(Array` and `copyto!(`, and
+    compares the hits with a `file => count` allowlist that gives a reason for each entry:
+    Lattice `==`/`hash`, `_standard_frozen` on a host state, `reinit!`, the
+    `FieldStep`/`CopyPhase` device→device copies (until P6.0v3), and the setup layouts.
+  - A new `Array(st.σ)` in `run_lifecycle!` makes it fail (checked).
 - `lib/CorePotts/test/phases.jl` (CPU) and `lib/CorePotts/test/gpu.jl` (Metal) test the
   helpers themselves:
   - exact bytes for each direction;
@@ -117,9 +135,11 @@ synchronize:
 - For a lifecycle model, the trigger readback waits for the whole MCS, so the gate measures
   full latency. So does Merks, through its waiting copies.
 
-The two groups are not comparable. Proposed row P6.0v7 (§9) fixes this.
+The two groups are not comparable. ROADMAP row P6.0v7 (§9) fixes this.
 
-**Hidden syncs the counters do not show.** Merks makes no transfer and no explicit sync,
+### 2.1 Implicit waits the counters do not show
+
+**Hidden syncs.** Merks makes no transfer and no explicit sync,
 yet its throughput equals its latency (291 against 284). Metal.jl's device→device
 `copyto!` drains the queue twice: it calls `synchronize()` before the blit and waits for the
 blit (`async = false`, `Metal/src/array.jl:415`, `memory.jl:88-122`). Each `FieldStep`
@@ -132,47 +152,66 @@ Measured (§8.1 F2):
 
 D-085 counts only explicit `synchronize` calls and treats device→device copies as free. So
 the counters read 0 / 0 / 0 for Merks, the frozen target (a) holds, and this cost is
-invisible to them. `CopyPhase` (`phases.jl:110-113`) has the same cost wherever generated
+invisible to them. **Under the user's standard these waits are syncs.** Metal.jl waits for
+the GPU in three places the counters miss:
+- device→device `copyto!`, twice per copy;
+- `UInt8`/`Int8` `fill!` (a waiting blit);
+- conversions of a device array to a host pointer (`unsafe_copyto!` on pointers).
+
+All of them go to **P6.0v3**, which now also carries P6.0v8's rule: no Metal.jl
+device→device `copyto!` in the step path, with every device copy going through a CorePotts
+kernel helper. `CopyPhase` (`phases.jl:110-113`) has the same cost wherever generated
 code publishes a double buffer (buffered site updates, several ODE groups). Device `fill!` of
 `Int32`/`Float32` is a GPUArrays kernel and does not wait (8–11 µs); only `UInt8`/`Int8`
 fills use a waiting blit, and none runs in the step path.
 
-## 3. `refresh_frozen!` (P6.0d, `feat/p6-0d` 87a6e5b)
+**Measured GPU waits per quiet MCS.** `Metal.wait_cmdbuf!` was wrapped with a test-only
+counter, and the in-flight back-pressure of `wait_oldest_cleanup!` (the host running ahead
+of a busy GPU, which is not a sync) was excluded. Each counted sync is 1 wait and each
+counted transfer is 2, so with no hidden waits the identity is waits = `syncs + 2 × transfers`:
 
-P6.0d recomputes the frozen-kind mobility mask after a lifecycle event. Three versions:
+| gate model | waits per quiet MCS | `syncs + 2 × transfers` |
+|---|---|---|
+| Graner–Glazier 72 | 0 | 0 |
+| Wortel Act 100 | 0 | 0 |
+| Merks 100 | **6** | 0 |
+| OpenVT monolayer 100 | 3 | 3 |
+| Akeeb 99×60 | 3 | 3 |
 
+The stronger P6.0v8 test is now in `test/transfer_counts.jl` (§1). It asserts the identity
+on every gate model. Merks is `@test_broken` and turns into an unexpected pass, so a failing
+reminder, when P6.0v3 reaches 0 waits.
+
+## 3. `refresh_frozen!` (P6.0d, final `feat/p6-0d` ee2331b, merged here)
+
+P6.0d recomputes the frozen-kind mobility mask after a lifecycle event.
 - **Round 2 (42a6593, the version named in the ROADMAP row).**
   - Standard rule: a device fill, one kernel over all sites, then a blocking
     `copyto!(host, device)` of 8 B on every event MCS of a model with `[frozen]` kinds.
-  - Custom rule: a full `_snapshot`, a host `remake_frozen`, and the mask copied up.
-- **Round 3 (87a6e5b, merging before P6.0v).**
+  - Custom rule: a full snapshot, a host `remake_frozen`, and the mask copied up.
+- **Final (ee2331b).**
   - The standard-rule kernel writes its two counts into entries 2–3 of the lifecycle's
-    `count`, which grows to 3 `Int32` with a host mirror `LifecycleCache.host`.
-  - The counts travel with the next lifecycle readback, so a refresh after an event MCS has
-    no transfer of its own.
-  - `solve!` ends with `_flush_counts!`: one 12 B read, only when counts are pending.
+    3-entry `count` (host mirror `LifecycleCache.host`).
+  - The trigger read-back stays the D-035 read: `_sync!` and then 4 B
+    (`_copy!(pstats, cache.host, 1, cache.count, 1, nread)` with `nread = 1`). It reads
+    12 B (`nread = 3`) only on the lifecycle MCS after a refresh, while its counts are
+    pending.
+  - `fill!(cache.count, 0)` is enqueued **after** the read.
+  - `solve!` and `checkpoint` end with `_flush_counts!`, one 12 B read, and only when
+    counts are pending.
   - A direct `refresh_frozen!` (`set_state!` on `kind`, `u_modified!`, `reinit!`) reads its
     counts at once: one 12 B transfer, outside the MCS.
 
-| # | site (87a6e5b) | fires | moves | necessary | device-side replacement | row |
+| # | site (merged) | fires | moves | necessary | device-side replacement | row |
 |---|---|---|---|---|---|---|
-| R1 | `problem.jl` `_refresh_frozen!(…, kinds::Tuple, defer)`: `_launch(_frozen_body!)` | event MCS, `[frozen]` models only | O(sites) device pass, no transfer | yes (the mask must follow kinds) | already on the device. It could visit only the sites of cells whose kind changed, but it runs on event MCS only and costs one launch. | keep (justified) |
-| R2 | `lifecycle.jl` `run_lifecycle!`: `copyto!(cache.host, cache.count)` | **every lifecycle MCS** | **12 B** (3 × Int32) | 4 B yes (D-035); the other 8 B only for `[frozen]` models | size `count` by need: 1 entry when `frozen_varies` is false, 3 otherwise | **merge (see below)** |
-| R3 | `_flush_counts!` at `solve!` end, and direct `refresh_frozen!` | end of run; user writes | 12 B | yes (exact `stats.attempts`) | – | keep (outside the MCS) |
-| R4 | `_refresh_frozen!(…, ::Nothing, …)` (custom rule): `synchronize`, `_snapshot`, host `frozen_sites`, `copyto!(m.frozen, …)` | event MCS of a custom-rule model (none published; Potts uses the standard rule) | O(sites + cells × quantities) down, O(sites) up | only `σ` and `kind` are read by the standard shape of a rule | copy only the columns the rule declares | P6.0v2 |
+| R1 | `problem.jl:463-479` standard-rule `_refresh_frozen!`: `_launch(_frozen_body!)` | event MCS, `[frozen]` models only | O(sites) device pass, no transfer of its own | yes (the mask must follow kinds) | already on the device; one launch on event MCS only | keep (justified) |
+| R2 | `lifecycle.jl:287-290` `_sync!` + `_copy!(…, nread)` | every lifecycle MCS | 4 B; 12 B on the lifecycle MCS after a refresh | 4 B per D-035 (until D-089) | D-089: no read-back on a GPU backend. The pending counts are read only at saves, the end of `solve!` and `checkpoint`. | **P6.0v1 (D-089)** |
+| R3 | `problem.jl:420-427` `_flush_counts!`; direct `refresh_frozen!` (`:473`) | end of run, checkpoint, user writes | 12 B | yes (exact `stats.attempts`) | – | keep (outside the MCS) |
+| R4 | `problem.jl:481-488` custom-rule `_refresh_frozen!`: `_sync!`, `_snapshot`, host `frozen_sites`, `_set_mobility!` (`lattice.jl`) up | event MCS of a custom-rule model (none published; Potts uses the standard rule) | O(sites + cells × quantities) down, O(sites) up | only the columns the rule reads | copy only the columns the rule declares | P6.0v2 |
 
-**Merge note for the coordinator (frozen target (b)).** At 87a6e5b the quiet-MCS readback is
-`copyto!(cache.host, cache.count)`, 12 B, with no explicit `synchronize` before it. Merged
-naively into P6.0v's counting, a quiet lifecycle MCS reads 0 syncs / 1 transfer / 12 B
-(implicit wait), while the frozen file asserts exactly 1 / 1 / 4 B for OpenVT, Akeeb and the
-division fixture (none of which has frozen kinds). The reconciliation that keeps both
-decisions:
-- route the readback through `_sync!(pstats, backend)` then `_copy!(pstats, cache.host, cache.count)`;
-- allocate `count` with 1 entry when the model's mask does not vary and 3 when it does.
-
-Then a quiet MCS is 1 / 1 / 4 B without frozen kinds and 1 / 1 / 12 B with them. That is
-still O(1), and no gate model has frozen kinds. The other P6.0d copies must use the counted
-helpers at merge: `_flush_counts!`, the direct `refresh_frozen!` and the R4 snapshot.
+All of these copies go through the counted helpers, as of the merge commit. With the merge,
+the frozen target (b) still reads exactly 1 sync / 1 transfer / 4 B on OpenVT, Akeeb and the
+division fixture (re-run on Metal).
 
 ## 4. `_AdaptiveODE` (`src/codegen.jl:591-649`)
 
@@ -205,20 +244,21 @@ The `HostPhase` fixture of `test/transfer_counts.jl` (two cells; σ, `kind`, `vo
 `generation`, `x`, `y`) costs 1 sync / 11 transfers / 656 B per MCS: σ plus 5 columns down,
 then 5 columns up. With H2 and H4, a body that reads `x` and writes `y` moves 2 columns.
 
-## 6. The lifecycle trigger readback (`lifecycle.jl:277-281`): the only sync on a quiet MCS
+## 6. The lifecycle trigger readback (`lifecycle.jl:285-292`): the only sync on a quiet MCS
 
 ```julia
-fill!(cache.count, Int32(0))                                     # :277 device fill
-_launch(_trigger_body!, backend, cap, (…))                      # :278 trigger kernel
-_sync!(pstats, backend)                                         # :280
-_readback(pstats, cache.count) == 0 && return launches          # :281 4 B, Array(count)[1]
+_launch(_trigger_body!, backend, cap, (…))                          # :285 trigger kernel
+_sync!(pstats, backend)                                             # :287
+_copy!(pstats, cache.host, 1, cache.count, 1, nread)                # :290 4 B (12 B while P6.0d counts pend)
+fill!(cache.count, Int32(0))                                        # :291 device fill, after the read
+cache.host[1] == 0 && return launches, false, true                  # :292
 ```
 
 **Confirmed: this is the only sync and the only transfer of a quiet MCS.**
 - By counters: a quiet MCS is exactly 1 / 1 / 4 B on OpenVT, Akeeb and the division fixture
   (frozen file, testset (b)), and 0 / 0 / 0 on Graner–Glazier, Wortel and Merks. Merks
   also has the uncounted waits inside Metal's device→device `copyto!` (§2; F2).
-- By reading the step path (`problem.jl:282-311`), the rest of a quiet MCS makes no other
+- By reading the step path (`problem.jl:355-394`), the rest of a quiet MCS makes no other
   host↔device copy:
   - `_color_order!` and `cache.buffer[]` are host values;
   - `stats.attempts` uses the host count `nmobile`;
@@ -227,11 +267,11 @@ _readback(pstats, cache.count) == 0 && return launches          # :281 4 B, Arra
 
 | # | site | fires | moves | necessary | device-side replacement | row |
 |---|---|---|---|---|---|---|
-| T1 | `:280` `_sync!` | every lifecycle MCS | – | yes: the host decides whether to run the event path (D-035; frozen target (b)) | sync-free deferred readback (proposed P6.0v6, needs a decision) | justified (D-035) |
-| T2 | `:281` `_readback` (`Array(count)[1]`) | every lifecycle MCS | 4 B | the value yes; the **copy** no | allocate `count` (and the other host-read scalars) in shared storage on unified-memory devices. The read becomes a load after the sync: 0.3 µs instead of 150–220 µs (measured, §7). Still counted as 1 transfer (the frozen target is unchanged). | proposed **P6.0v4** |
-| T3 | `:277` `fill!(cache.count, 0)` | every lifecycle MCS | device fill, an extra GPU command not in `stats.launches` | no | reset in the trigger kernel (double-buffered count indexed by MCS parity), or fold into the fused per-cell kernel (§8.1 F1) | P6.0v3 |
+| T1 | `:287` `_sync!` | every lifecycle MCS | – | today the host decides whether to run the event path (D-035; frozen target (b)) | D-089: plan and apply the lifecycle on the device; no host decision, no sync | **P6.0v1 (D-089)** |
+| T2 | `:290` `_copy!` of `count` (4 B) | every lifecycle MCS | 4 B (12 B while P6.0d counts pend) | not under D-089 | D-089: no read-back. Counts and `stats.lifecycle` are read at saves, the end of `solve!` and `checkpoint`. Until then, a shared-storage `count` would cut the read from 150–220 µs to 0.3 µs (P6.0v4). | **P6.0v1 (D-089)**; P6.0v4 for the remaining host reads |
+| T3 | `:291` `fill!(cache.count, 0)` (after the read since P6.0d) | every lifecycle MCS | device fill, an extra GPU command not in `stats.launches` | no | reset in the trigger kernel (double-buffered count indexed by MCS parity), or fold into the fused per-cell kernel (§8.1 F1) | P6.0v3 |
 
-## 7. The lifecycle on an event MCS (`lifecycle.jl:273-402`)
+## 7. The lifecycle on an event MCS (`lifecycle.jl:279-413`)
 
 ### 7.1 What it costs: Akeeb on Metal
 
@@ -277,8 +317,8 @@ Per-segment medians, µs (`/tmp/p60v/probe2.jl`, sync after each segment):
 
 Each segment includes one wait for the GPU. On a quiet MCS the lifecycle segment (fill,
 trigger kernel, sync and a 4 B private-storage readback) costs 533–674 µs. That is 33 % of
-OpenVT's MCS and 24 % of Akeeb's: the sync is needed (D-035), but the readback round trip of
-about 200 µs is not (T2, P6.0v4).
+OpenVT's MCS and 24 % of Akeeb's. Under D-089 all of it goes (T1, T2, P6.0v1); only the
+trigger kernel stays.
 
 ### 7.2 Entries
 
@@ -287,28 +327,27 @@ stated.
 
 | # | site | moves | necessary | device-side replacement | row |
 |---|---|---|---|---|---|
-| L1 | `:284` `events = _to_host(cache.events)` | O(cells) Int32 | the **events** yes; the full array no | the trigger appends `(c, event)` to a compacted device list with an atomic counter; the host downloads `count` entries | P6.0v1 |
-| L2 | `:287` `volume` down (free slots) | O(cells) | no | the device keeps a free-slot list, or a prefix scan over `volume == 0` assigns daughters | P6.0v1 |
-| L3 | `:289` `cluster` down (`held`, cluster models) | O(cells) | no | device flag "id still named by a live member" | P6.0v1 |
-| L4 | `:297` `cluster` down **again** | O(cells) | **no: duplicate of L3's copy** | reuse L3's host array (trivial, even before P6.0v1) | P6.0v1 |
-| L5 | `:290-342` host plan loops over all slots (free list, cluster members, deferral) | host O(cells) | the sequential parts (cluster precedence, deferral order) yes | plain divisions and removals: device scan. Cluster divisions: host plan over the compacted O(events) list. | P6.0v1 |
-| L6 | `:344-346` `daughter`, `removed`, `events` up | O(cells) | no | the device plan writes them in place, or the host uploads O(events) | P6.0v1 |
-| L7 | `:351` `_cluster_planes!` (`compartments.jl:193-224`): σ, `cluster`, `generation`, `kind`, `volume`, `anchor`, `m1` down; host `init_moments` over all sites; `normals`, `bias` up | O(sites) + O(cells × 7) down, O(cells) up | the planes yes; host moments no | per-cluster moment reduction on the device (`CellReduce`-style), plane kernel per dividing root | P6.0v1 |
-| L8 | `:349` `fill!(cache.bias, 0)` | device fill (extra command) | no | fold into the normal kernel | P6.0v1 |
-| L9 | `:354`, `:359`, `:391` normal, partition and cell-rule kernels | device, 3 launches | yes | fuse normal + cell rule into one per-cell kernel before the partition (§8.1 F4) | P6.0v1 |
-| L10 | `:364-372` `_copy_columns!` (`:404-415`) for every non-tracker cell column | **O(cells × quantities)**, 2 transfers per column (Akeeb: 8, 32 kB) | no | one device kernel over daughters copying every non-tracker column parent → daughter (static unroll over the state NamedTuple) | **P6.0v1** |
-| L11 | `:373-375` `generation` round trip | O(cells), 2 transfers | no | same kernel (`generation[d] = generation[parent] + 1`) | P6.0v1 |
-| L12 | `:377-386` `cluster` round trip | O(cells), 2 transfers | no | same kernel | P6.0v1 |
-| L13 | `:389-390` `_lifecycle_links!` (`:474-486`): every adjacency down and up | O(cells × degree × relationships) | no | device kernel: `remove_incident!` for removed cells and daughters | P6.0v1 |
-| L14 | `:395` `_fix_clusters!` (`compartments.jl:172-177`): `cluster`, **σ**, `kind` down; `cluster` up; host `_normalize_clusters!` | O(sites) + O(cells) | the re-rooting yes; host σ no | liveness from `volume` (exact after the device tracker update) rather than from σ; re-root kernel | P6.0v1 |
-| L15 | `:396` `_rebuild_trackers!` (`:428-448`): **sync**, **σ down**, host O(sites) recompute of `volume`, `surface`, `anchor`/`m1`/`m2`; 4–5 columns up; cluster trackers (`compartments.jl:179-188`); host mask | **O(sites)** + O(cells × trackers), 1 sync | no | update trackers in the partition kernel: each moved site does the same atomic tracker deltas as an accepted copy (exact integer moments); the daughter's anchor starts as the parent's; removed cells are zeroed | **P6.0v1** |
-| L16 | `:397` `lc.rebuild!` user host hook | user code (not counted) | – | Potts passes the no-op | justified (user hook, documented) |
-| L17 | `:399-400` `volume` down again (empty daughters) | O(cells) | no | count empty daughters on the device in the tracker update; until then, reuse L15's host `volume` | P6.0v1 |
+| L1 | `:295` `events = _to_host(cache.events)` | O(cells) Int32 | the **events** yes; the full array no | the trigger appends `(c, event)` to a compacted device list with an atomic counter; the host downloads `count` entries | P6.0v1 |
+| L2 | `:298` `volume` down (free slots) | O(cells) | no | the device keeps a free-slot list, or a prefix scan over `volume == 0` assigns daughters | P6.0v1 |
+| L3 | `:300` `cluster` down (`held`, cluster models) | O(cells) | no | device flag "id still named by a live member" | P6.0v1 |
+| L4 | `:308` `cluster` down **again** | O(cells) | **no: duplicate of L3's copy** | reuse L3's host array (trivial, even before P6.0v1) | P6.0v1 |
+| L5 | `:301-353` host plan loops over all slots (free list, cluster members, deferral) | host O(cells) | the sequential parts (cluster precedence, deferral order) yes | plain divisions and removals: device scan. Cluster divisions: host plan over the compacted O(events) list. | P6.0v1 |
+| L6 | `:355-357` `daughter`, `removed`, `events` up | O(cells) | no | the device plan writes them in place, or the host uploads O(events) | P6.0v1 |
+| L7 | `:362` `_cluster_planes!` (`compartments.jl:193-224`): σ, `cluster`, `generation`, `kind`, `volume`, `anchor`, `m1` down; host `init_moments` over all sites; `normals`, `bias` up | O(sites) + O(cells × 7) down, O(cells) up | the planes yes; host moments no | per-cluster moment reduction on the device (`CellReduce`-style), plane kernel per dividing root | P6.0v1 |
+| L8 | `:360` `fill!(cache.bias, 0)` | device fill (extra command) | no | fold into the normal kernel | P6.0v1 |
+| L9 | `:365`, `:370`, `:402` normal, partition and cell-rule kernels | device, 3 launches | yes | fuse normal + cell rule into one per-cell kernel before the partition (§8.1 F4) | P6.0v1 |
+| L10 | `:375-383` `_copy_columns!` (`:416-427`) for every non-tracker cell column | **O(cells × quantities)**, 2 transfers per column (Akeeb: 8, 32 kB) | no | one device kernel over daughters copying every non-tracker column parent → daughter (static unroll over the state NamedTuple) | **P6.0v1** |
+| L11 | `:384-386` `generation` round trip | O(cells), 2 transfers | no | same kernel (`generation[d] = generation[parent] + 1`) | P6.0v1 |
+| L12 | `:388-397` `cluster` round trip | O(cells), 2 transfers | no | same kernel | P6.0v1 |
+| L13 | `:400-401` `_lifecycle_links!` (`:486-498`): every adjacency down and up | O(cells × degree × relationships) | no | device kernel: `remove_incident!` for removed cells and daughters | P6.0v1 |
+| L14 | `:406` `_fix_clusters!` (`compartments.jl:172-177`): `cluster`, **σ**, `kind` down; `cluster` up; host `_normalize_clusters!` | O(sites) + O(cells) | the re-rooting yes; host σ no | liveness from `volume` (exact after the device tracker update) rather than from σ; re-root kernel | P6.0v1 |
+| L15 | `:407` `_rebuild_trackers!` (`:439-459`): **sync**, **σ down**, host O(sites) recompute of `volume`, `surface`, `anchor`/`m1`/`m2`; 4–5 columns up; cluster trackers (`compartments.jl:179-188`); host mask | **O(sites)** + O(cells × trackers), 1 sync | no | update trackers in the partition kernel: each moved site does the same atomic tracker deltas as an accepted copy (exact integer moments); the daughter's anchor starts as the parent's; removed cells are zeroed | **P6.0v1** |
+| L16 | `:408` `lc.rebuild!` user host hook | user code (not counted) | – | Potts passes the no-op | justified (user hook, documented) |
+| L17 | `:410-411` `volume` down again (empty daughters) | O(cells) | no | count empty daughters on the device in the tracker update; until then, reuse L15's host `volume` | P6.0v1 |
 
-After P6.0v1, an event MCS costs:
-- the count readback;
-- one O(events) download of the compacted events, and one O(events) upload for the
-  host-planned cluster cases.
+Under D-089, P6.0v1 plans and applies all of this on the device. An event MCS then has no
+host transfer at all, except where a host-planned case remains (cluster divisions, if they
+stay on the host), which moves O(events).
 
 Its bytes are then independent of the lattice size and of the number of cell quantities
 (the P6.0v1 acceptance).
@@ -385,56 +424,35 @@ the cause is not GPU work. Its `after_mcs` segment (the field step, 1736 µs) co
 its sweep (1513 µs), because each of the 3 substeps ends with a waiting Metal `copyto!`.
 With a kernel copy it runs at 60 ns/site (F2).
 
-## 9. Proposed rows
+## 9. Proposed rows (status after D-089)
 
-- **P6.0v4 Shared-storage scalars for host reads on unified memory.**
-  - Change: allocate the device buffers the host reads every MCS or every event MCS in
-    `Metal.SharedStorage` when the backend has unified memory, and read them with a load
-    after the sync instead of `Array(a)`. These buffers are the lifecycle `count`, the
-    status word, P6.0d's counts and the compacted event list of P6.0v1.
+- **P6.0v4: shared-storage scalars for host reads on unified memory.** Filed in the ROADMAP.
+  - Change: allocate the device buffers the host reads in `Metal.SharedStorage` and read
+    them with a load after the sync instead of `Array(a)`. Under D-089 these are the
+    status word, the lifecycle and P6.0d counts read at saves, `solve!` end and `checkpoint`,
+    and any O(events) list a host-planned case needs.
   - Measured: 150–220 µs → 0.3 µs per read.
-  - The counters keep counting each read as 1 transfer, so frozen target (b) is unchanged.
-  - Accept: a quiet lifecycle MCS on Metal is faster by at least the measured readback
-    latency in `ab.jl` (Akeeb, OpenVT); results unchanged.
-- **P6.0v5 (optional, low priority) Device-resident host phases.**
-  - Adaptive ODEs through a device adaptive ensemble kernel (DiffEqGPU style).
+  - Each read is still counted as 1 transfer.
+- **P6.0v5 (optional) device-resident host phases.** Filed in the ROADMAP.
+  - Adaptive ODEs through a device adaptive ensemble kernel.
   - `@link`/`@unlink` through a device contact graph (A5, H5).
-  - P6.0v2 makes both cheap; this row removes the per-MCS sync as well.
-- **P6.0v6 (needs a decision; amends D-035 and frozen target (b)) Sync-free quiet MCS.**
-  - After P6.0v1 the whole event path can run on the device (compacted event list, device
-    plan for plain divisions and removals), so the host need not read the count every MCS.
-  - Read it lazily, every k MCS or at saves, and run the event kernels unconditionally: they
-    are no-ops with zero events.
-  - This removes the last sync of a quiet MCS (T1). Measured cost of that sync: Akeeb quiet
-    MCS is latency-bound (median 2.2 ms per MCS with the sync, against a throughput mode
-    that keeps the queue full).
-  - Cluster divisions would still need a host plan. They would be deferred to the next read,
-    which changes when they happen unless the plan moves to the device.
-- **P6.0v7 (tooling) The gate measures GPU completion.**
-  - `benchmark/gate.jl` should time `step!` plus `synchronize` (or N MCS plus one sync)
-    on Metal, so that sync-free and lifecycle models are measured alike (§2).
-  - Rebaseline Metal once.
-- **P6.0v8 (rule, with P6.0v3) No Metal.jl `copyto!` between device arrays in the step path.**
-  - Route every device→device copy through one CorePotts helper that launches a KA copy
-    kernel (`FieldStep`, `CopyPhase`, and any later one).
-  - Add a test that fails if a device→device `copyto!` or a `UInt8`/`Int8` `fill!` appears in
-    a Metal MCS. For example, count them through the helper and grep the step path for raw
-    `copyto!` in QA.
-  - D-085's counters cannot see these waits, so without a rule they come back.
-
-The ROADMAP row says the implementation is "split into P6.0v1–P6.0v4" but defines only v1–v3.
-This audit proposes v4 as above.
+- **P6.0v6 → D-089.** The user chose the device-side form: no trigger read-back on a GPU
+  backend. It is built by P6.0v1, which re-freezes target (b) to 0 / 0 / 0.
+- **P6.0v7 (tooling) the gate measures GPU completion.** Filed in the ROADMAP (§2).
+- **P6.0v8 → folded into P6.0v3.**
+  - The rule: no Metal.jl device→device `copyto!` or `UInt8`/`Int8` `fill!` in the step
+    path.
+  - The test: waits = `syncs + 2 × transfers` per quiet MCS, already in
+    `test/transfer_counts.jl` with Merks `@test_broken`.
 
 ## 10. Assignment summary
 
 | row | entries |
 |---|---|
-| P6.0v1 | L1–L15, L17; F4; P2, P3; R2's sizing (at the P6.0d merge) |
+| P6.0v1 (with D-089) | T1, T2, R2; L1–L15, L17; F4; P2, P3 |
 | P6.0v2 | A1–A4; H1–H4; R4 |
-| P6.0v3 | F2 first (measured 5.1× on Merks), F3; T3; F1; X1–X5; Int64-moment investigation (§8.2); P6.0t if still open |
-| P6.0v4 (proposed) | T2, and the readback halves of L1 and R2 |
-| P6.0v5 (proposed, optional) | A5, H5 |
-| P6.0v6 (proposed, needs decision) | T1 |
-| P6.0v7 (proposed) | gate semantics (§2) |
-| P6.0v8 (proposed rule) | no Metal.jl device→device `copyto!` in the step path (guards F2 and F3) |
-| unavoidable or kept (justified) | T1 under D-035; F5 (no grid barrier); A6 (column-only already); R1, R3; L16 (user hook); P4, P5; outside the MCS: saves and `integ.u` (`problem.jl:258-261`: sync and snapshot, the user asked for the state), `_check_status!` at saves (`:275-280`, 4 B), `checkpoint` (`checkpoint.jl:26-30`), `reinit!` (`:62`, setup; the counters are reset after it), `set_state!` (`problem.jl:471-475`, 1 sync and 1 upload per user write), `init` uploads, `src/layouts.jl:241,419` and `src/problem.jl:419` (setup, host), `Lattice` `==`/`hash` (`lattice.jl:79-80`, host utility) |
+| P6.0v3 (with P6.0v8) | F2 first (measured 5.1× on Merks), F3 and the other implicit waits (§2.1); T3; F1; X1–X5; Int64-moment investigation (§8.2); P6.0t if still open |
+| P6.0v4 (ROADMAP) | the host reads that remain under D-089 (status word; counts at saves, `solve!` end, `checkpoint`) |
+| P6.0v5 (ROADMAP, optional) | A5, H5 |
+| P6.0v7 (ROADMAP) | gate semantics (§2) |
+| unavoidable or kept (justified) | F5 (no grid barrier); A6 (column-only already); R1, R3; L16 (user hook); P4, P5; outside the MCS: saves and `integ.u` (`problem.jl:331-334`: sync and snapshot, the user asked for the state), `_check_status!` at saves (`:348-353`, 4 B), `checkpoint` (`checkpoint.jl:26-31`), `reinit!` (`:63`, setup; the counters are reset after it), `set_state!` (`problem.jl:667-673`, 1 sync and 1 upload per user write, plus P6.0d's refresh on `kind`), model-scope `getindex(st, ::StateIndex)` (`problem.jl:637-640`, a user read through `_to_host(nothing, …)`, not counted), `_standard_frozen` on host states (problem construction, `remake`, `frozen_sites`), `init` uploads, `src/layouts.jl:241,419` and `src/problem.jl:419` (setup, host), `Lattice` `==`/`hash` (`lattice.jl:79-80`, host utility) |

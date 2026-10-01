@@ -97,3 +97,68 @@ p60vx_hostphase_counts(u0) =
         @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
     end
 end
+
+# Every GPU wait of a quiet MCS is a counted one (P6.0v3 / proposed P6.0v8). On Metal a
+# counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the copy
+# and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`. Waits the
+# counters cannot see (Metal.jl's device→device `copyto!`, `UInt8`/`Int8` `fill!`) break the
+# identity. Test-only instrumentation: `Metal.wait_cmdbuf!` gains a counter; the queue-depth
+# back-pressure of `wait_oldest_cleanup!` (the host running ahead of the GPU) is not a sync
+# and is excluded. The redefinitions copy Metal.jl 1.10.0's bodies, hence the version guard.
+const P60VX_WAITS = Ref(0)
+const P60VX_INFLIGHT = Ref(false)
+function p60vx_instrument_waits!()
+    M = Main.Metal
+    @eval M function wait_oldest_cleanup!(bq::BatchedCommandQueue)
+        isempty(bq.cleanups) && return
+        cmdbuf = first(bq.cleanups).cmdbuf
+        $(P60VX_INFLIGHT)[] = true
+        try
+            wait_cmdbuf!(cmdbuf)
+        finally
+            $(P60VX_INFLIGHT)[] = false
+        end
+        drain_cleanups!(bq)
+        return
+    end
+    @eval M function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
+        $(P60VX_INFLIGHT)[] || ($(P60VX_WAITS)[] += 1)
+        is_completed(cmdbuf) && return
+        precompiling = ccall(:jl_generating_output, Cint, ()) != 0
+        if use_nonblocking_synchronization && !precompiling
+            spinning_synchronization(cmdbuf) || yielding_synchronization(cmdbuf)
+        else
+            wait_completed(cmdbuf)
+        end
+        return
+    end
+    return nothing
+end
+
+const P60VX_WAITS_ON = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal) &&
+                      isdefined(Main, :P60vOnMetal) && pkgversion(Main.Metal) == v"1.10.0"
+P60VX_WAITS_ON && p60vx_instrument_waits!()      # at top level: the testset must see the new methods
+
+@testset "P6.0v: every GPU wait of a quiet MCS is counted (Metal)" begin
+    if P60VX_WAITS_ON
+        backend = Main.Metal.MetalBackend()
+        for (label, _, make) in Main.P60vOnMetal.p60v_gate_models(Float32)
+            integ = init(make(), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            step!(integ); step!(integ)
+            Main.Metal.synchronize()
+            for _ in 1:3
+                c0, w0 = p60vx_counts(integ.stats), P60VX_WAITS[]
+                step!(integ)
+                d = p60vx_counts(integ.stats) .- c0
+                waits = P60VX_WAITS[] - w0
+                if label == "Merks"          # FieldStep's device→device copies wait (P6.0v3)
+                    @test_broken waits == d[1] + 2 * d[2]
+                else
+                    @test waits == d[1] + 2 * d[2]
+                end
+            end
+        end
+    else
+        @test_skip "Metal.jl 1.10.0 (POTTS_GPU=metal with Metal loaded, from test/gpu.jl)"
+    end
+end
