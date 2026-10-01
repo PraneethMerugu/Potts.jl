@@ -803,6 +803,15 @@ function _tick_expr(bs, T, rn, scope; scratch = false)
 end
 
 # `@link`/`@unlink` rules: host phases over the contact graph / existing links.
+# D-066 boundary (c): each `@link`/`@unlink` host phase first drops every link of a dead
+# cell (volume 0, killed by copies), before any condition is evaluated or link created, so
+# a stale degree or `linked` never blocks creation and no 0/0 centroid reaches `distance`.
+_drop_dead_links() = quote
+    for ea in 1:length(cell.kind)
+        cell.volume[ea] == 0 && CorePotts.remove_incident!(store, ea)
+    end
+end
+
 function _link_phases(c::CompiledPottsSystem, T)
     rn = c.gather_names
     out = Any[]
@@ -813,6 +822,7 @@ function _link_phases(c::CompiledPottsSystem, T)
             cond = lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs))
             quote
                 store = $store
+                $(_drop_dead_links())
                 for ea in 1:length(cell.kind), ek in 1:size(store.links, 1)
                     eb = store.links[ek, ea]
                     eb > ea || continue
@@ -825,6 +835,7 @@ function _link_phases(c::CompiledPottsSystem, T)
             ba = lower(r.when, LowerEnv(T, :edge, Dict{Symbol, Any}(:a => :eb, :b => :ea, :distance => :ed, :mcs => :mcs), rn))
             quote
                 store = $store
+                $(_drop_dead_links())
                 g = CorePotts.contact_graph(st.σ, ctx.lattice, ctx.contact, length(cell.kind))
                 for ea in 1:length(cell.kind)
                     cell.volume[ea] > 0 || continue
@@ -1072,6 +1083,7 @@ function _total_energy_expr(c::CompiledPottsSystem, T)
             for ea in 1:length(st.cell.kind), ek in 1:size($L, 1)
                 eb = $L[ek, ea]
                 eb > ea || continue
+                (st.cell.volume[ea] > 0 && st.cell.volume[eb] > 0) || continue   # both ends alive (D-066 item 5)
                 ed = CorePotts.centroid_distance($T, st.cell, ctx.lattice, ea, eb)
                 H += $Ecode
             end

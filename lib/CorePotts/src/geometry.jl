@@ -122,8 +122,10 @@ end
 # Queries (host or device). `T` is the float type of the result.
 
 """Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic axes."""
-@inline function centroid(::Type{T}, cell, l::Lattice{N}, c) where {T, N}
-    V = @inbounds cell.volume[c]
+@inline centroid(::Type{T}, cell, l::Lattice, c) where {T} = _centroid(T, cell, l, c, @inbounds cell.volume[c])
+# … from an already-loaded volume `V` (one load for a caller that also tests `V`, e.g.
+# `link_delta`'s dead-partner skip: no second, possibly racing, read of the volume)
+@inline function _centroid(::Type{T}, cell, l::Lattice{N}, c, V) where {T, N}
     return ntuple(Val(N)) do d
         x = T(@inbounds cell.anchor[d, c]) + T(@inbounds cell.m1[d, c]) / T(V)
         l.periodic[d] ? mod(x - one(T), T(l.dims[d])) + one(T) : x

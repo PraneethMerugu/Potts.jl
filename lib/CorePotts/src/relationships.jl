@@ -151,6 +151,12 @@ payload lookup) when `prop` moves the target from `old` to `new`: every link inc
 `old` or `new` sees their centroids shift (`centroid_shift`). Centroids come from `cell`,
 links from `store` (default: `cell` itself); a model with several relationships sums one
 call per store.
+
+A partner with `volume == 0` (dead: it lost its last site to copies) is skipped, so its
+links contribute nothing until a boundary drops them (D-066 X3, item 5): its centroid
+would be 0/0. The skip tests the volume load the centroid uses anyway (one load, so a
+racing write cannot slip a zero in between). `old` and `new` own a site each, so they are
+alive. Device-safe: no allocation, no `throw`.
 """
 @inline link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F} = link_delta(T, cell, cell, ctx, prop, E)
 @inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal{N}, E::F) where {T, N, F}
@@ -166,7 +172,9 @@ call per store.
             n = @inbounds store.links[k, c]
             n == 0 && continue
             n == other && c == b && continue          # the old–new link is counted once (from a)
-            cn = centroid(T, cell, lat, n)
+            Vn = @inbounds cell.volume[n]
+            Vn == 0 && continue                       # dead partner: skipped (D-066 item 5)
+            cn = _centroid(T, cell, lat, n, Vn)
             sn = n == other ? so : ntuple(_ -> zero(T), Val(N))
             before = _periodic_norm(T, lat, ntuple(d -> cc[d] - cn[d], Val(N)))
             after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
