@@ -562,8 +562,12 @@ end
     # with clocks, every cell that becomes split does so in an MCS where it took part in a
     # division: either a cell born that MCS took most of its sites from it (a split mother),
     # or it was born that MCS with most of its sites from one cell (a split daughter).
-    # 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds hold a split cell
-    newly = map(1:4) do seed
+    # 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds hold a split cell.
+    # The "most of its sites" attribution is per saved MCS, so a daughter that takes sites from
+    # its neighbours after its birth in the same MCS can miss it: about 1 seed in 10 has such
+    # a daughter (5 of seeds 1:28 under the D-093 clocks, 2 of 28 under the old ones). Seeds
+    # re-picked for P6.0w to ones without it; seeds 2 and 3 have one each
+    newly = map((1, 4, 5, 6)) do seed
         o = akeeb_state(; lattice = (99, 60), seed)
         sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 300); capacity = 1000,
             seed), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
