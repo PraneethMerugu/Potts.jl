@@ -1,143 +1,27 @@
-using ParallelTestRunner
-import Potts
+# Test entry point for the whole monorepo.
+#   GROUP=All (default) | Potts | CorePotts | MakiePotts | PottsModels | GPU
+# Each group runs in the shared workspace environment of its own test project.
+const GROUP = get(ENV, "GROUP", "All")
+const ROOT = dirname(@__DIR__)
 
-const POTTS_TESTS = (
-    "test_fixed_array_scaling.jl",
-    "test_discrete_field_rhs.jl",
-    "test_expression_reference_scales.jl",
-    "test_public_api.jl", "test_system_contract.jl",
-    "test_cartesian_domain_authoring.jl",
-    "test_declaration_assembly.jl",
-    "test_lexical_enrollment.jl",
-    "test_declaration_control_flow.jl",
-    "test_lexical_model.jl",
-    "test_assembled_model.jl",
-    "test_component_replacement.jl",
-    "test_compound_effects.jl",
-    "test_structured_state_authoring.jl",
-    "test_state_initial_value_types.jl",
-    "test_product_state_authoring.jl",
-    "test_product_field_authoring.jl",
-    "test_product_field_substitution.jl",
-    "test_product_proposal_reads.jl",
-    "test_state_initial_selection.jl",
-    "test_component_initial_units.jl",
-    "test_product_state_defaults.jl",
-    "test_model_state_proposal_reads.jl",
-    "test_model_state_energy.jl",
-    "test_model_site_transactions.jl",
-    "test_structured_assignments.jl",
-    "test_cell_process_authoring.jl",
-    "test_quantity_scopes.jl",
-    "test_scope_names.jl",
-    "test_scope_inputs.jl",
-    "test_scope_anchor_execution.jl",
-    "test_model_cell_transactions.jl",
-    "test_structured_lifecycle_literals.jl",
-    "test_dimensional_state_values.jl",
-    "test_history_source_storage.jl",
-    "test_history_feedback.jl",
-    "test_history_structured_samples.jl",
-    "test_history_initialization.jl",
-    "test_history_lifecycle.jl",
-    "test_history_ownership_change.jl",
-    "test_logical_state_mutation.jl",
-    "test_mixed_symbolic_mutation.jl",
-    "test_state_mutation_observation_failure.jl",
-    "test_state_reference_inference.jl",
-    "test_fixed_vector_operations.jl",
-    "test_fixed_vector_parameters.jl",
-    "test_vector_parameter_units_and_imports.jl",
-    "test_parameter_contracts.jl",
-    "test_component_dependency_ownership.jl",
-    "test_statements_and_traversal.jl", "test_completion_and_diagnostics.jl",
-    "test_units_and_parameters.jl", "test_mtkcompile.jl",
-    "test_initial_problem_remake.jl", "test_runtime_solution_sii.jl",
-    "test_addressed_randomness.jl",
-    "test_scheduled_process_draws.jl",
-    "test_structured_random_continuation.jl",
-    "test_trigonometric_operations.jl",
-    "test_cell_polarity_dynamics.jl",
-    "test_source_traversal_authority.jl", "test_native_authoring.jl",
-    "test_native_component_pools.jl", "test_sciml_problem_and_indexing.jl",
-    "test_sciml_callbacks_and_replay.jl",
-    "test_sciml_ensemble_and_failures.jl",
-    "test_lifecycle_public_contracts.jl",
-    "test_lifecycle_public_arbitration.jl",
-    "test_lifecycle_public_trajectories.jl",
-    "test_lifecycle_public_policies.jl",
-    "test_relationship_host_transactions.jl",
-    "test_external_compiler_spi.jl", "test_scientific_operation_spi.jl",
-    "test_external_operation_energy.jl",
-    "test_gather_reductions.jl",
-    "test_scientific_reference_witnesses.jl",
-    "test_scientific_relationship_witnesses.jl",
-    "test_scientific_activity_field_witnesses.jl",
-    "test_custom_model.jl",
-    "test_platform_smoke.jl",
-    "test_fresh_process.jl", "test_core_spi_boundary.jl",
-    "test_package_quality.jl",
-)
-
-# Each helper is owned either by the worker-wide setup or by one test unit.
-# Keeping that inventory explicit prevents detached fixture artifacts without
-# turning helpers into a second test suite.
-const POTTS_TEST_FIXTURES = (
-    "history_structured_samples.jl",
-    "discrete_field_rhs.jl",
-    "ExternalCompilerSPIFixture.jl",
-    "ExternalSurfaceOperationFixture.jl",
-    "LifecycleOperationFixtures.jl",
-    "cell_processes.jl",
-    "scoped_quantities.jl",
-    "model_cell_transactions.jl",
-    "scheduled_process_draws.jl",
-    "structured_random_continuation.jl",
-    "cell_polarity_dynamics.jl",
-    "lifecycle_public.jl",
-    "logical_state_mutation.jl",
-    "mixed_symbolic_mutation.jl",
-    "symbolic_mutation_observation_failure.jl",
-    "sciml_lifecycle.jl",
-    "vector_rotation.jl",
-    "vector_parameters.jl",
-    "product_fields.jl",
-)
-
-const POTTS_TEST_SUITE = Dict(
-    splitext(file)[1] => :(include($(joinpath(@__DIR__, file))))
-        for file in POTTS_TESTS
-)
-POTTS_TEST_SUITE["inventory"] = quote
-    discovered = Set(
-        filter(
-            name -> startswith(name, "test_") && endswith(name, ".jl"),
-            readdir(@__DIR__),
-        )
-    )
-    @test discovered == Set($(POTTS_TESTS))
-
-    fixture_directory = joinpath(@__DIR__, "fixtures")
-    discovered_fixtures = Set(
-        filter(
-            name -> endswith(name, ".jl"),
-            readdir(fixture_directory),
-        )
-    )
-    @test discovered_fixtures == Set($(POTTS_TEST_FIXTURES))
+function run_group(project, file; env = ())
+    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project $file`, env...)
+    @info "Running $(relpath(file, ROOT))"
+    run(cmd)
 end
 
-const POTTS_TEST_INIT = quote
-    include($(joinpath(@__DIR__, "setup.jl")))
-    include($(joinpath(@__DIR__, "fixtures", "lifecycle_public.jl")))
-    include($(joinpath(@__DIR__, "fixtures", "sciml_lifecycle.jl")))
-end
-
-ParallelTestRunner.runtests(
-    Potts,
-    ARGS;
-    testsuite = POTTS_TEST_SUITE,
-    init_code = POTTS_TEST_INIT,
-    serial = ["inventory", "test_package_quality"],
-    serial_position = :after,
-)
+GROUP in ("All", "CorePotts") &&
+    run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl"))
+GROUP in ("All", "MakiePotts") &&
+    run_group(joinpath(ROOT, "lib/MakiePotts/test"), joinpath(ROOT, "lib/MakiePotts/test/runtests.jl"))
+GROUP in ("All", "Potts") &&
+    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"))
+GROUP in ("All", "PottsModels") &&
+    run_group(joinpath(ROOT, "lib/PottsModels/test"), joinpath(ROOT, "lib/PottsModels/test/runtests.jl"))
+# Device group (not part of All): the CorePotts suite plus its Metal tests.
+GROUP == "GPU" &&
+    run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
+        env = ("COREPOTTS_GPU" => "metal", "COREPOTTS_QA" => "false"))
+GROUP == "GPU" &&
+    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl");
+        env = ("POTTS_GPU" => "metal", "POTTS_QA" => "false"))

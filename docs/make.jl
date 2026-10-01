@@ -1,61 +1,47 @@
-using Documenter
-using Potts
+# Build the documentation offline: `julia --project=docs docs/make.jl`.
+# Every `lib/PottsModels/reproductions/*.jl` is rendered by Literate into
+# `docs/src/published/` (generated, gitignored) and executed by Documenter.
+# `POTTS_FULL_REPRODUCTION=true` makes the tutorials run their full-size ensembles.
+using Documenter, Literate
+using Potts, CorePotts, PottsModels
 
-makedocs(
+const REPRODUCTIONS = joinpath(dirname(@__DIR__), "lib", "PottsModels", "reproductions")
+const PUBLISHED = joinpath(@__DIR__, "src", "published")
+
+for f in readdir(PUBLISHED)
+    endswith(f, ".md") && rm(joinpath(PUBLISHED, f))
+end
+published = String[]
+for f in sort(readdir(REPRODUCTIONS))
+    endswith(f, ".jl") || continue
+    Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false)
+    push!(published, joinpath("published", splitext(f)[1] * ".md"))
+end
+
+# the section's index page lists the generated pages
+write(joinpath(PUBLISHED, "index.md"), """
+# [Published models](@id published-models)
+
+Each page reproduces one paper from the public constructor in `PottsModels`. The pages
+are generated from the Literate scripts in `lib/PottsModels/reproductions/`. The docs
+build runs a reduced ensemble; `POTTS_FULL_REPRODUCTION=true` runs the full one.
+
+```@contents
+Pages = $(repr([basename(p) for p in published]))
+Depth = 1
+```
+""")
+
+makedocs(;
     sitename = "Potts.jl",
-    authors = "Praneeth Merugu",
-    modules = [Potts],
-    format = Documenter.HTML(
-        prettyurls = true,
-        canonical = "https://praneethmerugu.github.io/Potts.jl/",
-        repolink = "https://github.com/PraneethMerugu/Potts.jl",
-        edit_link = "main",
-        size_threshold = nothing,
-        size_threshold_warn = nothing,
-        assets = ["assets/docs.css"],
-    ),
-    doctest = true,
-    linkcheck = get(ENV, "POTTS_DOCS_LINKCHECK", "false") == "true",
-    warnonly = false,
-    # Only pages in the curated manual execute. Generated media and historical drafts are not
-    # documentation inputs merely because they remain in the repository.
-    pagesonly = true,
-    # Exported constructors and operations require attached help. Qualified-public
-    # extension SPI is inventoried separately by package tests and the extension manual.
-    checkdocs = :exports,
+    modules = [Potts, CorePotts, PottsModels, PottsModels.Analysis],
     remotes = nothing,
+    format = Documenter.HTML(; prettyurls = true, edit_link = nothing, repolink = nothing,
+        size_threshold = nothing, size_threshold_warn = nothing),
+    checkdocs = :exports,
     pages = [
         "Home" => "index.md",
-        "Learn" => [
-            "Author and compose" => "learn/authoring.md",
-            "Build a custom model" => "learn/custom-model.md",
-            "Initialize and execute" => "learn/execution.md",
-            "Lifecycle and relationships" => "learn/state-lifecycle.md",
-            "Native MTK components" => "learn/native-components.md",
-            "Fields, batching, and ensembles" => "learn/fields-and-ensembles.md",
-            "Observe, checkpoint, and reproduce" => "learn/reproducibility.md",
-        ],
-        "Scientific model library" => "learn/model-library.md",
-        "Concepts and support" => [
-            "Architecture" => "concepts/architecture.md",
-            "Runtime boundary" => "concepts/runtime-boundary.md",
-            "Capability status" => "concepts/capability-status.md",
-            "Extension boundary" => "concepts/extension-boundary.md",
-        ],
-        "API" => [
-            "Potts" => "api/potts.md",
-        ],
-    ],
-)
-
-if get(ENV, "POTTS_DEPLOY_DOCS", "false") == "true"
-    get(ENV, "GITHUB_ACTIONS", "false") == "true" ||
-        error("Documentation deployment is only permitted inside GitHub Actions")
-    get(ENV, "GITHUB_EVENT_NAME", "") == "pull_request" &&
-        error("Documentation deployment is forbidden for pull requests")
-    deploydocs(
-        repo = "github.com/PraneethMerugu/Potts.jl.git",
-        devbranch = "main",
-        push_preview = false,
-    )
-end
+        "Learn" => "learn.md",
+        "Published models" => ["published/index.md"; published],
+        "API" => "api.md",
+    ])

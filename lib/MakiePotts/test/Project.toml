@@ -1,0 +1,14 @@
+[deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Aqua = "0.8"
+CairoMakie = "0.15"
+ExplicitImports = "1.15"

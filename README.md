@@ -1,64 +1,59 @@
 # Potts.jl
 
-> **Development disclosure:** Substantial portions of this pre-release codebase,
-> tests, and documentation were developed with generative-AI assistance and
-> remain subject to maintainer review.
+Cellular Potts models written as equations, in the style of ModelingToolkit, and solved with
+SciML-style problems, solvers and solutions, on the CPU or a GPU.
 
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://praneethmerugu.github.io/Potts.jl/dev/)
+```julia
+using Potts, PottsModels, MakiePotts, CairoMakie
 
-Potts.jl is the high-level Cellular Potts modeling system for Julia. It is one
-member of four independently versioned packages:
+σ0, k0 = graner_glazier_state()                      # a 64-cell aggregate of two kinds
+gg = GranerGlazier(; name = :gg, lattice = size(σ0)) # Graner & Glazier (1992) cell sorting
+prob = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 200); seed = 1)
+sol = solve(prob, SequentialCPM())
+pottsplot(renderframe(sol.u[end]))                    # the sorted aggregate
+```
 
-- **[Potts](https://github.com/PraneethMerugu/Potts.jl)**: biological authoring and SciML integration.
-- **[CorePotts](https://github.com/PraneethMerugu/CorePotts.jl)**: scientific execution and extension interfaces.
-- **[LocalMath](https://github.com/PraneethMerugu/LocalMath.jl)**: typed bounded local computation.
-- **[MakiePotts](https://github.com/PraneethMerugu/MakiePotts.jl)**: native Makie recipes.
+This repository holds four Julia packages:
 
-The historical monorepo layout and pre-freeze engine have been removed.
+| Package | Path | What it is |
+|---|---|---|
+| **Potts** | `/` | The modelling language: `@potts_model`, `PottsProblem`, layouts, components |
+| **CorePotts** | `lib/CorePotts` | The numerical layer: lattices, `SequentialCPM` and `CheckerboardCPM`, solutions, ensembles, callbacks, GPU kernels |
+| **PottsModels** | `lib/PottsModels` | Published models as ordinary `@potts_model` constructors, with reproductions |
+| **MakiePotts** | `lib/MakiePotts` | Plotting of states and solutions with Makie |
 
-## Installation
+## Install
 
-Until the package family is registered, install the release candidates in dependency order:
+The packages are not registered yet. With Julia 1.12:
+
+```bash
+git clone https://github.com/PraneethMerugu/Potts.jl
+```
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/PraneethMerugu/LocalMath.jl", rev = "v0.2.0-rc1")
-Pkg.add(url = "https://github.com/PraneethMerugu/CorePotts.jl", rev = "v0.2.0-rc1")
-Pkg.add(url = "https://github.com/PraneethMerugu/Potts.jl", rev = "v0.3.0-rc1")
+Pkg.develop([PackageSpec(path = "Potts.jl/lib/CorePotts"), PackageSpec(path = "Potts.jl"),
+             PackageSpec(path = "Potts.jl/lib/PottsModels"), PackageSpec(path = "Potts.jl/lib/MakiePotts")])
 ```
 
-Add MakiePotts separately when visualization is required.
-
-The four `main` branches currently contain the RC2 candidates, but no RC2 tags
-exist yet. To exercise them before the release, use immutable commit revisions
-from the standalone repositories in the same dependency order. A clean Potts
-checkout never expects an embedded sibling-package checkout layout.
-
-For development:
-
-```julia
-using Pkg
-Pkg.develop(path="../LocalMath.jl")
-Pkg.develop(path="../CorePotts.jl")
-Pkg.develop(path="../Potts.jl")
-```
-
-The package family supports Julia 1.12 and later Julia 1.x releases. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for the complete development commands.
+GPU runs use any KernelAbstractions backend (Metal is tested): load the backend package and
+pass `backend = MetalBackend()` to `solve`.
 
 ## Documentation
 
-The package family is pre-1.0. CorePotts retains scientific ownership of
-proposal ordering, failure boundaries, acceptance, semantic randomness,
-lifecycle behavior, and checkpoint continuation. LocalMath owns bounded
-spatial and publication semantics. Historical development records under
-[`design/`](design/) do not define product APIs or runtime modes.
+Build the documentation locally:
 
 ```bash
-julia --project=docs --startup-file=no -e 'using Pkg; Pkg.instantiate(; julia_version_strict=true)'
-julia --project=docs --startup-file=no docs/make.jl
+julia --project=docs -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs docs/make.jl
 ```
 
-The complete Learn, Published Models, and API manual builds strictly against
-the public interface. There is no compatibility promise for unpublished
-pre-release authoring names.
+and open `docs/build/index.html`. It covers getting started, tutorials, the modelling
+language, and the published models, each reproduced from its public constructor.
+
+## History
+
+This repository replaces the earlier CorePotts.jl, MakiePotts.jl and PottsModels.jl
+repositories (now archived) and the previous contents of this one. Their histories stay
+reachable: the old `main` is an ancestor of this branch, and every earlier branch is kept as
+an `archive/*` or `legacy/*` tag in its repository.

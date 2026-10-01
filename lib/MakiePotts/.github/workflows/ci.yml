@@ -1,0 +1,244 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      localmath_ref:
+        description: LOCALMATH candidate revision
+        type: string
+        default: b699002a05f84e240e34162d509d6b952bf7d437
+      corepotts_ref:
+        description: COREPOTTS candidate revision
+        type: string
+        default: 7183bcec81afc34028153f8674d1992b625fd2bc
+      potts_ref:
+        description: POTTS candidate revision
+        type: string
+        default: 868a22ff432e33f0a1dc0ba4879102539a0a0c8d
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  JULIA_VERSION: '1.12.6'
+  LOCALMATH_REF: ${{ inputs.localmath_ref || 'b699002a05f84e240e34162d509d6b952bf7d437' }}
+  COREPOTTS_REF: ${{ inputs.corepotts_ref || '7183bcec81afc34028153f8674d1992b625fd2bc' }}
+  POTTS_REF: ${{ inputs.potts_ref || '868a22ff432e33f0a1dc0ba4879102539a0a0c8d' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      execution: ${{ steps.diff.outputs.execution }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {fetch-depth: 0}
+      - name: Select execution checks from the whole PR diff
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          execution=true
+          if [[ "$EVENT" == pull_request ]] && git cat-file -e "$BASE^{commit}" && git cat-file -e "$HEAD^{commit}"; then
+            git diff --no-renames --name-only -z "$BASE...$HEAD" > "$RUNNER_TEMP/makiepotts-changed-paths"
+            execution=false
+            while IFS= read -r -d '' path; do
+              case "$path" in
+                AGENTS.md|CONTRIBUTING.md|README.md|LICENSE|CITATION.cff|spec/*.md|design/*.md) ;;
+                *) execution=true; break ;;
+              esac
+            done < "$RUNNER_TEMP/makiepotts-changed-paths"
+          fi
+          printf 'execution=%s\n' "$execution" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD
+
+  ubuntu-qualification:
+    needs: changes
+    if: always()
+    name: ubuntu-qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
+        run: exit 1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/Potts.jl, ref: '${{ env.POTTS_REF }}', path: deps/Potts}
+      - name: Require immutable sibling revisions
+        shell: bash
+        run: |
+          [[ "$LOCALMATH_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "LOCALMATH_REF must be a full commit SHA"; exit 1; }
+          [[ "$COREPOTTS_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "COREPOTTS_REF must be a full commit SHA"; exit 1; }
+          [[ "$POTTS_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "POTTS_REF must be a full commit SHA"; exit 1; }
+      - name: Show selected revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
+          git -C deps/Potts rev-parse HEAD
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+        id: julia-cache
+      - name: Initialize phase telemetry
+        env:
+          CACHE_HIT: ${{ steps.julia-cache.outputs.cache-hit }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ci-telemetry"
+          : > "${RUNNER_TEMP}/ci-telemetry/ubuntu-qualification.jsonl"
+          export CI_TELEMETRY_PATH="${RUNNER_TEMP}/ci-telemetry/ubuntu-qualification.jsonl"
+          printf 'CI_TELEMETRY_PATH=%s\n' "$CI_TELEMETRY_PATH" >> "$GITHUB_ENV"
+          depot_kib=$(du -sk "${JULIA_DEPOT_PATH%%:*}" 2>/dev/null | cut -f1 || true)
+          julia --startup-file=no dev/ci_telemetry.jl observe cache.restore "hit=${CACHE_HIT:-unknown};depot_kib=${depot_kib:-0}"
+      - name: Test package
+        run: julia --startup-file=no dev/ci_telemetry.jl measure package.test -- julia --startup-file=no -e 'using Pkg; Pkg.activate(; temp=true); Pkg.add(PackageSpec(name="AMD", version="0.5.3")); Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.test("MakiePotts")'
+      - name: Prepare rendering backend environment
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backends.prepare -- xvfb-run -a julia --project=test/backends --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); Pkg.precompile()'
+      - name: CairoMakie backend
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backend.cairo -- julia --project=test/backends --startup-file=no test/backends/cairo.jl
+      - name: Clean-install rendering journey
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backend.clean_install -- julia --project=test/backends --startup-file=no test/clean_install_smoke.jl
+      - name: WGLMakie backend
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backend.wgl -- julia --project=test/backends --startup-file=no test/backends/wgl.jl
+      - name: GLMakie backend
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backend.gl -- xvfb-run -a julia --project=test/backends --startup-file=no test/backends/gl.jl
+      - name: Visual regression
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure visual.regression -- julia --project=test/backends --startup-file=no test/visual_regression.jl
+      - name: Native recipe example
+        if: needs.changes.outputs.execution == 'true'
+        run: julia --startup-file=no dev/ci_telemetry.jl measure example.native_recipe -- xvfb-run -a julia --project=examples --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); include("examples/native_recipe.jl")'
+      - name: Documentation and doctests
+        run: julia --startup-file=no dev/ci_telemetry.jl measure documentation.build -- julia --project=docs --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate(); include("docs/make.jl")'
+      - name: Record final cache footprint
+        if: always()
+        run: |
+          depot_kib=$(du -sk "${JULIA_DEPOT_PATH%%:*}" 2>/dev/null | cut -f1 || true)
+          julia --startup-file=no dev/ci_telemetry.jl observe cache.final "depot_kib=${depot_kib:-0}"
+      - name: Upload phase telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: makiepotts-ubuntu-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-telemetry/ubuntu-qualification.jsonl
+          if-no-files-found: error
+
+  macos-smoke:
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.execution != 'false')
+    name: macos-smoke
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Require a valid change selection
+        if: needs.changes.result != 'success' || (needs.changes.outputs.execution != 'true' && needs.changes.outputs.execution != 'false')
+        run: exit 1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/LocalMath.jl, ref: '${{ env.LOCALMATH_REF }}', path: deps/LocalMath}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/CorePotts.jl, ref: '${{ env.COREPOTTS_REF }}', path: deps/CorePotts}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with: {repository: PraneethMerugu/Potts.jl, ref: '${{ env.POTTS_REF }}', path: deps/Potts}
+      - name: Require immutable sibling revisions
+        shell: bash
+        run: |
+          [[ "$LOCALMATH_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "LOCALMATH_REF must be a full commit SHA"; exit 1; }
+          [[ "$COREPOTTS_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "COREPOTTS_REF must be a full commit SHA"; exit 1; }
+          [[ "$POTTS_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "POTTS_REF must be a full commit SHA"; exit 1; }
+      - name: Show selected revisions
+        run: |
+          git rev-parse HEAD
+          git -C deps/LocalMath rev-parse HEAD
+          git -C deps/CorePotts rev-parse HEAD
+          git -C deps/Potts rev-parse HEAD
+      - uses: julia-actions/setup-julia@fa02766e078afaaf09b14210362cee14137e6a32 # v3
+        with: {version: '${{ env.JULIA_VERSION }}'}
+      - uses: julia-actions/cache@a45e8fa8be21c18a06b7177052533149e61e9b38 # v3
+        id: julia-cache
+      - name: Initialize phase telemetry
+        env:
+          CACHE_HIT: ${{ steps.julia-cache.outputs.cache-hit }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ci-telemetry"
+          : > "${RUNNER_TEMP}/ci-telemetry/macos-smoke.jsonl"
+          export CI_TELEMETRY_PATH="${RUNNER_TEMP}/ci-telemetry/macos-smoke.jsonl"
+          printf 'CI_TELEMETRY_PATH=%s\n' "$CI_TELEMETRY_PATH" >> "$GITHUB_ENV"
+          depot_kib=$(du -sk "${JULIA_DEPOT_PATH%%:*}" 2>/dev/null | cut -f1 || true)
+          julia --startup-file=no dev/ci_telemetry.jl observe cache.restore "hit=${CACHE_HIT:-unknown};depot_kib=${depot_kib:-0}"
+      - name: Prepare rendering backend environment
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backends.prepare -- julia --project=test/backends --startup-file=no -e 'using Pkg; Pkg.develop([PackageSpec(path=path) for path in ("deps/LocalMath", "deps/CorePotts", "deps/Potts", ".")]); Pkg.instantiate()'
+      - name: Test CairoMakie backend
+        run: julia --startup-file=no dev/ci_telemetry.jl measure backend.cairo -- julia --project=test/backends --startup-file=no test/backends/cairo.jl
+      - name: Record final cache footprint
+        if: always()
+        run: |
+          depot_kib=$(du -sk "${JULIA_DEPOT_PATH%%:*}" 2>/dev/null | cut -f1 || true)
+          julia --startup-file=no dev/ci_telemetry.jl observe cache.final "depot_kib=${depot_kib:-0}"
+      - name: Upload phase telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: makiepotts-macos-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-telemetry/macos-smoke.jsonl
+          if-no-files-found: error
+
+  cache-transfer-telemetry:
+    needs: [ubuntu-qualification, macos-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect completed cache step durations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/ci-telemetry"
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" > "${RUNNER_TEMP}/ci-telemetry/jobs.json"
+          jq -c --arg run_id "$GITHUB_RUN_ID" --arg revision "$GITHUB_SHA" '
+            .jobs[]
+            | select(.name == "ubuntu-qualification" or .name == "macos-smoke")
+            | . as $job
+            | .steps[]
+            | select(.name | contains("julia-actions/cache"))
+            | {
+                kind: "transfer",
+                label: (if (.name | startswith("Post ")) then "cache.save" else "cache.restore" end),
+                elapsed_seconds: ((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)),
+                status: .conclusion,
+                source_step: .name,
+                repository: env.GITHUB_REPOSITORY,
+                job: $job.name,
+                run_id: $run_id,
+                revision: $revision,
+                runner_os: ($job.labels | join(","))
+              }
+          ' "${RUNNER_TEMP}/ci-telemetry/jobs.json" > "${RUNNER_TEMP}/ci-telemetry/cache-transfers.jsonl"
+      - name: Upload cache transfer telemetry
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: makiepotts-cache-transfer-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-telemetry/cache-transfers.jsonl
+          if-no-files-found: error

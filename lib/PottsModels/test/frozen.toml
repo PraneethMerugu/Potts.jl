@@ -1,0 +1,123 @@
+# Frozen acceptance tests (D-053, AUTONOMY §7.3). An implementer may not edit a listed file.
+# A file is frozen in its own commit, before the code it accepts. Changing it (a tolerance,
+# a target, a run length) needs a DECISIONS entry. Update `sha256` and `decision` in the
+# same commit. Hash: shasum -a 256 <file>
+[[file]]
+path = "papers.jl"
+sha256 = "427d62a2334f30129c9895a9bd571e0721d16e7b5ed9131601cbd5e1a2148f70"
+decision = "D-071"
+
+[[file]]
+path = "acceptance/p6_0a_division_kinds.jl"
+sha256 = "438fff835f2e5b5c54a24db1dbcdbf3bae40dc9c7fe431c925e8d3773d065544"
+decision = "D-076"
+
+[[file]]
+path = "acceptance/p6_1a_layouts.jl"
+sha256 = "7e4ba57efb48930591a2edb6ce0a67667ad0bdb1042ed68434aa27ba303a5f31"
+decision = "D-056"
+
+[[file]]
+path = "acceptance/p6_0b_relationships.jl"
+sha256 = "146da9cc0946865fa9bee0cb023dfacab0360aa83c48d9393698f43440f8d2a1"
+decision = "D-053"
+
+[[file]]
+path = "acceptance/p6_0e_contact_sites.jl"
+sha256 = "246e0ba071bed5d32d90df8127b1ba538ccfbf2153661673e26bfe762d44dd58"
+decision = "D-053"
+
+[[file]]
+path = "acceptance/p6_1b2_gg_aggregate.jl"
+sha256 = "61a62a9a156478b2ee6b645626885c095466962ebbac4cef04207d6a547c143e"
+decision = "D-060"
+
+[[file]]
+path = "acceptance/p6_0f_rule_cadence.jl"
+sha256 = "9bf38772b920b6c6b8abf8afa9e087bbe1de20c77de6c5c0d8bfbccefe480821"
+decision = "D-076"
+
+[[file]]
+path = "../reproductions/09_cell_sorting.jl"
+sha256 = "716d2f405e09b45d89f8df0be6ff88ec8f0a9682ebd7548570df6d708b347fa5"
+decision = "D-072"
+
+[[file]]
+path = "acceptance/p6_2a_akeeb_analysis.jl"
+sha256 = "1f6ef1aebf04c33c89de8632137818c8f8dd5c4bf18cc7c84d244ec5729f7462"
+decision = "D-091"
+
+[[file]]
+path = "acceptance/p6_0k_boolean_network.jl"
+sha256 = "2efbf328d775cd80fe3236213807eb7069b6ceff44afbd1f871ca6ecb4cae1de"
+decision = "D-065"
+
+[[file]]
+path = "acceptance/p6_0m_defects.jl"
+sha256 = "b97cfefa4c30c528946a5ec4da1cb756306ebc675351f3d957320c82ea32e778"
+decision = "D-074"
+
+[[file]]
+path = "acceptance/p6_0m2_potts_problem.jl"
+sha256 = "d256d213d3784cfae6a0b40e37766e505eb4b0116e6d8801a864e5083f1c8712"
+decision = "D-075"
+
+[[file]]
+path = "acceptance/p6_0c_solver_placement.jl"
+sha256 = "14e8cffe0892024459f79913c546b9c638b686edf59026615daf467f359b4023"
+decision = "D-075"
+
+[[file]]
+path = "acceptance/p6_0l_link_partner_death.jl"
+sha256 = "19e10050922bd0a8c046d1d06dbbb8ce35d15e153cc7879e73350de7558c1da3"
+decision = "D-066"
+
+[[file]]
+path = "acceptance/p6_0m3_integral_pre.jl"
+sha256 = "16c4218fd30cfeb423c8503a6b17d1c162a7bd799ea846b7a38149573e1f85e2"
+decision = "D-076"
+
+[[file]]
+path = "acceptance/p6_2a2_akeeb_inventory.jl"
+sha256 = "d0e36abb98abc68a2f0cbbeb0087eab71a459f0e3c3f51d00b9052e156e5d513"
+decision = "D-091"
+
+[[file]]
+path = "acceptance/p6_0k2_component_rejections.jl"
+sha256 = "140bed96e6bff6e8f3720d299f49e10cb2666646ada01db1c305a6cf9a5f0118"
+decision = "D-077"
+
+[[file]]
+path = "acceptance/p6_0n_cell_ode_jacobi.jl"
+sha256 = "42c940660b14cf9a53f649505bca8c9f79faa5f390cdf96cbbe63103c9d7c0be"
+decision = "D-078"
+
+[[file]]
+path = "acceptance/p6_0e2_prime_errors.jl"
+sha256 = "bfad1c1ac40fc3f147f8ab26af47b65b2c2ebe29464dc753d5cb5138e640f89f"
+decision = "D-061"
+
+[[file]]
+path = "acceptance/p6_0r_killing_copy_energy.jl"
+sha256 = "0ba7ccfaca27fae5549a523524b232d7a02f4a24c032f80e60a07f521c1e9172"
+decision = "D-083"
+
+[[file]]
+path = "acceptance/p6_0v_transfer_counters.jl"
+sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
+decision = "D-085"
+
+[[file]]
+path = "acceptance/p6_0d_frozen_kind_mask.jl"
+sha256 = "6a5ee19416dd47c74ee6e9427eaffae73141e1e881304a65b3a3f2f6d27ad888"
+decision = "D-081"
+
+[[file]]
+path = "../../../benchmark/test/p6_0s_v7_tooling.jl"
+sha256 = "1b001ef00a7aa94594e869280083518af5677739a2b8418283f758e1553d743a"
+decision = "D-090"
+
+[[file]]
+path = "acceptance/p6_1a6_layout_protocol.jl"
+sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
+decision = "D-091"

@@ -1,0 +1,444 @@
+# Lowering: symbolic expressions → Julia `Expr` reading the CorePotts state.
+#
+# Generated functions see `st` (CPMState), `p` (parameters NamedTuple), `ctx` (lattice and
+# relations) and, per function kind, `prop` or an index. A `LowerEnv` says which built-in
+# names are bound in the current mode and to what code; everything else follows the role
+# recorded in each symbol's metadata.
+
+using SymbolicUtils: iscall, operation, arguments, issym
+
+const CP = CorePotts
+
+const _FLOAT_OPS = (sqrt, cbrt, exp, exp2, exp10, expm1, log, log2, log10, log1p, sin, cos, tan,
+    sinh, cosh, tanh, asin, acos, atan, (/), inv, hypot)
+
+struct LowerEnv
+    T::Type                          # scalar type of the generated code
+    mode::Symbol                     # :cell, :site, :contact, :proposal
+    bind::Dict{Symbol, Any}          # built-in name (or :__site/:__cell) → code
+    relname::Dict{Any, Symbol}       # gather relation spec → ctx field
+end
+
+const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
+    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+
+_unwrap(x) = Symbolics.unwrap(x)
+
+"""Julia code for the value of symbolic `x` in `env`."""
+function lower(x, env::LowerEnv)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return _literal(x, env)
+    SymbolicUtils.isconst(x) && return _literal(SymbolicUtils.unwrap_const(x), env)
+    i = info(x)
+    if i !== nothing && !(i.role in (:bound, :bound_cell, :bound_site))
+        return _lower_named(x, i, env)
+    end
+    if issym(x)
+        i === nothing && error("unknown symbol `$x` in $(_MODE_NAMES[env.mode]); declare it in @parameters or @variables")
+        return Symbol(nameof(x))                    # a gather's bound site
+    end
+    op = operation(x)
+    args = arguments(x)
+    (op === at || op === at2) && return _lower_at(args, env)
+    op === gather && return _lower_gather(args, env)
+    op === population && return _lower_population(args, env)
+    op === Δ && return _lower_laplacian(args[1], env)
+    if op === cell_centroid
+        haskey(env.bind, :__cell) || error("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities")
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
+        return :(Potts._centroid_axis($(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]), $k))
+    end
+    if op === copy_displacement
+        env.mode === :proposal || error("`displacement(c, k)` is only available in drives and on-copy updates")
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+        return :(Potts._displacement_axis($(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k))
+    end
+    if op === cell_integral
+        haskey(env.bind, :__cell) || error("`integral(x)` is per cell: use it in cell updates, division conditions or observed quantities")
+        return :(Potts._cellval(st.cell.$(_integral_name(args[1])), $(env.bind[:__cell])))
+    end
+    if op === history_lag
+        haskey(env.bind, :mcs) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
+        _walk(args[1]) do y
+            i = info(y)
+            i !== nothing && i.role === :cell &&
+                error("`Pre($(i.name), k)`: lags of cell variables are not tracked; chain lag variables instead (`$(i.name)_1 ~ Pre($(i.name))`, `$(i.name)_2 ~ Pre($(i.name)_1)`, …)")
+        end
+        k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+        return _retarget_history(lower(args[1], env), env.bind[:mcs], k)
+    end
+    if op === random_uniform
+        haskey(env.bind, :__draw) || error("`rand()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))")
+        key, mcs, entity = env.bind[:__draw]
+        stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
+        return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
+    end
+    op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
+    # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
+    op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
+    op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
+    if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
+        e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
+        if e isa Integer || (e isa Real && isinteger(e))
+            return Expr(:call, :^, lower(args[1], env), Int(e))   # literal_pow, no float exponent
+        end
+    end
+    # float-valued functions compute in the model's scalar type (no Float64 from Int args)
+    if op in _FLOAT_OPS || op === (^)
+        return Expr(:call, op, map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...)
+    end
+    # `+`/`*` as left-associated binary calls: varargs calls above 32 arguments allocate
+    # (bitwise the same result: n-ary `+` is itself a left fold), D-014
+    if (op === (+) || op === (*)) && length(args) > 2
+        return foldl((a, b) -> Expr(:call, op, a, b), map(a -> lower(a, env), args))
+    end
+    return Expr(:call, op, map(a -> lower(a, env), args)...)
+end
+
+function _literal(v, env)
+    v isa Bool && return v
+    v isa Integer && return v
+    v isa Real && return env.T(v)
+    v isa Tuple && return Expr(:tuple, map(x -> _literal(x, env), v)...)
+    error("cannot lower constant $v")
+end
+
+function _lower_named(x, i::Info, env::LowerEnv)
+    r = i.role
+    r === :param && return :(p.$(i.name))
+    r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, kind′]`")
+    if r === :builtin || r === :delta
+        key = r === :delta ? Symbol(:δ, i.name) : i.name
+        haskey(env.bind, key) || error("`$(i.name)` is not available in $(_MODE_NAMES[env.mode])")
+        return env.bind[key]
+    end
+    if r === :site || r === :field
+        haskey(env.bind, :__site) || error("site variable `$(i.name)` needs a site: write `$(i.name)[target]` or `$(i.name)[source]`")
+        return :(@inbounds st.site.$(i.name)[$(env.bind[:__site])])
+    elseif r === :cell
+        haskey(env.bind, :__cell) || error("cell variable `$(i.name)` needs a cell: write `$(i.name)[new]` or `$(i.name)[owner[target]]`")
+        return :(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell])))
+    elseif r === :model
+        return :(@inbounds st.model.$(i.name)[1])
+    elseif r === :edge
+        haskey(env.bind, :__edge) || error("edge variable `$(i.name)` is only available in edge terms and link rules")
+        k, a = env.bind[:__edge]
+        return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
+    end
+    error("cannot lower `$x` (role $r)")
+end
+
+"""Site and model variable reads in `ex` → reads of their history ring `k` MCS back."""
+function _retarget_history(ex, mcs, k)
+    ex isa Expr || return ex
+    if ex.head === :. && (ex.args[1] == :(st.site) || ex.args[1] == :(st.model))
+        name = ex.args[2].value
+        return :(Potts._LagView(st.history.$name, $mcs, $k))
+    end
+    return Expr(ex.head, (_retarget_history(a, mcs, k) for a in ex.args)...)
+end
+
+"""Read-only linear view of the ring-buffer slot holding a lag (`CorePotts.history_slot`)."""
+struct _LagView{R}
+    ring::R
+    offset::Int
+end
+@inline function _LagView(ring, mcs, k)
+    depth = size(ring, ndims(ring))
+    return _LagView(ring, (CorePotts.history_slot(depth, Int(mcs), k) - 1) * (length(ring) ÷ depth))
+end
+Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
+
+"""Distinct site expressions `x` of `integral(x)` in the model's statements."""
+function _integrals(sys::PottsSystem)
+    out = Any[]
+    xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+        (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
+        (x for b in sys.discrete for x in b.next)...]
+    for x in xs
+        _walk(x) do y
+            iscall(y) && operation(y) === cell_integral || return
+            a = _unwrap(arguments(y)[1])
+            any(z -> isequal(z, a), out) || push!(out, a)
+        end
+    end
+    return out
+end
+
+"""Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
+_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+    (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+    (r.when for r in sys.link_rules)..., (x for b in sys.discrete for x in b.next)...])
+function _history_depths(xs::Vector{Any})
+    depths = Dict{Symbol, Int}()
+    for x in xs
+        _walk(x) do y
+            (iscall(y) && operation(y) === history_lag) || return
+            k = Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))
+            _walk(arguments(y)[1]) do z
+                i = info(z)
+                i !== nothing && i.role in (:site, :field, :model) && (depths[i.name] = max(get(depths, i.name, 0), k))
+            end
+        end
+    end
+    return depths
+end
+
+"""Centroid of cell `c` along axis `k` (0 for the medium and empty slots)."""
+@inline function _centroid_axis(::Type{T}, cell, lat, c, k) where {T}
+    (c == 0 || cell.volume[c] == 0) && return zero(T)
+    return CorePotts.centroid_position(T, cell, lat, Int(c))[k]
+end
+
+"""Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or new cell)."""
+@inline function _displacement_axis(::Type{T}, cell, lat, prop, c, k) where {T}
+    (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
+    return CorePotts.embed(lat, CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1))[k]
+end
+
+"""Integers (and `Bool`s) in the model's scalar type; other numbers (dual numbers of an
+implicit solver's Jacobian, already-typed floats) unchanged."""
+@inline _tofloat(::Type{T}, x::Integer) where {T} = T(x)
+@inline _tofloat(::Type{T}, x) where {T} = x
+
+"""
+Cartesian position of site `i` (D-043): the embedded lattice coordinates times the lattice
+spacing (on a square lattice with unit spacing, the coordinates themselves).
+"""
+@inline function _position(::Type{T}, ctx, i) where {T}
+    e = CorePotts.embed(ctx.lattice, map(T, CorePotts.coordinates(ctx.lattice, i)))
+    return haskey(ctx, :spacing) ? map((x, h) -> x * T(h), e, ctx.spacing) : e
+end
+
+"""Value of a cell array at `c`, zero for the medium (`c == 0`)."""
+@inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]
+"""Kind of cell `c` (`0` for the medium)."""
+@inline _cellkind(st, c) = c == 0 ? Int32(0) : Int32(@inbounds st.cell.kind[c])
+
+# Sort of an index expression: :site or :cell.
+function _sort(x)
+    x = _unwrap(x)
+    i = info(x)
+    if i !== nothing
+        i.role in (:bound, :bound_site) && return :site
+        i.role === :bound_cell && return :cell
+        i.role === :builtin && return i.name in (:source, :target, :site, :site′) ? :site :
+               i.name in (:old, :new, :owner, :owner′, :id, :a, :b) ? :cell : :unknown
+    end
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at
+        a = info(arguments(x)[1])
+        a !== nothing && a.role === :builtin && a.name === :owner && return :cell
+    end
+    return :unknown
+end
+
+# whether `x` is `at(_nonzero(v), …)` (or `at(Pre(_nonzero(v)), …)`): a Bool node read at an
+# index, which `_lower_at` lowers to a Bool already
+function _is_bool_node_read(x)
+    x = _unwrap(x)
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    a = _unwrap(arguments(x)[1])
+    iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
+    return iscall(a) && operation(a) === _nonzero
+end
+
+function _lower_at(args, env)
+    x = _unwrap(args[1])
+    # `Pre(x[i])` arrives as `at(Pre(x), i)`: the previous value is the stored one
+    iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
+    # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
+    iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
+    i = info(x)
+    i === nothing && error("cannot index `$(_standin_var(x))`")
+    idx = map(a -> lower(a, env), args[2:end])
+    if i.role === :kindtable
+        return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])
+    end
+    length(idx) == 1 || error("`$(i.name)` takes one index")
+    j = only(idx)
+    s = _sort(args[2])
+    if i.role === :site || i.role === :field
+        s === :cell && error("site variable `$(i.name)` indexed by a cell")
+        return :(@inbounds st.site.$(i.name)[$j])
+    elseif i.role === :cell
+        s === :site && error("cell variable `$(i.name)` indexed by a site; use `$(i.name)[owner[s]]`")
+        return :(Potts._cellval(st.cell.$(i.name), $j))
+    elseif i.role === :builtin
+        i.name === :owner && return :(@inbounds st.σ[$j])
+        if i.name === :position
+            haskey(env.bind, :position) || error("`position` is not available in $(_MODE_NAMES[env.mode])")
+            return :($(env.bind[:position])[$j])
+        end
+        if i.name === :kind
+            s === :site && return :(CorePotts.owner_kind(st, $j))
+            if haskey(env.bind, :__kind_of)                   # `kind[old]`/`kind[new]`: bound once
+                for (c, k) in env.bind[:__kind_of]
+                    j === c && return k
+                end
+            end
+            s === :cell && return :(Potts._cellkind(st, $j))
+            error("`kind[…]` needs a site (`source`, `target`) or a cell (`new`, `owner[s]`)")
+        end
+        i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
+        i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        if i.name === :cluster
+            s === :site && error("`cluster[…]` needs a cell; write `cluster[owner[s]]`")
+            return :(CorePotts.cluster_of(st.cell, $j))
+        end
+    end
+    error("cannot index `$(i.name)`")
+end
+
+# Fold over live cells (optionally of some kinds) or over all sites; the body sees the bound
+# cell/site as the implicit index (`volume`, `x`, `kind` refer to it).
+function _lower_population(args, env)
+    n, body, cond = args
+    ni = info(n)
+    T = env.T
+    nsym = Symbol(nameof(_unwrap(n)))
+    acc, cnt, flag, v = map(p -> Symbol(p, :_, nsym), (:acc, :cnt, :zero, :v))
+    bind = copy(env.bind)
+    if ni.role === :bound_cell
+        merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
+            :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
+            :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+            :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
+            :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
+            :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))))
+        range = :(1:length(st.cell.kind))
+        skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
+    else
+        merge!(bind, Dict{Symbol, Any}(:owner => :(@inbounds st.σ[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
+            :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
+        range = :(1:length(st.σ))
+        skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
+    end
+    inner = LowerEnv(T, env.mode, bind, env.relname)
+    op = ni.options.op
+    init, step, fin = if op === :sum
+        :(zero($T)), :($acc += $v), acc
+    elseif op === :mean
+        :(zero($T)), :($acc += $v), :($cnt == 0 ? zero($T) : $acc / $T($cnt))
+    elseif op === :minimum
+        :(typemax($T)), :($acc = min($acc, $T($v))), acc
+    elseif op === :maximum
+        :(typemin($T)), :($acc = max($acc, $T($v))), acc
+    elseif op === :count
+        :(Int32(0)), :($acc += Int32($v)), acc
+    elseif op === :any
+        false, :($acc |= $v), acc
+    elseif op === :all
+        true, :($acc &= $v), acc
+    end
+    return quote
+        let $acc = $init, $cnt = 0
+            for $nsym in $range
+                if $skip && $(lower(cond, inner))
+                    $v = $(lower(body, inner))
+                    $step
+                    $cnt += 1
+                end
+            end
+            $fin
+        end
+    end
+end
+
+function _lower_laplacian(c, env)
+    i = info(c)
+    (i !== nothing && i.role === :field) || error("`Δ` applies to field variables")
+    haskey(env.bind, :__site) || error("`Δ($(i.name))` needs a site")
+    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
+end
+
+function _lower_gather(args, env)
+    n, anchor, body, cond = args
+    _uses_builtin(anchor, :position) &&
+        error("a gather is anchored at a site: use `site` (the current site), `source` or `target`, not `position`")
+    ni = info(n)
+    spec = ni.options.relation
+    rel = spec isa RelationRef ? spec.name : env.relname[spec]
+    T = env.T
+    nsym = Symbol(nameof(_unwrap(n)))
+    # names derived from the (unique) bound variable: deterministic, so rebuilding a problem
+    # yields the same generated function and never recompiles
+    acc, cnt, flag, x0, y, k, v, ins = map(p -> Symbol(p, :_, nsym), (:acc, :cnt, :zero, :x0, :y, :k, :v, :in))
+    op = ni.options.op
+    init, step, fin = if op === :sum
+        :(zero($T)), :($acc += $v), acc
+    elseif op === :prod
+        :(one($T)), :($acc *= $v), acc
+    elseif op === :mean
+        :(zero($T)), :($acc += $v), :($cnt == 0 ? zero($T) : $acc / $T($cnt))
+    elseif op === :geomean
+        :(zero($T)), :(($v > 0 ? ($acc += log($T($v))) : ($flag = true))),
+        :(($cnt == 0 || $flag) ? zero($T) : exp($acc / $T($cnt)))
+    elseif op === :log1p_geomean
+        :(zero($T)), :($acc += log1p(max(zero($T), $T($v)))), :($cnt == 0 ? zero($T) : expm1($acc / $T($cnt)))
+    elseif op === :minimum
+        :(typemax($T)), :($acc = min($acc, $T($v))), acc
+    elseif op === :maximum
+        :(typemin($T)), :($acc = max($acc, $T($v))), acc
+    elseif op === :count
+        :(Int32(0)), :($acc += Int32($v)), acc
+    elseif op === :any
+        false, :($acc |= $v), acc
+    elseif op === :all
+        true, :($acc &= $v), acc
+    end
+    condc = lower(cond, env)
+    bodyc = lower(body, env)
+    return quote
+        let $x0 = CorePotts.coordinates(ctx.lattice, $(lower(anchor, env))), $acc = $init, $cnt = 0, $flag = false
+            for $k in 1:length(ctx.$rel)
+                $ins, $y = CorePotts.shift(ctx.lattice, $x0, @inbounds ctx.$rel.offsets[$k])
+                if $ins
+                    $nsym = CorePotts.linear_index(ctx.lattice, $y)
+                    if $condc
+                        $v = $bodyc
+                        $step
+                        $cnt += 1
+                    end
+                end
+            end
+            $fin
+        end
+    end
+end
+
+# ---------------------------------------------------------------------------------------
+# Analysis helpers
+
+"""All symbolic leaves and operations of `x` (depth-first), for validation and analysis."""
+function _walk(f, x)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return
+    f(x)
+    if iscall(x) && !(info(x) !== nothing && info(x).role in SCOPES)
+        foreach(a -> _walk(f, a), arguments(x))
+    end
+    return
+end
+
+"""Named quantities (by role) referenced in `x`."""
+function _uses(x)
+    out = Set{Tuple{Symbol, Symbol}}()
+    _walk(x) do y
+        i = info(y)
+        i === nothing || push!(out, (i.role, i.name))
+    end
+    return out
+end
+_uses_builtin(x, name) = (:builtin, name) in _uses(x)
+
+"""Gathers in `x`: (bound variable info, anchor)."""
+function _gathers(x)
+    out = Any[]
+    _walk(x) do y
+        iscall(y) && operation(y) === gather && push!(out, (info(arguments(y)[1]), arguments(y)[2]))
+    end
+    return out
+end
+
+_has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
