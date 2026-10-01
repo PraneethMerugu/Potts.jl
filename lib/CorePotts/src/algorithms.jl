@@ -41,7 +41,9 @@ end
 
 abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 
-# Potts dynamics advance in whole MCS: a discrete-time algorithm (D-075 Q9).
+# Potts dynamics advance in whole MCS: a discrete-time algorithm (D-075 Q2). Keep this
+# method when the planned `AbstractPottsAlgorithm <: AbstractDEAlgorithm` lands: it
+# overrides SciMLBase's default `false`.
 SciMLBase.isdiscrete(::CPMAlgorithm) = true
 
 """

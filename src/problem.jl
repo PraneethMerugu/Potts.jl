@@ -20,20 +20,6 @@ struct PottsModelInfo{C, E, DE, X}
 end
 
 """
-    PottsProblem(sys, op, tspan; T = Float64, capacity, seed = 0, replica = 0, repeat = 0,
-                 expression = Val(false))
-
-Build a `PottsProblem` from a `PottsSystem` (compiled with `mtkcompile` if
-needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
-`kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
-compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
-(scalars or arrays), parameters to values overriding their defaults, and a relationship's
-name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
-type of the generated code and state (use `Float32` on Metal). The generated code is
-`Potts.generated_code(sys; T)`.
-"""
-
-"""
     generated_code(sys; T = Float64)
 
 The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in scalar
@@ -49,6 +35,19 @@ function generated_code(sys; T::Type = Float64)
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
         delta_E = _delta_H_expr(c, T; drives = false), phases)
 end
+"""
+    PottsProblem(sys, op, tspan; T = Float64, capacity, seed = 0, replica = 0, repeat = 0,
+                 expression = Val(false))
+
+Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
+needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
+`kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
+compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
+(scalars or arrays), parameters to values overriding their defaults, and a relationship's
+name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
+type of the generated code and state (use `Float32` on Metal). The generated code is
+`Potts.generated_code(sys; T)`.
+"""
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
 end

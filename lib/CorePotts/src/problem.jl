@@ -6,8 +6,8 @@ const STATUS_NONFINITE = UInt32(1)
 
 """
     PottsProblem(f::CPMFunction, u0::CPMState, lattice, tspan, p;
-               contact = Moore(1), proposal = VonNeumann(1), relations = (;), seed = 0,
-               replica = 0, repeat = 0)
+                 contact = Moore(1), proposal = VonNeumann(1), relations = (;), seed = 0,
+                 replica = 0, repeat = 0)
 
 A cellular Potts problem. `tspan = (t0, t1)` in MCS. `frozen` (a Bool mask) marks sites
 that never change owner and never donate (walls, obstacles); an MCS is one attempt per
