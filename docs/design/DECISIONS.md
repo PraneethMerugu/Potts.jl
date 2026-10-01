@@ -1562,3 +1562,11 @@ session.
 - Generated code is unchanged for models without `integral(Pre(…))`: 75 of 81 fingerprints identical; the 6 that changed all use `integral(Pre)`.
 - Review: approved in round 1; the coordinator corrected the AUTHORING wording and the mixed-integral hint. Follow-ups: P6.0t (refresh waste), P6.0u (temperature location nit).
 
+
+## D-085 P6.0v: GPU host-transfer counters and audit (2026-10-01, P6.0v; user request)
+
+- **User (2026-10-01):** every synchronise, host↔device copy or host-side work during a Metal MCS must be either unavoidable or removed. P6.0v is the audit and the instrumentation; P6.0v1–v3 remove what the audit finds (ROADMAP).
+- **Counters.** `PottsStats` gains `syncs` (explicit `KernelAbstractions.synchronize`), `transfers` (host↔device copies; one contiguous array = 1, and each array leaf of an `Adapt.adapt(Array, …)` snapshot = 1) and `transfer_bytes` (`sizeof` of the device array copied). They are summed by `merge` and restored with checkpoints. Every such call in the step path goes through one helper that counts. Device→device copies and device `fill!` are not counted; on the CPU backend nothing is counted.
+- **Scope.** `step!` and the paths it reaches (lifecycle, `HostPhase`, `_AdaptiveODE`, refresh), plus saves and `integ.u` (counted; tests assert lower bounds only for those).
+- **Frozen acceptance** (`p6_0v_transfer_counters.jl`): exact long-term targets only. CPU counters are 0 on every gate model. On Metal, a quiet MCS costs 0/0/0 B on Graner–Glazier, Wortel Act and Merks, and exactly 1 sync / 1 transfer / 4 B (the D-035 event-count readback) on OpenVT, Akeeb and a division fixture. Event and `HostPhase` MCS: invariants only (≥ 1, non-decreasing), because P6.0v1/v2 change them. Exact current-path counts live in an ordinary, non-frozen regression test that later rows update.
+- **Audit document** `docs/design/research/gpu-host-transfer-audit.md`: every call site with when it fires, how much it moves, whether it is necessary, and its device-side replacement; codegen quality on Metal; the quiet-MCS baseline per gate model.

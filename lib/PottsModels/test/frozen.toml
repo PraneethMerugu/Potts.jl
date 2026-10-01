@@ -76,3 +76,8 @@ decision = "D-066"
 path = "acceptance/p6_0m3_integral_pre.jl"
 sha256 = "16c4218fd30cfeb423c8503a6b17d1c162a7bd799ea846b7a38149573e1f85e2"
 decision = "D-076"
+
+[[file]]
+path = "acceptance/p6_0v_transfer_counters.jl"
+sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
+decision = "D-085"
