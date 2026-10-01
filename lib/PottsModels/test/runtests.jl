@@ -50,7 +50,8 @@ end
         op = akeeb_state(; lattice = (99, 60))
         n0 = length(op[2].second)
         @test count(==(:follower), op[2].second) == 231 && 70 <= count(==(:leader), op[2].second) <= 77
-        prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 200); capacity = 1000)
+        # 300 MCS: divisions start near MCS 200 (0–5 by then, 40–74 by 300 over six state seeds)
+        prob = PottsProblem(AkeebInvasion(; name = :akeeb, lattice = (99, 60)), op, (0, 300); capacity = 1000)
         @test selfcheck(prob) < 1e-9
         sol = solve(prob, SequentialCPM(; proposal = VonNeumann(1)))
         u = sol.u[end]
@@ -77,20 +78,16 @@ end
         @test_throws ArgumentError graner_glazier_aggregate(200; seed = 1, margin = -1)
     end
     @testset "Akeeb seeding emulates the authors' CC3D loop (D-068, spec 10 §5.3.6)" begin
-        # the bare follower slab of `akeeb_state` at the published 500×300, slab 21
-        function slab()
-            σ = zeros(Int32, 500, 300); kinds = Symbol[]
-            for y in 1:3:21, x in 1:3:500
-                push!(kinds, :follower); σ[x:min(x + 2, 500), y:(y + 2)] .= length(kinds)
-            end
-            return σ, kinds
-        end
+        # the counted inventory of the leader layer at the published 500×300, slab 21
         n = 400
         painted, counted = zeros(Int, n), zeros(Int, n)
+        quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
         for s in 1:n
-            σ, kinds = slab()
-            counted[s] = PottsModels._seed_leaders!(σ, kinds, PottsModels.MersenneTwister(s), 21, false)
-            painted[s] = count(==(:leader), kinds)
+            point, tallies = quiet(() -> layout_tally(akeeb_layout(; seed = s), (500, 300)))
+            σ, kinds = point[1].second, point[2].second
+            t = only(tallies)
+            counted[s], painted[s] = t.counted, t.painted
+            @test count(==(:leader), kinds) == painted[s]
             @test sort(σ[σ .> 1169]) == 1170:(1169 + painted[s])             # one site per leader
         end
         # the spec owner's 20k-rep seeding simulation: 382.1 ± 2.7 painted, 7.9 ± 2.8 empty,
@@ -98,7 +95,7 @@ end
         @test abs(mean(painted) - 382.1) < 0.5
         @test abs(mean(counted .- painted) - 7.9) < 0.5
         @test all(>=(390), counted) && 0.93 < mean(counted .== 390) <= 0.995
-        # `akeeb_state` uses this loop; negative control: `:retry` paints exactly the quota
+        # `akeeb_state` paints this layout; negative control: `:retry` paints exactly the quota
         o = akeeb_state(; seed = 3)
         @test count(==(:follower), o[2].second) == 1169 && count(==(:leader), o[2].second) == painted[3]
         @test all(s -> count(==(:leader), akeeb_state(; seed = s, seeding = :retry)[2].second) == 390, 1:5)

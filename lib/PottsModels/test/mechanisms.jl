@@ -552,7 +552,7 @@ end
     @test all(m -> m.leader_mean_y > 28, on) && all(m -> m.leader_mean_y < 20, off)
     # CC3D connectivity keeps every cell in one piece under copies (the legacy `:merks` rule
     # split 4–6). Without clocks (pp = 0): a random-plane division may cut a non-convex
-    # follower into pieces, as in CC3D (2 of 30 seeds with pp = 0.5, D-068 seeding)
+    # follower into pieces, as in CC3D (2 of 30 seeds at 200 MCS and 28 of 30 at 300 with pp = 0.5)
     for seed in 1:3
         o = akeeb_state(; lattice = (99, 60), seed, pp = 0.0)
         u = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000, seed),
@@ -561,10 +561,11 @@ end
     end
     # with clocks, every cell that becomes split does so in an MCS where it took part in a
     # division: either a cell born that MCS took most of its sites from it (a split mother),
-    # or it was born that MCS with most of its sites from one cell (a split daughter)
-    newly = map((3, 5, 6, 24)) do seed
+    # or it was born that MCS with most of its sites from one cell (a split daughter).
+    # 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds hold a split cell
+    newly = map(1:4) do seed
         o = akeeb_state(; lattice = (99, 60), seed)
-        sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 200); capacity = 1000,
+        sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 300); capacity = 1000,
             seed), SequentialCPM(; proposal = VonNeumann(1)); saveat = 1)
         n = 0
         for t in 2:length(sol.u)
