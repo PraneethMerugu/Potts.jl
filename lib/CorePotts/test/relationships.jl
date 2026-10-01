@@ -12,6 +12,8 @@ function brute_link_energy(σ, lat, cell, E)
     return H
 end
 
+link_delta_allocs(T, cell, ctx, prop, E) = @allocated link_delta(T, cell, ctx, prop, E)   # function barrier
+
 @testset "relationships" begin
     @testset "link bookkeeping" begin
         cell = empty_links(2, 4; rest = Float64)
@@ -56,6 +58,41 @@ end
             checked >= 200 && break
         end
         @test checked >= 100 && pair_checked >= 5
+    end
+
+    @testset "link_delta skips a dead partner (D-066 item 5, P6.0l)" begin
+        # cells 1 and 2 alive and linked; cell 3 linked to 1 but owns no site (copy-killed):
+        # volume 0, so its centroid is 0/0. Its link must contribute nothing.
+        lat = Lattice((40, 30))
+        σ = zeros(Int32, 40, 30); σ[8:13, 12:17] .= 1; σ[24:27, 13:16] .= 2
+        for T in (Float64, Float32)
+            cell = merge(init_moments(σ, lat, 3), empty_links(2, 3; rest = T))
+            add_link!(cell, 1, 2; rest = T(12)); add_link!(cell, 1, 3; rest = T(5))
+            st = initial_state(σ, [1, 1, 1]; cell)
+            @test st.cell.volume[3] == 0 && linked(st.cell, 1, 3)
+            free = deepcopy(st); remove_incident!(free.cell, 3)
+            E(a, b, k, d) = T(0.7) * (d - st.cell.link_rest[k, a])^2
+            Ef(a, b, k, d) = T(0.7) * (d - free.cell.link_rest[k, a])^2
+            ctx = (; lattice = lat, proposal = relation(Moore(1), lat))
+            checked = 0
+            for t in 1:nsites(lat), dir in 1:length(ctx.proposal)
+                inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
+                inside || continue
+                s = linear_index(lat, y)
+                a, b = st.σ[t], st.σ[s]
+                (a != b && (a == 1 || b == 1)) || continue
+                prop = Proposal(t, s, coordinates(lat, t), dir, a, b)
+                dH = link_delta(T, st.cell, ctx, prop, E)
+                @test dH isa T && isfinite(dH)
+                @test dH ≈ link_delta(T, free.cell, ctx, prop, Ef) atol = (T === Float32 ? 1e-3 : 1e-9)
+                checked += 1
+            end
+            @test checked > 20
+            # device-shaped: no allocation
+            prop = Proposal(LinearIndices(σ)[14, 14], LinearIndices(σ)[13, 14], (14, 14), 1, Int32(0), Int32(1))
+            link_delta_allocs(T, st.cell, ctx, prop, E)
+            @test link_delta_allocs(T, st.cell, ctx, prop, E) == 0
+        end
     end
 
     @testset "a spring pulls linked cells to its rest length" begin

@@ -1583,3 +1583,15 @@ The maintainer approved F-1…F-6 (D-049).
   - None of these three models has ODEs or a field, so their generated code is unchanged.
 - **Follow-ups.** P6.0c2 (filed).
 - **Note.** The disk filled up during the parallel batch. With the user's approval, the Julia 1.10/1.11 precompile caches (about 22 GB) were removed.
+
+## 2026-10-01 — P6.0l merged: links to a copy-killed partner (D-079)
+
+- **The change.** A link to a partner killed by a copy no longer reads 0/0. `link_delta` and `total_energy` skip volume-0 partners, and each `@link`/`@unlink` phase drops dead cells' links first (D-079).
+- **Review.** Approved in round 1. D-066 item 4 (the killing copy's ΔH misses the edge credit) is filed as P6.0r.
+- **Published models.** Generated code unchanged after canonicalising (D-070).
+- **Merge checks.** CorePotts (QA), PottsModels, MakiePotts, docs, Potts on Metal and CorePotts on Metal all exit 0.
+- **Gate.** It ran under parallel-agent load: CPU flagged Graner–Glazier sequential (1.067) and Wortel checkerboard (1.066); Metal flagged four cases at 1.5–2.9. `ab.jl` against 75daa0c settled all six:
+  - Metal: Wortel 1.035, Merks 1.001, OpenVT 1.015, Akeeb 1.000 (8 rounds);
+  - CPU: Graner–Glazier sequential 0.990, Wortel checkerboard 1.000 (6 rounds).
+- **Tooling.** `ab.jl` starves other `exclusive.sh` waiters; filed as P6.0s. `ab.jl` needs absolute checkout paths.
+

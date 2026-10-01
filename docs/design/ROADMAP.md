@@ -200,7 +200,7 @@ Every item's acceptance also includes the standing checks:
   - `_check_internal_suffix` misses component unknowns (`comp₊x__ode`), `:vector` option names and observed names.
   - Closure canonical strings embed the closure type name (`#12#13`). This is conservative, but makes fingerprints session-dependent for closure-carrying kwargs.
   - Add a script that compares fingerprints across a `git archive` copy (as the coordinator did at merge).
-- [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
+- [x] (merge, 2026-10-01; D-079) **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
   linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
   NaN, `accept` rejects every copy touching the partner so it freezes silently, and
   `total_energy` is NaN. Links are dropped only on `EVENT_REMOVE` (`lifecycle.jl:358`).
@@ -218,6 +218,15 @@ Every item's acceptance also includes the standing checks:
   - Accept: fingerprints of models without clocked components are unchanged.
 - [ ] **P6.0q** An unhoisted population fold that reads `time` inside a cell ODE fails to compile for Metal (`InvalidIRError`, `jl_new_opaque_closure_jlcall`), with or without the P6.0n fix. Found by the P6.0n test author. A fold that reads `mcs` is hoisted and runs on Metal.
   - Accept: the P6.0n fold fixture runs on Metal and matches the CPU in Float32.
+- [ ] **P6.0r** D-066 item 4 (from the P6.0l review).
+  - `total_energy` sums cell and cluster terms over alive cells only, and the killing copy's ΔH credits the dead cell's edge energy.
+  - The self-check helpers get the same credit: `selfcheck` in `lib/PottsModels/test/runtests.jl:7-25`, `test/symbolic.jl:141` and `test/audit.jl:473`.
+  - Add a Metal test in which the partner is killed during the run (`lib/CorePotts/test/gpu.jl:264-293` only has a partner that is dead from the start).
+  - Accept: for every copy, including a killing copy, ΔH equals the H difference on a linked model.
+- [ ] **P6.0s** Fair machine lock (tooling; found 2026-10-01).
+  - `benchmark/ab.jl` takes `tools/exclusive.sh` per process and re-takes it at once, so a waiter polling every 20 s starved for the whole A/B (a P6.0n Metal suite waited about 40 minutes).
+  - Fix: `ab.jl` holds one lock for all its rounds (its per-run calls skip the lock when the holder is the parent), or the lock becomes a ticket queue.
+  - Accept: a waiter queued before an A/B starts runs before the A/B's second round.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes).
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:

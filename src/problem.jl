@@ -455,7 +455,9 @@ energy_change(prob::CorePotts.PottsProblem, u, prop) = prob.f.sys.delta_E(u, pro
 The authored Hamiltonian `H` of state `u` (brute force, host). Generated from the same
 terms as the model's ΔH, so `ΔH == H(after) − H(before)` is a self-check. Cell terms sum
 over every cell slot: an emptied cell keeps contributing `E(volume = 0)`, as in the ΔH of
-the copy that emptied it (legacy and CompuCell3D semantics).
+the copy that emptied it (legacy and CompuCell3D semantics). Edge terms sum over links
+whose two ends are both alive (`volume > 0`): a copy-killed partner's links add nothing
+(D-066 item 5).
 """
 function total_energy(prob::CorePotts.PottsProblem, u = prob.u0)
     info = prob.f.sys

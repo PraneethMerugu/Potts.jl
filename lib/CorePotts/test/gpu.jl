@@ -261,6 +261,37 @@ using Metal
         end
     end
 
+    @testset "link_delta skips a dead partner on Metal (P6.0l)" begin
+        # the spring of the previous testset, plus cell 3: linked to cell 1 but owning no
+        # site (copy-killed, volume 0, centroid 0/0). The kernel skips it: ΔH stays finite.
+        latD = Lattice((60, 30))
+        σD = zeros(Int32, 60, 30); σD[5:10, 12:17] .= 1; σD[40:45, 12:17] .= 2
+        cellD = merge(init_moments(σD, latD, 3), empty_links(2, 3; rest = Float32))
+        add_link!(cellD, 1, 2; rest = 12.0f0); add_link!(cellD, 1, 3; rest = 3.0f0)
+        function dHD(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            E(v, c) = p.λ * (v - p.V0)^2
+            S(a, b, k, d) = p.k * (d - st.cell.link_rest[k, a])^2
+            return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+                   link_delta(Float32, st.cell, ctx, prop, S)
+        end
+        commitD!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx.lattice, prop))
+        f = CPMFunction(dHD; commit! = commitD!, temperature = gg_temperature,
+            claims = (st, p, prop, ctx) -> link_claims(st.cell, prop, Val(2)))
+        pD = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = 2.0f0)
+        st0 = initial_state(σD, [1, 1, 1]; cell = cellD)
+        @test st0.cell.volume[3] == 0
+        ds = map(1:4) do seed
+            sol = solve(PottsProblem(f, st0, latD, (0, 1000), pD; seed), CheckerboardCPM(); backend)
+            @test sol.retcode == ReturnCode.Success                 # a NaN ΔH would fail the run
+            u = sol.u[end]
+            @test u.σ != σD && u.cell.volume[3] == 0
+            @test linked(u.cell, 1, 3)                              # no boundary here: the skip suffices
+            centroid_distance(Float64, u.cell, latD, 1, 2)
+        end
+        @test abs(mean(ds) - 12.0) < 2.5                            # the live spring still acts
+    end
+
     @testset "checkpoint continuation on Metal" begin
         σc, kc = blocks((48, 48), 6)
         latc = Lattice((48, 48))

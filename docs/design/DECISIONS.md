@@ -1534,3 +1534,20 @@ session.
   - Rounds 2–3 blocker: build-dependent fingerprints. The last residual, nested `+`
     grouping, was fixed by the coordinator with the round-3 reviewer's verified patch.
   - Follow-ups are in P6.0c2.
+
+## D-079 P6.0l: links to a copy-killed partner (2026-10-01, P6.0l; implements D-066 item 5)
+
+- **The skip.**
+  - `link_delta` loads the partner's volume once. It skips the partner when the volume is 0, and otherwise computes the centroid from that same load (`_centroid`), so a race can never divide 0 by 0.
+  - `total_energy` sums an edge only when both ends have volume > 0.
+- **Boundary (c).** Each `@link`/`@unlink` host phase first drops every link of a volume-0 cell, before any condition is evaluated or any link created.
+- **Boundary (a) is met by slot reuse.** The lifecycle plan clears the link rows of every daughter slot before any sweep, so a stale link never reaches a new occupant. Otherwise, links of a copy-killed cell persist, and are skipped, until a (c) boundary or reuse. The store is a fixed `maxdeg × capacity` matrix, so this does not grow it.
+- **Checkerboard.**
+  - Generated models claim link partners (`link_claims`), so there is no race.
+  - A hand-written model without `link_claims` may read a racing partner's moments one colour stale, but never 0/0.
+- **Open: D-066 item 4** (P6.0r).
+  - Cell and cluster terms of `total_energy` still sum over every slot.
+  - The killing copy's ΔH differs from the H difference by exactly item 4's edge credit (reviewer probe: 4.56 and 146.55, error ≤ 3e-14). Copies after the death match exactly.
+  - The self-check helpers do not credit it yet.
+- **Unchanged code.** The generated code of the six published models is unchanged once operand order is canonicalised (D-070).
+- **ROADMAP correction.** Before this fix the solve ended with `Failure` (`STATUS_NONFINITE`) within about one MCS of the death, rather than freezing silently as the ROADMAP row said.
