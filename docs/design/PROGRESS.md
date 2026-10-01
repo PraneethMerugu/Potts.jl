@@ -1676,3 +1676,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge fix.** P6.0v's raw-transfer allowlist pinned `src/layouts.jl` at 3; the rewrite leaves 2 (Frame masks, setup only).
 - **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs and Potts on Metal exit 0.
 - **Gate: pass.** CPU 0.991–1.032. Metal rows all flagged together (1.52–2.07) while agents ran, as on the previous merge; this change has no device code.
+
+## 2026-10-01 — P6.1a7 merged: `Scattered` overlap test on an occupancy mask (D-094)
+
+- **The change.** `Scattered` tests each draw against a BitArray mask of its region (the draw's box grown by `gap`, split at a periodic wrap) instead of every box placed so far: O(box) per draw, no allocation per draw. Same draws and decisions: σ, kinds and reports identical to before.
+- **Review.** One round, approved: 2·10⁶ random decisions and 10⁵ random layouts identical to the old pairwise test; coordinator nits (comment wording, a long line).
+- **Numbers.** 10⁴ cubes of 5³ at 200³: 17 ms closed and periodic (was 480 and 860 ms); per-box time at 4·10⁴ vs 4·10³ squares: 1.2× (was 9.9×).
+- **Merge checks.** Host-only layout code: PottsModels (P6.1a7 126/126), Potts and docs exit 0. No gate case paints with `Scattered`; gate not rerun.

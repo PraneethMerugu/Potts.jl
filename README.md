@@ -9,8 +9,8 @@ using Potts, PottsModels, MakiePotts, CairoMakie
 σ0, k0 = graner_glazier_state()                      # a 64-cell aggregate of two kinds
 gg = GranerGlazier(; name = :gg, lattice = size(σ0)) # Graner & Glazier (1992) cell sorting
 prob = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 200); seed = 1)
-sol = solve(prob, SequentialCPM())
-pottsplot(renderframe(sol.u[end]))                    # the sorted aggregate
+sol = solve(prob, SequentialCPM(); saveat = 2)
+record_potts("cell_sorting.mp4", sol; framerate = 15) # a video of the sorting
 ```
 
 This repository holds four Julia packages:
