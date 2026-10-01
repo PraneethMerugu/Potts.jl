@@ -1,0 +1,24 @@
+algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
+backend = "CPU"
+caption = "Paper run — Merks et al. (2006) vasculogenesis, constructor defaults (contact_inhibited = false): 282 cells (merks_state) on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1. Differences from the authors' setup: cell size A = 50, λ = 25 here vs A = 100, λ = 50 (longcells.par); zero-flux field boundary here vs an absorbing c = 0 ring; free closed walls here vs a frozen border with J_cB = 100; hard connectivity veto vs the E₀ penalty; 2 field substeps vs 15."
+date = "2026-10-01T18:07:25.353"
+deviations = "Shipped constructor defaults, not yet the D-050 2006 set: A = 50, λ = 25, L = 30 px (longcells.par: A = 100, λ = 50; paper L ≈ 50 px); zero-flux field boundary (authors: absorbing c = 0 ring); free closed walls (paper: frozen border, J_cB = 100); hard one-arc connectivity veto (paper: E₀ > 2000 penalty); fewest stable field substeps (2) instead of 15; initial cells 7×7 squares (paper unstated). Observed: a sparse network forms by ~1000-2000 MCS, then breaks into islands; the paper's stable polygonal network is not reproduced."
+field_solver = "ExplicitEuler(substeps = 2, lower = 0.0)"
+framerate = 24
+frames = 241
+git_commit = "e5aade2e"
+initial_state = "merks_state(; seed = 1): 282 square 7×7 cells in the central 333×333 of 500×500"
+julia = "1.12.6"
+lattice = [500, 500]
+model = "MerksVasculogenesis"
+paper = "Merks et al., Dev. Biol. 289, 44 (2006), Figs. 4-5"
+record_wall_s = 453.7
+recorded_mcs = [0, 6000]
+save_every_mcs = 25
+script = "docs/paper_runs/merks_vasculogenesis.jl"
+seed = 1
+solve_wall_s = 549.9
+threads = 1
+title = """Merks et al. (2006) vasculogenesis — 500×500, 282 cells, 6000 MCS (50 h), seed 1\none frame every 25 MCS (12.5 min)"""
+tspan = [0, 6000]
+video_mb = 3.91
