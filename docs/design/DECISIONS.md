@@ -1551,3 +1551,11 @@ session.
   - The self-check helpers do not credit it yet.
 - **Unchanged code.** The generated code of the six published models is unchanged once operand order is canonicalised (D-070).
 - **ROADMAP correction.** Before this fix the solve ended with `Failure` (`STATUS_NONFINITE`) within about one MCS of the death, rather than freezing silently as the ROADMAP row said.
+
+## D-081 P6.0d: the frozen-kind mask follows lifecycle events (2026-10-01, P6.0d; coordinator)
+
+- **Where.** The mobility mask is refreshed by CorePotts' integrator after `run_lifecycle!` on every MCS that had lifecycle events (transitions, divisions, removals), through the existing `remake_frozen(f.sys, prob, state)` hook. Not in Potts' generated lifecycle: CorePotts' own `Lifecycle(trigger; kind)` transitions must be covered, and P6.4c's `@transition` then inherits the fix.
+- **Cost.** Nothing on quiet MCS (`run_lifecycle!` already returns early); one O(sites) pass on MCS with events, which already synchronise with the host (D-035).
+- **Count.** The number of mobile sites may change, so it can no longer be a constant of the integrator context; `reinit!` accepts a state whose frozen-site count differs.
+- **Callbacks.** A `DiscreteCallback` that writes `kind` directly is not tracked; it must call the public refresh (or `reinit!`). Not pinned by the frozen test.
+- **Acceptance** (frozen `p6_0d_frozen_kind_mask.jl`): a cell that becomes frozen by a transition never moves again; a released cell moves; the negative control (a transition to an unfrozen kind) keeps moving. Sequential and Checkerboard. The fixture installs a CorePotts `Lifecycle` with `remake(prob; f = g)` because Potts has no symbolic transition before P6.4c.
