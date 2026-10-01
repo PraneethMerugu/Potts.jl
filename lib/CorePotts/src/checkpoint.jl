@@ -26,7 +26,7 @@ end
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
-        prob.repeat, Adapt.adapt(Array, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
+        prob.repeat, _adapt_host(integ.stats, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
 end
 
 """Write a checkpoint to `path` (Julia `Serialization`; same package versions to read)."""
@@ -59,7 +59,7 @@ allocation of device storage), clearing saved values, statistics and the return 
 """
 function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         t0::Integer = integ.prob.tspan[1])
-    KernelAbstractions.synchronize(integ.backend)
+    _sync!(integ.stats, integ.backend)            # reset below with the statistics
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
     _same_shape(integ.state, u0) || throw(ArgumentError(
@@ -74,7 +74,7 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     _restore_stats!(integ.stats, PottsStats())
     integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> c === nothing || fill!(c, 0), (integ.cache.claims..., integ.cache.wclaims...)))
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
     end

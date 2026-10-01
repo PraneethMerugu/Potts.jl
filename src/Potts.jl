@@ -7,7 +7,6 @@ Models are authored as a global Hamiltonian with `@potts_model` (see
 """
 module Potts
 
-using Adapt: Adapt
 # The bare `using CorePotts` only backs the re-export loop below (`export $name` needs each
 # exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
 # explicitly on the next line (ExplicitImports, P6.0j).

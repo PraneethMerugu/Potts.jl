@@ -214,6 +214,9 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :RelationSpec,        # relation dispatch in the `Around` vocabulary
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
+    :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
+    :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
+    :_adapt_host,         # counted `Adapt.adapt(Array, …)` (D-085)
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
     :no_claims,           # the no-claim-set default

@@ -588,13 +588,16 @@ struct _AdaptiveODE{F, A, K}
     lock::ReentrantLock
 end
 
-function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
-    KernelAbstractions.synchronize(backend)
+(ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend) = CorePotts._run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+
+# `stats`: the integrator's `PottsStats`, counting the host copies (D-085)
+function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, stats)
+    CorePotts._sync!(stats, backend)
     owner = st.σ                                   # identifies the trajectory
-    cpu = backend isa CorePotts.CPU
-    host = cpu ? st : CorePotts._snapshot(backend, st)
-    hp = cpu ? p : Adapt.adapt(Array, p)
-    hctx = merge(ctx, (; lattice = CorePotts.host_lattice(ctx.lattice)))
+    cpu = backend isa KernelAbstractions.CPU
+    host = cpu ? st : CorePotts._snapshot(stats, backend, st)
+    hp = cpu ? p : CorePotts._adapt_host(stats, p)
+    hctx = merge(ctx, (; lattice = CorePotts.host_lattice(stats, ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
     outs = [getfield(part, n) for n in ph.outs]
@@ -640,7 +643,7 @@ function (ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend)
     end
     if !cpu
         dst = ph.scope === :cell ? st.cell : st.model
-        foreach(n -> copyto!(getfield(dst, n), getfield(part, n)), ph.outs)
+        foreach(n -> CorePotts._copy!(stats, getfield(dst, n), getfield(part, n)), ph.outs)
     end
     return 0
 end
@@ -887,7 +890,9 @@ struct _Gated{P}
 end
 _Gated(every::Integer, phase) = _Gated(every, 0, phase)
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
-    mcs % g.every == g.offset ? g.phase(st, p, ctx, key, mcs, backend) : 0
+    CorePotts._run_phase(g, st, p, ctx, key, mcs, backend, nothing)
+CorePotts._run_phase(g::_Gated{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
+    mcs % g.every == g.offset ? CorePotts._run_phase(g.phase, st, p, ctx, key, mcs, backend, stats) : 0
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)

@@ -102,6 +102,11 @@ Base.@kwdef mutable struct PottsStats
     attempts::Int = 0
     accepted::Int = -1          # -1: not counted by this algorithm (checkerboard)
     launches::Int = 0
+    # host↔device traffic (D-085; never counted on the CPU): explicit synchronizations,
+    # host↔device array copies, and the bytes they moved
+    syncs::Int = 0
+    transfers::Int = 0
+    transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
 end
 
@@ -142,7 +147,8 @@ function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
     return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
-        launches = a.launches + b.launches, lifecycle = l)
+        launches = a.launches + b.launches, syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
+        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -185,7 +191,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback))
     integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
     end
@@ -247,14 +253,12 @@ end
 """
 Host snapshot of the current state: independent of the live state on every backend
 (`Adapt.adapt(Array, …)` alone would alias host arrays). Synchronizes the device. The live
-device state is `integ.state`.
+device state is `integ.state`. Counted in `integ.stats` (D-085).
 """
 function current_state(integ::PottsIntegrator)
-    KernelAbstractions.synchronize(integ.backend)
-    return _snapshot(integ.backend, integ.state)
+    _sync!(integ.stats, integ.backend)
+    return _snapshot(integ.stats, integ.backend, integ.state)
 end
-_snapshot(backend, st) = Adapt.adapt(Array, st)
-_snapshot(::KernelAbstractions.CPU, st) = deepcopy(st)
 
 function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :u && return current_state(integ)
@@ -270,7 +274,7 @@ end
 
 function _check_status!(integ::PottsIntegrator)
     integ.alg isa CheckerboardCPM || return integ.retcode
-    st = _readback(integ.cache.status)
+    st = _readback(integ.stats, integ.cache.status)
     st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     return integ.retcode
 end
@@ -281,7 +285,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     lat = integ.ctx.lattice
     phases = integ.f.phases
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     if integ.alg isa SequentialCPM
         acc, status = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t)
@@ -292,13 +296,13 @@ function CommonSolve.step!(integ::PottsIntegrator)
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
     end
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     if integ.f.lifecycle !== nothing
         integ.stats.launches += run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
-            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
+            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats)
     end
     integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend)
+        integ.key, integ.t, integ.backend, integ.stats)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += nmobile(integ.ctx.mobility, lat)
@@ -372,6 +376,7 @@ end
 
 function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
+    dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end
@@ -437,14 +442,16 @@ function Base.getindex(st::CPMState, i::StateIndex)
     a = _state_array(st, i)
     return i.scope === :model ? only(Array(a)) : a
 end
-function Base.setindex!(st::CPMState, v, i::StateIndex)
+Base.setindex!(st::CPMState, v, i::StateIndex) = _set_state_array!(nothing, st, v, i)
+# `stats`: the integrator's `PottsStats` counting the host→device copy (D-085), or `nothing`
+function _set_state_array!(stats, st::CPMState, v, i::StateIndex)
     a = _state_array(st, i)
     if v isa Number
         fill!(a, convert(eltype(a), v))      # a Float64 must not reach a Float32 device array
     else
         size(v) == size(a) ||
             throw(DimensionMismatch("$(i.scope) variable $(i.name) has size $(size(a)); got $(size(v))"))
-        copyto!(a, convert(Array{eltype(a)}, v))
+        _copy!(stats, a, convert(Array{eltype(a)}, v))
     end
     return v
 end
@@ -462,8 +469,8 @@ end
 # snapshot) and take effect from the next MCS. A problem's parameters are immutable (isbits):
 # change them with `remake`.
 function SymbolicIndexingInterface.set_state!(integ::PottsIntegrator, v, i::StateIndex)
-    KernelAbstractions.synchronize(integ.backend)
-    integ.state[i] = v
+    _sync!(integ.stats, integ.backend)
+    _set_state_array!(integ.stats, integ.state, v, i)
     return v
 end
 function SymbolicIndexingInterface.set_parameter!(integ::PottsIntegrator, v, i)

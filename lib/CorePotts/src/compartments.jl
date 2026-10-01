@@ -169,19 +169,19 @@ _has_clusters(st) = haskey(st.cell, :cluster)
 
 # Re-root clusters after lifecycle events (a root may have been removed or emptied) and
 # make free slots their own cluster. Host arrays.
-function _fix_clusters!(st)
-    cl = Array(st.cell.cluster)
-    _normalize_clusters!(cl, _live(Array(st.σ), length(cl)); kind = Array(st.cell.kind))
-    copyto!(st.cell.cluster, cl)
+function _fix_clusters!(stats, st)
+    cl = _to_host(stats, st.cell.cluster)
+    _normalize_clusters!(cl, _live(_to_host(stats, st.σ), length(cl)); kind = _to_host(stats, st.cell.kind))
+    _copy!(stats, st.cell.cluster, cl)
     return nothing
 end
 
-function _rebuild_cluster_trackers!(st, σ, ctx)
+function _rebuild_cluster_trackers!(stats, st, σ, ctx)
     haskey(st.cell, :cluster_volume) || haskey(st.cell, :cluster_surface) || return nothing
-    cl = Array(st.cell.cluster)
-    haskey(st.cell, :cluster_volume) && copyto!(st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
+    cl = _to_host(stats, st.cell.cluster)
+    haskey(st.cell, :cluster_volume) && _copy!(stats, st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
     if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
-        copyto!(st.cell.cluster_surface, _recompute_cluster_surface(eltype(st.cell.cluster_surface),
+        _copy!(stats, st.cell.cluster_surface, _recompute_cluster_surface(eltype(st.cell.cluster_surface),
             σ, cl, ctx.lattice, ctx.surface))
     end
     return nothing
@@ -190,20 +190,21 @@ end
 # Cluster-mode division plan: the host evaluates `normal` for each dividing root on the
 # cluster's own moments, and every member splits along that plane through the cluster
 # centroid (`bias[m]` = (member centroid − cluster centroid) · normal).
-function _cluster_planes!(normals, bias, lc, st, p, ctx, key, mcs, roots, members)
-    lat = host_lattice(ctx.lattice)
+function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots, members)
+    lat = host_lattice(stats, ctx.lattice)
     ctx = merge(ctx, (; lattice = lat))
     N = ndims(lat)
     T = eltype(normals)
-    σ = Array(st.σ)
-    cl = Array(st.cell.cluster)
+    σ = _to_host(stats, st.σ)
+    cl = _to_host(stats, st.cell.cluster)
     cap = length(cl)
     σK = map(s -> s == 0 ? Int32(0) : cl[s], σ)
     mK = init_moments(σK, lat, cap)
     cellK = merge(mK, (; volume = recompute_cluster_volume(σ, cl),
-        generation = Array(st.cell.generation), kind = Array(st.cell.kind), cluster = cl))
+        generation = _to_host(stats, st.cell.generation), kind = _to_host(stats, st.cell.kind), cluster = cl))
     stK = (; σ = σK, cell = cellK)
-    cell = (; volume = Array(st.cell.volume), anchor = Array(st.cell.anchor), m1 = Array(st.cell.m1))
+    cell = (; volume = _to_host(stats, st.cell.volume), anchor = _to_host(stats, st.cell.anchor),
+        m1 = _to_host(stats, st.cell.m1))
     nh = zeros(T, N, cap); bh = zeros(T, cap)
     for r in roots
         n = lc.cluster_normal(stK, p, ctx, key, mcs, Int32(r))
@@ -219,6 +220,6 @@ function _cluster_planes!(normals, bias, lc, st, p, ctx, key, mcs, roots, member
             bh[m] = s
         end
     end
-    copyto!(normals, nh); copyto!(bias, bh)
+    _copy!(stats, normals, nh); _copy!(stats, bias, bh)
     return nothing
 end
