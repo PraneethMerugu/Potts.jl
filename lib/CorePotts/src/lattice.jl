@@ -106,10 +106,10 @@ end
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
 """The lattice with its domain mask on the host (for host code given a device context)."""
-host_lattice(l::Lattice) = host_lattice(nothing, l)
+host_lattice(l::Lattice) = _host_lattice(nothing, l)
 # `stats` counts the mask copy (D-085; `_adapt_host`), or `nothing`
-host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
-host_lattice(stats, l::Lattice) = _adapt_host(stats, l)
+_host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
+_host_lattice(stats, l::Lattice) = _adapt_host(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 nsites(l::Lattice) = prod(l.dims)

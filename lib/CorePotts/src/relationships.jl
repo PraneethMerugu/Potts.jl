@@ -226,7 +226,7 @@ function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) wher
     mcs % ph.every == 0 || return 0
     _sync!(stats, backend)
     host = _snapshot(stats, backend, st)
-    ph.f!(host.cell, host, p, merge(ctx, (; lattice = host_lattice(stats, ctx.lattice))), mcs)
+    ph.f!(host.cell, host, p, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
     foreach(keys(st.cell)) do name
         _copy!(stats, getfield(st.cell, name), getfield(host.cell, name))
     end

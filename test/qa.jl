@@ -217,6 +217,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
     :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
     :_adapt_host,         # counted `Adapt.adapt(Array, …)` (D-085)
+    :_host_lattice,       # counted host copy of the lattice's domain mask (D-085)
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
     :no_claims,           # the no-claim-set default

@@ -597,7 +597,7 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
     cpu = backend isa KernelAbstractions.CPU
     host = cpu ? st : CorePotts._snapshot(stats, backend, st)
     hp = cpu ? p : CorePotts._adapt_host(stats, p)
-    hctx = merge(ctx, (; lattice = CorePotts.host_lattice(stats, ctx.lattice)))
+    hctx = merge(ctx, (; lattice = CorePotts._host_lattice(stats, ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
     outs = [getfield(part, n) for n in ph.outs]

@@ -440,7 +440,7 @@ end
 _state_array(st::CPMState, i::StateIndex) = getfield(getfield(st, i.scope), i.name)
 function Base.getindex(st::CPMState, i::StateIndex)
     a = _state_array(st, i)
-    return i.scope === :model ? only(Array(a)) : a
+    return i.scope === :model ? only(_to_host(nothing, a)) : a      # user read: not counted
 end
 Base.setindex!(st::CPMState, v, i::StateIndex) = _set_state_array!(nothing, st, v, i)
 # `stats`: the integrator's `PottsStats` counting the host→device copy (D-085), or `nothing`

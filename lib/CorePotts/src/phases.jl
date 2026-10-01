@@ -179,10 +179,12 @@ _run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing) =
 """
     _run_phase(phase, st, p, ctx, key, mcs, backend, stats)
 
-Run one phase: `phase(st, p, ctx, key, mcs, backend)`. A phase that copies between the host
-and a device (`HostPhase`, a symbolic layer's host phases) adds a method that routes its
-copies through the counted helpers (`_sync!`, `_to_host`, `_copy!`, `_snapshot`) with
-`stats`; a wrapper phase forwards `stats` to the phase it wraps.
+Internal: run one phase, `phase(st, p, ctx, key, mcs, backend)`, with the integrator's
+transfer counters. Not an extension point for users: host work in a phase goes through the
+public `HostPhase`, which counts its copies. CorePotts' and Potts' own phases that copy
+between the host and a device add a method that routes the copies through the counted
+helpers (`_sync!`, `_to_host`, `_copy!`, `_snapshot`); a wrapper phase forwards `stats` to
+the phase it wraps.
 """
 _run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx, key, mcs, backend)
 

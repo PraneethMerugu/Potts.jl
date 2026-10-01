@@ -191,7 +191,7 @@ end
 # cluster's own moments, and every member splits along that plane through the cluster
 # centroid (`bias[m]` = (member centroid − cluster centroid) · normal).
 function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots, members)
-    lat = host_lattice(stats, ctx.lattice)
+    lat = _host_lattice(stats, ctx.lattice)
     ctx = merge(ctx, (; lattice = lat))
     N = ndims(lat)
     T = eltype(normals)

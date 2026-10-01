@@ -428,7 +428,7 @@ rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backe
 function _rebuild_trackers!(stats, st, ctx, backend)
     _sync!(stats, backend)
     σ = _to_host(stats, st.σ)
-    lat = host_lattice(stats, ctx.lattice)
+    lat = _host_lattice(stats, ctx.lattice)
     ctx = merge(ctx, (; lattice = lat))
     cap = length(st.cell.kind)
     volume = zeros(Int32, cap)

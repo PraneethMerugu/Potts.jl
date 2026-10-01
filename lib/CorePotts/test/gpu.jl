@@ -338,7 +338,7 @@ using Metal
         # a lattice domain mask on the device: one transfer
         ml = CorePotts._to_backend(backend, Lattice((4, 4); domain = trues(4, 4)))
         before = counts()
-        @test CorePotts.host_lattice(stats, ml).mask isa Array
+        @test CorePotts._host_lattice(stats, ml).mask isa Array
         @test counts() .- before == (0, 1, 16)
         CorePotts._to_host(nothing, d)                                       # nothing counts into `nothing`
         @test counts() .- before == (0, 1, 16)

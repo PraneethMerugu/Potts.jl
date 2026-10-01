@@ -35,17 +35,27 @@ function _sync!(stats, backend)
 end
 _sync!(stats, backend::KernelAbstractions.CPU) = KernelAbstractions.synchronize(backend)
 
+"""Bytes of the elements of `a` (`sizeof` is not defined alike for every array type)."""
+_nbytes(a::AbstractArray) = length(a) * sizeof(eltype(a))
+
 """`Array(a)`: a host copy, counted when `a` lives on a device."""
 function _to_host(stats, a::AbstractArray)
-    _ondevice(a) && _count_transfer!(stats, 0, 1, sizeof(a))
+    _ondevice(a) && _count_transfer!(stats, 0, 1, _nbytes(a))
     return Array(a)
 end
 
 """`copyto!(dst, src)`, counted when it crosses between the host and a device."""
 function _copy!(stats, dst::AbstractArray, src::AbstractArray)
     d, s = _ondevice(dst), _ondevice(src)
-    d == s || _count_transfer!(stats, 0, 1, sizeof(d ? dst : src))
+    d == s || _count_transfer!(stats, 0, 1, _nbytes(d ? dst : src))
     return copyto!(dst, src)
+end
+
+"""`copyto!(dst, doff, src, soff, n)`: `n` elements, counted (`n` elements' bytes) when it
+crosses between the host and a device."""
+function _copy!(stats, dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer)
+    _ondevice(dst) == _ondevice(src) || _count_transfer!(stats, 0, 1, n * sizeof(eltype(src)))
+    return copyto!(dst, doff, src, soff, n)
 end
 
 """The first element of a 1-element array, on the host (no copy on the CPU)."""
