@@ -71,7 +71,7 @@ function _check_primed_names(sys::PottsSystem)
         x = Symbol(chop(s))
         _is_site_quantity(sys, x) && throw(ArgumentError(
             "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
-            "site variable `$x`; rename one of them"))
+            "site variable `$x` (primes exist only for site/field variables); rename one of them"))
     end
     return sys
 end
@@ -148,6 +148,6 @@ function _lookup_primed(sys::PottsSystem, name::Symbol)
     return _primed(lookup(sys, base))
 end
 function _is_site_quantity(sys::PottsSystem, name::Symbol)
-    return any(x -> (i = info(x); i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
+    return any(x -> (i = info(x); i !== nothing && i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
         sys.variables)
 end

@@ -2184,6 +2184,69 @@ end
     @test ext(quote @extend cue, A = b = SiteContactsBase(); @parameters cue2 = 2.0 end) isa Potts.PottsSystem   # control
 end
 
+# P6.0e2: `x′` of a quantity that is not a site/field variable is a Potts error, raised when
+# the constructor reads the unbound `x′`; a local named `x′` is ordinary Julia
+@potts_model PrimeBase begin
+    @structural_parameters n = 2
+    @kinds medium A
+    @parameters begin
+        J[kind, kind] = [0 4; 4 2]
+        λ = 1.0
+    end
+    @variables begin
+        m(cell) = 1.0
+        c(site) = 0.0
+    end
+    @lattice Lattice((10, 10))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "P6.0e2 primes of non-site quantities" begin
+    build(body) = Base.invokelatest(eval(Potts._potts_model(:PrimeProbe, body, @__MODULE__)); name = :pp)
+    model(stmts...) = quote
+        @structural_parameters n = 2
+        @kinds medium A
+        @parameters begin
+            J[kind, kind] = [0 4; 4 2]
+            λ = 1.0
+        end
+        @variables begin
+            m(cell) = 1.0
+            c(site) = 0.0
+        end
+        @lattice Lattice((10, 10))
+        @energy cells => (volume - 9.0)^2
+        $(stmts...)
+        @sweep Metropolis(; temperature = 1.0)
+    end
+    phrase = "primes exist only for site/field variables"
+    rejects(body, n, what) = try
+        build(body)
+        false
+    catch e
+        e isa ArgumentError && (msg = sprint(showerror, e); occursin(phrase, msg) && occursin("`$n`", msg) && occursin(what, msg))
+    end
+    # locals named `x′` (x declared) are ordinary Julia and build
+    for st in (:(@energy cells(A) => let λ′ = 2λ; λ′ * volume end),
+               :(@energy cells(A) => sum(volume * k for n′ in 1:n for k in 1:1)),
+               :(@energy cells(A) => sum(volume * m′ for m′ in 1:2)),
+               :(@energy cells(A) => ((λ′) -> λ′ * volume)(λ)),
+               :(@energy cells(A) => (; m′ = 2.0).m′ * volume))
+        @test mtkcompile(build(model(st))) isa CompiledPottsSystem
+    end
+    # declared non-site quantities, with the right description
+    @test rejects(model(:(@energy contacts => J[kind, kind′] + m′)), "m′", "`m` is a cell variable; in a contact term, `m[owner′]`")
+    @test rejects(model(:(@energy contacts => J[kind, kind′] + λ′)), "λ′", "`λ` is a parameter")
+    @test rejects(model(:(@observed q ~ 1.0), :(@energy cells(A) => q′)), "q′", "`q` is an observed quantity")
+    # inherited through @extend, named or not
+    @test rejects(quote @extend m, c = b = PrimeBase(); @energy contacts => m′ end, "m′", "`m` is a cell variable; in a contact term")
+    @test rejects(quote @extend PrimeBase(); @energy contacts => m′ end, "m′", "`m` is a cell variable")
+    # controls: a site variable's prime and an unrelated unbound name keep their behaviour
+    @test build(quote @extend c, J = b = PrimeBase(); @energy contacts => J[kind, kind′] + c′ end) isa Potts.PottsSystem
+    @test_throws UndefVarError build(model(:(@energy cells(A) => zz′)))
+end
+
 # ---------------------------------------------------------------------------------------
 # P6.0f: `Every(n)` per lifecycle rule
 
