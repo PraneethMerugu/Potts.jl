@@ -64,8 +64,8 @@ decision = "D-075"
 
 [[file]]
 path = "acceptance/p6_0c_solver_placement.jl"
-sha256 = "14e8cffe0892024459f79913c546b9c638b686edf59026615daf467f359b4023"
-decision = "D-075"
+sha256 = "60a7af80e929123fc7c5d486abd544a635d9082bf0279230d52a8ea761b0bc6f"
+decision = "D-098"
 
 [[file]]
 path = "acceptance/p6_0l_link_partner_death.jl"
@@ -104,8 +104,8 @@ decision = "D-083"
 
 [[file]]
 path = "acceptance/p6_0v_transfer_counters.jl"
-sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
-decision = "D-085"
+sha256 = "542f3c728047e107d8d4bdf5e35dcf9e783d71b792cec92dfd31f667dbff2e2e"
+decision = "D-098"
 
 [[file]]
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
@@ -126,3 +126,8 @@ decision = "D-091"
 path = "acceptance/p6_1a7_scattered_mask.jl"
 sha256 = "6aaaf0001aad707832892a045cd21abedbe287568b3087c2243f1a45e6203038"
 decision = "D-094"
+
+[[file]]
+path = "acceptance/merks_2006_defaults.jl"
+sha256 = "e16226d4d4b9ab1670c5735e238535807db6da46e434b4b86494fb6a006f18ee"
+decision = "D-098"

@@ -157,7 +157,7 @@ p60c_same(a, b) = Array(a.σ) == Array(b.σ) && a.site == b.site && a.cell == b.
 const p60c_MERKS_OLD_FINGERPRINT = UInt64(14430386590091383282)
 const p60c_MERKS_SOLVER = p60c_EE(substeps = 2, lower = 0.0)
 p60c_merks() = MerksVasculogenesis(; name = :m, lattice = (100, 100))
-p60c_merks_op() = merks_state(; lattice = (100, 100), n = 50)
+p60c_merks_op() = merks_state(; lattice = (100, 100), n = 50, side = 7)    # 7² seeds (D-098)
 p60c_merks_sensitive_op() = [p60c_merks_op(); :Dc => 0.01; :c => fill(-0.05, 100, 100)]
 
 # a model with a solver in @sweep, built from source (the error may come at expansion or build)
