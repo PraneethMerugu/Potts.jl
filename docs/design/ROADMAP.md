@@ -179,6 +179,10 @@ Every item's acceptance also includes the standing checks:
   - F1: `Pre(grn.x)[j]` and `Pre(grn.x[j])` on a discrete node fail with "cannot index" (`lower.jl:236-241`). Support them, since they equal `x[j]` inside a tick, or give a clear message.
   - F4: `_compile_discrete`'s catch still relabels internal Potts `MethodError`/`BoundsError` as "ModelingToolkit cannot compile" (`components.jl:258-263`).
   - F6: the generated code has a cosmetic `_nonzero(_nonzero(…))`.
+  - F7 (MTK-native review, `/tmp/mtknative-review.md` r8): `@components` silently ignores a component System's `initialization_eqs`, `discrete_events`, `continuous_events`, `jumps` and bindings that touch a coupled parameter. For example, `z ~ 5y` is ignored and gives `c₊z_c = 0.0`. Reject each with an ArgumentError that names it.
+    - Accept: one negative test per case.
+    - Accept: generated code and fingerprints for existing models are byte-identical.
+    - Accept: build time and first MCS are unchanged within noise.
 - [ ] **P6.0n** Cell ODEs that read another cell's ODE state are Gauss–Seidel across cells and race on the GPU (P6.0k review N3). Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
 - [ ] **P6.0l** Links to a copy-killed cell (found by the P6.5a0 review, confirmed). When a
   linked cell loses its last site through copies, its centroid is 0/0. `link_delta` is then
