@@ -232,7 +232,8 @@ end
 """Lifecycle scratch: device buffers sized by capacity, plus host mirrors."""
 struct LifecycleCache{E, C, D, R, NM, B}
     events::E
-    count::C
+    count::C            # [events, frozen-mask mobile-count change, changed sites] (D-081)
+    host::Vector{Int32} # host copy of `count`: one transfer per lifecycle MCS
     daughter::D
     removed::R
     normals::NM
@@ -242,7 +243,7 @@ end
 function LifecycleCache(backend, N::Int, capacity::Int)
     T = backend isa KernelAbstractions.CPU ? Float64 : Float32
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
-        KernelAbstractions.zeros(backend, Int32, 1),
+        KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
@@ -266,20 +267,23 @@ function _defer!(stats, cap)
 end
 
 """
-Run the lifecycle for MCS `mcs`. Returns `(launches, events)`: the number of kernel
-launches and whether any cell had an event (then kinds, owners and cell ids may have
-changed, and the integrator refreshes the frozen mask). Synchronizes once (reads the event
-count); quiet MCS return after the trigger kernel.
+Run the lifecycle for MCS `mcs`. Returns `(launches, events, read)`: the number of kernel
+launches, whether any cell had an event (then kinds, owners and cell ids may have changed,
+and the integrator refreshes the frozen mask), and whether `cache.count` was read into
+`cache.host` (on every MCS the lifecycle runs). Synchronizes once: one transfer of
+`cache.count`, which also carries the counts of a deferred frozen-mask refresh (D-081);
+quiet MCS return after the trigger kernel.
 """
 function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
         stats::LifecycleStats)
-    mcs % lc.every == 0 || return 0, false
+    mcs % lc.every == 0 || return 0, false, false
     cap = length(st.cell.kind)
-    fill!(cache.count, Int32(0))
+    # `count` is all zero here except a deferred mask refresh's counts (entries 2 and 3)
     _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
-    KernelAbstractions.synchronize(backend)
-    _readback(cache.count) == 0 && return launches, false
+    copyto!(cache.host, cache.count)                # synchronizes: the MCS's one transfer
+    fill!(cache.count, Int32(0))                    # enqueued; read above
+    cache.host[1] == 0 && return launches, false, true
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = Array(cache.events)
@@ -400,7 +404,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         v = Array(st.cell.volume)
         stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
     end
-    return launches, true
+    return launches, true, true
 end
 
 function _copy_columns!(a::AbstractVector, dst, src)

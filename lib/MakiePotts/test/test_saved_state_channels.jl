@@ -121,7 +121,6 @@ end
 struct _ReleasedFrozenKind
     k::Int32
 end
-CorePotts.frozen_varies(::_ReleasedFrozenKind) = true
 CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
 
 @testset "solution frames follow a frozen mask that changes during the run" begin

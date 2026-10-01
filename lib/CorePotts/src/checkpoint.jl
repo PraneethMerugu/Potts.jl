@@ -25,6 +25,7 @@ end
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
+    _flush_counts!(integ)                           # exact `stats.attempts` in the checkpoint
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
         prob.repeat, Adapt.adapt(Array, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
 end

@@ -369,8 +369,9 @@ _backend_mobility(backend, m::AllMobile) = m
 _backend_mobility(::KernelAbstractions.CPU, m::MaskMobility) = m
 _backend_mobility(backend, m::MaskMobility) = MaskMobility(_to_backend(backend, m.frozen), nothing)
 
-# `sites` ← the mobile sites of a host mask, in place (no allocation within capacity). A run
-# may freeze every site: the list is then empty and an MCS makes no attempt.
+# `sites` ← the mobile sites of a host mask, in place. The first `resize!` grows the list to
+# the full site count once (later calls stay within that capacity and do not allocate). A
+# run may freeze every site: the list is then empty and an MCS makes no attempt.
 function _mobile_sites!(sites::Vector{Int32}, frozen)
     resize!(sites, length(frozen))
     j = 0
@@ -394,14 +395,15 @@ _set_mobility!(m, frozen) = throw(ArgumentError(
 
 # The standard rule, one work item per site: a site is frozen when it lies outside the
 # lattice domain or its owner's kind is one of `kinds`. Counts, in `counter`, the change of
-# the mobile count (1) and the number of sites that changed (2).
+# the mobile count (entry 2) and the number of sites that changed (entry 3); entry 1 is the
+# lifecycle's event count, read in the same transfer.
 @inline function _frozen_body!(i, frozen, counter, σ, kind, kinds, lat)
     s = @inbounds σ[i]
     f = !in_domain(lat, i) || (s != 0 && _in_kinds(@inbounds(kind[s]), kinds))
     if f != @inbounds(frozen[i])
         @inbounds frozen[i] = f
-        Atomix.@atomic counter[1] += f ? Int32(-1) : Int32(1)
-        Atomix.@atomic counter[2] += Int32(1)
+        Atomix.@atomic counter[2] += f ? Int32(-1) : Int32(1)
+        Atomix.@atomic counter[3] += Int32(1)
     end
     return nothing
 end

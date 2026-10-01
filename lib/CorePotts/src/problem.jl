@@ -52,6 +52,16 @@ function PottsProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
         throw(ArgumentError("spacing must be $(ndims(lattice)) positive numbers"))
     frozen === nothing || size(frozen) == lattice.dims ||
         throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(lattice.dims)"))
+    kinds = frozen_kinds(f.sys)
+    if kinds !== nothing                            # the standard rule decides the mask
+        rule = _standard_frozen(kinds, u0)
+        dom(m) = lattice.mask === nothing ? m : m .| .!lattice.mask
+        frozen === nothing || dom(frozen) == dom(rule) || throw(ArgumentError(
+            "a model with frozen kinds $kinds derives its frozen mask from the state; a " *
+            "`frozen` mask that differs from it cannot be combined with them (give the " *
+            "obstacle sites to a cell of a frozen kind instead)"))
+        frozen = rule
+    end
     if lattice.mask !== nothing                     # outside the domain: medium, never mobile
         all(i -> lattice.mask[i] || u0.σ[i] == 0, eachindex(u0.σ)) ||
             throw(ArgumentError("sites outside the lattice domain must belong to the medium (0)"))
@@ -66,16 +76,52 @@ end
 # `remake` into the problem's parameter object and state (identity here).
 remake_parameters(sys, prob, p) = p
 remake_state(sys, prob, u0) = u0
-# the frozen mask of a remade state (models whose mask derives from the state override this)
-remake_frozen(sys, prob, u0) = prob.frozen
-# Whether the frozen mask may change during a run (D-081). `false` (the default: a static
-# user mask, a domain): the integrator never recomputes it. A model whose mask follows the
-# state returns `true`, and either names its frozen kinds with `frozen_kinds` (the standard
-# rule, built on the device) or overrides `remake_frozen` (any rule, built on the host).
-frozen_varies(sys) = false
-# The kinds whose cells' sites are frozen, as a tuple of `Int32` (the standard rule: plus the
-# sites outside the domain), or `nothing` for a custom rule (`remake_frozen`).
+"""
+    frozen_kinds(sys)
+
+The kinds whose cells' sites are frozen, as a tuple of `Int32`, or `nothing` (the default).
+A system that returns kinds uses the standard rule (D-081): a site is frozen when its
+owner's kind is listed or it lies outside the lattice domain. The rule builds the
+problem's mask (`PottsProblem`, `remake`, checkpoint resume) and is recomputed on the
+integrator's backend after lifecycle events. A problem with frozen kinds takes no other
+`frozen` mask.
+"""
 frozen_kinds(sys) = nothing
+
+"""
+    frozen_varies(sys)
+
+Whether the frozen mask follows the state during a run. Default: `frozen_kinds(sys) !==
+nothing`. `false` means a static mask (none, a domain, a user `frozen`), never recomputed.
+"""
+frozen_varies(sys) = frozen_kinds(sys) !== nothing
+
+"""
+    remake_frozen(sys, prob, u0)
+
+The frozen mask of a remade or reinitialized state `u0`: the standard rule when
+`frozen_kinds(sys)` names kinds, else `prob.frozen` (a static mask).
+
+A custom rule overrides this method **and must also define `frozen_varies(sys) = true`**;
+without it the integrator treats the mask as static and never recomputes it (no error).
+A custom rule runs on a host copy of the state at every refresh.
+"""
+remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen : _standard_frozen(k, u0)
+
+# A custom `remake_frozen` without `frozen_varies(sys) = true` gives a static mask: say so.
+function _check_frozen_hooks(sys)
+    frozen_varies(sys) && return nothing
+    which(remake_frozen, Tuple{typeof(sys), Any, Any}).module === CorePotts && return nothing
+    @warn "`remake_frozen` is overridden for $(typeof(sys)) but `frozen_varies(sys)` is false: the " *
+          "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
+    return nothing
+end
+
+# the standard rule on a host state (without the domain, which `PottsProblem` adds)
+function _standard_frozen(kinds, u)
+    k = Array(u.cell.kind)
+    return map(s -> s != 0 && _in_kinds(k[s], kinds), Array(u.σ))
+end
 # `remake` keywords beyond the fixed ones (a symbolic layer's problem-construction keywords,
 # e.g. Potts' solvers): `(f, u0)`, a new `f` built from them and `prob.u0` re-laid out for it
 # if its state layout depends on them (values kept); everything else is kept
@@ -145,7 +191,19 @@ mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS
     const stats::PottsStats
     const callbacks::CB             # tuple of DiscreteCallbacks, checked after every MCS
     nmobile::Int                    # mobile sites: the attempts of one MCS
-    const mscratch::MS              # standard-rule refresh counters (device, host), or nothing
+    const mscratch::MS              # `MobileCounters` of the standard-rule refresh, or nothing
+end
+
+# Counts of the standard-rule refresh (D-081). `device` = [lifecycle events, mobile-count
+# change, changed sites]: with a lifecycle it is the lifecycle's `count`, so the counts of a
+# refresh after an event MCS travel with the next lifecycle read-back (no transfer of their
+# own on a device). `pending`: counts not read yet; `stale`: the MCS since then whose
+# attempts used the old count (corrected when they arrive).
+mutable struct MobileCounters{D}
+    const device::D
+    const host::Vector{Int32}
+    pending::Bool
+    stale::Int
 end
 
 # Ensemble statistics: totals over trajectories.
@@ -185,6 +243,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
     _preflight(prob, alg, ctx)
+    _check_frozen_hooks(prob.f.sys)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
@@ -195,7 +254,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback),
-        prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
+        prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility, lcache))
     integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     for cb in integ.callbacks
@@ -294,6 +353,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     lat = integ.ctx.lattice
     phases = integ.f.phases
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
+    _count_stale!(integ.mscratch)
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     if integ.alg isa SequentialCPM
@@ -308,12 +368,13 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     if integ.f.lifecycle !== nothing
-        launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
+        launches, events, read = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
             integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
         integ.stats.launches += launches
+        read && _take_counts!(integ)                # a deferred refresh's counts, if any
         # a transition, division or removal may move sites into or out of frozen kinds;
-        # quiet MCS pay nothing, event MCS have already synchronized (D-081)
-        events && refresh_frozen!(integ)
+        # quiet MCS pay nothing (D-081)
+        events && _refresh_frozen!(integ, true)
     end
     integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
@@ -326,10 +387,36 @@ function CommonSolve.step!(integ::PottsIntegrator)
 end
 
 # counters for the standard-rule refresh: only when the mask can change by the standard rule
-_mobility_scratch(backend, prob, ::AllMobile) = nothing
-function _mobility_scratch(backend, prob, ::MaskMobility)
+_mobility_scratch(backend, prob, ::AllMobile, lcache) = nothing
+function _mobility_scratch(backend, prob, ::MaskMobility, lcache)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
-    return (; device = KernelAbstractions.zeros(backend, Int32, 2), host = zeros(Int32, 2))
+    lcache === nothing && return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3), false, 0)
+    return MobileCounters(lcache.count, lcache.host, false, 0)
+end
+
+@inline _count_stale!(::Nothing) = nothing
+@inline _count_stale!(sc::MobileCounters) = (sc.pending && (sc.stale += 1); nothing)
+
+# apply the counts in `sc.host` (just read) of a pending refresh
+function _take_counts!(integ)
+    sc = integ.mscratch
+    (sc === nothing || !sc.pending) && return nothing
+    d = Int(sc.host[2])
+    integ.nmobile += d
+    integ.stats.attempts += d * sc.stale            # MCS that ran with the old count
+    sc.pending = false
+    sc.stale = 0
+    return nothing
+end
+
+# read a pending refresh's counts now (synchronizes; only off the MCS loop)
+function _flush_counts!(integ)
+    sc = integ.mscratch
+    (sc === nothing || !sc.pending) && return nothing
+    copyto!(sc.host, sc.device)
+    fill!(sc.device, Int32(0))
+    _take_counts!(integ)
+    return nothing
 end
 
 """
@@ -343,31 +430,42 @@ true)`; `set_state!` (`setu`) on `kind` calls it.
 
 Only models whose mask follows the state (`frozen_varies`; Potts: a `[frozen]` kind) do
 any work; for a static mask (none, the domain, a user `frozen`) it returns at once. The
-standard rule (Potts' frozen kinds) runs as one kernel on the integrator's backend and
-reads back two integers; a custom rule (`remake_frozen`) runs on a host copy of the state.
+standard rule (`frozen_kinds`) runs as one kernel on the integrator's backend; called
+directly, it then reads back its counts (one small transfer). A custom rule
+(`remake_frozen`) runs on a host copy of the state.
 """
-function refresh_frozen!(integ::PottsIntegrator)
+refresh_frozen!(integ::PottsIntegrator) = (_refresh_frozen!(integ, false); integ)
+
+# `defer`: after a lifecycle event on a device, the counts wait for the next lifecycle
+# read-back (the mask itself is current at once: CheckerboardCPM reads only the mask)
+function _refresh_frozen!(integ::PottsIntegrator, defer::Bool)
     m = integ.ctx.mobility
-    (m isa AllMobile || !frozen_varies(integ.f.sys)) && return integ
+    (m isa AllMobile || !frozen_varies(integ.f.sys)) && return nothing
     integ.stats.refreshes += 1
-    _refresh_frozen!(integ, m, frozen_kinds(integ.f.sys))
-    return integ
+    _refresh_frozen!(integ, m, frozen_kinds(integ.f.sys), defer)
+    return nothing
 end
 
-# the standard rule on the device: the kernel counts the changes, the host reads two integers
-function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
+# the standard rule: one kernel rewrites the mask and counts the changes on the device
+function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple, defer::Bool)
     sc = integ.mscratch
-    fill!(sc.device, Int32(0))
+    defer &= !(integ.backend isa CPU) && integ.lcache !== nothing   # the host reads its own memory at once
+    defer || _flush_counts!(integ)
     _launch(_frozen_body!, integ.backend, length(integ.state.σ),
         (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
     integ.stats.launches += 1
-    copyto!(sc.host, sc.device)                     # synchronizes
-    integ.nmobile += sc.host[1]
-    sc.host[2] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
+    if defer
+        sc.pending, sc.stale = true, 0
+    else
+        copyto!(sc.host, sc.device)                 # synchronizes (a no-op copy on the CPU)
+        fill!(sc.device, Int32(0))
+        integ.nmobile += sc.host[2]
+        sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
+    end
     return nothing
 end
 # a custom rule: `remake_frozen` on a host copy of the state
-function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
+function _refresh_frozen!(integ, m::MaskMobility, ::Nothing, defer::Bool)
     KernelAbstractions.synchronize(integ.backend)
     u = integ.backend isa CPU ? integ.state : _snapshot(integ.backend, integ.state)
     fz = frozen_sites(integ.prob, u)
@@ -388,12 +486,7 @@ function frozen_sites(prob::PottsProblem, u)
     sys = prob.f.sys
     frozen_varies(sys) || return prob.frozen
     kinds = frozen_kinds(sys)
-    fz = if kinds === nothing
-        remake_frozen(sys, prob, u)
-    else
-        k = Array(u.cell.kind)
-        map(s -> s != 0 && _in_kinds(k[s], kinds), Array(u.σ))
-    end
+    fz = kinds === nothing ? remake_frozen(sys, prob, u) : _standard_frozen(kinds, u)
     m = prob.lattice.mask
     m === nothing && return fz
     return fz === nothing ? .!m : fz .| .!m
@@ -403,6 +496,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     while integ.t < integ.tstop && integ.retcode == SciMLBase.ReturnCode.Default
         step!(integ)
     end
+    _flush_counts!(integ)                           # exact `stats.attempts` at the end
     _check_status!(integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success

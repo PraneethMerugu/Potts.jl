@@ -145,14 +145,15 @@ end
 struct FrozenKind
     k::Int32
 end
-CorePotts.frozen_varies(::FrozenKind) = true
-CorePotts.frozen_kinds(s::FrozenKind) = (s.k,)
+CorePotts.frozen_kinds(s::FrozenKind) = (s.k,)              # `frozen_varies` follows
 struct HostFrozen
     k::Int32
 end
-CorePotts.frozen_varies(::HostFrozen) = true
+CorePotts.frozen_varies(::HostFrozen) = true                # required with a custom rule
+struct OnlyRemake end                                       # … which this one forgets
 fk_mask(u, k) = (kinds = Array(u.cell.kind); map(c -> c != 0 && kinds[c] == k, Array(u.σ)))
 CorePotts.remake_frozen(s::HostFrozen, prob, u) = fk_mask(u, s.k)
+CorePotts.remake_frozen(::OnlyRemake, prob, u) = fk_mask(u, 2)
 
 # 30×30 periodic, cell 1 (kind 1) and cell 2 (kind 2), both 6×6 and growing toward V0 = 40
 function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = Float64,
@@ -226,7 +227,7 @@ end
         @test sol.stats.attempts == 4 * 50                       # sweeps 0 … 3, then none
         @test all(i -> sol.u[i].σ == sol.u[5].σ, 5:9)            # nothing moves from t = 4 on
         # at construction a fully frozen lattice is still an error
-        @test_throws ArgumentError init(PottsProblem(f, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
+        @test_throws "every site is frozen" init(PottsProblem(GG, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
     end
 
     @testset "a domain without frozen kinds never refreshes ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
@@ -258,9 +259,39 @@ end
                 @test sol.stats.attempts == S * (900 - 36) + (30 - S) * (900 - 36 - Int(sol.u[end].cell.volume[1]))
             end
         end
+        # a custom rule without `frozen_varies` is static: init warns (once per session)
+        @test_logs (:warn, r"frozen_varies") init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
         # refresh_frozen! on a problem without a mask is a no-op
         integ = init(PottsProblem(GG, initial_state(blocks((20, 20), 5)...), Lattice((20, 20)), (0, 2), gg_params()), SequentialCPM())
         @test refresh_frozen!(integ) === integ && integ.ctx.mobility isa AllMobile && integ.stats.refreshes == 0
+    end
+
+    @testset "frozen kinds build the mask: construction, remake, checkpoint resume ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        mobile_ok(integ) = (fz = Array(integ.ctx.mobility.frozen);
+            fz == frozen_sites(integ.prob, integ.state) && integ.nmobile == count(!, fz))
+        prob = fk_problem(fk_flip(S); kind = fk_swap, tspan = (0, 20))
+        # no `frozen` given: the rule builds it; a different mask is rejected
+        lat, st = prob.lattice, prob.u0
+        @test PottsProblem(prob.f, st, lat, (0, 1), gg_params()).frozen == fk_mask(st, 2)
+        @test_throws ArgumentError PottsProblem(prob.f, st, lat, (0, 1), gg_params(); frozen = falses(30, 30))
+        integ = init(prob, alg)
+        for _ in 1:15
+            step!(integ)
+        end
+        @test integ.stats.lifecycle.transitions == 2 && mobile_ok(integ)
+        ck = checkpoint(integ)                                    # after the transition
+        integ2 = init(prob, alg; checkpoint = ck)
+        @test mobile_ok(integ2)
+        @test integ2.ctx.mobility.frozen == fk_mask(ck.state, 2) != fk_mask(prob.u0, 2)
+        solve!(integ2)
+        @test mobile_ok(integ2)
+        # remake with a new state: the mask of that state
+        r = remake(prob; u0 = ck.state)
+        @test r.frozen == fk_mask(ck.state, 2)
+        @test mobile_ok(init(r, alg))
+        # negative control: a static mask keeps the problem's t0 mask on resume
+        sprob = fk_problem(fk_flip(S); kind = fk_swap, sys = nothing, tspan = (0, 20))
+        @test remake(sprob; u0 = ck.state).frozen == sprob.frozen
     end
 
     @testset "reinit! accepts a state with a different frozen-site count ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
