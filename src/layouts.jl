@@ -665,6 +665,11 @@ end
 # overlay
 # ---------------------------------------------------------------------------------------------
 
+# The layers of `overlay`, flattened.
+struct Overlay <: AbstractLayout
+    layers::Vector{AbstractLayout}
+end
+
 """
     overlay(layers...)
 
@@ -675,9 +680,6 @@ cell, when later layers split a cell into pieces that are not connected under th
 neighbourhood, unless every layer that cut that cell has `splits = :allow`. Nested overlays
 are flattened, so each leaf layer is one row of the layout report.
 """
-struct Overlay <: AbstractLayout
-    layers::Vector{AbstractLayout}
-end
 function overlay(layers::AbstractLayout...)
     flat = AbstractLayout[]
     for l in layers
