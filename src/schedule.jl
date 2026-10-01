@@ -150,7 +150,8 @@ function _check_integral_pre(sys, u::Update, writers)
         _located(sys, u) do
             throw(ArgumentError("`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
                                 "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
-                                "same block; split it into `integral(…Pre…)` and `integral(…)` terms"))
+                                "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
+                                "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"))
         end
     end
     return nothing

@@ -790,9 +790,11 @@ end
     from `integral(x)` in the same block. An integral mixing `Pre` and bare reads of
     variables the block writes is an error (no single refresh point gives both).
   - Outside update blocks (equations, division conditions and rules, link rules, discrete
-    ticks, the temperature, observed quantities) `Pre(x)` is the stored value, so
-    `integral(Pre(x))` would silently be the post-block fold; it is an error there. Keep
-    the block-start fold in a cell variable (`s ~ integral(Pre(x))` in the block).
+    ticks, the temperature, observed quantities) a bare `Pre(x)` is the stored value, while
+    `integral(Pre(x))` would read the block-start fold shared with the update block, and
+    observed queries would fold the queried state; the meaning is ambiguous, so it is an
+    error there. Keep the block-start fold in a cell variable (`s ~ integral(Pre(x))` in
+    the block).
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the
