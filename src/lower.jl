@@ -74,6 +74,8 @@ function lower(x, env::LowerEnv)
         return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
     end
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
+    # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
+    op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
     op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
         e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
@@ -229,6 +231,16 @@ function _sort(x)
         a !== nothing && a.role === :builtin && a.name === :owner && return :cell
     end
     return :unknown
+end
+
+# whether `x` is `at(_nonzero(v), …)` (or `at(Pre(_nonzero(v)), …)`): a Bool node read at an
+# index, which `_lower_at` lowers to a Bool already
+function _is_bool_node_read(x)
+    x = _unwrap(x)
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    a = _unwrap(arguments(x)[1])
+    iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
+    return iscall(a) && operation(a) === _nonzero
 end
 
 function _lower_at(args, env)
