@@ -118,6 +118,7 @@ include("siblings.jl")
 include("analysis.jl")
 include("guardrails.jl")
 include("frozen.jl")
+include("tutorial_models.jl")
 foreach(f -> include(joinpath(@__DIR__, "acceptance", f)), sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))
 
 @testset "Aqua" begin

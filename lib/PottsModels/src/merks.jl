@@ -2,7 +2,7 @@
     MerksVasculogenesis(; name, lattice = (500, 500), contact_inhibited = false, …)
 
 Vasculogenesis by chemotaxis to an autocrine chemoattractant, with elongated cells (Merks,
-Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
+Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006):
 
 - `H = Σ J + λ Σ (a − A)² + λ_L Σ (l − L)²` (Eqs. 1, 4), with the cell length
   `l = 4√(λ_max(I)/a)` (Eq. 5, the `major_length` built-in). Elongation is what turns the
@@ -17,14 +17,13 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
   connectivity penalty; the CompuCell3D one-arc rule).
 - Differences: the closed walls cost nothing (paper: frozen border cells with `J_cB = 100`),
   there is no dissipation threshold `E₀` (its value is not given), and the field takes the
-  fewest stable Euler substeps rather than the paper's 15 (spec:
-  `docs/design/research/model-specs/01_merks.md`).
+  fewest stable Euler substeps rather than the paper's 15.
 
 Defaults are the paper's in lattice units (2 µm/px, 30 s/MCS): `T = 50`, `χ = 1000`,
 `J_cc = 40`, `J_cM = 20`, `D = 0.75`, `α = ε = 5.4·10⁻³`, and the PLoS 2008 cell size
 `A = 50`, `λ = 25` with `L = 30`, `λ_L = 5`. Seed with [`merks_state`](@ref).
 
-The field solver is a problem keyword (D-075) with no default; this model's is
+The field solver is a problem keyword with no default; this model's is
 `field_solver = ExplicitEuler(substeps = 2, lower = 0.0)`:
 
 ```julia
