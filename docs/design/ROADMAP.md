@@ -438,6 +438,7 @@ These are listed so that dependencies are visible. They are expanded into items 
 merges (phase-end checkpoint).
 
 - **P6.6** myxobacteria:
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Chain` with `add_link!`.
   - R9 3-body terms and ordered chains;
   - R7 unwrapped centroids and cluster moments;
   - related centroids with declared footprints;
@@ -452,6 +453,7 @@ merges (phase-end checkpoint).
   - the 12a Eq 7 unit test. Labelled as a reconstruction.
 - **P6.7b** the 14c chemotaxis variant: R12 `Pre(x, k)` on cell variables.
 - **P6.8** Bauer 2007:
+  - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Rod` and `InsertUntil(shape; occupied, collective)`.
   - R3 symbolic `@transition` with scope that survives it;
   - R14 steady init (SteadyStateDiffEq / NonlinearSolve);
   - R15 `CellOperator` and `uptake` (once per MCS, D-065 Q8);
