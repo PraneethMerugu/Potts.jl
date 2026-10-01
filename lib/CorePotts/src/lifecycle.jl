@@ -266,18 +266,20 @@ function _defer!(stats, cap)
 end
 
 """
-Run the lifecycle for MCS `mcs`. Returns the number of kernel launches. Synchronizes once
-(reads the event count); quiet MCS return after the trigger kernel.
+Run the lifecycle for MCS `mcs`. Returns `(launches, events)`: the number of kernel
+launches and whether any cell had an event (then kinds, owners and cell ids may have
+changed, and the integrator refreshes the frozen mask). Synchronizes once (reads the event
+count); quiet MCS return after the trigger kernel.
 """
 function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
         stats::LifecycleStats)
-    mcs % lc.every == 0 || return 0
+    mcs % lc.every == 0 || return 0, false
     cap = length(st.cell.kind)
     fill!(cache.count, Int32(0))
     _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
     KernelAbstractions.synchronize(backend)
-    _readback(cache.count) == 0 && return launches
+    _readback(cache.count) == 0 && return launches, false
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = Array(cache.events)
@@ -398,7 +400,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         v = Array(st.cell.volume)
         stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
     end
-    return launches
+    return launches, true
 end
 
 function _copy_columns!(a::AbstractVector, dst, src)

@@ -342,25 +342,45 @@ end
 """Every site may change owner (the default; no per-attempt cost)."""
 struct AllMobile end
 
-"""Sites with `frozen[i] = true` never change owner and never donate; `sites` lists the rest."""
+"""
+Sites with `frozen[i] = true` never change owner and never donate; `sites` lists the rest.
+The number of mobile sites is `length(sites)`: a refresh (`refresh_frozen!`, `reinit!`)
+rewrites `frozen` and resizes `sites` in place, so the integrator's context stays valid.
+"""
 struct MaskMobility{M, S}
     frozen::M
     sites::S
-    n::Int
 end
 Adapt.@adapt_structure MaskMobility
 
 function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
     frozen === nothing && return AllMobile()
     size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
-    sites = Int32[i for i in 1:nsites(l) if !frozen[i]]
-    isempty(sites) && throw(ArgumentError("every site is frozen"))
-    return MaskMobility(Array{Bool}(frozen), sites, length(sites))
+    return MaskMobility(Array{Bool}(frozen), _mobile_sites(frozen))
 end
+function _mobile_sites(frozen)
+    sites = Int32[i for i in eachindex(IndexLinear(), frozen) if !frozen[i]]
+    isempty(sites) && throw(ArgumentError("every site is frozen"))
+    return sites
+end
+
+# Rewrite a mask mobility in place from a host mask: `frozen` is overwritten, `sites` resized
+# only when the mobile count changed (a device `resize!` may reallocate; the context holds
+# the array object, so later launches see the new buffer).
+_set_mobility!(::AllMobile, ::Nothing) = nothing
+function _set_mobility!(m::MaskMobility, frozen::AbstractArray{Bool})
+    sites = _mobile_sites(frozen)
+    copyto!(m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
+    length(m.sites) == length(sites) || resize!(m.sites, length(sites))
+    copyto!(m.sites, sites)
+    return nothing
+end
+_set_mobility!(m, frozen) = throw(ArgumentError(
+    "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
 
 @inline is_mobile(::AllMobile, i) = true
 @inline is_mobile(m::MaskMobility, i) = !@inbounds(m.frozen[i])
 nmobile(::AllMobile, l::Lattice) = nsites(l)
-nmobile(m::MaskMobility, l::Lattice) = m.n
+nmobile(m::MaskMobility, l::Lattice) = length(m.sites)
 @inline mobile_site(::AllMobile, j) = j
 @inline mobile_site(m::MaskMobility, j) = Int(@inbounds m.sites[j])

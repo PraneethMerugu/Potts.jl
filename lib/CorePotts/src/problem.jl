@@ -280,6 +280,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
     lat = integ.ctx.lattice
     phases = integ.f.phases
+    attempts = nmobile(integ.ctx.mobility, lat)     # this sweep's count (a refresh may change it)
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     if integ.alg isa SequentialCPM
@@ -294,17 +295,49 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     if integ.f.lifecycle !== nothing
-        integ.stats.launches += run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
+        launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
             integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats.lifecycle)
+        integ.stats.launches += launches
+        # a transition, division or removal may move sites into or out of frozen kinds;
+        # quiet MCS pay nothing, event MCS have already synchronized (D-081)
+        events && refresh_frozen!(integ)
     end
     integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend)
     integ.t += 1
     integ.stats.mcs += 1
-    integ.stats.attempts += nmobile(integ.ctx.mobility, lat)
+    integ.stats.attempts += attempts
     isempty(integ.callbacks) || _apply_callbacks!(integ)
     insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
     return integ
+end
+
+"""
+    refresh_frozen!(integrator)
+
+Recompute the frozen-site mask from the integrator's current state (`remake_frozen`; for a
+Potts model, the sites of cells of `[frozen]` kinds, plus the sites outside the domain).
+The integrator does this itself after every MCS with a lifecycle event (transition,
+division, removal). A `DiscreteCallback` whose `affect!` changes `kind` (or `σ` around
+frozen cells) directly must call it, or the change reaches the mobility mask only at the
+next lifecycle event. A problem without a frozen mask is left as it is. Synchronizes; one
+O(sites) pass on the host.
+"""
+function refresh_frozen!(integ::PottsIntegrator)
+    integ.ctx.mobility isa AllMobile && return integ
+    KernelAbstractions.synchronize(integ.backend)
+    u = integ.backend isa CPU ? integ.state : _snapshot(integ.backend, integ.state)
+    _set_mobility!(integ.ctx.mobility, _frozen_sites(integ, u))
+    return integ
+end
+
+# The frozen mask of state `u` (host) for this integrator's problem, with the sites outside
+# the lattice domain (as `PottsProblem` adds them).
+function _frozen_sites(integ::PottsIntegrator, u)
+    fz = remake_frozen(integ.f.sys, integ.prob, u)
+    m = integ.prob.lattice.mask
+    m === nothing && return fz
+    return fz === nothing ? .!m : fz .| .!m
 end
 
 function CommonSolve.solve!(integ::PottsIntegrator)

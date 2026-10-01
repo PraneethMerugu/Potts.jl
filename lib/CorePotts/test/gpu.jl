@@ -436,4 +436,23 @@ using Metal
         @info "reads on Metal, k = 0" free = (m(free, 1), m(free, 2))
         @test m(free, 1) > 18 && m(free, 2) > 21
     end
+
+    @testset "the frozen mask follows a lifecycle transition on Metal (P6.0d)" begin
+        # fixture in lifecycle.jl: cell 1 → frozen kind 2, cell 2 → free kind 1 at MCS 10
+        S = 10
+        sol = solve(fk_problem(fk_flip(S); kind = fk_swap, T = Float32), CheckerboardCPM(); backend, saveat = 1)
+        @test sol.retcode == ReturnCode.Success && sol.stats.lifecycle.transitions == 2
+        @test fk_moved(sol, 1, 2:(S + 2)) >= (S + 1) ÷ 2
+        @test fk_moved(sol, 2, 2:(S + 2)) == 0
+        @test fk_moved(sol, 1, (S + 3):31) == 0                  # frozen from the next sweep on
+        @test fk_moved(sol, 2, (S + 3):31) >= 9                  # released
+        # removal of the frozen cell: the mobile-site count grows (device `sites` resized)
+        rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
+        sol = solve(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)
+        @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
+        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+        # negative control: a static mask does not follow the transition
+        ctl = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = nothing, T = Float32), CheckerboardCPM(); backend, saveat = 1)
+        @test fk_moved(ctl, 1, (S + 3):31) >= 9
+    end
 end

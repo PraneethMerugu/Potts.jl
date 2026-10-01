@@ -462,6 +462,20 @@ did not fire, never writes the daughters' state, even when it names the same kin
 Daughter state rules: `Split()` (conservative), `Copy()`, `Reset(v)`,
 `Redraw(dist)`; the default is `Copy()`.
 
+**Frozen kinds follow the lifecycle (P6.0d, D-081).** The sites of cells of `[frozen]`
+kinds never change owner. The mask is recomputed after every MCS that had a lifecycle
+event (transition, division, removal), so a cell that becomes frozen stops moving from the
+next sweep, a released cell moves, and a removed frozen cell's sites become mobile. MCS
+without events pay nothing. The attempt count per MCS (`stats.attempts`) follows the
+number of mobile sites. A `DiscreteCallback` whose `affect!` writes `kind` directly is
+not tracked: call `refresh_frozen!(integrator)` after the write (or `reinit!`, which
+recomputes the mask and accepts a state with a different number of frozen sites).
+
+```julia
+freeze = DiscreteCallback((u, t, integ) -> t == 100,
+    integ -> (integ.state.cell.kind[3] = 2; refresh_frozen!(integ)))   # kind 2 is `wall[frozen]`
+```
+
 ### Relationships
 
 A model declares any number of named relationships (P6.0b). Each has its own link store,
