@@ -150,38 +150,13 @@ still = solve(remake(prob; p = [:λ_act => 0.0]), SequentialCPM(); saveat = 0:10
 
 # ## The run as a movie
 #
-# The movie shows the cell (left) next to its activity field `sol[:act]` (right), the
-# memory that drives it. `record_potts` draws one panel; for two we use Makie's `record`
-# directly, with an `Observable` frame index that both panels follow:
-
-using MakiePotts, CairoMakie
-mkpath("wortel_act") #hide
-k = Observable(1)
-fig = Figure(size = (720, 380))
-ax = Axis(fig[1, 1]; title = @lift("cell, MCS $(sol.t[$k])"), aspect = DataAspect())
-pottsplot!(ax, @lift(renderframe(sol.u[$k])); boundaries = true)
-ax = Axis(fig[1, 2]; title = "activity", aspect = DataAspect())
-heatmap!(ax, @lift(sol[:act][$k]); colormap = :inferno, colorrange = (0, 20))
-hidedecorations!.(contents(fig.layout))
-record(fig, "wortel_act/act.mp4", eachindex(sol.u); framerate = 15) do i
-    k[] = i
-end
-nothing #hide
-
-# ```@raw html
-# <video src="act.mp4" controls autoplay loop muted playsinline width="640"></video>
-# ```
-#
-# The cell polarises and crawls. Fresh, fully active sites mark its front; the activity
-# fades behind it.
-
-# ## Measuring migration
-#
-# On a torus the centre of a cell is a circular mean along each axis. Summing the
-# shortest step between saved centres (through the wrap) gives the unwrapped path:
+# The movie shows the cell on the whole torus (left) and, next to it, its activity
+# `sol[:act]`, the memory that drives it (right). The right panel follows the cell: it
+# shows the 80 × 80 sites around the cell's centre, with the activity drawn only inside
+# the cell. On a torus the centre is a circular mean along each axis, and `circshift`
+# moves the cell to the middle of the window even when it crosses an edge.
 
 using Statistics: mean
-CairoMakie.activate!(type = "png")
 function centre(u)
     sites = findall(==(1), u.σ)
     return map(1:2) do d
@@ -189,6 +164,45 @@ function centre(u)
         mod(atan(mean(sin.(θ)), mean(cos.(θ))) * L / 2π, L)
     end
 end
+acts = sol[:act]
+function act_window(i)            # activity inside the cell, centred on it, 80 × 80 sites
+    a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], sol.u[i].σ)]
+    c = round.(Int, centre(sol.u[i]))
+    return circshift(a, (L ÷ 2 - c[1], L ÷ 2 - c[2]))[61:140, 61:140]
+end
+
+# `record_potts` draws one panel; for two we use Makie's `record` directly, with an
+# `Observable` frame index that both panels follow:
+
+using MakiePotts, CairoMakie
+mkpath("wortel_act") #hide
+k = Observable(1)
+fig = Figure(size = (760, 380))
+ax = Axis(fig[1, 1]; title = @lift("cell, MCS $(sol.t[$k])"), aspect = DataAspect())
+pottsplot!(ax, @lift(renderframe(sol.u[$k])); boundaries = true)
+hidedecorations!(ax)
+ax = Axis(fig[1, 2]; title = "activity in the cell", aspect = DataAspect(), backgroundcolor = :gray92)
+hm = heatmap!(ax, @lift(act_window($k)); colormap = :inferno, colorrange = (0, 20), nan_color = :transparent)
+hidedecorations!(ax)
+Colorbar(fig[1, 3], hm; label = "Act")
+record(fig, "wortel_act/act.mp4", eachindex(sol.u); framerate = 15) do i
+    k[] = i
+end
+nothing #hide
+
+# ```@raw html
+# <video src="act.mp4" controls autoplay loop muted playsinline width="660"></video>
+# ```
+#
+# The cell polarises and crawls. Fresh, fully active sites (bright) mark its front; the
+# activity fades (dark) towards the rear.
+
+# ## Measuring migration
+#
+# Summing the shortest step between saved centres (through the wrap) gives the unwrapped
+# path:
+
+CairoMakie.activate!(type = "png")
 function path(s)
     c = centre.(s.u)
     steps = [(d = c[k + 1] .- c[k]; d .- L .* round.(d ./ L)) for k in 1:(length(c) - 1)]
