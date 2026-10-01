@@ -66,3 +66,8 @@ decision = "D-075"
 path = "acceptance/p6_0c_solver_placement.jl"
 sha256 = "14e8cffe0892024459f79913c546b9c638b686edf59026615daf467f359b4023"
 decision = "D-075"
+
+[[file]]
+path = "acceptance/p6_2a2_akeeb_inventory.jl"
+sha256 = "1805cb4a1e1dd8290545a027e1dbcd37b500b482406cc4a6e611893981bb86b0"
+decision = "D-075"
