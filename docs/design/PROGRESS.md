@@ -1715,3 +1715,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge.** Combined with D-098's `side = 7` edit of `p6_0v_transfer_counters.jl` (listed under D-096) and gave the Merks fixture of `p6_0v1_device_lifecycle.jl` `side = 7` (D-060 style); internal IDs removed from the new docstrings.
 - **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0.
 - **Gate / A/B.** Idle machine: CPU 0.969–1.010; Metal GG 1.03, OpenVT 0.871, Akeeb 0.774, Wortel 1.21 (A/B 0.889), Merks 4.06 — `ab.jl` against the pre-merge base gives 1.008, so the Merks row was mis-baselined at D-098 (see its correction) and is re-set to 729.75. Akeeb Metal A/B 0.695 against fd84ba91 (review).
+
+## 2026-10-02 — P6.0ad merged: `Barker` carries its offset (D-100)
+
+- **The change.** `Barker(; offset)` shifts ΔH as Metropolis does (`1/(1 + e^{(ΔH − δ)/T})`; at T ≤ 0 the two laws coincide); `@sweep Barker(; offset)` and `acceptance = Barker(; offset)` carry it (it was accepted and dropped). `offset = 0` is the old law bit for bit; a Float64 offset is narrowed to Float32 on a device.
+- **Review.** One round, approved (0 mismatches on an extreme-value grid, zero allocation, CPU and Metal agree in law); coordinator doc nits.
+- **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, PottsModels and docs exit 0. No gate model uses Barker; gate not rerun.

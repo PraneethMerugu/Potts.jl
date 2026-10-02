@@ -191,8 +191,12 @@ function _check_kind_tables(sys::PottsSystem, p)
     return nothing
 end
 
-_acceptance(s::SweepSpec, T) = s.law === :barker ? CorePotts.Barker() :
-                               s.offset == 0 ? CorePotts.Metropolis() : CorePotts.Metropolis(T(s.offset))
+function _acceptance(s::SweepSpec, T)
+    if s.law === :barker
+        return s.offset == 0 ? CorePotts.Barker() : CorePotts.Barker(T(s.offset))
+    end
+    return s.offset == 0 ? CorePotts.Metropolis() : CorePotts.Metropolis(T(s.offset))
+end
 
 # Keys may be symbolic quantities or their names (`:λ`, `Symbol("clock₊τ")`); relationship
 # names (`:bond => [(1, 2)]`) stay symbols.
