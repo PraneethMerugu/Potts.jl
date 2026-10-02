@@ -151,3 +151,8 @@ decision = "D-096"
 path = "acceptance/p6_0ad_barker_offset.jl"
 sha256 = "b2bee6b13fd5ddd718c1b8b93c524d830f6c4d4ffbd039abea63da331da0fb45"
 decision = "D-100"
+
+[[file]]
+path = "acceptance/p6_0aa_arc_or_pair_medium.jl"
+sha256 = "15cdf3af5140a72c0b1d12e06a558b70c8e54586dac7d8840f01410a2553994f"
+decision = "D-099"

@@ -14,9 +14,9 @@ their reference code Artistoo:
 - **Energies.** Adhesion `J`, area `λ(V − V₀)²` and perimeter `λₛ(P − S₀)²`, where the
   perimeter counts Moore neighbours owned by others.
 - **Connectivity.** `connected = true` adds the ring rule `connectivity(cell; rule =
-  :arc_or_pair)` (one arc, or else two cells on the ring), which Niculescu et al. use
-  for multicellular runs. Without it, cells can break at high `λ_act`, as Wortel et al.
-  report.
+  :arc_or_pair)` (one arc, or else two cells and no medium on the ring), which Niculescu
+  et al. use for multicellular runs. Without it, cells can break at high `λ_act`, as
+  Wortel et al. report.
 
 The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 200² torus.
 `max_act = 80` gives the keratocyte-like cell. Copies come from the 8 neighbours.

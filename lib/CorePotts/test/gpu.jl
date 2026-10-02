@@ -170,7 +170,8 @@ using Metal
     @testset "ring connectivity rule and Barker on Metal" begin
         σM, kM = blocks((48, 48), 5; gap = 1)
         latM = Lattice((48, 48))
-        okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 || ring_cells(st.σ, ctx, prop) == 2
+        okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 ||
+            (ring_cells(st.σ, ctx, prop) == 2 && ring_medium(st.σ, ctx, prop) == 0)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = okM)
         pM = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 12.0f0)
         prob = PottsProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))

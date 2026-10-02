@@ -1721,3 +1721,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** `Barker(; offset)` shifts ΔH as Metropolis does (`1/(1 + e^{(ΔH − δ)/T})`; at T ≤ 0 the two laws coincide); `@sweep Barker(; offset)` and `acceptance = Barker(; offset)` carry it (it was accepted and dropped). `offset = 0` is the old law bit for bit; a Float64 offset is narrowed to Float32 on a device.
 - **Review.** One round, approved (0 mismatches on an extreme-value grid, zero allocation, CPU and Metal agree in law); coordinator doc nits.
 - **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, PottsModels and docs exit 0. No gate model uses Barker; gate not rerun.
+
+## 2026-10-02 — P6.0aa merged: `:arc_or_pair` exempts a two-cell ring only without medium (D-099)
+
+- **The change.** `connectivity(k; rule = :arc_or_pair)` is `ring_arcs ≤ 1 || (ring_cells == 2 && ring_medium == 0)`; new public copy-scope value `ring_medium` (medium sites on the ring; out-of-domain sites are neither medium nor a cell). Multicell `WortelAct(connected = true)` no longer accepts copies at cell–cell–medium junctions that split cells.
+- **Review.** One round, approved: other ring values identical to before over ≈ 575k random proposals; splits 167 → 7 (sequential, 12 seeds × 1000 MCS); no speed change; Metal agrees. Closed edges still differ from TST's frame-as-cell reading (documented; P6.0ae).
+- **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels and docs exit 0. No gate model uses `:arc_or_pair`; gate not rerun.

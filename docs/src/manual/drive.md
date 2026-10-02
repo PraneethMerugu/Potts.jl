@@ -12,7 +12,7 @@ written in the **copy scope**:
 | `x[target]`, `x[new]` | a site variable at a site, a cell variable of a cell |
 | `owner[s]`, `volume[owner[s]]` | the owner of a site, its volume |
 | `displacement(c, k)` | how far the copy would move cell `c`'s centroid along axis `k` (`c` is `new` or `old`) |
-| `local_components`, `ring_arcs`, `ring_cells` | connectivity of the losing cell around the target |
+| `local_components`, `ring_arcs`, `ring_cells`, `ring_medium` | connectivity of the losing cell around the target |
 | `mcs` | the current MCS |
 
 A drive is added with weight 1: a negative value favours the copy.
