@@ -80,3 +80,19 @@ an untested combination of existing primitives · `UNSPECIFIED` a value the pape
 - `ExplicitEuler(substeps = 1)` reproduces CC3D's "diffuse + decay, then secrete" order for Fortuna's F-actin.
 - Every Fortuna 14a energy reads only the copy's owners and `cluster`, so the checkerboard is exact there.
 - Foam's shear drive is writable today from coordinate site variables; R1 is mostly sugar apart from `Metropolis(tie)`.
+
+## 6. Errata from the topology audit (2026-10-01)
+
+These drafts are kept unedited for audit. A port must apply these corrections (source:
+`../../topology-neighborhood-audit.md` §4, §6). The specs themselves are already correct
+unless noted.
+
+| Sketch | Error | Correct form | Evidence |
+|---|---|---|---|
+| 13 (l.49, 124, 246) | `Hex(2)` called "12 sites" | `NeighborOrder(2)` on `Hexagonal()` = 12; `Hex(2)` is the 18-site hex-distance ball | `lib/CorePotts/src/lattice.jl` `Hex`, `_candidates(::NeighborOrder, N, ::Hexagonal)`; README Y3 and `api-synthesis.md` fixed |
+| 06 (l.163) | plain Metropolis proposals | unlike-neighbour proposals: "one of its unlike neighbors' ID" | 06 p.3; spec 06 §2 row "Neighbourhood" |
+| 05 | default `VonNeumann(1)`, uniform proposals | unlike-neighbour proposals from the 2007 lineage (`NeighborOrder(2)` + `UnlikeNeighbor`), or document VN(1) as a deviation | spec 05 l.43, G8; 07 p.7 |
+| 08 (l.115) | 08b `lattice = (175, 115)` | `(115, 175)`: spec 08 gives h × w = 175 × 115 and the 11 × 115 vessel spans the width; Potts tuples are (x, y) | 08b p.285–286 |
+| 08 (l.102) | SC1 `Tiling((5, 5); kinds = [ox, fe])` alternates by id, which gives vertical stripes on 20 (even) columns | **Open:** Fig 2A may show a checkerboard (visual reading only); confirm before porting | 08a Fig 2A |
+| 04 (l.67, 90) | sides and T1 neighbour lists on `Moore(1)` | `VonNeumann(1)` by default (spec 04 updated) | 04b p.5823 |
+| 11 (11b component, l.180) | `VonNeumann(1)` proposals with no deviation note | "up to fourth nearest neighbour" = `NeighborOrder(4)` (20 sites), or a stated deviation | 11b p.11; spec 11 l.160, l.285 |

@@ -12,8 +12,10 @@ using Statistics: mean, median
 include("akeeb_metrics.jl")
 
 const CP = CorePotts
-# Merks' field solver (its docstring; a `PottsProblem` keyword, D-075)
-const MERKS_SOLVER = ExplicitEuler(substeps = 2, lower = 0.0)
+# Merks' field solver (its docstring: the paper's 15 substeps per MCS; a `PottsProblem`
+# keyword, D-075), and a two-substep one for the field-step recomputation below
+const MERKS_SOLVER = ExplicitEuler(substeps = 15, lower = 0.0)
+const MERKS_TWO_SUBSTEPS = ExplicitEuler(substeps = 2, lower = 0.0)
 
 """Interface proposals (source and target owned differently) on states along a trajectory of
 `prob`, up to `n` per state, evenly spread: a vector of (u, prop, ctx)."""
@@ -284,7 +286,7 @@ end
     c0 = [0.01 * (x + 2y) for x in 1:L, y in 1:L]
     op = [ownership => σ0, kind => fill(:endothelial, 3), :c => c0, :χ => 50.0, :V₀ => 16.0, :L => 6.0, :Dc => 0.08,
           :σc => 0.02, :δc => 0.01]
-    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)), op, (0, 10); field_solver = MERKS_SOLVER)
+    prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L)), op, (0, 10); field_solver = MERKS_TWO_SUBSTEPS)
     p = prob.p
     # chemotaxis on every copy: −χ (c[target] − c[source]) (Eq. 2); contact-inhibited, only
     # on extensions of a cell into the medium (PLoS 2008). The constraint is CC3D's one-arc
@@ -294,7 +296,7 @@ end
     @test all(((u, prop, ctx),) -> isapprox(drive(prob, u, prop, ctx),
         -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]); atol = 1e-9), props)
     ci = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (L, L), contact_inhibited = true), op, (0, 10);
-        field_solver = MERKS_SOLVER)
+        field_solver = MERKS_TWO_SUBSTEPS)
     @test all(sampled_proposals(ci)) do (u, prop, ctx)
         want = prop.old == 0 && prop.new != 0 ? -p.χ * (u.site.c[prop.target] - u.site.c[prop.source]) : 0.0
         isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
@@ -328,7 +330,7 @@ end
     # MCS, the default) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
     sp = zeros(Int32, 40, 40); sp[18:23, 18:23] .= 1
     fast = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (40, 40)),
-        [ownership => sp, kind => [:endothelial]], (0, 200); field_solver = MERKS_SOLVER), SequentialCPM()).u[end]
+        [ownership => sp, kind => [:endothelial]], (0, 200); field_solver = MERKS_TWO_SUBSTEPS), SequentialCPM()).u[end]
     @test all(isfinite, fast.site.c) && maximum(fast.site.c) < 1.5
 
     # mechanism: in a static gradient (no secretion, diffusion or decay) a cell climbs it for
@@ -349,18 +351,23 @@ end
     @test mean(drift(-100.0)) < -10
 
     # mechanism (Fig. 6; the paper's title claim): at the paper's parameters elongated cells
-    # (λ_L > 0, L = 30) form a network, a sparse cluster far from its convex hull, while
-    # round cells (λ_L = 0) aggregate into compact islands
+    # (λ_L > 0, L = 50) form a network, a sparse cluster far from its convex hull, while
+    # round cells (λ_L = 0) aggregate into compact islands. 49 cells of 10² on 140²: the
+    # paper's density (282 · 100 sites over 333²). Seeds 1–3 at MCS 1500 (2006 defaults):
+    # compactness 0.25–0.28 vs 0.31–0.59 (means 0.26, 0.46), largest cluster 4689–4779 vs
+    # 1794–3692 sites (means 4748, 2428), elongation 6.6–7.0 vs 1.5–1.6. At A = 100 the round
+    # cells merge into fewer, larger islands than at the former A = 50 (where the bounds were
+    # compactness < 0.4 / > 0.5 and a 2× largest cluster), so the island bounds are relative
     function vasculo(λ_L, seed)
         u = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (140, 140)),
-            [merks_state(; lattice = (140, 140), n = 100, seed); :λ_L => λ_L], (0, 1500); seed, field_solver = MERKS_SOLVER),
+            [merks_state(; lattice = (140, 140), n = 49, seed); :λ_L => λ_L], (0, 1500); seed, field_solver = MERKS_SOLVER),
             SequentialCPM(); saveat = 1500).u[end]
-        el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:100)
+        el = map(c -> (s = CP.shape(u.cell, CP.Lattice((140, 140)), c); s.elongation), 1:49)
         return (; compact = compactness(u.σ), largest = maximum(components(u.σ .!= 0)[1]), elongation = mean(el))
     end
     net, isl = [vasculo(5.0, s) for s in 1:3], [vasculo(0.0, s) for s in 1:3]
-    @test mean(r -> r.compact, net) < 0.4 && mean(r -> r.compact, isl) > 0.5
-    @test mean(r -> r.largest, net) > 2 * mean(r -> r.largest, isl)
+    @test mean(r -> r.compact, net) < 0.35 && mean(r -> r.compact, isl) > 1.5 * mean(r -> r.compact, net)
+    @test mean(r -> r.largest, net) > 1.5 * mean(r -> r.largest, isl)
     @test mean(r -> r.elongation, net) > 3 && mean(r -> r.elongation, isl) < 2
 end
 
@@ -560,9 +567,12 @@ end
         @test split_cells(u.σ, (true, false)) == 0
     end
     # with clocks, every cell that becomes split does so in an MCS where it took part in a
-    # division: either a cell born that MCS took most of its sites from it (a split mother),
-    # or it was born that MCS with most of its sites from one cell (a split daughter).
-    # 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds hold a split cell
+    # division. The lifecycle runs after the sweep and `@divide` resets both clocks to 0
+    # (division needs clock > 75, and running clocks tick before the lifecycle), so at a save
+    # `clock == 0` marks exactly the cells that divided that MCS: one mother per daughter.
+    # (A majority-of-sites attribution misses a non-convex mother whose sites gained in the
+    # sweep go to the daughter.) 300 MCS: divisions start near MCS 200; by 300, 28 of 30 seeds
+    # hold a split cell
     newly = map(1:4) do seed
         o = akeeb_state(; lattice = (99, 60), seed)
         sol = solve(PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)), o, (0, 300); capacity = 1000,
@@ -573,13 +583,12 @@ end
             was = Set(split_ids(a.σ, (true, false)))
             born = [d for d in eachindex(b.cell.volume) if b.cell.volume[d] > 0 &&
                     (d > length(a.cell.volume) || a.cell.volume[d] == 0)]
-            from(d, m) = 2 * count(i -> a.σ[i] == m, findall(==(d), b.σ)) > b.cell.volume[d]
+            divided = Set(c for c in eachindex(b.cell.volume) if b.cell.volume[c] > 0 && b.cell.clock[c] == 0)
+            @test issubset(born, divided) && length(divided) == 2 * length(born)
             for c in split_ids(b.σ, (true, false))
                 c in was && continue
                 n += 1
-                mother = any(d -> from(d, c), born)
-                daughter = c in born && any(m -> m != 0 && from(c, m), unique(a.σ[b.σ .== c]))
-                @test mother || daughter
+                @test c in divided
             end
         end
         n

@@ -151,7 +151,7 @@ None. Bubble number is conserved, there are no T2 events, and gas diffusion is i
   - **Note:** the figures show that φ(0) is not one common reference. Fig. 3(b) J = 10 sits flat at φ ≈ 1.027, and Fig. 7 runs at φ ≈ 0.98 < 1. Only shapes and relative amplitudes can be compared across panels, not baselines.
 - **T1 detection (04b p.5823):**
   - Each bubble keeps a neighbour list. "A change in the neighbor list indicates a topological change which … has to be a T1 event."
-  - A bubble's number of sides is its number of distinct neighbours.
+  - A bubble's number of sides is its number of distinct neighbours. The relation for "neighbour" is UNSTATED. Use `VonNeumann(1)` (edge sharing) by default: on `Moore(1)`, bubbles touching only at a corner count as neighbours, which inflates n, μ₂(n) and T1 counts. `Moore(1)` is a variant (topology audit 2026-10-01).
   - A T1 "by definition takes one MCS" (04b p.5822).
   - **Counting unit (A-15, STILL OPEN):** the steady-bulk-shear bars in Figs. 4(b) and 5(b) take only even values (2, 4, 6, 8, 12), which suggests each T1 is counted twice (for example, once per bubble pair that loses or gains contact). The Fig. 5 inset (1-MCS resolution) shows 0.5 to 3, including half-integers.
 - **Topology moments (04b p.5823):** ρ(n) is the fraction of bubbles with n sides; μ_m ≡ Σ_n ρ(n)(n − ⟨n⟩)^m. μ2(a) is the same moment for areas.

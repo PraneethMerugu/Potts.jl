@@ -59,15 +59,15 @@ hand-written):
   cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
   here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
 - `every` — check triggers every `every` MCS.
-- `rules` — rule-carrying events (P6.0f). With `rules = true` the trigger returns
+- `rules` — rule-carrying events. With `rules = true` the trigger returns
   `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and `divide!`/`cluster_divide!`
   take an eighth argument, that index (a cluster member gets its root's), so only the firing
   rule's daughter state rule runs. Needed only when two rules can fire for one cell.
 - `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
 
-Both kinds of division can happen in one MCS (P6.0a):
+Both kinds of division can happen in one MCS:
 
-- `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`, D-036).
+- `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`).
   Only the root's event counts (members' `EVENT_DIVIDE_CLUSTER` are ignored).
   `cluster_normal` is evaluated on the host with the cluster's moments (`st.cell` then holds
   cluster volume/moments, indexed by root), and every live member splits along that plane
@@ -271,10 +271,10 @@ Run the lifecycle for MCS `mcs`. Returns `(launches, events, read)`: the number 
 launches, whether any cell had an event (then kinds, owners and cell ids may have changed,
 and the integrator refreshes the frozen mask), and whether `cache.count` was read into
 `cache.host` (on every MCS the lifecycle runs). Synchronizes once and makes one transfer:
-the event count (4 B, the D-035 read), or with `nread = 3` also the counts of a deferred
-frozen-mask refresh (12 B, only on the lifecycle MCS after such a refresh; D-081). Quiet MCS
+the event count (4 B), or with `nread = 3` also the counts of a deferred
+frozen-mask refresh (12 B, only on the lifecycle MCS after such a refresh). Quiet MCS
 return after the trigger kernel. `pstats` is the integrator's `PottsStats` (lifecycle
-counts, host transfers; D-085).
+counts, host transfers).
 """
 function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
         pstats; nread::Int = 1)
@@ -463,7 +463,7 @@ end
 
 A copy of host state `st` whose cell quantities have `capacity` slots (free slots have
 volume 0, kind 1, generation 0). History rings are not resized: build rings of cell
-quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error). Lifecycle models preallocate capacity (F11).
+quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error). Lifecycle models preallocate capacity.
 """
 function with_capacity(st::CPMState, capacity::Integer)
     n = length(st.cell.kind)

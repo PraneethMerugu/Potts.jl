@@ -66,14 +66,14 @@ Notes on the terms:
   for ECs ("that endothelial cell", 05 p.3). The paper does not say whether the BFS is run on the
   pre- or post-copy configuration or which connectivity (4 or 8) it uses. **UNSPECIFIED**.
 - **Matrix and fluid** behave as generalized cells: "they are each collectively identified by the
-  same ID and are therefore always like neighbors" (05 p.14 §Sensitivity). They have volume
+  same ID and are therefore always like neighbors" (05 p.13 §Sensitivity). They have volume
   elasticities γ_m and γ_f (Table 1). The paper says results "do not depend on the compressibility
   properties of the matrix fibers or interstitial fluid … since the total mass of these ECM
-  components is conserved" (05 p.14). The target volumes for the matrix and fluid collectives are
+  components is conserved" (05 p.13). The target volumes for the matrix and fluid collectives are
   **UNSPECIFIED**. The natural reading is that each target equals its initial total, but this is
   not stated.
 - **J_mm, J_ff**: the adhesion term never fires inside a collective because every site carries the
-  same ID. The paper marks both "I" (insensitive) for this reason (05 p.14). The text calls the
+  same ID. The paper marks both "I" (insensitive) for this reason (05 p.13). The text calls the
   fluid–fluid value "J_ss", but Table 1 names it J_ff.
 - **Sign of chemotaxis**: χ_σ < 0 (05 p.3), and the phenotype values in Table 1 are −1.45χ, −1.42χ
   and −1.40χ with χ = 1.11·10⁶ > 0. Whether ΔV means V(target) − V(source) or the reverse is
@@ -197,7 +197,7 @@ the product state; how ρ is measured; the seed/ensemble generator; boundary han
 | 5 | 14 h runs | CONFIRMED | 05 p.6, p.7 |
 | 6 | T = 2.5 | CONFIRMED (as kT = 2.5 E) | Table 1 p.4 |
 | 7 | Kinds EC (tip/stalk/proliferating), matrix fibre, interstitial fluid | CONFIRMED | 05 p.3–5 |
-| 8 | Matrix and fluid as generalized cells with volume elasticities 0.5 | CONFIRMED | γ_m = γ_f = 0.5 (Table 1); "collectively identified by the same ID" (p.14) |
+| 8 | Matrix and fluid as generalized cells with volume elasticities 0.5 | CONFIRMED | γ_m = γ_f = 0.5 (Table 1); "collectively identified by the same ID" (p.13) |
 | 9 | H = ΣJ(1−δ) + Σc_τ(a−A_T)² + χ_σΔV + α[a′≠a] | CORRECTED (notation) | Eq 1 p.2 uses γ_τ (not c_τ). The chemotaxis term is Σ_sites χ_σΔV and the continuity term is Σ_cells α(1 − δ_{a_σ,a'_σ}). Structure confirmed. |
 | 10 | BFS connected-component continuity | CONFIRMED | "breadth first search count", p.3 |
 | 11 | α = 300 | CONFIRMED | Table 1 (300 E/L, fixed) |
@@ -263,7 +263,7 @@ means a numeric match within the tolerance.
 | G7 site conversion @convert | Tip-cell matrix degradation: matrix sites converted (product unspecified) at a budget of (0.55 µm)²/min, only where matrix is present. Needs a per-cell rate budget. | 05 p.11 |
 | G8 pluggable proposal law + time in scope | Standard Metropolis; neighbourhood order must be configurable (2007 uses 2nd-nearest). Optional mask so that only ECs act as copy sources, if adopted from 2007 (07 p.7). | 05 p.2 |
 | G9 per-cell component protocol | Minimal: an 18 h cell-cycle clock per EC (a scalar counter). No intracellular ODE. | 05 p.5 |
-| G10 cluster-scope quantities / sibling | (a) Matrix and fluid as **collective generalized cells** (one ID each, multiply-connected, with a volume constraint on the total). Under D-066 they are **ordinary cells**: huge and multiply connected, so losing every site through copies is implausible, and nothing needs them to exist empty. An optional zero-cost guard is `@constraint no_extinction(matrix, fluid)`. No connectivity constraint. Recruited ECs (`@create`) are born by receiving their first site and get new slots and `birth` ids (D-066; `../liveness-survey.md` §5). (b) Identify the "leading" cell (tip) = sprout-cluster extremum. (c) Distance of the sprout base to the tip for the speed metric. | 05 p.14; p.6 |
+| G10 cluster-scope quantities / sibling | (a) Matrix and fluid as **collective generalized cells** (one ID each, multiply-connected, with a volume constraint on the total). Under D-066 they are **ordinary cells**: huge and multiply connected, so losing every site through copies is implausible, and nothing needs them to exist empty. An optional zero-cost guard is `@constraint no_extinction(matrix, fluid)`. No connectivity constraint. Recruited ECs (`@create`) are born by receiving their first site and get new slots and `birth` ids (D-066; `../liveness-survey.md` §5). (b) Identify the "leading" cell (tip) = sprout-cluster extremum. (c) Distance of the sprout base to the tip for the speed metric. | 05 p.13; p.6 |
 | G11 ordered relationships + angle energies | Not needed | — |
 | G12 observables | Tip displacement from the sprout base / time; sprout thickness (width profile); branch detection (bud ≥10 µm from the main body, Kearney definition p.7); loop (anastomosis) detection; recruited-cell count; per-cell elongation axis; local ECM density under the sprout (p.11–12); fibre-network percolation (parent vessel → source connectivity, p.9); VEGF gradient maps | 05 p.6–12 |
 | G13 initial layout generators | Random fibre bundles (thickness 1.1 µm, discrete angle set, fill to ρ); aligned-only sets (0°, 90°, 0&90°); patterned cords (thickness, spacing, orientation, crosshatch); a single initial EC bud at the left wall | 05 p.5, p.9–11 |

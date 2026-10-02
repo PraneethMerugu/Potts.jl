@@ -435,7 +435,7 @@ The code is authoritative: the paper reports the code's quantities (10 §7 D12).
 |---|---|---|---|---|
 | Y1 | θ = normalised chord vs raw chord (13 §7 item 1) | unit / raw | **Unit vector**; raw as a variant | A norm cannot be a direction. The scale changes by ≈ 2D ≈ 7 |
 | Y2 | **Checkerboard vs sequential.** Segment energies and θ read sibling COMs, so on the checkerboard each cluster may change at most once per colour (`cluster_claims`, D-036) | sequential / checkerboard + claims | **Sequential** for the reference. Checkerboard as a performance variant that must match V8–V12 within tolerance | Claims change which copies are possible per colour; sequential is the paper's dynamics |
-| Y3 | "Second-nearest" contact shell: shells 1+2 (12) vs shell 2 only (13 §7 item 4) | – | **Shells 1+2** (`Hex(2)`) | CPM convention |
+| Y3 | "Second-nearest" contact shell: shells 1+2 (12) vs shell 2 only (13 §7 item 4) | – | **Shells 1+2** (`NeighborOrder(2)` on `Hexagonal()`, 12 sites; **not** `Hex(2)`, which is the 18-site hex-distance ball: topology audit 2026-10-01) | CPM convention |
 | Y4 | Eq 10 loser term as printed (13 §7 item 3) | – | **As printed** | Implement exactly, then ask |
 | Y5 | Same-cell non-adjacent contact = J_CC (13 §7 item 12) | – | **As printed** | – |
 | Y6 | Fig 6 κ ≈ 10 vs s = 8 (13 §2.8) | – | s = 8 for 'xanthus'; κ(s) ≈ 0.86 s is a labelled hypothesis | – |

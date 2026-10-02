@@ -39,8 +39,8 @@ decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
-sha256 = "716d2f405e09b45d89f8df0be6ff88ec8f0a9682ebd7548570df6d708b347fa5"
-decision = "D-072"
+sha256 = "71188f5e86250cfb55eeb9e9855d9359835aa9ce0ecbc0b2f7bb2067b32091cd"
+decision = "D-097"
 
 [[file]]
 path = "acceptance/p6_2a_akeeb_analysis.jl"
@@ -64,8 +64,8 @@ decision = "D-075"
 
 [[file]]
 path = "acceptance/p6_0c_solver_placement.jl"
-sha256 = "14e8cffe0892024459f79913c546b9c638b686edf59026615daf467f359b4023"
-decision = "D-075"
+sha256 = "60a7af80e929123fc7c5d486abd544a635d9082bf0279230d52a8ea761b0bc6f"
+decision = "D-098"
 
 [[file]]
 path = "acceptance/p6_0l_link_partner_death.jl"
@@ -79,8 +79,8 @@ decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_2a2_akeeb_inventory.jl"
-sha256 = "d0e36abb98abc68a2f0cbbeb0087eab71a459f0e3c3f51d00b9052e156e5d513"
-decision = "D-091"
+sha256 = "8b93c6545a52c4ea038ee7b8864630c95cb19aa62d7ee9a81dca85b55736c135"
+decision = "D-093"
 
 [[file]]
 path = "acceptance/p6_0k2_component_rejections.jl"
@@ -104,8 +104,8 @@ decision = "D-083"
 
 [[file]]
 path = "acceptance/p6_0v_transfer_counters.jl"
-sha256 = "56f7bd5c98a7abfa3da356df93644f70926237ffcc0e14836c61d5775c491601"
-decision = "D-085"
+sha256 = "542f3c728047e107d8d4bdf5e35dcf9e783d71b792cec92dfd31f667dbff2e2e"
+decision = "D-098"
 
 [[file]]
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
@@ -121,3 +121,23 @@ decision = "D-090"
 path = "acceptance/p6_1a6_layout_protocol.jl"
 sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
 decision = "D-091"
+
+[[file]]
+path = "acceptance/p6_1a7_scattered_mask.jl"
+sha256 = "6aaaf0001aad707832892a045cd21abedbe287568b3087c2243f1a45e6203038"
+decision = "D-094"
+
+[[file]]
+path = "acceptance/p6_0v2_column_copies.jl"
+sha256 = "f6ae99c53934b39da075a82311aa8342bdcb48c0821d733d7ee82618a6d9ddee"
+decision = "D-092"
+
+[[file]]
+path = "acceptance/p6_0w_substream_seeds.jl"
+sha256 = "c868d9a7d6563ebb583446f174ba4eff618462c3d89f0459ff8c5ecc77dce109"
+decision = "D-093"
+
+[[file]]
+path = "acceptance/merks_2006_defaults.jl"
+sha256 = "e16226d4d4b9ab1670c5735e238535807db6da46e434b4b86494fb6a006f18ee"
+decision = "D-098"

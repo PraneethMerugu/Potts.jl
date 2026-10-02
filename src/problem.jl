@@ -53,7 +53,7 @@ name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). The generated code is
 `Potts.generated_code(sys; T)`.
 
-How fields and ODEs are integrated is part of the problem, compiled into its code (D-075):
+How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower)` is required when the model has a field
   and an error otherwise; there is no default (a published model's docstring gives its
   value, e.g. `ExplicitEuler(substeps = 2, lower = 0.0)` for `MerksVasculogenesis`);
@@ -65,7 +65,7 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
   of the step (Jacobi), across solvers too.
 
 `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
-it names and keeps the others, `u0`, `p` and the seed; the D-016 fingerprint hashes a
+it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
 discretised problem.
 """
@@ -87,7 +87,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     end
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
-        "`expression = Val(true)` is not supported (D-014); use `Potts.generated_code(sys; T)` to inspect the code"))
+        "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
     st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(sys.lattice)
     relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
@@ -453,8 +453,8 @@ energy_change(prob::CorePotts.PottsProblem, u, prop) = prob.f.sys.delta_E(u, pro
     total_energy(prob, u = prob.u0)
 
 The authored Hamiltonian `H` of state `u` (brute force, host), generated from the same
-terms as the model's ΔH. A dead cell (`volume == 0`) contributes nothing (D-066 item 4,
-D-083): cell terms sum over alive cells, cluster terms over the roots of clusters with at
+terms as the model's ΔH. A dead cell (`volume == 0`) contributes nothing:
+cell terms sum over alive cells, cluster terms over the roots of clusters with at
 least one alive member, edge terms over links whose two ends are both alive; free slots
 add nothing.
 

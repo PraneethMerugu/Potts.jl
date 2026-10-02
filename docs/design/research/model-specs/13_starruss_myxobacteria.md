@@ -82,7 +82,7 @@ J_{(µ1,ν1),(µ2,ν2)} = 0      if σ1 = σ2
 - **Acceptance, Eq. 7** (13 p.274): p = 1 if ΔH′ < 0, and p = e^{(…)ΔH′/kT} if ΔH′ ≥ 0.
   - On the page image the exponent reads ΔH′/kT, and the minus sign is not visible (see the 300-dpi render). This is almost certainly a typesetting omission. The spec uses the standard Metropolis form exp(−ΔH′/kT), because an exponent of +ΔH′/kT would give p > 1 for every ΔH′ > 0.
   - "Metropolis-Kinetics (7)" refers to the equation, not to reference 7.
-- **Neighbourhoods.** Proposals use **nearest** neighbours, which is 6 on the hexagonal lattice. Energy uses **second-nearest** neighbours (13 p.275 §2.3). The paper does not say whether "second-nearest" means the 1st+2nd shells together (12 sites on a hex lattice) or only the 2nd shell (see §7).
+- **Neighbourhoods.** Proposals use **nearest** neighbours, which is 6 on the hexagonal lattice. Energy uses **second-nearest** neighbours (13 p.275 §2.3). The paper does not say whether "second-nearest" means the 1st+2nd shells together (12 sites on a hex lattice: `NeighborOrder(2)` on `Hexagonal()`, not `Hex(2)`, which has 18) or only the 2nd shell (see §7).
 - **MCS.** Time is reported in MCS (Figs. 2–5). The number of attempts per MCS is not defined in the paper. It is assumed to be Graner–Glazier style, one attempt per lattice site (UNSPECIFIED).
 - **Update order.** Only random sequential single-site copies are described. There are no other per-MCS processes: no fields, no growth, no conversion.
 

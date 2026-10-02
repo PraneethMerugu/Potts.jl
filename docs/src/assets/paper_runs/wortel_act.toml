@@ -1,0 +1,23 @@
+algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
+backend = "CPU"
+caption = "Paper run — Niculescu et al. (2015) Act model, amoeboid cell (λ_act = 200, max_act = 20): 200×200 torus, 30 000 MCS (paper: same), seed 1. Initial shape: 23×23 square (unstated in the paper)."
+date = "2026-10-01T17:41:57.392"
+deviations = "Initial cell shape not stated in the paper (a 23×23 square here)."
+framerate = 30
+frames = 301
+git_commit = "e5aade2e"
+initial_state = "one 23×23 square cell (area 529) at the lattice centre"
+julia = "1.12.6"
+lattice = [200, 200]
+model = "WortelAct"
+paper = "Niculescu, Textor & de Boer, PLoS Comput. Biol. 11, e1004280 (2015), single-cell runs (Figs. 2-4, 30 000 MCS); Wortel et al., Biophys. J. 120, 2609 (2021)"
+record_wall_s = 168.9
+recorded_mcs = [0, 30000]
+save_every_mcs = 100
+script = "docs/paper_runs/wortel_act.jl"
+seed = 1
+solve_wall_s = 46.2
+threads = 1
+title = """Niculescu et al. (2015) Act model, amoeboid cell — 200×200 torus, 30000 MCS, seed 1\nλ_act = 200, max_act = 20; one frame every 100 MCS"""
+tspan = [0, 30000]
+video_mb = 0.87

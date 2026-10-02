@@ -216,7 +216,7 @@ P6.0d recomputes the frozen-kind mobility mask after a lifecycle event.
 | R1 | `problem.jl:463-479` standard-rule `_refresh_frozen!`: `_launch(_frozen_body!)` | event MCS, `[frozen]` models only | O(sites) device pass, no transfer of its own | yes (the mask must follow kinds) | already on the device; one launch on event MCS only | keep (justified) |
 | R2 | `lifecycle.jl:287-290` `_sync!` + `_copy!(…, nread)` | every lifecycle MCS | 4 B; 12 B on the lifecycle MCS after a refresh | 4 B per D-035 (until D-089) | D-089: no read-back on a GPU backend. The pending counts are read only at saves, the end of `solve!` and `checkpoint`. | **P6.0v1 (D-089)** |
 | R3 | `problem.jl:420-427` `_flush_counts!`; direct `refresh_frozen!` (`:473`) | end of run, checkpoint, user writes | 12 B | yes (exact `stats.attempts`) | – | keep (outside the MCS) |
-| R4 | `problem.jl:481-488` custom-rule `_refresh_frozen!`: `_sync!`, `_snapshot`, host `frozen_sites`, `_set_mobility!` (`lattice.jl`) up | event MCS of a custom-rule model (none published; Potts uses the standard rule) | O(sites + cells × quantities) down, O(sites) up | only the columns the rule reads | copy only the columns the rule declares | P6.0v2 |
+| R4 | `problem.jl:481-488` custom-rule `_refresh_frozen!`: `_sync!`, `_snapshot`, host `frozen_sites`, `_set_mobility!` (`lattice.jl`) up | event MCS of a custom-rule model (none published; Potts uses the standard rule) | O(sites + cells × quantities) down, O(sites) up | only the columns the rule reads | copy only the columns the rule declares | P6.0v2b (moved from P6.0v2 at its merge) |
 
 All of these copies go through the counted helpers, as of the merge commit. With the merge,
 the frozen target (b) still reads exactly 1 sync / 1 transfer / 4 B on OpenVT, Akeeb and the
@@ -236,6 +236,15 @@ This is the phase of `ode_solver = Adaptive(alg)`: a host SciML integrator per l
 | A5 | `:621-641` host loop over cells, one adaptive solve each | every MCS | host O(cells) solves | yes for SciML's host solvers | a device adaptive ensemble kernel (DiffEqGPU `GPUTsit5` style) | proposed P6.0v5 (optional) |
 | A6 | `:644-647` `_copy!` of `ph.outs` | every MCS | O(cells × ODE columns) up | yes while the solve is on the host (already column-only) | – | keep |
 
+**Status (P6.0v2, D-092).** A2 resolved: on a device the phase copies down only the
+unknowns, the leaves its rates read (`_state_reads` over the generated rates; a use the scan
+cannot follow falls back to the whole state) and `volume` for cell ODEs; scratch outputs are
+host buffers. A3 is a no-op for Potts: `PottsParameters` is isbits, so `_adapt_host(stats, p)`
+copies nothing (kept as is; no parameter cache, since parameter arrays may be written in
+place). A4 resolved: the host domain mask is cached per device mask (`_cached_host`), copied
+once per run. A1 stays with the host solve. Measured on the frozen fixture (Float32, Metal):
+5388 → 1032 B per MCS, the same with extra quantities and on a 32² lattice.
+
 ## 5. `HostPhase` (`lib/CorePotts/src/relationships.jl:222-235`) and the `@link` phases
 
 A `HostPhase` runs on the host every `every` MCS. Potts generates one per `@link`/`@unlink`
@@ -252,6 +261,14 @@ rule (`src/codegen.jl:818-855`). No gate model has one.
 The `HostPhase` fixture of `test/transfer_counts.jl` (two cells; σ, `kind`, `volume`,
 `generation`, `x`, `y`) costs 1 sync / 11 transfers / 656 B per MCS: σ plus 5 columns down,
 then 5 columns up. With H2 and H4, a body that reads `x` and writes `y` moves 2 columns.
+
+**Status (P6.0v2, D-092).** H2 and H4 resolved: `HostPhase(f!; every, reads, writes)` copies
+only the declared leaves down and only `writes` back; Potts declares its `@link`/`@unlink`
+phases (a `when` reading model, site or history values keeps the whole-state copy down). H3
+resolved: the host domain mask is cached once per run. H1 stays while the body runs on the
+host. The body gets the live `p` (no parameter copy). Measured (Float32, Metal): a body
+reading `x` and writing `y` moves 384 B per MCS (2000 before); the frozen `@link` fixture
+10752 → 4864 B.
 
 ## 6. The lifecycle trigger readback (`lifecycle.jl:285-292`): the only sync on a quiet MCS
 
@@ -459,7 +476,7 @@ With a kernel copy it runs at 60 ns/site (F2).
 | row | entries |
 |---|---|
 | P6.0v1 (with D-089) | T1, T2, R2; L1–L15, L17; F4; P2, P3 |
-| P6.0v2 | A1–A4; H1–H4; R4 |
+| P6.0v2 | A1–A4; H1–H4 (R4 moved to P6.0v2b) |
 | P6.0v3 (with P6.0v8) | F2 first (measured 5.1× on Merks), F3 and the other implicit waits (§2.1); T3; F1; X1–X5; Int64-moment investigation (§8.2); P6.0t if still open |
 | P6.0v4 (ROADMAP) | the host reads that remain under D-089 (status word; counts at saves, `solve!` end, `checkpoint`) |
 | P6.0v5 (ROADMAP, optional) | A5, H5 |

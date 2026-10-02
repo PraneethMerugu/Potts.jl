@@ -56,7 +56,7 @@ The paper's conceptual section also says "Volume and interfacial area constraint
 E_interface = Σ_r Σ_{v(r)} J(σ(r), C(r); σ(v), C(v)) · [1 − δ(σ(r) − σ(v))] · [1 − δ(C(r) − C(v))]
 
 - The sum over v(r) covers the "fourth-neighbor range around r (32 neighbors) to reduce lattice anisotropy" (14a p.2805).
-- The double sum over r and v counts each pair twice, and no ½ factor is printed. This matches CC3D convention.
+- The double sum over r and v, printed without a ½ factor, runs over ordered pairs. CC3D's ΔE counts each unordered pair **once**, as Potts `contacts` does, so Table 1 J values are used **unchanged**: do not halve or double them (topology audit 2026-10-01; the earlier wording here said "counts each pair twice … matches CC3D", which invited a 2× error).
 - Note on the delta product as printed: J is zero whenever the two sites share **either** σ **or** C. Read literally, two compartments of the same cell (same σ, different C) would have **no** contact energy. That contradicts the intra-cell J values in Table 1 (for example J_cyto-nucleus). The text says J = 0 "for neighboring lattice sites that belong to the same cell and compartment". So the intended rule is J = 0 only when **both** labels match. See §9.
 - All other J values are positive ("ferromagnetic", 14a p.2805). The hierarchy is chosen so the cytoplasm surrounds the nucleus and the lamellipodium stays attached to cytoplasm, substrate and medium (14a p.2805–2806).
 

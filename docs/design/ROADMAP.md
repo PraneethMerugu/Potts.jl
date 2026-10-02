@@ -251,9 +251,10 @@ Every item's acceptance also includes the standing checks:
   - Accept: the audit document with every entry classified; the transfer counters exist and count exactly on a fixture with known transfers (CPU: always zero); on Metal, a quiet MCS of every gate model reports its current transfers (recorded in the audit as the baseline).
 - [ ] **P6.0v1** Lifecycle on the device (after P6.0v and P6.0v7). Per D-089 (user): the whole lifecycle, including event planning, runs on the device with no host decision and no trigger read-back; re-freeze `p6_0v_transfer_counters.jl` target (b) to 0 / 0 / 0 B. Daughter column copies run as a device kernel; trackers update on the device (or incrementally from the partition kernel's changes); no host O(sites) or O(cells × quantities) work on an event MCS.
   - Accept: on Metal, total host traffic on an event MCS is O(events): bytes independent of lattice size and of the number of cell quantities, on a division fixture scaled in both; Akeeb Metal improves measurably in `ab.jl` against the pre-change base; results unchanged up to floating-point differences ordinary tests allow (D-048).
-- [ ] **P6.0v2** ODE and `HostPhase` column-only copies (after P6.0v). `_AdaptiveODE` and `HostPhase` move only the columns they read and write, or run on the device.
+- [x] **P6.0v2** (merge, 2026-10-01; D-092) ODE and `HostPhase` column-only copies (after P6.0v). `_AdaptiveODE` and `HostPhase` move only the columns they read and write, or run on the device.
   - Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale with the columns used, not with all cell quantities; results unchanged up to floating-point tolerance.
-- [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first).
+- [ ] **P6.0v2b** (from the P6.0v2 review) Audit R4: a custom-rule `refresh_frozen!` snapshots the whole state to the host; copy only the leaves `remake_frozen` reads, or run the standard rule on the device. Accept: per-refresh bytes independent of unused cell quantities on Metal.
+- [ ] **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first). Also from the P6.0v2 review: an MCS with two adaptive-ODE phases syncs twice although the second sync waits on an idle queue (merge consecutive host phases, or skip a sync when nothing was enqueued since the last one).
   - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
 - [x] **P6.0v7** (merge, 2026-10-01; D-090) (top priority within P6.0v, before v1–v3; from the P6.0v audit and review) `benchmark/gate.jl` and `benchmark/ab_one.jl` time Metal `step!` to GPU completion (`synchronize`), then rebaseline Metal once. Today Graner–Glazier and Wortel Metal numbers measure only host enqueue time, so Metal A/B verdicts on them say nothing about GPU cost.
   - Accept: a Metal gate case's time includes a synchronize; baseline.toml's Metal rows re-measured under one lock; CPU rows unchanged.
@@ -263,10 +264,16 @@ Every item's acceptance also includes the standing checks:
 - **P6.0v overall accept** (checked when P6.0v1–v3 are merged; the last of them freezes it): quiet MCS has zero host transfers and zero GPU waits (counted or implicit) on Metal, on every gate model, lifecycle models included (D-089); event MCS traffic is O(events); no gate case regresses on CPU or Metal; CPU paths unchanged in performance, zero allocations where zero today.
 - [ ] **P6.0x** A `gather` inside a cell-ODE rate allocates on every warm step (544–1408 B per MCS, e.g. `sum(volume[owner[n]] for n in Moore(1)(42))`), on base too (found by the P6.0n implementer). The ODE's `rhs` closure is heap-allocated and dispatched dynamically.
   - Accept: zero warm allocations for a cell ODE whose rate contains a gather, on both algorithms; fingerprints of models without one unchanged.
-- [ ] **P6.0w** Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
+- [x] **P6.0w** (merge, 2026-10-01; D-093) Sub-stream seeds through a stable mixer (from the P6.2a2 review; small).
   - StableRNG (Lehmer) streams for seeds `s` and `s + 1` differ by a draw-wise constant shift. New code derives sub-stream seeds as `seed + k` (e.g. `akeeb_state`'s clocks use `StableRNG(seed + 1)`, the leader stream of `seed + 1`).
   - Fix: one internal helper (splitmix64 of `(seed, stream)`) used wherever a sub-stream seed is derived; changing `akeeb_state`'s clock seed changes its state, so revalidate the frozen `papers.jl` band as in P6.2a2.
   - Accept: consecutive top-level seeds give uncorrelated first draws of each sub-stream.
+- [ ] **P6.0y** Explicit-Euler field substeps sit exactly on the stability edge (found by the docs author, 2026-10-01). `CorePotts.stable_substeps(D, dt, h) = ceil(dt·D·Σ2/h²)` (`fields.jl:145`, used by `ExplicitEuler()` with `substeps = nothing`, `codegen.jl:962`) ignores reaction/decay terms and has no margin, so `D = 0.5` with decay blows up. Include the linear reaction rate (|∂f/∂u| bound, e.g. decay) and a safety factor in the count.
+  - Accept: a diffusion–decay fixture at the old edge stays bounded and matches the analytic decay of a Fourier mode; Merks' substep count change (if any) re-checked against its papers.jl gates (D-048); fingerprints of models with explicit `substeps` unchanged.
+- [ ] **P6.0aa** `connectivity(k; rule = :arc_or_pair)` exempts a two-cell ring even when medium is on it, so multicell `WortelAct(connected = true)` runs accept copies that split cells (topology audit §6.4; TST `ConnectivityPreservedP` needs no medium on the ring, ca.cpp:1218). Add a copy-scope `ring_medium` (out-of-domain sites are not medium) and use `ring_arcs ≤ 1 || (ring_cells == 2 && ring_medium == 0)`; fix AUTHORING §4 and the WortelAct tutorial claim. No frozen gate uses `connected = true`.
+  - Accept: a three-site junction fixture (cell–cell–medium) where the old rule splits a cell and the new one refuses; single-cell runs unchanged.
+- [ ] **P6.0ab** Small API defects found by the docs authors (2026-10-01): a kind table computed from parameters raises a `MethodError`, and `observe` does not accept a `Symbol` on a solution. Reproduce each from the docs-lab notes, fix, and add a test for each.
+- [ ] **P6.0ac** AUTHORING §12.9 wording: proposals draw a uniform mobile target, then a uniform source offset (topology audit §1); add Morpheus `boundaryLengthScaling` and CC3D's hex `surfaceMF` to the pair-counting notes.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -311,7 +318,7 @@ Every item's acceptance also includes the standing checks:
   - `akeeb_layout = overlay(Tiling(…; partial = :clip), InsertUntil(…; splits = :allow))`; `_AkeebSlab` and the `NullLogger` in `akeeb_state` are deleted; the width check stays.
   - Accept: Akeeb σ, kinds and painted/misses/counted byte-identical to today at 500×300 and 99×60, both seedings, ≥ 4 seeds (reproducer `/tmp/initstate-review/p1_akeeb_clip.jl`); `akeeb_state` emits no log record while an unrelated `@warn` inside a layer still surfaces; the custom test layer uses no `LatticeSpec` field; `remake(Scattered(…); seed = 2)` and `remake(InsertUntil(…); misses = :retry)` work and validate; re-freeze (D-060 style, assertions unchanged, API calls only) of `acceptance/p6_2a_akeeb_analysis.jl` and `acceptance/p6_2a2_akeeb_inventory.jl`; gate and fingerprints unchanged; Aqua, JET, ExplicitImports clean.
   - Not in this row: `into`, `shortfall`, `set_column!`, `add_link!`, shapes.
-- [ ] **P6.1a7** `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
+- [x] **P6.1a7** (merge, 2026-10-01; D-094) `Scattered` overlap test against an occupancy mask (after P6.1a6; same file). Today O(placed) per draw (`layouts.jl:179`): 3.5 s for 4·10⁴ squares at 3000².
   - Accept: σ identical to the pre-change version over a seed grid, closed and periodic (the dilation wraps), 2D, 3D and hex; 10⁴ cubes of 5³ at 200³ under 50 ms (≈ 480 ms today, `/tmp/initstate-review/p3_scattered_cost.jl`).
 - [x] (merge, 2026-10-01; D-088) **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
@@ -360,6 +367,8 @@ Every item's acceptance also includes the standing checks:
   MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
   StableRNG only (D-075): the `clock`/`cue` expression defaults move to P6.4a.
 
+- [ ] **P6.1e** `graner_glazier_aggregate`'s default 10-site margin lets a long sorting run join the aggregate to its periodic image (seen in the 10⁴-MCS paper run, which uses `margin = 60`). Raise the default margin (≥ 60) or make the default lattice closed, and re-check the frozen sorting reproductions that call it.
+
 ### Step 2 — Akeeb
 
 - [x] (merge, 2026-09-30; D-073) **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
@@ -399,6 +408,8 @@ Every item's acceptance also includes the standing checks:
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
+
+- [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
 
 ### Step 4 — Foam
 

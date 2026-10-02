@@ -689,7 +689,7 @@ _check_units(sys) = nothing
 function _check_integral_pre_outside(x)
     _integral_pre(x) && throw(ArgumentError(
         "`integral(Pre(x))` is only available in update blocks, where it folds the values before the " *
-        "block (D-042); elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
+        "block; elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
         "the block (`s ~ integral(Pre(x))`), or write `integral(x)`"))
     return nothing
 end

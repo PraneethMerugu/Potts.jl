@@ -34,6 +34,7 @@ end
 export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, extend,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, RK4
 
+include("seeds.jl")
 include("vocabulary.jl")
 include("system.jl")
 include("macro.jl")

@@ -405,20 +405,23 @@ Legend(fig[1, 2],
     [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false)
 fig
 
-# Snapshots of replicate 1 (dark kind blue, light kind green, medium black). PRL Fig. 1
-# shows small same-type clusters after the first steps, merging clusters by 100 MCS,
-# partial sorting with trapped light cells at 1000, and a single rounding dark cluster at
-# 4000–10000 (spec §5.1 V-GG5).
+# Replicate 1 as a video (dark kind blue, light kind green, medium black; frames
+# log-spaced in time). PRL Fig. 1 shows small same-type clusters after the first steps,
+# merging clusters by 100 MCS, partial sorting with trapped light cells at 1000, and a single
+# rounding dark cluster at 4000–10000 (spec §5.1 V-GG5). The video re-solves replicate 1
+# with denser saves; saving does not change the run, which the last line checks.
 
-snap = FULL ? [1, 100, 1000, 10_000] : [1, 100, 1000]
-fig = Figure(size = (300 * length(snap), 320))
 sol1 = ens.u[1]
-for (c, t) in enumerate(snap)
-    ax_t = Axis(fig[1, c]; title = "$t paper MCS", aspect = DataAspect())
-    hidedecorations!(ax_t)
-    pottsplot!(ax_t, renderframe(sol1; index = findfirst(==(PAPER_MCS * t), sol1.t)); boundaries = true)
-end
-fig
+video_t = unique(round.(Int, PAPER_MCS .* exp10.(range(0, log10(last(ts)); length = 100))))
+q1 = remake(prob; tspan = (0, PAPER_MCS * last(ts)), replica = prob.replica + 1)
+FULL && (q1 = remake(q1; u0 = [ownership => starts[1][1], kind => starts[1][2]]))
+video = solve(q1, alg; saveat = video_t)
+record_potts("09_cell_sorting_replicate1.mp4", video; framerate = 12, title = "",
+    plot = (; boundaries = true), figure = (; size = (420, 420)))
+@assert ownership(video.u[end]) == state_at(sol1, last(ts))
+# ```@raw html
+# <video src="../09_cell_sorting_replicate1.mp4" controls autoplay loop muted playsinline width="420"></video>
+# ```
 
 # ### Contrasting regimes and negative control
 #

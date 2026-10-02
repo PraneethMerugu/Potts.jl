@@ -380,7 +380,9 @@ Moore(1)). Like every layer it overwrites earlier layers (pass a `region` to kee
 
 Placement is random sequential: box after box is drawn with a `StableRNG(seed)` (so it is
 deterministic in `seed` across Julia versions) and rejected while it is too close to a
-placed box. `kinds` is cycled over the cells. Throws an `ArgumentError` when the boxes
+box placed earlier by this layer (cells of earlier layers do not count). The test runs on an
+occupancy mask of the region, so a draw costs `prod(size .+ 2gap)` site reads, independent
+of the number placed. `kinds` is cycled over the cells. Throws an `ArgumentError` when the boxes
 cannot fit the region, and also when a box cannot be placed after 10,000 draws: random
 sequential placement jams at about half of the densest packing, so a feasible but dense
 request can throw.
@@ -408,14 +410,43 @@ _splits(l::Scattered) = l.splits
 
 const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
 
-# Boxes at lower corners `a` and `b` are at least `gap` sites apart along some axis; on a
-# periodic axis of length `n` in both directions around the ring.
-function _apart1(a, b, s, gap, n, wrap)
-    wrap || return a + s + gap <= b || b + s + gap <= a
-    δ = mod(b - a, n)
-    return δ - s >= gap && n - δ - s >= gap
+# The overlap test runs on an occupancy mask of the region (`occ`, indexed from `first(r)`): a draw is
+# rejected iff a site of an earlier box of this layer lies in the draw's box grown by `gap`
+# on every side. Per axis this is exactly the Chebyshev rule `a + s + gap <= b || b + s + gap
+# <= a` (closed) or `δ - s >= gap && n - δ - s >= gap` with `δ = mod(b - a, n)` (periodic):
+# the grown window wraps on a periodic axis and covers the whole ring once `s + 2gap >= n`.
+# Only boxes of this layer count, as before: sites painted by earlier layers do not.
+#
+# The window along one axis is at most two pieces of `1:n`, each cut to the region `r` and
+# shifted into mask indices.
+function _scatter_window(a, s, gap, n, wrap, r)
+    lo, hi = a - gap, a + s - 1 + gap
+    if !wrap
+        p, q = max(lo, 1):min(hi, n), 1:0
+    elseif s + 2gap >= n
+        p, q = 1:n, 1:0
+    elseif lo < 1
+        p, q = 1:hi, (lo + n):n
+    elseif hi > n
+        p, q = lo:n, 1:(hi - n)
+    else
+        p, q = lo:hi, 1:0
+    end
+    cut(x) = (max(first(x), first(r)) - first(r) + 1):(min(last(x), last(r)) - first(r) + 1)
+    return (cut(p), cut(q))
 end
-_apart(a, b, sz, gap, dims, per) = any(ntuple(d -> _apart1(a[d], b[d], sz[d], gap, dims[d], per[d]), length(a)))
+
+# Some site of `occ` in the window (the product over axes of one piece each) is set.
+function _scatter_hit(occ, win::NTuple{N, Tuple{UnitRange{Int}, UnitRange{Int}}}) where {N}
+    for k in 0:(2^N - 1)
+        ranges = ntuple(d -> win[d][((k >> (d - 1)) & 1) + 1], Val(N))
+        any(isempty, ranges) && continue
+        for I in CartesianIndices(ranges)
+            occ[I] && return true
+        end
+    end
+    return false
+end
 
 function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
     dims = size(lat)
@@ -432,16 +463,18 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
         throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
-    corners = NTuple{N, Int}[]
+    occ = falses(ext)                  # sites of the boxes placed so far, in region indices
+    corners = Vector{NTuple{N, Int}}(undef, l.n)
     for k in 1:(l.n)
         placed = false
         for _ in 1:_SCATTER_ATTEMPTS
             o = map(r -> rand(rng, r), ranges)
-            if all(c -> _apart(o, c, l.size, l.gap, dims, per), corners)
-                push!(corners, o)
-                placed = true
-                break
-            end
+            win = map((a, s, n, p, r) -> _scatter_window(a, s, l.gap, n, p, r), o, l.size, dims, per, reg)
+            _scatter_hit(occ, win) && continue
+            fill!(view(occ, map((a, s, r) -> (a - first(r) + 1):(a - first(r) + s), o, l.size, reg)...), true)
+            corners[k] = o
+            placed = true
+            break
         end
         placed || throw(ArgumentError("Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
                                       "in the region $reg after $_SCATTER_ATTEMPTS draws (random sequential placement " *

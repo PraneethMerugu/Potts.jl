@@ -203,7 +203,7 @@ implicit solver's Jacobian, already-typed floats) unchanged."""
 @inline _tofloat(::Type{T}, x) where {T} = x
 
 """
-Cartesian position of site `i` (D-043): the embedded lattice coordinates times the lattice
+Cartesian position of site `i`: the embedded lattice coordinates times the lattice
 spacing (on a square lattice with unit spacing, the coordinates themselves).
 """
 @inline function _position(::Type{T}, ctx, i) where {T}

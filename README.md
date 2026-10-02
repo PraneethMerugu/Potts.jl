@@ -9,8 +9,8 @@ using Potts, PottsModels, MakiePotts, CairoMakie
 σ0, k0 = graner_glazier_state()                      # a 64-cell aggregate of two kinds
 gg = GranerGlazier(; name = :gg, lattice = size(σ0)) # Graner & Glazier (1992) cell sorting
 prob = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 200); seed = 1)
-sol = solve(prob, SequentialCPM())
-pottsplot(renderframe(sol.u[end]))                    # the sorted aggregate
+sol = solve(prob, SequentialCPM(); saveat = 2)
+record_potts("cell_sorting.mp4", sol; framerate = 15) # a video of the sorting
 ```
 
 This repository holds four Julia packages:
@@ -34,6 +34,7 @@ git clone https://github.com/PraneethMerugu/Potts.jl
 using Pkg
 Pkg.develop([PackageSpec(path = "Potts.jl/lib/CorePotts"), PackageSpec(path = "Potts.jl"),
              PackageSpec(path = "Potts.jl/lib/PottsModels"), PackageSpec(path = "Potts.jl/lib/MakiePotts")])
+Pkg.add("CairoMakie")   # a Makie backend, for figures and videos
 ```
 
 GPU runs use any KernelAbstractions backend (Metal is tested): load the backend package and
@@ -49,7 +50,7 @@ julia --project=docs docs/make.jl
 ```
 
 and open `docs/build/index.html`. It covers getting started, tutorials, the modelling
-language, and the published models, each reproduced from its public constructor.
+language, and the published models, each built step by step from its public constructor.
 
 ## History
 

@@ -33,8 +33,8 @@ function cases(T)
         "wortel_act_100" => () -> (σ = zeros(Int32, 100, 100); σ[40:62, 40:62] .= 1;
             PottsProblem(WortelAct(; name = :w, lattice = (100, 100)), [ownership => σ, kind => [:cell]], (0, 10^6); T)),
         "merks_100" => () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
-            merks_state(; lattice = (100, 100), n = 50), (0, 10^6); T,
-            field_solver = ExplicitEuler(substeps = 2, lower = 0.0)),
+            merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
+            field_solver = ExplicitEuler(substeps = 15, lower = 0.0)),
         "openvt_monolayer_100" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
             openvt_monolayer_state(; lattice = (100, 100)), (0, 10^6); T, capacity = 64),
         "akeeb_99x60" => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),

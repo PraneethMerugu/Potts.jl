@@ -85,7 +85,7 @@ function p60v_gate_models(T)
         ("Graner–Glazier", false, () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], (0, 6); T)),
         ("Wortel Act", false, () -> PottsProblem(WortelAct(; name = :w, lattice = (32, 32)), [ownership => w, kind => [:cell]], (0, 6); T)),
         ("Merks", false, () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (32, 32)),
-            merks_state(; lattice = (32, 32), n = 6), (0, 6); T, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+            merks_state(; lattice = (32, 32), n = 6, side = 7), (0, 6); T, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
         ("OpenVT monolayer", true, () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 1e6),
             openvt_monolayer_state(; lattice = (24, 24)), (0, 6); T, capacity = 64)),
         ("Akeeb", true, () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),

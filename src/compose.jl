@@ -81,7 +81,7 @@ _kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersec
 """Items of `base` whose key no item of `new` shares."""
 _unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))
 """What an update writes: its phase and target (`x`, `act[target]`, …). An extension's update
-replaces the base's whatever their cadences (D-045)."""
+replaces the base's whatever their cadences."""
 _target_key(u::Update) = (u.phase, string(u.eq.lhs))
 
 # Draws are numbered per model (`random_uniform(k)`); two separately built models both start

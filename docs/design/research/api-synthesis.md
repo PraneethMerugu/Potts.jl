@@ -1185,7 +1185,7 @@ using Potts
         J[kind, kind] = [0.0 1.0; 1.0 3.0]
     end
     @variables pinned(cell) = 0.0
-    @lattice Lattice(lattice; geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(2))
+    @lattice Lattice(lattice; geometry = Hexagonal(), boundary = Periodic(), neighborhood = NeighborOrder(2))   # 12 sites; Hex(2) would be 18 (topology audit 2026-10-01)
     @relations proposal = Hex(1)
     @relationship chain(cell, cell) capacity = 2, ordered = true
 

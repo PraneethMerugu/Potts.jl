@@ -22,7 +22,7 @@ struct Hexagonal <: AbstractGeometry end
     Lattice(dims; boundary = Periodic(), domain = nothing, geometry = Square())
 
 A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
-`domain` restricts it to an irregular region (ROADMAP M2.1b): a `Bool` array over the
+`domain` restricts it to an irregular region: a `Bool` array over the
 lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on a
 hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside the domain never
 change owner and must belong to the medium. The domain edge is closed: `shift` reports
@@ -105,11 +105,12 @@ end
 @inline in_domain(::Lattice{N, Nothing}, i) where {N} = true
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
-"""The lattice with its domain mask on the host (for host code given a device context)."""
+"""The lattice with its domain mask on the host (for host code given a device context). The
+mask is static: its host copy is made once per device mask and reused (read-only)."""
 host_lattice(l::Lattice) = _host_lattice(nothing, l)
-# `stats` counts the mask copy (D-085; `_adapt_host`), or `nothing`
+# `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit A4/H3)
 _host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
-_host_lattice(stats, l::Lattice) = _adapt_host(stats, l)
+_host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 nsites(l::Lattice) = prod(l.dims)
