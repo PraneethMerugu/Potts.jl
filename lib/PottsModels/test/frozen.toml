@@ -141,3 +141,8 @@ decision = "D-093"
 path = "acceptance/merks_2006_defaults.jl"
 sha256 = "e16226d4d4b9ab1670c5735e238535807db6da46e434b4b86494fb6a006f18ee"
 decision = "D-098"
+
+[[file]]
+path = "acceptance/p6_0aa_arc_or_pair_medium.jl"
+sha256 = "15cdf3af5140a72c0b1d12e06a558b70c8e54586dac7d8840f01410a2553994f"
+decision = "D-099"
