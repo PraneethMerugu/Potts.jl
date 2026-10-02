@@ -1727,3 +1727,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** `connectivity(k; rule = :arc_or_pair)` is `ring_arcs ≤ 1 || (ring_cells == 2 && ring_medium == 0)`; new public copy-scope value `ring_medium` (medium sites on the ring; out-of-domain sites are neither medium nor a cell). Multicell `WortelAct(connected = true)` no longer accepts copies at cell–cell–medium junctions that split cells.
 - **Review.** One round, approved: other ring values identical to before over ≈ 575k random proposals; splits 167 → 7 (sequential, 12 seeds × 1000 MCS); no speed change; Metal agrees. Closed edges still differ from TST's frame-as-cell reading (documented; P6.0ae).
 - **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels and docs exit 0. No gate model uses `:arc_or_pair`; gate not rerun.
+
+## 2026-10-02 — P6.0v3 + P6.0v8 merged: no GPU wait in a quiet MCS; launch fusion (D-101)
+
+- **The change.** Device→device copies and fills in the step path are kernels (Merks: 30 GPU waits per MCS → 0); a model's last after-MCS cell update runs inside the lifecycle trigger when Potts proves the trigger reads its columns only at the cell's own index (`Lifecycle(…; before)`; OpenVT 10 → 9, Akeeb 14 → 13 launches per quiet MCS); an adaptive-ODE phase right after another skips its sync (2 → 1); T3's uncounted `fill!` removed. Every gate model: 0 syncs, 0 transfers, 0 B, 0 GPU waits per quiet MCS on Metal.
+- **Review.** One round, approved: fused = unfused bitwise over 252 comparisons (CPU and Metal, every fallback form, `Every(2)`, callbacks, `reinit!`, resume); coordinator: no launch for empty copies, docstring ID removed, follow-ups as P6.0af.
+- **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0.
+- **Gate: pass.** CPU 0.994–1.034. Metal: Merks 142.77 ns/site (0.196 of its baseline; now faster than the CPU's 286), OpenVT 0.625, Akeeb 0.657, GG 1.016, Wortel 1.122 (flagged; reviewer's reversed A/B 0.998). Metal rows re-baselined on this idle run: Merks 142.77, OpenVT 50.36, Akeeb 123.46.

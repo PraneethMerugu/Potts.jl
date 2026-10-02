@@ -208,7 +208,7 @@ end
 end
 
 @inline _ternary_offset(p, ::Val{N}) where {N} =
-    ntuple(d -> Int32(rem(div(p, 3^(d - 1)), 3) - 1), Val(N))
+    ntuple(d -> (rem(div(p, 3^(d - 1)), 3) - 1) % Int32, Val(N))
 
 @inline function _face_neighbors(p, ::Val{N}) where {N}
     m = UInt32(0)

@@ -280,8 +280,9 @@ const RAW_TRANSFER_ALLOW = Dict(
     # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted)
     "lib/CorePotts/src/problem.jl" => 3,
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
-    "lib/CorePotts/src/fields.jl" => 1,      # FieldStep device→device copy: not a transfer; Metal waits in it (P6.0v3)
-    "lib/CorePotts/src/phases.jl" => 1,      # CopyPhase device→device copy: idem (P6.0v3)
+    # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since
+    # Metal.jl's device→device `copyto!` waits for the GPU twice (P6.0v3, D-101)
+    "lib/CorePotts/src/phases.jl" => 1,
     "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup; Frame masks)
 )
 # `synchronize` of any module, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,
