@@ -1683,3 +1683,22 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** One round, approved: 2·10⁶ random decisions and 10⁵ random layouts identical to the old pairwise test; coordinator nits (comment wording, a long line).
 - **Numbers.** 10⁴ cubes of 5³ at 200³: 17 ms closed and periodic (was 480 and 860 ms); per-box time at 4·10⁴ vs 4·10³ squares: 1.2× (was 9.9×).
 - **Merge checks.** Host-only layout code: PottsModels (P6.1a7 126/126), Potts and docs exit 0. No gate case paints with `Scattered`; gate not rerun.
+
+## 2026-10-01 — P6.0v2 merged: ODE and `HostPhase` copy only the columns they use (D-092)
+
+- **The change.** `HostPhase(f!; every, reads, writes)` copies only the declared leaves (σ or cell columns); adaptive-ODE phases copy only the unknowns and the leaves their rates read (a scan of the generated code, falling back to the whole state); generated `@link`/`@unlink` phases declare their reads and writes; the static domain mask comes down once per run. Per-MCS Metal bytes: adaptive ODE 5388 → 1032, `@link` 10752 → 4864, declared HostPhase 2000 → 384, all independent of unused columns and lattice size.
+- **Review.** Two rounds: round 1 found host phases handed a cached `p` (stale after in-place writes); round 2 passes the live `p`, caches only the mask, and adds sentinel tests for the scanned read sets. R4 filed as P6.0v2b; the idle second sync under P6.0v3.
+- **Merge checks.** CorePotts (QA), Potts, PottsModels, MakiePotts, docs, CorePotts on Metal and Potts on Metal exit 0.
+- **Gate: pass.** CPU 1.004–1.032. Metal rows all flagged together (1.32–1.89) under load; `ab.jl` against 3df39655 (6 rounds): Akeeb 0.991, OpenVT 0.959.
+
+## 2026-10-01 — P6.0w merged: sub-stream seeds through a stable mixer (D-093)
+
+- **The change.** `Potts._substream_seed(seed, stream)` (SplitMix64 of the seed and the stream name's FNV-1a id) derives every sub-stream seed; `akeeb_state`'s clocks use the `:clock` stream instead of `StableRNG(seed + 1)`. σ and kinds are unchanged; clocks differ per seed with the same law. `p6_2a2` re-frozen (oracle stream and a comment).
+- **Review.** One round; the coordinator replaced a seed re-pick in `mechanisms.jl` with a correct attribution (the clock reset marks exactly the cells that divided). Akeeb divisions over 80 seeds: mean 585.8, SD 18.7 (band 585.0 ± 3×16.4; no re-baseline).
+- **Merge checks.** PottsModels and Potts exit 0 (branch: also CorePotts, docs, Potts on Metal). No step-loop change; gate not rerun.
+
+## 2026-10-01 — Merks 2006 parameter set as the defaults (D-098, user)
+
+- **The change.** `MerksVasculogenesis()` defaults are the Merks et al. (2006) set: V₀ = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, D_c = 0.75, ε = δ = 5.4·10⁻³, J = [0 20; 20 40], with `ExplicitEuler(substeps = 15, lower = 0)`; `merks_state` side 10. The old defaults fragmented the network (largest component 0.27–0.45 of the cells); the 2006 set keeps it connected (0.98–1.0). New frozen `merks_2006_defaults`; `p6_0c_solver_placement` and `p6_0v_transfer_counters` re-frozen with `side = 7` (sizes only); Fig. 6 mechanism test retuned.
+- **Gate.** `merks_100` is now 25 cells of 10² with 15 substeps; CPU rows re-baselined (sequential 286.41, checkerboard 287.85 ns/site — the 3× is the substeps, about 16 ns/site each). The Metal row measured 1.51× the old baseline, inside the common-mode band of the other Metal rows (1.32–1.89) under load, so it is not re-baselined.
+- **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts, docs and the gate exit 0.

@@ -570,13 +570,73 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scr
     end))
     names = [info(x).name for (x, _) in odes]
     return _AdaptiveODE(f, solver.alg, solver.kwargs, names, scratch ? _ode_scratch_name.(names) : names, scope, T,
-        Float64(dt), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+        Float64(dt), _state_reads(rates), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+end
+
+# The state leaves generated host code reads (D-092): `nothing` when it uses the state in a
+# way this scan does not follow (then the caller copies everything), else the leaves as
+# `(; σ, cell, site, model, history)` (Bool and tuples of names). It follows `st.σ`,
+# `st.<part>.<name>`, `alias.<name>` for `alias` bound to `st.cell` (a `HostPhase` body's
+# `cell`), the cell helpers below given the whole cell state, and `Potts._cellkind` /
+# `CorePotts.owner_kind`. `length`/`size` of a leaf read only its shape (not a read).
+const _CELL_HELPER_READS = Dict{String, Tuple{Vararg{Symbol}}}(
+    "CorePotts.centroid_distance" => (:volume, :anchor, :m1), "CorePotts.centroid" => (:volume, :anchor, :m1),
+    "CorePotts.centroid_position" => (:volume, :anchor, :m1), "Potts._centroid_axis" => (:volume, :anchor, :m1),
+    "Potts._displacement_axis" => (:volume, :anchor, :m1), "CorePotts.major_length" => (:volume, :m1, :m2),
+    "CorePotts.cluster_of" => (:cluster,))
+function _state_reads(exprs; alias::Union{Nothing, Symbol} = nothing)
+    σ = Ref(false)
+    whole = Ref(false)
+    parts = Dict(p => Set{Symbol}() for p in (:cell, :site, :model, :history))
+    iscell(x) = x == :(st.cell) || (alias !== nothing && x === alias)
+    function leaf(x)                  # (part, name) of a leaf access, or nothing
+        x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode || return nothing
+        a, n = x.args[1], x.args[2].value
+        a === :st && n === :σ && return (:σ, :σ)
+        iscell(a) && return (:cell, n)
+        a isa Expr && a.head === :. && a.args[1] === :st && a.args[2] isa QuoteNode && a.args[2].value in keys(parts) &&
+            return (a.args[2].value, n)
+        return nothing
+    end
+    function visit(x)
+        whole[] && return
+        if x === :st || (alias !== nothing && x === alias)
+            whole[] = true
+        elseif x isa Expr
+            l = leaf(x)
+            if l !== nothing
+                l[1] === :σ ? (σ[] = true) : push!(parts[l[1]], l[2])
+            elseif iscell(x)
+                whole[] = true
+            elseif x.head === :. && any(p -> x == Expr(:., :st, QuoteNode(p)), keys(parts))
+                whole[] = true                          # a whole part passed somewhere
+            elseif x.head === :call && x.args[1] in (:length, :size) && length(x.args) >= 2 && leaf(x.args[2]) !== nothing
+                foreach(visit, x.args[3:end])           # the shape only
+            elseif x.head === :call && string(x.args[1]) in ("Potts._cellkind", "CorePotts.owner_kind") &&
+                   length(x.args) >= 2 && x.args[2] === :st
+                push!(parts[:cell], :kind)
+                string(x.args[1]) == "CorePotts.owner_kind" && (σ[] = true)
+                foreach(visit, x.args[3:end])
+            elseif x.head === :call && haskey(_CELL_HELPER_READS, string(x.args[1]))
+                for a in x.args[2:end]
+                    iscell(a) ? union!(parts[:cell], _CELL_HELPER_READS[string(x.args[1])]) : visit(a)
+                end
+            else
+                foreach(visit, x.args)
+            end
+        end
+        return
+    end
+    foreach(visit, exprs)
+    whole[] && return nothing
+    sorted(p) = Tuple(sort!(collect(parts[p])))
+    return (; σ = σ[], cell = sorted(:cell), site = sorted(:site), model = sorted(:model), history = sorted(:history))
 end
 
 # One SciML integrator per trajectory, keyed by the identity of its live state array (held
 # weakly; ensembles run trajectories concurrently through the same phase object), rebuilt if
 # the parameter-tuple type changes (another algorithm, backend or relation set).
-struct _AdaptiveODE{F, A, K}
+struct _AdaptiveODE{F, A, K, R}
     f::F
     alg::A
     kwargs::K
@@ -585,6 +645,7 @@ struct _AdaptiveODE{F, A, K}
     scope::Symbol
     T::Type
     dt::Float64
+    reads::R                     # the state leaves the rates read (`_state_reads`; `nothing`: all)
     integrators::Dict{UInt, Tuple{WeakRef, Any}}
     lock::ReentrantLock
 end
@@ -596,8 +657,8 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
     CorePotts._sync!(stats, backend)
     owner = st.σ                                   # identifies the trajectory
     cpu = backend isa KernelAbstractions.CPU
-    host = cpu ? st : CorePotts._snapshot(stats, backend, st)
-    hp = cpu ? p : CorePotts._adapt_host(stats, p)
+    host = cpu ? st : _adaptive_host_state(ph, stats, backend, st)
+    hp = cpu ? p : CorePotts._adapt_host(stats, p)     # Potts' parameters are isbits: nothing to copy
     hctx = merge(ctx, (; lattice = CorePotts._host_lattice(stats, ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
@@ -647,6 +708,21 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
         foreach(n -> CorePotts._copy!(stats, getfield(dst, n), getfield(part, n)), ph.outs)
     end
     return 0
+end
+
+# The host state of an adaptive solve on a device (D-092): the unknowns, the leaves the rates
+# read and, for cell ODEs, `volume` (dead cells are skipped) come down; scratch outputs are
+# host buffers (every entry is written); every other leaf stays on the device, unread.
+function _adaptive_host_state(ph::_AdaptiveODE, stats, backend, st)
+    r = ph.reads
+    r === nothing && return CorePotts._snapshot(stats, backend, st)
+    cell, model = ph.scope === :cell ? ((r.cell..., ph.names..., :volume), r.model) : (r.cell, (r.model..., ph.names...))
+    host = CorePotts._host_leaves(stats, st; σ = r.σ, cell = unique(cell), model = unique(model), r.site, r.history)
+    fresh = Tuple(n for n in ph.outs if !(n in (ph.scope === :cell ? cell : model)))    # not copied down
+    isempty(fresh) && return host
+    bufs(nt) = merge(nt, NamedTuple{fresh}(map(n -> CorePotts._host_buffer(getfield(nt, n)), fresh)))
+    return ph.scope === :cell ? CorePotts.CPMState(host.σ, bufs(host.cell), host.site, host.model, host.history) :
+           CorePotts.CPMState(host.σ, host.cell, host.site, bufs(host.model), host.history)
 end
 
 function _cached_integrator(cache, owner)
@@ -883,7 +959,12 @@ function _link_phases(c::CompiledPottsSystem, T)
             end
         end
         f = _rgf(:((cell, st, p, ctx, mcs) -> $(Expr(:block, body, :(return nothing)))))
-        push!(out, CorePotts.HostPhase(f; every = r.every))
+        # D-092: the body writes only its relationship's columns; it reads what the scan finds
+        writes = (CorePotts.adjacency_name(r.relationship), (Symbol(:link_, info(x).name) for x in c.edge_vars[r.relationship])...)
+        rd = _state_reads((body,); alias = :cell)
+        reads = rd === nothing || !all(isempty, (rd.site, rd.model, rd.history)) ? nothing :
+                Tuple(n for n in ((rd.σ ? (:σ,) : ())..., rd.cell...) if !(n in writes))
+        push!(out, CorePotts.HostPhase(f; every = r.every, reads, writes))
     end
     return out
 end
