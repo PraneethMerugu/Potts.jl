@@ -199,16 +199,12 @@ mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS
     const mscratch::MS              # `MobileCounters` of the standard-rule refresh, or nothing
 end
 
-# Counts of the standard-rule refresh (D-081). `device` = [lifecycle events, mobile-count
-# change, changed sites]: with a lifecycle it is the lifecycle's `count`, so the counts of a
-# refresh after an event MCS travel with the next lifecycle read-back (no transfer of their
-# own on a device). `pending`: counts not read yet; `stale`: the MCS since then whose
-# attempts used the old count (corrected when they arrive).
-mutable struct MobileCounters{D}
-    const device::D
-    const host::Vector{Int32}
-    pending::Bool
-    stale::Int
+# Counts of the standard-rule refresh (D-081) run by `refresh_frozen!` and on the host
+# lifecycle path: `device` = [unused, mobile-count change, changed sites], read into `host`
+# at once. The device lifecycle (D-089) keeps its own counts on the device (`_fold_lifecycle!`).
+struct MobileCounters{D}
+    device::D
+    host::Vector{Int32}
 end
 
 # Ensemble statistics: totals over trajectories.
@@ -257,11 +253,11 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
-             LifecycleCache(backend, ndims(lat), ncells(prob.u0))
+             LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback),
-        prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility, lcache))
+        prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
     integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
@@ -326,10 +322,12 @@ end
 """
 Host snapshot of the current state: independent of the live state on every backend
 (`Adapt.adapt(Array, …)` alone would alias host arrays). Synchronizes the device. The live
-device state is `integ.state`. Counted in `integ.stats`.
+device state is `integ.state`. Counted in `integ.stats`. A host read point:
+the device lifecycle's statistics and frozen-mask counts are folded into `integ.stats`.
 """
 function current_state(integ::PottsIntegrator)
     _sync!(integ.stats, integ.backend)
+    _fold_lifecycle!(integ)
     return _snapshot(integ.stats, integ.backend, integ.state)
 end
 
@@ -358,7 +356,6 @@ function CommonSolve.step!(integ::PottsIntegrator)
     lat = integ.ctx.lattice
     phases = integ.f.phases
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
-    _count_stale!(integ.mscratch)
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     if integ.alg isa SequentialCPM
@@ -372,17 +369,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     end
     integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
-    if integ.f.lifecycle !== nothing
-        sc = integ.mscratch
-        nread = sc !== nothing && sc.pending ? 3 : 1
-        launches, events, read = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state,
-            integ.p, integ.ctx, integ.key, integ.t, integ.backend, integ.stats; nread)
-        integ.stats.launches += launches
-        read && _take_counts!(integ)                # a deferred refresh's counts, if any
-        # a transition, division or removal may move sites into or out of frozen kinds;
-        # quiet MCS pay nothing (D-081)
-        events && _refresh_frozen!(integ, true)
-    end
+    integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
     integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     integ.t += 1
@@ -393,38 +380,54 @@ function CommonSolve.step!(integ::PottsIntegrator)
     return integ
 end
 
+# The host lifecycle path (CPU; host hooks on a device): events are known on the host, and
+# the frozen mask follows them at once (D-081; quiet MCS pay nothing)
+function _step_lifecycle!(integ, ::Nothing)
+    launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, integ.stats)
+    integ.stats.launches += launches
+    events && _refresh_frozen!(integ)
+    return nothing
+end
+# The device lifecycle (D-089): enqueued, nothing read; the mask refresh is enqueued with it.
+# When no device form can launch (`_FORM_HOST`), the host planner runs instead
+function _step_lifecycle!(integ, D::DeviceLifecycle)
+    D.form[] == _FORM_HOST && return _step_lifecycle!(integ, nothing)
+    sc = integ.mscratch
+    refresh = sc === nothing ? nothing : (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
+    n = run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
+        integ.backend, refresh)
+    n < 0 && return _step_lifecycle!(integ, nothing)
+    integ.stats.launches += n
+    return nothing
+end
+
+"""
+Whether `f`'s lifecycle is planned on the device: on every device backend, unless a
+host hook needs host decisions (a `Lifecycle` `rebuild!`, or a custom `remake_frozen` rule
+of a mask that follows the state). `_FORCE_DEVICE_LIFECYCLE[]` (tests only) selects the
+device planner on the CPU backend too, for `CheckerboardCPM` (`SequentialCPM` never runs on
+a device: its mobile-site list is host state, which the device planner does not maintain).
+"""
+function _device_planned(backend, alg, f::CPMFunction)
+    lc = f.lifecycle
+    lc === nothing && return false
+    (backend isa CPU && !(_FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM)) && return false
+    lc.rebuild! === no_rebuild || return false
+    sys = f.sys
+    return !(frozen_varies(sys) && frozen_kinds(sys) === nothing)
+end
+const _FORCE_DEVICE_LIFECYCLE = Ref(false)
+
 # counters for the standard-rule refresh: only when the mask can change by the standard rule
-_mobility_scratch(backend, prob, ::AllMobile, lcache) = nothing
-function _mobility_scratch(backend, prob, ::MaskMobility, lcache)
+_mobility_scratch(backend, prob, ::AllMobile) = nothing
+function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
-    lcache === nothing && return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3), false, 0)
-    return MobileCounters(lcache.count, lcache.host, false, 0)
+    return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3))
 end
 
-@inline _count_stale!(::Nothing) = nothing
-@inline _count_stale!(sc::MobileCounters) = (sc.pending && (sc.stale += 1); nothing)
-
-# apply the counts in `sc.host` (just read) of a pending refresh
-function _take_counts!(integ)
-    sc = integ.mscratch
-    (sc === nothing || !sc.pending) && return nothing
-    d = Int(sc.host[2])
-    integ.nmobile += d
-    integ.stats.attempts += d * sc.stale            # MCS that ran with the old count
-    sc.pending = false
-    sc.stale = 0
-    return nothing
-end
-
-# read a pending refresh's counts now (synchronizes; only off the MCS loop)
-function _flush_counts!(integ)
-    sc = integ.mscratch
-    (sc === nothing || !sc.pending) && return nothing
-    _copy!(integ.stats, sc.host, sc.device)
-    fill!(sc.device, Int32(0))
-    _take_counts!(integ)
-    return nothing
-end
+# bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
+_flush_counts!(integ) = _fold_lifecycle!(integ)
 
 """
     refresh_frozen!(integrator)
@@ -441,44 +444,37 @@ standard rule (`frozen_kinds`) runs as one kernel on the integrator's backend; c
 directly, it then reads back its counts (one small transfer). A custom rule
 (`remake_frozen`) runs on a host copy of the state.
 
-On a device, after the integrator's own refresh on an event MCS, `integrator.nmobile` and
-`integrator.stats.attempts` lag by that refresh's change until the next lifecycle read-back
-(the mask itself is current at once). `solve!`, `checkpoint` and any direct
-`refresh_frozen!` bring them up to date; code that calls `step!` directly and reads them
-between those points sees the lagging values.
+On a device, the integrator's own refreshes after lifecycle events run on the device:
+`integrator.nmobile`, `integrator.stats.attempts` and `stats.refreshes` are brought
+up to date at the host read points (a save, `integrator.u`, `checkpoint`, the end of
+`solve!`) and by any direct `refresh_frozen!`; code that calls `step!` directly and reads
+them in between sees lagging values (the mask itself is always current).
 """
-refresh_frozen!(integ::PottsIntegrator) = (_refresh_frozen!(integ, false); integ)
+refresh_frozen!(integ::PottsIntegrator) = (_refresh_frozen!(integ); integ)
 
-# `defer`: after a lifecycle event on a device, the counts wait for the next lifecycle
-# read-back (the mask itself is current at once: CheckerboardCPM reads only the mask)
-function _refresh_frozen!(integ::PottsIntegrator, defer::Bool)
+function _refresh_frozen!(integ::PottsIntegrator)
     m = integ.ctx.mobility
     (m isa AllMobile || !frozen_varies(integ.f.sys)) && return nothing
     integ.stats.refreshes += 1
-    _refresh_frozen!(integ, m, frozen_kinds(integ.f.sys), defer)
+    _refresh_frozen!(integ, m, frozen_kinds(integ.f.sys))
     return nothing
 end
 
 # the standard rule: one kernel rewrites the mask and counts the changes on the device
-function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple, defer::Bool)
+function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc = integ.mscratch
-    defer &= !(integ.backend isa CPU) && integ.lcache !== nothing   # the host reads its own memory at once
-    defer || _flush_counts!(integ)
+    _flush_counts!(integ)                           # earlier device refreshes first
     _launch(_frozen_body!, integ.backend, length(integ.state.σ),
         (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
     integ.stats.launches += 1
-    if defer
-        sc.pending, sc.stale = true, 0
-    else
-        _copy!(integ.stats, sc.host, sc.device)     # synchronizes (a no-op copy on the CPU)
-        fill!(sc.device, Int32(0))
-        integ.nmobile += sc.host[2]
-        sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
-    end
+    _copy!(integ.stats, sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
+    fill!(sc.device, Int32(0))
+    integ.nmobile += sc.host[2]
+    sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
     return nothing
 end
 # a custom rule: `remake_frozen` on a host copy of the state
-function _refresh_frozen!(integ, m::MaskMobility, ::Nothing, defer::Bool)
+function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
     _sync!(integ.stats, integ.backend)
     u = integ.backend isa CPU ? integ.state : _snapshot(integ.stats, integ.backend, integ.state)
     fz = frozen_sites(integ.prob, u)
@@ -509,7 +505,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     while integ.t < integ.tstop && integ.retcode == SciMLBase.ReturnCode.Default
         step!(integ)
     end
-    _flush_counts!(integ)                           # exact `stats.attempts` at the end
+    _flush_counts!(integ)                           # exact `stats` at the end (D-089)
     _check_status!(integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success

@@ -493,17 +493,17 @@ event (transition, division, removal), so a cell that becomes frozen stops movin
 next sweep, a released cell moves, and a removed frozen cell's sites become mobile. It is
 built on the integrator's backend by one kernel (a site is frozen when its owner's kind is
 frozen or it lies outside the domain); MCS without events, and models without a frozen
-kind (a domain alone included), pay nothing. On a device the refresh adds no
-synchronization: the mask is current for the next sweep at once, and its counts travel
-with the next lifecycle read-back. `stats.refreshes` counts the recomputations.
+kind (a domain alone included), pay nothing. On a device the whole lifecycle, the refresh
+included, runs on the device with no synchronization (D-089): the mask is current for the
+next sweep at once, and its counts stay on the device until the next host read.
+`stats.refreshes` counts the recomputations.
 
 `stats.attempts` is the sum over MCS of the number of mobile sites at that MCS's sweep,
 which may reach zero mid-run (the MCS then makes no attempt). On the CPU it is exact after
-every `step!`. On a device, after an MCS with a lifecycle event the new count is learned
-at the next MCS on which the lifecycle runs; the MCS in between are added with the old
-count and corrected then. So it is exact whenever `solve!` returns, at `checkpoint`, after
-`refresh_frozen!`/`reinit!`, and after any `step!` on which the lifecycle ran; between
-those it may lag by the change of one refresh.
+every `step!`. On a device it, `stats.lifecycle` and `stats.refreshes` are exact at the
+host read points: a save, `integrator.u` (`current_state`), `checkpoint`, the end of
+`solve!`, and after `refresh_frozen!`/`reinit!`. Between those they may lag (the device
+counts are folded in at the next read point, exactly).
 
 State written outside the lifecycle:
 - `setu`/`set_state!` on `kind` refreshes the mask itself.

@@ -524,16 +524,19 @@ using Metal
         # on the device the context holds the mask only; the count lives on the host
         integ = init(fk_problem(fk_flip(S); kind = fk_swap, T = Float32), CheckerboardCPM(); backend)
         @test integ.ctx.mobility.sites === nothing && integ.nmobile == 900 - 36
-        # the counts of a refresh after an event MCS arrive with the next lifecycle read-back
+        # D-089: the counts of a refresh after an event MCS stay on the device until a host
+        # read point (here `integ.u`), which corrects the MCS that ran with the old count
         rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
-        integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)
+        integ = init(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend, save_start = false)
         for _ in 0:S
             step!(integ)
         end
-        @test integ.mscratch.pending && integ.nmobile == 900 - 36     # mask current, count deferred
+        @test integ.nmobile == 900 - 36                               # mask current, count on the device
         @test count(!, Array(integ.ctx.mobility.frozen)) == 900
-        step!(integ)                                                  # MCS S+1: its read-back
-        @test !integ.mscratch.pending && integ.nmobile == 900
+        step!(integ)                                                  # MCS S+1: no read-back …
+        @test integ.nmobile == 900 - 36 && integ.stats.lifecycle.removals == 0
+        integ.u                                                       # … until a host read point
+        @test integ.nmobile == 900 && integ.stats.lifecycle.removals == 1
         @test integ.stats.attempts == (S + 1) * (900 - 36) + 900      # MCS S+1 corrected
         # removal of the frozen cell: the mobile-site count grows by the device count
         sol = solve(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)

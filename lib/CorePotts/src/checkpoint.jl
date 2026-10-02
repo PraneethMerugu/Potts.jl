@@ -25,7 +25,8 @@ end
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
-    _flush_counts!(integ)                           # exact `stats.attempts` in the checkpoint
+    # `current_state` is the host read point that makes `stats` exact (D-089): it runs
+    # before the statistics are copied
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
         prob.repeat, _adapt_host(integ.stats, integ.p), prob.f.fingerprint, deepcopy(integ.stats))
 end
@@ -67,6 +68,7 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
         "reinit!: the new state's arrays differ in shape from the integrator's (cell capacity " *
         "$(length(integ.state.cell.kind)), got $(length(u0.cell.kind))$(_key_difference(integ.state, u0))); " *
         "use `remake` and `init`"))
+    _fold_lifecycle!(integ; report = false)     # device lifecycle counts of the old run: dropped
     _copy_state!(integ.state, u0)
     refresh_frozen!(integ)          # the frozen mask of the new state (static masks: nothing to do)
     integ.t = t0
