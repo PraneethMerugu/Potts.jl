@@ -9,9 +9,10 @@
 #   partition  (sites)   removed cells' sites → medium; each dividing cell's sites on the
 #              positive side of its plane → the daughter; the daughter's volume and moment
 #              sums accumulate in integer scratch (exact, order-independent)
-#   cells      (cells)   daughter column copies, generation, cluster ids, links (removed
-#              cells' links dropped, daughters unlinked), then the daughter state rules and
-#              transitions (they see the trackers as the CPU path's rules do: not yet updated)
+#   copies     (cells)   daughter column copies, generation, cluster ids, links (removed
+#              cells' links dropped, daughters unlinked), for every cell before any rule runs
+#   rules      (cells)   the daughter state rules and transitions (they see the trackers as
+#              the CPU path's rules do: not yet updated)
 #   surface    (sites)   the surface change of each parent and daughter (only the moved sites)
 #   finalize   (cells)   volume and moments of parents and daughters, removed cells' trackers
 #   clusters   re-root clusters whose root died; cluster volume (cells) and surface (sites)
@@ -30,9 +31,14 @@ const _ACC_REMOVALS = 2
 const _ACC_TRANSITIONS = 3
 const _ACC_DEFERRED = 4
 const _ACC_EMPTY = 5
-const _ACC_ERROR = 6                # bits: 1 = EVENT_DIVIDE_CLUSTER without cluster state,
-                                    # 2 = a dividing cell too large for the Int32 moment scratch
-const _NACC = 6
+const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
+const _ACC_LARGE = 7                # divisions deferred: the cell is too large for the Int32
+                                    # moment scratch (`_scratch_ok`; also counted as deferred)
+const _NACC = 7
+
+# The bound of `_scratch_ok` (`typemax(Int32)`); a `Ref` read when the scratch is built, so
+# that tests can lower it (not public API)
+const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
 const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :cluster,
@@ -45,7 +51,7 @@ function _device_scratch(backend, N::Int, cap::Int)
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(Int32, 3), mask = z(Int64, 3))
+        mcnt = z(Int32, 3), mask = z(Int64, 3), limit = _SCRATCH_LIMIT[])
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -85,7 +91,7 @@ end
         ::Val{CL}) where {F, CL}
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
-        e = Int32(trigger(st, p, ctx, key, mcs, Int32(c)))
+        e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
         # a dead root still names its cluster while members live: its id is held (not free)
         CL && (@inbounds dv.held[st.cell.cluster[c]] = round)
     end
@@ -131,7 +137,7 @@ end
             raw = @inbounds events[c]
             e = _event(ruled, raw)
             if e == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
-                CL || Atomix.@atomic dv.acc[_ACC_ERROR] |= Int32(1)
+                CL || Atomix.@atomic dv.acc[_ACC_NOCLUSTER] += Int32(1)
                 e = EVENT_NONE
                 @inbounds events[c] = EVENT_NONE
             end
@@ -225,7 +231,7 @@ end
             e = _event(ruled, @inbounds events[c])
             if _is_free(st, dv, round, e, c, cl)
                 k += Int32(1)
-                @inbounds dv.freelist[k] = Int32(c)
+                @inbounds dv.freelist[k] = c % Int32
             end
             if CL && e == EVENT_DIVIDE_CLUSTER && !greedy
                 @inbounds dv.coff[c] = off
@@ -268,32 +274,48 @@ end
     for c in lo:hi
         if @inbounds(dv.req[c]) == 1
             if rk < nfree
-                @inbounds daughter[c] = dv.freelist[rk + 1]
-                _check_scratch!(dv, st.cell, c, Val(ndims(ctx.lattice)))
-                n = normal(st, p, ctx, key, mcs, Int32(c))
-                for d in 1:length(n)
-                    @inbounds normals[d, c] = n[d]
+                if _scratch_ok(dv, st.cell, c, Val(ndims(ctx.lattice)))
+                    @inbounds daughter[c] = dv.freelist[rk + 1]
+                    n = normal(st, p, ctx, key, mcs, c % Int32)
+                    for d in 1:length(n)
+                        @inbounds normals[d, c] = n[d]
+                    end
+                else                            # deferred (its slot stays free this round)
+                    _defer_large!(dv, Int32(1))
                 end
             end
             rk += Int32(1)
         end
         # a root (its cluster id is itself) whose cluster divides: members are found by id
         if CL && @inbounds(st.cell.cluster[c]) == c && _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER
-            _plan_cluster!(Int32(c), events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs)
+            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs)
         end
     end
     return nothing
 end
 
-# A daughter's moment sums (about the parent's anchor) accumulate in Int32 scratch: exact
-# while the parent's own second moments fit in Int32 (the daughter's are a part of them).
-# A larger cell sets an error bit, raised at the next host read point.
-@inline function _check_scratch!(dv, cell, c, ::Val{N}) where {N}
+# A daughter's volume and moment sums about the parent's anchor accumulate in Int32 scratch
+# (`_dpartition_body!`). With δ the integer offsets (site − parent anchor) of the daughter's
+# sites, a subset of the parent's, and P_k = Σ_parent δ_k² (the parent's `m2[k, k]`, exact):
+#   |Σ δ_k| ≤ Σ |δ_k| ≤ Σ δ_k² ≤ P_k                         (integers: |δ| ≤ δ²)
+#   |Σ δ_k δ_l| ≤ Σ (δ_k² + δ_l²)/2 ≤ max(P_k, P_l)
+#   0 ≤ Σ δ_k² ≤ P_k,   0 ≤ the daughter's volume ≤ the parent's (an Int32 site count)
+# so every final sum fits in Int32 when every P_k ≤ `typemax(Int32)` (atomic adds wrap, so
+# the order of the partial sums does not matter), and each site's own term |δ_k δ_l| ≤ P_k.
+# A larger cell does not divide: its division is deferred and counted (`_ACC_LARGE`), the
+# state stays exact, and the host warns at the next read point.
+@inline function _scratch_ok(dv, cell, c, ::Val{N}) where {N}
     ok = true
     for k in 1:N
-        ok &= @inbounds(cell.m2[_pair(N, k, k), c]) < typemax(Int32)
+        ok &= Int64(@inbounds(cell.m2[_pair(N, k, k), c])) <= dv.limit
     end
-    ok || Atomix.@atomic dv.acc[_ACC_ERROR] |= Int32(2)
+    return ok
+end
+
+@inline function _defer_large!(dv, ndiv)
+    Atomix.@atomic dv.acc[_ACC_DIVISIONS] -= ndiv
+    Atomix.@atomic dv.acc[_ACC_DEFERRED] += Int32(1)
+    Atomix.@atomic dv.acc[_ACC_LARGE] += Int32(1)
     return nothing
 end
 
@@ -315,6 +337,17 @@ end
     T = eltype(normals)
     cap = length(events)
     raw_r = @inbounds events[r]
+    # a member too large for the moment scratch defers the whole cluster's division
+    ok = true
+    for m in 1:cap
+        (@inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == r) || continue
+        _event(ruled, @inbounds events[m]) == EVENT_REMOVE && continue
+        ok &= _scratch_ok(dv, cell, m, Val(N))
+    end
+    if !ok
+        _defer_large!(dv, @inbounds dv.nmem[r])
+        return nothing
+    end
     j = @inbounds dv.coff[r]
     ar = anchor(cell, r, Val(N))
     # cluster moments about the root's anchor, summed exactly over the live members
@@ -338,7 +371,6 @@ end
         em == EVENT_REMOVE && continue
         @inbounds daughter[m] = dv.freelist[j + 1]
         j += Int32(1)
-        _check_scratch!(dv, cell, m, Val(N))
         ev = em == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
         @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
     end
@@ -370,7 +402,7 @@ end
     for c in lo:hi
         d = @inbounds daughter[c]
         if d > 0
-            @inbounds dv.newborn[d] = Int32(c)
+            @inbounds dv.newborn[d] = c % Int32
             surf === nothing || (@inbounds surf[d] = zero(eltype(surf)))
         end
         e = _event(ruled, @inbounds events[c])
@@ -438,10 +470,12 @@ end
         if side > 0
             @inbounds σ[i] = d
             Atomix.@atomic dv.dvol[d] += Int32(1)
+            # `% Int32`: |δ_k|, |δ_k δ_l| ≤ the parent's m2[k, k] ≤ the scratch limit
+            # (`_scratch_ok`), and the sums wrap (exact once complete)
             for k in 1:N
-                Atomix.@atomic dv.dm1[k, d] += Int32(δ[k])
+                Atomix.@atomic dv.dm1[k, d] += δ[k] % Int32
                 for l in k:N
-                    Atomix.@atomic dv.dm2[_pair(N, k, l), d] += Int32(δ[k] * δ[l])
+                    Atomix.@atomic dv.dm2[_pair(N, k, l), d] += (δ[k] * δ[l]) % Int32
                 end
             end
         end
@@ -450,7 +484,9 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# Cells: column copies, generation, cluster ids, links, then the state rules
+# Cells: column copies, generation, cluster ids and links of every cell, then (after a
+# barrier or a kernel boundary) the state rules, which may read or write any cell's columns
+# or links (e.g. `add_link!(st.cell, parent, daughter)` in `divide!`)
 
 @inline function _copy_column!(a::AbstractVector, c, d)
     @inbounds a[d] = a[c]
@@ -476,8 +512,8 @@ end
     return nothing
 end
 
-@inline function _dcells_body!(c, dv, par, events, daughter, removed, cols, links, kindf::KF, divide!::DF,
-        cluster_divide!::CF, st, p, ctx, key, mcs, ruled, ::Val{CL}) where {KF, DF, CF, CL}
+@inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
+        ::Val{CL}) where {CL}
     _on(dv, par) || return nothing
     d = @inbounds daughter[c]
     if d > 0
@@ -491,6 +527,12 @@ end
         end
     end
     map(L -> _clean_links!(L, c, removed, dv.newborn), links)
+    return nothing
+end
+
+@inline function _drules_body!(c, dv, par, events, daughter, kindf::KF, divide!::DF, cluster_divide!::CF, st, p,
+        ctx, key, mcs, ruled) where {KF, DF, CF}
+    _on(dv, par) || return nothing
     _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
     return nothing
 end
@@ -579,8 +621,8 @@ end
     ok = @inbounds(cell.volume[k]) > 0 && @inbounds(cell.cluster[k]) == k
     @inbounds dv.okc[c] = ok
     if !ok
-        @inbounds(cell.kind[c]) == @inbounds(cell.kind[k]) && Atomix.@atomic dv.rootA[k] min Int32(c)
-        Atomix.@atomic dv.rootB[k] min Int32(c)
+        @inbounds(cell.kind[c]) == @inbounds(cell.kind[k]) && Atomix.@atomic dv.rootA[k] min (c % Int32)
+        Atomix.@atomic dv.rootB[k] min (c % Int32)
     end
     return nothing
 end
@@ -588,7 +630,7 @@ end
 @inline function _dcluster_root_body!(c, dv, par, cell, cvol, csurf)
     _on(dv, par) || return nothing
     if @inbounds(cell.volume[c]) == 0
-        @inbounds cell.cluster[c] = Int32(c)
+        @inbounds cell.cluster[c] = c % Int32
     elseif !@inbounds(dv.okc[c])
         k = @inbounds cell.cluster[c]
         a = @inbounds dv.rootA[k]
@@ -696,9 +738,11 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     D.plan!(buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round, fns.normal, fns.cnormal,
         ruled, st, p, ctx, key, mcs, CL, surf; ndrange = PLAN_WG)
     _launch(_dpartition_body!, backend, n, (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
-    _launch(_dcells_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links,
-        fns.kind, fns.divide!, fns.cluster_divide!, st, p, ctx, key, mcs, ruled, CL))
-    launches = 4
+    _launch(_dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
+        ruled, CL))
+    _launch(_drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
+    launches = 5
     if surf !== nothing
         _launch(_dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
         launches += 1
@@ -786,8 +830,12 @@ end
         (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice))
     @synchronize
     tq = @index(Local, Linear)
-    _each!(_dcells_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        fns.kind, fns.divide!, fns.cluster_divide!, st, p, ctx, key, mcs, ruled, clusters))
+    _each!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
+        st, ruled, clusters))
+    @synchronize
+    tu = @index(Local, Linear)
+    _each!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     @synchronize
     ts = @index(Local, Linear)
     _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
@@ -814,9 +862,12 @@ end
 """
 Fold the device lifecycle's statistics and frozen-mask counts into `integ.stats` (and
 `integ.nmobile`): one transfer each, at a host read point that synchronizes anyway. Warns
-on the first deferred division of the run, as the CPU path does at the event.
+on the first deferred division of the run, as the CPU path does at the event, and on
+divisions deferred for the moment scratch; throws on a cluster event without cluster
+state. Every count, the errors included, is reported once (`acc_seen`). `report = false`
+(`reinit!`) folds without warning or throwing: the old run's counts are dropped.
 """
-function _fold_lifecycle!(integ)
+function _fold_lifecycle!(integ; report::Bool = true)
     lc = integ.lcache
     (lc === nothing || lc.device === nothing) && return nothing
     D = lc.device
@@ -825,14 +876,15 @@ function _fold_lifecycle!(integ)
     δ(i) = Int(D.acc[i] - D.acc_seen[i])             # Int32 differences (wrap-safe)
     s = stats.lifecycle
     deferred = δ(_ACC_DEFERRED)
-    deferred > 0 && s.deferred == 0 && @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
+    large = δ(_ACC_LARGE)              # of which for the moment scratch (warned below)
+    deferred > large && s.deferred == 0 && report && @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
                                          "divisions are deferred until slots free up. Pass a larger `capacity`."
     s.divisions += δ(_ACC_DIVISIONS)
     s.removals += δ(_ACC_REMOVALS)
     s.transitions += δ(_ACC_TRANSITIONS)
     s.deferred += deferred
     s.empty_daughters += δ(_ACC_EMPTY)
-    err = D.acc[_ACC_ERROR]
+    nocluster = δ(_ACC_NOCLUSTER)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
         _copy!(stats, D.mask, D.dv.mask)
@@ -844,8 +896,10 @@ function _fold_lifecycle!(integ)
         stats.refreshes += Int(D.mask[3] - D.mask_seen[3])
         D.mask_seen .= D.mask
     end
-    err & 1 != 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
-    err & 2 != 0 && throw(ArgumentError("lifecycle: a dividing cell's second moments exceed the device " *
-                                        "planner's Int32 scratch (a cell far larger than any in use); run it on the CPU"))
+    report || return nothing
+    large > 0 && @warn "lifecycle: $large division(s) deferred: the dividing cell's second moments exceed the " *
+                       "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
+                       "only on the CPU"
+    nocluster > 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
     return nothing
 end

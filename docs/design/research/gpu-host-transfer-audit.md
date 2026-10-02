@@ -481,15 +481,19 @@ the CPU keeps the host plan of §6–7 unchanged.
     atomics-order dependence); clusters by the D-035 greedy pass only when capacity runs out.
   - Trackers: the partition kernel accumulates each daughter's volume and moment sums in
     `Int32` scratch about the parent's anchor (exact while the parent's own second moments
-    fit in `Int32`, far above any cell size in use; the planner checks it and a larger cell
-    raises an error at the next read point); surfaces change only for parents and
+    fit in `Int32`, which bounds every scratch sum; far above any cell size in use). The
+    planner checks it: a larger cell's division is deferred and counted, the state stays
+    exact, and the host warns at the next read point; surfaces change only for parents and
     daughters (one site kernel); cluster trackers are recounted on event rounds only.
   - Cluster planes: the root's work item sums its members' exact moments (O(capacity) per
     dividing cluster, on event rounds only).
+  - Daughter columns, cluster ids and link cleaning run for every cell before any state
+    rule (a barrier in the fused form, a kernel boundary in the staged one), so a rule may
+    read any cell's columns or add links to a newborn (`add_link!` in `divide!`).
 - **Launches:** up to 2¹⁶ sites and 2¹³ cell slots (every published model) the whole
   lifecycle is one launch of one 256-item workgroup, its stages separated by workgroup
   barriers: a quiet MCS costs that one launch, as the trigger alone did. Larger problems
-  launch one kernel per stage (5 on a quiet MCS, +1 with a surface tracker, +2–4 with
+  launch one kernel per stage (6 on a quiet MCS, +1 with a surface tracker, +2–4 with
   clusters, +2 with frozen kinds); every work item after the trigger returns at once on a
   quiet round.
 - **Akeeb 99×60 on Metal** (`/tmp/p60v1_impl_probe.jl`, 600 MCS from MCS 288, seed 0,
