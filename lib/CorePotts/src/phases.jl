@@ -63,6 +63,7 @@ _inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
 (returns nothing; enqueued, not synchronized)."""
 function _device_copy!(backend, dst::AbstractArray, src::AbstractArray)
     length(dst) >= length(src) || throw(DimensionMismatch("destination has $(length(dst)) elements, the source $(length(src))"))
+    isempty(src) && return nothing                       # no zero-size kernel launch
     _launch(_copy_body!, backend, length(src), (dst, src))
     return nothing
 end
@@ -70,6 +71,7 @@ _device_copy!(::KernelAbstractions.CPU, dst::AbstractArray, src::AbstractArray) 
 
 """`fill!(dst, v)` on `backend` without a GPU wait: one kernel on a device."""
 function _device_fill!(backend, dst::AbstractArray, v)
+    isempty(dst) && return nothing
     _launch(_fill_body!, backend, length(dst), (dst, convert(eltype(dst), v)))
     return nothing
 end
