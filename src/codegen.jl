@@ -396,8 +396,13 @@ end
 # Names the stage writes (its updates' left sides).
 _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 
-function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
+_phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
+
+# The phases, and the last cell update phase with the columns it writes (`(; phase, writes)`,
+# or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
+function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     rn = c.gather_names
+    cand = nothing
     integrals = _integral_phases(c, T)
     before = Any[]; after = Any[]
     # integrals: fresh at every MCS boundary (and at init). An update block reads them fresh
@@ -445,7 +450,9 @@ function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
             elseif stage.scope === :model
                 push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
             else
-                push!(dst, CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, stage.updates, stage.every, rn))))
+                ph = CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, stage.updates, stage.every, rn)))
+                push!(dst, ph)
+                phase === :after_mcs && (cand = (; phase = ph, writes = _stage_writes(stage)))
             end
             if !isempty(dirty)
                 w = _stage_writes(stage)
@@ -483,7 +490,10 @@ function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         groups = _ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)
         scratch = _ode_scratch(c, spec, scope)
         for (solver, odes) in groups
-            push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch) :
+            # a host phase right after another one finds the queue idle (the previous one
+            # synchronized and only copied since): it skips its sync (P6.0v3, D-101)
+            sync = isempty(after) || !(last(after) isa _AdaptiveODE)
+            push!(after, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch, sync) :
                          scope === :cell ? CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch))) :
                          CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver; scratch))))
         end
@@ -501,8 +511,65 @@ function _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         scope = any(x -> info(x).name === n && info(x).role === :model, c.sys.variables) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
-    return CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
+    phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
         at_init = (integrals..., snapshots...))
+    return phases, cand
+end
+
+# F1 (P6.0v3, D-101): when the last after-MCS phase is a cell update (`cand`) and the trigger
+# reads the columns it writes only at the trigger's own cell, the update moves into the
+# lifecycle as `Lifecycle.before`: on a device, update and trigger of a cell then run in one
+# work item, one launch for both. Same code, same order (the host planner runs `before` as
+# its own launch first); the expressions and so the fingerprint are unchanged.
+function _fuse_before(c::CompiledPottsSystem, T, phases, lc, cand)
+    (lc === nothing || cand === nothing || lc.before !== nothing) && return phases, lc
+    after = phases.after_mcs
+    (!isempty(after) && last(after) === cand.phase) || return phases, lc
+    _reads_own_only(_trigger_expr(c, T).args[2], cand.writes) || return phases, lc     # the body
+    fused = CorePotts.Lifecycle(lc.trigger, lc.normal, lc.cluster_normal, lc.kind, lc.divide!, lc.cluster_divide!,
+        lc.rebuild!, lc.every, lc.rules, cand.phase.f!)
+    return CorePotts.Phases(phases.before_mcs, Base.front(after), phases.end_mcs, phases.at_init), fused
+end
+
+# Whether generated cell code `ex` (of cell `c`) reads the cell columns `writes` only at its
+# own cell: as `st.cell.x[c]` or `Potts._cellval(st.cell.x, c)`. Any other use of such a
+# column, of the whole cell state (except a `_CELL_HELPER_READS` helper that reads none of
+# them) or of the whole state (except `Potts._cellkind(st, c)` with `kind` unwritten) is not.
+function _reads_own_only(ex, writes)
+    ok = Ref(true)
+    column(x) = x isa Expr && x.head === :. && length(x.args) == 2 && x.args[1] == :(st.cell) &&
+                x.args[2] isa QuoteNode ? x.args[2].value : nothing
+    own(col, i) = column(col) !== nothing && i === :c
+    function visit(x)
+        ok[] || return
+        x === :st && (ok[] = false; return)                 # the whole state
+        x isa Expr || return
+        if x == :(st.cell)
+            ok[] = false                                    # the whole cell state
+        elseif (n = column(x)) !== nothing
+            n in writes && (ok[] = false)                   # a written column, not at `c`
+        elseif x.head === :. && x.args[1] === :st && x.args[2] isa QuoteNode
+            return                                          # σ, site, model, history: never written
+        elseif x.head === :ref && length(x.args) == 2 && own(x.args[1], x.args[2])
+            return
+        elseif x.head === :call && string(x.args[1]) == "Potts._cellval" && length(x.args) == 3 &&
+               own(x.args[2], x.args[3])
+            return
+        elseif x.head === :call && string(x.args[1]) == "Potts._cellkind" && length(x.args) == 3 && x.args[2] === :st
+            :kind in writes && (ok[] = false)
+            visit(x.args[3])
+        elseif x.head === :call && haskey(_CELL_HELPER_READS, string(x.args[1]))
+            for a in x.args[2:end]
+                a == :(st.cell) ? (isempty(intersect(_CELL_HELPER_READS[string(x.args[1])], writes)) || (ok[] = false)) :
+                visit(a)
+            end
+        else
+            foreach(visit, x.args)
+        end
+        return
+    end
+    visit(ex)
+    return ok[]
 end
 
 """One model phase computing the population folds `slots` (`name => fold`) into `st.model`."""
@@ -558,7 +625,7 @@ end
 # SciML right-hand side `f!(du, u, (st, p, ctx, mcs, c), t)` from the same lowered rates of
 # the ODEs `odes` of that solver, and a phase that keeps one integrator (created on first
 # use) and re-initializes it per cell / per MCS.
-function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scratch = false)
+function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scratch = false, sync = true)
     ys, locals, bind = _ode_locals(odes)
     env = scope === :cell ? _cell_env(T, :c, c.gather_names; mcs = :mcs, extra = (bind..., :time => :tt)) :
           _model_env(T, c.gather_names; extra = (bind..., :time => :tt))
@@ -571,7 +638,7 @@ function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scr
     end))
     names = [info(x).name for (x, _) in odes]
     return _AdaptiveODE(f, solver.alg, solver.kwargs, names, scratch ? _ode_scratch_name.(names) : names, scope, T,
-        Float64(dt), _state_reads(rates), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+        Float64(dt), _state_reads(rates), sync, Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
 end
 
 # The state leaves generated host code reads (D-092): `nothing` when it uses the state in a
@@ -647,6 +714,8 @@ struct _AdaptiveODE{F, A, K, R}
     T::Type
     dt::Float64
     reads::R                     # the state leaves the rates read (`_state_reads`; `nothing`: all)
+    sync::Bool                   # synchronize first (`false`: right after another host phase,
+                                 # which synchronized and enqueued nothing but its copies)
     integrators::Dict{UInt, Tuple{WeakRef, Any}}
     lock::ReentrantLock
 end
@@ -655,7 +724,7 @@ end
 
 # `stats`: the integrator's `PottsStats`, counting the host copies (D-085)
 function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, stats)
-    CorePotts._sync!(stats, backend)
+    ph.sync && CorePotts._sync!(stats, backend)
     owner = st.σ                                   # identifies the trajectory
     cpu = backend isa KernelAbstractions.CPU
     host = cpu ? st : _adaptive_host_state(ph, stats, backend, st)
@@ -1075,8 +1144,8 @@ function _overlapping_rules(divisions)
     return false
 end
 
-function _lifecycle(c::CompiledPottsSystem, T)
-    isempty(c.divisions) && return nothing
+# The trigger: the event of cell `c` (the first rule that fires)
+function _trigger_expr(c::CompiledPottsSystem, T)
     rn = c.gather_names
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     g = _lifecycle_every(c.divisions)
@@ -1094,7 +1163,15 @@ function _lifecycle(c::CompiledPottsSystem, T)
                            return $(event(:(CorePotts.EVENT_DIVIDE), i))))
         end
     end
-    trigger = _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:block, tests..., :(return CorePotts.EVENT_NONE)))))
+    return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, tests..., :(return CorePotts.EVENT_NONE))))
+end
+
+function _lifecycle(c::CompiledPottsSystem, T)
+    isempty(c.divisions) && return nothing
+    rn = c.gather_names
+    trigger = _rgf(_trigger_expr(c, T))
+    g = _lifecycle_every(c.divisions)
+    ruled = _overlapping_rules(c.divisions)
     ids = eachindex(c.divisions)
     cellids = filter(i -> c.divisions[i].domain isa CellDomain, ids)
     clusterids = filter(i -> c.divisions[i].domain isa ClusterDomain, ids)

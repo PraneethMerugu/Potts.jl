@@ -157,6 +157,48 @@
                 CorePotts._SCRATCH_LIMIT[] = lim
             end
         end
+
+        # `Lifecycle.before` (F1, D-101): a cell update run with the trigger of each cell, in
+        # one work item on the device (one launch for both), on its own on the host planner
+        # and on MCS the lifecycle does not check. Oracle: the same update as an after-MCS
+        # `CellPhase` and no `before`, in every form (and through a failing form's handover)
+        @testset "Lifecycle.before with the trigger" begin
+            σb = zeros(Int32, 30, 30); σb[4:11, 4:11] .= 1; σb[18:25, 18:25] .= 2
+            latb = Lattice((30, 30))
+            stb = with_capacity(initial_state(σb, Int32[1, 1]; cell = merge(init_moments(σb, latb, 2), (; g = [0.0, 2.0]))), 8)
+            tick!(st, p, ctx, key, mcs, c) = (st.cell.volume[c] > 0 && (st.cell.g[c] += 1.0); nothing)
+            ripe(st, p, ctx, key, mcs, c) = st.cell.g[c] >= 4.0 ? EVENT_DIVIDE : EVENT_NONE    # its own `g`
+            restart!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.g[parent] = 0.0; st.cell.g[daughter] = 0.0; nothing)
+            make(fused, every) = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                    phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
+                    lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)),
+                stb, latb, (0, 9), gg_params())
+            fuse = CorePotts.FUSE_SITES[]
+            try
+                for every in (1, 2), (form, device, sites, fault) in (("host", false, fuse, 0), ("fused", true, fuse, 0),
+                    ("staged", true, 0, 0), ("fused → staged", true, fuse, CorePotts._FORM_FUSED),
+                    ("staged → host", true, 0, CorePotts._FORM_STAGED))
+                    CorePotts.FUSE_SITES[] = sites
+                    # the reference runs the planner that ends up running (the host planner's
+                    # trackers may differ from the device planner's in representation)
+                    CorePotts._FORCE_DEVICE_LIFECYCLE[] = device && fault != CorePotts._FORM_STAGED
+                    ref = solve(make(false, every), CheckerboardCPM(); saveat = 1)
+                    CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
+                    CorePotts._LAUNCH_FAULT[] = fault
+                    sol = fault == 0 ? solve(make(true, every), CheckerboardCPM(); saveat = 1) :
+                          @test_logs (:warn, r"cannot launch") solve(make(true, every), CheckerboardCPM(); saveat = 1)
+                    CorePotts._LAUNCH_FAULT[] = 0
+                    @test sol.stats.lifecycle.divisions == ref.stats.lifecycle.divisions >= 3
+                    @test all(i -> sol.u[i].σ == ref.u[i].σ && sol.u[i].cell == ref.u[i].cell, eachindex(ref.u))
+                    # one launch fewer per checked MCS where the device lifecycle runs it
+                    fault == 0 && @test sol.stats.launches == ref.stats.launches - (device ? cld(9, every) : 0)
+                end
+            finally
+                CorePotts.FUSE_SITES[] = fuse
+                CorePotts._LAUNCH_FAULT[] = 0
+                CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            end
+        end
     finally
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
     end

@@ -76,6 +76,7 @@ struct DeviceLifecycle{DV, CO, LI, K, KF}
     plan!::K
     fused!::KF          # the whole lifecycle in one workgroup (small problems), or nothing
     form::Base.RefValue{Int}        # `_FORM_*`
+    before_ran::Base.RefValue{Bool} # this MCS's `Lifecycle.before` was enqueued (with the trigger)
     proven::Base.RefValue{Bool}     # the form has launched once (its workgroup fits)
     round::Base.RefValue{Int}
     acc::Vector{Int32}
@@ -96,15 +97,22 @@ function DeviceLifecycle(backend, N::Int, cap::Int, st)
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(0), zeros(Int32, _NACC),
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), zeros(Int32, _NACC),
         zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
 
 # ---------------------------------------------------------------------------------------
 # Trigger
 
-@inline function _dtrigger_body!(c, events, dv, par, round, trigger::F, st, p, ctx, key, mcs,
-        ::Val{CL}) where {F, CL}
+# `before` (`Lifecycle.before`, or `nothing`) runs for cell `c` first, in the same work item:
+# the trigger of `c` reads only `c`'s own values of what it writes (its contract), so no
+# barrier is needed between them (F1, D-101)
+@inline _before!(::Nothing, c, st, p, ctx, key, mcs) = nothing
+@inline _before!(f::F, c, st, p, ctx, key, mcs) where {F} =
+    (c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32); nothing)
+@inline function _dtrigger_body!(c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
+        ::Val{CL}) where {B, F, CL}
+    _before!(before, c, st, p, ctx, key, mcs)
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
         e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
@@ -112,7 +120,7 @@ end
         CL && (@inbounds dv.held[st.cell.cluster[c]] = round)
     end
     @inbounds events[c] = e
-    e != EVENT_NONE && Atomix.@atomic dv.flag[par] += Int32(1)
+    e != EVENT_NONE && @inbounds Atomix.@atomic dv.flag[par] += Int32(1)    # par ∈ (1, 2) = axes(dv.flag)
     return nothing
 end
 
@@ -720,17 +728,23 @@ _plane(normal, ::Type) = normal
 Enqueue the lifecycle of MCS `mcs` on a device: no synchronization, no transfer.
 `refresh` is `nothing` or `(frozen, kinds)` of a standard-rule frozen mask. Returns
 the number of kernel launches, or -1 when no device form can launch (the host planner then
-runs this MCS and every later one).
+runs this MCS and every later one; `cache.device.before_ran[]` tells whether `lc.before`
+already ran this MCS).
 """
 function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
-    mcs % lc.every == 0 || return 0
     D = cache.device
+    D.before_ran[] = false
+    if mcs % lc.every != 0
+        n = _run_before(lc.before, st, p, ctx, key, mcs, backend)
+        D.before_ran[] = true
+        return n
+    end
     r = (D.round[] += 1)
     par = Int32(isodd(r) ? 1 : 2)
     round = Int32(r % typemax(Int32))
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
-    fns = (; lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
+    fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
         lc.cluster_divide!)
     opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
@@ -776,6 +790,7 @@ end
 
 function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs)
     D.fused!(buf, D.dv, D.cols, D.links, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG)
+    D.before_ran[] = true
     return 1
 end
 
@@ -786,7 +801,8 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     n = length(st.σ)
     lat = ctx.lattice
     surf, cvol, csurf, refresh = opt.surf, opt.cvol, opt.csurf, opt.refresh
-    _launch(_dtrigger_body!, backend, cap, (buf.events, dv, par, round, fns.trigger, st, p, ctx, key, mcs, CL))
+    _launch(_dtrigger_body!, backend, cap, (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
+    D.before_ran[] = true
     D.plan!(buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round, fns.normal, fns.cnormal,
         ruled, st, p, ctx, key, mcs, CL, surf; ndrange = PLAN_WG)
     _launch(_dpartition_body!, backend, n, (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
@@ -853,7 +869,7 @@ end
     tot = @localmem Int32 (3,)
     t0 = @index(Local, Linear)
     _each!(_dtrigger_body!, t0, length(buf.events),
-        (buf.events, dv, par, round, fns.trigger, st, p, ctx, key, mcs, clusters))
+        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters))
     @synchronize
     ta = @index(Local, Linear)
     _plan_a!(ta, cnt, buf.events, buf.daughter, buf.removed, buf.bias, dv, par, round, ruled, st, clusters)

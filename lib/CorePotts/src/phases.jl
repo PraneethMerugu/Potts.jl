@@ -52,10 +52,35 @@ end
 _inline(backend, n) = false
 _inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
 
+# Device→device copies and fills in the step path (P6.0v8, D-101). Metal.jl's `copyto!`
+# between device arrays synchronizes before its blit and waits for it (two GPU waits per
+# copy), and its `fill!` of 1-byte elements is a waiting blit; a kernel enqueues and returns.
+# On the CPU both stay the Base calls they were.
+@inline _copy_body!(i, dst, src) = (@inbounds dst[i] = src[i]; nothing)     # i ≤ length(src) ≤ length(dst)
+@inline _fill_body!(i, dst, v) = (@inbounds dst[i] = v; nothing)            # i ≤ length(dst)
+
+"""`copyto!(dst, src)` of two arrays on `backend` without a GPU wait: one kernel on a device
+(returns nothing; enqueued, not synchronized)."""
+function _device_copy!(backend, dst::AbstractArray, src::AbstractArray)
+    length(dst) >= length(src) || throw(DimensionMismatch("destination has $(length(dst)) elements, the source $(length(src))"))
+    isempty(src) && return nothing                       # no zero-size kernel launch
+    _launch(_copy_body!, backend, length(src), (dst, src))
+    return nothing
+end
+_device_copy!(::KernelAbstractions.CPU, dst::AbstractArray, src::AbstractArray) = (copyto!(dst, src); nothing)
+
+"""`fill!(dst, v)` on `backend` without a GPU wait: one kernel on a device."""
+function _device_fill!(backend, dst::AbstractArray, v)
+    isempty(dst) && return nothing
+    _launch(_fill_body!, backend, length(dst), (dst, convert(eltype(dst), v)))
+    return nothing
+end
+_device_fill!(::KernelAbstractions.CPU, dst::AbstractArray, v) = (fill!(dst, v); nothing)
+
 @inline _site_phase_body!(i, f!::F, st, p, ctx, key, mcs) where {F} =
     (in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i); nothing)
 @inline _cell_phase_body!(c, f!::F, st, p, ctx, key, mcs) where {F} =
-    (f!(st, p, ctx, key, mcs, Int32(c)); nothing)
+    (f!(st, p, ctx, key, mcs, c % Int32); nothing)         # c ≤ ncells < 2^31
 
 function (ph::SitePhase{F})(st, p, ctx, key, mcs, backend) where {F}
     _launch(_site_phase_body!, backend, nsites(ctx.lattice), (ph.f!, st, p, ctx, key, mcs))
@@ -108,7 +133,7 @@ end
 CopyPhase(pair::Pair) = CopyPhase(Part(pair.first), Part(pair.second))
 
 function (ph::CopyPhase)(st, p, ctx, key, mcs, backend)
-    copyto!(ph.dst(st), ph.src(st))
+    _device_copy!(backend, ph.dst(st), ph.src(st))
     return 1
 end
 

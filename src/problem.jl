@@ -110,16 +110,17 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         ce = _constraint_expr(c, T)
         (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
             constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
-            phases = _phases(c, T, values, spec), lifecycle = _lifecycle(c, T),
+            phases = _phases_parts(c, T, values, spec), lifecycle = _lifecycle(c, T),
             total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
     end
+    phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
     # every generated function, without line numbers: independent of the install path, and
     # the canonical solver spec (D-016 as amended by D-075; a model with no field or ODE has
     # none and keeps its fingerprint)
     h = hash(_fingerprint_seed(sys, T))
     isempty(spec.canonical) || (h = hash(spec.canonical, h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
-        claims = _claims(c), reads = _reads(c), fns.phases, fns.lifecycle, acceptance = _acceptance(sys.sweep, T),
+        claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec))
 end

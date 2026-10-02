@@ -40,7 +40,7 @@ end
 ncolorsites(c::Color) = prod(c.count)
 
 @inline function _claim!(claim, c::Int32, won::UInt32)
-    c > 0 && Atomix.@atomic claim[c] max won
+    c > 0 && @inbounds Atomix.@atomic claim[c] max won      # 0 < c ≤ capacity = length(claim)
     return nothing
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
@@ -75,10 +75,10 @@ end
                 T = typeof(temperature)
                 dH = _effective_dH(f, dH, temperature, st, p, prop, ctx)
                 if !isfinite(dH)
-                    Atomix.@atomic status[1] |= STATUS_NONFINITE
+                    @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
                     # random high bits | color-local index: unique and nonzero
-                    won = ((rp >> idbits) << idbits) | UInt32(j)
+                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # j ≤ ncolorsites < 2^idbits
                     _claim!(claim, a, won)
                     _claim!(claim, b, won)
                     writes = f.claims(st, p, prop, ctx)
