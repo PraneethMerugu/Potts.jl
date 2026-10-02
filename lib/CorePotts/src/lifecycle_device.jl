@@ -23,7 +23,20 @@
 # `integ.stats` only at host read points (saves, `integ.u`, `checkpoint`, the end of
 # `solve!`), which synchronize anyway (`_fold_lifecycle!`).
 
+# Items of the planner's (and the fused form's) single workgroup. Fewer cost time on a
+# quiet MCS (each item runs the trigger of capacity/PLAN_WG slots; 128 measured about 1.2×
+# slower on Akeeb Metal, `benchmark/ab.jl`). A kernel's pipeline may allow fewer threads
+# per group (Metal: register-bound, 384 measured for Akeeb's fused kernel); that launch then
+# fails on the host before anything is enqueued, and the next form takes over (`_FORM_*`,
+# `run_lifecycle_device!`).
 const PLAN_WG = 256
+
+# The forms of the device lifecycle, tried in this order: one fused launch (small problems),
+# one kernel per stage, the host planner (D-035; `_step_lifecycle!`)
+const _FORM_FUSED = 1
+const _FORM_STAGED = 2
+const _FORM_HOST = 3
+const _LAUNCH_FAULT = Ref(0)        # tests: the first launch of this form fails (not public API)
 
 # device accumulators (`dv.acc`, cumulative Int32; the host folds the differences)
 const _ACC_DIVISIONS = 1
@@ -62,6 +75,8 @@ struct DeviceLifecycle{DV, CO, LI, K, KF}
     links::LI           # the adjacency matrices of the relationships
     plan!::K
     fused!::KF          # the whole lifecycle in one workgroup (small problems), or nothing
+    form::Base.RefValue{Int}        # `_FORM_*`
+    proven::Base.RefValue{Bool}     # the form has launched once (its workgroup fits)
     round::Base.RefValue{Int}
     acc::Vector{Int32}
     acc_seen::Vector{Int32}
@@ -81,7 +96,7 @@ function DeviceLifecycle(backend, N::Int, cap::Int, st)
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(0), zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(0), zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -301,13 +316,14 @@ end
 #   |Σ δ_k δ_l| ≤ Σ (δ_k² + δ_l²)/2 ≤ max(P_k, P_l)
 #   0 ≤ Σ δ_k² ≤ P_k,   0 ≤ the daughter's volume ≤ the parent's (an Int32 site count)
 # so every final sum fits in Int32 when every P_k ≤ `typemax(Int32)` (atomic adds wrap, so
-# the order of the partial sums does not matter), and each site's own term |δ_k δ_l| ≤ P_k.
+# the order of the partial sums does not matter), and each site's own term
+# |δ_k δ_l| ≤ max(P_k, P_l).
 # A larger cell does not divide: its division is deferred and counted (`_ACC_LARGE`), the
 # state stays exact, and the host warns at the next read point.
 @inline function _scratch_ok(dv, cell, c, ::Val{N}) where {N}
     ok = true
     for k in 1:N
-        ok &= Int64(@inbounds(cell.m2[_pair(N, k, k), c])) <= dv.limit
+        ok &= @inbounds(cell.m2[_pair(N, k, k), c]) <= dv.limit
     end
     return ok
 end
@@ -702,7 +718,8 @@ _plane(normal, ::Type) = normal
 """
 Enqueue the lifecycle of MCS `mcs` on a device (D-089): no synchronization, no transfer.
 `refresh` is `nothing` or `(frozen, kinds)` of a standard-rule frozen mask (P6.0d). Returns
-the number of kernel launches.
+the number of kernel launches, or -1 when no device form can launch (the host planner then
+runs this MCS and every later one).
 """
 function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backend, refresh)
     mcs % lc.every == 0 || return 0
@@ -720,11 +737,45 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh)
     CL = Val(_has_clusters(st))
-    if D.fused! !== nothing
-        D.fused!(buf, D.dv, D.cols, D.links, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG)
-        return 1
+    if D.form[] == _FORM_FUSED
+        D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
+        n = try
+            _LAUNCH_FAULT[] == _FORM_FUSED && throw(ArgumentError("launch refused (test)"))
+            _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
+        catch e
+            _form_failed!(D, e)
+        end
+        n > 0 && (D.proven[] = true; return n)
     end
-    return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+    if D.form[] == _FORM_STAGED
+        D.proven[] && return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+        n = try
+            _LAUNCH_FAULT[] == _FORM_STAGED && throw(ArgumentError("launch refused (test)"))
+            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+        catch e
+            _form_failed!(D, e)
+        end
+        n > 0 && (D.proven[] = true; return n)
+    end
+    return -1
+end
+
+# The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
+# next form takes over. The trigger may have run (staged form): the host planner, which
+# reruns it, takes the MCS from scratch, and later device forms rerun it too
+function _form_failed!(D, e)
+    e isa InterruptException && throw(e)
+    next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
+    @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form cannot launch " *
+          "($(sprint(showerror, e))); using $next"
+    D.form[] += 1
+    D.proven[] = false
+    return -1
+end
+
+function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs)
+    D.fused!(buf, D.dv, D.cols, D.links, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG)
+    return 1
 end
 
 # one kernel per stage (large problems)
@@ -783,13 +834,16 @@ end
     end
     return nothing
 end
+# the stages after the trigger (`args` start with `dv, par`): a quiet round skips the loop
+@inline _each_on!(body::B, t, n, args::A) where {B, A} =
+    (_on(args[1], args[2]) && _each!(body, t, n, args); nothing)
 @inline _each_if!(body::B, t, n, x::Nothing, args::A) where {B, A} = nothing
-@inline _each_if!(body::B, t, n, x, args::A) where {B, A} = _each!(body, t, n, args)
+@inline _each_if!(body::B, t, n, x, args::A) where {B, A} = _each_on!(body, t, n, args)
 @inline _clusters_each!(::Val{false}, body::B, t, n, args::A) where {B, A} = nothing
-@inline _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A} = _each!(body, t, n, args)
+@inline _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A} = _each_on!(body, t, n, args)
 @inline _refresh_each!(body::B, t, n, ::Nothing, dv, par, st, lat) where {B} = nothing
 @inline _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B} =
-    _each!(body, t, n, (dv, par, r.frozen, st.σ, st.cell.kind, r.kinds, lat))
+    _each_on!(body, t, n, (dv, par, r.frozen, st.σ, st.cell.kind, r.kinds, lat))
 @inline _refresh_fold!(t, ::Nothing, dv, par, mcs) = nothing
 @inline _refresh_fold!(t, r, dv, par, mcs) = (t == 1 && _dmask_fold_body!(1, dv, par, mcs); nothing)
 
@@ -826,22 +880,22 @@ end
     _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
-    _each!(_dpartition_body!, tp, length(st.σ),
+    _each_on!(_dpartition_body!, tp, length(st.σ),
         (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice))
     @synchronize
     tq = @index(Local, Linear)
-    _each!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
+    _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
         st, ruled, clusters))
     @synchronize
     tu = @index(Local, Linear)
-    _each!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+    _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     @synchronize
     ts = @index(Local, Linear)
     _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
     @synchronize
     tz = @index(Local, Linear)
-    _each!(_dfinalize_body!, tz, length(buf.events), (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
+    _each_on!(_dfinalize_body!, tz, length(buf.events), (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
     @synchronize
     tk = @index(Local, Linear)
     _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))

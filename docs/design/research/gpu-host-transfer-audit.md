@@ -496,6 +496,9 @@ the CPU keeps the host plan of §6–7 unchanged.
   launch one kernel per stage (6 on a quiet MCS, +1 with a surface tracker, +2–4 with
   clusters, +2 with frozen kinds); every work item after the trigger returns at once on a
   quiet round.
+  A form whose first launch fails (a workgroup larger than the kernel's pipeline allows:
+  Metal's limit is register-bound, 384 for Akeeb's fused kernel) hands over to the next:
+  fused → one kernel per stage → the host planner, with a warning.
 - **Akeeb 99×60 on Metal** (`/tmp/p60v1_impl_probe.jl`, 600 MCS from MCS 288, seed 0,
   126 divisions in both): throughput (one synchronize per 600 MCS) 4750 → 561 µs/MCS; the
   counters over 1200 MCS go from (707 syncs, 2847 transfers, 14.6 MB) per 600 MCS to

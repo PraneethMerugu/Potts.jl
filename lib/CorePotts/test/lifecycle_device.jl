@@ -57,6 +57,34 @@
             end
         end
 
+        # A form whose first launch fails (on a device: its workgroup exceeds what the
+        # kernel's pipeline allows; simulated here) hands over to the next one, fused →
+        # one kernel per stage → host planner, with the results of that form
+        @testset "a form that cannot launch hands over" begin
+            ref = solve(pg, CheckerboardCPM(); saveat = 5)                  # fused
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+            host = solve(pg, CheckerboardCPM(); saveat = 5)
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            fuse = CorePotts.FUSE_SITES[]
+            try
+                for (fault, sites, form, want) in ((CorePotts._FORM_FUSED, fuse, CorePotts._FORM_STAGED, ref),
+                    (CorePotts._FORM_STAGED, 0, CorePotts._FORM_HOST, host))
+                    CorePotts._LAUNCH_FAULT[] = fault
+                    CorePotts.FUSE_SITES[] = sites
+                    integ = init(pg, CheckerboardCPM(); save_start = false, save_end = false)
+                    @test_logs (:warn, r"cannot launch") step!(integ)
+                    @test integ.lcache.device.form[] == form
+                    @test_logs step!(integ)                                   # once
+                    sol = @test_logs (:warn, r"cannot launch") solve(pg, CheckerboardCPM(); saveat = 5)
+                    @test sol.stats.lifecycle.divisions == want.stats.lifecycle.divisions >= 2
+                    @test all(i -> sol.u[i].σ == want.u[i].σ && sol.u[i].cell == want.u[i].cell, eachindex(want.u))
+                end
+            finally
+                CorePotts._LAUNCH_FAULT[] = 0
+                CorePotts.FUSE_SITES[] = fuse
+            end
+        end
+
         # A daughter rule that links mother and daughter: the newborn's links are cleaned
         # (and its columns copied) for every cell before any rule runs, so the rule's link
         # survives exactly as on the host planner (a race before: the link was dropped)

@@ -389,12 +389,16 @@ function _step_lifecycle!(integ, ::Nothing)
     events && _refresh_frozen!(integ)
     return nothing
 end
-# The device lifecycle (D-089): enqueued, nothing read; the mask refresh is enqueued with it
-function _step_lifecycle!(integ, ::DeviceLifecycle)
+# The device lifecycle (D-089): enqueued, nothing read; the mask refresh is enqueued with it.
+# When no device form can launch (`_FORM_HOST`), the host planner runs instead
+function _step_lifecycle!(integ, D::DeviceLifecycle)
+    D.form[] == _FORM_HOST && return _step_lifecycle!(integ, nothing)
     sc = integ.mscratch
     refresh = sc === nothing ? nothing : (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
-    integ.stats.launches += run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p,
-        integ.ctx, integ.key, integ.t, integ.backend, refresh)
+    n = run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
+        integ.backend, refresh)
+    n < 0 && return _step_lifecycle!(integ, nothing)
+    integ.stats.launches += n
     return nothing
 end
 
