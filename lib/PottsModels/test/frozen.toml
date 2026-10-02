@@ -141,3 +141,8 @@ decision = "D-093"
 path = "acceptance/merks_2006_defaults.jl"
 sha256 = "e16226d4d4b9ab1670c5735e238535807db6da46e434b4b86494fb6a006f18ee"
 decision = "D-098"
+
+[[file]]
+path = "acceptance/p6_0ad_barker_offset.jl"
+sha256 = "b2bee6b13fd5ddd718c1b8b93c524d830f6c4d4ffbd039abea63da331da0fb45"
+decision = "D-100"
