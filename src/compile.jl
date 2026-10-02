@@ -54,7 +54,7 @@ const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluste
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight, :site′)   # `site′`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
-const _PROPOSAL_BUILTINS = (:source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells)
+const _PROPOSAL_BUILTINS = (:source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells, :ring_medium)
 const _EDGE_BUILTINS = (:a, :b, :distance)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
 

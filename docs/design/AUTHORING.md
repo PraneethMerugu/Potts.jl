@@ -261,14 +261,16 @@ added to ΔH with unit weight; `copy => expr` is the copy-attempt context.
 (`old`) around the target:
 - `local_components`: its pieces in the target's neighbourhood after the copy;
 - `ring_arcs`: its arcs on the 2D neighbour ring;
-- `ring_cells`: distinct cells on that ring.
+- `ring_cells`: distinct cells on that ring;
+- `ring_medium`: medium sites on that ring (out-of-domain sites on a `Closed()` face are not
+  medium; a `Periodic()` ring wraps).
 
 Connectivity rules are then ordinary statements:
 
 | Rule | Statement |
 |---|---|
 | Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components == 1` for losers of kind `k` (D-074: zero pieces, the last site or an isolated fragment, is rejected too, so such a cell cannot die by copies) |
-| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs <= 1 \|\| ring_cells == 2` (zero arcs pass; D-074 covers the local rule only) |
+| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs <= 1 \|\| (ring_cells == 2 && ring_medium == 0)` (one arc, or exactly two cells and no medium on the ring, D-099; zero arcs pass; D-074 covers the local rule only) |
 | Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
 
 An unknown `rule` is an error.

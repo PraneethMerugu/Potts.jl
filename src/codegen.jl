@@ -89,7 +89,8 @@ _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => 
     :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new),
     :local_components => :(Int32(CorePotts.local_components(st.σ, ctx, prop))),
     :ring_arcs => :(Int32(CorePotts.ring_arcs(st.σ, ctx, prop))),
-    :ring_cells => :(Int32(CorePotts.ring_cells(st.σ, ctx, prop)))), relname)
+    :ring_cells => :(Int32(CorePotts.ring_cells(st.σ, ctx, prop))),
+    :ring_medium => :(Int32(CorePotts.ring_medium(st.σ, ctx, prop)))), relname)
 
 # a contact pair (s, s′): owners `a`, `n`, their kinds, the relation weight, and the sites
 # (site variables `x ≡ x[site]`, `x′ ≡ x[site′]`)

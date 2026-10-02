@@ -115,9 +115,9 @@ using Potts, PottsModels
 #
 # At high ``\lambda_{\text{Act}}`` a cell can tear apart, as Wortel et al. report. With
 # `connected = true` copies that would split a cell are forbidden by an "arc or pair"
-# rule on the 8 neighbours of the target site. Niculescu et al. use a connectivity rule
-# in their multicellular runs that is close to this one but not the same (see the table
-# at the end).
+# rule on the 8 neighbours of the target site: the copy is allowed if the losing cell
+# forms at most one arc on that ring, or if exactly two cells and no medium are on it.
+# This is the connectivity rule Niculescu et al. use in their multicellular runs.
 #
 # ## Step 9: the sweep
 #
@@ -226,7 +226,7 @@ fig
 # | | Niculescu et al. (2015) | Here |
 # |:--|:--|:--|
 # | Implementation | the Tissue Simulation Toolkit | the semantics of Artistoo, the authors' later reference code (Wortel et al. 2021): activity written on copy, decay after each MCS, geometric mean over the Moore neighbours of the same cell |
-# | Connectivity | used in the multicellular runs: a split is allowed when exactly two cells and no medium are on the ring | off by default; `connected = true` adds a rule that allows two cells on the ring whether or not medium is there too. It matters only with several cells |
+# | Connectivity | used in the multicellular runs: a split is allowed when exactly two cells and no medium are on the ring | off by default; `connected = true` adds the same rule |
 # | Run length | long tracks for speed and persistence statistics | one 1000-MCS track |
 # | Initial cell shape | not stated | a 22 × 22 square |
 #

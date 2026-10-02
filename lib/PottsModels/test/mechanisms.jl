@@ -42,25 +42,27 @@ drive(prob, u, prop, ctx) = prob.f.delta_H(u, prob.p, prop, ctx) - energy_change
 kindof(u, c) = c == 0 ? 0 : Int(u.cell.kind[c])
 
 # Ring rules on the clockwise Moore ring around the target (out-of-lattice sites are
-# medium). CC3D's `Connectivity` (`one_arc`): the losing cell's ring sites form exactly one
+# neither the cell nor medium). CC3D's `Connectivity` (`one_arc`): the losing cell's ring sites form exactly one
 # arc (none, i.e. its last site or an isolated fragment, is rejected: D-074). The Merks et al.
 # (2006) rule (`ring_rule`, TST's `ConnectivityPreservedP`) accepts at most one arc (zero
-# included), or exactly two distinct cells on the ring.
+# included), or exactly two distinct cells and no medium on the ring (an out-of-domain site
+# is not medium).
 const RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
 function ring_owners(σ, x, periodic)
     X, Y = size(σ)
     return map(RING) do (dx, dy)
         u, v = x[1] + dx, x[2] + dy
-        periodic[1] ? (u = mod1(u, X)) : (1 <= u <= X || return 0)
-        periodic[2] ? (v = mod1(v, Y)) : (1 <= v <= Y || return 0)
+        periodic[1] ? (u = mod1(u, X)) : (1 <= u <= X || return -1)
+        periodic[2] ? (v = mod1(v, Y)) : (1 <= v <= Y || return -1)
         σ[u, v]
     end
-end
+end                                     # an out-of-domain site reads -1 (neither cell nor medium)
 arcs(σ, x, a, periodic) = (own = ring_owners(σ, x, periodic); n = count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8);
     n == 0 && all(==(a), own) ? 1 : n)
 one_arc(σ, x, a, periodic) = arcs(σ, x, a, periodic) == 1
 ring_rule(σ, x, a, periodic) = arcs(σ, x, a, periodic) <= 1 ||
-                               length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2
+                               (length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
+                                !any(==(0), ring_owners(σ, x, periodic)))
 
 """Cells whose sites are not one 8-connected piece (axes periodic as given)."""
 function split_ids(σ, periodic)

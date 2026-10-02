@@ -106,7 +106,7 @@ site, an isolated fragment) is rejected like two.
     ring_arcs(σ, ctx, prop) -> Int
 
 Maximal runs of the losing cell's sites around the target's neighbour ring (the 8-ring on
-a square 2D lattice, the 6-ring on a hexagonal one; out-of-domain sites count as medium).
+a square 2D lattice, the 6-ring on a hexagonal one; out-of-domain sites are not the cell).
 """
 @inline ring_arcs(σ, ctx, prop::Proposal{2}) = prop.old == 0 ? 0 : _arcs(map(==(prop.old), _ring_owners(ctx.lattice, σ, prop.x)))
 
@@ -118,6 +118,14 @@ Number of distinct cells (medium excluded) on the target's neighbour ring (see
 """
 @inline ring_cells(σ, ctx, prop::Proposal{2}) = _distinct_cells(_ring_owners(ctx.lattice, σ, prop.x))
 
+"""
+    ring_medium(σ, ctx, prop) -> Int
+
+Number of medium sites on the target's neighbour ring (see [`ring_arcs`](@ref)).
+Out-of-domain sites on a closed face are not medium; on a periodic axis the ring wraps.
+"""
+@inline ring_medium(σ, ctx, prop::Proposal{2}) = _count_medium(_ring_owners(ctx.lattice, σ, prop.x))
+
 # The 6 hex neighbours in angular order (axial offsets at 0°, 60°, …, 300°).
 const _HEX_RING = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
 # The 8 square neighbours in clockwise order.
@@ -128,7 +136,16 @@ const _MOORE_RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1)
 @inline _owners(lat, σ, x, ring::NTuple{K}) where {K} = ntuple(Val(K)) do k
     o = ring[k]
     inside, y = shift(lat, x, (Int32(o[1]), Int32(o[2])))
-    inside ? @inbounds(σ[linear_index(lat, y)]) : Int32(0)
+    # an out-of-domain site reads −1: neither the medium (0) nor a cell (> 0)
+    inside ? @inbounds(σ[linear_index(lat, y)]) : -one(eltype(σ))
+end
+
+@inline function _count_medium(owners::NTuple{K}) where {K}
+    n = 0
+    for k in 1:K
+        n += owners[k] == 0
+    end
+    return n
 end
 
 # Number of maximal runs of `true` in a cyclic tuple (0 if none, 1 if all).
