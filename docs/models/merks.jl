@@ -83,9 +83,10 @@ using Potts, PottsModels
 #
 # The defaults are the paper's values in lattice units (2 µm per site, 30 s per MCS):
 # ``T = 50``, ``\chi = 1000``, cell–cell ``J = 40``, cell–matrix ``J = 20``,
-# ``D = 0.75``, ``\alpha = \varepsilon = 5.4 \cdot 10^{-3}``. The cell size is that of the
-# 2008 paper: target area `V₀` ``= 50`` with `λ` ``= 25``, target length `L` ``= 30``
-# with `λ_L` ``= 5``. `Dc`, `σc` and `δc` are ``D``, ``\alpha`` and ``\varepsilon``.
+# ``D = 0.75``, ``\alpha = \varepsilon = 5.4 \cdot 10^{-3}``, target area `V₀` ``= 100``
+# with `λ` ``= 50``, and target length `L` ``= 50`` (the paper's "about 100 µm") with
+# `λ_L` ``= 5``. `Dc`, `σc` and `δc` are ``D``, ``\alpha`` and ``\varepsilon``. The 2008
+# contact-inhibited runs used smaller cells (target area 50); pass such values as keywords.
 #
 # ## Step 4: the chemoattractant field
 #
@@ -160,8 +161,8 @@ using Potts, PottsModels
 # ## The starting state
 #
 # The paper scatters 282 cells at random over the central 333 × 333 sites of its lattice
-# (Fig. 4). `merks_state` builds this start: square cells of 7 × 7 sites (about the
-# target area) at random, non-overlapping positions with gaps of at least one site.
+# (Fig. 4). `merks_state` builds this start: square cells of 10 × 10 sites (the target
+# area; the paper does not state the initial cell shape) at random, non-overlapping positions with gaps of at least one site.
 # Scaled to our lattice, 45 cells over the central 133 × 133 sites keep the paper's
 # density:
 
@@ -169,16 +170,16 @@ u0 = merks_state(; lattice = (200, 200), region = (133, 133), n = 45)
 length(u0[2].second)
 
 # The same kind of start is one `Scattered` layer of the layout vocabulary, for example
-# `layout(Scattered(45, (7, 7); kinds = [:endothelial], region = (34:166, 34:166), seed = 1), vasc)`.
+# `layout(Scattered(45, (10, 10); kinds = [:endothelial], region = (34:166, 34:166), seed = 1), vasc)`.
 
 # ## Solving
 #
-# A model with a field needs a *field solver*, chosen when the problem is built. Explicit
-# Euler takes at least 2 substeps per MCS, more if ``D`` needs them for stability, and
-# `lower = 0.0` clips the concentration at zero. One MCS is 30 s, so 1000 MCS are about
-# 8 hours (the paper follows 50 hours):
+# A model with a field needs a *field solver*, chosen when the problem is built. The paper
+# integrates the field with 15 explicit Euler steps per MCS (2 s each); `substeps = 15`
+# does the same, and `lower = 0.0` clips the concentration at zero. One MCS is 30 s, so
+# 1000 MCS are about 8 hours (paper: 50 hours; here: 1000 MCS, to keep the build short):
 
-prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 2, lower = 0.0))
+prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
 sol = solve(prob, SequentialCPM(); saveat = 0:10:1000)
 
 # The paper's central claim is that elongation makes the network. `remake` builds the same
@@ -206,7 +207,9 @@ nothing #hide
 # ```
 #
 # Elongated cells join into branched cords, the start of a network; round cells gather
-# into compact islands (the paper's Fig. 6 makes this comparison). `sol[:c]` reads the chemoattractant at every saved time (symbolic
+# into compact islands (the paper's Fig. 6 makes this comparison). With only 45 cells the
+# small network coarsens if run much longer; the paper run at the top shows the full-size
+# network over 50 hours. `sol[:c]` reads the chemoattractant at every saved time (symbolic
 # indexing, as in ModelingToolkit); at the end it follows the network:
 
 CairoMakie.activate!(type = "png")
@@ -215,7 +218,7 @@ heatmap(sol[:c][end]; axis = (title = "chemoattractant c, MCS $(sol.t[end])", as
 # ## Measuring elongation
 #
 # `sol[:major_length]` is the length of every cell at every saved time. The cells start
-# as 7 × 7 squares (length 8) and stretch towards `L = 30` when `λ_L > 0`:
+# as 10 × 10 squares (length about 11.5) and stretch towards `L = 50` when `λ_L > 0`:
 
 using Statistics: mean
 mean_length(s) = [mean(l) for l in s[:major_length]]
@@ -232,16 +235,17 @@ fig
 # |:--|:--|:--|
 # | Lattice | 500 × 500, 282 cells over the central 333 × 333 sites | 200 × 200 on this page, 45 cells over the central 133 × 133 sites (same density; the paper run above uses the paper's) |
 # | Run length | 50 h (6000 MCS) | 1000 MCS (8.3 h) on this page, to keep the docs build short |
-# | Cell size | target area and length not stated (length "about 100 µm"); the authors' parameter file for elongated cells suggests ``A = 100``, ``\lambda = 50`` | the constructor's defaults, the 2008 paper's cells: `V₀ = 50`, `λ = 25`, `L = 30`, `λ_L = 5` |
+# | Cell size | ``A = 100``, ``\lambda = 50``, length "about 100 µm" (``L = 50``), ``\lambda_L = 5``; the authors' parameter file `longcells.par` uses ``L = 60`` | the same, with `L = 50` from the paper text (pass `L = 60.0` for the parameter file's value) |
+# | Initial cells | shape not stated | 10 × 10 squares |
 # | Lattice border | frozen border cells with ``J = 100`` against cells | closed walls that cost nothing |
 # | Field at the border | the authors' code holds ``c = 0`` on an absorbing border ring | zero flux |
 # | Contact-inhibited variant (2008) | 20 neighbours for contacts and copies (the authors' parameter files) | `contact_inhibited = true` keeps the 8 Moore neighbours |
 # | Acceptance | Metropolis with a dissipation threshold ``E_0`` (Eq. (3)), value not given | plain Metropolis |
 # | Connectivity | an energy penalty above 2000 (p. 49) | a hard veto |
-# | Field integration | 15 explicit substeps per MCS (p. 49) | the fewest stable explicit Euler substeps (at least 2), clipped at 0 |
+# | Field integration | 15 explicit substeps per MCS (p. 49) | the same, `ExplicitEuler(substeps = 15)`, clipped at 0 |
 #
-# The contact energies, temperature, chemotaxis strength, the diffusion, secretion and
-# decay rates inside the lattice, the 2006 model's neighbourhoods and the cell density
+# The cell size, contact energies, temperature, chemotaxis strength, the field
+# integration, the diffusion, secretion and decay rates inside the lattice, the 2006 model's neighbourhoods and the cell density
 # are the paper's.
 #
 # ## This model ships as `MerksVasculogenesis`

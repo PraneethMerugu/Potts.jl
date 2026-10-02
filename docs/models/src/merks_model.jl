@@ -14,10 +14,10 @@
     @kinds medium endothelial
     #> parameters
     @parameters begin
-        λ = 25.0
-        V₀ = 50.0
+        λ = 50.0
+        V₀ = 100.0
         λ_L = 5.0
-        L = 30.0
+        L = 50.0
         χ = 1000.0
         Dc = 0.75
         σc = 5.4e-3
