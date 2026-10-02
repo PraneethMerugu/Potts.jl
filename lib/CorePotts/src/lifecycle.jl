@@ -1,11 +1,15 @@
 # Cell lifecycle: division, removal, kind transition, creation and id reuse
-# (ROADMAP M2.8, INTERNALS §1.7 as amended by D-035).
+# (ROADMAP M2.8, INTERNALS §1.7 as amended by D-035 and D-089).
 #
-# Per checked MCS: one trigger kernel over cells writes an event code per cell and counts
-# events atomically; the host reads the 4-byte count. Quiet MCS end there. Otherwise the
-# host plans (allocates daughter ids lowest-first among free ids, defers on exhausted
-# capacity), then kernels partition sites by plane, remove cells, set kinds and apply the
-# daughter state rule, and the trackers are rebuilt exactly.
+# Two planners with the same semantics:
+# - On the CPU (the host path, D-035): per checked MCS one trigger kernel over cells writes
+#   an event code per cell and counts events; quiet MCS end there. Otherwise the host plans
+#   (allocates daughter ids lowest-first among free ids, defers on exhausted capacity), then
+#   kernels partition sites by plane, remove cells, set kinds and apply the daughter state
+#   rule, and the trackers are rebuilt exactly.
+# - On a device (`lifecycle_device.jl`, D-089): the same plan and updates run as device
+#   kernels every checked MCS, with no host decision and no read-back; the statistics are
+#   folded into `integ.stats` at host read points.
 #
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
 # its generation, so cell-addressed randomness never replays (F2).
@@ -58,6 +62,10 @@ hand-written):
   (a lifecycle event moves sites between cells). Model-specific trackers that the lifecycle
   cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
   here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
+  A host hook needs a host decision: on a device, a lifecycle with `rebuild!` (or a model
+  with a custom `remake_frozen` rule) is planned on the host as on the CPU, with one
+  synchronizing read-back per checked MCS; every other lifecycle runs entirely on
+  the device.
 - `every` — check triggers every `every` MCS.
 - `rules` — rule-carrying events. With `rules = true` the trigger returns
   `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and `divide!`/`cluster_divide!`
@@ -69,9 +77,14 @@ Both kinds of division can happen in one MCS:
 
 - `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`).
   Only the root's event counts (members' `EVENT_DIVIDE_CLUSTER` are ignored).
-  `cluster_normal` is evaluated on the host with the cluster's moments (`st.cell` then holds
-  cluster volume/moments, indexed by root), and every live member splits along that plane
-  through the cluster centroid; `cluster_divide!` runs for each member. The daughters form
+  `cluster_normal` is evaluated with the cluster's moments (`st.cell` then holds the
+  cluster's volume and moments at the root's index), and every live member splits along that plane
+  through the cluster centroid; `cluster_divide!` runs for each member. A portable
+  `cluster_normal` reads `st.cell.volume`, `anchor`, `m1`, `m2` only at the root's index,
+  any other cell column only as `generation`, `kind` or `cluster`, and not `st.σ`: the host
+  planner passes a cluster-labelled `σ` and cluster moments at every root, the device planner
+  the cell-labelled `σ`, the full cell columns, and the cluster's volume and moments
+  at every index. The daughters form
   a new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
 - `EVENT_DIVIDE` divides the cell alone along `normal`; `divide!` runs. A compartment's
   daughter (the parent shares its cluster with another live cell) stays in the parent's
@@ -106,7 +119,8 @@ const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
 """
     AlongMinorAxis{T}(), AlongMajorAxis{T}(), RandomPlane{T}()
 
-Division plane normals, computed in float type `T` (use `Float32` on Metal):
+Division plane normals, computed in float type `T` (on a device, in the device's float type,
+`Float32`; a hand-written normal or state rule runs on the device and must be device code):
 `AlongMinorAxis` divides across the long axis (the plane contains the minor axis; normal =
 major axis), `AlongMajorAxis` divides along it, `RandomPlane` draws a uniform plane
 addressed by cell id and generation. `along_minor_axis` etc. are the `Float64` instances.
@@ -229,25 +243,28 @@ end
 # ---------------------------------------------------------------------------------------
 # Host orchestration
 
-"""Lifecycle scratch: device buffers sized by capacity, plus host mirrors."""
-struct LifecycleCache{E, C, D, R, NM, B}
+"""Lifecycle scratch: device buffers sized by capacity, plus host mirrors; `device` is the
+device planner's state (`DeviceLifecycle`), or `nothing` for the host path."""
+struct LifecycleCache{E, C, D, R, NM, B, DL}
     events::E
-    count::C            # [events, frozen-mask mobile-count change, changed sites] (D-081)
-    host::Vector{Int32} # host copy of `count`: one transfer per lifecycle MCS
+    count::C            # the event count (host path)
+    host::Vector{Int32} # host copy of `count`: one transfer per lifecycle MCS (host path)
     daughter::D
     removed::R
     normals::NM
     bias::B
+    device::DL
 end
 
-function LifecycleCache(backend, N::Int, capacity::Int)
+function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false)
     T = backend isa KernelAbstractions.CPU ? Float64 : Float32
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
-        KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3),
+        KernelAbstractions.zeros(backend, Int32, 1), zeros(Int32, 1),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
-        KernelAbstractions.zeros(backend, T, capacity))
+        KernelAbstractions.zeros(backend, T, capacity),
+        device ? DeviceLifecycle(backend, N, capacity, st) : nothing)
 end
 
 Base.@kwdef mutable struct LifecycleStats
@@ -267,29 +284,23 @@ function _defer!(stats, cap)
 end
 
 """
-Run the lifecycle for MCS `mcs`. Returns `(launches, events, read)`: the number of kernel
-launches, whether any cell had an event (then kinds, owners and cell ids may have changed,
-and the integrator refreshes the frozen mask), and whether `cache.count` was read into
-`cache.host` (on every MCS the lifecycle runs). Synchronizes once and makes one transfer:
-the event count (4 B), or with `nread = 3` also the counts of a deferred
-frozen-mask refresh (12 B, only on the lifecycle MCS after such a refresh). Quiet MCS
-return after the trigger kernel. `pstats` is the integrator's `PottsStats` (lifecycle
-counts, host transfers).
+Run the lifecycle for MCS `mcs` with the host planner (the CPU path; on a device only for
+host hooks, see `Lifecycle`). Returns `(launches, events)`: the number of kernel launches,
+and whether any cell had an event (then kinds, owners and cell ids may have changed, and
+the integrator refreshes the frozen mask). Synchronizes once and reads back the 4-byte event
+count (counted on a device). Quiet MCS return after the trigger kernel.
+`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers).
 """
-function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend,
-        pstats; nread::Int = 1)
-    mcs % lc.every == 0 || return 0, false, false
+function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats)
+    mcs % lc.every == 0 || return 0, false
     stats = pstats.lifecycle
     cap = length(st.cell.kind)
-    # `count` is all zero here except a deferred mask refresh's counts (entries 2 and 3)
     _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
     launches = 1
     _sync!(pstats, backend)
-    # the MCS's one transfer: 4 B, or 12 B while a refresh's counts are pending (entries 2
-    # and 3 are zero otherwise, so nothing is lost)
-    _copy!(pstats, cache.host, 1, cache.count, 1, nread)
+    _copy!(pstats, cache.host, 1, cache.count, 1, 1)
     fill!(cache.count, Int32(0))                    # enqueued; read above
-    cache.host[1] == 0 && return launches, false, true
+    cache.host[1] == 0 && return launches, false
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = _to_host(pstats, cache.events)
@@ -410,7 +421,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         v = _to_host(pstats, st.cell.volume)
         stats.empty_daughters += count(d -> v[d] == 0, daughter[parents])
     end
-    return launches, true, true
+    return launches, true
 end
 
 function _copy_columns!(stats, a::AbstractVector, dst, src)

@@ -127,7 +127,7 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`)
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
-- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker()`), used
+- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`), used
   unless the algorithm sets one; `nothing` means `Metropolis()`
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work

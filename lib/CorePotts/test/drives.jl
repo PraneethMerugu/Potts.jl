@@ -104,7 +104,15 @@ end
         @test ring_cells(σ, ctx, prop) == 2
         edge = Proposal(linear_index(lat, (1, 3)), 0, (1, 3), 1, Int32(1), Int32(0))
         σ[1, 3] = 1
-        @test ring_arcs(σ, ctx, edge) == 1               # out-of-domain ring sites = medium
+        @test ring_arcs(σ, ctx, edge) == 1               # out-of-domain ring sites are not the cell
+        # ring of (1,3): 3 out of domain, (1,2)=0 (2,2)=1 (2,3)=1 (2,4)=1 (1,4)=0
+        @test ring_medium(σ, ctx, edge) == 2 && ring_cells(σ, ctx, edge) == 1
+        # ring of (3,3): (2,2:4)=1 (3,4)=0 (4,4)=0 (4,3)=1 (4,2)=0 (3,2)=2
+        @test ring_medium(σ, ctx, prop) == 3
+        corner = Proposal(linear_index(lat, (1, 1)), 0, (1, 1), 1, Int32(0), Int32(0))
+        @test ring_medium(σ, ctx, corner) == 2           # 5 of 8 ring sites out of domain, (2,2) is 1
+        latP = Lattice((5, 5))                           # periodic: the ring wraps onto medium
+        @test ring_medium(σ, (; lattice = latP), edge) == 5
         medium = Proposal(linear_index(lat, (5, 5)), 0, (5, 5), 1, Int32(0), Int32(1))
         @test ring_arcs(σ, ctx, medium) == 0 && local_components(σ, ctx, medium) == 0
     end

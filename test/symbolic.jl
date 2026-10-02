@@ -1783,7 +1783,9 @@ end
     σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1
     @test !allows(ArcOrPair, σ, (6, 6), (6, 7))           # a bridge, one cell on the ring: 2 arcs
     σ[6, 5] = 2
-    @test allows(ArcOrPair, σ, (6, 6), (6, 5))            # 2 arcs, exactly two cells on the ring: the pair
+    @test !allows(ArcOrPair, σ, (6, 6), (6, 5))           # 2 arcs, two cells but medium on the ring: refused
+    σ = fill(Int32(2), 12, 12); σ[3:9, 6] .= 1
+    @test allows(ArcOrPair, σ, (6, 6), (6, 5))            # 2 arcs, exactly two cells and no medium: the pair
     σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
     @test allows(ArcOrPair, σ, (6, 4), (7, 4))            # an ordinary boundary copy: 1 arc
 end

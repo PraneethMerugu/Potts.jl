@@ -104,8 +104,8 @@ decision = "D-083"
 
 [[file]]
 path = "acceptance/p6_0v_transfer_counters.jl"
-sha256 = "542f3c728047e107d8d4bdf5e35dcf9e783d71b792cec92dfd31f667dbff2e2e"
-decision = "D-098"
+sha256 = "f3c07f850fdd89245a2507289e806dca93bc9114b260d622d2e7ab1115e1f008"
+decision = "D-096"
 
 [[file]]
 path = "acceptance/p6_0d_frozen_kind_mask.jl"
@@ -141,3 +141,18 @@ decision = "D-093"
 path = "acceptance/merks_2006_defaults.jl"
 sha256 = "e16226d4d4b9ab1670c5735e238535807db6da46e434b4b86494fb6a006f18ee"
 decision = "D-098"
+
+[[file]]
+path = "acceptance/p6_0v1_device_lifecycle.jl"
+sha256 = "5ab0c11b96d8bdc7465411df957e9ad99bae2f273970465aac055dea948b8d98"
+decision = "D-096"
+
+[[file]]
+path = "acceptance/p6_0ad_barker_offset.jl"
+sha256 = "b2bee6b13fd5ddd718c1b8b93c524d830f6c4d4ffbd039abea63da331da0fb45"
+decision = "D-100"
+
+[[file]]
+path = "acceptance/p6_0aa_arc_or_pair_medium.jl"
+sha256 = "15cdf3af5140a72c0b1d12e06a558b70c8e54586dac7d8840f01410a2553994f"
+decision = "D-099"

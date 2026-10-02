@@ -10,7 +10,7 @@ module CorePotts
 using Adapt: Adapt
 using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
-using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, CPU
+using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, @localmem, @synchronize, CPU
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
@@ -29,7 +29,7 @@ export Phases, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
     neighborhood_mean, MeanFold, ArithmeticMean, GeometricMean, Log1pGeometricMean,
-    local_components, locally_connected, ring_arcs, ring_cells, forbid_extinction
+    local_components, locally_connected, ring_arcs, ring_cells, ring_medium, forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
     neighbors, contact, empty_contacts, ContactPhase, contact_slot, contact_measure
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
@@ -66,6 +66,7 @@ include("spatial.jl")
 include("relationships.jl")
 include("compartments.jl")
 include("lifecycle.jl")
+include("lifecycle_device.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

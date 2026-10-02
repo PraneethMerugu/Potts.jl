@@ -42,6 +42,21 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
     return f, p
 end
 
+"""Moment trackers of `u` exact: on the host planner equal to a recount from σ; on the device
+planner (D-089), which keeps the parent's anchor for a daughter (a representation choice),
+the same centroid and covariance of every live cell as the recount."""
+function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
+    m = init_moments(u.σ, lat, cap)
+    device = CorePotts._FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM
+    device || return u.cell.m1 == m.m1 && u.cell.m2 == m.m2
+    ref = merge(m, (; volume = Int32[count(==(c), u.σ) for c in 1:cap]))
+    return all(1:cap) do c
+        ref.volume[c] == 0 && return u.cell.volume[c] == 0
+        all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1e-9)) &&
+            all(isapprox.(CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(Float64, ref, c, Val(N)); atol = 1e-9))
+    end
+end
+
 @testset "compartments" begin
     @testset "cluster bookkeeping" begin
         lat = Lattice((10, 10))
@@ -207,8 +222,7 @@ end
         # trackers exact after the mixed division (brute force from σ)
         @test u.cell.volume == Int32[count(==(c), u.σ) for c in 1:10]
         @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
-        m = init_moments(u.σ, lat, 10)
-        @test u.cell.m1 == m.m1 && u.cell.m2 == m.m2
+        @test same_moments(u, lat, 10, alg)
 
         # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without its
         # root's cluster event, member 2 divides alone and its daughter stays in cluster 1
@@ -254,8 +268,7 @@ end
         @test u.cell.volume == brute(u, 6)
         @test u.cell.cluster_volume == recompute_cluster_volume(u.σ, u.cell.cluster)
         @test u.cell.cluster_volume[1] == 280
-        m = init_moments(u.σ, lat, 6)
-        @test u.cell.m1 == m.m1 && u.cell.m2 == m.m2
+        @test same_moments(u, lat, 6, alg)
 
         # control, 3 free slots: the cluster fits and takes precedence over its members' own
         # events (1 → 5, 2 → 6, 3 → 7, one cluster plane); now only lone cell 4 is deferred

@@ -23,8 +23,21 @@ _device_law(law, backend) = law
 _device_law(law::Metropolis{Float64}, backend) =
     backend isa KernelAbstractions.CPU ? law : Metropolis(Float32(law.offset))
 
-"""Barker (heat-bath) acceptance: probability `1 / (1 + exp(ΔH/T))`."""
-struct Barker <: AcceptanceLaw end
+"""
+    Barker(; offset = 0)
+
+Barker (heat-bath) acceptance: probability `1 / (1 + exp((ΔH - offset)/T))`. The offset
+shifts ΔH exactly as in `Metropolis`, so at `T ≤ 0` the two laws coincide: accept
+if `ΔH < offset`, and ties (`ΔH == offset`) with probability ½. On GPU backends without
+Float64 (Metal) a floating-point offset is stored as `Float32`.
+"""
+struct Barker{T} <: AcceptanceLaw
+    offset::T
+end
+Barker(; offset = 0) = Barker(offset)
+
+_device_law(law::Barker{Float64}, backend) =
+    backend isa KernelAbstractions.CPU ? law : Barker(Float32(law.offset))
 
 @inline function accept(law::Metropolis, dH::T, temperature::T, u::T) where {T}
     x = dH - T(law.offset)
@@ -34,9 +47,10 @@ struct Barker <: AcceptanceLaw end
     return x <= zero(T) || u < exp(-x / temperature)
 end
 
-@inline function accept(::Barker, dH::T, temperature::T, u::T) where {T}
-    temperature <= zero(T) && return dH < zero(T) || (dH == zero(T) && u < T(0.5))
-    return u < inv(one(T) + exp(dH / temperature))
+@inline function accept(law::Barker, dH::T, temperature::T, u::T) where {T}
+    x = dH - T(law.offset)
+    temperature <= zero(T) && return x < zero(T) || (x == zero(T) && u < T(0.5))
+    return u < inv(one(T) + exp(x / temperature))
 end
 
 abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end

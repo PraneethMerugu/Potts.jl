@@ -16,19 +16,22 @@
 # add under `merge` (ensemble totals) like the other fields of `PottsStats`.
 #
 # Expected counts on Metal. (a) and (b) are exact and are also the long-term targets of
-# P6.0v1–v3 (they hold at freeze time: 1554d56, plus P6.0d, whose `refresh_frozen!` returns
-# before synchronizing when nothing is frozen, as in every fixture here):
+# P6.0v1–v3 ((a) held at the first freeze: 1554d56, plus P6.0d, whose `refresh_frozen!`
+# returns before synchronizing when nothing is frozen, as in every fixture here; (b) was
+# re-frozen by P6.0v1 under D-089):
 #  (a) A quiet MCS of a gate model without a lifecycle (Graner–Glazier, Wortel Act, Merks
 #      with the explicit field solver): 0 syncs, 0 transfers. `CheckerboardCPM` reads its
 #      status back only at a save; the field step copies device to device.
 #  (b) A quiet MCS (no lifecycle event) of a model with a lifecycle (OpenVT monolayer,
-#      Akeeb, the division fixture after MCS 0): exactly the event-count readback (D-035):
-#      1 sync, 1 transfer, 4 bytes (`lifecycle.jl` `run_lifecycle!`: synchronize, then
-#      `_readback(cache.count)`, a 1-element Int32).
+#      Akeeb, the division fixture after MCS 0): 0 syncs, 0 transfers, 0 bytes (D-089: the
+#      lifecycle is planned on the device, with no trigger read-back; D-035's 1 sync,
+#      1 transfer, 4 bytes event-count readback is withdrawn on GPU backends).
 # (c) and (d) are invariants that survive P6.0v1/v2 (their exact current-path counts are an
 # ordinary, non-frozen regression test that those rows update):
-#  (c) The event MCS of the division fixture (every cell divides at MCS 0) reads back at
-#      least the event count: syncs ≥ 1, transfers ≥ 1, bytes ≥ 4.
+#  (c) The division fixture (every cell divides at MCS 0) divides both cells at MCS 0, read
+#      at a `checkpoint` (a host read point: under D-089 `stats.lifecycle` is exact only at
+#      saves, the end of `solve!`, `checkpoint` and `integ.u`, and the event MCS has no
+#      host traffic bound here; re-frozen by P6.0v1).
 #  (d) An MCS running a `HostPhase` (host code over host copies) transfers: transfers ≥ 1.
 #  Counters never decrease from one MCS to the next; a save (`integ.u`) is counted (lower
 #  bounds: it synchronizes and copies σ and every cell column down).
@@ -95,20 +98,24 @@ end
 
 p60v_lifecycle_total(s) = sum(f -> getfield(s.lifecycle, f), fieldnames(typeof(s.lifecycle)))
 
-"""Per-MCS counter deltas of `step!` (no saves): a vector of `(quiet, (syncs, transfers, bytes))`,
-`quiet` when the MCS had no lifecycle event."""
+"""Per-MCS counter deltas of `step!` (no saves): a vector of `(quiet, (syncs, transfers, bytes))`.
+The window is quiet when a `checkpoint` (a host read point, D-089) before and after it shows
+no lifecycle event; then every MCS in it is quiet, otherwise none is counted as quiet. The
+checkpoints lie outside the measured deltas."""
 function p60v_step_deltas(prob, alg; backend, nwarm = 1, nstep = 4)
     integ = init(prob, alg; backend, save_start = false, save_end = false)
     for _ in 1:nwarm
         step!(integ)
     end
-    out = Tuple{Bool, NTuple{3, Int}}[]
+    l0 = p60v_lifecycle_total(checkpoint(integ).stats)
+    out = NTuple{3, Int}[]
     for _ in 1:nstep
-        c0, l0 = p60v_counts(integ.stats), p60v_lifecycle_total(integ.stats)
+        c0 = p60v_counts(integ.stats)
         step!(integ)
-        push!(out, (p60v_lifecycle_total(integ.stats) == l0, p60v_counts(integ.stats) .- c0))
+        push!(out, p60v_counts(integ.stats) .- c0)
     end
-    return out
+    quiet = p60v_lifecycle_total(checkpoint(integ).stats) == l0
+    return [(quiet, d) for d in out]
 end
 
 """Counter triples after each of `n` steps of `integ`."""
@@ -154,25 +161,22 @@ end
             deltas = p60v_step_deltas(make(), alg; backend)
             quiet = [d for (q, d) in deltas if q]
             @test length(quiet) >= 2
-            expected = lifecycle ? (1, 1, 4) : (0, 0, 0)
+            expected = (0, 0, 0)                                         # (b): D-089
             @test all(==(expected), quiet)
             all(==(expected), quiet) || @info "P6.0v quiet-MCS counts" label quiet
         end
-        # (c) the division fixture: the event MCS reads back at least the event count;
-        # later MCS are quiet (exact, as (b))
+        # (c) the division fixture: both cells divide at MCS 0 (read at a checkpoint); later
+        # MCS are quiet (exact, as (b))
         prob = p60v_divide_problem(; T = Float32)
         integ = init(prob, alg; backend, save_start = false, save_end = false)
-        c0 = p60v_counts(integ.stats)
         step!(integ)                                                     # MCS 0: both cells divide
-        @test integ.stats.lifecycle.divisions == 2
-        d = p60v_counts(integ.stats) .- c0
-        @test d[1] >= 1 && d[2] >= 1 && d[3] >= 4
+        @test checkpoint(integ).stats.lifecycle.divisions == 2
         for _ in 1:3
             c0 = p60v_counts(integ.stats)
             step!(integ)
-            @test p60v_counts(integ.stats) .- c0 == (1, 1, 4)
+            @test p60v_counts(integ.stats) .- c0 == (0, 0, 0)          # (b): D-089
         end
-        @test integ.stats.lifecycle.divisions == 2
+        @test checkpoint(integ).stats.lifecycle.divisions == 2
         # (d) a HostPhase every MCS
         integ = init(p60v_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_end = false)
         for _ in 1:3

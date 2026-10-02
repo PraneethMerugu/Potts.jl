@@ -36,7 +36,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
     :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
-    :ring_cells)
+    :ring_cells, :ring_medium)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -415,16 +415,19 @@ a constraint over the proposal-scope connectivity values, applied when the losin
   exactly one piece (CompuCell3D `Connectivity`, which rejects `!= 1`). Zero pieces
   (the cell's last site, an isolated fragment) is rejected, so a cell under this rule
   cannot die by copies;
-- `rule = :arc_or_pair`: `ring_arcs <= 1 || ring_cells == 2`, at most one arc of the
-  neighbour ring, or else exactly two cells on it (TST's `ConnectivityPreservedP`, the
-  Merks reference; zero arcs pass, so the last site can be taken).
+- `rule = :arc_or_pair`: `ring_arcs <= 1 || (ring_cells == 2 && ring_medium == 0)`, at
+  most one arc of the neighbour ring, or else exactly two cells and no medium on it (TST's
+  `ConnectivityPreservedP`, the Merks reference, as a hard veto). Out-of-domain sites
+  (a closed face, outside a domain mask) are neither medium nor a cell; TST counts its
+  frame as a cell, so at a closed edge the two rules can differ. Zero arcs pass, so the
+  last site can be taken.
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """
 function connectivity(kinds::Integer...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
-    test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | (B.ring_cells == 2))
+    test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | ((B.ring_cells == 2) & (B.ring_medium == 0)))
     return Constraint(:connectivity, collect(Int, kinds), test)
 end
 """`no_extinction`: forbid copies that remove a cell's last site."""

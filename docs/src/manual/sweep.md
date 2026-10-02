@@ -8,7 +8,7 @@
 | `Barker(; temperature = T)` | accept with probability ``1/(1 + e^{\Delta H/T})`` |
 | `temperature = Tk[kind]` | a temperature per kind (or any cell expression); the copy uses `combine` of the source and target cells' values, and the medium never contributes |
 | `combine = min` | how the two temperatures combine (default `min`) |
-| `offset = ε` | accept if ``\Delta H \le \varepsilon``, else ``e^{-(\Delta H - \varepsilon)/T}``; Morpheus's yield `Y` is `offset = -Y` |
+| `offset = ε` | shift ``\Delta H`` to ``\Delta H - \varepsilon`` in either law: Metropolis accepts if ``\Delta H \le \varepsilon``, else with probability ``e^{-(\Delta H - \varepsilon)/T}``; Barker with probability ``1/(1 + e^{(\Delta H - \varepsilon)/T})``. Morpheus's yield `Y` is `offset = -Y` |
 | `mcs_duration = 0.5` | the time one MCS represents, for equations (default 1) |
 
 One MCS is as many copy attempts as there are mobile lattice sites. A paper that counts
@@ -17,7 +17,7 @@ accepted with probability ½, as in CompuCell3D.
 
 ## Choosing an acceptance law
 
-Metropolis and Barker both satisfy detailed balance, so they have the same equilibrium. Only
+Without an offset, Metropolis and Barker both satisfy detailed balance, so they have the same equilibrium. Only
 the dynamics differ:
 
 - Barker accepts a neutral copy (``\Delta H = 0``) with probability ½; Metropolis accepts
@@ -27,7 +27,8 @@ the dynamics differ:
   from a paper are comparable only under the same law: for a reproduction, use the paper's
   law. With integer contact energies ``\Delta H = 0`` is common, so the difference shows in
   practice.
-- At ``T \le 0`` the two laws coincide: both accept ``\Delta H < 0`` and half the ties.
+- At ``T \le 0`` the two laws coincide: both accept ``\Delta H < 0`` and half the ties
+  (with an offset, ``\Delta H < \varepsilon`` and half of ``\Delta H = \varepsilon``).
 - Barker's acceptance is smooth in ``\Delta H``, which matters for gradient-based methods
   through the stochastic dynamics (e.g. StochasticAD.jl). This is a research direction, not a
   feature of Potts.jl.
