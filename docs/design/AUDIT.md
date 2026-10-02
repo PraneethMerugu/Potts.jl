@@ -242,7 +242,7 @@ Every parity test should get a **negative control**: a perturbed science paramet
 
 ## 9. Coverage gaps
 
-- The `Barker` acceptance law is tested only in the CorePotts GPU group; a nonzero `offset` and the T ≤ 0 tie rule are untested.
+- The `Barker` acceptance law, its `offset` and the T ≤ 0 tie rule are tested on the CPU (frozen `p6_0ad_barker_offset.jl`, D-100) and on Metal (CorePotts GPU group).
 - The symbolic tests have zero coverage of `clear_on_ownership_change`, `include_self`, `Stencil`, `Ball`, `major_axis`, the `Surface()` one-liner or `generation`.
 - The PottsModels self-check runs 3 MCS with Moore(1) proposals only.
 - Nothing displays or integer-indexes a solution (A-19).

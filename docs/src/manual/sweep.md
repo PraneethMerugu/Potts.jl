@@ -17,7 +17,7 @@ accepted with probability ½, as in CompuCell3D.
 
 ## Choosing an acceptance law
 
-Metropolis and Barker both satisfy detailed balance, so they have the same equilibrium. Only
+Without an offset, Metropolis and Barker both satisfy detailed balance, so they have the same equilibrium. Only
 the dynamics differ:
 
 - Barker accepts a neutral copy (``\Delta H = 0``) with probability ½; Metropolis accepts
