@@ -66,7 +66,7 @@ end
 
 function (ph::CellReduce{D, F, O})(st, p, ctx, key, mcs, backend) where {D, F, O}
     dst = ph.dst(st)
-    fill!(dst, _identity(ph.op, eltype(dst)))
+    _device_fill!(backend, dst, _identity(ph.op, eltype(dst)))
     n = length(st.σ)
     _launch(_cell_reduce_body!, backend, n, (ph.f, ph.op, dst, st, p, ctx, key, mcs))
     return 2
@@ -201,8 +201,8 @@ end
 
 function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     c = st.cell
-    fill!(c.contact_nbr, 0); fill!(c.contact_measure, 0)
-    fill!(c.contact_medium, 0); fill!(c.contact_overflow, 0)
+    _device_fill!(backend, c.contact_nbr, 0); _device_fill!(backend, c.contact_measure, 0)
+    _device_fill!(backend, c.contact_medium, 0); _device_fill!(backend, c.contact_overflow, 0)
     n = length(st.σ)
     _launch(_contact_body!, backend, n, (c.contact_nbr, c.contact_measure, c.contact_medium,
         c.contact_overflow, st.σ, ctx.lattice, getfield(ctx, R)))

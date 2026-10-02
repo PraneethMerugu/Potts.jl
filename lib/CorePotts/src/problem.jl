@@ -382,9 +382,9 @@ end
 
 # The host lifecycle path (CPU; host hooks on a device): events are known on the host, and
 # the frozen mask follows them at once (D-081; quiet MCS pay nothing)
-function _step_lifecycle!(integ, ::Nothing)
+function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
     launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+        integ.key, integ.t, integ.backend, integ.stats, before)
     integ.stats.launches += launches
     events && _refresh_frozen!(integ)
     return nothing
@@ -397,7 +397,7 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
     refresh = sc === nothing ? nothing : (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
     n = run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
         integ.backend, refresh)
-    n < 0 && return _step_lifecycle!(integ, nothing)
+    n < 0 && return _step_lifecycle!(integ, nothing, !D.before_ran[])
     integ.stats.launches += n
     return nothing
 end

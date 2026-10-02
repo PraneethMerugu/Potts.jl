@@ -45,7 +45,7 @@ public ruled_event
 
 """
     Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1, rules = false,
-              cluster_normal = normal, cluster_divide! = divide!)
+              cluster_normal = normal, cluster_divide! = divide!, before = nothing)
 
 The lifecycle of a model (generated from `@divide`, `@remove`, `@transition` rules, or
 hand-written):
@@ -72,6 +72,13 @@ hand-written):
   take an eighth argument, that index (a cluster member gets its root's), so only the firing
   rule's daughter state rule runs. Needed only when two rules can fire for one cell.
 - `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
+- `before(st, p, ctx, key, mcs, c)` — a cell update run for every cell `c` in
+  `1:ncells(st)` at the start of the lifecycle of every MCS (also the MCS it does not check),
+  as a `CellPhase` run just before it would. It must write only cell `c`'s own columns, and
+  the trigger of cell `c` may read a column `before` writes only at index `c` (other values
+  only if `before` does not write them). Then the device lifecycle runs `before` and the
+  trigger of each cell in one work item, one launch for both (P6.0v3, D-101); the host
+  planner runs `before` as its own launch.
 
 Both kinds of division can happen in one MCS:
 
@@ -92,7 +99,7 @@ Both kinds of division can happen in one MCS:
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val}
+struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE}
     trigger::TR
     normal::NO
     cluster_normal::CN
@@ -102,11 +109,16 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val}
     rebuild!::RB
     every::Int
     rules::RU                   # Val(true): rule-carrying events
+    before::BE                  # a cell update fused with the trigger, or `nothing`
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
-    rules::Bool = false) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules))
+    rules::Bool = false, before = nothing) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before)
+
+# `before` as its own launch (the host planner; MCS the lifecycle does not check)
+_run_before(::Nothing, st, p, ctx, key, mcs, backend) = 0
+_run_before(f::F, st, p, ctx, key, mcs, backend) where {F} = CellPhase(f)(st, p, ctx, key, mcs, backend)
 
 no_rebuild(st, p, ctx, backend) = nothing
 
@@ -184,13 +196,16 @@ end
 # ---------------------------------------------------------------------------------------
 # Kernels
 
-@inline function _trigger_body!(c, events, count, trigger, st, p, ctx, key, mcs)
+# `count[slot]` counts this round's events; item 1 zeroes the other slot, the next round's (its
+# value was read after the previous round), so no separate reset command is enqueued (T3)
+@inline function _trigger_body!(c, events, count, slot, trigger, st, p, ctx, key, mcs)
+    c == 1 && (@inbounds count[3 - slot] = Int32(0))     # count has 2 entries, slot ∈ (1, 2)
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
-        e = Int32(trigger(st, p, ctx, key, mcs, Int32(c)))
+        e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
     end
     @inbounds events[c] = e
-    e != EVENT_NONE && Atomix.@atomic count[1] += Int32(1)
+    e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)     # slot ∈ (1, 2) = axes(count)
 end
 
 @inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled)
@@ -247,8 +262,9 @@ end
 device planner's state (`DeviceLifecycle`), or `nothing` for the host path."""
 struct LifecycleCache{E, C, D, R, NM, B, DL}
     events::E
-    count::C            # the event count (host path)
-    host::Vector{Int32} # host copy of `count`: one transfer per lifecycle MCS (host path)
+    count::C            # the event counts of alternate rounds (host path; `_trigger_body!`)
+    host::Vector{Int32} # host copy of this round's count: one transfer per lifecycle MCS (host path)
+    round::Base.RefValue{Int}   # host-path rounds run (selects the slot of `count`)
     daughter::D
     removed::R
     normals::NM
@@ -259,7 +275,7 @@ end
 function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false)
     T = backend isa KernelAbstractions.CPU ? Float64 : Float32
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
-        KernelAbstractions.zeros(backend, Int32, 1), zeros(Int32, 1),
+        KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
         KernelAbstractions.zeros(backend, T, N, capacity),
@@ -289,17 +305,20 @@ host hooks, see `Lifecycle`). Returns `(launches, events)`: the number of kernel
 and whether any cell had an event (then kinds, owners and cell ids may have changed, and
 the integrator refreshes the frozen mask). Synchronizes once and reads back the 4-byte event
 count (counted on a device). Quiet MCS return after the trigger kernel.
-`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers).
+`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers). `before = false`:
+`lc.before` has already run this MCS (a device form that failed after launching it).
 """
-function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats)
-    mcs % lc.every == 0 || return 0, false
+function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats,
+        before::Bool = true)
+    nb = before ? _run_before(lc.before, st, p, ctx, key, mcs, backend) : 0
+    mcs % lc.every == 0 || return nb, false
     stats = pstats.lifecycle
     cap = length(st.cell.kind)
-    _launch(_trigger_body!, backend, cap, (cache.events, cache.count, lc.trigger, st, p, ctx, key, mcs))
-    launches = 1
+    slot = Int32((cache.round[] += 1) % 2 + 1)
+    _launch(_trigger_body!, backend, cap, (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs))
+    launches = 1 + nb
     _sync!(pstats, backend)
-    _copy!(pstats, cache.host, 1, cache.count, 1, 1)
-    fill!(cache.count, Int32(0))                    # enqueued; read above
+    _copy!(pstats, cache.host, 1, cache.count, slot, 1)
     cache.host[1] == 0 && return launches, false
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted

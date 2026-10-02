@@ -2984,3 +2984,73 @@ end
     @test length(b.u0.cell.volume) == 50
     @test total_energy(b) ≈ total_energy(a)
 end
+
+# P6.0v3 (F1, D-101): the last after-MCS cell update moves into `Lifecycle.before` (one
+# device launch with the trigger) exactly when the trigger reads what it writes only at its
+# own cell; otherwise it stays a phase of its own
+@potts_model P60v3FuseOwn begin
+    @kinds medium A
+    @variables g(cell) = 0.0
+    @lattice Lattice((24, 24))
+    @energy cells => (volume - 16.0)^2
+    @after_mcs g ~ g + 1.0
+    @divide cells(A) when = g >= 3.0, along = RandomPlane(), g => 0.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model P60v3FuseOther begin
+    @kinds medium A
+    @variables g(cell) = 0.0
+    @lattice Lattice((24, 24))
+    @energy cells => (volume - 16.0)^2
+    @after_mcs g ~ g + 1.0
+    @divide cells(A) when = g[3 - id] >= 3.0, along = RandomPlane(), g => 0.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model P60v3FuseNotLast begin
+    @kinds medium A
+    @parameters k = 0.1
+    @variables begin
+        g(cell) = 0.0
+        y(cell) = 1.0
+    end
+    @lattice Lattice((24, 24))
+    @energy cells => (volume - 16.0)^2
+    @after_mcs g ~ g + 1.0
+    @equations D(y) ~ -k * y
+    @divide cells(A) when = g >= 3.0, along = RandomPlane(), g => 0.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@testset "P6.0v3: a cell update fuses with the lifecycle trigger only when legal" begin
+    R(ex, w...) = Potts._reads_own_only(ex, Set{Symbol}(w))
+    @test R(:(st.cell.g[c] >= 3), :g)
+    @test R(:(@inbounds(st.cell.g[c]) >= 3), :g)
+    @test R(:(Potts._cellval(st.cell.g, c) >= 3), :g)
+    @test R(:(st.cell.volume[d] > 0 && st.σ[1] == 0 && p.a * st.model.m[1] > 0), :g)   # unwritten values: any
+    @test R(:(Potts._cellkind(st, c) == 1), :g)
+    @test R(:(CorePotts.centroid(st.cell, c)), :g)
+    # negative controls: another cell's value, the whole column, cell or state
+    @test !R(:(st.cell.g[3 - c] >= 3), :g)
+    @test !R(:(Potts._cellval(st.cell.g, d) >= 3), :g)
+    @test !R(:(sum(st.cell.g)), :g)
+    @test !R(:(f(st.cell, c)), :g)
+    @test !R(:(f(st)), :g)
+    @test !R(:(Potts._cellkind(st, c) == 1), :kind)
+    @test !R(:(CorePotts.centroid(st.cell, c)), :m1)
+    σ = zeros(Int32, 24, 24); σ[3:6, 3:6] .= 1; σ[15:18, 15:18] .= 2
+    op = [ownership => σ, kind => [:A, :A]]
+    cellphases(prob) = count(ph -> ph isa CorePotts.CellPhase, prob.f.phases.after_mcs)
+    own = PottsProblem(P60v3FuseOwn(; name = :f), op, (0, 8); capacity = 16)
+    @test own.f.lifecycle.before !== nothing && cellphases(own) == 0
+    for M in (P60v3FuseOther, P60v3FuseNotLast)
+        prob = PottsProblem(M(; name = :f), op, (0, 8); capacity = 16)
+        @test prob.f.lifecycle.before === nothing
+        @test cellphases(prob) >= 1
+    end
+    # same results: the update still runs every MCS before the trigger (g = 0, 1, 2 → 3:
+    # every live cell divides at MCS 2, 6, …)
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        sol = solve(own, alg; saveat = 1)
+        @test sol.stats.lifecycle.divisions == 2 + 4
+        @test sol.u[4].cell.g[1:4] == zeros(4)
+    end
+end

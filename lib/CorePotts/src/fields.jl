@@ -136,7 +136,7 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     h = eltype(c)(ph.dt / nsub)
     for _ in 1:nsub
         _launch(_field_step_body!, backend, n, (ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
-        copyto!(c, cn)
+        _device_copy!(backend, c, cn)        # a kernel: no GPU wait (P6.0v8)
     end
     return 2 * nsub
 end

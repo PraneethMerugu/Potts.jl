@@ -161,7 +161,8 @@ end
 # counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the copy
 # and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`. Waits the
 # counters cannot see (Metal.jl's device→device `copyto!`, `UInt8`/`Int8` `fill!`) break the
-# identity. Test-only instrumentation: `Metal.wait_cmdbuf!` gains a counter; the queue-depth
+# identity (P6.0v3 removed them from the step path: kernel copies and fills, D-101).
+# Test-only instrumentation: `Metal.wait_cmdbuf!` gains a counter; the queue-depth
 # back-pressure of `wait_oldest_cleanup!` (the host running ahead of the GPU) is not a sync
 # and is excluded. The redefinitions copy Metal.jl 1.10.0's bodies, hence the version guard.
 const P60VX_WAITS = Ref(0)
@@ -230,11 +231,7 @@ const P60VX_STATS = Ref{Any}(nothing)
             Main.Metal.synchronize()
             for _ in 1:3
                 waits, d = p60vx_waits(() -> step!(integ))
-                if label == "Merks"          # FieldStep's device→device copies wait (P6.0v3)
-                    @test_broken waits == d[1] + 2 * d[2]
-                else
-                    @test waits == d[1] + 2 * d[2]
-                end
+                @test waits == d[1] + 2 * d[2]    # Merks too: FieldStep copies by kernel (P6.0v3, D-101)
             end
         end
         # the event MCS of the division fixture: planned on the device (P6.0v1, D-089), no

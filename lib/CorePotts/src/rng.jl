@@ -77,7 +77,8 @@ Four independent 32-bit words for one address. `entity` is a site index or a cel
 """
 @inline function draw(key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
         local_index::Integer = 0)
-    return philox4x32(UInt32(mcs), UInt32(entity), stream, UInt32(local_index),
+    # wrapping conversions: in range by construction, and no exception branch in kernels (X1)
+    return philox4x32(mcs % UInt32, entity % UInt32, stream, local_index % UInt32,
         key.k0, key.k1)
 end
 
