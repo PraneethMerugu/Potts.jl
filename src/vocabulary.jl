@@ -417,8 +417,10 @@ a constraint over the proposal-scope connectivity values, applied when the losin
   cannot die by copies;
 - `rule = :arc_or_pair`: `ring_arcs <= 1 || (ring_cells == 2 && ring_medium == 0)`, at
   most one arc of the neighbour ring, or else exactly two cells and no medium on it (TST's
-  `ConnectivityPreservedP`, the Merks reference). Out-of-domain sites on a closed face are
-  not medium. Zero arcs pass, so the last site can be taken.
+  `ConnectivityPreservedP`, the Merks reference, as a hard veto). Out-of-domain sites
+  (a closed face, outside a domain mask) are neither medium nor a cell; TST counts its
+  frame as a cell, so at a closed edge the two rules can differ. Zero arcs pass, so the
+  last site can be taken.
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """

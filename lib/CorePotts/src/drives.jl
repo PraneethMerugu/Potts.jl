@@ -122,7 +122,8 @@ Number of distinct cells (medium excluded) on the target's neighbour ring (see
     ring_medium(σ, ctx, prop) -> Int
 
 Number of medium sites on the target's neighbour ring (see [`ring_arcs`](@ref)).
-Out-of-domain sites on a closed face are not medium; on a periodic axis the ring wraps.
+Out-of-domain sites (a closed face, outside a domain mask) are not medium; on a periodic
+axis the ring wraps.
 """
 @inline ring_medium(σ, ctx, prop::Proposal{2}) = _count_medium(_ring_owners(ctx.lattice, σ, prop.x))
 
