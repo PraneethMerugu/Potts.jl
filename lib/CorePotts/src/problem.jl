@@ -80,7 +80,7 @@ remake_state(sys, prob, u0) = u0
     frozen_kinds(sys)
 
 The kinds whose cells' sites are frozen, as a tuple of `Int32`, or `nothing` (the default).
-A system that returns kinds uses the standard rule (D-081): a site is frozen when its
+A system that returns kinds uses the standard rule: a site is frozen when its
 owner's kind is listed or it lies outside the lattice domain. The rule builds the
 problem's mask (`PottsProblem`, `remake`, checkpoint resume) and is recomputed on the
 integrator's backend after lifecycle events. A problem with frozen kinds takes no other
@@ -326,7 +326,7 @@ end
 """
 Host snapshot of the current state: independent of the live state on every backend
 (`Adapt.adapt(Array, …)` alone would alias host arrays). Synchronizes the device. The live
-device state is `integ.state`. Counted in `integ.stats` (D-085).
+device state is `integ.state`. Counted in `integ.stats`.
 """
 function current_state(integ::PottsIntegrator)
     _sync!(integ.stats, integ.backend)

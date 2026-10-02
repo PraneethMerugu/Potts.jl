@@ -3,7 +3,7 @@
 
 The Act model of actin-driven cell migration (Niculescu, Textor & de Boer, PLoS Comput.
 Biol. 11, e1004280, 2015; Wortel et al., Biophys. J. 120, 2609, 2021), with the semantics of
-their reference code Artistoo (D-049):
+their reference code Artistoo:
 
 - **Activity.** Every site a cell gains becomes fully active (`max_act`); a site taken by the
   medium is inactive; activity decays by one per MCS.

@@ -2,7 +2,7 @@
     MerksVasculogenesis(; name, lattice = (500, 500), contact_inhibited = false, …)
 
 Vasculogenesis by chemotaxis to an autocrine chemoattractant, with elongated cells (Merks,
-Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
+Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006):
 
 - `H = Σ J + λ Σ (a − A)² + λ_L Σ (l − L)²` (Eqs. 1, 4), with the cell length
   `l = 4√(λ_max(I)/a)` (Eq. 5, the `major_length` built-in). Elongation is what turns the
@@ -15,7 +15,7 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006; D-049 F-3):
 - Cells stay connected: a copy may not split a cell (a hard veto for the paper's
   connectivity penalty; the CompuCell3D one-arc rule).
 
-Defaults are the 2006 parameter set in lattice units (2 µm/px, 30 s/MCS; D-050 M1):
+Defaults are the 2006 parameter set in lattice units (2 µm/px, 30 s/MCS):
 `T = 50`, `χ = 1000`, `J_cc = 40`, `J_cM = 20`, `D = 0.75` (10⁻¹³ m²/s),
 `α = ε = 5.4·10⁻³` (1.8·10⁻⁴ s⁻¹), target area `A = 100` with `λ = 50`, and target length
 `L = 50` ("about 100 µm" in the paper text) with `λ_L = 5`, on a 500² lattice with Moore
@@ -23,18 +23,17 @@ contacts and copies. Seed with [`merks_state`](@ref): 282 cells of 10² sites ov
 The 2008 contact-inhibited runs used other values (`A = 50` and Dataset S1); pass them as
 keywords with `contact_inhibited = true`.
 
-Differences from the paper (spec: `docs/design/research/model-specs/01_merks.md`):
+Differences from the paper:
 - connectivity is a hard veto, not the soft penalty `E₀ > 2000` on connectivity-breaking
-  copies (D-050 M3);
-- the closed walls cost nothing; the paper has frozen border cells with `J_cB = 100`
-  (D-050 M4);
+  copies;
+- the closed walls cost nothing; the paper has frozen border cells with `J_cB = 100`;
 - the field boundary is zero-flux; the paper's code holds `c = 0` on the outer ring
-  (absorbing, D-050 M5);
+  (absorbing);
 - `L = 50` follows the paper text; the released parameter files labelled for Fig. 4
-  (`longcells.par`) use `L = 60` (D-050 M2), pass `L = 60.0` for that reading.
+  (`longcells.par`) use `L = 60`; pass `L = 60.0` for that reading.
 
-The field solver is a problem keyword (D-075) with no default; this model's is the paper's
-schedule of 15 explicit Euler substeps per MCS (`Δt = 2 s`, D-050 M5),
+The field solver is a problem keyword with no default; this model's is the paper's
+schedule of 15 explicit Euler substeps per MCS (`Δt = 2 s`),
 `field_solver = ExplicitEuler(substeps = 15, lower = 0.0)`:
 
 ```julia

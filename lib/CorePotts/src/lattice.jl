@@ -22,7 +22,7 @@ struct Hexagonal <: AbstractGeometry end
     Lattice(dims; boundary = Periodic(), domain = nothing, geometry = Square())
 
 A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
-`domain` restricts it to an irregular region (ROADMAP M2.1b): a `Bool` array over the
+`domain` restricts it to an irregular region: a `Bool` array over the
 lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on a
 hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside the domain never
 change owner and must belong to the medium. The domain edge is closed: `shift` reports

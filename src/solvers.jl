@@ -12,7 +12,7 @@ const _ODESolver = Union{ExplicitEuler, RK4, Adaptive}
 The solver keywords of a problem as given (`field_solver`, `ode_solver`, `solvers`: kept for
 `remake`, which replaces only the keywords it names) and resolved: `resolved` maps every
 integrated variable (each field and each cell or model ODE unknown) by name to its solver,
-and `canonical` is the canonical string of that map that the D-016 fingerprint hashes.
+and `canonical` is the canonical string of that map that the problem fingerprint hashes.
 """
 struct SolverSpec
     field_solver::Union{Nothing, ExplicitEuler}
@@ -30,7 +30,7 @@ _solver_name(x) = info(x).name
 Resolve the solver keywords against compiled model `c`:
 - `field_solver` is required when the model has a field (no default: a silent default
   would replace a paper's scheme), and an error without one;
-- `ode_solver` (default `ExplicitEuler()`, one step per MCS; D-038) integrates every cell
+- `ode_solver` (default `ExplicitEuler()`, one step per MCS) integrates every cell
   and model ODE that `solvers` does not name;
 - `solvers = [x => solver, …]` keys integrated variables (the Potts variable, the MTK
   component variable `comp.x`, or the name `:x`/`Symbol("comp₊x")`), or a component
@@ -51,7 +51,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         field_solver === nothing && throw(ArgumentError(
             "model `$(nameof(sys))` has the field$(length(fields) == 1 ? "" : "s") " *
             "$(join(("`$n`" for n in fields), ", ")), so `PottsProblem` needs `field_solver = ExplicitEuler(; substeps, lower)` " *
-            "(no default, D-075; a published model's docstring gives its value)"))
+            "(no default; a published model's docstring gives its value)"))
         field_solver isa ExplicitEuler || throw(ArgumentError(
             "`field_solver` takes an `ExplicitEuler(; substeps, lower)`; got $(repr(field_solver))"))
     end
@@ -130,7 +130,7 @@ The ODE unknowns `odes` (`(x, rate)` pairs, in model order) grouped by solver (b
 string, the fingerprint's: equal specifications built afresh share a phase, and solvers
 that differ, a closure's captures included, do not), in order of first appearance: each
 group is one phase. Every rate
-sees the state at the start of the step (Jacobi, D-038): with one group the phase writes
+sees the state at the start of the step (Jacobi): with one group the phase writes
 the variables directly; with several, each writes scratch `x__ode` and one publish per
 scope copies them back after all groups ran (`_ode_scratch`).
 """
@@ -146,8 +146,8 @@ function _ode_groups(odes, spec::SolverSpec)
 end
 
 """Whether the ODEs of `scope` (`:cell`, `:model`) step through scratch slots `x__ode`:
-when they run in several solver groups (Jacobi across groups, D-078), or when a cell ODE
-reads another cell's ODE unknowns (Jacobi across cells, P6.0n)."""
+when they run in several solver groups (Jacobi across groups), or when a cell ODE
+reads another cell's ODE unknowns (Jacobi across cells)."""
 _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
     length(_ode_groups(scope === :cell ? c.cell_odes : c.model_odes, spec)) > 1 ||
     (scope === :cell && _ode_reads_other_cells(c))

@@ -1,11 +1,11 @@
 """
     PottsModels.Analysis
 
-Analysis of saved states and solutions (D-051 item 6): plain Julia that runs on σ arrays and
+Analysis of saved states and solutions: plain Julia that runs on σ arrays and
 profiles after a simulation, never inside a Monte Carlo step.
 
 - Peaks of a 1-D profile: [`find_peaks`](@ref), [`peak_prominences`](@ref),
-  [`peak_widths`](@ref) (a port of SciPy 1.7's `scipy.signal` functions, D-069) and
+  [`peak_widths`](@ref) (a port of SciPy 1.7's `scipy.signal` functions) and
   [`merge_peaks`](@ref).
 - Profiles and areas: [`column_tops`](@ref), [`trapz`](@ref).
 - Cell adjacency: [`cell_graph`](@ref), [`reachable`](@ref), [`components`](@ref),

@@ -45,7 +45,7 @@ end
 """
     graner_glazier_state(scale = 1) -> (labels, kinds)
 
-The 72×72 initial condition of PRE §II D3 (D-049 F-2; `data/graner/generate.jl`): a square
+The 72×72 initial condition of PRE §II D3 (made by `data/graner/generate.jl`): a square
 51×50 aggregate of 64 staggered rectangular cells of height 5 and various widths (mean area
 40) is relaxed as one type for 400 paper MCS until boundary length and medium fraction are
 flat, then each cell is dark or light with probability ½ (33 dark, 31 light). Tiled
@@ -66,10 +66,10 @@ end
 
 A paper-size initial condition (PRE 47, p. 2129: "about 1000 cells"): one round aggregate
 of `n` cells of about `V₀ = 40` sites, dark (1) and light (2) randomly mixed in equal
-numbers (±1; spec §8.4 A-GG5 leaves the fraction open), surrounded by a medium margin of
+numbers (±1; the paper does not state the fraction), surrounded by a medium margin of
 `margin` sites on a square lattice sized to fit (use `lattice = size(labels)`). On the
 periodic `GranerGlazier` lattice the gap to the aggregate's image is `2margin`; runs in
-which cells detach need a wider margin (spec 09 §9.1 V-PRE14/15: at least 60). The
+which cells detach need a wider margin (at least 60). The
 aggregate is rebuilt on the larger lattice, not embedded: a different `margin` can move a
 few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
 10), so compare margins statistically, not site by site. Built with the
@@ -80,8 +80,8 @@ The paper relaxes its aggregate as one cell type for 400 paper MCS before assign
 (§II D3); no Potts relaxation is run here. The cell areas are more spread than after that
 relaxation: SD 7.6 (range 21–67) for `n = 1000`, against 1.6 for a Potts-relaxed aggregate.
 The sorting time course does not see the difference: the heterotypic boundary fractions from
-this start and from a relaxed one agree within 0.005 at 1, 10 and 100 paper MCS (measured
-in the P6.1b2 review, 6 seeds). The area term evens the cells out within the first MCS.
+this start and from a relaxed one agree within 0.005 at 1, 10 and 100 paper MCS (6
+seeds). The area term evens the cells out within the first MCS.
 """
 function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1, margin::Integer = 10)
     margin >= 0 || throw(ArgumentError("graner_glazier_aggregate: margin must be non-negative, got $margin"))

@@ -125,7 +125,7 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
   (0 = none). Claiming them in `claims` instead is also exact, only more conservative.
 - `temperature` → the copy temperature
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
-- `phases` → synchronous work before/after each copy sweep (`Phases`, D-033)
+- `phases` → synchronous work before/after each copy sweep (`Phases`)
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
 - `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker()`), used
   unless the algorithm sets one; `nothing` means `Metropolis()`

@@ -125,7 +125,7 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     sub = Dict{Any, Any}()
     for p in pops
         _hoistable(p, rn) || (strict ? throw(ArgumentError(
-            "a population fold in an energy is computed once per MCS (D-041), so its body must not read " *
+            "a population fold in an energy is computed once per MCS, so its body must not read " *
             "the current cell or site; got `$p`")) : continue)
         j = findfirst(s -> isequal(s.second, p), slots)
         if j === nothing
