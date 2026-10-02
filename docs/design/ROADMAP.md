@@ -270,6 +270,10 @@ Every item's acceptance also includes the standing checks:
   - Accept: consecutive top-level seeds give uncorrelated first draws of each sub-stream.
 - [ ] **P6.0y** Explicit-Euler field substeps sit exactly on the stability edge (found by the docs author, 2026-10-01). `CorePotts.stable_substeps(D, dt, h) = ceil(dt·D·Σ2/h²)` (`fields.jl:145`, used by `ExplicitEuler()` with `substeps = nothing`, `codegen.jl:962`) ignores reaction/decay terms and has no margin, so `D = 0.5` with decay blows up. Include the linear reaction rate (|∂f/∂u| bound, e.g. decay) and a safety factor in the count.
   - Accept: a diffusion–decay fixture at the old edge stays bounded and matches the analytic decay of a Fourier mode; Merks' substep count change (if any) re-checked against its papers.jl gates (D-048); fingerprints of models with explicit `substeps` unchanged.
+- [ ] **P6.0aa** `connectivity(k; rule = :arc_or_pair)` exempts a two-cell ring even when medium is on it, so multicell `WortelAct(connected = true)` runs accept copies that split cells (topology audit §6.4; TST `ConnectivityPreservedP` needs no medium on the ring, ca.cpp:1218). Add a copy-scope `ring_medium` (out-of-domain sites are not medium) and use `ring_arcs ≤ 1 || (ring_cells == 2 && ring_medium == 0)`; fix AUTHORING §4 and the WortelAct tutorial claim. No frozen gate uses `connected = true`.
+  - Accept: a three-site junction fixture (cell–cell–medium) where the old rule splits a cell and the new one refuses; single-cell runs unchanged.
+- [ ] **P6.0ab** Small API defects found by the docs authors (2026-10-01): a kind table computed from parameters raises a `MethodError`, and `observe` does not accept a `Symbol` on a solution. Reproduce each from the docs-lab notes, fix, and add a test for each.
+- [ ] **P6.0ac** AUTHORING §12.9 wording: proposals draw a uniform mobile target, then a uniform source offset (topology audit §1); add Morpheus `boundaryLengthScaling` and CC3D's hex `surfaceMF` to the pair-counting notes.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -363,6 +367,8 @@ Every item's acceptance also includes the standing checks:
   MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
   StableRNG only (D-075): the `clock`/`cue` expression defaults move to P6.4a.
 
+- [ ] **P6.1e** `graner_glazier_aggregate`'s default 10-site margin lets a long sorting run join the aggregate to its periodic image (seen in the 10⁴-MCS paper run, which uses `margin = 60`). Raise the default margin (≥ 60) or make the default lattice closed, and re-check the frozen sorting reproductions that call it.
+
 ### Step 2 — Akeeb
 
 - [x] (merge, 2026-09-30; D-073) **P6.2a** R2 `InsertUntil` (general "repeat until ratio" placement; refactor P6.2c's
@@ -402,6 +408,8 @@ Every item's acceptance also includes the standing checks:
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
+
+- [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
 
 ### Step 4 — Foam
 
