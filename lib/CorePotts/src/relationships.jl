@@ -229,7 +229,7 @@ graph. Host-shaped and rare by design. `ctx.lattice` is a host copy (made once p
 domain mask never changes); `p` is the live parameter object, as given to the integrator.
 
 `reads` and `writes` declare what the body touches, as tuples of `:σ` (the labels) and cell
-column names, so that on a device only those leaves cross (D-092):
+column names, so that on a device only those leaves cross:
 - `reads`: copied to the host before the body;
 - `writes`: copied to the host before the body (bodies update them in place) and back after
   it; they are the only leaves written back.
