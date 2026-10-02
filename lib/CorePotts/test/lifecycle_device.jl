@@ -88,12 +88,14 @@
         # A daughter rule that links mother and daughter: the newborn's links are cleaned
         # (and its columns copied) for every cell before any rule runs, so the rule's link
         # survives exactly as on the host planner (a race before: the link was dropped)
-        @testset "a divide! rule's links ($form)" for (form, sites) in (("fused", CorePotts.FUSE_SITES[]), ("staged", 0))
+        @testset "a divide! rule's links ($form)" for (form, sites) in
+                                                       (("fused", CorePotts.FUSE_SITES[]), ("staged", 0))
             fuse = CorePotts.FUSE_SITES[]
             CorePotts.FUSE_SITES[] = sites
             try
                 link_md!(st, p, ctx, key, mcs, parent, daughter) = (add_link!(st.cell, parent, daughter); nothing)
-                stl = with_capacity(initial_state(σ, Int32[1]; cell = merge(init_moments(σ, lat, 1), empty_links(2, 1))), 3)
+                cl = merge(init_moments(σ, lat, 1), empty_links(2, 1))
+                stl = with_capacity(initial_state(σ, Int32[1]; cell = cl), 3)
                 fl = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
                     lifecycle = Lifecycle(once; divide! = link_md!))
                 probl = PottsProblem(fl, stl, lat, (0, 3), gg_params())

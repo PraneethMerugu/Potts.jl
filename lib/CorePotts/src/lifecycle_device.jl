@@ -96,7 +96,8 @@ function DeviceLifecycle(backend, N::Int, cap::Int, st)
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(0), zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(0), zeros(Int32, _NACC),
+        zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -895,7 +896,8 @@ end
     _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
     @synchronize
     tz = @index(Local, Linear)
-    _each_on!(_dfinalize_body!, tz, length(buf.events), (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
+    _each_on!(_dfinalize_body!, tz, length(buf.events),
+        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
     @synchronize
     tk = @index(Local, Linear)
     _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))
@@ -931,8 +933,9 @@ function _fold_lifecycle!(integ; report::Bool = true)
     s = stats.lifecycle
     deferred = δ(_ACC_DEFERRED)
     large = δ(_ACC_LARGE)              # of which for the moment scratch (warned below)
-    deferred > large && s.deferred == 0 && report && @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
-                                         "divisions are deferred until slots free up. Pass a larger `capacity`."
+    deferred > large && s.deferred == 0 && report &&
+        @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
+              "divisions are deferred until slots free up. Pass a larger `capacity`."
     s.divisions += δ(_ACC_DIVISIONS)
     s.removals += δ(_ACC_REMOVALS)
     s.transitions += δ(_ACC_TRANSITIONS)
