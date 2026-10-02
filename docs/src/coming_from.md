@@ -21,7 +21,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 |---|---|
 | `<Potts>` `Dimensions`, `Boundary_x` | `@lattice Lattice((nx, ny); boundary = (Periodic(), Closed()))` |
 | `<Potts>` `NeighborOrder` | `@lattice Lattice(…; neighborhood = NeighborOrder(k))` for contacts, `@relations proposal = NeighborOrder(k)` for copies |
-| `<Potts>` `Temperature` / `FluctuationAmplitude` | `@sweep Metropolis(; temperature = T)`; per type `temperature = Tk[kind]` |
+| `<Potts>` `Temperature` / `FluctuationAmplitude` | `@sweep Metropolis(; temperature = T)`; per type `temperature = Tk[kind]`; see the note below |
 | `<Potts>` `Offset` | `@sweep Metropolis(; temperature = T, offset = δ)` |
 | `<Potts>` `Steps` | the time span of `PottsProblem(sys, op, (0, steps))` |
 | `<Plugin Name="CellType">`, `Freeze` | `@kinds medium a b wall[frozen]` |
@@ -45,6 +45,20 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | SBML / RoadRunner ODEs per cell | a ModelingToolkit `System` in `@components cells(k) name = sys` |
 | `stop_simulation` | `DiscreteCallback(cond, terminate!)` |
 | Parameter scans | `remake` and `EnsembleProblem` |
+
+**Temperature in detail.** See [Sweep](@ref manual-sweep) for runnable examples.
+
+- `FluctuationAmplitudeFunctionName` `Min` / `Max` / `ArithmeticAverage` is
+  `combine = min` / `max` / `(a, b) -> (a + b) / 2`. `combine` receives two numbers, so
+  `mean` from Statistics does not work (it expects a collection). As in CC3D, the medium
+  never contributes: a copy between a cell and the medium uses the cell's value.
+- A per-cell `fluctAmpl`, where −1 means "use the type's value", is a cell variable:
+  `temperature = ifelse(T_cell >= 0, T_cell, Tk[kind])`.
+- `Anneal = n` (the temperature set to 0 for `n` more MCS after `Steps`) is a second solve
+  at ``T = 0``, `remake(prob; u0 = sol.u[end], tspan = (steps, steps + n), p = [:T => 0.0])`,
+  or a [callback](@ref manual-callbacks) that sets `integ.ps[:T] = 0.0` at `t == steps`.
+- The default temperature is 0 in CC3D XML but 10 in PyCoreSpecs. Check which one the model
+  relied on.
 
 ## Morpheus
 
