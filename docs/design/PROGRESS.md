@@ -1696,3 +1696,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** `Potts._substream_seed(seed, stream)` (SplitMix64 of the seed and the stream name's FNV-1a id) derives every sub-stream seed; `akeeb_state`'s clocks use the `:clock` stream instead of `StableRNG(seed + 1)`. σ and kinds are unchanged; clocks differ per seed with the same law. `p6_2a2` re-frozen (oracle stream and a comment).
 - **Review.** One round; the coordinator replaced a seed re-pick in `mechanisms.jl` with a correct attribution (the clock reset marks exactly the cells that divided). Akeeb divisions over 80 seeds: mean 585.8, SD 18.7 (band 585.0 ± 3×16.4; no re-baseline).
 - **Merge checks.** PottsModels and Potts exit 0 (branch: also CorePotts, docs, Potts on Metal). No step-loop change; gate not rerun.
+
+## 2026-10-01 — Merks 2006 parameter set as the defaults (D-098, user)
+
+- **The change.** `MerksVasculogenesis()` defaults are the Merks et al. (2006) set: V₀ = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, D_c = 0.75, ε = δ = 5.4·10⁻³, J = [0 20; 20 40], with `ExplicitEuler(substeps = 15, lower = 0)`; `merks_state` side 10. The old defaults fragmented the network (largest component 0.27–0.45 of the cells); the 2006 set keeps it connected (0.98–1.0). New frozen `merks_2006_defaults`; `p6_0c_solver_placement` and `p6_0v_transfer_counters` re-frozen with `side = 7` (sizes only); Fig. 6 mechanism test retuned.
+- **Gate.** `merks_100` is now 25 cells of 10² with 15 substeps; CPU rows re-baselined (sequential 286.41, checkerboard 287.85 ns/site — the 3× is the substeps, about 16 ns/site each). The Metal row measured 1.51× the old baseline, inside the common-mode band of the other Metal rows (1.32–1.89) under load, so it is not re-baselined.
+- **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts, docs and the gate exit 0.

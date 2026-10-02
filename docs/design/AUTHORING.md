@@ -359,8 +359,8 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   integrated field (`D(c) ~ …`) needs it, even when `solvers` names every field, and a
   model without one rejects it. `substeps = nothing` takes the stable count from the
   diffusion coefficient; an explicit `n` is a minimum. `lower` clips after every substep. A
-  published model's docstring gives its value (Merks: `ExplicitEuler(substeps = 2,
-  lower = 0.0)`).
+  published model's docstring gives its value (Merks: `ExplicitEuler(substeps = 15,
+  lower = 0.0)`, the paper's schedule).
 - `ode_solver` integrates every cell and model ODE (`D(x) ~ …`, components):
   `ExplicitEuler(; substeps)`, `RK4(; substeps)` or `Adaptive(alg; kwargs...)`. It has a
   default, so a model without ODEs accepts it silently (it changes nothing, fingerprint
@@ -700,7 +700,7 @@ end
 ```
 
 Its problem gives the field solver (D-075): `PottsProblem(MerksVasculogenesis(…), op, tspan;
-field_solver = ExplicitEuler(substeps = 2, lower = 0.0))`.
+field_solver = ExplicitEuler(substeps = 15, lower = 0.0))`.
 
 ### OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameter set)
 
