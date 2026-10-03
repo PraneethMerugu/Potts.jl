@@ -68,7 +68,10 @@ sol[:x][end], sol[:g][end]
 - Fields are stepped one after another within an MCS, each seeing the others' values from
   the start of its own step. A strong coupling between two fields is therefore split per
   MCS, and it can be unstable however many substeps each field takes; keep such couplings
-  weak relative to `1 / mcs_duration`.
+  weak relative to `1 / mcs_duration`. For the same reason another field's Laplacian
+  (`- Dx * Δ(u)` in `D(c)`) is a source term for `c` and does not change its substep count.
+- A diffusion coefficient must not be negative: that is anti-diffusion, an ill-posed problem
+  whose shortest wavelengths grow without bound under any step (the problem warns).
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
   `rand()` cannot be integrated adaptively.

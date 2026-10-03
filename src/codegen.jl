@@ -1101,12 +1101,17 @@ end
 # computed from the current parameters every MCS (a `remake(p = …)` keeps the step stable).
 # An explicit `substeps = n` is a minimum: an unstable step silently diverges, so the stable
 # count wins when it is larger. A coefficient with no bound from the parameters needs `n`.
+# Only the field's own `Δ(x)` is its diffusion: `Δ(u)` of another field `u` is a source
+# term here (fields are stepped one after another, so `u` is fixed during this step), with
+# no part in ∂f/∂x.
 function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
     L = _unwrap(Symbolics.variable(:__Lap))
     lap = Dict{Any, Any}()
-    _walk(y -> (iscall(y) && operation(y) === Δ && (lap[y] = L)), rate)
+    xu = _unwrap(x)
+    _walk(y -> (iscall(y) && operation(y) === Δ && isequal(_unwrap(arguments(y)[1]), xu) && (lap[y] = L)), rate)
     rate_L = _unwrap(Symbolics.substitute(rate, lap; fold = Val(false)))
     coef = isempty(lap) ? 0 : _unwrap(Symbolics.derivative(Symbolics.wrap(rate_L), Symbolics.wrap(L)))
+    _warn_negative_diffusion(x, coef, values)
     h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
     env = _model_env(Float64, Dict{Any, Symbol}())
     db = _abs_bound(coef, env)
@@ -1129,6 +1134,29 @@ function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
     throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not bounded by the parameters; " *
                         "give `PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` " *
                         "(or `solvers = [$(info(x).name) => ExplicitEuler(; substeps = n)]`)"))
+end
+
+# A diffusion coefficient below zero is anti-diffusion: the continuum problem is ill-posed
+# (every short wavelength grows), whatever the step. Warned at build time from the values the
+# problem is built with, for a parameter expression or a kind table `D[kind]`.
+function _warn_negative_diffusion(x, coef, values)
+    values === nothing && return
+    neg = false
+    if _param_only(coef)
+        w = _unwrap(Symbolics.substitute(coef, values; fold = Val(true)))
+        w = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+        neg = w isa Real && w < 0
+    elseif iscall(coef) && (operation(coef) === at || operation(coef) === at2)
+        i = info(_unwrap(arguments(coef)[1]))
+        if i !== nothing && i.role === :kindtable
+            v = get(values, _unwrap(arguments(coef)[1]), nothing)
+            neg = v isa AbstractArray{<:Real} && any(<(0), v)
+        end
+    end
+    neg && @warn "the diffusion coefficient of the field `$(info(x).name)` ($coef) is negative: that is " *
+                 "anti-diffusion, an ill-posed problem whose short wavelengths grow without bound; " *
+                 "no substep count makes it stable"
+    return
 end
 
 # A host expression (in `p`) bounding |∂f/∂x| over every site and state, for the field's

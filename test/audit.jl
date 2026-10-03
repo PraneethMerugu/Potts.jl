@@ -245,6 +245,44 @@ end
     @test all(isfinite, c) && maximum(abs, c) < 1e-3
 end
 
+# another field's Laplacian is a source term, not this field's diffusion (fields are
+# stepped one after another); a negative diffusion coefficient warns (anti-diffusion)
+@potts_model AuditCrossField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.5
+        Dx = 0.5
+        Dk[kind] = [0.1, 0.1]
+    end
+    @variables begin
+        c(field) = 0.0
+        u(field) = 0.0
+        w(field) = 0.0
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
+        D(u) ~ Dc * Δ(u)
+        D(w) ~ Dk[kind] * Δ(w)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "cross-diffusion counts only the field's own Laplacian; negative diffusion warns" begin
+    cb = [iseven(i + j) ? 1.0 : -1.0 for i in 1:8, j in 1:8]
+    op = [ownership => zeros(Int32, 8, 8), kind => Symbol[], :c => cb, :u => copy(cb)]
+    prob = @test_nowarn PottsProblem(AuditCrossField(; name = :x), op, (0, 30); field_solver = ExplicitEuler())
+    steps = filter(x -> x isa Potts.CorePotts.FieldStep, collect(prob.f.phases.after_mcs))
+    @test [Potts.CorePotts._substeps(f.substeps, prob.p) for f in steps] == [3, 3, 1]   # ceil(0.5·8 / 1.8)
+    c = Array(solve(prob, SequentialCPM()).u[end].site.c)
+    @test all(isfinite, c) && maximum(abs, c) < 1e-3
+    @test_logs (:warn, r"field `c`.*anti-diffusion") (:warn, r"field `u`.*anti-diffusion") PottsProblem(AuditCrossField(; name = :x), [op; :Dc => -0.1], (0, 1);
+        field_solver = ExplicitEuler())
+    @test_logs (:warn, r"anti-diffusion") PottsProblem(AuditCrossField(; name = :x), [op; :Dk => [0.1, -0.1]], (0, 1);
+        field_solver = ExplicitEuler())
+end
+
 @potts_model AuditClear begin
     @kinds medium A
     @variables begin
