@@ -601,7 +601,8 @@ step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
 `mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8` (`CorePotts.stable_substeps`), from the
 current parameters: `D` is the diffusion coefficient and `k` bounds the reaction's
 `|∂f/∂c|` (for a reaction linear in the field, the size of its coefficient, indicators such
-as `(kind == medium)` counting as 1; a nonlinear reaction is not counted, with a warning).
+as `(kind == medium)` and `rand()` counting as 1 and a kind table `δ[kind]` as its largest
+entry; a reaction nonlinear in the field is not counted, with a warning).
 An explicit `n` is a minimum. As an `ode_solver` (the default), `nothing` is one step.
 """
 Base.@kwdef struct ExplicitEuler
