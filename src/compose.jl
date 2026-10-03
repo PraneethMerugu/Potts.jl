@@ -8,7 +8,7 @@
     extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
 
 The model with everything in `base` and `sys`. `sys` wins where both define something
-(parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
+(parameters and variables by name, a vector as a whole, relations, the lattice and sweep of a `@potts_model`
 extension that declares them). Structural replacement: an update of `sys` replaces the base's
 updates of the same target in the same phase (whatever their cadences; a warning names a
 changed cadence), an equation the base's equation for the same
@@ -33,8 +33,17 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
             @warn "extend: $(_describe(u)) adds to the base's $(_describe(b)) (division rules accumulate: " *
                   "both fire at their own cadence; the base's rule is not replaced)"
     end
-    byname(xs, ys) = (seen = Set(info(y).name for y in ys);
-        Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
+    # a name keeps its category: say which side came from the base
+    # (`@extend Base()` without a name calls the base `__base`)
+    mine = _name_categories(sys)
+    inbase = nameof(base) === :__base ? "in the base" : "in the base `$(nameof(base))`"
+    for (n, old) in _name_categories(base)
+        what = get(mine, n, old)
+        what == old || throw(_category_clash(name, n, what, "$old $inbase"))
+    end
+    # a vector replaces the base's vector of its name as a whole (whatever their lengths)
+    key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
+    byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
@@ -79,21 +88,24 @@ function _check_primed_names(sys::PottsSystem)
 end
 
 """
-One name, one category: kinds, parameters (a vector by its vector name), variables (every
-scope), observed quantities, relations, relationships and components share one namespace,
-and so do a component's namespaced quantities (`clk₊y` for the unknown or parameter `y` of
-the component `clk`). `@potts_model` rejects a second category within one model
-(`_declare!`); this rejects it however the `PottsSystem` was built (`@extend`, `extend`, a
-programmatic build), so `lookup`, `observe` and `getu` agree on every name. A name declared
-twice in one category is not a clash (`extend` keeps the extension's).
+One name, one category: kinds, parameters, variables (every scope), observed quantities,
+relations, relationships and components share one namespace. A vector quantity claims its
+vector name and each component name (`bias` and `bias_1`, `bias_2`, …), and a component
+system its namespaced quantities (`clk₊y` for the unknown or parameter `y` of the
+component `clk`). `@potts_model` rejects a second category within one model (`_declare!`);
+this rejects it however the `PottsSystem` was built (`@extend`, `extend`, a programmatic
+build), so `lookup`, `observe` and `getu` agree on every name. A name declared twice in one
+category is not a clash (`extend` keeps the extension's), but a scalar named like a
+component of a vector is (it would leave part of the vector).
 """
-function _check_name_categories(sys::PottsSystem)
+_check_name_categories(sys::PottsSystem) = (_name_categories(sys); sys)
+
+"""The category of every name of `sys` (name → category); throws on a name in two."""
+function _name_categories(sys::PottsSystem)
     seen = Dict{Symbol, String}()
     function claim(n::Symbol, what::String)
         old = get!(seen, n, what)
-        old == what || throw(ArgumentError(
-            "$(nameof(sys)): $what `$n`: `$n` is already declared as a $old (kinds, parameters, variables, " *
-            "observed quantities, relations, relationships and components share one namespace); rename one of them"))
+        old == what || throw(_category_clash(nameof(sys), n, what, old))
         return nothing
     end
     foreach(k -> claim(k, "kind"), sys.kinds)
@@ -101,7 +113,13 @@ function _check_name_categories(sys::PottsSystem)
         for x in xs
             i = info(x)
             i === nothing && continue
-            claim(something(get(i.options, :vector, nothing), i.name), what)
+            v = get(i.options, :vector, nothing)
+            if v === nothing
+                claim(i.name, what)
+            else
+                claim(v, what)
+                claim(i.name, "$what (a component of the vector `$v`)")
+            end
         end
     end
     foreach(o -> (i = info(o.var); i === nothing || claim(i.name, "observed quantity")), sys.observed)
@@ -113,10 +131,14 @@ function _check_name_categories(sys::PottsSystem)
             claim(Symbol(c.name, :₊, SymbolicIndexingInterface.getname(u)), "quantity of the component `$(c.name)`")
         end
     end
-    return sys
+    return seen
 end
 
-_kinds_overlap(a, b) =isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
+_category_clash(model, n, what, old) = ArgumentError(
+    "$model: $what `$n`: `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
+    "observed quantities, relations, relationships and components share one namespace); rename one of them")
+
+_kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
 
 """Items of `base` whose key no item of `new` shares."""
 _unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))

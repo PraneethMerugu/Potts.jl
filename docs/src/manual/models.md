@@ -143,9 +143,12 @@ derivative of ModelingToolkit. Declaring any of these is an error that names the
 
 A model has one namespace: a name is a kind, a parameter, a variable, an observed quantity,
 a relation, a relationship or a component, never two of these. This holds for the names a
-model inherits through `@extend` (or `extend`) and for a component's quantities: the
-unknown `y` of the component `clk` is `clk₊y`, and no parameter or variable may take that
-name. A name in two categories is an error that names both.
+model inherits through `@extend` (or `extend`), for the components of a vector and for a
+component's quantities. A vector `w[1:2]` also names its components `w_1` and `w_2`, so no
+other quantity may be called `w_1`, not even a scalar parameter (an extension overrides a
+vector as a whole: `@parameters w[1:3] = …`). The unknown `y` of the component `clk` is
+`clk₊y`, and no parameter or variable may take that name. A name in two categories is an
+error that names both.
 
 A model constructor is a Julia function in your module, so avoid names that clash with
 functions you load (for example `Toggle`, `Axis` or `Label` from Makie): Julia warns about
