@@ -373,11 +373,11 @@ end
 # ---------------------------------------------------------------------------------------
 # Phases: synchronous updates, field equations, per-cell ODEs
 
-"""One phase per `integral(x)`: the site expression `x` summed over each cell, after its
-hoisted folds (`_integral_hoist`)."""
+"""The phases recomputing every `integral(x)`: the hoisted folds (`_integral_hoist`), then
+one `CellReduce` per integral (the site expression `x` summed over each cell)."""
 function _integral_phases(c::CompiledPottsSystem, T)
     reduces, folds = _integral_reduces(c, T)
-    return Any[_seq(_integral_refresh(T, c.gather_names, reduces, folds, (j,))) for j in eachindex(reduces)]
+    return _integral_refresh(T, c.gather_names, reduces, folds, eachindex(reduces))
 end
 
 # One `CellReduce` per stored integral operand, and the slots of each one's hoisted folds.
@@ -397,7 +397,6 @@ function _integral_refresh(T, rn, reduces, folds, js)
     end
     return Any[(isempty(slots) ? () : (_slots_phase(T, slots, rn),))..., (reduces[j] for j in js)...]
 end
-_seq(phs) = length(phs) == 1 ? only(phs) : _Seq(Tuple(phs))
 
 # Indices (into `_integrals(sys)`) of the integrals `integral(x)` read in the expressions `xs`.
 function _integrals_read(xs, ints)
@@ -459,7 +458,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
             if !isempty(dirty)
                 for j in _integrals_read(Any[(u.eq.rhs for u in stage.updates)..., (x for (_, x) in stage.pops)...], ints)
                     j in stale || continue
-                    stage.every == 1 ? append!(dst, refresh((j,))) : push!(dst, _Gated(stage.every, _seq(refresh((j,)))))
+                    append!(dst, stage.every == 1 ? refresh((j,)) : [_Gated(stage.every, ph) for ph in refresh((j,))])
                     stage.every == 1 && delete!(stale, j)      # a gated refresh leaves it stale
                 end
             end
@@ -1106,15 +1105,6 @@ _Gated(every::Integer, phase) = _Gated(every, 0, phase)
     CorePotts._run_phase(g, st, p, ctx, key, mcs, backend, nothing)
 CorePotts._run_phase(g::_Gated{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
     mcs % g.every == g.offset ? CorePotts._run_phase(g.phase, st, p, ctx, key, mcs, backend, stats) : 0
-
-"""Phases run one after the other as one (an integral's hoisted folds, then its reduction)."""
-struct _Seq{P <: Tuple}
-    phases::P
-end
-(s::_Seq{P})(st, p, ctx, key, mcs, backend) where {P} =
-    CorePotts._run_phase(s, st, p, ctx, key, mcs, backend, nothing)
-CorePotts._run_phase(s::_Seq{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
-    CorePotts._run_phases(s.phases, st, p, ctx, key, mcs, backend, stats)
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)
