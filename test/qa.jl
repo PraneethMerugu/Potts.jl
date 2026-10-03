@@ -229,6 +229,8 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :remake_parameters,
     :remake_state,
     :set_parameter,       # parameter-update hook Potts extends
+    :set_parameters,      # its batched form (`setp(integ, [x, y])` as one change, D-112)
+    :parameter_setter,    # `setp` with several parameters on a model description (one change)
     :stream_id,           # named RNG stream for `draw` in generated code
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components

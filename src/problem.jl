@@ -585,6 +585,22 @@ function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i:
     return _finish_parameters(info, p, q, Set([i]))
 end
 
+SymbolicIndexingInterface.setp(sys::PottsModelInfo, ps::Union{Tuple, AbstractVector}; run_hook = true) =
+    CorePotts.parameter_setter(sys, ps, run_hook)
+
+# `setp(integ, [x, y])`: every value set first, then one derivation for the whole change
+function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals, names)
+    params = info.csys.sys.parameters
+    new = Dict{Symbol, Any}()
+    for (v, i) in zip(vals, names)
+        x = findfirst(x -> Potts.info(x).name === i, params)
+        x === nothing && throw(ArgumentError("`$i` is not a parameter of $(nameof(info.csys))"))
+        new[i] = _param_value(info.T, v, Potts.info(params[x]))
+    end
+    q = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(p))))
+    return _finish_parameters(info, p, q, Set(keys(new)))
+end
+
 # `[frozen]` kinds: the mask follows the kinds, by CorePotts' standard rule (built on the
 # device after lifecycle events, D-081; `frozen_varies` follows from it)
 CorePotts.frozen_kinds(info::PottsModelInfo) =

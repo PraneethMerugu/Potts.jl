@@ -3223,3 +3223,34 @@ end
     @test (integ.ps[:p₂], integ.ps[:p₄], integ.ps[:p₅]) == (10.0, 12.0, 10.0)
     @test vals(prob) == (p₁ = 1.0, p₂ = 2.0, p₃ = 3.0, p₄ = 5.0, p₅ = 15.0, λ = 1.0)   # source unchanged
 end
+
+# `setp` with several names is one change, whatever the order of the names and whatever it
+# was built on (integrator, problem, function, model description); `integ.ps[[x, y]] = v` too.
+@testset "setp with several parameters is one change" begin
+    σ = zeros(Int32, 6, 6)
+    σ[2:3, 2:3] .= 1
+    prob = PottsProblem(ParamDiamond(; name = :pd), Any[ownership => σ, kind => [:A]], (0, 1))
+    fresh() = init(prob, SequentialCPM())
+    state(i) = (i.ps[:p₁], i.ps[:p₂], i.ps[:p₄], i.ps[:p₅])
+    for build in (identity, _ -> prob, _ -> prob.f, _ -> prob.f.sys)
+        i = fresh()
+        setp(build(i), [:p₄, :p₁])(i, [0.0, 3.0])
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)                  # p₄ named: kept; p₂ follows p₁
+        i = fresh()
+        setp(build(i), (:p₁, :p₄))(i, (3.0, 0.0))
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    end
+    i = fresh()
+    i.ps[[:p₄, :p₁]] = [0.0, 3.0]
+    @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    # negative control: one name at a time is two changes, so the order matters
+    i = fresh()
+    i.ps[:p₄] = 0.0
+    i.ps[:p₁] = 3.0
+    @test state(i) == (3.0, 6.0, 9.0, 15.0)
+    # all or nothing: a bad value leaves the parameters unchanged
+    i = fresh()
+    @test_throws ArgumentError setp(i, [:p₁, :nope])
+    @test_throws DimensionMismatch setp(i, [:p₁, :p₃])(i, [3.0])
+    @test state(i) == (1.0, 2.0, 5.0, 15.0)
+end
