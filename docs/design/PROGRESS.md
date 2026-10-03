@@ -1815,3 +1815,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** On a model's problem, `remake(prob; p = (λ = 3.0,))` is a parameter map like pairs or a `Dict` (one change under D-112); a whole `PottsParameters` of the same type is taken as given, of another type only with the same names (values converted); `p`/`u0` `= missing` or `nothing` keep the current value, as in SciML; any other value is an `ArgumentError` instead of a silent replacement that failed later. A NamedTuple `u0` works in `remake` and `reinit!`. Hand-written CorePotts problems keep their contract.
 - **Review.** Two rounds (round 2: whole objects checked, keep sentinels, `u0` catch-all), approved.
 - **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Host-only; gate and Metal not rerun.
+
+## 2026-10-03 — P6.0am merged: an `@extend`-bound name redeclared keeps its own default (D-114)
+
+- **The change.** `@extend λ = base = Base(); @parameters λ = 3.0` used to take the base's symbol as the default ("does not reduce to numbers") and to drop a constructor keyword `λ = 5`; each parameter keyword is now captured before section code runs, so a redeclared bound name takes the extension's default or keyword (scalars, vectors, kind tables), and every expression reading it uses that one value. Names starting with `#` are rejected. Fingerprints of existing models unchanged.
+- **Review.** One round, approved; follow-ups (vector regression test, `#` names) done before merge.
+- **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Build-time only; gate and Metal not rerun.
