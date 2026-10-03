@@ -146,8 +146,9 @@ Evaluate the model quantity or expression `x` (e.g. `volume`, an `@observed` nam
 (default: the problem's initial state, or every saved state of a solution).
 
 `x` may also be a name, as a `Symbol`: `observe(sol, :nA)` is `observe` on the model's
-quantity of that name (an `@observed` quantity, a declared variable, a built-in such as
-`:volume`, or a parameter). An unknown name is an `ArgumentError`.
+quantity of that name, looked up in this order: a declared variable or `@observed`
+quantity, then a built-in such as `:volume`, then a parameter. An unknown name is an
+`ArgumentError`.
 """
 observe(prob::CorePotts.PottsProblem, x, u = prob.u0) =
     _observed_function(prob.f.sys, _observe_quantity(prob.f.sys, x))(u, prob.p, prob.tspan[1])
@@ -165,7 +166,15 @@ function _observe_quantity(sys::PottsModelInfo, x::Symbol)
     for p in m.parameters
         info(p).name === x && return p
     end
-    throw(ArgumentError("`$x` is not a variable, observed quantity, built-in or parameter of $(nameof(sys.csys))"))
+    msg = "`$x` is not a variable, observed quantity, built-in or parameter of $(nameof(sys.csys))"
+    comps = [info(v).name for v in Iterators.flatten((m.parameters, m.variables))
+             if get(info(v).options, :vector, nothing) === x]
+    if !isempty(comps)
+        msg *= "; `$x` is a vector quantity: observe its components ($(join((":" * string(n) for n in comps), ", ")))"
+    elseif x === :t
+        msg *= "; the times of a solution are `sol.t`"
+    end
+    throw(ArgumentError(msg))
 end
 
 SII.parameter_values(p::PottsParameters) = p

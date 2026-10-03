@@ -59,11 +59,15 @@ prob3 = remake(prob; p = [:A₀ => 30.0])
 getp(prob3, :V_big)(prob3), getp(prob3, :V₀)(prob3)
 ```
 
-A computed parameter is evaluated when the problem is built, and again by `remake` and by
-setting a parameter of a running integrator (`integ.ps[:A₀] = 25.0`). A value given
-explicitly replaces the expression: `remake(prob; p = [:V₀ => [0.0, 30.0, 30.0]])` keeps
-those numbers. A contact table (`J[kind, kind′]`) must be symmetric for the values it
-takes; an asymmetric one is an `ArgumentError`.
+A computed parameter is evaluated when the problem is built, and again by every `remake`
+and every setting of a parameter of a running integrator (`integ.ps[:A₀] = 25.0`). A value
+given explicitly replaces the expression for that change only:
+`remake(prob; p = [:V₀ => [0.0, 30.0, 30.0]])` uses those numbers, but a later `remake` or
+setter of any other parameter evaluates `V₀` from its expression again, unless `V₀` is
+given again with it. The same holds for a value given in the operating point of
+`PottsProblem`, and for scalar computed defaults such as `V_big`. The inputs of a computed
+default must be declared before it in `@parameters`. A contact table (`J[kind, kind′]`)
+must be symmetric for the values it takes; an asymmetric one is an `ArgumentError`.
 
 Values are converted to the problem's number type (`Float64`, or `Float32` for GPU
 problems), so a `remake` never changes the compiled code.
