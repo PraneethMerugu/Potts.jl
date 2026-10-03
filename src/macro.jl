@@ -40,6 +40,11 @@ struct _Parts
     declared::Dict{Symbol, String}   # name → what declared it (collision checks)
 end
 
+# The hidden local holding parameter `k`'s constructor keyword. `@extend λ = base = Base()`
+# rebinds the local `λ` to the base's symbol, so a redeclaration `@parameters λ = …` reads
+# the keyword here (D-114). `#` keeps the name out of reach of user code.
+_kw_local(k::Symbol) = Symbol("##kw#", k)
+
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
@@ -82,6 +87,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     end
     P = :(Potts)
     preamble = quote
+        # each parameter keyword, kept before `@extend` may rebind its name (D-114)
+        $([:($(_kw_local(k)) = $k) for k in parts.params]...)
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _BOUND_BUILTINS...)), :($P.B)))
         # gather variables and draws are numbered per build (`_in_build`); a base built by
         # `@extend` inside another model continues the outer numbering (no collisions)
@@ -342,19 +349,19 @@ function _section!(parts, sec, args, ln = nothing)
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $k === nothing ? $val : $k; $(kw...))),
+                push!(code, :($k = $P.vector_parameter($(QuoteNode(k)), $(lhs.args[2]), $(_kw_local(k)) === nothing ? $val : $(_kw_local(k)); $(kw...))),
                     :(append!(__params, $k.components)))
                 continue
             elseif lhs isa Expr && lhs.head === :ref
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k; $(kw...))))
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $val : $(_kw_local(k)); $(kw...))))
             else
                 k = lhs::Symbol
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k; $(kw...))))
+                push!(code, :($k = $P.parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $(rewrite(val)) : $(_kw_local(k)); $(kw...))))
             end
             push!(code, :(push!(__params, $k)))
         end

@@ -119,7 +119,9 @@ end
 - Redeclaring a base name in its own category overrides it: `@parameters λ = 3.0` gives the
   base's `λ` a new default, `@variables x(cell) = 1.0` replaces the base's variable `x`. A
   base name cannot change category (a base parameter `x` and an extension variable `x(cell)`):
-  that is an error that names both (see [Names](#Names)).
+  that is an error that names both (see [Names](#Names)). A name bound by `@extend` and
+  redeclared takes the extension's default (or the extension's keyword), and every
+  expression that reads it uses that one value.
 
 `extend(sys, base)` is the functional form.
 
