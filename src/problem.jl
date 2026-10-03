@@ -562,6 +562,39 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
     return _finish_parameters(info, prob.p, out, Set(keys(new)))
 end
 
+# `remake(prob; p = (λ = 3.0,))`: a NamedTuple is the map of its fields (D-115)
+CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
+    CorePotts.remake_parameters(info, prob, _field_pairs(p))
+
+# a whole parameter object of this problem's type is taken as given (`remake(prob; p = ck.p)`);
+# one of another type must have the same names and sets every value, converted to the
+# problem's scalar type (a Float32 problem's `p` does not make a Float64 problem Float32)
+function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::PottsParameters)
+    typeof(p) === typeof(prob.p) && return p
+    new, old = keys(NamedTuple(p)), keys(NamedTuple(prob.p))
+    if Set(new) != Set(old)
+        extra, absent = setdiff(new, old), setdiff(old, new)
+        throw(ArgumentError("the parameter object is not one of $(nameof(info.csys))" *
+                            (isempty(extra) ? "" : "; not its parameters: $(join(extra, ", "))") *
+                            (isempty(absent) ? "" : "; missing: $(join(absent, ", "))")))
+    end
+    return CorePotts.remake_parameters(info, prob, NamedTuple(p))
+end
+
+# SciML's keep sentinels: `p = missing` (SciMLBase's generic `remake`) or `nothing` keeps `prob.p`
+CorePotts.remake_parameters(::PottsModelInfo, prob, ::Union{Nothing, Missing}) = prob.p
+
+# a vector or tuple of `Pair`s (of any eltype) is a map; anything else is an error, never a
+# silent replacement of `prob.p` (D-115)
+function CorePotts.remake_parameters(info::PottsModelInfo, prob, p)
+    _is_pairs(p) && return CorePotts.remake_parameters(info, prob, Pair[x for x in p])
+    throw(ArgumentError("`p = $(repr(p; context = :limit => true))` is not a parameter map of $(nameof(info.csys)); " *
+                        "give a NamedTuple, a vector of `name => value` pairs or a Dict"))
+end
+
+_field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
+_is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
+
 # Re-derive the expression-defined parameters not set in this change, and check the tables.
 function _finish_parameters(mi::PottsModelInfo, old, out, explicit)
     c = mi.csys
@@ -609,6 +642,20 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
+
+# a NamedTuple operating point is the map of its fields (D-115)
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple) =
+    CorePotts.remake_state(info, prob, _field_pairs(u0))
+
+# `u0 = nothing`/`missing` keeps the problem's state (laid out for this model's functions)
+CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}) =
+    CorePotts.remake_state(info, prob, prob.u0)
+
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0)
+    _is_pairs(u0) && return CorePotts.remake_state(info, prob, Pair[x for x in u0])
+    throw(ArgumentError("`u0 = $(repr(u0; context = :limit => true))` is not a state or an operating point of $(nameof(info.csys)); " *
+                        "give a state, a NamedTuple, a vector of `variable => value` pairs or a Dict"))
+end
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = _operating_point(info.csys.sys, u0)

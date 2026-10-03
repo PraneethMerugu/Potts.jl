@@ -1809,3 +1809,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Finding (A/B method).** A Metal A/B of a few percent is not evidence on its own: identical source in two checkouts differed by up to ±4% (Merks: 1.042, then 0.975 in a later session), because each checkout's compiled package caches differ and are rebuilt often in the shared depot. Before treating a small Metal ratio as a regression, compare two checkouts of the same source (or the host enqueue time with `--pkgimages=no`).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0.
 - **Gate.** CPU 0.971–1.033; Metal GG 1.018, Merks 0.942, OpenVT 1.030, Akeeb 1.033, Wortel 1.090 flagged; `ab.jl` Wortel against ea26df4c, 6 rounds: 0.940 (noisy after the machine slept; the implementer's earlier run 0.974).
+
+## 2026-10-03 — P6.0an merged: `remake` with a NamedTuple (D-115)
+
+- **The change.** On a model's problem, `remake(prob; p = (λ = 3.0,))` is a parameter map like pairs or a `Dict` (one change under D-112); a whole `PottsParameters` of the same type is taken as given, of another type only with the same names (values converted); `p`/`u0` `= missing` or `nothing` keep the current value, as in SciML; any other value is an `ArgumentError` instead of a silent replacement that failed later. A NamedTuple `u0` works in `remake` and `reinit!`. Hand-written CorePotts problems keep their contract.
+- **Review.** Two rounds (round 2: whole objects checked, keep sentinels, `u0` catch-all), approved.
+- **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Host-only; gate and Metal not rerun.
