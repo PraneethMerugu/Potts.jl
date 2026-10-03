@@ -562,6 +562,22 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
     return _finish_parameters(info, prob.p, out, Set(keys(new)))
 end
 
+# `remake(prob; p = (λ = 3.0,))`: a NamedTuple is the map of its fields (D-115)
+CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
+    CorePotts.remake_parameters(info, prob, _field_pairs(p))
+
+# a whole parameter object is taken as given; a vector or tuple of `Pair`s (of any eltype)
+# is a map; anything else is an error, never a silent replacement of `prob.p` (D-115)
+CorePotts.remake_parameters(::PottsModelInfo, prob, p::PottsParameters) = p
+function CorePotts.remake_parameters(info::PottsModelInfo, prob, p)
+    _is_pairs(p) && return CorePotts.remake_parameters(info, prob, Pair[x for x in p])
+    throw(ArgumentError("`p = $(repr(p))` is not a parameter map of $(nameof(info.csys)); " *
+                        "give a NamedTuple, a vector of `name => value` pairs or a Dict"))
+end
+
+_field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
+_is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
+
 # Re-derive the expression-defined parameters not set in this change, and check the tables.
 function _finish_parameters(mi::PottsModelInfo, old, out, explicit)
     c = mi.csys
@@ -609,6 +625,10 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
+
+# a NamedTuple operating point is the map of its fields (D-115)
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple) =
+    CorePotts.remake_state(info, prob, _field_pairs(u0))
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     opd = _operating_point(info.csys.sys, u0)

@@ -49,6 +49,11 @@ prob2 = remake(prob; p = [:λ => 5.0, :J => [0 16 16; 16 2 14; 16 14 14]])
 getp(prob2, :λ)(prob2), getp(prob2, :J)(prob2)[2, 3]
 ```
 
+`p` can be a NamedTuple (`remake(prob; p = (λ = 5.0,))`), a vector of pairs or a `Dict`;
+all three mean the same change. A name that is not a parameter, or a value that is none of
+these nor a whole parameter object (below), is an `ArgumentError`. A NamedTuple also works
+for `u0`, as for the operating point.
+
 A computed default such as `V_big = 2A₀` follows its inputs: `remake` with a new `A₀` also
 changes `V_big`. The entries of a kind table can be computed the same way
 (`V₀[kind] = [0.0, V_big, A₀]` above, or `J[kind, kind] = [0 Jx Jx; Jx 2 Jx-5; Jx Jx-5 14]`),
