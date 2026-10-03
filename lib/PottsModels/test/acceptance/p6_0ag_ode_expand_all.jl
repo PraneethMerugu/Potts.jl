@@ -39,7 +39,8 @@
 #     1e-3/1e-4 or cut by `ifelse`, so their last-place differences do not reach the result
 #     (measured bitwise); those stay bitwise.
 #  3. CPU results unchanged: the ODE values after 10 MCS (seed 7) of every shape, algorithm,
-#     solver and T equal the values recorded inline from the code before the fix, bitwise.
+#     solver and T equal the values recorded inline from the code before the fix, bitwise;
+#     model-scope shapes within 8 ulp (D-105: their sum's term order varies between builds).
 #     (Forcing expansion on that code reproduces them all bitwise.)
 #  4. A gather-ODE model on Metal runs and equals the CPU Float32 run bitwise (a regression
 #     guard for D-103's Metal fix), and a plain-rate control does too.
@@ -393,7 +394,14 @@ end
 @testset "P6.0ag: CPU results unchanged (bitwise, $p60ag_N MCS, seed 7)" begin
     for M in P60AG_SHAPES, T in (Float64, Float32), (label, kw) in P60AG_FIXED, alg in P60AG_ALGS
         u = solve(p60ag_problem(M, (0, p60ag_N); T, kw...), alg).u[end]
-        @test p60ag_values(M, u) == P60AG_RESULTS[(nameof(M), label, nameof(typeof(alg)), T)]
+        want = P60AG_RESULTS[(nameof(M), label, nameof(typeof(alg)), T)]
+        if startswith(String(nameof(M)), "P60agModel")
+            # D-105: a model-scope rate's sum is ordered by Symbolics' hashes, which differ
+            # between package builds, so these values move by a few ulp between builds.
+            @test all(isapprox.(p60ag_values(M, u), want; rtol = 8eps(T)))
+        else
+            @test p60ag_values(M, u) == want
+        end
     end
 end
 
