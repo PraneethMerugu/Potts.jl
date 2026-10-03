@@ -3238,3 +3238,79 @@ end
     end
     @test divided
 end
+
+# Every refresh point of a hoisted fold's slot: at init (read by a before-MCS update in the
+# first MCS), a gated reader of a fold whose operand the block writes, an equation reading
+# such an integral after the block, and a checkpoint continuation.
+@potts_model P60aiRefresh begin
+    @kinds medium A
+    @variables begin
+        w(site) = 1.0
+        v(cell) = 0.0
+        sb(cell) = 0.0
+        s2(cell) = 0.0
+        r(cell) = 0.0
+    end
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 16.0)^2
+    @before_mcs sb ~ integral(w * sum(volume[c] for c in cells))
+    @after_mcs v ~ Pre(v) + 1
+    @after_mcs Every(2) s2 ~ integral(w * sum(v[c] for c in cells))
+    @equations D(r) ~ integral(sin(w) * sum(v[c] for c in cells))
+    @observed o(cell) ~ integral(w * mean(volume[c] for c in cells))
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+@testset "P6.0ai: hoisted folds are fresh at every refresh point ($(nameof(typeof(alg))))" for
+        alg in (SequentialCPM(), CheckerboardCPM())
+    σ0, w0 = p60ai_init((16, 16))
+    prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); seed = 5)
+    per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
+    vsum(u) = sum(Array(u.cell.v)[Array(u.cell.volume) .> 0])
+    # at init: the stored tracker of the before-MCS operand, and its reader in MCS 1
+    names = [Potts._integral_name(x) for x in Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys)]
+    sb0 = per(prob.u0, i -> w0[i] * 32)
+    @test count(n -> getfield(prob.u0.cell, n) ≈ sb0, names) == 1      # the tracker, in u0
+    sol = solve(prob, alg; saveat = 0:4)
+    @test sol.u[2].cell.sb ≈ sb0                                     # MCS 1 reads the initial state
+    @test !(sol.u[2].cell.sb ≈ sb0 .* 0)
+    for t in 1:4
+        u, prev = sol.u[t + 1], sol.u[t]
+        @test vsum(u) == 2t
+        # gated: fresh in MCS 1, 3 (mcs 0, 2), kept in MCS 2, 4
+        @test u.cell.s2 ≈ (isodd(t) ? per(u, i -> w0[i] * vsum(u)) : prev.cell.s2)
+        # the equation (explicit Euler, dt = 1) integrates the fresh integral of each MCS
+        @test u.cell.r - prev.cell.r ≈ per(u, i -> sin(w0[i]) * vsum(u))
+    end
+    @test !(sol.u[2].cell.s2 ≈ per(sol.u[2], i -> w0[i] * 0))
+    # a checkpoint continuation equals the uninterrupted run
+    integ = init(prob, alg)
+    foreach(_ -> step!(integ), 1:2)
+    rest = solve!(init(prob, alg; checkpoint = checkpoint(integ))).u[end]
+    @test rest.σ == sol.u[end].σ
+    @test all(n -> getfield(rest.cell, n) == getfield(sol.u[end].cell, n), propertynames(rest.cell))
+    @test all(n -> getfield(rest.model, n) == getfield(sol.u[end].model, n), propertynames(rest.model))
+end
+
+@testset "P6.0ai: observed integrals leave the state unchanged" begin
+    σ0, w0 = p60ai_init((16, 16))
+    prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 2); seed = 5)
+    slots = filter(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model))
+    @test length(slots) == 4
+    mark!(u) = foreach(n -> fill!(getfield(u.model, n), -7.0), slots)
+    unchanged(u, cell) = all(n -> all(==(-7.0), getfield(u.model, n)), slots) &&
+                         all(n -> getfield(u.cell, n) == getfield(cell, n), propertynames(cell))
+    oracle(u) = (V = u.cell.volume; L = V .> 0; mv = sum(V[L]) / count(L);
+                 [sum((w0[i] * mv for i in findall(==(k), u.σ)); init = 0.0) for k in eachindex(V)])
+    mark!(prob.u0); c0 = deepcopy(prob.u0.cell)
+    @test prob[:o] ≈ oracle(prob.u0)
+    @test unchanged(prob.u0, c0)
+    sol = solve(prob, SequentialCPM())
+    mark!(sol.u[end]); c1 = deepcopy(sol.u[end].cell)
+    @test sol[:o][end] ≈ oracle(sol.u[end])
+    @test unchanged(sol.u[end], c1)
+    integ = init(prob, SequentialCPM()); step!(integ)
+    mark!(integ.state); c2 = deepcopy(integ.state.cell)
+    @test integ[:o] ≈ oracle(integ.state)
+    @test unchanged(integ.state, c2)
+end

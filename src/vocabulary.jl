@@ -229,6 +229,7 @@ one of its variables when something reads it later, and at the MCS boundary.
 `integral(Pre(x))` (update blocks only) folds the values before the block. A fold over
 `cells` or `sites` in `x` that does not read the site (e.g. `mean(volume[c] for c in
 cells)`) is the same at every site: it is computed once per recomputation, not per site.
+Folds that draw `rand()`, and folds nested inside a fold that reads the site, stay per site.
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
