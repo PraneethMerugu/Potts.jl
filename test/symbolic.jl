@@ -996,6 +996,44 @@ end
     @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
 end
 
+# D-114: a bound vector parameter redeclared takes the extension's default or keyword.
+# Fixture: cell 1 (A, volume 9) and cell 2 (B, volume 12) on a 12×12 von Neumann lattice;
+# the base without the `d` terms is 9 + 52 + 10.5 = 71.5, and the `d` terms add 9 d₁ + 12 d₂.
+@potts_model ExtVecBase begin
+    @kinds medium A B
+    @parameters begin
+        λ = 1.0
+        V₀ = 9.0
+        J[kind, kind] = [0 2 2; 2 1 4; 2 4 1]
+        d[1:2] = [1.0, 2.0]
+    end
+    @variables x(cell) = 0.5
+    @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A, B) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+        cells(A, B) => x * volume
+        cells(A) => d[1] * volume
+        cells(B) => d[2] * volume
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@potts_model ExtVecRedecl begin
+    @extend d = base = ExtVecBase()
+    @parameters d[1:2] = [3.0, 4.0]
+end
+
+@testset "@extend: a bound vector parameter redeclared keeps its own default (D-114)" begin
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[6:8, 3:6] .= 2
+    E(m) = total_energy(PottsProblem(m, [ownership => σ, kind => [:A, :B]], (0, 2); seed = 7))
+    @test E(ExtVecBase(; name = :b)) == 104.5                           # 71.5 + 9 + 24
+    @test E(ExtVecRedecl(; name = :e)) == 146.5                         # 71.5 + 27 + 48
+    @test E(ExtVecRedecl(; name = :e, d = [0.0, 0.0])) == 71.5
+    # `#…` names are the constructor's own; a declaration of one is rejected
+    @test_throws r"cannot start with `#`" Potts._potts_model(:HashName, quote @parameters var"##kw#λ" = 4.0 end, @__MODULE__)
+end
+
 @potts_model BadSiteVar begin
     @kinds medium A
     @parameters T = 1.0

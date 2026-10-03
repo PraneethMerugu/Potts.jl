@@ -59,6 +59,8 @@ function _declare!(parts::_Parts, k::Symbol, what::String)
     k in _reserved_names() && throw(ArgumentError(
         "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
     k in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, k)))
+    # `#…` names are the constructor's hidden locals (`_kw_local`)
+    startswith(string(k), '#') && throw(ArgumentError("$what `$k`: a name cannot start with `#`; choose another name"))
     haskey(parts.declared, k) && throw(ArgumentError("$what `$k`: `$k` is already declared as $(_with_article(parts.declared[k]))"))
     parts.declared[k] = what
     return k
