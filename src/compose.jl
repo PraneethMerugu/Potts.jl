@@ -9,12 +9,15 @@
 
 The model with everything in `base` and `sys`. `sys` wins where both define something
 (parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
-extension that declares them). Structural replacement: an update of `sys` replaces the base's
+extension that declares them). A vector replaces the base's vector of its name as a whole and
+may be longer, not shorter (the base may read the components a shorter one would drop). Structural replacement: an update of `sys` replaces the base's
 updates of the same target in the same phase (whatever their cadences; a warning names a
 changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
 divisions, relationships and link rules accumulate, base first (a division rule for kinds
 the base divides at another cadence warns: both rules apply, each at its own `Every`).
+A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
+is an `ArgumentError` naming both.
 """
 function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
     length(sys.kinds) >= length(base.kinds) && sys.kinds[1:length(base.kinds)] == base.kinds ||
@@ -31,8 +34,20 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
             @warn "extend: $(_describe(u)) adds to the base's $(_describe(b)) (division rules accumulate: " *
                   "both fire at their own cadence; the base's rule is not replaced)"
     end
-    byname(xs, ys) = (seen = Set(info(y).name for y in ys);
-        Any[filter(x -> !(info(x).name in seen), xs)..., ys...])
+    # a name keeps its category: say which side came from the base
+    # (`@extend Base()` without a name calls the base `__base`)
+    mine = _name_categories(sys)
+    inbase = nameof(base) === :__base ? "in the base" : "in the base `$(nameof(base))`"
+    for (n, old) in _name_categories(base)
+        what = get(mine, n, old)
+        what == old || throw(_category_clash(name, n, what, "$old $inbase"))
+    end
+    # a vector replaces the base's vector of its name as a whole, so it may not be shorter
+    # (the base's statements may read the components it would drop)
+    key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
+    _check_vector_lengths(name, inbase, Iterators.flatten((base.parameters, base.variables)),
+        Iterators.flatten((sys.parameters, sys.variables)))
+    byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
@@ -75,6 +90,80 @@ function _check_primed_names(sys::PottsSystem)
     end
     return sys
 end
+
+"""
+One name, one category: kinds, parameters, variables (every scope), observed quantities,
+relations, relationships and components share one namespace. A vector quantity claims its
+vector name and each component name (`bias` and `bias_1`, `bias_2`, …), and a component
+system its namespaced quantities (`clk₊y` for the unknown or parameter `y` of the
+component `clk`). `@potts_model` rejects a second category within one model (`_declare!`);
+this rejects it however the `PottsSystem` was built (`@extend`, `extend`, a programmatic
+build), so `lookup`, `observe` and `getu` agree on every name. A name declared twice in one
+category is not a clash (`extend` keeps the extension's), but a scalar named like a
+component of a vector is (it would leave part of the vector).
+"""
+_check_name_categories(sys::PottsSystem) = (_name_categories(sys); sys)
+
+"""The category of every name of `sys` (name → category); throws on a name in two."""
+function _name_categories(sys::PottsSystem)
+    seen = Dict{Symbol, String}()
+    function claim(n::Symbol, what::String)
+        old = get!(seen, n, what)
+        old == what || throw(_category_clash(nameof(sys), n, what, old))
+        return nothing
+    end
+    foreach(k -> claim(k, "kind"), sys.kinds)
+    for (what, xs) in (("parameter", sys.parameters), ("variable", sys.variables))
+        for x in xs
+            i = info(x)
+            i === nothing && continue
+            v = get(i.options, :vector, nothing)
+            if v === nothing
+                claim(i.name, what)
+            else
+                claim(v, what)
+                claim(i.name, "$what (a component of the vector `$v`)")
+            end
+        end
+    end
+    foreach(o -> (i = info(o.var); i === nothing || claim(i.name, "observed quantity")), sys.observed)
+    foreach(k -> k === :contact || claim(k, "relation"), keys(sys.relations))
+    foreach(r -> claim(r.name, "relationship"), sys.relationships)
+    for c in sys.components
+        claim(c.name, "component")
+        for u in Iterators.flatten((ModelingToolkitBase.unknowns(c.system), ModelingToolkitBase.parameters(c.system)))
+            claim(Symbol(c.name, :₊, SymbolicIndexingInterface.getname(u)), "quantity of the component `$(c.name)`")
+        end
+    end
+    return seen
+end
+
+"""Reject a vector of `mine` with fewer components than the base's vector of its name."""
+function _check_vector_lengths(model, inbase, theirs, mine)
+    components(xs) = (out = Dict{Symbol, Vector{Symbol}}();
+        for x in xs
+            i = info(x)
+            v = i === nothing ? nothing : get(i.options, :vector, nothing)
+            v === nothing || push!(get!(out, v, Symbol[]), i.name)
+        end; out)
+    ours = components(mine)
+    for (v, names) in components(theirs)
+        new = get(ours, v, nothing)
+        (new === nothing || length(new) >= length(names)) && continue
+        dropped = join(("`$n`" for n in names if !(n in new)), ", ")
+        throw(ArgumentError("$model: `$v` has $(length(names)) components $inbase; the extension's " *
+                            "`$v[1:$(length(new))]` would drop $dropped (an extension's vector may be longer, not shorter)"))
+    end
+    return nothing
+end
+
+"""`parameter `bias_2` (a component of the vector `bias`)`: a category label with its name."""
+_labelled(what, n) = (i = findfirst(" (", what); i === nothing ? "$what `$n`" :
+                                                 "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])")
+
+_category_clash(model, n, what, old) = ArgumentError(
+    "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
+    "observed quantities, relations, relationships and components share one namespace); rename one of them")
 
 _kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
 

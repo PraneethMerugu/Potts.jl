@@ -3254,3 +3254,97 @@ end
     @test_throws DimensionMismatch setp(i, [:p₁, :p₃])(i, [3.0])
     @test state(i) == (1.0, 2.0, 5.0, 15.0)
 end
+
+# One name, one category, for vectors: a vector claims its name and each component name
+# (`vb_1`, `vb_2`); a quantity of another category, or a scalar of the same category, named
+# like a component is rejected (in one model, through `@extend`/`extend`, programmatically).
+@potts_model NameVecBase begin
+    @kinds medium host
+    @parameters vb[1:2] = [1.0, 2.0]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model NameVecVarBase begin
+    @kinds medium host
+    @variables vb_1(cell) = 7.0
+    @observed tot ~ sum(volume for n in cells)
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@potts_model NameVecUse begin
+    @kinds medium host
+    @parameters vb[1:3] = [1.0, 2.0, 3.0]
+    @variables vw(cell)[1:3] = [0.1, 0.2, 0.3]
+    @after_mcs vw[3] ~ Pre(vw[3]) + vb[3]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2 + vb[3] * vw[3]
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "one name, one category: vector components" begin
+    function rejection(f, words...)
+        try
+            f()
+        catch e
+            while e isa LoadError
+                e = e.error
+            end
+            e isa ArgumentError || return "not an ArgumentError: $(typeof(e))"
+            msg = sprint(showerror, e)
+            return all(w -> occursin(w, msg), words) ? :ok : "message: $msg"
+        end
+        return "accepted silently"
+    end
+    model(stmts) = Base.invokelatest(() -> Base.invokelatest(@eval(@potts_model NameVecExt begin
+        $(stmts.args...)
+    end); name = :ext))
+    single(stmts) = model(quote
+        $(stmts.args...)
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 10.0)
+    end)
+    vec = "a parameter (a component of the vector `vb`)"
+    # across categories, both directions, attributing the base's side
+    @test rejection(() -> model(quote @extend NameVecBase(); @variables vb_1(cell) = 7.0 end),
+        "variable `vb_1`", vec, "in the base") === :ok
+    @test rejection(() -> model(quote @extend NameVecVarBase(); @parameters vb[1:2] = [1.0, 2.0] end),
+        "`vb_1`", "variable in the base", "component of the vector `vb`") === :ok
+    # within one model (`@potts_model` alone does not see the component names)
+    @test rejection(() -> single(quote @kinds medium host; @parameters vb[1:2] = [1.0, 2.0]; @variables vb_1(cell) = 7.0 end),
+        "variable `vb_1`", vec) === :ok
+    # a scalar of the same category named like a component would leave half a vector
+    @test rejection(() -> model(quote @extend NameVecBase(); @parameters vb_1 = 5.0 end),
+        "parameter `vb_1`", vec, "in the base") === :ok
+    @test rejection(() -> single(quote @kinds medium host; @parameters begin vb[1:2] = [1.0, 2.0]; vb_2 = 3.0 end end),
+        "`vb_2`", "component of the vector `vb`") === :ok
+    # programmatic: `extend` and a hand-built `PottsSystem`
+    base, var = NameVecBase(; name = :b), NameVecVarBase(; name = :v)
+    @test rejection(() -> extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
+    @test rejection(() -> Potts.PottsSystem(; name = :p, kinds = base.kinds, lattice = base.lattice, sweep = base.sweep,
+        parameters = Any[base.parameters...], variables = Any[var.variables...]), "`vb_1`", vec) === :ok
+    # the label reads `parameter `vb_2` (a component of the vector `vb`)`
+    @test rejection(() -> single(quote @kinds medium host; @parameters begin vb_2 = 3.0; vb[1:2] = [1.0, 2.0] end end),
+        "parameter `vb_2` (a component of the vector `vb`)") === :ok
+    # an override vector may not be shorter than the base's (the base reads `vb[3]`, `vw[3]`)
+    @test rejection(() -> model(quote @extend NameVecUse(); @parameters vb[1:2] = [5.0, 6.0] end),
+        "`vb` has 3 components in the base", "`vb[1:2]` would drop `vb_3`") === :ok
+    @test rejection(() -> model(quote @extend NameVecUse(); @variables vw(cell)[1:2] = [0.0, 0.0] end),
+        "`vw` has 3 components in the base", "`vw[1:2]` would drop `vw_3`") === :ok
+    m = model(quote @extend NameVecUse(); @parameters vb[1:4] = [5.0, 6.0, 7.0, 8.0]; @variables vw(cell)[1:3] = [1.0, 1.0, 1.0] end)
+    s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1
+    sol = solve(PottsProblem(m, [ownership => s, kind => [:host]], (0, 2)), SequentialCPM(; proposal = Moore(1)); saveat = 1)
+    @test observe(sol, :vw_3)[end] == [1.0 + 2 * 7.0]
+    # the article follows the category
+    @test rejection(() -> model(quote @extend NameVecVarBase(); @parameters tot = 1.0 end),
+        "already declared as an observed quantity") === :ok
+    # controls: a vector override replaces the base's vector whole; other names are free
+    m = model(quote @extend NameVecBase(); @parameters vb[1:3] = [4.0, 5.0, 6.0] end)
+    @test sort([Potts.info(p).name for p in m.parameters]) == [:vb_1, :vb_2, :vb_3] &&
+          all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, m.parameters)
+    m = model(quote @extend NameVecBase(); @variables vb_3(cell) = 1.0; @parameters vb₁ = 1.0 end)
+    @test Potts.info(Potts.lookup(m, :vb_3)).role === :cell && mtkcompile(m) isa Potts.CompiledPottsSystem
+end
