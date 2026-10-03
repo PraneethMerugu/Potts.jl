@@ -1783,3 +1783,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** The bound-variable/draw counter, the lattice dimension that `centroid()` reads and the `@extend` state are one per-build state in a `ScopedValue`, so models built concurrently (threads, or tasks that yield mid-build) get the same generated code, names and fingerprints as built serially; 4 threads used to give 16–21 of 32 builds different code, reused names within a model and `centroid()` build errors. Serial output unchanged for all 225 systems checked. Only an `@extend` base continues the outer build; any other model built inside a body is its own build (it used to reset the outer model's lattice dimension).
 - **Review.** Two rounds (round 2: the one-shot base flag), approved.
 - **Merge checks.** Run together with P6.0ab's (below).
+
+## 2026-10-03 — P6.0ab merged: kind tables from parameters; `observe` by name (D-111)
+
+- **The change.** A kind table whose entries are expressions of parameters (`J[kind, kind] = [0 Jx Jx; …]`) builds (it raised a `MethodError`) and follows its inputs at build, `remake` and the integrator setters, with the problem's scalar type kept and symmetry checked on the values; `observe(sol | prob, :name)` resolves a variable, `@observed`, built-in or parameter (it raised "cannot lower constant"), with a clear error for an unknown name. Fingerprints of existing models unchanged.
+- **Review.** Two rounds: the parameters page now says an explicit value holds only until the next change of another parameter (the existing rule; P6.0ak to keep it), the declaration order and `observe`'s resolution order. Follow-ups P6.0ak, P6.0al.
+- **Merge checks (P6.0aj + P6.0ab).** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No step-loop change in either; gate not rerun.

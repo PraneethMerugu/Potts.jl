@@ -196,3 +196,8 @@ decision = "D-108"
 path = "acceptance/p6_0aj_concurrent_builds.jl"
 sha256 = "b9528a07ea0eb245b4cd4f643e6cf807361da4ef5bb1944f8a7777e940cd6f7c"
 decision = "D-109"
+
+[[file]]
+path = "acceptance/p6_0ab_api_defects.jl"
+sha256 = "7aca73bda09aabd0954e42ba7cdd723f212137f9661e2ab2dd1bab217783f785"
+decision = "D-111"

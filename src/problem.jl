@@ -291,7 +291,9 @@ function _parameter_values(c::CompiledPottsSystem, opd)
     return _resolve_defaults!(values)
 end
 
+# a scalar expression, or a kind table (vector/matrix) with an expression among its entries
 _is_symbolic(v) = v isa Num || v isa SymbolicUtils.BasicSymbolic
+_is_symbolic(v::AbstractArray) = any(_is_symbolic, v)
 
 """A value given by an expression of parameters, evaluated with the parameter `values`."""
 function _evaluate(v, values)
@@ -316,14 +318,20 @@ function _derived_parameters(c::CompiledPottsSystem, p, explicit)
 end
 
 function _resolve_defaults!(values)
-    # parameters may default to expressions of other parameters
+    # parameters may default to expressions of other parameters; a kind table's entries may
+    # be such expressions (`J[kind, kind] = [0 Jx; Jx 2]`), substituted entry by entry
     for _ in 1:length(values)
         done = true
         for (k, v) in values
-            if v isa Num || v isa SymbolicUtils.BasicSymbolic
-                w = _unwrap(Symbolics.substitute(v, values))
-                values[k] = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
-                done &= SymbolicUtils.isconst(w) || !(w isa SymbolicUtils.BasicSymbolic)
+            _is_symbolic(v) || continue
+            if v isa AbstractArray
+                w = map(e -> _substitute_entry(e, values), v)
+                values[k] = w
+                done &= !any(_is_symbolic, w)
+            else
+                w = _substitute_entry(v, values)
+                values[k] = w
+                done &= !(w isa SymbolicUtils.BasicSymbolic)
             end
         end
         done && break
@@ -331,7 +339,15 @@ function _resolve_defaults!(values)
     return values
 end
 
+# one value with the parameter `values` substituted: a number once it reduces to one
+function _substitute_entry(v, values)
+    _is_symbolic(v) || return v
+    w = _unwrap(Symbolics.substitute(v, values))
+    return SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+end
+
 function _param_value(T, v, i::Info)
+    _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$v` does not reduce to numbers with the parameter values"))
     if i.role === :kindtable
         v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)
