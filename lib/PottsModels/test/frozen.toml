@@ -166,3 +166,8 @@ decision = "D-101"
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
 sha256 = "b1c4ec450043060a8199a55520683c79ba32bf9fca1fb7f65115bc351ecce0be"
 decision = "D-103"
+
+[[file]]
+path = "acceptance/p6_0ag_ode_expand_all.jl"
+sha256 = "35a3f66b7f5cb83c1365ca9e7d407b594eaa97f6771fbce2eb4eb3c9881e99aa"
+decision = "D-104"
