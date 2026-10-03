@@ -181,3 +181,8 @@ decision = "D-105"
 path = "acceptance/p6_1e_gg_margin.jl"
 sha256 = "f4e6754c39f99d5f8fbfb9bcbb124391eba182087ab6ccd3207246028467679b"
 decision = "D-106"
+
+[[file]]
+path = "acceptance/p6_0af_lifecycle_followups.jl"
+sha256 = "56465fa5ac7457c496a9563a84d693eef310586ee21012158f7d2fa76d1b8a0a"
+decision = "D-108"
