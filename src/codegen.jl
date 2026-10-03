@@ -866,8 +866,10 @@ end
 # RuntimeGeneratedFunction body is lowered to an opaque closure that is then built on every
 # call with its captures (`st`, `p`, `ctx`, `c`) on the heap: 272–416 B per cell per MCS.
 # Expanded, the rates are plain code of the phase, with the same arithmetic (bitwise the
-# same values). Rates without a gather keep the closure, which inlines, so their code (and
-# their fingerprints) are unchanged.
+# same values). Rates without a gather keep the closure so their code (and fingerprints)
+# are unchanged — but any rate the compiler does not inline (a long sum, an `ifelse`
+# chain, a Hill term, a population fold) still builds the closure per call, allocates,
+# and fails to compile on Metal; expanding every fixed-step system is P6.0ag.
 _ode_expand(odes) = any(((_, rate),) -> _has_op(rate, gather), odes)
 
 # `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`; with
