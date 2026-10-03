@@ -397,7 +397,10 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
     refresh = sc === nothing ? nothing : (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
     n = run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
         integ.backend, refresh)
-    n < 0 && return _step_lifecycle!(integ, nothing, !D.before_ran[])
+    if n < 0                    # handover: the host planner takes this MCS and every later one
+        D.before_ran[] && _drop_device_counts!(integ, D)
+        return _step_lifecycle!(integ, nothing, !D.before_ran[])
+    end
     integ.stats.launches += n
     return nothing
 end

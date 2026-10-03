@@ -27,18 +27,31 @@ end
 
 The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in scalar
 type `T` with the solver keywords of `PottsProblem`, as expressions: `delta_H`, `commit!`,
-`constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives), and `phases`,
-every other function (MCS phases, lifecycle), in build order. Each is `(args…) -> body` and
-can be `eval`'d into a plain function (e.g. for JET).
+`constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives), `phases`, every
+other function (MCS phases, lifecycle), in build order, and `lifecycle`: `nothing` for a
+model without divisions, else `(; trigger, before)`, the trigger (the event of a cell) and the
+cell update that runs in the trigger's work item (`Lifecycle.before`), or `nothing`. That
+update is the model's last after-MCS cell update when the trigger reads the columns it
+writes only at its own cell; it then runs with the lifecycle and is not among `phases`.
+Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
 """
 function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in c.sys.parameters)
-    _, phases = _recording(() -> (_phases(c, T, values, spec), _lifecycle(c, T)))
+    (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
+    lc, lex = _recording(() -> _lifecycle(c, T))
+    lifecycle = nothing
+    if lc !== nothing
+        # the problem's own fusion decision (`_problem_function`)
+        before = _fuse_before(c, T, phases0, lc, cand)[2].before === nothing ? nothing : cand.expr
+        before === nothing || filter!(ex -> ex !== before, phases)
+        lifecycle = (; trigger = first(lex), before)            # `_lifecycle` compiles the trigger first
+    end
+    append!(phases, lex)
     return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
-        delta_E = _delta_H_expr(c, T; drives = false), phases)
+        delta_E = _delta_H_expr(c, T; drives = false), phases, lifecycle)
 end
 """
     PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],

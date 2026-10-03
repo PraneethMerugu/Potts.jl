@@ -37,6 +37,14 @@ const _FORM_FUSED = 1
 const _FORM_STAGED = 2
 const _FORM_HOST = 3
 const _LAUNCH_FAULT = Ref(0)        # tests: the first launch of this form fails (not public API)
+# Tests (not public API, D-108): with k = `_STAGED_FAULT_AFTER[]` > 0, the staged form's first
+# (not yet proven) launch enqueues its first k kernels (1: the trigger with `Lifecycle.before`;
+# 2: also the planner) and then throws as if the next kernel's launch had failed; 0 is off.
+# Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per integrator. A real
+# launch failure can only occur before the planner's kernel ran (`run_lifecycle_device!`),
+# so k ≥ 3 models no reachable failure: it would hand the host planner a state that the
+# partition kernel already changed.
+const _STAGED_FAULT_AFTER = Ref(0)
 
 # device accumulators (`dv.acc`, cumulative Int32; the host folds the differences)
 const _ACC_DIVISIONS = 1
@@ -763,10 +771,23 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         n > 0 && (D.proven[] = true; return n)
     end
     if D.form[] == _FORM_STAGED
-        D.proven[] && return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+        D.proven[] &&
+            return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _Enqueue())
         n = try
             _LAUNCH_FAULT[] == _FORM_STAGED && throw(ArgumentError("launch refused (test)"))
-            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend)
+            # Every kernel of the form is compiled (with this launch's argument types) before
+            # any is enqueued, so a compilation failure hands over an untouched MCS. What can
+            # still fail is a launch whose workgroup exceeds its compiled pipeline's limit:
+            # only the planner has a fixed workgroup (`PLAN_WG`); every other kernel's group is
+            # sized by the backend from that limit (`_launch`, `workgroupsize = nothing`). So
+            # a real failure happens at the trigger (nothing enqueued) or at the planner (the
+            # trigger and `before` ran): before the partition writes σ or any cell column, and
+            # the host planner takes the MCS without `before` (`before_ran[]`) and without
+            # this MCS's device counts (`_drop_device_counts!`).
+            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _CompileOnly())
+            k = _STAGED_FAULT_AFTER[]
+            mode = k > 0 ? _FaultAfter(k, Ref(0)) : _Enqueue()
+            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, mode)
         catch e
             _form_failed!(D, e)
         end
@@ -776,8 +797,12 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
 end
 
 # The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
-# next form takes over. The trigger may have run (staged form): the host planner, which
-# reruns it, takes the MCS from scratch, and later device forms rerun it too
+# next form takes over. The staged form's trigger (with `before`) and planner may have run:
+# neither writes σ or a cell column (the planner only writes its scratch, the event buffers,
+# the device counts and the `surface` of the free slots it picks as daughters, which the
+# host planner recomputes from σ with the other trackers at an event), so
+# the host planner takes the MCS from scratch, rerunning the trigger but not `before`
+# (`before_ran[]`), and drops this MCS's device counts (`_drop_device_counts!`)
 function _form_failed!(D, e)
     e isa InterruptException && throw(e)
     next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
@@ -794,45 +819,87 @@ function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, m
     return 1
 end
 
+# How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); only compile each, with
+# the argument types of the launch, enqueueing none (`_CompileOnly`, the first launch of
+# the form); tests: enqueue the first `k`, then fail (`_FaultAfter`, `_STAGED_FAULT_AFTER`)
+struct _Enqueue end
+struct _CompileOnly end
+struct _FaultAfter
+    k::Int
+    n::Base.RefValue{Int}               # kernels enqueued so far
+end
+
+_stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A} = _launch(body, backend, n, args)
+function _stage!(m::_FaultAfter, body::B, backend, n, args::A) where {B, A}
+    _fault_point!(m)
+    _launch(body, backend, n, args)
+    return nothing
+end
+# KA compiles a kernel at its launch and returns before dispatching an empty range (the
+# compiled kernel is cached by argument types, which do not depend on the range); the CPU
+# backend has no separate compilation step
+_stage!(::_CompileOnly, body::B, backend::KernelAbstractions.CPU, n, args::A) where {B, A} = nothing
+function _stage!(::_CompileOnly, body::B, backend, n, args::A) where {B, A}
+    _each_kernel!(backend)(body, args; ndrange = 0, workgroupsize = 1)
+    return nothing
+end
+
+_stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = PLAN_WG); nothing)
+_stage_plan!(m::_FaultAfter, D, backend, args::A) where {A} =
+    (_fault_point!(m); D.plan!(args...; ndrange = PLAN_WG); nothing)
+_stage_plan!(::_CompileOnly, D, backend::KernelAbstractions.CPU, args::A) where {A} = nothing
+_stage_plan!(::_CompileOnly, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = 0); nothing)
+
+function _fault_point!(m::_FaultAfter)
+    m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)"))
+    m.n[] += 1
+    return nothing
+end
+
+_enqueues(mode) = true
+_enqueues(::_CompileOnly) = false
+
 # one kernel per stage (large problems)
-function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs, backend)
+function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs, backend, mode::M) where {M}
     dv = D.dv
     cap = length(st.cell.kind)
     n = length(st.σ)
     lat = ctx.lattice
     surf, cvol, csurf, refresh = opt.surf, opt.cvol, opt.csurf, opt.refresh
-    _launch(_dtrigger_body!, backend, cap, (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
-    D.before_ran[] = true
-    D.plan!(buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round, fns.normal, fns.cnormal,
-        ruled, st, p, ctx, key, mcs, CL, surf; ndrange = PLAN_WG)
-    _launch(_dpartition_body!, backend, n, (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
-    _launch(_dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
+    _stage!(mode, _dtrigger_body!, backend, cap,
+        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
+    _enqueues(mode) && (D.before_ran[] = true)
+    _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
+        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf))
+    _stage!(mode, _dpartition_body!, backend, n,
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
+    _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
         ruled, CL))
-    _launch(_drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+    _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     launches = 5
     if surf !== nothing
-        _launch(_dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
+        _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
         launches += 1
     end
-    _launch(_dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
+    _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
     launches += 1
     if _has_clusters(st)
-        _launch(_dcluster_mark_body!, backend, cap, (dv, par, st.cell))
-        _launch(_dcluster_root_body!, backend, cap, (dv, par, st.cell, cvol, csurf))
+        _stage!(mode, _dcluster_mark_body!, backend, cap, (dv, par, st.cell))
+        _stage!(mode, _dcluster_root_body!, backend, cap, (dv, par, st.cell, cvol, csurf))
         launches += 2
         if cvol !== nothing
-            _launch(_dcluster_volume_body!, backend, cap, (dv, par, st.cell, cvol))
+            _stage!(mode, _dcluster_volume_body!, backend, cap, (dv, par, st.cell, cvol))
             launches += 1
         end
         if csurf !== nothing
-            _launch(_dcluster_surface_body!, backend, n, (dv, par, st.σ, st.cell, csurf, ctx.surface, lat))
+            _stage!(mode, _dcluster_surface_body!, backend, n, (dv, par, st.σ, st.cell, csurf, ctx.surface, lat))
             launches += 1
         end
     end
     if refresh !== nothing
-        _launch(_dfrozen_body!, backend, n, (dv, par, refresh.frozen, st.σ, st.cell.kind, refresh.kinds, lat))
-        _launch(_dmask_fold_body!, backend, 1, (dv, par, mcs))
+        _stage!(mode, _dfrozen_body!, backend, n, (dv, par, refresh.frozen, st.σ, st.cell.kind, refresh.kinds, lat))
+        _stage!(mode, _dmask_fold_body!, backend, 1, (dv, par, mcs))
         launches += 2
     end
     return launches
@@ -929,6 +996,25 @@ end
     @synchronize
     tr = @index(Local, Linear)
     _refresh_fold!(tr, opt.refresh, dv, par, mcs)
+end
+
+"""
+Drop the device lifecycle's counts of the current MCS: the staged form failed after it
+enqueued kernels of this MCS (`before_ran[]`), and the host planner, which takes the MCS
+from scratch, counts its divisions, removals, transitions and deferrals itself (the planner
+kernel had already added them to `dv.acc`). The device holds no counts of earlier MCS that
+are not folded yet: a form fails only at its first launch, and no device form completed an
+MCS before it (a proven form never fails over). One synchronizing read, once per integrator.
+"""
+function _drop_device_counts!(integ, D::DeviceLifecycle)
+    stats = integ.stats
+    _copy!(stats, D.acc, D.dv.acc)
+    D.acc_seen .= D.acc
+    if integ.mscratch !== nothing
+        _copy!(stats, D.mask, D.dv.mask)
+        D.mask_seen .= D.mask
+    end
+    return nothing
 end
 
 """
