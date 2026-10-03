@@ -1770,3 +1770,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Fold keys now carry bound-variable names (two folds differing only in their bound variable no longer collide), keys are memoised, integrals keep their folds inside; approved. Follow-ups P6.0ai (integral of a fold is O(sites × cells)) and P6.0aj (`_GATHER_COUNT` is not thread-safe).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
 - **Gate: pass.** CPU 0.972–1.028. Metal OpenVT 1.049, Akeeb 1.016; Wortel 1.150, Merks 1.065, GG 1.062 flagged; `ab.jl` against 457104d8, 6 rounds: Wortel 1.005, Merks 1.003, GG 1.018 (noise).
+
+## 2026-10-03 — P6.0af merged: the device lifecycle's mid-sequence handover; `generated_code` shows fusion (D-108)
+
+- **The change.** The staged device form's first launch is compiled before anything is enqueued and counts the kernels it enqueues: a failure at the trigger or the planner (k ≤ 2) hands the MCS to the host planner without `before` and without this MCS's device counts (the k = 2 handover double-counted divisions before); a failure after the partition (which writes σ) is rethrown (`_StagedFailedMidway`) instead of handing over a partly divided state. `generated_code(sys).lifecycle` shows the trigger and the fused `before`. X4 stays deferred in the row.
+- **Review.** Two rounds; round 1 approved with notes (the post-partition rethrow, the compile-on-empty-range comment, launch counts at the handover), done in round 2.
+- **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0 (a first run used wrong test projects; rerun).
+- **Gate.** CPU 0.991–1.056 under three concurrent agents (GG seq 1.053, OpenVT cb 1.056 flagged; no CPU step change). Metal under the same load 1.2–2.0×; `ab.jl` against 2f54c1e9, 4 rounds: GG 0.981, Wortel 1.011, Merks 0.874, OpenVT 1.007, Akeeb 0.986.
