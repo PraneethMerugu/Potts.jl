@@ -117,11 +117,13 @@ function _hoistable(pop, rn)
 end
 
 # Replace hoistable population folds in `x` by model slots (named `prefix1`, `prefix2`, … in
-# first-seen order; equal folds share a slot).
+# statement order and, within `x`, in canonical order (`_symkey`, D-107); equal folds share
+# a slot).
 function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Symbol; strict = false)
     pops = Any[]
     _walk_all(y -> (iscall(y) && operation(y) === population && push!(pops, y)), x)
     isempty(pops) && return x
+    length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
         _hoistable(p, rn) || (strict ? throw(ArgumentError(

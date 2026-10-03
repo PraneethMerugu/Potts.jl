@@ -24,6 +24,59 @@ const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => 
 
 _unwrap(x) = Symbolics.unwrap(x)
 
+# ---------------------------------------------------------------------------------------
+# Canonical order (D-107). Symbolics stores a sum or product as a dictionary and hands its
+# operands out in the order of their hashes, which involve function identities (a
+# Potts-registered operator's hash changes with each package build). Everything that
+# reaches generated code is therefore put in an order read from the model alone: `lower`
+# emits the operands of a commutative `+`/`*` sorted by their code (`_code_key`), and the
+# names and slots numbered while compiling (hoisted folds, gather relations,
+# integrals) follow `_symkey`, a printed form of a symbolic expression with commutative
+# operands sorted. Neither key involves a hash.
+
+"""Generated code `ex` as an S-expression string without line numbers (the sort key of
+operands; cheaper than printing Julia syntax, and equal keys mean equal code)."""
+_code_key(ex) = (io = IOBuffer(); _code_key!(io, ex); String(take!(io)))
+function _code_key!(io, ex)
+    ex isa Expr || return show(io, ex)
+    print(io, '(', ex.head)
+    for a in ex.args
+        a isa LineNumberNode && continue
+        print(io, ' ')
+        _code_key!(io, a)
+    end
+    print(io, ')')
+    return nothing
+end
+
+"""Canonical printed form of symbolic `x`: commutative operands sorted, no hashes."""
+function _symkey(x)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return _canonical_value(x)
+    SymbolicUtils.isconst(x) && return _canonical_value(SymbolicUtils.unwrap_const(x))
+    i = info(x)
+    if i !== nothing
+        i.role in (:bound, :bound_cell, :bound_site) || return string(i.role, ":", i.name)
+        return string(i.role, ":", i.name, _canonical_value(i.options))
+    end
+    issym(x) && return string("sym:", nameof(x))
+    op = operation(x)
+    ks = map(_symkey, arguments(x))
+    (SymbolicUtils.isadd(x) || SymbolicUtils.ismul(x)) && sort!(ks)
+    return string(_symop_key(op), "(", join(ks, ","), ")")
+end
+_symop_key(op::Function) = string(nameof(parentmodule(op)), ".", nameof(op))
+_symop_key(op) = _canonical_value(op)
+
+"""64-bit FNV-1a of a string: a content hash fixed by its definition (names, not order)."""
+function _fnv64(s::AbstractString)
+    h = 0xcbf29ce484222325
+    for b in codeunits(s)
+        h = (h ⊻ b) * 0x00000100000001b3
+    end
+    return h
+end
+
 """Julia code for the value of symbolic `x` in `env`."""
 function lower(x, env::LowerEnv)
     x = _unwrap(x)
@@ -88,7 +141,12 @@ function lower(x, env::LowerEnv)
         return Expr(:call, op, map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...)
     end
     # `+`/`*` as left-associated binary calls: varargs calls above 32 arguments allocate
-    # (bitwise the same result: n-ary `+` is itself a left fold), D-014
+    # (bitwise the same result: n-ary `+` is itself a left fold), D-014; a scalar sum or
+    # product folds its operands in canonical order (D-107)
+    if (SymbolicUtils.isadd(x) || SymbolicUtils.ismul(x)) && length(args) >= 2
+        codes = map(a -> lower(a, env), args)
+        return foldl((a, b) -> Expr(:call, op, a, b), codes[sortperm(map(_code_key, codes))])
+    end
     if (op === (+) || op === (*)) && length(args) > 2
         return foldl((a, b) -> Expr(:call, op, a, b), map(a -> lower(a, env), args))
     end
@@ -157,11 +215,13 @@ function _integrals(sys::PottsSystem)
         (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
         (x for b in sys.discrete for x in b.next)...]
     for x in xs
+        new = Any[]
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
             a = _unwrap(arguments(y)[1])
-            any(z -> isequal(z, a), out) || push!(out, a)
+            any(z -> isequal(z, a), out) || any(z -> isequal(z, a), new) || push!(new, a)
         end
+        append!(out, new[sortperm(map(_symkey, new))])     # canonical within a statement (D-107)
     end
     return out
 end
