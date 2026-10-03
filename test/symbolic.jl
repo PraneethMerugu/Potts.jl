@@ -3174,8 +3174,8 @@ end
             @test state(solve(p, SequentialCPM()).u[end]) == u
         end
     end
-    # the two integrals are distinct trackers, each over its operand as written (the fold
-    # inside is not hoisted): integral(c · Σ volume) = (Σ_cell volume)², w = 2y
+    # the two integrals are distinct trackers (each fold, hoisted to its own slot, keeps its
+    # bound variable's name in the key): integral(c · Σ volume) = (Σ_cell volume)², w = 2y
     xs = Potts._integrals(Potts.ModelingToolkitBase.mtkcompile(P60ahTieIntegral(; name = :x)).sys)
     @test length(xs) == 2 && Potts._integral_name(xs[1]) != Potts._integral_name(xs[2])
     s = zeros(Int32, 12, 8)
@@ -3183,4 +3183,334 @@ end
     u = solve(PottsProblem(P60ahTieIntegral(; name = :x), Any[ownership => s, kind => [:A]], (0, 3)), SequentialCPM()).u[end]
     @test u.cell.y == [Float64(u.cell.volume[1])^2]
     @test u.cell.w == 2 .* u.cell.y
+end
+
+# A change re-derives a computed parameter iff it is not named and an input is named or
+# re-derived (transitively); every other value is kept. Diamond p₁ → p₂, (p₂, p₃) → p₄, p₃ → p₅.
+@potts_model ParamDiamond begin
+    @kinds medium A
+    @parameters begin
+        p₁ = 1.0
+        p₂ = 2p₁
+        p₃ = 3.0
+        p₄ = p₂ + p₃
+        p₅ = 5p₃
+        λ = 1.0
+    end
+    @lattice Lattice((6, 6); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A) => λ * (volume - p₄)^2
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "computed parameters follow only their inputs" begin
+    σ = zeros(Int32, 6, 6)
+    σ[2:3, 2:3] .= 1
+    prob = PottsProblem(ParamDiamond(; name = :pd), Any[ownership => σ, kind => [:A]], (0, 1))
+    vals(q) = map(n -> getp(q, n)(q), (p₁ = :p₁, p₂ = :p₂, p₃ = :p₃, p₄ = :p₄, p₅ = :p₅, λ = :λ))
+    @test vals(prob) == (p₁ = 1.0, p₂ = 2.0, p₃ = 3.0, p₄ = 5.0, p₅ = 15.0, λ = 1.0)
+    q = remake(prob; p = [:p₅ => 7.0, :p₂ => 10.0])
+    @test vals(q) == (p₁ = 1.0, p₂ = 10.0, p₃ = 3.0, p₄ = 13.0, p₅ = 7.0, λ = 1.0)   # p₄ re-derived from p₂
+    @test vals(remake(q; p = [:λ => 2.0])) == (p₁ = 1.0, p₂ = 10.0, p₃ = 3.0, p₄ = 13.0, p₅ = 7.0, λ = 2.0)
+    @test vals(remake(q; p = [:p₁ => 2.0])) == (p₁ = 2.0, p₂ = 4.0, p₃ = 3.0, p₄ = 7.0, p₅ = 7.0, λ = 1.0)
+    @test vals(remake(q; p = [:p₃ => 1.0])) == (p₁ = 1.0, p₂ = 10.0, p₃ = 1.0, p₄ = 11.0, p₅ = 5.0, λ = 1.0)
+    @test vals(remake(q; p = [:p₄ => 0.0, :p₁ => 3.0])) == (p₁ = 3.0, p₂ = 6.0, p₃ = 3.0, p₄ = 0.0, p₅ = 7.0, λ = 1.0)
+    integ = init(q, SequentialCPM())
+    integ.ps[:λ] = 4.0
+    @test (integ.ps[:p₂], integ.ps[:p₄], integ.ps[:p₅]) == (10.0, 13.0, 7.0)
+    integ.ps[:p₃] = 2.0
+    @test (integ.ps[:p₂], integ.ps[:p₄], integ.ps[:p₅]) == (10.0, 12.0, 10.0)
+    @test vals(prob) == (p₁ = 1.0, p₂ = 2.0, p₃ = 3.0, p₄ = 5.0, p₅ = 15.0, λ = 1.0)   # source unchanged
+end
+
+# `setp` with several names is one change, whatever the order of the names and whatever it
+# was built on (integrator, problem, function, model description); `integ.ps[[x, y]] = v` too.
+@testset "setp with several parameters is one change" begin
+    σ = zeros(Int32, 6, 6)
+    σ[2:3, 2:3] .= 1
+    prob = PottsProblem(ParamDiamond(; name = :pd), Any[ownership => σ, kind => [:A]], (0, 1))
+    fresh() = init(prob, SequentialCPM())
+    state(i) = (i.ps[:p₁], i.ps[:p₂], i.ps[:p₄], i.ps[:p₅])
+    for build in (identity, _ -> prob, _ -> prob.f, _ -> prob.f.sys)
+        i = fresh()
+        setp(build(i), [:p₄, :p₁])(i, [0.0, 3.0])
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)                  # p₄ named: kept; p₂ follows p₁
+        i = fresh()
+        setp(build(i), (:p₁, :p₄))(i, (3.0, 0.0))
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    end
+    i = fresh()
+    i.ps[[:p₄, :p₁]] = [0.0, 3.0]
+    @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    # negative control: one name at a time is two changes, so the order matters
+    i = fresh()
+    i.ps[:p₄] = 0.0
+    i.ps[:p₁] = 3.0
+    @test state(i) == (3.0, 6.0, 9.0, 15.0)
+    # all or nothing: a bad value leaves the parameters unchanged
+    i = fresh()
+    @test_throws ArgumentError setp(i, [:p₁, :nope])
+    @test_throws DimensionMismatch setp(i, [:p₁, :p₃])(i, [3.0])
+    @test state(i) == (1.0, 2.0, 5.0, 15.0)
+end
+
+# One name, one category, for vectors: a vector claims its name and each component name
+# (`vb_1`, `vb_2`); a quantity of another category, or a scalar of the same category, named
+# like a component is rejected (in one model, through `@extend`/`extend`, programmatically).
+@potts_model NameVecBase begin
+    @kinds medium host
+    @parameters vb[1:2] = [1.0, 2.0]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model NameVecVarBase begin
+    @kinds medium host
+    @variables vb_1(cell) = 7.0
+    @observed tot ~ sum(volume for n in cells)
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@potts_model NameVecUse begin
+    @kinds medium host
+    @parameters vb[1:3] = [1.0, 2.0, 3.0]
+    @variables vw(cell)[1:3] = [0.1, 0.2, 0.3]
+    @after_mcs vw[3] ~ Pre(vw[3]) + vb[3]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2 + vb[3] * vw[3]
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "one name, one category: vector components" begin
+    function rejection(f, words...)
+        try
+            f()
+        catch e
+            while e isa LoadError
+                e = e.error
+            end
+            e isa ArgumentError || return "not an ArgumentError: $(typeof(e))"
+            msg = sprint(showerror, e)
+            return all(w -> occursin(w, msg), words) ? :ok : "message: $msg"
+        end
+        return "accepted silently"
+    end
+    model(stmts) = Base.invokelatest(() -> Base.invokelatest(@eval(@potts_model NameVecExt begin
+        $(stmts.args...)
+    end); name = :ext))
+    single(stmts) = model(quote
+        $(stmts.args...)
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 10.0)
+    end)
+    vec = "a parameter (a component of the vector `vb`)"
+    # across categories, both directions, attributing the base's side
+    @test rejection(() -> model(quote @extend NameVecBase(); @variables vb_1(cell) = 7.0 end),
+        "variable `vb_1`", vec, "in the base") === :ok
+    @test rejection(() -> model(quote @extend NameVecVarBase(); @parameters vb[1:2] = [1.0, 2.0] end),
+        "`vb_1`", "variable in the base", "component of the vector `vb`") === :ok
+    # within one model (`@potts_model` alone does not see the component names)
+    @test rejection(() -> single(quote @kinds medium host; @parameters vb[1:2] = [1.0, 2.0]; @variables vb_1(cell) = 7.0 end),
+        "variable `vb_1`", vec) === :ok
+    # a scalar of the same category named like a component would leave half a vector
+    @test rejection(() -> model(quote @extend NameVecBase(); @parameters vb_1 = 5.0 end),
+        "parameter `vb_1`", vec, "in the base") === :ok
+    @test rejection(() -> single(quote @kinds medium host; @parameters begin vb[1:2] = [1.0, 2.0]; vb_2 = 3.0 end end),
+        "`vb_2`", "component of the vector `vb`") === :ok
+    # programmatic: `extend` and a hand-built `PottsSystem`
+    base, var = NameVecBase(; name = :b), NameVecVarBase(; name = :v)
+    @test rejection(() -> extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
+    @test rejection(() -> Potts.PottsSystem(; name = :p, kinds = base.kinds, lattice = base.lattice, sweep = base.sweep,
+        parameters = Any[base.parameters...], variables = Any[var.variables...]), "`vb_1`", vec) === :ok
+    # the label reads `parameter `vb_2` (a component of the vector `vb`)`
+    @test rejection(() -> single(quote @kinds medium host; @parameters begin vb_2 = 3.0; vb[1:2] = [1.0, 2.0] end end),
+        "parameter `vb_2` (a component of the vector `vb`)") === :ok
+    # an override vector may not be shorter than the base's (the base reads `vb[3]`, `vw[3]`)
+    @test rejection(() -> model(quote @extend NameVecUse(); @parameters vb[1:2] = [5.0, 6.0] end),
+        "`vb` has 3 components in the base", "`vb[1:2]` would drop `vb_3`") === :ok
+    @test rejection(() -> model(quote @extend NameVecUse(); @variables vw(cell)[1:2] = [0.0, 0.0] end),
+        "`vw` has 3 components in the base", "`vw[1:2]` would drop `vw_3`") === :ok
+    m = model(quote @extend NameVecUse(); @parameters vb[1:4] = [5.0, 6.0, 7.0, 8.0]; @variables vw(cell)[1:3] = [1.0, 1.0, 1.0] end)
+    s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1
+    sol = solve(PottsProblem(m, [ownership => s, kind => [:host]], (0, 2)), SequentialCPM(; proposal = Moore(1)); saveat = 1)
+    @test observe(sol, :vw_3)[end] == [1.0 + 2 * 7.0]
+    # the article follows the category
+    @test rejection(() -> model(quote @extend NameVecVarBase(); @parameters tot = 1.0 end),
+        "already declared as an observed quantity") === :ok
+    # controls: a vector override replaces the base's vector whole; other names are free
+    m = model(quote @extend NameVecBase(); @parameters vb[1:3] = [4.0, 5.0, 6.0] end)
+    @test sort([Potts.info(p).name for p in m.parameters]) == [:vb_1, :vb_2, :vb_3] &&
+          all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, m.parameters)
+    m = model(quote @extend NameVecBase(); @variables vb_3(cell) = 1.0; @parameters vb₁ = 1.0 end)
+    @test Potts.info(Potts.lookup(m, :vb_3)).role === :cell && mtkcompile(m) isa Potts.CompiledPottsSystem
+end
+
+# ---------------------------------------------------------------------------------------
+# P6.0ai (D-110): a population fold inside `integral(x)` that reads neither the site nor the
+# cell is computed once per refresh of the integral (a model slot), not at every site. The
+# slot must be current at every refresh: in a block after a write to what the fold reads, at
+# the MCS boundary after the lifecycle, at init, and for observed integrals.
+
+for (M, lat) in ((:P60aiSquare, :(Lattice((16, 16)))),
+                 (:P60aiHex, :(Lattice((16, 16); geometry = Hexagonal(), neighborhood = Hex(1)))),
+                 (:P60ai3D, :(Lattice((8, 8, 8)))))
+    @eval @potts_model $M begin
+        @kinds medium A
+        @variables begin
+            w(site) = 1.0
+            v(cell) = 0.0
+            s(cell) = 0.0
+            bo(cell) = 0.0
+            q(cell) = 0.0
+            n(cell) = 0.0
+            r(cell) = 0.0
+        end
+        @lattice $lat
+        @energy cells => (volume - 16.0)^2
+        @after_mcs begin
+            v ~ Pre(v) + 1
+            s ~ integral(w * sum(v[c] for c in cells))                       # reads v, new this block
+            bo ~ integral(w * (1 - 2 * any(volume[c] > 17 for c in cells)))   # a Boolean fold
+            q ~ integral(w * sum(w for x in sites))                          # a fold over sites
+            n ~ integral(sum(w * volume[c] for c in cells))                  # reads the site: per site
+            r ~ integral(sum(rand() * volume[c] for c in cells) * 1e-300 + w) # draws per site: per site
+        end
+        @observed o(cell) ~ integral(w * mean(volume[c] for c in cells))
+        @divide cells(A) when = mcs == 2, along = RandomPlane()
+        @sweep Metropolis(; temperature = 2.0)
+    end
+end
+
+function p60ai_init(dims)
+    σ = zeros(Int32, dims)
+    if length(dims) == 2
+        σ[3:6, 3:6] .= 1; σ[10:13, 9:12] .= 2
+    else
+        σ[2:3, 2:3, 2:5] .= 1; σ[5:6, 5:6, 3:6] .= 2
+    end
+    w = [1 + 0.5 * sin(I[1] / 3) * cos(sum(Tuple(I)[2:end]) / 5) for I in CartesianIndices(dims)]
+    return σ, w
+end
+
+@testset "P6.0ai: integral folds are hoisted, fresh at every refresh ($M, $(nameof(typeof(alg))))" for
+        (M, dims) in ((P60aiSquare, (16, 16)), (P60aiHex, (16, 16)), (P60ai3D, (8, 8, 8))),
+        alg in (SequentialCPM(), CheckerboardCPM())
+    c = mtkcompile(M(; name = :x))
+    xs = Potts._integrals(c.sys)
+    hoisted = [!Potts._has_op(x, Potts.population) for x in xs]
+    @test count(hoisted) == 4                    # s, bo, q and the observed o; not n, r
+    @test count(!, hoisted) == 2
+    σ0, w0 = p60ai_init(dims)
+    prob = PottsProblem(M(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
+    @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
+    live(u) = findall(>(0), Array(u.cell.volume))
+    per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
+    obs(u) = (V = Array(u.cell.volume); L = live(u); mv = sum(V[L]) / length(L); per(u, i -> w0[i] * mv))
+    @test prob[:o] ≈ obs(prob.u0)                                         # at init
+    sol = solve(prob, alg; saveat = 0:4)
+    names = [Potts._integral_name(x) for x in xs]
+    divided = false
+    for t in 1:4
+        u, prev = sol.u[t + 1], sol.u[t]
+        V, v = Array(u.cell.volume), Array(u.cell.v)
+        @test sol[:o][t + 1] ≈ obs(u)                                     # observed, after divisions too
+        # stored = recomputed from the saved state (the MCS boundary refresh, after the lifecycle)
+        fresh = Potts._fresh_integrals(u, sol.prob.p, sol.prob.f.sys.ctx, t,
+                                       Potts._integral_phases(sol.prob.f.sys.csys, Float64), names)
+        @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)
+        if length(live(u)) != length(live(prev))                          # a division after the block
+            divided = true
+            continue
+        end
+        L = live(u)
+        @test v[L] == fill(t, length(L))
+        @test u.cell.s ≈ per(u, i -> w0[i] * sum(v[L]))                   # the fold sees the new v
+        @test !(u.cell.s ≈ per(u, i -> w0[i] * sum(v[L] .- 1)))           # (the stale one differs)
+        big = any(>(17), V[L])
+        @test u.cell.bo ≈ per(u, i -> big ? -w0[i] : w0[i])
+        @test u.cell.q ≈ per(u, i -> w0[i] * sum(w0))
+        @test u.cell.n ≈ per(u, i -> w0[i] * sum(V[L]))
+        @test u.cell.r ≈ per(u, i -> w0[i])
+    end
+    @test divided
+end
+
+# Every refresh point of a hoisted fold's slot: at init (read by a before-MCS update in the
+# first MCS), a gated reader of a fold whose operand the block writes, an equation reading
+# such an integral after the block, and a checkpoint continuation.
+@potts_model P60aiRefresh begin
+    @kinds medium A
+    @variables begin
+        w(site) = 1.0
+        v(cell) = 0.0
+        sb(cell) = 0.0
+        s2(cell) = 0.0
+        r(cell) = 0.0
+    end
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 16.0)^2
+    @before_mcs sb ~ integral(w * sum(volume[c] for c in cells))
+    @after_mcs v ~ Pre(v) + 1
+    @after_mcs Every(2) s2 ~ integral(w * sum(v[c] for c in cells))
+    @equations D(r) ~ integral(sin(w) * sum(v[c] for c in cells))
+    @observed o(cell) ~ integral(w * mean(volume[c] for c in cells))
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+@testset "P6.0ai: hoisted folds are fresh at every refresh point ($(nameof(typeof(alg))))" for
+        alg in (SequentialCPM(), CheckerboardCPM())
+    σ0, w0 = p60ai_init((16, 16))
+    prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); seed = 5)
+    per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
+    vsum(u) = sum(Array(u.cell.v)[Array(u.cell.volume) .> 0])
+    # at init: the stored tracker of the before-MCS operand, and its reader in MCS 1
+    names = [Potts._integral_name(x) for x in Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys)]
+    sb0 = per(prob.u0, i -> w0[i] * 32)
+    @test count(n -> getfield(prob.u0.cell, n) ≈ sb0, names) == 1      # the tracker, in u0
+    sol = solve(prob, alg; saveat = 0:4)
+    @test sol.u[2].cell.sb ≈ sb0                                     # MCS 1 reads the initial state
+    @test !(sol.u[2].cell.sb ≈ sb0 .* 0)
+    for t in 1:4
+        u, prev = sol.u[t + 1], sol.u[t]
+        @test vsum(u) == 2t
+        # gated: fresh in MCS 1, 3 (mcs 0, 2), kept in MCS 2, 4
+        @test u.cell.s2 ≈ (isodd(t) ? per(u, i -> w0[i] * vsum(u)) : prev.cell.s2)
+        # the equation (explicit Euler, dt = 1) integrates the fresh integral of each MCS
+        @test u.cell.r - prev.cell.r ≈ per(u, i -> sin(w0[i]) * vsum(u))
+    end
+    @test !(sol.u[2].cell.s2 ≈ per(sol.u[2], i -> w0[i] * 0))
+    # a checkpoint continuation equals the uninterrupted run
+    integ = init(prob, alg)
+    foreach(_ -> step!(integ), 1:2)
+    rest = solve!(init(prob, alg; checkpoint = checkpoint(integ))).u[end]
+    @test rest.σ == sol.u[end].σ
+    @test all(n -> getfield(rest.cell, n) == getfield(sol.u[end].cell, n), propertynames(rest.cell))
+    @test all(n -> getfield(rest.model, n) == getfield(sol.u[end].model, n), propertynames(rest.model))
+end
+
+@testset "P6.0ai: observed integrals leave the state unchanged" begin
+    σ0, w0 = p60ai_init((16, 16))
+    prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 2); seed = 5)
+    slots = filter(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model))
+    @test length(slots) == 4
+    mark!(u) = foreach(n -> fill!(getfield(u.model, n), -7.0), slots)
+    unchanged(u, cell) = all(n -> all(==(-7.0), getfield(u.model, n)), slots) &&
+                         all(n -> getfield(u.cell, n) == getfield(cell, n), propertynames(cell))
+    oracle(u) = (V = u.cell.volume; L = V .> 0; mv = sum(V[L]) / count(L);
+                 [sum((w0[i] * mv for i in findall(==(k), u.σ)); init = 0.0) for k in eachindex(V)])
+    mark!(prob.u0); c0 = deepcopy(prob.u0.cell)
+    @test prob[:o] ≈ oracle(prob.u0)
+    @test unchanged(prob.u0, c0)
+    sol = solve(prob, SequentialCPM())
+    mark!(sol.u[end]); c1 = deepcopy(sol.u[end].cell)
+    @test sol[:o][end] ≈ oracle(sol.u[end])
+    @test unchanged(sol.u[end], c1)
+    integ = init(prob, SequentialCPM()); step!(integ)
+    mark!(integ.state); c2 = deepcopy(integ.state.cell)
+    @test integ[:o] ≈ oracle(integ.state)
+    @test unchanged(integ.state, c2)
 end

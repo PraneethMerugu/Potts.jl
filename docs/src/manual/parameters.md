@@ -59,15 +59,22 @@ prob3 = remake(prob; p = [:A₀ => 30.0])
 getp(prob3, :V_big)(prob3), getp(prob3, :V₀)(prob3)
 ```
 
-A computed parameter is evaluated when the problem is built, and again by every `remake`
-and every setting of a parameter of a running integrator (`integ.ps[:A₀] = 25.0`). A value
-given explicitly replaces the expression for that change only:
-`remake(prob; p = [:V₀ => [0.0, 30.0, 30.0]])` uses those numbers, but a later `remake` or
-setter of any other parameter evaluates `V₀` from its expression again, unless `V₀` is
-given again with it. The same holds for a value given in the operating point of
-`PottsProblem`, and for scalar computed defaults such as `V_big`. The inputs of a computed
-default must be declared before it in `@parameters`. A contact table (`J[kind, kind′]`)
-must be symmetric for the values it takes; an asymmetric one is an `ArgumentError`.
+A computed parameter is evaluated when the problem is built, from the operating point and
+the other defaults. A value given explicitly (in the operating point of `PottsProblem`, by
+`remake(prob; p = …)` or by a setter of a running integrator, `integ.ps[:A₀] = 25.0`)
+replaces the expression and is kept until one of the expression's inputs changes. Each
+`remake` and each setter is one change: it re-evaluates a computed parameter only if the
+parameter is not given in that change and one of its inputs is given in it or is itself
+re-evaluated by it. So after `remake(prob; p = [:V₀ => [0.0, 30.0, 30.0]])`, a later change
+of `λ` keeps those numbers, while a change of an input of `V₀` evaluates `V₀` from its
+expression again (give `V₀` in the same change to keep it). Chains follow their inputs: with
+`β = 2α` and `γ = β + 1`, changing `α` re-evaluates `β` and `γ` even if `β` was set, and
+changing `β` re-evaluates `γ`. The same holds for scalar computed defaults such as `V_big`.
+A parameter object given whole (`remake(prob; p = checkpoint.p)`) sets every value.
+
+The inputs of a computed default must be declared before it in `@parameters`. A contact
+table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmetric one is an
+`ArgumentError`.
 
 Values are converted to the problem's number type (`Float64`, or `Float32` for GPU
 problems), so a `remake` never changes the compiled code.

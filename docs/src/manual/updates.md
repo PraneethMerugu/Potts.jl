@@ -64,6 +64,10 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   (`sum(x[s] for s in sites)`) and over a relation around a site (`sum(c[n] for n in
   Moore(1)(site))`).
 - **Cell quantities.** `centroid(k)` is the `k`-th centroid coordinate of a cell;
-  `integral(x)` sums a site expression over the cell's sites.
+  `integral(x)` sums a site expression over the cell's sites. A fold inside `x` that does
+  not read the site, such as `integral(w * mean(volume[c] for c in cells))`, is computed
+  once per recomputation of the integral, not at every site: it costs what
+  `integral(w) * mean(volume[c] for c in cells)` costs. Folds that draw `rand()`, and
+  folds nested inside a fold that reads the site, stay per site.
 - **`@on_copy`** writes the target site of an accepted copy, with the copy names `new`,
   `old`, `source`, `target`: `act[target] ~ ifelse(new != 0, max_act, 0.0)`.

@@ -683,6 +683,63 @@ end
 layer adds a method to validate the value and update parameters derived from `i`.
 """
 set_parameter(sys, p, v, i) = set_parameter(p, v, i)
+
+"""
+    set_parameters(sys, p, vals, idxs)
+
+Parameter object `p` with parameters `idxs` set to `vals` as one change (`setp(integ, [x,
+y])`). By default one `set_parameter` per index; a symbolic layer adds a method so that
+parameters derived from several of them are updated once, from all the new values.
+"""
+function set_parameters(sys, p, vals, idxs)
+    for (v, i) in zip(vals, idxs)
+        p = set_parameter(sys, p, v, i)
+    end
+    return p
+end
+
+# `setp(integ, [x, y])` (and `integ.ps[[x, y]] = v`) on an integrator: the parameters are set
+# together, as one change (`set_parameters`), not one name at a time
+struct ParameterSetter{I, O}
+    idxs::I
+    original::O
+    run_hook::Bool
+end
+function (s::ParameterSetter)(integ::PottsIntegrator, vals)
+    length(vals) == length(s.idxs) ||
+        throw(DimensionMismatch("setp: $(length(s.idxs)) parameters, $(length(vals)) values"))
+    integ.p = set_parameters(integ.f.sys, integ.p, vals, s.idxs)
+    s.run_hook && SymbolicIndexingInterface.finalize_parameters_hook!(integ, s.original)
+    return nothing
+end
+function (s::ParameterSetter)(valp, vals)
+    for (v, i) in zip(vals, s.idxs)
+        SymbolicIndexingInterface.set_parameter!(valp, v, i)
+    end
+    s.run_hook && SymbolicIndexingInterface.finalize_parameters_hook!(valp, s.original)
+    return nothing
+end
+SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
+                               run_hook = true) = parameter_setter(sys, ps, run_hook)
+
+"""
+    parameter_setter(sys, ps, run_hook)
+
+`setp(sys, ps)` for several parameters `ps` of `sys` (an integrator, problem, function or
+model description): a setter that applies them to an integrator as one change. A list that
+also names states goes to SymbolicIndexingInterface's `setp`; an unknown name is an
+`ArgumentError`.
+"""
+function parameter_setter(sys, ps, run_hook)
+    for x in ps
+        SymbolicIndexingInterface.is_parameter(sys, x) || SymbolicIndexingInterface.is_variable(sys, x) ||
+            throw(ArgumentError("setp: `$x` is neither a parameter nor a state variable"))
+    end
+    if isempty(ps) || !all(x -> SymbolicIndexingInterface.is_parameter(sys, x), ps)
+        return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, ps; run_hook)
+    end
+    return ParameterSetter(map(x -> SymbolicIndexingInterface.parameter_index(sys, x), ps), ps, run_hook)
+end
 function SymbolicIndexingInterface.set_parameter!(::PottsProblem, v, i)
     throw(ArgumentError("problem parameters are immutable; use `remake(prob; p = [$(repr(i)) => $v])` " *
                         "(or `setp` on an integrator)"))
