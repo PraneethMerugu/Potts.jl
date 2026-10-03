@@ -1741,3 +1741,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** One round; the coordinator corrected the rationale: the closure, not the gather, is the cause, so non-gather rates that are not inlined still allocate and fail on Metal — P6.0ag (D-104), started.
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
 - **Gate: pass.** CPU 0.987–1.021; Metal Merks 0.963, OpenVT 1.003, Akeeb 1.006, Wortel 1.043, GG 1.087 (flagged; GG has no ODE, so this change does not touch its step — load from concurrent agents).
+
+## 2026-10-03 — P6.0y merged: the automatic substep count keeps a margin and counts linear reaction (D-102)
+
+- **The change.** `ExplicitEuler()` without `substeps` picks `n = max(1, ceil(dt·(D·Σ4/h² + k)/1.8))` from the live parameters, k a bound on the reaction's |∂f/∂c| (parameters, indicators, `rand()`, kind tables, `ifelse`; another field's Δ is a source); state-dependent rates fall back to k = 0 with a build-time warning, and a negative diffusion coefficient warns. Diffusion–decay that blew up (2D, D = 0.5, k = 0.2: ×1.21 per MCS) now decays; explicit counts above the new one are unchanged bit for bit (Merks' 15).
+- **Review.** Three rounds (a `rand()` reaction no longer built; per-kind decay fell back; cross-diffusion cancelled the own coefficient, also on the base), then approved.
+- **Merge.** Merks' fingerprint changes with the substep function; `p6_0x_gather_ode_alloc.jl`'s Merks pin re-recorded (D-102 addendum).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate.** CPU (idle rerun) 0.967–1.016. Metal (under concurrent review load) 1.008–1.046, OpenVT 1.160 flagged — OpenVT has no field, so this change does not touch its step.

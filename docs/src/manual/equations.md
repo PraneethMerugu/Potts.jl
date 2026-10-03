@@ -58,9 +58,20 @@ sol[:x][end], sol[:g][end]
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-- `substeps = nothing` in a field solver takes the smallest stable count for the diffusion
-  term alone, recomputed when parameters change; a number is a minimum. Leave a margin for
-  reaction terms.
+- `substeps = nothing` in a field solver takes the smallest count `n` with
+  `mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8`, where `k` bounds the reaction's
+  `|∂f/∂c|` (the coefficient of `c` in a linear reaction, indicators such as
+  `(kind == medium)` and `rand()` counting as 1, a kind table `δ[kind]` as its largest
+  entry), recomputed when parameters change; a number is a minimum. A reaction that is not
+  linear in `c`, or whose coefficient of `c` reads other state, is not counted (the problem
+  warns): give `substeps` yourself.
+- Fields are stepped one after another within an MCS, each seeing the others' values from
+  the start of its own step. A strong coupling between two fields is therefore split per
+  MCS, and it can be unstable however many substeps each field takes; keep such couplings
+  weak relative to `1 / mcs_duration`. For the same reason another field's Laplacian
+  (`- Dx * Δ(u)` in `D(c)`) is a source term for `c` and does not change its substep count.
+- A diffusion coefficient must not be negative: that is anti-diffusion, an ill-posed problem
+  whose shortest wavelengths grow without bound under any step (the problem warns).
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
   `rand()` cannot be integrated adaptively.

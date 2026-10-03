@@ -197,6 +197,92 @@ end
     @test maximum(abs, uq) < 100
 end
 
+@potts_model AuditNonlinearField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.1
+        k = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ Dc * Δ(c) - k * c^2
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "a reaction nonlinear in the field is not counted in the substeps, with a warning" begin
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1
+    op = [ownership => σ, kind => [1]]
+    @test_logs (:warn, r"counts diffusion only") PottsProblem(AuditNonlinearField(; name = :n), op, (0, 1);
+        field_solver = ExplicitEuler())
+    # an explicit count: the user chose it, no warning
+    @test_nowarn PottsProblem(AuditNonlinearField(; name = :n), op, (0, 1); field_solver = ExplicitEuler(substeps = 4))
+end
+
+# the substep count bounds draws and kind tables in the reaction and diffusion coefficients
+@potts_model AuditBoundedField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.25
+        k = 3.0
+        δ[kind] = [3.0, 0.0]
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16,))
+    @energy cells => (volume - 4.0)^2
+    @equations D(c) ~ Dc * rand() * Δ(c) - k * c * rand() - δ[kind] * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "draws and kind tables in a field rate are bounded in the substep count" begin
+    c0 = [isodd(i) ? 1.0 : -1.0 for i in 1:16]
+    prob = @test_nowarn PottsProblem(AuditBoundedField(; name = :b), [ownership => zeros(Int32, 16), kind => Symbol[], :c => c0],
+        (0, 30); field_solver = ExplicitEuler())
+    nsub(q) = Potts.CorePotts._substeps(only(filter(x -> x isa Potts.CorePotts.FieldStep, collect(q.f.phases.after_mcs))).substeps, q.p)
+    @test nsub(prob) == 4                                           # ceil((0.25·4 + 3 + 3) / 1.8)
+    @test nsub(remake(prob; p = [:δ => [9.0, 0.0]])) == 8           # the live kind table: ceil(13 / 1.8)
+    c = Array(solve(prob, SequentialCPM(); saveat = 1).u[end].site.c)
+    @test all(isfinite, c) && maximum(abs, c) < 1e-3
+end
+
+# another field's Laplacian is a source term, not this field's diffusion (fields are
+# stepped one after another); a negative diffusion coefficient warns (anti-diffusion)
+@potts_model AuditCrossField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.5
+        Dx = 0.5
+        Dk[kind] = [0.1, 0.1]
+    end
+    @variables begin
+        c(field) = 0.0
+        u(field) = 0.0
+        w(field) = 0.0
+    end
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 4.0)^2
+    @equations begin
+        D(c) ~ Dc * Δ(c) - Dx * Δ(u)
+        D(u) ~ Dc * Δ(u)
+        D(w) ~ Dk[kind] * Δ(w)
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "cross-diffusion counts only the field's own Laplacian; negative diffusion warns" begin
+    cb = [iseven(i + j) ? 1.0 : -1.0 for i in 1:8, j in 1:8]
+    op = [ownership => zeros(Int32, 8, 8), kind => Symbol[], :c => cb, :u => copy(cb)]
+    prob = @test_nowarn PottsProblem(AuditCrossField(; name = :x), op, (0, 30); field_solver = ExplicitEuler())
+    steps = filter(x -> x isa Potts.CorePotts.FieldStep, collect(prob.f.phases.after_mcs))
+    @test [Potts.CorePotts._substeps(f.substeps, prob.p) for f in steps] == [3, 3, 1]   # ceil(0.5·8 / 1.8)
+    c = Array(solve(prob, SequentialCPM()).u[end].site.c)
+    @test all(isfinite, c) && maximum(abs, c) < 1e-3
+    @test_logs (:warn, r"field `c`.*anti-diffusion") (:warn, r"field `u`.*anti-diffusion") PottsProblem(AuditCrossField(; name = :x), [op; :Dc => -0.1], (0, 1);
+        field_solver = ExplicitEuler())
+    @test_logs (:warn, r"anti-diffusion") PottsProblem(AuditCrossField(; name = :x), [op; :Dk => [0.1, -0.1]], (0, 1);
+        field_solver = ExplicitEuler())
+end
+
 @potts_model AuditClear begin
     @kinds medium A
     @variables begin
