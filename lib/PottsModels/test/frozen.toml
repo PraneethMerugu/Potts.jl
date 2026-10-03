@@ -174,10 +174,15 @@ decision = "D-102"
 
 [[file]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"
-sha256 = "e1ec2261c7999a7fe7972f2665fdbb2580da2f01bb66b93e70bf133712066396"
-decision = "D-105"
+sha256 = "17b02a9434d2b9a0c8b9708ae9383558cbaf96a71419ca33406ed5ec41cfa6f7"
+decision = "D-107"
 
 [[file]]
 path = "acceptance/p6_1e_gg_margin.jl"
 sha256 = "f4e6754c39f99d5f8fbfb9bcbb124391eba182087ab6ccd3207246028467679b"
 decision = "D-106"
+
+[[file]]
+path = "acceptance/p6_0ah_canonical_term_order.jl"
+sha256 = "b38d76fc59b39f6b523b31a06be6a01ac38c9537074785b03e587889f6005f86"
+decision = "D-107"

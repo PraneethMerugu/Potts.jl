@@ -1763,3 +1763,10 @@ The maintainer approved F-1…F-6 (D-049).
 
 - **The change.** Default margin 10 → 60 on the periodic lattice (side `2⌈√(40n/π)⌉ + 1 + 2margin`): long runs no longer drift onto the edge or join the periodic image; explicit margins bitwise unchanged. Non-frozen tests that need a small aggregate pass `margin = 10`.
 - **Checks.** Frozen P6.1e 92/92, P6.1b2 12/12; PottsModels, Potts and docs exit 0 (branch based on the current `monorepo`; no step-loop change, gate not rerun).
+
+## 2026-10-03 — P6.0ah merged: canonical term order in generated code (D-107)
+
+- **The change.** Sums and products in generated code are ordered by a key of their generated code text (memoised per build), fold slots, gather numbers and integral names are canonical, so a rate's floating-point result no longer depends on the build's operator hashes (D-105). `p6_0ag` item 3 compares bitwise again (re-frozen under D-107); 43 new symbolic tests.
+- **Review.** Fold keys now carry bound-variable names (two folds differing only in their bound variable no longer collide), keys are memoised, integrals keep their folds inside; approved. Follow-ups P6.0ai (integral of a fold is O(sites × cells)) and P6.0aj (`_GATHER_COUNT` is not thread-safe).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate: pass.** CPU 0.972–1.028. Metal OpenVT 1.049, Akeeb 1.016; Wortel 1.150, Merks 1.065, GG 1.062 flagged; `ab.jl` against 457104d8, 6 rounds: Wortel 1.005, Merks 1.003, GG 1.018 (noise).

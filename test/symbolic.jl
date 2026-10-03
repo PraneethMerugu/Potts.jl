@@ -3056,3 +3056,95 @@ end
         @test sol.u[4].cell.g[1:4] == zeros(4)
     end
 end
+
+# ---------------------------------------------------------------------------------------
+# P6.0ah (D-107): textually equal folds over different bound variables in one statement keep
+# a canonical slot numbering (their key carries the variables' names), and integrals of
+# such folds stay distinct and are not hoisted apart from their trackers. A salted
+# `Base.hash` of the Potts operators stands for another package build (inert at salt 0).
+
+const P60AH_TIE_SALT = Ref{UInt}(0)
+for f in (Potts.population, Potts.gather, Potts.at, Potts.at2, Potts.cell_integral)
+    @eval function Base.hash(g::typeof($f), h::UInt)
+        P60AH_TIE_SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
+        return hash(P60AH_TIE_SALT[], hash(:p60ah_tie_salt, h))
+    end
+end
+p60ah_tie_salted(f, s) = (P60AH_TIE_SALT[] = s; try f() finally P60AH_TIE_SALT[] = 0 end)
+
+@potts_model P60ahTieModel begin
+    @kinds medium A
+    @variables z(cell) = 1.0 g(model) = 0.5
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(g) ~ 0.01 * sum(z[c] for c in cells) + 0.02 * sum(z[c] for c in cells)^2 + 0.03 * sum(z[c] for c in cells)^3 - 0.1g
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model P60ahTieCell begin
+    @kinds medium A
+    @variables z(cell) = 1.0 y(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(y) ~ 0.01 * sum(z[c] for c in cells) * y + 0.02 * sum(z[c] for c in cells)^2 + 0.03 * sum(z[c] for c in cells)^3 - 0.1y
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model P60ahTieUpd begin
+    @kinds medium A
+    @variables z(cell) = 1.0 y(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @after_mcs y ~ 0.01 * sum(z[c] for c in cells) * y + 0.02 * sum(z[c] for c in cells)^2 + 0.03 * sum(z[c] for c in cells)^3
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model P60ahTieIntegral begin
+    @kinds medium A
+    @variables c(site) = 1.0 y(cell) = 0.0 w(cell) = 0.0
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @after_mcs begin
+        y ~ integral(c * sum(volume[k] for k in cells))
+        w ~ 2 * integral(c * sum(volume[k] for k in cells))
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+function p60ah_tie_code(M, solver)
+    strip!(ex) = (ex isa Expr || return ex; Base.remove_linenums!(ex);
+        ex.head === :macrocall && length(ex.args) >= 2 && ex.args[2] isa LineNumberNode && (ex.args[2] = nothing);
+        foreach(strip!, ex.args); ex)
+    g = Potts.generated_code(M(; name = :x); ode_solver = solver)
+    return [string(strip!(deepcopy(x))) for k in propertynames(g) for x in (getproperty(g, k) isa AbstractVector ?
+                                                                         getproperty(g, k) : (getproperty(g, k),))]
+end
+function p60ah_tie_problem(M)
+    s = zeros(Int32, 12, 8)
+    s[3:6, 3:6] .= 1
+    s[7:10, 3:6] .= 2
+    return PottsProblem(M(; name = :x), [ownership => s, kind => [:A, :A]], (0, 3); seed = 7, ode_solver = Potts.RK4())
+end
+
+@testset "P6.0ah: equal folds over different variables, independent of operator hashes" begin
+    for M in (P60ahTieModel, P60ahTieCell, P60ahTieUpd, P60ahTieIntegral), solver in (Potts.ExplicitEuler(), Potts.RK4())
+        base = p60ah_tie_code(M, solver)
+        @test all(s -> p60ah_tie_salted(() -> p60ah_tie_code(M, solver), s) == base, 1:4)
+    end
+    state(u) = (Array(u.σ), map(Array, u.cell), map(Array, u.site), map(Array, u.model))
+    for M in (P60ahTieModel, P60ahTieCell, P60ahTieUpd, P60ahTieIntegral)
+        prob = p60ah_tie_problem(M)
+        u = state(solve(prob, SequentialCPM()).u[end])
+        for s in 1:4
+            p = p60ah_tie_salted(() -> p60ah_tie_problem(M), s)
+            @test p.f.fingerprint == prob.f.fingerprint
+            @test state(solve(p, SequentialCPM()).u[end]) == u
+        end
+    end
+    # the two integrals are distinct trackers, each over its operand as written (the fold
+    # inside is not hoisted): integral(c · Σ volume) = (Σ_cell volume)², w = 2y
+    xs = Potts._integrals(Potts.ModelingToolkitBase.mtkcompile(P60ahTieIntegral(; name = :x)).sys)
+    @test length(xs) == 2 && Potts._integral_name(xs[1]) != Potts._integral_name(xs[2])
+    s = zeros(Int32, 12, 8)
+    s[3:6, 3:6] .= 1
+    u = solve(PottsProblem(P60ahTieIntegral(; name = :x), Any[ownership => s, kind => [:A]], (0, 3)), SequentialCPM()).u[end]
+    @test u.cell.y == [Float64(u.cell.volume[1])^2]
+    @test u.cell.w == 2 .* u.cell.y
+end

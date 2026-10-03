@@ -1232,7 +1232,7 @@ function _abs_bound(d, env)
     (op === (+) || op === (-) || op === (*)) || return nothing
     bs = map(a -> _abs_bound(a, env), args)
     any(isnothing, bs) && return nothing
-    return Expr(:call, op === (*) ? :* : :+, bs...)
+    return Expr(:call, op === (*) ? :* : :+, bs[sortperm(map(_code_key, bs))]...)   # canonical order (D-107)
 end
 
 # ---------------------------------------------------------------------------------------

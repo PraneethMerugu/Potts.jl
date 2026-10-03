@@ -232,7 +232,8 @@ cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
 """Cell-state name of the tracker for `integral(x)`."""
 _integral(x) = cell_integral(x isa Num ? x : Num(x))
-_integral_name(x) = Symbol(:integral_, string(hash(Symbolics.unwrap(x)); base = 62))
+# named by content (`_symkey`), not by Symbolics' hash, which differs between builds (D-107)
+_integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(x)); base = 62))
 
 """`history_lag(x, k)`: `x` at the end of the MCS `k` before the current one."""
 history_lag(x, k) = error("`history_lag` is symbolic-only")
