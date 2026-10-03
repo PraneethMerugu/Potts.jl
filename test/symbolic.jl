@@ -94,6 +94,44 @@ end
     @test prob.f.acceptance === Metropolis()
 end
 
+@testset "remake: whole parameter objects, keep sentinels, non-maps (D-115)" begin
+    prob = symbolic_graner_problem(; nmcs = 5)
+    # a whole object of this problem's type is taken as given
+    q = remake(prob; p = [:λ => 3.0])
+    @test remake(prob; p = q.p).p === q.p
+    # another model's object: an ArgumentError naming the differing names, not a later failure
+    other = symbolic_wortel_problem()
+    err = try
+        remake(prob; p = other.p); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("λₛ", err.msg) && occursin("S₀", err.msg)                # names WORTEL has, SORTING lacks
+    @test prob.p.λ == symbolic_graner_problem(; nmcs = 5).p.λ        # source unchanged
+    # a Float32 problem's object: values taken, converted to this problem's scalar type
+    p32 = remake(symbolic_graner_problem(; nmcs = 5, T = Float32); p = [:λ => 4.0, :T => 3.0])
+    @test eltype(p32.p.V₀) === Float32
+    r = remake(prob; p = p32.p)
+    @test typeof(r.p) === typeof(prob.p)
+    @test r.p.λ === 4.0 && r.p.T === 3.0 && r.p.V₀ == Float64.(p32.p.V₀)
+    @test solve(remake(r; tspan = (0, 1)), SequentialCPM()).u[end].cell.volume isa AbstractVector
+    # SciML keep sentinels
+    @test remake(q; p = missing).p === q.p
+    @test remake(q; p = nothing).p === q.p
+    @test remake(prob; u0 = nothing).u0.σ == prob.u0.σ
+    @test remake(prob; u0 = missing).u0.cell.volume == prob.u0.cell.volume
+    integ = init(prob, SequentialCPM())
+    step!(integ)
+    reinit!(integ, nothing)
+    @test integ.state.σ == prob.u0.σ && integ.t == 0
+    # non-states and non-maps: ArgumentErrors, not MethodErrors or silent replacement
+    @test_throws ArgumentError remake(prob; u0 = 3.0)
+    @test_throws ArgumentError remake(prob; u0 = [1, 2])
+    @test_throws ArgumentError reinit!(integ, "state")
+    @test_throws ArgumentError remake(prob; p = 3.0)
+end
+
 @potts_model Spring begin
     @kinds medium blob
     @parameters begin
