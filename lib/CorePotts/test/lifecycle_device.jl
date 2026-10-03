@@ -85,6 +85,40 @@
             end
         end
 
+        # The staged form failing midway (D-108, `_STAGED_FAULT_AFTER`): after the trigger or
+        # the planner it hands over, counting the kernels that ran; after the partition
+        # (which writes σ) the state is not consistent, and the failure is rethrown
+        @testset "the staged form failing midway" begin
+            fuse = CorePotts.FUSE_SITES[]
+            CorePotts.FUSE_SITES[] = 0
+            try
+                launches = Dict{Int, Int}()
+                for k in (1, 2)
+                    CorePotts._STAGED_FAULT_AFTER[] = k
+                    integ = init(pg, CheckerboardCPM(); save_start = false, save_end = false)
+                    @test_logs (:warn, r"cannot launch") step!(integ)
+                    D = integ.lcache.device
+                    @test D.form[] == CorePotts._FORM_HOST && D.enqueued[] == k
+                    launches[k] = integ.stats.launches
+                end
+                @test launches[2] == launches[1] + 1             # the planner kernel is counted
+                CorePotts._STAGED_FAULT_AFTER[] = CorePotts._STAGED_PARTITION
+                integ = init(pg, CheckerboardCPM(); save_start = false, save_end = false)
+                err = try
+                    step!(integ)
+                    nothing
+                catch e
+                    e
+                end
+                @test err isa CorePotts._StagedFailedMidway && err.enqueued == CorePotts._STAGED_PARTITION
+                @test occursin("no longer consistent", sprint(showerror, err))
+                @test integ.lcache.device.form[] == CorePotts._FORM_STAGED       # not handed over
+            finally
+                CorePotts._STAGED_FAULT_AFTER[] = 0
+                CorePotts.FUSE_SITES[] = fuse
+            end
+        end
+
         # A daughter rule that links mother and daughter: the newborn's links are cleaned
         # (and its columns copied) for every cell before any rule runs, so the rule's link
         # survives exactly as on the host planner (a race before: the link was dropped)
