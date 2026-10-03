@@ -1789,3 +1789,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** A kind table whose entries are expressions of parameters (`J[kind, kind] = [0 Jx Jx; …]`) builds (it raised a `MethodError`) and follows its inputs at build, `remake` and the integrator setters, with the problem's scalar type kept and symmetry checked on the values; `observe(sol | prob, :name)` resolves a variable, `@observed`, built-in or parameter (it raised "cannot lower constant"), with a clear error for an unknown name. Fingerprints of existing models unchanged.
 - **Review.** Two rounds: the parameters page now says an explicit value holds only until the next change of another parameter (the existing rule; P6.0ak to keep it), the declaration order and `observe`'s resolution order. Follow-ups P6.0ak, P6.0al.
 - **Merge checks (P6.0aj + P6.0ab).** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No step-loop change in either; gate not rerun.
+
+## 2026-10-03 — P6.0ak merged: explicit parameter values survive unrelated changes (D-112)
+
+- **The change.** A computed parameter (scalar or kind table) is re-derived only by a change that names one of its inputs (transitively), so an explicit value from `remake`, a setter or the operating point survives unrelated changes; a `setp` with several names is one change, validated all-or-nothing (new CorePotts hook `set_parameters`). Unrelated changes are 2–3× faster.
+- **Review.** Two rounds (round 2: the batched `setp`), approved, including on Metal. Follow-up P6.0ap.
+- **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No step-loop change; gate not rerun.

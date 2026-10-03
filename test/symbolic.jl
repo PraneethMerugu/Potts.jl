@@ -3184,3 +3184,73 @@ end
     @test u.cell.y == [Float64(u.cell.volume[1])^2]
     @test u.cell.w == 2 .* u.cell.y
 end
+
+# A change re-derives a computed parameter iff it is not named and an input is named or
+# re-derived (transitively); every other value is kept. Diamond p₁ → p₂, (p₂, p₃) → p₄, p₃ → p₅.
+@potts_model ParamDiamond begin
+    @kinds medium A
+    @parameters begin
+        p₁ = 1.0
+        p₂ = 2p₁
+        p₃ = 3.0
+        p₄ = p₂ + p₃
+        p₅ = 5p₃
+        λ = 1.0
+    end
+    @lattice Lattice((6, 6); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A) => λ * (volume - p₄)^2
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "computed parameters follow only their inputs" begin
+    σ = zeros(Int32, 6, 6)
+    σ[2:3, 2:3] .= 1
+    prob = PottsProblem(ParamDiamond(; name = :pd), Any[ownership => σ, kind => [:A]], (0, 1))
+    vals(q) = map(n -> getp(q, n)(q), (p₁ = :p₁, p₂ = :p₂, p₃ = :p₃, p₄ = :p₄, p₅ = :p₅, λ = :λ))
+    @test vals(prob) == (p₁ = 1.0, p₂ = 2.0, p₃ = 3.0, p₄ = 5.0, p₅ = 15.0, λ = 1.0)
+    q = remake(prob; p = [:p₅ => 7.0, :p₂ => 10.0])
+    @test vals(q) == (p₁ = 1.0, p₂ = 10.0, p₃ = 3.0, p₄ = 13.0, p₅ = 7.0, λ = 1.0)   # p₄ re-derived from p₂
+    @test vals(remake(q; p = [:λ => 2.0])) == (p₁ = 1.0, p₂ = 10.0, p₃ = 3.0, p₄ = 13.0, p₅ = 7.0, λ = 2.0)
+    @test vals(remake(q; p = [:p₁ => 2.0])) == (p₁ = 2.0, p₂ = 4.0, p₃ = 3.0, p₄ = 7.0, p₅ = 7.0, λ = 1.0)
+    @test vals(remake(q; p = [:p₃ => 1.0])) == (p₁ = 1.0, p₂ = 10.0, p₃ = 1.0, p₄ = 11.0, p₅ = 5.0, λ = 1.0)
+    @test vals(remake(q; p = [:p₄ => 0.0, :p₁ => 3.0])) == (p₁ = 3.0, p₂ = 6.0, p₃ = 3.0, p₄ = 0.0, p₅ = 7.0, λ = 1.0)
+    integ = init(q, SequentialCPM())
+    integ.ps[:λ] = 4.0
+    @test (integ.ps[:p₂], integ.ps[:p₄], integ.ps[:p₅]) == (10.0, 13.0, 7.0)
+    integ.ps[:p₃] = 2.0
+    @test (integ.ps[:p₂], integ.ps[:p₄], integ.ps[:p₅]) == (10.0, 12.0, 10.0)
+    @test vals(prob) == (p₁ = 1.0, p₂ = 2.0, p₃ = 3.0, p₄ = 5.0, p₅ = 15.0, λ = 1.0)   # source unchanged
+end
+
+# `setp` with several names is one change, whatever the order of the names and whatever it
+# was built on (integrator, problem, function, model description); `integ.ps[[x, y]] = v` too.
+@testset "setp with several parameters is one change" begin
+    σ = zeros(Int32, 6, 6)
+    σ[2:3, 2:3] .= 1
+    prob = PottsProblem(ParamDiamond(; name = :pd), Any[ownership => σ, kind => [:A]], (0, 1))
+    fresh() = init(prob, SequentialCPM())
+    state(i) = (i.ps[:p₁], i.ps[:p₂], i.ps[:p₄], i.ps[:p₅])
+    for build in (identity, _ -> prob, _ -> prob.f, _ -> prob.f.sys)
+        i = fresh()
+        setp(build(i), [:p₄, :p₁])(i, [0.0, 3.0])
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)                  # p₄ named: kept; p₂ follows p₁
+        i = fresh()
+        setp(build(i), (:p₁, :p₄))(i, (3.0, 0.0))
+        @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    end
+    i = fresh()
+    i.ps[[:p₄, :p₁]] = [0.0, 3.0]
+    @test state(i) == (3.0, 6.0, 0.0, 15.0)
+    # negative control: one name at a time is two changes, so the order matters
+    i = fresh()
+    i.ps[:p₄] = 0.0
+    i.ps[:p₁] = 3.0
+    @test state(i) == (3.0, 6.0, 9.0, 15.0)
+    # all or nothing: a bad value leaves the parameters unchanged
+    i = fresh()
+    @test_throws ArgumentError setp(i, [:p₁, :nope])
+    @test_throws DimensionMismatch setp(i, [:p₁, :p₃])(i, [3.0])
+    @test state(i) == (1.0, 2.0, 5.0, 15.0)
+end
