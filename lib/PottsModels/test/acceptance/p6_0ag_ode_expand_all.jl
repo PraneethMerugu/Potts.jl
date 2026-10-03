@@ -39,9 +39,10 @@
 #     1e-3/1e-4 or cut by `ifelse`, so their last-place differences do not reach the result
 #     (measured bitwise); those stay bitwise.
 #  3. CPU results unchanged: the ODE values after 10 MCS (seed 7) of every shape, algorithm,
-#     solver and T equal the values recorded inline from the code before the fix, bitwise;
-#     model-scope shapes within 8 ulp (D-105: their sum's term order varies between builds).
-#     (Forcing expansion on that code reproduces them all bitwise.)
+#     solver and T equal the values recorded inline, bitwise. (Recorded from the code before
+#     the fix, where forcing expansion reproduced them all bitwise; re-recorded under D-107
+#     from the canonical term order, 11 of 96 moved by at most 2 ulp; D-105's 8-ulp tolerance
+#     for model-scope shapes is withdrawn.)
 #  4. A gather-ODE model on Metal runs and equals the CPU Float32 run bitwise (a regression
 #     guard for D-103's Metal fix), and a plain-rate control does too.
 #  5. Problem fingerprints of published models WITHOUT any ODE are unchanged (GranerGlazier,
@@ -227,23 +228,24 @@ p60ag_ulps(a::Float32, b::Float32) = signbit(a) == signbit(b) ? abs(Int64(reinte
 const p60ag_N = 10                                     # MCS of the recorded results
 
 # ---------------------------------------------------------------------------------------
-# Recorded on the code before the fix (feat/p6-0ag at cb0372a1, CPU, 1 thread), seed 7, 10 MCS:
+# Recorded on the code before the fix (feat/p6-0ag at cb0372a1, CPU, 1 thread), seed 7, 10 MCS,
+# re-recorded under D-107 with the canonical term order (feat/p6-0ah, CPU, 1 thread):
 # (model, solver label, algorithm, T) => ODE unknowns after 10 MCS (`p60ag_values`; Float32
 # results widened exactly to Float64).
 
 const P60AG_RESULTS = Dict{Tuple{Symbol, String, Symbol, DataType}, Vector{Float64}}(
     (:P60agHill, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [2.0989936514165404, 1.47515671654117, 0.21222627913174308, 0.25537438523178735],
     (:P60agHill, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [2.0989933013916016, 1.475156545639038, 0.2122262865304947, 0.25537440180778503],
-    (:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [2.08224356583383, 1.4937561468405993, 0.2121555373113417, 0.25605480154316057],
+    (:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [2.08224356583383, 1.4937561468405995, 0.2121555373113417, 0.2560548015431605],
     (:P60agHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [2.0822432041168213, 1.4937560558319092, 0.2121555507183075, 0.2560548186302185],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.871310594453223, 1.6707567769927003, 0.25499898821743605, 0.2777098480566056],
+    (:P60agHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.8713105944532233, 1.6707567769927005, 0.25499898821743605, 0.27770984805660553],
     (:P60agHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [1.8713103532791138, 1.670756459236145, 0.2549990117549896, 0.2777099311351776],
-    (:P60agHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [1.8564638319271034, 1.6870687296134126, 0.2553740979659346, 0.27741134626925756],
+    (:P60agHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [1.856463831927103, 1.6870687296134124, 0.25537409796593463, 0.27741134626925756],
     (:P60agHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [1.8564633131027222, 1.6870684623718262, 0.25537413358688354, 0.2774113714694977],
     (:P60agHill, "RK4()", :SequentialCPM, Float64) => [1.8690474532125243, 1.7332247875127564, 0.2681659604633495, 0.2819629454824082],
     (:P60agHill, "RK4()", :SequentialCPM, Float32) => [1.8690471649169922, 1.733224630355835, 0.2681660056114197, 0.2819629907608032],
     (:P60agHill, "RK4()", :CheckerboardCPM, Float64) => [1.854904414789083, 1.7485548534062567, 0.2686960029116616, 0.2815208830580529],
-    (:P60agHill, "RK4()", :CheckerboardCPM, Float32) => [1.854904294013977, 1.7485545873641968, 0.26869601011276245, 0.28152093291282654],
+    (:P60agHill, "RK4()", :CheckerboardCPM, Float32) => [1.8549041748046875, 1.7485547065734863, 0.26869601011276245, 0.28152087330818176],
     (:P60agIf5, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.18224735265994974, 0.1633032283809401],
     (:P60agIf5, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.1822473555803299, 0.1633032262325287],
     (:P60agIf5, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.16206953668186, 0.18477174234273244],
@@ -284,10 +286,10 @@ const P60AG_RESULTS = Dict{Tuple{Symbol, String, Symbol, DataType}, Vector{Float
     (:P60agMixed, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [0.48669958114624023, 0.48767417669296265, 0.4013277590274811, 0.4013277590274811],
     (:P60agMixed, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [0.48669957553163773, 0.4876742020938126, 0.4013277667210781, 0.4013277667210781],
     (:P60agMixed, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [0.48669958114624023, 0.48767417669296265, 0.4013277590274811, 0.4013277590274811],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.5230593941395449, 0.527843956015992, 0.4177034123704255, 0.4177034123704255],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.5230592489242554, 0.5278437733650208, 0.4177033007144928, 0.4177033007144928],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.5230593941395449, 0.527843956015992, 0.4177034123704255, 0.4177034123704255],
-    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.5230592489242554, 0.5278437733650208, 0.4177033007144928, 0.4177033007144928],
+    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [0.5230593941395449, 0.5278439560159921, 0.4177034123704255, 0.4177034123704255],
+    (:P60agMixed, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [0.5230592489242554, 0.5278438329696655, 0.4177033007144928, 0.4177033007144928],
+    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [0.5230593941395449, 0.5278439560159921, 0.4177034123704255, 0.4177034123704255],
+    (:P60agMixed, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [0.5230592489242554, 0.5278438329696655, 0.4177033007144928, 0.4177033007144928],
     (:P60agMixed, "RK4()", :SequentialCPM, Float64) => [0.5340884971803392, 0.5408467128640905, 0.4228294604145212, 0.4228294604145212],
     (:P60agMixed, "RK4()", :SequentialCPM, Float32) => [0.5340884923934937, 0.5408467650413513, 0.4228295087814331, 0.4228295087814331],
     (:P60agMixed, "RK4()", :CheckerboardCPM, Float64) => [0.5340884971803392, 0.5408467128640905, 0.4228294604145212, 0.4228294604145212],
@@ -297,11 +299,11 @@ const P60AG_RESULTS = Dict{Tuple{Symbol, String, Symbol, DataType}, Vector{Float
     (:P60agModelHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [4.872560739224415, 0.32777736930137036],
     (:P60agModelHill, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [4.872560024261475, 0.32777732610702515],
     (:P60agModelHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [3.365760547195339, 0.2608948833674407],
-    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [3.3657610416412354, 0.26089489459991455],
+    (:P60agModelHill, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float32) => [3.365760564804077, 0.2608948349952698],
     (:P60agModelHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float64) => [3.3656633126667646, 0.26091877367863736],
     (:P60agModelHill, "ExplicitEuler(substeps = 4)", :CheckerboardCPM, Float32) => [3.3656630516052246, 0.2609187364578247],
     (:P60agModelHill, "RK4()", :SequentialCPM, Float64) => [2.9062550400127396, 0.24623159182881385],
-    (:P60agModelHill, "RK4()", :SequentialCPM, Float32) => [2.906254768371582, 0.2462315708398819],
+    (:P60agModelHill, "RK4()", :SequentialCPM, Float32) => [2.906254768371582, 0.2462315559387207],
     (:P60agModelHill, "RK4()", :CheckerboardCPM, Float64) => [2.906111242766644, 0.24627998962302128],
     (:P60agModelHill, "RK4()", :CheckerboardCPM, Float32) => [2.906111001968384, 0.2462799847126007],
     (:P60agModelIf5, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [0.05894023053124153],
@@ -317,7 +319,7 @@ const P60AG_RESULTS = Dict{Tuple{Symbol, String, Symbol, DataType}, Vector{Float
     (:P60agModelIf5, "RK4()", :CheckerboardCPM, Float64) => [0.06351845464848845],
     (:P60agModelIf5, "RK4()", :CheckerboardCPM, Float32) => [0.0635184496641159],
     (:P60agModelSum16, "ExplicitEuler() (default)", :SequentialCPM, Float64) => [1.320234516679355],
-    (:P60agModelSum16, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [1.3202344179153442],
+    (:P60agModelSum16, "ExplicitEuler() (default)", :SequentialCPM, Float32) => [1.3202345371246338],
     (:P60agModelSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float64) => [1.3192344655349362],
     (:P60agModelSum16, "ExplicitEuler() (default)", :CheckerboardCPM, Float32) => [1.3192344903945923],
     (:P60agModelSum16, "ExplicitEuler(substeps = 4)", :SequentialCPM, Float64) => [1.3201376476994076],
@@ -395,13 +397,8 @@ end
     for M in P60AG_SHAPES, T in (Float64, Float32), (label, kw) in P60AG_FIXED, alg in P60AG_ALGS
         u = solve(p60ag_problem(M, (0, p60ag_N); T, kw...), alg).u[end]
         want = P60AG_RESULTS[(nameof(M), label, nameof(typeof(alg)), T)]
-        if startswith(String(nameof(M)), "P60agModel")
-            # D-105: a model-scope rate's sum is ordered by Symbolics' hashes, which differ
-            # between package builds, so these values move by a few ulp between builds.
-            @test all(isapprox.(p60ag_values(M, u), want; rtol = 8eps(T)))
-        else
-            @test p60ag_values(M, u) == want
-        end
+        # D-107: the generated term order is canonical, so every shape is bitwise across builds
+        @test p60ag_values(M, u) == want
     end
 end
 
