@@ -17,7 +17,9 @@ struct LowerEnv
     mode::Symbol                     # :cell, :site, :contact, :proposal
     bind::Dict{Symbol, Any}          # built-in name (or :__site/:__cell) → code
     relname::Dict{Any, Symbol}       # gather relation spec → ctx field
+    keys::IdDict{Any, String}        # sort keys of the operand code lowered so far (`_code_key`)
 end
+LowerEnv(T, mode, bind, relname) = LowerEnv(T, mode, bind, relname, IdDict{Any, String}())
 
 const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
     :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
@@ -35,33 +37,59 @@ _unwrap(x) = Symbolics.unwrap(x)
 # operands sorted. Neither key involves a hash.
 
 """Generated code `ex` as an S-expression string without line numbers (the sort key of
-operands; cheaper than printing Julia syntax, and equal keys mean equal code)."""
-_code_key(ex) = (io = IOBuffer(); _code_key!(io, ex); String(take!(io)))
-function _code_key!(io, ex)
+operands; cheaper than printing Julia syntax, and equal keys mean equal code). `memo` holds
+the keys of sub-expressions already keyed (operands of inner sums and products), which are
+copied rather than printed again: keying nested sums costs their size, not size × depth."""
+function _code_key(ex, memo = nothing)
+    ex isa Expr || return sprint(show, ex)
+    memo !== nothing && haskey(memo, ex) && return memo[ex]
+    io = IOBuffer()
+    _code_key!(io, ex, memo)
+    k = String(take!(io))
+    memo === nothing || (memo[ex] = k)
+    return k
+end
+function _code_key!(io, ex, memo)
     ex isa Expr || return show(io, ex)
+    if memo !== nothing
+        k = get(memo, ex, nothing)
+        k === nothing || return print(io, k)
+    end
     print(io, '(', ex.head)
     for a in ex.args
         a isa LineNumberNode && continue
         print(io, ' ')
-        _code_key!(io, a)
+        _code_key!(io, a, memo)
     end
     print(io, ')')
     return nothing
 end
 
-"""Canonical printed form of symbolic `x`: commutative operands sorted, no hashes."""
+"""
+Canonical printed form of symbolic `x`: commutative operands sorted, no hashes. A fold's
+bound variable prints by its role and options, so equal folds over different variables print
+alike; the sorted names of those variables (`c_3`, numbered in source order when the model
+is built) follow as a tie-break, so textually equal but distinct folds keep distinct keys
+in an order that does not depend on the walk.
+"""
 function _symkey(x)
+    names = String[]
+    k = _symkey!(names, x)
+    return isempty(names) ? k : string(k, "|", join(sort!(names), ","))
+end
+function _symkey!(names, x)
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return _canonical_value(x)
     SymbolicUtils.isconst(x) && return _canonical_value(SymbolicUtils.unwrap_const(x))
     i = info(x)
     if i !== nothing
         i.role in (:bound, :bound_cell, :bound_site) || return string(i.role, ":", i.name)
+        push!(names, string(nameof(x)))
         return string(i.role, ":", i.name, _canonical_value(i.options))
     end
     issym(x) && return string("sym:", nameof(x))
     op = operation(x)
-    ks = map(_symkey, arguments(x))
+    ks = map(a -> _symkey!(names, a), arguments(x))
     (SymbolicUtils.isadd(x) || SymbolicUtils.ismul(x)) && sort!(ks)
     return string(_symop_key(op), "(", join(ks, ","), ")")
 end
@@ -145,7 +173,7 @@ function lower(x, env::LowerEnv)
     # product folds its operands in canonical order (D-107)
     if (SymbolicUtils.isadd(x) || SymbolicUtils.ismul(x)) && length(args) >= 2
         codes = map(a -> lower(a, env), args)
-        return foldl((a, b) -> Expr(:call, op, a, b), codes[sortperm(map(_code_key, codes))])
+        return foldl((a, b) -> Expr(:call, op, a, b), codes[sortperm(map(c -> _code_key(c, env.keys), codes))])
     end
     if (op === (+) || op === (*)) && length(args) > 2
         return foldl((a, b) -> Expr(:call, op, a, b), map(a -> lower(a, env), args))
@@ -374,7 +402,7 @@ function _lower_population(args, env)
         range = :(1:length(st.σ))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
-    inner = LowerEnv(T, env.mode, bind, env.relname)
+    inner = LowerEnv(T, env.mode, bind, env.relname, env.keys)
     op = ni.options.op
     init, step, fin = if op === :sum
         :(zero($T)), :($acc += $v), acc
