@@ -79,6 +79,17 @@ changing `β` re-evaluates `γ`. The same holds for scalar computed defaults suc
 A parameter object given whole (`remake(prob; p = checkpoint.p)`) sets every value, converted
 to the problem's number type; one with other parameter names is an `ArgumentError`.
 
+A computed default, scalar or table entry, is evaluated as a number. It may use Julia's
+functions (`sqrt`, `exp`, `log`, `min`, `max`, `floor`, `mod`, `div` or `÷`, and so on),
+comparisons with `ifelse`, `c ? a : b` and `&&`, constants such as `π`, and functions
+registered with `@register_symbolic`. It may also read an entry of a kind table. A kind is
+indexed by its number as everywhere in a model: the medium is 0, then the kinds follow in
+`@kinds` order, and a kind's name stands for its number. With `@kinds medium dark light`,
+`u = V₀[2] + 1` and `u = V₀[light] + 1` are the same. A default cannot read a variable or a
+built-in such as `volume`, cannot draw `rand()`, and cannot read a kind outside the table.
+Each of these is an `ArgumentError` that names the parameter. So is a function that fails on
+the values, such as `sqrt` of a negative number.
+
 The inputs of a computed default must be declared before it in `@parameters`. A contact
 table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmetric one is an
 `ArgumentError`.

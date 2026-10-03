@@ -335,6 +335,15 @@ _notq(a) = !a
 _ifelseq(c::Bool, a, b) = c ? a() : b()
 _ifelseq(c, a, b) = ifelse(c, a(), b())
 
+# `div(a, b)` and `a ÷ b` in models: Julia's `div` on numbers; on a symbolic operand the
+# registered `_intdiv` (Symbolics has no `div` on `Num`), evaluated by `div` when numeric.
+_div(a, b) = div(a, b)
+_div(a::Num, b) = _intdiv(a, b)
+_div(a, b::Num) = _intdiv(a, b)
+_div(a::Num, b::Num) = _intdiv(a, b)
+_intdiv(a, b) = div(a, b)
+Symbolics.@register_symbolic _intdiv(a, b)
+
 """Neighbours of `anchor` over a relation spec, as the iterator of a gather."""
 struct Around{R}
     relation::R

@@ -349,7 +349,7 @@ function _section!(parts, sec, args, ln = nothing)
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $val : $k; $(kw...))))
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $k === nothing ? $(rewrite(val)) : $k; $(kw...))))
             else
                 k = lhs::Symbol
                 _declare!(parts, k, "parameter")
@@ -559,7 +559,7 @@ end
     rewrite(ex)
 
 Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
-→ `ifelse`, and `fold(body for n in R(s) if cond)` → a relation gather.
+→ `ifelse`, `div(a, b)`/`a ÷ b` → `_div`, and `fold(body for n in R(s) if cond)` → a relation gather.
 """
 function rewrite(ex)
     ex isa Expr || return ex
@@ -581,6 +581,8 @@ function rewrite(ex)
         return :($P._ifelseq($(rewrite(ex.args[1])), () -> $(rewrite(ex.args[2])), () -> $(rewrite(ex.args[3]))))
     elseif h === :call && ex.args[1] === :! && length(ex.args) == 2
         return Expr(:call, :($P._notq), rewrite(ex.args[2]))
+    elseif h === :call && (ex.args[1] === :div || ex.args[1] === :÷) && length(ex.args) == 3
+        return Expr(:call, :($P._div), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
