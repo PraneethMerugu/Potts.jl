@@ -164,13 +164,13 @@ const p60x_RESULTS = Dict{Tuple{Symbol, String, Symbol}, Vector{Float64}}(
 
 # (model, solver label) => problem fingerprint (Float64)
 const p60x_FINGERPRINTS = Dict{Tuple{Symbol, String}, UInt64}(
-    (:XPlain, "ExplicitEuler() (default)") => 0x524fe6097c1d3fef,
-    (:XPlain, "ExplicitEuler(substeps = 4)") => 0xa184f6422ce6e0c5,
-    (:XPlain, "RK4()") => 0xd58c7a24f561c2b3,
+    (:XPlain, "ExplicitEuler() (default)") => 0x6735c6e78bb18202,
+    (:XPlain, "ExplicitEuler(substeps = 4)") => 0x786ca81a07a7ca57,
+    (:XPlain, "RK4()") => 0xcf18be4cf6c34e28,
     (:XPlain, "Adaptive(Rodas5P())") => 0xd14f9b0eab30d41e,
-    (:XPair, "ExplicitEuler() (default)") => 0x12c6e9dfce5b9518,
-    (:XPair, "ExplicitEuler(substeps = 4)") => 0xbf30572fcb0e3b09,
-    (:XPair, "RK4()") => 0x263fa6b503f962c5,
+    (:XPair, "ExplicitEuler() (default)") => 0x931642ceb3ccf4f0,
+    (:XPair, "ExplicitEuler(substeps = 4)") => 0xb0b464bc350e1102,
+    (:XPair, "RK4()") => 0x05dd207f8b357730,
     (:XPair, "Adaptive(Rodas5P())") => 0x843419cc959dffb3,
 )
 
