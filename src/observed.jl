@@ -79,7 +79,10 @@ end
 """A copy of state `u` whose integral arrays are recomputed from its sites (host)."""
 function _fresh_integrals(u, p, ctx, t, phases, names)
     cell = merge(u.cell, NamedTuple(n => zero(getfield(u.cell, n)) for n in names))
-    st = CorePotts.CPMState(u.σ, cell, u.site, u.model, u.history)
+    # the integrals' hoisted folds write their model slots: copies, so `u` is left unchanged
+    model = merge(u.model, NamedTuple(n => copy(getfield(u.model, n)) for n in propertynames(u.model)
+                                      if startswith(String(n), "__ifold_")))
+    st = CorePotts.CPMState(u.σ, cell, u.site, model, u.history)
     foreach(ph -> ph(st, p, ctx, CorePotts.RNGKey(0), Int(t), CorePotts.CPU()), phases)
     return st
 end

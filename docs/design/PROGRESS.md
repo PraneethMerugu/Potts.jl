@@ -1801,3 +1801,11 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** Kinds, parameters, variables, observed quantities, relations, relationships and components (with their `comp₊name` quantities) share one namespace, and each vector claims its name and its component names: a clash is an `ArgumentError` naming the name, both categories and the base, however the system is built (one model, `@extend`, `extend`, programmatic). `extend` replaces a vector as a whole and may lengthen it, not shorten it. About 1 µs per build.
 - **Review.** Three rounds (vector component names; whole-vector override; no shorter override), approved.
 - **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-03 — P6.0ai merged: population folds inside `integral` are hoisted (D-110)
+
+- **The change.** A population fold inside `integral(x)` that reads neither the site nor the cell is computed once per refresh in a model slot (named by content, canonical), not at every site of every tracker: the frozen 200², 400-cell case went from 22× the hand-factored cost to 0.80–0.95×. Every refresh point (init and checkpoint load, before-MCS, gated, after-block stale refresh, MCS boundary, observed) computes its slots first; observed integrals no longer write into the observed state. Models without such a fold get exactly the base's phases, types and fingerprints.
+- **Review.** Two rounds plus a performance round, approved.
+- **Finding (A/B method).** A Metal A/B of a few percent is not evidence on its own: identical source in two checkouts differed by up to ±4% (Merks: 1.042, then 0.975 in a later session), because each checkout's compiled package caches differ and are rebuilt often in the shared depot. Before treating a small Metal ratio as a regression, compare two checkouts of the same source (or the host enqueue time with `--pkgimages=no`).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0.
+- **Gate.** CPU 0.971–1.033; Metal GG 1.018, Merks 0.942, OpenVT 1.030, Akeeb 1.033, Wortel 1.090 flagged; `ab.jl` Wortel against ea26df4c, 6 rounds: 0.940 (noisy after the machine slept; the implementer's earlier run 0.974).

@@ -118,8 +118,8 @@ end
 
 # Replace hoistable population folds in `x` by model slots (named `prefix1`, `prefix2`, … in
 # statement order and, within `x`, in canonical order (`_symkey`, D-107); equal folds share
-# a slot). Folds inside `integral(…)` stay: the integral is a cell slot named after its
-# operand as written (`_integrals`), and its own phase evaluates the operand per site.
+# a slot). Folds inside `integral(…)` stay: the integral's own refresh computes them
+# (`_integral_hoist`).
 function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Symbol; strict = false)
     pops = Any[]
     function visit(y)
@@ -148,6 +148,44 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     return _unwrap(Symbolics.substitute(x, sub; fold = Val(false), filterer = _outside_integrals))
 end
 _outside_integrals(ex) = !(iscall(ex) && operation(ex) === cell_integral) && SymbolicUtils.default_substitute_filter(ex)
+
+# Population folds in the operand of `integral(x)` that read neither the site nor the cell
+# (D-110) are the same at every site: each is computed once per refresh of the integral, into
+# a model slot named after the fold's content (`_symkey`, D-107), and the operand reads the
+# slot. Only outermost folds are candidates (an inner fold may read the outer one's bound
+# variable), and not folds that draw random numbers (a draw per site is not one per MCS).
+# Returns the operand with the folds substituted and the slots (`name => fold`).
+function _integral_hoist(x)
+    x = _unwrap(x)
+    slots = Pair{Symbol, Any}[]
+    sub = Dict{Any, Any}()
+    function visit(y)
+        y = _unwrap(y)
+        (y isa SymbolicUtils.BasicSymbolic && iscall(y)) || return
+        if operation(y) === population
+            (haskey(sub, y) || !_integral_hoistable(y)) && return
+            n = Symbol(:__ifold_, string(_fnv64(_symkey(y)); base = 62))
+            any(s -> s.first === n, slots) || push!(slots, n => y)
+            sub[y] = _standin(:model, n)               # (a `count`, `any`, `all` stored exactly)
+            return
+        end
+        foreach(visit, arguments(y))
+    end
+    visit(x)
+    isempty(sub) && return x, slots
+    sort!(slots; by = first)                           # by content, not by walk order (D-107)
+    return _unwrap(Symbolics.substitute(x, sub; fold = Val(false))), slots
+end
+
+"""The operand of `integral(x)` as stored: `x` with its site-independent folds read from slots."""
+_integral_operand(x) = first(_integral_hoist(x))
+
+function _integral_hoistable(pop)
+    _has_op(pop, random_uniform) && return false
+    rn = Dict{Any, Symbol}(ni.options.relation => :__gather for (ni, _) in _gathers(pop)
+                           if !(ni.options.relation isa RelationRef))
+    return _hoistable(pop, rn)
+end
 
 # An integral that reads a variable written in the block both through `Pre` (block-start
 # values) and bare (new values) has no single refresh point: reject it.

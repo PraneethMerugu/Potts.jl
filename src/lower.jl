@@ -235,23 +235,31 @@ end
 end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
 
-"""Distinct site expressions `x` of `integral(x)` in the model's statements."""
-function _integrals(sys::PottsSystem)
+"""Distinct site expressions `x` of `integral(x)` in the model's statements, as stored
+(`_integral_operand`)."""
+_integrals(sys::PottsSystem) = first(_integrals_folds(sys))
+
+# The stored operands and, per operand, the slots of its hoisted folds (`_integral_hoist`).
+function _integrals_folds(sys::PottsSystem)
     out = Any[]
+    folds = Vector{Pair{Symbol, Any}}[]
     xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
         (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
         (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
         (x for b in sys.discrete for x in b.next)...]
     for x in xs
         new = Any[]
+        newfolds = Vector{Pair{Symbol, Any}}[]
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
-            a = _unwrap(arguments(y)[1])
-            any(z -> isequal(z, a), out) || any(z -> isequal(z, a), new) || push!(new, a)
+            a, fs = _integral_hoist(arguments(y)[1])
+            any(z -> isequal(z, a), out) || any(z -> isequal(z, a), new) || (push!(new, a); push!(newfolds, fs))
         end
-        append!(out, new[sortperm(map(_symkey, new))])     # canonical within a statement (D-107)
+        perm = sortperm(map(_symkey, new))                 # canonical within a statement (D-107)
+        append!(out, new[perm])
+        append!(folds, newfolds[perm])
     end
-    return out
+    return out, folds
 end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
