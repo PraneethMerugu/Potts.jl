@@ -161,3 +161,8 @@ decision = "D-099"
 path = "acceptance/p6_0v3_launch_fusion.jl"
 sha256 = "86f715f9112341fed7ec21f38f9a7e89cc5db20f088bfcefabc5c93ba3a210bd"
 decision = "D-101"
+
+[[file]]
+path = "acceptance/p6_0y_stable_substeps.jl"
+sha256 = "f848f9258851b83a92c064ff57c8b531446d967499d37306a83678af891efe8e"
+decision = "D-102"
