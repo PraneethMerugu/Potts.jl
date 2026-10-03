@@ -8,8 +8,9 @@
     extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
 
 The model with everything in `base` and `sys`. `sys` wins where both define something
-(parameters and variables by name, a vector as a whole, relations, the lattice and sweep of a `@potts_model`
-extension that declares them). Structural replacement: an update of `sys` replaces the base's
+(parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
+extension that declares them). A vector replaces the base's vector of its name as a whole and
+may be longer, not shorter (the base may read the components a shorter one would drop). Structural replacement: an update of `sys` replaces the base's
 updates of the same target in the same phase (whatever their cadences; a warning names a
 changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
@@ -41,8 +42,11 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         what = get(mine, n, old)
         what == old || throw(_category_clash(name, n, what, "$old $inbase"))
     end
-    # a vector replaces the base's vector of its name as a whole (whatever their lengths)
+    # a vector replaces the base's vector of its name as a whole, so it may not be shorter
+    # (the base's statements may read the components it would drop)
     key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
+    _check_vector_lengths(name, inbase, Iterators.flatten((base.parameters, base.variables)),
+        Iterators.flatten((sys.parameters, sys.variables)))
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
@@ -134,8 +138,31 @@ function _name_categories(sys::PottsSystem)
     return seen
 end
 
+"""Reject a vector of `mine` with fewer components than the base's vector of its name."""
+function _check_vector_lengths(model, inbase, theirs, mine)
+    components(xs) = (out = Dict{Symbol, Vector{Symbol}}();
+        for x in xs
+            i = info(x)
+            v = i === nothing ? nothing : get(i.options, :vector, nothing)
+            v === nothing || push!(get!(out, v, Symbol[]), i.name)
+        end; out)
+    ours = components(mine)
+    for (v, names) in components(theirs)
+        new = get(ours, v, nothing)
+        (new === nothing || length(new) >= length(names)) && continue
+        dropped = join(("`$n`" for n in names if !(n in new)), ", ")
+        throw(ArgumentError("$model: `$v` has $(length(names)) components $inbase; the extension's " *
+                            "`$v[1:$(length(new))]` would drop $dropped (an extension's vector may be longer, not shorter)"))
+    end
+    return nothing
+end
+
+"""`parameter `bias_2` (a component of the vector `bias`)`: a category label with its name."""
+_labelled(what, n) = (i = findfirst(" (", what); i === nothing ? "$what `$n`" :
+                                                 "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])")
+
 _category_clash(model, n, what, old) = ArgumentError(
-    "$model: $what `$n`: `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
+    "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
     "observed quantities, relations, relationships and components share one namespace); rename one of them")
 
 _kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))

@@ -146,7 +146,8 @@ a relation, a relationship or a component, never two of these. This holds for th
 model inherits through `@extend` (or `extend`), for the components of a vector and for a
 component's quantities. A vector `w[1:2]` also names its components `w_1` and `w_2`, so no
 other quantity may be called `w_1`, not even a scalar parameter (an extension overrides a
-vector as a whole: `@parameters w[1:3] = …`). The unknown `y` of the component `clk` is
+vector as a whole, and the new vector may be longer than the base's but not shorter:
+`@parameters w[1:3] = …` over `w[1:2]`). The unknown `y` of the component `clk` is
 `clk₊y`, and no parameter or variable may take that name. A name in two categories is an
 error that names both.
 

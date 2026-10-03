@@ -3204,6 +3204,16 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
+@potts_model NameVecUse begin
+    @kinds medium host
+    @parameters vb[1:3] = [1.0, 2.0, 3.0]
+    @variables vw(cell)[1:3] = [0.1, 0.2, 0.3]
+    @after_mcs vw[3] ~ Pre(vw[3]) + vb[3]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2 + vb[3] * vw[3]
+    @sweep Metropolis(; temperature = 10.0)
+end
+
 @testset "one name, one category: vector components" begin
     function rejection(f, words...)
         try
@@ -3246,6 +3256,18 @@ end
     @test rejection(() -> extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
     @test rejection(() -> Potts.PottsSystem(; name = :p, kinds = base.kinds, lattice = base.lattice, sweep = base.sweep,
         parameters = Any[base.parameters...], variables = Any[var.variables...]), "`vb_1`", vec) === :ok
+    # the label reads `parameter `vb_2` (a component of the vector `vb`)`
+    @test rejection(() -> single(quote @kinds medium host; @parameters begin vb_2 = 3.0; vb[1:2] = [1.0, 2.0] end end),
+        "parameter `vb_2` (a component of the vector `vb`)") === :ok
+    # an override vector may not be shorter than the base's (the base reads `vb[3]`, `vw[3]`)
+    @test rejection(() -> model(quote @extend NameVecUse(); @parameters vb[1:2] = [5.0, 6.0] end),
+        "`vb` has 3 components in the base", "`vb[1:2]` would drop `vb_3`") === :ok
+    @test rejection(() -> model(quote @extend NameVecUse(); @variables vw(cell)[1:2] = [0.0, 0.0] end),
+        "`vw` has 3 components in the base", "`vw[1:2]` would drop `vw_3`") === :ok
+    m = model(quote @extend NameVecUse(); @parameters vb[1:4] = [5.0, 6.0, 7.0, 8.0]; @variables vw(cell)[1:3] = [1.0, 1.0, 1.0] end)
+    s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1
+    sol = solve(PottsProblem(m, [ownership => s, kind => [:host]], (0, 2)), SequentialCPM(; proposal = Moore(1)); saveat = 1)
+    @test observe(sol, :vw_3)[end] == [1.0 + 2 * 7.0]
     # the article follows the category
     @test rejection(() -> model(quote @extend NameVecVarBase(); @parameters tot = 1.0 end),
         "already declared as an observed quantity") === :ok
