@@ -726,26 +726,141 @@ SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunc
     parameter_setter(sys, ps, run_hook)
 
 `setp(sys, ps)` for several parameters `ps` of `sys` (an integrator, problem, function or
-model description): a setter that applies them to an integrator as one change. A list that
-also names states goes to SymbolicIndexingInterface's `setp`; an unknown name is an
-`ArgumentError`.
+model description): a setter that applies them to an integrator as one change. A state in
+the list (set those with `setu`, or both with `setsym`) or an unknown name is an
+`ArgumentError` here, before anything is set.
 """
 function parameter_setter(sys, ps, run_hook)
+    isempty(ps) && return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, ps; run_hook)
     for x in ps
-        SymbolicIndexingInterface.is_parameter(sys, x) || SymbolicIndexingInterface.is_variable(sys, x) ||
-            throw(ArgumentError("setp: `$x` is neither a parameter nor a state variable"))
-    end
-    if isempty(ps) || !all(x -> SymbolicIndexingInterface.is_parameter(sys, x), ps)
-        return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, ps; run_hook)
+        SymbolicIndexingInterface.is_parameter(sys, x) && continue
+        SymbolicIndexingInterface.is_variable(sys, x) &&
+            throw(ArgumentError("setp: `$x` is a state variable, not a parameter; set states with " *
+                                "`setu`, or parameters and states together with `setsym`"))
+        throw(_unknown_name(sys, x, "setp"))
     end
     return ParameterSetter(map(x -> SymbolicIndexingInterface.parameter_index(sys, x), ps), ps, run_hook)
 end
+
+_unknown_name(sys, x, fn) = ArgumentError("$fn: `$x` is neither a parameter nor a state variable" *
+                                          _names_hint(sys))
+_names_hint(sys) = ""
+_names_hint(x::Union{PottsIntegrator, PottsProblem, CPMFunction}) = _names_hint(SymbolicIndexingInterface.symbolic_container(x))
+
+# `setsym(integ, [x, y, w])`: the parameters of the list are set as one change (as `setp`),
+# then its states (as `setu`)
+struct SymbolSetter{PS, SS}
+    pset::PS
+    sset::SS
+    pk::Vector{Int}
+    sk::Vector{Int}
+end
+function (s::SymbolSetter)(valp, vals)
+    length(vals) == length(s.pk) + length(s.sk) ||
+        throw(DimensionMismatch("setsym: $(length(s.pk) + length(s.sk)) names, $(length(vals)) values"))
+    s.pset(valp, map(k -> vals[k], s.pk))
+    s.sset(valp, map(k -> vals[k], s.sk))
+    return nothing
+end
+SymbolicIndexingInterface.setsym(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, syms::Union{Tuple, AbstractVector}) =
+    symbol_setter(sys, syms)
+
+"""
+    symbol_setter(sys, syms)
+
+`setsym(sys, syms)` (and `setu`) for a list of names of `sys` (an integrator, problem,
+function or model description). Its parameters are set as one change, as by `setp(sys,
+parameters)` (a rejected value sets none of them); its states as by `setu`. A list of
+states only is SymbolicIndexingInterface's setter; an unknown name is an `ArgumentError`.
+"""
+function symbol_setter(sys, syms)
+    generic() = invoke(SymbolicIndexingInterface.setsym, Tuple{Any, Any}, sys, syms)
+    SymbolicIndexingInterface.symbolic_type(syms) isa SymbolicIndexingInterface.NotSymbolic || return generic()
+    pk, sk = Int[], Int[]
+    for (k, x) in enumerate(syms)
+        if SymbolicIndexingInterface.symbolic_type(x) isa SymbolicIndexingInterface.NotSymbolic ||
+           SymbolicIndexingInterface.is_variable(sys, x)
+            push!(sk, k)                                  # a state (or a raw state index)
+        elseif SymbolicIndexingInterface.is_parameter(sys, x)
+            push!(pk, k)
+        else
+            throw(_unknown_name(sys, x, "setsym"))
+        end
+    end
+    isempty(pk) && return generic()
+    pset = parameter_setter(sys, [syms[k] for k in pk], true)
+    isempty(sk) && return pset
+    sset = invoke(SymbolicIndexingInterface.setsym, Tuple{Any, Any}, sys, [syms[k] for k in sk])
+    return SymbolSetter(pset, sset, pk, sk)
+end
+
 function SymbolicIndexingInterface.set_parameter!(::PottsProblem, v, i)
-    throw(ArgumentError("problem parameters are immutable; use `remake(prob; p = [$(repr(i)) => $v])` " *
+    throw(ArgumentError("problem parameters are immutable; use `remake(prob; p = [$(repr(_index_name(i))) => $v])` " *
                         "(or `setp` on an integrator)"))
 end
 
-SymbolicIndexingInterface.symbolic_container(f::CPMFunction) = f.sys
+# A hand-written problem (`f.sys === nothing`): the fields of a NamedTuple parameter object
+# are its parameters by name (`getp(integ, :T)`, `setp(integ, :T)`, `integ.ps[:T]`); any
+# other parameter object has no names.
+struct ParameterFields{P}
+    p::P            # the parameter object; `nothing` for a function (no parameter object)
+end
+# index of field `name` of a NamedTuple parameter object
+struct ParameterField
+    name::Symbol
+end
+_index_name(i) = i
+_index_name(i::ParameterField) = i.name
+_parameter_container(::Nothing, x) = ParameterFields(SymbolicIndexingInterface.parameter_values(x))
+_parameter_container(sys, x) = x.f
+
+SymbolicIndexingInterface.symbolic_container(f::CPMFunction) = _function_container(f.sys)
+_function_container(::Nothing) = ParameterFields(nothing)
+_function_container(sys) = sys
+SymbolicIndexingInterface.symbolic_container(integ::PottsIntegrator) = _parameter_container(integ.f.sys, integ)
+SymbolicIndexingInterface.symbolic_container(prob::PottsProblem) = _parameter_container(prob.f.sys, prob)
+
+_has_field(s::ParameterFields, x) = s.p isa NamedTuple && x isa Symbol && haskey(s.p, x)
+_names_hint(s::ParameterFields) =
+    s.p isa NamedTuple ? "; the parameters of a problem without a model are the fields of its NamedTuple " *
+                         "parameter object: $(join(keys(s.p), ", "))" :
+    s.p === nothing ? "; a function without a model has no parameter names (use its problem or integrator)" :
+    "; a problem without a model has parameter names only if its parameter object is a NamedTuple " *
+    "(this one is a $(nameof(typeof(s.p))))"
+function _check_parameter_name(s::ParameterFields, x)
+    SymbolicIndexingInterface.symbolic_type(x) isa SymbolicIndexingInterface.NotSymbolic && return nothing
+    _has_field(s, x) || throw(ArgumentError("`$x` is not a parameter" * _names_hint(s)))
+    return nothing
+end
+_check_parameter_name(s, x) = nothing
+
+SymbolicIndexingInterface.is_parameter(s::ParameterFields, x) = _has_field(s, x)
+function SymbolicIndexingInterface.parameter_index(s::ParameterFields, x)
+    _check_parameter_name(s, x)
+    return ParameterField(x)
+end
+SymbolicIndexingInterface.parameter_symbols(s::ParameterFields) = s.p isa NamedTuple ? collect(keys(s.p)) : Symbol[]
+SymbolicIndexingInterface.is_variable(::ParameterFields, x) = false
+SymbolicIndexingInterface.variable_index(::ParameterFields, x) = nothing
+SymbolicIndexingInterface.variable_symbols(::ParameterFields) = Symbol[]
+SymbolicIndexingInterface.all_variable_symbols(::ParameterFields) = Symbol[]
+SymbolicIndexingInterface.all_symbols(s::ParameterFields) = SymbolicIndexingInterface.parameter_symbols(s)
+SymbolicIndexingInterface.is_independent_variable(::ParameterFields, x) = false
+SymbolicIndexingInterface.independent_variable_symbols(::ParameterFields) = Symbol[]
+SymbolicIndexingInterface.is_observed(::ParameterFields, x) = false
+SymbolicIndexingInterface.is_time_dependent(::ParameterFields) = true
+SymbolicIndexingInterface.constant_structure(::ParameterFields) = true
+SymbolicIndexingInterface.default_values(::ParameterFields) = Dict()
+SymbolicIndexingInterface.parameter_values(p::NamedTuple, i::ParameterField) = getfield(p, i.name)
+set_parameter(p::NamedTuple, v, i::ParameterField) = set_parameter(p, v, i.name)
+
+# a name that is not a parameter of a problem without a model is an `ArgumentError` (not
+# SymbolicIndexingInterface's "invalid symbol" error); with a model, `getp` is unchanged
+function SymbolicIndexingInterface.getp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p)
+    _check_parameter_name(SymbolicIndexingInterface.symbolic_container(sys), p)
+    return invoke(SymbolicIndexingInterface.getp, Tuple{Any, Any}, sys, p)
+end
+
 SymbolicIndexingInterface.state_values(prob::PottsProblem) = prob.u0
 SymbolicIndexingInterface.parameter_values(prob::PottsProblem) = prob.p
 SymbolicIndexingInterface.current_time(prob::PottsProblem) = prob.tspan[1]

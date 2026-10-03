@@ -18,6 +18,14 @@ The shape of a value follows the scope of the quantity: a vector over cells for 
 quantities (dead cells and free slots included; filter with `volume > 0`), an array over
 the lattice for site and field quantities, and a number for model quantities.
 
+A setter for a list of names is one change. `setp(integ, [:α, :β])` sets parameters only (a
+variable in its list is an error that points to `setu`). SymbolicIndexingInterface's
+`setsym(integ, [:α, :β, :age])` (exported as its alias `setu`) sets the variables in its
+list, and all the listed parameters together. A rejected value leaves every parameter as it
+was. A problem built from a hand-written `CPMFunction` (no
+model) whose parameter object is a NamedTuple has that tuple's fields as its parameter
+names, so `getp(integ, :T)`, `setp(integ, :T)` and `integ.ps[:T]` work on it.
+
 Names that work: declared variables (`:age`, `:c`), component variables (`:clock₊m`),
 `@observed` quantities, and built-ins (`:volume`, `:kind`, `:generation`, and others the
 model uses, such as `:surface`). Built-ins and observed quantities are read-only.
