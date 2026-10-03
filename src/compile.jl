@@ -38,7 +38,7 @@ struct CompiledPottsSystem
     scratch::Set{Symbol}                              # field variables (double-buffered steps)
     schedule::Dict{Symbol, Vector{Stage}}             # :before_mcs/:after_mcs → ordered stages (D-042)
     pre_snapshots::Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}   # block → (scope, x) copied to x__pre
-    update_pops::Vector{Pair{Symbol, Any}}            # model slots of folds hoisted from updates
+    update_pops::Vector{Pair{Symbol, Any}}            # model slots of folds hoisted from updates and integrals
     energy_snapshots::Vector{Pair{Symbol, Any}}       # model slots of folds in energies (D-041)
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
     discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
@@ -413,6 +413,10 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for ph in (:before_mcs, :after_mcs)
         schedule[ph], pre_snapshots[ph] = _schedule_block(sys, Update[u for u in sys.updates if u.phase === ph],
             gather_names, update_pops)
+    end
+    # folds hoisted out of integral operands: model slots too, computed by the integrals' refresh
+    for fs in last(_integrals_folds(sys)), sl in fs
+        any(q -> q.first === sl.first, update_pops) || push!(update_pops, sl)
     end
     cell_ode_pops = Pair{Symbol, Any}[]
     cell_odes = Tuple{Any, Any}[(x, _hoist_populations(r, cell_ode_pops, gather_names, :__odepop)) for (x, r) in cell_odes]

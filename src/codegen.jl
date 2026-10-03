@@ -373,12 +373,31 @@ end
 # ---------------------------------------------------------------------------------------
 # Phases: synchronous updates, field equations, per-cell ODEs
 
-"""One `CellReduce` per `integral(x)`: the site expression `x` summed over each cell."""
+"""One phase per `integral(x)`: the site expression `x` summed over each cell, after its
+hoisted folds (`_integral_hoist`)."""
 function _integral_phases(c::CompiledPottsSystem, T)
-    env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
-    return Any[CorePotts.CellReduce((:cell, _integral_name(x)), _rgf(:((st, p, ctx, key, mcs, i) -> $(lower(x, env)))))
-               for x in _integrals(c.sys)]
+    reduces, folds = _integral_reduces(c, T)
+    return Any[_seq(_integral_refresh(T, c.gather_names, reduces, folds, (j,))) for j in eachindex(reduces)]
 end
+
+# One `CellReduce` per stored integral operand, and the slots of each one's hoisted folds.
+function _integral_reduces(c::CompiledPottsSystem, T)
+    env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
+    ints, folds = _integrals_folds(c.sys)
+    return Any[CorePotts.CellReduce((:cell, _integral_name(x)), _rgf(:((st, p, ctx, key, mcs, i) -> $(lower(x, env)))))
+               for x in ints], folds
+end
+
+# The refresh of the integrals `js`: their hoisted folds (one model phase, each fold once),
+# then their reductions.
+function _integral_refresh(T, rn, reduces, folds, js)
+    slots = Pair{Symbol, Any}[]
+    for j in js, sl in folds[j]
+        any(q -> q.first === sl.first, slots) || push!(slots, sl)
+    end
+    return Any[(isempty(slots) ? () : (_slots_phase(T, slots, rn),))..., (reduces[j] for j in js)...]
+end
+_seq(phs) = length(phs) == 1 ? only(phs) : _Seq(Tuple(phs))
 
 # Indices (into `_integrals(sys)`) of the integrals `integral(x)` read in the expressions `xs`.
 function _integrals_read(xs, ints)
@@ -386,7 +405,8 @@ function _integrals_read(xs, ints)
     for x in xs
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
-            j = findfirst(z -> isequal(z, _unwrap(arguments(y)[1])), ints)
+            a = _integral_operand(arguments(y)[1])
+            j = findfirst(z -> isequal(z, a), ints)
             j === nothing || j in out || push!(out, j)
         end
     end
@@ -403,7 +423,8 @@ _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_par
 function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     rn = c.gather_names
     cand = nothing
-    integrals = _integral_phases(c, T)
+    reduces, folds = _integral_reduces(c, T)
+    refresh(js) = _integral_refresh(T, rn, reduces, folds, js)
     before = Any[]; after = Any[]
     # integrals: fresh at every MCS boundary (and at init). An update block reads them fresh
     # (D-042: a bare name in the block is its new value): the sweep moves σ, so each integral
@@ -417,11 +438,12 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))..., (r.when for r in s.link_rules)...,
         (x for b in c.discrete for x in b.next)...]
     after_read = _integrals_read(Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., post...], ints)
-    operands = [Set(n for (n, pre, _) in _reads(x) if !pre) for x in ints]
+    # an operand's reads include those of its hoisted folds
+    operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
     written(phase) = Set{Symbol}(_update_name(u) for u in s.updates if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
     after_dirty = dirtied(:after_mcs)
-    isempty(after_read) || append!(after, integrals[j] for j in eachindex(ints) if !(j in after_dirty))
+    isempty(after_read) || append!(after, refresh([j for j in eachindex(ints) if !(j in after_dirty)]))
     # update blocks (D-042): snapshots of previous values, then the ordered stages, each
     # after its hoisted population folds
     for phase in (:before_mcs, :after_mcs)
@@ -437,7 +459,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
             if !isempty(dirty)
                 for j in _integrals_read(Any[(u.eq.rhs for u in stage.updates)..., (x for (_, x) in stage.pops)...], ints)
                     j in stale || continue
-                    push!(dst, stage.every == 1 ? integrals[j] : _Gated(stage.every, integrals[j]))
+                    stage.every == 1 ? append!(dst, refresh((j,))) : push!(dst, _Gated(stage.every, _seq(refresh((j,)))))
                     stage.every == 1 && delete!(stale, j)      # a gated refresh leaves it stale
                 end
             end
@@ -463,7 +485,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         # MCS) or the sweep's temperature (before it)
         if !isempty(stale)
             later = _integrals_read(phase === :after_mcs ? post : Any[s.sweep.temperature], ints)
-            append!(dst, integrals[j] for j in sort!(collect(stale)) if j in later)
+            append!(dst, refresh([j for j in sort!(collect(stale)) if j in later]))
         end
     end
     # energy snapshots (D-041): after the before-MCS updates, constant during the sweep
@@ -506,13 +528,14 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     append!(after, _discrete_phases(c, T))
     append!(after, _link_phases(c, T))
     # at the MCS boundary (after the lifecycle): integrals, then history rings take the values
-    finish = Any[integrals...]
+    boundary = refresh(eachindex(ints))
+    finish = Any[boundary...]
     for (n, _) in sort!(collect(_history_depths(c.sys)); by = first)
         scope = any(x -> info(x).name === n && info(x).role === :model, c.sys.variables) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
     phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
-        at_init = (integrals..., snapshots...))
+        at_init = (boundary..., snapshots...))
     return phases, cand
 end
 
@@ -1082,6 +1105,15 @@ _Gated(every::Integer, phase) = _Gated(every, 0, phase)
     CorePotts._run_phase(g, st, p, ctx, key, mcs, backend, nothing)
 CorePotts._run_phase(g::_Gated{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
     mcs % g.every == g.offset ? CorePotts._run_phase(g.phase, st, p, ctx, key, mcs, backend, stats) : 0
+
+"""Phases run one after the other as one (an integral's hoisted folds, then its reduction)."""
+struct _Seq{P <: Tuple}
+    phases::P
+end
+(s::_Seq{P})(st, p, ctx, key, mcs, backend) where {P} =
+    CorePotts._run_phase(s, st, p, ctx, key, mcs, backend, nothing)
+CorePotts._run_phase(s::_Seq{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
+    CorePotts._run_phases(s.phases, st, p, ctx, key, mcs, backend, stats)
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)

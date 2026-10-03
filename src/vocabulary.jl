@@ -226,14 +226,17 @@ state after the copy sweep, and the new value of every variable of `x` written b
 same block (the reading update runs after the writer, and the integral is recomputed in
 between). Recomputed at the start of the after-MCS phases, after each update that writes
 one of its variables when something reads it later, and at the MCS boundary.
-`integral(Pre(x))` (update blocks only) folds the values before the block.
+`integral(Pre(x))` (update blocks only) folds the values before the block. A fold over
+`cells` or `sites` in `x` that does not read the site (e.g. `mean(volume[c] for c in
+cells)`) is the same at every site: it is computed once per recomputation, not per site.
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
 """Cell-state name of the tracker for `integral(x)`."""
 _integral(x) = cell_integral(x isa Num ? x : Num(x))
-# named by content (`_symkey`), not by Symbolics' hash, which differs between builds (D-107)
-_integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(x)); base = 62))
+# named by content (`_symkey`), not by Symbolics' hash, which differs between builds (D-107),
+# of the operand as stored (its site-independent folds read from slots, D-110)
+_integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(_integral_operand(x))); base = 62))
 
 """`history_lag(x, k)`: `x` at the end of the MCS `k` before the current one."""
 history_lag(x, k) = error("`history_lag` is symbolic-only")
