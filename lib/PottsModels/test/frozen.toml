@@ -186,3 +186,8 @@ decision = "D-106"
 path = "acceptance/p6_0ah_canonical_term_order.jl"
 sha256 = "b38d76fc59b39f6b523b31a06be6a01ac38c9537074785b03e587889f6005f86"
 decision = "D-107"
+
+[[file]]
+path = "acceptance/p6_0ab_api_defects.jl"
+sha256 = "7aca73bda09aabd0954e42ba7cdd723f212137f9661e2ab2dd1bab217783f785"
+decision = "D-111"
