@@ -1734,3 +1734,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** One round, approved: fused = unfused bitwise over 252 comparisons (CPU and Metal, every fallback form, `Every(2)`, callbacks, `reinit!`, resume); coordinator: no launch for empty copies, docstring ID removed, follow-ups as P6.0af.
 - **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0.
 - **Gate: pass.** CPU 0.994–1.034. Metal: Merks 142.77 ns/site (0.196 of its baseline; now faster than the CPU's 286), OpenVT 0.625, Akeeb 0.657, GG 1.016, Wortel 1.122 (flagged; reviewer's reversed A/B 0.998). Metal rows re-baselined on this idle run: Merks 142.77, OpenVT 50.36, Akeeb 123.46.
+
+## 2026-10-02 — P6.0x merged: a gather in a cell-ODE rate allocates nothing (D-103)
+
+- **The change.** Fixed-step ODE systems whose rates contain a gather are written out in place instead of calling a per-cell `rhs` closure (Julia 1.12 builds it as an opaque closure on every call when the rate is not inlined): 480–1472 B per warm MCS → 0, values bitwise unchanged, fingerprints of other models unchanged. It also fixes Metal compilation of gather ODEs (all failed before).
+- **Review.** One round; the coordinator corrected the rationale: the closure, not the gather, is the cause, so non-gather rates that are not inlined still allocate and fail on Metal — P6.0ag (D-104), started.
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate: pass.** CPU 0.987–1.021; Metal Merks 0.963, OpenVT 1.003, Akeeb 1.006, Wortel 1.043, GG 1.087 (flagged; GG has no ODE, so this change does not touch its step — load from concurrent agents).

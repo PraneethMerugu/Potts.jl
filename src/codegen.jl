@@ -592,7 +592,8 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = f
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
     outs = scratch ? _ode_scratch_name.(names) : names
-    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes];
+        expand = _ode_expand(odes))
     live = scratch ? :(if !(@inbounds st.cell.volume[c] > 0)
                          $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
                          return nothing
@@ -612,7 +613,8 @@ function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = 
     env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
     outs = scratch ? _ode_scratch_name.(names) : names
-    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes])
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes];
+        expand = _ode_expand(odes))
     return :((st, p, ctx, key, mcs) -> begin
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
@@ -859,26 +861,40 @@ function _index_reads!(out, x, subs)
     return out
 end
 
-# `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`.
-function _ode_steps(solver, T, dt, ys, rates)
+# Whether the fixed-step rates are expanded in place rather than called through a closure
+# (P6.0x, D-103). A gather's loop makes the rate too large to inline, and a closure inside a
+# RuntimeGeneratedFunction body is lowered to an opaque closure that is then built on every
+# call with its captures (`st`, `p`, `ctx`, `c`) on the heap: 272–416 B per cell per MCS.
+# Expanded, the rates are plain code of the phase, with the same arithmetic (bitwise the
+# same values). Rates without a gather keep the closure so their code (and fingerprints)
+# are unchanged — but any rate the compiler does not inline (a long sum, an `ifelse`
+# chain, a Hill term, a population fold) still builds the closure per call, allocates,
+# and fails to compile on Metal; expanding every fixed-step system is P6.0ag.
+_ode_expand(odes) = any(((_, rate),) -> _has_op(rate, gather), odes)
+
+# `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`; with
+# `expand` each rate evaluation is the rates in a `let` binding `tt` and `ys` (`_ode_expand`).
+function _ode_steps(solver, T, dt, ys, rates; expand = false)
     n = length(ys)
     substeps = something(solver.substeps, 1)
     h = :($T($dt / $substeps))
-    f = :(rhs = (tt, $(ys...)) -> ($(rates...),))
+    f = expand ? nothing : :(rhs = (tt, $(ys...)) -> ($(rates...),))
+    bindings(t, args) = Expr(:block, :(tt = $t), [:($(ys[i]) = $(args[i])) for i in 1:n]...)
+    call(t, args...) = expand ? Expr(:let, bindings(t, args), :(($(rates...),))) : :(rhs($t, $(args...)))
     lowerclip = solver isa ExplicitEuler ? solver.lower : nothing
     clip(v) = lowerclip === nothing ? v : :(max($v, $T($lowerclip)))
     step = if solver isa RK4
         k(j) = [Symbol(:k, j, :_, i) for i in 1:n]
         quote
-            ($(k(1)...),) = rhs(tt, $(ys...))
-            ($(k(2)...),) = rhs(tt + h / 2, $([:($(ys[i]) + h / 2 * $(k(1)[i])) for i in 1:n]...))
-            ($(k(3)...),) = rhs(tt + h / 2, $([:($(ys[i]) + h / 2 * $(k(2)[i])) for i in 1:n]...))
-            ($(k(4)...),) = rhs(tt + h, $([:($(ys[i]) + h * $(k(3)[i])) for i in 1:n]...))
+            ($(k(1)...),) = $(call(:tt, ys...))
+            ($(k(2)...),) = $(call(:(tt + h / 2), [:($(ys[i]) + h / 2 * $(k(1)[i])) for i in 1:n]...))
+            ($(k(3)...),) = $(call(:(tt + h / 2), [:($(ys[i]) + h / 2 * $(k(2)[i])) for i in 1:n]...))
+            ($(k(4)...),) = $(call(:(tt + h), [:($(ys[i]) + h * $(k(3)[i])) for i in 1:n]...))
             ($(ys...),) = ($([clip(:($(ys[i]) + h / 6 * ($(k(1)[i]) + 2 * $(k(2)[i]) + 2 * $(k(3)[i]) + $(k(4)[i])))) for i in 1:n]...),)
         end
     else
         quote
-            ($(Symbol.(:k1_, 1:n)...),) = rhs(tt, $(ys...))
+            ($(Symbol.(:k1_, 1:n)...),) = $(call(:tt, ys...))
             ($(ys...),) = ($([clip(:($(ys[i]) + h * $(Symbol(:k1_, i)))) for i in 1:n]...),)
         end
     end
