@@ -85,12 +85,17 @@ lines!(ax, 1:80, vec(sum(c_end; dims = 2)) ./ 40)
 fig
 ```
 
-!!! warning "Choose enough substeps"
-    An explicit step is stable only if it is small enough for the diffusion coefficient.
-    `ExplicitEuler()` without `substeps` takes the smallest stable count for the
-    diffusion alone, which leaves no margin for reaction terms; give `substeps` with some
-    room to spare. A field that blows up to huge positive and negative values is the sign
-    of too few substeps.
+!!! note "How many substeps"
+    An explicit step is stable only if it is short enough for the diffusion coefficient
+    and the reaction rate. `ExplicitEuler()` without `substeps` chooses the count itself,
+    from the current parameters: the smallest `n` with
+    ``\frac{\Delta t}{n}\left(D \sum_d 4/h_d^2 + k\right) \le 1.8``, where ``k``
+    bounds the reaction's ``|\partial f/\partial c|`` (`k` for `- k * c`, also with an
+    indicator such as `(kind == medium)`). The margin below the stability limit 2 damps
+    grid-scale noise. A number, as here, is a minimum: the automatic count wins when it is
+    larger. When the reaction is not linear in the field (`- k * c^2`), its rate is not
+    counted and the problem warns; give `substeps` with room to spare. A field that blows
+    up to huge positive and negative values is the sign of too few substeps.
 
 ## Chemotaxis
 

@@ -101,8 +101,9 @@ Explicit Euler for `∂c/∂t = rate(st, p, ctx, key, mcs, i, c)` over one MCS o
 in `substeps` equal steps (a number, or a function of the parameters `p -> n` evaluated
 each MCS, so a `remake` with a larger diffusion coefficient stays stable), optionally clipped below at `lower` after each step (legacy
 Potts clips concentrations at 0). Each step writes the scratch array and publishes it, so the
-rate function sees a consistent field (bulk-synchronous). Stability of diffusion needs
-`dt/substeps · D · Σ_d 2/h_d² ≤ 1`; see `stable_substeps`.
+rate function sees a consistent field (bulk-synchronous). Explicit Euler is stable when
+`dt/substeps · (D · Σ_d 4/h_d² + k) ≤ 2`, with `k` a bound on the reaction's `|∂f/∂c|`; see
+`stable_substeps`.
 """
 struct FieldStep{F <: Part, S <: Part, R, T, N, L}
     field::F
@@ -141,5 +142,20 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     return 2 * nsub
 end
 
-"""Smallest substep count keeping explicit diffusion stable: `dt·D·Σ 2/h_d² / substeps ≤ 1`."""
-stable_substeps(D, dt, h) = max(1, ceil(Int, dt * D * sum(x -> 2 / x^2, h)))
+"""
+    stable_substeps(D, dt, h, k = 0) -> Int
+
+Substep count for explicit Euler on `∂c/∂t = D Δc + f(c)` over a step of length `dt`, on a
+lattice with spacings `h` (a tuple, one per axis), when `|∂f/∂c| ≤ k`: the smallest `n ≥ 1`
+with
+
+    ρ = dt/n · (D · Σ_d 4/h_d² + k) ≤ 1.8.
+
+`D · Σ_d 4/h_d² + k` bounds the spectral radius of the linearized step operator (the
+lattice checkerboard is the fastest diffusion mode), and explicit Euler is stable for
+`ρ ≤ 2`. The margin to 1.8 damps every mode by at least 20 % per substep, so grid-scale
+noise is removed rather than left ringing at the edge of stability, at about 10 % more
+substeps than the edge count. The bound holds on square lattices with any boundary; on
+hexagonal lattices (fastest mode `6D/h²`) it is conservative.
+"""
+stable_substeps(D, dt, h, k = 0) = max(1, ceil(Int, dt * (D * sum(x -> 4 / x^2, h) + k) / 1.8))

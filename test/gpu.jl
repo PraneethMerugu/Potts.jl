@@ -374,6 +374,14 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v3_launch_fusion.jl"))
 end
 
+# P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's Metal testsets
+# (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
+# run only where Metal is loaded (here).
+module P60agOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0ag_ode_expand_all.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")

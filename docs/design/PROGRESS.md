@@ -1734,3 +1734,27 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** One round, approved: fused = unfused bitwise over 252 comparisons (CPU and Metal, every fallback form, `Every(2)`, callbacks, `reinit!`, resume); coordinator: no launch for empty copies, docstring ID removed, follow-ups as P6.0af.
 - **Merge checks.** CorePotts (QA), CorePotts on Metal, Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0.
 - **Gate: pass.** CPU 0.994–1.034. Metal: Merks 142.77 ns/site (0.196 of its baseline; now faster than the CPU's 286), OpenVT 0.625, Akeeb 0.657, GG 1.016, Wortel 1.122 (flagged; reviewer's reversed A/B 0.998). Metal rows re-baselined on this idle run: Merks 142.77, OpenVT 50.36, Akeeb 123.46.
+
+## 2026-10-02 — P6.0x merged: a gather in a cell-ODE rate allocates nothing (D-103)
+
+- **The change.** Fixed-step ODE systems whose rates contain a gather are written out in place instead of calling a per-cell `rhs` closure (Julia 1.12 builds it as an opaque closure on every call when the rate is not inlined): 480–1472 B per warm MCS → 0, values bitwise unchanged, fingerprints of other models unchanged. It also fixes Metal compilation of gather ODEs (all failed before).
+- **Review.** One round; the coordinator corrected the rationale: the closure, not the gather, is the cause, so non-gather rates that are not inlined still allocate and fail on Metal — P6.0ag (D-104), started.
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate: pass.** CPU 0.987–1.021; Metal Merks 0.963, OpenVT 1.003, Akeeb 1.006, Wortel 1.043, GG 1.087 (flagged; GG has no ODE, so this change does not touch its step — load from concurrent agents).
+
+## 2026-10-03 — P6.0y merged: the automatic substep count keeps a margin and counts linear reaction (D-102)
+
+- **The change.** `ExplicitEuler()` without `substeps` picks `n = max(1, ceil(dt·(D·Σ4/h² + k)/1.8))` from the live parameters, k a bound on the reaction's |∂f/∂c| (parameters, indicators, `rand()`, kind tables, `ifelse`; another field's Δ is a source); state-dependent rates fall back to k = 0 with a build-time warning, and a negative diffusion coefficient warns. Diffusion–decay that blew up (2D, D = 0.5, k = 0.2: ×1.21 per MCS) now decays; explicit counts above the new one are unchanged bit for bit (Merks' 15).
+- **Review.** Three rounds (a `rand()` reaction no longer built; per-kind decay fell back; cross-diffusion cancelled the own coefficient, also on the base), then approved.
+- **Merge.** Merks' fingerprint changes with the substep function; `p6_0x_gather_ode_alloc.jl`'s Merks pin re-recorded (D-102 addendum).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate.** CPU (idle rerun) 0.967–1.016. Metal (under concurrent review load) 1.008–1.046, OpenVT 1.160 flagged — OpenVT has no field, so this change does not touch its step.
+
+## 2026-10-03 — P6.0ag merged: every fixed-step ODE system is expanded in place (D-104, D-105)
+
+- **The change.** The per-cell `rhs` closure is gone: every fixed-step rate evaluation (Euler, RK4 stages) is an in-place block. Rates that were not inlined (Hill circuits, `ifelse` chains, long sums, population folds) no longer allocate (48–640 B per MCS → 0) and now compile on Metal (all failed with `jl_new_opaque_closure_jlcall`), matching the CPU Float32 run (Hill within 4 ulp of device math). Fingerprints of ODE models change by design.
+- **Finding (D-105).** Symbolics orders sum terms by the hashes of Potts-registered operators, which change with each package build, so rates with `population`/`gather`/`at` can move by a few ulp between builds of identical source; P6.0ag's model-scope pins compare within 8 ulp; canonical term order is P6.0ah.
+- **Review.** One round, approved (closure removal bitwise-safe over 752 runs; full Metal suite completes).
+- **Merge.** Merks' fingerprint pin in this file re-recorded for P6.0y's substep function (D-105 addendum).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate.** CPU 0.968–1.020; Metal 1.007–1.043, GG 1.125 and OpenVT 1.292 flagged; `ab.jl` OpenVT against d5bfd3dc (before P6.0x/y/ag), 8 rounds: 1.016 (55.4 → 56.6 ns/site, every round), so the flag was noise and the three merges cost OpenVT about 1.6 % on Metal.

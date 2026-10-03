@@ -597,9 +597,13 @@ Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neig
 
 Explicit Euler over one MCS in `substeps` steps, clipping the result at `lower` after every
 step if given (legacy Potts clips concentrations at 0). As a `field_solver` (a
-`PottsProblem` keyword), `substeps = nothing` derives the stable count from the
-diffusion coefficient and an explicit `n` is a minimum; as an `ode_solver` (the default),
-`nothing` is one step.
+`PottsProblem` keyword), `substeps = nothing` takes the smallest count `n` with
+`mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8` (`CorePotts.stable_substeps`), from the
+current parameters: `D` is the diffusion coefficient and `k` bounds the reaction's
+`|∂f/∂c|` (for a reaction linear in the field, the size of its coefficient, indicators such
+as `(kind == medium)` and `rand()` counting as 1 and a kind table `δ[kind]` as its largest
+entry; a reaction nonlinear in the field is not counted, with a warning).
+An explicit `n` is a minimum. As an `ode_solver` (the default), `nothing` is one step.
 """
 Base.@kwdef struct ExplicitEuler
     substeps::Union{Nothing, Int} = nothing
