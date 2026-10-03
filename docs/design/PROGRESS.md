@@ -1749,3 +1749,12 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge.** Merks' fingerprint changes with the substep function; `p6_0x_gather_ode_alloc.jl`'s Merks pin re-recorded (D-102 addendum).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
 - **Gate.** CPU (idle rerun) 0.967–1.016. Metal (under concurrent review load) 1.008–1.046, OpenVT 1.160 flagged — OpenVT has no field, so this change does not touch its step.
+
+## 2026-10-03 — P6.0ag merged: every fixed-step ODE system is expanded in place (D-104, D-105)
+
+- **The change.** The per-cell `rhs` closure is gone: every fixed-step rate evaluation (Euler, RK4 stages) is an in-place block. Rates that were not inlined (Hill circuits, `ifelse` chains, long sums, population folds) no longer allocate (48–640 B per MCS → 0) and now compile on Metal (all failed with `jl_new_opaque_closure_jlcall`), matching the CPU Float32 run (Hill within 4 ulp of device math). Fingerprints of ODE models change by design.
+- **Finding (D-105).** Symbolics orders sum terms by the hashes of Potts-registered operators, which change with each package build, so rates with `population`/`gather`/`at` can move by a few ulp between builds of identical source; P6.0ag's model-scope pins compare within 8 ulp; canonical term order is P6.0ah.
+- **Review.** One round, approved (closure removal bitwise-safe over 752 runs; full Metal suite completes).
+- **Merge.** Merks' fingerprint pin in this file re-recorded for P6.0y's substep function (D-105 addendum).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate.** CPU 0.968–1.020; Metal 1.007–1.043, GG 1.125 and OpenVT 1.292 flagged; `ab.jl` OpenVT against d5bfd3dc (before P6.0x/y/ag), 8 rounds: 1.016 (55.4 → 56.6 ns/site, every round), so the flag was noise and the three merges cost OpenVT about 1.6 % on Metal.

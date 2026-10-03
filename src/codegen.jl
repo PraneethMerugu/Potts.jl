@@ -592,8 +592,7 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = f
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
     outs = scratch ? _ode_scratch_name.(names) : names
-    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes];
-        expand = _ode_expand(odes))
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
     live = scratch ? :(if !(@inbounds st.cell.volume[c] > 0)
                          $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
                          return nothing
@@ -613,8 +612,7 @@ function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = 
     env = _model_env(T, c.gather_names; key = :key, extra = (bind..., :time => :tt))
     names = [info(x).name for (x, _) in odes]
     outs = scratch ? _ode_scratch_name.(names) : names
-    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes];
-        expand = _ode_expand(odes))
+    body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes])
     return :((st, p, ctx, key, mcs) -> begin
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
@@ -861,26 +859,20 @@ function _index_reads!(out, x, subs)
     return out
 end
 
-# Whether the fixed-step rates are expanded in place rather than called through a closure
-# (P6.0x, D-103). A gather's loop makes the rate too large to inline, and a closure inside a
-# RuntimeGeneratedFunction body is lowered to an opaque closure that is then built on every
-# call with its captures (`st`, `p`, `ctx`, `c`) on the heap: 272–416 B per cell per MCS.
-# Expanded, the rates are plain code of the phase, with the same arithmetic (bitwise the
-# same values). Rates without a gather keep the closure so their code (and fingerprints)
-# are unchanged — but any rate the compiler does not inline (a long sum, an `ifelse`
-# chain, a Hill term, a population fold) still builds the closure per call, allocates,
-# and fails to compile on Metal; expanding every fixed-step system is P6.0ag.
-_ode_expand(odes) = any(((_, rate),) -> _has_op(rate, gather), odes)
-
-# `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`; with
-# `expand` each rate evaluation is the rates in a `let` binding `tt` and `ys` (`_ode_expand`).
-function _ode_steps(solver, T, dt, ys, rates; expand = false)
+# `substeps` fixed steps of a fixed-step `solver` over one MCS (`dt`), on locals `ys`. The
+# rates are expanded in place: each rate evaluation (Euler's stage, RK4's four) is the rates
+# in a `let` binding `tt` and `ys`, plain code of the phase (D-103, D-104). There is no
+# closure path: a `rhs` closure inside a RuntimeGeneratedFunction body is lowered by Julia
+# 1.12 to an opaque closure, built on every call with its captures (`st`, `p`, `ctx`, `c`)
+# on the heap whenever the compiler does not inline the rate (a gather's loop, a long sum,
+# an `ifelse` chain, a Hill term, a population fold): 48–640 B per cell per MCS on the CPU,
+# and a Metal compile failure (`jl_new_opaque_closure_jlcall`).
+function _ode_steps(solver, T, dt, ys, rates)
     n = length(ys)
     substeps = something(solver.substeps, 1)
     h = :($T($dt / $substeps))
-    f = expand ? nothing : :(rhs = (tt, $(ys...)) -> ($(rates...),))
     bindings(t, args) = Expr(:block, :(tt = $t), [:($(ys[i]) = $(args[i])) for i in 1:n]...)
-    call(t, args...) = expand ? Expr(:let, bindings(t, args), :(($(rates...),))) : :(rhs($t, $(args...)))
+    call(t, args...) = Expr(:let, bindings(t, args), :(($(rates...),)))
     lowerclip = solver isa ExplicitEuler ? solver.lower : nothing
     clip(v) = lowerclip === nothing ? v : :(max($v, $T($lowerclip)))
     step = if solver isa RK4
@@ -900,7 +892,6 @@ function _ode_steps(solver, T, dt, ys, rates; expand = false)
     end
     return quote
         h = $h
-        $f
         for s in 1:$substeps
             tt = $T(mcs) * $T($dt) + $T(s - 1) * h
             $step
