@@ -1758,3 +1758,8 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge.** Merks' fingerprint pin in this file re-recorded for P6.0y's substep function (D-105 addendum).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
 - **Gate.** CPU 0.968–1.020; Metal 1.007–1.043, GG 1.125 and OpenVT 1.292 flagged; `ab.jl` OpenVT against d5bfd3dc (before P6.0x/y/ag), 8 rounds: 1.016 (55.4 → 56.6 ns/site, every round), so the flag was noise and the three merges cost OpenVT about 1.6 % on Metal.
+
+## 2026-10-03 — P6.1e merged: `graner_glazier_aggregate` defaults to a 60-site margin (D-106)
+
+- **The change.** Default margin 10 → 60 on the periodic lattice (side `2⌈√(40n/π)⌉ + 1 + 2margin`): long runs no longer drift onto the edge or join the periodic image; explicit margins bitwise unchanged. Non-frozen tests that need a small aggregate pass `margin = 10`.
+- **Checks.** Frozen P6.1e 92/92, P6.1b2 12/12; PottsModels, Potts and docs exit 0 (branch based on the current `monorepo`; no step-loop change, gate not rerun).

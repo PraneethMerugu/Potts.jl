@@ -226,7 +226,7 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 # | Run length | to ``10^4`` paper MCS | 100 paper MCS on this page, to keep the docs build short |
 # | Cells | about 1000 | 200 on this page (1000 in the paper run above) |
 # | Starting aggregate | relaxed as one kind for 400 paper MCS before the kinds are assigned (PRE §II D3) | Voronoi cells of mean area 40, not relaxed |
-# | Boundary | not stated | periodic, with a 10-site medium margin |
+# | Boundary | not stated | periodic, with a 10-site medium margin on this short run (60 in the paper run and by default in `graner_glazier_aggregate`) |
 # | Measurement | on a copy annealed for 2 paper MCS at ``T = 0`` (PRE p. 2134) | on the raw states |
 # | Target area per kind | one value, except the cavity run (PRE Fig. 28) | one `V₀`; a per-kind table `V₀[kind]` gives the cavity run's targets |
 #
@@ -240,7 +240,9 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 
 @named gg = GranerGlazier(; lattice = (side, side))
 
-# Its starting states are `graner_glazier_aggregate(n)`, the aggregate built above, and
+# Its starting states are `graner_glazier_aggregate(n)`, the aggregate built above but with
+# a 60-site medium margin by default (a long run drifts, and a 10-site margin lets it reach
+# the lattice edge and its periodic image; pass `margin` for a short run), and
 # `graner_glazier_state()`, 64 cells made by the PRE's relaxation recipe on the default
 # 72 × 72 lattice.
 

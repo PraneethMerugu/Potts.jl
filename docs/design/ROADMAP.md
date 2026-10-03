@@ -375,7 +375,7 @@ Every item's acceptance also includes the standing checks:
   MersenneTwister to StableRNG, so the frozen `papers.jl` band must be revalidated.
   StableRNG only (D-075): the `clock`/`cue` expression defaults move to P6.4a.
 
-- [ ] **P6.1e** `graner_glazier_aggregate`'s default 10-site margin lets a long sorting run join the aggregate to its periodic image (seen in the 10⁴-MCS paper run, which uses `margin = 60`). Raise the default margin (≥ 60) or make the default lattice closed, and re-check the frozen sorting reproductions that call it.
+- [x] (merge, 2026-10-03; D-106) **P6.1e** `graner_glazier_aggregate`'s default 10-site margin lets a long sorting run join the aggregate to its periodic image (seen in the 10⁴-MCS paper run, which uses `margin = 60`). Raise the default margin (≥ 60) or make the default lattice closed, and re-check the frozen sorting reproductions that call it.
 
 ### Step 2 — Akeeb
 
