@@ -1777,3 +1777,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds; round 1 approved with notes (the post-partition rethrow, the compile-on-empty-range comment, launch counts at the handover), done in round 2.
 - **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0 (a first run used wrong test projects; rerun).
 - **Gate.** CPU 0.991–1.056 under three concurrent agents (GG seq 1.053, OpenVT cb 1.056 flagged; no CPU step change). Metal under the same load 1.2–2.0×; `ab.jl` against 2f54c1e9, 4 rounds: GG 0.981, Wortel 1.011, Merks 0.874, OpenVT 1.007, Akeeb 0.986.
+
+## 2026-10-03 — P6.0aj merged: a model build keeps its state per build (D-109)
+
+- **The change.** The bound-variable/draw counter, the lattice dimension that `centroid()` reads and the `@extend` state are one per-build state in a `ScopedValue`, so models built concurrently (threads, or tasks that yield mid-build) get the same generated code, names and fingerprints as built serially; 4 threads used to give 16–21 of 32 builds different code, reused names within a model and `centroid()` build errors. Serial output unchanged for all 225 systems checked. Only an `@extend` base continues the outer build; any other model built inside a body is its own build (it used to reset the outer model's lattice dimension).
+- **Review.** Two rounds (round 2: the one-shot base flag), approved.
+- **Merge checks.** Run together with P6.0ab's (below).
