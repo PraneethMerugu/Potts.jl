@@ -116,6 +116,10 @@ end
   the same variable replaces the base's.
 - An extension without `@lattice`, `@sweep` or `@kinds` inherits the base's. An extension
   that adds kinds lists the base's first: `@kinds medium blob wall[frozen]`.
+- Redeclaring a base name in its own category overrides it: `@parameters λ = 3.0` gives the
+  base's `λ` a new default, `@variables x(cell) = 1.0` replaces the base's variable `x`. A
+  base name cannot change category (a base parameter `x` and an extension variable `x(cell)`):
+  that is an error that names both (see [Names](#Names)).
 
 `extend(sys, base)` is the functional form.
 
@@ -136,6 +140,12 @@ Some names are built in (`volume`, `surface`, `kind`, `kind′`, `owner`, `sourc
 `target`, `new`, `old`, `mcs`, `position`, `distance`, `id`, …) and cannot be declared. `a`
 and `b` are reserved for the two cells of a link. `t` and `D` are the time variable and
 derivative of ModelingToolkit. Declaring any of these is an error that names the clash.
+
+A model has one namespace: a name is a kind, a parameter, a variable, an observed quantity,
+a relation, a relationship or a component, never two of these. This holds for the names a
+model inherits through `@extend` (or `extend`) and for a component's quantities: the
+unknown `y` of the component `clk` is `clk₊y`, and no parameter or variable may take that
+name. A name in two categories is an error that names both.
 
 A model constructor is a Julia function in your module, so avoid names that clash with
 functions you load (for example `Toggle`, `Axis` or `Label` from Makie): Julia warns about

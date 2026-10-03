@@ -51,7 +51,7 @@ Base.@kwdef struct PottsSystem
     sweep::SweepSpec
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
-    PottsSystem(args...) = _check_primed_names(_check_reserved_names(new(args...)))
+    PottsSystem(args...) = _check_primed_names(_check_name_categories(_check_reserved_names(new(args...))))
 end
 
 # The link endpoints `a`, `b` (bound in edge terms and link rules) are reserved globally

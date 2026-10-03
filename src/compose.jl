@@ -15,6 +15,8 @@ changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
 divisions, relationships and link rules accumulate, base first (a division rule for kinds
 the base divides at another cadence warns: both rules apply, each at its own `Every`).
+A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
+is an `ArgumentError` naming both.
 """
 function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
     length(sys.kinds) >= length(base.kinds) && sys.kinds[1:length(base.kinds)] == base.kinds ||
@@ -76,7 +78,45 @@ function _check_primed_names(sys::PottsSystem)
     return sys
 end
 
-_kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
+"""
+One name, one category: kinds, parameters (a vector by its vector name), variables (every
+scope), observed quantities, relations, relationships and components share one namespace,
+and so do a component's namespaced quantities (`clk₊y` for the unknown or parameter `y` of
+the component `clk`). `@potts_model` rejects a second category within one model
+(`_declare!`); this rejects it however the `PottsSystem` was built (`@extend`, `extend`, a
+programmatic build), so `lookup`, `observe` and `getu` agree on every name. A name declared
+twice in one category is not a clash (`extend` keeps the extension's).
+"""
+function _check_name_categories(sys::PottsSystem)
+    seen = Dict{Symbol, String}()
+    function claim(n::Symbol, what::String)
+        old = get!(seen, n, what)
+        old == what || throw(ArgumentError(
+            "$(nameof(sys)): $what `$n`: `$n` is already declared as a $old (kinds, parameters, variables, " *
+            "observed quantities, relations, relationships and components share one namespace); rename one of them"))
+        return nothing
+    end
+    foreach(k -> claim(k, "kind"), sys.kinds)
+    for (what, xs) in (("parameter", sys.parameters), ("variable", sys.variables))
+        for x in xs
+            i = info(x)
+            i === nothing && continue
+            claim(something(get(i.options, :vector, nothing), i.name), what)
+        end
+    end
+    foreach(o -> (i = info(o.var); i === nothing || claim(i.name, "observed quantity")), sys.observed)
+    foreach(k -> k === :contact || claim(k, "relation"), keys(sys.relations))
+    foreach(r -> claim(r.name, "relationship"), sys.relationships)
+    for c in sys.components
+        claim(c.name, "component")
+        for u in Iterators.flatten((ModelingToolkitBase.unknowns(c.system), ModelingToolkitBase.parameters(c.system)))
+            claim(Symbol(c.name, :₊, SymbolicIndexingInterface.getname(u)), "quantity of the component `$(c.name)`")
+        end
+    end
+    return sys
+end
+
+_kinds_overlap(a, b) =isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
 
 """Items of `base` whose key no item of `new` shares."""
 _unreplaced(base, new, key) = (keys = Set(key(x) for x in new); filter(x -> !(key(x) in keys), base))
