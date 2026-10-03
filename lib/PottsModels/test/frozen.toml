@@ -216,3 +216,8 @@ decision = "D-113"
 path = "acceptance/p6_0ai_integral_fold_hoist.jl"
 sha256 = "c7f767d8968b0d19372629bef091b67f09771d8e198898ac75b7ee322ca12c30"
 decision = "D-110"
+
+[[file]]
+path = "acceptance/p6_0an_remake_namedtuple.jl"
+sha256 = "eee0703a97d96d7ec2acd8691dafdb8206163e9053d4efec0a8a633fec30df06"
+decision = "D-115"
