@@ -304,18 +304,51 @@ function _evaluate(v, values)
 end
 
 """
-The parameters as a `Dict` (symbol → value) with the parameters that were not set
-explicitly (`explicit`: names) and are defined by expressions re-derived from the others:
-`b = 3a` follows a new `a` (MTK semantics).
+The parameters as a `Dict` (symbol → value) after a change naming the parameters `changed`
+(names), with values `p`. A computed parameter (its default an expression of parameters, or
+a kind table with expression entries) is re-derived from its expression iff it is not named
+in the change and one of its inputs is named in the change or is itself re-derived by it
+(transitively): `b = 3a` follows a new `a`. Every other parameter keeps its value in `p`, so
+an explicit value survives every change that touches none of its inputs (D-112).
 """
-function _derived_parameters(c::CompiledPottsSystem, p, explicit)
+function _derived_parameters(c::CompiledPottsSystem, p, changed)
+    ps = c.sys.parameters
     values = Dict{Any, Any}()
-    for x in c.sys.parameters
+    redo = _rederived(ps, changed)
+    for x in ps
         i = info(x)
-        values[_unwrap(x)] = (_is_symbolic(i.default) && !(i.name in explicit)) ? i.default : getproperty(p, i.name)
+        values[_unwrap(x)] = i.name in redo ? i.default : getproperty(p, i.name)
     end
+    isempty(redo) && return values
     return _resolve_defaults!(values)
 end
+
+# The names of the computed parameters a change naming `changed` re-derives (D-112): a fixed
+# point over the inputs of the computed defaults. Empty when every parameter is named.
+function _rederived(ps, changed)
+    redo = Set{Symbol}()
+    computed = [x for x in ps if _is_symbolic(info(x).default) && !(info(x).name in changed)]
+    isempty(computed) && return redo
+    byvar = Dict{Any, Symbol}(_unwrap(x) => info(x).name for x in ps)
+    inputs = [Set{Symbol}(byvar[u] for u in _default_inputs(info(x).default) if haskey(byvar, u)) for x in computed]
+    grew = true
+    while grew
+        grew = false
+        for (x, ins) in zip(computed, inputs)
+            n = info(x).name
+            n in redo && continue
+            if any(d -> d in changed || d in redo, ins)
+                push!(redo, n)
+                grew = true
+            end
+        end
+    end
+    return redo
+end
+
+# the parameters an expression default (scalar, or kind-table entries) reads, unwrapped
+_default_inputs(v::AbstractArray) = reduce(vcat, (_default_inputs(e) for e in v); init = Any[])
+_default_inputs(v) = _is_symbolic(v) ? Any[_unwrap(u) for u in Symbolics.get_variables(v)] : Any[]
 
 function _resolve_defaults!(values)
     # parameters may default to expressions of other parameters; a kind table's entries may
