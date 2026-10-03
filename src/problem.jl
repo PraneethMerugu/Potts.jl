@@ -27,18 +27,31 @@ end
 
 The code Potts generates for model `sys` (a `PottsSystem` or `CompiledPottsSystem`) in scalar
 type `T` with the solver keywords of `PottsProblem`, as expressions: `delta_H`, `commit!`,
-`constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives), and `phases`,
-every other function (MCS phases, lifecycle), in build order. Each is `(args…) -> body` and
-can be `eval`'d into a plain function (e.g. for JET).
+`constraint`, `temperature`, `total_energy`, `delta_E` (ΔH without drives), `phases`, every
+other function (MCS phases, lifecycle), in build order, and `lifecycle`: `nothing` for a
+model without divisions, else `(; trigger, before)`, the trigger (the event of a cell) and the
+cell update that runs in the trigger's work item (`Lifecycle.before`), or `nothing`. That
+update is the model's last after-MCS cell update when the trigger reads the columns it
+writes only at its own cell; it then runs with the lifecycle and is not among `phases`.
+Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
 """
 function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in c.sys.parameters)
-    _, phases = _recording(() -> (_phases(c, T, values, spec), _lifecycle(c, T)))
+    (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
+    lc, lex = _recording(() -> _lifecycle(c, T))
+    lifecycle = nothing
+    if lc !== nothing
+        # the problem's own fusion decision (`_problem_function`)
+        before = _fuse_before(c, T, phases0, lc, cand)[2].before === nothing ? nothing : cand.expr
+        before === nothing || filter!(ex -> ex !== before, phases)
+        lifecycle = (; trigger = first(lex), before)            # `_lifecycle` compiles the trigger first
+    end
+    append!(phases, lex)
     return (; delta_H = _delta_H_expr(c, T), commit! = _commit_expr(c, T), constraint = _constraint_expr(c, T),
         temperature = _temperature_expr(c, T), total_energy = _total_energy_expr(c, T),
-        delta_E = _delta_H_expr(c, T; drives = false), phases)
+        delta_E = _delta_H_expr(c, T; drives = false), phases, lifecycle)
 end
 """
     PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],
@@ -278,7 +291,9 @@ function _parameter_values(c::CompiledPottsSystem, opd)
     return _resolve_defaults!(values)
 end
 
+# a scalar expression, or a kind table (vector/matrix) with an expression among its entries
 _is_symbolic(v) = v isa Num || v isa SymbolicUtils.BasicSymbolic
+_is_symbolic(v::AbstractArray) = any(_is_symbolic, v)
 
 """A value given by an expression of parameters, evaluated with the parameter `values`."""
 function _evaluate(v, values)
@@ -303,14 +318,20 @@ function _derived_parameters(c::CompiledPottsSystem, p, explicit)
 end
 
 function _resolve_defaults!(values)
-    # parameters may default to expressions of other parameters
+    # parameters may default to expressions of other parameters; a kind table's entries may
+    # be such expressions (`J[kind, kind] = [0 Jx; Jx 2]`), substituted entry by entry
     for _ in 1:length(values)
         done = true
         for (k, v) in values
-            if v isa Num || v isa SymbolicUtils.BasicSymbolic
-                w = _unwrap(Symbolics.substitute(v, values))
-                values[k] = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
-                done &= SymbolicUtils.isconst(w) || !(w isa SymbolicUtils.BasicSymbolic)
+            _is_symbolic(v) || continue
+            if v isa AbstractArray
+                w = map(e -> _substitute_entry(e, values), v)
+                values[k] = w
+                done &= !any(_is_symbolic, w)
+            else
+                w = _substitute_entry(v, values)
+                values[k] = w
+                done &= !(w isa SymbolicUtils.BasicSymbolic)
             end
         end
         done && break
@@ -318,7 +339,15 @@ function _resolve_defaults!(values)
     return values
 end
 
+# one value with the parameter `values` substituted: a number once it reduces to one
+function _substitute_entry(v, values)
+    _is_symbolic(v) || return v
+    w = _unwrap(Symbolics.substitute(v, values))
+    return SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+end
+
 function _param_value(T, v, i::Info)
+    _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$v` does not reduce to numbers with the parameter values"))
     if i.role === :kindtable
         v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)

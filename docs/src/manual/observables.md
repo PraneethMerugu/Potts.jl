@@ -36,7 +36,9 @@ sol = solve(prob, SequentialCPM(); saveat = 25)
 ```
 
 Observed quantities can use each other, the built-ins and the model's variables and
-parameters. `observe(prob, x)` evaluates a quantity on the initial state.
+parameters. `observe(prob, x)` evaluates a quantity on the initial state, and
+`observe(sol, x)` on every saved state. `x` can be the quantity itself or its name as a
+`Symbol`, such as `observe(sol, :ndark)`.
 
 ## Energy
 

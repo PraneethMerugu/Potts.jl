@@ -117,11 +117,21 @@ function _hoistable(pop, rn)
 end
 
 # Replace hoistable population folds in `x` by model slots (named `prefix1`, `prefix2`, … in
-# first-seen order; equal folds share a slot).
+# statement order and, within `x`, in canonical order (`_symkey`, D-107); equal folds share
+# a slot). Folds inside `integral(…)` stay: the integral is a cell slot named after its
+# operand as written (`_integrals`), and its own phase evaluates the operand per site.
 function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Symbol; strict = false)
     pops = Any[]
-    _walk_all(y -> (iscall(y) && operation(y) === population && push!(pops, y)), x)
+    function visit(y)
+        y = _unwrap(y)
+        (y isa SymbolicUtils.BasicSymbolic && iscall(y)) || return
+        operation(y) === cell_integral && return
+        operation(y) === population && push!(pops, y)
+        foreach(visit, arguments(y))
+    end
+    visit(x)
     isempty(pops) && return x
+    length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
         _hoistable(p, rn) || (strict ? throw(ArgumentError(
@@ -135,8 +145,9 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
         sub[p] = _standin(:model, slots[j].first)
     end
     isempty(sub) && return x
-    return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
+    return _unwrap(Symbolics.substitute(x, sub; fold = Val(false), filterer = _outside_integrals))
 end
+_outside_integrals(ex) = !(iscall(ex) && operation(ex) === cell_integral) && SymbolicUtils.default_substitute_filter(ex)
 
 # An integral that reads a variable written in the block both through `Pre` (block-start
 # values) and bare (new values) has no single refresh point: reject it.

@@ -156,22 +156,49 @@ _norm(a::AbstractVector) = sqrt(sum(abs2, a))
 """`normalize(v)`: `v / norm(v)`, and zero where `norm(v) == 0`."""
 _normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) for x in a])
 
-"""Spatial dimension of the lattice being declared (for `centroid()`, `displacement(c)`)."""
-const _DIM = Ref(0)
-"""Depth of `@extend` bases being built inside another model's constructor."""
-const _NESTING = Ref(0)
-"""Build an `@extend` base: numbering continues, and the outer model's lattice dimension is kept."""
-function _nested(f)
-    dim = _DIM[]
-    _NESTING[] += 1
+"""
+State of one model build: the bound-variable and draw counter, the spatial dimension of
+the lattice being declared (for `centroid()`, `displacement(c)`) and a one-shot flag set
+just before an `@extend` base's constructor runs. Every constructor call gets its own state
+(`_in_build`) except that base, so builds on other threads or tasks, or other models built
+inside a model's body, never share or reset it.
+"""
+mutable struct _Build
+    count::Int
+    dim::Int
+    enter::Bool
+end
+const _BUILD = Base.ScopedValues.ScopedValue{Union{Nothing, _Build}}(nothing)
+"""The current build's state (task-local outside a constructor, e.g. at the REPL)."""
+function _build()
+    b = _BUILD[]
+    b === nothing || return b
+    return get!(() -> _Build(0, 0, false), task_local_storage(), :potts_build)::_Build
+end
+"""Run a model constructor body: a fresh build state unless it is an `@extend` base, which
+continues the outer model's numbering."""
+function _in_build(f)
+    b = _BUILD[]
+    b !== nothing && b.enter && (b.enter = false; return f())
+    return Base.ScopedValues.with(f, _BUILD => _Build(0, 0, false))
+end
+"""`f(args...; kws...)` as an `@extend` base: numbering continues, and the outer model's
+lattice dimension is kept. Only `f`'s own build continues the outer state; any other model
+built meanwhile (in `f`'s body) gets its own."""
+function _nested(f, args...; kws...)
+    b = _build()
+    dim = b.dim
+    b.enter = true
     try
-        return f()
+        return f(args...; kws...)
     finally
-        _NESTING[] -= 1
-        _DIM[] = dim
+        b.enter = false
+        b.dim = dim
     end
 end
-_lattice_dim() = _DIM[] > 0 ? _DIM[] :
+_set_dim!(d) = (_build().dim = d)
+_next_number!() = (_build().count += 1)
+_lattice_dim() = (d = _build().dim) > 0 ? d :
                  throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 
 # ---------------------------------------------------------------------------------------
@@ -232,7 +259,8 @@ cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
 """Cell-state name of the tracker for `integral(x)`."""
 _integral(x) = cell_integral(x isa Num ? x : Num(x))
-_integral_name(x) = Symbol(:integral_, string(hash(Symbolics.unwrap(x)); base = 62))
+# named by content (`_symkey`), not by Symbolics' hash, which differs between builds (D-107)
+_integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(x)); base = 62))
 
 """`history_lag(x, k)`: `x` at the end of the MCS `k` before the current one."""
 history_lag(x, k) = error("`history_lag` is symbolic-only")
@@ -269,7 +297,7 @@ from its own counter-based stream (reproducible on any backend and schedule). Av
 updates, equations, division conditions and rules; not in energies, drives or constraints
 (a random ΔH would break detailed balance).
 """
-_rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
+_rand() = random_uniform(Num(_next_number!()))
 
 # ---------------------------------------------------------------------------------------
 # Helpers the macro rewrites user syntax into
@@ -330,10 +358,10 @@ const _POPULATION_FOLDS = (:sum, :mean, :minimum, :maximum, :count, :any, :all)
 function _population(fold, body, d, cond)
     op = nameof(fold)
     op in _POPULATION_FOLDS || throw(ArgumentError("`$op` over a population is not supported; use one of $_POPULATION_FOLDS"))
-    _GATHER_COUNT[] += 1
+    k = _next_number!()
     role = d isa CellDomain ? :bound_cell : :bound_site
     kinds = d isa CellDomain ? d.kinds : Int[]
-    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, _GATHER_COUNT[])), Info(role, :n, nothing, (; op, kinds)))
+    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, k)), Info(role, :n, nothing, (; op, kinds)))
     return population(n, body(n), cond === nothing ? true : cond(n))
 end
 
@@ -347,8 +375,6 @@ geomean(itr) = any(iszero, itr) ? zero(first(itr)) : exp(sum(log, itr) / length(
 """`mean(itr)`: arithmetic mean (a fold over relations inside models)."""
 mean(itr) = sum(itr) / length(itr)
 
-const _GATHER_COUNT = Ref(0)
-
 """
     _gather(fold, body, around, cond)
 
@@ -357,8 +383,7 @@ const _GATHER_COUNT = Ref(0)
 function _gather(fold, body, a::Around, cond = nothing)
     op = nameof(fold)
     op in FOLDS || throw(ArgumentError("`$op` is not a recognised fold over a relation; use one of $FOLDS"))
-    _GATHER_COUNT[] += 1
-    n = _tag(_sym(Symbol(:n_, _GATHER_COUNT[])), Info(:bound, :n, nothing, (; relation = a.relation, op)))
+    n = _tag(_sym(Symbol(:n_, _next_number!())), Info(:bound, :n, nothing, (; relation = a.relation, op)))
     b = body(n)
     c = cond === nothing ? true : cond(n)
     return gather(n, a.anchor, b, c)

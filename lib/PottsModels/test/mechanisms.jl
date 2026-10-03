@@ -207,7 +207,7 @@ end
     end
 
     # sorting proceeds on the aggregate; symmetric contacts (no differential adhesion) do not sort
-    σ, k = graner_glazier_aggregate(200; seed = 1)
+    σ, k = graner_glazier_aggregate(200; seed = 1, margin = 10)   # a short run: a small lattice
     function hetero(σ)                     # dark–light fraction of cell–cell Moore bonds
         he = ho = 0
         for x in CartesianIndices(σ), d in ((1, 0), (0, 1), (1, 1), (1, -1))

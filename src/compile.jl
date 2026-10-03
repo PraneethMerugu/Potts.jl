@@ -359,9 +359,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1
-    for x in all_exprs, (ni, anchor) in _gathers(x)
-        spec = ni.options.relation
-        if !(spec isa RelationRef) && !haskey(gather_names, spec)
+    # gather relations numbered in statement order and, within one, by content (D-107)
+    for x in all_exprs
+        specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
+                            if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
+        for spec in specs[sortperm(map(_canonical_value, specs))]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
             relations[gather_names[spec]] = spec
         end

@@ -398,8 +398,8 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
-# The phases, and the last cell update phase with the columns it writes (`(; phase, writes)`,
-# or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
+# The phases, and the last cell update phase with the columns it writes and its expression
+# (`(; phase, writes, expr)`, or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
 function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     rn = c.gather_names
     cand = nothing
@@ -450,9 +450,10 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
             elseif stage.scope === :model
                 push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
             else
-                ph = CorePotts.CellPhase(_rgf(_cell_update_expr(c, T, stage.updates, stage.every, rn)))
+                ex = _cell_update_expr(c, T, stage.updates, stage.every, rn)
+                ph = CorePotts.CellPhase(_rgf(ex))
                 push!(dst, ph)
-                phase === :after_mcs && (cand = (; phase = ph, writes = _stage_writes(stage)))
+                phase === :after_mcs && (cand = (; phase = ph, writes = _stage_writes(stage), expr = ex))
             end
             if !isempty(dirty)
                 w = _stage_writes(stage)
@@ -1232,7 +1233,7 @@ function _abs_bound(d, env)
     (op === (+) || op === (-) || op === (*)) || return nothing
     bs = map(a -> _abs_bound(a, env), args)
     any(isnothing, bs) && return nothing
-    return Expr(:call, op === (*) ? :* : :+, bs...)
+    return Expr(:call, op === (*) ? :* : :+, bs[sortperm(map(_code_key, bs))]...)   # canonical order (D-107)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1286,7 +1287,7 @@ end
 function _lifecycle(c::CompiledPottsSystem, T)
     isempty(c.divisions) && return nothing
     rn = c.gather_names
-    trigger = _rgf(_trigger_expr(c, T))
+    trigger = _rgf(_trigger_expr(c, T))         # compiled first (`generated_code` reads it so)
     g = _lifecycle_every(c.divisions)
     ruled = _overlapping_rules(c.divisions)
     ids = eachindex(c.divisions)

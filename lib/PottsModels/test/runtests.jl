@@ -79,9 +79,9 @@ end
             @test first(rows) > margin && first(cols) > margin
             @test last(rows) <= size(σm, 1) - margin && last(cols) <= size(σm, 2) - margin
         end
-        # the lattice grows by exactly twice the change of margin; the default is 10
+        # the lattice grows by exactly twice the change of margin; the default is 60
         @test size(graner_glazier_aggregate(200; seed = 1, margin = 30)[1], 1) ==
-              size(graner_glazier_aggregate(200; seed = 1)[1], 1) + 40
+              size(graner_glazier_aggregate(200; seed = 1)[1], 1) - 60
         @test_throws ArgumentError graner_glazier_aggregate(200; seed = 1, margin = -1)
     end
     @testset "Akeeb seeding emulates the authors' CC3D loop (D-068, spec 10 §5.3.6)" begin

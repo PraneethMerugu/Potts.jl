@@ -174,5 +174,30 @@ decision = "D-102"
 
 [[file]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"
-sha256 = "e1ec2261c7999a7fe7972f2665fdbb2580da2f01bb66b93e70bf133712066396"
-decision = "D-105"
+sha256 = "17b02a9434d2b9a0c8b9708ae9383558cbaf96a71419ca33406ed5ec41cfa6f7"
+decision = "D-107"
+
+[[file]]
+path = "acceptance/p6_1e_gg_margin.jl"
+sha256 = "f4e6754c39f99d5f8fbfb9bcbb124391eba182087ab6ccd3207246028467679b"
+decision = "D-106"
+
+[[file]]
+path = "acceptance/p6_0ah_canonical_term_order.jl"
+sha256 = "b38d76fc59b39f6b523b31a06be6a01ac38c9537074785b03e587889f6005f86"
+decision = "D-107"
+
+[[file]]
+path = "acceptance/p6_0af_lifecycle_followups.jl"
+sha256 = "56465fa5ac7457c496a9563a84d693eef310586ee21012158f7d2fa76d1b8a0a"
+decision = "D-108"
+
+[[file]]
+path = "acceptance/p6_0aj_concurrent_builds.jl"
+sha256 = "b9528a07ea0eb245b4cd4f643e6cf807361da4ef5bb1944f8a7777e940cd6f7c"
+decision = "D-109"
+
+[[file]]
+path = "acceptance/p6_0ab_api_defects.jl"
+sha256 = "7aca73bda09aabd0954e42ba7cdd723f212137f9661e2ab2dd1bab217783f785"
+decision = "D-111"

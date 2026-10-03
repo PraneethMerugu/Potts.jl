@@ -1758,3 +1758,34 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge.** Merks' fingerprint pin in this file re-recorded for P6.0y's substep function (D-105 addendum).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
 - **Gate.** CPU 0.968–1.020; Metal 1.007–1.043, GG 1.125 and OpenVT 1.292 flagged; `ab.jl` OpenVT against d5bfd3dc (before P6.0x/y/ag), 8 rounds: 1.016 (55.4 → 56.6 ns/site, every round), so the flag was noise and the three merges cost OpenVT about 1.6 % on Metal.
+
+## 2026-10-03 — P6.1e merged: `graner_glazier_aggregate` defaults to a 60-site margin (D-106)
+
+- **The change.** Default margin 10 → 60 on the periodic lattice (side `2⌈√(40n/π)⌉ + 1 + 2margin`): long runs no longer drift onto the edge or join the periodic image; explicit margins bitwise unchanged. Non-frozen tests that need a small aggregate pass `margin = 10`.
+- **Checks.** Frozen P6.1e 92/92, P6.1b2 12/12; PottsModels, Potts and docs exit 0 (branch based on the current `monorepo`; no step-loop change, gate not rerun).
+
+## 2026-10-03 — P6.0ah merged: canonical term order in generated code (D-107)
+
+- **The change.** Sums and products in generated code are ordered by a key of their generated code text (memoised per build), fold slots, gather numbers and integral names are canonical, so a rate's floating-point result no longer depends on the build's operator hashes (D-105). `p6_0ag` item 3 compares bitwise again (re-frozen under D-107); 43 new symbolic tests.
+- **Review.** Fold keys now carry bound-variable names (two folds differing only in their bound variable no longer collide), keys are memoised, integrals keep their folds inside; approved. Follow-ups P6.0ai (integral of a fold is O(sites × cells)) and P6.0aj (`_GATHER_COUNT` is not thread-safe).
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels and docs exit 0.
+- **Gate: pass.** CPU 0.972–1.028. Metal OpenVT 1.049, Akeeb 1.016; Wortel 1.150, Merks 1.065, GG 1.062 flagged; `ab.jl` against 457104d8, 6 rounds: Wortel 1.005, Merks 1.003, GG 1.018 (noise).
+
+## 2026-10-03 — P6.0af merged: the device lifecycle's mid-sequence handover; `generated_code` shows fusion (D-108)
+
+- **The change.** The staged device form's first launch is compiled before anything is enqueued and counts the kernels it enqueues: a failure at the trigger or the planner (k ≤ 2) hands the MCS to the host planner without `before` and without this MCS's device counts (the k = 2 handover double-counted divisions before); a failure after the partition (which writes σ) is rethrown (`_StagedFailedMidway`) instead of handing over a partly divided state. `generated_code(sys).lifecycle` shows the trigger and the fused `before`. X4 stays deferred in the row.
+- **Review.** Two rounds; round 1 approved with notes (the post-partition rethrow, the compile-on-empty-range comment, launch counts at the handover), done in round 2.
+- **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels, MakiePotts and docs exit 0 (a first run used wrong test projects; rerun).
+- **Gate.** CPU 0.991–1.056 under three concurrent agents (GG seq 1.053, OpenVT cb 1.056 flagged; no CPU step change). Metal under the same load 1.2–2.0×; `ab.jl` against 2f54c1e9, 4 rounds: GG 0.981, Wortel 1.011, Merks 0.874, OpenVT 1.007, Akeeb 0.986.
+
+## 2026-10-03 — P6.0aj merged: a model build keeps its state per build (D-109)
+
+- **The change.** The bound-variable/draw counter, the lattice dimension that `centroid()` reads and the `@extend` state are one per-build state in a `ScopedValue`, so models built concurrently (threads, or tasks that yield mid-build) get the same generated code, names and fingerprints as built serially; 4 threads used to give 16–21 of 32 builds different code, reused names within a model and `centroid()` build errors. Serial output unchanged for all 225 systems checked. Only an `@extend` base continues the outer build; any other model built inside a body is its own build (it used to reset the outer model's lattice dimension).
+- **Review.** Two rounds (round 2: the one-shot base flag), approved.
+- **Merge checks.** Run together with P6.0ab's (below).
+
+## 2026-10-03 — P6.0ab merged: kind tables from parameters; `observe` by name (D-111)
+
+- **The change.** A kind table whose entries are expressions of parameters (`J[kind, kind] = [0 Jx Jx; …]`) builds (it raised a `MethodError`) and follows its inputs at build, `remake` and the integrator setters, with the problem's scalar type kept and symmetry checked on the values; `observe(sol | prob, :name)` resolves a variable, `@observed`, built-in or parameter (it raised "cannot lower constant"), with a clear error for an unknown name. Fingerprints of existing models unchanged.
+- **Review.** Two rounds: the parameters page now says an explicit value holds only until the next change of another parameter (the existing rule; P6.0ak to keep it), the declaration order and `observe`'s resolution order. Follow-ups P6.0ak, P6.0al.
+- **Merge checks (P6.0aj + P6.0ab).** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No step-loop change in either; gate not rerun.

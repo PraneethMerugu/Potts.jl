@@ -144,9 +144,38 @@ SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_qu
 Evaluate the model quantity or expression `x` (e.g. `volume`, an `@observed` name,
 `count(true for c in cells(tumor))` written with the model's symbols) on state `u`
 (default: the problem's initial state, or every saved state of a solution).
+
+`x` may also be a name, as a `Symbol`: `observe(sol, :nA)` is `observe` on the model's
+quantity of that name, looked up in this order: a declared variable or `@observed`
+quantity, then a built-in such as `:volume`, then a parameter. An unknown name is an
+`ArgumentError`.
 """
-observe(prob::CorePotts.PottsProblem, x, u = prob.u0) = _observed_function(prob.f.sys, x)(u, prob.p, prob.tspan[1])
-observe(sol::CorePotts.PottsSolution, x) = map((u, s) -> _observed_function(sol.prob.f.sys, x)(u, sol.prob.p, s), sol.u, sol.t)
+observe(prob::CorePotts.PottsProblem, x, u = prob.u0) =
+    _observed_function(prob.f.sys, _observe_quantity(prob.f.sys, x))(u, prob.p, prob.tspan[1])
+function observe(sol::CorePotts.PottsSolution, x)
+    f = _observed_function(sol.prob.f.sys, _observe_quantity(sol.prob.f.sys, x))
+    return map((u, s) -> f(u, sol.prob.p, s), sol.u, sol.t)
+end
+
+# `observe` by name: the model's quantity called `x` (variable, `@observed`, built-in, parameter)
+_observe_quantity(::Any, x) = x
+function _observe_quantity(sys::PottsModelInfo, x::Symbol)
+    q = _named_quantity(sys, x)
+    q === nothing || return q
+    m = sys.csys.sys
+    for p in m.parameters
+        info(p).name === x && return p
+    end
+    msg = "`$x` is not a variable, observed quantity, built-in or parameter of $(nameof(sys.csys))"
+    comps = [info(v).name for v in Iterators.flatten((m.parameters, m.variables))
+             if get(info(v).options, :vector, nothing) === x]
+    if !isempty(comps)
+        msg *= "; `$x` is a vector quantity: observe its components ($(join((":" * string(n) for n in comps), ", ")))"
+    elseif x === :t
+        msg *= "; the times of a solution are `sol.t`"
+    end
+    throw(ArgumentError(msg))
+end
 
 SII.parameter_values(p::PottsParameters) = p
 SII.parameter_values(p::PottsParameters, i::Symbol) = p[i]
