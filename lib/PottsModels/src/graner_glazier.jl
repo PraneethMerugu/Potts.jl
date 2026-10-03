@@ -62,14 +62,18 @@ function graner_glazier_state(scale::Integer = 1)
 end
 
 """
-    graner_glazier_aggregate(n = 1000; seed = 1, margin = 10) -> (labels, kinds)
+    graner_glazier_aggregate(n = 1000; seed = 1, margin = 60) -> (labels, kinds)
 
 A paper-size initial condition (PRE 47, p. 2129: "about 1000 cells"): one round aggregate
 of `n` cells of about `V₀ = 40` sites, dark (1) and light (2) randomly mixed in equal
 numbers (±1; the paper does not state the fraction), surrounded by a medium margin of
-`margin` sites on a square lattice sized to fit (use `lattice = size(labels)`). On the
-periodic `GranerGlazier` lattice the gap to the aggregate's image is `2margin`; runs in
-which cells detach need a wider margin (at least 60). The
+`margin` sites on a square lattice of side `2⌈√(40n/π)⌉ + 1 + 2margin` (use
+`lattice = size(labels)`). On the periodic `GranerGlazier` lattice the gap to the
+aggregate's image is `2margin`. The default of 60 sites is for long runs: over thousands of
+MCS the whole aggregate drifts, and with a small margin (10 sites) it reaches the lattice
+edge and wraps across it (`n = 200`: after about 23 000 MCS for one run seed), and over
+10⁴ paper MCS a 1000-cell aggregate joins its periodic image. Short runs can pass a smaller
+`margin` to save lattice area (the lattice grows as the square of its side). The
 aggregate is rebuilt on the larger lattice, not embedded: a different `margin` can move a
 few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
 10), so compare margins statistically, not site by site. Built with the
@@ -83,7 +87,7 @@ The sorting time course does not see the difference: the heterotypic boundary fr
 this start and from a relaxed one agree within 0.005 at 1, 10 and 100 paper MCS (6
 seeds). The area term evens the cells out within the first MCS.
 """
-function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1, margin::Integer = 10)
+function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1, margin::Integer = 60)
     margin >= 0 || throw(ArgumentError("graner_glazier_aggregate: margin must be non-negative, got $margin"))
     radius = sqrt(40n / π)
     L = 2ceil(Int, radius) + 1 + 2margin
