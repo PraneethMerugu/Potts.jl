@@ -45,8 +45,16 @@ end
         b = solve(field_problem(σ, kinds, lat, c0, diffuse, p; dt = 0.25, substeps = 1,
             tspan = (0, 12)), SequentialCPM(); ).u[end].site.c
         @test a ≈ b rtol = 1e-12
-        @test stable_substeps(1.0, 1.0, (1.0, 1.0)) == 4
-        @test stable_substeps(0.1, 1.0, (1.0, 0.5)) == 1
+        @test stable_substeps(1.0, 1.0, (1.0, 1.0)) == 5          # 8/1.8 = 4.4
+        @test stable_substeps(0.1, 1.0, (1.0, 0.5)) == 2          # 0.1·20/1.8 = 1.1
+        @test stable_substeps(0.45, 1.0, (1.0, 1.0)) == 2         # 3.6/1.8 = 2 exactly
+        @test stable_substeps(0.45, 1.0, (1.0, 1.0), 0.2) == 3    # the reaction rate counts
+        @test stable_substeps(0.0, 1.0, (1.0,), 1.0) == 1
+        for (D, dt, h, k) in ((0.5, 1.0, (1.0, 1.0), 0.2), (0.125, 2.0, (0.5, 0.5, 1.0), 1.6), (2.5, 0.5, (1.0,), 0.0))
+            n = stable_substeps(D, dt, h, k)
+            Λ = D * sum(x -> 4 / x^2, h) + k
+            @test dt / n * Λ ≤ 1.8 * (1 + 1e-12) && n ≤ max(1, ceil(Int, dt * Λ))
+        end
     end
 
     @testset "secretion–decay steady state" begin

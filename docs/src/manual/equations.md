@@ -58,9 +58,12 @@ sol[:x][end], sol[:g][end]
 | `ode_solver` | `ExplicitEuler(; substeps)`, `RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-- `substeps = nothing` in a field solver takes the smallest stable count for the diffusion
-  term alone, recomputed when parameters change; a number is a minimum. Leave a margin for
-  reaction terms.
+- `substeps = nothing` in a field solver takes the smallest count `n` with
+  `mcs_duration / n · (D · Σ_d 4/h_d² + k) ≤ 1.8`, where `k` bounds the reaction's
+  `|∂f/∂c|` (the coefficient of `c` in a linear reaction, indicators such as
+  `(kind == medium)` counting as 1), recomputed when parameters change; a number is a
+  minimum. A reaction that is not linear in `c` is not counted (the problem warns): give
+  `substeps` yourself.
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
   `rand()` cannot be integrated adaptively.

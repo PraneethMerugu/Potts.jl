@@ -1096,26 +1096,81 @@ function _cell_update_expr(c, T, us, every, rn)
         :(@inbounds st.cell.volume[c] > 0 || return nothing), vals..., writes..., :(return nothing))))
 end
 
-# Explicit-Euler substeps from the diffusion coefficient (the factor multiplying Δ(x)),
-# computed from the current parameters every MCS (a `remake(p = …)` keeps the step stable).
-# An explicit `substeps = n` is a minimum: an unstable step silently diverges, so the stable
+# Explicit-Euler substeps from the diffusion coefficient D (the factor multiplying Δ(x)) and
+# a bound k on the reaction's |∂f/∂x| (`_rate_bound`), `CorePotts.stable_substeps`, computed
+# from the current parameters every MCS (a `remake(p = …)` keeps the step stable). An
+# explicit `substeps = n` is a minimum: an unstable step silently diverges, so the stable
 # count wins when it is larger. A coefficient that is not a parameter expression needs `n`.
 function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
     L = _unwrap(Symbolics.variable(:__Lap))
     lap = Dict{Any, Any}()
     _walk(y -> (iscall(y) && operation(y) === Δ && (lap[y] = L)), rate)
-    isempty(lap) && return something(n, 1)
-    coef = _unwrap(Symbolics.derivative(Symbolics.substitute(rate, lap; fold = Val(false)), Symbolics.wrap(L)))
+    rate_L = _unwrap(Symbolics.substitute(rate, lap; fold = Val(false)))
+    coef = isempty(lap) ? 0 : _unwrap(Symbolics.derivative(Symbolics.wrap(rate_L), Symbolics.wrap(L)))
     h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
     if all(u -> first(u) === :param, _uses(coef))
-        body = lower(coef, _model_env(Float64, Dict{Any, Symbol}()))
+        env = _model_env(Float64, Dict{Any, Symbol}())
+        body = lower(coef, env)
+        kb = _rate_bound(x, isempty(lap) ? rate_L : Symbolics.substitute(rate_L, Dict{Any, Any}(L => 0); fold = Val(false)), env)
+        if kb === nothing
+            n === nothing && @warn "the substep count of the field `$(info(x).name)` counts diffusion only: " *
+                                   "the reaction's rate ∂f/∂$(info(x).name) is not bounded by the parameters " *
+                                   "(it depends on the field or on other state). If the reaction is fast, give " *
+                                   "`ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · (D · Σ 4/h² + max|∂f/∂$(info(x).name)|) / 1.8`."
+            kb = 0.0
+        end
         least = something(n, 1)
-        return _rgf(:(p -> max($least, CorePotts.stable_substeps(abs(Float64($body)), $(Float64(dt)), $h))))
+        return _rgf(:(p -> max($least, CorePotts.stable_substeps(abs(Float64($body)), $(Float64(dt)), $h, $kb))))
     end
     n === nothing || return n
     throw(ArgumentError("the diffusion coefficient of `$(info(x).name)` ($coef) is not a parameter expression; " *
                         "give `PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` " *
                         "(or `solvers = [$(info(x).name) => ExplicitEuler(; substeps = n)]`)"))
+end
+
+# A host expression (in `p`) bounding |∂f/∂x| over every site and state, for the field's
+# reaction `f` (the rate without its diffusion term), or `nothing` when no bound follows from
+# the parameters alone (a reaction nonlinear in `x`, or a rate scaled by other state). For a
+# reaction linear in `x` the derivative is a parameter expression, possibly weighted by
+# indicators (`kind == medium`, `position[1] > 75`, each in {0, 1}): `−k x` and
+# `−k x (kind == medium)` are both bounded by |k|.
+function _rate_bound(x, reaction, env)
+    d = try
+        _unwrap(Symbolics.derivative(Symbolics.wrap(reaction), Symbolics.wrap(x)))
+    catch
+        return nothing
+    end
+    return _abs_bound(d, env)
+end
+
+const _INDICATOR_OPS = (==, !=, <, <=, >, >=, !, &, |, xor)
+
+function _abs_bound(d, env)
+    d = _unwrap(d)
+    d isa SymbolicUtils.BasicSymbolic || return d isa Real ? Float64(abs(d)) : nothing
+    SymbolicUtils.isconst(d) && return _abs_bound(SymbolicUtils.unwrap_const(d), env)
+    all(u -> first(u) === :param, _uses(d)) && return :(abs(Float64($(lower(d, env)))))
+    iscall(d) || return nothing
+    op, args = operation(d), arguments(d)
+    op in _INDICATOR_OPS && return 1.0
+    if op === ifelse
+        a, b = _abs_bound(args[2], env), _abs_bound(args[3], env)
+        return a === nothing || b === nothing ? nothing : :(max($a, $b))
+    end
+    if op === (/) && all(u -> first(u) === :param, _uses(args[2]))
+        a = _abs_bound(args[1], env)
+        return a === nothing ? nothing : :($a / abs(Float64($(lower(args[2], env)))))
+    end
+    if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
+        e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
+        (e isa Real && isinteger(e) && e >= 0) || return nothing
+        a = _abs_bound(args[1], env)
+        return a === nothing ? nothing : :($a^$(Int(e)))
+    end
+    (op === (+) || op === (-) || op === (*)) || return nothing
+    bs = map(a -> _abs_bound(a, env), args)
+    any(isnothing, bs) && return nothing
+    return Expr(:call, op === (*) ? :* : :+, bs...)
 end
 
 # ---------------------------------------------------------------------------------------

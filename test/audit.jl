@@ -197,6 +197,28 @@ end
     @test maximum(abs, uq) < 100
 end
 
+@potts_model AuditNonlinearField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.1
+        k = 0.5
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9)^2
+    @equations D(c) ~ Dc * Δ(c) - k * c^2
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "a reaction nonlinear in the field is not counted in the substeps, with a warning" begin
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1
+    op = [ownership => σ, kind => [1]]
+    @test_logs (:warn, r"counts diffusion only") PottsProblem(AuditNonlinearField(; name = :n), op, (0, 1);
+        field_solver = ExplicitEuler())
+    # an explicit count: the user chose it, no warning
+    @test_nowarn PottsProblem(AuditNonlinearField(; name = :n), op, (0, 1); field_solver = ExplicitEuler(substeps = 4))
+end
+
 @potts_model AuditClear begin
     @kinds medium A
     @variables begin

@@ -329,7 +329,8 @@ end
     @test all(k -> isapprox(sol.u[k + 1].site.c, euler2(sol.u[k].site.c, sol.u[k + 1].σ); atol = 1e-12), 1:10)
 
     # an explicit substep count is a minimum: the paper's diffusion constant (D = 0.75 per
-    # MCS, the default) needs 3 substeps, and 2 would diverge (it reached 1e65 by MCS 200)
+    # MCS, the default) takes 4 automatic substeps (dt·(D·8 + δc)/n ≤ 1.8), and 2 would
+    # diverge (it reached 1e65 by MCS 200)
     sp = zeros(Int32, 40, 40); sp[18:23, 18:23] .= 1
     fast = solve(PottsProblem(MerksVasculogenesis(; name = :m, lattice = (40, 40)),
         [ownership => sp, kind => [:endothelial]], (0, 200); field_solver = MERKS_TWO_SUBSTEPS), SequentialCPM()).u[end]
