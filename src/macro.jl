@@ -83,10 +83,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
     P = :(Potts)
     preamble = quote
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _BOUND_BUILTINS...)), :($P.B)))
-        # gather variables and draws are numbered per model; a base built by `@extend` inside
-        # another model continues the outer numbering (so the merged model has no collisions)
-        $P._NESTING[] == 0 && ($P._GATHER_COUNT[] = 0)
-        $P._DIM[] = 0                             # set by @lattice (vector builtins)
+        # gather variables and draws are numbered per build (`_in_build`); a base built by
+        # `@extend` inside another model continues the outer numbering (no collisions)
+        $P._set_dim!(0)                           # set by @lattice (vector builtins)
         t = $P.t
         D = $P._D
         Pre = $P._pre
@@ -122,6 +121,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
+          $P._in_build() do
             $preamble
             try
                 $(parts.code...)
@@ -137,6 +137,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
             $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
+          end
         end
     end
 end
@@ -410,7 +411,7 @@ function _section!(parts, sec, args, ln = nothing)
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
         # an extension without its own @lattice uses the base's dimension (vector builtins, A-38)
         push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)),
-            :($P._DIM[] == 0 && ($P._DIM[] = length($bname.lattice.dims))))
+            :($P._build().dim == 0 && $P._set_dim!(length($bname.lattice.dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along
         for n in names
@@ -435,7 +436,7 @@ function _section!(parts, sec, args, ln = nothing)
         end
     elseif sec === Symbol("@lattice")
         push!(code, :(__lattice = $(_replace_call(only(args), :Lattice, :($P.lattice_spec)))),
-            :($P._DIM[] = length(__lattice.dims)))
+            :($P._set_dim!(length(__lattice.dims))))
     elseif sec === Symbol("@relations")
         for l in _lines(args)
             k = l.args[1]

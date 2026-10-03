@@ -156,22 +156,46 @@ _norm(a::AbstractVector) = sqrt(sum(abs2, a))
 """`normalize(v)`: `v / norm(v)`, and zero where `norm(v) == 0`."""
 _normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) for x in a])
 
-"""Spatial dimension of the lattice being declared (for `centroid()`, `displacement(c)`)."""
-const _DIM = Ref(0)
-"""Depth of `@extend` bases being built inside another model's constructor."""
-const _NESTING = Ref(0)
+"""
+State of one model build: the bound-variable and draw counter, the spatial dimension of
+the lattice being declared (for `centroid()`, `displacement(c)`) and the depth of `@extend`
+bases being built inside it. Each top-level constructor call gets its own (`_in_build`), so
+builds on other threads or tasks never share or reset it.
+"""
+mutable struct _Build
+    count::Int
+    dim::Int
+    nesting::Int
+end
+const _BUILD = Base.ScopedValues.ScopedValue{Union{Nothing, _Build}}(nothing)
+"""The current build's state (task-local outside a constructor, e.g. at the REPL)."""
+function _build()
+    b = _BUILD[]
+    b === nothing || return b
+    return get!(() -> _Build(0, 0, 0), task_local_storage(), :potts_build)::_Build
+end
+"""Run a model constructor body: a fresh build state unless it is an `@extend` base, which
+continues the outer model's numbering."""
+function _in_build(f)
+    b = _BUILD[]
+    b !== nothing && b.nesting > 0 && return f()
+    return Base.ScopedValues.with(f, _BUILD => _Build(0, 0, 0))
+end
 """Build an `@extend` base: numbering continues, and the outer model's lattice dimension is kept."""
 function _nested(f)
-    dim = _DIM[]
-    _NESTING[] += 1
+    b = _build()
+    dim = b.dim
+    b.nesting += 1
     try
         return f()
     finally
-        _NESTING[] -= 1
-        _DIM[] = dim
+        b.nesting -= 1
+        b.dim = dim
     end
 end
-_lattice_dim() = _DIM[] > 0 ? _DIM[] :
+_set_dim!(d) = (_build().dim = d)
+_next_number!() = (_build().count += 1)
+_lattice_dim() = (d = _build().dim) > 0 ? d :
                  throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 
 # ---------------------------------------------------------------------------------------
@@ -270,7 +294,7 @@ from its own counter-based stream (reproducible on any backend and schedule). Av
 updates, equations, division conditions and rules; not in energies, drives or constraints
 (a random ΔH would break detailed balance).
 """
-_rand() = (_GATHER_COUNT[] += 1; random_uniform(Num(_GATHER_COUNT[])))
+_rand() = random_uniform(Num(_next_number!()))
 
 # ---------------------------------------------------------------------------------------
 # Helpers the macro rewrites user syntax into
@@ -331,10 +355,10 @@ const _POPULATION_FOLDS = (:sum, :mean, :minimum, :maximum, :count, :any, :all)
 function _population(fold, body, d, cond)
     op = nameof(fold)
     op in _POPULATION_FOLDS || throw(ArgumentError("`$op` over a population is not supported; use one of $_POPULATION_FOLDS"))
-    _GATHER_COUNT[] += 1
+    k = _next_number!()
     role = d isa CellDomain ? :bound_cell : :bound_site
     kinds = d isa CellDomain ? d.kinds : Int[]
-    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, _GATHER_COUNT[])), Info(role, :n, nothing, (; op, kinds)))
+    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, k)), Info(role, :n, nothing, (; op, kinds)))
     return population(n, body(n), cond === nothing ? true : cond(n))
 end
 
@@ -348,8 +372,6 @@ geomean(itr) = any(iszero, itr) ? zero(first(itr)) : exp(sum(log, itr) / length(
 """`mean(itr)`: arithmetic mean (a fold over relations inside models)."""
 mean(itr) = sum(itr) / length(itr)
 
-const _GATHER_COUNT = Ref(0)
-
 """
     _gather(fold, body, around, cond)
 
@@ -358,8 +380,7 @@ const _GATHER_COUNT = Ref(0)
 function _gather(fold, body, a::Around, cond = nothing)
     op = nameof(fold)
     op in FOLDS || throw(ArgumentError("`$op` is not a recognised fold over a relation; use one of $FOLDS"))
-    _GATHER_COUNT[] += 1
-    n = _tag(_sym(Symbol(:n_, _GATHER_COUNT[])), Info(:bound, :n, nothing, (; relation = a.relation, op)))
+    n = _tag(_sym(Symbol(:n_, _next_number!())), Info(:bound, :n, nothing, (; relation = a.relation, op)))
     b = body(n)
     c = cond === nothing ? true : cond(n)
     return gather(n, a.anchor, b, c)
