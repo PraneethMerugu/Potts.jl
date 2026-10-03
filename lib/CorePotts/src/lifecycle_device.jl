@@ -40,11 +40,13 @@ const _LAUNCH_FAULT = Ref(0)        # tests: the first launch of this form fails
 # Tests (not public API, D-108): with k = `_STAGED_FAULT_AFTER[]` > 0, the staged form's first
 # (not yet proven) launch enqueues its first k kernels (1: the trigger with `Lifecycle.before`;
 # 2: also the planner) and then throws as if the next kernel's launch had failed; 0 is off.
-# Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per integrator. A real
-# launch failure can only occur before the planner's kernel ran (`run_lifecycle_device!`),
-# so k ≥ 3 models no reachable failure: it would hand the host planner a state that the
-# partition kernel already changed.
+# Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per integrator. A launch
+# failure is expected only before the partition kernel (`run_lifecycle_device!`); a failure
+# after it (k ≥ 3 here) is not handed over but rethrown (`_StagedFailedMidway`).
 const _STAGED_FAULT_AFTER = Ref(0)
+# The staged form's kernels are the trigger, the planner, then the partition, the first to
+# write σ: a failure once this many kernels were enqueued leaves no consistent state
+const _STAGED_PARTITION = 3
 
 # device accumulators (`dv.acc`, cumulative Int32; the host folds the differences)
 const _ACC_DIVISIONS = 1
@@ -86,6 +88,7 @@ struct DeviceLifecycle{DV, CO, LI, K, KF}
     form::Base.RefValue{Int}        # `_FORM_*`
     before_ran::Base.RefValue{Bool} # this MCS's `Lifecycle.before` was enqueued (with the trigger)
     proven::Base.RefValue{Bool}     # the form has launched once (its workgroup fits)
+    enqueued::Base.RefValue{Int}    # kernels the unproven staged launch enqueued (`_Counted`)
     round::Base.RefValue{Int}
     acc::Vector{Int32}
     acc_seen::Vector{Int32}
@@ -105,8 +108,8 @@ function DeviceLifecycle(backend, N::Int, cap::Int, st)
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), zeros(Int32, _NACC),
-        zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), Ref(0),
+        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -773,6 +776,9 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     if D.form[] == _FORM_STAGED
         D.proven[] &&
             return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _Enqueue())
+        D.enqueued[] = 0
+        k = _STAGED_FAULT_AFTER[]
+        mode = _Counted(k > 0 ? k : -1, D.enqueued)
         n = try
             _LAUNCH_FAULT[] == _FORM_STAGED && throw(ArgumentError("launch refused (test)"))
             # Every kernel of the form is compiled (with this launch's argument types) before
@@ -783,12 +789,14 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
             # a real failure happens at the trigger (nothing enqueued) or at the planner (the
             # trigger and `before` ran): before the partition writes σ or any cell column, and
             # the host planner takes the MCS without `before` (`before_ran[]`) and without
-            # this MCS's device counts (`_drop_device_counts!`).
+            # this MCS's device counts (`_drop_device_counts!`). Should a launch fail after the
+            # partition all the same (an environmental error), the state is partly divided
+            # with stale trackers: that failure is rethrown, not handed over.
             _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _CompileOnly())
-            k = _STAGED_FAULT_AFTER[]
-            mode = k > 0 ? _FaultAfter(k, Ref(0)) : _Enqueue()
             _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, mode)
         catch e
+            e isa InterruptException && rethrow()
+            D.enqueued[] >= _STAGED_PARTITION && throw(_StagedFailedMidway(D.enqueued[], e))
             _form_failed!(D, e)
         end
         n > 0 && (D.proven[] = true; return n)
@@ -821,23 +829,27 @@ end
 
 # How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); only compile each, with
 # the argument types of the launch, enqueueing none (`_CompileOnly`, the first launch of
-# the form); tests: enqueue the first `k`, then fail (`_FaultAfter`, `_STAGED_FAULT_AFTER`)
+# the form); enqueue each and count it in `n` (`_Counted`, the first launch of the form;
+# tests: fail after `k` kernels, `_STAGED_FAULT_AFTER`; `k < 0`: never)
 struct _Enqueue end
 struct _CompileOnly end
-struct _FaultAfter
+struct _Counted
     k::Int
-    n::Base.RefValue{Int}               # kernels enqueued so far
+    n::Base.RefValue{Int}               # kernels enqueued so far (`DeviceLifecycle.enqueued`)
 end
 
 _stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A} = _launch(body, backend, n, args)
-function _stage!(m::_FaultAfter, body::B, backend, n, args::A) where {B, A}
-    _fault_point!(m)
+function _stage!(m::_Counted, body::B, backend, n, args::A) where {B, A}
+    _fault_point(m)
     _launch(body, backend, n, args)
+    m.n[] += 1
     return nothing
 end
-# KA compiles a kernel at its launch and returns before dispatching an empty range (the
-# compiled kernel is cached by argument types, which do not depend on the range); the CPU
-# backend has no separate compilation step
+# Compile without dispatching: a launch over an empty range. That this compiles the kernel
+# (cached by argument types, which do not depend on the range) and then returns before
+# dispatching is a property of the backend's KA launch, not of the KA API: verified for
+# Metal.jl 1.10 (`Metal.kernel_instances` grows here and not at the launch that follows) and
+# (from its source) CUDA.jl. The CPU backend has no separate compilation step.
 _stage!(::_CompileOnly, body::B, backend::KernelAbstractions.CPU, n, args::A) where {B, A} = nothing
 function _stage!(::_CompileOnly, body::B, backend, n, args::A) where {B, A}
     _each_kernel!(backend)(body, args; ndrange = 0, workgroupsize = 1)
@@ -845,16 +857,24 @@ function _stage!(::_CompileOnly, body::B, backend, n, args::A) where {B, A}
 end
 
 _stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = PLAN_WG); nothing)
-_stage_plan!(m::_FaultAfter, D, backend, args::A) where {A} =
-    (_fault_point!(m); D.plan!(args...; ndrange = PLAN_WG); nothing)
+_stage_plan!(m::_Counted, D, backend, args::A) where {A} =
+    (_fault_point(m); D.plan!(args...; ndrange = PLAN_WG); m.n[] += 1; nothing)
 _stage_plan!(::_CompileOnly, D, backend::KernelAbstractions.CPU, args::A) where {A} = nothing
 _stage_plan!(::_CompileOnly, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = 0); nothing)
 
-function _fault_point!(m::_FaultAfter)
-    m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)"))
-    m.n[] += 1
-    return nothing
+_fault_point(m::_Counted) =
+    (m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)")); nothing)
+
+"""The staged form's first launch failed after its partition kernel was enqueued: σ may be
+partly divided and the trackers stale, so no form can take the MCS over."""
+struct _StagedFailedMidway <: Exception
+    enqueued::Int
+    cause::Any
 end
+Base.showerror(io::IO, e::_StagedFailedMidway) =
+    print(io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
+        "the partition (which writes σ) among them; the state is no longer consistent and cannot be ",
+        "handed to the host planner. Cause: ", sprint(showerror, e.cause))
 
 _enqueues(mode) = true
 _enqueues(::_CompileOnly) = false

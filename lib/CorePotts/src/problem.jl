@@ -399,6 +399,7 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
         integ.backend, refresh)
     if n < 0                    # handover: the host planner takes this MCS and every later one
         D.before_ran[] && _drop_device_counts!(integ, D)
+        integ.stats.launches += D.enqueued[]        # the failed form's kernels that ran
         return _step_lifecycle!(integ, nothing, !D.before_ran[])
     end
     integ.stats.launches += n
