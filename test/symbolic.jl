@@ -1402,6 +1402,42 @@ end
     @test length(x) == 4 && x[2:4] == zeros(3) && !any(isnan, x)
 end
 
+# A model built inside an `@extend` base's body is a build of its own: it neither continues
+# the outer numbering nor changes the lattice dimension `centroid()` reads afterwards.
+@potts_model _Helper3D begin
+    @kinds medium A
+    @variables q(cell) = 0.0
+    @lattice Lattice((6, 6, 6))
+    @after_mcs q ~ rand() + rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model _BuildsHelper begin
+    @kinds medium A
+    @variables p(cell)[1:2] = 0.0 w(cell) = 0.0
+    @lattice Lattice((12, 8))
+    helper = _Helper3D(; name = :h)
+    @after_mcs w ~ rand()
+    @after_mcs p ~ centroid()
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model _ExtendsBuilder begin
+    @kinds medium A
+    @variables v(cell) = 0.0
+    @extend b = _BuildsHelper()
+    @after_mcs v ~ rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "a model built inside an @extend base has its own build state" begin
+    draws(sys) = sort!([parse(Int, m[1]) for m in eachmatch(r"random_uniform\((\d+)\)", string(sys.updates))])
+    s = _ExtendsBuilder(; name = :o)                 # threw a DimensionMismatch (3D helper's dim leaked)
+    @test draws(s) == [1, 2]                         # base's draw, then the extension's: the helper's two draws are its own
+    @test draws(_Helper3D(; name = :h)) == [1, 2]
+    @test length(s.lattice.dims) == 2
+    @test count(u -> occursin("cell_centroid", string(u.eq)), s.updates) == 2   # p is 2D, not 3D
+    @test draws(_BuildsHelper(; name = :b)) == [1]   # serial build of the base alone is unchanged
+end
+
 @potts_model Lags begin
     @kinds medium A
     @variables begin

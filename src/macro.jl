@@ -410,7 +410,9 @@ function _section!(parts, sec, args, ln = nothing)
         any(a -> a isa Expr && a.head === :kw && a.args[1] === :name, params.args) ||
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
         # an extension without its own @lattice uses the base's dimension (vector builtins, A-38)
-        push!(code, :($bname = $P._nested(() -> $call)), :(push!(__bases, $bname)),
+        # `_nested(F, args...; kws...)`: the arguments are evaluated before the base is entered
+        nested = Expr(:call, :($P._nested), params, call.args[1], filter(x -> x !== params, call.args[2:end])...)
+        push!(code, :($bname = $nested), :(push!(__bases, $bname)),
             :($P._build().dim == 0 && $P._set_dim!(length($bname.lattice.dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along

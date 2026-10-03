@@ -158,38 +158,41 @@ _normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) fo
 
 """
 State of one model build: the bound-variable and draw counter, the spatial dimension of
-the lattice being declared (for `centroid()`, `displacement(c)`) and the depth of `@extend`
-bases being built inside it. Each top-level constructor call gets its own (`_in_build`), so
-builds on other threads or tasks never share or reset it.
+the lattice being declared (for `centroid()`, `displacement(c)`) and a one-shot flag set
+just before an `@extend` base's constructor runs. Every constructor call gets its own state
+(`_in_build`) except that base, so builds on other threads or tasks, or other models built
+inside a model's body, never share or reset it.
 """
 mutable struct _Build
     count::Int
     dim::Int
-    nesting::Int
+    enter::Bool
 end
 const _BUILD = Base.ScopedValues.ScopedValue{Union{Nothing, _Build}}(nothing)
 """The current build's state (task-local outside a constructor, e.g. at the REPL)."""
 function _build()
     b = _BUILD[]
     b === nothing || return b
-    return get!(() -> _Build(0, 0, 0), task_local_storage(), :potts_build)::_Build
+    return get!(() -> _Build(0, 0, false), task_local_storage(), :potts_build)::_Build
 end
 """Run a model constructor body: a fresh build state unless it is an `@extend` base, which
 continues the outer model's numbering."""
 function _in_build(f)
     b = _BUILD[]
-    b !== nothing && b.nesting > 0 && return f()
-    return Base.ScopedValues.with(f, _BUILD => _Build(0, 0, 0))
+    b !== nothing && b.enter && (b.enter = false; return f())
+    return Base.ScopedValues.with(f, _BUILD => _Build(0, 0, false))
 end
-"""Build an `@extend` base: numbering continues, and the outer model's lattice dimension is kept."""
-function _nested(f)
+"""`f(args...; kws...)` as an `@extend` base: numbering continues, and the outer model's
+lattice dimension is kept. Only `f`'s own build continues the outer state; any other model
+built meanwhile (in `f`'s body) gets its own."""
+function _nested(f, args...; kws...)
     b = _build()
     dim = b.dim
-    b.nesting += 1
+    b.enter = true
     try
-        return f()
+        return f(args...; kws...)
     finally
-        b.nesting -= 1
+        b.enter = false
         b.dim = dim
     end
 end
