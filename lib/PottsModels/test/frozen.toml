@@ -306,3 +306,8 @@ decision = "D-130"
 path = "acceptance/p6_0u_components_gaps.jl"
 sha256 = "4c773bca6623f3c814d79e8f9d915d0db5425c23aeb314be9a8bf9065524357c"
 decision = "D-133"
+
+[[file]]
+path = "acceptance/p6_0o_abstract_system.jl"
+sha256 = "5582a2ebf285a347bfa88a83935324f446089d9b2d86f1a4940ed8597b838dfe"
+decision = "D-137"
