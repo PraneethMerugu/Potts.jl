@@ -271,3 +271,8 @@ decision = "D-123"
 path = "acceptance/p6_0au_integral_readers.jl"
 sha256 = "776550b11d37e2dfb509bdefc4e7a30da0a9be0e2e511e6714b21cc702a59ba1"
 decision = "D-125"
+
+[[file]]
+path = "acceptance/p6_0aw_on_copy_integral.jl"
+sha256 = "ed526e87822560b8e0831cd15cdd13ee8a31761d0e3489af29c9c41c87b4c9d9"
+decision = "D-129"
