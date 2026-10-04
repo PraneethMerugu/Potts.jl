@@ -112,15 +112,21 @@ end
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end
 
-include("mechanisms.jl")
-include("papers.jl")
-include("siblings.jl")
-include("analysis.jl")
-include("guardrails.jl")
-include("frozen.jl")
-include("tutorial_models.jl")
-foreach(f -> include(joinpath(@__DIR__, "acceptance", f)), sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))
+# Every file runs in its own testset, all inside one: a file whose tests fail, or that
+# throws while loading, is recorded and the later files still run (a bare `include` chain
+# stopped at the first failing file's top-level testset). The outer testset throws at its
+# end, so a failure still exits non-zero. `include` evaluates each file at top level, so its
+# `const`s, structs and `@potts_model`s are globals as before.
+const POTTSMODELS_TEST_FILES = [
+    "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
+    (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
+]
 
-@testset "Aqua" begin
-    Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
+@testset "PottsModels files" begin
+    @testset "$f" for f in POTTSMODELS_TEST_FILES
+        include(joinpath(@__DIR__, f))
+    end
+    @testset "Aqua" begin
+        Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
+    end
 end

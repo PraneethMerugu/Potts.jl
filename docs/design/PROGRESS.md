@@ -1894,3 +1894,8 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** An `integral` on either side of an `@on_copy` statement (right-hand side or a computed left-hand-side index; bare, in a fold, with `Pre`, at any scope) is an `ArgumentError` at build naming `integral`, `@on_copy`, "every accepted copy" and the `@before_mcs` workaround. Before, a folded read built and wrote the start-of-MCS value, which could enter ΔH through an energy reading the written variable. Updates, drive and variables manual pages say so.
 - **Review.** Two rounds (round 1: an integral in the left-hand-side index bypassed the check). WortelAct's pins in `p6_0aw` re-pinned under D-124 at merge. Follow-up filed meanwhile: P6.0az (closure-weighted lattice neighbourhood not fingerprinted by value, from the P6.0c2 review).
 - **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build, run one after another: exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ay merged: P6.0t's cost check is structural; the acceptance chain collects failures (D-131)
+
+- **The change.** P6.0t's frozen "observed-only integrals cost nothing" check, which flaked at 1.1× under parallel agent load and then aborted the include chain, now compares the executed phase lists and integral columns (re-frozen) with a loose paired-timing backstop (≤ 1.5×, defect ≈ 3.6×). PottsModels' test and acceptance files now run one testset per file inside an outer testset, so a failing file no longer hides later ones; the run still exits 1.
+- **Review.** Approved in round 1.
