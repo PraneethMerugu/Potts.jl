@@ -15,7 +15,16 @@ cell. A model can declare several.
 In edge terms and link rules, `a` and `b` are the two cells, `distance` the distance between
 their centroids, and cell quantities are read as `kind[a]`, `volume[b]`, `x[a]`. Link rules
 run at the end of the MCS. Initial links go in the operating point as
-`:bond => [(1, 2), (2, 3)]`. Cells that die lose their links; daughters start unlinked.
+`:bond => [(1, 2), (2, 3)]`, and an edge variable's value there (`:rest => 9.0`, one number,
+or a parameter expression evaluated at construction: a later `remake` of parameters does
+not re-seed it) is its initial value on every initial link of its relationship; without it the initial
+links start at the default. Links made by `@link` always start at the default. Cells that
+die lose their links; daughters start unlinked.
+
+An extension (`@extend`) may re-declare an inherited edge variable to change its default:
+`@variables rest(edge) = 9.0` over a base's `rest(bond)` stays an edge variable of `bond`,
+whatever relationships the extension adds. Re-declaring it as an edge variable of another
+relationship is an error: each edge variable belongs to one relationship.
 
 ```@example rel
 using Potts

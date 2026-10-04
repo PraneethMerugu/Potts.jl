@@ -1904,3 +1904,9 @@ The maintainer approved F-1…F-6 (D-049).
 
 - **The change.** `CorePotts.frozen_reads(sys)` (public; default `nothing`) lets a custom `remake_frozen` declare `:σ` and the cell columns it reads; a device refresh then copies only those (Metal, test fixture: 1408 B per refresh for both twins, vs 1792/3460 B undeclared). Bad or repeated names are an `ArgumentError` at `init` and every refresh. Standard rule unchanged (no gate model uses a custom rule). Audit row R4 resolved.
 - **Review.** Two rounds (round 1: a repeated name crashed on Metal only).
+
+## 2026-10-04 — P6.0b2 merged: re-declared edge variables keep their relationship; operating-point edge values seed initial links (D-127)
+
+- **The change.** An extension that re-declares a base edge variable (to change its default) keeps the base's relationship, with `@extend` and with functional `extend`; an explicit re-scope, conflicting bases, and a change of scope are clear `ArgumentError`s at build. `:rest => 9.0` (or a parameter expression) in the operating point now seeds every initial link of its relationship instead of being silently ignored; a non-number is rejected. No generated-code or fingerprint change.
+- **Review.** Two rounds (round 1: functional `extend` disagreed with `@extend` for a body built on its own).
+- **Merge checks (P6.0ay, P6.0v2b, P6.0b2 together).** Merged locally one after another and checked once on the combined tree: see below.

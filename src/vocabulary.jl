@@ -511,20 +511,54 @@ function link_rule(action::Symbol, r::RelationshipRef, args...; when, every = no
 end
 
 """
-Bind each unscoped edge variable `x(edge)` of one model body to that body's only
-relationship, when the body is built (before `@extend` merges it with others, so a base's
-`rest(edge)` stays its own relationship's). A body declaring several relationships leaves
-them unscoped; `mtkcompile` reports them as ambiguous.
+Bind each unscoped edge variable `x(edge)` of one model body, when the body is built
+(before `@extend` merges it with others, so a base's `rest(edge)` stays its own
+relationship's). A re-declaration of an edge variable of one of `bases` (the body's
+`@extend`s) keeps that variable's relationship, whatever relationships the body declares;
+only its default is the body's. A new one binds to the body's only relationship (marked
+`implicit_relationship`, so a later functional `extend` over a base declaring it may still
+re-bind it); a body declaring several leaves it unscoped, and `mtkcompile` reports it as
+ambiguous. Two bases declaring one edge variable on different relationships is an
+`ArgumentError`.
 """
-function _bind_edge_scope(vars, rels)
-    length(rels) == 1 || return vars
-    r = only(rels).name
+function _bind_edge_scope(vars, rels, bases = ())
+    # D-127: a payload column belongs to one relationship, so a re-declaration inherits it
+    inherited = Dict{Symbol, Symbol}()
+    from = Dict{Symbol, Symbol}()                      # edge variable → the base declaring it
+    for b in bases, (n, r) in _edge_relationships(b.variables)
+        old = get!(inherited, n, r)
+        old === r || throw(ArgumentError("bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
+            "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"))
+        get!(from, n, nameof(b))
+    end
+    own = length(rels) == 1 ? only(rels).name : nothing
+    isempty(inherited) && own === nothing && return vars
     return map(vars) do x
         i = info(x)
-        (i.role === :edge && !haskey(i.options, :relationship)) || return x
-        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+        (i !== nothing && i.role === :edge && !haskey(i.options, :relationship)) || return x
+        r = get(inherited, i.name, nothing)
+        r === nothing || return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+        own === nothing && return x
+        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = own, implicit_relationship = true)))
     end
 end
+"""Edge variable name → relationship, for the edge variables among `xs` bound to one."""
+function _edge_relationships(xs)
+    out = Dict{Symbol, Symbol}()
+    for x in xs
+        i = info(x)
+        i !== nothing && i.role === :edge && haskey(i.options, :relationship) &&
+            (out[i.name] = i.options.relationship)
+    end
+    return out
+end
+"""`x` with its relationship settled: the `implicit_relationship` mark dropped."""
+function _settle_edge_scope(x)
+    i = info(x)
+    (i !== nothing && i.role === :edge && haskey(i.options, :implicit_relationship)) || return x
+    return _tag(x, Info(:edge, i.name, i.default, _without_implicit(i.options)))
+end
+_without_implicit(o::NamedTuple) = (; (k => v for (k, v) in pairs(o) if k !== :implicit_relationship)...)
 """`new_contact(a, b)`: the pair touches and is not yet linked (the candidates of `@link`)."""
 new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)

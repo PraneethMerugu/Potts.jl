@@ -484,6 +484,123 @@ end
     @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
 end
 
+@testset "programmatic extend: a re-declared edge variable keeps the base's relationship" begin
+    base = Spring(; name = :s)                       # `rest(edge)`: `bond`
+    rest_sym = only(Potts.Symbolics.@variables rest(Potts.t))
+    ext(scope; rels = [Potts.relationship(:tether; capacity = 1)]) = Potts.PottsSystem(; name = :x,
+        kinds = base.kinds, lattice = base.lattice, sweep = base.sweep, relationships = rels,
+        variables = Any[Potts.variable(rest_sym, scope; default = 9.0)])
+    σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2
+    op = [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]]
+    for (scope, rels) in ((:edge, [Potts.relationship(:tether; capacity = 1)]), (:edge, Potts.RelationshipSpec[]),
+                          (:edge, [Potts.relationship(:tether), Potts.relationship(:glue)]), (:bond, Potts.RelationshipSpec[]))
+        c = mtkcompile(extend(ext(scope; rels), base))
+        @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
+        @test all(r -> isempty(c.edge_vars[r]), filter(!=(:bond), collect(keys(c.edge_vars))))
+        prob = PottsProblem(c, op, (0, 5))
+        @test prob.u0.cell.link_rest[1, 1] == prob.u0.cell.link_rest[1, 2] == 9.0   # the extension's default
+        @test total_energy(prob) == total_energy(PottsProblem(base, [op; :rest => 9.0], (0, 5)))
+    end
+    # a nested extension (of an extension) keeps it too
+    c = mtkcompile(extend(ext(:edge; rels = Potts.RelationshipSpec[]), extend(ext(:edge), base; name = :mid)))
+    @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest] && isempty(c.edge_vars[:tether])
+    # another relationship: rejected when built, naming the variable and both relationships
+    @test_throws ArgumentError extend(ext(:tether), base)
+    @test_throws r"`rest`.*`bond`.*`tether`" extend(ext(:tether), base)
+    # control: without the base's variable, `rest(tether)` is the extension's own
+    c = mtkcompile(ext(:tether))
+    @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:rest]
+end
+
+# a body built on its own (no @extend), whose `rest(edge)` binds to its only relationship
+# `tether`, then extended functionally over `Spring` (`rest(edge)` on `bond`)
+@potts_model EdgeBody begin
+    @kinds medium blob
+    @variables begin
+        rest(edge) = 9.0
+        len(tether) = 18.0
+    end
+    @relationship tether(cell, cell) capacity = 1
+    @lattice Lattice((60, 30); neighborhood = Moore(1))
+    @energy edges(tether) => 1.5 * (distance - len)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model EdgeBodyExtend begin                     # the `@extend` form of the same
+    @extend base = Spring()
+    @variables begin
+        rest(edge) = 9.0
+        len(tether) = 18.0
+    end
+    @relationship tether(cell, cell) capacity = 1
+    @energy edges(tether) => 1.5 * (distance - len)^2
+end
+@potts_model RestOnTether begin                        # `rest(edge)`: `tether`
+    @kinds medium blob
+    @variables rest(edge) = 5.0
+    @relationship tether(cell, cell) capacity = 1
+    @lattice Lattice((60, 30); neighborhood = Moore(1))
+    @energy edges(tether) => (distance - rest)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model TwoBasesOneEdgeName begin
+    @extend a = Spring()
+    @extend b = RestOnTether()
+end
+@potts_model RestAsCell begin                          # an inherited edge variable as a cell variable
+    @extend base = Spring()
+    @variables rest(cell) = 9.0
+end
+@potts_model VolumeGoalBase begin
+    @kinds medium blob
+    @variables goal(cell) = 36.0
+    @lattice Lattice((60, 30); neighborhood = Moore(1))
+    @energy cells(blob) => (volume - goal)^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model GoalAsEdge begin                        # an inherited cell variable as an edge variable
+    @extend base = VolumeGoalBase()
+    @variables goal(edge) = 1.0
+    @relationship bond(cell, cell) capacity = 1
+end
+
+@testset "extend: a body's implicitly bound edge variable takes the base's relationship" begin
+    σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2; σ[40:45, 12:17] .= 3
+    op = [ownership => σ, kind => [:blob, :blob, :blob], :bond => [(1, 2)], :tether => [(2, 3)]]
+    # alone, the body's `rest(edge)` is its only relationship's (control)
+    body = EdgeBody(; name = :x)
+    @test sort([Potts.info(x).name for x in mtkcompile(body).edge_vars[:tether]]) == [:len, :rest]
+    # the mark of an implicit binding is not code: settling it keeps the fingerprint
+    settled = Potts.PottsSystem(; (f => getfield(body, f) for f in fieldnames(Potts.PottsSystem))...,
+        variables = map(Potts._settle_edge_scope, body.variables))
+    @test any(x -> haskey(Potts.info(x).options, :implicit_relationship), body.variables)
+    @test !any(x -> haskey(Potts.info(x).options, :implicit_relationship), settled.variables)
+    bop = [ownership => σ, kind => [:blob, :blob, :blob], :tether => [(2, 3)]]
+    @test PottsProblem(body, bop, (0, 5)).f.fingerprint == PottsProblem(settled, bop, (0, 5)).f.fingerprint
+    sys = extend(EdgeBody(; name = :x), Spring(; name = :s))
+    c = mtkcompile(sys)
+    @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
+    @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
+    oracle = mtkcompile(EdgeBodyExtend(; name = :x))
+    @test [Potts.info(x).name for x in oracle.edge_vars[:bond]] == [:rest]
+    p, q = PottsProblem(c, op, (0, 5)), PottsProblem(oracle, op, (0, 5))
+    @test p.u0.cell.link_rest[1, 1] == 9.0 && p.u0.cell.link_len[1, 2] == 18.0
+    @test total_energy(p) == total_energy(q) == 3264 + 72 + 6
+    # an explicit `rest(tether)` is still a move, and rejected
+    @test_throws r"`rest`.*`bond`.*`tether`" extend(RestOnTether(; name = :x) |> s -> Potts.PottsSystem(; name = :x,
+        kinds = s.kinds, lattice = s.lattice, sweep = s.sweep, relationships = s.relationships,
+        variables = Any[Potts.variable(only(Potts.Symbolics.@variables rest(Potts.t)), :tether; default = 5.0)]),
+        Spring(; name = :s))
+    # once merged, a binding is settled: a second base declaring `rest` elsewhere is an error
+    @test_throws ArgumentError extend(extend(EdgeBody(; name = :x), Spring(; name = :s)), RestOnTether(; name = :t))
+end
+
+@testset "extend: edge variables of bases and changes of scope are checked" begin
+    @test_throws "bases `a` and `b` both declare edge variable `rest`, on `bond` and `tether`" TwoBasesOneEdgeName(; name = :m)
+    @test_throws ArgumentError RestAsCell(; name = :m)
+    @test_throws r"`rest` is an edge variable of `bond`.*a cell variable.*change its scope" RestAsCell(; name = :m)
+    @test_throws r"`goal` is a cell variable.*an edge variable.*change its scope" GoalAsEdge(; name = :m)
+end
+
 @testset "several relationships: names are checked" begin
     @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
     @test_throws "neither a scope" mtkcompile(UnknownRelationship(; name = :u))

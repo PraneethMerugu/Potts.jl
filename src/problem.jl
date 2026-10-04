@@ -62,7 +62,10 @@ needed). `op` maps `ownership` to the initial labels (an integer array over the 
 `kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
 compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
 (scalars or arrays), parameters to values overriding their defaults, and a relationship's
-name to its initial links (`:bond => [(1, 2)]`). `T` is the scalar
+name to its initial links (`:bond => [(1, 2)]`). An edge variable takes one number (or
+a parameter expression, evaluated at construction: a later `remake` of parameters does not
+re-seed it), its initial value on every initial link of its relationship (both ends;
+default: its declared default); links made later by `@link` start at the declared default. `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). The generated code is
 `Potts.generated_code(sys; T)`.
 
@@ -583,7 +586,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         vars = c.edge_vars[r.name]
         links = CorePotts.empty_links(r.capacity, ncell, r.name; (info(x).name => T for x in vars)...)
         store = (; links = links[CorePotts.adjacency_name(r.name)], Base.tail(links)...)
-        defaults = (; (info(x).name => T(info(x).default) for x in vars)...)
+        defaults = (; (info(x).name => T(_edge_initial(x, opd, pvals, r.name)) for x in vars)...)
         for (x, y) in get(opd, r.name, ())
             CorePotts.add_link!(store, x, y; defaults...) ||
                 throw(ArgumentError("$(r.name): cannot link cells $x and $y (full row or duplicate)"))
@@ -612,6 +615,18 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+end
+
+# The initial value of edge variable `x` on the initial links of relationship `r`: its
+# operating-point value (one number for every initial link, both ends; D-127) or its
+# default. Per-link values are not guessed from arrays.
+function _edge_initial(x, opd, pvals, r)
+    i = info(x)
+    haskey(opd, _unwrap(x)) || return i.default
+    v = _evaluate(opd[_unwrap(x)], pvals, "the operating-point value of `$(i.name)`")
+    v isa Real || throw(ArgumentError("edge variable `$(i.name)`: the operating point takes one number, " *
+        "the initial value on every initial link of `$r`; got $(repr(v; context = :limit => true))"))
+    return v
 end
 
 # The at-init phases (integrals, energy snapshots) on a host state, so a problem's `u0` is

@@ -110,7 +110,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; D-058) **P6.0b** several named relationships per model, each with its own link store and
   claim set. Depends: none. Accept: two relationships with different laws, checked by the
   springs oracle on each; checkerboard equals sequential statistically.
-- [ ] **P6.0b2** P6.0b review follow-ups:
+- [x] (merge, 2026-10-04; D-127) **P6.0b2** P6.0b review follow-ups:
   - An extension that re-declares a base edge variable while adding its own single
     relationship re-binds it to the new relationship, which gives a confusing error. Keep
     the base's binding, or improve the message.
