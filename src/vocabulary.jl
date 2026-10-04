@@ -682,17 +682,12 @@ struct SweepSpec
     mcs_duration::Float64
 end
 # D-123: `combine` is interpolated into the generated temperature code, whose printed form
-# the fingerprint hashes, so it must print the same in every session. A singleton function
-# is stable only through a constant global binding (`nameof(typeof(min))` is `#min`, so the
-# type name alone cannot decide); anything else is stable unless its type is
-# compiler-generated (`#…`: an anonymous function, a closure, a local named function).
-function _stable_callable(f)
-    if f isa Function && Base.issingletontype(typeof(f))
-        m, n = parentmodule(f), nameof(f)
-        return isdefinedglobal(m, n) && isconst(m, n) && getglobal(m, n) === f
-    end
-    return !startswith(string(nameof(typeof(f))), '#')
-end
+# the fingerprint hashes, so it must print the same in every session. Test exactly that
+# printed form: a compiler-generated name (`var"#…"`: an anonymous function, a closure, a
+# local named function, a gensym'd module, or any of these inside a wrapper's type or
+# fields) carries a session counter. Module paths such as Pluto's `var"workspace#3"` pass:
+# stable within a session, the user's contract across sessions.
+_stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
 """
     sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
 
@@ -701,8 +696,10 @@ The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
 
 - `offset` must be finite; NaN and ±Inf are an `ArgumentError`.
 - `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
-  at the top level and passed as `combine = amean`) or an instance of a callable struct.
-  An anonymous function, a closure or a function defined inside another function is an
+  at the top level and passed as `combine = amean`), a composition of named functions
+  (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous
+  function, a closure, a function defined inside another function, or a wrapper holding
+  one (`Base.Fix2((a, b) -> a, 1)`, a struct with an anonymous-function field) is an
   `ArgumentError`: its compiler-generated name changes between Julia sessions, so a
   checkpoint written in one session would not load in the next. To carry parameters, use
   a callable struct (`struct Mix; w::Float64; end; (m::Mix)(a, b) = m.w * a + (1 - m.w) * b`).
@@ -715,14 +712,15 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
+    (offset isa Real && isfinite(offset)) || throw(ArgumentError(
+        "`@sweep`: `offset` must be a finite real number, got $(repr(offset)); " *
+        "pass a finite number (`offset = 0` disables it)"))
     o = Float64(offset)
-    isfinite(o) || throw(ArgumentError("`@sweep`: `offset` must be finite, got $offset; " *
-                                       "pass a finite number (`offset = 0` disables it)"))
     _stable_callable(combine) || throw(ArgumentError(
-        "`@sweep`: `combine` must be a named function or a callable struct instance, not an anonymous " *
-        "function or closure (its compiler-generated name differs between sessions, so checkpoints could " *
-        "not be matched), got $combine: define a named function at the top level, `f(a, b) = …`, and pass " *
-        "`combine = f`, or a callable struct to carry parameters"))
+        "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+        "function or closure, or a wrapper holding one, is named differently in every session, so " *
+        "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+        "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
     return SweepSpec(law, temperature, combine, o, Float64(mcs_duration))
 end
 
