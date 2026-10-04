@@ -113,11 +113,12 @@ remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen
     frozen_reads(sys)
 
 The state leaves a custom `remake_frozen` rule reads at a refresh, as a tuple of `Symbol`s:
-`:σ` (the labels) or cell column names. On a device, a refresh then copies only these
-leaves to the host before running the rule; what the rule sees in any other leaf is
-unspecified. `nothing` (the default) copies the whole state. A rule that reads model, site
+`:σ` (the labels) or cell column names, each at most once. On a device, a refresh then
+copies only these leaves to the host before running the rule; every other leaf is the live
+device array: do not read it on the host (scalar indexing errors; `Array(...)` works but is
+an uncounted transfer). `nothing` (the default) copies the whole state. A rule that reads model, site
 or history quantities keeps the default. A name that is neither `:σ` nor a cell column of
-the state is an `ArgumentError` at `init` (and at every refresh), on every backend. The
+the state, or that is repeated, is an `ArgumentError` at `init` (and at every refresh), on every backend. The
 standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this hook.
 """
 frozen_reads(sys) = nothing
@@ -131,8 +132,8 @@ function _check_frozen_hooks(sys)
     return nothing
 end
 
-# The declared reads of a custom rule (D-128): `nothing`, or a tuple of `:σ` and cell
-# column names of `st`; checked at `init` and at every custom-rule refresh.
+# The declared reads of a custom rule (D-128): `nothing`, or a tuple of distinct `:σ` and
+# cell column names of `st`; checked at `init` and at every custom-rule refresh.
 function _frozen_reads(sys, st)
     reads = frozen_reads(sys)
     reads === nothing && return nothing
@@ -143,6 +144,8 @@ function _frozen_reads(sys, st)
             "`frozen_reads` declares `$n`, which is neither `:σ` nor a cell column of the state " *
             "(cell columns: $(join(keys(st.cell), ", ")))"))
     end
+    allunique(reads) || throw(ArgumentError(
+        "`frozen_reads` declares `$(reads[findfirst(n -> count(==(n), reads) > 1, reads)])` more than once; got $(repr(reads))"))
     return reads
 end
 _custom_frozen(sys) = frozen_varies(sys) && frozen_kinds(sys) === nothing

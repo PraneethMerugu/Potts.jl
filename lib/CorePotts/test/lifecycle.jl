@@ -315,9 +315,10 @@ end
     end
 end
 
-# P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`); on the CPU
-# the rule still sees the live state, so the masks are the undeclared rule's. A bad
-# declaration fails at `init`, before any step.
+# P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`). On the CPU
+# the declared path is the live state (no copy), so only the validation and the masks are
+# exercised here; the byte behaviour is covered on Metal by the acceptance file
+# `p6_0v2b_frozen_refresh_bytes.jl`. A bad declaration fails at `init`, before any step.
 struct DeclaredFrozen
     k::Int32
     reads::Any
@@ -349,9 +350,10 @@ CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
         reinit!(integ, prob.u0)
         @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
         # a name that is not `:σ` or a cell column, or not a tuple of Symbols: rejected at init
-        for bad in ((:σ, :knd), (:σ, :q), [:σ], (:σ, "kind"))
+        for bad in ((:σ, :knd), (:σ, :q), [:σ], (:σ, "kind"), (:σ, :kind, :kind), (:σ, :σ))
             @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, bad)), alg)
         end
+        @test_throws r"`kind` more than once" init(fk_problem(; sys = DeclaredFrozen(2, (:σ, :kind, :kind))), alg)
         # negative control: the standard rule ignores the hook (not even checked)
         integ = init(fk_problem(; sys = KindsBadReads()), alg)
         @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
