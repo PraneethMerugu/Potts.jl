@@ -712,7 +712,7 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
-    (offset isa Real && isfinite(offset)) || throw(ArgumentError(
+    (offset isa Real && isfinite(Float64(offset))) || throw(ArgumentError(
         "`@sweep`: `offset` must be a finite real number, got $(repr(offset)); " *
         "pass a finite number (`offset = 0` disables it)"))
     o = Float64(offset)
