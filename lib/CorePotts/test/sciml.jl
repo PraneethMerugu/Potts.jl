@@ -47,3 +47,29 @@ using SciMLBase: ContinuousCallback
         @test calls == [1, 2]
     end
 end
+
+# D-116: a problem without a model whose parameter object is a NamedTuple has its fields as
+# parameter names; `remake_buffer` (and `setp_oop`, which calls it) returns a new NamedTuple.
+@testset "remake_buffer on a NamedTuple parameter object" begin
+    SII = CorePotts.SymbolicIndexingInterface
+    σ, kinds = blocks((20, 20), 5)
+    gp = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 2), gg_params(); seed = 3)
+    gi = init(gp, SequentialCPM())
+    # without a CorePotts method, SII's untyped fallback and its deprecated `Dict` method call
+    # each other forever: check the method instead of risking the test process
+    # (`setp_oop` calls it on the root container, with tuples)
+    m = which(SII.remake_buffer, Tuple{typeof(gp), typeof(gp.p), Vector{Symbol}, Vector{Float64}})
+    mo = which(SII.remake_buffer, Tuple{typeof(SII.symbolic_container(gi)), typeof(gp.p), Tuple{Any}, Tuple{Int}})
+    @test m.module === CorePotts && mo.module === CorePotts
+    if m.module === CorePotts && mo.module === CorePotts
+        r = SII.remake_buffer(gp, gp.p, [:T, :λ], [3.0, 2])
+        @test typeof(r) === typeof(gp.p) && r == merge(gp.p, (; T = 3.0, λ = 2.0))
+        @test gp.p == gg_params()                                         # the original untouched
+        @test SII.remake_buffer(gi, gi.p, [:V0], [7]).V0 === 7.0
+        @test SII.setp_oop(gi, :T)(gi, 4) == merge(gp.p, (; T = 4.0))
+        @test gi.p == gg_params()
+        # negative controls: an unknown field; keys and values of different lengths
+        @test_throws ArgumentError SII.remake_buffer(gp, gp.p, [:T, :zz], [1.0, 2.0])
+        @test_throws DimensionMismatch SII.remake_buffer(gp, gp.p, [:T], [1.0, 2.0])
+    end
+end

@@ -94,6 +94,44 @@ end
     @test prob.f.acceptance === Metropolis()
 end
 
+@testset "remake: whole parameter objects, keep sentinels, non-maps (D-115)" begin
+    prob = symbolic_graner_problem(; nmcs = 5)
+    # a whole object of this problem's type is taken as given
+    q = remake(prob; p = [:λ => 3.0])
+    @test remake(prob; p = q.p).p === q.p
+    # another model's object: an ArgumentError naming the differing names, not a later failure
+    other = symbolic_wortel_problem()
+    err = try
+        remake(prob; p = other.p); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("λₛ", err.msg) && occursin("S₀", err.msg)                # names WORTEL has, SORTING lacks
+    @test prob.p.λ == symbolic_graner_problem(; nmcs = 5).p.λ        # source unchanged
+    # a Float32 problem's object: values taken, converted to this problem's scalar type
+    p32 = remake(symbolic_graner_problem(; nmcs = 5, T = Float32); p = [:λ => 4.0, :T => 3.0])
+    @test eltype(p32.p.V₀) === Float32
+    r = remake(prob; p = p32.p)
+    @test typeof(r.p) === typeof(prob.p)
+    @test r.p.λ === 4.0 && r.p.T === 3.0 && r.p.V₀ == Float64.(p32.p.V₀)
+    @test solve(remake(r; tspan = (0, 1)), SequentialCPM()).u[end].cell.volume isa AbstractVector
+    # SciML keep sentinels
+    @test remake(q; p = missing).p === q.p
+    @test remake(q; p = nothing).p === q.p
+    @test remake(prob; u0 = nothing).u0.σ == prob.u0.σ
+    @test remake(prob; u0 = missing).u0.cell.volume == prob.u0.cell.volume
+    integ = init(prob, SequentialCPM())
+    step!(integ)
+    reinit!(integ, nothing)
+    @test integ.state.σ == prob.u0.σ && integ.t == 0
+    # non-states and non-maps: ArgumentErrors, not MethodErrors or silent replacement
+    @test_throws ArgumentError remake(prob; u0 = 3.0)
+    @test_throws ArgumentError remake(prob; u0 = [1, 2])
+    @test_throws ArgumentError reinit!(integ, "state")
+    @test_throws ArgumentError remake(prob; p = 3.0)
+end
+
 @potts_model Spring begin
     @kinds medium blob
     @parameters begin
@@ -996,6 +1034,44 @@ end
     @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
 end
 
+# D-114: a bound vector parameter redeclared takes the extension's default or keyword.
+# Fixture: cell 1 (A, volume 9) and cell 2 (B, volume 12) on a 12×12 von Neumann lattice;
+# the base without the `d` terms is 9 + 52 + 10.5 = 71.5, and the `d` terms add 9 d₁ + 12 d₂.
+@potts_model ExtVecBase begin
+    @kinds medium A B
+    @parameters begin
+        λ = 1.0
+        V₀ = 9.0
+        J[kind, kind] = [0 2 2; 2 1 4; 2 4 1]
+        d[1:2] = [1.0, 2.0]
+    end
+    @variables x(cell) = 0.5
+    @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A, B) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+        cells(A, B) => x * volume
+        cells(A) => d[1] * volume
+        cells(B) => d[2] * volume
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@potts_model ExtVecRedecl begin
+    @extend d = base = ExtVecBase()
+    @parameters d[1:2] = [3.0, 4.0]
+end
+
+@testset "@extend: a bound vector parameter redeclared keeps its own default (D-114)" begin
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[6:8, 3:6] .= 2
+    E(m) = total_energy(PottsProblem(m, [ownership => σ, kind => [:A, :B]], (0, 2); seed = 7))
+    @test E(ExtVecBase(; name = :b)) == 104.5                           # 71.5 + 9 + 24
+    @test E(ExtVecRedecl(; name = :e)) == 146.5                         # 71.5 + 27 + 48
+    @test E(ExtVecRedecl(; name = :e, d = [0.0, 0.0])) == 71.5
+    # `#…` names are the constructor's own; a declaration of one is rejected
+    @test_throws r"cannot start with `#`" Potts._potts_model(:HashName, quote @parameters var"##kw#λ" = 4.0 end, @__MODULE__)
+end
+
 @potts_model BadSiteVar begin
     @kinds medium A
     @parameters T = 1.0
@@ -1361,6 +1437,22 @@ end
     @test integ.state.cell.py == [-0.25]
     @test_throws DimensionMismatch (integ[:px] = [1.0, 2.0])
     @test_throws Exception (integ[:volume] = [3])
+    # a built-in in a list setter is read-only, not unknown (D-116); nothing is set
+    for f in (() -> setu(integ, [:kind, :μ]), () -> setp(integ, [:μ, :volume]))
+        e = try
+            f(); nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError && occursin("read-only", sprint(showerror, e))
+    end
+    e = try
+        setu(integ, [:zz, :μ]); nothing
+    catch err
+        err
+    end
+    @test e isa ArgumentError && !occursin("read-only", sprint(showerror, e))   # control: unknown
+    @test integ.ps[:μ] == 800.0
     sol = solve!(integ)
     @test sol[:x][end][1] ≈ sol.u[end].cell.cx[1]                     # observed still derived
     @test sol[:px][end] == sol.u[end].cell.px
@@ -3513,4 +3605,66 @@ end
     mark!(integ.state); c2 = deepcopy(integ.state.cell)
     @test integ[:o] ≈ oracle(integ.state)
     @test unchanged(integ.state, c2)
+end
+
+# `div`/`÷` on parameters and cell quantities in step code, and a variable default computed
+# with a function of parameters (D-117)
+@potts_model P60aoDivEnergy begin
+    @kinds medium A
+    @parameters begin
+        n = 7.0
+        λ = 1.0
+    end
+    @variables begin
+        goal(cell) = sqrt(n + 2)
+    end
+    @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A) => λ * (volume - n ÷ 2 - goal)^2 + div(volume, 4)
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "div and ÷ in energies; variable defaults with functions" begin
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[8:9, 8:9] .= 2
+    prob = PottsProblem(P60aoDivEnergy(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 3)
+    @test prob.u0.cell.goal[1:2] == [3.0, 3.0]                       # sqrt(7 + 2)
+    oracle(V, n) = sum((v - div(n, 2) - 3)^2 + div(v, 4) for v in V if v > 0)
+    @test total_energy(prob) == oracle([9, 4], 7.0)                     # 9 + 2 + 4 + 1
+    @test total_energy(remake(prob; p = [:n => 4.0])) == oracle([9, 4], 4.0)
+    worst = 0.0
+    for (u, prop) in proposal_states(prob; mcs = (0, 5), n = 300)
+        a = deepcopy(u); a.σ[prop.target] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
+    end
+    @test worst < 1e-9
+    sol = solve(prob, SequentialCPM())
+    @test total_energy(prob, sol.u[end]) ≈ oracle(sol.u[end].cell.volume[1:2], 7.0)
+    # on numbers: Julia's `div` (integers stay integers; floats in their own type)
+    @test Potts._intdiv(7, 2) === 3 && Potts._intdiv(Int32(7), 2) === 3 && Potts._intdiv(7.0, 2) === 3.0
+    @test Potts._intdiv(7.5f0, 2.0f0) === 3.0f0 && Potts._intdiv(-7.5f0, 2) === -3.0f0
+    # equal to Base where the quotient is exact in Float32 (|a / b| < 2^24)
+    xs = Float32[0.3, -7.5, 1.0f5, 12.0, 5.0f-3, 9.0, -9.5]
+    @test all(((a, b),) -> Potts._intdiv(a, b) === div(a, b), Iterators.product(xs, Float32[0.1, 2, -3, 1.5]))
+    # zero derivative (piecewise constant)
+    a, b = Potts.Symbolics.@variables a b
+    @test isequal(Potts.Symbolics.derivative(Potts._intdiv(a, b), a), 0)
+end
+
+@testset "a model may not define its own `div` or `÷`" begin
+    for def in (:(div(a, b) = a), :(function ÷(a::T, b) where {T}; a; end), :(div = max))
+        err = try
+            macroexpand(@__MODULE__, :(@potts_model LocalDiv begin
+                $def
+                @kinds medium A
+            end))
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("integer division", sprint(showerror, err))
+    end
+    # a field named `div` in a named tuple is not a definition
+    @test Potts._div_definition(:(f(x) = (div = x ÷ 2,))) === nothing
 end

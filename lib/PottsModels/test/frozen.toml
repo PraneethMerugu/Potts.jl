@@ -216,3 +216,23 @@ decision = "D-113"
 path = "acceptance/p6_0ai_integral_fold_hoist.jl"
 sha256 = "c7f767d8968b0d19372629bef091b67f09771d8e198898ac75b7ee322ca12c30"
 decision = "D-110"
+
+[[file]]
+path = "acceptance/p6_0am_extend_bound_override.jl"
+sha256 = "46ec9fb9743054544ca88b6d0d5c0782e62b6a77ebebb1c85352972aece7a9a4"
+decision = "D-114"
+
+[[file]]
+path = "acceptance/p6_0an_remake_namedtuple.jl"
+sha256 = "eee0703a97d96d7ec2acd8691dafdb8206163e9053d4efec0a8a633fec30df06"
+decision = "D-115"
+
+[[file]]
+path = "acceptance/p6_0ap_setter_loose_ends.jl"
+sha256 = "85bb3e08904b1d2df905a0befdaddfe1a2a2e2f1b233bf6defbfd2b995cf3b75"
+decision = "D-116"
+
+[[file]]
+path = "acceptance/p6_0ao_computed_defaults.jl"
+sha256 = "42c5b60d1869e9d765c163eb0b9d949b0034acc3776e3237883d285639723846"
+decision = "D-117"

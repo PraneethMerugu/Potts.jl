@@ -1809,3 +1809,28 @@ The maintainer approved F-1…F-6 (D-049).
 - **Finding (A/B method).** A Metal A/B of a few percent is not evidence on its own: identical source in two checkouts differed by up to ±4% (Merks: 1.042, then 0.975 in a later session), because each checkout's compiled package caches differ and are rebuilt often in the shared depot. Before treating a small Metal ratio as a regression, compare two checkouts of the same source (or the host enqueue time with `--pkgimages=no`).
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0.
 - **Gate.** CPU 0.971–1.033; Metal GG 1.018, Merks 0.942, OpenVT 1.030, Akeeb 1.033, Wortel 1.090 flagged; `ab.jl` Wortel against ea26df4c, 6 rounds: 0.940 (noisy after the machine slept; the implementer's earlier run 0.974).
+
+## 2026-10-03 — P6.0an merged: `remake` with a NamedTuple (D-115)
+
+- **The change.** On a model's problem, `remake(prob; p = (λ = 3.0,))` is a parameter map like pairs or a `Dict` (one change under D-112); a whole `PottsParameters` of the same type is taken as given, of another type only with the same names (values converted); `p`/`u0` `= missing` or `nothing` keep the current value, as in SciML; any other value is an `ArgumentError` instead of a silent replacement that failed later. A NamedTuple `u0` works in `remake` and `reinit!`. Hand-written CorePotts problems keep their contract.
+- **Review.** Two rounds (round 2: whole objects checked, keep sentinels, `u0` catch-all), approved.
+- **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Host-only; gate and Metal not rerun.
+
+## 2026-10-03 — P6.0am merged: an `@extend`-bound name redeclared keeps its own default (D-114)
+
+- **The change.** `@extend λ = base = Base(); @parameters λ = 3.0` used to take the base's symbol as the default ("does not reduce to numbers") and to drop a constructor keyword `λ = 5`; each parameter keyword is now captured before section code runs, so a redeclared bound name takes the extension's default or keyword (scalars, vectors, kind tables), and every expression reading it uses that one value. Names starting with `#` are rejected. Fingerprints of existing models unchanged.
+- **Review.** One round, approved; follow-ups (vector regression test, `#` names) done before merge.
+- **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and docs exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-03 — P6.0ap merged: parameter-setter loose ends (D-116)
+
+- **The change.** A `setp` list naming a state is an `ArgumentError` at build pointing to `setu`/`setsym`; `setsym`/`setu` with a list sets its parameters as one change and its states as before; `SII.remake_buffer` returns a new parameter object (it overflowed the stack) for a model's problem and for a hand-written NamedTuple one; hand-written CorePotts problems with a NamedTuple `p` get `getp`/`setp`/`integ.ps[x]` by field name; a read-only built-in in a list setter is reported as read-only. `setp_oop`/`setsym_oop` now work.
+- **Review.** One round, approved (including Metal); follow-ups done before merge.
+- **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. Single-name setters unchanged in time; no step-loop change, gate not rerun.
+
+## 2026-10-03 — P6.0ao merged: computed defaults that call functions or read kind tables (D-117)
+
+- **The change.** A computed default (scalar or kind-table entry) is evaluated numerically: Base math, `÷`/`div`, comparisons, lazy `ifelse`, constants, registered functions and kind-table reads by kind number (with `@kinds medium P Q`, `V₀[2] ≡ V₀[Q]`), in the problem's scalar type; D-112 re-derivation sees through them. A default reading a variable or built-in, drawing `rand()`, reading an out-of-range kind or failing on its values is an `ArgumentError` naming the parameter. Kind-table literals are rewritten like the rest of the model (a table reading a table works). `÷`/`div` now work in model code on CPU and Metal (Float32 without Float64; equal to Base while the quotient is exact); a model may not define its own `div`. Fingerprints of existing models unchanged.
+- **Review.** Two rounds (round 2: Metal-safe float division, the substep bound, local `div` rejected), approved.
+- **Merge.** One conflict with P6.0am on the kind-table keyword line: both the hidden keyword local and the literal rewrite kept.
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No existing model's step code changes; gate not rerun.

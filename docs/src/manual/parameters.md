@@ -49,6 +49,12 @@ prob2 = remake(prob; p = [:λ => 5.0, :J => [0 16 16; 16 2 14; 16 14 14]])
 getp(prob2, :λ)(prob2), getp(prob2, :J)(prob2)[2, 3]
 ```
 
+`p` can be a NamedTuple (`remake(prob; p = (λ = 5.0,))`), a vector of pairs or a `Dict`;
+all three mean the same change. A name that is not a parameter, or a value that is none of
+these nor a whole parameter object (below), is an `ArgumentError`. A NamedTuple also works
+for `u0`, as for the operating point. As in SciML, `p = missing` (or `nothing`) keeps the
+problem's parameters, and `u0 = missing` (or `nothing`) keeps its state.
+
 A computed default such as `V_big = 2A₀` follows its inputs: `remake` with a new `A₀` also
 changes `V_big`. The entries of a kind table can be computed the same way
 (`V₀[kind] = [0.0, V_big, A₀]` above, or `J[kind, kind] = [0 Jx Jx; Jx 2 Jx-5; Jx Jx-5 14]`),
@@ -70,7 +76,22 @@ of `λ` keeps those numbers, while a change of an input of `V₀` evaluates `V�
 expression again (give `V₀` in the same change to keep it). Chains follow their inputs: with
 `β = 2α` and `γ = β + 1`, changing `α` re-evaluates `β` and `γ` even if `β` was set, and
 changing `β` re-evaluates `γ`. The same holds for scalar computed defaults such as `V_big`.
-A parameter object given whole (`remake(prob; p = checkpoint.p)`) sets every value.
+A parameter object given whole (`remake(prob; p = checkpoint.p)`) sets every value, converted
+to the problem's number type; one with other parameter names is an `ArgumentError`.
+
+A computed default, scalar or table entry, is evaluated as a number. It may use Julia's
+functions (`sqrt`, `exp`, `log`, `min`, `max`, `floor`, `mod`, `div` or `÷`, and so on),
+comparisons with `ifelse`, `c ? a : b` and `&&`, constants such as `π`, and functions
+registered with `@register_symbolic`. It may also read an entry of a kind table. A kind is
+indexed by its number as everywhere in a model: the medium is 0, then the kinds follow in
+`@kinds` order, and a kind's name stands for its number. With `@kinds medium dark light`,
+`u = V₀[2] + 1` and `u = V₀[light] + 1` are the same. A default cannot read a variable or a
+built-in such as `volume`, cannot draw `rand()`, and cannot read a kind outside the table.
+Each of these is an `ArgumentError` that names the parameter. So is a function that fails on
+the values, such as `sqrt` of a negative number. A call on literal numbers only, such as
+`sqrt(-1.0)`, is evaluated by Julia when the model is built, so its error (here a
+`DomainError`) comes from the model constructor. A model may not define its own `div` or
+`÷`, since in a model these are integer division.
 
 The inputs of a computed default must be declared before it in `@parameters`. A contact
 table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmetric one is an

@@ -245,6 +245,29 @@ end
     @test all(isfinite, c) && maximum(abs, c) < 1e-3
 end
 
+# an integer division of parameters in the rate keeps the automatic bound (no warning)
+@potts_model AuditIntDivField begin
+    @kinds medium A
+    @parameters begin
+        Dc = 0.25
+        k₀ = 7.0
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((16,))
+    @energy cells => (volume - 4.0)^2
+    @equations D(c) ~ Dc * Δ(c) - (k₀ ÷ 2) * c
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "÷ of parameters in a field rate is bounded in the substep count" begin
+    op = [ownership => zeros(Int32, 16), kind => Symbol[], :c => [isodd(i) ? 1.0 : -1.0 for i in 1:16]]
+    prob = @test_nowarn PottsProblem(AuditIntDivField(; name = :b), op, (0, 30); field_solver = ExplicitEuler())
+    nsub(q) = Potts.CorePotts._substeps(only(filter(x -> x isa Potts.CorePotts.FieldStep, collect(q.f.phases.after_mcs))).substeps, q.p)
+    @test nsub(prob) == 3                                           # ceil((0.25·4 + 7 ÷ 2) / 1.8)
+    @test nsub(remake(prob; p = [:k₀ => 13.0])) == 4                # ceil((1 + 6) / 1.8)
+    @test nsub(remake(prob; p = [:k₀ => 1.0])) == 1                 # 1 ÷ 2 = 0: diffusion only
+end
+
 # another field's Laplacian is a source term, not this field's diffusion (fields are
 # stepped one after another); a negative diffusion coefficient warns (anti-diffusion)
 @potts_model AuditCrossField begin
