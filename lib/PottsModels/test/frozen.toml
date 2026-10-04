@@ -276,3 +276,8 @@ decision = "D-125"
 path = "acceptance/p6_0at_relation_fingerprint.jl"
 sha256 = "5d2ee89b63909e0eb951c98d73b76e0541c73884ee18d868d55f26868ba02328"
 decision = "D-124"
+
+[[file]]
+path = "acceptance/p6_0av_mcs_duration.jl"
+sha256 = "a0989602d285db76d847b4373af7a6da83e5080ede41fc0782d9d19ac7ae3719"
+decision = "D-126"

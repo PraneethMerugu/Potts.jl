@@ -517,3 +517,63 @@ end
     end
     @test spec(offset = 2).offset === 2.0 && spec(offset = -1.5f0).offset === -1.5
 end
+
+# `mcs_duration` validation beyond the frozen P6.0av acceptance (D-126): the `offset`,
+# `combine` and `mcs_duration` checks also live in the `SweepSpec` constructor, so a hand-built
+# spec passed to `PottsSystem(; sweep)` cannot bypass them, and its errors are those of `@sweep`.
+@testset "@sweep: mcs_duration validated; a hand-built SweepSpec is checked too" begin
+    spec(; kw...) = Potts.sweep_spec(:metropolis; temperature = 1.0, kw...)
+    hand(o, md) = Potts.SweepSpec(:metropolis, 1.0, min, o, md)
+    sys(sw) = Potts.PottsSystem(; name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+        energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw)
+    function argerr(f)
+        try
+            f()
+        catch e
+            return e
+        end
+        return nothing
+    end
+    isoff(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`offset`", e.msg)
+    ismd(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`mcs_duration`", e.msg) &&
+              occursin("positive, finite", e.msg)
+    bad_md = (NaN, Inf, -Inf, NaN32, Inf32, 0, 0.0, -0.0, -1, -0.5f0, big"1e400", big"1e-400",
+              :a, "1", nothing, 1 + 1im)
+    for md in bad_md
+        @test ismd(argerr(() -> spec(mcs_duration = md)))
+        @test ismd(argerr(() -> hand(0.0, md)))
+        @test ismd(argerr(() -> sys(hand(0.0, md))))
+    end
+    for o in (NaN, Inf32, -Inf, big"1e400", :a, "1", 1 + 1im)
+        @test isoff(argerr(() -> spec(offset = o)))
+        @test isoff(argerr(() -> hand(o, 1.0)))
+        @test isoff(argerr(() -> sys(hand(o, 1.0))))
+    end
+    # an unstable `combine` is rejected by hand too; a named or callable-struct one is accepted
+    iscomb(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`combine`", e.msg)
+    anon = (a, b) -> a
+    for c in (anon, Base.Fix2(anon, 1))
+        @test iscomb(argerr(() -> Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)))
+        @test iscomb(argerr(() -> sys(Potts.SweepSpec(:barker, 1.0, c, 0.0, 1.0))))
+    end
+    for c in (max, SweepMix(0.3), Base.Fix2(min, 1))
+        @test Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0).combine === c
+        @test sys(Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)).sweep.combine === c
+    end
+    # the order of `@sweep`'s checks: offset, then combine, then mcs_duration
+    @test isoff(argerr(() -> spec(offset = NaN, combine = anon, mcs_duration = 0)))
+    @test iscomb(argerr(() -> spec(combine = anon, mcs_duration = 0)))
+    @test isoff(argerr(() -> Potts.SweepSpec(:metropolis, 1.0, anon, NaN, 0)))
+    # accepted values are stored as Float64, by `@sweep` and by hand alike
+    for md in (1, 0.5f0, 3 // 2, big"0.25", 1e300, floatmin(Float64), nextfloat(0.0))
+        @test spec(mcs_duration = md).mcs_duration === Float64(md)
+        @test hand(2, md).mcs_duration === Float64(md) && hand(2, md).offset === 2.0
+    end
+    # control: a valid hand-built spec builds, compiles, and fingerprints like the `@sweep` one
+    good = sys(hand(0, 0.5))
+    @test good.sweep.mcs_duration === 0.5
+    fp(sw) = (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
+              PottsProblem(mtkcompile(sys(sw)), [ownership => σ, kind => [:A]], (0, 2)).f.fingerprint)
+    @test fp(hand(0, 0.5)) == fp(spec(mcs_duration = 0.5))
+    @test fp(hand(0, 0.5)) != fp(spec(mcs_duration = 0.25))                     # control
+end

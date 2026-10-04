@@ -1882,3 +1882,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Pins.** WortelAct (both variants) and the `P60ahAt` fixture moved: 9 lines in 5 frozen files on the branch, plus WortelAct in `p6_0as` and `p6_0au` at merge (D-124). No dynamics change.
 - **Review.** Two rounds (round 1 approved with a reserved-name nit, fixed in round 2). Follow-up P6.0ax (an inline gather in a division `when` fails at build, pre-existing).
 - **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0av merged: `@sweep mcs_duration` validation; the `@sweep` checks live in `SweepSpec` (D-126)
+
+- **The change.** `mcs_duration` must be a real number that is finite and > 0 after conversion to Float64; NaN, ±Inf, 0, negatives, out-of-range `BigFloat`s, non-numbers and symbolic parameters are an `ArgumentError` naming it when the model is built (before: silent NaN runs, frozen or backwards time, opaque `MethodError`s). The `offset`, `combine` (D-123) and `mcs_duration` checks now run in `SweepSpec`'s inner constructor, so a hand-built spec passed to `PottsSystem(; sweep)` cannot skip them. Messages show the rejected value's type. No fingerprint changes.
+- **Review.** Approved in round 1 (constructor is the only method; serialization round-trips; fields stay Float64; build-time only). Coordinator nits at merge: docstring order, type in the message. WortelAct's pins in `p6_0av` re-pinned under D-124 at merge.
+- **Merge checks.** Potts and the docs build exit 0. PottsModels: the first run was suspended by a ≈3 h machine sleep and killed at the background limit; the rerun failed only P6.0t's timing check (1.075 vs 0.975 ms, limit 1.1×), which aborted the chain; P6.0t and every later acceptance file then ran separately (exit 0, 93 testsets) and Aqua passed. P6.0ay (load-robust cost check, chain collects failures) is in progress. Build-time only; gate and Metal not rerun.
