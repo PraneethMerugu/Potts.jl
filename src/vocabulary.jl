@@ -416,8 +416,11 @@ or earlier classes, flattened in order). A class is usable wherever a list of ki
 `cells(g)`, `clusters(g)`, `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`,
 `Chemotaxis(…; kinds = g)`, mixed with kinds (`cells(g, k)`). On a symbolic kind,
 `kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order and `kind[x] ∉ g`
-its negation, so a class costs nothing at run time. A class is not an index into a kind
-table, and operating points and layouts take kinds, not classes.
+its negation, so a class costs nothing at run time. `∈ g` is meant for kind-valued
+expressions (`kind`, `kind′`, `kind[new]`, `kind[c]`, …): on any other quantity it compares
+that value with the kind numbers. `kind == g` is an error (a kind is never equal to a
+set of kinds). A class is not an index into a kind table, and operating points and layouts
+take kinds, not classes.
 
 `PottsSystem(; kind_classes = [KindClass(:name, [k₁, …])])` declares classes
 programmatically (kind numbers: the medium is 0, then the cell kinds in order).
@@ -434,6 +437,12 @@ Base.:(==)(a::KindClass, b::KindClass) = a.name === b.name && a.kinds == b.kinds
 Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)))
 Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
 Base.in(x::Integer, g::KindClass) = x in g.kinds
+# `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
+_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with `kind ∈ $(g.name)`"))
+Base.:(==)(::Num, g::KindClass) = _class_compare(g)
+Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
+Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
+Base.:(!=)(g::KindClass, ::Num) = _class_compare(g)
 # on a symbolic kind: an unrolled `|` of equalities with constant kind numbers, folded left
 # in member order (the same expression as the explicit `(x == k₁) || (x == k₂) || …`)
 function Base.in(x::Num, g::KindClass)

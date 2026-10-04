@@ -112,16 +112,18 @@ end
   kind numbers, nothing allocated, so it runs on every backend. A model written with classes
   has the same generated code and fingerprint as the one with the `||` chains spelled out;
   a class no statement reads changes nothing.
-- A class is not an index: `J[g, kind′]` and `γ[g]` are errors naming the class. Operating
-  points, layouts and `Frame` take kinds, not classes.
+- A class is not an index: `J[g, kind′]` and `γ[g]` are errors naming the class, and so is
+  `kind == g` / `kind != g` (use `∈`/`∉`). Operating points and layouts (`Tiling`,
+  `Scattered`, `Frame`, `InsertUntil` `kind`/`into`) take kinds, not classes: `layout(l, sys)`
+  rejects a class name.
 - Rejected at construction (`ArgumentError`): an empty class, a member listed twice (also
   after flattening), the medium as a member (write `kind[x] == medium || kind[x] ∈ g`), a
   member that is not a kind or an earlier class, a name used by another declaration (D-113:
   "kind class" is a category) or a reserved name.
 - Classes are stored on the `PottsSystem` (`kind_classes`, `Potts.KindClass`; not hashed,
   their effect is in the code). `@extend g = base = Base()` binds a base class like a kind;
-  an extension may restate a base class with the same members and add new ones; restating
-  it with other members is an error naming it.
+  an extension may restate a base class with the same members in the same order and add new
+  ones; restating it with other members, or in another order, is an error naming it.
 
 ---
 

@@ -57,7 +57,9 @@ comparisons spelled out.
 Some things a class is not:
 
 - **Not a kind.** A cell has one kind, so operating points and layouts take kinds
-  (`kind => [:tip, :stalk]`), never a class name.
+  (`kind => [:tip, :stalk]`, `Tiling(…; kinds = [:tip])`, `InsertUntil(:tip; into =
+  [:stalk])`), never a class name. `kind == endothelial` is an error too: write
+  `kind ∈ endothelial`.
 - **Not an index.** Kind tables are indexed by kind (`J[kind, kind′]`); `J[endothelial,
   kind′]` is an error. Gate the term instead: `J[kind, kind′] * (kind ∈ endothelial)`.
 - **Not the medium.** The medium is not a cell kind and cannot be a member; write
@@ -66,7 +68,7 @@ Some things a class is not:
 An empty class, a kind listed twice (also through a nested class), a member that is not a
 kind or an earlier class, and a class named like another declaration are errors when the
 model is built. A model extending another (`@extend endothelial = base = Base()`) can use the
-base's classes; it may restate a base class with the same members, but not with others.
+base's classes; it may restate a base class with the same members in the same order, but not otherwise.
 Classes are stored on the model as [`Potts.KindClass`](@ref) values.
 
 ## Frozen kinds

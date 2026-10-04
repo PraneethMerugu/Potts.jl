@@ -90,6 +90,8 @@ function _check_kind_classes(sys)
     for (i, g) in enumerate(sys.kind_classes)
         n = g.name
         n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message("kind class", n)))
+        n in _reserved_names() && throw(ArgumentError(
+            "kind class `$n` has the name of a built-in (`$n` means something else in @potts_model); choose another name"))
         any(h -> h.name === n, view(sys.kind_classes, 1:(i - 1))) &&
             throw(ArgumentError("kind class `$n` is declared twice in $(sys.name)"))
         isempty(g.kinds) && throw(ArgumentError("kind class `$n` is empty; list at least one kind"))

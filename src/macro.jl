@@ -38,6 +38,26 @@ struct _Parts
     code::Vector{Any}
     mod::Module                  # the calling module (globals shadowed by component names)
     declared::Dict{Symbol, String}   # name → what declared it (collision checks)
+    bound::Set{Symbol}           # names bound by `@extend a, b = base = Base()` (kind class members)
+end
+_Parts(structural, params, code, mod, declared) = _Parts(structural, params, code, mod, declared, Set{Symbol}())
+
+# The names `@extend n₁, n₂ = base = Base()` binds before the first `@kinds` (the constructor
+# runs the sections in order, so only those are bound when the classes are built).
+function _extend_bound_names(body::Expr)
+    out = Set{Symbol}()
+    for ex in body.args
+        ex isa Expr && ex.head === :macrocall || continue
+        ex.args[1] === Symbol("@kinds") && break
+        ex.args[1] === Symbol("@extend") || continue
+        es = filter(a -> !(a isa LineNumberNode), ex.args[3:end])
+        length(es) == 1 || continue                 # malformed: the `@extend` section reports it
+        e = es[1]
+        e isa Expr && e.head === :(=) && e.args[2] isa Expr && e.args[2].head === :(=) || continue
+        lhs = e.args[1]
+        lhs isa Symbol ? push!(out, lhs) : foreach(a -> a isa Symbol && push!(out, a), lhs.args)
+    end
+    return out
 end
 
 # The hidden local holding parameter `k`'s constructor keyword. `@extend λ = base = Base()`
@@ -72,6 +92,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
                                          "are integer division; give the helper another name"))
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
+    union!(parts.bound, _extend_bound_names(body))
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -353,6 +374,14 @@ function _section!(parts, sec, args, ln = nothing)
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
         end
         for (g, members) in classes
+            # members resolve at expansion (D-135): a kind (of any @kinds), an earlier class, or
+            # a name bound by `@extend`; anything else (a misspelling, a later class, a global)
+            # is rejected here, naming it
+            for m in members
+                get(parts.declared, m, "") in ("kind", "kind class") || m in parts.bound ||
+                    throw(ArgumentError("kind class `$g`: `$m` is not a kind or an earlier kind class" *
+                                        (m === g ? " (a class cannot contain itself)" : "")))
+            end
             _declare!(parts, g, "kind class")
             push!(code, :($g = $P._kind_class($(QuoteNode(g)), $(Tuple(members)), ($(members...),))), :(push!(__classes, $g)))
         end

@@ -54,7 +54,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         Iterators.flatten((sys.parameters, sys.variables)))
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     # kind classes (D-135): the base's, then the extension's new ones; a restated class must
-    # keep its members
+    # keep its members in order (`x ∈ g` unrolls in member order)
     classes = copy(base.kind_classes)
     for g in sys.kind_classes
         i = findfirst(h -> h.name === g.name, classes)
@@ -63,7 +63,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         elseif classes[i].kinds != g.kinds
             here, there = (Tuple(get(sys.kinds, k + 1, k) for k in h.kinds) for h in (g, classes[i]))   # kind names
             throw(ArgumentError("extend: kind class `$(g.name)` is $here in $(nameof(sys)) but $there $inbase; " *
-                                "a restated class keeps its members (or rename it)"))
+                                "restate it with the same members in the same order (the order is in the generated code), or rename it"))
         end
     end
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
