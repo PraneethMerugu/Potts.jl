@@ -249,8 +249,8 @@ decision = "D-119"
 
 [[file]]
 path = "acceptance/p6_0t_integral_refresh.jl"
-sha256 = "46bd3196cb182d1e76870ff1dc7cff1aa5824de3177feede196c7e608082accd"
-decision = "D-120"
+sha256 = "332c8c27027773732731927b577475d2f7e08fd26d464a4604bc04c27e95e53b"
+decision = "D-131"
 
 [[file]]
 path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
@@ -286,3 +286,23 @@ decision = "D-126"
 path = "acceptance/p6_0ax_gather_scan.jl"
 sha256 = "ace4d43dfa9a5fd7c18f8903935558083b72dd5144a63e3704b45a221f365da1"
 decision = "D-132"
+
+[[file]]
+path = "acceptance/p6_0aw_on_copy_integral.jl"
+sha256 = "2940596dfc054e70f0fb67dba4b8a6cab6a6931403244486e8e9df2e88968d90"
+decision = "D-129"
+
+[[file]]
+path = "acceptance/p6_0v2b_frozen_refresh_bytes.jl"
+sha256 = "65f438af2c8faea5a6e033dec94474b710535ddba65769e3489582714762c576"
+decision = "D-128"
+
+[[file]]
+path = "acceptance/p6_0b2_link_followups.jl"
+sha256 = "b2f29c6b87f90566e937bff2b80843dcdfd7f4e25dcf2dfd326a75e31bdaf0e0"
+decision = "D-127"
+
+[[file]]
+path = "acceptance/p6_0c2_canonical_followups.jl"
+sha256 = "40783990a807ba3319d051c3a168754181e7d6d4f0333c384d54a7bbe0460145"
+decision = "D-130"

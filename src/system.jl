@@ -70,10 +70,11 @@ function _check_reserved_names(sys)
             check(what, i.name)
             _check_internal_suffix(what, i.name)
             v = get(i.options, :vector, nothing)
-            v === nothing || check(what, v)
+            v === nothing || (check(what, v); _check_internal_suffix(what, v))
         end
     end
-    foreach(o -> (i = info(o.var); i === nothing || check("observed quantity", i.name)), sys.observed)
+    foreach(o -> (i = info(o.var); i === nothing || (check("observed quantity", i.name);
+                                                     _check_internal_suffix("observed quantity", i.name))), sys.observed)
     foreach(k -> check("relation", k), keys(sys.relations))
     foreach(r -> check("relationship", r.name), sys.relationships)
     foreach(c -> check("component", c.name), sys.components)
@@ -82,7 +83,9 @@ function _check_reserved_names(sys)
 end
 
 # Suffixes of the state slots Potts adds (ODE and tick scratch, double-buffered fields): a
-# declared name ending in one would collide with them.
+# declared name ending in one would collide with them. Every declared name is checked
+# (D-130): scalar and vector variables and parameters and `@observed` names here, component
+# names when components are bound (`_bind_components`, and the rebuilt system's names).
 const _INTERNAL_SUFFIXES = ("__ode", "__tick", "__next")
 function _check_internal_suffix(what, n::Symbol)
     for suf in _INTERNAL_SUFFIXES

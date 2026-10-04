@@ -74,7 +74,12 @@ sol[:x][end], sol[:g][end]
   whose shortest wavelengths grow without bound under any step (the problem warns).
 - `Adaptive(alg; reltol, abstol, …)` integrates cell and model ODEs on the host with any
   SciML ODE algorithm (load its package, e.g. OrdinaryDiffEqTsit5). Equations with
-  `rand()` cannot be integrated adaptively.
+  `rand()` cannot be integrated adaptively. Its keywords and the algorithm's fields are
+  part of the problem's identity (a checkpoint resumes only under an equal solver), so a
+  value in them may be at most 8 levels deep and must not refer to itself. A closure or
+  anonymous function there (`isoutofdomain = (u, p, t) -> …`) works, but its checkpoints
+  load only in the same Julia session; use a named function or a callable struct to resume
+  in a new session (see [Checkpoints](@ref)).
 - `remake(prob; ode_solver = …)` regenerates the code with the new solver and keeps the
   state, parameters and seed.
 

@@ -368,7 +368,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for x in all_exprs
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
                             if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
-        for spec in specs[sortperm(map(_canonical_value, specs))]
+        ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
+        for spec in specs[sortperm(ckeys)]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
             relations[gather_names[spec]] = spec
         end
@@ -631,6 +632,9 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for u in sys.updates
         _located(sys, u) do
             if u.phase === :on_copy
+                # Both sides: an index on the left (`y[ifelse(…, new, old)]`) runs at the copy too (D-129).
+                foreach(x -> _check_copy_integral(x, "on-copy updates"; when = "every accepted copy"),
+                        (u.eq.lhs, u.eq.rhs))
                 env = _proposal_env(T, rn)
                 lower(u.eq.rhs, env)
                 _write(_unwrap(u.eq.lhs), :v, env)
@@ -708,11 +712,12 @@ function _check_integral_pre_outside(x)
     return nothing
 end
 
-# Drives and expression constraints are evaluated at every copy attempt, where σ changes
-# with each accepted copy, while an integral is refreshed only between sweeps (D-125).
-function _check_copy_integral(x, what)
+# Drives and expression constraints are evaluated at every copy attempt (D-125), and on-copy
+# updates, both sides, at every accepted copy (D-129); σ changes with each accepted copy, while
+# an integral is refreshed only between sweeps.
+function _check_copy_integral(x, what; when = "every copy attempt")
     _has_op(x, cell_integral) && throw(ArgumentError(
-        "`integral` is not available in $what: they are evaluated at every copy attempt, while an " *
+        "`integral` is not available in $what: they are evaluated at $when, while an " *
         "integral is refreshed only between sweeps. Keep it in a cell variable updated @before_mcs " *
         "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"))
     return nothing

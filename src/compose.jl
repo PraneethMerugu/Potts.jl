@@ -17,7 +17,10 @@ variable, an observed quantity the base's of the same name. Energies, drives, co
 divisions, relationships and link rules accumulate, base first (a division rule for kinds
 the base divides at another cadence warns: both rules apply, each at its own `Every`).
 A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
-is an `ArgumentError` naming both.
+is an `ArgumentError` naming both. An edge variable keeps its relationship too: an edge
+variable of `sys` that re-declares one of `base` (to change its default) is the base
+relationship's (an unscoped `x(edge)` takes it), and one scoped to another relationship is an
+`ArgumentError` naming the variable and both relationships.
 """
 function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
     length(sys.kinds) >= length(base.kinds) && sys.kinds[1:length(base.kinds)] == base.kinds ||
@@ -42,6 +45,8 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         what = get(mine, n, old)
         what == old || throw(_category_clash(name, n, what, "$old $inbase"))
     end
+    # an edge variable keeps its relationship (D-127)
+    svars = _inherit_edge_scope(name, inbase, sys.variables, base.variables)
     # a vector replaces the base's vector of its name as a whole, so it may not be shorter
     # (the base's statements may read the components it would drop)
     key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
@@ -50,7 +55,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
-        variables = byname(base.variables, sys.variables), relations = merge(base.relations, sys.relations),
+        variables = map(_settle_edge_scope, byname(base.variables, svars)), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
         constraints = [base.constraints; sys.constraints],
         updates = [_unreplaced(base.updates, sys.updates, _target_key); sys.updates],
@@ -65,6 +70,42 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         sources = merge(base.sources, sys.sources))
 end
 
+"""
+The variables `xs` of an extension, each edge variable that re-declares one of the base's
+(`bxs`) bound to that variable's relationship: an unscoped one, or one bound only because
+its body had one relationship (`implicit_relationship`), takes it; one scoped to another
+relationship is an `ArgumentError` (a payload column belongs to one relationship; moving it
+would strip the base's terms and rules of it), and so is a re-declaration that turns an
+edge variable into another scope, or another variable into an edge variable.
+"""
+function _inherit_edge_scope(model, inbase, xs, bxs)
+    inherited = _edge_relationships(bxs)
+    roles = Dict{Symbol, Symbol}()
+    for x in bxs
+        i = info(x)
+        i === nothing || (roles[i.name] = i.role)
+    end
+    return map(xs) do x
+        i = info(x)
+        i === nothing && return x
+        old = get(roles, i.name, nothing)
+        (old === :edge) == (i.role === :edge) || old === nothing || throw(ArgumentError(
+            "$model: `$(i.name)` is $(_scope_description(old, get(inherited, i.name, nothing))) $inbase; " *
+            "re-declaring it as $(_scope_description(i.role, get(i.options, :relationship, nothing))) would change " *
+            "its scope (an edge variable's values live on links); keep its scope or choose another name"))
+        (i.role === :edge && haskey(inherited, i.name)) || return x
+        rb = inherited[i.name]
+        r = get(i.options, :relationship, nothing)
+        if r === nothing || get(i.options, :implicit_relationship, false) === true
+            opts = _without_implicit(i.options)
+            return _tag(x, Info(:edge, i.name, i.default, (; opts..., relationship = rb)))
+        end
+        r === rb || throw(ArgumentError("$model: `$(i.name)` is an edge variable of relationship `$rb` $inbase; " *
+            "re-declaring it as `$(i.name)($r)` would move it to relationship `$r`. Re-declare it as " *
+            "`$(i.name)($rb)` or `$(i.name)(edge)`, or give the `$r` variable another name"))
+        return x
+    end
+end
 """
 `x′` is the contact-pair value of a site or field variable `x`: no quantity of the system
 (parameter, variable or observed quantity, inherited through `@extend` or not) may carry

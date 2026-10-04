@@ -51,7 +51,7 @@ export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
-public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey, frozen_varies, frozen_kinds
+public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads
 
 include("rng.jl")
 include("lattice.jl")

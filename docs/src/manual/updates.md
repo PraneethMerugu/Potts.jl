@@ -71,3 +71,6 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   folds nested inside a fold that reads the site, stay per site.
 - **`@on_copy`** writes the target site of an accepted copy, with the copy names `new`,
   `old`, `source`, `target`: `act[target] ~ ifelse(new != 0, max_act, 0.0)`.
+  It runs inside the sweep, while `integral(x)` is refreshed only between sweeps, so an
+  `integral` in an `@on_copy` right-hand side is an error at build; keep it in a cell
+  variable updated `@before_mcs` (`s ~ integral(x)`) and read `s[new]`, `s[old]`.
