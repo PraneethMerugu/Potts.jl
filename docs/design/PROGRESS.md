@@ -1909,4 +1909,4 @@ The maintainer approved F-1…F-6 (D-049).
 
 - **The change.** An extension that re-declares a base edge variable (to change its default) keeps the base's relationship, with `@extend` and with functional `extend`; an explicit re-scope, conflicting bases, and a change of scope are clear `ArgumentError`s at build. `:rest => 9.0` (or a parameter expression) in the operating point now seeds every initial link of its relationship instead of being silently ignored; a non-number is rejected. No generated-code or fingerprint change.
 - **Review.** Two rounds (round 1: functional `extend` disagreed with `@extend` for a body built on its own).
-- **Merge checks (P6.0ay, P6.0v2b, P6.0b2 together).** Merged locally one after another and checked once on the combined tree: see below.
+- **Merge checks (P6.0ay, P6.0v2b, P6.0b2 together).** Merged locally one after another and checked once on the combined tree, one suite at a time: CorePotts, Potts, PottsModels and the docs build exit 0; `GROUP=GPU` on Metal under `tools/exclusive.sh` exit 0, including the P6.0v2b Metal testsets. Standard frozen-rule path unchanged, so no gate run.
