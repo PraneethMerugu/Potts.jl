@@ -158,7 +158,7 @@ Every item's acceptance also includes the standing checks:
   contact term that reads a site field.
 - [x] (merge, 2026-09-30; D-070; gate CPU ≤ 1.037, Metal A/B 0.96–1.02) **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
   at their counts.
-- [ ] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
+- [x] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
   Accept: a Bauer-style model where the matrix is a cell kind uses class gates; the
   denylist and DSL snapshots are updated with the reviewer's justification.
 - [x] (merge, 2026-09-30; docs build ≈ 2 min) **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`

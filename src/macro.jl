@@ -38,6 +38,26 @@ struct _Parts
     code::Vector{Any}
     mod::Module                  # the calling module (globals shadowed by component names)
     declared::Dict{Symbol, String}   # name → what declared it (collision checks)
+    bound::Set{Symbol}           # names bound by `@extend a, b = base = Base()` (kind class members)
+end
+_Parts(structural, params, code, mod, declared) = _Parts(structural, params, code, mod, declared, Set{Symbol}())
+
+# The names `@extend n₁, n₂ = base = Base()` binds before the first `@kinds` (the constructor
+# runs the sections in order, so only those are bound when the classes are built).
+function _extend_bound_names(body::Expr)
+    out = Set{Symbol}()
+    for ex in body.args
+        ex isa Expr && ex.head === :macrocall || continue
+        ex.args[1] === Symbol("@kinds") && break
+        ex.args[1] === Symbol("@extend") || continue
+        es = filter(a -> !(a isa LineNumberNode), ex.args[3:end])
+        length(es) == 1 || continue                 # malformed: the `@extend` section reports it
+        e = es[1]
+        e isa Expr && e.head === :(=) && e.args[2] isa Expr && e.args[2].head === :(=) || continue
+        lhs = e.args[1]
+        lhs isa Symbol ? push!(out, lhs) : foreach(a -> a isa Symbol && push!(out, a), lhs.args)
+    end
+    return out
 end
 
 # The hidden local holding parameter `k`'s constructor keyword. `@extend λ = base = Base()`
@@ -72,6 +92,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
                                          "are integer division; give the helper another name"))
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
+    union!(parts.bound, _extend_bound_names(body))
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -104,6 +125,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
         __frozen = Int[]
+        __classes = $P.KindClass[]
         __params = Any[]
         __vars = Any[]
         __relations = Dict{Symbol, Any}()
@@ -129,7 +151,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
+        observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
         sweep = __sweep, structural = $structural))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -353,7 +375,16 @@ function _section!(parts, sec, args, ln = nothing)
         end
     elseif sec === Symbol("@kinds")
         names = Symbol[]
+        classes = Any[]
         for l in _lines(args)
+            if l isa Expr && l.head === :(=)        # `endothelial = (tip, stalk)`: a kind class
+                g, m = l.args[1], _strip(l.args[2])
+                g isa Symbol || throw(ArgumentError("@kinds: a kind class is `name = (kind, …)`"))
+                members = m isa Expr && m.head === :tuple ? m.args : Any[m]
+                all(x -> x isa Symbol, members) || throw(ArgumentError("@kinds: kind class `$g` lists kind or class names, `$g = (kind, …)`"))
+                push!(classes, (g, members))
+                continue
+            end
             if l isa Expr && l.head === :ref && l.args[2:end] == [:frozen]
                 isempty(names) && throw(ArgumentError("the medium (the first kind) cannot be frozen"))
                 push!(code, :(push!(__frozen, $(length(names)))))    # `wall[frozen]`: an obstacle kind
@@ -365,6 +396,18 @@ function _section!(parts, sec, args, ln = nothing)
         for (i, k) in enumerate(names)
             _declare!(parts, k, "kind")
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
+        end
+        for (g, members) in classes
+            # members resolve at expansion (D-135): a kind (of any @kinds), an earlier class, or
+            # a name bound by `@extend`; anything else (a misspelling, a later class, a global)
+            # is rejected here, naming it
+            for m in members
+                get(parts.declared, m, "") in ("kind", "kind class") || m in parts.bound ||
+                    throw(ArgumentError("kind class `$g`: `$m` is not a kind or an earlier kind class" *
+                                        (m === g ? " (a class cannot contain itself)" : "")))
+            end
+            _declare!(parts, g, "kind class")
+            push!(code, :($g = $P._kind_class($(QuoteNode(g)), $(Tuple(members)), ($(members...),))), :(push!(__classes, $g)))
         end
     elseif sec === Symbol("@parameters")
         for l in _lines(args)

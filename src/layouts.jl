@@ -887,9 +887,11 @@ contributes its flattened leaves), with the properties
 """
 function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     lat = _layout_spec(x)
+    _check_layout_kinds(x, _layer_kinds(l))                # before painting: `into` is never painted
     op = LayoutState(lat.dims)
     _paint_leaf!(op, l, lat)
     σ, kinds = op.σ, op.kinds
+    _check_layout_kinds(x, kinds)                          # custom layers' kinds
     counts = zeros(Int, length(kinds))
     for s in σ
         s > 0 && (counts[s] += 1)
@@ -906,6 +908,28 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
     return report ? (point, rows) : point
+end
+
+# The kind names a layout's built-in layers name (cell kinds and `InsertUntil` hosts).
+_layer_kinds(l::AbstractLayout) = ()
+_layer_kinds(l::Overlay) = Any[k for x in l.layers for k in _layer_kinds(x)]
+_layer_kinds(l::Union{Tiling, Scattered}) = l.kinds
+_layer_kinds(l::Frame) = (l.kind,)
+_layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
+
+# Against a model, a layout's kind names may not be its kind classes (D-135): a class would
+# never match a cell's kind (`InsertUntil(into = [g])` would silently miss). Names that are
+# not the model's kinds pass here (a model may serve as a lattice only); `PottsProblem`
+# rejects them in the operating point.
+_check_layout_kinds(x, kinds) = nothing
+_check_layout_kinds(c::CompiledPottsSystem, kinds) = _check_layout_kinds(c.sys, kinds)
+function _check_layout_kinds(sys::PottsSystem, kinds)
+    isempty(sys.kind_classes) && return nothing
+    for k in kinds
+        k isa Symbol && !(k in sys.kinds) && any(g -> g.name === k, sys.kind_classes) &&
+            throw(ArgumentError("layout: `$k` is a kind class, not a kind: layers take kinds; kinds are $(sys.kinds)"))
+    end
+    return nothing
 end
 
 function _layout_spec(dims::Tuple{Vararg{Integer}})
