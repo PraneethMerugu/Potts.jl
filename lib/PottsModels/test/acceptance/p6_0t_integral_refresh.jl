@@ -30,8 +30,8 @@
 #     (`sol[:x]`, `observe(sol, :x)`, `observe(prob, :x)`; σ and sites of each saved state),
 #     and the temperature (trajectory identical to a twin that reads the same quantity
 #     without an integral; a constant-temperature control shows the trajectory depends on it).
-#  3. Cost: with only observed-only integrals added, a warm MCS takes at most 1.1× the same
-#     model without them (min over repetitions, both algorithms).
+#  3. Cost: observed-only integrals add no per-MCS refresh and no cell column (structural,
+#     both algorithms), with a paired-timing backstop of at most 1.5× (re-frozen, D-131).
 #  4. Fingerprints unchanged (recorded on 432a0a74) for the PottsModels systems (no
 #     integrals) and for an integral model whose integrals are all read after the sweep.
 #
