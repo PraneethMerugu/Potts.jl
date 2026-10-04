@@ -924,10 +924,10 @@ _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 _check_layout_kinds(x, kinds) = nothing
 _check_layout_kinds(c::CompiledPottsSystem, kinds) = _check_layout_kinds(c.sys, kinds)
 function _check_layout_kinds(sys::PottsSystem, kinds)
-    isempty(sys.kind_classes) && return nothing
+    isempty(getfield(sys, :kind_classes)) && return nothing
     for k in kinds
-        k isa Symbol && !(k in sys.kinds) && any(g -> g.name === k, sys.kind_classes) &&
-            throw(ArgumentError("layout: `$k` is a kind class, not a kind: layers take kinds; kinds are $(sys.kinds)"))
+        k isa Symbol && !(k in getfield(sys, :kinds)) && any(g -> g.name === k, getfield(sys, :kind_classes)) &&
+            throw(ArgumentError("layout: `$k` is a kind class, not a kind: layers take kinds; kinds are $(getfield(sys, :kinds))"))
     end
     return nothing
 end
@@ -939,7 +939,7 @@ end
 _layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
     Moore(1), lat.mask, lat.geometry)
 _layout_spec(lat::LatticeSpec) = lat
-_layout_spec(sys::PottsSystem) = _layout_spec(sys.lattice)
+_layout_spec(sys::PottsSystem) = _layout_spec(getfield(sys, :lattice))
 _layout_spec(sys::CompiledPottsSystem) = _layout_spec(sys.sys)
 
 # Drop cells with no site left and renumber the rest in order.

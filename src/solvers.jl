@@ -113,7 +113,7 @@ _key_string(k) = (s = sprint(show, k; context = :limit => true); length(s) > 60 
 
 # A-68: an adaptive step re-evaluates the rate at trial steps, so it cannot replay draws.
 function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
-    for eq in c.sys.equations
+    for eq in getfield(c.sys, :equations)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue

@@ -10,8 +10,8 @@ const SII = SymbolicIndexingInterface
 
 """Definitions of `@observed` names, substituted (recursively) into observed expressions."""
 function _expand_observed(csys::CompiledPottsSystem, x)
-    isempty(csys.sys.observed) && return x
-    sub = Dict{Any, Any}(_unwrap(o.var) => _unwrap(o.expr) for o in csys.sys.observed)
+    isempty(getfield(csys.sys, :observed)) && return x
+    sub = Dict{Any, Any}(_unwrap(o.var) => _unwrap(o.expr) for o in getfield(csys.sys, :observed))
     for _ in 1:(length(sub) + 1)
         y = Symbolics.substitute(x, sub; fold = Val(false))
         isequal(y, x) && return y
@@ -94,7 +94,7 @@ end
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
 function _param_info(sys::PottsModelInfo, x)
-    x isa Symbol && return findfirst(p -> info(p).name === x, sys.csys.sys.parameters)
+    x isa Symbol && return findfirst(p -> info(p).name === x, getfield(sys.csys.sys, :parameters))
     _potts_quantity(x) || return nothing
     i = info(x)
     return i !== nothing && i.role in (:param, :kindtable) ? i.name : nothing
@@ -106,7 +106,7 @@ const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)
 _state_var(v) = (i = info(v); i !== nothing && haskey(_STATE_SCOPE, i.role))
 function _state_index(sys::PottsModelInfo, x)
     x isa Symbol || _potts_quantity(x) || return nothing
-    for v in sys.csys.sys.variables
+    for v in getfield(sys.csys.sys, :variables)
         _state_var(v) || continue
         (x isa Symbol ? info(v).name === x : isequal(_unwrap(v), _unwrap(x))) &&
             return CorePotts.StateIndex(_STATE_SCOPE[info(v).role], info(v).name)
@@ -115,20 +115,20 @@ function _state_index(sys::PottsModelInfo, x)
 end
 SII.is_variable(sys::PottsModelInfo, x) = _state_index(sys, x) !== nothing
 SII.variable_index(sys::PottsModelInfo, x) = _state_index(sys, x)
-SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, sys.csys.sys.variables)
-SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.var for o in sys.csys.sys.observed]]
+SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, getfield(sys.csys.sys, :variables))
+SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.var for o in getfield(sys.csys.sys, :observed)]]
 SII.is_parameter(sys::PottsModelInfo, x) = _param_info(sys, x) !== nothing
 function SII.parameter_index(sys::PottsModelInfo, x)
     i = _param_info(sys, x)
-    return i isa Integer ? info(sys.csys.sys.parameters[i]).name : i
+    return i isa Integer ? info(getfield(sys.csys.sys, :parameters)[i]).name : i
 end
-SII.parameter_symbols(sys::PottsModelInfo) = sys.csys.sys.parameters
+SII.parameter_symbols(sys::PottsModelInfo) = getfield(sys.csys.sys, :parameters)
 SII.is_timeseries_parameter(::PottsModelInfo, x) = false
 SII.is_independent_variable(::PottsModelInfo, x) = _potts_quantity(x) && isequal(_unwrap(x), _unwrap(t))
 SII.independent_variable_symbols(::PottsModelInfo) = [t]
 SII.is_time_dependent(::PottsModelInfo) = true
 SII.constant_structure(::PottsModelInfo) = true
-SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), sys.csys.sys.parameters, [t])
+SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), getfield(sys.csys.sys, :parameters), [t])
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
                                           !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
@@ -136,7 +136,7 @@ SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, x)
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
     m = sys.csys.sys
-    for v in Iterators.flatten((m.variables, (o.var for o in m.observed)))
+    for v in Iterators.flatten((getfield(m, :variables), (o.var for o in getfield(m, :observed))))
         info(v).name === x && return v
     end
     return x in BUILTIN_NAMES ? getfield(B, x) : nothing
@@ -170,11 +170,11 @@ function _observe_quantity(sys::PottsModelInfo, x::Symbol)
     q = _named_quantity(sys, x)
     q === nothing || return q
     m = sys.csys.sys
-    for p in m.parameters
+    for p in getfield(m, :parameters)
         info(p).name === x && return p
     end
     msg = "`$x` is not a variable, observed quantity, built-in or parameter of $(nameof(sys.csys))"
-    comps = [info(v).name for v in Iterators.flatten((m.parameters, m.variables))
+    comps = [info(v).name for v in Iterators.flatten((getfield(m, :parameters), getfield(m, :variables)))
              if get(info(v).options, :vector, nothing) === x]
     if !isempty(comps)
         msg *= "; `$x` is a vector quantity: observe its components ($(join((":" * string(n) for n in comps), ", ")))"

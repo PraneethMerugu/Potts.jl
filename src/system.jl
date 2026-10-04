@@ -63,8 +63,8 @@ _endpoint_message(what, k) = "$what `$k`: `$k` is reserved (`a` and `b` are the 
 
 function _check_reserved_names(sys)
     check(what, n) = n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, n)))
-    foreach(k -> check("kind", k), sys.kinds)
-    for (what, xs) in (("parameter", sys.parameters), ("variable", sys.variables))
+    foreach(k -> check("kind", k), getfield(sys, :kinds))
+    for (what, xs) in (("parameter", getfield(sys, :parameters)), ("variable", getfield(sys, :variables)))
         for x in xs
             i = info(x)
             i === nothing && continue
@@ -75,11 +75,11 @@ function _check_reserved_names(sys)
         end
     end
     foreach(o -> (i = info(o.var); i === nothing || (check("observed quantity", i.name);
-                                                     _check_internal_suffix("observed quantity", i.name))), sys.observed)
-    foreach(k -> check("relation", k), keys(sys.relations))
-    foreach(r -> check("relationship", r.name), sys.relationships)
-    foreach(c -> check("component", c.name), sys.components)
-    foreach(k -> check("structural parameter", k), keys(sys.structural))
+                                                     _check_internal_suffix("observed quantity", i.name))), getfield(sys, :observed))
+    foreach(k -> check("relation", k), keys(getfield(sys, :relations)))
+    foreach(r -> check("relationship", r.name), getfield(sys, :relationships))
+    foreach(c -> check("component", c.name), getfield(sys, :components))
+    foreach(k -> check("structural parameter", k), keys(getfield(sys, :structural)))
     _check_kind_classes(sys)
     return sys
 end
@@ -87,19 +87,19 @@ end
 # A class is a non-empty set of cell kinds of this system (D-135); `@kinds` checks the same
 # at expansion, this catches programmatic builds.
 function _check_kind_classes(sys)
-    ncell = length(sys.kinds) - 1
-    for (i, g) in enumerate(sys.kind_classes)
+    ncell = length(getfield(sys, :kinds)) - 1
+    for (i, g) in enumerate(getfield(sys, :kind_classes))
         n = g.name
         n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message("kind class", n)))
         n in _reserved_names() && throw(ArgumentError(
             "kind class `$n` has the name of a built-in (`$n` means something else in @potts_model); choose another name"))
-        any(h -> h.name === n, view(sys.kind_classes, 1:(i - 1))) &&
-            throw(ArgumentError("kind class `$n` is declared twice in $(sys.name)"))
+        any(h -> h.name === n, view(getfield(sys, :kind_classes), 1:(i - 1))) &&
+            throw(ArgumentError("kind class `$n` is declared twice in $(getfield(sys, :name))"))
         isempty(g.kinds) && throw(ArgumentError("kind class `$n` is empty; list at least one kind"))
         allunique(g.kinds) || throw(ArgumentError("kind class `$n` lists a kind twice: $(Tuple(g.kinds))"))
         for k in g.kinds
             1 <= k <= ncell || throw(ArgumentError("kind class `$n` lists kind number $k, which is not a cell kind of " *
-                                                   "$(sys.name) (cell kinds are 1:$ncell; 0 is the medium)"))
+                                                   "$(getfield(sys, :name)) (cell kinds are 1:$ncell; 0 is the medium)"))
         end
     end
     return nothing
@@ -118,45 +118,45 @@ function _check_internal_suffix(what, n::Symbol)
     return nothing
 end
 
-Base.nameof(sys::PottsSystem) = sys.name
-ModelingToolkitBase.get_name(sys::PottsSystem) = sys.name
+Base.nameof(sys::PottsSystem) = getfield(sys, :name)
+ModelingToolkitBase.get_name(sys::PottsSystem) = getfield(sys, :name)
 
 """Parameter symbols of a model (scalars and kind tables)."""
-parameters(sys::PottsSystem) = sys.parameters
+parameters(sys::PottsSystem) = getfield(sys, :parameters)
 """Scoped state variables of a model."""
-variables(sys::PottsSystem) = sys.variables
+variables(sys::PottsSystem) = getfield(sys, :variables)
 
 function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
-    println(io, "PottsSystem ", sys.name, " on ", join(sys.lattice.dims, "×"), " (", ndims(sys), "D)")
-    println(io, "  kinds: ", join(sys.kinds, ", "))
-    isempty(sys.parameters) || println(io, "  parameters: ", join(map(p -> info(p).name, sys.parameters), ", "))
-    isempty(sys.variables) || println(io, "  variables: ",
-        join(map(v -> string(info(v).name, "(", info(v).role, ")"), sys.variables), ", "))
-    for e in sys.energies
+    println(io, "PottsSystem ", getfield(sys, :name), " on ", join(getfield(sys, :lattice).dims, "×"), " (", ndims(sys), "D)")
+    println(io, "  kinds: ", join(getfield(sys, :kinds), ", "))
+    isempty(getfield(sys, :parameters)) || println(io, "  parameters: ", join(map(p -> info(p).name, getfield(sys, :parameters)), ", "))
+    isempty(getfield(sys, :variables)) || println(io, "  variables: ",
+        join(map(v -> string(info(v).name, "(", info(v).role, ")"), getfield(sys, :variables)), ", "))
+    for e in getfield(sys, :energies)
         println(io, "  energy  ", _domain_string(e.domain), " => ", e.expr)
     end
-    for d in sys.drives
+    for d in getfield(sys, :drives)
         println(io, "  drive   copy => ", d.expr)
     end
-    for c in sys.constraints
+    for c in getfield(sys, :constraints)
         println(io, "  constraint ", c.kind === :expr ? c.expr : string(c.kind, c.kinds))
     end
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         println(io, "  @", u.phase, " ", u.eq)
     end
-    for e in sys.equations
+    for e in getfield(sys, :equations)
         println(io, "  equation ", e)
     end
-    for b in sys.discrete
+    for b in getfield(sys, :discrete)
         println(io, "  tick    ", b.name, b.scope === :model ? " (model)" : "", b.every == 1 ? "" : " every $(b.every) MCS",
             ": ", join((string(info(x).name, " ← ", y) for (x, y) in zip(b.slots, b.next)), ", "))
     end
-    for d in sys.divisions
+    for d in getfield(sys, :divisions)
         println(io, "  divide  ", _domain_string(d.domain), _cadence_string(d.every), " when ", d.when)
     end
-    print(io, "  sweep: ", sys.sweep.law, "(temperature = ", sys.sweep.temperature, ")")
+    print(io, "  sweep: ", getfield(sys, :sweep).law, "(temperature = ", getfield(sys, :sweep).temperature, ")")
 end
-Base.ndims(sys::PottsSystem) = length(sys.lattice.dims)
+Base.ndims(sys::PottsSystem) = length(getfield(sys, :lattice).dims)
 
 _domain_string(d::CellDomain) = isempty(d.kinds) ? "cells" : "cells(" * join(d.kinds, ", ") * ")"
 _domain_string(d::ClusterDomain) = isempty(d.kinds) ? "clusters" : "clusters(" * join(d.kinds, ", ") * ")"

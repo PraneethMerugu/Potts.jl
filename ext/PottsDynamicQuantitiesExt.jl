@@ -81,11 +81,11 @@ function _require(label, u, want, what)
 end
 
 function Potts._check_units(sys::PottsSystem)
-    any(_hasunit, sys.parameters) || any(_hasunit, sys.variables) || return nothing
+    any(_hasunit, getfield(sys, :parameters)) || any(_hasunit, getfield(sys, :variables)) || return nothing
     # H: every energy term, drive and the temperature share one unit
-    terms = Any[(Potts._describe(e), e.expr) for e in sys.energies]
-    append!(terms, [(Potts._describe(d), d.expr) for d in sys.drives])
-    push!(terms, ("@sweep temperature", sys.sweep.temperature))
+    terms = Any[(Potts._describe(e), e.expr) for e in getfield(sys, :energies)]
+    append!(terms, [(Potts._describe(d), d.expr) for d in getfield(sys, :drives)])
+    push!(terms, ("@sweep temperature", getfield(sys, :sweep).temperature))
     first_term = nothing
     for (label, x) in terms
         u = _unit(label, x)
@@ -97,14 +97,14 @@ function Potts._check_units(sys::PottsSystem)
                 "units: the terms of H disagree: [$(first_term[2])] in $(first_term[1]), [$u] in $label"))
         end
     end
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         label = Potts._describe(u)
         _literal_zero(u.eq.rhs) || _require(label, _unit(label, u.eq.rhs), _unit(label, u.eq.lhs), "the right side")
     end
     # `D(x) ~ rhs`: the clock is the MCS (`mcs_duration` is a plain number), so a rate has x's
     # units per unit of time in whatever time unit its parameters use: [rhs]/[x] must be
     # dimensionless or a pure inverse time
-    for eq in sys.equations
+    for eq in getfield(sys, :equations)
         label = Potts._describe(eq)
         r = _unit(label, eq.rhs)
         _literal_zero(eq.rhs) && continue
@@ -114,17 +114,17 @@ function Potts._check_units(sys::PottsSystem)
         (iszero(q) || pertime) ||
             throw(ArgumentError("units: in $label, the rate has units [$r]; expected [$(_unit(label, x))] per unit of time"))
     end
-    for c in sys.constraints
+    for c in getfield(sys, :constraints)
         c.kind === :expr && _require(Potts._describe(c), _unit(Potts._describe(c), c.expr), UNITLESS, "the condition")
     end
-    for d in sys.divisions
+    for d in getfield(sys, :divisions)
         label = Potts._describe(d)
         _require(label, _unit(label, d.when), UNITLESS, "the condition")
         for (x, r) in d.rules
             r isa Split || _literal_zero(r) || _require(label, _unit(label, r), _unit(label, x), "the rule for $(info(x).name)")
         end
     end
-    for o in sys.observed
+    for o in getfield(sys, :observed)
         _unit(Potts._describe(o), o.expr)
     end
     return nothing
