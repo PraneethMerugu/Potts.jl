@@ -95,6 +95,35 @@ function _merged_metadata(base::PottsSystem, sys::PottsSystem)
     return meta
 end
 
+# --- MTK operations a Potts model does not support (D-137 rule 5): clear errors naming the
+# Potts route, instead of MTK's generic methods (`compose(x, [y])` reached MTK's varargs
+# `compose` and recursed without end; the others were MethodErrors).
+
+const _COMPOSE_MSG = "compose: Potts models do not compose with other systems (D-039); embed an MTK system in a " *
+                     "Potts model with `@components`, and merge two Potts models with `extend` (`@extend`)"
+ModelingToolkitBase.compose(::PottsSystem, ::AbstractArray; kw...) = throw(ArgumentError(_COMPOSE_MSG))
+ModelingToolkitBase.compose(::ModelingToolkitBase.AbstractSystem, ::AbstractVector{<:PottsSystem}; kw...) =
+    throw(ArgumentError(_COMPOSE_MSG))
+ModelingToolkitBase.compose(::PottsSystem, ::AbstractVector{<:PottsSystem}; kw...) = throw(ArgumentError(_COMPOSE_MSG))
+ModelingToolkitBase.compose(::PottsSystem, ::ModelingToolkitBase.AbstractSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
+ModelingToolkitBase.compose(::ModelingToolkitBase.AbstractSystem, ::PottsSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
+ModelingToolkitBase.compose(::PottsSystem, ::PottsSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
+
+const _EXTEND_MSG = "extend: a Potts model extends, and is extended by, only another Potts model (`extend(sys, base)`, " *
+                    "`@extend`); embed an MTK System in a Potts model with `@components`"
+ModelingToolkitBase.extend(::PottsSystem, ::ModelingToolkitBase.AbstractSystem; kw...) = throw(ArgumentError(_EXTEND_MSG))
+ModelingToolkitBase.extend(::ModelingToolkitBase.AbstractSystem, ::PottsSystem; kw...) = throw(ArgumentError(_EXTEND_MSG))
+
+_problem_msg(f) = "$f: a Potts model is not an ODE or jump system; build its problem with " *
+                  "`PottsProblem(sys, op, tspan)` and solve it with a CPM algorithm"
+const _AnyPottsSystem = Union{PottsSystem, CompiledPottsSystem}
+SciMLBase.ODEProblem(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
+    throw(ArgumentError(_problem_msg("ODEProblem")))
+SciMLBase.ODEProblem{iip}(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) where {iip} =
+    throw(ArgumentError(_problem_msg("ODEProblem")))
+JumpProcesses.JumpProblem(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
+    throw(ArgumentError(_problem_msg("JumpProblem")))
+
 """
 The variables `xs` of an extension, each edge variable that re-declares one of the base's
 (`bxs`) bound to that variable's relationship: an unscoped one, or one bound only because

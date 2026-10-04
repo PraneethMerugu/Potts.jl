@@ -12,6 +12,7 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, PottsProblem, Periodic, Closed, Moore, init, saturating, saturating_linear
+using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend
 using PrecompileTools: PrecompileTools
