@@ -692,7 +692,7 @@ end
 function _sweep_offset(offset)
     o = offset isa Real ? (try Float64(offset) catch; NaN end) : NaN
     isfinite(o) || throw(ArgumentError(
-        "`@sweep`: `offset` must be a finite real number, got $(repr(offset)); " *
+        "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
         "pass a finite number (`offset = 0` disables it)"))
     return o
 end
@@ -701,7 +701,7 @@ end
 function _sweep_mcs_duration(mcs_duration)
     md = mcs_duration isa Real ? (try Float64(mcs_duration) catch; NaN end) : NaN
     (isfinite(md) && md > 0) || throw(ArgumentError(
-        "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration)); " *
+        "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
         "it is the time one MCS stands for (default 1.0)"))
     return md
 end
@@ -728,9 +728,6 @@ The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
   ±Inf, 0, negative values, a `BigFloat` beyond the `Float64` range, non-numbers and a
   symbolic parameter are an `ArgumentError`, so the system does not build. It is stored as
   `Float64(mcs_duration)`.
-
-A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`,
-`combine` and `mcs_duration` the same way.
 - `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
   at the top level and passed as `combine = amean`), a composition of named functions
   (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous
@@ -739,6 +736,9 @@ A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks
   `ArgumentError`: its compiler-generated name changes between Julia sessions, so a
   checkpoint written in one session would not load in the next. To carry parameters, use
   a callable struct (`struct Mix; w::Float64; end; (m::Mix)(a, b) = m.w * a + (1 - m.w) * b`).
+
+A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`,
+`combine` and `mcs_duration` the same way.
 """
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
     for k in keys(kwargs)
