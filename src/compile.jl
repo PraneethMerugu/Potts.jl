@@ -368,7 +368,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     for x in all_exprs
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
                             if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
-        for spec in specs[sortperm(map(_canonical_value, specs))]
+        ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
+        for spec in specs[sortperm(ckeys)]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
             relations[gather_names[spec]] = spec
         end

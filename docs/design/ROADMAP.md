@@ -196,7 +196,7 @@ Every item's acceptance also includes the standing checks:
   - Latency: `@potts_model` construction, `mtkcompile` and `PottsProblem` build time each within +5 % of the pre-change baseline on the five gate models.
   - Latency: fresh-process time to first MCS (`benchmark/graner.jl`, D-047 target under 15 s) within +5 %.
   - Latency: the warm-MCS gate is unchanged.
-- [ ] **P6.0c2** P6.0c round-3 follow-ups (D-078):
+- [x] (merge, 2026-10-04; D-130) **P6.0c2** P6.0c round-3 follow-ups (D-078):
   - Document the after-MCS phase order in AUTHORING §6 and INTERNALS §1.6: updates, then field steps, then cell ODEs, then model ODEs, then discrete ticks, then links.
   - `_canonical_value` prints only the type below depth 8, so two `Adaptive` solvers that differ deeper would share a group and a fingerprint. Error at the cap, or group by `isequal` within equal strings.
   - `_check_internal_suffix` misses component unknowns (`comp₊x__ode`), `:vector` option names and observed names.

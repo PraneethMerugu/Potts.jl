@@ -142,6 +142,9 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # none and keeps its fingerprint)
     h = hash(_fingerprint_seed(sys, T))
     isempty(spec.canonical) || (h = hash(spec.canonical, h))
+    # a solver holding a compiler-generated name (a closure) is bound to this session (D-130):
+    # only the fingerprint sees the token, never the canonical string or the solver groups
+    _session_bound(spec) && (h = hash(_SESSION_TOKEN[], h))
     # the schedule kept outside the generated code (D-118): the resolved cadence (in MCS,
     # after `mcs_duration`) of every gated phase, host phase and the lifecycle pass, and a
     # non-default `mcs_duration`; only non-default values, so a model on the default schedule

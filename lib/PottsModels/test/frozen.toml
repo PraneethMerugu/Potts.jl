@@ -296,3 +296,8 @@ decision = "D-128"
 path = "acceptance/p6_0b2_link_followups.jl"
 sha256 = "b2f29c6b87f90566e937bff2b80843dcdfd7f4e25dcf2dfd326a75e31bdaf0e0"
 decision = "D-127"
+
+[[file]]
+path = "acceptance/p6_0c2_canonical_followups.jl"
+sha256 = "40783990a807ba3319d051c3a168754181e7d6d4f0333c384d54a7bbe0460145"
+decision = "D-130"

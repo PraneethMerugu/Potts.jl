@@ -577,3 +577,55 @@ end
     @test fp(hand(0, 0.5)) == fp(spec(mcs_duration = 0.5))
     @test fp(hand(0, 0.5)) != fp(spec(mcs_duration = 0.25))                     # control
 end
+
+# D-130: a value too deep (or cyclic) for the canonical printer, met outside the solvers, is
+# an `ArgumentError` naming the part, never the private `_CanonicalDepthError`
+struct SolverDeep
+    a::Any
+end
+solver_nest(k) = k == 0 ? 1.0 : SolverDeep(solver_nest(k - 1))
+"""A model with an inline gather relation whose weight closure captures `solver_nest(k)`,
+compiled; returns the compiled system or the unwrapped exception."""
+function solver_deep_relation(k)
+    nm = Symbol(:SolverDeepRel, k)
+    R = let d = solver_nest(k)
+        Weighted(Moore(1), o -> d isa SolverDeep ? 1.0 : 2.0)
+    end
+    compiled = Ref{Any}(nothing)
+    e = solver_err() do
+        Core.eval(@__MODULE__, quote
+            @potts_model $nm begin
+                @kinds medium A
+                @lattice Lattice((12, 12))
+                @energy cells => (volume - 9.0)^2 + 0.1 * count(owner[n] == id for n in $R(40))
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        end)
+        sys = Base.invokelatest(Base.invokelatest(getglobal, @__MODULE__, nm); name = :x)
+        compiled[] = mtkcompile(sys)
+    end
+    e === nothing && return compiled[]
+    while e isa LoadError
+        e = e.error
+    end
+    return e
+end
+
+@testset "D-130: values too deep outside the solvers are an ArgumentError naming the part" begin
+    deep = solver_deep_relation(9)
+    @test deep isa ArgumentError
+    @test deep isa ArgumentError && occursin("relation", deep.msg) && occursin("nested deeper", deep.msg)
+    # control: the same relation within the cap compiles and runs
+    ok = solver_deep_relation(3)
+    @test ok isa Potts.CompiledPottsSystem
+    σ = zeros(Int32, 12, 12)
+    σ[3:5, 3:5] .= 1
+    @test Symbol(solve(PottsProblem(ok, [ownership => σ, kind => [:A]], (0, 2)), SequentialCPM()).retcode) === :Success
+    # a constant in an expression key (`_symkey`): too deep names it, within the cap prints
+    e = solver_err(() -> Potts._symkey(solver_nest(12)))
+    @test e isa ArgumentError && occursin("symbolic constant", e.msg)
+    @test Potts._symkey(solver_nest(3)) isa String
+    cyc = Ref{Any}(nothing)
+    cyc[] = cyc
+    @test solver_err(() -> Potts._symkey(cyc)) isa ArgumentError
+end

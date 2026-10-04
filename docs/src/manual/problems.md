@@ -116,6 +116,14 @@ lattice) check alike, and a relation nothing reads, or one read only by `@observ
 quantities, is not checked. The algorithm's `proposal` keyword (`SequentialCPM(; proposal)`)
 is a run choice and is not checked.
 
+A solver holding an anonymous function or closure, such as
+`Adaptive(Rodas5P(); isoutofdomain = (u, p, t) -> any(<(0), u))`, has no name that survives
+the Julia session, so its checkpoints are session-bound: they load in the session that
+made them and are refused (an `ArgumentError`) in any other, even one running the same
+script. To resume such a run in a new session, pass a named function defined at the top
+level (`nonnegative(u, p, t) = any(<(0), u)`, then `isoutofdomain = nonnegative`) or an
+instance of a callable struct.
+
 ## Changing a problem: `remake`
 
 `remake(prob; p, u0, tspan, seed, replica)` returns a new problem without regenerating code;
