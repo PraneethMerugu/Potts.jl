@@ -295,10 +295,7 @@ function _renumber_draws(sys::PottsSystem, base::PottsSystem)
 end
 
 """`sys` with some fields replaced."""
-_replace(sys::PottsSystem; kw...) =
-    PottsSystem(; (f => getfield(sys, f) for f in fieldnames(PottsSystem) if !(f in _MIRRORS))..., kw...)
-# the MTK mirror fields, derived by the constructor (system.jl)
-const _MIRRORS = (:eqs, :unknowns, :ps, :systems)
+_replace(sys::PottsSystem; kw...) = PottsSystem(; (f => getfield(sys, f) for f in fieldnames(PottsSystem))..., kw...)
 
 """
     lookup(sys::PottsSystem, name::Symbol)

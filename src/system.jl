@@ -59,7 +59,8 @@ models do not compose, D-039: use `@components` or `extend`), `ODEProblem`/`Jump
 The positional constructor takes every field in order (`fieldnames(PottsSystem)`) and the
 keyword `checks = true`; `checks = false` skips the construction checks (reserved and
 clashing names). The MTK mirror fields `eqs`, `unknowns`, `ps` and `systems` are derived from
-`equations`, `variables`, `parameters` and `components`; values passed for them are ignored.
+`equations`, `variables`, `parameters` and `components`; values passed for them (positionally
+or by keyword) are ignored.
 """
 struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol
@@ -129,7 +130,8 @@ function PottsSystem(; name::Symbol, kinds, lattice, sweep, frozen_kinds = Int[]
         constraints = Constraint[], updates = Update[], equations = Equation[], divisions = DivideRule[],
         relationships = RelationshipSpec[], link_rules = LinkRule[], observed = ObservedEq[], components = Any[],
         discrete = DiscreteBlock[], structural = (;), sources = IdDict{Any, LineNumberNode}(),
-        metadata = _EMPTY_METADATA, namespacing::Bool = true, complete::Bool = false, checks::Bool = true)
+        metadata = _EMPTY_METADATA, namespacing::Bool = true, complete::Bool = false, checks::Bool = true,
+        eqs = nothing, unknowns = nothing, ps = nothing, systems = nothing)     # mirrors: derived, ignored
     return PottsSystem(name, kinds, frozen_kinds, kind_classes, lattice, parameters, variables, relations, energies,
         drives, constraints, updates, equations, divisions, relationships, link_rules, observed, components, discrete,
         sweep, structural, sources, nothing, nothing, nothing, nothing, metadata, namespacing, complete; checks)
