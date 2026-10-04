@@ -98,11 +98,12 @@ parameters is `WortelAct`.
     `rand()` is not allowed in drives, energies and constraints: a random ``\Delta H``
     breaks detailed balance. Draw random values in updates and read the stored result.
 
-!!! note "No `integral` in drives and constraints"
+!!! note "No `integral` in drives, constraints and on-copy updates"
     `integral(x)`, including `integral(Pre(x))` and an `integral` inside a fold over cells
-    or in the arguments of `Chemotaxis`, is not allowed in drives and constraints, and
-    building such a model is an `ArgumentError`. Drives and constraints are evaluated at
-    every copy attempt, where the cells change with each accepted copy, while an integral
+    or in the arguments of `Chemotaxis`, is not allowed in drives, constraints and
+    [on-copy updates](@ref manual-updates), and building such a model is an
+    `ArgumentError`. Drives and constraints are evaluated at every copy attempt, and
+    on-copy updates at every accepted copy, where the cells change, while an integral
     is refreshed only between sweeps. Keep the integral in a cell variable updated at the
     start of the MCS and read it at the copy's cells:
 

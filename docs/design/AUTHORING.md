@@ -876,7 +876,8 @@ end
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the
-    sites. For the same reason it is rejected in energies and drives.
+    sites. For the same reason it is rejected in energies, drives, expression constraints
+    and `@on_copy` right-hand sides (D-125, D-129).
 
 ### 12.4 Shape descriptors (CompuCell3D definitions)
 
