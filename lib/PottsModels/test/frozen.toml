@@ -286,3 +286,8 @@ decision = "D-126"
 path = "acceptance/p6_0aw_on_copy_integral.jl"
 sha256 = "2940596dfc054e70f0fb67dba4b8a6cab6a6931403244486e8e9df2e88968d90"
 decision = "D-129"
+
+[[file]]
+path = "acceptance/p6_0v2b_frozen_refresh_bytes.jl"
+sha256 = "65f438af2c8faea5a6e033dec94474b710535ddba65769e3489582714762c576"
+decision = "D-128"

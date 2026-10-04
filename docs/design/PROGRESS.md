@@ -1899,3 +1899,8 @@ The maintainer approved F-1…F-6 (D-049).
 
 - **The change.** P6.0t's frozen "observed-only integrals cost nothing" check, which flaked at 1.1× under parallel agent load and then aborted the include chain, now compares the executed phase lists and integral columns (re-frozen) with a loose paired-timing backstop (≤ 1.5×, defect ≈ 3.6×). PottsModels' test and acceptance files now run one testset per file inside an outer testset, so a failing file no longer hides later ones; the run still exits 1.
 - **Review.** Approved in round 1.
+
+## 2026-10-04 — P6.0v2b merged: a custom frozen rule declares the leaves it reads (D-128)
+
+- **The change.** `CorePotts.frozen_reads(sys)` (public; default `nothing`) lets a custom `remake_frozen` declare `:σ` and the cell columns it reads; a device refresh then copies only those (Metal, test fixture: 1408 B per refresh for both twins, vs 1792/3460 B undeclared). Bad or repeated names are an `ArgumentError` at `init` and every refresh. Standard rule unchanged (no gate model uses a custom rule). Audit row R4 resolved.
+- **Review.** Two rounds (round 1: a repeated name crashed on Metal only).
