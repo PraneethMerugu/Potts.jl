@@ -380,6 +380,12 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2_column_copies.jl"))
 end
 
+# P6.0v2b: the frozen custom-rule refresh acceptance file (Metal testsets run only here)
+module P60v2bOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2b_frozen_refresh_bytes.jl"))
+end
+
 # P6.0v1: the frozen device-lifecycle acceptance file, whose Metal testsets run only where
 # Metal is loaded (here). It wraps `Metal.wait_cmdbuf!` for its own wait count;
 # `transfer_counts.jl` below re-wraps it for its own.

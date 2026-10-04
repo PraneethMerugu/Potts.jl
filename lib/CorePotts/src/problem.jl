@@ -104,9 +104,23 @@ The frozen mask of a remade or reinitialized state `u0`: the standard rule when
 
 A custom rule overrides this method **and must also define `frozen_varies(sys) = true`**;
 without it the integrator treats the mask as static and never recomputes it (no error).
-A custom rule runs on a host copy of the state at every refresh.
+A custom rule runs on a host copy of the state at every refresh; `frozen_reads(sys)`
+limits that copy to the leaves the rule reads.
 """
 remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen : _standard_frozen(k, u0)
+
+"""
+    frozen_reads(sys)
+
+The state leaves a custom `remake_frozen` rule reads at a refresh, as a tuple of `Symbol`s:
+`:σ` (the labels) or cell column names. On a device, a refresh then copies only these
+leaves to the host before running the rule; what the rule sees in any other leaf is
+unspecified. `nothing` (the default) copies the whole state. A rule that reads model, site
+or history quantities keeps the default. A name that is neither `:σ` nor a cell column of
+the state is an `ArgumentError` at `init` (and at every refresh), on every backend. The
+standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this hook.
+"""
+frozen_reads(sys) = nothing
 
 # A custom `remake_frozen` without `frozen_varies(sys) = true` gives a static mask: say so.
 function _check_frozen_hooks(sys)
@@ -116,6 +130,22 @@ function _check_frozen_hooks(sys)
           "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
     return nothing
 end
+
+# The declared reads of a custom rule (D-128): `nothing`, or a tuple of `:σ` and cell
+# column names of `st`; checked at `init` and at every custom-rule refresh.
+function _frozen_reads(sys, st)
+    reads = frozen_reads(sys)
+    reads === nothing && return nothing
+    (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
+        "`frozen_reads` must be `nothing` or a tuple of Symbols (`:σ` or cell column names); got $(repr(reads))"))
+    for n in reads
+        n === :σ || haskey(st.cell, n) || throw(ArgumentError(
+            "`frozen_reads` declares `$n`, which is neither `:σ` nor a cell column of the state " *
+            "(cell columns: $(join(keys(st.cell), ", ")))"))
+    end
+    return reads
+end
+_custom_frozen(sys) = frozen_varies(sys) && frozen_kinds(sys) === nothing
 
 # the standard rule on a host state (without the domain, which `PottsProblem` adds)
 function _standard_frozen(kinds, u)
@@ -247,6 +277,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
     _preflight(prob, alg, ctx)
     _check_frozen_hooks(prob.f.sys)
+    _custom_frozen(prob.f.sys) && _frozen_reads(prob.f.sys, prob.u0)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
@@ -418,8 +449,7 @@ function _device_planned(backend, alg, f::CPMFunction)
     lc === nothing && return false
     (backend isa CPU && !(_FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM)) && return false
     lc.rebuild! === no_rebuild || return false
-    sys = f.sys
-    return !(frozen_varies(sys) && frozen_kinds(sys) === nothing)
+    return !_custom_frozen(f.sys)
 end
 const _FORCE_DEVICE_LIFECYCLE = Ref(false)
 
@@ -446,7 +476,8 @@ Only models whose mask follows the state (`frozen_varies`; Potts: a `[frozen]` k
 any work; for a static mask (none, the domain, a user `frozen`) it returns at once. The
 standard rule (`frozen_kinds`) runs as one kernel on the integrator's backend; called
 directly, it then reads back its counts (one small transfer). A custom rule
-(`remake_frozen`) runs on a host copy of the state.
+(`remake_frozen`) runs on a host copy of the state (of the leaves `frozen_reads` names, if
+it names them).
 
 On a device, the integrator's own refreshes after lifecycle events run on the device:
 `integrator.nmobile`, `integrator.stats.attempts` and `stats.refreshes` are brought
@@ -477,10 +508,14 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
     return nothing
 end
-# a custom rule: `remake_frozen` on a host copy of the state
+# a custom rule: `remake_frozen` on a host copy of the state; with `frozen_reads`, a copy
+# of the declared leaves only (D-128; the other leaves stay device arrays)
 function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
+    reads = _frozen_reads(integ.f.sys, integ.state)
     _sync!(integ.stats, integ.backend)
-    u = integ.backend isa CPU ? integ.state : _snapshot(integ.stats, integ.backend, integ.state)
+    u = integ.backend isa CPU ? integ.state :
+        reads === nothing ? _snapshot(integ.stats, integ.backend, integ.state) :
+        _host_leaves(integ.stats, integ.state; σ = :σ in reads, cell = filter(n -> n !== :σ, reads))
     fz = frozen_sites(integ.prob, u)
     _set_mobility!(integ.stats, m, fz)
     integ.nmobile = count(!, fz)

@@ -314,3 +314,46 @@ end
         @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
     end
 end
+
+# P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`); on the CPU
+# the rule still sees the live state, so the masks are the undeclared rule's. A bad
+# declaration fails at `init`, before any step.
+struct DeclaredFrozen
+    k::Int32
+    reads::Any
+end
+CorePotts.frozen_varies(::DeclaredFrozen) = true
+CorePotts.frozen_reads(s::DeclaredFrozen) = s.reads
+CorePotts.remake_frozen(s::DeclaredFrozen, prob, u) = fk_mask(u, s.k)
+struct KindsBadReads end                                    # the standard rule, a bad declaration
+CorePotts.frozen_kinds(::KindsBadReads) = (Int32(2),)
+CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
+
+@testset "a custom rule's declared reads (frozen_reads)" begin
+    @test CorePotts.frozen_reads(HostFrozen(2)) === nothing && CorePotts.frozen_reads(FrozenKind(2)) === nothing
+    S = 10
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        dec = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:σ, :kind))), alg; saveat = 1)
+        ref = solve(fk_problem(fk_flip(S); kind = fk_swap, sys = HostFrozen(2)), alg; saveat = 1)
+        @test dec.stats.refreshes == ref.stats.refreshes == 1
+        @test [u.σ for u in dec.u] == [u.σ for u in ref.u]       # same masks, same run
+        @test fk_moved(dec, 1, (S + 3):31) == 0                   # frozen after the transition
+        # checkpoint resume and reinit! refresh by the declared rule
+        prob = fk_problem(fk_flip(S); kind = fk_swap, sys = DeclaredFrozen(2, (:σ, :kind)), tspan = (0, 20))
+        integ = init(prob, alg)
+        for _ in 1:15
+            step!(integ)
+        end
+        ck = checkpoint(integ)
+        @test init(prob, alg; checkpoint = ck).ctx.mobility.frozen == fk_mask(ck.state, 2) != fk_mask(prob.u0, 2)
+        reinit!(integ, prob.u0)
+        @test integ.ctx.mobility.frozen == fk_mask(prob.u0, 2)
+        # a name that is not `:σ` or a cell column, or not a tuple of Symbols: rejected at init
+        for bad in ((:σ, :knd), (:σ, :q), [:σ], (:σ, "kind"))
+            @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, bad)), alg)
+        end
+        # negative control: the standard rule ignores the hook (not even checked)
+        integ = init(fk_problem(; sys = KindsBadReads()), alg)
+        @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
+    end
+end
