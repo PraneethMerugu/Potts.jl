@@ -92,7 +92,7 @@ end
 so the problems they touch show as DIFFER."""
 function warn_if_dirty(checkout)
     status = try
-        read(pipeline(`git -C $checkout status --porcelain`; stderr = devnull), String)
+        read(pipeline(`git -C $checkout status --porcelain --untracked-files=no`; stderr = devnull), String)
     catch
         return nothing                                   # not a git checkout: nothing to compare
     end
