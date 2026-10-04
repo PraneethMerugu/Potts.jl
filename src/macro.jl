@@ -104,6 +104,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
         __frozen = Int[]
+        __classes = $P.KindClass[]
         __params = Any[]
         __vars = Any[]
         __relations = Dict{Symbol, Any}()
@@ -128,7 +129,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
+        observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
         sweep = __sweep, structural = $structural))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -329,7 +330,16 @@ function _section!(parts, sec, args, ln = nothing)
         end
     elseif sec === Symbol("@kinds")
         names = Symbol[]
+        classes = Any[]
         for l in _lines(args)
+            if l isa Expr && l.head === :(=)        # `endothelial = (tip, stalk)`: a kind class
+                g, m = l.args[1], _strip(l.args[2])
+                g isa Symbol || throw(ArgumentError("@kinds: a kind class is `name = (kind, …)`"))
+                members = m isa Expr && m.head === :tuple ? m.args : Any[m]
+                all(x -> x isa Symbol, members) || throw(ArgumentError("@kinds: kind class `$g` lists kind or class names, `$g = (kind, …)`"))
+                push!(classes, (g, members))
+                continue
+            end
             if l isa Expr && l.head === :ref && l.args[2:end] == [:frozen]
                 isempty(names) && throw(ArgumentError("the medium (the first kind) cannot be frozen"))
                 push!(code, :(push!(__frozen, $(length(names)))))    # `wall[frozen]`: an obstacle kind
@@ -341,6 +351,10 @@ function _section!(parts, sec, args, ln = nothing)
         for (i, k) in enumerate(names)
             _declare!(parts, k, "kind")
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
+        end
+        for (g, members) in classes
+            _declare!(parts, g, "kind class")
+            push!(code, :($g = $P._kind_class($(QuoteNode(g)), $(Tuple(members)), ($(members...),))), :(push!(__classes, $g)))
         end
     elseif sec === Symbol("@parameters")
         for l in _lines(args)

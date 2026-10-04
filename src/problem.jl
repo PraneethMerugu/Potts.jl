@@ -537,7 +537,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     ncell = maximum(σ; init = Int32(0))
     kkey = _unwrap(B.kind)
     kinds = haskey(opd, kkey) ? opd[kkey] : fill(1, ncell)
-    kinds = Int32[k isa Symbol ? _kind_index(sys, k) : Int(k) for k in (kinds isa AbstractVector ? kinds : fill(kinds, ncell))]
+    kinds = Int32[k isa Symbol ? _kind_index(sys, k) : _kind_number(k) for k in (kinds isa AbstractVector ? kinds : fill(kinds, ncell))]
     length(kinds) == ncell || throw(ArgumentError("$(length(kinds)) kinds for $ncell labelled cells"))
     nk = length(sys.kinds) - 1
     for k in kinds
@@ -649,8 +649,12 @@ function _frozen_mask(sys::PottsSystem, st)
     return map(s -> s != 0 && Int(kinds[s]) in sys.frozen_kinds, st.σ)
 end
 
+_kind_number(k) = Int(k)
+_kind_number(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class, not a kind: a cell has one kind"))
 function _kind_index(sys::PottsSystem, k::Symbol)
     j = findfirst(==(k), sys.kinds)
+    j === nothing && any(g -> g.name === k, sys.kind_classes) &&
+        throw(ArgumentError("`$k` is a kind class, not a kind: a cell has one kind; kinds are $(sys.kinds)"))
     j === nothing && throw(ArgumentError("unknown kind `$k`; kinds are $(sys.kinds)"))
     j == 1 && throw(ArgumentError("cells cannot have the medium kind `$k`"))
     return j - 1

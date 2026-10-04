@@ -461,6 +461,13 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0q_time_fold_metal.jl"))
 end
 
+# P6.0g: kind classes lower to constant kind comparisons, so the class gates compile for
+# the device and match the CPU run in Float32 (D-135)
+module P60gOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")

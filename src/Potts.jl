@@ -60,5 +60,7 @@ export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
 public paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,
     core_lattice, LatticeSpec
+# a named set of kinds declared in `@kinds` (`g = (k, …)`); for programmatic `PottsSystem(; kind_classes)`
+public KindClass
 
 end

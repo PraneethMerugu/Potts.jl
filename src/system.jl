@@ -33,6 +33,7 @@ Base.@kwdef struct PottsSystem
     name::Symbol
     kinds::Vector{Symbol}
     frozen_kinds::Vector{Int} = Int[]          # obstacle kinds: their sites never change owner
+    kind_classes::Vector{KindClass} = KindClass[]   # named sets of kinds (D-135); not hashed: lowered into the statements
     lattice::LatticeSpec
     parameters::Vector{Any} = Any[]
     variables::Vector{Any} = Any[]
@@ -78,7 +79,27 @@ function _check_reserved_names(sys)
     foreach(r -> check("relationship", r.name), sys.relationships)
     foreach(c -> check("component", c.name), sys.components)
     foreach(k -> check("structural parameter", k), keys(sys.structural))
+    _check_kind_classes(sys)
     return sys
+end
+
+# A class is a non-empty set of cell kinds of this system (D-135); `@kinds` checks the same
+# at expansion, this catches programmatic builds.
+function _check_kind_classes(sys)
+    ncell = length(sys.kinds) - 1
+    for (i, g) in enumerate(sys.kind_classes)
+        n = g.name
+        n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message("kind class", n)))
+        any(h -> h.name === n, view(sys.kind_classes, 1:(i - 1))) &&
+            throw(ArgumentError("kind class `$n` is declared twice in $(sys.name)"))
+        isempty(g.kinds) && throw(ArgumentError("kind class `$n` is empty; list at least one kind"))
+        allunique(g.kinds) || throw(ArgumentError("kind class `$n` lists a kind twice: $(Tuple(g.kinds))"))
+        for k in g.kinds
+            1 <= k <= ncell || throw(ArgumentError("kind class `$n` lists kind number $k, which is not a cell kind of " *
+                                                   "$(sys.name) (cell kinds are 1:$ncell; 0 is the medium)"))
+        end
+    end
+    return nothing
 end
 
 # Suffixes of the state slots Potts adds (ODE and tick scratch, double-buffered fields): a

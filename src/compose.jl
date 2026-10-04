@@ -53,7 +53,21 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
     _check_vector_lengths(name, inbase, Iterators.flatten((base.parameters, base.variables)),
         Iterators.flatten((sys.parameters, sys.variables)))
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
+    # kind classes (D-135): the base's, then the extension's new ones; a restated class must
+    # keep its members
+    classes = copy(base.kind_classes)
+    for g in sys.kind_classes
+        i = findfirst(h -> h.name === g.name, classes)
+        if i === nothing
+            push!(classes, g)
+        elseif classes[i].kinds != g.kinds
+            here, there = (Tuple(get(sys.kinds, k + 1, k) for k in h.kinds) for h in (g, classes[i]))   # kind names
+            throw(ArgumentError("extend: kind class `$(g.name)` is $here in $(nameof(sys)) but $there $inbase; " *
+                                "a restated class keeps its members (or rename it)"))
+        end
+    end
     return PottsSystem(; name, kinds = sys.kinds, frozen_kinds = sort!(union(base.frozen_kinds, sys.frozen_kinds)),
+        kind_classes = classes,
         lattice = sys.lattice, parameters = byname(base.parameters, sys.parameters),
         variables = map(_settle_edge_scope, byname(base.variables, svars)), relations = merge(base.relations, sys.relations),
         energies = [base.energies; sys.energies], drives = [base.drives; sys.drives],
@@ -154,6 +168,7 @@ function _name_categories(sys::PottsSystem)
         return nothing
     end
     foreach(k -> claim(k, "kind"), sys.kinds)
+    foreach(g -> claim(g.name, "kind class"), sys.kind_classes)
     for (what, xs) in (("parameter", sys.parameters), ("variable", sys.variables))
         for x in xs
             i = info(x)
@@ -264,9 +279,11 @@ function lookup(sys::PottsSystem, name::Symbol)
     isempty(comps) || return QuantityVector(name, Num[Symbolics.wrap(x) for x in sort!(comps; by = x -> info(x).options.index)])
     k = findfirst(==(name), sys.kinds)
     k === nothing || return k - 1
+    g = findfirst(h -> h.name === name, sys.kind_classes)
+    g === nothing || return sys.kind_classes[g]
     haskey(sys.relations, name) && return RelationRef(name)
     any(r -> r.name === name, sys.relationships) && return RelationshipRef(name)
-    throw(ArgumentError("$(nameof(sys)) has no parameter, variable, kind or relation `$name`"))
+    throw(ArgumentError("$(nameof(sys)) has no parameter, variable, kind, kind class or relation `$name`"))
 end
 
 # `x′` of a site or field variable `x` (scalar or vector) of `sys`, or `nothing`
