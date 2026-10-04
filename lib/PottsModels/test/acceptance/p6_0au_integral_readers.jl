@@ -349,8 +349,8 @@ p60au_pinned() = (
 )
 const P60AU_FINGERPRINTS = Dict{Symbol, UInt64}(
     :GranerGlazier => 0x04a4528dcdf3fcb8,
-    :WortelAct => 0xd6d4f8e4e7850c5e,
-    :WortelActConnected => 0xa2b5702602b1e8f9,
+    :WortelAct => 0xce4f1cec820b20fe,  # re-pinned under D-124
+    :WortelActConnected => 0x993142c5fb9c8f2f,  # re-pinned under D-124
     :MerksVasculogenesis => 0x984e2ad5906fc999,
     :SingleDivisionFixture => 0x13a4ddc2bb677287,
     :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,

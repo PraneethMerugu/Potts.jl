@@ -337,6 +337,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     proposal_spec = get(sys.relations, :proposal, CorePotts.VonNeumann(1))
     relations = Dict{Symbol, Any}()
     for (k, v) in sys.relations
+        # `contact` and `proposal` are declarable roles (split out above); the other names
+        # CorePotts reserves are run-context fields, so a relation may not take them (the
+        # fingerprint resolves every relation the code reads by its context name, D-124)
+        k in (:lattice, :mobility, :spacing) && throw(ArgumentError(
+            "relation names `contact`, `proposal`, `lattice`, `mobility`, `spacing` are reserved"))
         k in (:contact, :proposal) || (relations[k] = v)
     end
     for r in keys(contact_terms)

@@ -188,7 +188,7 @@ p60x_published() = (
 )
 const p60x_PUBLISHED = Dict{Symbol, UInt64}(
     :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
-    :WortelAct => 0xd6d4f8e4e7850c5e,   # re-pinned under D-122
+    :WortelAct => 0xce4f1cec820b20fe,   # re-pinned under D-124
     :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122
     :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,   # re-pinned under D-122
 )

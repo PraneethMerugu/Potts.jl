@@ -172,11 +172,37 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         end
         r == d || push!(cad, "$role=$(r.offsets);$(r.weights)")
     end
+    # named and inline gather relations, also run data outside the generated code (D-124):
+    # every one a recorded function reads as `ctx.<name>` (`generated` holds each compiled
+    # expression: energies, drives, ODEs, site and cell updates, ticks, lifecycle and
+    # temperature), already resolved on the lattice in `hctx`, keyed by its name in sorted
+    # order. No default is skipped. `surface` is always the lattice neighbourhood; a relation
+    # read only by observed quantities (built at query time) is not here.
+    used = Set{Symbol}()
+    names = keys(c.relations)
+    foreach(ex -> _ctx_reads!(used, ex, names), generated)
+    delete!(used, :surface)
+    for k in sort!(collect(used))
+        r = getfield(hctx, k)
+        push!(cad, "relation:$k=$(r.offsets);$(r.weights)")
+    end
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(sys.sweep, T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec))
+end
+
+# The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
+# added to `acc` (D-124).
+_ctx_reads!(acc, x, names) = acc
+function _ctx_reads!(acc, ex::Expr, names)
+    if ex.head === :. && length(ex.args) == 2 && ex.args[1] === :ctx && ex.args[2] isa QuoteNode &&
+       ex.args[2].value in names
+        push!(acc, ex.args[2].value)
+    end
+    foreach(a -> _ctx_reads!(acc, a, names), ex.args)
+    return acc
 end
 
 # The fingerprint's structural part as a canonical string: the lattice (dims, boundaries,
