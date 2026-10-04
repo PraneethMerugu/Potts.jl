@@ -1612,10 +1612,12 @@ end
     @test uc.cell.mass ≈ [sum(w0[uc.σ .== k]) for k in 1:2]
     for (body, msg) in ((:(@energy cells => integral(w)), "energies"), (:(@drive copy => integral(w)), "@before_mcs"),
             (:(@on_copy w[target] += integral(w)), "every accepted copy"),                     # D-129, `+=` form
-            (:(@on_copy w[target] ~ sum(integral(w) for c in cells if c == new)), "@on_copy"))
+            (:(@on_copy w[target] ~ sum(integral(w) for c in cells if c == new)), "@on_copy"),
+            (:(@on_copy w[ifelse(sum(integral(w) for c in cells if c == new) > 0, target, source)] ~ 1.0), "every accepted copy"),
+            (:(@on_copy y[ifelse(sum(integral(w) for c in cells if c == new) > 0, new, old)] ~ 1.0), "every accepted copy"))
         m = eval(:(@potts_model _BadIntegral begin
             @kinds medium A
-            @variables w(site) = 0.0
+            @variables w(site) = 0.0 y(cell) = 0.0
             @lattice Lattice((8, 8))
             $(body)
             @sweep Metropolis(; temperature = 1.0)
