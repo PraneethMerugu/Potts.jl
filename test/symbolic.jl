@@ -2499,6 +2499,53 @@ end
     # controls: a site variable's prime and an unrelated unbound name keep their behaviour
     @test build(quote @extend c, J = b = PrimeBase(); @energy contacts => J[kind, kind′] + c′ end) isa Potts.PottsSystem
     @test_throws UndefVarError build(model(:(@energy cells(A) => zz′)))
+    # an `@extend` base's arguments are the extension's own code: their primes are translated
+    @test rejects(quote @parameters q = 1.0; @extend b = PrimeBase(; λ = q′) end, "q′", "`q` is a parameter")
+end
+
+# Component bindings (an MTK value given as an expression) are rejected by name only where
+# Potts reads them; a binding of a continuous observed variable (its equation gives its
+# value) or of a parameter the system does not use stays ignored
+@testset "component bindings Potts does not read" begin
+    t = Potts.t
+    σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
+    op = [ownership => σ, kind => [:A]]
+    function run(sys)
+        m = Base.invokelatest(eval, quote
+            @potts_model BindProbe begin
+                @kinds medium A
+                @components cells(A) comp = $sys
+                @lattice Lattice((10, 10))
+                @energy cells => (volume - 9.0)^2
+                @sweep Metropolis(; temperature = 1.0e-6)
+            end
+            BindProbe(; name = :bp)
+        end)
+        mtkcompile(m)
+        return solve(PottsProblem(m, op, (0, 2)), SequentialCPM())
+    end
+    rejected(sys, word) = try
+        run(sys)
+        false
+    catch e
+        e isa ArgumentError && (m = sprint(showerror, e); occursin("component `comp`", m) && occursin(word, m))
+    end
+    @parameters k = 0.3
+    @parameters k2 = 2k
+    Potts.ModelingToolkitBase.@variables y(t) = 1.0 o(t)
+    # an unused bound parameter
+    sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp))
+    @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.3)^2
+    # negative control: the same parameter used is rejected
+    @test rejected(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp), "k2")
+    # an observed variable bound (or given an initial value) consistent with its equation
+    Potts.ModelingToolkitBase.@variables ob(t) = 2y
+    sol = run(System([ob ~ 2y, Potts.D(y) ~ -k * ob], t; name = :comp))
+    @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+    sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [o => 2y]))
+    @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
+    # negative control: an unknown's initial value given as an expression is rejected
+    @test rejected(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]), "2k")
 end
 
 # ---------------------------------------------------------------------------------------

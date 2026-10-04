@@ -93,6 +93,8 @@ frozen_kinds(sys) = nothing
 
 Whether the frozen mask follows the state during a run. Default: `frozen_kinds(sys) !==
 nothing`. `false` means a static mask (none, a domain, a user `frozen`), never recomputed.
+A system with a custom `remake_frozen` defines it: `true` to follow the state,
+`false` for a deliberately static mask.
 """
 frozen_varies(sys) = frozen_kinds(sys) !== nothing
 
@@ -103,7 +105,9 @@ The frozen mask of a remade or reinitialized state `u0`: the standard rule when
 `frozen_kinds(sys)` names kinds, else `prob.frozen` (a static mask).
 
 A custom rule overrides this method **and must also define `frozen_varies(sys) = true`**;
-without it the integrator treats the mask as static and never recomputes it (no error).
+without it the integrator treats the mask as static and never recomputes it, and `init`
+warns. Defining `frozen_varies(sys) = false` (a deliberately static mask) silences the
+warning.
 A custom rule runs on a host copy of the state at every refresh.
 """
 remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen : _standard_frozen(k, u0)
@@ -112,6 +116,8 @@ remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen
 function _check_frozen_hooks(sys)
     frozen_varies(sys) && return nothing
     which(remake_frozen, Tuple{typeof(sys), Any, Any}).module === CorePotts && return nothing
+    # a `frozen_varies` defined outside CorePotts (even `false`, also on a supertype) is a choice (D-133)
+    which(frozen_varies, Tuple{typeof(sys)}).module === CorePotts || return nothing
     @warn "`remake_frozen` is overridden for $(typeof(sys)) but `frozen_varies(sys)` is false: the " *
           "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
     return nothing

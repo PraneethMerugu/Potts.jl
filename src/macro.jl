@@ -121,6 +121,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
+        __base_failed = $(Ref{Bool})(false)       # set when an `@extend` base's constructor throws
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
@@ -138,7 +139,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
             try
                 $(parts.code...)
             catch __e
-                $P._prime_error(__e, $targets, __bases)
+                # an error from inside a base propagates as the base raised it (D-133)
+                __base_failed[] || $P._prime_error(__e, $targets, __bases)
                 rethrow()
             end
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare
@@ -185,6 +187,25 @@ end
 _with_article(what) = (first(what) in "aeiou" ? "an " : "a ") * what
 _scope_description(role, rel) = role === :edge ? (rel === nothing ? "an edge variable" : "an edge variable of `$rel`") :
                                 "a $role variable"
+
+"""
+`F(args...; kws...)` for an `@extend` base `F` whose constructor raising sets `failed[]`: the
+extending constructor then rethrows the error unchanged instead of translating it as one of
+its own `x′` (each constructor call has its own flag, so nested or concurrent builds never
+share it). The flag is set only on the error path, which leaves the extending constructor.
+"""
+struct _BaseCall{F, R <: Ref{Bool}}
+    f::F
+    failed::R
+end
+function (c::_BaseCall)(args...; kws...)
+    try
+        return c.f(args...; kws...)
+    catch
+        c.failed[] = true
+        rethrow()
+    end
+end
 
 """What `x` is in one of `bases` (for `_prime_error`), or `nothing`."""
 function _base_description(bases, x::Symbol)
@@ -423,7 +444,10 @@ function _section!(parts, sec, args, ln = nothing)
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
         # an extension without its own @lattice uses the base's dimension (vector builtins, A-38)
         # `_nested(F, args...; kws...)`: the arguments are evaluated before the base is entered
-        nested = Expr(:call, :($P._nested), params, call.args[1], filter(x -> x !== params, call.args[2:end])...)
+        # (the extension's own code); only an error the base's constructor raises is marked
+        # `__base_failed`, so the extension does not relabel it (`_BaseCall`, D-133)
+        nested = Expr(:call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
+            filter(x -> x !== params, call.args[2:end])...)
         push!(code, :($bname = $nested), :(push!(__bases, $bname)),
             :($P._build().dim == 0 && $P._set_dim!(length($bname.lattice.dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
