@@ -1851,3 +1851,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** The fingerprint also hashes a non-Metropolis `@sweep` law and a non-zero `offset`, so a checkpoint no longer loads across `Metropolis`/`Barker` or across offsets. Defaults (Metropolis, offset 0) keep their fingerprints; every PottsModels pin holds.
 - **Review.** One round, approved. Follow-ups P6.0ar (neighbourhoods) and P6.0as (NaN offset, closure `combine`).
 - **Merge checks.** Potts and PottsModels (`-t 4`) and the docs build exit 0. Host-only (problem build); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ar merged: the fingerprint includes the proposal and contact neighbourhoods (D-122)
+
+- **The change.** The fingerprint also hashes `@relations proposal` and `@relations contact` when they resolve to something other than their default (`VonNeumann(1)`; the lattice neighbourhood), so a checkpoint no longer loads across copy or contact neighbourhoods. Because the proposal default is `VonNeumann(1)`, the models declaring `proposal = Moore(1)` — GranerGlazier, WortelAct (both), MerksVasculogenesis, OpenVTGrowingMonolayer — and one fixture were re-pinned in six earlier frozen files under D-122 (pins only); AkeebInvasion and every model without `@relations` keep theirs.
+- **Review.** Two rounds (round 1: thin lattices whose default aliases), approved. Follow-up P6.0at (named and inline relations).
+- **Merge checks.** Potts, PottsModels (`-t 4`), CorePotts and the docs build exit 0. Host-only (problem build); gate and Metal not rerun.
