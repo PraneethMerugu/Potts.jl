@@ -411,19 +411,34 @@ function p60t_time(integ; n = 20, reps = 7)
     end
 end
 
+# Re-frozen under D-131 (P6.0ay): the D-120 bound `to <= 1.1 * tl` failed under parallel
+# load (1.854 vs 1.545 ms) and passed alone. The primary check is now structural, on what
+# the problem actually runs: the 8 observed-only integrals add no phase, no refresh and no
+# cell column to the problem built for `init` (`prob.f.phases`, `prob.u0`), so a warm MCS
+# does the same work as without them. The timing check stays as a loose backstop: paired
+# rounds (each pair timed back to back, so load hits both alike), the minimum ratio over
+# the rounds, at most 1.5× (≈ 3.6× with the waste).
 @testset "P6.0t: observed-only integrals cost nothing per MCS ($(nameof(typeof(alg))))" for alg in P60T_ALGS
-    io = init(p60t_cost_problem(P60tCostObserved), alg)
-    il = init(p60t_cost_problem(P60tCostLean), alg)
-    foreach(_ -> (step!(io); step!(il)), 1:5)
-    # interleaved rounds, the best of each
-    to, tl = Inf, Inf
-    for _ in 1:3
-        to = min(to, p60t_time(io))
-        tl = min(tl, p60t_time(il))
+    po, pl = p60t_cost_problem(P60tCostObserved), p60t_cost_problem(P60tCostLean)
+    # structural: the problem's own phases, as `init` runs them
+    for (k, tw, tn) in zip((:before_mcs, :after_mcs, :end_mcs, :at_init), p60t_tuples(po.f.phases), p60t_tuples(pl.f.phases))
+        @test map(x -> nameof(typeof(x)), collect(tw)) == map(x -> nameof(typeof(x)), collect(tn))   # DEFECT CHECK
+        @test p60t_refreshed(tw) == p60t_refreshed(tn)                                                # DEFECT CHECK
     end
-    ok = to <= 1.1 * tl
-    @test ok                                                            # DEFECT CHECK (today ≈ 3.6×)
-    ok || @info "P6.0t: per-MCS time with 8 observed-only integrals $(round(1e3to; digits = 3)) ms, without $(round(1e3tl; digits = 3)) ms"
+    @test length(p60t_refreshed(po.f.phases.after_mcs)) == 1          # the one after-block integral
+    @test p60t_columns(po) == p60t_columns(pl)                          # DEFECT CHECK (+8 columns today)
+    @test length(p60t_columns(pl)) == 1
+    # timing backstop: paired rounds, the minimum ratio
+    io, il = init(po, alg), init(pl, alg)
+    foreach(_ -> (step!(io); step!(il)), 1:5)
+    rs = map(1:15) do r
+        to, tl = isodd(r) ? (p60t_time(io; reps = 3), p60t_time(il; reps = 3)) :
+            reverse((p60t_time(il; reps = 3), p60t_time(io; reps = 3)))
+        to / tl
+    end
+    ok = minimum(rs) <= 1.5
+    @test ok                                                            # DEFECT CHECK (≈ 3.6× with the waste)
+    ok || @info "P6.0t: per-MCS time ratio with/without 8 observed-only integrals, paired rounds: $(round.(rs; digits = 2))"
 end
 
 # ---------------------------------------------------------------------------------------
