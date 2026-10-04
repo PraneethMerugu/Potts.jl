@@ -140,14 +140,16 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     h = hash(_fingerprint_seed(sys, T))
     isempty(spec.canonical) || (h = hash(spec.canonical, h))
     # the schedule kept outside the generated code (D-118): the resolved cadence (in MCS,
-    # after `mcs_duration`) of every gated phase, host phase and the lifecycle pass; only
-    # non-default cadences, so a model whose cadences are all every = 1, offset = 0 keeps
-    # its fingerprint
+    # after `mcs_duration`) of every gated phase, host phase and the lifecycle pass, and a
+    # non-default `mcs_duration`; only non-default values, so a model on the default schedule
+    # (every = 1, offset = 0, `mcs_duration` = 1) keeps its fingerprint
     cad = String[]
     for f in fieldnames(typeof(phases))
         _cadences!(cad, getfield(phases, f))
     end
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
+    # the MCS length, which solvers keep as data (`Adaptive`'s dt, an explicit-substeps `FieldStep.dt`)
+    sys.sweep.mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(sys.sweep.mcs_duration))")
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(sys.sweep, T),

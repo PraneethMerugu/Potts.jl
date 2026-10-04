@@ -389,3 +389,61 @@ end
         @test solve(prob, alg).u[end].cell.y ≈ [2.15, 1.65]
     end
 end
+
+# D-118: `mcs_duration` is data of a solver (`Adaptive`'s dt), not of the generated code, so
+# the fingerprint hashes it when it is not 1.
+function md_ode_model(md)
+    @potts_model MdODE begin
+        @kinds medium A
+        @variables y(cell) = 1.0
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @equations D(y) ~ -y
+        @sweep Metropolis(; temperature = 1.0, mcs_duration = md)
+    end
+    MdODE(; name = :ad)
+end
+function md_field_model(md)
+    @potts_model MdField begin
+        @kinds medium A
+        @variables c(field) = 0.0
+        @lattice Lattice((12, 12))
+        @energy cells => (volume - 9.0)^2
+        @equations D(c) ~ 0.1 * Δ(c) - 0.05 * c
+        @sweep Metropolis(; temperature = 1.0, mcs_duration = md)
+    end
+    MdField(; name = :fd)
+end
+@testset "D-118: a non-default mcs_duration is in the fingerprint" begin
+    md_sigma() = (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s)
+    refused(p, ck) = try
+        init(p, SequentialCPM(); checkpoint = ck); false
+    catch e
+        e isa ArgumentError
+    end
+    ad(md) = PottsProblem(md_ode_model(md), [ownership => md_sigma(), kind => [:A]], (0, 4);
+        ode_solver = Adaptive(Tsit5(); reltol = 1e-10, abstol = 1e-12))
+    a1, a2, ah = ad(1.0), ad(1.0), ad(0.5)
+    # the runs differ: y = e^{-4} after 4 MCS of length 1, e^{-2} of length 0.5
+    @test solve(a1, SequentialCPM()).u[end].cell.y[1] ≈ exp(-4) rtol = 1e-6
+    @test solve(ah, SequentialCPM()).u[end].cell.y[1] ≈ exp(-2) rtol = 1e-6
+    @test a1.f.fingerprint == a2.f.fingerprint                      # control: same schedule
+    @test a1.f.fingerprint != ah.f.fingerprint
+    i1 = init(a1, SequentialCPM()); step!(i1); step!(i1)
+    ck = checkpoint(i1)
+    @test refused(ah, ck)
+    @test init(a2, SequentialCPM(); checkpoint = ck).t == i1.t      # control: same schedule loads
+    # an explicit-substeps field step (no parameter bound): already distinct through its code;
+    # kept as a regression guard
+    fd(md) = PottsProblem(md_field_model(md), [ownership => md_sigma(), kind => [:A], :c => [Float64(x + y) for x in 1:12, y in 1:12]],
+        (0, 3); field_solver = ExplicitEuler(substeps = 4))
+    f1, fh = fd(1.0), fd(0.5)
+    @test solve(f1, SequentialCPM()).u[end].site.c != solve(fh, SequentialCPM()).u[end].site.c
+    @test f1.f.fingerprint == fd(1.0).f.fingerprint
+    @test f1.f.fingerprint != fh.f.fingerprint
+    j1 = init(f1, SequentialCPM()); step!(j1)
+    @test refused(fh, checkpoint(j1))
+    # the default `mcs_duration` adds nothing: an explicit 1.0 equals an unset one
+    @test fd(1.0).f.fingerprint == PottsProblem(md_field_model(1), [ownership => md_sigma(), kind => [:A],
+        :c => [Float64(x + y) for x in 1:12, y in 1:12]], (0, 3); field_solver = ExplicitEuler(substeps = 4)).f.fingerprint
+end
