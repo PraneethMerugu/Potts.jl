@@ -341,7 +341,7 @@ p60ag_published() = (
 )
 const P60AG_PUBLISHED = Dict{Symbol, UInt64}(
     :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
-    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-pinned under D-122
+    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-recorded at the P6.0ag merge (D-102: substep function); re-pinned under D-122
 )
 
 """CPU and Metal runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:

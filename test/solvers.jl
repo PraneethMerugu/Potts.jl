@@ -447,3 +447,35 @@ end
     @test fd(1.0).f.fingerprint == PottsProblem(md_field_model(1), [ownership => md_sigma(), kind => [:A],
         :c => [Float64(x + y) for x in 1:12, y in 1:12]], (0, 3); field_solver = ExplicitEuler(substeps = 4)).f.fingerprint
 end
+# The fingerprint resolves the default proposal and contact neighbourhoods only to compare
+# with them (D-122): on a thin periodic lattice where the default aliases (VonNeumann(1) on
+# a 2- or 1-wide axis, a lattice `neighborhood = Moore(1)` overridden by a valid contact),
+# a model with valid stencils still builds, runs and fingerprints deterministically.
+function thin_model(dims, contact, nbhd)
+    @potts_model ThinStrip begin
+        @kinds medium A
+        @lattice Lattice(dims; neighborhood = nbhd)
+        @relations begin
+            proposal = Stencil([[0, 1], [0, -1]])
+            contact = contact
+        end
+        @energy cells => (volume - 4.0)^2
+        @energy contacts => 1.0
+        @sweep Metropolis(; temperature = 2.0)
+    end
+    ThinStrip(; name = :t)
+end
+@testset "D-122: thin lattices whose default neighbourhood aliases" begin
+    line = Stencil([[0, 1], [0, -1]])
+    line2 = Stencil([[0, 1], [0, -1], [0, 2], [0, -2]])
+    for (dims, nbhd) in (((2, 12), VonNeumann(1)), ((1, 12), VonNeumann(1)), ((2, 12), Moore(1)))
+        σ = zeros(Int32, dims); σ[:, 2:3] .= 1
+        op = [ownership => σ, kind => [:A]]
+        # control: the default itself does not resolve on this lattice
+        @test_throws ArgumentError Potts.CorePotts.relation(VonNeumann(1), Potts.CorePotts.Lattice(dims))
+        p = PottsProblem(thin_model(dims, line, nbhd), op, (0, 3); seed = 1)
+        @test Symbol(solve(p, SequentialCPM()).retcode) === :Success
+        @test PottsProblem(thin_model(dims, line, nbhd), op, (0, 3); seed = 1).f.fingerprint == p.f.fingerprint
+        @test PottsProblem(thin_model(dims, line2, nbhd), op, (0, 3); seed = 1).f.fingerprint != p.f.fingerprint
+    end
+end

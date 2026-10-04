@@ -157,12 +157,20 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     sys.sweep.offset == 0 || push!(cad, "offset=$(repr(sys.sweep.offset))")
     # the proposal and contact neighbourhoods, run data outside the generated code (D-122):
     # each resolved on the lattice and hashed with its role when it differs from its default
-    # (proposal `VonNeumann(1)`, contact the lattice's `neighborhood`)
-    lat = core_lattice(sys.lattice)
-    for (role, spec, default) in (("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
+    # (proposal `VonNeumann(1)`, contact the lattice's `neighborhood`). A default that does
+    # not resolve on this lattice (it aliases on a thin periodic axis) is unused here, so it
+    # is resolved leniently and any resolvable relation differs from it.
+    lat = hctx.lattice
+    for (role, nb, default) in (("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
             ("contact", c.contact_spec, sys.lattice.neighborhood))
-        r = CorePotts.relation(spec, lat)
-        r == CorePotts.relation(default, lat) || push!(cad, "$role=$(r.offsets);$(r.weights)")
+        r = CorePotts.relation(nb, lat)
+        d = try
+            CorePotts.relation(default, lat)
+        catch e
+            e isa ArgumentError || rethrow()
+            nothing
+        end
+        r == d || push!(cad, "$role=$(r.offsets);$(r.weights)")
     end
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
