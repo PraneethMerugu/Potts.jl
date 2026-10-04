@@ -125,7 +125,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
-        variables = $P._bind_edge_scope(__vars, __relationships), relations = __relations, energies = __energies, drives = __drives,
+        variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,

@@ -484,6 +484,34 @@ end
     @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
 end
 
+@testset "programmatic extend: a re-declared edge variable keeps the base's relationship" begin
+    base = Spring(; name = :s)                       # `rest(edge)`: `bond`
+    rest_sym = only(Potts.Symbolics.@variables rest(Potts.t))
+    ext(scope; rels = [Potts.relationship(:tether; capacity = 1)]) = Potts.PottsSystem(; name = :x,
+        kinds = base.kinds, lattice = base.lattice, sweep = base.sweep, relationships = rels,
+        variables = Any[Potts.variable(rest_sym, scope; default = 9.0)])
+    σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2
+    op = [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]]
+    for (scope, rels) in ((:edge, [Potts.relationship(:tether; capacity = 1)]), (:edge, Potts.RelationshipSpec[]),
+                          (:edge, [Potts.relationship(:tether), Potts.relationship(:glue)]), (:bond, Potts.RelationshipSpec[]))
+        c = mtkcompile(extend(ext(scope; rels), base))
+        @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
+        @test all(r -> isempty(c.edge_vars[r]), filter(!=(:bond), collect(keys(c.edge_vars))))
+        prob = PottsProblem(c, op, (0, 5))
+        @test prob.u0.cell.link_rest[1, 1] == prob.u0.cell.link_rest[1, 2] == 9.0   # the extension's default
+        @test total_energy(prob) == total_energy(PottsProblem(base, [op; :rest => 9.0], (0, 5)))
+    end
+    # a nested extension (of an extension) keeps it too
+    c = mtkcompile(extend(ext(:edge; rels = Potts.RelationshipSpec[]), extend(ext(:edge), base; name = :mid)))
+    @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest] && isempty(c.edge_vars[:tether])
+    # another relationship: rejected when built, naming the variable and both relationships
+    @test_throws ArgumentError extend(ext(:tether), base)
+    @test_throws r"`rest`.*`bond`.*`tether`" extend(ext(:tether), base)
+    # control: without the base's variable, `rest(tether)` is the extension's own
+    c = mtkcompile(ext(:tether))
+    @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:rest]
+end
+
 @testset "several relationships: names are checked" begin
     @test_throws "ambiguous" mtkcompile(AmbiguousEdge(; name = :a))
     @test_throws "neither a scope" mtkcompile(UnknownRelationship(; name = :u))

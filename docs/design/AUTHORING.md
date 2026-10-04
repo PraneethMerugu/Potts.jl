@@ -547,9 +547,22 @@ end
   ("ambiguous"), as is a scope that is neither a scope nor a relationship. An edge term or
   link rule reads only its own relationship's edge variables (another relationship's
   payload has no slot for its links).
+- **Re-declared edge variables keep their relationship** (D-127). An extension that
+  re-declares an inherited edge variable to change its default (`@variables rest(edge) =
+  9.0` over a base's `rest(bond)`) changes only the default: an unscoped `x(edge)` takes
+  the inherited relationship, whatever relationships the extension declares (none, one or
+  several). A new unscoped edge variable follows the rule above. Re-declaring it scoped to
+  another relationship (`rest(tether)`) is an `ArgumentError` when the extension is built
+  (`@extend` or `extend`), naming the variable and both relationships: a payload column
+  belongs to one relationship.
 - **Initial links** are given per name in the operating point:
-  `PottsProblem(sys, [ownership => σ, :bond => [(1, 2)], :tether => [(2, 3)]], tspan)`. A
-  new link's edge variables start at their defaults.
+  `PottsProblem(sys, [ownership => σ, :bond => [(1, 2)], :tether => [(2, 3)]], tspan)`. An
+  edge variable's operating-point value (`:rest => 9.0`, one number) is its initial value
+  on every initial link of its relationship, both ends, converted to `T`, at construction
+  and in `remake(prob; u0 = op)` (D-127); anything but a number is an `ArgumentError`
+  naming the variable. Without it, initial links start at the declared default. A link
+  made by `@link` starts at the declared default (compiled into the rule); the operating
+  point is state and never changes the fingerprint.
 - **Storage.** Relationship `r` keeps its adjacency in the cell column `links__r`
   (`maxdeg × capacity`, 0 = empty slot; `CorePotts.adjacency_name(r)`), and each edge
   variable `x` its payload in `link_x` (edge variable names are unique per model, so a
