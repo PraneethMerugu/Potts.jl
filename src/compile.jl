@@ -365,7 +365,12 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1
     # gather relations numbered in statement order and, within one, by content (D-107)
-    for x in all_exprs
+    # then the sites evaluated outside the copy step, after every existing one so their
+    # numbers stay; observed quantities last (they are not fingerprinted, D-124)
+    numbered = Any[all_exprs..., (d.when for d in sys.divisions)...,
+        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in sys.link_rules)..., last.(edge_terms)..., (o.expr for o in sys.observed)...]
+    for x in numbered
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
                             if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
         ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
