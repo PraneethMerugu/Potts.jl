@@ -266,3 +266,8 @@ decision = "D-122"
 path = "acceptance/p6_0as_sweep_validation.jl"
 sha256 = "a68bfaaf16aa9598f4b35cf3706177ef6ce4adeda72a7a4b765d471d49afbf2e"
 decision = "D-123"
+
+[[file]]
+path = "acceptance/p6_0b2_link_followups.jl"
+sha256 = "b2f29c6b87f90566e937bff2b80843dcdfd7f4e25dcf2dfd326a75e31bdaf0e0"
+decision = "D-127"
