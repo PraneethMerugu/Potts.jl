@@ -61,4 +61,15 @@ export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
 public paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,
     core_lattice, LatticeSpec
 
+# The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
+# runs when Potts loads, never into the precompile image. The draw is a child task's, which
+# leaves the caller's random stream untouched (loading Potts never shifts a user's seeded
+# `rand`), mixed with the clock and the process id so that two sessions differ even when the
+# global RNG was seeded alike before loading.
+function __init__()
+    draw = fetch(schedule(Task(() -> rand(UInt64))))
+    _SESSION_TOKEN[] = hash((draw, time_ns(), getpid()))
+    return nothing
+end
+
 end

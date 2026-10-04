@@ -339,6 +339,18 @@ end
   masks.
 - `rand(dist)` inside any expression is an addressed draw: reproducible, backend
   independent, keyed to the site/cell/MCS it belongs to.
+- **After-MCS order (D-130; INTERNALS §1.6).** After the copy sweep, every MCS runs, in
+  this order: the after-MCS updates (`@after_mcs`), the field steps, the cell ODEs, the
+  model ODEs, the discrete ticks (discrete `@components`), and the link rules
+  (`@link`/`@unlink`); then the lifecycle (division, removal, …) and the MCS boundary
+  (integrals refreshed, `Pre(x, k)` rings pushed). Each stage sees what the earlier ones
+  wrote in the same MCS (the ODEs see the updated values, the ticks the stepped unknowns).
+- **Reserved suffixes (D-130).** Names ending in `__ode`, `__tick` or `__next` are Potts'
+  internal state slots: any declared name with one is an `ArgumentError` naming the
+  quantity and the suffix, at build or `mtkcompile`: variables and parameters (scalar or
+  vector, `@variables v(cell)[1:2]`), `@observed` names, and a component's unknowns,
+  parameters, discrete nodes and observed names (`comp₊w__ode`). A suffix elsewhere in the
+  name (`v__oder`, `ode__d`) is accepted.
 
 ### Differential equations, in MTK syntax
 
@@ -405,6 +417,20 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   loads only into an equally discretised problem; equal specifications built from fresh
   objects match. The algorithm's type and fields belong to the solver package, so the
   fingerprint can change with its version (as it does with Julia's).
+- **Depth cap and session-bound closures (D-130).** The canonical string prints values at
+  most 8 levels deep; a deeper or cyclic value in an `Adaptive` algorithm or keyword is an
+  `ArgumentError` naming `Adaptive` (and the keyword) from `PottsProblem` and `remake`,
+  never a truncation (which grouped different solvers together). A closure or anonymous
+  function (`isoutofdomain = (u, p, t) -> …`, `Rodas5P(step_limiter! = …)`) is accepted:
+  its canonical string holds a compiler-generated name (`var"#…"`), so the fingerprint
+  also hashes a token drawn when Potts loads. Within a session the same closure, or one
+  of the same type and captures, fingerprints alike and its checkpoints load; across
+  sessions the fingerprint always differs, so its checkpoints are session-bound. Named
+  functions, callable structs and stable wrappers (`Returns(false)`) load across sessions;
+  use one of them to resume in a new session. The token enters only the fingerprint hash,
+  never the canonical string or the solver grouping. `tools/fingerprint_compare.jl A B`
+  compares the published systems' and ODE fixtures' fingerprints between two checkouts
+  (the D-078 merge check).
 
 **Adaptive and stiff solvers (implemented).**
 `ode_solver = Adaptive(Rodas5P(); reltol = 1e-8)` (or a `solvers` entry) integrates cell

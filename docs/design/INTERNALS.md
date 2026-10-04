@@ -164,11 +164,24 @@ are counted null attempts); the fidelity reference.
 for each MCS:
   phases.before_mcs          (LocalMath stages)
   for color in permuted colors (one permutation per MCS): propose! ; commit!
-  phases.after_mcs           (synchronous site/cell updates, field steps, history push)
-  lifecycle (device-gated)   (see 1.7)
-  relationships rebuild      (only if relationships exist and something changed)
+  phases.after_mcs           (in this order, below)
+  lifecycle (device-gated)   (see 1.7; relationships rebuild only if they exist and something changed)
+  phases.end_mcs             (the MCS boundary: integrals refreshed, then history rings push)
   save hook                  (only if this MCS is in saveat)
 ```
+
+- **After-MCS order (D-130; `_phases_parts` in src/codegen.jl).** `phases.after_mcs` runs:
+  1. the after-MCS updates (`@after_mcs`), stage by stage, each followed by the refresh of
+     any integral it dirtied that a later stage reads;
+  2. the field steps (`FieldStep`, one per field PDE);
+  3. the cell ODEs (after the population folds their rates read), one phase per solver
+     group, then the scratch publish when the scope uses scratch slots;
+  4. the model ODEs (they see the cells' new values), likewise;
+  5. the discrete ticks (`@components` discrete systems);
+  6. the link rules (`@link`/`@unlink`, host phases).
+
+  Then the lifecycle (with a fused last cell update as `Lifecycle.before`, D-101) and the
+  boundary (`end_mcs`).
 
 - **No host synchronization inside the loop.** Everything is enqueued; the integrator
   synchronizes only at save points, on `integrator.u` access, at the end, or when a

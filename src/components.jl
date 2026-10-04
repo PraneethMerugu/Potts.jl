@@ -152,7 +152,9 @@ function _bind_components(sys::PottsSystem)
         obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(cs))
         expand(x) = _fixpoint(y -> Symbolics.substitute(y, obs; fold = Val(false)), _unwrap(x))
         for o in ModelingToolkitBase.observed(cs)          # `comp.y` for an observed y
-            names[Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(o.lhs))] =
+            oname = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(o.lhs))
+            _check_internal_suffix("component observed quantity", oname)    # D-130
+            names[oname] =
                 _unwrap(Symbolics.substitute(expand(o.rhs), local_sub; fold = Val(false)))
         end
         for eq in ModelingToolkitBase.equations(cs)

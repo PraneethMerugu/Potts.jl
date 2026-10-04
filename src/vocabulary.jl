@@ -660,6 +660,14 @@ Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`
 `solvers` map. One integrator is created on first use and re-initialized per cell and per
 MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
 systemic models, at host speed (a device state is copied once per MCS).
+
+Every keyword and algorithm field enters the problem fingerprint, so a checkpoint resumes
+only under an equal solver. Values must be at most 8 levels deep and not cyclic (deeper
+ones are an `ArgumentError` when the problem is built). An anonymous function or closure
+(`isoutofdomain = (u, p, t) -> any(<(0), u)`, `Rodas5P(step_limiter! = …)`) is accepted, but
+it has no name that survives the Julia session: its problem's checkpoints load only in the
+session that made them. To resume in a new session, pass a named function defined at the
+top level or an instance of a callable struct (or a stable wrapper such as `Returns(false)`).
 """
 struct Adaptive{A, K}
     alg::A

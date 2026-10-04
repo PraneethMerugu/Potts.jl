@@ -192,29 +192,70 @@ _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 _canonical(s::ExplicitEuler) = "ExplicitEuler(substeps=$(repr(s.substeps)),lower=$(repr(s.lower)))"
 _canonical(s::RK4) = "RK4(substeps=$(s.substeps))"
 function _canonical(s::Adaptive)
-    kw = sort!([string(k, "=", _canonical_value(v)) for (k, v) in pairs(s.kwargs)])
-    return "Adaptive($(_canonical_value(s.alg));$(join(kw, ",")))"
+    alg = _canonical_solver_part(s.alg, "the algorithm")
+    kw = sort!([string(k, "=", _canonical_solver_part(v, "the keyword `$k`")) for (k, v) in pairs(s.kwargs)])
+    return "Adaptive($alg;$(join(kw, ",")))"
+end
+
+# A solver part's canonical string (D-130). A value beyond the printer's depth cap, or a
+# cyclic one, is an `ArgumentError` naming `Adaptive` and the part: cut to its type, two
+# different solvers would fingerprint alike and share one ODE group. A compiler-generated
+# name (`var"#…"`: an anonymous function, a closure, a local function) is accepted; the
+# problem fingerprint then also hashes the session token (`_session_bound`).
+function _canonical_solver_part(v, what)
+    try
+        return _canonical_value(v)
+    catch e
+        e isa _CanonicalDepthError || rethrow()
+        throw(ArgumentError("`Adaptive`: $what holds a value nested deeper than $(_CANONICAL_DEPTH) levels, or a " *
+                            "cyclic value (at a `$(e.type)`), which the problem fingerprint cannot identify; pass a " *
+                            "flatter value, e.g. a callable struct holding only the values that matter"))
+    end
 end
 
 _canonical_type(T) = sprint(show, T; context = :module => Core)
 
+# How deep `_canonical_value` descends. A value with parts below this depth, or a cyclic one,
+# is an error (`_CanonicalDepthError`), never cut to its type (D-130). The depth is the only
+# cycle check: build-time, no visited set.
+const _CANONICAL_DEPTH = 8
+struct _CanonicalDepthError <: Exception
+    type::String
+end
+Base.showerror(io::IO, e::_CanonicalDepthError) =
+    print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
+        "`), has no canonical string for the problem fingerprint; pass a flatter value")
+
 # Values print with their full type. Scalars, enums and other primitives, strings and
 # ranges by `repr`; containers element by element (dictionaries and sets sorted by the
 # printed key, never their hash slots); types and singleton functions by type; any other
-# struct, closures included (their captures are fields), by type and fields.
+# struct, closures included (their captures are fields), by type and fields. Leaves print at
+# any depth; a value with parts below `_CANONICAL_DEPTH` throws.
 function _canonical_value(x, depth = 0)
     T = typeof(x)
     (x isa Union{Number, Symbol, AbstractString, Nothing, Missing, Enum, AbstractRange} || isprimitivetype(T)) &&
         return string(_canonical_type(T), ":", repr(x))
     x isa Type && return _canonical_type(x)
-    depth > 8 && return _canonical_type(T)
+    container = x isa Union{AbstractDict, AbstractSet, Tuple, NamedTuple, AbstractArray}
+    !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
+    depth > _CANONICAL_DEPTH && throw(_CanonicalDepthError(_canonical_type(T)))
     item(v) = _canonical_value(v, depth + 1)
     x isa AbstractDict && return string(_canonical_type(T), "{",
         join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}")
     x isa AbstractSet && return string(_canonical_type(T), "{", join(sort!([item(v) for v in x]), ","), "}")
-    x isa Union{Tuple, NamedTuple, AbstractArray} &&
+    container &&
         return string(_canonical_type(T), "[", join((string(k, "=", item(v)) for (k, v) in pairs(x)), ","), "]")
-    (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
     return string(_canonical_type(T), "(",
         join((string(n, "=", item(getfield(x, n))) for n in fieldnames(T) if isdefined(x, n)), ","), ")")
 end
+
+# The per-session token (D-130), drawn in `__init__` (Potts.jl) at every load, never baked
+# into the precompile image. A solver whose canonical string holds a compiler-generated name
+# is identified only within this session: `_problem_function` hashes the token into such a
+# problem's fingerprint (only there: the canonical string and solver grouping never see it),
+# so its checkpoints never load into another session, nor collide with another session's
+# closure that happens to get the same name. Construction and `remake` both build through
+# `_problem_function`, and `spec.canonical` covers every solver (`field_solver`,
+# `ode_solver`, `solvers`).
+const _SESSION_TOKEN = Ref{UInt64}(0)
+_session_bound(spec::SolverSpec) = occursin("var\"#", spec.canonical)
