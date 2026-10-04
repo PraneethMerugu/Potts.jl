@@ -742,8 +742,11 @@ function parameter_setter(sys, ps, run_hook)
     return ParameterSetter(map(x -> SymbolicIndexingInterface.parameter_index(sys, x), ps), ps, run_hook)
 end
 
-_unknown_name(sys, x, fn) = ArgumentError("$fn: `$x` is neither a parameter nor a state variable" *
-                                          _names_hint(sys))
+function _unknown_name(sys, x, fn)
+    SymbolicIndexingInterface.is_observed(sys, x) &&
+        return ArgumentError("$fn: `$x` is read-only (a built-in or observed quantity) and cannot be set")
+    return ArgumentError("$fn: `$x` is neither a parameter nor a state variable" * _names_hint(sys))
+end
 _names_hint(sys) = ""
 _names_hint(x::Union{PottsIntegrator, PottsProblem, CPMFunction}) = _names_hint(SymbolicIndexingInterface.symbolic_container(x))
 
@@ -771,7 +774,10 @@ SymbolicIndexingInterface.setsym(sys::Union{PottsIntegrator, PottsProblem, CPMFu
 `setsym(sys, syms)` (and `setu`) for a list of names of `sys` (an integrator, problem,
 function or model description). Its parameters are set as one change, as by `setp(sys,
 parameters)` (a rejected value sets none of them); its states as by `setu`. A list of
-states only is SymbolicIndexingInterface's setter; an unknown name is an `ArgumentError`.
+states only is SymbolicIndexingInterface's setter; an unknown or read-only name is an
+`ArgumentError` when the setter is built. A mixed list is all-or-nothing for its parameters
+only: they are set first, so a rejected parameter value sets nothing, but a rejected state
+value (set after them) leaves the new parameter values in place.
 """
 function symbol_setter(sys, syms)
     generic() = invoke(SymbolicIndexingInterface.setsym, Tuple{Any, Any}, sys, syms)
@@ -853,6 +859,23 @@ SymbolicIndexingInterface.constant_structure(::ParameterFields) = true
 SymbolicIndexingInterface.default_values(::ParameterFields) = Dict()
 SymbolicIndexingInterface.parameter_values(p::NamedTuple, i::ParameterField) = getfield(p, i.name)
 set_parameter(p::NamedTuple, v, i::ParameterField) = set_parameter(p, v, i.name)
+
+# `SII.remake_buffer(prob, prob.p, keys, vals)` (and `setp_oop`, which calls it on the root
+# container) on a problem without a model: a new NamedTuple of the same type with those fields
+# set (the original untouched)
+function SymbolicIndexingInterface.remake_buffer(sys::Union{PottsIntegrator, PottsProblem, CPMFunction, ParameterFields},
+        p::NamedTuple, idxs, vals)
+    length(idxs) == length(vals) ||
+        throw(DimensionMismatch("remake_buffer: $(length(idxs)) keys, $(length(vals)) values"))
+    for (i, v) in zip(idxs, vals)
+        name = _index_name(i)
+        (name isa Symbol && haskey(p, name)) ||
+            throw(ArgumentError("remake_buffer: `$name` is not a field of the parameter object " *
+                                "($(join(keys(p), ", ")))"))
+        p = set_parameter(p, v, name)
+    end
+    return p
+end
 
 # a name that is not a parameter of a problem without a model is an `ArgumentError` (not
 # SymbolicIndexingInterface's "invalid symbol" error); with a model, `getp` is unchanged
