@@ -1141,8 +1141,8 @@ end
     # an added frozen kind and a redeclared (wider) contact table; base overrides by keyword
     w = WalledSorting(; name = :walled)
     @test getfield(w, :kinds) == [:medium, :dark, :light, :wall] && getfield(w, :frozen_kinds) == [3]
-    @test count(x -> Potts.info(x).name === :J, w.parameters) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, w.parameters))).default) == (4, 4)
-    @test w.lattice.dims == (40, 40)
+    @test count(x -> Potts.info(x).name === :J, Potts.parameters(w)) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, Potts.parameters(w)))).default) == (4, 4)
+    @test Potts.lattice(w).dims == (40, 40)
     σw = zeros(Int32, 40, 40); σw[:, 1] .= 1; σw[10:15, 10:15] .= 2; σw[20:25, 20:25] .= 3
     pw = PottsProblem(w, [ownership => σw, kind => [:wall, :dark, :light]], (0, 10))
     @test pw.p.T == 6.0 && count(pw.frozen) == 40
@@ -1404,7 +1404,7 @@ end
     ck = checkpoint(integ)
     @test solve!(init(p2, SequentialCPM(); checkpoint = ck)).u[end].σ == solve(p1, SequentialCPM()).u[end].σ
     # site populations stay inside the domain
-    @test observe(p1, Potts._fold_iter(count, s -> true, Potts.sites, nothing)) == count(DiskSorting(; name = :d).lattice.domain)
+    @test observe(p1, Potts._fold_iter(count, s -> true, Potts.sites, nothing)) == count(Potts.lattice(DiskSorting(; name = :d)).domain)
 end
 
 module UserFunctions
@@ -3646,8 +3646,8 @@ end
         "already declared as an observed quantity") === :ok
     # controls: a vector override replaces the base's vector whole; other names are free
     m = model(quote @extend NameVecBase(); @parameters vb[1:3] = [4.0, 5.0, 6.0] end)
-    @test sort([Potts.info(p).name for p in m.parameters]) == [:vb_1, :vb_2, :vb_3] &&
-          all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, m.parameters)
+    @test sort([Potts.info(p).name for p in Potts.parameters(m)]) == [:vb_1, :vb_2, :vb_3] &&
+          all(p -> Potts.info(p).default == 3.0 + Potts.info(p).options.index, Potts.parameters(m))
     m = model(quote @extend NameVecBase(); @variables vb_3(cell) = 1.0; @parameters vb₁ = 1.0 end)
     @test Potts.info(Potts.lookup(m, :vb_3)).role === :cell && mtkcompile(m) isa Potts.CompiledPottsSystem
 end
