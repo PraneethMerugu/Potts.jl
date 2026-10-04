@@ -103,7 +103,9 @@ resumed.t
 ```
 
 The resumed run continues with the same random stream, so it equals the uninterrupted run.
-A checkpoint loads only into a problem built from the same model and solvers.
+A checkpoint loads only into a problem built from the same model and solvers, with the same
+schedule: the cadences of clocked components, `Every(n)` rules and `mcs_duration` are part of
+the check.
 
 ## Changing a problem: `remake`
 

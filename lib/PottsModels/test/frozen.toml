@@ -236,3 +236,13 @@ decision = "D-116"
 path = "acceptance/p6_0ao_computed_defaults.jl"
 sha256 = "42c5b60d1869e9d765c163eb0b9d949b0034acc3776e3237883d285639723846"
 decision = "D-117"
+
+[[file]]
+path = "acceptance/p6_0p_cadence_fingerprint.jl"
+sha256 = "14c1e56e971e70b6af98b98f5beef6d5cd7ab42a8482e04f074c95633bb0f02c"
+decision = "D-118"
+
+[[file]]
+path = "acceptance/p6_0q_time_fold_metal.jl"
+sha256 = "f90bf2e9cebb0b556ef803f099ef2a24a972ae02ba88e3db2a97e4616651ae05"
+decision = "D-119"

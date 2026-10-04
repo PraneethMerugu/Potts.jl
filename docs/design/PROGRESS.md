@@ -1834,3 +1834,14 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds (round 2: Metal-safe float division, the substep bound, local `div` rejected), approved.
 - **Merge.** One conflict with P6.0am on the kind-table keyword line: both the hidden keyword local and the literal rewrite kept.
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No existing model's step code changes; gate not rerun.
+
+## 2026-10-03 — P6.0q closed: a fold reading `time` in a cell ODE runs on Metal (D-119)
+
+- **Finding.** The `InvalidIRError` the row reported came from the per-cell `rhs` closure that P6.0x/P6.0ag removed; on 4e81e1eb the P6.0n fold fixture and the time, mcs, both and two-fold variants under Euler, substepped Euler and RK4 run on Metal bitwise equal to the CPU Float32 run. No source change; the acceptance file is a regression guard wired into `test/gpu.jl`.
+- **Merge checks.** Potts, Potts on Metal and PottsModels (`-t 4`) exit 0.
+
+## 2026-10-03 — P6.0p merged: the fingerprint includes the tick cadence (D-118)
+
+- **The change.** The fingerprint also hashes non-default cadences kept outside the generated code: discrete-component clocks (period and phase, resolved after `mcs_duration`), `@divide … Every(n)`, `@link`/`@unlink … Every(n)`, and a non-default `mcs_duration` (the `Adaptive` ODE solver's step). A checkpoint no longer loads into a problem with another schedule. Models on the default schedule — every PottsModels system and every existing pin — keep their fingerprints.
+- **Review.** Two rounds (round 2: `mcs_duration`), approved. Follow-up P6.0aq (the acceptance law's offset).
+- **Merge checks.** Potts and PottsModels (`-t 4`) exit 0. Host-only (problem build); gate and Metal not rerun.

@@ -444,6 +444,13 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0af_lifecycle_followups.jl"))
 end
 
+# P6.0q: a population fold reading `time` inside a cell ODE (unhoisted) on Metal (D-119);
+# the acceptance file's Metal testsets run only where Metal is loaded (here)
+module P60qOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0q_time_fold_metal.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")
