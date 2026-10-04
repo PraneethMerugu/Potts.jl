@@ -246,3 +246,8 @@ decision = "D-118"
 path = "acceptance/p6_0q_time_fold_metal.jl"
 sha256 = "f90bf2e9cebb0b556ef803f099ef2a24a972ae02ba88e3db2a97e4616651ae05"
 decision = "D-119"
+
+[[file]]
+path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
+sha256 = "dc68c623b17971032988abe7b279148742c6786effe2c973b25c0208f84ff4e0"
+decision = "D-121"
