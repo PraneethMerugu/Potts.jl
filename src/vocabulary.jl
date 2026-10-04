@@ -279,7 +279,8 @@ initial value. Lags are available where the MCS clock is: updates, equations,
 division conditions and rules, link rules.
 """
 _pre(x) = ModelingToolkitBase.Pre(x)
-_pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
+_pre(v::AbstractVector) = [_pre(x) for x in v]
+_pre(v::AbstractVector, k::Integer) = [_pre(x, k) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
 
 """
