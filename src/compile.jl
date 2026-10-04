@@ -626,6 +626,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for u in sys.updates
         _located(sys, u) do
             if u.phase === :on_copy
+                _check_copy_integral(u.eq.rhs, "on-copy updates"; at = "every accepted copy")
                 env = _proposal_env(T, rn)
                 lower(u.eq.rhs, env)
                 _write(_unwrap(u.eq.lhs), :v, env)
@@ -705,9 +706,9 @@ end
 
 # Drives and expression constraints are evaluated at every copy attempt, where σ changes
 # with each accepted copy, while an integral is refreshed only between sweeps (D-125).
-function _check_copy_integral(x, what)
+function _check_copy_integral(x, what; at = "every copy attempt")
     _has_op(x, cell_integral) && throw(ArgumentError(
-        "`integral` is not available in $what: they are evaluated at every copy attempt, while an " *
+        "`integral` is not available in $what: they are evaluated at $at, while an " *
         "integral is refreshed only between sweeps. Keep it in a cell variable updated @before_mcs " *
         "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"))
     return nothing

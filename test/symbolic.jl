@@ -1610,7 +1610,9 @@ end
     @test sol[:occupied][end] == sol.u[end].cell.volume                              # integral(1) == volume
     uc = solve(p, CheckerboardCPM()).u[end]
     @test uc.cell.mass ≈ [sum(w0[uc.σ .== k]) for k in 1:2]
-    for (body, msg) in ((:(@energy cells => integral(w)), "energies"), (:(@drive copy => integral(w)), "@before_mcs"))
+    for (body, msg) in ((:(@energy cells => integral(w)), "energies"), (:(@drive copy => integral(w)), "@before_mcs"),
+            (:(@on_copy w[target] += integral(w)), "every accepted copy"),                     # D-129, `+=` form
+            (:(@on_copy w[target] ~ sum(integral(w) for c in cells if c == new)), "@on_copy"))
         m = eval(:(@potts_model _BadIntegral begin
             @kinds medium A
             @variables w(site) = 0.0
