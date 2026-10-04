@@ -1922,3 +1922,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** MTK `tstops`/`assertions` on a component are rejected instead of ignored; every rejected component binding names the component and the bound name, including a bound parameter the model reads as `comp.x`; an error inside a hand-written `@extend` base propagates as the base raised it; `frozen_varies(sys) = false` silences `init`'s static-mask warning; the temperature's `integral(Pre)` error says "in @sweep".
 - **Review.** Two rounds (round 1: a model read of a let-through bound parameter still gave the old message). Two pre-existing component limitations noted in D-133, not filed (D-134).
 - **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`) and the docs build, one at a time: exit 0. Build-time only (the CorePotts change is an `init` warning guard); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ax merged: inline gathers outside the copy step are numbered (D-132)
+
+- **The change.** Every inline gather the compiler lowers is numbered, including those in division `when`s and rules, link `when`s, edge energies and `@on_copy` update indices (they used to fail at build with `KeyError`). One `scanned` list drives both tracker flags and numbering; the footprint scans on-copy indices (a named relation read there now reports its full reach). Models that built before keep their fingerprints; `@observed` gathers are not fingerprinted.
+- **Review.** Two rounds (round 1: the on-copy index was not scanned; D-132 overstated `@observed` fingerprint stability — the shared build counter is folded into P6.0z).
+- **Merge checks.** Potts, PottsModels (`-t 4`, 13278 pass, 37 broken) and the docs build, one at a time: exit 0. Build-time only; gate and Metal not rerun.

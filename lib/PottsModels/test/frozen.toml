@@ -283,6 +283,11 @@ sha256 = "a0989602d285db76d847b4373af7a6da83e5080ede41fc0782d9d19ac7ae3719"
 decision = "D-126"
 
 [[file]]
+path = "acceptance/p6_0ax_gather_scan.jl"
+sha256 = "ace4d43dfa9a5fd7c18f8903935558083b72dd5144a63e3704b45a221f365da1"
+decision = "D-132"
+
+[[file]]
 path = "acceptance/p6_0aw_on_copy_integral.jl"
 sha256 = "2940596dfc054e70f0fb67dba4b8a6cab6a6931403244486e8e9df2e88968d90"
 decision = "D-129"

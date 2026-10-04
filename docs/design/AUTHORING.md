@@ -336,7 +336,9 @@ end
   ```
   `sum`, `prod`, `mean`, `geomean`, `minimum`, `maximum`, `count`, `any`, `all` are
   recognised and lowered to unrolled loops with the right fold; `if` filters become
-  masks.
+  masks. Inline comprehensions work everywhere an expression does, including division
+  conditions and rules, `@link`/`@unlink` conditions, `edges(name) =>` energies, the
+  index of an `@on_copy` update and `@observed` quantities (D-132).
 - `rand(dist)` inside any expression is an addressed draw: reproducible, backend
   independent, keyed to the site/cell/MCS it belongs to.
 - **After-MCS order (D-130; INTERNALS §1.6).** After the copy sweep, every MCS runs, in

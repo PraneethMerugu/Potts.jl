@@ -352,11 +352,16 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
         (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
         sys.sweep.temperature, tick_exprs...]
-    # everything evaluated against the state, including division rules, observed quantities
-    # and link rules: every tracker flag scans the same set (A-35)
+    # everything evaluated against the state: the copy-step expressions, then the sites
+    # evaluated outside the copy step (division conditions and rules, link rules, edge
+    # energies, on-copy update indices) and observed quantities last. One list serves both
+    # the tracker flags (A-35, order-free) and gather numbering (D-107: statement order, and
+    # new sites append after the existing ones so their numbers stay; observed quantities
+    # are not fingerprinted, D-124), so the two always cover the same sites.
     scanned = Any[all_exprs..., (d.when for d in sys.divisions)...,
-        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., (o.expr for o in sys.observed)...,
-        (r.when for r in sys.link_rules)...]
+        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in sys.link_rules)..., last.(edge_terms)...,
+        (u.eq.lhs for u in sys.updates if u.phase === :on_copy)..., (o.expr for o in sys.observed)...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_clusters = cluster_division || uses_cluster_surface ||
@@ -364,8 +369,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = sys.lattice.neighborhood)
     radius_read = 1
-    # gather relations numbered in statement order and, within one, by content (D-107)
-    for x in all_exprs
+    # gather relations numbered in `scanned` order and, within one, by content (D-107)
+    for x in scanned
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
                             if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
         ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
@@ -386,7 +391,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     source_write = -1
     oncopy = get(updates, (:on_copy, :proposal), Update[])
     for x in Any[(drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-            (u.eq.rhs for u in oncopy)..., sys.sweep.temperature]
+            (u.eq.rhs for u in oncopy)..., (u.eq.lhs for u in oncopy)..., sys.sweep.temperature]
         for (ni, anchor) in _gathers(x)
             spec = ni.options.relation
             r = rad(spec isa RelationRef ? sys.relations[spec.name] : spec)
