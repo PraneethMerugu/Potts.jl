@@ -150,6 +150,11 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
     # the MCS length, which solvers keep as data (`Adaptive`'s dt, an explicit-substeps `FieldStep.dt`)
     sys.sweep.mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(sys.sweep.mcs_duration))")
+    # the acceptance law and its offset, solver data in `CPMFunction.acceptance` (D-121); only
+    # non-default values (Metropolis, offset 0), so the default keeps its fingerprint. The
+    # offset is a Float64 in `SweepSpec`, so `offset = 2` and `offset = 2.0` hash alike.
+    sys.sweep.law === :metropolis || push!(cad, "law=$(sys.sweep.law)")
+    sys.sweep.offset == 0 || push!(cad, "offset=$(repr(sys.sweep.offset))")
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(sys.sweep, T),

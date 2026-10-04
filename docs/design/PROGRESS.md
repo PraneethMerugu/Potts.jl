@@ -1845,3 +1845,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** The fingerprint also hashes non-default cadences kept outside the generated code: discrete-component clocks (period and phase, resolved after `mcs_duration`), `@divide … Every(n)`, `@link`/`@unlink … Every(n)`, and a non-default `mcs_duration` (the `Adaptive` ODE solver's step). A checkpoint no longer loads into a problem with another schedule. Models on the default schedule — every PottsModels system and every existing pin — keep their fingerprints.
 - **Review.** Two rounds (round 2: `mcs_duration`), approved. Follow-up P6.0aq (the acceptance law's offset).
 - **Merge checks.** Potts and PottsModels (`-t 4`) exit 0. Host-only (problem build); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0aq merged: the fingerprint includes the acceptance law (D-121)
+
+- **The change.** The fingerprint also hashes a non-Metropolis `@sweep` law and a non-zero `offset`, so a checkpoint no longer loads across `Metropolis`/`Barker` or across offsets. Defaults (Metropolis, offset 0) keep their fingerprints; every PottsModels pin holds.
+- **Review.** One round, approved. Follow-ups P6.0ar (neighbourhoods) and P6.0as (NaN offset, closure `combine`).
+- **Merge checks.** Potts and PottsModels (`-t 4`) and the docs build exit 0. Host-only (problem build); gate and Metal not rerun.
