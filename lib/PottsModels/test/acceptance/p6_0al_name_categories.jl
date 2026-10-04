@@ -152,31 +152,31 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
         var = P60alVarGain(; name = :v)
         @test p60al_rejection(() -> P60AL_MTKB.extend(var, base), "gain", "parameter", "variable") === :ok
         @test p60al_rejection(() -> P60AL_MTKB.extend(base, var), "gain", "parameter", "variable") === :ok
-        @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = base.kinds, lattice = base.lattice,
-            sweep = base.sweep, parameters = Any[base.parameters...], variables = Any[var.variables...]),
+        @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice),
+            sweep = getfield(base, :sweep), parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]),
             "gain", "parameter", "variable") === :ok
         # control: the same parts without the clash
-        @test Potts.PottsSystem(; name = :p, kinds = base.kinds, lattice = base.lattice, sweep = base.sweep,
-            parameters = Any[filter(p -> Potts.info(p).name !== :gain, base.parameters)...],
-            variables = Any[var.variables...]) isa Potts.PottsSystem
+        @test Potts.PottsSystem(; name = :p, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice), sweep = getfield(base, :sweep),
+            parameters = Any[filter(p -> Potts.info(p).name !== :gain, Potts.parameters(base))...],
+            variables = Any[Potts.variables(var)...]) isa Potts.PottsSystem
         @test P60AL_MTKB.extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
     end
 
     @testset "controls: a redeclaration in its own category is an override" begin
         m = p60al_model(quote @extend P60alBase(); @parameters λ = 3.0 end)
-        @test p60al_count(m.parameters, :λ) == 1 && Potts.info(p60al_find(m.parameters, :λ)).default == 3.0
+        @test p60al_count(Potts.parameters(m), :λ) == 1 && Potts.info(p60al_find(Potts.parameters(m), :λ)).default == 3.0
         @test p60al_runs(m)
         m = p60al_model(quote @extend P60alBase(); @variables level(cell) = 2.0 end)
-        @test p60al_count(m.variables, :level) == 1 && Potts.info(p60al_find(m.variables, :level)).default == 2.0
+        @test p60al_count(Potts.variables(m), :level) == 1 && Potts.info(p60al_find(Potts.variables(m), :level)).default == 2.0
         @test p60al_runs(m)
         m = p60al_model(quote @extend P60alBase(); @observed total ~ 2.0 * sum(volume for n in cells) end)
-        @test count(o -> Potts.info(o.var).name === :total, m.observed) == 1
+        @test count(o -> Potts.info(o.var).name === :total, getfield(m, :observed)) == 1
         m = p60al_model(quote @extend P60alBase(); @kinds medium host extra end)
-        @test m.kinds == [:medium, :host, :extra]
+        @test getfield(m, :kinds) == [:medium, :host, :extra]
         m = p60al_model(quote @extend P60alBase(); @relations reach = Moore(1) end)
-        @test m.relations[:reach] == Moore(1)
+        @test getfield(m, :relations)[:reach] == Moore(1)
         m = p60al_model(quote @extend b1 = P60alBase(); @extend b2 = P60alBase() end)
-        @test p60al_count(m.parameters, :gain) == 1
+        @test p60al_count(Potts.parameters(m), :gain) == 1
         m = p60al_model(quote @extend P60alCompBase(); @parameters rate = 1.0 end)
         @test p60al_runs(m)
         # the repro, renamed: the variable and the parameter both reachable by their own names

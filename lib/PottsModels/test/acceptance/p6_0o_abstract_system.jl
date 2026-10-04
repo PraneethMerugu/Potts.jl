@@ -46,7 +46,8 @@
 #     files read such properties on 33f681df).
 #  C. Potts-owned `complete` (returns a completed PottsSystem, idempotent, same code and
 #     fingerprint), `extend(::PottsSystem, ::PottsSystem)` and `show` (text/plain starts
-#     with "PottsSystem <name>"; the two-argument form does not throw).
+#     with "PottsSystem <name>"; the two-argument form does not throw). `Potts.lattice(sys)`
+#     (public, not exported; D-137 rule 6) returns the system's lattice.
 #  E. Clear errors (`ArgumentError`, message naming the operation and the Potts route):
 #     `compose` with a PottsSystem on either side (D-039: names `compose` and
 #     `@components`); `ODEProblem`/`JumpProblem` on a PottsSystem or a compiled one (names
@@ -67,7 +68,7 @@
 #     p6_0aq, p6_0c2 and others (D-136 keeps one copy); the Float32, Merks
 #     contact-inhibited and fixture pins are new.
 #
-# On 33f681df: 38 fail and 46 error of the 193 tests that run (every target; the 101 pin
+# On 33f681df: 39 fail and 52 error of the 200 tests that run (every target; the 101 pin
 # tests and 8 controls pass). A stub (subtype, mirrored fields, accessor methods, `complete`, the
 # error methods, the `_pre` fix, every listed property read rewritten to `getfield`, and
 # MTK's strict `getproperty`) passes every test here, with identical pins; with a
@@ -561,6 +562,16 @@ end
     two = sprint(show, sys)
     @test occursin("pr", two) && length(two) < 10_000
     @test startswith(sprint(show, MIME"text/plain"(), GranerGlazier(; name = :gg); context = :limit => true), "PottsSystem gg")
+end
+
+@testset "P6.0o C: Potts.lattice, the public lattice accessor (D-137 rule 6)" begin
+    @test Base.ispublic(Potts, :lattice) && !Base.isexported(Potts, :lattice)
+    for (label, build, _, _) in P60O_CASES[[1, 4, 9, 12]]
+        s = build()
+        @test Potts.lattice(s) === getfield(s, :lattice)
+    end
+    @test Potts.lattice(GranerGlazier(; name = :gg)).dims == (72, 72)
+    @test Potts.lattice(MerksVasculogenesis(; name = :m, lattice = (8, 8))).dims == (8, 8)
 end
 
 # ---------------------------------------------------------------------------------------

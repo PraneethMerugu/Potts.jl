@@ -86,7 +86,7 @@ end
     @test p.χ == 1000.0 && p.T == 50.0
     @test p.Dc == 0.75 && p.σc == 5.4e-3 && p.δc == 5.4e-3
     @test Matrix(p.J) == [0.0 20.0; 20.0 40.0]
-    @test PottsModels.MerksVasculogenesis(; name = :m).lattice.dims == (500, 500)
+    @test getfield(PottsModels.MerksVasculogenesis(; name = :m), :lattice).dims == (500, 500)
 
     op = merks_state()
     σ = op[1].second

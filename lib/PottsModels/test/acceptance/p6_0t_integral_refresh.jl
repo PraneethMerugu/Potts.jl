@@ -235,7 +235,7 @@ const P60T_ALGS = (SequentialCPM(), CheckerboardCPM())
 """Compiled system and phases (`Potts._phases`) of model `M`."""
 function p60t_phases(M)
     c = mtkcompile(M(; name = :m))
-    return c, Potts._phases(c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in c.sys.parameters),
+    return c, Potts._phases(c, Float64, Dict{Any, Any}(Potts._unwrap(x) => Potts.info(x).default for x in Potts.parameters(c.sys)),
         Potts._resolve_solvers(c))
 end
 
@@ -248,7 +248,7 @@ p60t_tuples(ph) = (ph.before_mcs, ph.after_mcs, ph.end_mcs, ph.at_init)
 
 """Column name of `integral(f(vars...))` for the model's variables named `names`."""
 function p60t_iname(c, f, names...)
-    vs = [only(filter(x -> Potts.info(x).name === n, c.sys.variables)) for n in names]
+    vs = [only(filter(x -> Potts.info(x).name === n, Potts.variables(c.sys))) for n in names]
     return Potts._integral_name(Potts._unwrap(f(vs...)))
 end
 
