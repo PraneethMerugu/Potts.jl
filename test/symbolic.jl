@@ -1944,6 +1944,34 @@ end
     @test all(isapprox.(chemo(:(Chemotaxis(c; strength = 1.0, kinds = (A,), when = true))), (0.0, -1.0)))   # S2
 end
 
+# A relation may not take a run-context name CorePotts reserves (`lattice`, `mobility`,
+# `spacing`): mtkcompile refuses it with CorePotts' error, before codegen; the declarable
+# roles `contact` and `proposal` still build
+@testset "reserved relation names are refused at mtkcompile" begin
+    function build(name, spec; read = true)
+        energy = read ? :(@energy cells => 0.1 * count(owner[n] == id for n in $name(40))) :
+                 :(@energy cells => (volume - 16)^2)
+        m = Core.eval(@__MODULE__, quote
+            @potts_model $(gensym(:Reserved)) begin
+                @kinds medium cell
+                @lattice Lattice((12, 12); spacing = (1.0, 1.0))
+                @relations $name = $spec
+                $energy
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        end)
+        sys = Base.invokelatest(m; name = :r)
+        σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
+        return Base.invokelatest(PottsProblem, sys, [ownership => σ, kind => [:cell]], (0, 1))
+    end
+    for name in (:spacing, :lattice, :mobility)
+        @test_throws r"relation names .*`spacing` are reserved" build(name, :(Moore(2)))
+    end
+    @test build(:far, :(Moore(2))) isa CorePotts.PottsProblem                       # control: any other name
+    @test build(:contact, :(Moore(2)); read = false) isa CorePotts.PottsProblem     # declarable roles build
+    @test build(:proposal, :(Moore(1)); read = false) isa CorePotts.PottsProblem
+end
+
 # P6.0m (D-075 Q8): `a` and `b` are reserved for every declaration, and for a programmatic
 # PottsSystem; the error suggests `a₀`/`b₀`
 @testset "`a` and `b` are reserved globally (P6.0m, D-075 Q8)" begin
