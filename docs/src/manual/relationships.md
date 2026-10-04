@@ -15,8 +15,9 @@ cell. A model can declare several.
 In edge terms and link rules, `a` and `b` are the two cells, `distance` the distance between
 their centroids, and cell quantities are read as `kind[a]`, `volume[b]`, `x[a]`. Link rules
 run at the end of the MCS. Initial links go in the operating point as
-`:bond => [(1, 2), (2, 3)]`, and an edge variable's value there (`:rest => 9.0`, one number)
-is its initial value on every initial link of its relationship; without it the initial
+`:bond => [(1, 2), (2, 3)]`, and an edge variable's value there (`:rest => 9.0`, one number,
+or a parameter expression evaluated at construction: a later `remake` of parameters does
+not re-seed it) is its initial value on every initial link of its relationship; without it the initial
 links start at the default. Links made by `@link` always start at the default. Cells that
 die lose their links; daughters start unlinked.
 

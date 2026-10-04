@@ -62,9 +62,10 @@ needed). `op` maps `ownership` to the initial labels (an integer array over the 
 `kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
 compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
 (scalars or arrays), parameters to values overriding their defaults, and a relationship's
-name to its initial links (`:bond => [(1, 2)]`). An edge variable takes one number, its
-initial value on every initial link of its relationship (both ends; default: its declared
-default); links made later by `@link` start at the declared default. `T` is the scalar
+name to its initial links (`:bond => [(1, 2)]`). An edge variable takes one number (or
+a parameter expression, evaluated at construction: a later `remake` of parameters does not
+re-seed it), its initial value on every initial link of its relationship (both ends;
+default: its declared default); links made later by `@link` start at the declared default. `T` is the scalar
 type of the generated code and state (use `Float32` on Metal). The generated code is
 `Potts.generated_code(sys; T)`.
 
