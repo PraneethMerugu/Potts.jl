@@ -602,6 +602,7 @@ _describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
+_describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
 _describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
@@ -683,7 +684,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             (r -> r.when, sys.link_rules), (b -> b.next, sys.discrete), (o -> o.expr, sys.observed))
         foreach(i -> _located(() -> foreach(_check_integral_pre_outside, vcat(x(i))), sys, i), items)
     end
-    _check_integral_pre_outside(sys.sweep.temperature)
+    _located(() -> _check_integral_pre_outside(sys.sweep.temperature), sys, sys.sweep)   # D-133
     for o in sys.observed
         _located(sys, o) do
             _check_geometry(o.expr, N)

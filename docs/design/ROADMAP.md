@@ -233,7 +233,7 @@ Every item's acceptance also includes the standing checks:
   - `src/codegen.jl` refreshes every integral that is not dirty after the sweep at the start of the after block once any after reader exists, including integrals read only by the before block or the temperature (fresh from `end_mcs`). `end_mcs` also refreshes observed-only integrals, which observed queries recompute anyway.
   - Fix: filter the start-of-after refresh to integrals read after the sweep; give observed-only integrals no slot or refresh.
   - Accept: probe `PWaste` (`/tmp/p60m3/rv1/`) emits 1 `CellReduce` at the start of the after block and none for the observed integral; fingerprints of models without such integrals unchanged.
-- [ ] **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
+- [x] (merge, 2026-10-04; D-133) **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
   - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
   - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
   - Hand-written (non-`@potts_model`) `@extend` bases: an untranslated `x′` error from inside the base is labelled with the outer model's description (P6.0e2 review; wrap the base call in its own catch, about 3 lines).

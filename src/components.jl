@@ -16,9 +16,13 @@
 parameters, couplings to model-scope expressions such as `sum(volume for c in cells)`).
 The system is continuous (`D(x) ~ f`, cell or model ODEs) or discrete-time (clocked, `Shift`:
 Boolean and discrete networks, ticking after the ODEs of each period of its clock).
-A system with `initialization_eqs`, `discrete_events`, `continuous_events` or `jumps`, or
-with a binding (`y(t) = 2k`, `k2 = 2k`) that involves a parameter coupled with `@equations`,
-is rejected by name; `guesses` are ignored (MTK initialisation is not run).
+Values are plain numbers: a system with `initialization_eqs`, `discrete_events`,
+`continuous_events`, `jumps`, `brownians`, `tstops` or `assertions` (also in a subsystem), or
+whose quantities Potts reads (unknowns, parameters, discrete nodes, names the model reads
+as `comp.x`) are bound to expressions (`y(t) = 2k`, `k2 = 2k`, `initial_conditions =
+[y => 2k]`, a discrete `X(t) = !Y`), is rejected by name. Bindings of observed variables and
+of parameters nothing reads are ignored, as by MTK; `guesses` are ignored too (MTK
+initialisation is not run).
 """
 struct ComponentSpec
     name::Symbol
@@ -91,11 +95,13 @@ function _bind_components(sys::PottsSystem)
     coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
     blocks = copy(sys.discrete)
     slotnames_all = Set{Symbol}()               # every discrete slot (`Pre` of one is the slot)
+    unread = Dict{Symbol, String}()             # bound names no component equation reads → their error
     for comp in sys.components
         _reject_ignored_features(comp)
         discrete = _is_discrete(comp.system)
         cs = discrete ? _compile_discrete(comp) : ModelingToolkitBase.mtkcompile(comp.system)
         _reject_coupled_bindings(comp, cs, couplings)
+        _reject_bindings(comp, cs, discrete, unread)
         ics = ModelingToolkitBase.initial_conditions(cs)
         # a missing value stays `nothing`: the operating point must give it (checked there)
         value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
@@ -172,12 +178,20 @@ function _bind_components(sys::PottsSystem)
                                                "(component unknowns evolve by their own equations)"))
     end
     # couplings may read other components' state (`dec.k ~ clock.m`)
-    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names, slotnames_all)) for eq in odes]
-    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[_substitute_names(x, names, slotnames_all) for x in b.next],
+    # a bound name no component equation reads is ignored, unless the model reads it (`comp.k2`)
+    function subst(x)
+        isempty(unread) || _walk_all(x) do y
+            n = _mtkname(y)
+            n !== nothing && haskey(unread, n) && throw(ArgumentError(unread[n]))
+        end
+        return _substitute_names(x, names, slotnames_all)
+    end
+    odes = [eq.lhs ~ Symbolics.wrap(subst(eq.rhs)) for eq in odes]
+    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[subst(x) for x in b.next],
                   b.every, b.offset)
               for b in blocks]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
-    sub(x) = _substitute_names(x, names, slotnames_all)
+    sub(x) = subst(x)
     m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
         lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
         energies = sys.energies, drives = sys.drives, constraints = sys.constraints, updates = sys.updates,
@@ -206,18 +220,24 @@ function _reject_ignored_features(comp)
             ("jumps", ModelingToolkitBase.jumps(sys),
                 "write the jump as a Potts update with `rand()`"),
             ("brownians", ModelingToolkitBase.brownians(sys),
-                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"))
+                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"),
+            ("tstops", _all_tstops(sys),
+                "Potts advances cell ODEs once per MCS and never stops inside a step; write the stop as a Potts update (`@after_mcs`)"),
+            ("assertions", collect(keys(ModelingToolkitBase.assertions(sys))),
+                "Potts does not check MTK assertions; write the check as a Potts update or a callback"))
         isempty(items) || throw(ArgumentError("component `$(comp.name)`: MTK $field are not supported " *
                                               "(they would be ignored): $(what(items)); $why"))
     end
     return nothing
 end
 
+# the tstops of a system and its subsystems (`get_tstops` is the system's own)
+_all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_tstops(s))...]
+
 # An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
 # `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
 # value of its own (it is a per-cell or model expression), so such a binding would be wrong or
-# dropped (P6.0k2 F7). Other bindings are not supported either, but are rejected elsewhere
-# (unknown symbol, missing initial value).
+# dropped (P6.0k2 F7). Other bindings are not supported either (`_reject_bindings`).
 function _reject_coupled_bindings(comp, cs, couplings)
     namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
     leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
@@ -235,6 +255,51 @@ function _reject_coupled_bindings(comp, cs, couplings)
                             "(`@equations $(first(touched)) ~ …`); a coupled parameter has no value of its own for MTK " *
                             "to bind with. Write the expression inline in the component's equations instead, or give " *
                             "a plain value"))
+    end
+    return nothing
+end
+
+# Any other binding Potts reads (D-133): Potts takes a component's values as plain numbers
+# (it does not run MTK initialisation), so a value given as an expression (`y(t) = 2k`,
+# `k2 = 2k`, `initial_conditions = [y => 2k]`, a discrete `X(t) = !Y`) is rejected here, naming
+# the component, instead of failing later as a missing value or an unknown symbol. Only
+# bindings of what Potts reads count: unknowns, parameters, symbols the equations or observed
+# expressions read, and (discrete) the nodes, which are observed. A binding of a continuous
+# observed variable (its equation gives its value) or of an unused parameter stays ignored,
+# unless the model reads it (`comp.k2`): `unread` collects namespaced name → error for that.
+function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String}())
+    used = Set{Any}()
+    function use(y)
+        y = _unwrap(y)
+        push!(used, y)
+        iscall(y) && operation(y) === getindex && push!(used, _unwrap(arguments(y)[1]))   # `z[1]` reads `z`
+        return nothing
+    end
+    foreach(use, ModelingToolkitBase.unknowns(cs))
+    foreach(use, ModelingToolkitBase.parameters(cs))
+    for eq in ModelingToolkitBase.equations(cs)
+        _walk_all(use, eq.lhs)
+        _walk_all(use, eq.rhs)
+    end
+    observed = Set{Any}()
+    for o in ModelingToolkitBase.observed(cs)
+        discrete ? _walk_all(use, o.lhs) : push!(observed, _unwrap(o.lhs))
+        _walk_all(use, o.rhs)
+    end
+    reads(x) = (u = _unwrap(x); u in used && !(u in observed))
+    for (x, v) in ModelingToolkitBase.bindings(cs)
+        msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding); " *
+              "Potts takes a component's values as plain numbers: give `$x` a value, or write " *
+              "the expression inline in the component's equations"
+        reads(x) && throw(ArgumentError(msg))
+        u = _unwrap(x)
+        u in observed || (unread[Symbol(comp.name, :₊, _slot_name(u))] = msg)
+    end
+    for (x, v) in ModelingToolkitBase.initial_conditions(cs)
+        w = _unwrap(v)
+        w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && reads(x) &&
+            throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression; " *
+                                "Potts takes a component's values as plain numbers (it does not run MTK initialisation)"))
     end
     return nothing
 end
