@@ -68,6 +68,9 @@ end
 
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
+    d = _div_definition(body)
+    d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
+                                         "are integer division; give the helper another name"))
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
@@ -358,7 +361,7 @@ function _section!(parts, sec, args, ln = nothing)
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $val : $(_kw_local(k)); $(kw...))))
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $(rewrite(val)) : $(_kw_local(k)); $(kw...))))
             else
                 k = lhs::Symbol
                 _declare!(parts, k, "parameter")
@@ -568,7 +571,7 @@ end
     rewrite(ex)
 
 Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
-→ `ifelse`, and `fold(body for n in R(s) if cond)` → a relation gather.
+→ `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, and `fold(body for n in R(s) if cond)` → a relation gather.
 """
 function rewrite(ex)
     ex isa Expr || return ex
@@ -590,6 +593,8 @@ function rewrite(ex)
         return :($P._ifelseq($(rewrite(ex.args[1])), () -> $(rewrite(ex.args[2])), () -> $(rewrite(ex.args[3]))))
     elseif h === :call && ex.args[1] === :! && length(ex.args) == 2
         return Expr(:call, :($P._notq), rewrite(ex.args[2]))
+    elseif h === :call && (ex.args[1] === :div || ex.args[1] === :÷) && length(ex.args) == 3
+        return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
@@ -598,6 +603,27 @@ function rewrite(ex)
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+
+# `div`/`÷` defined in a model body (`div(a, b) = …`, `function ÷(a, b) … end`, `div = f`):
+# the name it defines, or `nothing`. `rewrite` turns their calls into `_intdiv`.
+function _div_definition(ex)
+    ex isa Expr || return nothing
+    if ex.head in (:(=), :function) && !isempty(ex.args)
+        f = ex.args[1]
+        while f isa Expr && f.head in (:where, :(::))
+            f = f.args[1]
+        end
+        f isa Expr && f.head === :call && (f = f.args[1])
+        f in (:div, :÷) && return f
+    end
+    for a in ex.args
+        # `(div = 1,)` names a field, not a function
+        ex.head === :tuple && a isa Expr && a.head === :(=) && (a = a.args[2])
+        d = _div_definition(a)
+        d === nothing || return d
+    end
+    return nothing
+end
 _has_endbegin(x) = x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
                    (x isa AbstractVector && any(_has_endbegin, x))
 

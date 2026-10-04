@@ -296,11 +296,12 @@ _is_symbolic(v) = v isa Num || v isa SymbolicUtils.BasicSymbolic
 _is_symbolic(v::AbstractArray) = any(_is_symbolic, v)
 
 """A value given by an expression of parameters, evaluated with the parameter `values`."""
-function _evaluate(v, values)
+function _evaluate(v, values, who = "`$v`")
     _is_symbolic(v) || return v
-    w = _unwrap(Symbolics.substitute(v, values))
-    SymbolicUtils.isconst(w) || throw(ArgumentError("`$v` does not reduce to a number with the parameter values"))
-    return SymbolicUtils.unwrap_const(w)
+    w = _substitute_entry(v, values, who)
+    _is_symbolic(w) && throw(ArgumentError("`$v` does not reduce to a number with the parameter values" *
+                                           _non_parameters(w)))
+    return w
 end
 
 """
@@ -358,13 +359,13 @@ function _resolve_defaults!(values)
         for (k, v) in values
             _is_symbolic(v) || continue
             if v isa AbstractArray
-                w = map(e -> _substitute_entry(e, values), v)
+                w = map(e -> _substitute_entry(e, values, k), v)
                 values[k] = w
                 done &= !any(_is_symbolic, w)
             else
-                w = _substitute_entry(v, values)
+                w = _substitute_entry(v, values, k)
                 values[k] = w
-                done &= !(w isa SymbolicUtils.BasicSymbolic)
+                done &= !_is_symbolic(w)
             end
         end
         done && break
@@ -372,15 +373,82 @@ function _resolve_defaults!(values)
     return values
 end
 
-# one value with the parameter `values` substituted: a number once it reduces to one
-function _substitute_entry(v, values)
+# One value with the parameter `values` substituted: a number once it reduces to one (D-117).
+# What substitution leaves (calls of functions, kind-table reads) is evaluated numerically;
+# the expression stays symbolic while it reads a parameter not yet a number, or a quantity
+# that is not a parameter (reported by `_param_value`). `who` (a parameter, or a label)
+# names the default in errors.
+function _substitute_entry(v, values, who)
     _is_symbolic(v) || return v
-    w = _unwrap(Symbolics.substitute(v, values))
-    return SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
+    w = try
+        _unwrap(Symbolics.substitute(v, values))
+    catch e     # substitution folds calls on numbers: `sqrt(-1.0)` fails here
+        throw(ArgumentError("$(_who(who)) = `$v` fails on the parameter values: $(sprint(showerror, e))"))
+    end
+    SymbolicUtils.isconst(w) && return SymbolicUtils.unwrap_const(w)
+    r = _numeric(w, _who(who))
+    return r === _PENDING ? w : r
+end
+_who(s::AbstractString) = s
+_who(k) = (i = info(k); i === nothing ? "`$k`" : "parameter `$(i.name)`")
+
+struct _Pending end
+const _PENDING = _Pending()
+
+# The number of a substituted expression: Julia's functions on the evaluated arguments
+# (`ifelse` lazily), kind-table reads by kind number (medium = 0). `_PENDING` if a symbol
+# (a quantity not yet a number, or not a parameter) or a table with symbolic entries remains.
+function _numeric(x, who)
+    x = _unwrap(x)
+    SymbolicUtils.isconst(x) && (x = SymbolicUtils.unwrap_const(x))
+    x isa SymbolicUtils.BasicSymbolic || return _is_symbolic(x) ? _PENDING : x
+    SymbolicUtils.iscall(x) || return _PENDING
+    op = SymbolicUtils.operation(x)
+    args = SymbolicUtils.arguments(x)
+    op === random_uniform &&
+        throw(ArgumentError("$who draws a random number (`rand()`); a default is evaluated once per build " *
+                            "and must be deterministic"))
+    if op === ifelse
+        c = _numeric(args[1], who)
+        c === _PENDING && return c
+        return _numeric(c ? args[2] : args[3], who)
+    end
+    vals = map(a -> _numeric(a, who), args)
+    any(a -> a === _PENDING, vals) && return _PENDING
+    (op === at || op === at2) && return _table_entry(who, vals...)
+    try
+        return op(vals...)
+    catch e
+        throw(ArgumentError("$who: `$x` fails on the parameter values: $(sprint(showerror, e))"))
+    end
+end
+
+# `t[k…]` of a kind table `t` by kind numbers (medium = 0, then the `@kinds` order)
+function _table_entry(who, t, ks...)
+    t isa AbstractArray && ndims(t) == length(ks) ||
+        throw(ArgumentError("$who reads a kind table with $(length(ks)) kind$(length(ks) == 1 ? "" : "s"); " *
+                            "the table takes $(t isa AbstractArray ? ndims(t) : 0)"))
+    for k in ks
+        k isa Real && isinteger(k) || throw(ArgumentError("$who reads a kind table at `$k`, not a kind number"))
+    end
+    i = map(k -> Int(k) + 1, ks)
+    checkbounds(Bool, t, i...) ||
+        throw(ArgumentError("$who reads kind $(join(ks, ", ")) of a kind table with kinds 0:$(size(t, 1) - 1)"))
+    return t[i...]
+end
+
+# the quantities a symbolic default reads that are not parameters (variables, built-ins)
+function _non_parameters(v)
+    us = _default_inputs(v)
+    out = unique(string(u) for u in us if (i = info(u); i === nothing || !(i.role in (:param, :kindtable))))
+    isempty(out) && return ""
+    return "; it reads $(join(("`$o`" for o in out), ", ")), which $(length(out) == 1 ? "is not a parameter" : "are not parameters"): " *
+           "a default is an expression of parameters, numbers and functions"
 end
 
 function _param_value(T, v, i::Info)
-    _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$v` does not reduce to numbers with the parameter values"))
+    _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
+                                           "reduce to numbers with the parameter values" * _non_parameters(v)))
     if i.role === :kindtable
         v isa Number && throw(ArgumentError("kind table `$(i.name)` takes a vector (one value per kind) or a matrix; got $v"))
         A = Matrix(v isa AbstractVector ? reshape(v, :, 1) : v)
@@ -412,7 +480,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     model = Pair{Symbol, Any}[]
     for x in sys.variables
         i = info(x)
-        v = _evaluate(get(opd, _unwrap(x), i.default), pvals)
+        v = _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
         if i.role === :site || i.role === :field
             a = v isa AbstractArray ? T.(v) : fill(T(v), sys.lattice.dims)
             push!(site, i.name => a)

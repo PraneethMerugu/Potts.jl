@@ -231,3 +231,8 @@ decision = "D-115"
 path = "acceptance/p6_0ap_setter_loose_ends.jl"
 sha256 = "85bb3e08904b1d2df905a0befdaddfe1a2a2e2f1b233bf6defbfd2b995cf3b75"
 decision = "D-116"
+
+[[file]]
+path = "acceptance/p6_0ao_computed_defaults.jl"
+sha256 = "42c5b60d1869e9d765c163eb0b9d949b0034acc3776e3237883d285639723846"
+decision = "D-117"

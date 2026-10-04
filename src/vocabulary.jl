@@ -335,6 +335,18 @@ _notq(a) = !a
 _ifelseq(c::Bool, a, b) = c ? a() : b()
 _ifelseq(c, a, b) = ifelse(c, a(), b())
 
+# `div(a, b)` and `a ÷ b` in models: `div` rounding toward zero, registered (Symbolics has
+# no `div` on `Num`). Floats use Base's generic formula, which stays in the operands' type
+# (Base's `div` on Float32 goes through Float64, which GPUs reject): equal to Base's where
+# the quotient is exact in the type (|a / b| < 2^24 in Float32). Integers keep `div`.
+_intdiv(a, b) = div(a, b)
+_intdiv(a::Integer, b::Integer) = div(a, b)
+_intdiv(a::T, b::T) where {T <: AbstractFloat} = round((a - rem(a, b)) / b)
+_intdiv(a::Real, b::Real) = _intdiv(promote(a, b)...)
+Symbolics.@register_symbolic _intdiv(a, b)
+# piecewise constant: zero derivative (as `floor`)
+Symbolics.@register_derivative _intdiv(a, b) I Symbolics.unwrap(Num(0))
+
 """Neighbours of `anchor` over a relation spec, as the iterator of a gather."""
 struct Around{R}
     relation::R

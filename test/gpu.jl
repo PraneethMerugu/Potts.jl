@@ -394,6 +394,44 @@ end
 
 # P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's Metal testsets
 # (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
+# P6.0ao: `÷`/`div` in generated code stays in Float32 on the device (Base's Float32 `div`
+# goes through Float64): a parameter, a variable, a literal and the Int32 `volume`, in an
+# energy and in updates, against `div` on the host.
+@potts_model MetalIntDiv begin
+    @kinds medium A
+    @parameters begin
+        n = 7.5
+    end
+    @variables begin
+        h(cell) = 0.0
+        q(cell) = 0.0
+        r(cell) = 0.0
+        s(cell) = 9.5
+    end
+    @lattice Lattice((16, 16); neighborhood = VonNeumann(1))
+    @energy cells(A) => (volume - n ÷ 2 - div(volume, 3))^2
+    @after_mcs begin
+        h ~ volume ÷ 2
+        q ~ div(volume + 0.5, n)
+        r ~ s ÷ 1.5
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "÷ and div on Metal (Float32)" begin
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[9:12, 9:11] .= 2
+    prob = PottsProblem(MetalIntDiv(; name = :d), [ownership => σ, kind => [:A, :A]], (0, 4); seed = 1, T = Float32)
+    @test total_energy(prob) == sum((v - 3 - div(v, 3))^2 for v in (9, 12))
+    u = solve(prob, CheckerboardCPM(); backend = MetalBackend()).u[end]
+    V = Array(u.cell.volume)[1:2]
+    @test all(>(0), V)
+    @test Array(u.cell.h)[1:2] == Float32.(div.(V, 2))
+    @test Array(u.cell.q)[1:2] == div.(Float32.(V) .+ 0.5f0, 7.5f0)
+    @test Array(u.cell.r)[1:2] == [6.0f0, 6.0f0]                           # 9.5 ÷ 1.5
+    @test eltype(u.cell.q) === Float32
+    @test total_energy(prob, u) == sum((v - 3 - div(v, 3))^2 for v in V)
+end
+
 # run only where Metal is loaded (here).
 module P60agOnMetal
 using Test, Potts, PottsModels

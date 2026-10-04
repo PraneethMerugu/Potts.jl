@@ -3606,3 +3606,65 @@ end
     @test integ[:o] ≈ oracle(integ.state)
     @test unchanged(integ.state, c2)
 end
+
+# `div`/`÷` on parameters and cell quantities in step code, and a variable default computed
+# with a function of parameters (D-117)
+@potts_model P60aoDivEnergy begin
+    @kinds medium A
+    @parameters begin
+        n = 7.0
+        λ = 1.0
+    end
+    @variables begin
+        goal(cell) = sqrt(n + 2)
+    end
+    @lattice Lattice((12, 12); neighborhood = VonNeumann(1))
+    @energy begin
+        cells(A) => λ * (volume - n ÷ 2 - goal)^2 + div(volume, 4)
+    end
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "div and ÷ in energies; variable defaults with functions" begin
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[8:9, 8:9] .= 2
+    prob = PottsProblem(P60aoDivEnergy(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 3)
+    @test prob.u0.cell.goal[1:2] == [3.0, 3.0]                       # sqrt(7 + 2)
+    oracle(V, n) = sum((v - div(n, 2) - 3)^2 + div(v, 4) for v in V if v > 0)
+    @test total_energy(prob) == oracle([9, 4], 7.0)                     # 9 + 2 + 4 + 1
+    @test total_energy(remake(prob; p = [:n => 4.0])) == oracle([9, 4], 4.0)
+    worst = 0.0
+    for (u, prop) in proposal_states(prob; mcs = (0, 5), n = 300)
+        a = deepcopy(u); a.σ[prop.target] = prop.new
+        prob.f.commit!(a, prob.p, prop, ctx_of(prob))
+        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
+    end
+    @test worst < 1e-9
+    sol = solve(prob, SequentialCPM())
+    @test total_energy(prob, sol.u[end]) ≈ oracle(sol.u[end].cell.volume[1:2], 7.0)
+    # on numbers: Julia's `div` (integers stay integers; floats in their own type)
+    @test Potts._intdiv(7, 2) === 3 && Potts._intdiv(Int32(7), 2) === 3 && Potts._intdiv(7.0, 2) === 3.0
+    @test Potts._intdiv(7.5f0, 2.0f0) === 3.0f0 && Potts._intdiv(-7.5f0, 2) === -3.0f0
+    # equal to Base where the quotient is exact in Float32 (|a / b| < 2^24)
+    xs = Float32[0.3, -7.5, 1.0f5, 12.0, 5.0f-3, 9.0, -9.5]
+    @test all(((a, b),) -> Potts._intdiv(a, b) === div(a, b), Iterators.product(xs, Float32[0.1, 2, -3, 1.5]))
+    # zero derivative (piecewise constant)
+    a, b = Potts.Symbolics.@variables a b
+    @test isequal(Potts.Symbolics.derivative(Potts._intdiv(a, b), a), 0)
+end
+
+@testset "a model may not define its own `div` or `÷`" begin
+    for def in (:(div(a, b) = a), :(function ÷(a::T, b) where {T}; a; end), :(div = max))
+        err = try
+            macroexpand(@__MODULE__, :(@potts_model LocalDiv begin
+                $def
+                @kinds medium A
+            end))
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("integer division", sprint(showerror, err))
+    end
+    # a field named `div` in a named tuple is not a definition
+    @test Potts._div_definition(:(f(x) = (div = x ÷ 2,))) === nothing
+end

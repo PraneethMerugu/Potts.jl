@@ -1827,3 +1827,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** A `setp` list naming a state is an `ArgumentError` at build pointing to `setu`/`setsym`; `setsym`/`setu` with a list sets its parameters as one change and its states as before; `SII.remake_buffer` returns a new parameter object (it overflowed the stack) for a model's problem and for a hand-written NamedTuple one; hand-written CorePotts problems with a NamedTuple `p` get `getp`/`setp`/`integ.ps[x]` by field name; a read-only built-in in a list setter is reported as read-only. `setp_oop`/`setsym_oop` now work.
 - **Review.** One round, approved (including Metal); follow-ups done before merge.
 - **Merge checks.** CorePotts (CPU and Metal), Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. Single-name setters unchanged in time; no step-loop change, gate not rerun.
+
+## 2026-10-03 — P6.0ao merged: computed defaults that call functions or read kind tables (D-117)
+
+- **The change.** A computed default (scalar or kind-table entry) is evaluated numerically: Base math, `÷`/`div`, comparisons, lazy `ifelse`, constants, registered functions and kind-table reads by kind number (with `@kinds medium P Q`, `V₀[2] ≡ V₀[Q]`), in the problem's scalar type; D-112 re-derivation sees through them. A default reading a variable or built-in, drawing `rand()`, reading an out-of-range kind or failing on its values is an `ArgumentError` naming the parameter. Kind-table literals are rewritten like the rest of the model (a table reading a table works). `÷`/`div` now work in model code on CPU and Metal (Float32 without Float64; equal to Base while the quotient is exact); a model may not define its own `div`. Fingerprints of existing models unchanged.
+- **Review.** Two rounds (round 2: Metal-safe float division, the substep bound, local `div` rejected), approved.
+- **Merge.** One conflict with P6.0am on the kind-table keyword line: both the hidden keyword local and the literal rewrite kept.
+- **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No existing model's step code changes; gate not rerun.
