@@ -281,3 +281,8 @@ decision = "D-124"
 path = "acceptance/p6_0av_mcs_duration.jl"
 sha256 = "a0989602d285db76d847b4373af7a6da83e5080ede41fc0782d9d19ac7ae3719"
 decision = "D-126"
+
+[[file]]
+path = "acceptance/p6_0u_components_gaps.jl"
+sha256 = "4c773bca6623f3c814d79e8f9d915d0db5425c23aeb314be9a8bf9065524357c"
+decision = "D-133"
