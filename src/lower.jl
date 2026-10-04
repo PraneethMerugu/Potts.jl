@@ -79,13 +79,14 @@ function _symkey(x)
 end
 function _symkey!(names, x)
     x = _unwrap(x)
-    x isa SymbolicUtils.BasicSymbolic || return _canonical_value(x)
-    SymbolicUtils.isconst(x) && return _canonical_value(SymbolicUtils.unwrap_const(x))
+    x isa SymbolicUtils.BasicSymbolic || return _symkey_value(x)
+    SymbolicUtils.isconst(x) && return _symkey_value(SymbolicUtils.unwrap_const(x))
     i = info(x)
     if i !== nothing
         i.role in (:bound, :bound_cell, :bound_site) || return string(i.role, ":", i.name)
         push!(names, string(nameof(x)))
-        return string(i.role, ":", i.name, _canonical_value(i.options))
+        return string(i.role, ":", i.name,
+            _canonical_checked(() -> "the bound variable `$(i.name)` (its relation or options)", i.options))
     end
     issym(x) && return string("sym:", nameof(x))
     op = operation(x)
@@ -94,7 +95,9 @@ function _symkey!(names, x)
     return string(_symop_key(op), "(", join(ks, ","), ")")
 end
 _symop_key(op::Function) = string(nameof(parentmodule(op)), ".", nameof(op))
-_symop_key(op) = _canonical_value(op)
+_symop_key(op) = _canonical_checked(() -> "the operation `$(_key_string(op))`", op)
+# a constant in an expression, printed canonically (an `ArgumentError` naming it if too deep, D-130)
+_symkey_value(v) = _canonical_checked(() -> "the symbolic constant `$(_key_string(v))`", v)
 
 """64-bit FNV-1a of a string: a content hash fixed by its definition (names, not order)."""
 function _fnv64(s::AbstractString)

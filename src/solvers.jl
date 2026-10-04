@@ -202,14 +202,21 @@ end
 # different solvers would fingerprint alike and share one ODE group. A compiler-generated
 # name (`var"#…"`: an anonymous function, a closure, a local function) is accepted; the
 # problem fingerprint then also hashes the session token (`_session_bound`).
-function _canonical_solver_part(v, what)
+_canonical_solver_part(v, what) = _canonical_checked(() -> "`Adaptive`: $what", v)
+
+# `_canonical_value(v)`, with a value too deep or cyclic turned into an `ArgumentError` that
+# starts with `describe()` (built only then): every caller that can meet a user value (solver
+# parts, gather relations, symbolic constants and bound options) goes through here, so the
+# private `_CanonicalDepthError` never reaches the user (D-130).
+function _canonical_checked(describe, v)
     try
         return _canonical_value(v)
     catch e
         e isa _CanonicalDepthError || rethrow()
-        throw(ArgumentError("`Adaptive`: $what holds a value nested deeper than $(_CANONICAL_DEPTH) levels, or a " *
-                            "cyclic value (at a `$(e.type)`), which the problem fingerprint cannot identify; pass a " *
-                            "flatter value, e.g. a callable struct holding only the values that matter"))
+        throw(ArgumentError(string(describe(), " holds a value nested deeper than ", _CANONICAL_DEPTH,
+            " levels, or a cyclic value (at a `", e.type, "`): too deep to print in the canonical form that ",
+            "orders, names and fingerprints the model's parts; pass a flatter value, e.g. a callable struct ",
+            "holding only the values that matter")))
     end
 end
 
@@ -224,7 +231,7 @@ struct _CanonicalDepthError <: Exception
 end
 Base.showerror(io::IO, e::_CanonicalDepthError) =
     print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
-        "`), has no canonical string for the problem fingerprint; pass a flatter value")
+        "`), too deep to print in canonical form; pass a flatter value")
 
 # Values print with their full type. Scalars, enums and other primitives, strings and
 # ranges by `repr`; containers element by element (dictionaries and sets sorted by the

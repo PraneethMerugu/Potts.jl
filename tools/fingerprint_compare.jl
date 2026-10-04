@@ -72,31 +72,56 @@ function fingerprints(checkout)
     return TOML.parse(read(cmd, String))
 end
 
-"""A `git archive HEAD` copy of `checkout` with its workspace Manifest, in a temporary directory."""
+"""A `git archive HEAD` copy of `checkout` with its workspace Manifest, in a temporary
+directory; the caller removes it (`main`). Removed here if building it fails."""
 function archive_copy(checkout)
     dir = mktempdir(; cleanup = false)
-    run(pipeline(`git -C $checkout archive HEAD`, `tar -x -C $dir`))
-    manifest = joinpath(checkout, "Manifest.toml")
-    isfile(manifest) && cp(manifest, joinpath(dir, "Manifest.toml"))
-    run(`$(Base.julia_cmd()) --startup-file=no --project=$dir -e "using Pkg; Pkg.instantiate()"`)
+    try
+        run(pipeline(`git -C $checkout archive HEAD`, `tar -x -C $dir`))
+        manifest = joinpath(checkout, "Manifest.toml")
+        isfile(manifest) && cp(manifest, joinpath(dir, "Manifest.toml"))
+        run(`$(Base.julia_cmd()) --startup-file=no --project=$dir -e "using Pkg; Pkg.instantiate()"`)
+    catch
+        rm(dir; recursive = true, force = true)
+        rethrow()
+    end
     return dir
+end
+
+"""Warn when `checkout` has uncommitted changes: they are in A but not in its HEAD archive,
+so the problems they touch show as DIFFER."""
+function warn_if_dirty(checkout)
+    status = try
+        read(pipeline(`git -C $checkout status --porcelain`; stderr = devnull), String)
+    catch
+        return nothing                                   # not a git checkout: nothing to compare
+    end
+    isempty(strip(status)) || @warn "$checkout has uncommitted changes; they are not in the `git archive HEAD` " *
+                                    "copy B, so the problems they touch show as DIFFER" status
+    return nothing
 end
 
 function main(args)
     a = abspath(get(args, 1, ROOT))
-    b = length(args) >= 2 ? abspath(args[2]) : archive_copy(a)
-    println("A = $a\nB = $b")
-    fa, fb = fingerprints(a), fingerprints(b)
-    names = sort!(collect(union(keys(fa), keys(fb))))
-    differ = 0
-    for n in names
-        x, y = get(fa, n, "missing"), get(fb, n, "missing")
-        same = x == y && !startswith(x, "error")
-        same || (differ += 1)
-        println(rpad(n, 40), same ? "same  " : "DIFFER", "  ", x, same ? "" : "  vs  $y")
+    auto = length(args) < 2
+    auto && warn_if_dirty(a)
+    b = auto ? archive_copy(a) : abspath(args[2])
+    try
+        println("A = $a\nB = $b")
+        fa, fb = fingerprints(a), fingerprints(b)
+        names = sort!(collect(union(keys(fa), keys(fb))))
+        differ = 0
+        for n in names
+            x, y = get(fa, n, "missing"), get(fb, n, "missing")
+            same = x == y && !startswith(x, "error")
+            same || (differ += 1)
+            println(rpad(n, 40), same ? "same  " : "DIFFER", "  ", x, same ? "" : "  vs  $y")
+        end
+        println(differ == 0 ? "all $(length(names)) fingerprints agree" : "$differ of $(length(names)) differ")
+        return differ == 0
+    finally
+        auto && rm(b; recursive = true, force = true)   # the temporary archive copy
     end
-    println(differ == 0 ? "all $(length(names)) fingerprints agree" : "$differ of $(length(names)) differ")
-    return differ == 0
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__()
