@@ -3587,6 +3587,30 @@ end
     @test worst < 1e-9
     sol = solve(prob, SequentialCPM())
     @test total_energy(prob, sol.u[end]) ≈ oracle(sol.u[end].cell.volume[1:2], 7.0)
-    # the rewrite leaves `div` on numbers (and with a rounding mode) to Julia
-    @test Potts._div(7, 2) === 3 && Potts._div(7.0, 2) === 3.0
+    # on numbers: Julia's `div` (integers stay integers; floats in their own type)
+    @test Potts._intdiv(7, 2) === 3 && Potts._intdiv(Int32(7), 2) === 3 && Potts._intdiv(7.0, 2) === 3.0
+    @test Potts._intdiv(7.5f0, 2.0f0) === 3.0f0 && Potts._intdiv(-7.5f0, 2) === -3.0f0
+    # equal to Base where the quotient is exact in Float32 (|a / b| < 2^24)
+    xs = Float32[0.3, -7.5, 1.0f5, 12.0, 5.0f-3, 9.0, -9.5]
+    @test all(((a, b),) -> Potts._intdiv(a, b) === div(a, b), Iterators.product(xs, Float32[0.1, 2, -3, 1.5]))
+    # zero derivative (piecewise constant)
+    a, b = Potts.Symbolics.@variables a b
+    @test isequal(Potts.Symbolics.derivative(Potts._intdiv(a, b), a), 0)
+end
+
+@testset "a model may not define its own `div` or `÷`" begin
+    for def in (:(div(a, b) = a), :(function ÷(a::T, b) where {T}; a; end), :(div = max))
+        err = try
+            macroexpand(@__MODULE__, :(@potts_model LocalDiv begin
+                $def
+                @kinds medium A
+            end))
+            nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("integer division", sprint(showerror, err))
+    end
+    # a field named `div` in a named tuple is not a definition
+    @test Potts._div_definition(:(f(x) = (div = x ÷ 2,))) === nothing
 end

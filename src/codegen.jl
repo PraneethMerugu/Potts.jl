@@ -1207,7 +1207,7 @@ end
 
 const _INDICATOR_OPS = (==, !=, <, <=, >, >=, !, &, |, xor)
 # operations a parameter-only expression may use (evaluated on the host from `p`)
-const _HOST_OPS = (_FLOAT_OPS..., +, -, *, ^, abs, min, max, ifelse, _INDICATOR_OPS...)
+const _HOST_OPS = (_FLOAT_OPS..., +, -, *, ^, abs, min, max, ifelse, _intdiv, _INDICATOR_OPS...)
 
 """Whether `x` reads only parameters and constants through plain arithmetic."""
 function _param_only(x)

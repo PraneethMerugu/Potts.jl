@@ -88,7 +88,10 @@ indexed by its number as everywhere in a model: the medium is 0, then the kinds 
 `u = V₀[2] + 1` and `u = V₀[light] + 1` are the same. A default cannot read a variable or a
 built-in such as `volume`, cannot draw `rand()`, and cannot read a kind outside the table.
 Each of these is an `ArgumentError` that names the parameter. So is a function that fails on
-the values, such as `sqrt` of a negative number.
+the values, such as `sqrt` of a negative number. A call on literal numbers only, such as
+`sqrt(-1.0)`, is evaluated by Julia when the model is built, so its error (here a
+`DomainError`) comes from the model constructor. A model may not define its own `div` or
+`÷`, since in a model these are integer division.
 
 The inputs of a computed default must be declared before it in `@parameters`. A contact
 table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmetric one is an
