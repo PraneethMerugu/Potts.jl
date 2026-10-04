@@ -202,7 +202,8 @@ function _bind_components(sys::PottsSystem)
         lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
         m.energies, m.drives, m.constraints, m.updates, equations = [m.equations; odes], m.divisions,
         relationships = sys.relationships, m.link_rules, m.observed, discrete = blocks, m.sweep, structural = sys.structural,
-        sources = merge(sys.sources, m.sources))
+        sources = merge(sys.sources, m.sources),
+        kind_classes = sys.kind_classes)
 end
 
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK

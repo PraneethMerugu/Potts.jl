@@ -283,6 +283,11 @@ sha256 = "fb09075979ed6c4dfaa06f5d628802c149272f9a6a935900f6b1f260dff85cc4"
 decision = "D-137"
 
 [[file]]
+path = "acceptance/p6_0ax_gather_scan.jl"
+sha256 = "ace4d43dfa9a5fd7c18f8903935558083b72dd5144a63e3704b45a221f365da1"
+decision = "D-132"
+
+[[file]]
 path = "acceptance/p6_0aw_on_copy_integral.jl"
 sha256 = "2940596dfc054e70f0fb67dba4b8a6cab6a6931403244486e8e9df2e88968d90"
 decision = "D-129"
@@ -311,3 +316,8 @@ decision = "D-133"
 path = "acceptance/p6_0o_abstract_system.jl"
 sha256 = "462ec79c957c6b973ca0957c4a0d4cb5c925ee7fbc2d7a8039c878cf0ddb9f58"
 decision = "D-137"
+
+[[file]]
+path = "acceptance/p6_0g_kind_classes.jl"
+sha256 = "2e10a3496c8d7f0340085d0fc0c33be5837dbfe94d85deda1c4b46c9d23cae71"
+decision = "D-135"

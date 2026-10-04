@@ -58,7 +58,7 @@ is sugar.
 | Section | Purpose | MTK analogue |
 |---|---|---|
 | `@structural_parameters` | values baked into generated code (lattice size, orders) | same |
-| `@kinds` | cell kinds; the first is the medium (kind 0); `[frozen]` marks obstacles | — |
+| `@kinds` | cell kinds; the first is the medium (kind 0); `[frozen]` marks obstacles; `name = (kind, …)` declares a kind class (D-135) | — |
 | `@parameters` | numeric parameters, incl. kind-indexed arrays `J[kind, kind]` | same |
 | `@variables` | state with a **scope** in the signature: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(edge)` or `e(rel)` (an edge variable of `@relationship rel`) | `@variables`, scope is Potts |
 | `@lattice` | `Lattice(dims; boundary, neighborhood, spacing)` | — |
@@ -87,6 +87,43 @@ end
 
 Declaring sections (`@structural_parameters`, `@kinds`, `@parameters`, `@variables`,
 `@extend`) cannot be conditional.
+
+**Kind classes (D-135, implemented).** A line `name = (member, …)` in `@kinds` declares a
+named set of kinds; members are declared kinds or earlier classes, flattened in order.
+Class lines may sit anywhere among the kinds (block or one-line form) and never shift kind
+numbers:
+
+```julia
+@kinds begin
+    medium; fluid; matrix
+    ecm = (fluid, matrix)
+    tip; stalk
+    endothelial = (tip, stalk)
+    mix = (ecm, tip)                  # (fluid, matrix, tip)
+end
+```
+
+- A class goes wherever a list of kinds does, alone or mixed with kinds: `cells(g)` (energy
+  domains, `@divide`, `@components`, population folds `for c in cells(g)`), `clusters(g)`,
+  `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`, `Chemotaxis(…; kinds = g)`,
+  `cells(ecm, tip)`.
+- On a symbolic kind (`kind`, `kind′`, `kind[new]`, `kind[old]`, `kind[c]`, `kind[n]`),
+  `x ∈ g` is `(x == k₁) | … | (x == kₙ)` in member order, and `x ∉ g` its negation: constant
+  kind numbers, nothing allocated, so it runs on every backend. A model written with classes
+  has the same generated code and fingerprint as the one with the `||` chains spelled out;
+  a class no statement reads changes nothing.
+- A class is not an index: `J[g, kind′]` and `γ[g]` are errors naming the class, and so is
+  `kind == g` / `kind != g` (use `∈`/`∉`). Operating points and layouts (`Tiling`,
+  `Scattered`, `Frame`, `InsertUntil` `kind`/`into`) take kinds, not classes: `layout(l, sys)`
+  rejects a class name.
+- Rejected at construction (`ArgumentError`): an empty class, a member listed twice (also
+  after flattening), the medium as a member (write `kind[x] == medium || kind[x] ∈ g`), a
+  member that is not a kind or an earlier class, a name used by another declaration (D-113:
+  "kind class" is a category) or a reserved name.
+- Classes are stored on the `PottsSystem` (`kind_classes`, `Potts.KindClass`; not hashed,
+  their effect is in the code). `@extend g = base = Base()` binds a base class like a kind;
+  an extension may restate a base class with the same members in the same order and add new
+  ones; restating it with other members, or in another order, is an error naming it.
 
 ---
 
@@ -156,10 +193,10 @@ expression may refer to:
 
 | Domain | Sum over | Names in scope |
 |---|---|---|
-| `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
+| `cells(kinds…)` | every cell of those kinds (kinds or kind classes, flattened) | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
-| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
+| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, kind class, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
 Examples:
@@ -336,7 +373,9 @@ end
   ```
   `sum`, `prod`, `mean`, `geomean`, `minimum`, `maximum`, `count`, `any`, `all` are
   recognised and lowered to unrolled loops with the right fold; `if` filters become
-  masks.
+  masks. Inline comprehensions work everywhere an expression does, including division
+  conditions and rules, `@link`/`@unlink` conditions, `edges(name) =>` energies, the
+  index of an `@on_copy` update and `@observed` quantities (D-132).
 - `rand(dist)` inside any expression is an addressed draw: reproducible, backend
   independent, keyed to the site/cell/MCS it belongs to.
 - **After-MCS order (D-130; INTERNALS §1.6).** After the copy sweep, every MCS runs, in

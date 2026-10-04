@@ -308,11 +308,11 @@ _rand() = random_uniform(Num(_next_number!()))
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
 # a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
-_index(x::Num, i) = SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i)
+_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i))
 _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
-_index(x::Num, i, j) = at2(x, i, j)
-_index(x, i...) = getindex(x, i...)
+_index(x::Num, i, j) = (_no_class_index(i, j); at2(x, i, j))
+_index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 
 """
 `x′` of a site (or field) variable `x`: its value at the other site `s′` of a contact pair
@@ -406,6 +406,85 @@ function _gather(fold, body, a::Around, cond = nothing)
 end
 
 # ---------------------------------------------------------------------------------------
+# Kind classes (D-135): a named set of cell kinds, declared in `@kinds` as `name = (k, …)`
+
+"""
+    KindClass
+
+A named set of cell kinds, declared in `@kinds` as `name = (kind, …)` (members are kinds
+or earlier classes, flattened in order). A class is usable wherever a list of kinds is:
+`cells(g)`, `clusters(g)`, `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`,
+`Chemotaxis(…; kinds = g)`, mixed with kinds (`cells(g, k)`). On a symbolic kind,
+`kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order and `kind[x] ∉ g`
+its negation, so a class costs nothing at run time. `∈ g` is meant for kind-valued
+expressions (`kind`, `kind′`, `kind[new]`, `kind[c]`, …): on any other quantity it compares
+that value with the kind numbers. `kind == g` is an error (a kind is never equal to a
+set of kinds). A class is not an index into a kind table, and operating points and layouts
+take kinds, not classes.
+
+`PottsSystem(; kind_classes = [KindClass(:name, [k₁, …])])` declares classes
+programmatically (kind numbers: the medium is 0, then the cell kinds in order).
+"""
+struct KindClass
+    name::Symbol
+    kinds::Vector{Int}
+end
+Base.iterate(g::KindClass, i...) = iterate(g.kinds, i...)
+Base.length(g::KindClass) = length(g.kinds)
+Base.isempty(g::KindClass) = isempty(g.kinds)
+Base.eltype(::Type{KindClass}) = Int
+Base.:(==)(a::KindClass, b::KindClass) = a.name === b.name && a.kinds == b.kinds
+Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)))
+Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
+Base.in(x::Integer, g::KindClass) = x in g.kinds
+# `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
+_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with `kind ∈ $(g.name)`"))
+Base.:(==)(::Num, g::KindClass) = _class_compare(g)
+Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
+Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
+Base.:(!=)(g::KindClass, ::Num) = _class_compare(g)
+# on a symbolic kind: an unrolled `|` of equalities with constant kind numbers, folded left
+# in member order (the same expression as the explicit `(x == k₁) || (x == k₂) || …`)
+function Base.in(x::Num, g::KindClass)
+    ks = g.kinds
+    isempty(ks) && throw(ArgumentError("kind class `$(g.name)` is empty"))
+    r = x == ks[1]
+    for i in 2:length(ks)
+        r = r | (x == ks[i])
+    end
+    return r
+end
+
+"""Build the class `name` from its members' names and values (kind numbers or classes)."""
+function _kind_class(name::Symbol, names::Tuple, members::Tuple)
+    isempty(members) && throw(ArgumentError("kind class `$name` is empty; list at least one kind"))
+    ks = Int[]
+    for (n, m) in zip(names, members)
+        if m isa KindClass
+            append!(ks, m.kinds)
+        elseif m isa Integer && !(m isa Bool)
+            m == 0 && throw(ArgumentError("kind class `$name` lists the medium `$n`, which is not a cell kind; " *
+                                          "write `kind[x] == $n || kind[x] ∈ $name` instead"))
+            push!(ks, m)
+        else
+            throw(ArgumentError("kind class `$name`: `$n` is not a kind or an earlier kind class"))
+        end
+    end
+    allunique(ks) || throw(ArgumentError("kind class `$name` lists a kind twice (after flattening its classes): $(Tuple(ks))"))
+    return KindClass(name, ks)
+end
+function _no_class_index(is...)
+    for i in is
+        i isa KindClass && throw(ArgumentError("`$(i.name)` is a kind class and cannot index a kind table; " *
+                                               "index by a kind (e.g. `J[kind, kind′]`) and gate with `kind ∈ $(i.name)`"))
+    end
+    return nothing
+end
+"""Kind numbers of a list of kinds and classes, classes flattened in place."""
+_flat_kinds(ks) = Int[k for x in ks for k in (x isa KindClass ? x.kinds : (x,))]
+const _KindArg = Union{Integer, KindClass}
+
+# ---------------------------------------------------------------------------------------
 # Domains, statements
 
 """Energy domains: `cells(kinds...)`, `contacts`, `contacts(relation)`, `sites`."""
@@ -422,8 +501,8 @@ struct ClusterDomain
     kinds::Vector{Int}
 end
 
-cells(kinds::Integer...) = CellDomain(collect(Int, kinds))
-clusters(kinds::Integer...) = ClusterDomain(collect(Int, kinds))
+cells(kinds::_KindArg...) = CellDomain(_flat_kinds(kinds))
+clusters(kinds::_KindArg...) = ClusterDomain(_flat_kinds(kinds))
 (d::ContactDomain)(relation::Symbol) = ContactDomain(relation)
 const contacts = ContactDomain(:contact)
 const sites = SiteDomain()
@@ -465,11 +544,11 @@ a constraint over the proposal-scope connectivity values, applied when the losin
 
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
 """
-function connectivity(kinds::Integer...; rule::Symbol = :local)
+function connectivity(kinds::_KindArg...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
     test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | ((B.ring_cells == 2) & (B.ring_medium == 0)))
-    return Constraint(:connectivity, collect(Int, kinds), test)
+    return Constraint(:connectivity, _flat_kinds(kinds), test)
 end
 """`no_extinction`: forbid copies that remove a cell's last site."""
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
@@ -798,9 +877,9 @@ end
 # Library one-liners (AUTHORING §4): functions returning the same `domain => expr` pairs
 
 """`Volume(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (volume - target)^2`."""
-Volume(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
+Volume(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
 """`Surface(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (surface - target)^2`."""
-Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
+Surface(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
 """`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
 Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 """
@@ -818,7 +897,8 @@ concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)`
   (`kind[new] ∈ kinds`), so retractions stay 0 whatever `when` says.
 """
 function Chemotaxis(c; strength, response::F = identity, kinds = (), when = (B.new != 0)) where {F}
-    gate = isempty(kinds) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in kinds]) & when)
+    ks = _flat_kinds(kinds)          # kinds and kind classes, flattened in order
+    gate = isempty(ks) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in ks]) & when)
     return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 
