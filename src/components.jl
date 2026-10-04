@@ -18,9 +18,11 @@ The system is continuous (`D(x) ~ f`, cell or model ODEs) or discrete-time (cloc
 Boolean and discrete networks, ticking after the ODEs of each period of its clock).
 Values are plain numbers: a system with `initialization_eqs`, `discrete_events`,
 `continuous_events`, `jumps`, `brownians`, `tstops` or `assertions` (also in a subsystem), or
-whose variables or parameters are bound to expressions (`y(t) = 2k`, `k2 = 2k`,
-`initial_conditions = [y => 2k]`, a discrete `X(t) = !Y`), is rejected by name; `guesses`
-are ignored (MTK initialisation is not run).
+whose quantities Potts reads (unknowns, parameters, discrete nodes, names the model reads
+as `comp.x`) are bound to expressions (`y(t) = 2k`, `k2 = 2k`, `initial_conditions =
+[y => 2k]`, a discrete `X(t) = !Y`), is rejected by name. Bindings of observed variables and
+of parameters nothing reads are ignored, as by MTK; `guesses` are ignored too (MTK
+initialisation is not run).
 """
 struct ComponentSpec
     name::Symbol
@@ -93,12 +95,13 @@ function _bind_components(sys::PottsSystem)
     coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
     blocks = copy(sys.discrete)
     slotnames_all = Set{Symbol}()               # every discrete slot (`Pre` of one is the slot)
+    unread = Dict{Symbol, String}()             # bound names no component equation reads → their error
     for comp in sys.components
         _reject_ignored_features(comp)
         discrete = _is_discrete(comp.system)
         cs = discrete ? _compile_discrete(comp) : ModelingToolkitBase.mtkcompile(comp.system)
         _reject_coupled_bindings(comp, cs, couplings)
-        _reject_bindings(comp, cs, discrete)
+        _reject_bindings(comp, cs, discrete, unread)
         ics = ModelingToolkitBase.initial_conditions(cs)
         # a missing value stays `nothing`: the operating point must give it (checked there)
         value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
@@ -173,12 +176,20 @@ function _bind_components(sys::PottsSystem)
                                                "(component unknowns evolve by their own equations)"))
     end
     # couplings may read other components' state (`dec.k ~ clock.m`)
-    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names, slotnames_all)) for eq in odes]
-    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[_substitute_names(x, names, slotnames_all) for x in b.next],
+    # a bound name no component equation reads is ignored, unless the model reads it (`comp.k2`)
+    function subst(x)
+        isempty(unread) || _walk_all(x) do y
+            n = _mtkname(y)
+            n !== nothing && haskey(unread, n) && throw(ArgumentError(unread[n]))
+        end
+        return _substitute_names(x, names, slotnames_all)
+    end
+    odes = [eq.lhs ~ Symbolics.wrap(subst(eq.rhs)) for eq in odes]
+    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[subst(x) for x in b.next],
                   b.every, b.offset)
               for b in blocks]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
-    sub(x) = _substitute_names(x, names, slotnames_all)
+    sub(x) = subst(x)
     m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
         lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
         energies = sys.energies, drives = sys.drives, constraints = sys.constraints, updates = sys.updates,
@@ -252,8 +263,9 @@ end
 # the component, instead of failing later as a missing value or an unknown symbol. Only
 # bindings of what Potts reads count: unknowns, parameters, symbols the equations or observed
 # expressions read, and (discrete) the nodes, which are observed. A binding of a continuous
-# observed variable (its equation gives its value) or of an unused parameter stays ignored.
-function _reject_bindings(comp, cs, discrete::Bool)
+# observed variable (its equation gives its value) or of an unused parameter stays ignored,
+# unless the model reads it (`comp.k2`): `unread` collects namespaced name → error for that.
+function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String}())
     used = Set{Any}()
     function use(y)
         y = _unwrap(y)
@@ -274,9 +286,12 @@ function _reject_bindings(comp, cs, discrete::Bool)
     end
     reads(x) = (u = _unwrap(x); u in used && !(u in observed))
     for (x, v) in ModelingToolkitBase.bindings(cs)
-        reads(x) && throw(ArgumentError("component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding); " *
-                                       "Potts takes a component's values as plain numbers: give `$x` a value, or write " *
-                                       "the expression inline in the component's equations"))
+        msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding); " *
+              "Potts takes a component's values as plain numbers: give `$x` a value, or write " *
+              "the expression inline in the component's equations"
+        reads(x) && throw(ArgumentError(msg))
+        u = _unwrap(x)
+        u in observed || (unread[Symbol(comp.name, :₊, _slot_name(u))] = msg)
     end
     for (x, v) in ModelingToolkitBase.initial_conditions(cs)
         w = _unwrap(v)

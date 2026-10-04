@@ -194,6 +194,9 @@ extending constructor then rethrows the error unchanged instead of translating i
 its own `x′` (each constructor call has its own flag, so nested or concurrent builds never
 share it). The flag is set only on the error path, which leaves the extending constructor.
 """
+# Accepted trade-off: a closure the extension passes to a hand-written base runs inside the
+# base's constructor, so an `x′` error raised in it is reported as the base's (the raw
+# `UndefVarError`), not translated.
 struct _BaseCall{F, R <: Ref{Bool}}
     f::F
     failed::R
