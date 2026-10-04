@@ -23,36 +23,116 @@ end
 
 """
     PottsSystem(; name, kinds, lattice, parameters, variables, relations, energies, drives,
-                constraints, updates, equations, divisions, sweep, structural)
+                constraints, updates, equations, divisions, sweep, structural, …)
 
 A cellular Potts model: kinds (the first is the medium), a lattice, parameters, scoped
 variables, Hamiltonian terms, drives, constraints, synchronous/on-copy updates, field
 equations (MTK syntax), lifecycle rules and the sweep protocol.
+
+`PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137); `sys.x` is the namespaced
+symbolic `sys₊x` (a parameter, variable or `@observed` quantity, or a `@components` system:
+`sys.dc.y` is `sys₊dc₊y`), as in MTK. A completed system (`complete(sys)`) or one with
+namespacing off (`toggle_namespacing(sys, false)`) returns the declared symbol itself, which
+keys the operating point of `PottsProblem`. Any other name is an `ArgumentError`.
+
+MTK's accessors:
+- `equations(sys)`: the `@equations` as written, plus each component's equations namespaced
+  (`dc₊y`). Hamiltonian terms, drives, updates, lifecycle rules and `@observed` are not
+  equations.
+- `unknowns(sys)`: the declared variables of every scope (cell, model, site, field, edge),
+  plus each component's unknowns namespaced; never the lattice ownership, kinds or built-in
+  cell properties.
+- `parameters(sys)`: the declared parameters (scalars and kind tables), plus each component's
+  parameters namespaced. (`Potts.parameters(sys)` and `Potts.variables(sys)` are the model's
+  own declarations.)
+- `observed(sys)`: one `name ~ expr` per `@observed` quantity.
+- `nameof(sys)`: the model name.
+- `getmetadata(sys, key, default)`, `setmetadata(sys, key, value)`, `hasmetadata(sys, key)`:
+  MTK's typed metadata. It survives `complete`, `mtkcompile` and `extend`, and never enters
+  the generated code or the fingerprint.
+
+`complete`, `extend(::PottsSystem, ::PottsSystem)` and `show` are Potts'. `compose` (Potts
+models do not compose, D-039: use `@components` or `extend`), `ODEProblem`/`JumpProblem`
+(use `PottsProblem`) and `extend` with a plain MTK `System` are `ArgumentError`s.
+`Potts.lattice(sys)` is the model's lattice.
+
+The positional constructor takes every field in order (`fieldnames(PottsSystem)`) and the
+keyword `checks = true`; `checks = false` skips the construction checks (reserved and
+clashing names). The MTK mirror fields `eqs`, `unknowns`, `ps` and `systems` are derived from
+`equations`, `variables`, `parameters` and `components`; values passed for them are ignored.
 """
-Base.@kwdef struct PottsSystem
+struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol
     kinds::Vector{Symbol}
-    frozen_kinds::Vector{Int} = Int[]          # obstacle kinds: their sites never change owner
-    kind_classes::Vector{KindClass} = KindClass[]   # named sets of kinds (D-135); not hashed: lowered into the statements
+    frozen_kinds::Vector{Int}                  # obstacle kinds: their sites never change owner
+    kind_classes::Vector{KindClass}            # named sets of kinds (D-135); not hashed: lowered into the statements
     lattice::LatticeSpec
-    parameters::Vector{Any} = Any[]
-    variables::Vector{Any} = Any[]
-    relations::Dict{Symbol, Any} = Dict{Symbol, Any}()
-    energies::Vector{EnergyTerm} = EnergyTerm[]
-    drives::Vector{Drive} = Drive[]
-    constraints::Vector{Constraint} = Constraint[]
-    updates::Vector{Update} = Update[]
-    equations::Vector{Equation} = Equation[]
-    divisions::Vector{DivideRule} = DivideRule[]
-    relationships::Vector{RelationshipSpec} = RelationshipSpec[]
-    link_rules::Vector{LinkRule} = LinkRule[]
-    observed::Vector{ObservedEq} = ObservedEq[]
-    components::Vector{Any} = Any[]            # `ComponentSpec`s: MTK systems instantiated per cell
-    discrete::Vector{DiscreteBlock} = DiscreteBlock[]   # bound discrete components (`_bind_components`)
+    parameters::Vector{Any}
+    variables::Vector{Any}
+    relations::Dict{Symbol, Any}
+    energies::Vector{EnergyTerm}
+    drives::Vector{Drive}
+    constraints::Vector{Constraint}
+    updates::Vector{Update}
+    equations::Vector{Equation}
+    divisions::Vector{DivideRule}
+    relationships::Vector{RelationshipSpec}
+    link_rules::Vector{LinkRule}
+    observed::Vector{ObservedEq}               # also MTK's `observed` field (D-137): `observed(sys)` gives `name ~ expr`
+    components::Vector{Any}                    # `ComponentSpec`s: MTK systems instantiated per cell
+    discrete::Vector{DiscreteBlock}            # bound discrete components (`_bind_components`)
     sweep::SweepSpec
-    structural::NamedTuple = (;)
-    sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
-    PottsSystem(args...) = _check_primed_names(_check_name_categories(_check_reserved_names(new(args...))))
+    structural::NamedTuple
+    sources::IdDict{Any, LineNumberNode}       # term → where it was written
+    # The MTK `System` fields MTK's generic accessors read (D-137). `eqs`, `unknowns` and `ps`
+    # are the `equations`, `variables` and `parameters` vectors themselves, `systems` the
+    # component systems; none of these, nor the metadata and flags, enter code or fingerprint.
+    eqs::Vector{Equation}
+    unknowns::Vector{Any}
+    ps::Vector{Any}
+    systems::Vector{ModelingToolkitBase.AbstractSystem}
+    metadata::Base.ImmutableDict{DataType, Any}
+    namespacing::Bool
+    complete::Bool
+    function PottsSystem(name, kinds, frozen_kinds, kind_classes, lattice, parameters, variables, relations, energies,
+            drives, constraints, updates, equations, divisions, relationships, link_rules, observed, components,
+            discrete, sweep, structural, sources, eqs, unknowns, ps, systems, metadata, namespacing, complete;
+            checks::Bool = true)
+        # the mirrors share the Potts vectors (converted once, so both fields hold one object)
+        equations = convert(Vector{Equation}, equations)
+        variables = convert(Vector{Any}, variables)
+        parameters = convert(Vector{Any}, parameters)
+        components = convert(Vector{Any}, components)
+        sys = new(name, kinds, frozen_kinds, kind_classes, lattice, parameters, variables, relations, energies, drives,
+            constraints, updates, equations, divisions, relationships, link_rules, observed, components, discrete,
+            sweep, structural, sources, equations, variables, parameters, _component_systems(components), metadata,
+            namespacing, complete)
+        checks || return sys
+        return _check_primed_names(_check_name_categories(_check_reserved_names(sys)))
+    end
+end
+
+const _EMPTY_METADATA = Base.ImmutableDict{DataType, Any}()
+
+# The `@components` systems, each under its component name (MTK's `sys.dc` finds it by name).
+function _component_systems(components)
+    out = ModelingToolkitBase.AbstractSystem[]
+    for c in components
+        c isa ComponentSpec && c.system isa ModelingToolkitBase.AbstractSystem || continue
+        push!(out, nameof(c.system) === c.name ? c.system : Symbolics.rename(c.system, c.name))
+    end
+    return out
+end
+
+function PottsSystem(; name::Symbol, kinds, lattice, sweep, frozen_kinds = Int[], kind_classes = KindClass[],
+        parameters = Any[], variables = Any[], relations = Dict{Symbol, Any}(), energies = EnergyTerm[], drives = Drive[],
+        constraints = Constraint[], updates = Update[], equations = Equation[], divisions = DivideRule[],
+        relationships = RelationshipSpec[], link_rules = LinkRule[], observed = ObservedEq[], components = Any[],
+        discrete = DiscreteBlock[], structural = (;), sources = IdDict{Any, LineNumberNode}(),
+        metadata = _EMPTY_METADATA, namespacing::Bool = true, complete::Bool = false, checks::Bool = true)
+    return PottsSystem(name, kinds, frozen_kinds, kind_classes, lattice, parameters, variables, relations, energies,
+        drives, constraints, updates, equations, divisions, relationships, link_rules, observed, components, discrete,
+        sweep, structural, sources, nothing, nothing, nothing, nothing, metadata, namespacing, complete; checks)
 end
 
 # The link endpoints `a`, `b` (bound in edge terms and link rules) are reserved globally

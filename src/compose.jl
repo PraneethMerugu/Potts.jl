@@ -81,7 +81,18 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         components = unique(c -> c.name, [getfield(sys, :components); getfield(base, :components)]),
         discrete = unique(b -> b.name, [getfield(sys, :discrete); getfield(base, :discrete)]),
         sweep = getfield(sys, :sweep), structural = merge(getfield(base, :structural), getfield(sys, :structural)),
-        sources = merge(getfield(base, :sources), getfield(sys, :sources)))
+        sources = merge(getfield(base, :sources), getfield(sys, :sources)),
+        metadata = _merged_metadata(base, sys))
+end
+
+# MTK's `extend` metadata: the base's entries, then the extension's (which win); MTK's
+# mutable cache is left out
+function _merged_metadata(base::PottsSystem, sys::PottsSystem)
+    meta = _EMPTY_METADATA
+    for s in (base, sys), kv in getfield(s, :metadata)
+        kv[1] === ModelingToolkitBase.MutableCacheKey || (meta = Base.ImmutableDict(meta, kv))
+    end
+    return meta
 end
 
 """
@@ -256,7 +267,9 @@ end
 
 """`sys` with some fields replaced."""
 _replace(sys::PottsSystem; kw...) =
-    PottsSystem(; (f => getfield(sys, f) for f in fieldnames(PottsSystem))..., kw...)
+    PottsSystem(; (f => getfield(sys, f) for f in fieldnames(PottsSystem) if !(f in _MIRRORS))..., kw...)
+# the MTK mirror fields, derived by the constructor (system.jl)
+const _MIRRORS = (:eqs, :unknowns, :ps, :systems)
 
 """
     lookup(sys::PottsSystem, name::Symbol)

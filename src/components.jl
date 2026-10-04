@@ -203,7 +203,8 @@ function _bind_components(sys::PottsSystem)
         energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes], divisions = getfield(m, :divisions),
         relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
         sources = merge(getfield(sys, :sources), getfield(m, :sources)),
-        kind_classes = getfield(sys, :kind_classes))
+        kind_classes = getfield(sys, :kind_classes), metadata = getfield(sys, :metadata),
+        namespacing = getfield(sys, :namespacing), complete = getfield(sys, :complete))
 end
 
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
