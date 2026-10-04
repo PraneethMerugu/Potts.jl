@@ -331,12 +331,12 @@ end
 
 # recorded on 4e81e1eb (Julia 1.12, Float64)
 const P60P_FINGERPRINTS = Dict{String, UInt64}(
-    "GranerGlazier" => 0x8942dc9ed483ec21,
-    "WortelAct" => 0xeec6e447bfffba66,
-    "WortelAct connected" => 0x9627f9c719353a2c,
-    "MerksVasculogenesis" => 0xe8c37fa651d985f6,
+    "GranerGlazier" => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
+    "WortelAct" => 0xd6d4f8e4e7850c5e,   # re-pinned under D-122
+    "WortelAct connected" => 0xa2b5702602b1e8f9,   # re-pinned under D-122
+    "MerksVasculogenesis" => 0x984e2ad5906fc999,   # re-pinned under D-122
     "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "OpenVTGrowingMonolayer" => 0xfe0d128235b9b8a6,
+    "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,   # re-pinned under D-122
     "AkeebInvasion" => 0x8d33bd0bb1eddd1c,
     "@after_mcs/@before_mcs Every(1)" => 0x97770dd85d99f955,
     "@after_mcs/@before_mcs Every(2)" => 0x16868ec68c10f99e,

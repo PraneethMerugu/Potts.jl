@@ -340,8 +340,8 @@ p60ag_published() = (
         field_solver = Potts.ExplicitEuler(substeps = 2, lower = 0.0))),
 )
 const P60AG_PUBLISHED = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x8942dc9ed483ec21,
-    :MerksVasculogenesis => 0xe8c37fa651d985f6,   # re-recorded at the P6.0ag merge (D-102: substep function)
+    :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
+    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-pinned under D-122
 )
 
 """CPU and Metal runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:

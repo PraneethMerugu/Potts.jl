@@ -155,6 +155,15 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # offset is a Float64 in `SweepSpec`, so `offset = 2` and `offset = 2.0` hash alike.
     sys.sweep.law === :metropolis || push!(cad, "law=$(sys.sweep.law)")
     sys.sweep.offset == 0 || push!(cad, "offset=$(repr(sys.sweep.offset))")
+    # the proposal and contact neighbourhoods, run data outside the generated code (D-122):
+    # each resolved on the lattice and hashed with its role when it differs from its default
+    # (proposal `VonNeumann(1)`, contact the lattice's `neighborhood`)
+    lat = core_lattice(sys.lattice)
+    for (role, spec, default) in (("proposal", c.proposal_spec, CorePotts.VonNeumann(1)),
+            ("contact", c.contact_spec, sys.lattice.neighborhood))
+        r = CorePotts.relation(spec, lat)
+        r == CorePotts.relation(default, lat) || push!(cad, "$role=$(r.offsets);$(r.weights)")
+    end
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(sys.sweep, T),

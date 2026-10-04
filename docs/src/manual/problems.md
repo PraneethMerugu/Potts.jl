@@ -104,9 +104,12 @@ resumed.t
 
 The resumed run continues with the same random stream, so it equals the uninterrupted run.
 A checkpoint loads only into a problem built from the same model and solvers, with the same
-schedule and acceptance law: the cadences of clocked components, `Every(n)` rules,
-`mcs_duration`, and the `@sweep` law (`Metropolis` or `Barker`) and its `offset` are part of
-the check.
+schedule, acceptance law and neighbourhoods: the cadences of clocked components, `Every(n)`
+rules, `mcs_duration`, the `@sweep` law (`Metropolis` or `Barker`) and its `offset`, and the
+`@relations proposal` and `@relations contact` neighbourhoods (resolved on the lattice) are part
+of the check. A neighbourhood that resolves to its default (`VonNeumann(1)` for the proposal,
+the lattice's `neighborhood` for contact) checks like omitting it. The algorithm's `proposal`
+keyword (`SequentialCPM(; proposal)`) is a run choice and is not checked.
 
 ## Changing a problem: `remake`
 
