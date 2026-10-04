@@ -681,6 +681,32 @@ struct SweepSpec
     offset::Float64
     mcs_duration::Float64
 end
+# D-123: `combine` is interpolated into the generated temperature code, whose printed form
+# the fingerprint hashes, so it must print the same in every session. A singleton function
+# is stable only through a constant global binding (`nameof(typeof(min))` is `#min`, so the
+# type name alone cannot decide); anything else is stable unless its type is
+# compiler-generated (`#…`: an anonymous function, a closure, a local named function).
+function _stable_callable(f)
+    if f isa Function && Base.issingletontype(typeof(f))
+        m, n = parentmodule(f), nameof(f)
+        return isdefinedglobal(m, n) && isconst(m, n) && getglobal(m, n) === f
+    end
+    return !startswith(string(nameof(typeof(f))), '#')
+end
+"""
+    sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
+
+The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
+`@sweep Barker(; …)` (`law = :barker`).
+
+- `offset` must be finite; NaN and ±Inf are an `ArgumentError`.
+- `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
+  at the top level and passed as `combine = amean`) or an instance of a callable struct.
+  An anonymous function, a closure or a function defined inside another function is an
+  `ArgumentError`: its compiler-generated name changes between Julia sessions, so a
+  checkpoint written in one session would not load in the next. To carry parameters, use
+  a callable struct (`struct Mix; w::Float64; end; (m::Mix)(a, b) = m.w * a + (1 - m.w) * b`).
+"""
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
     for k in keys(kwargs)
         k in (:field_solver, :ode_solver, :solvers) && throw(ArgumentError(
@@ -689,7 +715,15 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
-    return SweepSpec(law, temperature, combine, Float64(offset), Float64(mcs_duration))
+    o = Float64(offset)
+    isfinite(o) || throw(ArgumentError("`@sweep`: `offset` must be finite, got $offset; " *
+                                       "pass a finite number (`offset = 0` disables it)"))
+    _stable_callable(combine) || throw(ArgumentError(
+        "`@sweep`: `combine` must be a named function or a callable struct instance, not an anonymous " *
+        "function or closure (its compiler-generated name differs between sessions, so checkpoints could " *
+        "not be matched), got $combine: define a named function at the top level, `f(a, b) = …`, and pass " *
+        "`combine = f`, or a callable struct to carry parameters"))
+    return SweepSpec(law, temperature, combine, o, Float64(mcs_duration))
 end
 
 # ---------------------------------------------------------------------------------------
