@@ -279,5 +279,5 @@ decision = "D-124"
 
 [[file]]
 path = "acceptance/p6_0c2_canonical_followups.jl"
-sha256 = "5bc2d989731c9f5d832f57b6e9f53f6808a4bc1e59c75ee4de76ab60db213432"
+sha256 = "40783990a807ba3319d051c3a168754181e7d6d4f0333c384d54a7bbe0460145"
 decision = "D-130"

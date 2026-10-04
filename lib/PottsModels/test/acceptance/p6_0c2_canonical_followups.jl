@@ -20,9 +20,12 @@
 #  d. A closure or anonymous function in an `Adaptive` solver (a keyword such as
 #     `isoutofdomain`, or a field of the algorithm such as `Rodas5P(step_limiter! = …)`)
 #     prints in the canonical string by its compiler-generated type name
-#     (`Main.var"#2#3"{Float64}(w=Float64:0.3)`), which carries a session counter: the same
-#     problem fingerprints differently in another session and two different closures can
-#     collide across sessions. The body is never hashed.
+#     (`Main.var"#2#3"{Float64}(w=Float64:0.3)`), whose counter depends on what the session
+#     lowered before. Two fresh processes running the same script get the same names, so
+#     the same fingerprint, and a checkpoint loads from one into the other; a process whose
+#     closure has another body at the same position gets the same name too, so two
+#     different closures fingerprint alike across sessions and a checkpoint loads across
+#     them (unsafe). The body is never hashed.
 #
 # Rule (D-130), pinned here:
 #  B. A value nested deeper than the canonical printer's cap (8 levels), or a cyclic value,
@@ -34,13 +37,16 @@
 #     vector quantity, `@observed` names and component observed names. The `ArgumentError`
 #     (when the model is built or compiled) names the quantity and the suffix. Names that
 #     merely contain a suffix elsewhere are accepted.
-#  D. As D-123 for `combine`: an `Adaptive` solver whose canonical string contains a
-#     compiler-generated name (`var"#`: an anonymous function, a closure, a local named
-#     function, a wrapper holding one) is an `ArgumentError` from `PottsProblem` and
-#     `remake`, whether given as `ode_solver` or in `solvers`; the message names `Adaptive`
-#     (and the keyword, when it is one). Named functions, callable structs and stable
-#     wrappers (`Returns(false)`) are accepted and fingerprint alike in another session,
-#     whose checkpoints load here.
+#  D. An `Adaptive` solver whose canonical string contains a compiler-generated name
+#     (`var"#`: an anonymous function, a closure, a local named function, a wrapper holding
+#     one) is accepted (idiomatic SciML), as `ode_solver`, in `solvers` and in `remake`.
+#     Its fingerprint also hashes a per-session token: within a session the same closure
+#     (or one of the same type and captures) fingerprints alike and its checkpoints load,
+#     and different closures fingerprint apart; across sessions the fingerprint always
+#     differs, so a checkpoint never loads into another session (the fingerprint
+#     `ArgumentError`) and cannot collide with another session's closure. Named functions,
+#     callable structs and stable wrappers (`Returns(false)`) fingerprint as before and
+#     load across sessions. (`combine` keeps its D-123 rejection.)
 #  E. `tools/fingerprint_compare.jl` exists and parses (tooling: it compares fingerprints
 #     of the published models and fixtures between two checkouts, e.g. a `git archive`
 #     copy; not run here).
@@ -311,17 +317,107 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# D. Compiler-generated names in a solver are an error
+# D. Compiler-generated names in a solver: accepted, fingerprint bound to the session
 
-@testset "P6.0c2 D: an Adaptive solver with a compiler-generated name is an ArgumentError" begin
-    for (label, (mk, kw)) in P60C2_UNSTABLE
-        words = kw === nothing ? ("Adaptive",) : ("Adaptive", kw)
+const P60C2_CLOSURE = (u, p, t) -> false
+const P60C2_CLOSURE_OTHER = (u, p, t) -> any(isnan, u)
+p60c2_closure_problem(f = P60C2_CLOSURE) = p60c2_problem(p60c2_Adaptive(Rodas5P(); isoutofdomain = f))
+
+@testset "P6.0c2 D: an Adaptive solver with a compiler-generated name builds" begin
+    for (label, (mk, _)) in P60C2_UNSTABLE
         @testset "$label" begin
-            @test p60c2_rejection(() -> p60c2_problem(mk()), words...) === :ok                       # ode_solver
-            @test p60c2_rejection(() -> p60c2_split(p60c2_RK4(), mk()), words...) === :ok            # solvers
+            @test p60c2_problem(mk()) isa PottsProblem                                   # ode_solver
+            @test p60c2_split(p60c2_RK4(), mk()) isa PottsProblem                        # solvers
             prob = p60c2_problem(p60c2_RK4())
-            @test p60c2_rejection(() -> remake(prob; ode_solver = mk()), words...) === :ok           # remake
+            @test remake(prob; ode_solver = mk()) isa PottsProblem                       # remake
+            @test remake(prob; ode_solver = mk()).f.fingerprint != prob.f.fingerprint
         end
+    end
+end
+
+@testset "P6.0c2 D: within a session, closures fingerprint by identity and checkpoints load" begin
+    fp(f) = p60c2_closure_problem(f).f.fingerprint
+    # the same closure object, and closures of the same type with the same captures, alike
+    @test fp(P60C2_CLOSURE) == fp(P60C2_CLOSURE)
+    @test fp(p60c2_mk(-1.0)) == fp(p60c2_mk(-1.0))
+    # different closures (another body, other captures) and the stable solver differ
+    fps = [fp(P60C2_CLOSURE), fp(P60C2_CLOSURE_OTHER), fp(p60c2_mk(-1.0)), fp(p60c2_mk(-2.0)),
+        p60c2_stable_problem("Rodas5P()").f.fingerprint, p60c2_stable_problem("Rodas5P(isoutofdomain = p60c2_ood)").f.fingerprint]
+    for i in eachindex(fps), j in (i + 1):lastindex(fps)
+        @test fps[i] != fps[j]
+    end
+    # the closure runs, and its checkpoint loads in this session (in memory and on disk)
+    prob = p60c2_closure_problem()
+    sol = solve(prob, SequentialCPM())
+    @test Symbol(sol.retcode) === :Success
+    @test sol.u[end].cell.y[1] ≈ exp(-0.3 * 6) rtol = 1e-2
+    integ = init(prob, SequentialCPM())
+    step!(integ)
+    step!(integ)
+    ck = checkpoint(integ)
+    again = init(p60c2_closure_problem(), SequentialCPM(); checkpoint = ck)
+    @test again.t == 2 && again.u.σ == ck.state.σ
+    mktempdir() do dir
+        path = joinpath(dir, "closure.jls")
+        save_checkpoint(path, ck)
+        @test init(p60c2_closure_problem(), SequentialCPM(); checkpoint = load_checkpoint(path)).t == 2
+    end
+    # negative controls: refused by another closure and by the stable solver
+    @test_throws ArgumentError init(p60c2_closure_problem(P60C2_CLOSURE_OTHER), SequentialCPM(); checkpoint = ck)
+    @test_throws ArgumentError init(p60c2_stable_problem("Rodas5P()"), SequentialCPM(); checkpoint = ck)
+end
+
+"""Run the pair model with `isoutofdomain = <body>` in a fresh, unperturbed `julia`
+process; it writes its fingerprint and a checkpoint after 2 MCS, and, given `other` (a
+checkpoint path), whether that checkpoint is `refused` (ArgumentError) or `loaded`."""
+function p60c2_session(dir, tag, body; other = nothing)
+    outfile = joinpath(dir, "session $tag.toml")
+    script = joinpath(dir, "session $tag.jl")
+    ckpath = joinpath(dir, "session $tag.jls")
+    write(script, """
+    using Potts, PottsModels, TOML
+    using OrdinaryDiffEqRosenbrock: Rodas5P
+    const p60c2_Adaptive = Potts.Adaptive
+    const p60c2_RK4 = Potts.RK4
+    """ * P60C2_DEFS * """
+    const P60C2_SESSION_CLOSURE = $body
+    prob = p60c2_problem(p60c2_Adaptive(Rodas5P(); isoutofdomain = P60C2_SESSION_CLOSURE))
+    r = Dict{String, Any}("fp" => repr(prob.f.fingerprint))
+    integ = init(prob, SequentialCPM())
+    step!(integ)
+    step!(integ)
+    save_checkpoint($(repr(ckpath)), checkpoint(integ))
+    r["ck"] = $(repr(ckpath))
+    other = $(repr(other))
+    if other !== nothing
+        r["other"] = try
+            init(prob, SequentialCPM(); checkpoint = load_checkpoint(other))
+            "loaded"
+        catch e
+            e isa ArgumentError ? "refused" : "error: " * first(sprint(showerror, e), 200)
+        end
+    end
+    open(io -> TOML.print(io, r), $(repr(outfile)), "w")
+    """)
+    run(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) $script`)
+    return TOML.parsefile(outfile)
+end
+
+@testset "P6.0c2 D: a closure's fingerprint is bound to its session" begin
+    mktempdir() do dir
+        a1 = p60c2_session(dir, "a1", "(u, p, t) -> false")
+        a2 = p60c2_session(dir, "a2", "(u, p, t) -> false"; other = a1["ck"])           # same script
+        b = p60c2_session(dir, "b", "(u, p, t) -> any(isnan, u)"; other = a1["ck"])     # another body
+        # the same source in two sessions: different fingerprints, the checkpoint refused
+        @test a1["fp"] != a2["fp"]
+        @test a2["other"] == "refused"
+        # another closure in another session never collides
+        @test a1["fp"] != b["fp"]
+        @test b["other"] == "refused"
+        # nor loads here
+        @test_throws ArgumentError init(p60c2_closure_problem(), SequentialCPM(); checkpoint = load_checkpoint(a1["ck"]))
+        # control: within its own session the checkpoint is a valid one of that problem
+        @test load_checkpoint(a1["ck"]).fingerprint == parse(UInt64, a1["fp"])
     end
 end
 
