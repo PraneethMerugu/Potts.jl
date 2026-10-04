@@ -78,7 +78,8 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
 end
 
 """A copy of state `u` whose integral arrays are recomputed from its sites (host); the
-columns of integrals read only by `@observed` (not stored, D-120) are created in `T`."""
+columns of integrals read only by `@observed` (not stored) are created in `T`."""
+# (observed-only integrals have no cell column, D-120)
 function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
     fresh(n) = hasproperty(u.cell, n) ? zero(getfield(u.cell, n)) : fill!(similar(u.cell.kind, T), zero(T))
     cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names))

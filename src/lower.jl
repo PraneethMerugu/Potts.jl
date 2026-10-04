@@ -236,18 +236,30 @@ end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
 
 """Distinct site expressions `x` of `integral(x)` in the model's statements, as stored
-(`_integral_operand`). Those read only by `@observed` have no cell column (D-120): they are
-included, last (so the stored integrals keep their indices), with `observed = true`."""
+(`_integral_operand`): those read by a statement other than `@observed`, and with
+`observed = true` also those read only by `@observed`, after them."""
+# Observed-only integrals have no cell column (D-120). The stored ones keep the order of the
+# full gather, so models without observed-only integrals keep their layout and fingerprint.
 _integrals(sys::PottsSystem; observed = false) = first(_integrals_folds(sys; observed))
 
 # The stored operands and, per operand, the slots of its hoisted folds (`_integral_hoist`).
 function _integrals_folds(sys::PottsSystem; observed = false)
     out = Any[]
     folds = Vector{Pair{Symbol, Any}}[]
-    xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
+    head = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
         (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in sys.link_rules)..., sys.sweep.temperature,
-        (x for b in sys.discrete for x in b.next)..., (observed ? (o.expr for o in sys.observed) : ())...]
+        (r.when for r in sys.link_rules)...]
+    tail = Any[sys.sweep.temperature, (x for b in sys.discrete for x in b.next)...]
+    xs = Any[head..., (o.expr for o in sys.observed)..., tail...]
+    # operands read by a statement other than `@observed`
+    stored = Any[]
+    for x in Any[head..., tail...]
+        _walk(x) do y
+            iscall(y) && operation(y) === cell_integral || return
+            a = first(_integral_hoist(arguments(y)[1]))
+            any(z -> isequal(z, a), stored) || push!(stored, a)
+        end
+    end
     for x in xs
         new = Any[]
         newfolds = Vector{Pair{Symbol, Any}}[]
@@ -260,7 +272,9 @@ function _integrals_folds(sys::PottsSystem; observed = false)
         append!(out, new[perm])
         append!(folds, newfolds[perm])
     end
-    return out, folds
+    keep = [any(z -> isequal(z, a), stored) for a in out]
+    order = observed ? [findall(keep); findall(!, keep)] : findall(keep)
+    return out[order], folds[order]
 end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""

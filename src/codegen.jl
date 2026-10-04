@@ -373,14 +373,16 @@ end
 # ---------------------------------------------------------------------------------------
 # Phases: synchronous updates, field equations, per-cell ODEs
 
-"""The phases recomputing every `integral(x)`: the hoisted folds (`_integral_hoist`), then
-one `CellReduce` per integral (the site expression `x` summed over each cell)."""
+"""The phases recomputing every stored `integral(x)` (or every one, with `observed = true`):
+the hoisted folds (`_integral_hoist`), then one `CellReduce` per integral (the site
+expression `x` summed over each cell)."""
 function _integral_phases(c::CompiledPottsSystem, T; observed = false)
     reduces, folds = _integral_reduces(c, T; observed)
     return _integral_refresh(T, c.gather_names, reduces, folds, eachindex(reduces))
 end
 
-# One `CellReduce` per stored integral operand, and the slots of each one's hoisted folds.
+# One `CellReduce` per stored integral operand (with `observed = true`, also those read only
+# by `@observed`, D-120), and the slots of each one's hoisted folds.
 function _integral_reduces(c::CompiledPottsSystem, T; observed = false)
     env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
     ints, folds = _integrals_folds(c.sys; observed)
@@ -427,15 +429,18 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     before = Any[]; after = Any[]
     # integrals: fresh at every MCS boundary (and at init). An update block reads them fresh
     # (D-042: a bare name in the block is its new value): the sweep moves σ, so each integral
-    # the after-MCS updates, equations or lifecycle read is refreshed after it, and an
+    # the after-MCS updates, equations, lifecycle or ticks read is refreshed after it, and an
     # integral whose operand an update writes is refreshed after that write, just before
-    # the stage that next reads it. Integrals whose operands no update writes cost exactly
-    # the one refresh at the start of the after-MCS phases.
+    # the stage that next reads it. Of the integrals whose operands no after-MCS update
+    # writes, only those read after the sweep cost the one refresh at the start of the
+    # after-MCS phases; those read only before the sweep (the before block, the temperature)
+    # are fresh from the previous boundary (D-120).
     s = c.sys
     ints = _integrals(s)
+    # (the uncompiled ticks: the compiled ones read their population folds through slots)
     post = Any[(eq.rhs for eq in s.equations)..., (d.when for d in s.divisions)...,
         (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))..., (r.when for r in s.link_rules)...,
-        (x for b in c.discrete for x in b.next)...]
+        (x for b in s.discrete for x in b.next)...]
     after_read = _integrals_read(Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., post...], ints)
     # an operand's reads include those of its hoisted folds
     operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]

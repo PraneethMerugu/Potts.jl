@@ -3672,3 +3672,62 @@ end
     # a field named `div` in a named tuple is not a definition
     @test Potts._div_definition(:(f(x) = (div = x ÷ 2,))) === nothing
 end
+
+# ---------------------------------------------------------------------------------------
+# P6.0t (D-120): the start-of-after refresh covers the integrals read after the sweep, and
+# a tick reads its population folds through slots (`__tickpop`), so an integral read only
+# inside a tick's fold must still count as read after the sweep. Twin: the same fold over
+# `volume` (w ≡ 1 makes `integral(w)` the volume); a stale integral lags one MCS.
+@named p60t_ctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+for (M, x) in ((:P60tTickIntegral, :(integral(w))), (:P60tTickVolume, :volume))
+    @eval @potts_model $M begin
+        @kinds medium A
+        @variables begin
+            w(site) = 1.0
+            u(site) = 0.0
+            sa(cell) = 0.0
+        end
+        @components cells(A) ctr = p60t_ctr
+        @equations ctr.dinc ~ sum($x^2 for c in cells)
+        @after_mcs sa ~ integral(u)
+        @lattice Lattice((16, 16))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 20.0)
+    end
+end
+
+@testset "P6.0t: an integral read only in a tick's population fold is fresh ($(nameof(typeof(alg))))" for
+        alg in (SequentialCPM(), CheckerboardCPM())
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
+    dn(M) = (sol = solve(PottsProblem(M(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12);
+             [Array(u.cell.ctr₊dn)[1] for u in sol.u])
+    a, b = dn(P60tTickIntegral), dn(P60tTickVolume)
+    @test a == b
+    @test length(unique(diff(b))) > 1                  # the volumes move: a lag would show
+end
+
+# Stored integrals keep the full gather's order (and the fingerprint) when no integral is
+# read only by `@observed`: here `@observed` is the first statement to read pb.
+@named p60t_rctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+@potts_model P60tOrder begin
+    @kinds medium A
+    @variables begin
+        pa(site) = 1.0
+        pb(site) = 1.0
+    end
+    @components cells(A) ctr = p60t_rctr
+    @equations ctr.dinc ~ integral(pa)
+    @observed o(cell) ~ integral(pa) + integral(pb)
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = integral(pb) / 9)
+end
+
+@testset "P6.0t: stored integrals keep their order without observed-only readers" begin
+    c = mtkcompile(P60tOrder(; name = :x))
+    @test [Potts.info(x).name for x in Potts._integrals(c.sys)] == [:pa, :pb]
+    @test isequal(Potts._integrals(c.sys; observed = true), Potts._integrals(c.sys))
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
+    prob = PottsProblem(P60tOrder(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 3); seed = 1)
+    @test prob.f.fingerprint == 0x38850600cfaa35ae                     # as on 1289afae
+end
