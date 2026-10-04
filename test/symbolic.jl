@@ -1437,6 +1437,22 @@ end
     @test integ.state.cell.py == [-0.25]
     @test_throws DimensionMismatch (integ[:px] = [1.0, 2.0])
     @test_throws Exception (integ[:volume] = [3])
+    # a built-in in a list setter is read-only, not unknown (D-116); nothing is set
+    for f in (() -> setu(integ, [:kind, :μ]), () -> setp(integ, [:μ, :volume]))
+        e = try
+            f(); nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError && occursin("read-only", sprint(showerror, e))
+    end
+    e = try
+        setu(integ, [:zz, :μ]); nothing
+    catch err
+        err
+    end
+    @test e isa ArgumentError && !occursin("read-only", sprint(showerror, e))   # control: unknown
+    @test integ.ps[:μ] == 800.0
     sol = solve!(integ)
     @test sol[:x][end][1] ≈ sol.u[end].cell.cx[1]                     # observed still derived
     @test sol[:px][end] == sol.u[end].cell.px

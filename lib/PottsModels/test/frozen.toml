@@ -226,3 +226,8 @@ decision = "D-114"
 path = "acceptance/p6_0an_remake_namedtuple.jl"
 sha256 = "eee0703a97d96d7ec2acd8691dafdb8206163e9053d4efec0a8a633fec30df06"
 decision = "D-115"
+
+[[file]]
+path = "acceptance/p6_0ap_setter_loose_ends.jl"
+sha256 = "85bb3e08904b1d2df905a0befdaddfe1a2a2e2f1b233bf6defbfd2b995cf3b75"
+decision = "D-116"

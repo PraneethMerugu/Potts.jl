@@ -543,7 +543,10 @@ end
 # its type and nothing recompiles.
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
-function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap)
+CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) = _set_parameter_map(info, prob.p, p)
+
+# parameter object `old` with the parameter map `p` applied as one change (D-112)
+function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
     p = _expand_vectors(info.csys.sys, p)
     names = Dict{Any, Info}()
     for x in info.csys.sys.parameters
@@ -558,9 +561,22 @@ function CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap
         i = names[key]
         new[i.name] = _param_value(info.T, v, i)
     end
-    out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(prob.p))))
-    return _finish_parameters(info, prob.p, out, Set(keys(new)))
+    out = PottsParameters(NamedTuple(k => get(new, k, v) for (k, v) in pairs(NamedTuple(old))))
+    return _finish_parameters(info, old, out, Set(keys(new)))
 end
+
+# `SII.remake_buffer(prob, prob.p, keys, vals)`: a new parameter object, `remake(prob; p =
+# Dict(keys .=> vals)).p` (the original untouched); `sys` is the model's problem, integrator,
+# function or description
+function SymbolicIndexingInterface.remake_buffer(sys, p::PottsParameters, idxs, vals)
+    length(idxs) == length(vals) ||
+        throw(DimensionMismatch("remake_buffer: $(length(idxs)) keys, $(length(vals)) values"))
+    return _set_parameter_map(_model_info(sys), p, Pair[k => v for (k, v) in zip(idxs, vals)])
+end
+_model_info(sys::PottsModelInfo) = sys
+_model_info(f::CorePotts.CPMFunction) = _model_info(f.sys)
+_model_info(x::Union{CorePotts.PottsProblem, CorePotts.PottsIntegrator}) = _model_info(x.f)
+_model_info(x) = throw(ArgumentError("remake_buffer: `$(nameof(typeof(x)))` does not describe a Potts model"))
 
 # `remake(prob; p = (λ = 3.0,))`: a NamedTuple is the map of its fields (D-115)
 CorePotts.remake_parameters(info::PottsModelInfo, prob, p::NamedTuple) =
@@ -620,6 +636,8 @@ end
 
 SymbolicIndexingInterface.setp(sys::PottsModelInfo, ps::Union{Tuple, AbstractVector}; run_hook = true) =
     CorePotts.parameter_setter(sys, ps, run_hook)
+SymbolicIndexingInterface.setsym(sys::PottsModelInfo, syms::Union{Tuple, AbstractVector}) =
+    CorePotts.symbol_setter(sys, syms)
 
 # `setp(integ, [x, y])`: every value set first, then one derivation for the whole change
 function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals, names)

@@ -62,6 +62,11 @@ using Statistics: mean, var
     im = init(pm, CheckerboardCPM(); backend)
     im[:px] = [0.25]; im.ps[:μ] = 0.0
     @test Array(im.state.cell.px) == Float32[0.25] && im.p.μ === 0.0f0 && im[:px] == Float32[0.25]
+    # a batched `setsym` (a state and a parameter, D-116) writes through too, and the run goes on
+    CorePotts.SymbolicIndexingInterface.setsym(im, [:μ, :px])(im, [2.0, [0.5]])
+    @test Array(im.state.cell.px) == Float32[0.5] && im.p.μ === 2.0f0
+    step!(im)
+    @test im.t == 1 && Array(im.state.cell.volume)[1] == count(==(1), Array(im.state.σ))
     # history rings: pushed and read on the device
     σl = zeros(Int32, 8, 8); σl[3:5, 3:5] .= 1
     ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
