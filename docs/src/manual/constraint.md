@@ -11,6 +11,10 @@ Metropolis test. Each line is a condition in the copy scope (the names of
 | `no_extinction` | no copy takes a cell's last site, so cells never disappear |
 | any condition | e.g. `kind[target] != wall` or `volume[old] > 5` |
 
+Conditions follow the rules of drives: `rand()` and `integral` are not allowed; keep an
+integral in a cell variable updated `@before_mcs` and read it as `s[new]`, `s[old]` (see
+[Drives](@ref manual-drive)).
+
 A soft version of a rule is a drive: `@drive copy => λ * (local_components > 1)` penalises
 fragmentation instead of forbidding it.
 
