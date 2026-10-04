@@ -1834,3 +1834,8 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds (round 2: Metal-safe float division, the substep bound, local `div` rejected), approved.
 - **Merge.** One conflict with P6.0am on the kind-table keyword line: both the hidden keyword local and the literal rewrite kept.
 - **Merge checks.** CorePotts, Potts, Potts on Metal, PottsModels (`-t 4`), MakiePotts and docs exit 0. No existing model's step code changes; gate not rerun.
+
+## 2026-10-03 — P6.0q closed: a fold reading `time` in a cell ODE runs on Metal (D-119)
+
+- **Finding.** The `InvalidIRError` the row reported came from the per-cell `rhs` closure that P6.0x/P6.0ag removed; on 4e81e1eb the P6.0n fold fixture and the time, mcs, both and two-fold variants under Euler, substepped Euler and RK4 run on Metal bitwise equal to the CPU Float32 run. No source change; the acceptance file is a regression guard wired into `test/gpu.jl`.
+- **Merge checks.** Potts, Potts on Metal and PottsModels (`-t 4`) exit 0.

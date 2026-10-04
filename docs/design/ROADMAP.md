@@ -216,7 +216,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0p** D-016 gap: the fingerprint ignores the discrete tick cadence (found by the P6.0k2 test author). The P6.0k fixture with `Clock(2.0)` fingerprints the same as with `ShiftIndex(t, 0)`, so a checkpoint loads into a problem with a different schedule. Hash the resolved cadence (every/offset of each `_Gated` phase, or the clock spec).
   - Accept: two problems that differ only in a clock's period or phase have different fingerprints, and a checkpoint of one fails to load into the other with an `ArgumentError`.
   - Accept: fingerprints of models without clocked components are unchanged.
-- [ ] **P6.0q** An unhoisted population fold that reads `time` inside a cell ODE fails to compile for Metal (`InvalidIRError`, `jl_new_opaque_closure_jlcall`), with or without the P6.0n fix. Found by the P6.0n test author. A fold that reads `mcs` is hoisted and runs on Metal.
+- [x] (merge, 2026-10-03; D-119; already fixed by D-103/D-104, regression guard added) **P6.0q** An unhoisted population fold that reads `time` inside a cell ODE fails to compile for Metal (`InvalidIRError`, `jl_new_opaque_closure_jlcall`), with or without the P6.0n fix. Found by the P6.0n test author. A fold that reads `mcs` is hoisted and runs on Metal.
   - Accept: the P6.0n fold fixture runs on Metal and matches the CPU in Float32.
 - [x] (merge, 2026-10-01; D-083, maintainer) **P6.0r** D-066 item 4 (from the P6.0l review).
   - `total_energy` sums cell and cluster terms over alive cells only, and the killing copy's ΔH removes the dying cell's edges; no edge credit (D-083).
