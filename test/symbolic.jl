@@ -3882,3 +3882,44 @@ end
     prob = PottsProblem(P60tOrder(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 3); seed = 1)
     @test prob.f.fingerprint == 0x38850600cfaa35ae                     # as on 1289afae
 end
+
+@potts_model OnCopyIndexInline begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @on_copy y[ifelse(count(owner[n] == 1 for n in Moore(3)(target)) > 3, new, old)] ~ y[new] + 1.0
+    @sweep Metropolis(; temperature = 2.0)
+end
+@potts_model OnCopyIndexNamed begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 12))
+    @relations far = Moore(3)
+    @energy cells => (volume - 9.0)^2
+    @on_copy y[ifelse(count(owner[n] == 1 for n in far(target)) > 3, new, old)] ~ y[new] + 1.0
+    @sweep Metropolis(; temperature = 2.0)
+end
+@potts_model OnCopyIndexPlain begin
+    @kinds medium A
+    @variables y(cell) = 0.0
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @on_copy y[new] ~ y[new] + 1.0
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+@testset "a gather in an on-copy update's index: numbered, in the footprint, same as named" begin
+    σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1; σ[7:9, 7:9] .= 2
+    op = Any[ownership => σ, kind => [:A, :A]]
+    run(mk) = (prob = PottsProblem(mk(; name = :g), op, (0, 6); seed = 7, capacity = 16);
+               (prob, solve(prob, SequentialCPM(); saveat = 1)))
+    (pi, si), (pn, sn) = run(OnCopyIndexInline), run(OnCopyIndexNamed)
+    @test [u.σ for u in si.u] == [u.σ for u in sn.u]
+    @test [u.cell.y for u in si.u] == [u.cell.y for u in sn.u]
+    @test sum(si.u[end].cell.y) > 0                       # the update ran
+    # the index's relation sets the read reach (Moore(3) → 3); the plain index stays at 1
+    @test mtkcompile(OnCopyIndexInline(; name = :g)).footprint.read == 3
+    @test mtkcompile(OnCopyIndexNamed(; name = :g)).footprint.read == 3
+    @test mtkcompile(OnCopyIndexPlain(; name = :g)).footprint.read == 1
+end
