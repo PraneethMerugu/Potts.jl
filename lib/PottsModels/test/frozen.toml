@@ -256,3 +256,8 @@ decision = "D-121"
 path = "acceptance/p6_0ar_neighbourhood_fingerprint.jl"
 sha256 = "837763ac68d2c77d89f5ebf5a926c6059d53b490419d2def6315ba83720642fb"
 decision = "D-122"
+
+[[file]]
+path = "acceptance/p6_0as_sweep_validation.jl"
+sha256 = "a68bfaaf16aa9598f4b35cf3706177ef6ce4adeda72a7a4b765d471d49afbf2e"
+decision = "D-123"
