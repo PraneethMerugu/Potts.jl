@@ -7,9 +7,35 @@
 | `Metropolis(; temperature = T)` | accept if ``\Delta H \le 0``, else with probability ``e^{-\Delta H/T}`` |
 | `Barker(; temperature = T)` | accept with probability ``1/(1 + e^{\Delta H/T})`` |
 | `temperature = Tk[kind]` | a temperature per kind (or any cell expression); the copy uses `combine` of the source and target cells' values, and the medium never contributes |
-| `combine = min` | how the two temperatures combine (default `min`) |
+| `combine = min` | how the two temperatures combine (default `min`); a named function or a callable struct, not an anonymous function (below) |
 | `offset = ε` | shift ``\Delta H`` to ``\Delta H - \varepsilon`` in either law: Metropolis accepts if ``\Delta H \le \varepsilon``, else with probability ``e^{-(\Delta H - \varepsilon)/T}``; Barker with probability ``1/(1 + e^{(\Delta H - \varepsilon)/T})``. Morpheus's yield `Y` is `offset = -Y` |
 | `mcs_duration = 0.5` | the time one MCS represents, for equations (default 1) |
+
+`@sweep` checks two of these when the model is built, and throws an `ArgumentError` otherwise:
+
+- `offset` must be finite. NaN and ±Inf are rejected.
+- `combine` must be a named function or an instance of a callable struct. An anonymous
+  function (`(a, b) -> (a + b) / 2`), a closure, or a function defined inside another
+  function is rejected: its compiler-generated name changes between Julia sessions, so a
+  checkpoint saved in one session would not load in the next. Define the function at the
+  top level, or use a callable struct to carry parameters:
+
+```julia
+amean(a, b) = (a + b) / 2                 # combine = amean
+
+struct Mix                                # combine = Mix(0.7)
+    w::Float64
+end
+(m::Mix)(a, b) = m.w * a + (1 - m.w) * b
+```
+
+A wrapper is checked through: `min ∘ max` is accepted, while `Base.Fix2((a, b) -> a, 1)` or a
+callable struct whose field holds an anonymous function is rejected. A named function is
+identified by its module path and name, not its body, so redefining it under the same name
+between saving and loading a checkpoint is not detected. Functions defined in a Pluto notebook
+or inside a module are identified by that module path too, so a Pluto workspace function's
+checkpoint does not reload in another notebook session, and the same function defined in a
+script and in a module fingerprints differently.
 
 One MCS is as many copy attempts as there are mobile lattice sites. A paper that counts
 `n` attempts per site as one step uses `n` of our MCS per paper step. At `T ≤ 0` ties are

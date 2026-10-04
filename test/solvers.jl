@@ -479,3 +479,41 @@ end
         @test PottsProblem(thin_model(dims, line2, nbhd), op, (0, 3); seed = 1).f.fingerprint != p.f.fingerprint
     end
 end
+
+# `@sweep` validation beyond the frozen P6.0as acceptance (D-123, review round 1): `combine`
+# is judged by the printed form that is hashed, so wrappers are checked through; non-Real
+# offsets get the same `offset` error as non-finite ones.
+struct SweepHolder{F}
+    f::F
+end
+(h::SweepHolder)(a, b) = h.f(a, b)
+struct SweepFnSub <: Function end
+(::SweepFnSub)(a, b) = min(a, b)
+struct SweepMix
+    w::Float64
+end
+(m::SweepMix)(a, b) = m.w * a + (1 - m.w) * b
+@testset "@sweep: combine judged by its printed form; offset must be a finite Real" begin
+    spec(; kw...) = Potts.sweep_spec(:metropolis; temperature = 1.0, kw...)
+    function argerr(f)
+        try
+            f()
+        catch e
+            return e
+        end
+        return nothing
+    end
+    anon = (a, b) -> a
+    for c in (anon, Base.Fix2(anon, 1), SweepHolder(anon), SweepHolder(SweepHolder(anon)))
+        e = argerr(() -> spec(combine = c))
+        @test e isa ArgumentError && occursin("combine", e.msg) && occursin("callable struct", e.msg)
+    end
+    for c in (min, max, min ∘ max, splat(min), SweepFnSub(), SweepMix(0.7), SweepHolder(min), Base.Fix2(min, 1))
+        @test spec(combine = c).combine === c
+    end
+    for o in (:a, "1", nothing, 1 + 1im, NaN, Inf32, -Inf)
+        e = argerr(() -> spec(offset = o))
+        @test e isa ArgumentError && occursin("offset", e.msg)
+    end
+    @test spec(offset = 2).offset === 2.0 && spec(offset = -1.5f0).offset === -1.5
+end
