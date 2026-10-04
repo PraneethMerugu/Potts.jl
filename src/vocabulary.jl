@@ -680,6 +680,27 @@ struct SweepSpec
     combine::Any              # combines the source and target cells' temperatures
     offset::Float64
     mcs_duration::Float64
+    # D-126: the `offset` and `mcs_duration` checks live here, so a hand-built `SweepSpec`
+    # passed to `PottsSystem(; sweep)` is checked as `@sweep` checks it
+    SweepSpec(law::Symbol, temperature, combine, offset, mcs_duration) =
+        new(law, temperature, combine, _sweep_offset(offset), _sweep_mcs_duration(mcs_duration))
+end
+# D-123: a finite real, also after conversion to Float64
+function _sweep_offset(offset)
+    o = offset isa Real ? (try Float64(offset) catch; NaN end) : NaN
+    isfinite(o) || throw(ArgumentError(
+        "`@sweep`: `offset` must be a finite real number, got $(repr(offset)); " *
+        "pass a finite number (`offset = 0` disables it)"))
+    return o
+end
+# D-126: a positive, finite real, also after conversion to Float64 (a `BigFloat` can overflow
+# to Inf or underflow to 0); a symbolic parameter does not convert and is rejected
+function _sweep_mcs_duration(mcs_duration)
+    md = mcs_duration isa Real ? (try Float64(mcs_duration) catch; NaN end) : NaN
+    (isfinite(md) && md > 0) || throw(ArgumentError(
+        "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration)); " *
+        "it is the time one MCS stands for (default 1.0)"))
+    return md
 end
 # D-123: `combine` is interpolated into the generated temperature code, whose printed form
 # the fingerprint hashes, so it must print the same in every session. Test exactly that
@@ -695,6 +716,13 @@ The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
 `@sweep Barker(; …)` (`law = :barker`).
 
 - `offset` must be finite; NaN and ±Inf are an `ArgumentError`.
+- `mcs_duration`, the time one MCS stands for, must be a positive, finite real number; NaN,
+  ±Inf, 0, negative values, a `BigFloat` beyond the `Float64` range, non-numbers and a
+  symbolic parameter are an `ArgumentError`, so the system does not build. It is stored as
+  `Float64(mcs_duration)`.
+
+A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`
+and `mcs_duration` the same way.
 - `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
   at the top level and passed as `combine = amean`), a composition of named functions
   (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous
@@ -712,16 +740,13 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
-    (offset isa Real && isfinite(Float64(offset))) || throw(ArgumentError(
-        "`@sweep`: `offset` must be a finite real number, got $(repr(offset)); " *
-        "pass a finite number (`offset = 0` disables it)"))
-    o = Float64(offset)
+    o = _sweep_offset(offset)
     _stable_callable(combine) || throw(ArgumentError(
         "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
         "function or closure, or a wrapper holding one, is named differently in every session, so " *
         "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
         "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
-    return SweepSpec(law, temperature, combine, o, Float64(mcs_duration))
+    return SweepSpec(law, temperature, combine, o, _sweep_mcs_duration(mcs_duration))
 end
 
 # ---------------------------------------------------------------------------------------

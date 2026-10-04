@@ -11,9 +11,13 @@
 | `offset = ε` | shift ``\Delta H`` to ``\Delta H - \varepsilon`` in either law: Metropolis accepts if ``\Delta H \le \varepsilon``, else with probability ``e^{-(\Delta H - \varepsilon)/T}``; Barker with probability ``1/(1 + e^{(\Delta H - \varepsilon)/T})``. Morpheus's yield `Y` is `offset = -Y` |
 | `mcs_duration = 0.5` | the time one MCS represents, for equations (default 1) |
 
-`@sweep` checks two of these when the model is built, and throws an `ArgumentError` otherwise:
+`@sweep` checks three of these when the model is built, and throws an `ArgumentError` otherwise:
 
 - `offset` must be finite. NaN and ±Inf are rejected.
+- `mcs_duration` must be a positive, finite number. NaN, ±Inf, 0 and negative values are
+  rejected, as are values that are not numbers and a symbolic parameter: the duration
+  belongs to the sweep, not to the model's parameters, so it cannot be changed with
+  `remake`. Build a new system to change it.
 - `combine` must be a named function or an instance of a callable struct. An anonymous
   function (`(a, b) -> (a + b) / 2`), a closure, or a function defined inside another
   function is rejected: its compiler-generated name changes between Julia sessions, so a
