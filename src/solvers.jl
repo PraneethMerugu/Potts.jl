@@ -91,6 +91,9 @@ _ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(1
 # unknowns `comp₊…`).
 function _solver_keys(k, integrated)
     k isa Symbol && return (k,)
+    # a PottsSystem is an AbstractSystem too (D-137), but not a component
+    k isa PottsSystem && throw(ArgumentError("`solvers`: the key is the Potts model `$(nameof(k))`; key by a variable " *
+                                             "(`x => solver`) or a component system"))
     if k isa ModelingToolkitBase.AbstractSystem
         prefix = string(nameof(k), "₊")
         ns = sort!([n for n in integrated if startswith(string(n), prefix)])

@@ -206,6 +206,65 @@ parameters(sys::PottsSystem) = getfield(sys, :parameters)
 """Scoped state variables of a model."""
 variables(sys::PottsSystem) = getfield(sys, :variables)
 
+"""
+    Potts.lattice(sys::PottsSystem)
+
+The lattice of a model (its `LatticeSpec`: `dims`, neighbourhood, boundary). `sys.lattice`
+is not a field read: `sys.<name>` is a declared symbol (D-137).
+"""
+lattice(sys::PottsSystem) = getfield(sys, :lattice)
+
+# --- MTK's AbstractSystem interface (D-137). `equations`, `unknowns`, `parameters`, `nameof`,
+# the metadata and `toggle_namespacing` are MTK's generic methods on the mirror fields; the
+# `observed` field holds Potts' `ObservedEq`s, so `observed`, `getvar` (which `sys.x` calls)
+# and `propertynames` read it here.
+
+ModelingToolkitBase.observed(sys::PottsSystem) = Equation[o.var ~ o.expr for o in getfield(sys, :observed)]
+
+# `sys.x`: a component system, a declared variable or parameter, or an observed quantity,
+# namespaced as MTK does (`renamespace`) unless `namespace = false` (a completed system)
+function ModelingToolkitBase.getvar(sys::PottsSystem, name::Symbol; namespace::Bool = getfield(sys, :namespacing))
+    for s in getfield(sys, :systems)
+        nameof(s) === name && return namespace ? ModelingToolkitBase.renamespace(sys, s) : s
+    end
+    for xs in (getfield(sys, :variables), getfield(sys, :parameters)), x in xs
+        _declared_name(x) === name && return namespace ? ModelingToolkitBase.renamespace(sys, x) : x
+    end
+    for o in getfield(sys, :observed)
+        _declared_name(o.var) === name && return namespace ? ModelingToolkitBase.renamespace(sys, o.var) : o.var
+    end
+    throw(ArgumentError("System $(nameof(sys)): variable $name does not exist (a PottsSystem's properties are its " *
+                        "parameters, variables, observed quantities and components; `Potts.lattice(sys)` is its lattice)"))
+end
+_declared_name(x) = (i = info(x); i === nothing ? nothing : i.name)
+
+function Base.propertynames(sys::PottsSystem; private::Bool = false)
+    private && return fieldnames(PottsSystem)
+    names = Symbol[nameof(s) for s in getfield(sys, :systems)]
+    for x in Iterators.flatten((getfield(sys, :variables), getfield(sys, :parameters), (o.var for o in getfield(sys, :observed))))
+        n = _declared_name(x)
+        n === nothing || push!(names, n)
+    end
+    return names
+end
+
+"""
+    complete(sys::PottsSystem)
+
+`sys` marked complete (MTK's `complete`): `sys.x` returns the declared symbol, not the
+namespaced one. The generated code and the fingerprint are unchanged; MTK's keywords are
+accepted and ignored (a Potts model is compiled by `mtkcompile`).
+"""
+ModelingToolkitBase.complete(sys::PottsSystem; kw...) = _with_flags(sys; complete = true, namespacing = false)
+
+# `sys` with some of its MTK flags (`complete`, `namespacing`) replaced; the checks ran already
+function _with_flags(sys::PottsSystem; kw...)
+    vals = Any[get(kw, f, getfield(sys, f)) for f in fieldnames(PottsSystem)]
+    return PottsSystem(vals...; checks = false)
+end
+
+Base.show(io::IO, sys::PottsSystem) = print(io, "PottsSystem ", nameof(sys))
+
 function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     println(io, "PottsSystem ", getfield(sys, :name), " on ", join(getfield(sys, :lattice).dims, "×"), " (", ndims(sys), "D)")
     println(io, "  kinds: ", join(getfield(sys, :kinds), ", "))
