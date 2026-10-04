@@ -680,10 +680,13 @@ struct SweepSpec
     combine::Any              # combines the source and target cells' temperatures
     offset::Float64
     mcs_duration::Float64
-    # D-126: the `offset` and `mcs_duration` checks live here, so a hand-built `SweepSpec`
-    # passed to `PottsSystem(; sweep)` is checked as `@sweep` checks it
-    SweepSpec(law::Symbol, temperature, combine, offset, mcs_duration) =
-        new(law, temperature, combine, _sweep_offset(offset), _sweep_mcs_duration(mcs_duration))
+    # D-126: the `offset`, `combine` and `mcs_duration` checks live here, in that order, so a
+    # hand-built `SweepSpec` passed to `PottsSystem(; sweep)` is checked as `@sweep` checks it
+    function SweepSpec(law::Symbol, temperature, combine, offset, mcs_duration)
+        o = _sweep_offset(offset)
+        _sweep_combine(combine)
+        return new(law, temperature, combine, o, _sweep_mcs_duration(mcs_duration))
+    end
 end
 # D-123: a finite real, also after conversion to Float64
 function _sweep_offset(offset)
@@ -709,6 +712,11 @@ end
 # fields) carries a session counter. Module paths such as Pluto's `var"workspace#3"` pass:
 # stable within a session, the user's contract across sessions.
 _stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
+_sweep_combine(combine) = _stable_callable(combine) || throw(ArgumentError(
+    "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+    "function or closure, or a wrapper holding one, is named differently in every session, so " *
+    "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+    "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
 """
     sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
 
@@ -721,8 +729,8 @@ The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
   symbolic parameter are an `ArgumentError`, so the system does not build. It is stored as
   `Float64(mcs_duration)`.
 
-A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`
-and `mcs_duration` the same way.
+A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`,
+`combine` and `mcs_duration` the same way.
 - `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
   at the top level and passed as `combine = amean`), a composition of named functions
   (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous
@@ -740,13 +748,8 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
-    o = _sweep_offset(offset)
-    _stable_callable(combine) || throw(ArgumentError(
-        "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
-        "function or closure, or a wrapper holding one, is named differently in every session, so " *
-        "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
-        "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
-    return SweepSpec(law, temperature, combine, o, _sweep_mcs_duration(mcs_duration))
+    # `offset`, `combine` and `mcs_duration` are checked by the constructor, in that order
+    return SweepSpec(law, temperature, combine, offset, mcs_duration)
 end
 
 # ---------------------------------------------------------------------------------------
