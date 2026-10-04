@@ -1723,7 +1723,7 @@ end
     for (t, u) in zip(sol.t, sol.u)
         @test sol[:cmass][t + 1] ≈ brute(u, u.site.w)                 # observed: the saved state itself
         @test sol[:occ][t + 1] == u.cell.volume                        # after division too
-        fresh = Potts._fresh_integrals(u, p.p, p.f.sys.ctx, t, Potts._integral_phases(p.f.sys.csys, Float64), names)
+        fresh = Potts._fresh_integrals(Float64, u, p.p, p.f.sys.ctx, t, Potts._integral_phases(p.f.sys.csys, Float64), names)
         @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)   # stored = recomputed at the boundary
     end
     @test sol.stats.lifecycle.divisions >= 1
@@ -1832,7 +1832,9 @@ end
     ph = Potts._phases(c, Float64, Dict{Any, Any}(), Potts._resolve_solvers(c))
     reduces(t) = count(x -> x isa CorePotts.CellReduce, t)
     @test reduces(ph.before_mcs) == 0                  # the boundary refresh serves `sb`
-    @test reduces(ph.after_mcs) == 4                   # Pre(w), Pre(v), Pre(x) at the start; w after its writer
+    # Pre(w), Pre(v) at the start (read by the after block); w after its writer. Pre(x) is
+    # read only by the before block: fresh from the previous boundary (D-120)
+    @test reduces(ph.after_mcs) == 3
     i1 = findfirst(x -> x isa CorePotts.CellReduce, ph.after_mcs)
     @test i1 < findfirst(x -> x isa CorePotts.CopyPhase, ph.after_mcs)  # refreshed before the snapshot copy
     for alg in (SequentialCPM(), CheckerboardCPM())
@@ -3492,26 +3494,28 @@ end
         (M, dims) in ((P60aiSquare, (16, 16)), (P60aiHex, (16, 16)), (P60ai3D, (8, 8, 8))),
         alg in (SequentialCPM(), CheckerboardCPM())
     c = mtkcompile(M(; name = :x))
-    xs = Potts._integrals(c.sys)
+    xs = Potts._integrals(c.sys; observed = true)
     hoisted = [!Potts._has_op(x, Potts.population) for x in xs]
     @test count(hoisted) == 4                    # s, bo, q and the observed o; not n, r
     @test count(!, hoisted) == 2
+    @test length(Potts._integrals(c.sys)) == 5    # o is read only by `@observed`: not stored (D-120)
     σ0, w0 = p60ai_init(dims)
     prob = PottsProblem(M(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
     @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
+    @test !hasproperty(prob.u0.cell, Potts._integral_name(last(xs)))   # (o has its fold slot, no column)
     live(u) = findall(>(0), Array(u.cell.volume))
     per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
     obs(u) = (V = Array(u.cell.volume); L = live(u); mv = sum(V[L]) / length(L); per(u, i -> w0[i] * mv))
     @test prob[:o] ≈ obs(prob.u0)                                         # at init
     sol = solve(prob, alg; saveat = 0:4)
-    names = [Potts._integral_name(x) for x in xs]
+    names = [Potts._integral_name(x) for x in Potts._integrals(c.sys)]
     divided = false
     for t in 1:4
         u, prev = sol.u[t + 1], sol.u[t]
         V, v = Array(u.cell.volume), Array(u.cell.v)
         @test sol[:o][t + 1] ≈ obs(u)                                     # observed, after divisions too
         # stored = recomputed from the saved state (the MCS boundary refresh, after the lifecycle)
-        fresh = Potts._fresh_integrals(u, sol.prob.p, sol.prob.f.sys.ctx, t,
+        fresh = Potts._fresh_integrals(Float64, u, sol.prob.p, sol.prob.f.sys.ctx, t,
                                        Potts._integral_phases(sol.prob.f.sys.csys, Float64), names)
         @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)
         if length(live(u)) != length(live(prev))                          # a division after the block

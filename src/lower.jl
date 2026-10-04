@@ -236,17 +236,18 @@ end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
 
 """Distinct site expressions `x` of `integral(x)` in the model's statements, as stored
-(`_integral_operand`)."""
-_integrals(sys::PottsSystem) = first(_integrals_folds(sys))
+(`_integral_operand`). Those read only by `@observed` have no cell column (D-120): they are
+included, last (so the stored integrals keep their indices), with `observed = true`."""
+_integrals(sys::PottsSystem; observed = false) = first(_integrals_folds(sys; observed))
 
 # The stored operands and, per operand, the slots of its hoisted folds (`_integral_hoist`).
-function _integrals_folds(sys::PottsSystem)
+function _integrals_folds(sys::PottsSystem; observed = false)
     out = Any[]
     folds = Vector{Pair{Symbol, Any}}[]
     xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
         (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
-        (x for b in sys.discrete for x in b.next)...]
+        (r.when for r in sys.link_rules)..., sys.sweep.temperature,
+        (x for b in sys.discrete for x in b.next)..., (observed ? (o.expr for o in sys.observed) : ())...]
     for x in xs
         new = Any[]
         newfolds = Vector{Pair{Symbol, Any}}[]

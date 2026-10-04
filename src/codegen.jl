@@ -375,15 +375,15 @@ end
 
 """The phases recomputing every `integral(x)`: the hoisted folds (`_integral_hoist`), then
 one `CellReduce` per integral (the site expression `x` summed over each cell)."""
-function _integral_phases(c::CompiledPottsSystem, T)
-    reduces, folds = _integral_reduces(c, T)
+function _integral_phases(c::CompiledPottsSystem, T; observed = false)
+    reduces, folds = _integral_reduces(c, T; observed)
     return _integral_refresh(T, c.gather_names, reduces, folds, eachindex(reduces))
 end
 
 # One `CellReduce` per stored integral operand, and the slots of each one's hoisted folds.
-function _integral_reduces(c::CompiledPottsSystem, T)
+function _integral_reduces(c::CompiledPottsSystem, T; observed = false)
     env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
-    ints, folds = _integrals_folds(c.sys)
+    ints, folds = _integrals_folds(c.sys; observed)
     return Any[CorePotts.CellReduce((:cell, _integral_name(x)), _rgf(:((st, p, ctx, key, mcs, i) -> $(lower(x, env)))))
                for x in ints], folds
 end
@@ -442,7 +442,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     written(phase) = Set{Symbol}(_update_name(u) for u in s.updates if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
     after_dirty = dirtied(:after_mcs)
-    isempty(after_read) || append!(after, refresh([j for j in eachindex(ints) if !(j in after_dirty)]))
+    isempty(after_read) || append!(after, refresh([j for j in eachindex(ints) if !(j in after_dirty) && j in after_read]))
     # update blocks (D-042): snapshots of previous values, then the ordered stages, each
     # after its hoisted population folds
     for phase in (:before_mcs, :after_mcs)
