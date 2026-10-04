@@ -176,6 +176,9 @@ end
     @named lonely = System([Potts.D(y_c) ~ -y_c], _tc)
     e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [lonely => RK4()]))
     @test e isa ArgumentError && occursin("`lonely`", sprint(showerror, e)) && length(sprint(showerror, e)) < 300
+    # a PottsSystem is an AbstractSystem too (D-137), never a component key
+    e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [cs => RK4()]))
+    @test e isa ArgumentError && occursin("Potts model", sprint(showerror, e))
     # unknown keywords: `@sweep`, `remake`; `f` together with a solver keyword
     @test solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, substeps = 2)) isa ArgumentError
     @test occursin("PottsProblem", sprint(showerror, solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0,
@@ -558,7 +561,7 @@ end
     end
     for c in (max, SweepMix(0.3), Base.Fix2(min, 1))
         @test Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0).combine === c
-        @test sys(Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)).sweep.combine === c
+        @test getfield(sys(Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)), :sweep).combine === c
     end
     # the order of `@sweep`'s checks: offset, then combine, then mcs_duration
     @test isoff(argerr(() -> spec(offset = NaN, combine = anon, mcs_duration = 0)))
@@ -571,7 +574,7 @@ end
     end
     # control: a valid hand-built spec builds, compiles, and fingerprints like the `@sweep` one
     good = sys(hand(0, 0.5))
-    @test good.sweep.mcs_duration === 0.5
+    @test getfield(good, :sweep).mcs_duration === 0.5
     fp(sw) = (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
               PottsProblem(mtkcompile(sys(sw)), [ownership => σ, kind => [:A]], (0, 2)).f.fingerprint)
     @test fp(hand(0, 0.5)) == fp(spec(mcs_duration = 0.5))

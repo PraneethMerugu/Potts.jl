@@ -91,14 +91,14 @@ end
         @extend endothelial = base = KCBase()
     end))), "kind class `sprout`", "`endothelial`")
     s = KCExt(; name = :m)
-    @test [(g.name, g.kinds) for g in s.kind_classes] == [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
+    @test [(g.name, g.kinds) for g in getfield(s, :kind_classes)] == [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
     @potts_model KCExtOnlyClass begin
         @extend tip, stalk = base = KCBase()
         @kinds pair = (tip, stalk)           # no kind lines: the kinds are the base's
     end
     s = KCExtOnlyClass(; name = :m)
-    @test s.kinds == [:medium, :fluid, :tip, :stalk]
-    @test [(g.name, g.kinds) for g in s.kind_classes] == [(:endothelial, [2, 3]), (:pair, [2, 3])]
+    @test getfield(s, :kinds) == [:medium, :fluid, :tip, :stalk]
+    @test [(g.name, g.kinds) for g in getfield(s, :kind_classes)] == [(:endothelial, [2, 3]), (:pair, [2, 3])]
 end
 
 @testset "kind classes: an @extend restatement keeps the member order" begin

@@ -281,7 +281,7 @@ end
 
 @testset "layouts: Frame on a lattice domain (P6.1a2)" begin
     sys = DiskFrameProbe(; name = :disk)
-    mask = sys.lattice.domain
+    mask = Potts.lattice(sys).domain
     for w in (1, 2)
         σ = _op(layout(Frame(:wall; width = w), sys), ownership)
         ring = σ .== 1

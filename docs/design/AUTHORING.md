@@ -47,7 +47,8 @@ plot(sol, 100)                      # MakiePotts recipe
 ```
 
 `@potts_model` mirrors `@mtkmodel`: a block of sections that produce a
-`PottsSystem <: ModelingToolkitBase.AbstractSystem` (planned, P6.0o; today a plain struct). Everything the macro does is also
+`PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137: MTK's `equations`, `unknowns`,
+`parameters`, `observed`, metadata and `sys.x` namespacing work on it). Everything the macro does is also
 available as plain constructors (`PottsSystem(energies, equations, …; name)`); the macro
 is sugar.
 

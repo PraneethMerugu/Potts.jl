@@ -108,7 +108,7 @@ end
         @test all(s -> count(==(:leader), akeeb_state(; seed = s, seeding = :retry)[2].second) == 390, 1:5)
         @test_throws ArgumentError akeeb_state(; seeding = :other)
     end
-    @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
+    @test Potts.lattice(GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0)).dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end
 

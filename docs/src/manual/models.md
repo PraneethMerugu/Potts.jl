@@ -60,7 +60,7 @@ arguments change structural parameters and parameter defaults:
 
 ```@example models
 big = Blobs(; name = :big, n = 80, V₀ = 50.0)
-big.lattice.dims
+Potts.lattice(big).dims
 ```
 
 **Structural parameters** are fixed when the model is built: they size the lattice or
@@ -89,7 +89,7 @@ parameter can switch statements on or off:
     @sweep Metropolis(; temperature = 8.0)
 end
 
-length(MaybeConnected(; name = :a).constraints), length(MaybeConnected(; name = :b, connected = true).constraints)
+MaybeConnected(; name = :b, connected = true)   # `connected = false` has no constraint line
 ```
 
 Declaring sections (`@structural_parameters`, `@kinds`, `@parameters`, `@variables`,
