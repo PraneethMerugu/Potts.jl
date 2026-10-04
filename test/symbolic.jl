@@ -1610,7 +1610,7 @@ end
     @test sol[:occupied][end] == sol.u[end].cell.volume                              # integral(1) == volume
     uc = solve(p, CheckerboardCPM()).u[end]
     @test uc.cell.mass ≈ [sum(w0[uc.σ .== k]) for k in 1:2]
-    for body in (:(@energy cells => integral(w)), :(@drive copy => integral(w)))
+    for (body, msg) in ((:(@energy cells => integral(w)), "energies"), (:(@drive copy => integral(w)), "@before_mcs"))
         m = eval(:(@potts_model _BadIntegral begin
             @kinds medium A
             @variables w(site) = 0.0
@@ -1618,7 +1618,9 @@ end
             $(body)
             @sweep Metropolis(; temperature = 1.0)
         end))
-        @test_throws ArgumentError mtkcompile(Base.invokelatest(m; name = :b))
+        err = try mtkcompile(Base.invokelatest(m; name = :b)); nothing catch e; e end
+        @test err isa ArgumentError && occursin("integral", sprint(showerror, err)) &&
+              occursin(msg, sprint(showerror, err))
     end
 end
 

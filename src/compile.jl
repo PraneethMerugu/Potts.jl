@@ -614,11 +614,14 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             d isa EdgeDomain ? lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn)) : nothing
         end
     end
+    # The integral check runs before lowering, which would otherwise fail on a bare
+    # `integral` with the generic "is per cell" message (D-125).
     for d in sys.drives
-        _located(() -> lower(d.expr, _proposal_env(T, rn)), sys, d)
+        _located(() -> (_check_copy_integral(d.expr, "drives"); lower(d.expr, _proposal_env(T, rn))), sys, d)
     end
     for c in sys.constraints
-        c.kind === :expr && _located(() -> lower(c.expr, _proposal_env(T, rn)), sys, c)
+        c.kind === :expr &&
+            _located(() -> (_check_copy_integral(c.expr, "constraints"); lower(c.expr, _proposal_env(T, rn))), sys, c)
     end
     for u in sys.updates
         _located(sys, u) do
@@ -697,6 +700,16 @@ function _check_integral_pre_outside(x)
         "`integral(Pre(x))` is only available in update blocks, where it folds the values before the " *
         "block; elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
         "the block (`s ~ integral(Pre(x))`), or write `integral(x)`"))
+    return nothing
+end
+
+# Drives and expression constraints are evaluated at every copy attempt, where σ changes
+# with each accepted copy, while an integral is refreshed only between sweeps (D-125).
+function _check_copy_integral(x, what)
+    _has_op(x, cell_integral) && throw(ArgumentError(
+        "`integral` is not available in $what: they are evaluated at every copy attempt, while an " *
+        "integral is refreshed only between sweeps. Keep it in a cell variable updated @before_mcs " *
+        "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"))
     return nothing
 end
 

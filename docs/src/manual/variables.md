@@ -81,7 +81,7 @@ These names are always available where they make sense:
 | `kind`, `id`, `generation` | kind, number and generation of the cell | cell |
 | `major_length` | length of the cell's long axis | cell, energies |
 | `centroid(k)` | coordinate `k` of the centroid | cell (not energies) |
-| `integral(x)` | sum of the site expression `x` over the cell's sites | cell (not energies) |
+| `integral(x)` | sum of the site expression `x` over the cell's sites | cell (not energies, drives or constraints) |
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
 | `kind′`, `owner′`, `weight` | the other side of a contact pair, the relation weight | contacts |
 | `source`, `target`, `new`, `old` | the sites and cells of a copy | drives, constraints, on-copy |
