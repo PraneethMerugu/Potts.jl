@@ -82,16 +82,20 @@ using Statistics: mean, var
     # integral(x) with site-independent folds: computed once into model slots on the device
     σf, wf = p60ai_init((16, 16))
     wf = Float32.(wf)
-    uf = solve(PottsProblem(P60aiRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
-            T = Float32, seed = 5), CheckerboardCPM(); backend).u[end]
+    solf = solve(PottsProblem(P60aiRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
+            T = Float32, seed = 5), CheckerboardCPM(); backend)
+    uf = solf.u[end]
     σh, Vf = Array(uf.σ), Array(uf.cell.volume)
     perf(f) = [sum((f(i) for i in findall(==(k), σh)); init = 0.0) for k in eachindex(Vf)]
     vf = sum(Array(uf.cell.v)[Vf .> 0])
     @test vf == 6
     @test Array(uf.cell.s2) ≈ perf(i -> wf[i] * vf) rtol = 1e-5                       # fresh in MCS 3
     mvf = sum(Vf[Vf .> 0]) / count(>(0), Vf)
-    namesf = [Potts._integral_name(x) for x in Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys)]
-    @test count(n -> Array(getfield(uf.cell, n)) ≈ perf(i -> wf[i] * mvf), namesf) == 1   # at the MCS boundary
+    # the observed-only integral has no column (D-120): computed from the saved state, its
+    # hoisted fold included
+    xo = last(Potts._integrals(mtkcompile(P60aiRefresh(; name = :x)).sys; observed = true))
+    @test !hasproperty(uf.cell, Potts._integral_name(xo))
+    @test Array(solf[:o][end]) ≈ perf(i -> wf[i] * mvf)                               # at the MCS boundary
     # model-scope ODEs and a model component (single-item kernel)
     σs2 = zeros(Int32, 20, 20); σs2[2:4, 2:4] .= 1; σs2[10:12, 10:12] .= 2; σs2[15:17, 3:5] .= 3
     us = solve(PottsProblem(Systemic(; name = :s), [ownership => σs2, kind => [1, 1, 1]], (0, 10); T = Float32,

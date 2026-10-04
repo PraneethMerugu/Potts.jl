@@ -248,6 +248,11 @@ sha256 = "f90bf2e9cebb0b556ef803f099ef2a24a972ae02ba88e3db2a97e4616651ae05"
 decision = "D-119"
 
 [[file]]
+path = "acceptance/p6_0t_integral_refresh.jl"
+sha256 = "b6fe87d38f0a5ae673ba2b8e4e39766119f20f3b7d660903c3d899d529330323"
+decision = "D-120"
+
+[[file]]
 path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
 sha256 = "723e3f9e47e51a92266d4a865145c052dea08195c7718d3da6926ef02ed7c9fe"
 decision = "D-121"

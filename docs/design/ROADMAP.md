@@ -227,7 +227,7 @@ Every item's acceptance also includes the standing checks:
   - `benchmark/ab.jl` takes `tools/exclusive.sh` per process and re-takes it at once, so a waiter polling every 20 s starved for the whole A/B (a P6.0n Metal suite waited about 40 minutes).
   - Fix: `ab.jl` holds one lock for all its rounds (its per-run calls skip the lock when the holder is the parent), or the lock becomes a ticket queue.
   - Accept: a waiter queued before an A/B starts runs before the A/B's second round.
-- [ ] **P6.0t** Integral refresh waste (from the P6.0m3 review; low priority).
+- [x] (merge, 2026-10-04; D-120) **P6.0t** Integral refresh waste (from the P6.0m3 review; low priority).
   - `src/codegen.jl` refreshes every integral that is not dirty after the sweep at the start of the after block once any after reader exists, including integrals read only by the before block or the temperature (fresh from `end_mcs`). `end_mcs` also refreshes observed-only integrals, which observed queries recompute anyway.
   - Fix: filter the start-of-after refresh to integrals read after the sweep; give observed-only integrals no slot or refresh.
   - Accept: probe `PWaste` (`/tmp/p60m3/rv1/`) emits 1 `CellReduce` at the start of the after block and none for the observed integral; fingerprints of models without such integrals unchanged.

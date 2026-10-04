@@ -67,18 +67,22 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
         end
         hctx = info.ctx
         if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
-            ph = _integral_phases(c, T)
-            names = [_integral_name(x) for x in _integrals(c.sys)]
-            (u, p, t) -> f(_fresh_integrals(u, p, hctx, t, ph, names), p, hctx, t)
+            # observed-only integrals (D-120) have no stored column: computed here, with the rest
+            ph = _integral_phases(c, T; observed = true)
+            names = [_integral_name(x) for x in _integrals(c.sys; observed = true)]
+            (u, p, t) -> f(_fresh_integrals(T, u, p, hctx, t, ph, names), p, hctx, t)
         else
             (u, p, t) -> f(u, p, hctx, t)
         end
     end
 end
 
-"""A copy of state `u` whose integral arrays are recomputed from its sites (host)."""
-function _fresh_integrals(u, p, ctx, t, phases, names)
-    cell = merge(u.cell, NamedTuple(n => zero(getfield(u.cell, n)) for n in names))
+"""A copy of state `u` whose integral arrays are recomputed from its sites (host); the
+columns of integrals read only by `@observed` (not stored) are created in `T`."""
+# (observed-only integrals have no cell column, D-120)
+function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
+    fresh(n) = hasproperty(u.cell, n) ? zero(getfield(u.cell, n)) : fill!(similar(u.cell.kind, T), zero(T))
+    cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names))
     # the integrals' hoisted folds write their model slots: copies, so `u` is left unchanged
     model = merge(u.model, NamedTuple(n => copy(getfield(u.model, n)) for n in propertynames(u.model)
                                       if startswith(String(n), "__ifold_")))

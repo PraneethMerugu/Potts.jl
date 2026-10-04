@@ -1723,7 +1723,7 @@ end
     for (t, u) in zip(sol.t, sol.u)
         @test sol[:cmass][t + 1] ≈ brute(u, u.site.w)                 # observed: the saved state itself
         @test sol[:occ][t + 1] == u.cell.volume                        # after division too
-        fresh = Potts._fresh_integrals(u, p.p, p.f.sys.ctx, t, Potts._integral_phases(p.f.sys.csys, Float64), names)
+        fresh = Potts._fresh_integrals(Float64, u, p.p, p.f.sys.ctx, t, Potts._integral_phases(p.f.sys.csys, Float64), names)
         @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)   # stored = recomputed at the boundary
     end
     @test sol.stats.lifecycle.divisions >= 1
@@ -1832,7 +1832,9 @@ end
     ph = Potts._phases(c, Float64, Dict{Any, Any}(), Potts._resolve_solvers(c))
     reduces(t) = count(x -> x isa CorePotts.CellReduce, t)
     @test reduces(ph.before_mcs) == 0                  # the boundary refresh serves `sb`
-    @test reduces(ph.after_mcs) == 4                   # Pre(w), Pre(v), Pre(x) at the start; w after its writer
+    # Pre(w), Pre(v) at the start (read by the after block); w after its writer. Pre(x) is
+    # read only by the before block: fresh from the previous boundary (D-120)
+    @test reduces(ph.after_mcs) == 3
     i1 = findfirst(x -> x isa CorePotts.CellReduce, ph.after_mcs)
     @test i1 < findfirst(x -> x isa CorePotts.CopyPhase, ph.after_mcs)  # refreshed before the snapshot copy
     for alg in (SequentialCPM(), CheckerboardCPM())
@@ -3492,26 +3494,28 @@ end
         (M, dims) in ((P60aiSquare, (16, 16)), (P60aiHex, (16, 16)), (P60ai3D, (8, 8, 8))),
         alg in (SequentialCPM(), CheckerboardCPM())
     c = mtkcompile(M(; name = :x))
-    xs = Potts._integrals(c.sys)
+    xs = Potts._integrals(c.sys; observed = true)
     hoisted = [!Potts._has_op(x, Potts.population) for x in xs]
     @test count(hoisted) == 4                    # s, bo, q and the observed o; not n, r
     @test count(!, hoisted) == 2
+    @test length(Potts._integrals(c.sys)) == 5    # o is read only by `@observed`: not stored (D-120)
     σ0, w0 = p60ai_init(dims)
     prob = PottsProblem(M(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
     @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
+    @test !hasproperty(prob.u0.cell, Potts._integral_name(last(xs)))   # (o has its fold slot, no column)
     live(u) = findall(>(0), Array(u.cell.volume))
     per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.σ))); init = 0.0) for k in eachindex(u.cell.volume)]
     obs(u) = (V = Array(u.cell.volume); L = live(u); mv = sum(V[L]) / length(L); per(u, i -> w0[i] * mv))
     @test prob[:o] ≈ obs(prob.u0)                                         # at init
     sol = solve(prob, alg; saveat = 0:4)
-    names = [Potts._integral_name(x) for x in xs]
+    names = [Potts._integral_name(x) for x in Potts._integrals(c.sys)]
     divided = false
     for t in 1:4
         u, prev = sol.u[t + 1], sol.u[t]
         V, v = Array(u.cell.volume), Array(u.cell.v)
         @test sol[:o][t + 1] ≈ obs(u)                                     # observed, after divisions too
         # stored = recomputed from the saved state (the MCS boundary refresh, after the lifecycle)
-        fresh = Potts._fresh_integrals(u, sol.prob.p, sol.prob.f.sys.ctx, t,
+        fresh = Potts._fresh_integrals(Float64, u, sol.prob.p, sol.prob.f.sys.ctx, t,
                                        Potts._integral_phases(sol.prob.f.sys.csys, Float64), names)
         @test all(n -> getfield(u.cell, n) ≈ getfield(fresh.cell, n), names)
         if length(live(u)) != length(live(prev))                          # a division after the block
@@ -3667,4 +3671,63 @@ end
     end
     # a field named `div` in a named tuple is not a definition
     @test Potts._div_definition(:(f(x) = (div = x ÷ 2,))) === nothing
+end
+
+# ---------------------------------------------------------------------------------------
+# P6.0t (D-120): the start-of-after refresh covers the integrals read after the sweep, and
+# a tick reads its population folds through slots (`__tickpop`), so an integral read only
+# inside a tick's fold must still count as read after the sweep. Twin: the same fold over
+# `volume` (w ≡ 1 makes `integral(w)` the volume); a stale integral lags one MCS.
+@named p60t_ctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+for (M, x) in ((:P60tTickIntegral, :(integral(w))), (:P60tTickVolume, :volume))
+    @eval @potts_model $M begin
+        @kinds medium A
+        @variables begin
+            w(site) = 1.0
+            u(site) = 0.0
+            sa(cell) = 0.0
+        end
+        @components cells(A) ctr = p60t_ctr
+        @equations ctr.dinc ~ sum($x^2 for c in cells)
+        @after_mcs sa ~ integral(u)
+        @lattice Lattice((16, 16))
+        @energy cells => (volume - 9.0)^2
+        @sweep Metropolis(; temperature = 20.0)
+    end
+end
+
+@testset "P6.0t: an integral read only in a tick's population fold is fresh ($(nameof(typeof(alg))))" for
+        alg in (SequentialCPM(), CheckerboardCPM())
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
+    dn(M) = (sol = solve(PottsProblem(M(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12);
+             [Array(u.cell.ctr₊dn)[1] for u in sol.u])
+    a, b = dn(P60tTickIntegral), dn(P60tTickVolume)
+    @test a == b
+    @test length(unique(diff(b))) > 1                  # the volumes move: a lag would show
+end
+
+# Stored integrals keep the full gather's order (and the fingerprint) when no integral is
+# read only by `@observed`: here `@observed` is the first statement to read pb.
+@named p60t_rctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+@potts_model P60tOrder begin
+    @kinds medium A
+    @variables begin
+        pa(site) = 1.0
+        pb(site) = 1.0
+    end
+    @components cells(A) ctr = p60t_rctr
+    @equations ctr.dinc ~ integral(pa)
+    @observed o(cell) ~ integral(pa) + integral(pb)
+    @lattice Lattice((16, 16))
+    @energy cells => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = integral(pb) / 9)
+end
+
+@testset "P6.0t: stored integrals keep their order without observed-only readers" begin
+    c = mtkcompile(P60tOrder(; name = :x))
+    @test [Potts.info(x).name for x in Potts._integrals(c.sys)] == [:pa, :pb]
+    @test isequal(Potts._integrals(c.sys; observed = true), Potts._integrals(c.sys))
+    σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
+    prob = PottsProblem(P60tOrder(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 3); seed = 1)
+    @test prob.f.fingerprint == 0x38850600cfaa35ae                     # as on 1289afae
 end

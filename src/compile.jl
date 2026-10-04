@@ -415,7 +415,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
             gather_names, update_pops)
     end
     # folds hoisted out of integral operands: model slots too, computed by the integrals' refresh
-    for fs in last(_integrals_folds(sys)), sl in fs
+    for fs in last(_integrals_folds(sys; observed = true)), sl in fs
         any(q -> q.first === sl.first, update_pops) || push!(update_pops, sl)
     end
     cell_ode_pops = Pair{Symbol, Any}[]
