@@ -1999,3 +1999,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds. Round 1 found the page stopping one MCS short of the paper's endpoint, the missing observables table, and the kinds check reading ids that own no site. In round 2 the coordinator fixed the plot axis nit.
 - **Merge checks.** These ran one at a time and all exited 0: `frozen.jl` (210), Potts, PottsModels (`-t 4`, 16 251 pass, 42 broken) and the docs build. No solver or device code changed, so Metal was not rerun.
 - **Gate.** Gate metal passed on the implementer's run. The baseline was not re-set. Measured in one process, alternating μ 30 and 24, the change costs ≈ 1%. The `ab.jl` reading of 1.24 was mostly a per-checkout artefact (P6.0bb).
+
+## 2026-10-05 — P6.15a merged: OpenVT monolayer benchmark track (D-147); full-run outputs rule (D-146)
+
+- **Spec.** Spec 15 v3 was written by the peer session "Potts.jl models and publications" and verified by the coordinator's spec verifier. The verifier re-derived the spring–dashpot reference to 5e-13, and found that `metrics.cpp` reproduces its own output byte for byte only with `-ffp-contract=off` (D11). It also corrected CC3D's J, the V4 shape target and the Artistoo replicate counts, and added item A3.
+- **Plan.** ROADMAP Step 3b, P6.15b–j. The P6.15b (calibration) and P6.15d (analysis port) test authors are running.
+- **D-146.** Full reproduction runs are offline, and their verdicts, per-save TSVs and provenance are committed under `reproductions/data/NN/`. Videos go to release assets.
+- **Merge checks.** Docs only: `frozen.jl` passes.

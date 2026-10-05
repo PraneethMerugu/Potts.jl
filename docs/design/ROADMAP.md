@@ -453,6 +453,43 @@ Every item's acceptance also includes the standing checks:
 
 - [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
 
+### Step 3b — OpenVT monolayer benchmark (parallel track; D-147, spec 15)
+
+Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
+- Follow the manuscript wherever possible.
+- Recreate every simulation figure and meet every submission requirement.
+- Include the 1D-chain mechanical calibration.
+- Publish all results as offline files in the docs.
+
+Full runs are offline (D-146).
+
+- [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
+  - Written by the peer session "Potts.jl models and publications".
+  - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
+- [ ] **P6.15b** F2 and Table S5 mechanical calibration (spec 15 §4.2, P1–P12; gap G10).
+  - The test author freezes V6–V8 and a P11 unit test: the 11-bead free-end spring–dashpot reference matches `relaxation_exact.csv` to 1e-6.
+  - Implement the fixture: strips on a 5-row periodic lattice (one `Tiling` per region plus `overlay`), the A* switch at t = 0, unwrapped centroids, the 90% crossing and the MSE.
+  - FULL run: 100 seeds × λ ∈ {1, 2, 3, 5}, for the 11- and 21-chains. It sets T_Potts, which every other row uses.
+- [ ] **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
+  - G1: per-cell free-surface fraction f_i over Moore(1), exact and incremental, as a general contact fold, not model-named.
+  - G2: a per-daughter normal draw of X, redrawn while ≤ 0, on the counter RNG, with a deterministic X ≡ 2 mode. Start it in parallel with P6.15b.
+  - G5: a disc start.
+  - G6: a domain guard.
+  - G11: stops at 1000 and 10⁴ cells and the O2 snapshot writer. Use the existing `DiscreteCallback` plus `terminate!` (G7).
+- [ ] **P6.15d** Analysis port (G8; can run in parallel with P6.15b):
+  - a concaveman port and a `metrics.cpp` port, with the inhibition fractions of M's Category 3 analysis (spec item A3);
+  - the O1–O6 writers.
+  - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
+- [ ] **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
+- [ ] **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
+- [ ] **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [ ] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
+- [ ] **P6.15i** Docs page "OpenVT monolayer benchmark":
+  - every figure in M's layout;
+  - a differences table, which is spec 15 §1.1 plus the deviations;
+  - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
+- [ ] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
+
 ### Step 4 — Foam
 
 - [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.

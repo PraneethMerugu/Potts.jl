@@ -2136,3 +2136,28 @@ session.
 - **Change.** The page uses `MARGIN = 60` (347² for 1000 cells, the generator's default and the V-PRE14/15 minimum). A new FULL row, the isolation guard, requires an all-medium row and column at every save of every replicate; it is run validity, not a paper target, and a failure voids the verdicts read after the first touching save. The boundary-conditions deviation row, the variant-run prose and the changelog say so. **No target, tolerance, n or run length changes**; V-PRE3 (b) stays as frozen (spec 09 §9.1, §9.4).
 - **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The next FULL run (≈ 2× the per-MCS cost) replaces it as the record for every row. The other rows read after ≈ 3000 in P6.1d (V-PRE1 @ 10⁴, V-PRE4 flatness, V-PRE5) moved by at most ≈ 0.004 and kept their verdicts.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` is edited under this entry; its `frozen.toml` decision becomes D-144. Reported in the phase report (AUTONOMY §7.5) as a pre-registered failure explained after the run.
+
+## D-146 Full reproduction runs are offline, and their outputs are committed (2026-10-05, maintainer)
+
+- **Rule (maintainer, verbatim):** "Full reproduction runs stay offline (run by hand on an idle machine, not in CI). After each one, commit the verdict table, the per-save time series (TSV) and a provenance file (commit, seeds, threads, wall time) to lib/PottsModels/reproductions/data/NN/, and put the video in a release asset or LFS linked from the docs page. Remember this for all reproductions."
+- **How it is applied.**
+  - The frozen page is not edited to export. The run wrapper appends a hidden export chunk through Literate's `preprocess`, which runs in the page's module after the last cell.
+  - The chunk writes `verdicts.tsv`, the per-save `timeseries.tsv`, any page-specific TSVs and `page_meta.toml` (replicates, seeds, saves, threads).
+  - After the run the wrapper writes `provenance.toml`: commit, page sha256, environment, Julia, threads, machine, start, finish and wall time.
+  - The first use is P6.1f (`PottsWorktrees/p6-1f-out/run.jl`).
+- **Video.** Git LFS is not installed. Videos go to a GitHub release asset linked from the docs page, and each first upload is confirmed with the maintainer.
+
+## D-147 The OpenVT monolayer benchmark is adopted as a parallel track (2026-10-05; coordinator, from the peer session "Potts.jl models and publications" at the maintainer's request)
+
+- **Goal (maintainer, relayed):**
+  - "produce offline derived figures for the monolayer project in line with this benchmark. we ultimately want to include Potts.jl in that lineup";
+  - "follow the manuscript whenever possible";
+  - "recreate every simulation specific figure, and required simulation submission requirement";
+  - "we should also include their initial benchmark of the Mechanical calibration on 1D cell chains";
+  - the results go in the docs as offline files ("public is fine").
+- **Spec.** `research/model-specs/15_openvt_monolayer.md` v3.
+  - Source precedence: M > the G schema > the G implementations.
+  - Conflicts C1–C17, the inventory F1–F8, T1, S1, S5 and A3, calibration P1–P12, targets V1–V8, gaps G1–G11 and author questions Q12–Q21.
+- **Verified in v3.** The spring–dashpot reference was re-derived: k/η = 18.28166472147, and all 51 CSV rows match to 5e-13. `metrics.cpp` reproduces the committed `metrics.csv` byte for byte only with `-ffp-contract=off` (defect D11), so the Julia port avoids fused multiply-adds in its geometry. V4 was rewritten from the pooled consortium data. G7 (stop on a condition) already exists.
+- **Plan.** ROADMAP Step 3b, P6.15b–j. Each item goes through the §7 loop. Pass bands are confirmed at each item's V-target audit before freezing. Consortium data stays outside the repo, read from `OPENVT_MONOLAYER_REPO`.
+- **Outward actions.** Release-asset uploads and the consortium submission (P6.15j) are confirmed with the maintainer first.
