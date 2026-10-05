@@ -331,3 +331,8 @@ decision = "D-139"
 path = "acceptance/p6_1a5_voronoi_shapes.jl"
 sha256 = "6a099588e48492ecde77141dd2f63ac1cf1bb20ad573ffc3c3903375a69e49eb"
 decision = "D-138"
+
+[[file]]
+path = "acceptance/p6_3c_eden_splits.jl"
+sha256 = "4b44d0efa2157ccd1054cd566293c35ca6dcff1222455aed133a90725321c56d"
+decision = "D-141"
