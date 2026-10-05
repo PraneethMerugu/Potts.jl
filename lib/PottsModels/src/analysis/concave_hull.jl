@@ -66,8 +66,10 @@ Two further caveats:
   `long double` is `double`; an x86 build of `metrics.cpp` with 80-bit `long double` may
   differ in the last bits.
 
-Points and hull edges are indexed by uniform grids, so a hull of ``10⁴`` points takes
-milliseconds.
+Points and hull edges are indexed by uniform grids: a hull of ``10⁴`` colony centroids
+takes milliseconds. Near-degenerate input whose orientation signs need exact rational
+arithmetic (many points exactly collinear at non-integer coordinates) is slower, up to
+seconds for ``10⁴`` points on one line.
 """
 function concave_hull(points; concavity::Real = 2.0, length_threshold::Real = 0.0)
     pts = _Point2[(Float64(p[1]), Float64(p[2])) for p in points]
@@ -94,10 +96,18 @@ function _orientation(a::_Point2, b::_Point2, c::_Point2)
     t2 = b[1] * (c[2] - a[2])
     t3 = c[1] * (a[2] - b[2])
     v = t1 + t2 + t3
-    bound = 8 * eps(Float64) * (abs(t1) + abs(t2) + abs(t3))
+    # absolute term: below ≈ 1e-150 the products are subnormal and the error is absolute
+    bound = 8 * eps(Float64) * (abs(t1) + abs(t2) + abs(t3)) + 4 * nextfloat(0.0)
     abs(v) > bound && return v < 0 ? -1 : 1
+    _small_integers(a, b, c) && return Int(sign(v))   # every operation above was exact
     return _orientation_exact(a, b, c)
 end
+
+# Integer coordinates below 2²⁵ in magnitude: differences < 2²⁶, products < 2⁵¹ and the
+# three-term sum < 2⁵³, all exact in Float64, so `v` itself is exact (lattice data).
+_small_int(x) = isinteger(x) & (abs(x) < 33554432.0)
+_small_integers(a, b, c) = _small_int(a[1]) & _small_int(a[2]) & _small_int(b[1]) & _small_int(b[2]) &
+    _small_int(c[1]) & _small_int(c[2])
 
 function _orientation_exact(a::_Point2, b::_Point2, c::_Point2)
     R(x) = Rational{BigInt}(x)
