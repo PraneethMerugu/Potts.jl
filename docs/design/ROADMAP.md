@@ -480,7 +480,7 @@ Full runs are offline (D-146).
   - G5: a disc start.
   - G6: a domain guard.
   - G11: stops at 1000 and 10⁴ cells and the O2 snapshot writer. Use the existing `DiscreteCallback` plus `terminate!` (G7).
-- [ ] **P6.15d** Analysis port (G8; can run in parallel with P6.15b):
+- [x] (merge, 2026-10-05; D-149) **P6.15d** Analysis port (G8; can run in parallel with P6.15b):
   - a concaveman port and a `metrics.cpp` port, with the inhibition fractions of M's Category 3 analysis (spec item A3);
   - the O1–O6 writers.
   - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.

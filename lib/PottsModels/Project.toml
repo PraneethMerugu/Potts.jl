@@ -6,6 +6,7 @@ version = "0.1.0-DEV"
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [sources]
@@ -14,5 +15,6 @@ Potts = {path = "../.."}
 [compat]
 DelimitedFiles = "1"
 Potts = "0.4"
+Printf = "1"
 Random = "1"
 julia = "1.12"

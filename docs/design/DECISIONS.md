@@ -2204,6 +2204,45 @@ session.
   - **Re-freeze under this entry.** `acceptance/p6_0v1_device_lifecycle.jl` (frozen under D-096) treats every exported uppercase function in PottsModels as a published model. It gains one builder, `:OpenVTChain`, on the 11-chain. The model has no lifecycle, so it enters only the set check. On CPU the file still passes and the Float32 build works. Every future exported model constructor needs the same one-line re-freeze; P6.15c's growth model is next.
   - **FULL tier.** It ran once on 4 threads in 14.5 s, and every V6–V8 row passes. T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5. At λ = 2 the MSE is 0.38× Table S5. For V8, w₂₁ at 1/5/10 T is 15.96 / 19.28 / 19.89, and the plateau ends at 0.173 T. The D-146 recorded run is separate.
 
+## D-149 P6.15d: the OpenVT analysis port is frozen (2026-10-05, P6.15d; coordinator, from the P6.15d test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/acceptance/p6_15d_openvt_analysis.jl` (freeze 000d505a).
+- **Surface.**
+  - `PottsModels.Analysis.concave_hull(points; concavity = 2.0, length_threshold = 0.0)` is a general primitive. It computes the Graham hull of `metrics.cpp`, then concaveman, and keeps concaveman's vertex order.
+  - The model-named composites are `openvt_metrics(path)` and `openvt_metrics(x, y, g)`, which return `(; N, r, A, C, w, g, C_rel, w_rel)`, plus `openvt_metrics_line`, `openvt_neighbor_histogram`, `openvt_inhibition_code(a, f; β, γ)` and `openvt_inhibition_fractions`.
+  - File handling is `write_openvt(dest, format, data)`, `read_openvt(path, format)` and `openvt_filename(format; …)`, for the formats `:O1`–`:O6` and `:O6_neighbors`.
+- **Headline acceptance.** The 25 Morpheus parameter-plane files reproduce the committed `metrics.csv` byte for byte.
+  - The reference is `metrics.cpp` built with `-ffp-contract=off`. Clang 17 and gcc 15 agree with each other, and default contraction differs on all 25 rows.
+  - The check runs only when `OPENVT_MONOLAYER_REPO` is set. No G data enter git.
+- **D11 guard (always runs).**
+  - Three integer-LCG point clouds must give the reference build's lines. The default-contraction build and a `muladd` port both fail them.
+  - A source scan bans `fma`, `muladd`, `@fastmath`, `@simd`, `@turbo` and `evalpoly` in `src/analysis/*.jl` and the port's files. This binds **all** future code in `src/analysis/`: speed-tuned analysis code lives elsewhere.
+- **Readings.**
+  - C9: type 1 is inhibited iff !(a ≥ β), and type 2 iff !(f ≥ γ).
+  - C8: g = (i == 0) when an O1 file has no `g` column.
+  - O4 has no pandas index column and uses the population SD.
+  - In O1–O5, floats round-trip exactly and NaN is written as `nan`.
+  - O6 metrics fields use `metrics.cpp`'s format, and `t` uses `run_metrics.sh`'s `%.15g`.
+  - The neighbour share is p = (100·count)/N, in that order.
+- **Evidence.** A brute-force scratch port passed every tier before freezing: 184/184 with the repo set.
+- **Coordinator rulings on the open questions.**
+  1. **Exports.** PottsModels exports the `openvt_*` names and `write_openvt`/`read_openvt`. `concave_hull` is exported from `Analysis`.
+  2. **Formats.** The symbol formats and the `:O6_neighbors` name stand.
+  3. **O4 and O6.** The O4 layout stands, and O4 and O6 get no `openvt_filename` names.
+  4. **Empty input.** `openvt_metrics` throws `ArgumentError` on empty input. This is unfrozen behaviour, and the implementer adds a test for it.
+  5. **Exact ties.** The docs state that byte identity is proven only for inputs without exact ties. On perfect lattices, libc++ and libstdc++ break ties differently.
+  6. **Platform.** The reference is arm64, where long double equals double. The port is Float64 everywhere, and the docs say so.
+- **Amendment (review round 1, coordinator).** The port departs from `metrics.cpp` deliberately in two places. Spec 15 records both as defects (§3.6, "Potts does not copy them, it records them").
+  - **D12. The Graham order is not a strict weak ordering when points are collinear with p0.** Rounding makes the orientation asymmetric: 0 one way, 3.6e-12 the other. The result then depends on the sort algorithm, and the "convex" hull can keep interior points.
+    - Example: G's Artistoo frame `centroids_neighbors_mcs_1656.csv`. The first port kept input order and got w_rel 0.44, against C++'s 0.0155.
+    - Potts uses an antisymmetric orientation test, nearer-first ties on a ray, and a strictly convex hull.
+  - **D13. The reference's R-tree box distance is unreliable for near-parallel or axis-aligned hull edges.** It comes from the simplified parallel case of `sqSegSegDist`, so C++ prunes boxes it should search.
+    - Example: G's TST frame `TST_beta_1.006_gamma_0_103480MCS.csv`, with C 867.369 vs 868.164. A tie-free jittered lattice shows the same.
+    - Potts keeps its exact candidate search.
+  - **Neither is ported.** There is no R-tree port and no `std::sort` port; libc++ and libstdc++ differ anyway.
+  - **Byte identity is claimed only for the 25 frozen parameter-plane files and for tie-free clouds that hit neither defect.** The reviewer fuzzed about 600 such clouds with 0 mismatches. The docs say this in place of "character for character".
+  - **O4** uses sequential sums, which can differ from numpy in the last ulp for ≥ 8 replicates. The "np.std" wording above means the population SD, not numpy's summation order.
+
 ## D-151 Reproduction 09: V-PRE5's one-cluster clause is kept as frozen; late-stage coarsening is an open deviation (2026-10-05; coordinator, from the peer spec-owner ruling, spec 09 §9.5)
 
 - **Finding.** P6.1f (D-144 fixture, isolation guard clear) failed V-PRE5's one-cluster clause: the mean largest dark-cluster share at 10⁴ is 0.815, against ≥ 0.90. Per replicate the value is bimodal: 4 of 10 replicates are ≥ 0.99, the rest 0.51–0.90. A peer diagnostic used 6 independent seeds, each from the Voronoi start and from its paper-relaxed copy, to 2×10⁴. It gives mean shares of 0.75 / 0.72 at 10⁴, 0.79 / 0.72 at 13 500 and 0.81 / 0.80 at 2×10⁴: neither the start nor the reading time rescues the clause. PRE's t = 1 fractions match a dark share of 0.50, so the type fraction is not the cause either. Dark cells have no medium contact from ≈ 320, so P6.1d's 0.905 was not inflated by the periodic image; the two runs differ by ≈ 1 SE.

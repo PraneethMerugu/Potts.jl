@@ -2064,3 +2064,25 @@ The maintainer approved F-1…F-6 (D-049).
   - `frozen.jl`: 213.
   - Reproduction 10 test: SMOKE passes, and with `POTTS_REFERENCES` set the reference rows pass 208/208.
   - Docs build: exit 0.
+
+## 2026-10-05 — P6.15d merged: OpenVT analysis port (D-149)
+
+- **The change.**
+  - `Analysis.concave_hull`: the Graham scan of `metrics.cpp` followed by concaveman, with uniform-grid candidate filtering.
+  - The `openvt_*` metrics, the neighbour histogram, the A3 inhibition codes and fractions, and `write_openvt`/`read_openvt`/`openvt_filename` for O1–O6, all in `src/benchmarks/`.
+  - `Printf` is a new stdlib dependency.
+- **Fidelity.**
+  - The 25 frozen parameter-plane rows match `metrics.cpp -ffp-contract=off` byte for byte.
+  - 53 of 54 real consortium frames match. The other, a TST frame, is D13: the reference's R-tree pruning error.
+  - Fuzzing found no other mismatches outside exact ties.
+  - Spec 15 records two deliberate departures, D12 (an exact, strict Graham order) and D13 (unpruned search).
+- **Speed.** A 10⁴-centroid hull takes 6–27 ms, and 10⁴ lattice points take 45 ms.
+- **Review.** Two rounds.
+  - Round 1 found D12 and D13 on real data.
+  - In round 2 the coordinator added an underflow-safe bound, an exact integer fast path and a timing note.
+- **Merge checks** (one at a time, all exit 0):
+  - P6.15d acceptance with the repo set: 186/186.
+  - P6.15b calibration: 240/240.
+  - PottsModels (`-t 4`): 16 648 pass, 46 broken.
+  - Docs build.
+  - `frozen.jl`: 216.

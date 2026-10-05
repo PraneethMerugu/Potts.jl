@@ -11,6 +11,7 @@ module PottsModels
 using Potts: Potts, @potts_model, Circle, Closed, DiscreteCallback, Lattice, Metropolis, Moore, Periodic, Point,
     RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling
 using DelimitedFiles: readdlm
+using Printf: @sprintf
 using Random: MersenneTwister
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
@@ -21,6 +22,8 @@ export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
 public Analysis
+export openvt_metrics, openvt_metrics_line, openvt_neighbor_histogram, openvt_inhibition_code,
+    openvt_inhibition_fractions, write_openvt, read_openvt, openvt_filename
 
 include("graner_glazier.jl")
 include("wortel_act.jl")
@@ -28,5 +31,7 @@ include("merks.jl")
 include("openvt.jl")
 include("openvt_chain.jl")
 include("akeeb.jl")
+
+include("benchmarks/openvt_analysis.jl")
 
 end
