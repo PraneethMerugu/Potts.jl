@@ -32,8 +32,12 @@ equations (MTK syntax), lifecycle rules and the sweep protocol.
 `PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137); `sys.x` is the namespaced
 symbolic `sys₊x` (a parameter, variable or `@observed` quantity, or a `@components` system:
 `sys.dc.y` is `sys₊dc₊y`), as in MTK. A completed system (`complete(sys)`) or one with
-namespacing off (`toggle_namespacing(sys, false)`) returns the declared symbol itself, which
-keys the operating point of `PottsProblem`. Any other name is an `ArgumentError`.
+namespacing off (`toggle_namespacing(sys, false)`) returns the declared symbol itself. Either
+works as a key wherever a model quantity is named (operating point, `remake`, `getu`/`setu`/
+`getp`, `observe`, `prob[…]`/`sol[…]`, `solvers`): a key namespaced by the model's own name
+(`sys₊x`) means the declared `x`; one namespaced by another name is an `ArgumentError`. A
+name that is not a parameter, variable, observed quantity or component (a kind, a vector
+quantity, a relation, a field) is an `ArgumentError` naming what it is.
 
 MTK's accessors:
 - `equations(sys)`: the `@equations` as written, plus each component's equations namespaced
@@ -51,7 +55,8 @@ MTK's accessors:
   MTK's typed metadata. It survives `complete`, `mtkcompile` and `extend`, and never enters
   the generated code or the fingerprint.
 
-`complete`, `extend(::PottsSystem, ::PottsSystem)` and `show` are Potts'. `compose` (Potts
+`complete` (exported, MTK's function), `extend(::PottsSystem, ::PottsSystem)` and `show` are
+Potts'; `independent_variables(sys)` is `[t]`. `compose` (Potts
 models do not compose, D-039: use `@components` or `extend`), `ODEProblem`/`JumpProblem`
 (use `PottsProblem`) and `extend` with a plain MTK `System` are `ArgumentError`s.
 `Potts.lattice(sys)` is the model's lattice.
@@ -59,8 +64,10 @@ models do not compose, D-039: use `@components` or `extend`), `ODEProblem`/`Jump
 The positional constructor takes every field in order (`fieldnames(PottsSystem)`) and the
 keyword `checks = true`; `checks = false` skips the construction checks (reserved and
 clashing names). The MTK mirror fields `eqs`, `unknowns`, `ps` and `systems` are derived from
-`equations`, `variables`, `parameters` and `components`; values passed for them (positionally
-or by keyword) are ignored.
+`equations`, `variables`, `parameters` and `components`; values passed for them to a
+constructor are ignored. `@set sys.eqs = …` (Setfield) sets `equations` (likewise `unknowns`
+→ `variables`, `ps` → `parameters`); setting `systems`, or `observed` to MTK equations, is an
+`ArgumentError`.
 """
 Base.@kwdef struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     name::Symbol
@@ -217,10 +224,117 @@ function ModelingToolkitBase.getvar(sys::PottsSystem, name::Symbol; namespace::B
     for o in getfield(sys, :observed)
         _declared_name(o.var) === name && return namespace ? ModelingToolkitBase.renamespace(sys, o.var) : o.var
     end
-    throw(ArgumentError("System $(nameof(sys)): variable $name does not exist (a PottsSystem's properties are its " *
-                        "parameters, variables, observed quantities and components; `Potts.lattice(sys)` is its lattice)"))
+    throw(ArgumentError("System $(nameof(sys)): " * _property_category(sys, name) * "; `sys.<name>` covers variables, " *
+                        "parameters, observed quantities and components (`Potts.lattice(sys)` is the lattice)"))
 end
 _declared_name(x) = (i = info(x); i === nothing ? nothing : i.name)
+
+# what `name` is in `sys` when it is not a property (D-137 review N1)
+function _property_category(sys::PottsSystem, name::Symbol)
+    name in getfield(sys, :kinds) && return "`$name` is a kind"
+    any(g -> g.name === name, getfield(sys, :kind_classes)) && return "`$name` is a kind class"
+    comps = Symbol[]
+    for x in Iterators.flatten((getfield(sys, :variables), getfield(sys, :parameters)))
+        i = info(x)
+        i !== nothing && get(i.options, :vector, nothing) === name && push!(comps, i.name)
+    end
+    isempty(comps) || return "`$name` is a vector quantity: its components are $(join(("`$n`" for n in comps), ", "))"
+    haskey(getfield(sys, :relations), name) && return "`$name` is a relation"
+    any(r -> r.name === name, getfield(sys, :relationships)) && return "`$name` is a relationship"
+    name in fieldnames(PottsSystem) && return "`$name` is a field, not a property (read it with `getfield`)"
+    return "variable $name does not exist"
+end
+
+ModelingToolkitBase.independent_variables(::PottsSystem) = Any[_unwrap(t)]
+
+# `@set sys.eqs = …` (Setfield, `ConstructionBase.setproperties`): the MTK mirror names set
+# the Potts fields they mirror, so the derived mirrors follow (D-137 review SF3); `systems`
+# is derived from `@components` and `observed` holds Potts' `ObservedEq`s, so neither is
+# settable as MTK's.
+const _MIRROR_FIELDS = (eqs = :equations, unknowns = :variables, ps = :parameters)
+function ConstructionBase.setproperties(sys::PottsSystem, patch::NamedTuple)
+    haskey(patch, :systems) && throw(ArgumentError("setting `systems` of a PottsSystem: its subsystems are its " *
+                                                   "`@components`; build the model with them instead"))
+    if haskey(patch, :observed) && !(patch.observed isa AbstractVector{ObservedEq})
+        throw(ArgumentError("setting `observed` of a PottsSystem: it holds the model's `@observed` quantities " *
+                            "(`ObservedEq`s), not MTK observed equations"))
+    end
+    pairs_ = Pair{Symbol, Any}[]
+    for (k, v) in pairs(patch)
+        f = get(_MIRROR_FIELDS, k, k)
+        f !== k && haskey(patch, f) && throw(ArgumentError("setting both `$k` and `$f` of a PottsSystem: `$k` is `$f`"))
+        push!(pairs_, f => v)
+    end
+    return invoke(ConstructionBase.setproperties, Tuple{ModelingToolkitBase.AbstractSystem, NamedTuple}, sys,
+        NamedTuple(pairs_))
+end
+
+# --- Keys namespaced by the model itself (D-137 review SF1). `sys.x` of an uncompleted `sys`
+# is `pr₊x`; wherever a key names a model quantity (operating point, `remake`, `getu`/`setu`/
+# `getp`, `observe`, `prob[…]`/`sol[…]`, `solvers`) it means the declared `x`. A key
+# namespaced by another name names nothing here: with `strict`, an `ArgumentError`.
+
+# the name of a symbolic key (`x` of `x` or `x(t)`), or `nothing` for other expressions
+function _key_name(u)
+    u isa SymbolicUtils.BasicSymbolic || return nothing
+    (issym(u) || (iscall(u) && issym(operation(u)))) || return nothing
+    return SymbolicIndexingInterface.getname(u)
+end
+_namespaced(n::Symbol) = occursin('₊', String(n))
+_declared_quantities(sys::PottsSystem) = Dict{Symbol, Any}(i.name => _unwrap(x) for x in Iterators.flatten((
+    getfield(sys, :parameters), getfield(sys, :variables), (o.var for o in getfield(sys, :observed))))
+                                                           for i in (info(x),) if i !== nothing)
+# `pr₊x` → `:x` when `x` is declared and `pr₊x` is not; otherwise `nothing`
+function _own_name(sys::PottsSystem, n::Symbol, declared)
+    haskey(declared, n) && return nothing
+    pre = string(nameof(sys), '₊')
+    s = String(n)
+    startswith(s, pre) || return nothing
+    m = Symbol(SubString(s, ncodeunits(pre) + 1))
+    return haskey(declared, m) ? m : nothing
+end
+function _foreign_key(sys::PottsSystem, n::Symbol, declared)
+    haskey(declared, n) && return nothing
+    throw(ArgumentError("`$n` is namespaced by another system: model `$(nameof(sys))` declares no such quantity; " *
+                        "key by this model's own symbols, `complete(sys).x` (or `sys.x`, `$(nameof(sys))₊x`)"))
+end
+
+"""The key `k` with this model's namespace (`pr₊x`) removed: the declared quantity (or its
+name, for a `Symbol` key); in an expression, every such symbol. Other keys are returned as
+they are, or with `strict` a key namespaced by another name is an `ArgumentError`."""
+function _localize(sys::PottsSystem, k; strict::Bool = false)
+    if k isa Symbol
+        _namespaced(k) || return k
+        declared = _declared_quantities(sys)
+        m = _own_name(sys, k, declared)
+        m === nothing || return m
+        strict && _foreign_key(sys, k, declared)
+        return k
+    end
+    u = _unwrap(k)
+    u isa SymbolicUtils.BasicSymbolic || return k
+    n = _key_name(u)
+    if n !== nothing
+        n isa Symbol && _namespaced(n) || return k
+        declared = _declared_quantities(sys)
+        m = _own_name(sys, n, declared)
+        m === nothing || return declared[m]
+        strict && _foreign_key(sys, n, declared)
+        return k
+    end
+    iscall(u) || return k
+    found = Any[]
+    _walk_all(y -> ((ny = _key_name(y)) isa Symbol && _namespaced(ny) && push!(found, y)), u)
+    isempty(found) && return k
+    declared = _declared_quantities(sys)
+    subs = Dict{Any, Any}()
+    for y in found
+        m = _own_name(sys, _key_name(y), declared)
+        m === nothing || (subs[y] = declared[m])
+    end
+    isempty(subs) && return k
+    return Symbolics.substitute(u, subs; fold = Val(false))
+end
 
 function Base.propertynames(sys::PottsSystem; private::Bool = false)
     private && return fieldnames(PottsSystem)

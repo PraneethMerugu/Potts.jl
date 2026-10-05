@@ -288,7 +288,7 @@ end
 # Keys may be symbolic quantities or their names (`:λ`, `Symbol("clock₊τ")`); relationship
 # names (`:bond => [(1, 2)]`) stay symbols.
 function _operating_point(sys::PottsSystem, op)
-    op = _expand_vectors(sys, op)
+    op = _expand_vectors(sys, Pair{Any, Any}[_localize(sys, k; strict = true) => v for (k, v) in op])
     byname = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables))))
     byname[:kind] = _unwrap(B.kind)
     byname[:cluster] = _unwrap(B.cluster)
@@ -704,7 +704,7 @@ CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) = _set_
 
 # parameter object `old` with the parameter map `p` applied as one change (D-112)
 function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
-    p = _expand_vectors(info.csys.sys, p)
+    p = _expand_vectors(info.csys.sys, Pair{Any, Any}[_localize(info.csys.sys, k; strict = true) => v for (k, v) in p])
     names = Dict{Any, Info}()
     for x in getfield(info.csys.sys, :parameters)
         i = Potts.info(x)

@@ -94,6 +94,7 @@ end
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
 function _param_info(sys::PottsModelInfo, x)
+    x = _localize(sys.csys.sys, x)
     x isa Symbol && return findfirst(p -> info(p).name === x, getfield(sys.csys.sys, :parameters))
     _potts_quantity(x) || return nothing
     i = info(x)
@@ -105,6 +106,7 @@ end
 const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)
 _state_var(v) = (i = info(v); i !== nothing && haskey(_STATE_SCOPE, i.role))
 function _state_index(sys::PottsModelInfo, x)
+    x = _localize(sys.csys.sys, x)
     x isa Symbol || _potts_quantity(x) || return nothing
     for v in getfield(sys.csys.sys, :variables)
         _state_var(v) || continue
@@ -132,7 +134,7 @@ SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), getfi
 SII.default_values(::PottsModelInfo) = Dict()
 SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
                                           !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
-SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, x)
+SII.observed(sys::PottsModelInfo, x) = _observed_function(sys, _localize(sys.csys.sys, x; strict = true))
 # by name: `sol[:volume]`, `sol[:act]`, `sol[:mean_excess]`
 function _named_quantity(sys::PottsModelInfo, x::Symbol)
     m = sys.csys.sys
@@ -142,8 +144,8 @@ function _named_quantity(sys::PottsModelInfo, x::Symbol)
     return x in BUILTIN_NAMES ? getfield(B, x) : nothing
 end
 SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
-                                                  _named_quantity(sys, x) !== nothing
-SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_quantity(sys, x))
+                                                  _named_quantity(sys, _localize(sys.csys.sys, x)) !== nothing
+SII.observed(sys::PottsModelInfo, x::Symbol) = _observed_function(sys, _named_quantity(sys, _localize(sys.csys.sys, x)))
 
 """
     observe(prob_or_sol, x[, u])
@@ -166,7 +168,9 @@ end
 
 # `observe` by name: the model's quantity called `x` (variable, `@observed`, built-in, parameter)
 _observe_quantity(::Any, x) = x
+_observe_quantity(sys::PottsModelInfo, x) = _localize(sys.csys.sys, x; strict = true)
 function _observe_quantity(sys::PottsModelInfo, x::Symbol)
+    x = _localize(sys.csys.sys, x; strict = true)
     q = _named_quantity(sys, x)
     q === nothing || return q
     m = sys.csys.sys

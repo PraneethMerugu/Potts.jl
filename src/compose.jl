@@ -85,11 +85,12 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         metadata = _merged_metadata(base, sys))
 end
 
-# MTK's `extend` metadata: the base's entries, then the extension's (which win); MTK's
-# mutable cache is left out
+# MTK's `extend` metadata: the base's entries, then the extension's, so the newest value of a
+# key wins (the extension's over the base's). An `ImmutableDict` iterates newest first, so
+# each system's entries are re-inserted oldest first. MTK's mutable cache is left out.
 function _merged_metadata(base::PottsSystem, sys::PottsSystem)
     meta = _EMPTY_METADATA
-    for s in (base, sys), kv in getfield(s, :metadata)
+    for s in (base, sys), kv in Iterators.reverse(collect(getfield(s, :metadata)))
         kv[1] === ModelingToolkitBase.MutableCacheKey || (meta = Base.ImmutableDict(meta, kv))
     end
     return meta

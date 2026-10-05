@@ -4,6 +4,7 @@ version = "0.4.0-DEV"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
+ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
@@ -30,6 +31,7 @@ PottsModelingToolkitExt = "ModelingToolkit"
 CorePotts = {path = "lib/CorePotts"}
 
 [compat]
+ConstructionBase = "1.5"
 CorePotts = "0.3"
 JumpProcesses = "9.33"
 KernelAbstractions = "0.9.42"

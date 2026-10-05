@@ -3981,3 +3981,120 @@ end
     @test mtkcompile(OnCopyIndexNamed(; name = :g)).footprint.read == 3
     @test mtkcompile(OnCopyIndexPlain(; name = :g)).footprint.read == 1
 end
+
+# ---------------------------------------------------------------------------------------
+# D-137 review (P6.0o): namespaced keys of the model's own `sys.x`, `@set` on the MTK mirror
+# names, metadata precedence in `extend`, property errors naming the category
+
+@potts_model NsCell begin
+    @kinds medium host
+    @parameters begin
+        λ = 2.0
+        T = 1.0
+        w[1:2] = [0.5, 0.25]
+    end
+    @variables begin
+        x(cell) = 1.5
+        g(model) = 0.0
+    end
+    @lattice Lattice((12, 12); neighborhood = Moore(1))
+    @energy cells(host) => λ * (volume - 9.0)^2
+    @equations D(x) ~ -0.1 * x
+    @after_mcs g ~ g + 1.0
+    @observed total ~ sum(x for n in cells)
+    @sweep Metropolis(; temperature = T)
+end
+const NS_DECAY = Ref{Any}(nothing)
+let t = Potts.t
+    Potts.ModelingToolkitBase.@variables y(t) = 1.0
+    Potts.ModelingToolkitBase.@parameters k = 0.1
+    NS_DECAY[] = Potts.ModelingToolkitBase.System([Potts.D(y) ~ -k * y], t; name = :decay)
+end
+@potts_model NsComp begin
+    @kinds medium host
+    @variables x(cell) = 1.5
+    @components cells(host) dc = NS_DECAY[]
+    @lattice Lattice((12, 12))
+    @energy cells => (volume - 9.0)^2
+    @equations D(x) ~ -0.1 * x
+    @sweep Metropolis(; temperature = 1.0)
+end
+ns_op() = [ownership => (s = zeros(Int32, 12, 12); s[2:4, 2:4] .= 1; s[7:9, 7:9] .= 2; s), kind => [:host, :host]]
+struct NsKey end
+using Potts.ModelingToolkitBase: Setfield as NsSetfield
+
+@testset "D-137: a key namespaced by the model itself is the declared quantity" begin
+    SII = Potts.SymbolicIndexingInterface
+    sys = NsCell(; name = :pr)
+    cs = complete(sys)
+    @test SII.getname(sys.λ) === :pr₊λ && SII.getname(cs.λ) === :λ          # the keys differ …
+    # … and mean the same everywhere: operating point (parameter and variable)
+    p1 = PottsProblem(sys, [ns_op(); sys.λ => 7.0; sys.x => 3.0], (0, 2))
+    p2 = PottsProblem(sys, [ns_op(); cs.λ => 7.0; cs.x => 3.0], (0, 2))
+    @test p1.p == p2.p && p1.p.λ == 7.0 && p1.u0.cell.x == p2.u0.cell.x == [3.0, 3.0]
+    @test PottsProblem(sys, [ns_op(); Symbol("pr₊λ") => 5.0], (0, 1)).p.λ == 5.0     # the name, too
+    # remake p and u0
+    @test remake(p1; p = [sys.λ => 9.0]).p.λ == 9.0
+    @test remake(p1; u0 = [ns_op(); sys.x => 4.0]).u0.cell.x == [4.0, 4.0]
+    # getu / setu / getp / observe / prob[…] / sol[…], with observed quantities and expressions
+    @test SII.getu(p1, sys.x)(p1) == [3.0, 3.0] && SII.getp(p1, sys.λ)(p1) == 7.0
+    @test observe(p1, sys.total) == observe(p1, cs.total) == 6.0
+    @test p1[sys.total] == 6.0 && p1[sys.g] == p1[cs.g]
+    @test observe(p1, 2 * sys.total + sys.λ) == 2 * 6.0 + 7.0
+    q = deepcopy(p1)
+    SII.setu(q, sys.x)(q, [1.0, 2.0])
+    @test q.u0.cell.x == [1.0, 2.0]
+    sol = solve(p1, SequentialCPM())
+    @test sol[sys.total] == sol[cs.total] && sol[sys.g] == sol[cs.g]
+    # solvers keys
+    fp(k) = PottsProblem(sys, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
+    @test fp(sys.x) == fp(cs.x) == fp(:x) != PottsProblem(sys, ns_op(), (0, 1)).f.fingerprint
+    # components: `sys.dc.y` and `sys.dc`
+    comp = NsComp(; name = :pc)
+    cc = complete(comp)
+    @test PottsProblem(comp, [ns_op(); comp.dc.y => 2.0], (0, 1)).u0.cell.dc₊y == [2.0, 2.0]
+    cfp(k) = PottsProblem(comp, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
+    @test cfp(comp.dc) == cfp(cc.dc) == cfp(comp.dc.y) == cfp(cc.dc.y)
+    # negative controls: a key namespaced by another model names nothing here
+    other = NsCell(; name = :other)
+    for f in (() -> PottsProblem(sys, [ns_op(); other.λ => 1.0], (0, 1)), () -> remake(p1; p = [other.λ => 1.0]),
+              () -> observe(p1, other.total))
+        e = try
+            f(); nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError && occursin("complete(sys).x", e.msg) && occursin("other₊", e.msg)
+    end
+    # a vector quantity and a kind are not properties; the error names what they are
+    e = try sys.w catch err err end
+    @test e isa ArgumentError && occursin("vector quantity", e.msg) && occursin("`w_1`", e.msg)
+    e = try sys.host catch err err end
+    @test e isa ArgumentError && occursin("`host` is a kind", e.msg)
+    e = try sys.nosuch catch err err end
+    @test e isa ArgumentError && occursin("does not exist", e.msg)
+    @test isequal(Potts.ModelingToolkitBase.independent_variables(sys), Any[Potts._unwrap(Potts.t)])
+end
+
+@testset "D-137: @set on the MTK mirror names, metadata precedence, complete exported" begin
+    M = Potts.ModelingToolkitBase
+    sys = NsCell(; name = :pr)
+    @test complete === M.complete                                           # exported, MTK's function
+    s0 = NsSetfield.@set sys.eqs = Potts.Equation[]
+    @test isempty(M.equations(s0)) && isempty(getfield(s0, :equations)) && length(M.equations(sys)) == 1
+    ps = Any[first(Potts.parameters(sys))]
+    s1 = NsSetfield.@set sys.ps = ps
+    @test length(M.parameters(s1)) == 1 && isequal(Potts.parameters(s1), ps) && getfield(s1, :ps) === getfield(s1, :parameters)
+    s2 = NsSetfield.@set sys.unknowns = Any[]
+    @test isempty(Potts.variables(s2)) && isempty(M.unknowns(s2))
+    @test nameof(NsSetfield.@set sys.name = :zz) === :zz
+    @test_throws ArgumentError NsSetfield.@set sys.systems = Any[]
+    @test_throws ArgumentError NsSetfield.@set sys.observed = M.observed(sys)
+    # extend: the newest value of a key wins, the extension's over the base's
+    a = M.setmetadata(M.setmetadata(NsCell(; name = :a), NsKey, 1), NsKey, 2)
+    b = M.setmetadata(NsCell(; name = :b), NsKey, 3)
+    @test M.getmetadata(a, NsKey, nothing) == 2
+    @test M.getmetadata(extend(a, NsCell(; name = :b)), NsKey, nothing) == 2
+    @test M.getmetadata(extend(NsCell(; name = :b), a), NsKey, nothing) == 2
+    @test M.getmetadata(extend(b, a), NsKey, nothing) == 3 && M.getmetadata(extend(a, b), NsKey, nothing) == 2
+end
