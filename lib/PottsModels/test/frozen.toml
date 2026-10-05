@@ -341,3 +341,8 @@ decision = "D-140"
 path = "acceptance/p6_3c_eden_splits.jl"
 sha256 = "4b44d0efa2157ccd1054cd566293c35ca6dcff1222455aed133a90725321c56d"
 decision = "D-141"
+
+[[file]]
+path = "acceptance/p6_3b_boundary_schedule.jl"
+sha256 = "da7a8505ceffe0d27cdda56f026fda1f21652a74304033f20d99ec93af9a9d80"
+decision = "D-145"
