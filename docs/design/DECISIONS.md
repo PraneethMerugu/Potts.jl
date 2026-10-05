@@ -2163,3 +2163,13 @@ session.
   4. **Empty input.** `openvt_metrics` throws `ArgumentError` on empty input. This is unfrozen behaviour, and the implementer adds a test for it.
   5. **Exact ties.** The docs state that byte identity is proven only for inputs without exact ties. On perfect lattices, libc++ and libstdc++ break ties differently.
   6. **Platform.** The reference is arm64, where long double equals double. The port is Float64 everywhere, and the docs say so.
+- **Amendment (review round 1, coordinator).** The port departs from `metrics.cpp` deliberately in two places. Spec 15 records both as defects (§3.6, "Potts does not copy them, it records them").
+  - **D12. The Graham order is not a strict weak ordering when points are collinear with p0.** Rounding makes the orientation asymmetric: 0 one way, 3.6e-12 the other. The result then depends on the sort algorithm, and the "convex" hull can keep interior points.
+    - Example: G's Artistoo frame `centroids_neighbors_mcs_1656.csv`. The first port kept input order and got w_rel 0.44, against C++'s 0.0155.
+    - Potts uses an antisymmetric orientation test, nearer-first ties on a ray, and a strictly convex hull.
+  - **D13. The reference's R-tree box distance is unreliable for near-parallel or axis-aligned hull edges.** It comes from the simplified parallel case of `sqSegSegDist`, so C++ prunes boxes it should search.
+    - Example: G's TST frame `TST_beta_1.006_gamma_0_103480MCS.csv`, with C 867.369 vs 868.164. A tie-free jittered lattice shows the same.
+    - Potts keeps its exact candidate search.
+  - **Neither is ported.** There is no R-tree port and no `std::sort` port; libc++ and libstdc++ differ anyway.
+  - **Byte identity is claimed only for the 25 frozen parameter-plane files and for tie-free clouds that hit neither defect.** The reviewer fuzzed about 600 such clouds with 0 mismatches. The docs say this in place of "character for character".
+  - **O4** uses sequential sums, which can differ from numpy in the last ulp for ≥ 8 replicates. The "np.std" wording above means the population SD, not numpy's summation order.
