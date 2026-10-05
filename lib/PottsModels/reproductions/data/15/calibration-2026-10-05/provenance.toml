@@ -1,0 +1,18 @@
+decisions = ["D-148", "D-146"]
+runner_sha256 = "78814b592a8aba10947552d2c670b292d13b0cf813e2aa44aea68aa9cf52b221"
+env = "julia -t 4 --project=lib/PottsModels/test (no POTTS_FULL_REPRODUCTION needed; the runner is the FULL tier)"
+threads = 4
+cpu = "Apple M1 Pro"
+simulation_s = 11.2
+wall_s = 13.9
+finished = "2026-10-05T18:26:56.624"
+test_sha256 = "f42bc57a55d6d4969c1bf10abe9a1e16ff7e1f2f1c2403c1040dda95846bdcba"
+started = "2026-10-05T18:26:42.756"
+machine = "arm64-apple-darwin24.0.0"
+julia = "1.12.6"
+runner = "lib/PottsModels/reproductions/data/15/calibration-2026-10-05/run_calibration.jl"
+test = "lib/PottsModels/test/reproductions/15_openvt_calibration.jl"
+commit = "30c396011841ebffde023a0b28e1cd8c3b66c2a0"
+item = "P6.15b"
+dirty_tracked = false
+commit_date = "2026-10-05"

@@ -1,0 +1,38 @@
+decisions = ["D-148", "D-146"]
+spring_dashpot_rate = 18.2816647214633
+burnin_mcs = 100
+seeds_21chain = "21000 + i, i = 1:100"
+run_length_21chain_mcs = 1560
+seeds_11chain = "1000λ + i, i = 1:100"
+saves = "every MCS from MCS 0 (spec t = −100) to the end; the test saves from MCS 100 (t = 0)"
+threads = 4
+parameters = "OpenVTChain defaults: T = 20, A = 50, A_c = 25 (burn-in), J_cc = 20, J_cm = 10, Moore(1)"
+lambdas = [1, 2, 3, 5]
+lattice_21chain = [250, 5]
+periodic = [true, true]
+release = "openvt_release(100): A_c := A at the end of MCS 100 (t = 0)"
+algorithm = "SequentialCPM(; proposal = Moore(1))"
+plateau_rise_CD = 0.05
+replicates = 100
+item = "P6.15b"
+CD_px = 10
+level_CD = 9.0
+lattice_11chain = [150, 5]
+
+[T_ours]
+1 = 297
+5 = 77
+2 = 156
+3 = 111
+
+[T_S5]
+1 = 290
+5 = 75
+2 = 155
+3 = 110
+
+[run_length_11chain_mcs]
+1 = 2030
+5 = 525
+2 = 1085
+3 = 770

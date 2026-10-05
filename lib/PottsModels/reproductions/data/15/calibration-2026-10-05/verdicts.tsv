@@ -1,0 +1,28 @@
+target	paper	ours	tolerance	class	result
+V6 T(λ = 1), MCS	Table S5: 290	297 (1.024 × S5)	±15 %: [246.5, 333.5]	FULL	PASS
+V7 run covers 5 T (λ = 1)	— (run validity)	5T = 1485, run to 2030	5T ≤ 7 T_S5	FULL	PASS
+V7 MSE vs spring–dashpot (λ = 1)	Table S5: 7.57e-4	1.28e-3 (1.69 × S5)	≤ 3 × S5 = 2.27e-3	FULL	PASS
+V6 T(λ = 2), MCS	Table S5: 155	156 (1.006 × S5)	±15 %: [131.8, 178.2]	FULL	PASS
+V7 run covers 5 T (λ = 2)	— (run validity)	5T = 780, run to 1085	5T ≤ 7 T_S5	FULL	PASS
+V7 MSE vs spring–dashpot (λ = 2)	Table S5: 2.66e-3	1.02e-3 (0.38 × S5)	≤ 3 × S5 = 7.99e-3	FULL	PASS
+V7 w₁₁(0.5 T) (λ = 2), CD	lattice spread 7.83–7.87 (TST, Morpheus-J10, Artistoo); reference 7.9	7.859	spread ± 0.1: [7.73, 7.97]	FULL	PASS
+V7 w₁₁(2.0 T) (λ = 2), CD	lattice spread 9.78–9.8 (TST, Morpheus-J10, Artistoo); reference 9.77	9.794	spread ± 0.1: [9.68, 9.9]	FULL	PASS
+V6 T(λ = 3), MCS	Table S5: 110	111 (1.009 × S5)	±15 %: [93.5, 126.5]	FULL	PASS
+V7 run covers 5 T (λ = 3)	— (run validity)	5T = 555, run to 770	5T ≤ 7 T_S5	FULL	PASS
+V7 MSE vs spring–dashpot (λ = 3)	Table S5: 4.43e-3	4.06e-3 (0.92 × S5)	≤ 3 × S5 = 1.33e-2	FULL	PASS
+V6 T(λ = 5), MCS	Table S5: 75	77 (1.027 × S5)	±15 %: [63.8, 86.2]	FULL	PASS
+V7 run covers 5 T (λ = 5)	— (run validity)	5T = 385, run to 525	5T ≤ 7 T_S5	FULL	PASS
+V7 MSE vs spring–dashpot (λ = 5)	Table S5: 1.38e-2	1.05e-2 (0.76 × S5)	≤ 3 × S5 = 4.13e-2	FULL	PASS
+V6 T strictly decreasing in λ	290 > 155 > 110 > 75	297 > 156 > 111 > 77	strict	FULL	PASS
+V8 w₂₁(1 T) (λ = 2, T = 156), CD	lattice spread 15.9–16.25 (CC3D, Morpheus-J10, TST, Artistoo)	15.959	spread ± 0.15: [15.75, 16.4]	FULL	PASS
+V8 w₂₁(5 T) (λ = 2, T = 156), CD	lattice spread 19.2–19.57 (CC3D, Morpheus-J10, TST, Artistoo)	19.281	spread ± 0.15: [19.05, 19.72]	FULL	PASS
+V8 w₂₁(10 T) (λ = 2, T = 156), CD	lattice spread 19.9–19.96 (CC3D, Morpheus-J10, TST, Artistoo)	19.889	spread ± 0.15: [19.75, 20.11]	FULL	PASS
+V8 inner w₁₁(1 T) (λ = 2, T = 156), CD	lattice spread 7.2–7.51 (CC3D, Morpheus-J10, TST, Artistoo)	7.241	spread ± 0.15: [7.05, 7.66]	FULL	PASS
+V8 inner w₁₁(5 T) (λ = 2, T = 156), CD	lattice spread 9.46–9.71 (CC3D, Morpheus-J10, TST, Artistoo)	9.514	spread ± 0.15: [9.31, 9.86]	FULL	PASS
+V8 inner w₁₁(10 T) (λ = 2, T = 156), CD	lattice spread 9.92–9.96 (CC3D, Morpheus-J10, TST, Artistoo)	9.925	spread ± 0.15: [9.77, 10.11]	FULL	PASS
+V8 plateau end (w̄₂₁ ≥ w̄₂₁(0) + 0.05), T	0.15–0.22 T (lattice spread)	0.173 (27 MCS; w̄₂₁(0) = 14.501)	[0.1, 0.3] T	FULL	PASS
+P8 per-run crossing (λ = 1), MCS	— (Morpheus `Event`)	median 290, mean 291.8 ± 33.2 (SD), 100/100 cross	—	reported	info
+P8 per-run crossing (λ = 2), MCS	— (Morpheus `Event`)	median 154, mean 156.1 ± 13.7 (SD), 100/100 cross	—	reported	info
+P8 per-run crossing (λ = 3), MCS	— (Morpheus `Event`)	median 112, mean 111.2 ± 8.6 (SD), 100/100 cross	—	reported	info
+P8 per-run crossing (λ = 5), MCS	— (Morpheus `Event`)	median 76, mean 76.9 ± 4.9 (SD), 100/100 cross	—	reported	info
+P12 cycle 5 × T(2), MCS	775 (α, M)	780	—	reported	info
