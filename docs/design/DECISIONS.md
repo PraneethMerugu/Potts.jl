@@ -2203,3 +2203,48 @@ session.
   - **Periodic axes.** `centroids(σ; periodic)` also accepts a single `Bool` for every axis.
   - **Re-freeze under this entry.** `acceptance/p6_0v1_device_lifecycle.jl` (frozen under D-096) treats every exported uppercase function in PottsModels as a published model. It gains one builder, `:OpenVTChain`, on the 11-chain. The model has no lifecycle, so it enters only the set check. On CPU the file still passes and the Float32 build works. Every future exported model constructor needs the same one-line re-freeze; P6.15c's growth model is next.
   - **FULL tier.** It ran once on 4 threads in 14.5 s, and every V6–V8 row passes. T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5. At λ = 2 the MSE is 0.38× Table S5. For V8, w₂₁ at 1/5/10 T is 15.96 / 19.28 / 19.89, and the plateau ends at 0.173 T. The D-146 recorded run is separate.
+
+## D-150 P6.15c: the OpenVT Table S1 model, a cell-scope contact fold, `randn()` and per-daughter draws, disc start, edge guard, cell-count stop (2026-10-05, P6.15c; coordinator, from the P6.15c test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/acceptance/p6_15c_openvt_table_s1.jl` (freeze d1326174), from spec 15 v3 §2, §5 and §6 (G1, G2, G5, G6, G7, G11), and C3, C9, C13, C14, C16.
+  - Also re-frozen under this entry: `acceptance/p6_0v1_device_lifecycle.jl` gains the builder `:OpenVTReferenceMonolayer` (24², σ_X = 0, so the window stays quiet; D-148 Applied rule).
+- **Replace or variant (spec §5): a variant.**
+  - The Table S1 model is a new published model, `OpenVTReferenceMonolayer`.
+  - `OpenVTGrowingMonolayer` stays as the documented 2024 Artistoo set, pinned bit for bit: fingerprint 0xfcecc4612f387b5e and two 60-MCS trajectory digests.
+  - The gate case `openvt_monolayer_100` and every existing fingerprint pin are untouched.
+- **Surface: Potts DSL (general).**
+  - **G1, the contact fold.** In cell scope, `count(pred for _ in contacts)` and `count(pred for _ in contacts(rel))` count the cell's unlike pairs: s in the cell and s′ ∈ R(s) inside the lattice, for which `pred` holds.
+    - `pred` reads `kind′`, with the medium being owner 0.
+    - `count(true for _ in contacts) == surface` on the contact relation.
+    - It is exact after every copy and every lifecycle event, and maintained incrementally.
+    - Models that do not read it pay nothing; their fingerprints are pinned.
+  - **G2, per-daughter draws.** `randn()` follows `rand()`'s contract, keyed by (seed, MCS, cell, occurrence). A division state rule whose value contains a draw is evaluated separately for the parent and the daughter. Rules without draws are unchanged.
+- **Surface: PottsModels.**
+  - Exported:
+    - `OpenVTReferenceMonolayer(; lattice = (1400, 1400))`, with the Table S1 values A₀ 50, λ 2, T 20, α 50/775, μ_X 2, σ_X 0.4, β = γ = 0 and J [0 10; 10 20]. Its cell variables are A_star, X and f.
+    - `openvt_reference_state(; lattice, A₀)`, the G5 disc.
+  - Not exported:
+    - `openvt_snapshot(u; A₀, center)`, the O2 rows;
+    - `stop_at_cells(n)`, for G7 and G11;
+    - `edge_guard(margin; terminate)` and `Analysis.near_edge(σ, margin)`, for G6.
+- **Readings fixed by the freeze.**
+  - **Growth.** Once per MCS after the sweep, iff (volume / A_star ≥ β) && (f ≥ γ), using C9's ≥ and the current A_star.
+  - **Division.** At volume ≥ X·A₀. Both daughters draw X at birth, redrawn while ≤ 0. The first cell's X is drawn before the first division check. σ_X = 0 is case (f).
+  - **Disc.** Morpheus' `Sphere radius = R` centred at (L+1)/2: 52 sites on an even lattice, 45 on an odd one.
+  - **O2.** The origin is at (L+1)/2, distances are in units of R = √(A₀/π), and f is computed from σ.
+- **Checked before freezing.**
+  - A stub on today's primitives passes everything except the three gaps: cost 2.7× against the ≤ 1.5 bound, per-daughter draws, and truncation (20 non-positive X).
+  - The Metal block passes on the stub except the per-daughter check.
+  - The doubling windows come from 16 + 16 stub seeds.
+- **Coordinator rulings on the open questions.**
+  1. **Variant.** As above.
+  2. **G1 and G2 live in the core DSL and CorePotts,** being general: a per-cell incremental contact-count tracker with a kind predicate, recomputed on transitions; `randn()` in the vocabulary; per-daughter evaluation in lifecycle rules, device lifecycle included. These are core write sets: P6.3b, which restructures `step!`/phases and the vocabulary, merges first, and P6.15c rebases onto it. `count` and `randn` are new DSL names, added to `DSL_NAMES` with a justification.
+  3. **Truncation is a DSL form, `randn(μ, σ; lower)`.** It is bounded rejection on the counter RNG: at most 64 attempts, each a new occurrence on the same key. Exhaustion sets the status word; no throw inside kernels. P(exhaust) ≈ p⁶⁴ is negligible for any lower bound under ≈ μ + 2σ. A "redraw next MCS" sentinel is not acceptable, because M draws at birth.
+  4. **Performance.**
+     - The frozen bound is 1.5×, against an expected 1.05–1.2× a surface-only model.
+     - Models that do not read the fold must not regress: the gate and its fingerprints check this.
+     - At merge the new model gets a gate case on a small lattice; the coordinator sets its baseline.
+     - `stop_at_cells` and `edge_guard` take `every = k` (default 1). On Metal, each check is one host read per k MCS, declared as a host pass under D-145's budget.
+  5. **Base RNG calls.** The DSL rejects any Base RNG call it does not implement (`randexp`, `rand(range)`, `randn(dims…)`, …) with an error naming it. A Base RNG call never silently becomes a build-time constant again. The implementer adds a guard test (not frozen).
+  6. **The O2 round-trip row** stays `@test_broken` until P6.15d merges. It runs afterwards; the coordinator checks this at the later merge.
+  7. **The implementer also adds** a sibling in `siblings.jl`, a `runtests.jl` entry, the `test/gpu.jl` include, and the gate case.
