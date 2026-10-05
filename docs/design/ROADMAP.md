@@ -357,7 +357,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-10-01; D-088) **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
   `PottsSystem`s for declarations named `x′`.
-- [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
+- [x] (merge, 2026-10-05; D-139) **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
 - [x] (merge, 2026-09-30) **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
 - [x] (merge, 2026-09-30; D-059, D-060, D-063) **P6.1b2** follow-ups from the P6.0h review:

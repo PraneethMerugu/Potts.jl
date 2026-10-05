@@ -11,7 +11,9 @@ Depth = 2
 ## Potts
 
 The modelling language: `@potts_model`, `PottsProblem` for symbolic models, layouts,
-solver specifications.
+solver specifications, and measurements of a state: `total_energy` and the public, not
+exported, `Potts.boundary_lengths` and `Potts.anneal` (see [Boundary lengths and annealed
+states](@ref manual-analysis)).
 
 ```@autodocs
 Modules = [Potts]

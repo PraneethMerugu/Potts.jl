@@ -321,3 +321,8 @@ decision = "D-137"
 path = "acceptance/p6_0g_kind_classes.jl"
 sha256 = "96dc19fb424723b4f50c71bf831a2b8462631656a7a7bea5a088e5914b8185de"
 decision = "D-137"
+
+[[file]]
+path = "acceptance/p6_1b_boundary_anneal.jl"
+sha256 = "54fbe11426ee77e10da84ae196a98d10cd120aeadd33203bae7da48747f7e853"
+decision = "D-139"

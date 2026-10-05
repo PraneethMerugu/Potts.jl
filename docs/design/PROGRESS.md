@@ -1956,3 +1956,9 @@ The maintainer approved F-1…F-6 (D-049).
   - V-GG6 Δa = −2.861 ± 0.061 SE, NC1 0.073: PASS. NC1 symmetric contacts (share 0.497, dark–medium 0.03, 0 engulfed): PASS.
   - Periodic-boundary variant (494 × 494, 9 Bonferroni comparisons at 5 %): all within, PASS.
 - **Next.** Send the table to the spec owner (spec 09 §9.1) for the V-PRE3 (b) failure: the slow light–medium approach may come from the unrelaxed Voronoi start (cell-area SD 6.9 vs 1.8 relaxed) or the aggregate shape, not the dynamics. No change to the frozen page without a DECISIONS entry (D-072).
+
+## 2026-10-05 — P6.1b merged: `Potts.boundary_lengths` and `Potts.anneal` (D-139)
+
+- **The change.** Two public (not exported) analysis functions next to `total_energy`: `boundary_lengths(prob, u; relation)` splits the boundary by kind pair (each bond once, relation weights, periodic wrap, domains; Σ J·L == `total_energy` for a contact-only model), and `anneal(prob, u; mcs, seed, alg)` returns a copy relaxed at copy temperature 0 with the run's own ΔH (drives included), refreshing integrals and energy snapshots before each MCS and running nothing else. No CorePotts or kernel change. New manual page `manual/analysis.md`; HexSorting sibling. The frozen 09 page keeps its own helpers (D-072; switch later under its own entry).
+- **Review.** Two rounds (round 1: frozen population-fold snapshots and integrals; a failed run returned silently; docs overclaimed a lower energy).
+- **Merge checks.** Potts, PottsModels (`-t 4`), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.022, others 0.968–1.017; 0 allocations). No device code touched; Metal not rerun.

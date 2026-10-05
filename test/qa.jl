@@ -222,6 +222,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_host_lattice,       # counted host copy of the lattice's domain mask (D-085)
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
+    :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
     :no_claims,           # the no-claim-set default
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
