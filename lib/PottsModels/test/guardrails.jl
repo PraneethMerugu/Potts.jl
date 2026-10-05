@@ -5,10 +5,8 @@ using ExplicitImports
 @testset "PottsModels uses only public names" begin
     @test check_no_implicit_imports(PottsModels) === nothing
     @test check_all_explicit_imports_are_public(PottsModels) === nothing
-    # one internal exception: the sub-stream seed mixer, pinned internal by D-093 (P6.0w);
-    # `akeeb_state` derives its clock seed with it. Nothing else may be ignored here
-    @test check_all_qualified_accesses_are_public(PottsModels; ignore = (:_substream_seed,)) === nothing
-    @test_throws Exception check_all_qualified_accesses_are_public(PottsModels)   # the exception is used
+    # no exception: `akeeb_state` draws its clocks through the public `Potts.layer_rng` (D-138)
+    @test check_all_qualified_accesses_are_public(PottsModels) === nothing
     @test check_all_qualified_accesses_via_owners(PottsModels) === nothing
     @test check_no_stale_explicit_imports(PottsModels) === nothing
     @test check_no_self_qualified_accesses(PottsModels) === nothing

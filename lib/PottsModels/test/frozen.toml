@@ -79,8 +79,8 @@ decision = "D-076"
 
 [[file]]
 path = "acceptance/p6_2a2_akeeb_inventory.jl"
-sha256 = "8b93c6545a52c4ea038ee7b8864630c95cb19aa62d7ee9a81dca85b55736c135"
-decision = "D-093"
+sha256 = "9c74d0261174735ea8676b7deccdefe082a094245a5ca2a900df6f9655d0c963"
+decision = "D-138"
 
 [[file]]
 path = "acceptance/p6_0k2_component_rejections.jl"
@@ -119,8 +119,8 @@ decision = "D-090"
 
 [[file]]
 path = "acceptance/p6_1a6_layout_protocol.jl"
-sha256 = "88a963d12007a39ea16b152a30bdaa102e7fcfbe280b853841a64a31f8ca902e"
-decision = "D-091"
+sha256 = "9f3c0046caa776d0f2c381c9589a1a39db43cba837f9faab92d0e67bd3d035f8"
+decision = "D-138"
 
 [[file]]
 path = "acceptance/p6_1a7_scattered_mask.jl"
@@ -134,8 +134,8 @@ decision = "D-092"
 
 [[file]]
 path = "acceptance/p6_0w_substream_seeds.jl"
-sha256 = "c868d9a7d6563ebb583446f174ba4eff618462c3d89f0459ff8c5ecc77dce109"
-decision = "D-093"
+sha256 = "62f0ed1402fda94284e57720285881dd2f66a7cb201b1ec26a9d2016c69e734f"
+decision = "D-138"
 
 [[file]]
 path = "acceptance/merks_2006_defaults.jl"
@@ -328,6 +328,16 @@ sha256 = "54fbe11426ee77e10da84ae196a98d10cd120aeadd33203bae7da48747f7e853"
 decision = "D-139"
 
 [[file]]
+path = "acceptance/p6_1a5_voronoi_shapes.jl"
+sha256 = "6a099588e48492ecde77141dd2f63ac1cf1bb20ad573ffc3c3903375a69e49eb"
+decision = "D-138"
+
+[[file]]
 path = "acceptance/p6_3a_topology_track.jl"
 sha256 = "90949487e768f13ecf923eda7cdd87a71ced3c12295cbf4b451b0f0aea567509"
 decision = "D-140"
+
+[[file]]
+path = "acceptance/p6_3c_eden_splits.jl"
+sha256 = "4b44d0efa2157ccd1054cd566293c35ca6dcff1222455aed133a90725321c56d"
+decision = "D-141"

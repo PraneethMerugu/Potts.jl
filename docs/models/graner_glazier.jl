@@ -145,17 +145,20 @@ J_dd < (J_dd + J_ll) / 2 < J_dl < J_ll < J_M
 #
 # A starting state names the owner of every site and the kind of every cell. *Layouts*
 # build one from layers. The paper starts from a compact aggregate of "about 1000 cells"
-# (PRE, p. 2129) of area about 40, with the kinds assigned at random. `VoronoiBall` (from
-# PottsModels) divides a disk into compact cells of about equal area; its `kinds` are
-# cycled over randomly placed cells, so dark and light are mixed at random, in equal
-# numbers. A disk of area ``n \times 40`` sites, with a 10-site margin of medium on every
-# side, sets the lattice:
+# (PRE, p. 2129) of area about 40, with the kinds assigned at random. The `Voronoi` layout
+# divides a region into one cell per generator point; here the region is a disk
+# (`Circle`), the generators are `n` random sites of it (`RandomPoints`), and 30 Lloyd
+# steps (`lloyd = 30`) move each generator to its cell's centroid, so the cells are compact
+# and of about equal area. Its `kinds` are cycled over the randomly placed cells, so dark
+# and light are mixed at random, in equal numbers. A disk of area ``n \times 40`` sites,
+# with a 10-site margin of medium on every side, sets the lattice:
 
 n = 200
 radius = sqrt(40n / π)
 side = 2ceil(Int, radius) + 1 + 2 * 10
 @named sorting = CellSorting(; lattice = (side, side))
-u0 = layout(VoronoiBall(n; radius, kinds = [:dark, :light], seed = 1), sorting)
+disk = Circle(Point((side + 1) / 2, (side + 1) / 2), radius)     # centred on the lattice
+u0 = layout(Voronoi(RandomPoints(n; region = disk, seed = 1); region = disk, lloyd = 30, kinds = [:dark, :light]), sorting)
 first(u0[2].second, 6)
 
 # `layout` returns an operating point, `[ownership => σ, kind => kinds]`, the same form a
@@ -250,7 +253,6 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 # GranerGlazier
 # graner_glazier_aggregate
 # graner_glazier_state
-# VoronoiBall
 # ```
 #
 # ## Reproduction

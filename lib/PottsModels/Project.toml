@@ -7,7 +7,6 @@ version = "0.1.0-DEV"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 
 [sources]
 Potts = {path = "../.."}
@@ -16,5 +15,4 @@ Potts = {path = "../.."}
 DelimitedFiles = "1"
 Potts = "0.4"
 Random = "1"
-StableRNGs = "1"
 julia = "1.12"

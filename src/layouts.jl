@@ -7,8 +7,9 @@
 # `assign!`, reads the paint so far with `owner`/`kindof`/`ncells` and reports with
 # `record!`. `lat` is read only through the lattice queries `size`, `isperiodic` and
 # `indomain` (plus `core_lattice` for CorePotts' `shift`, `relation` and `embed`). Randomized
-# layouts own their seed, so adding a layer never changes another layer's draws. Coordinates
-# are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a rhombus.
+# layouts own their seed, so adding a layer never changes another layer's draws. Box
+# coordinates are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a
+# rhombus. Shapes and points (`Circle`, `Point`, …; P6.1a5) are Cartesian (`embed`).
 
 """
     AbstractLayout
@@ -36,7 +37,8 @@ function Potts.paint!(op::Potts.LayoutState, l::Column, lat)
 end
 ```
 
-Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`) takes
+Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`, `Eden`,
+`Splits`) takes
 `splits = :warn | :allow` and can be rebuilt with changed keywords by
 `remake(l; kw...)`, which re-runs the keyword constructor (so it validates).
 """
@@ -57,6 +59,7 @@ mutable struct _LayerRow
     counted::Int
     recorded::Bool
     splits::Int
+    clipped::Int
 end
 
 """
@@ -72,12 +75,13 @@ mutable struct LayoutState{N}
     const cutby::Vector{Int32}       # per cell before the current leaf: 0, the one cutter, or -1 (several)
     const cutwarn::Vector{Bool}      # … some cutter has `splits = :warn`
     const rows::Vector{_LayerRow}
+    const pieces::Vector{Tuple{Int, Int, Bool}}   # `Splits`: (cell, row, warn) of its cells left in pieces
     layer::Int                       # the current leaf (0: none)
     base::Int                        # cells allocated before the current leaf
     warn::Bool                       # the current leaf has `splits = :warn`
 end
 LayoutState(dims::NTuple{N, Int}) where {N} =
-    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], 0, 0, true)
+    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], 0, 0, true)
 
 """
     new_cell!(op::LayoutState, kind) -> id
@@ -180,19 +184,20 @@ counts the cells of a simulation state.
 ncells(op::LayoutState) = length(op.kinds)
 
 """
-    record!(op::LayoutState; requested, painted, misses = 0, counted = painted)
+    record!(op::LayoutState; requested, painted, misses = 0, counted = painted, clipped = 0)
 
 Set the current leaf layer's entry in the layout report (see [`layout`](@ref)): what it was
-asked for, the cells it created, the draws that missed and what a stop rule counted. A layer
-that does not call it reports `requested = painted =` the cells it allocated. A layer that
+asked for, the cells it created, the draws that missed, what a stop rule counted and the
+sites of its region lost to closed edges and the domain. A layer that does not call it
+reports `requested = painted =` the cells it allocated and `clipped = 0`. A layer that
 paints built-in layers inside its own `paint!` calls `record!` last: their entries go to the
 same row.
 """
 function record!(op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
-        counted::Integer = painted)
+        counted::Integer = painted, clipped::Integer = 0)
     op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!"))
     r = op.rows[op.layer]
-    r.requested, r.painted, r.misses, r.counted, r.recorded = requested, painted, misses, counted, true
+    r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
     return nothing
 end
 
@@ -690,6 +695,816 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
 end
 
 # ---------------------------------------------------------------------------------------------
+# Shapes and point patterns (P6.1a5, D-138)
+# ---------------------------------------------------------------------------------------------
+#
+# Shapes are GeometryBasics' `HyperSphere`s (`Circle`, `Sphere`) in Cartesian coordinates:
+# the lattice's `embed` of the index (the identity on square lattices, `(q + r/2, r√3/2)` on
+# hexagonal ones). Site `x` is in shape `s` iff `|center − embed(x)| ≤ r·(1 + 1e-12)` (closed,
+# up to rounding: on hexagonal lattices `embed` carries √3/2 rounding, so sites at exactly the
+# radius would otherwise drop out unevenly) for `x` or one of its images through periodic
+# edges, so a shape wraps
+# through a periodic edge and is clipped at a closed edge and at the domain. Generators are
+# kept in index coordinates, where distances are embedded and Lloyd's centroids are taken
+# (the embedding is linear, so a centroid maps to the Cartesian centroid).
+
+# The embedding as a matrix: column j is the embedded unit vector along axis j.
+function _embedding(clat, ::Val{N}) where {N}
+    unit(j) = ntuple(d -> Float64(d == j), Val(N))
+    return SMatrix{N, N, Float64}(ntuple(k -> Float64(embed(clat, unit((k - 1) ÷ N + 1))[(k - 1) % N + 1]), Val(N * N)))
+end
+
+# Per axis, the index half-width of the box that holds a Cartesian ball of radius 1: the
+# row norms of the inverse embedding (|xᵢ| = |(E⁻¹v)ᵢ| ≤ ‖rowᵢ(E⁻¹)‖ |v|).
+_box_scale(Ei::SMatrix{N, N}) where {N} = ntuple(i -> sqrt(sum(abs2, Ei[i, :])), Val(N))
+
+# The Cartesian point of index coordinates `x`.
+_cart(clat, x::NTuple{N, Real}) where {N} = Point{N, Float64}(embed(clat, map(Float64, x)))
+
+function _shape_arg(s::HyperSphere, what)
+    (all(isfinite, s.center) && isfinite(s.r) && s.r >= 0) ||
+        throw(ArgumentError("$what: a shape needs a finite centre and a finite, non-negative radius, got $s"))
+    return s
+end
+
+# A layer's or pattern's region: the whole lattice (`nothing`), a shape or a box of ranges.
+_place_arg(::Nothing, what) = nothing
+_place_arg(s::HyperSphere, what) = _shape_arg(s, what)
+_place_arg(region, what) = _region_arg(region, length(region), what)
+
+function _check_dim(::HyperSphere{M}, N, what) where {M}
+    M == N || throw(ArgumentError("$what: the shape is $(M)D, the lattice $(N)D"))
+    return nothing
+end
+
+# The in-domain lattice sites of a region in column-major order, and its `clipped` count:
+# the points of the region that are not in-domain lattice sites.
+function _region_sites(::Nothing, lat::LatticeSpec{N}, what) where {N}
+    return CartesianIndex{N}[x for x in CartesianIndices(size(lat)) if indomain(lat, x)], 0
+end
+function _region_sites(region::Tuple, lat::LatticeSpec{N}, what) where {N}
+    length(region) == N || throw(ArgumentError("$what: the region has $(length(region)) ranges, the lattice is $(N)D"))
+    box = CartesianIndices(_region(region, size(lat), what))
+    sites = CartesianIndex{N}[x for x in box if indomain(lat, x)]
+    return sites, length(box) - length(sites)
+end
+
+# A shape: the scan covers the index box of its bounding ball (one point per class along
+# periodic axes), so it costs O(box volume × images), not O(lattice). U = index points with
+# periodic coordinates in `1:n` that lie in the shape; `clipped = |U| − sites`.
+function _region_sites(s::HyperSphere, lat::LatticeSpec{N}, what) where {N}
+    _check_dim(s, N, what)
+    clat = core_lattice(lat)
+    Ei = inv(_embedding(clat, Val(N)))
+    c = Ei * SVector{N, Float64}(s.center)
+    w = _box_scale(Ei) .* Float64(s.r)
+    dims = size(lat)
+    per = _periodic(lat)
+    lo = ntuple(d -> floor(Int, c[d] - w[d]) - 1, Val(N))
+    hi = ntuple(d -> ceil(Int, c[d] + w[d]) + 1, Val(N))
+    cand = ntuple(d -> per[d] ? _residues(lo[d], hi[d], dims[d]) : collect(lo[d]:hi[d]), Val(N))
+    sites = CartesianIndex{N}[]
+    clipped = 0
+    for x in Iterators.product(cand...)            # column-major: the axes are ascending
+        _in_shape(s, clat, x, lo, hi, dims, per) || continue
+        if indomain(lat, x)
+            push!(sites, CartesianIndex(x))
+        else
+            clipped += 1
+        end
+    end
+    return sites, clipped
+end
+_residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x in lo:hi])
+
+# Closed membership with a relative rounding tolerance (D-138).
+_in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1e-12)
+
+# Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in `s`.
+function _in_shape(s::HyperSphere, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
+    images = ntuple(d -> per[d] ? ((x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]) : (x[d]:1:x[d]), Val(N))
+    for y in Iterators.product(images...)
+        _in_closed(_cart(clat, y), s) && return true
+    end
+    return false
+end
+
+"""
+    Center()
+
+A point pattern: the centre of the lattice, the Cartesian point `embed((size(lat) .+ 1) ./ 2)`
+(`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a [`Voronoi`](@ref) generator, alone
+or in a vector of `Point`s. A shape's own centre is an explicit `Point`.
+"""
+struct Center end
+
+"""
+    RandomPoints(n; region = <whole lattice>, replace = false, seed)
+
+A point pattern: `n` lattice sites of `region` that lie in the lattice's domain, drawn
+uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`; Cartesian, wrapping
+through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
+column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each point draws
+`i = rand(rng, 1:m)`:
+
+- `replace = false`: the points are distinct; a draw is repeated while sᵢ is already taken,
+  and `n > m` throws.
+- `replace = true`: point k is sᵢ of its one draw, so points may coincide and `n > m` is
+  allowed (TST-style seeding: coinciding seeds merge in [`Eden`](@ref)). The two rules
+  draw the same stream, so they agree up to the first repeated site.
+
+The points are in draw order (as a Cartesian `Point` each, see [`Potts.points`](@ref)).
+Throws an `ArgumentError` for `n < 0`, a seed outside `0:typemax(UInt64)` and, on a lattice,
+`n > m` (without replacement) or `n > 0` with `m = 0`. `remake(p; seed)` redraws;
+`remake(p; replace = true)` switches the rule.
+"""
+struct RandomPoints{R}
+    n::Int
+    region::R
+    seed::UInt64
+    replace::Bool
+end
+function RandomPoints(n::Integer; region = nothing, replace::Bool = false, seed::Integer)
+    n >= 0 || throw(ArgumentError("RandomPoints: n must be non-negative, got $n"))
+    _check_seed(seed, "RandomPoints")
+    return RandomPoints(Int(n), _place_arg(region, "RandomPoints"), UInt64(seed), replace)
+end
+_layout_args(p::RandomPoints) = (RandomPoints, (:n,), (; p.n, p.region, p.replace, p.seed))
+
+# A point pattern argument: `RandomPoints`, `Center()`, a `Point`, or a non-empty vector of
+# `Point`s and `Center()`s (copied).
+_pattern_arg(p::Union{RandomPoints, Center}, what) = p
+_pattern_arg(p::Point, what) = [_check_point(p, what)]
+function _pattern_arg(v::AbstractVector, what)
+    isempty(v) && throw(ArgumentError("$what: no generator (the point list is empty)"))
+    all(p -> p isa Union{Point, Center}, v) ||
+        throw(ArgumentError("$what: a point list holds `Point`s and `Center()`s, got a $(typeof(v))"))
+    foreach(p -> p isa Point && _check_point(p, what), v)
+    return copy(v)
+end
+
+# A generator's coordinates are finite and small enough to round to lattice indices.
+function _check_point(p::Point, what)
+    all(x -> isfinite(x) && abs(x) < 1e15, p) ||
+        throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in magnitude, got $p"))
+    return p
+end
+_pattern_arg(p, what) =
+    throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() or a vector of Points)"))
+
+function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
+    sites, _ = _region_sites(p.region, lat, what)
+    m = length(sites)
+    rng = layer_rng(p.seed)
+    if p.replace                                 # one draw per point, no redraw (D-141)
+        (p.n == 0 || m > 0) ||
+            throw(ArgumentError("$what: RandomPoints draws $(p.n) sites from a region with no site in the domain"))
+        return CartesianIndex{N}[sites[rand(rng, 1:m)] for _ in 1:(p.n)]
+    end
+    p.n <= m || throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the region holds $m in the domain"))
+    taken = falses(m)
+    out = Vector{CartesianIndex{N}}(undef, p.n)
+    for k in 1:(p.n)
+        i = rand(rng, 1:m)
+        while taken[i]
+            i = rand(rng, 1:m)
+        end
+        taken[i] = true
+        out[k] = sites[i]
+    end
+    return out
+end
+
+_center_index(lat) = map(n -> (n + 1) / 2, size(lat))
+function _point_index(p::Point{M}, Ei::SMatrix{N, N}, what) where {M, N}
+    M == N || throw(ArgumentError("$what: a $(M)D point on a $(N)D lattice"))
+    _check_point(p, what)
+    return Tuple(Ei * SVector{N, Float64}(p))
+end
+
+# The points of a pattern in index coordinates (drawn sites stay exact integers).
+_index_points(p::RandomPoints, lat::LatticeSpec{N}, what) where {N} =
+    NTuple{N, Float64}[map(Float64, Tuple(x)) for x in _draw(p, lat, what)]
+_index_points(::Center, lat::LatticeSpec{N}, what) where {N} = NTuple{N, Float64}[_center_index(lat)]
+function _index_points(v::AbstractVector, lat::LatticeSpec{N}, what) where {N}
+    Ei = inv(_embedding(core_lattice(lat), Val(N)))
+    return NTuple{N, Float64}[p isa Center ? _center_index(lat) : _point_index(p, Ei, what) for p in v]
+end
+
+"""
+    Potts.points(pattern, x) -> Vector{Point{N, Float64}}
+
+The Cartesian points of a point pattern (`RandomPoints`, `Center()`, or a vector of `Point`s
+and `Center()`s) on `x`, anything [`layout`](@ref) takes. A given `Point` is returned as is.
+"""
+function points(pattern, x)
+    lat = _layout_spec(x)
+    return _cartesian_points(_pattern_arg(pattern, "points"), lat)
+end
+function _cartesian_points(p::Union{RandomPoints, Center}, lat::LatticeSpec{N}) where {N}
+    clat = core_lattice(lat)
+    return Point{N, Float64}[_cart(clat, y) for y in _index_points(p, lat, "points")]
+end
+function _cartesian_points(v::AbstractVector, lat::LatticeSpec{N}) where {N}
+    clat = core_lattice(lat)
+    out = Point{N, Float64}[]
+    for p in v
+        p isa Center && (push!(out, _cart(clat, _center_index(lat))); continue)
+        length(p) == N || throw(ArgumentError("points: a $(length(p))D point on a $(N)D lattice"))
+        push!(out, Point{N, Float64}(p))
+    end
+    return out
+end
+
+# ---------------------------------------------------------------------------------------------
+# Voronoi
+# ---------------------------------------------------------------------------------------------
+
+"""
+    Voronoi(points; region = <whole lattice>, lloyd = 0, kinds, splits = :warn)
+
+One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
+`Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only the
+sites of `region` (a shape or a tuple of index ranges) that are in the lattice's domain and
+still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
+
+- Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
+  minimum image along periodic axes. Ties, in floating point, go to the lower generator; on
+  hexagonal lattices rounding can break exact geometric ties either way.
+- `lloyd = k`: k times, every generator that owns a site moves to the centroid of its sites
+  (minimum image along periodic axes, Lloyd's algorithm), and the sites are reassigned: a
+  centroidal tessellation of compact cells of similar volume.
+- Then every cell is made one piece under the geometry's nearest-neighbour steps (the 2N axis
+  steps on square lattices, the 6 neighbours on hexagonal ones; wrapping on periodic axes),
+  hence under any neighbourhood that contains them: a stray piece joins the neighbouring
+  cell whose largest piece it touches most (ties: the lower id), and a cell's largest piece
+  never moves.
+
+`Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)` with
+`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (D-063, the former
+`VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
+left with no site and `clipped` the region's points lost to closed edges and the domain.
+With a domain, `clipped` depends on whether a region is given: the default (the whole
+lattice) is the domain's sites and clips nothing, while an explicit box, even the full
+lattice, counts its out-of-domain sites.
+Throws an `ArgumentError` for `lloyd < 0`, empty `kinds`, a bad `splits`, no generator, or a
+shape or point of another dimension than the lattice. `remake(v; lloyd = …)` works.
+"""
+struct Voronoi{P, R, K} <: AbstractLayout
+    points::P
+    region::R
+    lloyd::Int
+    kinds::Vector{K}
+    splits::Symbol
+end
+function Voronoi(points; region = nothing, lloyd::Integer = 0, kinds, splits::Symbol = :warn)
+    lloyd >= 0 || throw(ArgumentError("Voronoi: lloyd must be non-negative, got $lloyd"))
+    return Voronoi(_pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd), _kinds_arg(kinds, "Voronoi"),
+        _splits_arg(splits, "Voronoi"))
+end
+_splits(l::Voronoi) = l.splits
+_layout_args(l::Voronoi) = (Voronoi, (:points,), (; l.points, l.region, l.lloyd, l.kinds, l.splits))
+
+function paint!(op::LayoutState, l::Voronoi, lat)
+    region, clipped = _region_sites(l.region, lat, "Voronoi")
+    gens = _index_points(l.points, lat, "Voronoi")
+    isempty(gens) && throw(ArgumentError("Voronoi: no generator (the point pattern is empty)"))
+    sites = filter(x -> owner(op, x) == 0, region)          # fill medium only
+    owners = _voronoi!(gens, sites, lat, l.lloyd)
+    n = length(gens)
+    ids = [new_cell!(op, l.kinds[mod1(k, length(l.kinds))]) for k in 1:n]
+    for (i, x) in enumerate(sites)
+        assign!(op, x, ids[owners[i]])
+    end
+    record!(op; requested = n, painted = n, clipped)
+    return nothing
+end
+
+# The generator owning each of `sites` after `lloyd` centroid moves and the one-piece repair.
+# `gens` (index coordinates) is moved in place.
+function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianIndex{N}}, lat, lloyd) where {N}
+    m, n = length(sites), length(gens)
+    owner = zeros(Int, m)
+    m == 0 && return owner
+    clat = core_lattice(lat)
+    dims = size(lat)
+    per = _periodic(lat)
+    index = zeros(Int, dims)                     # site => its position in `sites` (0: not painted here)
+    for (i, x) in enumerate(sites)
+        index[x] = i
+    end
+    scale = _box_scale(inv(_embedding(clat, Val(N))))
+    best = zeros(m)
+    image = Vector{NTuple{N, Int}}(undef, m)     # the period shift of the image nearest the owner
+    sums, counts = zeros(N, n), zeros(Int, n)
+    h = 2.0 * (m / n)^(1 / N)                     # about two cell radii (any h is exact)
+    for _ in 1:lloyd
+        h = _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
+        h = max(1.0, 1.25sqrt(maximum(best)))    # the next pass starts near the need
+        fill!(sums, 0.0)
+        fill!(counts, 0)
+        for (i, x) in enumerate(sites)
+            k = owner[i]
+            counts[k] += 1
+            for d in 1:N
+                sums[d, k] += x[d] + image[i][d]
+            end
+        end
+        for k in 1:n
+            counts[k] > 0 && (gens[k] = ntuple(d -> _wrap_coord(sums[d, k] / counts[k], dims[d], per[d]), Val(N)))
+        end
+    end
+    _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
+    _connect_pieces!(owner, sites, index, n, _nearest_steps(clat, Val(N)), per)
+    return owner
+end
+
+# A coordinate moved back into [½, n + ½) on a periodic axis (unchanged when already inside).
+_wrap_coord(g, n, periodic) = periodic && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+
+# Nearest generator of every site. Each generator scans the index box that holds its
+# Cartesian `h`-ball (`_box_scale`, plus ½ for rounding its position), wrapping on periodic
+# axes, so every image within `h` is seen. A site whose nearest scanned generator lies within
+# `h` has found its true nearest one; otherwise `h` doubles. Ties go to the lower generator.
+# Exact for any `h`; returns the `h` that sufficed.
+function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, per, scale, h) where {N}
+    dims = size(index)
+    while true
+        fill!(owner, 0)
+        fill!(best, Inf)
+        hh = h                                   # not captured while reassigned (no box)
+        w = map(s -> ceil(Int, hh * s + 0.5), scale)
+        for (k, g) in enumerate(gens)
+            c = map(x -> round(Int, x), g)
+            box = CartesianIndices(ntuple(d -> per[d] ? ((c[d] - w[d]):(c[d] + w[d])) :
+                                               (max(1, c[d] - w[d]):min(dims[d], c[d] + w[d])), Val(N)))
+            for y in box
+                x = ntuple(d -> per[d] ? mod1(y[d], dims[d]) : y[d], Val(N))
+                i = index[x...]
+                i == 0 && continue
+                d2 = sum(abs2, embed(clat, map((a, b) -> Float64(a) - b, Tuple(y), g)))
+                if d2 < best[i]
+                    best[i], owner[i], image[i] = d2, k, map(-, Tuple(y), x)
+                end
+            end
+        end
+        maximum(best) <= h^2 && return h
+        h *= 2
+    end
+end
+
+# The nearest-neighbour steps of the geometry: the offsets in {-1, 0, 1}ᴺ of shortest
+# embedded length (2N axis steps on square lattices, 6 on hexagonal ones).
+function _nearest_steps(clat, ::Val{N}) where {N}
+    offs = [o for o in Iterators.product(ntuple(_ -> -1:1, Val(N))...) if any(!=(0), o)]
+    len = [sum(abs2, embed(clat, map(Float64, o))) for o in offs]
+    return offs[len .<= minimum(len) + 1e-9]
+end
+
+# The position in `sites` of the site one step `o` from `x` (wrapping on periodic axes; 0 off
+# the lattice or not painted by this layer).
+function _step_index(index::Array{Int, N}, x::CartesianIndex{N}, o, per) where {N}
+    y = ntuple(d -> per[d] ? mod1(x[d] + o[d], size(index, d)) : x[d] + o[d], Val(N))
+    checkbounds(Bool, index, y...) || return 0
+    return index[y...]
+end
+
+# Make every cell one piece under the nearest-neighbour `steps` (D-063). Each pass labels the
+# pieces. A piece that is not its cell's largest (a stray piece) and touches the largest piece
+# of another cell goes to the cell whose largest piece it shares the most bonds with (ties:
+# the lower id). If no stray piece touches a largest piece, the lowest stray piece goes to the
+# neighbouring cell it shares the most bonds with. Either move lowers the number of stray
+# sites or pieces and never splits a cell, so the loop ends. A stray piece with no
+# neighbouring cell (a region split by the domain) stays.
+function _connect_pieces!(owner, sites, index, n, steps, per)
+    m = length(sites)
+    piece = zeros(Int, m)
+    stack = Int[]
+    sizes, cellof, main = Int[], Int[], zeros(Int, n)
+    bonds = Dict{Tuple{Int, Int}, Int}()          # (stray piece, cell) => bonds
+    tomain = Dict{Tuple{Int, Int}, Int}()         # … with that cell's largest piece only
+    while true
+        fill!(piece, 0)
+        empty!(sizes)
+        empty!(cellof)
+        for i in 1:m
+            piece[i] == 0 || continue
+            push!(sizes, 0)
+            push!(cellof, owner[i])
+            p = length(sizes)
+            piece[i] = p
+            push!(stack, i)
+            while !isempty(stack)
+                j = pop!(stack)
+                sizes[p] += 1
+                for o in steps
+                    k = _step_index(index, sites[j], o, per)
+                    (k != 0 && piece[k] == 0 && owner[k] == owner[j]) || continue
+                    piece[k] = p
+                    push!(stack, k)
+                end
+            end
+        end
+        fill!(main, 0)
+        for p in eachindex(sizes)
+            g = cellof[p]
+            (main[g] == 0 || sizes[p] > sizes[main[g]]) && (main[g] = p)
+        end
+        any(p -> main[cellof[p]] != p, eachindex(sizes)) || return nothing
+        empty!(bonds)
+        empty!(tomain)
+        for i in 1:m
+            p = piece[i]
+            main[cellof[p]] == p && continue
+            for o in steps
+                k = _step_index(index, sites[i], o, per)
+                (k != 0 && owner[k] != owner[i]) || continue
+                key = (p, owner[k])
+                bonds[key] = get(bonds, key, 0) + 1
+                main[owner[k]] == piece[k] && (tomain[key] = get(tomain, key, 0) + 1)
+            end
+        end
+        isempty(bonds) && return nothing
+        moves = isempty(tomain) ? _best_cells(bonds, minimum(first, keys(bonds))) : _best_cells(tomain, 0)
+        for i in 1:m
+            g = get(moves, piece[i], 0)
+            g == 0 || (owner[i] = g)
+        end
+    end
+end
+
+# piece => the cell it shares the most bonds with (ties: the lower id), for every piece in
+# `counts`, or for piece `only` alone when `only > 0`.
+function _best_cells(counts::Dict{Tuple{Int, Int}, Int}, only::Int)
+    best = Dict{Int, Tuple{Int, Int}}()           # piece => (bonds, cell)
+    for ((p, g), b) in counts
+        (only == 0 || p == only) || continue
+        bb, gg = get(best, p, (0, 0))
+        (b > bb || (b == bb && g < gg)) && (best[p] = (b, g))
+    end
+    return Dict(p => g for (p, (_, g)) in best)
+end
+
+# ---------------------------------------------------------------------------------------------
+# shortfall (D-141)
+# ---------------------------------------------------------------------------------------------
+
+function _shortfall_arg(s, what)
+    s in (:error, :warn, :allow) ||
+        throw(ArgumentError("$what: `shortfall` must be :error, :warn or :allow, got $(repr(s))"))
+    return s
+end
+
+# A layer that painted fewer cells than it was asked for, at the end of its own paint.
+function _shortfall!(mode::Symbol, what, requested, painted)
+    painted < requested || return nothing
+    mode === :allow && return nothing
+    msg = "$what: shortfall: $requested cells requested, $painted painted; pass `shortfall = :allow` to accept fewer"
+    mode === :error && throw(ArgumentError(msg))
+    @warn msg
+    return nothing
+end
+
+# ---------------------------------------------------------------------------------------------
+# Eden (D-141)
+# ---------------------------------------------------------------------------------------------
+
+"""
+    Eden(points; rounds, region = <whole lattice>, kinds, seed, neighborhood = nothing,
+         shortfall = :error, splits = :warn)
+
+Seed-and-grow (TST's `GrowInCells`): one-site cells at `points`, grown by `rounds` rounds of
+synchronous random (Eden) growth into the medium.
+
+- **Seeding.** `points` is a point pattern as for [`Voronoi`](@ref) (`RandomPoints`,
+  `Center()`, a `Point`, or a vector of `Point`s and `Center()`s). Each point is mapped to
+  lattice indices and rounded half up, `floor(xᵢ + 1/2)` (so `Center()` on 200² is site
+  (101, 101), TST's `sizex/2`), wrapping along periodic axes. In point order, a point whose
+  site is on the lattice, in `region` ∩ domain and still medium becomes a new one-site cell;
+  any other point is not placed, so coinciding points merge (the first one wins). `kinds` is
+  cycled over the cells created; ids follow creation order.
+- **Growth.** Each round visits the medium sites of `region` ∩ domain in column-major order.
+  A site with a neighbour (under `neighborhood`, default the lattice's own) owned by a cell
+  of this layer at the start of the round draws one neighbour uniformly, `j = rand(rng,
+  1:K)` over the `K` offsets of `CorePotts.relation`, with one `rng =
+  Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbour is a cell of this
+  layer at the start of the round, the site joins it at the end of the round. This is TST's
+  law (every medium site draws one of its neighbours and copies it only from a growing
+  cell); sites with no growing neighbour cannot change, so they draw nothing. TST grows
+  with 8 neighbours even on a lattice with a larger neighbourhood: pass `neighborhood =
+  Moore(1)` there.
+
+Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
+of ranges or a shape) or the domain. Each cell grows from one site, so it is one piece under
+`neighborhood`.
+
+The report row has `requested` = the points, `painted` = the cells created, `misses` = the
+points not placed, and `clipped` as for `Voronoi`. When fewer cells are painted than
+requested, `shortfall = :error` (the default) throws, `:warn` warns and `:allow` accepts
+it (seeds drawn with replacement merge by design: `RandomPoints(n; replace = true)`).
+
+Throws an `ArgumentError` for `rounds < 0`, empty `kinds`, a bad seed, `shortfall` or
+`splits`, a `neighborhood` that is not a relation spec such as `Moore(1)`, an empty point
+list and (at layout) a point or shape of another dimension. `remake(e; rounds = …)` works.
+
+```julia
+# TST's de novo vasculogenesis start: 360 seeds with replacement, 10 rounds
+overlay(Frame(:border), Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, seed = 1);
+    rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
+```
+"""
+struct Eden{P, R, K, H} <: AbstractLayout
+    points::P
+    region::R
+    rounds::Int
+    kinds::Vector{K}
+    seed::UInt64
+    neighborhood::H
+    shortfall::Symbol
+    splits::Symbol
+end
+function Eden(points; rounds::Integer, region = nothing, kinds, seed::Integer, neighborhood = nothing,
+        shortfall::Symbol = :error, splits::Symbol = :warn)
+    rounds >= 0 || throw(ArgumentError("Eden: rounds must be non-negative, got $rounds"))
+    _check_seed(seed, "Eden")
+    (neighborhood === nothing || neighborhood isa CorePotts.RelationSpec) ||
+        throw(ArgumentError("Eden: `neighborhood` must be a relation spec such as Moore(1), got $(repr(neighborhood))"))
+    return Eden(_pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds), _kinds_arg(kinds, "Eden"),
+        UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"), _splits_arg(splits, "Eden"))
+end
+_splits(l::Eden) = l.splits
+
+function paint!(op::LayoutState, l::Eden, lat)
+    region, clipped = _region_sites(l.region, lat, "Eden")
+    pts = _index_points(l.points, lat, "Eden")
+    n = length(pts)
+    placed = _eden!(op, l, lat, region, pts)
+    record!(op; requested = n, painted = placed, misses = n - placed, clipped)
+    _shortfall!(l.shortfall, "Eden", n, placed)
+    return nothing
+end
+
+function _eden!(op::LayoutState{N}, l::Eden, lat::LatticeSpec{N}, region::Vector{CartesianIndex{N}},
+        pts::Vector{NTuple{N, Float64}}) where {N}
+    dims = size(lat)
+    per = _periodic(lat)
+    σ = op.σ
+    allowed = falses(dims)                       # region ∩ domain
+    for x in region
+        allowed[x] = true
+    end
+    lo = ncells(op) + 1                          # this layer's cells are lo:ncells(op)
+    placed = 0
+    for p in pts
+        r = ntuple(d -> floor(Int, p[d] + 0.5), Val(N))      # rounded half up
+        x = ntuple(d -> per[d] ? mod1(r[d], dims[d]) : r[d], Val(N))
+        checkbounds(Bool, σ, x...) || continue
+        (allowed[x...] && σ[x...] == 0) || continue
+        placed += 1
+        assign!(op, x, new_cell!(op, l.kinds[mod1(placed, length(l.kinds))]))
+    end
+    (l.rounds == 0 || placed == 0) && return placed
+    clat = core_lattice(lat)
+    spec = l.neighborhood === nothing ? lat.neighborhood : l.neighborhood
+    # a vector: the offset count is a runtime value (a tuple of them would not infer)
+    offs = collect(NTuple{N, Int32}, CorePotts.relation(spec, clat).offsets)
+    _eden_grow!(op, l, clat, offs, allowed, lo)
+    return placed
+end
+
+# `rounds` synchronous growth rounds of the cells `lo:ncells(op)` under the offsets `offs`.
+function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where {N}
+    σ = op.σ
+    back = map(o -> map(-, o), offs)             # x with shift(x, o) = s is shift(s, -o)
+    K = length(offs)
+    rng = layer_rng(l.seed, :eden)
+    ci = CartesianIndices(σ)
+    # Candidates: medium sites that may have a growing neighbour (a superset of the
+    # frontier). A site leaves when it is painted or found with no growing neighbour, and
+    # re-enters when a neighbour is painted, so every eligible site of a round is a candidate.
+    cand = Int[]
+    incand = falses(size(σ))
+    for s in eachindex(σ)
+        σ[s] >= lo && _eden_enqueue!(cand, incand, s, allowed, σ, clat, back)
+    end
+    joins = Tuple{Int, Int32}[]
+    keep = Int[]
+    for _ in 1:(l.rounds)
+        sort!(cand)                              # column-major, the order of the draws
+        empty!(joins)
+        empty!(keep)
+        for k in cand
+            x = Tuple(ci[k])
+            front = false
+            for o in offs
+                inside, y = CorePotts.shift(clat, x, o)
+                (inside && σ[y...] >= lo) && (front = true; break)
+            end
+            if !front
+                incand[k] = false
+                continue
+            end
+            push!(keep, k)
+            inside, y = CorePotts.shift(clat, x, offs[rand(rng, 1:K)])
+            c = σ[y...]
+            inside && c >= lo && push!(joins, (k, c))
+        end
+        empty!(cand)
+        append!(cand, keep)
+        isempty(joins) && continue
+        for (k, c) in joins                      # the round's end: σ was read as it started
+            assign!(op, ci[k], c)
+            incand[k] = false
+        end
+        filter!(k -> σ[k] == 0, cand)
+        for (k, _) in joins
+            _eden_enqueue!(cand, incand, k, allowed, σ, clat, back)
+        end
+    end
+    return nothing
+end
+
+# Add the medium sites of region ∩ domain that have site `s` as a neighbour to the candidates.
+function _eden_enqueue!(cand, incand, s, allowed, σ::Array{Int32, N}, clat, back) where {N}
+    li, ci = LinearIndices(σ), CartesianIndices(σ)
+    for o in back
+        inside, y = CorePotts.shift(clat, Tuple(ci[s]), o)
+        inside || continue
+        k = li[y...]
+        (allowed[k] && σ[k] == 0 && !incand[k]) || continue
+        incand[k] = true
+        push!(cand, k)
+    end
+    return nothing
+end
+
+# ---------------------------------------------------------------------------------------------
+# Splits (D-141)
+# ---------------------------------------------------------------------------------------------
+
+"""
+    Splits(layer, k; shortfall = :error, splits = :warn)
+
+`layer`, with each of its cells divided `k` times (`0 ≤ k ≤ 30`) on the host before the
+simulation starts (TST's `DivideCells`): k passes, each cutting every cell of this layer
+with at least 2 sites in two across its long axis. It is not the simulation's division
+routine (no state, no trackers); it shares only the cut geometry with
+`CorePotts.AlongMinorAxis`.
+
+- Pass j visits the layer's cells in id order as they stand at the start of the pass; the
+  daughter of each cut is a new cell of the mother's kind, allocated right after the cut.
+  Cells of earlier layers are never touched.
+- The cut: sites in Cartesian coordinates (`embed`), unwrapped along periodic axes to the
+  image nearest the cell's first site in column-major order; `c` the centroid, `v` the unit
+  eigenvector of the largest eigenvalue of `C = Σ (p − c)(p − c)ᵀ` (in 2D by
+  `AlongMinorAxis`' rule; for a repeated largest eigenvalue, the first standard axis
+  projected onto its eigenspace), its first nonzero component positive. The daughter takes
+  the sites with `(p − c)·v > 0`; sites on the plane (up to a relative 1e-9 of the cell's
+  largest `|(p − c)·v|`) stay with the mother. A cell spanning more than half a periodic axis
+  is unwrapped relative to its first site all the same, so its cut can be torn into pieces
+  (deterministically).
+- After the passes, every cell of this layer that is not one piece under the lattice
+  neighbourhood (whether a cut or `layer` itself left it so) counts once in the report row's
+  `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
+  warning; `splits = :allow` silences the warning, not the count.
+
+The report row (one row for `Splits` and its `layer`) has `requested` = m·2ᵏ, m the cells of
+`layer` that own a site, `painted` = the cells owning a site after the passes, `misses` =
+their difference and the inner layer's `clipped`. A one-site cell cannot be cut, so fewer
+cells than requested is a shortfall: `shortfall = :error` (the default) throws, `:warn`
+warns, `:allow` accepts it. Throws an `ArgumentError` for `k` outside `0:30` or a bad
+`shortfall` or `splits`. `remake(s; k = …)` works.
+
+```julia
+# TST's sprout start: one Eden blob of 50 rounds at the centre, divided 7 times (128 cells)
+overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = 1), 7; splits = :allow))
+```
+"""
+struct Splits{L <: AbstractLayout} <: AbstractLayout
+    layer::L
+    k::Int
+    shortfall::Symbol
+    splits::Symbol
+end
+function Splits(layer::AbstractLayout, k::Integer; shortfall::Symbol = :error, splits::Symbol = :warn)
+    0 <= k <= 30 || throw(ArgumentError("Splits: k must be in 0:30, got $k"))
+    return Splits(layer, Int(k), _shortfall_arg(shortfall, "Splits"), _splits_arg(splits, "Splits"))
+end
+_splits(l::Splits) = l.splits
+
+function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
+    lo = ncells(op) + 1
+    paint!(op, l.layer, lat)                     # into this row (a delegating layer, D-091)
+    clipped = op.rows[op.layer].clipped
+    sites = [CartesianIndex{N}[] for _ in lo:ncells(op)]
+    for x in CartesianIndices(op.σ)
+        c = op.σ[x]
+        c >= lo && push!(sites[c - lo + 1], x)
+    end
+    m = count(!isempty, sites)
+    clat = core_lattice(lat)
+    dims, per = size(lat), _periodic(lat)
+    P = NTuple{N, Float64}[]
+    for _ in 1:(l.k), c in lo:ncells(op)        # the range is fixed at the pass's start
+        S = sites[c - lo + 1]
+        length(S) >= 2 || continue
+        _split_points!(P, S, clat, dims, per)
+        cen, v = _split_axis(P)
+        side = _daughter_side(P, cen, v)
+        any(side) || continue
+        daughter = S[side]
+        deleteat!(S, side)
+        id = new_cell!(op, kindof(op, c))
+        push!(sites, daughter)
+        for x in daughter
+            assign!(op, x, id)
+        end
+    end
+    painted = count(!isempty, sites)
+    requested = m << l.k
+    check = falses(ncells(op))
+    for c in lo:ncells(op)
+        check[c] = length(sites[c - lo + 1]) > 1
+    end
+    # an inner Splits shares this row: its findings for these cells are superseded
+    filter!(q -> q[1] < lo, op.pieces)
+    warn, row = l.splits === :warn, op.layer
+    _disconnected(op.σ, check, lat) do c
+        push!(op.pieces, (c, row, warn))         # counted and warned by `layout` (final ids)
+    end
+    record!(op; requested, painted, misses = requested - painted, clipped)
+    _shortfall!(l.shortfall, "Splits", requested, painted)
+    return nothing
+end
+
+# The daughter's sites: (p − c)·v > 0, where "0" is relative to the largest |(p − c)·v| of the
+# cell (1e-9): an inexact centroid and axis turn a site exactly on the plane into ±1e-16,
+# and it must stay with the mother.
+function _daughter_side(P, cen, v)
+    d = [_dot_from(p, cen, v) for p in P]
+    tol = 1e-9 * maximum(abs, d)
+    return [x > tol for x in d]
+end
+
+_dot_from(p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{N, Float64}) where {N} =
+    sum(d -> (p[d] - c[d]) * v[d], 1:N)
+
+# The Cartesian positions of a cell's sites `S`, each unwrapped along periodic axes to the
+# image nearest `S[1]` (displacement in [-n/2, n/2): ties to the lower image).
+function _split_points!(P::Vector{NTuple{N, Float64}}, S::Vector{CartesianIndex{N}}, clat, dims, per) where {N}
+    empty!(P)
+    x0 = Tuple(S[1])
+    for s in S
+        u = ntuple(Val(N)) do d
+            δ = s[d] - x0[d]
+            h = fld(dims[d], 2)
+            Float64(x0[d] + (per[d] ? mod(δ + h, dims[d]) - h : δ))
+        end
+        push!(P, NTuple{N, Float64}(embed(clat, u)))
+    end
+    return P
+end
+
+# The centroid of `P` and the unit eigenvector of the largest eigenvalue of its scatter
+# matrix, sign-fixed (the first component of magnitude > 1e-9 is positive).
+function _split_axis(P::Vector{NTuple{N, Float64}}) where {N}
+    c = ntuple(d -> sum(p -> p[d], P) / length(P), Val(N))
+    C = zeros(N, N)
+    for p in P, i in 1:N, j in 1:N
+        C[i, j] += (p[i] - c[i]) * (p[j] - c[j])
+    end
+    v = N == 2 ? _major_axis_2d(C) : _major_axis(C)
+    v ./= sqrt(sum(abs2, v))
+    f = findfirst(x -> abs(x) > 1e-9, v)
+    f !== nothing && v[f] < 0 && (v .*= -1)
+    return c, ntuple(d -> v[d], Val(N))
+end
+
+# CorePotts' 2D `AlongMinorAxis` rule: (λ − C₂₂, C₁₂), or the larger diagonal's axis (e₁ on a
+# tie) when C₁₂ vanishes.
+function _major_axis_2d(C)
+    a, b, d = C[1, 1], C[1, 2], C[2, 2]
+    λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
+    return abs(b) > eps() * (abs(a) + abs(d)) ? [λ - d, b] : (a >= d ? [1.0, 0.0] : [0.0, 1.0])
+end
+
+# Any dimension: the top eigenvector; for a repeated top eigenvalue, the first standard axis
+# with a nonzero projection on its eigenspace, projected onto it.
+function _major_axis(C)
+    N = size(C, 1)
+    E = eigen(Symmetric(C))
+    λ = E.values                                 # ascending
+    tied = findall(x -> λ[end] - x <= 1e-9 * max(λ[end], 1e-300), λ)
+    length(tied) == 1 && return E.vectors[:, end]
+    B = E.vectors[:, tied]
+    for e in 1:N
+        u = B * B[e, :]                          # the projection of eₑ onto span(B)
+        sqrt(sum(abs2, u)) > 1e-6 && return u
+    end
+    return E.vectors[:, end]
+end
+
+# ---------------------------------------------------------------------------------------------
 # remake
 # ---------------------------------------------------------------------------------------------
 
@@ -700,10 +1515,12 @@ _layout_args(l::Scattered) = (Scattered, (:n, :size), (; l.n, l.size, l.region, 
 _layout_args(l::Frame) = (Frame, (:kind,), (; l.kind, l.width, l.splits))
 _layout_args(l::InsertUntil) = (InsertUntil, (:kind,), (; l.kind, l.into, l.fraction,
     number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits))
+_layout_args(l::Eden) = (Eden, (:points,), (; l.points, l.region, l.rounds, l.kinds, l.seed, l.neighborhood, l.shortfall, l.splits))
+_layout_args(l::Splits) = (Splits, (:layer, :k), (; l.layer, l.k, l.shortfall, l.splits))
 _layout_args(l::AbstractLayout) =
     throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known)"))
 
-function SciMLBase.remake(l::AbstractLayout; kw...)
+function SciMLBase.remake(l::Union{AbstractLayout, RandomPoints}; kw...)
     ctor, pos, args = _layout_args(l)
     for k in keys(kw)
         haskey(args, k) || throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`"))
@@ -751,7 +1568,7 @@ end
 _paint_leaf!(op::LayoutState, l::Overlay, lat) = paint!(op, l, lat)
 function _paint_leaf!(op::LayoutState, l::AbstractLayout, lat)
     base = ncells(op)
-    push!(op.rows, _LayerRow(nameof(typeof(l)), base + 1, base, 0, 0, 0, 0, false, 0))
+    push!(op.rows, _LayerRow(nameof(typeof(l)), base + 1, base, 0, 0, 0, 0, false, 0, 0))
     # the per-cell cut records cover the cells a leaf can cut: those before it
     n = length(op.cutby)
     resize!(op.cutby, base)
@@ -833,18 +1650,35 @@ end
 # could warn and no report is asked for.
 function _check_splits!(op::LayoutState, lat::LatticeSpec, counts, report::Bool)
     cutby, cutwarn = op.cutby, op.cutwarn
-    any(!=(0), cutby) || return nothing        # no cell was cut
+    warned = falses(length(counts))
+    any(!=(0), cutby) || return warned         # no cell was cut
     check = falses(length(counts))              # cells of the last leaf were never cut
     for c in eachindex(cutby)
         check[c] = cutby[c] != 0 && counts[c] > 0 && (cutwarn[c] || (report && cutby[c] > 0))
     end
-    any(check) || return nothing
+    any(check) || return warned
     _disconnected(op.σ, check, lat) do c
         if cutwarn[c]
-            id = count(>(0), view(counts, 1:c))
-            @warn "layout: later layers split cell $id (kind $(op.kinds[c])) into disconnected pieces"
+            warned[c] = true
+            @warn "layout: later layers split cell $(_final_id(counts, c)) (kind $(op.kinds[c])) into disconnected pieces"
         end
         report && cutby[c] > 0 && (op.rows[cutby[c]].splits += 1)
+    end
+    return warned
+end
+
+# The id of paint cell `c` in the returned σ (cells with no site are dropped).
+_final_id(counts, c) = count(>(0), view(counts, 1:c))
+
+# The cells a `Splits` left in pieces at the end of its paint: counted in its row, and
+# warned (under `splits = :warn`, by their final id) unless dropped later or already named by
+# the split warning above.
+function _report_pieces!(op::LayoutState, counts, warned)
+    for (c, row, warn) in op.pieces
+        op.rows[row].splits += 1
+        (warn && counts[c] > 0 && !warned[c]) || continue
+        @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
+              "(pass `splits = :allow` to that Splits to accept it)"
     end
     return nothing
 end
@@ -874,16 +1708,21 @@ contributes its flattened leaves), with the properties
 
 - `layer`: the leaf's position; `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`, …);
 - `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` 1, `InsertUntil` its
-  `number` (`counted` under a `fraction` rule), a custom layer what it passed to
-  [`record!`](@ref);
+  `number` (`counted` under a `fraction` rule), `Voronoi` and `Eden` their points, `Splits`
+  m·2ᵏ (m the inner layer's cells), a custom layer what it passed to [`record!`](@ref);
 - `painted`: the cells the layer created; `dropped`: of those, the cells left with no site
   after the whole layout;
-- `misses`: `InsertUntil` the missed draws (in both `misses` modes), a custom layer its
-  `record!` value, other layers 0;
+- `misses`: `InsertUntil` the missed draws (in both `misses` modes), `Eden` and `Splits`
+  `requested − painted` (their shortfall), a custom layer its `record!` value, other layers 0;
 - `counted`: `InsertUntil` what its stop rule counted (`painted`, plus `misses` under
   `misses = :count`), other layers `painted`;
+- `clipped`: `Voronoi` and `Eden` (and a `Splits` of them) the points of its region (a shape or a box) that are not in-domain
+  lattice sites, lost to closed edges and to the domain (nothing is lost through a periodic
+  edge: a shape wraps); sites it skipped because an earlier layer owns them are not clipped.
+  A custom layer its `record!` value, other layers 0;
 - `splits`: the cells cut only by this layer (it took at least one of their sites) whose
-  remaining sites are disconnected after the whole layout, whatever its `splits` setting.
+  remaining sites are disconnected after the whole layout, whatever its `splits` setting;
+  for `Splits`, plus its own cells left in pieces by its divisions.
 """
 function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     lat = _layout_spec(x)
@@ -896,7 +1735,8 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     for s in σ
         s > 0 && (counts[s] += 1)
     end
-    _check_splits!(op, lat, counts, report)
+    warned = _check_splits!(op, lat, counts, report)
+    _report_pieces!(op, counts, warned)
     mask = lat.domain
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
@@ -904,7 +1744,7 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
             throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain"))
     end
     rows = report ? [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
-                         r.misses, r.counted, r.splits) for (j, r) in enumerate(op.rows)] : nothing
+                         r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)] : nothing
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
     return report ? (point, rows) : point
@@ -913,7 +1753,8 @@ end
 # The kind names a layout's built-in layers name (cell kinds and `InsertUntil` hosts).
 _layer_kinds(l::AbstractLayout) = ()
 _layer_kinds(l::Overlay) = Any[k for x in l.layers for k in _layer_kinds(x)]
-_layer_kinds(l::Union{Tiling, Scattered}) = l.kinds
+_layer_kinds(l::Union{Tiling, Scattered, Voronoi, Eden}) = l.kinds
+_layer_kinds(l::Splits) = _layer_kinds(l.layer)
 _layer_kinds(l::Frame) = (l.kind,)
 _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 
