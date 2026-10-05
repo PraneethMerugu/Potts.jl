@@ -62,7 +62,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
-    for (k, s) in given, n in _solver_keys(_localize(sys, k), [fields; odes], nameof(sys))
+    for (k, s) in given, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
         n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)

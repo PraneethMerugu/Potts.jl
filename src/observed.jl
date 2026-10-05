@@ -94,7 +94,7 @@ end
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
 function _param_info(sys::PottsModelInfo, x)
-    x = _localize(sys.csys.sys, x)
+    x = _localize(sys.csys.sys, x; strict = true)       # another model's `other₊λ` is an error (D-137)
     x isa Symbol && return findfirst(p -> info(p).name === x, getfield(sys.csys.sys, :parameters))
     _potts_quantity(x) || return nothing
     i = info(x)
@@ -107,6 +107,7 @@ const _STATE_SCOPE = (cell = :cell, site = :site, field = :site, model = :model)
 _state_var(v) = (i = info(v); i !== nothing && haskey(_STATE_SCOPE, i.role))
 function _state_index(sys::PottsModelInfo, x)
     x = _localize(sys.csys.sys, x)
+    _foreign(sys.csys.sys, x) && return nothing
     x isa Symbol || _potts_quantity(x) || return nothing
     for v in getfield(sys.csys.sys, :variables)
         _state_var(v) || continue

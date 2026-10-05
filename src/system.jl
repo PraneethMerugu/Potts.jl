@@ -299,6 +299,14 @@ function _foreign_key(sys::PottsSystem, n::Symbol, declared)
                         "key by this model's own symbols, `complete(sys).x` (or `sys.x`, `$(nameof(sys))₊x`)"))
 end
 
+# `k` (after `_localize`) is a single symbol namespaced by another system: its name has a
+# `₊` and names no declared quantity
+function _foreign(sys::PottsSystem, k)
+    n = k isa Symbol ? k : _key_name(_unwrap(k))
+    n isa Symbol && _namespaced(n) || return false
+    return !haskey(_declared_quantities(sys), n)
+end
+
 """The key `k` with this model's namespace (`pr₊x`) removed: the declared quantity (or its
 name, for a `Symbol` key); in an expression, every such symbol. Other keys are returned as
 they are, or with `strict` a key namespaced by another name is an `ArgumentError`."""
@@ -329,8 +337,13 @@ function _localize(sys::PottsSystem, k; strict::Bool = false)
     declared = _declared_quantities(sys)
     subs = Dict{Any, Any}()
     for y in found
-        m = _own_name(sys, _key_name(y), declared)
-        m === nothing || (subs[y] = declared[m])
+        n = _key_name(y)
+        m = _own_name(sys, n, declared)
+        if m !== nothing
+            subs[y] = declared[m]
+        elseif strict
+            _foreign_key(sys, n, declared)
+        end
     end
     isempty(subs) && return k
     return Symbolics.substitute(u, subs; fold = Val(false))

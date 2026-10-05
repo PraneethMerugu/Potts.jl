@@ -4066,6 +4066,20 @@ using Potts.ModelingToolkitBase: Setfield as NsSetfield
         end
         @test e isa ArgumentError && occursin("complete(sys).x", e.msg) && occursin("other₊", e.msg)
     end
+    # … and wherever else a key is resolved (review round 2): `getp`, `prob.ps[…]`, `solvers`,
+    # and inside an expression
+    for f in (() -> Potts.SymbolicIndexingInterface.getp(p1, other.λ)(p1), () -> p1.ps[other.λ],
+              () -> PottsProblem(sys, ns_op(), (0, 1); solvers = [other.x => RK4()]), () -> p1[sys.total + other.λ],
+              () -> observe(p1, sys.total + other.λ))
+        e = try
+            f(); nothing
+        catch err
+            err
+        end
+        @test e isa ArgumentError && occursin("other₊", e.msg) && occursin("complete(sys).x", e.msg)
+    end
+    @test p1[sys.total + sys.λ] == 6.0 + 7.0                     # control: the model's own keys
+    @test p1.ps[sys.λ] == 7.0 && SII.getp(p1, sys.λ)(p1) == 7.0
     # a vector quantity and a kind are not properties; the error names what they are
     e = try sys.w catch err err end
     @test e isa ArgumentError && occursin("vector quantity", e.msg) && occursin("`w_1`", e.msg)
