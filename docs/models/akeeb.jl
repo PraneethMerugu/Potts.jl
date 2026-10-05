@@ -176,11 +176,13 @@ count(>=(0), clocks) / count(==(:follower), u0[2].second)
 
 # ## Solving
 #
-# The paper runs 700 MCS. Cells are born during the run, so the problem reserves room for
-# them with `capacity`:
+# The paper reports its fronts at "MCS 700". The authors' CompuCell3D runs take 701 steps
+# and count from 0, so their MCS ``t`` is our state after ``t + 1`` MCS: we run 701 MCS and
+# save the start and every 10th of the authors' MCS (our 1, 11, …, 701). Cells are born
+# during the run, so the problem reserves room for them with `capacity`:
 
-prob = PottsProblem(invasion, u0, (0, 700); seed = 1, capacity = 6000)
-sol = solve(prob, SequentialCPM(); saveat = 0:10:700)
+prob = PottsProblem(invasion, u0, (0, 701); seed = 1, capacity = 6000)
+sol = solve(prob, SequentialCPM(); saveat = [0; 1:10:701])
 sol.stats.lifecycle.divisions
 
 # ## The run as a movie
@@ -217,9 +219,27 @@ lines!(ax, sol.t, [mean_height(u, 2) for u in sol.u]; label = "followers")
 axislegend(ax; position = :lt)
 fig
 
-# The paper classifies the final fronts into fingers, single cells and detached clusters;
-# `PottsModels.Analysis` has the tools for this (column tops of the front, peak finding,
-# the cell contact graph).
+# The paper measures the final front with the authors' analysis code: the areas under the
+# top of the main tumour (invasive) and under the top of any cell (infiltrative), both
+# above the tumour's lowest top; the fingers of the front; single leaders; detached
+# cells; and clusters that contain a follower.
+# `akeeb_observables` computes exactly these quantities (built from the
+# `PottsModels.Analysis` tools) at a state. Here they are for this run at the authors'
+# MCS 700, next to the authors' ensemble at the same point (``J_{LF} = 2``,
+# ``\lambda = 24``, ``PP = 0.5``; mean ± SD of 10 runs, released data):
+
+obs = akeeb_observables(sol.u[end])
+using Markdown
+reference = (invasive = "15734 ± 1362", infiltrative = "44029 ± 1669", singles = "204.5 ± 9.3",
+    fingers = "12.0 ± 1.2", detached = "239.4 ± 11.1", clusters = "5.5 ± 2.3")
+fmt(v) = v isa Integer ? string(v) : string(round(v; digits = 1))
+Markdown.parse("""
+| Measure | This run | Authors (10 runs) |
+|:--|--:|--:|
+""" * join(["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)], "\n"))
+
+# One run is not an ensemble: the reproduction of this paper compares ensembles of runs
+# with every reference point and its tolerance.
 #
 # ## Differences from the paper
 #
@@ -233,7 +253,7 @@ fig
 # | Neighbourhoods | not stated | contacts over 8 neighbours, copies from 4 (CompuCell3D orders 2 and 1) |
 # | ``y`` boundary | not stated | a closed wall (the CompuCell3D default) |
 # | Connectivity | not mentioned | every cell kept in one piece (CompuCell3D `Connectivity`) |
-# | Time | 700 MCS (701 CompuCell3D steps) | 700 MCS |
+# | Time | 700 MCS (701 CompuCell3D steps) | 701 MCS (the authors' MCS 700) |
 # | Chemotaxis strength | ``\lambda = 24`` | `μ = 24`, the constructor's default |
 #
 # The lattice, temperature, contact energies, volume constraint, growth rate and division

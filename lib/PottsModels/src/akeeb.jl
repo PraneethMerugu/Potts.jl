@@ -171,7 +171,7 @@ The invasion metrics of one state as the authors' analysis code computes them (A
 Marcus & Jiang 2026; spec 10 §5.3.3, O1–O8), so they compare directly with the released
 data. `σ` is a 2-D state with `x` (the first index) periodic and `y` (the second) closed;
 cell `c` is σ's value `c` and `kinds[c]` its kind, `:leader` or `:follower`. An id that owns
-no site is not a cell and counts nothing. The second method reads `u.σ` and the kinds of a
+no site is not a cell: it counts nothing and its kind is not read. The second method reads `u.σ` and the kinds of a
 state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
 
 - **Adjacency.** Two cells are neighbours when they own von Neumann-adjacent sites
@@ -212,15 +212,15 @@ function akeeb_observables(σ::AbstractMatrix{<:Integer}, kinds::AbstractVector{
     n = Int(maximum(σ; init = 0))
     length(kinds) >= n ||
         throw(ArgumentError("akeeb_observables: σ has cell ids up to $n but there are $(length(kinds)) kinds"))
-    for c in 1:n
-        kinds[c] in (:leader, :follower) ||
-            throw(ArgumentError("akeeb_observables: kind of cell $c must be :leader or :follower, got :$(kinds[c])"))
-    end
-    leader(c) = kinds[c] === :leader
     alive = falses(n)
     for c in σ
         c > 0 && (alive[c] = true)
     end
+    for c in 1:n                                  # an id that owns no site is not a cell
+        alive[c] && !(kinds[c] in (:leader, :follower)) &&
+            throw(ArgumentError("akeeb_observables: kind of cell $c must be :leader or :follower, got :$(kinds[c])"))
+    end
+    leader(c) = kinds[c] === :leader
     g = A.cell_graph(σ; periodic = (true, false))                       # O1
     seeds = unique(Int(σ[x, 2]) for x in 1:(X - 1) if σ[x, 2] != 0)     # O2
     isempty(seeds) &&
