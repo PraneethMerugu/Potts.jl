@@ -331,3 +331,14 @@ end
     @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims),
         Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat)
 end
+
+# P6.3c (D-141): Eden's growth and the Splits passes are type stable on square, hexagonal and
+# 3D lattices (host-side; the growth loop runs once per round over the frontier).
+@testset "QA: Eden and Splits are type stable ($label)" for (label, L) in (
+        ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
+        ("3D", Lattice((12, 12, 12); boundary = Closed())))
+    lat = Potts._layout_spec(L)
+    e = Eden(RandomPoints(5; replace = true, seed = 1); rounds = 3, kinds = [:a], seed = 1, shortfall = :allow)
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), e, lat)
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), Splits(e, 2; shortfall = :allow, splits = :allow), lat)
+end

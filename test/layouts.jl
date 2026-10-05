@@ -643,3 +643,133 @@ end
         @test_throws ArgumentError Potts.points([bad], (10, 10))
     end
 end
+
+# ---------------------------------------------------------------------------------------------
+# Eden, Splits, RandomPoints(replace = true), shortfall (P6.3c, D-141); the frozen acceptance
+# file holds the hand fixtures, the growth oracle and the spec 01 bands
+# ---------------------------------------------------------------------------------------------
+
+using LinearAlgebra: Symmetric, eigen
+
+@testset "layouts: Eden fills its connected component, and only it" begin
+    # enough rounds fill every site reachable from the seed: one cell owning the lattice
+    σ = _op(layout(Eden(Center(); rounds = 400, kinds = [:a], seed = 1), (15, 15)), ownership)
+    @test all(==(1), σ)
+    # a domain of two strips (x ≤ 5, x ≥ 9): a seed in the left strip fills it, never the right
+    dom = Lattice((14, 6); boundary = Closed(), domain = x -> x[1] <= 5 || x[1] >= 9)
+    σ = _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), dom), ownership)
+    @test all(==(1), σ[1:5, :]) && all(==(0), σ[6:14, :])
+    # control: on the full lattice the same seed reaches the right side
+    @test all(==(1), _op(layout(Eden(Potts.Point(2.0, 3.0); rounds = 400, kinds = [:a], seed = 2), (14, 6)), ownership))
+    # a periodic lattice: the blob crosses the edge from a seed at the corner
+    σ = _op(layout(Eden(Potts.Point(1.0, 1.0); rounds = 12, kinds = [:a], seed = 3), Lattice((20, 20))), ownership)
+    @test σ[20, 20] == 1 || σ[20, 1] == 1 || σ[1, 20] == 1
+end
+
+@testset "layouts: Eden's neighbourhood sets its reach" begin
+    # growth moves one neighbourhood step per round: within R of the seed in the graph metric
+    # of the growth neighbourhood (L1 for VonNeumann(1), Chebyshev for Moore(1))
+    R = 8
+    seed_site = (20, 20)
+    for s in 1:3
+        vn = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s, neighborhood = VonNeumann(1)), (40, 40)), ownership)
+        mo = _op(layout(Eden(Potts.Point(20.0, 20.0); rounds = R, kinds = [:a], seed = s), (40, 40)), ownership)
+        @test all(x -> sum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), vn))
+        @test all(x -> maximum(abs.(Tuple(x) .- seed_site)) <= R, findall(==(1), mo))
+    end
+    # a diagonal domain (x = y): VonNeumann(1) has no step inside it, Moore(1) grows along it
+    diag = Lattice((20, 20); boundary = Closed(), domain = x -> x[1] == x[2])
+    e = Eden(Potts.Point(10.0, 10.0); rounds = 60, kinds = [:a], seed = 1)
+    @test count(==(1), _op(layout(remake(e; neighborhood = VonNeumann(1)), diag), ownership)) == 1
+    @test count(==(1), _op(layout(e, diag), ownership)) > 5
+    # a model's own neighbourhood is the default: Hex(1) on the hexagonal probe equals the keyword
+    sys = HexLayoutProbe(; name = :h)
+    e = Eden(RandomPoints(4; seed = 2); rounds = 4, kinds = [:cell], seed = 5)
+    @test _same(layout(e, sys), layout(remake(e; neighborhood = Hex(1)), sys))
+    @test !_same(layout(e, sys), layout(remake(e; neighborhood = Hex(2)), sys))
+end
+
+# An independent recursive oracle for Splits on a 1 × n strip: every cut is across x, at the
+# centroid, the daughter taking the sites right of it; daughters follow their mothers.
+function _strip_splits(n, k)
+    cells = [collect(1:n)]
+    for _ in 1:k
+        for c in 1:length(cells)
+            S = cells[c]
+            length(S) >= 2 || continue
+            m = sum(S) / length(S)
+            push!(cells, filter(>(m), S))
+            cells[c] = filter(<=(m), S)
+        end
+    end
+    return cells
+end
+
+@testset "layouts: Splits passes on a strip (recursive oracle)" begin
+    for (n, k) in ((16, 4), (13, 3), (7, 5), (1, 2))
+        op, rep = layout(Splits(Tiling((n, 1); kinds = [:a]), k; shortfall = :allow), (n, 1); report = true)
+        σ = _op(op, ownership)
+        want = filter(!isempty, _strip_splits(n, k))
+        @test [findall(==(c), vec(σ)) for c in 1:maximum(σ)] == want
+        @test (only(rep).requested, only(rep).painted) == (2^k, length(want))
+    end
+    # 2^k sites: every cell ends with one site, no shortfall
+    @test isempty(_warnings(() -> layout(Splits(Tiling((16, 1); kinds = [:a]), 4), (16, 1))))
+end
+
+# The cut by an independent eigendecomposition: daughter = sites on the positive side of the
+# sign-fixed top eigenvector of the Cartesian scatter matrix.
+function _eig_cut(S, emb)
+    P = [collect(emb(x)) for x in S]
+    c = sum(P) / length(P)
+    C = sum((p - c) * (p - c)' for p in P)
+    v = eigen(Symmetric(C)).vectors[:, end]
+    v[findfirst(x -> abs(x) > 1e-9, v)] < 0 && (v = -v)
+    return Set(S[i] for i in eachindex(S) if sum((P[i] - c) .* v) > 0)
+end
+
+@testset "layouts: Splits cuts across the long axis (eigen oracle, $name)" for (name, target, emb) in (
+        ("square", (40, 40), x -> Float64.(x)),
+        ("hex", Lattice((40, 40); geometry = Hexagonal(), boundary = Closed()), x -> (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)),
+        ("3D", (14, 14, 14), x -> Float64.(x)))
+    for s in 1:4
+        inner = Eden(Center(); rounds = 5, kinds = [:a], seed = s)
+        σ0 = _op(layout(inner, target), ownership)
+        S = Tuple.(findall(==(1), σ0))
+        σ = _op(layout(Splits(inner, 1; splits = :allow), target), ownership)
+        @test Set(Tuple.(findall(==(2), σ))) == _eig_cut(S, emb)
+        @test count(==(1), σ) + count(==(2), σ) == length(S)
+    end
+end
+
+@testset "layouts: Splits delegates one report row" begin
+    # an overlay inside Splits paints into the Splits row: 2 boxes, 2 passes → 8 cells
+    inner = overlay(Tiling((4, 4); region = (1:4, 1:4), kinds = [:a]), Tiling((4, 4); region = (6:9, 1:4), kinds = [:b]))
+    op, rep = layout(overlay(Frame(:w), Splits(inner, 2)), (12, 6); report = true)
+    @test [(r.type, r.requested, r.painted, r.misses) for r in rep] == [(:Frame, 1, 1, 0), (:Splits, 8, 8, 0)]
+    @test _op(op, kind) == [:w, :a, :b, :a, :b, :a, :b, :a, :b]
+    # the inner layer cuts an earlier cell into two pieces: the overlay check (a later layer
+    # cut it) counts it in the Splits row and warns; the Splits cells themselves are one piece
+    bar = overlay(Tiling((6, 6); kinds = [:t]), Splits(Tiling((2, 6); region = (3:4, 1:6), kinds = [:s]), 1))
+    w = _warnings(() -> layout(bar, (6, 6)))
+    @test length(w) == 1 && occursin("later layers split cell 1", w[1])
+    @test last(layout(bar, (6, 6); report = true))[2].splits == 1
+    # shortfall :warn names the layer and both counts
+    l = Splits(Tiling((1, 1); kinds = [:a]), 2; shortfall = :warn)
+    w = _warnings(() -> layout(l, (1, 1)))
+    @test length(w) == 1 && occursin("Splits: shortfall", w[1]) && occursin("4", w[1]) && occursin("1 painted", w[1])
+end
+
+@testset "layouts: RandomPoints(replace = true) with Voronoi and Eden" begin
+    # coinciding generators: the later one ties every site to the lower one and is dropped
+    p = RandomPoints(12; region = (2:4, 2:4), replace = true, seed = 5)
+    pts = Potts.points(p, (8, 8))
+    @test length(unique(pts)) < 12
+    op, rep = layout(Voronoi(p; kinds = [:a]), (8, 8); report = true)
+    @test only(rep).painted == 12 && only(rep).dropped == 12 - length(unique(pts))
+    # Eden merges them instead: one cell per distinct site (a shortfall it must be told to allow)
+    @test_throws ArgumentError layout(Eden(p; rounds = 0, kinds = [:a], seed = 1), (8, 8))
+    op, rep = layout(Eden(p; rounds = 0, kinds = [:a], seed = 1, shortfall = :allow), (8, 8); report = true)
+    @test only(rep).painted == length(unique(pts)) == maximum(_op(op, ownership))
+    @test Set(Tuple.(findall(!=(0), _op(op, ownership)))) == Set(map(x -> Int.(Tuple(x)), pts))
+end

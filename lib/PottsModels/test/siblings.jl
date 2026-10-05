@@ -270,3 +270,70 @@ end
     u = solve(prob, SequentialCPM()).u[end]
     @test count(>(0), unique(u.σ)) >= 30          # the tessellation runs (a few small cells shrink away)
 end
+
+# P6.3c (D-141) primitives outside their first model (Merks 2008's TST seeding on a closed
+# square lattice): Eden seeding with replacement (`shortfall = :allow`, its code consumer)
+# and host-side Splits on the periodic hexagonal sorting sibling, growing under its own
+# Hex(2) neighbourhood and wrapping through its edges.
+struct SibSites <: AbstractLayout          # one cell of :dark on the given sites
+    sites::Vector{NTuple{2, Int}}
+end
+function Potts.paint!(op::Potts.LayoutState, l::SibSites, lat)
+    id = Potts.new_cell!(op, :dark)
+    foreach(x -> Potts.assign!(op, x, id), l.sites)
+    return nothing
+end
+@testset "Eden and Splits on the periodic hexagonal sorting sibling" begin
+    sys = HexSorting(; name = :he)
+    seeds = RandomPoints(60; replace = true, seed = 2)
+    distinct = length(unique(Potts.points(seeds, sys)))
+    @test distinct < 60                                               # this seed draws a coinciding pair
+    denovo(sf) = Eden(seeds; rounds = 4, kinds = [:dark, :light], seed = 7, shortfall = sf)
+    @test_throws ArgumentError layout(denovo(:error), sys)            # merged seeds are a shortfall
+    op, report = layout(denovo(:allow), sys; report = true)
+    row = only(report)
+    @test (row.type, row.requested, row.painted, row.misses, row.dropped) == (:Eden, 60, distinct, 60 - distinct, 0)
+    σ0, ks = op[1].second, op[2].second
+    @test maximum(σ0) == distinct && ks == [isodd(c) ? :dark : :light for c in 1:distinct]
+    # every cell is one piece under the growth neighbourhood (Hex(2), wrapping on both axes)
+    hex2 = [Tuple(Int.(o)) for o in CorePotts.relation(Hex(2), Potts.core_lattice(Potts._layout_spec(sys))).offsets]
+    nb(q, o) = CartesianIndex(mod1(q[1] + o[1], 30), mod1(q[2] + o[2], 30))
+    function onepiece(σ, c, offs)
+        idx = findall(==(c), σ)
+        seen, st = Set([idx[1]]), [idx[1]]
+        while !isempty(st)
+            q = pop!(st)
+            for o in offs
+                p = nb(q, o)
+                σ[p] == c && !(p in seen) && (push!(seen, p); push!(st, p))
+            end
+        end
+        return length(seen) == length(idx)
+    end
+    @test all(c -> onepiece(σ0, c, hex2), 1:distinct)
+    # four rounds of Hex(2) growth from 50-odd seeds cover about half of the 900 sites
+    @test 350 < count(>(0), σ0) < 900
+    # a sprout: one blob through the corner of the periodic lattice, divided 3 times
+    blob = Eden(Potts.Point(1.0, 1.0); rounds = 8, kinds = [:dark], seed = 3)
+    nblob = count(>(0), layout(blob, sys)[1].second)
+    sop, srep = layout(Splits(blob, 3; splits = :allow), sys; report = true)
+    σs = sop[1].second
+    @test (only(srep).requested, only(srep).painted) == (8, 8) && count(>(0), σs) == nblob
+    @test any(c -> c in σs[1, :] && c in σs[30, :], 1:8) || any(c -> c in σs[:, 1] && c in σs[:, 30], 1:8)
+    # the cut is translation-equivariant through the wrap: the blob's sites moved to the
+    # centre divide into the moved cells. (The unwrap takes each site's image nearest the
+    # cell's first site, so this holds while the blob spans less than half the lattice.)
+    S = Tuple.(findall(>(0), layout(blob, sys)[1].second))
+    moved = [(mod1(x[1] + 15, 30), mod1(x[2] + 15, 30)) for x in S]
+    @test all(d -> maximum(getindex.(moved, d)) - minimum(getindex.(moved, d)) < 15, 1:2)
+    cut(sites, target) = layout(Splits(SibSites(sites), 3; splits = :allow), target)[1].second
+    @test circshift(cut(S, sys), (15, 15)) == cut(moved, sys)
+    # negative control: on a closed lattice the corner pieces are cut in index space
+    closed = Lattice((30, 30); geometry = Hexagonal(), boundary = Closed())
+    @test circshift(cut(S, closed), (15, 15)) != cut(moved, closed)
+    for u0 in (op, sop)
+        prob = PottsProblem(sys, u0, (0, 10); seed = 1)
+        @test selfcheck(prob) < 1e-9
+        @test count(>(0), unique(solve(prob, SequentialCPM()).u[end].σ)) >= 1
+    end
+end
