@@ -2134,3 +2134,32 @@ session.
 - **Verified in v3.** The spring–dashpot reference was re-derived: k/η = 18.28166472147, and all 51 CSV rows match to 5e-13. `metrics.cpp` reproduces the committed `metrics.csv` byte for byte only with `-ffp-contract=off` (defect D11), so the Julia port avoids fused multiply-adds in its geometry. V4 was rewritten from the pooled consortium data. G7 (stop on a condition) already exists.
 - **Plan.** ROADMAP Step 3b, P6.15b–j. Each item goes through the §7 loop. Pass bands are confirmed at each item's V-target audit before freezing. Consortium data stays outside the repo, read from `OPENVT_MONOLAYER_REPO`.
 - **Outward actions.** Release-asset uploads and the consortium submission (P6.15j) are confirmed with the maintainer first.
+
+## D-149 P6.15d: the OpenVT analysis port is frozen (2026-10-05, P6.15d; coordinator, from the P6.15d test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/acceptance/p6_15d_openvt_analysis.jl` (freeze 000d505a).
+- **Surface.**
+  - `PottsModels.Analysis.concave_hull(points; concavity = 2.0, length_threshold = 0.0)` is a general primitive. It computes the Graham hull of `metrics.cpp`, then concaveman, and keeps concaveman's vertex order.
+  - The model-named composites are `openvt_metrics(path)` and `openvt_metrics(x, y, g)`, which return `(; N, r, A, C, w, g, C_rel, w_rel)`, plus `openvt_metrics_line`, `openvt_neighbor_histogram`, `openvt_inhibition_code(a, f; β, γ)` and `openvt_inhibition_fractions`.
+  - File handling is `write_openvt(dest, format, data)`, `read_openvt(path, format)` and `openvt_filename(format; …)`, for the formats `:O1`–`:O6` and `:O6_neighbors`.
+- **Headline acceptance.** The 25 Morpheus parameter-plane files reproduce the committed `metrics.csv` byte for byte.
+  - The reference is `metrics.cpp` built with `-ffp-contract=off`. Clang 17 and gcc 15 agree with each other, and default contraction differs on all 25 rows.
+  - The check runs only when `OPENVT_MONOLAYER_REPO` is set. No G data enter git.
+- **D11 guard (always runs).**
+  - Three integer-LCG point clouds must give the reference build's lines. The default-contraction build and a `muladd` port both fail them.
+  - A source scan bans `fma`, `muladd`, `@fastmath`, `@simd`, `@turbo` and `evalpoly` in `src/analysis/*.jl` and the port's files. This binds **all** future code in `src/analysis/`: speed-tuned analysis code lives elsewhere.
+- **Readings.**
+  - C9: type 1 is inhibited iff !(a ≥ β), and type 2 iff !(f ≥ γ).
+  - C8: g = (i == 0) when an O1 file has no `g` column.
+  - O4 has no pandas index column and uses the population SD.
+  - In O1–O5, floats round-trip exactly and NaN is written as `nan`.
+  - O6 metrics fields use `metrics.cpp`'s format, and `t` uses `run_metrics.sh`'s `%.15g`.
+  - The neighbour share is p = (100·count)/N, in that order.
+- **Evidence.** A brute-force scratch port passed every tier before freezing: 184/184 with the repo set.
+- **Coordinator rulings on the open questions.**
+  1. **Exports.** PottsModels exports the `openvt_*` names and `write_openvt`/`read_openvt`. `concave_hull` is exported from `Analysis`.
+  2. **Formats.** The symbol formats and the `:O6_neighbors` name stand.
+  3. **O4 and O6.** The O4 layout stands, and O4 and O6 get no `openvt_filename` names.
+  4. **Empty input.** `openvt_metrics` throws `ArgumentError` on empty input. This is unfrozen behaviour, and the implementer adds a test for it.
+  5. **Exact ties.** The docs state that byte identity is proven only for inputs without exact ties. On perfect lattices, libc++ and libstdc++ break ties differently.
+  6. **Platform.** The reference is arm64, where long double equals double. The port is Float64 everywhere, and the docs say so.
