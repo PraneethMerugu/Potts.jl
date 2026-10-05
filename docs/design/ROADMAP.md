@@ -374,7 +374,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge + freeze, 2026-09-30; D-072) **P6.1c** reproduction 09 (V-target audit done 2026-09-30: freeze from spec 09 §9.1 only; the tutorial prose was ratified with 8 changes). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 
-- [x] (run 2026-10-05, 8eb9d210; 37 of 38 FULL rows pass, V-PRE3 (b) fails) **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
+- [x] (run 2026-10-05, 8eb9d210; every binding row passes except V-PRE3 (b)) **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
   per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
   owner. There is no code change: the page is frozen (D-072).
 - [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
