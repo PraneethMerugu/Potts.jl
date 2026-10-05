@@ -213,9 +213,9 @@ using Statistics: mean
 mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.σ) if u.σ[I] > 0 && u.cell.kind[u.σ[I]] == k)
 CairoMakie.activate!(type = "png")
 fig = Figure(size = (520, 340))
-ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "mean height (sites)")
-lines!(ax, sol.t, [mean_height(u, 1) for u in sol.u]; label = "leaders")
-lines!(ax, sol.t, [mean_height(u, 2) for u in sol.u]; label = "followers")
+ax = Axis(fig[1, 1]; xlabel = "MCS (the authors' count)", ylabel = "mean height (sites)")
+lines!(ax, max.(sol.t .- 1, 0), [mean_height(u, 1) for u in sol.u]; label = "leaders")
+lines!(ax, max.(sol.t .- 1, 0), [mean_height(u, 2) for u in sol.u]; label = "followers")
 axislegend(ax; position = :lt)
 fig
 
