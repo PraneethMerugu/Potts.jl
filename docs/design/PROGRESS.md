@@ -2038,3 +2038,16 @@ The maintainer approved F-1…F-6 (D-049).
   - The coordinator's reading, unconfirmed: at margin 10, dark clusters that touched across the periodic image were probably counted as one, which inflated P6.1d's value.
   - V-PRE5 is a pre-registered target and is not changed here. The table goes to the spec owner, as P6.1d's did.
 - **Other rows moved by ≤ 0.006.** V-PRE1 heterotypic @ 10⁴ is 0.068 (was 0.073), and the cluster count @ 10⁴ is 2.2 (was 1.8).
+
+## 2026-10-05 — P6.15b data: the F2 / Table S5 calibration FULL record (D-148, D-146)
+
+- **Run.** Commit 30c39601, 4 threads, 13.9 s wall time (11.2 s of simulation). The D-146 outputs are committed under `lib/PottsModels/reproductions/data/15/calibration-2026-10-05/`: verdicts, the per-MCS 11- and 21-chain time series (mean and SD, from the burn-in at t = −100), per-run crossings, the spring–dashpot reference, metadata, provenance, the runner, and a Fig 2b/2d/2e-layout PNG (Potts only; no G data).
+- **The runner is the frozen FULL tier.** It uses the test's seeds, run lengths, algorithm, observables and bands through the public API, and also saves the burn-in. Checks:
+  - all five width matrices (t ≥ 0) are bitwise identical to the test's own `p615b_runs`;
+  - the frozen test with `POTTS_FULL_REPRODUCTION=true` passes (213 pass, 2 G rows skipped).
+- **Verdicts.** Every V6–V8 row passes, and the numbers equal the implementer's run.
+  - V6: T = 297, 156, 111 and 77 MCS.
+  - V7: MSE/S5 = 1.69, 0.38, 0.92 and 0.76. At λ = 2, w₁₁(0.5T) = 7.859 and w₁₁(2T) = 9.794.
+  - V8: w₂₁ = 15.96, 19.28 and 19.89 at 1, 5 and 10 T. The inner w₁₁ = 7.24, 9.51 and 9.93. The plateau ends at 0.173 T.
+  - w₂₁(10T) = 19.889 is 0.011 below the lattice spread but inside the ± 0.15 band.
+- **Reported.** The per-run crossing SD is 33, 14, 9 and 5 MCS for λ = 1, 2, 3 and 5. The cycle 5·T(2) is 780 MCS, against M's 775.
