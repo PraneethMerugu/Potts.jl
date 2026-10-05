@@ -1,0 +1,37 @@
+target	paper	ours	tolerance	class	result
+Isolation guard: no aggregate touches its periodic image	— (run validity, spec §9.0)	clear at every save, all 10 replicates	an all-medium row and column at every save	FULL	PASS
+V-PRE1 heterotypic @ 10	PRE 0.36, PRL 0.333	0.373 ± 0.009	[0.303, 0.39]	FULL	PASS
+V-PRE1 heterotypic @ 100	PRE 0.245, PRL 0.206	0.246 ± 0.008	[0.176, 0.275]	FULL	PASS
+V-PRE1 heterotypic @ 1000	PRE 0.136, PRL 0.122	0.134 ± 0.008	[0.092, 0.166]	FULL	PASS
+V-PRE1 heterotypic @ 10000	PRE 0.05, PRL 0.04	0.068 ± 0.013	[0.01, 0.08]	FULL	PASS
+V-PRE1 dark–dark @ 10	PRE 0.3, PRL 0.375	0.317 ± 0.005	[0.27, 0.405]	FULL	PASS
+V-PRE1 dark–dark @ 100	PRE 0.39, PRL 0.416	0.385 ± 0.005	[0.36, 0.446]	FULL	PASS
+V-PRE1 dark–dark @ 1000	PRE 0.44, PRL 0.489	0.444 ± 0.004	[0.41, 0.519]	FULL	PASS
+V-PRE1 dark–dark @ 10000	PRE 0.485, PRL off-scale (> 0.5)	0.475 ± 0.007	[0.455, 0.55]	FULL	PASS
+V-PRE1 light–light @ 10	PRE 0.255, PRL 0.238	0.25 ± 0.005	[0.208, 0.285]	FULL	PASS
+V-PRE1 light–light @ 100	PRE 0.31, PRL 0.289	0.309 ± 0.004	[0.259, 0.34]	FULL	PASS
+V-PRE1 light–light @ 1000	PRE 0.36, PRL 0.328	0.362 ± 0.005	[0.298, 0.39]	FULL	PASS
+V-PRE1 light–light @ 10000	PRE 0.4, PRL 0.362	0.396 ± 0.006	[0.332, 0.43]	FULL	PASS
+V-PRE1 log law, 5–4000	linear in log₁₀ t; slope ≈ −0.11 (PRE), ≈ −0.105 (PRL) per decade (spec §9.1)	R² = 0.992, slope -0.114	R² > 0.95, slope in [−0.15, −0.07]	FULL	PASS
+extra (not in spec): log law, 4–512	`test/papers.jl` window	R² = 0.995, slope -0.122	R² > 0.95, slope < 0	extra	info: in band
+V-PRE2 summed homotypic > heterotypic at every save	already at t = 1 in both paper runs, so a sanity row that cannot discriminate (spec §9.1)	at every save	every save	FULL	PASS
+V-PRE2 dark–dark crosses heterotypic	≈ 18 (PRE), ≈ 5 (PRL)	25	[2.5, 40]	FULL	PASS
+V-PRE2 light–light crosses heterotypic, after dark–dark	≈ 49 (PRE), ≈ 38 (PRL)	64; ll/dd crossing ratio 2.56	[19, 100]; dd first	FULL	PASS
+V-PRE2 NC1: no crossing by 10³	— (control)	dd: none, ll: none	no dd or ll crossing	FULL	PASS
+V-PRE3 (a) dark–medium < 0.003	0.0026 at 200 (PRE); 0 by 300 (PRL)	320	by 10³	FULL	PASS
+V-PRE3 (a) size-free: dark–medium below 0.1 × its t = 1 value	0.097 at 200 (PRE Fig. 13(b))	320	by 10³	reported	info: in band
+V-PRE3 (a) NC1: dark–medium @ 10³	— (control)	0.03	≥ 0.01	SMOKE+FULL	PASS
+V-PRE3 (b) light–medium plateau reached	from ≈ 200 (PRE), ≈ 300 (PRL)	320 (within 5% of the value at 20000); last-decade slope -0.0 per decade	before 10³; last-decade slope within ± 5% of the last value (0.003) per decade	FULL	PASS
+V-PRE3 (c) plateau level, size-free R	0.0628 / 0.0635 = 0.989 (PRE Fig. 13(b)); ≈ 0.99 (PRL)	R = 0.06 / 0.059 = 1.014	[0.85, 1.10]	FULL	PASS
+V-PRE3 (d) plateau level, raw @ 10³	0.0628 (PRE), 0.057 (PRL)	0.06	[0.050, 0.075]	FULL	PASS
+V-PRE4 total length drop D	0.014 (PRE Fig. 13(a))	0.021 ± 0.003	[0.005, 0.03]	FULL	PASS
+V-PRE4 total length flat over [10³, 10⁴]	flat after ≈ 20–100 (PRE Fig. 13(a))	log-slope -15.388 bonds per decade	≤ 0.005 N_mm(10³) = 181.044 per decade	FULL	PASS
+V-PRE5 dark-cluster count non-increasing	clusters merge (PRE Fig. 12)	20.3 @ 10, 12.8 @ 100, 5.3 @ 1000, 2.2 @ 10000	non-increasing over 10, 100, 10³, 10⁴	FULL	PASS
+V-PRE5 one dark cluster @ 10⁴	a single dark cluster at 13 500 (PRE Fig. 12(h))	largest 0.815; dark–medium 0.0	largest ≥ 0.90; dark–medium < 0.001	FULL	FAIL
+V-PRE13 (a) partial sorting: dark–medium @ 10³	0.019 (PRE Fig. 23(b), dark–medium bullets; replotted in Fig. 24(b))	0.022	> 0.01	SMOKE+FULL	PASS
+V-PRE13 (b) partial sorting: heterotypic @ 10	≈ 0.325 (PRE Fig. 23(a))	0.322	± 0.05	FULL	PASS
+V-PRE13 (b) partial sorting: heterotypic @ 100	≈ 0.245 (PRE Fig. 23(a))	0.229	± 0.05	FULL	PASS
+V-PRE13 (b) partial sorting: heterotypic @ 1000	≈ 0.17 (PRE Fig. 23(a))	0.155	± 0.05	FULL	PASS
+V-GG6 light cells smaller than dark @ 10³	"slightly smaller" (PRL p.2014)	Δa = -2.876 ± 0.035 (SE); NC1 -0.03	Δa < 0, \|Δa\| > 2 SE; \|NC1\| < ½ \|Δa\|	SMOKE+FULL	PASS
+NC1 symmetric contacts @ 10³	— (control; random mixing gives a cell–cell heterotypic share ≈ ½, spec §9.1)	cell–cell heterotypic share 0.495; dark–medium 0.03; engulfed 0 of 10	share ≥ 0.40; dark–medium ≥ 0.01; 0 engulfed	SMOKE+FULL	PASS
+NC1 raw heterotypic @ 10³ (the old clause)	— (assumed the paper-size medium share)	0.465	≥ 0.35	reported	info: in band
