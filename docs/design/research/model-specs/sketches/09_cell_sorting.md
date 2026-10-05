@@ -56,7 +56,9 @@ const PAPER_MCS = 16      # 1 paper MCS = 16 × (all lattice sites) attempts = 1
 end
 
 @named gg = DifferentialAdhesion()
-start(seed) = layout(VoronoiBall(1000; radius = sqrt(40_000 / π), kinds = [:dark, :light], seed), gg)  # D-063 [R2: core after P6.1a5]
+ball = Circle(Point(124.0, 124.0), sqrt(40_000 / π))    # 247² lattice centre; = graner_glazier_aggregate(1000; margin = 10)
+start(seed) = layout(Voronoi(RandomPoints(1000; region = ball, seed); region = ball, lloyd = 30,
+                             kinds = [:dark, :light]), gg)   # D-063, D-138 (core Voronoi)
 prob = PottsProblem(gg, start(1), (0, PAPER_MCS * 20_000); seed = 1)   # FULL: 2×10⁴ paper MCS (09 §9.0)
 alg  = SequentialCPM()
 ts   = PAPER_MCS .* [1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 1000, 10_000, 20_000]
@@ -74,7 +76,7 @@ regimes = (checkerboard = [J => [0 12 12; 12 8 6; 12 6 10]],                    
            partial      = [J => [0 16 16; 16 2 14; 16 14 11], T => 5.0],         # V-PRE13
            cavity       = [V₀ => [-1.0, 40.0, 20.0], T => 5.0])                  # Fig 28; also needs nucleation (Open choices)
 # Engulfment start: the upper half light, the lower half dark (V-PRE11)
-halves(seed) = layout(Relabel(VoronoiBall(1000; radius = sqrt(40_000 / π), kinds = [:dark], seed),
+halves(seed) = layout(Relabel(Voronoi(RandomPoints(1000; region = ball, seed); region = ball, lloyd = 30, kinds = [:dark]),
                               c -> centroid(c)[2] > 124 ? :light : :dark), gg)   # [NEW] layout relabel by cell predicate
 
 # PRE §II D3 recipe (variant of the D-063 start): square aggregate of staggered bricks of various widths
@@ -135,7 +137,7 @@ protocol and the OS variant.
 | `N_xy`, `N_mm` observables | 09 §9.0 "Fractions" | 09c §II D1 p.2133 |
 | `annealed` (2 paper MCS, T = 0, own J) | 09 §8.4 A-GG4, §9.0; D-059 | 09c §II D2 p.2134 |
 | `Δa` | 09 §9.1 V-GG6 | 09a p.2014 |
-| `VoronoiBall(1000; …)`, 247² | 09 §9.0 FULL; D-063 | 09c p.2129 ("≈ 1000 cells") |
+| `Voronoi(RandomPoints(1000; region = ball, …); lloyd = 30)`, 247² | 09 §9.0 FULL; D-063, D-138 | 09c p.2129 ("≈ 1000 cells") |
 | `regimes` | 09 §8.3 | 09c §III A, D, E, F3 (p.2135–2151) |
 | `halves` | 09 §9.1 V-PRE11 | 09c §III C, Fig 18 p.2145 |
 | `bricks` / `relax` / `typed` | 09 §8.2 IC, §8.4 A-GG5 | 09c §II D3 p.2134–2135, Fig 4(a) |
@@ -161,7 +163,7 @@ protocol and the OS variant.
 | `@observed x ~ mean(volume for c in cells(k))` | exists (`test/symbolic.jl:616`) |
 | `count(… for _ in contacts)`: a population fold over contact pairs, in `@observed` | **NEW**, not on the roadmap (R16 is "analysis in docs"; R11a is cell-level) |
 | `layout`, `overlay`, `Tiling`, `Frame` | exists (P6.1a, D-057) |
-| `VoronoiBall` | exists in PottsModels; moves into core as a layout at P6.1a5 (R2) |
+| `Voronoi`, `RandomPoints`, `Circle`/`Point` | exist in core (P6.1a5, D-138; `VoronoiBall` removed, no alias) |
 | `BrickWall` | planned (R2, ROADMAP P6.4d) |
 | `Relabel(layer, cell -> kind)` layout combinator | **NEW** |
 | `EnsembleProblem` with `prob_func`, `remake(q; p, tspan)` | exists (tutorial `reproductions/09_cell_sorting.jl`) |
@@ -215,7 +217,7 @@ protocol and the OS variant.
    `Closed(; counts_in_surface = true)` would be cleaner, but it is **NEW** and probably not
    worth it. At the edge, the Moore draw of a rim neighbour wastes the attempt, whereas
    Chaste renormalises. The spec accepts this (09 §5.2).
-5. **Layout gaps.** `VoronoiBall` is still model-local (P6.1a5). There is no layout
+5. **Layout gaps.** The Voronoi start is core since P6.1a5 (D-138). There is no layout
    combinator for "relabel cells by a predicate on the cell" (the engulfment start needs
    it). The PRE brick recipe needs `BrickWall` with *varied widths*, a parameter R2's
    proposed `BrickWall` does not mention. The random typing after relaxation is host code
@@ -236,7 +238,7 @@ protocol and the OS variant.
 
 | Choice | Default (spec) | Variants |
 |---|---|---|
-| Start (GG) | `VoronoiBall(1000)`, unrelaxed (D-063; 09 §9.0 FULL) | PRE §II D3 brick recipe, relaxed 400 paper MCS (`bricks`/`relax`); SMOKE `graner_glazier_state()` 64 cells on 72² |
+| Start (GG) | `Voronoi` disk of 1000 cells, unrelaxed (`graner_glazier_aggregate`; D-063, D-138; 09 §9.0 FULL) | PRE §II D3 brick recipe, relaxed 400 paper MCS (`bricks`/`relax`); SMOKE `graner_glazier_state()` 64 cells on 72² |
 | Light:dark fraction | exactly 500/500 (±1), reported (09 §9.3 item 5) | Bernoulli(½); UNSPECIFIED in the paper (09 §8.4 A-GG5) |
 | Lattice and BC (GG) | 247² periodic, 10-site margin | Closed with margin ≥ 60 for dispersal (V-PRE14/15); both UNSPECIFIED (09 §8.4) |
 | Annealing | on a copy, 2 paper MCS, T = 0, own J (S2, D-059) | on the trajectory (S2 variant); 10 MCS for the §II D3 statistics (09c p.2135) |
