@@ -120,6 +120,9 @@ end
 const POTTSMODELS_TEST_FILES = [
     "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
     (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
+    # paper reproductions (ROADMAP Phase 6 "Acceptance for model reproductions"): the SMOKE
+    # tier runs here, the FULL tier under POTTS_FULL_REPRODUCTION=true
+    (joinpath("reproductions", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "reproductions")))))...,
 ]
 
 @testset "PottsModels files" begin

@@ -341,3 +341,8 @@ decision = "D-140"
 path = "acceptance/p6_3c_eden_splits.jl"
 sha256 = "4b44d0efa2157ccd1054cd566293c35ca6dcff1222455aed133a90725321c56d"
 decision = "D-141"
+
+[[file]]
+path = "reproductions/15_openvt_calibration.jl"
+sha256 = "f42bc57a55d6d4969c1bf10abe9a1e16ff7e1f2f1c2403c1040dda95846bdcba"
+decision = "D-148"
