@@ -405,11 +405,25 @@ end
 function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
-    lat = integ.ctx.lattice
-    phases = integ.f.phases
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
-    integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
+    # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
+    # lifecycle in the model's order; `map` over the short tuple unrolls (no dynamic dispatch)
+    map(entry -> _run_entry!(integ, entry), integ.f.phases.mcs)
+    integ.t += 1
+    integ.stats.mcs += 1
+    integ.stats.attempts += attempts
+    isempty(integ.callbacks) || _apply_callbacks!(integ)
+    insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
+    return integ
+end
+
+# One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
+function _run_entry!(integ::PottsIntegrator, phases::Tuple)
+    integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     if integ.alg isa SequentialCPM
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t, integ.f.track)
@@ -420,17 +434,11 @@ function CommonSolve.step!(integ::PottsIntegrator)
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
     end
-    integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
-    integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
-    integ.t += 1
-    integ.stats.mcs += 1
-    integ.stats.attempts += attempts
-    isempty(integ.callbacks) || _apply_callbacks!(integ)
-    insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
-    return integ
+    return nothing
 end
 
 # The host lifecycle path (CPU; host hooks on a device): events are known on the host, and

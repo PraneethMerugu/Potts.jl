@@ -177,21 +177,67 @@ history_buffer(x::AbstractArray, depth::Integer) =
     repeat(x, ntuple(_ -> 1, ndims(x))..., depth)
 
 """
-    Phases(; before_mcs, after_mcs, end_mcs, at_init)
+    SweepPhase()
+
+The copy sweep as an entry of an MCS order (`Phases(; mcs)`): `step!` runs the algorithm's
+sweep (`SequentialCPM` or `CheckerboardCPM`) where the order lists it.
+"""
+struct SweepPhase end
+
+"""
+    LifecyclePhase()
+
+The lifecycle (divisions, removals, transitions; `CPMFunction(…; lifecycle)`) as an entry of
+an MCS order (`Phases(; mcs)`). Nothing runs at it when the model has no lifecycle.
+"""
+struct LifecyclePhase end
+
+"""
+    Phases(; before_mcs, after_mcs, end_mcs, at_init, mcs)
 
 Phases of every MCS: `before_mcs` before the copy sweep, `after_mcs` after it, `end_mcs`
 after the lifecycle (the state at the MCS boundary: history pushes, derived quantities);
 `at_init` once when an integrator is created (derived quantities of the initial state).
+
+`mcs` is the order `step!` runs, one static tuple whose entries are tuples of phases and the
+sentinels [`SweepPhase`](@ref)`()` and [`LifecyclePhase`](@ref)`()` (each exactly once).
+Without it the order is today's, `(before_mcs, SweepPhase(), after_mcs, LifecyclePhase(),
+end_mcs)`; the positional form `Phases(before_mcs, after_mcs, end_mcs, at_init)` means the
+same. With an explicit `mcs`, `before_mcs`, `after_mcs` and `end_mcs` name the phases by role
+(for inspection) and are not run themselves: `mcs` is (Potts' `@schedule` builds one).
+`step!` is one fold over `mcs`, unrolled by the compiler.
 """
-struct Phases{B, A, E, I}
+struct Phases{B, A, E, I, M}
     before_mcs::B
     after_mcs::A
     end_mcs::E
     at_init::I
+    mcs::M
+    function Phases(before_mcs::B, after_mcs::A, end_mcs::E, at_init::I, mcs::M) where {B, A, E, I, M}
+        _check_order(mcs)
+        return new{B, A, E, I, M}(before_mcs, after_mcs, end_mcs, at_init, mcs)
+    end
 end
-Phases(; before_mcs = (), after_mcs = (), end_mcs = (), at_init = ()) =
-    Phases(Tuple(before_mcs), Tuple(after_mcs), Tuple(end_mcs), Tuple(at_init))
+Phases(before_mcs, after_mcs, end_mcs, at_init) =
+    Phases(before_mcs, after_mcs, end_mcs, at_init, default_order(before_mcs, after_mcs, end_mcs))
+function Phases(; before_mcs = (), after_mcs = (), end_mcs = (), at_init = (), mcs = nothing)
+    b, a, e = Tuple(before_mcs), Tuple(after_mcs), Tuple(end_mcs)
+    return Phases(b, a, e, Tuple(at_init), mcs === nothing ? default_order(b, a, e) : Tuple(mcs))
+end
 Phases(before_mcs, after_mcs) = Phases(before_mcs, after_mcs, (), ())
+
+"""The MCS order without a schedule: `(before_mcs, SweepPhase(), after_mcs, LifecyclePhase(), end_mcs)`."""
+default_order(before_mcs, after_mcs, end_mcs) = (before_mcs, SweepPhase(), after_mcs, LifecyclePhase(), end_mcs)
+
+function _check_order(mcs)
+    mcs isa Tuple || throw(ArgumentError("Phases: `mcs` is a tuple of phase tuples and the sentinels SweepPhase(), LifecyclePhase()"))
+    for (k, S) in ((:sweep, SweepPhase), (:lifecycle, LifecyclePhase))
+        count(x -> x isa S, mcs) == 1 || throw(ArgumentError("Phases: the MCS order `mcs` must list $(nameof(S))() exactly once"))
+    end
+    all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase}, mcs) || throw(ArgumentError(
+        "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase() or LifecyclePhase()"))
+    return nothing
+end
 const NO_PHASES = Phases((), (), (), ())
 
 """

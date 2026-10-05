@@ -439,6 +439,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
                              for b in getfield(sys, :discrete)]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
+    _check_boundaries(sys, fields, gather_names)
+    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
@@ -447,6 +449,45 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops)
+end
+
+# `@boundary` (D-145): a field with an equation; faces on closed axes of a square lattice the
+# model has, each axis once per field; masks are site conditions.
+function _check_boundaries(sys::PottsSystem, fields, rn)
+    bs = getfield(sys, :boundaries)
+    isempty(bs) && return nothing
+    lat = core_lattice(getfield(sys, :lattice))
+    N = ndims(lat)
+    stepped = Set{Symbol}(info(x).name for (x, _) in fields)
+    seen = Set{Tuple{Symbol, Int}}()
+    for b in bs
+        _located(sys, b) do
+            i = info(b.field)
+            n = i.name
+            (i.role === :field && any(x -> info(x) !== nothing && info(x).name === n && info(x).role === :field,
+                getfield(sys, :variables))) || throw(ArgumentError(
+                "@boundary $n: `$n` is not a field variable of $(nameof(sys)); boundaries are for `c(field)` variables"))
+            n in stepped || throw(ArgumentError(
+                "@boundary $n: `$n` has no equation `D($n) ~ …`; a boundary condition applies to a field the model steps"))
+            if b.axis == 0
+                _check_names(b.mask, _SITE_BUILTINS, "a boundary site mask"; between_copies = true)
+                _has_op(b.mask, random_uniform) && throw(ArgumentError("@boundary $n: a site mask cannot draw `rand()`"))
+                lower(b.mask, _site_env(Float64, :i, rn; mcs = :mcs))
+            else
+                ax = _AXIS_NAMES[b.axis]
+                lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
+                    "@boundary $n: face conditions (`$ax => …`) are for square lattices; this lattice is Hexagonal " *
+                    "(its missing neighbours are zero flux); a site mask `sites(…) => Dirichlet(v)` works on every lattice"))
+                b.axis <= N || throw(ArgumentError(
+                    "@boundary $n: axis `$ax` does not exist on this $(N)D lattice (its axes are $(join(_AXIS_NAMES[1:N], ", ")))"))
+                lat.periodic[b.axis] && throw(ArgumentError(
+                    "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
+                (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
+                push!(seen, (n, b.axis))
+            end
+        end
+    end
+    return nothing
 end
 
 # A slot of a discrete component is written by its ticks only.
@@ -608,6 +649,8 @@ _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
 _describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
+_describe(b::BoundaryEntry) = "@boundary $(info(b.field).name) " *
+                              (b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" : "$(_AXIS_NAMES[b.axis]) => …")
 _describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering

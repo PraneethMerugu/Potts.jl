@@ -12,9 +12,22 @@
 @inline _ones(::Lattice{N}) where {N} = ntuple(_ -> 1, Val(N))
 
 # Per-face boundary conditions on closed axes: `bc[d] = (low, high)`, each `nothing`
-# (zero flux: the ghost mirrors the site) or a number (Dirichlet: the ghost holds the value
-# so the face value is reached midway, i.e. ghost = 2·value − c[x]).
+# (zero flux: the ghost mirrors the site), a number (Dirichlet: the ghost holds the value
+# so the face value is reached midway, i.e. ghost = 2·value − c[x]) or a `GhostFace`.
+"""
+    GhostFace(dirichlet::Bool, value)
+
+One face of a `bc` (`laplacian`, `gradient`) as a single concrete type: `dirichlet = true` is
+a Dirichlet face of value `value` (the ghost is `2·value − c`), `false` zero flux (the ghost
+mirrors the site; `value` unused). A `bc` of `GhostFace{T}`s only is homogeneous, so a kernel
+indexes it per axis without a type union (generated code, and device kernels, use it).
+"""
+struct GhostFace{T}
+    dirichlet::Bool
+    value::T
+end
 @inline _ghost(ci, ::Nothing) = ci
+@inline _ghost(ci, f::GhostFace) = f.dirichlet ? 2 * oftype(ci, f.value) - ci : ci
 @inline _ghost(ci, v) = 2 * oftype(ci, v) - ci
 @inline _face(::Nothing, d, side) = nothing
 @inline _face(bc, d, side) = @inbounds bc[d][side]
@@ -34,7 +47,8 @@ end
     laplacian(c, ctx, i; h = spacing(ctx), bc = nothing)
 
 Second-order `Σ_d (c[x+e_d] − 2c[x] + c[x−e_d]) / h_d²` at site `i`. On closed axes
-`bc = ((low₁, high₁), …)` selects zero flux (`nothing`, default) or a Dirichlet value per face.
+`bc = ((low₁, high₁), …)` selects zero flux (`nothing`, default) or a Dirichlet value per face
+(a number), or either as a [`GhostFace`](@ref).
 """
 @inline laplacian(c, ctx, i; h = spacing(ctx), bc = nothing) = _laplacian(ctx.lattice, c, ctx, i, h, bc)
 @inline function _laplacian(lat::Lattice, c, ctx, i, h, bc)
@@ -95,7 +109,7 @@ end
 @inline owner_kind(st, i) = (c = @inbounds st.σ[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
-    FieldStep((:site, :c) => (:site, :c_next), rate; dt = 1, substeps = 1, lower = nothing)
+    FieldStep((:site, :c) => (:site, :c_next), rate; dt = 1, substeps = 1, lower = nothing, clamp = nothing)
 
 Explicit Euler for `∂c/∂t = rate(st, p, ctx, key, mcs, i, c)` over one MCS of length `dt`,
 in `substeps` equal steps (a number, or a function of the parameters `p -> n` evaluated
@@ -104,19 +118,28 @@ Potts clips concentrations at 0). Each step writes the scratch array and publish
 rate function sees a consistent field (bulk-synchronous). Explicit Euler is stable when
 `dt/substeps · (D · Σ_d 4/h_d² + k) ≤ 2`, with `k` a bound on the reaction's `|∂f/∂c|`; see
 `stable_substeps`.
+
+`clamp` (a masked Dirichlet condition, a node value) is `nothing` or a callable
+`clamp(st, p, ctx, key, mcs, i, v) -> v′` applied to every substep's new value at site `i`,
+after the `lower` clip: it returns the clamped value where its mask holds and `v` elsewhere.
+It is evaluated on the state the substep reads (σ, kinds and variables do not change during
+a field step), in the same kernel as the step, so a clamp costs no launch; [`FieldClamp`](@ref)
+applies it to a state outside a step (the initial state).
 """
-struct FieldStep{F <: Part, S <: Part, R, T, N, L}
+struct FieldStep{F <: Part, S <: Part, R, T, N, L, C}
     field::F
     scratch::S
     rate::R
     dt::T
     substeps::N          # an Int, or `p -> Int` (from the current parameters, host-side)
     lower::L
+    clamp::C
 end
-function FieldStep(pair::Pair, rate; dt = 1.0, substeps = 1, lower = nothing)
+FieldStep(field::Part, scratch::Part, rate, dt, substeps, lower) = FieldStep(field, scratch, rate, dt, substeps, lower, nothing)
+function FieldStep(pair::Pair, rate; dt = 1.0, substeps = 1, lower = nothing, clamp = nothing)
     substeps isa Integer && (substeps >= 1 || throw(ArgumentError("substeps must be ≥ 1")))
     return FieldStep(Part(pair.first), Part(pair.second), rate, dt,
-        substeps isa Integer ? Int(substeps) : substeps, lower)
+        substeps isa Integer ? Int(substeps) : substeps, lower, clamp)
 end
 
 @inline _substeps(n::Int, p) = n
@@ -129,6 +152,16 @@ _substeps(f::F, p) where {F} = max(1, Int(f(p)))
     # outside the lattice domain the field is inert (neighbours never read it)
     @inbounds cn[i] = in_domain(ctx.lattice, i) ? _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower) : c[i]
 end
+# with a clamp: the clipped value, then the mask (a mask value below `lower` wins)
+@inline function _field_step_clamp_body!(i, rate, cn, c, st, p, ctx, key, mcs, h, lower, clamp)
+    @inbounds cn[i] = in_domain(ctx.lattice, i) ?
+                      clamp(st, p, ctx, key, mcs, i, _clip(c[i] + h * rate(st, p, ctx, key, mcs, i, c), lower)) : c[i]
+end
+
+_step_args(::Nothing, rate, cn, c, st, p, ctx, key, mcs, h, lower) = (rate, cn, c, st, p, ctx, key, mcs, h, lower)
+_step_args(clamp, rate, cn, c, st, p, ctx, key, mcs, h, lower) = (rate, cn, c, st, p, ctx, key, mcs, h, lower, clamp)
+_step_body(::Nothing) = _field_step_body!
+_step_body(clamp) = _field_step_clamp_body!
 
 function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     c, cn = ph.field(st), ph.scratch(st)
@@ -136,10 +169,32 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     nsub = _substeps(ph.substeps, p)
     h = eltype(c)(ph.dt / nsub)
     for _ in 1:nsub
-        _launch(_field_step_body!, backend, n, (ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
+        _launch(_step_body(ph.clamp), backend, n, _step_args(ph.clamp, ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
         _device_copy!(backend, c, cn)        # a kernel: no GPU wait (P6.0v8)
     end
     return 2 * nsub
+end
+
+"""
+    FieldClamp((:site, :c), clamp)
+
+A phase applying a [`FieldStep`](@ref) `clamp` to the field as it is: `c[i] = clamp(st, p,
+ctx, key, mcs, i, c[i])` at every site of the domain (one kernel). Potts runs it at
+initialization, so the initial state satisfies the masked conditions.
+"""
+struct FieldClamp{F <: Part, C}
+    field::F
+    clamp::C
+end
+FieldClamp(path::Tuple{Symbol, Symbol}, clamp) = FieldClamp(Part(path), clamp)
+
+@inline _field_clamp_body!(i, clamp, c, st, p, ctx, key, mcs) =
+    (in_domain(ctx.lattice, i) && @inbounds(c[i] = clamp(st, p, ctx, key, mcs, i, c[i])); nothing)   # i ≤ nsites = length(c)
+
+function (ph::FieldClamp)(st, p, ctx, key, mcs, backend)
+    c = ph.field(st)
+    _launch(_field_clamp_body!, backend, length(c), (ph.clamp, c, st, p, ctx, key, mcs))
+    return 1
 end
 
 """

@@ -16,7 +16,8 @@ changed cadence), an equation the base's equation for the same
 variable, an observed quantity the base's of the same name. Energies, drives, constraints,
 divisions, relationships and link rules accumulate, base first (a division rule for kinds
 the base divides at another cadence warns: both rules apply, each at its own `Every`).
-A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
+A field's `@boundary` entries replace the base's for that field as a whole; a `@schedule` of
+`sys` replaces the base's. A name keeps its category: a name that is, say, a parameter of `base` and a variable of `sys`
 is an `ArgumentError` naming both. An edge variable keeps its relationship too: an edge
 variable of `sys` that re-declares one of `base` (to change its default) is the base
 relationship's (an unscoped `x(edge)` takes it), and one scoped to another relationship is an
@@ -81,9 +82,15 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         components = unique(c -> c.name, [getfield(sys, :components); getfield(base, :components)]),
         discrete = unique(b -> b.name, [getfield(sys, :discrete); getfield(base, :discrete)]),
         sweep = getfield(sys, :sweep), structural = merge(getfield(base, :structural), getfield(sys, :structural)),
+        # a field's boundary is the extension's when it gives one (all its entries), else the base's
+        boundaries = [filter(b -> !any(x -> _boundary_name(x) === _boundary_name(b), getfield(sys, :boundaries)),
+                getfield(base, :boundaries)); getfield(sys, :boundaries)],
+        schedule = isempty(getfield(sys, :schedule)) ? getfield(base, :schedule) : getfield(sys, :schedule),
         sources = merge(getfield(base, :sources), getfield(sys, :sources)),
         metadata = _merged_metadata(base, sys))
 end
+
+_boundary_name(b::BoundaryEntry) = info(b.field).name
 
 # MTK's `extend` metadata: the base's entries, then the extension's, so the newest value of a
 # key wins (the extension's over the base's). An `ImmutableDict` iterates newest first, so

@@ -90,6 +90,58 @@ solve(prob2, SequentialCPM()).retcode
 
 The time step is one MCS times `mcs_duration` (default 1), set in `@sweep`.
 
+## Field boundaries: `@boundary`
+
+A field's boundary conditions are model content, one `@boundary` block per field:
+
+```@example equations
+@potts_model Absorbed begin
+    @kinds medium cell border[frozen]
+    @parameters begin
+        Dc = 0.2
+        S = 1.0
+    end
+    @variables c(field) = 0.0
+    @lattice Lattice((30, 20); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
+    @energy begin
+        Volume(cell; target = 25.0, strength = 1.0)
+        contacts => 8.0 * (kind != kind′)
+    end
+    @equations D(c) ~ Dc * Δ(c) + 0.1 * (kind == cell)
+    @boundary c begin
+        x => (Dirichlet(S), NoFlux())                 # the low x face held at S, the high one closed
+        sites(kind == border) => Dirichlet(0.0)        # an absorbing obstacle
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+@named absorbed = Absorbed()
+σ = zeros(Int32, 30, 20); σ[14:17, 1:20] .= 1; σ[4:8, 8:12] .= 2
+prob = PottsProblem(absorbed, [ownership => σ, kind => [:border, :cell]], (0, 20);
+    field_solver = ExplicitEuler(substeps = 2))
+u = solve(prob, SequentialCPM()).u[end]
+(wall = maximum(u.site.c[14:17, :]), low_face = sum(u.site.c[1, :]) / 20)
+```
+
+- **Faces.** `x => (low, high)` (and `y`, `z`: axes 1, 2, 3) sets both faces of a closed
+  axis, each `Dirichlet(v)` or `NoFlux()`. A face value is a ghost value: `Dirichlet(v)` sets
+  the missing neighbour of an edge site to `2v − c`, so the field reaches `v` midway between
+  the edge site and the face; `NoFlux()` mirrors the edge site. A closed axis without an entry
+  is zero flux. An entry on a periodic axis, on an axis the lattice lacks, or on a hexagonal
+  lattice is an error naming it.
+- **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: after every explicit
+  substep (after the write and the `lower` clip, before the next rate evaluation) every site
+  where the condition holds is set to `v`, and the initial state is clamped too. The
+  condition is a site expression (`kind`, `owner`, site and field variables), evaluated
+  from the state the substep reads, so a mask on a kind moves with its cells. A clamp costs
+  no extra kernel launch. A mask value below `lower` wins.
+- **Values** are numbers, parameters or parameter expressions; `remake(prob; p = [:S => 2.0])`
+  changes a value without regenerating code. The conditions themselves are part of the
+  model's identity (the fingerprint): a checkpoint does not cross them.
+- In an extension, a field's `@boundary` replaces the base's for that field.
+
+`Δ(c)` reads the faces wherever the model uses it (equations and site updates).
+
 ## Components
 
 `@components` adds ModelingToolkit systems to the model:

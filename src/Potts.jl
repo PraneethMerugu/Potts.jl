@@ -78,6 +78,8 @@ public lattice, paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, 
 public boundary_lengths, anneal
 # a named set of kinds declared in `@kinds` (`g = (k, …)`); for programmatic `PottsSystem(; kind_classes)`
 public KindClass
+# `@boundary` conditions (D-145), bound inside model bodies like the rest of `Potts.DSL`
+public Dirichlet, NoFlux
 
 # The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
 # runs when Potts loads, never into the precompile image. The draw is a child task's: the

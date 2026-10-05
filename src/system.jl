@@ -27,7 +27,9 @@ end
 
 A cellular Potts model: kinds (the first is the medium), a lattice, parameters, scoped
 variables, Hamiltonian terms, drives, constraints, synchronous/on-copy updates, field
-equations (MTK syntax), lifecycle rules and the sweep protocol.
+equations (MTK syntax), lifecycle rules and the sweep protocol. `boundaries` holds the
+`@boundary` entries of the fields (`Potts.boundary_face`, `Potts.boundary_mask`) and
+`schedule` the `@schedule` phases as listed (empty: the default MCS order).
 
 `PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137); `sys.x` is the namespaced
 symbolic `sys₊x` (a parameter, variable or `@observed` quantity, or a `@components` system:
@@ -90,6 +92,8 @@ Base.@kwdef struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     components::Vector{Any} = Any[]            # `ComponentSpec`s: MTK systems instantiated per cell
     discrete::Vector{DiscreteBlock} = DiscreteBlock[]   # bound discrete components (`_bind_components`)
     sweep::SweepSpec
+    boundaries::Vector{BoundaryEntry} = BoundaryEntry[]   # `@boundary` faces and site masks (D-145)
+    schedule::Vector{Symbol} = Symbol[]        # `@schedule` as listed; empty: the default phase order
     structural::NamedTuple = (;)
     sources::IdDict{Any, LineNumberNode} = IdDict{Any, LineNumberNode}()   # term → where it was written
     # The MTK `System` fields MTK's generic accessors read (D-137); they stay the last seven
@@ -404,9 +408,17 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     for d in getfield(sys, :divisions)
         println(io, "  divide  ", _domain_string(d.domain), _cadence_string(d.every), " when ", d.when)
     end
+    for b in getfield(sys, :boundaries)
+        println(io, "  boundary ", info(b.field).name, " ", b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" :
+                                                          "$(_AXIS_NAMES[b.axis]) => ($(_side_string(b.sides[1])), $(_side_string(b.sides[2])))")
+    end
+    isempty(getfield(sys, :schedule)) || println(io, "  schedule ", join(getfield(sys, :schedule), ", "))
     print(io, "  sweep: ", getfield(sys, :sweep).law, "(temperature = ", getfield(sys, :sweep).temperature, ")")
 end
 Base.ndims(sys::PottsSystem) = length(getfield(sys, :lattice).dims)
+
+_side_string(s::Dirichlet) = "Dirichlet($(s.value))"
+_side_string(::NoFlux) = "NoFlux()"
 
 _domain_string(d::CellDomain) = isempty(d.kinds) ? "cells" : "cells(" * join(d.kinds, ", ") * ")"
 _domain_string(d::ClusterDomain) = isempty(d.kinds) ? "clusters" : "clusters(" * join(d.kinds, ", ") * ")"

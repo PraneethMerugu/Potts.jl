@@ -463,7 +463,22 @@ function _lower_laplacian(c, env)
     i = info(c)
     (i !== nothing && i.role === :field) || error("`Δ` applies to field variables")
     haskey(env.bind, :__site) || error("`Δ($(i.name))` needs a site")
-    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
+    faces = get(env.bind, :__bc, nothing)
+    (faces === nothing || !haskey(faces, i.name)) &&
+        return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
+    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site]); bc = $(_bc_code(faces[i.name], env))))
+end
+
+# The `bc` of a field's `@boundary` faces (D-145): one `(low, high)` pair of `GhostFace`s per
+# axis (homogeneous, so kernels index it per axis without a union); an axis without an entry
+# is zero flux. Values are lowered here, so a parameter value is read from `p` (a `remake`
+# keeps the code).
+function _bc_code(axes, env)
+    T = env.T
+    side(::Nothing) = :(CorePotts.GhostFace(false, zero($T)))
+    side(::NoFlux) = side(nothing)
+    side(d::Dirichlet) = :(CorePotts.GhostFace(true, $T($(lower(d.value, env)))))
+    return Expr(:tuple, (Expr(:tuple, side(a === nothing ? nothing : a[1]), side(a === nothing ? nothing : a[2])) for a in axes)...)
 end
 
 function _lower_gather(args, env)

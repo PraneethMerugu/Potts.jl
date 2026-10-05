@@ -159,9 +159,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # non-default `mcs_duration`; only non-default values, so a model on the default schedule
     # (every = 1, offset = 0, `mcs_duration` = 1) keeps its fingerprint
     cad = String[]
-    for f in fieldnames(typeof(phases))
+    for f in (:before_mcs, :after_mcs, :end_mcs, :at_init)      # the phases by role (`mcs` lists them again)
         _cadences!(cad, getfield(phases, f))
     end
+    # the phase order (`@schedule`, D-145), canonicalized to the full placed order; only a
+    # non-default one, so a model without `@schedule` (or one listing the default relative
+    # order) keeps its fingerprint
+    order = _phase_order(sys)
+    order == collect(SCHEDULE_PHASES) || push!(cad, "schedule=$(join(order, ","))")
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
     # the MCS length, which solvers keep as data (`Adaptive`'s dt, an explicit-substeps `FieldStep.dt`)
     getfield(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(getfield(sys, :sweep).mcs_duration))")
