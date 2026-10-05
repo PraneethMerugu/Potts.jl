@@ -773,3 +773,99 @@ end
     @test only(rep).painted == length(unique(pts)) == maximum(_op(op, ownership))
     @test Set(Tuple.(findall(!=(0), _op(op, ownership)))) == Set(map(x -> Int.(Tuple(x)), pts))
 end
+
+# A custom layer painting given site sets, one cell of kind :c each.
+struct _SiteSets <: AbstractLayout
+    cells::Vector{Vector{NTuple{N, Int}}} where {N}
+end
+function Potts.paint!(op::Potts.LayoutState, l::_SiteSets, lat)
+    for c in l.cells
+        id = Potts.new_cell!(op, :c)
+        foreach(x -> Potts.assign!(op, x, id), c)
+    end
+    return nothing
+end
+
+# Exact cut oracle (2D, BigFloat at 512 bits): the daughter is the sites with (p − c)·v > 0,
+# with exact zeros (|·| < 1e-60 at this precision) on the plane.
+function _exact_daughter_2d(S)
+    setprecision(BigFloat, 512) do
+        P = [BigFloat.(s) for s in S]
+        n = length(P)
+        c = (sum(p[1] for p in P) / n, sum(p[2] for p in P) / n)
+        a = sum((p[1] - c[1])^2 for p in P); d = sum((p[2] - c[2])^2 for p in P)
+        b = sum((p[1] - c[1]) * (p[2] - c[2]) for p in P)
+        λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
+        v = abs(b) > 1e-60 ? [λ - d, b] : (a >= d ? [big(1.0), big(0.0)] : [big(0.0), big(1.0)])
+        v ./= sqrt(sum(abs2, v))
+        v[findfirst(x -> abs(x) > 1e-9, v)] < 0 && (v .*= -1)
+        Set(S[i] for i in eachindex(S) if (P[i][1] - c[1]) * v[1] + (P[i][2] - c[2]) * v[2] > 1e-60)
+    end
+end
+
+@testset "layouts: Splits keeps sites on the plane with the mother (exact oracle)" begin
+    # the review's reproducer: (4, 4) lies exactly on the plane, the inexact centroid
+    # (23/5, 19/5) and axis would put it at ±1e-16
+    S = [(4, 3), (5, 3), (4, 4), (5, 4), (5, 5)]
+    @test _exact_daughter_2d(S) == Set([(5, 4), (5, 5)])
+    σ = _op(layout(Splits(_SiteSets([S]), 1), (8, 8)), ownership)
+    @test Set(Tuple.(findall(==(2), σ))) == _exact_daughter_2d(S) && σ[4, 4] == 1
+    # random small cells (a random walk on 9×9; the cells with an exact on-plane site matter)
+    rng = Test.Random.Xoshiro(11)
+    onplane = 0
+    for _ in 1:3000
+        x = (5, 5); cell = Set([x])
+        for _ in 1:rand(rng, 1:12)
+            x = (clamp(x[1] + rand(rng, -1:1), 1, 9), clamp(x[2] + rand(rng, -1:1), 1, 9)); push!(cell, x)
+        end
+        length(cell) >= 2 || continue
+        Sv = sort!(collect(cell); by = s -> (s[2], s[1]))
+        want = _exact_daughter_2d(Sv)
+        σ = _op(layout(Splits(_SiteSets([Sv]), 1; splits = :allow), (9, 9)), ownership)
+        @test Set(Tuple.(findall(==(2), σ))) == want
+    end
+    # 3D: three layers z = 1:3 of the same L tromino (x, y centroid 4/3, inexact); exactly,
+    # C is diagonal with the largest variance along z (6 against 2), so the plane is z = 2:
+    # mother z ≤ 2, daughter z = 3
+    L = [(1, 1), (2, 1), (1, 2)]
+    S3 = [(x, y, z) for z in 1:3 for (x, y) in L]
+    σ = _op(layout(Splits(_SiteSets([S3]), 1), (3, 3, 3)), ownership)
+    @test Set(Tuple.(findall(==(2), σ))) == Set(s for s in S3 if s[3] == 3)
+end
+
+@testset "layouts: Splits names the cell by its id in the result" begin
+    # the review's reproducer: on a periodic 10 × 3 lattice the cell spans more than half of x,
+    # so it is unwrapped about (9, 1) and torn; an earlier one-site cell is painted over and
+    # dropped, so the Splits cells (paint ids 2, 3) are 1, 2 in the result
+    cell = [(9, 1); [(x, 2) for x in 2:9]]
+    l = overlay(_SiteSets([[(5, 3)]]), Splits(_SiteSets([cell]), 1), _SiteSets([[(5, 3)]]))
+    per = Lattice((10, 3))
+    # Unwrapped, x = 2:4 sit at 12:14: the daughter is x ≥ 9 of the unwrapped cell, i.e.
+    # (9, 1), (9, 2), (2, 2), (3, 2): two pieces, x = 9 and x = 2:3 (x = 10 and 1 between them
+    # are not the cell's). Result id 2 (paint id 3).
+    σ = _op(layout(l, per), ownership)
+    @test Set(Tuple.(findall(==(2), σ))) == Set([(9, 1), (9, 2), (2, 2), (3, 2)])
+    w = _warnings(() -> layout(l, per))
+    @test length(w) == 1 && occursin("cell 2 ", w[1])
+    # on a closed lattice the same cell is cut into two one-piece halves: no warning
+    @test isempty(_warnings(() -> layout(l, (10, 3))))
+    # a cell that is not one piece: two sites far apart, k = 0 (Splits cut nothing)
+    two = _SiteSets([[(1, 1), (6, 1)]])
+    l = overlay(_SiteSets([[(3, 3)]]), Splits(two, 0), _SiteSets([[(3, 3)]]))
+    w = _warnings(() -> layout(l, (8, 3)))
+    σ = _op(layout(l, (8, 3)), ownership)
+    @test length(w) == 1 && occursin("cell $(σ[1, 1]) ", w[1]) && occursin("Splits", w[1])
+    @test σ[1, 1] == 1                           # renumbered: paint id 2 is result id 1
+    @test occursin("is not one piece", w[1]) && !occursin("divisions", w[1])
+    _, rep = layout(l, (8, 3); report = true)
+    @test rep[2].splits == 1
+    # nested Splits share one row and count a cell in pieces once
+    _, rep = layout(Splits(Splits(two, 0; splits = :allow), 0; splits = :allow), (8, 3); report = true)
+    @test only(rep).splits == 1
+    # the outer setting decides: an inner :warn under an outer :allow is silent
+    @test isempty(_warnings(() -> layout(Splits(Splits(two, 0), 0; splits = :allow), (8, 3))))
+    # a cell dropped by a later layer is counted but not warned about
+    l = overlay(Splits(two, 0), Tiling((8, 1); region = (1:8, 1:1), kinds = [:t]))
+    @test isempty(_warnings(() -> layout(l, (8, 3))))
+    @test last(layout(l, (8, 3); report = true))[1].splits == 1
+end

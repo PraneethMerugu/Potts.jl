@@ -75,12 +75,13 @@ mutable struct LayoutState{N}
     const cutby::Vector{Int32}       # per cell before the current leaf: 0, the one cutter, or -1 (several)
     const cutwarn::Vector{Bool}      # … some cutter has `splits = :warn`
     const rows::Vector{_LayerRow}
+    const pieces::Vector{Tuple{Int, Int, Bool}}   # `Splits`: (cell, row, warn) of its cells left in pieces
     layer::Int                       # the current leaf (0: none)
     base::Int                        # cells allocated before the current leaf
     warn::Bool                       # the current leaf has `splits = :warn`
 end
 LayoutState(dims::NTuple{N, Int}) where {N} =
-    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], 0, 0, true)
+    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], 0, 0, true)
 
 """
     new_cell!(op::LayoutState, kind) -> id
@@ -1358,10 +1359,14 @@ routine (no state, no trackers); it shares only the cut geometry with
   eigenvector of the largest eigenvalue of `C = Σ (p − c)(p − c)ᵀ` (in 2D by
   `AlongMinorAxis`' rule; for a repeated largest eigenvalue, the first standard axis
   projected onto its eigenspace), its first nonzero component positive. The daughter takes
-  the sites with `(p − c)·v > 0`; sites on the plane stay with the mother.
+  the sites with `(p − c)·v > 0`; sites on the plane (up to a relative 1e-9 of the cell's
+  largest `|(p − c)·v|`) stay with the mother. A cell spanning more than half a periodic axis
+  is unwrapped relative to its first site all the same, so its cut can be torn into pieces
+  (deterministically).
 - After the passes, every cell of this layer that is not one piece under the lattice
-  neighbourhood counts in the report row's `splits` and, under `splits = :warn`, is named in
-  a warning; `splits = :allow` silences the warning, not the count.
+  neighbourhood (whether a cut or `layer` itself left it so) counts once in the report row's
+  `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
+  warning; `splits = :allow` silences the warning, not the count.
 
 The report row (one row for `Splits` and its `layer`) has `requested` = m·2ᵏ, m the cells of
 `layer` that own a site, `painted` = the cells owning a site after the passes, `misses` =
@@ -1405,7 +1410,7 @@ function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
         length(S) >= 2 || continue
         _split_points!(P, S, clat, dims, per)
         cen, v = _split_axis(P)
-        side = [_dot_from(p, cen, v) > 0 for p in P]           # the daughter's sites
+        side = _daughter_side(P, cen, v)
         any(side) || continue
         daughter = S[side]
         deleteat!(S, side)
@@ -1421,16 +1426,24 @@ function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
     for c in lo:ncells(op)
         check[c] = length(sites[c - lo + 1]) > 1
     end
-    pieces = Ref(0)                              # a Ref: the closure must not reassign
+    # an inner Splits shares this row: its findings for these cells are superseded
+    filter!(q -> q[1] < lo, op.pieces)
+    warn, row = l.splits === :warn, op.layer
     _disconnected(op.σ, check, lat) do c
-        pieces[] += 1
-        l.splits === :warn &&
-            @warn "Splits: cell $c (kind $(kindof(op, c))) is not one piece after $(l.k) divisions (pass `splits = :allow` to accept)"
+        push!(op.pieces, (c, row, warn))         # counted and warned by `layout` (final ids)
     end
     record!(op; requested, painted, misses = requested - painted, clipped)
-    op.rows[op.layer].splits += pieces[]
     _shortfall!(l.shortfall, "Splits", requested, painted)
     return nothing
+end
+
+# The daughter's sites: (p − c)·v > 0, where "0" is relative to the largest |(p − c)·v| of the
+# cell (1e-9): an inexact centroid and axis turn a site exactly on the plane into ±1e-16,
+# and it must stay with the mother.
+function _daughter_side(P, cen, v)
+    d = [_dot_from(p, cen, v) for p in P]
+    tol = 1e-9 * maximum(abs, d)
+    return [x > tol for x in d]
 end
 
 _dot_from(p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{N, Float64}) where {N} =
@@ -1637,18 +1650,35 @@ end
 # could warn and no report is asked for.
 function _check_splits!(op::LayoutState, lat::LatticeSpec, counts, report::Bool)
     cutby, cutwarn = op.cutby, op.cutwarn
-    any(!=(0), cutby) || return nothing        # no cell was cut
+    warned = falses(length(counts))
+    any(!=(0), cutby) || return warned         # no cell was cut
     check = falses(length(counts))              # cells of the last leaf were never cut
     for c in eachindex(cutby)
         check[c] = cutby[c] != 0 && counts[c] > 0 && (cutwarn[c] || (report && cutby[c] > 0))
     end
-    any(check) || return nothing
+    any(check) || return warned
     _disconnected(op.σ, check, lat) do c
         if cutwarn[c]
-            id = count(>(0), view(counts, 1:c))
-            @warn "layout: later layers split cell $id (kind $(op.kinds[c])) into disconnected pieces"
+            warned[c] = true
+            @warn "layout: later layers split cell $(_final_id(counts, c)) (kind $(op.kinds[c])) into disconnected pieces"
         end
         report && cutby[c] > 0 && (op.rows[cutby[c]].splits += 1)
+    end
+    return warned
+end
+
+# The id of paint cell `c` in the returned σ (cells with no site are dropped).
+_final_id(counts, c) = count(>(0), view(counts, 1:c))
+
+# The cells a `Splits` left in pieces at the end of its paint: counted in its row, and
+# warned (under `splits = :warn`, by their final id) unless dropped later or already named by
+# the split warning above.
+function _report_pieces!(op::LayoutState, counts, warned)
+    for (c, row, warn) in op.pieces
+        op.rows[row].splits += 1
+        (warn && counts[c] > 0 && !warned[c]) || continue
+        @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
+              "(pass `splits = :allow` to that Splits to accept it)"
     end
     return nothing
 end
@@ -1705,7 +1735,8 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
     for s in σ
         s > 0 && (counts[s] += 1)
     end
-    _check_splits!(op, lat, counts, report)
+    warned = _check_splits!(op, lat, counts, report)
+    _report_pieces!(op, counts, warned)
     mask = lat.domain
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
