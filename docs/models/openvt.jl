@@ -171,14 +171,20 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 # The benchmark measures each saved colony with the consortium's `metrics.cpp`: the tissue
 # boundary is a concave hull of the cell centroids, and from it come the mean radius `r`,
 # the area `A`, the perimeter `C`, the boundary roughness `w`, and the ratios
-# `C_rel = C/(2√(πA))` and `w_rel = w/r`. `openvt_metrics` is a byte-faithful port of that
-# program (its output line is the reference build's, character for character), built on the
-# general primitive `PottsModels.Analysis.concave_hull`. The benchmark's unit of length is
-# the cell radius ``R = \sqrt{A_0/\pi}``, with the origin at the lattice centre:
+# `C_rel = C/(2√(πA))` and `w_rel = w/r`. `openvt_metrics` ports that program, built on the
+# general primitive `PottsModels.Analysis.concave_hull`. Its output line is identical to
+# `metrics.cpp` built with `-ffp-contract=off` on the consortium's 25 parameter-plane
+# colonies and on fuzzed tie-free clouds. It departs from the reference on purpose in two
+# places where the reference's boundary depends on luck: the Graham order of points
+# collinear with the pivot, and an R-tree search that can miss candidates next to
+# near-parallel edges (spec defects D12 and D13). In both, the port's boundary is the
+# correct hull. The benchmark's unit of length is the cell radius ``R = \sqrt{A_0/\pi}``,
+# with the origin at the lattice centre. Ids of cells that have vanished have `NaN`
+# centroids, so they are dropped first:
 
 using PottsModels.Analysis: centroids, concave_hull
 R = sqrt(25 / π)
-cs = centroids(sol.u[end].σ)
+cs = filter(c -> !isnan(c[1]), centroids(sol.u[end].σ))
 x = [(c[1] - 200) / R for c in cs]
 y = [(c[2] - 200) / R for c in cs]
 m = openvt_metrics(x, y, ones(Int, length(cs)))   # β = 0: every cell grows

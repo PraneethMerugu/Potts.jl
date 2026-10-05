@@ -20,10 +20,10 @@ repeating the first vertex.
 The construction is the OpenVT monolayer benchmark's (`metrics.cpp` and `concaveman.h` in
 the consortium repository), step for step:
 
-1. A convex hull by Graham scan, collinear points excluded. The pivot `p₀` is the point
-   with the least `(y, x)`; the other points are sorted by orientation about `p₀`
-   (clockwise first, ties by squared distance). A two-vertex hull of equal points keeps
-   one vertex.
+1. A strictly convex hull by Graham scan, collinear points excluded. The pivot `p₀` is
+   the point with the least `(y, x)`; the other points are sorted by orientation about
+   `p₀` (clockwise first; on one ray from `p₀`, nearer first). A two-vertex hull of equal
+   points keeps one vertex.
 2. If the convex hull holds every point, it is returned (from `p₀`, clockwise).
 3. Otherwise concaveman: the hull edges are processed first in, first out. An edge
    `(b, c)` with ``|bc|² ≥`` `length_threshold²` looks at the interior points within
@@ -39,16 +39,32 @@ A larger `concavity` gives a simpler hull (`Inf`: the convex hull); `metrics.cpp
 An empty `points`, a non-finite coordinate, a `concavity` that is not positive or a negative
 `length_threshold` is an `ArgumentError`.
 
-The arithmetic follows the C++ operation for operation, without fused multiply-adds, so the
-result is the reference's built with `-ffp-contract=off`. Two caveats:
+The arithmetic follows the C++ operation for operation, without fused multiply-adds. The
+result is identical to the reference (`metrics.cpp` built with `-ffp-contract=off`) on the
+25 OpenVT parameter-plane colonies and on fuzzed clouds without ties. It departs from the
+reference on purpose in two places, recorded as defects D12 and D13 of the benchmark spec.
+In both, the reference's result depends on luck, and this one is the correct hull:
 
-- **Exact ties.** Byte identity with the reference is established only for inputs without
-  exact ties between candidate distances. The C++ takes tied candidates in the order of its
-  R-tree, which depends on the standard library's sort (libc++ and libstdc++ differ on a
-  perfect lattice); here a tie goes to the point that comes first in the Graham order.
+- **D12, the Graham order.** `metrics.cpp` sorts with a floating-point orientation whose
+  sign is rounding noise for points collinear with `p₀`, which is not a strict weak
+  ordering. Here the orientation sign is exact: it is `metrics.cpp`'s value wherever that
+  value's rounding bound decides the sign, and is computed in exact rational arithmetic
+  otherwise. Points on one ray from `p₀` go nearer first, and collinear points are dropped,
+  so the convex hull is strictly convex and does not depend on the sort algorithm.
+- **D13, the candidate search.** concaveman's R-tree prunes boxes by a segment–box distance
+  that overestimates next to near-parallel or axis-aligned edges, so it can miss the
+  nearest candidate. Here every live point within the distance limit is examined, nearest
+  first.
+
+Two further caveats:
+
+- **Exact ties.** When two candidates are at exactly the same distance, the C++ takes them
+  in the order of its R-tree, which depends on the standard library (libc++ and libstdc++
+  differ on a perfect lattice). Here a tie goes to the point that comes first in the Graham
+  order.
 - **Platform.** All arithmetic is `Float64`. The reference was validated on arm64, where
-  `long double` is `double`; an x86 build of `metrics.cpp` with 80-bit `long double`
-  differs in the last bits of its metrics, not in the hull.
+  `long double` is `double`; an x86 build of `metrics.cpp` with 80-bit `long double` may
+  differ in the last bits.
 
 Points and hull edges are indexed by uniform grids, so a hull of ``10⁴`` points takes
 milliseconds.
@@ -68,10 +84,25 @@ end
 
 # ── kernels (metrics.cpp and concaveman.h, operation for operation) ────────────────────────
 
-# metrics.cpp `orientation`: −1 clockwise, +1 counter-clockwise, 0 collinear
+# metrics.cpp `orientation`, with the sign made exact: −1 clockwise, +1 counter-clockwise,
+# 0 collinear. The value is metrics.cpp's expression; when its magnitude is within the
+# expression's rounding bound the sign is decided in exact rational arithmetic. Wherever the
+# floating-point sign is certain the result is metrics.cpp's; elsewhere metrics.cpp's sign is
+# rounding noise, which made its Graham order inconsistent (spec 15 D12).
 function _orientation(a::_Point2, b::_Point2, c::_Point2)
-    v = a[1] * (b[2] - c[2]) + b[1] * (c[2] - a[2]) + c[1] * (a[2] - b[2])
-    return v < 0 ? -1 : v > 0 ? 1 : 0
+    t1 = a[1] * (b[2] - c[2])
+    t2 = b[1] * (c[2] - a[2])
+    t3 = c[1] * (a[2] - b[2])
+    v = t1 + t2 + t3
+    bound = 8 * eps(Float64) * (abs(t1) + abs(t2) + abs(t3))
+    abs(v) > bound && return v < 0 ? -1 : 1
+    return _orientation_exact(a, b, c)
+end
+
+function _orientation_exact(a::_Point2, b::_Point2, c::_Point2)
+    R(x) = Rational{BigInt}(x)
+    v = R(a[1]) * (R(b[2]) - R(c[2])) + R(b[1]) * (R(c[2]) - R(a[2])) + R(c[1]) * (R(a[2]) - R(b[2]))
+    return Int(sign(v))
 end
 
 # concaveman.h `orient2d`
@@ -112,8 +143,10 @@ end
 
 # ── Graham scan (metrics.cpp `convex_hull`, include_collinear = false) ─────────────────────
 
-# Sorts `pts` in place into Graham order, as metrics.cpp does, and returns the hull as
-# indices into it.
+# Sorts `pts` in place into Graham order and returns the strictly convex hull as indices into
+# it. The order is a strict weak ordering (exact orientation about p₀; on one ray from p₀,
+# nearer first), so the result does not depend on the sort algorithm; metrics.cpp's
+# comparator is not one for points collinear with p₀ (spec 15 D12).
 function _graham_hull!(pts::Vector{_Point2})
     p0 = pts[1]
     for p in pts
@@ -131,14 +164,16 @@ function _graham_hull!(pts::Vector{_Point2})
     return hull
 end
 
+# a before b in Graham order: clockwise about p0 first; on one ray, nearer first. The squared
+# distance is metrics.cpp's (monotone along a ray, as rounding is monotone); distinct points
+# whose distances round alike are ordered by |Δx|, |Δy| (also monotone), then by coordinates.
 function _graham_before(p0::_Point2, a::_Point2, b::_Point2)
     o = _orientation(p0, a, b)
-    if o == 0
-        da = (p0[1] - a[1]) * (p0[1] - a[1]) + (p0[2] - a[2]) * (p0[2] - a[2])
-        db = (p0[1] - b[1]) * (p0[1] - b[1]) + (p0[2] - b[2]) * (p0[2] - b[2])
-        return da < db
-    end
-    return o < 0
+    o == 0 || return o < 0
+    da = (p0[1] - a[1]) * (p0[1] - a[1]) + (p0[2] - a[2]) * (p0[2] - a[2])
+    db = (p0[1] - b[1]) * (p0[1] - b[1]) + (p0[2] - b[2]) * (p0[2] - b[2])
+    da == db || return da < db
+    return (abs(a[1] - p0[1]), abs(a[2] - p0[2]), a[1], a[2]) < (abs(b[1] - p0[1]), abs(b[2] - p0[2]), b[1], b[2])
 end
 
 # ── a uniform grid over the points' bounding box ───────────────────────────────────────────

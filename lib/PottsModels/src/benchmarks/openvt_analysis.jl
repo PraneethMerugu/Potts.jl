@@ -29,17 +29,25 @@ and `r`, `A`, `C`, `w` are `NaN` for `B ≤ 2` (fewer than three cells, or colli
 
 The file method reads a headed CSV as `metrics.cpp` does: the header is split on `,` and
 `"` and `'` are removed from the names; the columns `x`, `y` and `g` are found by name (the
-last one of each name; other columns are ignored), and empty lines are skipped. A file
-without `g` but with an `i` column (an O1 file, see [`write_openvt`](@ref)) takes
-`g = (i == 0)` (spec C8). A missing `x` or `y`, neither `g` nor `i`, or a data row with too
-few fields is an `ArgumentError`. Unlike `metrics.cpp`, an `n` column is not required.
-No cells (an empty file or empty vectors) is an `ArgumentError`.
+last one of each name; other columns are ignored), and empty lines are skipped. A field is
+read as C++'s `std::stod`/`std::stoi` read it: leading spaces are skipped and the longest
+numeric prefix is taken, so `1.5abc` reads as 1.5 and a `g` of `1.0` as 1. CRLF line ends
+are accepted (`metrics.cpp` would keep the `\r` in the last header name). A file without
+`g` but with an `i` column (an O1 file, see [`write_openvt`](@ref)) takes `g = (i == 0)`
+(spec C8). A missing `x` or `y`, neither `g` nor `i`, a data row with too few fields, or a
+field that is not a number or overflows `Float64` (where `std::stod` throws) is an
+`ArgumentError`. Unlike `metrics.cpp`, an `n` column is not required. No cells (an empty
+file or empty vectors) and, in the vector method, a non-integer `g` are `ArgumentError`s.
 
-The sums run in `metrics.cpp`'s order and the arithmetic has no fused multiply-adds, so
-[`openvt_metrics_line`](@ref) gives the reference's output byte for byte, with two caveats:
-byte identity is proven only for inputs without exact ties between hull candidates (see
-[`Analysis.concave_hull`](@ref PottsModels.Analysis.concave_hull)), and everything is
-`Float64`: the reference is the arm64 build, where `long double` is `double`.
+The sums run in `metrics.cpp`'s order with no fused multiply-adds, and the boundary is
+[`Analysis.concave_hull`](@ref PottsModels.Analysis.concave_hull)'s. The output of
+[`openvt_metrics_line`](@ref) is identical to `metrics.cpp -ffp-contract=off` on the 25
+OpenVT parameter-plane colonies and on fuzzed clouds without ties. It departs from the
+reference on purpose where the reference's boundary depends on luck: its Graham order for
+points collinear with the pivot (spec defect D12), and its R-tree pruning next to
+near-parallel edges (D13). In both, this boundary is the correct hull. Exact ties between
+hull candidates are broken differently from the C++ R-tree, and everything is `Float64`:
+the reference is the arm64 build, where `long double` is `double`.
 
 See also [`openvt_neighbor_histogram`](@ref) for `metrics.cpp`'s third output.
 """
@@ -84,6 +92,7 @@ function openvt_metrics(x::AbstractVector{<:Real}, y::AbstractVector{<:Real}, g:
     end
     ng = 0
     for v in g
+        isinteger(v) || throw(ArgumentError("openvt_metrics: g must hold integers (0/1 flags), got $v"))
         ng += Int(v)
     end
     gfrac = ng / N
@@ -101,8 +110,8 @@ function openvt_metrics(path::AbstractString)
     for (k, row) in enumerate(rows)
         length(row) >= last || throw(ArgumentError("openvt_metrics: $path: ill-formatted data row $k"))
     end
-    x = [_stod(row[xi]) for row in rows]
-    y = [_stod(row[yi]) for row in rows]
+    x = [_stod(row[xi], "x") for row in rows]
+    y = [_stod(row[yi], "y") for row in rows]
     g = gi === nothing ? [Int(_stoi(row[ii]) == 0) for row in rows] : [_stoi(row[gi]) for row in rows]
     return openvt_metrics(x, y, g)
 end
@@ -122,9 +131,10 @@ openvt_metrics_line(m::NamedTuple) = join((_cpp_g(m[k]) for k in _OPENVT_METRICS
 The neighbour-number distribution `metrics.cpp` writes: for `n = 0:maximum(n)` (as a
 `Vector{Int}`), the percentage `p = (100·count)/N` of the `N` cells with that many
 neighbours, computed in that order. Write it with `write_openvt(dest, :O6_neighbors, h)`.
-A negative neighbour count is an `ArgumentError`.
+No cells or a negative neighbour count is an `ArgumentError`.
 """
 function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
+    isempty(n) && throw(ArgumentError("openvt_neighbor_histogram: no cells"))
     any(<(0), n) && throw(ArgumentError("openvt_neighbor_histogram: negative neighbour count"))
     nmax = Int(maximum(n; init = 0))
     counts = zeros(Int, nmax + 1)
@@ -180,13 +190,18 @@ function _cpp_csv(path::AbstractString)
     return names, rows
 end
 
-# std::stod / std::stoi: leading space, the longest numeric prefix
-function _stod(s::AbstractString)
+# std::stod / std::stoi: leading space, the longest numeric prefix; std::stod throws
+# std::out_of_range on overflow
+function _stod(s::AbstractString, name::AbstractString)
     v = tryparse(Float64, s)
-    v === nothing || return v
-    m = match(r"^\s*[+-]?(?:inf(?:inity)?|nan|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"i, s)
-    m === nothing && throw(ArgumentError("openvt_metrics: not a number: \"$s\""))
-    return parse(Float64, strip(m.match))
+    if v === nothing
+        m = match(r"^\s*[+-]?(?:inf(?:inity)?|nan|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"i, s)
+        m === nothing && throw(ArgumentError("openvt_metrics: column $name: not a number: \"$s\""))
+        v = parse(Float64, strip(m.match))
+    end
+    isinf(v) && !occursin(r"inf"i, s) &&
+        throw(ArgumentError("openvt_metrics: column $name: \"$s\" overflows Float64"))
+    return v
 end
 
 function _stoi(s::AbstractString)
@@ -251,12 +266,14 @@ Write `data` as the OpenVT benchmark file `format` (spec 15 §3.1) to `dest`, a 
 | `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbour count | `x,y,i,n` |
 | `:O2` | `(; x, y, r, f, a)` | `x,y,r,f,a` |
 | `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached 10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
-| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`; the mean and the population SD of each row |
+| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`; the mean and the population SD (divisor = replicates) of each row, from sequential sums |
 | `:O5` | `(; x_pos, y_pos, radius_i, inhibited)`, `inhibited` 0 or 1 | `x_pos,y_pos,radius_i,inhibited` |
 | `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`, and [`openvt_metrics_line`](@ref) |
 | `:O6_neighbors` | `(; n, p)` from [`openvt_neighbor_histogram`](@ref) | `n,p`; `p` as `metrics.cpp` prints it |
 
-The O6 values have `metrics.cpp`'s six significant digits. Other fields, an unknown
+The O4 mean and SD are summed left to right; NumPy sums pairwise, so with 8 or more
+replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values
+have `metrics.cpp`'s six significant digits. Other fields, an unknown
 format, an O1 code outside `0:3` or an O5 flag other than 0/1 is an `ArgumentError`;
 columns of different lengths are a `DimensionMismatch`. Read a file back with
 [`read_openvt`](@ref); name it with [`openvt_filename`](@ref).
