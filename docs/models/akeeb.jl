@@ -68,10 +68,8 @@ using Potts, PottsModels
 # energies medium–leader 2, medium–follower 10, leader–leader 16 and follower–follower 5.
 # The leader–follower energy ``J_{LF}`` (here 2) is the paper's main scanned parameter,
 # over ``[-5, 5]``; `akeeb_contacts(J_LF)` builds the table for any value. `μ` is the
-# chemotaxis strength (the paper's ``\lambda``). Its default here is 30; the paper's
-# value is 24, so we pass `μ = 24` when we build the model below. `V_max`, `clock_min`
-# and `clock_spread`
-# govern growth and division (Steps 8 and 9).
+# chemotaxis strength (the paper's ``\lambda``); its default is the paper's reference value
+# 24. `V_max`, `clock_min` and `clock_spread` govern growth and division (Steps 8 and 9).
 #
 # ## Step 4: per-cell and per-site variables
 #
@@ -138,11 +136,10 @@ using Potts, PottsModels
 
 # <<model>>
 
-# We run it on the paper's 500 × 300 lattice. Every default is the paper's value except
-# the chemotaxis strength, which we set to the paper's 24:
+# We run it on the paper's 500 × 300 lattice. Every default is the paper's value:
 
 dims = (500, 300)
-@named invasion = LeaderFollowerInvasion(; lattice = dims, μ = 24.0)
+@named invasion = LeaderFollowerInvasion(; lattice = dims)
 
 # ## The starting state
 #
@@ -237,7 +234,7 @@ fig
 # | ``y`` boundary | not stated | a closed wall (the CompuCell3D default) |
 # | Connectivity | not mentioned | every cell kept in one piece (CompuCell3D `Connectivity`) |
 # | Time | 700 MCS (701 CompuCell3D steps) | 700 MCS |
-# | Chemotaxis strength | ``\lambda = 24`` | the constructor's default is `μ = 30`; pass `μ = 24`, as this page does |
+# | Chemotaxis strength | ``\lambda = 24`` | `μ = 24`, the constructor's default |
 #
 # The lattice, temperature, contact energies, volume constraint, growth rate and division
 # size are the paper's (Table 1). The leader–follower energy is 2 here; the paper scans
@@ -248,15 +245,18 @@ fig
 # PottsModels exports this model as `AkeebInvasion`; the test suite checks that it
 # compiles to the same code and defaults as `LeaderFollowerInvasion` above.
 
-@named akeeb = AkeebInvasion(; μ = 24.0)
+@named akeeb = AkeebInvasion()
 
 # Its start is `akeeb_state()`, used above. To scan the leader–follower energy as the
 # paper does, pass a contact table with the state, for example
-# `[akeeb_state(); :J => akeeb_contacts(-2.0)]`.
+# `[akeeb_state(); :J => akeeb_contacts(-2.0)]`. To measure a state as the authors'
+# analysis code does (invasive and infiltrative areas, fingers, singles, detached cells
+# and clusters), use `akeeb_observables(u)`.
 
 # ```@docs
 # AkeebInvasion
 # akeeb_state
 # akeeb_layout
 # akeeb_contacts
+# akeeb_observables
 # ```

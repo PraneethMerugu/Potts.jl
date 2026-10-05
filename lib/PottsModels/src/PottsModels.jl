@@ -15,15 +15,16 @@ using Random: MersenneTwister
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
     AkeebInvasion
-export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, openvt_monolayer_state, merks_state
+export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
+    openvt_monolayer_state, merks_state
+
+include("analysis/Analysis.jl")
+public Analysis
 
 include("graner_glazier.jl")
 include("wortel_act.jl")
 include("merks.jl")
 include("openvt.jl")
 include("akeeb.jl")
-
-include("analysis/Analysis.jl")
-public Analysis
 
 end
