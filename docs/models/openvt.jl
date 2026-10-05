@@ -165,6 +165,44 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 
 # It is somewhat longer than ``\tau = 84``: a cell's area lags its growing target, and
 # a cell divides only when its area itself reaches ``2A_0``.
+#
+# ## The benchmark's colony metrics
+#
+# The benchmark measures each saved colony with the consortium's `metrics.cpp`: the tissue
+# boundary is a concave hull of the cell centroids, and from it come the mean radius `r`,
+# the area `A`, the perimeter `C`, the boundary roughness `w`, and the ratios
+# `C_rel = C/(2√(πA))` and `w_rel = w/r`. `openvt_metrics` is a byte-faithful port of that
+# program (its output line is the reference build's, character for character), built on the
+# general primitive `PottsModels.Analysis.concave_hull`. The benchmark's unit of length is
+# the cell radius ``R = \sqrt{A_0/\pi}``, with the origin at the lattice centre:
+
+using PottsModels.Analysis: centroids, concave_hull
+R = sqrt(25 / π)
+cs = centroids(sol.u[end].σ)
+x = [(c[1] - 200) / R for c in cs]
+y = [(c[2] - 200) / R for c in cs]
+m = openvt_metrics(x, y, ones(Int, length(cs)))   # β = 0: every cell grows
+
+# `openvt_metrics_line(m)` is what `metrics.cpp` prints, and `write_openvt` writes the
+# benchmark's files: here the O6 metrics series, one row per save:
+
+print(openvt_metrics_line(m))
+io = IOBuffer()
+write_openvt(io, :O6, (t = [840 / 84], metrics = [m]))   # t in cycles of τ = 84 MCS
+print(String(take!(io)))
+
+# The boundary itself, over the centroids:
+
+b = concave_hull(zip(x, y); concavity = 1.5)
+fig = Figure(size = (420, 420))
+ax = Axis(fig[1, 1]; aspect = DataAspect(), xlabel = "x / R", ylabel = "y / R")
+scatter!(ax, x, y; markersize = 4, color = :gray)
+lines!(ax, [first.(b); b[1][1]], [last.(b); b[1][2]]; color = :crimson)
+fig
+
+# For an inhibited run, `openvt_inhibition_code` classifies each cell and
+# `openvt_inhibition_fractions` gives the shares of the four codes; `read_openvt` reads any
+# of the files back and `openvt_filename` names them as the benchmark expects.
 
 # ## Differences from the benchmark
 #
@@ -190,4 +228,12 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 # ```@docs
 # OpenVTGrowingMonolayer
 # openvt_monolayer_state
+# openvt_metrics
+# openvt_metrics_line
+# openvt_neighbor_histogram
+# openvt_inhibition_code
+# openvt_inhibition_fractions
+# write_openvt
+# read_openvt
+# openvt_filename
 # ```
