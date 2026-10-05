@@ -1941,3 +1941,18 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Three rounds (round 1: namespaced keys inconsistent per site; `complete` not exported; `@set` on mirrors a no-op; stale metadata on `extend`. Round 2: foreign-namespaced keys leaked through `getp`, `prob.ps`, `solvers` and expressions).
 - **Maintainer.** D-137 rule 8: the absolute D-047 figure is reported, not gated — the maintainer, on the 14.69 s baseline: "14.69 s is fine" (2026-10-04).
 - **Merge checks.** Potts, PottsModels (`-t 4`), MakiePotts and the docs build, one at a time: exit 0 (first attempt failed to load Potts until the workspace Manifest was re-resolved for the new dependencies). `GROUP=GPU POTTS_GPU=metal`: exit 0. Gate with Metal: pass (Wortel, Merks Metal flagged). `benchmark/ab.jl`, 8 rounds against 8be0df58: Akeeb 1.007, Merks 0.979, Wortel 0.985, GG 0.975, OpenVT 0.976. Latency (`benchmark/p6_0o_latency.jl 5 10`, paired against 8be0df58): time to first MCS 0.988–1.004, cold construct/mtkcompile/problem ≤ 1.035; Akeeb Float32 first MCS 14.32 s (base 14.4 s). Warm medians for Merks and OpenVT construct/mtkcompile read 1.10–1.17; a paired minimum-time micro-benchmark (BenchmarkTools, two alternations) gives 0.98–1.04 for all three tested models, so treated as GC noise.
+
+## 2026-10-05 — P6.1d: reproduction 09 FULL run (no code change; page frozen, D-072)
+
+- **Run.** Commit 8eb9d210, Julia 1.12.6, 6 threads, `POTTS_FULL_REPRODUCTION=true`, base seed 1, 10 replicates each from `graner_glazier_aggregate(1000; seed = i, margin = 10)` on 247 × 247 periodic. Executed with `Literate.markdown(…; execute = true)` on the page alone; wall time 3 h 6 min (11 166 s, 2026-10-04 23:22 → 2026-10-05 02:29) on a heavily loaded machine (load average up to 59). Outputs (executed page, replicate-1 video, log) kept outside the repo in `PottsWorktrees/p6-1d-out/`; the page writes nothing to `data/09/`, which stays pending.
+- **Verdict (n = 10, nominal times).** Every FULL and SMOKE+FULL row passes except one:
+  - V-PRE1 fractions at 10/100/10³/10⁴ (heterotypic 0.372, 0.250, 0.133, 0.073; dark–dark 0.318, 0.382, 0.444, 0.474; light–light 0.250, 0.308, 0.363, 0.394): all PASS. Log law 5–4000: R² 0.991, slope −0.114 per decade: PASS.
+  - V-PRE2 (homotypic > heterotypic at every save; dd crossing 25, ll crossing 64, dd first; NC1 no crossing): PASS.
+  - V-PRE3 (a) dark–medium < 0.003 by 320: PASS; NC1 0.03: PASS. (c) size-free plateau R = 1.013: PASS. (d) raw 0.06: PASS.
+  - **V-PRE3 (b) light–medium plateau reached before 10³: FAIL** — our plateau is reached at 3200 paper MCS (within 5 % of the 20 000 value; last-decade slope −0.003 per decade), against ≈ 200 (PRE) / ≈ 300 (PRL). Also FAIL at the informational time scale s = 1. The plateau level itself matches (rows (c), (d)).
+  - V-PRE4 drop D 0.021 ± 0.003 in [0.005, 0.03]; flat over [10³, 10⁴] (−27.5 bonds/decade ≤ 181): PASS. Start check: D = 0.02 from Voronoi starts and 0.02 from relaxed copies (replicates 1–3).
+  - V-PRE5 dark clusters 20.3 → 12.2 → 5.1 → 1.8, largest 0.905 at 10⁴: PASS.
+  - V-PRE13 partial sorting (dark–medium 0.023; heterotypic 0.322, 0.228, 0.153): PASS.
+  - V-GG6 Δa = −2.861 ± 0.061 SE, NC1 0.073: PASS. NC1 symmetric contacts (share 0.497, dark–medium 0.03, 0 engulfed): PASS.
+  - Periodic-boundary variant (494 × 494, 9 Bonferroni comparisons at 5 %): all within, PASS.
+- **Next.** Send the table to the spec owner (spec 09 §9.1) for the V-PRE3 (b) failure: the slow light–medium approach may come from the unrelaxed Voronoi start (cell-area SD 6.9 vs 1.8 relaxed) or the aggregate shape, not the dynamics. No change to the frozen page without a DECISIONS entry (D-072).
