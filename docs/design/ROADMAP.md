@@ -381,7 +381,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (run 2026-10-05, 8eb9d210; every binding row passes except V-PRE3 (b)) **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
   per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
   owner. There is no code change: the page is frozen (D-072).
-- [ ] **P6.1f** (D-144; spec 09 §9.4, peer spec-owner ruling) Rerun reproduction 09 in FULL on an idle machine with the
+- [x] (run 2026-10-05, 0eb1ea72; every binding row passes except V-PRE5 "one dark cluster @ 10⁴", 0.815 vs ≥ 0.90; sent to the spec owner) **P6.1f** (D-144; spec 09 §9.4, peer spec-owner ruling) Rerun reproduction 09 in FULL on an idle machine with the
   amended page: `MARGIN = 60` (347²) and the isolation-guard row. It costs about 2× P6.1d. It replaces P6.1d as the record for
   every row; P6.1d stays on record as a FAIL of V-PRE3 (b) caused by periodic-image contact. Record the table in PROGRESS,
   send it to the spec owner, and report it in the phase report as a pre-registered failure explained after the run.

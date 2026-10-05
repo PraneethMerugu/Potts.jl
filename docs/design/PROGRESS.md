@@ -2006,3 +2006,14 @@ The maintainer approved F-1…F-6 (D-049).
 - **Plan.** ROADMAP Step 3b, P6.15b–j. The P6.15b (calibration) and P6.15d (analysis port) test authors are running.
 - **D-146.** Full reproduction runs are offline, and their verdicts, per-save TSVs and provenance are committed under `reproductions/data/NN/`. Videos go to release assets.
 - **Merge checks.** Docs only: `frozen.jl` passes.
+
+## 2026-10-05 — P6.1f: reproduction 09 FULL rerun at margin 60 (D-144); the record moves to it
+
+- **Run.** Commit 0eb1ea72 on an otherwise busy machine, 10 replicates on 347², 6 threads, 5052 s. The D-146 outputs are committed under `lib/PottsModels/reproductions/data/09/full-2026-10-05/`: verdicts, per-save time series, clusters, page metadata, provenance and the wrapper.
+- **Verdicts.**
+  - The isolation guard is clear at every save of all 10 replicates.
+  - **V-PRE3 (b) now passes** (t_p = 320; P6.1d's FAIL was the fixture, as D-144 found).
+  - Every other binding row passes except **V-PRE5 "one dark cluster @ 10⁴": the largest fraction is 0.815 against ≥ 0.90.** Per replicate it is 0.99, 0.76, 0.64, 1, 1, 0.90, 0.75, 0.51, 1, 0.60, and three replicates have one cluster. P6.1d read 0.905.
+  - The coordinator's reading, unconfirmed: at margin 10, dark clusters that touched across the periodic image were probably counted as one, which inflated P6.1d's value.
+  - V-PRE5 is a pre-registered target and is not changed here. The table goes to the spec owner, as P6.1d's did.
+- **Other rows moved by ≤ 0.006.** V-PRE1 heterotypic @ 10⁴ is 0.068 (was 0.073), and the cluster count @ 10⁴ is 2.2 (was 1.8).
