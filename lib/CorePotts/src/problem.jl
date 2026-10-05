@@ -412,7 +412,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
         integ.key, integ.t, integ.backend, integ.stats)
     if integ.alg isa SequentialCPM
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
-            integ.law, integ.key, integ.t)
+            integ.law, integ.key, integ.t, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)

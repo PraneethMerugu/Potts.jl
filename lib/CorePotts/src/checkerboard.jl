@@ -53,10 +53,12 @@ end
 # cell it reads, so two committed copies never write the same cell nor one read what the
 # other writes, while readers share. Without `f.reads`, `wclaim` is never touched.
 #
-# Track (D-140): `tk` is `nothing` (no track: ghost argument, no code) or `(; dH, acc)`. An
-# accepted proposal writes its tracked value into `dH[j]`; a committing copy adds it into
-# `acc[t]` (one target per site per colour: no atomics, nothing zeroed per colour). The host
-# reduces `acc` only at read points (`_fold_track!`).
+# Track (D-140): `tk` is `nothing` (no track) or `(; track, dH, acc)`. An accepted proposal
+# writes its tracked value into `dH[j]`; a committing copy adds it into `acc[t]` (one target
+# per site per colour: no atomics, nothing zeroed per colour). The host reduces `acc` only at
+# read points (`_fold_track!`). Without a track the kernels are the untracked ones
+# (`propose_kernel!`, `commit_kernel!`): no `tk` argument at all, the same code as before the
+# track existed.
 
 @inline function propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
         mcs, color, idbits, tk = nothing)
@@ -85,7 +87,7 @@ end
                     # random high bits | color-local index: unique and nonzero
                     won = ((rp >> idbits) << idbits) | (j % UInt32)          # j ≤ ncolorsites < 2^idbits
                     # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
-                    tk === nothing || (@inbounds tk.dH[j] = f.track(st, p, prop, ctx, dH0))
+                    tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
                     _claim!(claim, a, won)
                     _claim!(claim, b, won)
                     writes = f.claims(st, p, prop, ctx)
@@ -166,11 +168,21 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2}
 end
 
 # Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
-@kernel function propose_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk)
+@kernel function propose_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+    j = @index(Global, Linear)
+    propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits)
+end
+@kernel function commit_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
+        color, nclear, nthreads)
+    j = @index(Global, Linear)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads)
+end
+# the tracked kernels (D-140): the same bodies with the track buffers
+@kernel function propose_track_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk)
     j = @index(Global, Linear)
     propose_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk)
 end
-@kernel function commit_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
+@kernel function commit_track_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
         color, nclear, nthreads, tk)
     j = @index(Global, Linear)
     commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
@@ -191,15 +203,19 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))),
         has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (nothing, nothing),
         zeros_u32(1), _track_buffers(backend, f.track, maxsites, nsites(lat)), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
-        collect(1:length(cs)), Ref(1), idbits,
-        propose_kernel!(backend), commit_kernel!(backend))
+        collect(1:length(cs)), Ref(1), idbits, _kernels(backend, f.track)...)
 end
 
 _track_buffers(backend, ::Nothing, maxsites, n) = nothing
 function _track_buffers(backend, track, maxsites, n)
     T = track_eltype(track)
-    return (; dH = KernelAbstractions.zeros(backend, T, maxsites), acc = KernelAbstractions.zeros(backend, T, n))
+    return (; track, dH = KernelAbstractions.zeros(backend, T, maxsites), acc = KernelAbstractions.zeros(backend, T, n))
 end
+_kernels(backend, ::Nothing) = (propose_kernel!(backend), commit_kernel!(backend))
+_kernels(backend, track) = (propose_track_kernel!(backend), commit_track_kernel!(backend))
+# kernel arguments: the track buffers are appended only when tracking (type-level)
+_with_track(args, ::Nothing) = args
+_with_track(args, tk) = (args..., tk)
 
 # On the CPU backend every workgroup beyond the first is a spawned task. Small colors run
 # inline as one workgroup; large ones split into one workgroup per thread of at least
@@ -219,9 +235,9 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
         claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
         wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
         g = cache.groupsize[ci]
-        pargs = (cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
-            color, cache.idbits, cache.track)
-        cargs = (st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n,
+        pargs = _with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
+            color, cache.idbits), cache.track)
+        cargs = _with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n),
             cache.track)
         if g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
             for j in 1:n

@@ -1,16 +1,17 @@
 # Sequential (random-site) dynamics on the host.
 #
-# Returns `(accepted, status, tracked)`: `tracked` is the Float64 sum of `f.track` over the
-# committed copies, or `nothing` without a track (a type-level branch: no code when off).
+# Returns `(accepted, status, tracked)`: `tracked` is the Float64 sum of `track` (the
+# CPMFunction's, D-140) over the committed copies, or `nothing` without a track (a type-level
+# branch: no code when off).
 
-function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer) where {F, L}
+function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, track::TK = nothing) where {F, L, TK}
     σ = st.σ
     lat = ctx.lattice
     mob = ctx.mobility
     nsite = nmobile(mob, lat)
     K = length(ctx.proposal)
     accepted = 0
-    tracked = f.track === nothing ? nothing : 0.0
+    tracked = track === nothing ? nothing : 0.0
     for attempt in 1:nsite
         rt, rd, ra, _ = draw(key, mcs, attempt, STREAM_SEQUENTIAL_TARGET)
         t = mobile_site(mob, bounded(rt, nsite) + 1)
@@ -31,7 +32,7 @@ function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer) wh
         dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
         isfinite(dH) || return accepted, STATUS_NONFINITE, tracked
         if accept(law, T(dH), temperature, uniform(T, ra))
-            f.track === nothing || (tracked += Float64(f.track(st, p, prop, ctx, dH0)))
+            track === nothing || (tracked += Float64(track(st, p, prop, ctx, dH0)))
             @inbounds σ[t] = b
             f.commit!(st, p, prop, ctx)
             accepted += 1

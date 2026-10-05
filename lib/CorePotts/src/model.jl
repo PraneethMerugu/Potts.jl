@@ -197,7 +197,7 @@ track_eltype(track) = throw(ArgumentError(
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI, TK}
+struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -205,10 +205,11 @@ struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI, TK}
     reads::RD
     temperature::TT
     bias::BI
-    track::TK
 end
+# The track (D-140) is not part of it: the checkerboard carries it with its buffers and
+# `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields.
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.track)
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()
