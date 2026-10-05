@@ -274,6 +274,12 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         callback = nothing)
     if checkpoint !== nothing
         prob = _from_checkpoint(prob, checkpoint)
+        # the accumulator continues only into an equally tracked run (a hand-written model
+        # may keep fingerprint 0 whatever its track, so this is checked here too)
+        (checkpoint.stats.accepted_ΔH === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
+            "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
+            "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
+            "with the same `track`"))
         integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ

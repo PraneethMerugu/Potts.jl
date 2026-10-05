@@ -45,6 +45,9 @@ end
 struct EffectiveTrack end
 (::EffectiveTrack)(st, p, prop, ctx, dH) = dH - p.T * p.b * (prop.new == 0 ? -1.0 : 1.0)
 CorePotts.track_eltype(::EffectiveTrack) = Float64
+# a custom track without `track_eltype`: fine sequentially, a clear error on the checkerboard
+struct UntypedTrack end
+(::UntypedTrack)(st, p, prop, ctx, dH) = dH
 
 @testset "drives and connectivity" begin
     @testset "proposal predicates and chemotaxis" begin
@@ -261,6 +264,38 @@ CorePotts.track_eltype(::EffectiveTrack) = Float64
             step!(integ); step!(integ)
             @test minimum(_ -> @allocated(step!(integ)), 1:3) == 0
         end
+        # a custom track: sums on both algorithms (here the effective one, `track_eltype`
+        # given); without `track_eltype` only the checkerboard refuses, naming it
+        @test se.stats.accepted_ΔH isa Float64
+        un = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = UntypedTrack()),
+            initial_state(σ, kinds), lat, (0, 15), pb)
+        if alg isa SequentialCPM
+            @test solve(un, alg).stats.accepted_ΔH == sol.stats.accepted_ΔH
+        else
+            e = try
+                solve(un, alg); nothing
+            catch err
+                err
+            end
+            @test e isa ArgumentError && occursin("track_eltype", sprint(showerror, e))
+        end
+        # a checkpoint continues only into an equally tracked run (hand-written: fingerprint 0
+        # either way), in both directions
+        pon = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), pb)
+        poff = PottsProblem(off, initial_state(σ, kinds), lat, (0, 15), pb)
+        @test pon.f.fingerprint == poff.f.fingerprint
+        for (from, into) in ((poff, pon), (pon, poff))
+            i = init(from, alg); step!(i)
+            ck = checkpoint(i)
+            e = try
+                init(into, alg; checkpoint = ck); nothing
+            catch err
+                err
+            end
+            @test e isa ArgumentError && occursin("tracking", sprint(showerror, e))
+        end
+        i = init(pon, alg); step!(i); step!(i)                  # control: the same track continues
+        @test solve!(init(pon, alg; checkpoint = checkpoint(i))).stats.accepted_ΔH == sol.stats.accepted_ΔH
         # merge adds; `nothing` wins
         @test merge(sol.stats, sol.stats).accepted_ΔH == 2 * sol.stats.accepted_ΔH
         @test merge(sol.stats, a.stats).accepted_ΔH === nothing

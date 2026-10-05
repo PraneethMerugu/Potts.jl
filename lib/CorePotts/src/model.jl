@@ -133,7 +133,10 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
   callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
   into `stats.accepted_ΔH` (`dH` is `delta_H`'s value, without the bias and the acceptance
-  law's offset). [`TrackDeltaH`](@ref) sums `dH` itself (`Potts`: `track = (:ΔH,)`).
+  law's offset). [`TrackDeltaH`](@ref) sums `dH` itself (`Potts`: `track = (:ΔH,)`). A
+  custom callable must also define [`track_eltype`](@ref)`(track)` (the scalar type of its
+  values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
+  that type; `SequentialCPM` adds into a `Float64` and does not need it.
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
@@ -178,8 +181,17 @@ the device) between the host read points, which reduce into the `Float64`
 """
 struct TrackDeltaH{T} end
 @inline (::TrackDeltaH)(st, p, prop, ctx, dH) = dH
-"""The per-site accumulator type of a `track` callable (the model's scalar type)."""
+"""
+    track_eltype(track) -> Type
+
+The scalar type of a `track` callable's values (`CPMFunction(…; track)`): `CheckerboardCPM`
+accumulates them per site in this type between host read points. Define it for a custom
+track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
+"""
 track_eltype(::TrackDeltaH{T}) where {T} = T
+track_eltype(track) = throw(ArgumentError(
+    "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
+    "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
 
 """
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
