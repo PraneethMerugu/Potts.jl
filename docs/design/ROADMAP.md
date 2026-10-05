@@ -339,7 +339,7 @@ Every item's acceptance also includes the standing checks:
   needs a flood fill (it is 32 MB at 200³ today).
 - [x] (merge, 2026-09-30) **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
-- [ ] **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
+- [x] (merge, 2026-10-05; D-138) **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): shapes and points scoped to 09/11 (`Sphere`, `RandomPoints`, `Voronoi(points; region, lloyd)`, `Center()`); the GeometryBasics decision (Q1: reuse only round shapes and `Point`, closed membership; index boxes stay ranges); `Voronoi` replaces `VoronoiBall` only if it reproduces its σ or D-063's area statistics (Q3); shape layers clip to the domain and report `clipped` (Q5, D-057 amendment).
   a core layout, next to the planned `Spheres`. It needs a DSL and export review, and moves
   the StableRNGs dependency to Potts only.

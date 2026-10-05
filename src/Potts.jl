@@ -12,7 +12,7 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
@@ -24,6 +24,10 @@ using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
 using SymbolicIndexingInterface: SymbolicIndexingInterface
+# Last, on purpose (D-138): GeometryBasics' `OffsetInteger` `convert` methods invalidate the
+# symbolic stack's cached code when GeometryBasics loads before it (`using Potts` 4.8 → 6.2 s;
+# 4.9 s from here). Later dependencies go above this line.
+using GeometryBasics: HyperSphere, Circle, Sphere, Point
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -59,6 +63,10 @@ export kind, cluster
 
 include("layouts.jl")
 export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
+# shapes and point patterns (D-138): GeometryBasics' round shapes and `Point` (the same
+# bindings Makie re-exports), the lattice centre, random sites and the Voronoi layer
+export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
+public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
 public lattice, paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,

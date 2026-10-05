@@ -3,7 +3,8 @@
 Every simulation starts from an initial state: which cell owns each site, and the kind of
 each cell. A **layout** describes that state as a stack of simple layers. You will learn:
 
-- the built-in layers `Tiling`, `Scattered`, `Frame` and `InsertUntil`;
+- the built-in layers `Tiling`, `Scattered`, `Frame`, `InsertUntil` and `Voronoi`;
+- the shapes and point patterns `Circle`, `Point`, `Center()` and `RandomPoints`;
 - how `overlay` stacks layers and how `layout` turns them into an operating point;
 - how to check what each layer did with `report = true`;
 - how to write your own layer.
@@ -112,6 +113,27 @@ show_layout(op)
 An inserted site cuts a hole in the cell it lands in, and can split it into pieces;
 `layout` warns when a cell ends up in pieces. `splits = :allow` on a layer accepts it.
 
+## Voronoi aggregates
+
+`Voronoi(points; region, lloyd, kinds)` divides a region into one cell per generator point:
+each site goes to the nearest generator. `RandomPoints(n; region, seed)` draws `n` distinct
+sites of a region as generators, and `lloyd = k` moves every generator to the centroid of
+its cell `k` times (Lloyd's algorithm), which makes the cells compact and of similar size.
+The region here is a disk, `Circle(Point(x, y), r)`, in the lattice's Cartesian
+coordinates; `Center()` is the lattice centre as a point:
+
+```@example layouts
+disk = Circle(Point(20.5, 20.5), 15.0)
+aggregate = Voronoi(RandomPoints(28; region = disk, seed = 1); region = disk, lloyd = 30, kinds = [:dark, :light])
+show_layout(layout(overlay(Frame(:wall), aggregate), tissue))
+```
+
+This is the round aggregate of Graner and Glazier's cell-sorting experiment
+([`graner_glazier_aggregate`](@ref)). `Voronoi` only fills medium sites, so the frame
+painted first is never cut. A shape that crosses a closed edge or the domain is clipped
+(the report's `clipped` counts the lost sites); on a periodic lattice it wraps through the
+edge instead.
+
 ## The layout report
 
 With `report = true`, `layout` also returns one row per layer: how many cells the layer
@@ -193,7 +215,8 @@ see [Layouts](@ref manual-layouts).
 
 ## What you learned
 
-- `Tiling`, `Scattered`, `Frame` and `InsertUntil` are layers; `overlay` stacks them.
+- `Tiling`, `Scattered`, `Frame`, `InsertUntil` and `Voronoi` are layers; `overlay` stacks them.
+- Shapes (`Circle`, `Sphere`) and points (`Point`, `Center()`, `RandomPoints`) are Cartesian.
 - `layout(l, sys)` gives the operating point; `report = true` explains what each layer did.
 - A custom layer is a struct and a `Potts.paint!` method.
 

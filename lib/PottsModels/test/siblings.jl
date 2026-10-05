@@ -225,3 +225,48 @@ end
     u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
     @test total_energy(prob, Potts.anneal(prob, u; mcs = 8, seed = 2)) < total_energy(prob, u)
 end
+
+# P6.1a5 primitives outside their first model (the Graner–Glazier aggregate on a closed square
+# lattice): a centroidal `Voronoi` of `RandomPoints` filling the periodic hexagonal sorting
+# sibling, wrapping through its edges, with kinds cycled; it runs and its cells start compact.
+@testset "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" begin
+    sys = HexSorting(; name = :hs)
+    v = Voronoi(RandomPoints(45; seed = 3); lloyd = 20, kinds = [:dark, :light])
+    op, report = layout(v, sys; report = true)
+    row = only(report)
+    @test (row.type, row.painted, row.dropped, row.clipped) == (:Voronoi, 45, 0, 0)
+    σ0, ks = op[1].second, op[2].second
+    @test all(>(0), σ0) && count(==(:dark), ks) == 23
+    sd(a) = sqrt(sum(abs2, a .- mean(a)) / (length(a) - 1))
+    areas = [count(==(c), σ0) for c in 1:45]
+    @test sum(areas) == 900 && sd(areas) < 4                          # 20 sites each, SD ≈ 3 (seeds 1–5)
+    # cells cross the periodic edges (the wrap is used), yet every cell is one Hex(1) piece
+    @test any(c -> c in σ0[1, :] && c in σ0[30, :], 1:45)
+    hex1 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
+    nb(q, o) = CartesianIndex(mod1(q[1] + o[1], 30), mod1(q[2] + o[2], 30))
+    function pieces(σ, c)                     # Hex(1) pieces of cell c, wrapping on both axes
+        idx = findall(==(c), σ)
+        seen, st = Set([idx[1]]), [idx[1]]
+        while !isempty(st)
+            q = pop!(st)
+            for o in hex1
+                p = nb(q, o)
+                σ[p] == c && !(p in seen) && (push!(seen, p); push!(st, p))
+            end
+        end
+        return length(seen) == length(idx) ? 1 : 2
+    end
+    @test all(c -> pieces(σ0, c) == 1, 1:45)
+    # control: a site of another cell, not touching cell 1, given to cell 1 splits it
+    far = findfirst(x -> σ0[x] != 1 && all(o -> σ0[nb(x, o)] != 1, hex1), CartesianIndices(σ0))
+    split = copy(σ0); split[far] = 1
+    @test pieces(split, 1) == 2
+    # negative control: without Lloyd the areas spread more
+    σr = layout(remake(v; lloyd = 0), sys)[1].second
+    ar = [count(==(c), σr) for c in 1:45]
+    @test sd(ar) > 2sd(areas)                                         # SD ≈ 8.5–11 without
+    prob = PottsProblem(sys, op, (0, 20))
+    @test selfcheck(prob) < 1e-9
+    u = solve(prob, SequentialCPM()).u[end]
+    @test count(>(0), unique(u.σ)) >= 30          # the tessellation runs (a few small cells shrink away)
+end

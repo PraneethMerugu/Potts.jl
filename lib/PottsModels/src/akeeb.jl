@@ -130,8 +130,8 @@ The published initial slab:
 - **Cue.** `y − 1`.
 
 All draws use `StableRNG`, so the state is the same on every Julia version: the
-leaders `StableRNG(seed)` (inside `InsertUntil`), the clocks
-`StableRNG(Potts._substream_seed(seed, :clock))` (a mixed sub-stream, so clocks at
+leaders `StableRNG(seed)` (inside `InsertUntil`), the clocks `Potts.layer_rng(seed, :clock)`,
+which is `StableRNG(Potts._substream_seed(seed, :clock))` (a mixed sub-stream, so clocks at
 consecutive seeds are uncorrelated), one cell at a time in id order (a leader draws
 nothing).
 """
@@ -145,7 +145,7 @@ function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 
     l = akeeb_layout(; lattice, seed, slab, seeding)
     point = layout(l, lattice)               # the leader layer allows split followers: no warning
     σ, kinds = point[1].second, point[2].second
-    rng = StableRNG(Potts._substream_seed(seed, :clock))
+    rng = Potts.layer_rng(seed, :clock)
     clocks = [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]
     rates = [k === :leader ? 0.0 : 0.015 for k in kinds]
     cue = [Float64(y - 1) for x in 1:X, y in 1:Y]

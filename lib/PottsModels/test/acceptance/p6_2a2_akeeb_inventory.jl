@@ -37,6 +37,7 @@
 # beyond "some draw missed", whose failure probability is exp(−Σ_{n<390} n/9481) ≈ 3e-4
 # per seed at 500 × 300.
 using Potts: CorePotts
+using StableRNGs: StableRNG   # D-138: PottsModels no longer depends on StableRNGs
 
 p62a2_get(op, key) = only(last(p) for p in op if isequal(first(p), key))
 p62a2_quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
@@ -65,7 +66,7 @@ p62a2_oracle(X, slab, seed, misses) = overlay(P62a2Slab(X, slab),
     InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1))))
 
 # The clock recipe on the `:clock` sub-stream (D-093) over the kinds as returned (id order).
-function p62a2_clocks(kinds, pp, seed; rng = PottsModels.StableRNG(Potts._substream_seed(seed, :clock)))
+function p62a2_clocks(kinds, pp, seed; rng = StableRNG(Potts._substream_seed(seed, :clock)))
     return [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]
 end
 
@@ -156,7 +157,7 @@ end
         # the clock stream is the `:clock` sub-stream (D-093) in id order
         @test clocks == p62a2_clocks(ks, pp, seed)
         # negative control: the oracle depends on the stream (another StableRNG seed differs)
-        pp > 0 && @test p62a2_clocks(ks, pp, seed) != p62a2_clocks(ks, pp, seed; rng = PottsModels.StableRNG(seed + 2))
+        pp > 0 && @test p62a2_clocks(ks, pp, seed) != p62a2_clocks(ks, pp, seed; rng = StableRNG(seed + 2))
         @test p62a2_get(a, :rate) == [k === :leader ? 0.0 : 0.015 for k in ks]
         @test p62a2_get(a, :cue) == [Float64(y - 1) for x in 1:lat[1], y in 1:lat[2]]
         pp == 0 && @test all(==(-1.0), clocks)
