@@ -553,4 +553,40 @@ using Metal
         @test sol.stats.attempts == 8 * count(dp.lattice.mask)
         @test all(sol.u[end].σ[.!dp.lattice.mask] .== 0)
     end
+
+    @testset "3D shell rule and the ΔH track on Metal (P6.3a)" begin
+        # the arc-or-pair rule on the 26-site shell compiles for the device
+        lat3 = Lattice((18, 18, 18))
+        σ3, k3 = blocks((18, 18, 18), 4; gap = 1)
+        ok3(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 ||
+            (ring_cells(st.σ, ctx, prop) == 2 && ring_medium(st.σ, ctx, prop) == 0)
+        f3 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = ok3)
+        p3 = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 64.0f0, T = 12.0f0)
+        u3 = solve(PottsProblem(f3, initial_state(σ3, k3), lat3, (0, 10), p3; contact = Moore(1)),
+            CheckerboardCPM(); backend).u[end]
+        @test u3.σ != σ3
+        @test u3.cell.volume == [count(==(c), u3.σ) for c in eachindex(k3)]
+        @test all(c -> components(u3.σ, lat3, c) == 1, eachindex(k3))
+        # the track: Float32 per-site sums reduced at the read points, 0 syncs per quiet MCS
+        σt, kt = blocks((48, 48), 5)
+        latt = Lattice((48, 48))
+        pt = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 10.0f0)
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
+        off = CPMFunction(gg_delta_H; temperature = gg_temperature)
+        mk(f) = PottsProblem(f, initial_state(σt, kt), latt, (0, 20), pt)
+        a, b = solve(mk(off), CheckerboardCPM(); backend), solve(mk(on), CheckerboardCPM(); backend)
+        H(u) = total_H(u, latt, mk(on).contact, pt)
+        @test a.stats.accepted_ΔH === nothing
+        @test b.stats.accepted_ΔH isa Float64
+        @test isapprox(b.stats.accepted_ΔH, H(b.u[end]) - H(b.u[1]); atol = 0.5)
+        @test abs(H(b.u[end]) - H(b.u[1])) > 100
+        @test Array(a.u[end].σ) == Array(b.u[end].σ)
+        for f in (off, on)
+            integ = init(mk(f), CheckerboardCPM(); backend, save_start = false, save_end = false)
+            step!(integ)
+            c0 = (integ.stats.syncs, integ.stats.transfers)
+            step!(integ); step!(integ)
+            @test (integ.stats.syncs, integ.stats.transfers) == c0
+        end
+    end
 end

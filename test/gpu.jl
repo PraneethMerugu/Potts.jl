@@ -468,6 +468,13 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
 end
 
+# P6.3a: the frozen topology/track acceptance file; its Metal testset (the ΔH track in
+# Float32, no per-MCS sync) runs only where Metal is loaded (here)
+module P63aOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3a_topology_track.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")

@@ -543,7 +543,17 @@ a constraint over the proposal-scope connectivity values, applied when the losin
   frame as a cell, so at a closed edge the two rules can differ. Zero arcs pass, so the
   last site can be taken.
 
+Both rules read the target's neighbour shell (8 sites on a square lattice, 6 on a hexagonal
+one, 26 in 3D; see `CorePotts.ring_arcs`), so they hold on every geometry.
+
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
+The soft arc-or-pair rule (TST's `conn_diss`, Merks' E₀ threshold shift under Metropolis)
+charges `E₀` to every copy the rule would refuse:
+
+    @drive copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
+
+Connectivity of the whole cell (not only around the target) is `components(x; scope =
+Global())`, reserved until P6.9.
 """
 function connectivity(kinds::_KindArg...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
@@ -551,6 +561,35 @@ function connectivity(kinds::_KindArg...; rule::Symbol = :local)
     test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | ((B.ring_cells == 2) & (B.ring_medium == 0)))
     return Constraint(:connectivity, _flat_kinds(kinds), test)
 end
+"""
+    Global(; window = nothing)
+
+The global scope of [`components`](@ref): connectivity of the whole cell, not of the
+target's neighbour shell. `window` is `nothing` or a positive number of MCS. A reserved
+placeholder: using it in a model is an `ArgumentError` until P6.9.
+"""
+struct Global
+    window::Union{Nothing, Int}
+    function Global(; window = nothing)
+        window === nothing || (window isa Integer && window > 0) ||
+            throw(ArgumentError("Global: `window` must be `nothing` or a positive integer, got $(repr(window))"))
+        return new(window === nothing ? nothing : Int(window))
+    end
+end
+
+"""
+    components(x; scope = Global())
+
+The number of pieces of cell `x` (e.g. `old`) over `scope`. Only `Global()` is a scope, and
+it is not available yet: a model that uses it raises an `ArgumentError` when it is built.
+The local count around the target is the proposal value `local_components`.
+"""
+function components(x; scope = Global())
+    scope isa Global || throw(ArgumentError("components: `scope` must be `Global()`, got $(repr(scope))"))
+    throw(ArgumentError("global connectivity (`Global()`) is not available yet (P6.9); the local " *
+                        "rules (`connectivity`, `local_components`, `ring_arcs`) read the target's neighbour shell"))
+end
+
 """`no_extinction`: forbid copies that remove a cell's last site."""
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
 
@@ -914,7 +953,7 @@ struct ObservedEq
 end
 
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
-const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
+const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, components,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,

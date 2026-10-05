@@ -202,6 +202,10 @@ Base.@kwdef mutable struct PottsStats
     transfers::Int = 0
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
+    # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:ΔH,)`):
+    # `nothing` without a track. Exact after every step under `SequentialCPM`; under
+    # `CheckerboardCPM` brought up to date at the host read points (D-140)
+    accepted_ΔH::Union{Nothing, Float64} = nothing
 end
 
 """
@@ -253,7 +257,8 @@ function Base.merge(a::PottsStats, b::PottsStats)
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
-        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l)
+        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l,
+        accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -269,6 +274,12 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         callback = nothing)
     if checkpoint !== nothing
         prob = _from_checkpoint(prob, checkpoint)
+        # the accumulator continues only into an equally tracked run (a hand-written model
+        # may keep fingerprint 0 whatever its track, so this is checked here too)
+        (checkpoint.stats.accepted_ΔH === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
+            "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
+            "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
+            "with the same `track`"))
         integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ
@@ -296,7 +307,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
              LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
-        Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback),
+        Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
     integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
@@ -368,6 +379,7 @@ the device lifecycle's statistics and frozen-mask counts are folded into `integ.
 function current_state(integ::PottsIntegrator)
     _sync!(integ.stats, integ.backend)
     _fold_lifecycle!(integ)
+    _fold_track!(integ)
     return _snapshot(integ.stats, integ.backend, integ.state)
 end
 
@@ -399,9 +411,10 @@ function CommonSolve.step!(integ::PottsIntegrator)
     integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     if integ.alg isa SequentialCPM
-        acc, status = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
-            integ.law, integ.key, integ.t)
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+            integ.law, integ.key, integ.t, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
@@ -467,6 +480,23 @@ _mobility_scratch(backend, prob, ::AllMobile) = nothing
 function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
     return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3))
+end
+
+# Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`.
+_initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 0.0)
+
+# Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
+# is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
+# Nothing without a track or under `SequentialCPM`, which adds into the stats every step.
+_fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
+_fold_track!(stats, ::Nothing) = nothing
+_fold_track!(stats, cache::CheckerboardCache) = _fold_track!(stats, cache.track)
+function _fold_track!(stats, tk::NamedTuple)
+    acc = tk.acc
+    h = _ondevice(acc) ? _to_host(stats, acc) : acc
+    stats.accepted_ΔH += sum(Float64, h)
+    fill!(acc, zero(eltype(acc)))
+    return nothing
 end
 
 # bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
@@ -554,6 +584,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
         step!(integ)
     end
     _flush_counts!(integ)                           # exact `stats` at the end (D-089)
+    _fold_track!(integ)
     _check_status!(integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success
@@ -617,6 +648,7 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
     dst.refreshes = src.refreshes
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
+    dst.accepted_ΔH = src.accepted_ΔH
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end

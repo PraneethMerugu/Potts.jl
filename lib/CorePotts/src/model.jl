@@ -108,7 +108,8 @@ end
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
                 reads = no_claims, temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
-                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing)
+                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing,
+                track = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -129,11 +130,18 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
 - `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`), used
   unless the algorithm sets one; `nothing` means `Metropolis()`
+- `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
+  callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
+  into `stats.accepted_ΔH` (`dH` is `delta_H`'s value, without the bias and the acceptance
+  law's offset). [`TrackDeltaH`](@ref) sums `dH` itself (`Potts`: `track = (:ΔH,)`). A
+  custom callable must also define [`track_eltype`](@ref)`(track)` (the scalar type of its
+  values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
+  that type; `SequentialCPM` adds into a `Float64` and does not need it.
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS}
+struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -147,15 +155,43 @@ struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS}
     footprint::Footprint
     fingerprint::UInt64
     sys::SYS
+    track::TK
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
         claims = no_claims, reads = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
-        sys = nothing)
+        sys = nothing, track = nothing)
     return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
-        lifecycle, acceptance, footprint, UInt64(fingerprint), sys)
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track)
 end
+# the positional form without `track` (before D-140): untracked
+CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+    acceptance, footprint::Footprint, fingerprint, sys) =
+    CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+        acceptance, footprint, UInt64(fingerprint), sys, nothing)
+
+"""
+    TrackDeltaH{T}()
+
+The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:ΔH,)` in
+Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
+the device) between the host read points, which reduce into the `Float64`
+`stats.accepted_ΔH`; `SequentialCPM` adds into a `Float64` directly.
+"""
+struct TrackDeltaH{T} end
+@inline (::TrackDeltaH)(st, p, prop, ctx, dH) = dH
+"""
+    track_eltype(track) -> Type
+
+The scalar type of a `track` callable's values (`CPMFunction(…; track)`): `CheckerboardCPM`
+accumulates them per site in this type between host read points. Define it for a custom
+track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
+"""
+track_eltype(::TrackDeltaH{T}) where {T} = T
+track_eltype(track) = throw(ArgumentError(
+    "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
+    "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
 
 """
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
@@ -170,6 +206,8 @@ struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
     temperature::TT
     bias::BI
 end
+# The track (D-140) is not part of it: the checkerboard carries it with its buffers and
+# `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields.
 device_functions(f::CPMFunction) =
     DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias)
 

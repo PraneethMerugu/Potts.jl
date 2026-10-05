@@ -139,12 +139,12 @@ end
 # The reviewed DSL surface: every name the model body sees, and every keyword of its
 # constructors. A new name or option (a model-shaped flag under a generic name, like the
 # removed `extension_only`) must be reviewed and added here.
-const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :RK4, :RandomPlane, :Split,
-    :Surface, :Volume, :cells, :centroid, :clusters, :connectivity, :contacts, :displacement, :dot, :edges,
+const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :Global, :RK4, :RandomPlane, :Split,
+    :Surface, :Volume, :cells, :centroid, :clusters, :components, :connectivity, :contacts, :displacement, :dot, :edges,
     :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
     :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ]
 const DSL_KEYWORDS = Dict(:connectivity => [:rule], :Volume => [:strength, :target], :Surface => [:strength, :target],
-    :Chemotaxis => [:kinds, :response, :strength, :when])
+    :Chemotaxis => [:kinds, :response, :strength, :when], :components => [:scope])
 
 @testset "DSL surface snapshot" begin
     @test sort(collect(keys(Potts.DSL))) == sort(DSL_NAMES)
