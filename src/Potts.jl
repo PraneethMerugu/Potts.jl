@@ -13,7 +13,6 @@ module Potts
 using ConstructionBase: ConstructionBase
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, saturating, saturating_linear
-using GeometryBasics: HyperSphere, Circle, Sphere, Point
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
@@ -25,6 +24,10 @@ using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
 using Symbolics: Symbolics, Num
 using SymbolicIndexingInterface: SymbolicIndexingInterface
+# Last, on purpose (D-138): GeometryBasics' `OffsetInteger` `convert` methods invalidate the
+# symbolic stack's cached code when GeometryBasics loads before it (`using Potts` 4.8 → 6.2 s;
+# 4.9 s from here). Later dependencies go above this line.
+using GeometryBasics: HyperSphere, Circle, Sphere, Point
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

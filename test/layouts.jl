@@ -614,3 +614,32 @@ end
     @test_throws ArgumentError layout(Voronoi(Center(); region = (1:4,), kinds = [:a]), (8, 8))
     @test Potts.points(remake(RandomPoints(3; seed = 1); n = 5), (8, 8)) == Potts.points(RandomPoints(5; seed = 1), (8, 8))
 end
+
+@testset "layouts: shape membership is closed up to rounding (site-centred discs)" begin
+    hexpos(x) = (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)
+    hexl = Lattice((24, 24); geometry = Hexagonal(), boundary = Closed())
+    # exact oracle: the axial offset (a, b) has squared Cartesian length a² + ab + b², an integer
+    for (r2, n) in ((1, 7), (3, 13), (4, 19), (7, 31)), c in ((12, 12), (9, 14), (15, 10))
+        disc = Potts.Circle(Potts.Point(hexpos(c)), sqrt(r2))
+        σ = _op(layout(Voronoi([Potts.Point(hexpos(c))]; region = disc, kinds = [:a]), hexl), ownership)
+        exact = Set(x for x in CartesianIndices((24, 24)) if (a = x[1] - c[1]; b = x[2] - c[2]; a^2 + a * b + b^2 <= r2))
+        @test length(exact) == n
+        @test Set(findall(!=(0), σ)) == exact
+    end
+    # square and 3D: integer distances are exact, so nothing changes (29 and 33 points)
+    σs = _op(layout(Voronoi([Potts.Point(10.0, 10.0)]; region = Potts.Circle(Potts.Point(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)), ownership)
+    @test count(!=(0), σs) == 29
+    σ3 = _op(layout(Voronoi([Potts.Point(5.0, 5.0, 5.0)]; region = Potts.Sphere(Potts.Point(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (9, 9, 9)), ownership)
+    @test count(!=(0), σ3) == 33
+    # control: the tolerance is relative and tiny, a radius just below the ring excludes it
+    disc = Potts.Circle(Potts.Point(hexpos((12, 12))), 1 - 1e-9)
+    @test count(!=(0), _op(layout(Voronoi([Potts.Point(hexpos((12, 12)))]; region = disc, kinds = [:a]), hexl), ownership)) == 1
+end
+
+@testset "layouts: generator points must be finite" begin
+    for bad in (Potts.Point(NaN, 1.0), Potts.Point(Inf, 1.0), Potts.Point(1e300, 1.0))
+        @test_throws ArgumentError Voronoi([bad]; kinds = [:a])
+        @test_throws ArgumentError Voronoi(bad; kinds = [:a])
+        @test_throws ArgumentError Potts.points([bad], (10, 10))
+    end
+end

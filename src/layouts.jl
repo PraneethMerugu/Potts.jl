@@ -698,8 +698,10 @@ end
 #
 # Shapes are GeometryBasics' `HyperSphere`s (`Circle`, `Sphere`) in Cartesian coordinates:
 # the lattice's `embed` of the index (the identity on square lattices, `(q + r/2, r√3/2)` on
-# hexagonal ones). Site `x` is in shape `s` iff `Point(embed(x)) ∈ s` (GeometryBasics' own,
-# closed membership) for `x` or one of its images through periodic edges, so a shape wraps
+# hexagonal ones). Site `x` is in shape `s` iff `|center − embed(x)| ≤ r·(1 + 1e-12)` (closed,
+# up to rounding: on hexagonal lattices `embed` carries √3/2 rounding, so sites at exactly the
+# radius would otherwise drop out unevenly) for `x` or one of its images through periodic
+# edges, so a shape wraps
 # through a periodic edge and is clipped at a closed edge and at the domain. Generators are
 # kept in index coordinates, where distances are embedded and Lloyd's centroids are taken
 # (the embedding is linear, so a centroid maps to the Cartesian centroid).
@@ -773,11 +775,14 @@ function _region_sites(s::HyperSphere, lat::LatticeSpec{N}, what) where {N}
 end
 _residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x in lo:hi])
 
+# Closed membership with a relative rounding tolerance (D-138).
+_in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1e-12)
+
 # Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in `s`.
 function _in_shape(s::HyperSphere, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
     images = ntuple(d -> per[d] ? ((x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]) : (x[d]:1:x[d]), Val(N))
     for y in Iterators.product(images...)
-        _cart(clat, y) in s && return true
+        _in_closed(_cart(clat, y), s) && return true
     end
     return false
 end
@@ -817,12 +822,20 @@ _layout_args(p::RandomPoints) = (RandomPoints, (:n,), (; p.n, p.region, p.seed))
 # A point pattern argument: `RandomPoints`, `Center()`, a `Point`, or a non-empty vector of
 # `Point`s and `Center()`s (copied).
 _pattern_arg(p::Union{RandomPoints, Center}, what) = p
-_pattern_arg(p::Point, what) = [p]
+_pattern_arg(p::Point, what) = [_check_point(p, what)]
 function _pattern_arg(v::AbstractVector, what)
     isempty(v) && throw(ArgumentError("$what: no generator (the point list is empty)"))
     all(p -> p isa Union{Point, Center}, v) ||
         throw(ArgumentError("$what: a point list holds `Point`s and `Center()`s, got a $(typeof(v))"))
+    foreach(p -> p isa Point && _check_point(p, what), v)
     return copy(v)
+end
+
+# A generator's coordinates are finite and small enough to round to lattice indices.
+function _check_point(p::Point, what)
+    all(x -> isfinite(x) && abs(x) < 1e15, p) ||
+        throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in magnitude, got $p"))
+    return p
 end
 _pattern_arg(p, what) =
     throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() or a vector of Points)"))
@@ -848,6 +861,7 @@ end
 _center_index(lat) = map(n -> (n + 1) / 2, size(lat))
 function _point_index(p::Point{M}, Ei::SMatrix{N, N}, what) where {M, N}
     M == N || throw(ArgumentError("$what: a $(M)D point on a $(N)D lattice"))
+    _check_point(p, what)
     return Tuple(Ei * SVector{N, Float64}(p))
 end
 
@@ -898,7 +912,8 @@ sites of `region` (a shape or a tuple of index ranges) that are in the lattice's
 still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
 
 - Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
-  minimum image along periodic axes; ties go to the lowest generator.
+  minimum image along periodic axes. Ties, in floating point, go to the lower generator; on
+  hexagonal lattices rounding can break exact geometric ties either way.
 - `lloyd = k`: k times, every generator that owns a site moves to the centroid of its sites
   (minimum image along periodic axes, Lloyd's algorithm), and the sites are reassigned: a
   centroidal tessellation of compact cells of similar volume.
@@ -912,6 +927,9 @@ still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
 `ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (D-063, the former
 `VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
 left with no site and `clipped` the region's points lost to closed edges and the domain.
+With a domain, `clipped` depends on whether a region is given: the default (the whole
+lattice) is the domain's sites and clips nothing, while an explicit box, even the full
+lattice, counts its out-of-domain sites.
 Throws an `ArgumentError` for `lloyd < 0`, empty `kinds`, a bad `splits`, no generator, or a
 shape or point of another dimension than the lattice. `remake(v; lloyd = …)` works.
 """
@@ -962,7 +980,7 @@ function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianInde
     best = zeros(m)
     image = Vector{NTuple{N, Int}}(undef, m)     # the period shift of the image nearest the owner
     sums, counts = zeros(N, n), zeros(Int, n)
-    h = 2.0 * sqrt(m / n)
+    h = 2.0 * (m / n)^(1 / N)                     # about two cell radii (any h is exact)
     for _ in 1:lloyd
         h = _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
         h = max(1.0, 1.25sqrt(maximum(best)))    # the next pass starts near the need

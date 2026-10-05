@@ -44,7 +44,8 @@ unambiguous.
   a square lattice, `(q + r/2, r√3/2)` on a hexagonal one), so a circle is round on a
   hexagonal lattice too.
 - Membership is **closed**: a site belongs to `Circle(c, r)` when its embedded position is
-  at distance `≤ r` from `c`.
+  at distance `≤ r` from `c`, up to rounding (a relative `1e-12`, so a hexagonal disc of
+  radius 1 about a site holds the site and all 6 neighbours).
 - A shape **wraps** through a periodic edge and is **clipped** at a closed edge and at the
   domain; the report's `clipped` counts the lost points.
 
