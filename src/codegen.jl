@@ -256,7 +256,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
     vals = Any[]
     read = Set{Symbol}(n for E in Any[last.(c.cell_terms)..., c.site_terms..., values(c.contact_terms)...]
                        for (r, n) in _uses(E) if r in SCOPES)
-    for x in c.sys.variables                         # `commit!` resets these before the writes
+    for x in getfield(c.sys, :variables)                         # `commit!` resets these before the writes
         i = info(x)
         (i.role in (:site, :field) && i.name in read && get(i.options, :clear_on_ownership_change, false) === true) || continue
         after[:target][_unwrap(x)] = i.default isa Real ? T(i.default) : zero(T)
@@ -307,7 +307,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     c.uses_clusters && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
     # `clear_on_ownership_change`: the target's value resets to the default, before the
     # on-copy writes (which may set it again)
-    for x in c.sys.variables
+    for x in getfield(c.sys, :variables)
         i = info(x)
         get(i.options, :clear_on_ownership_change, false) === true || continue
         v = i.default isa Real ? T(i.default) : zero(T)
@@ -355,7 +355,7 @@ end
 # gaining and losing cells and combined (`combine`, default `min`); the medium never
 # contributes (CompuCell3D/Morpheus convention).
 function _temperature_expr(c::CompiledPottsSystem, T)
-    sw = c.sys.sweep
+    sw = getfield(c.sys, :sweep)
     rn = c.gather_names
     if _observed_scope(sw.temperature) === :cell
         tn = lower(sw.temperature, _cell_env(T, :new, rn; kind = :k_new))
@@ -438,13 +438,13 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     s = c.sys
     ints = _integrals(s)
     # (the uncompiled ticks: the compiled ones read their population folds through slots)
-    post = Any[(eq.rhs for eq in s.equations)..., (d.when for d in s.divisions)...,
-        (r for d in s.divisions for (_, r) in d.rules if !(r isa Split))..., (r.when for r in s.link_rules)...,
-        (x for b in s.discrete for x in b.next)...]
-    after_read = _integrals_read(Any[(u.eq.rhs for u in s.updates if u.phase === :after_mcs)..., post...], ints)
+    post = Any[(eq.rhs for eq in getfield(s, :equations))..., (d.when for d in getfield(s, :divisions))...,
+        (r for d in getfield(s, :divisions) for (_, r) in d.rules if !(r isa Split))..., (r.when for r in getfield(s, :link_rules))...,
+        (x for b in getfield(s, :discrete) for x in b.next)...]
+    after_read = _integrals_read(Any[(u.eq.rhs for u in getfield(s, :updates) if u.phase === :after_mcs)..., post...], ints)
     # an operand's reads include those of its hoisted folds
     operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
-    written(phase) = Set{Symbol}(_update_name(u) for u in s.updates if u.phase === phase)
+    written(phase) = Set{Symbol}(_update_name(u) for u in getfield(s, :updates) if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
     after_dirty = dirtied(:after_mcs)
     isempty(after_read) || append!(after, refresh([j for j in eachindex(ints) if !(j in after_dirty) && j in after_read]))
@@ -489,7 +489,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         # what reads the integrals after the block: the equations and lifecycle (after the
         # MCS) or the sweep's temperature (before it)
         if !isempty(stale)
-            later = _integrals_read(phase === :after_mcs ? post : Any[s.sweep.temperature], ints)
+            later = _integrals_read(phase === :after_mcs ? post : Any[getfield(s, :sweep).temperature], ints)
             append!(dst, refresh([j for j in sort!(collect(stale)) if j in later]))
         end
     end
@@ -497,12 +497,12 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     snapshots = isempty(c.energy_snapshots) ? () : (_slots_phase(T, c.energy_snapshots, rn),)
     append!(before, snapshots)
     # fields after the synchronous updates (MTK equations advance with the MCS clock)
-    dt = c.sys.sweep.mcs_duration
+    dt = getfield(c.sys, :sweep).mcs_duration
     for (x, rate) in c.fields
         name = info(x).name
         f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key)))))
         solver = spec.resolved[name]
-        sub = _auto_substeps(x, rate, values, dt, c.sys.lattice, solver.substeps)
+        sub = _auto_substeps(x, rate, values, dt, getfield(c.sys, :lattice), solver.substeps)
         lowerclip = solver.lower
         push!(after, CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip)))
@@ -536,7 +536,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     boundary = refresh(eachindex(ints))
     finish = Any[boundary...]
     for (n, _) in sort!(collect(_history_depths(c.sys)); by = first)
-        scope = any(x -> info(x).name === n && info(x).role === :model, c.sys.variables) ? :model : :site
+        scope = any(x -> info(x).name === n && info(x).role === :model, getfield(c.sys, :variables)) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
     phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),

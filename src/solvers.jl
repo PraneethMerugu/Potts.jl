@@ -62,7 +62,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
-    for (k, s) in given, n in _solver_keys(k, [fields; odes])
+    for (k, s) in given, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
         n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
@@ -89,10 +89,16 @@ _ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(1
 # The variable names a `solvers` key stands for: a name, a Potts variable, an MTK component
 # variable (`comp.x`, the cell variable `comp₊x`), or a component system (its integrated
 # unknowns `comp₊…`).
-function _solver_keys(k, integrated)
+function _solver_keys(k, integrated, model::Symbol)
     k isa Symbol && return (k,)
+    # a PottsSystem is an AbstractSystem too (D-137), but not a component
+    k isa PottsSystem && throw(ArgumentError("`solvers`: the key is the Potts model `$(nameof(k))`; key by a variable " *
+                                             "(`x => solver`) or a component system"))
     if k isa ModelingToolkitBase.AbstractSystem
-        prefix = string(nameof(k), "₊")
+        # `sys.dc` of an uncompleted model is `pr₊dc` (D-137): the component `dc`
+        cname = string(nameof(k))
+        startswith(cname, string(model, '₊')) && (cname = cname[(ncodeunits(string(model)) + ncodeunits("₊") + 1):end])
+        prefix = string(cname, "₊")
         ns = sort!([n for n in integrated if startswith(string(n), prefix)])
         isempty(ns) && throw(ArgumentError("`solvers`: the component `$(nameof(k))` has no integrated variable in this " *
                                            "model (no component of that name, or no `D(x) ~ …` equation)"))
@@ -113,7 +119,7 @@ _key_string(k) = (s = sprint(show, k; context = :limit => true); length(s) > 60 
 
 # A-68: an adaptive step re-evaluates the rate at trial steps, so it cannot replay draws.
 function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
-    for eq in c.sys.equations
+    for eq in getfield(c.sys, :equations)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue

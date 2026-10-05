@@ -254,6 +254,11 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # loaded): MTK's discrete-compilation hook and the MTKBase compiler it re-enters.
     :discrete_compile_pass, :with_reversible_transformation, :UnhackSystemTransformation,
     :__mtkcompile, :AbstractSystem,
+    # --- Potts -> MTKBase: `PottsSystem <: AbstractSystem` (D-137). `sys.x` is MTK's
+    # `getproperty`, which calls `getvar`; PottsSystem's `observed` field holds Potts'
+    # `ObservedEq`s, so it needs its own `getvar`. `extend` drops MTK's mutable cache entry
+    # from the merged metadata, as MTK's own `extend` does.
+    :getvar, :MutableCacheKey,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (

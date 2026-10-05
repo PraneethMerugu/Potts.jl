@@ -279,7 +279,8 @@ initial value. Lags are available where the MCS clock is: updates, equations,
 division conditions and rules, link rules.
 """
 _pre(x) = ModelingToolkitBase.Pre(x)
-_pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
+_pre(v::AbstractVector) = [_pre(x) for x in v]
+_pre(v::AbstractVector, k::Integer) = [_pre(x, k) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
 
 """
@@ -433,7 +434,7 @@ Base.iterate(g::KindClass, i...) = iterate(g.kinds, i...)
 Base.length(g::KindClass) = length(g.kinds)
 Base.isempty(g::KindClass) = isempty(g.kinds)
 Base.eltype(::Type{KindClass}) = Int
-Base.:(==)(a::KindClass, b::KindClass) = a.name === b.name && a.kinds == b.kinds
+Base.:(==)(g::KindClass, h::KindClass) = g.name === h.name && g.kinds == h.kinds
 Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)))
 Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
 Base.in(x::Integer, g::KindClass) = x in g.kinds
@@ -604,7 +605,7 @@ function _bind_edge_scope(vars, rels, bases = ())
     # D-127: a payload column belongs to one relationship, so a re-declaration inherits it
     inherited = Dict{Symbol, Symbol}()
     from = Dict{Symbol, Symbol}()                      # edge variable → the base declaring it
-    for b in bases, (n, r) in _edge_relationships(b.variables)
+    for b in bases, (n, r) in _edge_relationships(getfield(b, :variables))
         old = get!(inherited, n, r)
         old === r || throw(ArgumentError("bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
             "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"))

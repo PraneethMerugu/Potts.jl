@@ -166,9 +166,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
                 rethrow()
             end
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare
-                __lattice === nothing && (__lattice = b.lattice)
-                __sweep === nothing && (__sweep = b.sweep)
-                isempty(__kinds) && append!(__kinds, b.kinds)
+                __lattice === nothing && (__lattice = getfield(b, :lattice))
+                __sweep === nothing && (__sweep = getfield(b, :sweep))
+                isempty(__kinds) && append!(__kinds, getfield(b, :kinds))
             end) : nothing)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
@@ -236,17 +236,17 @@ end
 function _base_description(bases, x::Symbol)
     named(i) = i !== nothing && (i.name === x || get(i.options, :vector, nothing) === x)
     for b in bases
-        for v in b.variables
+        for v in getfield(b, :variables)
             i = info(v)
             named(i) || continue
             i.role in (:site, :field) && return nothing
             return _scope_description(i.role, get(i.options, :relationship, nothing))
         end
-        any(p -> named(info(p)), b.parameters) && return "a parameter"
-        x in b.kinds && return "a kind"
-        any(o -> named(info(o.var)), b.observed) && return "an observed quantity"
-        haskey(b.relations, x) && return "a relation"
-        any(r -> r.name === x, b.relationships) && return "a relationship"
+        any(p -> named(info(p)), getfield(b, :parameters)) && return "a parameter"
+        x in getfield(b, :kinds) && return "a kind"
+        any(o -> named(info(o.var)), getfield(b, :observed)) && return "an observed quantity"
+        haskey(getfield(b, :relations), x) && return "a relation"
+        any(r -> r.name === x, getfield(b, :relationships)) && return "a relationship"
     end
     return nothing
 end
@@ -495,7 +495,7 @@ function _section!(parts, sec, args, ln = nothing)
         nested = Expr(:call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
             filter(x -> x !== params, call.args[2:end])...)
         push!(code, :($bname = $nested), :(push!(__bases, $bname)),
-            :($P._build().dim == 0 && $P._set_dim!(length($bname.lattice.dims))))
+            :($P._build().dim == 0 && $P._set_dim!(length(getfield($bname, :lattice).dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along
         for n in names

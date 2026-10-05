@@ -278,16 +278,28 @@ CorePotts. Full ModelingToolkit, MethodOfLines and Unitful are extensions.
 
 ### 2.1 `PottsSystem <: ModelingToolkitBase.AbstractSystem`
 
-> Planned (P6.0o, D-075 §0.1): today `PottsSystem` is a plain struct; the subtype and the MTK accessor contract land with P6.0o.
+(P6.0o, D-137.) Potts fields: `name`, `kinds`, `frozen_kinds`, `kind_classes`, `lattice`,
+`parameters`, `variables` (scope in their metadata: cell, model, site, field, edge),
+`relations`, `energies::Vector{EnergyTerm}`, `drives`, `constraints`, `updates`,
+`equations`, `divisions`, `relationships`, `link_rules`, `observed::Vector{ObservedEq}`,
+`components` (`ComponentSpec`s), `discrete` (bound clocked components), `sweep`,
+`structural`, `sources` (source locations).
 
-Fields: `name`, `lattice`, `kinds`, `unknowns` (with scope metadata: Site, Cell,
-Medium, Model, Field, History), `ps`, `energies::Vector{EnergyTerm}`,
-`drives`, `constraints`, `updates::Vector{PhaseUpdate}`, `lifecycle::Vector{LifecycleRule}`,
-`relationships`, `observed`, `systems`, `native_components`, `statements` (authored form,
-kept for display and diagnostics), `metadata` (source locations).
+MTK mirror fields, read by MTK's generic accessors: `eqs`, `unknowns`, `ps` (the same
+vectors as `equations`, `variables`, `parameters`), `systems` (the component systems, by
+component name), `metadata`, `namespacing`, `complete`. The constructor derives the four
+mirrors, so they cannot disagree with the Potts fields; `checks = false` (positional
+constructor) skips the construction checks. The `observed` field keeps the `ObservedEq`s,
+so `observed`, `getvar` (behind `sys.x`) and `propertynames` are Potts methods.
 
-Composition: `compose`, `extend`, `flatten`, `@named`, namespacing — reused from
-ModelingToolkitBase.
+`sys.x` is MTK's `getproperty`: the namespaced symbolic of a declared quantity or a
+component, an `ArgumentError` for anything else. Internal code therefore reads fields with
+`getfield` (or `Potts.lattice`, `Potts.parameters`, `Potts.variables`); the P6.0o
+acceptance file scans `src/` and `ext/` for property reads.
+
+Composition: `extend` (and `@extend`) between Potts models and `@components` for MTK
+systems. `complete`, `extend` and `show` are Potts'; `compose`, `ODEProblem`/`JumpProblem`
+and `extend` with an MTK `System` are `ArgumentError`s that name the Potts route.
 
 ### 2.2 Statements expand into primitive terms
 

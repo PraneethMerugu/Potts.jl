@@ -55,7 +55,7 @@ end
 # Replace every expression of a model with `f(expr)`, keeping source locations.
 function _map_statements(f, sys::PottsSystem)
     src = IdDict{Any, LineNumberNode}()
-    keep(old, new) = (haskey(sys.sources, old) && (src[new] = sys.sources[old]); new)
+    keep(old, new) = (haskey(getfield(sys, :sources), old) && (src[new] = getfield(sys, :sources)[old]); new)
     fe(e::EnergyTerm) = keep(e, EnergyTerm(e.domain, f(e.expr)))
     fd(d::Drive) = keep(d, Drive(f(d.expr)))
     fc(c::Constraint) = keep(c, c.kind === :expr ? Constraint(c.kind, c.kinds, f(c.expr)) : c)
@@ -66,37 +66,37 @@ function _map_statements(f, sys::PottsSystem)
     fl(r::LinkRule) = keep(r, LinkRule(r.relationship, r.action, f(r.when), r.every))
     fo(o::ObservedEq) = keep(o, ObservedEq(o.var, f(o.expr)))
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
-    fs = sys.sweep
+    fs = getfield(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
-    return (; energies = map(fe, sys.energies), drives = map(fd, sys.drives),
-        constraints = map(fc, sys.constraints), updates = map(fu, sys.updates),
-        equations = map(fq, sys.equations), divisions = map(fv, sys.divisions),
-        link_rules = map(fl, sys.link_rules), observed = map(fo, sys.observed),
-        discrete = map(fb, sys.discrete), sweep, sources = src)
+    return (; energies = map(fe, getfield(sys, :energies)), drives = map(fd, getfield(sys, :drives)),
+        constraints = map(fc, getfield(sys, :constraints)), updates = map(fu, getfield(sys, :updates)),
+        equations = map(fq, getfield(sys, :equations)), divisions = map(fv, getfield(sys, :divisions)),
+        link_rules = map(fl, getfield(sys, :link_rules)), observed = map(fo, getfield(sys, :observed)),
+        discrete = map(fb, getfield(sys, :discrete)), sweep, sources = src)
 end
 
 """The model with its components expanded into cell variables, parameters and cell ODEs."""
 function _bind_components(sys::PottsSystem)
-    isempty(sys.components) && return sys
-    params = copy(sys.parameters)
-    vars = copy(sys.variables)
+    isempty(getfield(sys, :components)) && return sys
+    params = copy(getfield(sys, :parameters))
+    vars = copy(getfield(sys, :variables))
     odes = Equation[]
     # namespaced name (`clock₊m`) → the Potts quantity or expression it stands for
     names = Dict{Symbol, Any}()
     # couplings `clock.τ ~ expr` (component parameter ← cell-scope expression)
     couplings = Dict{Symbol, Any}()
     rest = Equation[]
-    for eq in sys.equations
+    for eq in getfield(sys, :equations)
         lhs = _unwrap(eq.lhs)
         n = iscall(lhs) && operation(lhs) isa Differential ? nothing : _mtkname(lhs)
         n === nothing ? push!(rest, eq) : (couplings[n] = eq.rhs)
     end
     time = _unwrap(B.time)
     coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
-    blocks = copy(sys.discrete)
+    blocks = copy(getfield(sys, :discrete))
     slotnames_all = Set{Symbol}()               # every discrete slot (`Pre` of one is the slot)
     unread = Dict{Symbol, String}()             # bound names no component equation reads → their error
-    for comp in sys.components
+    for comp in getfield(sys, :components)
         _reject_ignored_features(comp)
         discrete = _is_discrete(comp.system)
         cs = discrete ? _compile_discrete(comp) : ModelingToolkitBase.mtkcompile(comp.system)
@@ -108,7 +108,7 @@ function _bind_components(sys::PottsSystem)
                                                         (w = _unwrap(v); SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w))
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         scope = comp.domain === :model ? :model : :cell
-        plan = discrete ? _discrete_plan(comp, cs, sys.sweep.mcs_duration) : nothing
+        plan = discrete ? _discrete_plan(comp, cs, getfield(sys, :sweep).mcs_duration) : nothing
         if discrete
             # one slot per discrete variable (and per older lag): the value of its latest tick
             for (x, standin) in zip(plan.slots, plan.standins)
@@ -192,18 +192,19 @@ function _bind_components(sys::PottsSystem)
               for b in blocks]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
     sub(x) = subst(x)
-    m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
-        lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
-        energies = sys.energies, drives = sys.drives, constraints = sys.constraints, updates = sys.updates,
-        equations = rest, divisions = sys.divisions, relationships = sys.relationships,
-        link_rules = sys.link_rules, observed = sys.observed, sweep = sys.sweep, structural = sys.structural,
-        sources = sys.sources))
-    return PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
-        lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
-        m.energies, m.drives, m.constraints, m.updates, equations = [m.equations; odes], m.divisions,
-        relationships = sys.relationships, m.link_rules, m.observed, discrete = blocks, m.sweep, structural = sys.structural,
-        sources = merge(sys.sources, m.sources),
-        kind_classes = sys.kind_classes)
+    m = _map_statements(sub, PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
+        lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
+        energies = getfield(sys, :energies), drives = getfield(sys, :drives), constraints = getfield(sys, :constraints), updates = getfield(sys, :updates),
+        equations = rest, divisions = getfield(sys, :divisions), relationships = getfield(sys, :relationships),
+        link_rules = getfield(sys, :link_rules), observed = getfield(sys, :observed), sweep = getfield(sys, :sweep), structural = getfield(sys, :structural),
+        sources = getfield(sys, :sources)))
+    return PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
+        lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
+        energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes], divisions = getfield(m, :divisions),
+        relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
+        sources = merge(getfield(sys, :sources), getfield(m, :sources)),
+        kind_classes = getfield(sys, :kind_classes), metadata = getfield(sys, :metadata),
+        namespacing = getfield(sys, :namespacing), complete = getfield(sys, :complete))
 end
 
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
