@@ -303,6 +303,7 @@ function p60v1_published(T)
             akeeb_state(; lattice = (99, 60)), (0, 8); T, capacity = 1000),
         :SingleDivisionFixture => () -> PottsProblem(SingleDivisionFixture(; name = :s), [ownership => sd, kind => [:epithelial]],
             (0, 8); T, capacity = 4),
+        :OpenVTChain => () -> PottsProblem(OpenVTChain(; name = :c), openvt_chain(11), (0, 8); T),   # D-148 re-freeze
     )
 end
 const P60V1_PUBLISHED = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))

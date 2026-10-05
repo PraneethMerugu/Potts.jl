@@ -2170,3 +2170,9 @@ session.
   5. No frozen tutorial page here; the docs page is P6.15i.
   6. The FULL run uses a D-146 export wrapper.
   7. P1b and the 200-MCS burn-in variant are run only if V6–V8 fail.
+- **Applied (P6.15b implementation, 4b774b62).**
+  - **P11.** The spring–dashpot reference is the exact eigenmode solution, not OrdinaryDiffEq, so no dependency is added. It is checked against a matrix exponential to 1e-12 for n = 2, 3, 11 and 21, with free and pinned ends.
+  - **Sibling.** `OpenVTChain`'s generality sibling is `ScheduledRelease`, in `siblings.jl` (not frozen). It uses CC3D-style per-cell targets doubled in `@after_mcs`, closed in x.
+  - **Periodic axes.** `centroids(σ; periodic)` also accepts a single `Bool` for every axis.
+  - **Re-freeze under this entry.** `acceptance/p6_0v1_device_lifecycle.jl` (frozen under D-096) treats every exported uppercase function in PottsModels as a published model. It gains one builder, `:OpenVTChain`, on the 11-chain. The model has no lifecycle, so it enters only the set check. On CPU the file still passes and the Float32 build works. Every future exported model constructor needs the same one-line re-freeze; P6.15c's growth model is next.
+  - **FULL tier.** It ran once on 4 threads in 14.5 s, and every V6–V8 row passes. T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5. At λ = 2 the MSE is 0.38× Table S5. For V8, w₂₁ at 1/5/10 T is 15.96 / 19.28 / 19.89, and the plateau ends at 0.173 T. The D-146 recorded run is separate.
