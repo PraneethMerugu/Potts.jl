@@ -53,9 +53,11 @@ total_energy.(Ref(prob), sol.u)
 ## Analysis helpers
 
 `PottsModels.Analysis` has plain-Julia functions for saved states: `centroids(σ)` of every
-cell, the cell adjacency graph `cell_graph(σ)` with `components` and `reachable`, profile
-helpers `column_tops` and `trapz`, and peak finding (`find_peaks`, `peak_prominences`,
-`peak_widths`). See the [API](@ref api).
+cell (`periodic = (true, …)` takes each cell's minimum image on periodic axes), the cell
+adjacency graph `cell_graph(σ)` with `components` and `reachable`, profile helpers
+`column_tops` and `trapz`, peak finding (`find_peaks`, `peak_prominences`, `peak_widths`),
+and chains of cells along a periodic axis with their relaxation curves (`chain_centroids`,
+`chain_width`, `crossing_time`, `relaxation_mse`). See the [API](@ref api).
 
 ```@example observables
 using PottsModels.Analysis: centroids, cell_graph, components

@@ -144,8 +144,8 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "5ab0c11b96d8bdc7465411df957e9ad99bae2f273970465aac055dea948b8d98"
-decision = "D-096"
+sha256 = "2973df9c13f83ee24dba5792c5442c8dcbbcf3797c76221c124be4f6ec532c36"
+decision = "D-148"
 
 [[file]]
 path = "acceptance/p6_0ad_barker_offset.jl"
@@ -351,3 +351,8 @@ decision = "D-143"
 path = "../reproductions/10_akeeb.jl"
 sha256 = "db4b7027836b7f1dfcbbfc8b2e43429a17ae355b75313ce098870ee668872572"
 decision = "D-143"
+
+[[file]]
+path = "reproductions/15_openvt_calibration.jl"
+sha256 = "f42bc57a55d6d4969c1bf10abe9a1e16ff7e1f2f1c2403c1040dda95846bdcba"
+decision = "D-148"

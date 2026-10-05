@@ -466,7 +466,7 @@ Full runs are offline (D-146).
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
-- [ ] **P6.15b** F2 and Table S5 mechanical calibration (spec 15 §4.2, P1–P12; gap G10).
+- [x] (merge, 2026-10-05; D-148; the D-146 FULL record is pending) **P6.15b** F2 and Table S5 mechanical calibration (spec 15 §4.2, P1–P12; gap G10).
   - The test author freezes V6–V8 and a P11 unit test: the 11-bead free-end spring–dashpot reference matches `relaxation_exact.csv` to 1e-6.
   - Implement the fixture: strips on a 5-row periodic lattice (one `Tiling` per region plus `overlay`), the A* switch at t = 0, unwrapped centroids, the 90% crossing and the MSE.
   - FULL run: 100 seeds × λ ∈ {1, 2, 3, 5}, for the 11- and 21-chains. It sets T_Potts, which every other row uses.

@@ -2006,3 +2006,24 @@ The maintainer approved F-1…F-6 (D-049).
 - **Plan.** ROADMAP Step 3b, P6.15b–j. The P6.15b (calibration) and P6.15d (analysis port) test authors are running.
 - **D-146.** Full reproduction runs are offline, and their verdicts, per-save TSVs and provenance are committed under `reproductions/data/NN/`. Videos go to release assets.
 - **Merge checks.** Docs only: `frozen.jl` passes.
+
+## 2026-10-05 — P6.15b merged: OpenVT chain calibration (F2 / Table S5, D-148)
+
+- **The change.**
+  - In `Analysis`: `centroids(σ; periodic)`, plus `chain_centroids`, `chain_width`, `crossing_time` and `relaxation_mse`.
+  - Exported from PottsModels: `OpenVTChain`, `openvt_chain(11 | 21)`, `openvt_release` (a `DiscreteCallback` that switches A*) and `spring_dashpot_width` (an exact eigenmode solution; no new dependency).
+  - Nothing in core changed.
+  - `p6_0v1_device_lifecycle.jl` is re-frozen under D-148, gaining one `:OpenVTChain` builder.
+  - A new `ScheduledRelease` sibling covers generality.
+- **FULL tier (implementer's run, 14.5 s).** Every V6–V8 row passes:
+  - T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5, against Table S5's 290, 155, 110 and 75;
+  - at λ = 2 the MSE is 0.38× Table S5;
+  - the 21-chain predictions without refitting fall inside the consortium spread.
+- **Review.** One round, APPROVE; the coordinator fixed three nits.
+- **Merge checks** (one at a time, all exit 0):
+  - `frozen.jl`;
+  - the frozen calibration test with `OPENVT_MONOLAYER_REPO` set;
+  - PottsModels (`-t 4`): 16 457 pass, 44 broken;
+  - the docs build.
+
+  No core or device change, so no gate run.

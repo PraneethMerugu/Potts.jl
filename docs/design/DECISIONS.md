@@ -2161,3 +2161,45 @@ session.
 - **Verified in v3.** The spring–dashpot reference was re-derived: k/η = 18.28166472147, and all 51 CSV rows match to 5e-13. `metrics.cpp` reproduces the committed `metrics.csv` byte for byte only with `-ffp-contract=off` (defect D11), so the Julia port avoids fused multiply-adds in its geometry. V4 was rewritten from the pooled consortium data. G7 (stop on a condition) already exists.
 - **Plan.** ROADMAP Step 3b, P6.15b–j. Each item goes through the §7 loop. Pass bands are confirmed at each item's V-target audit before freezing. Consortium data stays outside the repo, read from `OPENVT_MONOLAYER_REPO`.
 - **Outward actions.** Release-asset uploads and the consortium submission (P6.15j) are confirmed with the maintainer first.
+
+## D-148 P6.15b: the F2 / Table S5 chain calibration is frozen (2026-10-05, P6.15b; coordinator, from the P6.15b test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/reproductions/15_openvt_calibration.jl` (freeze 798fa811), from spec 15 v3 §4.2 P1–P12, §4.1 V6–V8 and gap G10.
+  - The fixture rows and the SMOKE run are in the suite.
+  - V6–V8 run under `POTTS_FULL_REPRODUCTION=true`, offline (D-146).
+  - Rows that read G (54f375f) run only when `OPENVT_MONOLAYER_REPO` is set and are skipped otherwise. G data never enter git.
+- **Surface.** Nothing in core changes.
+  - The general piece is `Analysis.centroids(σ; periodic)`. It takes the minimum image relative to the cell's first site in column-major order and wraps the result into [1, n+1), as CorePotts `centroid` does.
+  - In `Analysis`: `chain_centroids` (unwrapped at the largest cyclic gap), `chain_width(σ, cells; CD = 10)`, `crossing_time(t, w, level = 9)` and `relaxation_mse(t, w, T, ref_t, ref_w)`.
+  - Exported from PottsModels:
+    - `spring_dashpot_width(t; n, rate, pinned)`;
+    - `OpenVTChain`, with kinds medium, compressed and relaxed, and parameters λ, T, A, A_c and J;
+    - `openvt_chain(11 | 21)`;
+    - `openvt_release(at = 100)`, a `DiscreteCallback` that switches `A_c` (no new mechanism).
+- **Readings fixed by the freeze.**
+  - P2 placement is Morpheus's: the box origin is size.x/2 − 27, 0-based, so the 11-chain occupies x ∈ 49:103.
+  - P5: t = 0 is the state after MCS 100.
+  - The V7 spreads apply at λ = 2 only.
+  - The V8 plateau end is `crossing_time` at w̄₂₁(0) + 0.05.
+  - P11 tolerances: printed digits to 5e-5, w(1) = 9 to 1e-7, and the CSV to 1e-6.
+- **Test-author choices.**
+  - Seeds: 1000λ + i (V6/V7), 21000 + i (V8), 90000 + i (SMOKE, 4 seeds).
+  - Run lengths: 7·T_S5(λ) for the 11-chain and 10·T(2) for the 21-chain.
+- **Checked before freezing.**
+  - The spec's P9 MSEs and the V7/V8 spreads were recomputed from G with the frozen rules.
+  - A minimal stub passes every tier. At 100 seeds it gives T = 297/156/111/77 MCS and MSE/S5 = 1.69/0.38/0.92/0.76.
+  - At 16 seeds the λ = 1 MSE fails V7, so P7's 100 seeds are load-bearing.
+- **Coordinator rulings on the open questions.**
+  1. Morpheus's placement stands. P1 follows Morpheus, and the off-centre gap is one site.
+  2. The homes and names stand. The chain helpers are general and stay in `Analysis` without an `openvt_` prefix.
+  3. The two-kind encoding with a global `A_c` stands for the calibration fixture. The P6.15c growth model carries its own per-cell target.
+  4. The V7 point bands apply at λ = 2 only, as frozen. Morpheus-J10's λ is author question Q12.
+  5. No frozen tutorial page here; the docs page is P6.15i.
+  6. The FULL run uses a D-146 export wrapper.
+  7. P1b and the 200-MCS burn-in variant are run only if V6–V8 fail.
+- **Applied (P6.15b implementation, 4b774b62).**
+  - **P11.** The spring–dashpot reference is the exact eigenmode solution, not OrdinaryDiffEq, so no dependency is added. It is checked against a matrix exponential to 1e-12 for n = 2, 3, 11 and 21, with free and pinned ends.
+  - **Sibling.** `OpenVTChain`'s generality sibling is `ScheduledRelease`, in `siblings.jl` (not frozen). It uses CC3D-style per-cell targets doubled in `@after_mcs`, closed in x.
+  - **Periodic axes.** `centroids(σ; periodic)` also accepts a single `Bool` for every axis.
+  - **Re-freeze under this entry.** `acceptance/p6_0v1_device_lifecycle.jl` (frozen under D-096) treats every exported uppercase function in PottsModels as a published model. It gains one builder, `:OpenVTChain`, on the 11-chain. The model has no lifecycle, so it enters only the set check. On CPU the file still passes and the Float32 build works. Every future exported model constructor needs the same one-line re-freeze; P6.15c's growth model is next.
+  - **FULL tier.** It ran once on 4 threads in 14.5 s, and every V6–V8 row passes. T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5. At λ = 2 the MSE is 0.38× Table S5. For V8, w₂₁ at 1/5/10 T is 15.96 / 19.28 / 19.89, and the plateau ends at 0.173 T. The D-146 recorded run is separate.
