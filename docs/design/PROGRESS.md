@@ -1983,3 +1983,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Merge checks.** These ran one at a time on the staged tree and all exited 0: CorePotts (9 021 pass), Potts, PottsModels (`-t 4`, 15 911 pass, 39 broken), MakiePotts, the docs build, CorePotts Metal and Potts Metal. CPU gate: pass, with GG sequential at 1.034 (the known tight baseline, D-140 drift note) and the others 0.990–1.028.
 - **Metal.** The gate's Metal rows were measured while other jobs were running (1.8–6.2×), so the A/B decides. Metal A/B, 8 rounds against 9016f53b: GG 0.974, Wortel 1.000, Merks 0.989, OpenVT 0.991, Akeeb 0.901. All pass.
 - **Caveat.** P6.2b found that `ab.jl` shows 5–16% offsets between two checkouts of the same commit on Akeeb Metal. The Merks 1.098 reading was probably this artefact. The follow-up is P6.0bb.
+
+## 2026-10-05 — P6.1f staged: reproduction 09 margin 60 and an isolation guard (D-144); FULL rerun pending
+
+- **The change.** This applies the peer spec-owner's ruling on P6.1d's V-PRE3 (b) failure. The cause is the fixture: with margin 10, aggregates touch their own periodic image after ≈ 3000 paper MCS. On 494², the frozen rule gives t_p = 200, a PASS. The 09 page now uses `MARGIN = 60` (347²) and has a FULL isolation-guard row. Spec 09 §9.4 is new, and the 09 and 11 sketches are updated. No target, tolerance, n or run length changed. The 09 page is re-frozen under D-144.
+- **Merge checks.** `frozen.jl` 204/204; the docs build exits 0, and the reduced 09 page renders the guard row.
+- **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The P6.1f FULL rerun replaces it.

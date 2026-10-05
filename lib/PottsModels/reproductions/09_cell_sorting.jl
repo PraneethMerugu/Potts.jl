@@ -77,7 +77,8 @@ const SEED = 1                          # base seed of every ensemble on this pa
 n = FULL ? 10 : 4                       # replicates (spec §9.0: 4 smoke, 10 full)
 σ_state, k_state = graner_glazier_state()
 n_state, dims_state = length(k_state), join(size(σ_state), " × ")
-const MARGIN = 10                       # medium margin of the full-run aggregates (periodic check in §5)
+const MARGIN = 60                       # medium margin of the full-run aggregates (spec §9.4: 10 let
+                                        # aggregates touch their periodic image after ≈ 3000 paper MCS)
 starts = [FULL ? graner_glazier_aggregate(1000; seed = i, margin = MARGIN) : (σ_state, k_state) for i in 1:n]
 σ0, k0 = starts[1]
 gg = GranerGlazier(; name = :gg, lattice = size(σ0))
@@ -140,7 +141,7 @@ Markdown.parse("""
 | Time unit | 1 MCS = 16N attempts (PRL p.2014) | — | 1 MCS = N attempts | — | INTERNALS F8; times are converted, paper t = our $(PAPER_MCS)t. Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) |
 | Aggregate size | ≈ 1000 cells (PRE p.2129) | — | $(n_state) cells on $(dims_state) (`graner_glazier_state`)$(FULL ? "; this run uses the variant" : "") | `graner_glazier_aggregate(n)`: one round aggregate of n cells on a lattice sized to fit (the full run: n = 1000, one per replicate) | Cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation |
 | Log-law window | 5–4000 paper MCS (spec §9.1 V-PRE1) | — | also reported over 4–512 | — | The window of `test/papers.jl`, which ends before our small aggregate levels off. Extra row, not a replacement |
-| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: the same starts embedded in a $(dims_pad) lattice give the same bond counts (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). The full run's margin of $MARGIN was chosen by a separate check with 120-cell aggregates on lattices twice as wide (spec §9.1 ruling 3); the gap to the periodic image is twice the margin whatever the cell count. Unsuitable for dispersal runs, which need a margin of at least 60 sites (`graner_glazier_aggregate(n; margin)`; spec §8.6 D2, §9.1 V-PRE14/15) |
+| Boundary conditions | unstated | — | periodic | `lattice` keyword | The aggregate stays clear of its image: no replicate has a save without an all-medium row and column (isolation guard, §5), and the same starts embedded in a $(dims_pad) lattice give the same bond counts to 10³ (variant run in §5)$(FULL ? "; the aggregates have a medium margin of $MARGIN sites" : ""). The first full run (P6.1d) used a margin of 10, chosen by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now $MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) |
 | Type fraction | unstated (spec §8.4) | — | $(FULL ? "equal numbers, randomly placed" : "probability ½ per cell") ($ndark dark / $nlight light) | — | $(FULL ? "Assumption; `graner_glazier_aggregate`, one draw per replicate" : "Assumption, recorded in `data/graner/provenance.toml`") |
 | Initial state | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | — | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the same recipe with $ncells cells") | $(FULL ? "—" : "`graner_glazier_aggregate(n)`") | $(FULL ? "Paper size. " : "D-049 F-2; `data/graner/generate.jl`. ")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree at 1, 10 and 100 paper MCS (D-063; P6.1b2 review), and so does the V-PRE4 boundary drop (spec §9.1 V-PRE4) |
 | T = 0 annealing | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | — | on a copy, $(2PAPER_MCS) of our MCS, run's J | — | Matches the paper (spec §8.4 A-GG4, resolved) |
@@ -337,7 +338,12 @@ Cb = Dict(key => zeros(n, length(ts)) for key in keys5)      # bond counts on th
 Nmm = zeros(n, length(ts))                                   # total length: all mismatched bonds
 cluster_t = filter(t -> t in (10, 100, 1000, 10_000), ts)
 ncluster, largest = zeros(n, length(cluster_t)), zeros(n, length(cluster_t))
+# isolation guard (spec §9.0): the raw state has at least one all-medium row and one all-medium
+# column, so the aggregate cannot touch its periodic image
+isolated(σ) = any(x -> all(==(0), view(σ, x, :)), axes(σ, 1)) && any(y -> all(==(0), view(σ, :, y)), axes(σ, 2))
+clear = trues(n, length(ts))
 for (i, sol) in enumerate(ens.u), (j, t) in enumerate(ts)
+    clear[i, j] = isolated(state_at(sol, t))
     σa = annealed(state_at(sol, t), kinds_of(i), prob)
     b = bond_counts(σa, kinds_of(i))
     Nmm[i, j] = sum(values(b))
@@ -463,8 +469,9 @@ At $t_end paper MCS, n = $n each:
 # comparisons (3 times × 3 bond counts), Bonferroni-corrected to a family-wise level of 5%:
 # every difference of the means must lie within q standard errors, q the two-sided
 # t-quantile at 5%/9 with 2n − 2 degrees of freedom. It is class FULL: a verdict in the full
-# build, information here. The full run's margin was chosen by a separate check at n = 6
-# (spec §9.1, ruling 3).
+# build, information here. It covers only the first 10³ paper MCS; later saves are covered
+# by the isolation guard of the pass/fail table (spec §9.0, §9.4), which the first full run
+# showed to be needed: with a margin of 10, aggregates touched their image after ≈ 3000.
 
 pf(ok) = ok ? "PASS" : "FAIL"
 binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
@@ -558,6 +565,14 @@ targets = []
 addrow!(target, paper, ours, tol, class, ok; timed = nothing, info = (;)) =
     push!(targets, (; target, paper, ours, tol, class, ok, timed, info,
         result = ok === nothing ? "pending full run" : result(ok, class)))
+
+## isolation guard (spec §9.0, §9.4): a validity condition of the run, not a paper target; when it
+## fails, every row read after the first touching save is void, whatever its own result
+first_touch = [(j = findfirst(!, clear[i, :]); j === nothing ? nothing : ts[j]) for i in 1:n]
+addrow!("Isolation guard: no aggregate touches its periodic image", "— (run validity, spec §9.0)",
+    all(clear) ? "clear at every save, all $n replicates" :
+    "touching: " * join(["replicate $i from $(first_touch[i])" for i in 1:n if first_touch[i] !== nothing], ", "),
+    "an all-medium row and column at every save", "FULL", all(clear))
 
 ## V-PRE1: two-run envelope ± 0.03 at 10, 100, 10³, 10⁴
 for (key, name) in ((:dl, "heterotypic"), (:dd, "dark–dark"), (:ll, "light–light")), j in 2:length(paper_t)
@@ -856,3 +871,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-09-30 | First version (pilot tutorial, reduced run) | ROADMAP P6.0h |
 # | 2026-09-30 | The full run uses a 1000-cell aggregate (`graner_glazier_aggregate`) | ROADMAP P6.1b2; D-063 |
 # | 2026-09-30 | Targets revised before freezing: nominal-time verdicts, two-run envelope, size-free plateau ratio | spec 09 §9 |
+# | 2026-10-05 | Full-run margin 10 → 60 and an isolation guard; no target changed. The first full run (P6.1d) failed V-PRE3 (b) because aggregates touched their periodic image | spec 09 §9.4; D-144 |
