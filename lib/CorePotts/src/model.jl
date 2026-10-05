@@ -108,7 +108,8 @@ end
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, claims = no_claims,
                 reads = no_claims, temperature, bias = no_bias, phases = Phases(), lifecycle = nothing,
-                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing)
+                acceptance = nothing, footprint = Footprint(), fingerprint = 0, sys = nothing,
+                track = nothing)
 
 The model, as plain Julia functions (the numerical analogue of `ODEFunction`). Each takes
 `(st, p, prop, ctx)` where `ctx` carries the lattice and relations:
@@ -129,11 +130,15 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
 - `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`), used
   unless the algorithm sets one; `nothing` means `Metropolis()`
+- `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
+  callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
+  into `stats.accepted_ΔH` (`dH` is `delta_H`'s value, without the bias and the acceptance
+  law's offset). [`TrackDeltaH`](@ref) sums `dH` itself (`Potts`: `track = (:ΔH,)`).
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS}
+struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -147,21 +152,40 @@ struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS}
     footprint::Footprint
     fingerprint::UInt64
     sys::SYS
+    track::TK
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
         claims = no_claims, reads = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
-        sys = nothing)
+        sys = nothing, track = nothing)
     return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
-        lifecycle, acceptance, footprint, UInt64(fingerprint), sys)
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track)
 end
+# the positional form without `track` (before D-140): untracked
+CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+    acceptance, footprint::Footprint, fingerprint, sys) =
+    CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+        acceptance, footprint, UInt64(fingerprint), sys, nothing)
+
+"""
+    TrackDeltaH{T}()
+
+The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:ΔH,)` in
+Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
+the device) between the host read points, which reduce into the `Float64`
+`stats.accepted_ΔH`; `SequentialCPM` adds into a `Float64` directly.
+"""
+struct TrackDeltaH{T} end
+@inline (::TrackDeltaH)(st, p, prop, ctx, dH) = dH
+"""The per-site accumulator type of a `track` callable (the model's scalar type)."""
+track_eltype(::TrackDeltaH{T}) where {T} = T
 
 """
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
+struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI, TK}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -169,9 +193,10 @@ struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
     reads::RD
     temperature::TT
     bias::BI
+    track::TK
 end
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias)
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias, f.track)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()

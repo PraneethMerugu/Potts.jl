@@ -7,8 +7,8 @@
 """
     PottsCheckpoint
 
-Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics and the
-model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
+Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics (with
+`accepted_ΔH`, exact here) and the model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
 the problem's `p` (so parameters may change at a restart; `ck.p` records the old ones).
 """
 struct PottsCheckpoint{S, P}
@@ -74,8 +74,9 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)
-    _restore_stats!(integ.stats, PottsStats())
+    _restore_stats!(integ.stats, _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
     integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> c === nothing || fill!(c, 0), (integ.cache.claims..., integ.cache.wclaims...)))
+    integ.cache === nothing || integ.cache.track === nothing || fill!(integ.cache.track.acc, 0)
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks

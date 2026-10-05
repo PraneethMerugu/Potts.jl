@@ -55,7 +55,8 @@ function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solv
 end
 """
     PottsProblem(sys, op, tspan; field_solver, ode_solver = ExplicitEuler(), solvers = [],
-                 T = Float64, capacity, seed = 0, replica = 0, repeat = 0, expression = Val(false))
+                 T = Float64, capacity, seed = 0, replica = 0, repeat = 0, track = (),
+                 expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
@@ -84,6 +85,13 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
 discretised problem.
+`track = (:ΔH,)` accumulates the ΔH of every committed copy (energy plus every drive, as
+`prob.f.delta_H` returns it; not the acceptance law's offset) into `sol.stats.accepted_ΔH`
+(a `Float64`; `nothing` with the default `track = ()`). Under `SequentialCPM` it is exact
+after every step; under `CheckerboardCPM` it is brought up to date at the host read points
+(a save, `integrator.u`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
+in the run; it is hashed into the fingerprint (only when on), and `remake(prob; track)`
+switches it.
 """
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
@@ -91,9 +99,10 @@ end
 
 function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Float64, capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = ())
+        ode_solver = ExplicitEuler(), solvers = (), track = ())
     sys = c.sys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+    track = _track(track)
     opd = _operating_point(sys, op)
     values = _parameter_values(c, opd)
     p = PottsParameters(NamedTuple(info(x).name => _param_value(T, values[_unwrap(x)], info(x)) for x in getfield(sys, :parameters)))
@@ -111,7 +120,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
         (spacing === nothing ? (;) : (; spacing))...)
-    f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}())
+    f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat)
     return CorePotts.PottsProblem(f, st, lat, tspan, p; contact = c.contact_spec, proposal = c.proposal_spec, relations,
@@ -127,7 +136,7 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 
 # The one codegen point: every generated function of a problem for compiled model `c`, scalar
 # type `T` and solvers `spec`, as a `CPMFunction` (construction, and `remake` with solvers).
-function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache)
+function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
     sys = c.sys
     fns, generated = _recording() do
         ce = _constraint_expr(c, T)
@@ -192,11 +201,16 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         r = getfield(hctx, k)
         push!(cad, "relation:$k=$(r.offsets);$(r.weights)")
     end
+    # what the run accumulates (D-140, D-075's amendment of D-016): hashed only when on, so an
+    # untracked problem keeps its fingerprint and a checkpoint loads only into an equally
+    # tracked one
+    isempty(track) || push!(cad, "track=$(repr(track))")
     isempty(cad) || (h = hash(join(cad, ";"), h))
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
-        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec))
+        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec),
+        track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}())
 end
 
 # The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
@@ -223,14 +237,28 @@ _fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(cor
 # out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, kwargs...)
+        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob.f), kwargs...)
     isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                                            "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
     c = mi.csys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = _derived_parameters(c, prob.p, Set(info(x).name for x in getfield(c.sys, :parameters)))
-    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache), _ode_layout(prob.u0, c, spec)
+    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track = _track(track)), _ode_layout(prob.u0, c, spec)
 end
+
+# `track` (D-140): the quantities a run accumulates into its statistics. Only `:ΔH` (each
+# committed copy's ΔH → `stats.accepted_ΔH`) for now; per-term names wait for R18.
+const _TRACKABLE = (:ΔH,)
+function _track(track)
+    (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(ArgumentError(
+        "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"))
+    for x in track
+        x in _TRACKABLE || throw(ArgumentError("`track`: `:$x` cannot be tracked (trackable: $(join(repr.(_TRACKABLE), ", ")))"))
+    end
+    allunique(track) || throw(ArgumentError("`track`: a name is given twice in $(repr(track))"))
+    return Tuple(track)
+end
+_track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:ΔH,)
 
 # The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
 # scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
