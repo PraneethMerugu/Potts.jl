@@ -111,6 +111,29 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
+# Compression release scheduled inside the model, CompuCell3D's way (a steppable doubles each
+# cell's target at a fixed MCS; the chain's left end rests on a closed lattice edge), with a
+# per-cell target variable instead of OpenVTChain's parameter switch by callback
+@potts_model ScheduledRelease begin
+    @kinds medium cell
+    @parameters begin
+        A_c = 16.0
+        release = 20.0
+        λ = 2.0
+        T = 20.0
+        J[kind, kind] = [0.0 10.0; 10.0 20.0]
+    end
+    @variables V_target(cell) = A_c
+    @lattice Lattice((60, 4); boundary = (Closed(), Periodic()), neighborhood = Moore(1))
+    @relations proposal = Moore(1)
+    @energy begin
+        cells(cell) => λ * (volume - V_target)^2
+        contacts => J[kind, kind′]
+    end
+    @after_mcs V_target ~ ifelse(mcs == release, 2A_c, Pre(V_target))
+    @sweep Metropolis(; temperature = T)
+end
+
 block(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 
 # published model => (sibling label, check); every check builds, self-checks and runs
@@ -160,6 +183,15 @@ const SIBLINGS = Dict(
         @test sol.stats.lifecycle.divisions >= 2
     end),
     :SingleDivisionFixture => ("major-axis division", () -> SIBLINGS[:OpenVTGrowingMonolayer][2]()),
+    :OpenVTChain => ("compression released by a scheduled per-cell target", function ()
+        σ = block((60, 4), [((1 + 4(c - 1)):(4c), 1:4) for c in 1:6]...)       # 6 cells of 16 sites from x = 1
+        p = PottsProblem(ScheduledRelease(; name = :r), [ownership => σ, kind => fill(:cell, 6)], (0, 300); seed = 3)
+        @test selfcheck(p) < 1e-9
+        sol = solve(p, SequentialCPM(; proposal = Moore(1)); saveat = [20, 300], save_start = false)
+        span(u) = (x = [c[1] for c in PottsModels.Analysis.centroids(u.σ)]; maximum(x) - minimum(x))
+        @test sol.u[1].cell.V_target == fill(16.0, 6) && sol.u[2].cell.V_target == fill(32.0, 6)
+        @test span(sol.u[1]) < 24 && span(sol.u[2]) > 32                  # the chain lengthens after the release
+    end),
 )
 
 @testset "siblings from public primitives" begin
