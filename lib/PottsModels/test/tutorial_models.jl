@@ -37,8 +37,8 @@ end
             MerksVasculogenesis(; name = :m, lattice = (8, 8), contact_inhibited = true), merks, euler),
         ("Akeeb", T.LeaderFollowerInvasion(; name = :m, lattice = (99, 60)), AkeebInvasion(; name = :m, lattice = (99, 60)),
             akeeb_state(; lattice = (99, 60)), (; capacity = 1000)),
-        ("Akeeb, the page's μ = 24", T.LeaderFollowerInvasion(; name = :m, lattice = (99, 60), μ = 24.0),
-            AkeebInvasion(; name = :m, lattice = (99, 60), μ = 24.0), akeeb_state(; lattice = (99, 60)), (; capacity = 1000)),
+        ("Akeeb, μ = 30 keyword", T.LeaderFollowerInvasion(; name = :m, lattice = (99, 60), μ = 30.0),
+            AkeebInvasion(; name = :m, lattice = (99, 60), μ = 30.0), akeeb_state(; lattice = (99, 60)), (; capacity = 1000)),
         ("Wortel Act", T.ActMigration(; name = :m, lattice = (8, 8)), WortelAct(; name = :m, lattice = (8, 8)), act, (;)),
         ("Wortel Act, connected", T.ActMigration(; name = :m, lattice = (8, 8), connected = true),
             WortelAct(; name = :m, lattice = (8, 8), connected = true), act, (;)),
@@ -55,6 +55,13 @@ end
         PottsProblem(GranerGlazier(; name = :m), gg, (0, 1)))
     @test PottsProblem(T.Vasculogenesis(; name = :m, lattice = (8, 8), contact_inhibited = true), merks, (0, 1); euler...).f.fingerprint !=
           PottsProblem(MerksVasculogenesis(; name = :m, lattice = (8, 8)), merks, (0, 1); euler...).f.fingerprint
+    # the Akeeb default μ is the paper's 24 (D-142) on the page and in the constructor, and a
+    # μ that differs is told apart
+    aop = akeeb_state(; lattice = (99, 60))
+    akp = PottsProblem(T.LeaderFollowerInvasion(; name = :m, lattice = (99, 60)), aop, (0, 1); capacity = 1000)
+    @test getp(akp, :μ)(akp) == 24.0
+    @test !same_problem(PottsProblem(T.LeaderFollowerInvasion(; name = :m, lattice = (99, 60), μ = 30.0), aop, (0, 1);
+            capacity = 1000), PottsProblem(AkeebInvasion(; name = :m, lattice = (99, 60)), aop, (0, 1); capacity = 1000))
     @test PottsProblem(T.ActMigration(; name = :m, lattice = (8, 8), connected = true), act, (0, 1)).f.fingerprint !=
           PottsProblem(WortelAct(; name = :m, lattice = (8, 8)), act, (0, 1)).f.fingerprint
 end

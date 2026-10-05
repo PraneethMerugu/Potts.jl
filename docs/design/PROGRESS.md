@@ -1989,3 +1989,13 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** This applies the peer spec-owner's ruling on P6.1d's V-PRE3 (b) failure. The cause is the fixture: with margin 10, aggregates touch their own periodic image after ≈ 3000 paper MCS. On 494², the frozen rule gives t_p = 200, a PASS. The 09 page now uses `MARGIN = 60` (347²) and has a FULL isolation-guard row. Spec 09 §9.4 is new, and the 09 and 11 sketches are updated. No target, tolerance, n or run length changed. The 09 page is re-frozen under D-144.
 - **Merge checks.** `frozen.jl` 204/204; the docs build exits 0, and the reduced 09 page renders the guard row.
 - **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The P6.1f FULL rerun replaces it.
+
+## 2026-10-05 — P6.2b merged: Akeeb μ = 24 default, `akeeb_observables` (D-142, D-143)
+
+- **The change.**
+  - The default μ moves from 30 to 24 (D-142), and the docstrings now state the paper-vs-code items P14 and the time mapping P12.
+  - `akeeb_observables(σ, kinds)` and `akeeb_observables(u)` compute O1–O8 by composing existing Analysis primitives.
+  - The Akeeb docs page runs 701 MCS (the authors' MCS 700) and shows the observables beside the P1 reference. Every one of the six reads within one SD.
+- **Review.** Two rounds. Round 1 found the page stopping one MCS short of the paper's endpoint, the missing observables table, and the kinds check reading ids that own no site. In round 2 the coordinator fixed the plot axis nit.
+- **Merge checks.** These ran one at a time and all exited 0: `frozen.jl` (210), Potts, PottsModels (`-t 4`, 16 251 pass, 42 broken) and the docs build. No solver or device code changed, so Metal was not rerun.
+- **Gate.** Gate metal passed on the implementer's run. The baseline was not re-set. Measured in one process, alternating μ 30 and 24, the change costs ≈ 1%. The `ab.jl` reading of 1.24 was mostly a per-checkout artefact (P6.0bb).

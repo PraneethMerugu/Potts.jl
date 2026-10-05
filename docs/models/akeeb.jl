@@ -68,10 +68,8 @@ using Potts, PottsModels
 # energies medium–leader 2, medium–follower 10, leader–leader 16 and follower–follower 5.
 # The leader–follower energy ``J_{LF}`` (here 2) is the paper's main scanned parameter,
 # over ``[-5, 5]``; `akeeb_contacts(J_LF)` builds the table for any value. `μ` is the
-# chemotaxis strength (the paper's ``\lambda``). Its default here is 30; the paper's
-# value is 24, so we pass `μ = 24` when we build the model below. `V_max`, `clock_min`
-# and `clock_spread`
-# govern growth and division (Steps 8 and 9).
+# chemotaxis strength (the paper's ``\lambda``); its default is the paper's reference value
+# 24. `V_max`, `clock_min` and `clock_spread` govern growth and division (Steps 8 and 9).
 #
 # ## Step 4: per-cell and per-site variables
 #
@@ -138,11 +136,10 @@ using Potts, PottsModels
 
 # <<model>>
 
-# We run it on the paper's 500 × 300 lattice. Every default is the paper's value except
-# the chemotaxis strength, which we set to the paper's 24:
+# We run it on the paper's 500 × 300 lattice. Every default is the paper's value:
 
 dims = (500, 300)
-@named invasion = LeaderFollowerInvasion(; lattice = dims, μ = 24.0)
+@named invasion = LeaderFollowerInvasion(; lattice = dims)
 
 # ## The starting state
 #
@@ -179,11 +176,13 @@ count(>=(0), clocks) / count(==(:follower), u0[2].second)
 
 # ## Solving
 #
-# The paper runs 700 MCS. Cells are born during the run, so the problem reserves room for
-# them with `capacity`:
+# The paper reports its fronts at "MCS 700". The authors' CompuCell3D runs take 701 steps
+# and count from 0, so their MCS ``t`` is our state after ``t + 1`` MCS: we run 701 MCS and
+# save the start and every 10th of the authors' MCS (our 1, 11, …, 701). Cells are born
+# during the run, so the problem reserves room for them with `capacity`:
 
-prob = PottsProblem(invasion, u0, (0, 700); seed = 1, capacity = 6000)
-sol = solve(prob, SequentialCPM(); saveat = 0:10:700)
+prob = PottsProblem(invasion, u0, (0, 701); seed = 1, capacity = 6000)
+sol = solve(prob, SequentialCPM(); saveat = [0; 1:10:701])
 sol.stats.lifecycle.divisions
 
 # ## The run as a movie
@@ -214,15 +213,33 @@ using Statistics: mean
 mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.σ) if u.σ[I] > 0 && u.cell.kind[u.σ[I]] == k)
 CairoMakie.activate!(type = "png")
 fig = Figure(size = (520, 340))
-ax = Axis(fig[1, 1]; xlabel = "MCS", ylabel = "mean height (sites)")
-lines!(ax, sol.t, [mean_height(u, 1) for u in sol.u]; label = "leaders")
-lines!(ax, sol.t, [mean_height(u, 2) for u in sol.u]; label = "followers")
+ax = Axis(fig[1, 1]; xlabel = "MCS (the authors' count)", ylabel = "mean height (sites)")
+lines!(ax, max.(sol.t .- 1, 0), [mean_height(u, 1) for u in sol.u]; label = "leaders")
+lines!(ax, max.(sol.t .- 1, 0), [mean_height(u, 2) for u in sol.u]; label = "followers")
 axislegend(ax; position = :lt)
 fig
 
-# The paper classifies the final fronts into fingers, single cells and detached clusters;
-# `PottsModels.Analysis` has the tools for this (column tops of the front, peak finding,
-# the cell contact graph).
+# The paper measures the final front with the authors' analysis code: the areas under the
+# top of the main tumour (invasive) and under the top of any cell (infiltrative), both
+# above the tumour's lowest top; the fingers of the front; single leaders; detached
+# cells; and clusters that contain a follower.
+# `akeeb_observables` computes exactly these quantities (built from the
+# `PottsModels.Analysis` tools) at a state. Here they are for this run at the authors'
+# MCS 700, next to the authors' ensemble at the same point (``J_{LF} = 2``,
+# ``\lambda = 24``, ``PP = 0.5``; mean ± SD of 10 runs, released data):
+
+obs = akeeb_observables(sol.u[end])
+using Markdown
+reference = (invasive = "15734 ± 1362", infiltrative = "44029 ± 1669", singles = "204.5 ± 9.3",
+    fingers = "12.0 ± 1.2", detached = "239.4 ± 11.1", clusters = "5.5 ± 2.3")
+fmt(v) = v isa Integer ? string(v) : string(round(v; digits = 1))
+Markdown.parse("""
+| Measure | This run | Authors (10 runs) |
+|:--|--:|--:|
+""" * join(["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)], "\n"))
+
+# One run is not an ensemble: the reproduction of this paper compares ensembles of runs
+# with every reference point and its tolerance.
 #
 # ## Differences from the paper
 #
@@ -236,8 +253,8 @@ fig
 # | Neighbourhoods | not stated | contacts over 8 neighbours, copies from 4 (CompuCell3D orders 2 and 1) |
 # | ``y`` boundary | not stated | a closed wall (the CompuCell3D default) |
 # | Connectivity | not mentioned | every cell kept in one piece (CompuCell3D `Connectivity`) |
-# | Time | 700 MCS (701 CompuCell3D steps) | 700 MCS |
-# | Chemotaxis strength | ``\lambda = 24`` | the constructor's default is `μ = 30`; pass `μ = 24`, as this page does |
+# | Time | 700 MCS (701 CompuCell3D steps) | 701 MCS (the authors' MCS 700) |
+# | Chemotaxis strength | ``\lambda = 24`` | `μ = 24`, the constructor's default |
 #
 # The lattice, temperature, contact energies, volume constraint, growth rate and division
 # size are the paper's (Table 1). The leader–follower energy is 2 here; the paper scans
@@ -248,15 +265,18 @@ fig
 # PottsModels exports this model as `AkeebInvasion`; the test suite checks that it
 # compiles to the same code and defaults as `LeaderFollowerInvasion` above.
 
-@named akeeb = AkeebInvasion(; μ = 24.0)
+@named akeeb = AkeebInvasion()
 
 # Its start is `akeeb_state()`, used above. To scan the leader–follower energy as the
 # paper does, pass a contact table with the state, for example
-# `[akeeb_state(); :J => akeeb_contacts(-2.0)]`.
+# `[akeeb_state(); :J => akeeb_contacts(-2.0)]`. To measure a state as the authors'
+# analysis code does (invasive and infiltrative areas, fingers, singles, detached cells
+# and clusters), use `akeeb_observables(u)`.
 
 # ```@docs
 # AkeebInvasion
 # akeeb_state
 # akeeb_layout
 # akeeb_contacts
+# akeeb_observables
 # ```

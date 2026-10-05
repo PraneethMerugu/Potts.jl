@@ -14,7 +14,7 @@
     #> parameters
     @parameters begin
         λᵥ = 2.0
-        μ = 30.0
+        μ = 24.0
         T = 10.0
         V_max = 20.0
         clock_min = 75.0

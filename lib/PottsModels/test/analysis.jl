@@ -227,3 +227,17 @@ end
     @test length(g) == k && all(c -> length(g[c]) <= 4, 1:k)
     @test bytes < 50 * 2^20                                  # ~2 MB measured; no per-site allocation
 end
+
+@testset "akeeb_observables reads kinds only of ids that own sites" begin
+    # 6 × 5: follower 1 at (3, 2) is the main tumour; leader 3 at (5, 4) is alone above it;
+    # id 2 owns no site, so its kind (here not a leader or follower) is never read
+    σ = zeros(Int, 6, 5)
+    σ[3, 2] = 1
+    σ[5, 4] = 3
+    o = akeeb_observables(σ, [:follower, :medium, :leader])
+    @test (o.singles, o.detached, o.clusters, o.fingers) == (1, 1, 0, 0)
+    @test o.invasive === 0.0 && o.infiltrative === 0.0         # one kept column (x = 3)
+    # negative control: once id 2 owns a site its kind is checked
+    σ[2, 4] = 2
+    @test_throws ArgumentError akeeb_observables(σ, [:follower, :medium, :leader])
+end
