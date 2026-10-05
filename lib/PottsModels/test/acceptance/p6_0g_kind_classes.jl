@@ -629,7 +629,7 @@ const P60G_CLASS_FIXTURES = (:P60gC, :P60gCTip, :P60gXSpare, :P60gLifeC, :P60gCl
     @test collect(Potts.lookup(sys, :ecm)) == [1, 2]
     @test collect(Potts.lookup(sys, :mix)) == [1, 2, 3]
     @test Potts.lookup(sys, :tip) == 3                                  # kind numbers unchanged by class lines
-    @test sys.kinds == [:medium, :fluid, :matrix, :tip, :stalk]
+    @test getfield(sys, :kinds) == [:medium, :fluid, :matrix, :tip, :stalk]
 end
 
 const P60G_X_PIN = 0x720f515fc374f5f4                    # P60gX on 462b012a
