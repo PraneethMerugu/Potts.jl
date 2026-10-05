@@ -2102,3 +2102,42 @@ session.
 - **Frozen acceptance** `p6_3c_eden_splits.jl` (freeze e7af6d2f): `RandomPoints(replace = true)` against an independent StableRNG oracle (square, 3D, domain, periodic, hex, a wrapping shape region), duplicates, the shared stream prefix, `remake`; Eden hand fixtures (seeding and rounding, merging, a hole, closed and periodic strips), medium-only fill, region, domain, `clipped`; an independent Eden oracle on square, VonNeumann, hex and 3D (closed, periodic, domain, after an earlier layer) with a deterministic-growth control; stream-prefix, reach and determinism invariants; spec 01 §7.6 bands for de novo (357–360 cells, ≈ 47.6 px) and sprout (1 816–2 439 px); Splits hand cuts (box, isotropic tie, on-plane row, diagonals, hex rhombus 3/3 vs index-space 2/4, 3D, periodic unwrap), ids, kinds, conservation, earlier layers untouched, the one-piece warning and count, shortfall and argument errors. On 21683819: 4 pass, 13 fail, 26 error of 43, all on the missing surface; a stub passes 611/611.
 - **Applied (implementer, coordinator-accepted).** LinearAlgebra (stdlib, already loaded transitively; no load-time change) for the N-D eigenvector; ties within 1e-9·λmax, projection nonzero above 1e-6; a cell with no site strictly on the positive side is not cut; Eden draws from a sorted candidate frontier (stream identical to the full scan: 670/670 against an independent oracle); non-symmetric neighbourhoods use negated offsets for candidates and forward offsets for eligibility.
 - **Review (P6.3c).** Two rounds (round 1: on-plane sites sent to the daughter in Float64; warnings with paint-time ids). Against the freeze stub (which had the same on-plane bug) sprout moved 0–2 sites on seeds 4–7; frozen bands unaffected. Follow-ups: the on-plane tolerance's margin shrinks ~1/L² (risk only for cells ~3×10⁴ long); a Splits cell repaired into one piece by a later layer still gets the "not one piece" warning — re-check against the final σ before warning (fold into P6.3d, the first Splits consumer).
+
+## D-145 P6.3b: `@boundary` per face and per site mask, `@schedule` as the phase order with the sweep and lifecycle as entries (2026-10-05, P6.3b; coordinator, from the P6.3b test author; implements R5 per api-synthesis §2.11–§2.12 and §6.4; amends D-035 as D-075 states)
+
+- **`@boundary <field> begin … end`.** One block per field; `<field>` must be a `(field)` variable, else an error naming it.
+  - **Face entries:** `x | y | z => (low, high)`, each side `Dirichlet(v)` or `NoFlux()`.
+    - A face value is a ghost value (01 F7, CorePotts' existing per-face rule). `Dirichlet(v)` sets the ghost to 2v − c, so the face value is reached midway; `NoFlux()` mirrors.
+    - A closed axis with no entry stays zero flux, as today.
+    - An entry on a periodic axis, or on an axis the lattice lacks, is an error naming it.
+  - **Mask entries:** `sites(pred) => Dirichlet(v)` is a node value. It is set after every explicit substep: after the write and any `lower` clip, before the next rate evaluation. `pred` is re-evaluated from σ each substep, so the mask moves with the cells.
+  - **Values** are numbers, parameters or parameter expressions; a parameter `remake` keeps `f`.
+  - `Dirichlet` and `NoFlux` are new DSL names, added to `DSL_NAMES`. The boundary spec is hashed into the D-016 fingerprint. Nothing is model-named.
+  - P6.3d's Merks 2006/2008 adopts `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` and `@schedule fields, sweep`.
+- **`@schedule a, b, …`.**
+  - **Canonical names:** `before_mcs, sweep, after_mcs, fields, components, operators, lifecycle, end_mcs`. Each is accepted even when the model has no such phase.
+  - **Default order.** No schedule means exactly that list, which is today's `step!` order. `fields` is the field PDE steps; `components` holds cell and model ODEs, discrete components and links.
+  - **Placement rule.** Listed phases run in the listed order. Each unlisted phase, in default order, goes right after the last placed phase that precedes it in the default order (first if none). A schedule in default relative order therefore equals no schedule bit for bit.
+  - **Errors**, each naming the offender: an unknown name, a duplicate, `end_mcs` not last, `before_mcs` after `sweep`, `after_mcs` before `sweep` (D-042's meanings are kept).
+  - The schedule is hashed into the fingerprint after canonicalization to the full placed order.
+- **`step!` restructuring (api-synthesis §2.12).** The sweep and the lifecycle become entries of the compiled static phase tuple (sentinels dispatched in `_run_phases`), and `step!` is one unrolled fold.
+  - Hand-written CorePotts `Phases` (before/after/end/at_init) and CPMFunction's positional and keyword constructors keep today's meaning (frozen p6_0af and p6_0d call them).
+  - The coordinator checks at merge: the gate unchanged on CPU, and Metal A/B ≤ 1.01 on the five gate models.
+- **D-035 amended (D-075 §6.1).**
+  - **Budget:** the lifecycle trigger readback on the host lifecycle path (on GPU already withdrawn by D-089), plus one device↔host round trip per declared host pass per firing.
+  - **Host passes:** `Adaptive` ODE groups and `HostPhase` now. Later: `@convert`, `HostOperator`, `uptake`/`secrete`, host field solvers, and model-scope `contacts(rel)` folds.
+  - A model with no host pass pays nothing, whatever its schedule. Each host pass is, or sits inside, a named `@schedule` phase. Reordering device phases is free.
+- **Frozen acceptance.** `lib/PottsModels/test/acceptance/p6_3b_boundary_schedule.jl` (freeze 16793f89).
+  - On 4e44381b: 16 pass, 9 fail, 17 error, 1 skip of 43, all on the missing surface.
+  - Against a stub of CorePotts phases: 301/311; the 9 failures are the error-message and DSL-name checks.
+- **Coordinator rulings on the test author's open questions.**
+  1. **Axis keys.** `x`/`y`/`z` are read syntactically as keys inside the `@boundary` block, so they do not clash with a model variable `x`. Only full `(low, high)` pairs; a one-sided form can be added later.
+  2. **Neumann.** `NoFlux()` only; a general `Neumann(g)` is deferred.
+  3. **Hex lattices.** Face entries on a hex lattice are an error naming the lattice. Mask entries work on every lattice.
+  4. **Initial state and `lower`.** Mask clamps are also applied to the initial state at init, so `sol.u[1]` satisfies them. A mask value below `lower` wins: the clamp is applied after the clip.
+  5. **Multi-field block form.** Deferred to P6.11; only the per-field form now.
+  6. **`components`** holds the cell and model ODEs, discrete components and links; `fields` is PDEs only. Named rules in a schedule are out of scope.
+  7. **The placement rule** above is adopted.
+  8. **The `before_mcs`/`after_mcs` restriction** is adopted.
+  9. **Fingerprints.** Schedules equal after canonicalization fingerprint equal; the frozen file does not pin this.
+  10. **`MerksVasculogenesis` is unchanged in this item.** The gate's Merks numerics are untouched; adoption is P6.3d.
