@@ -118,6 +118,7 @@ manual = [
     "manual/problems.md",
     "manual/indexing.md",
     "manual/observables.md",
+    "manual/analysis.md",
     "manual/callbacks.md",
     "manual/layouts.md",
     "manual/plotting.md",

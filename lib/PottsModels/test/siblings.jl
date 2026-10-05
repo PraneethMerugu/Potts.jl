@@ -196,3 +196,28 @@ end
     # negative control: square Moore(1) adjacency sees the axial (1, 1) diagonal that hex does not
     @test PottsModels.Analysis.cell_graph(σ; neighborhood = Moore(1)) != g
 end
+
+# P6.1b (D-139) outside its first model (Graner–Glazier's sorting analysis): the boundary
+# split by kind pair and the annealed copy on the hexagonal sorting sibling (Hex(2) contacts,
+# a volume term besides the contacts).
+@testset "boundary_lengths and anneal on the hexagonal sorting sibling" begin
+    σ = zeros(Int32, 30, 30); n = 0
+    for i in 6:5:21, j in 6:5:21
+        n += 1; σ[i:(i + 3), j:(j + 3)] .= n
+    end
+    prob = PottsProblem(HexSorting(; name = :hb), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n]], (0, 30); seed = 3)
+    L = Potts.boundary_lengths(prob)
+    @test Set(keys(L)) == Set([(:medium, :medium), (:medium, :dark), (:medium, :light), (:dark, :dark), (:dark, :light), (:light, :light)])
+    @test L[(:medium, :medium)] == 0 && all(>(0), (L[k] for k in keys(L) if k != (:medium, :medium)))
+    # Hex(2) bonds include second neighbours: more than the Hex(1) boundary of the same state
+    @test sum(values(L)) > sum(values(Potts.boundary_lengths(prob; relation = Hex(1))))
+    # the 4×4 blocks are far from the T = 0 minimum (V₀ = 20, rough Hex(2) edges): annealing lowers H
+    a = Potts.anneal(prob; mcs = 8, seed = 1)
+    @test total_energy(prob, a) < total_energy(prob)
+    @test a.σ == Potts.anneal(prob; mcs = 8, seed = 1).σ && prob.u0.σ == σ
+    # negative control: no MCS, no change
+    @test total_energy(prob, Potts.anneal(prob; mcs = 0)) == total_energy(prob)
+    # and from a state the run has moved (T = 4), H falls again
+    u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
+    @test total_energy(prob, Potts.anneal(prob, u; mcs = 8, seed = 2)) < total_energy(prob, u)
+end

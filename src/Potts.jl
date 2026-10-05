@@ -12,7 +12,7 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, PottsProblem, Periodic, Closed, Moore, init, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
@@ -46,6 +46,7 @@ include("compile.jl")
 include("solvers.jl")
 include("codegen.jl")
 include("problem.jl")
+include("analysis.jl")
 include("observed.jl")
 include("compose.jl")
 include("components.jl")
@@ -62,6 +63,8 @@ export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
 public lattice, paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,
     core_lattice, LatticeSpec
+# measurements of a state beside `total_energy` (D-139)
+public boundary_lengths, anneal
 # a named set of kinds declared in `@kinds` (`g = (k, …)`); for programmatic `PottsSystem(; kind_classes)`
 public KindClass
 
