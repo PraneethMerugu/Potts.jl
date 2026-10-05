@@ -95,7 +95,8 @@ to the cell's first site in column-major order, and the mean is wrapped into
 `[1, size(σ, d) + 1)`, CorePotts `centroid`'s convention: a cell owning columns 10 and 1 of
 a 10-wide periodic lattice has its centroid at 10.5. Non-periodic axes (the default) take
 the plain mean of the indices, with no unwrapping. The minimum image is exact for a cell
-narrower than half the lattice along `d`.
+at most half the lattice wide along `d`. A wider cell gets a result that depends on where its
+first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads 5.83, not 7.5.
 """
 function centroids(σ::AbstractArray{<:Integer, N}; periodic = ntuple(_ -> false, N)) where {N}
     per = _periodic_axes(periodic, Val(N))

@@ -52,6 +52,7 @@ The extent of a chain of cells along axis 1, `(max − min)` of
 """
 function chain_width(σ::AbstractArray{<:Integer}, cells = 1:Int(maximum(σ; init = 0)); CD = 10)
     xs = chain_centroids(σ)[cells]
+    isempty(xs) && throw(ArgumentError("chain_width: no cells (σ owns no site, or `cells` is empty)"))
     return (maximum(xs) - minimum(xs)) / CD
 end
 
@@ -83,6 +84,7 @@ function relaxation_mse(t, w, T, ref_t, ref_w)
         throw(ArgumentError("relaxation_mse: t and w have different lengths ($(length(s)) and $(length(w)))"))
     length(ref_t) == length(ref_w) ||
         throw(ArgumentError("relaxation_mse: ref_t and ref_w have different lengths"))
+    isempty(s) && throw(ArgumentError("relaxation_mse: t is empty"))
     issorted(s) || throw(ArgumentError("relaxation_mse: t must be ascending"))
     acc = 0.0
     for (r, v) in zip(ref_t, ref_w)
