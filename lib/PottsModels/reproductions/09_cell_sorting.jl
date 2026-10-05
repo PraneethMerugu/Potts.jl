@@ -148,6 +148,7 @@ Markdown.parse("""
 | Target area per kind | one value except the cavity run (PRE Fig. 28) | — | one `V₀` | — | Per-kind targets not expressible yet (spec §8.6 D14) |
 | Boundary length | mismatched bonds on the 8-neighbour lattice, medium included (PRE p.2133) | — | the same, each bond once | — | Once/twice counting cancels in fractions (spec §8.6 D8) |
 | Two published runs (paper-internal) | PRL Fig. 2 and PRE Fig. 13 use the same parameters but differ: dark–dark at 10 MCS, dd crossing time, light–medium plateau (spec §9.2) | — | the sorting targets use the envelope of both runs, widened by 0.03 (spec §9.1) | — | Spec §8.5 "Supersession": a single paper curve ± 0.05 would fail a model that reproduces the other run. Which run PRL Fig. 2 is: question in §6 |
+| Late-stage coarsening (open) | one dark cluster from 5000 (PRE Fig. 12(g), p.2140); heterotypic 0.050 (PRE), 0.040 (PRL) at 10⁴ | — | in the first full runs, two or three large dark domains often persist past 10⁴; heterotypic at 10⁴ is at or above both published runs in every replicate (spec §9.5) | — | Cause not found: not the periodic image, not the start relaxation, not the reading time, not the type fraction (spec §9.5). V-PRE5's one-cluster clause failed in P6.1f and is kept as frozen; question in §6 |
 | Monolayer time (paper-internal) | light monolayer "after 300 MCS" (PRL p.2015) against "After 600 MCS" (PRE p.2140) | — | read as the two runs; the target is dark–medium < 0.003 by 10³ (V-PRE3 (a)), which both runs meet | — | Spec §8.4, §9.1 V-PRE3 (a) |
 | Annealing temperature in PRE Fig. 23 (paper-internal) | caption: "two MCS of T = 10 annealing"; the protocol is T = 0 (PRE p.2134) | — | T = 0 for the partial-sorting copy too | — | Read as a typo (spec §8.2; §9.1 V-PRE13) |
 """)
@@ -847,6 +848,11 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 #   which neighbour range). Our count of the paper-size aggregate is below the paper's by a
 #   factor that is not 2 (spec §9.1 V-PRE4). The V-PRE4 drop D is a ratio and does not
 #   depend on it; the answer lets the page compare absolute lengths.
+# - Was the PRE Fig. 12 run typical in reaching a single dark cluster by about 5000 MCS,
+#   with a heterotypic fraction near 0.05 at 10⁴? How many runs were made, and how was the
+#   shown one chosen? In our replicates two or three large dark domains often persist past
+#   10⁴ (spec §9.5). The answer decides whether V-PRE5's one-cluster clause records a model
+#   difference or one fast run, and replaces the late-coarsening row of §3.
 #
 # We would welcome corrections, the original input files, or a joint check of these
 # results. Contact: the PottsModels maintainer. Answers are recorded as a new row in the
@@ -872,3 +878,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-09-30 | The full run uses a 1000-cell aggregate (`graner_glazier_aggregate`) | ROADMAP P6.1b2; D-063 |
 # | 2026-09-30 | Targets revised before freezing: nominal-time verdicts, two-run envelope, size-free plateau ratio | spec 09 §9 |
 # | 2026-10-05 | Full-run margin 10 → 60 and an isolation guard; no target changed. The first full run (P6.1d) failed V-PRE3 (b) because aggregates touched their periodic image | spec 09 §9.4; D-144 |
+# | 2026-10-05 | V-PRE5's one-cluster clause failed in the second full run (P6.1f) and is kept as frozen; late-stage coarsening is recorded as an open deviation, with a question to the authors | spec 09 §9.5; D-151 |

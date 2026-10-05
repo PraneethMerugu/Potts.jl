@@ -119,7 +119,7 @@ const P62B_REF_A = (
     P6 = ((2155, 261), (2155, 261), (0, 0), (0.1, 0.3), (0, 0), (0, 0)),
     P7 = ((15319, 1873), (46006, 1286), (204.3, 7.9), (11.1, 1.4), (249.9, 16.1), (7.0, 2.1)),
     P8 = ((1963, 300), (1963, 300), (0, 0), (0, 0), (0, 0), (0, 0)),
-    P9 = ((16493, 2294), (42656, 2889), (201.8, 6.4), (11.7, 1.9), (228.4, 12.5), (4.5, 1.8)))
+    P9 = ((16493, 2294), (42656, 2888), (201.8, 6.4), (11.7, 1.9), (228.4, 12.5), (4.5, 1.8)))
 const P62B_N_A = 10
 # Time course at P1, dataset B, n = 10 (V-A0 at MCS 0, V-A11 at 100 / 300 / 500)
 const P62B_REF_B = Dict(
@@ -491,9 +491,8 @@ const P62B_COLS_C = ["Contact Energy", "Chemotaxis Lambda", "Proliferative Proba
     "Infiltrative Area", "Single Defects", "Fingers", "Detached Cells", "Clusters"]
 p62b_at(rows, k, j) = [v[j] for (kk, v) in rows if kk == k]
 # `x` matches the printed reference `ref` to one unit of its last printed digit (0 to 3
-# decimals, read off the value). One unit, not half: the spec prints P9's infiltrative SD
-# as 2889 where A gives 2888.46 (a rounding slip of 0.54 px², immaterial to R1, kept
-# verbatim)
+# decimals, read off the value). One unit, not half, since P6.2b's freeze; the P9 slip it
+# absorbed (2889 printed for 2888.46) is corrected under D-152
 p62b_printed(x, ref) = (d = findfirst(d -> round(ref; digits = d) == ref, 0:3) - 1;
     abs(x - ref) <= 10.0^-d * (1 + 1e-6))
 p62b_stats(v) = (mean(v), p62b_sd(v), length(v))

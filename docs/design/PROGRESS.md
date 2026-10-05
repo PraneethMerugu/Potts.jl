@@ -2051,3 +2051,16 @@ The maintainer approved F-1…F-6 (D-049).
   - V8: w₂₁ = 15.96, 19.28 and 19.89 at 1, 5 and 10 T. The inner w₁₁ = 7.24, 9.51 and 9.93. The plateau ends at 0.173 T.
   - w₂₁(10T) = 19.889 is 0.011 below the lattice spread but inside the ± 0.15 band.
 - **Reported.** The per-run crossing SD is 33, 14, 9 and 5 MCS for λ = 1, 2, 3 and 5. The cycle 5·T(2) is 780 MCS, against M's 775.
+
+## 2026-10-05 — P6.1g filed: V-PRE5 kept as frozen, late coarsening an open deviation (D-151); spec 10 P9 SD 2888 (D-152)
+
+- **V-PRE5.** The peer spec-owner ruled that the one-cluster clause stays as frozen and P6.1f's FAIL stands.
+  - The coordinator's periodic-image reading was wrong: F_dM is 0 from ≈ 320, so no dark–dark bond crosses the seam. P6.1d's 0.905 and P6.1f's 0.815 differ by ≈ 1 SE.
+  - Diagnostic: 6 seeds from both the Voronoi and the relaxed starts, run to 2×10⁴. The mean largest share is 0.72–0.81 at every reading time, and several replicates arrest with two or three domains.
+  - Both published runs coarsen faster than almost all of our 22 replicates after 10³ (p ≈ 0.004).
+  - The page gains, as text only, an open-deviation row and an author question. P6.1g is the follow-up, and the question goes to the phase report (§7.5).
+- **Spec 10 P9.** The infiltrative-area SD is 2888, not 2889. The frozen Akeeb test constant is corrected and the file re-frozen.
+- **Checks.**
+  - `frozen.jl`: 213.
+  - Reproduction 10 test: SMOKE passes, and with `POTTS_REFERENCES` set the reference rows pass 208/208.
+  - Docs build: exit 0.

@@ -2203,3 +2203,21 @@ session.
   - **Periodic axes.** `centroids(σ; periodic)` also accepts a single `Bool` for every axis.
   - **Re-freeze under this entry.** `acceptance/p6_0v1_device_lifecycle.jl` (frozen under D-096) treats every exported uppercase function in PottsModels as a published model. It gains one builder, `:OpenVTChain`, on the 11-chain. The model has no lifecycle, so it enters only the set check. On CPU the file still passes and the Float32 build works. Every future exported model constructor needs the same one-line re-freeze; P6.15c's growth model is next.
   - **FULL tier.** It ran once on 4 threads in 14.5 s, and every V6–V8 row passes. T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5. At λ = 2 the MSE is 0.38× Table S5. For V8, w₂₁ at 1/5/10 T is 15.96 / 19.28 / 19.89, and the plateau ends at 0.173 T. The D-146 recorded run is separate.
+
+## D-151 Reproduction 09: V-PRE5's one-cluster clause is kept as frozen; late-stage coarsening is an open deviation (2026-10-05; coordinator, from the peer spec-owner ruling, spec 09 §9.5)
+
+- **Finding.** P6.1f (D-144 fixture, isolation guard clear) failed V-PRE5's one-cluster clause: the mean largest dark-cluster share at 10⁴ is 0.815, against ≥ 0.90. Per replicate the value is bimodal: 4 of 10 replicates are ≥ 0.99, the rest 0.51–0.90. A peer diagnostic used 6 independent seeds, each from the Voronoi start and from its paper-relaxed copy, to 2×10⁴. It gives mean shares of 0.75 / 0.72 at 10⁴, 0.79 / 0.72 at 13 500 and 0.81 / 0.80 at 2×10⁴: neither the start nor the reading time rescues the clause. PRE's t = 1 fractions match a dark share of 0.50, so the type fraction is not the cause either. Dark cells have no medium contact from ≈ 320, so P6.1d's 0.905 was not inflated by the periodic image; the two runs differ by ≈ 1 SE.
+- **Ruling.** No change to the target, tolerance, n or run length. The FAIL stands. Up to 10³ the ensemble matches the PRE run. After 10³ both published runs coarsen faster than almost all of our 22 replicates: PRE's heterotypic 0.050 at 10⁴ equals our minimum (0.0504), and PRL's 0.040 is below it (≈ 0.004 under exchangeability). The page records this as an open deviation ("late-stage coarsening") with an author question. An ensemble-mean bound on a bimodal single-run observable was a weak pre-registration. Amending it after the FAIL would be a post-hoc fit, so it is a lesson for future specs, not a change here.
+- **Escalation.** Science question for the phase report (AUTONOMY §7.5): a frozen row fails for a reason that looks like the paper's run (or an unidentified model difference), not the code. Author question added to README §5, Glazier item 5, and to the page's §6.
+- **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` gains, as text only, one deviations row, one §6 question and a changelog row; its `frozen.toml` decision becomes D-151. No verdict code changes.
+- **Evidence** is committed under `docs/design/research/model-specs/evidence/09_v-pre5/`: the diagnostic scripts and their TSV.
+- **Follow-up** is ROADMAP P6.1g. Measure the distribution of the time to a single dark cluster over ≥ 20 replicates against the paper's ≈ 5000, then test the untested candidate causes: T against the effective line tension, the V-GG6 size difference, and the aggregate size.
+
+## D-152 Spec 10 P9: the infiltrative-area SD is 2888, not 2889 (2026-10-05; coordinator, from the peer spec-owner check; amends D-143's frozen constant)
+
+- **Finding.** Dataset A (`invasion_metrics.csv`, (2, 24, 1.0), n = 10, sample SD) gives 42655.55 ± 2888.46, but spec 10 printed 2889. The spec owner rechecked every P1–P9 mean and SD at printed precision, and this is the only difference.
+- **Change.**
+  - The spec now prints 2888 and carries a dated correction note.
+  - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
+  - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
+  - The test file is re-frozen under this entry.

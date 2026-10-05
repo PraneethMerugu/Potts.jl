@@ -363,7 +363,9 @@ Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from
 | P6 | (−2, 6, 0.5) | no invasion (the paper's λ = 5 is off-grid; 9/10 no invasion) | 2155 ± 261 | = invasive | 0 | 0.1 ± 0.3 | 0 | 0 |
 | P7 | (2, 24, 0.0) | V-C1 (PP = 0) | 15319 ± 1873 | 46006 ± 1286 | 204.3 ± 7.9 | 11.1 ± 1.4 | 249.9 ± 16.1 | 7.0 ± 2.1 |
 | P8 | (2, 0, 0.5) | V-C2 (λ = 0) | 1963 ± 300 | = invasive | 0 | 0 | 0 | 0 |
-| P9 | (2, 24, 1.0) | V-A7 (PP = 1) | 16493 ± 2294 | 42656 ± 2889 | 201.8 ± 6.4 | 11.7 ± 1.9 | 228.4 ± 12.5 | 4.5 ± 1.8 |
+| P9 | (2, 24, 1.0) | V-A7 (PP = 1) | 16493 ± 2294 | 42656 ± 2888 | 201.8 ± 6.4 | 11.7 ± 1.9 | 228.4 ± 12.5 | 4.5 ± 1.8 |
+
+*Correction 2026-10-05 (peer session):* P9's infiltrative SD was printed 2889; dataset A gives 2888.46 (sample SD, n = 10), so it is 2888. A recheck of every P1–P9 mean and SD against dataset A (sample SD, rounded to the printed digits) found no other difference.
 
 The paper's single-cell representative (4, 10, 0.5) is off-grid. The nearest grid point, (4, 12, 0.5), has 7.6 ± 1.0 fingers and is 10/10 multimodal in the authors' own data, so it is **not** a single-cell point.
 
