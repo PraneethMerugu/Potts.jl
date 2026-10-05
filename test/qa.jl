@@ -316,3 +316,17 @@ end
     hits == RAW_TRANSFER_ALLOW || @error "raw synchronize/Array/adapt/copyto! outside transfers.jl" hits RAW_TRANSFER_ALLOW
     @test hits == RAW_TRANSFER_ALLOW
 end
+
+# P6.1a5 (D-138): the Voronoi layer (tessellation, Lloyd, repair) and shape regions are type
+# stable on square, hexagonal and 3D lattices (host-side, but `graner_glazier_aggregate`
+# runs it at paper size for every replicate).
+@testset "QA: Voronoi and shape regions are type stable ($label)" for (label, L) in (
+        ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
+        ("3D", Lattice((12, 12, 12); boundary = Closed())))
+    lat = Potts._layout_spec(L)
+    N = length(lat.dims)
+    S = HyperSphere{N, Float64}
+    @test_opt target_modules = (Potts,) Potts._region_sites(S(Point(ntuple(_ -> 6.0, N)), 4.0), lat, "")
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims),
+        Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat)
+end

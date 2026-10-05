@@ -117,8 +117,9 @@ blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b.
     end
 end
 
-# The paper-size aggregate (P6.1b2) and its layout, `VoronoiBall`, checked against their
-# definitions: a centroidal Voronoi tessellation of a Euclidean ball, every cell one piece.
+# The paper-size aggregate (P6.1b2) and its layout, a `Voronoi` tessellation of a ball (the
+# former `VoronoiBall`, D-138), checked against their definitions: a centroidal Voronoi
+# tessellation of a Euclidean ball, every cell one piece.
 """Share of ball sites whose nearest cell centroid (Euclidean, embedded by `pos`) is their own cell's."""
 function own_centroid_share(σ, pos)
     sites = [x for x in CartesianIndices(σ) if σ[x] != 0]
@@ -127,38 +128,51 @@ function own_centroid_share(σ, pos)
     cen = [sum(P[i] for i in eachindex(sites) if σ[sites[i]] == c) ./ count(==(c), σ) for c in 1:n]
     return count(i -> argmin(c -> sum(abs2, P[i] .- cen[c]), 1:n) == σ[sites[i]], eachindex(sites)) / length(sites)
 end
-"""Cells whose sites are not one piece under the index offsets `offs` (no wrap)."""
-function pieces_split(σ, offs)
-    bad = 0
-    for c in 1:maximum(σ)
-        idx = findall(==(c), σ); isempty(idx) && continue
-        seen = Set([idx[1]]); st = [idx[1]]
+"""For every cell of σ, its pieces under the index offsets `offs` (no wrap), largest first."""
+function cell_pieces(σ, offs)
+    out = Dict{Int, Vector{Vector{CartesianIndex{ndims(σ)}}}}()
+    seen = falses(size(σ))
+    for x in CartesianIndices(σ)
+        c = σ[x]
+        (c == 0 || seen[x]) && continue
+        piece = [x]; seen[x] = true; st = [x]
         while !isempty(st)
             q = pop!(st)
             for o in offs
                 p = q + CartesianIndex(o)
-                checkbounds(Bool, σ, p) && σ[p] == c && !(p in seen) && (push!(seen, p); push!(st, p))
+                checkbounds(Bool, σ, p) && σ[p] == c && !seen[p] && (seen[p] = true; push!(piece, p); push!(st, p))
             end
         end
-        bad += length(seen) < length(idx)
+        push!(get!(out, c, Vector{CartesianIndex{ndims(σ)}}[]), piece)
     end
-    return bad
+    foreach(v -> sort!(v; by = length, rev = true), values(out))
+    return out
 end
+"""Cells whose sites are not one piece under the index offsets `offs` (no wrap)."""
+pieces_split(σ, offs) = count(v -> length(v) > 1, values(cell_pieces(σ, offs)))
 const SQ2 = ((1, 0), (-1, 0), (0, 1), (0, -1))
 const HEX1 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
 const CUBE = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 hexpos(x) = (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)
-"""The labels of the Voronoi cells before the connectivity repair (the internal first stage)."""
-function raw_voronoi(l, clat, dims)
-    owner, sites, _, _ = PottsModels._voronoi_cells(l, clat, nothing, dims)
-    σ = zeros(Int32, dims)
-    foreach(((i, x),) -> σ[x] = owner[i], enumerate(sites))
-    return σ
+"""`Voronoi` over the ball of `radius` about `center` (lattice indices; default the lattice centre), as `VoronoiBall` was."""
+function voronoi_ball(n, dims; radius, center = nothing, kinds, seed, lloyd = 30, hex = false)
+    c = center === nothing ? map(d -> (d + 1) / 2, dims) : Float64.(Tuple(center))
+    ball = HyperSphere(Point(hex ? hexpos(c) : c), Float64(radius))
+    return Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd, kinds)
+end
+"""The plain nearest-generator labelling of the painted sites of σ (brute force, Cartesian `pos`, ties to the lowest)."""
+function nearest_labels(σ, gens, pos)
+    out = zeros(Int32, size(σ))
+    for x in CartesianIndices(σ)
+        σ[x] == 0 && continue
+        out[x] = argmin(k -> sum(abs2, collect(pos(Tuple(x))) .- collect(gens[k])), eachindex(gens))
+    end
+    return out
 end
 
-@testset "VoronoiBall and the paper-size Graner–Glazier aggregate" begin
+@testset "Voronoi over a ball and the paper-size Graner–Glazier aggregate" begin
     # square, 2D: the ball is exactly the sites within `radius`; a centroidal tessellation
-    op = layout(VoronoiBall(40; radius = 15.5, center = (20, 21), kinds = [:a, :b], seed = 3), (40, 42))
+    op = layout(voronoi_ball(40, (40, 42); radius = 15.5, center = (20, 21), kinds = [:a, :b], seed = 3), (40, 42))
     σ = op[1].second
     @test Set(findall(!=(0), σ)) == Set(x for x in CartesianIndices(σ) if (x[1] - 20)^2 + (x[2] - 21)^2 <= 15.5^2)
     @test maximum(σ) == 40 && op[2].second == repeat([:a, :b], 20)
@@ -166,44 +180,55 @@ end
     rnd = zeros(Int32, size(σ)); ball = findall(!=(0), σ)            # control: random labels are not
     foreach(((i, x),) -> rnd[x] = mod1(i * 7919, 40), enumerate(ball))
     @test own_centroid_share(rnd, x -> Float64.(Tuple(x))) < 0.2
-    @test layout(VoronoiBall(40; radius = 15.5, kinds = [:a], seed = 3, iterations = 0), (40, 42))[1].second != σ
-    @test_throws ArgumentError layout(VoronoiBall(50; radius = 3, kinds = [:a], seed = 1), (10, 10))
-    # hexagonal: round in the embedding, not in axial indices
+    @test layout(voronoi_ball(40, (40, 42); radius = 15.5, kinds = [:a], seed = 3, lloyd = 0), (40, 42))[1].second != σ
+    @test_throws ArgumentError layout(voronoi_ball(50, (10, 10); radius = 3, kinds = [:a], seed = 1), (10, 10))
+    # hexagonal: round in the embedding, not in axial indices (an interior ball: on this
+    # periodic lattice a ball cut by an edge would wrap)
     hex = Lattice((50, 50); geometry = Hexagonal())
-    σh = layout(VoronoiBall(30; radius = 14, center = (25 - 12, 25), kinds = [:a], seed = 1), hex)[1].second
+    σh = layout(voronoi_ball(30, (50, 50); radius = 14, center = (19, 25), kinds = [:a], seed = 1, hex = true), hex)[1].second
     xy = [hexpos(Tuple(x)) for x in findall(!=(0), σh)]
     @test all(v -> abs(maximum(getindex.(xy, v)) - minimum(getindex.(xy, v)) - 28) <= 2, 1:2)
     @test own_centroid_share(σh, x -> hexpos(Tuple(x))) > 0.97
     # 3D
-    σ3 = layout(VoronoiBall(20; radius = 7, kinds = [1], seed = 2), (17, 17, 17))[1].second
+    σ3 = layout(voronoi_ball(20, (17, 17, 17); radius = 7, kinds = [1], seed = 2), (17, 17, 17))[1].second
     @test maximum(σ3) == 20 && count(!=(0), σ3) == count(x -> sum(abs2, Tuple(x) .- 9) <= 49, CartesianIndices(σ3))
 
-    # the nearest-generator search against brute force
-    for (l, clat, dims, pos) in (
-            (VoronoiBall(60; radius = 12.3, kinds = [1], seed = 5), Lattice((30, 30); boundary = Closed()), (30, 30), Tuple),
-            (VoronoiBall(25; radius = 9, kinds = [1], seed = 5, iterations = 0), Lattice((30, 30); boundary = Closed()), (30, 30), Tuple),
-            (VoronoiBall(150; radius = 10.3, center = (10, 15), kinds = [1], seed = 2),
-                Lattice((30, 30); geometry = Hexagonal(), boundary = Closed()), (30, 30), hexpos),
-            (VoronoiBall(100; radius = 8.2, kinds = [1], seed = 4), Lattice((19, 19, 19); boundary = Closed()), (19, 19, 19), Tuple))
-        owner, sites, _, gens = PottsModels._voronoi_cells(l, clat, nothing, dims)
-        d2(x, g) = sum(abs2, collect(pos(Tuple(x))) .- collect(pos(g)))
-        # a nearest generator (up to rounding: hex ties differ in the last bits)
-        @test all(i -> d2(sites[i], gens[owner[i]]) <= minimum(k -> d2(sites[i], gens[k]), eachindex(gens)) + 1e-9,
-            eachindex(sites))
-        wrong = copy(owner); wrong[1] = mod1(wrong[1] + 1, length(gens))    # control: a wrong owner is caught
-        @test !all(i -> d2(sites[i], gens[wrong[i]]) <= minimum(k -> d2(sites[i], gens[k]), eachindex(gens)) + 1e-9,
-            eachindex(sites))
+    # the nearest-generator labelling against brute force: a site the layout gives another
+    # owner than the brute-force nearest generator is on a stray piece that the one-piece
+    # repair moved (the largest piece of a cell never moves), or is a tie up to rounding (hex
+    # lattices have many exact ties, which the index-coordinate distance breaks in the last bits)
+    for (n, r, c, target, pos, steps) in (
+            (60, 12.3, nothing, Lattice((30, 30); boundary = Closed()), Tuple, SQ2),
+            (150, 10.3, (10, 15), Lattice((30, 30); geometry = Hexagonal(), boundary = Closed()), hexpos, HEX1),
+            (100, 8.2, nothing, Lattice((19, 19, 19); boundary = Closed()), Tuple, CUBE)), seed in 1:6
+        hx = target.geometry isa Hexagonal
+        l = voronoi_ball(n, target.dims; radius = r, center = c, kinds = [1], seed, lloyd = 0, hex = hx)
+        σv = layout(l, target)[1].second
+        gens = Potts.points(l.points, target)
+        raw = nearest_labels(σv, gens, pos)
+        strays = Set(x for v in values(cell_pieces(raw, steps)) for p in v[2:end] for x in p)
+        d2(x, k) = sum(abs2, collect(pos(Tuple(x))) .- collect(gens[k]))
+        ok(σ) = all(x -> σ[x] == raw[x] || x in strays || d2(x, σ[x]) <= d2(x, raw[x]) + 1e-9, CartesianIndices(σ))
+        @test ok(σv)
+        # control: moving a generator's own site to another cell is caught
+        x0 = argmin(x -> σv[x] == 0 ? Inf : d2(x, 1), CartesianIndices(σv))
+        wrong = copy(σv); wrong[x0] = mod1(raw[x0] + 1, n)
+        @test !ok(wrong)
     end
 
-    # every cell is one piece under the nearest-neighbour steps, over many seeds; the
-    # Voronoi stage alone (before the repair) is not, so the check can fail
-    for (mk, clat, dims, steps) in (
-            (seed -> VoronoiBall(60; radius = 10.3, kinds = [1], seed), Lattice((24, 24); boundary = Closed()), (24, 24), SQ2),
-            (seed -> VoronoiBall(150; radius = 10.3, center = (10, 15), kinds = [1], seed),
-                Lattice((30, 30); geometry = Hexagonal(), boundary = Closed()), (30, 30), HEX1),
-            (seed -> VoronoiBall(100; radius = 8.2, kinds = [1], seed), Lattice((19, 19, 19); boundary = Closed()), (19, 19, 19), CUBE))
-        @test count(seed -> pieces_split(raw_voronoi(mk(seed), clat, dims), steps) > 0, 1:60) >= 2
-        @test all(seed -> pieces_split(layout(mk(seed), clat)[1].second, steps) == 0, 1:60)
+    # every cell is one piece under the nearest-neighbour steps, over many seeds; the plain
+    # nearest-generator labelling is not, so the check can fail
+    for (mk, target, steps, pos) in (
+            ((seed, k) -> voronoi_ball(60, (24, 24); radius = 10.3, kinds = [1], seed, lloyd = k),
+                Lattice((24, 24); boundary = Closed()), SQ2, Tuple),
+            ((seed, k) -> voronoi_ball(150, (30, 30); radius = 10.3, center = (10, 15), kinds = [1], seed, lloyd = k, hex = true),
+                Lattice((30, 30); geometry = Hexagonal(), boundary = Closed()), HEX1, hexpos),
+            ((seed, k) -> voronoi_ball(100, (19, 19, 19); radius = 8.2, kinds = [1], seed, lloyd = k),
+                Lattice((19, 19, 19); boundary = Closed()), CUBE, Tuple))
+        raw(seed) = (l = mk(seed, 0); σv = layout(l, target)[1].second; nearest_labels(σv, Potts.points(l.points, target), pos))
+        @test count(seed -> pieces_split(raw(seed), steps) > 0, 1:60) >= 2
+        @test all(seed -> pieces_split(layout(mk(seed, 30), target)[1].second, steps) == 0, 1:60)
+        @test all(seed -> pieces_split(layout(mk(seed, 0), target)[1].second, steps) == 0, 1:60)
     end
 
     # sorting proceeds on the aggregate; symmetric contacts (no differential adhesion) do not sort

@@ -12,7 +12,8 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, PottsProblem, Periodic, Closed, Moore, init, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, saturating, saturating_linear
+using GeometryBasics: HyperSphere, Circle, Sphere, Point
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
@@ -58,6 +59,10 @@ export kind, cluster
 
 include("layouts.jl")
 export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
+# shapes and point patterns (D-138): GeometryBasics' round shapes and `Point` (the same
+# bindings Makie re-exports), the lattice centre, random sites and the Voronoi layer
+export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
+public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
 public lattice, paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, record!, isperiodic, indomain,

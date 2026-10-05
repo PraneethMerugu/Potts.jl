@@ -541,3 +541,76 @@ end
     @test_throws ArgumentError InsertUntil(:x; into = [:a], number = -1, seed = 1)
     @test_throws ArgumentError InsertUntil(:x; into = [:a], fraction = 1, seed = 1)
 end
+
+# ---------------------------------------------------------------------------------------------
+# Shapes, point patterns and Voronoi (P6.1a5, D-138); the frozen acceptance file holds the
+# hand counts, the VoronoiBall pins and the brute-force oracle
+# ---------------------------------------------------------------------------------------------
+
+@testset "layouts: layer_rng" begin
+    @test rand(Potts.layer_rng(5), 3) == rand(Potts.layer_rng(UInt8(5)), 3)
+    @test rand(Potts.layer_rng(5, :a), 3) != rand(Potts.layer_rng(5, :b), 3)
+    @test rand(Potts.layer_rng(5, :a), 3) != rand(Potts.layer_rng(6, :a), 3)
+    @test_throws ArgumentError Potts.layer_rng(typemax(UInt64) + big(1))
+    @test_throws ArgumentError RandomPoints(1; seed = typemax(UInt64) + big(1))
+end
+
+@testset "layouts: Voronoi is equivariant under periodic translation" begin
+    P = Potts.Point
+    gens = [P(3.3, 4.1), P(14.2, 7.7), P(8.6, 15.4), P(18.1, 17.9), P(1.2, 12.6)]
+    lat = Lattice((20, 20))
+    for lloyd in (0, 5)
+        σ = _op(layout(Voronoi(gens; lloyd, kinds = [:a]), lat), ownership)
+        for s in ((7, 0), (0, 11), (13, 6))
+            moved = [P(mod(g[1] + s[1], 20), mod(g[2] + s[2], 20)) for g in gens]
+            @test _op(layout(Voronoi(moved; lloyd, kinds = [:a]), lat), ownership) == circshift(σ, s)
+        end
+        # a generator given through another period is the same generator
+        far = [P(g[1] + 40, g[2] - 20) for g in gens]
+        @test _op(layout(Voronoi(far; lloyd, kinds = [:a]), lat), ownership) == σ
+    end
+    # control: on a closed lattice a translation changes the tessellation
+    σc = _op(layout(Voronoi(gens; kinds = [:a]), (20, 20)), ownership)
+    moved = [P(mod(g[1] + 7, 20), g[2]) for g in gens]
+    @test _op(layout(Voronoi(moved; kinds = [:a]), (20, 20)), ownership) != circshift(σc, (7, 0))
+end
+
+@testset "layouts: shapes on periodic 3D lattices and boxes on domains" begin
+    # a sphere through the corner of a periodic cube wraps into all 8 corners, clips nothing
+    op, rep = layout(Voronoi(Center(); region = Potts.Sphere(Potts.Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
+        Lattice((10, 10, 10)); report = true)
+    σ = _op(op, ownership)
+    @test count(!=(0), σ) == 33 && only(rep).clipped == 0
+    @test all(x -> σ[x...] == 1, Iterators.product((1, 10), (1, 10), (1, 10)))
+    # on a closed cube the same sphere keeps the 11 points with offsets ≥ 0
+    @test only(last(layout(Voronoi(Center(); region = Potts.Sphere(Potts.Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
+        (10, 10, 10); report = true))).clipped == 22
+    # a box region on a domain clips its out-of-domain sites
+    dom = Lattice((10, 10); boundary = Closed(), domain = x -> x[1] <= 5)
+    op, rep = layout(Voronoi(Center(); region = (3:8, 1:2), kinds = [:a]), dom; report = true)
+    @test count(!=(0), _op(op, ownership)) == 6 && only(rep).clipped == 6
+    # a single Point is a one-generator pattern
+    @test Potts.points(Potts.Point(2, 3), (5, 5)) == [Potts.Point(2.0, 3.0)]
+end
+
+@testset "layouts: Voronoi repair leaves a piece cut off by the domain" begin
+    # the domain splits the lattice into two strips; one generator: its cell is everything,
+    # in two pieces with no neighbouring cell, and the repair leaves it so
+    dom = Lattice((12, 6); boundary = Closed(), domain = x -> x[1] <= 4 || x[1] >= 8)
+    σ = _op(layout(Voronoi([Potts.Point(2.0, 3.0)]; kinds = [:a]), dom), ownership)
+    @test count(==(1), σ) == 4 * 6 + 5 * 6
+    # two generators, one per strip: one piece each, nothing moves
+    σ2 = _op(layout(Voronoi([Potts.Point(2.0, 3.0), Potts.Point(10.0, 3.0)]; kinds = [:a]), dom), ownership)
+    @test all(==(1), σ2[1:4, :]) && all(==(2), σ2[8:12, :])
+end
+
+@testset "layouts: Voronoi arguments and remake" begin
+    @test_throws ArgumentError Voronoi([1, 2]; kinds = [:a])
+    @test_throws ArgumentError Voronoi(:nope; kinds = [:a])
+    @test_throws ArgumentError Voronoi(Center(); region = Potts.Circle(Potts.Point(1.0, 1.0), -1.0), kinds = [:a])
+    @test_throws ArgumentError Voronoi(Center(); region = Potts.Circle(Potts.Point(NaN, 1.0), 1.0), kinds = [:a])
+    @test_throws ArgumentError RandomPoints(3; region = (1:0, 1:2), seed = 1)
+    @test_throws ArgumentError remake(RandomPoints(3; seed = 1); bogus = 1)
+    @test_throws ArgumentError layout(Voronoi(Center(); region = (1:4,), kinds = [:a]), (8, 8))
+    @test Potts.points(remake(RandomPoints(3; seed = 1); n = 5), (8, 8)) == Potts.points(RandomPoints(5; seed = 1), (8, 8))
+end

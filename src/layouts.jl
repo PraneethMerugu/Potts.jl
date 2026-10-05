@@ -7,8 +7,9 @@
 # `assign!`, reads the paint so far with `owner`/`kindof`/`ncells` and reports with
 # `record!`. `lat` is read only through the lattice queries `size`, `isperiodic` and
 # `indomain` (plus `core_lattice` for CorePotts' `shift`, `relation` and `embed`). Randomized
-# layouts own their seed, so adding a layer never changes another layer's draws. Coordinates
-# are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a rhombus.
+# layouts own their seed, so adding a layer never changes another layer's draws. Box
+# coordinates are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a
+# rhombus. Shapes and points (`Circle`, `Point`, …; P6.1a5) are Cartesian (`embed`).
 
 """
     AbstractLayout
@@ -36,7 +37,7 @@ function Potts.paint!(op::Potts.LayoutState, l::Column, lat)
 end
 ```
 
-Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`) takes
+Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`) takes
 `splits = :warn | :allow` and can be rebuilt with changed keywords by
 `remake(l; kw...)`, which re-runs the keyword constructor (so it validates).
 """
@@ -57,6 +58,7 @@ mutable struct _LayerRow
     counted::Int
     recorded::Bool
     splits::Int
+    clipped::Int
 end
 
 """
@@ -180,19 +182,20 @@ counts the cells of a simulation state.
 ncells(op::LayoutState) = length(op.kinds)
 
 """
-    record!(op::LayoutState; requested, painted, misses = 0, counted = painted)
+    record!(op::LayoutState; requested, painted, misses = 0, counted = painted, clipped = 0)
 
 Set the current leaf layer's entry in the layout report (see [`layout`](@ref)): what it was
-asked for, the cells it created, the draws that missed and what a stop rule counted. A layer
-that does not call it reports `requested = painted =` the cells it allocated. A layer that
+asked for, the cells it created, the draws that missed, what a stop rule counted and the
+sites of its region lost to closed edges and the domain. A layer that does not call it
+reports `requested = painted =` the cells it allocated and `clipped = 0`. A layer that
 paints built-in layers inside its own `paint!` calls `record!` last: their entries go to the
 same row.
 """
 function record!(op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
-        counted::Integer = painted)
+        counted::Integer = painted, clipped::Integer = 0)
     op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!"))
     r = op.rows[op.layer]
-    r.requested, r.painted, r.misses, r.counted, r.recorded = requested, painted, misses, counted, true
+    r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
     return nothing
 end
 
@@ -690,6 +693,424 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
 end
 
 # ---------------------------------------------------------------------------------------------
+# Shapes and point patterns (P6.1a5, D-138)
+# ---------------------------------------------------------------------------------------------
+#
+# Shapes are GeometryBasics' `HyperSphere`s (`Circle`, `Sphere`) in Cartesian coordinates:
+# the lattice's `embed` of the index (the identity on square lattices, `(q + r/2, r√3/2)` on
+# hexagonal ones). Site `x` is in shape `s` iff `Point(embed(x)) ∈ s` (GeometryBasics' own,
+# closed membership) for `x` or one of its images through periodic edges, so a shape wraps
+# through a periodic edge and is clipped at a closed edge and at the domain. Generators are
+# kept in index coordinates, where distances are embedded and Lloyd's centroids are taken
+# (the embedding is linear, so a centroid maps to the Cartesian centroid).
+
+# The embedding as a matrix: column j is the embedded unit vector along axis j.
+function _embedding(clat, ::Val{N}) where {N}
+    unit(j) = ntuple(d -> Float64(d == j), Val(N))
+    return SMatrix{N, N, Float64}(ntuple(k -> Float64(embed(clat, unit((k - 1) ÷ N + 1))[(k - 1) % N + 1]), Val(N * N)))
+end
+
+# Per axis, the index half-width of the box that holds a Cartesian ball of radius 1: the
+# row norms of the inverse embedding (|xᵢ| = |(E⁻¹v)ᵢ| ≤ ‖rowᵢ(E⁻¹)‖ |v|).
+_box_scale(Ei::SMatrix{N, N}) where {N} = ntuple(i -> sqrt(sum(abs2, Ei[i, :])), Val(N))
+
+# The Cartesian point of index coordinates `x`.
+_cart(clat, x::NTuple{N, Real}) where {N} = Point{N, Float64}(embed(clat, map(Float64, x)))
+
+function _shape_arg(s::HyperSphere, what)
+    (all(isfinite, s.center) && isfinite(s.r) && s.r >= 0) ||
+        throw(ArgumentError("$what: a shape needs a finite centre and a finite, non-negative radius, got $s"))
+    return s
+end
+
+# A layer's or pattern's region: the whole lattice (`nothing`), a shape or a box of ranges.
+_place_arg(::Nothing, what) = nothing
+_place_arg(s::HyperSphere, what) = _shape_arg(s, what)
+_place_arg(region, what) = _region_arg(region, length(region), what)
+
+function _check_dim(::HyperSphere{M}, N, what) where {M}
+    M == N || throw(ArgumentError("$what: the shape is $(M)D, the lattice $(N)D"))
+    return nothing
+end
+
+# The in-domain lattice sites of a region in column-major order, and its `clipped` count:
+# the points of the region that are not in-domain lattice sites.
+function _region_sites(::Nothing, lat::LatticeSpec{N}, what) where {N}
+    return CartesianIndex{N}[x for x in CartesianIndices(size(lat)) if indomain(lat, x)], 0
+end
+function _region_sites(region::Tuple, lat::LatticeSpec{N}, what) where {N}
+    length(region) == N || throw(ArgumentError("$what: the region has $(length(region)) ranges, the lattice is $(N)D"))
+    box = CartesianIndices(_region(region, size(lat), what))
+    sites = CartesianIndex{N}[x for x in box if indomain(lat, x)]
+    return sites, length(box) - length(sites)
+end
+
+# A shape: the scan covers the index box of its bounding ball (one point per class along
+# periodic axes), so it costs O(box volume × images), not O(lattice). U = index points with
+# periodic coordinates in `1:n` that lie in the shape; `clipped = |U| − sites`.
+function _region_sites(s::HyperSphere, lat::LatticeSpec{N}, what) where {N}
+    _check_dim(s, N, what)
+    clat = core_lattice(lat)
+    Ei = inv(_embedding(clat, Val(N)))
+    c = Ei * SVector{N, Float64}(s.center)
+    w = _box_scale(Ei) .* Float64(s.r)
+    dims = size(lat)
+    per = _periodic(lat)
+    lo = ntuple(d -> floor(Int, c[d] - w[d]) - 1, Val(N))
+    hi = ntuple(d -> ceil(Int, c[d] + w[d]) + 1, Val(N))
+    cand = ntuple(d -> per[d] ? _residues(lo[d], hi[d], dims[d]) : collect(lo[d]:hi[d]), Val(N))
+    sites = CartesianIndex{N}[]
+    clipped = 0
+    for x in Iterators.product(cand...)            # column-major: the axes are ascending
+        _in_shape(s, clat, x, lo, hi, dims, per) || continue
+        if indomain(lat, x)
+            push!(sites, CartesianIndex(x))
+        else
+            clipped += 1
+        end
+    end
+    return sites, clipped
+end
+_residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x in lo:hi])
+
+# Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in `s`.
+function _in_shape(s::HyperSphere, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
+    images = ntuple(d -> per[d] ? ((x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]) : (x[d]:1:x[d]), Val(N))
+    for y in Iterators.product(images...)
+        _cart(clat, y) in s && return true
+    end
+    return false
+end
+
+"""
+    Center()
+
+A point pattern: the centre of the lattice, the Cartesian point `embed((size(lat) .+ 1) ./ 2)`
+(`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a [`Voronoi`](@ref) generator, alone
+or in a vector of `Point`s. A shape's own centre is an explicit `Point`.
+"""
+struct Center end
+
+"""
+    RandomPoints(n; region = <whole lattice>, seed)
+
+A point pattern: `n` distinct lattice sites of `region` that lie in the lattice's domain,
+drawn uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`; Cartesian, wrapping
+through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
+column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each point draws
+`i = rand(rng, 1:m)`, again while sᵢ is already taken; the points are in draw order (as a
+Cartesian `Point` each, see [`Potts.points`](@ref)). Throws an `ArgumentError` for `n < 0`, a
+seed outside `0:typemax(UInt64)` and, on a lattice, `n > m`. `remake(p; seed)` redraws.
+"""
+struct RandomPoints{R}
+    n::Int
+    region::R
+    seed::UInt64
+end
+function RandomPoints(n::Integer; region = nothing, seed::Integer)
+    n >= 0 || throw(ArgumentError("RandomPoints: n must be non-negative, got $n"))
+    _check_seed(seed, "RandomPoints")
+    return RandomPoints(Int(n), _place_arg(region, "RandomPoints"), UInt64(seed))
+end
+_layout_args(p::RandomPoints) = (RandomPoints, (:n,), (; p.n, p.region, p.seed))
+
+# A point pattern argument: `RandomPoints`, `Center()`, a `Point`, or a non-empty vector of
+# `Point`s and `Center()`s (copied).
+_pattern_arg(p::Union{RandomPoints, Center}, what) = p
+_pattern_arg(p::Point, what) = [p]
+function _pattern_arg(v::AbstractVector, what)
+    isempty(v) && throw(ArgumentError("$what: no generator (the point list is empty)"))
+    all(p -> p isa Union{Point, Center}, v) ||
+        throw(ArgumentError("$what: a point list holds `Point`s and `Center()`s, got a $(typeof(v))"))
+    return copy(v)
+end
+_pattern_arg(p, what) =
+    throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() or a vector of Points)"))
+
+function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
+    sites, _ = _region_sites(p.region, lat, what)
+    m = length(sites)
+    p.n <= m || throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the region holds $m in the domain"))
+    rng = layer_rng(p.seed)
+    taken = falses(m)
+    out = Vector{CartesianIndex{N}}(undef, p.n)
+    for k in 1:(p.n)
+        i = rand(rng, 1:m)
+        while taken[i]
+            i = rand(rng, 1:m)
+        end
+        taken[i] = true
+        out[k] = sites[i]
+    end
+    return out
+end
+
+_center_index(lat) = map(n -> (n + 1) / 2, size(lat))
+function _point_index(p::Point{M}, Ei::SMatrix{N, N}, what) where {M, N}
+    M == N || throw(ArgumentError("$what: a $(M)D point on a $(N)D lattice"))
+    return Tuple(Ei * SVector{N, Float64}(p))
+end
+
+# The points of a pattern in index coordinates (drawn sites stay exact integers).
+_index_points(p::RandomPoints, lat::LatticeSpec{N}, what) where {N} =
+    NTuple{N, Float64}[map(Float64, Tuple(x)) for x in _draw(p, lat, what)]
+_index_points(::Center, lat::LatticeSpec{N}, what) where {N} = NTuple{N, Float64}[_center_index(lat)]
+function _index_points(v::AbstractVector, lat::LatticeSpec{N}, what) where {N}
+    Ei = inv(_embedding(core_lattice(lat), Val(N)))
+    return NTuple{N, Float64}[p isa Center ? _center_index(lat) : _point_index(p, Ei, what) for p in v]
+end
+
+"""
+    Potts.points(pattern, x) -> Vector{Point{N, Float64}}
+
+The Cartesian points of a point pattern (`RandomPoints`, `Center()`, or a vector of `Point`s
+and `Center()`s) on `x`, anything [`layout`](@ref) takes. A given `Point` is returned as is.
+"""
+function points(pattern, x)
+    lat = _layout_spec(x)
+    return _cartesian_points(_pattern_arg(pattern, "points"), lat)
+end
+function _cartesian_points(p::Union{RandomPoints, Center}, lat::LatticeSpec{N}) where {N}
+    clat = core_lattice(lat)
+    return Point{N, Float64}[_cart(clat, y) for y in _index_points(p, lat, "points")]
+end
+function _cartesian_points(v::AbstractVector, lat::LatticeSpec{N}) where {N}
+    clat = core_lattice(lat)
+    out = Point{N, Float64}[]
+    for p in v
+        p isa Center && (push!(out, _cart(clat, _center_index(lat))); continue)
+        length(p) == N || throw(ArgumentError("points: a $(length(p))D point on a $(N)D lattice"))
+        push!(out, Point{N, Float64}(p))
+    end
+    return out
+end
+
+# ---------------------------------------------------------------------------------------------
+# Voronoi
+# ---------------------------------------------------------------------------------------------
+
+"""
+    Voronoi(points; region = <whole lattice>, lloyd = 0, kinds, splits = :warn)
+
+One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
+`Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only the
+sites of `region` (a shape or a tuple of index ranges) that are in the lattice's domain and
+still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
+
+- Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
+  minimum image along periodic axes; ties go to the lowest generator.
+- `lloyd = k`: k times, every generator that owns a site moves to the centroid of its sites
+  (minimum image along periodic axes, Lloyd's algorithm), and the sites are reassigned: a
+  centroidal tessellation of compact cells of similar volume.
+- Then every cell is made one piece under the geometry's nearest-neighbour steps (the 2N axis
+  steps on square lattices, the 6 neighbours on hexagonal ones; wrapping on periodic axes),
+  hence under any neighbourhood that contains them: a stray piece joins the neighbouring
+  cell whose largest piece it touches most (ties: the lower id), and a cell's largest piece
+  never moves.
+
+`Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)` with
+`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (D-063, the former
+`VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
+left with no site and `clipped` the region's points lost to closed edges and the domain.
+Throws an `ArgumentError` for `lloyd < 0`, empty `kinds`, a bad `splits`, no generator, or a
+shape or point of another dimension than the lattice. `remake(v; lloyd = …)` works.
+"""
+struct Voronoi{P, R, K} <: AbstractLayout
+    points::P
+    region::R
+    lloyd::Int
+    kinds::Vector{K}
+    splits::Symbol
+end
+function Voronoi(points; region = nothing, lloyd::Integer = 0, kinds, splits::Symbol = :warn)
+    lloyd >= 0 || throw(ArgumentError("Voronoi: lloyd must be non-negative, got $lloyd"))
+    return Voronoi(_pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd), _kinds_arg(kinds, "Voronoi"),
+        _splits_arg(splits, "Voronoi"))
+end
+_splits(l::Voronoi) = l.splits
+_layout_args(l::Voronoi) = (Voronoi, (:points,), (; l.points, l.region, l.lloyd, l.kinds, l.splits))
+
+function paint!(op::LayoutState, l::Voronoi, lat)
+    region, clipped = _region_sites(l.region, lat, "Voronoi")
+    gens = _index_points(l.points, lat, "Voronoi")
+    isempty(gens) && throw(ArgumentError("Voronoi: no generator (the point pattern is empty)"))
+    sites = filter(x -> owner(op, x) == 0, region)          # fill medium only
+    owners = _voronoi!(gens, sites, lat, l.lloyd)
+    n = length(gens)
+    ids = [new_cell!(op, l.kinds[mod1(k, length(l.kinds))]) for k in 1:n]
+    for (i, x) in enumerate(sites)
+        assign!(op, x, ids[owners[i]])
+    end
+    record!(op; requested = n, painted = n, clipped)
+    return nothing
+end
+
+# The generator owning each of `sites` after `lloyd` centroid moves and the one-piece repair.
+# `gens` (index coordinates) is moved in place.
+function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianIndex{N}}, lat, lloyd) where {N}
+    m, n = length(sites), length(gens)
+    owner = zeros(Int, m)
+    m == 0 && return owner
+    clat = core_lattice(lat)
+    dims = size(lat)
+    per = _periodic(lat)
+    index = zeros(Int, dims)                     # site => its position in `sites` (0: not painted here)
+    for (i, x) in enumerate(sites)
+        index[x] = i
+    end
+    scale = _box_scale(inv(_embedding(clat, Val(N))))
+    best = zeros(m)
+    image = Vector{NTuple{N, Int}}(undef, m)     # the period shift of the image nearest the owner
+    sums, counts = zeros(N, n), zeros(Int, n)
+    h = 2.0 * sqrt(m / n)
+    for _ in 1:lloyd
+        h = _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
+        h = max(1.0, 1.25sqrt(maximum(best)))    # the next pass starts near the need
+        fill!(sums, 0.0)
+        fill!(counts, 0)
+        for (i, x) in enumerate(sites)
+            k = owner[i]
+            counts[k] += 1
+            for d in 1:N
+                sums[d, k] += x[d] + image[i][d]
+            end
+        end
+        for k in 1:n
+            counts[k] > 0 && (gens[k] = ntuple(d -> _wrap_coord(sums[d, k] / counts[k], dims[d], per[d]), Val(N)))
+        end
+    end
+    _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
+    _connect_pieces!(owner, sites, index, n, _nearest_steps(clat, Val(N)), per)
+    return owner
+end
+
+# A coordinate moved back into [½, n + ½) on a periodic axis (unchanged when already inside).
+_wrap_coord(g, n, periodic) = periodic && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+
+# Nearest generator of every site. Each generator scans the index box that holds its
+# Cartesian `h`-ball (`_box_scale`, plus ½ for rounding its position), wrapping on periodic
+# axes, so every image within `h` is seen. A site whose nearest scanned generator lies within
+# `h` has found its true nearest one; otherwise `h` doubles. Ties go to the lower generator.
+# Exact for any `h`; returns the `h` that sufficed.
+function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, per, scale, h) where {N}
+    dims = size(index)
+    while true
+        fill!(owner, 0)
+        fill!(best, Inf)
+        hh = h                                   # not captured while reassigned (no box)
+        w = map(s -> ceil(Int, hh * s + 0.5), scale)
+        for (k, g) in enumerate(gens)
+            c = map(x -> round(Int, x), g)
+            box = CartesianIndices(ntuple(d -> per[d] ? ((c[d] - w[d]):(c[d] + w[d])) :
+                                               (max(1, c[d] - w[d]):min(dims[d], c[d] + w[d])), Val(N)))
+            for y in box
+                x = ntuple(d -> per[d] ? mod1(y[d], dims[d]) : y[d], Val(N))
+                i = index[x...]
+                i == 0 && continue
+                d2 = sum(abs2, embed(clat, map((a, b) -> Float64(a) - b, Tuple(y), g)))
+                if d2 < best[i]
+                    best[i], owner[i], image[i] = d2, k, map(-, Tuple(y), x)
+                end
+            end
+        end
+        maximum(best) <= h^2 && return h
+        h *= 2
+    end
+end
+
+# The nearest-neighbour steps of the geometry: the offsets in {-1, 0, 1}ᴺ of shortest
+# embedded length (2N axis steps on square lattices, 6 on hexagonal ones).
+function _nearest_steps(clat, ::Val{N}) where {N}
+    offs = [o for o in Iterators.product(ntuple(_ -> -1:1, Val(N))...) if any(!=(0), o)]
+    len = [sum(abs2, embed(clat, map(Float64, o))) for o in offs]
+    return offs[len .<= minimum(len) + 1e-9]
+end
+
+# The position in `sites` of the site one step `o` from `x` (wrapping on periodic axes; 0 off
+# the lattice or not painted by this layer).
+function _step_index(index::Array{Int, N}, x::CartesianIndex{N}, o, per) where {N}
+    y = ntuple(d -> per[d] ? mod1(x[d] + o[d], size(index, d)) : x[d] + o[d], Val(N))
+    checkbounds(Bool, index, y...) || return 0
+    return index[y...]
+end
+
+# Make every cell one piece under the nearest-neighbour `steps` (D-063). Each pass labels the
+# pieces. A piece that is not its cell's largest (a stray piece) and touches the largest piece
+# of another cell goes to the cell whose largest piece it shares the most bonds with (ties:
+# the lower id). If no stray piece touches a largest piece, the lowest stray piece goes to the
+# neighbouring cell it shares the most bonds with. Either move lowers the number of stray
+# sites or pieces and never splits a cell, so the loop ends. A stray piece with no
+# neighbouring cell (a region split by the domain) stays.
+function _connect_pieces!(owner, sites, index, n, steps, per)
+    m = length(sites)
+    piece = zeros(Int, m)
+    stack = Int[]
+    sizes, cellof, main = Int[], Int[], zeros(Int, n)
+    bonds = Dict{Tuple{Int, Int}, Int}()          # (stray piece, cell) => bonds
+    tomain = Dict{Tuple{Int, Int}, Int}()         # … with that cell's largest piece only
+    while true
+        fill!(piece, 0)
+        empty!(sizes)
+        empty!(cellof)
+        for i in 1:m
+            piece[i] == 0 || continue
+            push!(sizes, 0)
+            push!(cellof, owner[i])
+            p = length(sizes)
+            piece[i] = p
+            push!(stack, i)
+            while !isempty(stack)
+                j = pop!(stack)
+                sizes[p] += 1
+                for o in steps
+                    k = _step_index(index, sites[j], o, per)
+                    (k != 0 && piece[k] == 0 && owner[k] == owner[j]) || continue
+                    piece[k] = p
+                    push!(stack, k)
+                end
+            end
+        end
+        fill!(main, 0)
+        for p in eachindex(sizes)
+            g = cellof[p]
+            (main[g] == 0 || sizes[p] > sizes[main[g]]) && (main[g] = p)
+        end
+        any(p -> main[cellof[p]] != p, eachindex(sizes)) || return nothing
+        empty!(bonds)
+        empty!(tomain)
+        for i in 1:m
+            p = piece[i]
+            main[cellof[p]] == p && continue
+            for o in steps
+                k = _step_index(index, sites[i], o, per)
+                (k != 0 && owner[k] != owner[i]) || continue
+                key = (p, owner[k])
+                bonds[key] = get(bonds, key, 0) + 1
+                main[owner[k]] == piece[k] && (tomain[key] = get(tomain, key, 0) + 1)
+            end
+        end
+        isempty(bonds) && return nothing
+        moves = isempty(tomain) ? _best_cells(bonds, minimum(first, keys(bonds))) : _best_cells(tomain, 0)
+        for i in 1:m
+            g = get(moves, piece[i], 0)
+            g == 0 || (owner[i] = g)
+        end
+    end
+end
+
+# piece => the cell it shares the most bonds with (ties: the lower id), for every piece in
+# `counts`, or for piece `only` alone when `only > 0`.
+function _best_cells(counts::Dict{Tuple{Int, Int}, Int}, only::Int)
+    best = Dict{Int, Tuple{Int, Int}}()           # piece => (bonds, cell)
+    for ((p, g), b) in counts
+        (only == 0 || p == only) || continue
+        bb, gg = get(best, p, (0, 0))
+        (b > bb || (b == bb && g < gg)) && (best[p] = (b, g))
+    end
+    return Dict(p => g for (p, (_, g)) in best)
+end
+
+# ---------------------------------------------------------------------------------------------
 # remake
 # ---------------------------------------------------------------------------------------------
 
@@ -703,7 +1124,7 @@ _layout_args(l::InsertUntil) = (InsertUntil, (:kind,), (; l.kind, l.into, l.frac
 _layout_args(l::AbstractLayout) =
     throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known)"))
 
-function SciMLBase.remake(l::AbstractLayout; kw...)
+function SciMLBase.remake(l::Union{AbstractLayout, RandomPoints}; kw...)
     ctor, pos, args = _layout_args(l)
     for k in keys(kw)
         haskey(args, k) || throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`"))
@@ -751,7 +1172,7 @@ end
 _paint_leaf!(op::LayoutState, l::Overlay, lat) = paint!(op, l, lat)
 function _paint_leaf!(op::LayoutState, l::AbstractLayout, lat)
     base = ncells(op)
-    push!(op.rows, _LayerRow(nameof(typeof(l)), base + 1, base, 0, 0, 0, 0, false, 0))
+    push!(op.rows, _LayerRow(nameof(typeof(l)), base + 1, base, 0, 0, 0, 0, false, 0, 0))
     # the per-cell cut records cover the cells a leaf can cut: those before it
     n = length(op.cutby)
     resize!(op.cutby, base)
@@ -874,14 +1295,18 @@ contributes its flattened leaves), with the properties
 
 - `layer`: the leaf's position; `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`, …);
 - `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` 1, `InsertUntil` its
-  `number` (`counted` under a `fraction` rule), a custom layer what it passed to
-  [`record!`](@ref);
+  `number` (`counted` under a `fraction` rule), `Voronoi` its generators, a custom layer what
+  it passed to [`record!`](@ref);
 - `painted`: the cells the layer created; `dropped`: of those, the cells left with no site
   after the whole layout;
 - `misses`: `InsertUntil` the missed draws (in both `misses` modes), a custom layer its
   `record!` value, other layers 0;
 - `counted`: `InsertUntil` what its stop rule counted (`painted`, plus `misses` under
   `misses = :count`), other layers `painted`;
+- `clipped`: `Voronoi` the points of its region (a shape or a box) that are not in-domain
+  lattice sites, lost to closed edges and to the domain (nothing is lost through a periodic
+  edge: a shape wraps); sites it skipped because an earlier layer owns them are not clipped.
+  A custom layer its `record!` value, other layers 0;
 - `splits`: the cells cut only by this layer (it took at least one of their sites) whose
   remaining sites are disconnected after the whole layout, whatever its `splits` setting.
 """
@@ -904,7 +1329,7 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
             throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain"))
     end
     rows = report ? [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
-                         r.misses, r.counted, r.splits) for (j, r) in enumerate(op.rows)] : nothing
+                         r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)] : nothing
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
     return report ? (point, rows) : point
@@ -913,7 +1338,7 @@ end
 # The kind names a layout's built-in layers name (cell kinds and `InsertUntil` hosts).
 _layer_kinds(l::AbstractLayout) = ()
 _layer_kinds(l::Overlay) = Any[k for x in l.layers for k in _layer_kinds(x)]
-_layer_kinds(l::Union{Tiling, Scattered}) = l.kinds
+_layer_kinds(l::Union{Tiling, Scattered, Voronoi}) = l.kinds
 _layer_kinds(l::Frame) = (l.kind,)
 _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 
