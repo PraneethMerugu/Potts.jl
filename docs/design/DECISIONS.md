@@ -2121,6 +2121,15 @@ session.
 - **Gate.** The `akeeb_99x60` gate case uses the default μ; moving it to 24 changes the workload, so that case's baseline may be re-set in this item (D-068 anticipated it), with before/after numbers recorded.
 - **Pre-freeze check.** Against a stub composite on current code every SMOKE row passes except the μ default; in the reduced page build every FULL row that was run is in band.
 
+- **Applied (P6.2b merge).**
+  - The default μ is 24.
+  - `akeeb_observables` throws `ArgumentError` when no cell owns a site in the seed row; the authors' code would crash there too.
+  - It rejects kinds other than `:leader` and `:follower`, and it reads the kind only of ids that own a site.
+  - The `u` method reads kind code 1 as leader, which is specific to AkeebInvasion.
+  - The docs page runs 701 MCS (the authors' MCS 700).
+  - **The gate baseline is not re-set.** Measured in one process, alternating μ 30 and 24, the change costs ≈ 1% (seq 1.009, checkerboard 0.999, Metal 1.013). A re-baseline would only record machine drift. The 8-round `ab.jl` reading of 1.24 was mostly a per-checkout artefact; same-commit checkouts read 1.16 (P6.0bb).
+  - Review: 2 rounds.
+
 ## D-144 Reproduction 09: the FULL-run margin is 60, with an isolation guard; V-PRE3 (b) unchanged (2026-10-05; coordinator, from the peer spec-owner ruling, spec 09 §9.4; amends D-072's margin ruling)
 
 - **Finding.** P6.1d failed V-PRE3 (b) (t_p = 3200 against ≤ 10³). The cause is the fixture: with a 10-site margin on 247² periodic, aggregates drift and deform by ≈ 30 sites over 2×10⁴ paper MCS and touch their own periodic image, which turns light–medium bonds into light–light bonds. Peer diagnostic (3 starts of the FULL run, to 2×10⁴, run seeds 101–103): on 247² the light–medium fraction drops by ≈ 0.012 exactly at the save where a replicate stops having an all-medium row and column (replicate 1 at 4000, replicate 3 at 2×10⁴, replicate 2 never); embedded in 494² none drops, and the frozen rule gives t_p = 200, slope +0.0003 per decade (limit 0.0030): PASS. D-072's margin check ran only to 10³.

@@ -419,7 +419,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; D-068, D-071) **P6.2c** Akeeb seeding per D-068 (MD-1).
   - Default: emulate the authors' ghost leaders; keyword variant: retry.
   - Re-baseline the frozen `papers.jl` Akeeb testset (ensemble band; μ = 24) and the gate's Akeeb case.
-- [ ] **P6.2b** (V-target audit done 2026-09-30: freeze from spec 10 §5.3, with 12 READY rows and 3 PARKED; SciPy 1.7 `find_peaks` finger detection is exact against stored outputs; do not reuse `akeeb_metrics.jl`). Reproduction 10 against the authors' 13,310-run data (10 §5).
+- [x] (merge, 2026-10-05; D-142, D-143) **P6.2b** (V-target audit done 2026-09-30: freeze from spec 10 §5.3, with 12 READY rows and 3 PARKED; SciPy 1.7 `find_peaks` finger detection is exact against stored outputs; do not reuse `akeeb_metrics.jl`). Reproduction 10 against the authors' 13,310-run data (10 §5).
   Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
   confirmation).
 
