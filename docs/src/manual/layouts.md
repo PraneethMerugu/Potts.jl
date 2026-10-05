@@ -10,9 +10,10 @@ through them; this page is the reference.
 - `layout(l, dims)` paints on a closed square lattice of size `dims` with `Moore(1)`.
 - `layout(l, x; report = true)` also returns one row per layer, in paint order, with
   `type`, `requested`, `painted` (cells created), `dropped` (painted over completely),
-  `misses` and `counted` (`InsertUntil`), `clipped` (the points of a `Voronoi` region lost
-  to closed edges and the domain; 0 for the other built-in layers) and `splits` (cells this
-  layer alone cut into disconnected pieces).
+  `misses` and `counted` (`InsertUntil`; for `Eden` and `Splits`, `misses` is the cells
+  requested but not painted), `clipped` (the points of a `Voronoi` or `Eden` region lost to
+  closed edges and the domain; 0 for the other built-in layers) and `splits` (cells this
+  layer alone cut into disconnected pieces, and the cells `Splits` left in pieces).
 - Cells left without a site are dropped and the rest renumbered in order. `layout` warns
   when a cell ends up in disconnected pieces, unless every layer that cut it has
   `splits = :allow`.
@@ -26,7 +27,14 @@ through them; this page is the reference.
 | `Frame(kind; width = 1)` | one cell owning every site within `width` of a closed edge (or of the domain boundary) |
 | `InsertUntil(kind; into, number \| fraction, seed, region, misses = :retry)` | one-site cells of `kind` at random sites of cells of the kinds `into`, until `number` are made or `kind` is a `fraction` of all cells; `misses = :count` counts draws that miss |
 | `Voronoi(points; region, lloyd = 0, kinds)` | one cell per generator, filling the region's medium sites (it never cuts an earlier layer): each site goes to the nearest generator; `lloyd = k` moves the generators to their cells' centroids k times; every cell is one piece |
+| `Eden(points; rounds, region, kinds, seed, neighborhood, shortfall = :error)` | a one-site cell at each point (coinciding points merge), grown by `rounds` rounds of synchronous random growth into the medium of the region (TST's `GrowInCells`); it never cuts an earlier layer |
+| `Splits(layer, k; shortfall = :error)` | `layer` with each of its cells cut in two across its long axis, `k` times over (TST's `DivideCells`, on the host before the run) |
 | `overlay(layers...)` | the layers in order, later ones on top |
+
+`Eden` and `Splits` can paint fewer cells than they are asked for: seeds that coincide or
+fall on an occupied site are not placed, and a one-site cell cannot be cut. That is a
+*shortfall*: `shortfall = :error` (the default) throws, `:warn` warns, and `:allow` paints
+what it can. The report row is the same in all three modes.
 
 Box coordinates are lattice indices, so layouts work in 1D, 2D and 3D. On a hexagonal lattice
 they are axial and a box is a rhombus. `remake(layer; kw...)` rebuilds a layer with some
@@ -35,7 +43,7 @@ adding a layer never changes another layer's draws.
 
 ## Shapes and points
 
-`region` is a tuple of index ranges (a box) or, for `Voronoi` and `RandomPoints`, a round
+`region` is a tuple of index ranges (a box) or, for `Voronoi`, `Eden` and `RandomPoints`, a round
 shape: `Circle(Point(x, y), r)`, `Sphere(Point(x, y, z), r)` or `HyperSphere`. These are
 GeometryBasics' types, the same bindings Makie exports, so `using Potts, CairoMakie` is
 unambiguous.
@@ -55,6 +63,7 @@ The point patterns are
 |---|---|
 | `Center()` | the lattice centre, `embed((size .+ 1) ./ 2)` |
 | `RandomPoints(n; region, seed)` | `n` distinct in-domain sites of `region`, drawn uniformly with `Potts.layer_rng(seed)` |
+| `RandomPoints(n; region, replace = true, seed)` | `n` sites drawn the same way with replacement: points may coincide, and `n` may exceed the region |
 | `[Point(…), Center(), …]` | the given points |
 
 `Potts.points(pattern, sys)` returns a pattern's points on a lattice. A round aggregate of
@@ -63,6 +72,29 @@ The point patterns are
 ```julia
 ball = Circle(Point(50.5, 50.5), 30.0)
 layout(Voronoi(RandomPoints(200; region = ball, seed = 1); region = ball, lloyd = 30, kinds = [:dark, :light]), (100, 100))
+```
+
+TST's start for de novo vasculogenesis (Merks et al. 2008) draws 360 seeds with replacement
+in the interior of a 200² lattice and grows them for 10 rounds. Coinciding seeds merge, so
+the layout asks for `shortfall = :allow`; its report row says how many cells it made:
+
+```@example mlayouts
+using Potts
+denovo = overlay(Frame(:border),
+    Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, seed = 1);
+        rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
+op, report = layout(denovo, (200, 200); report = true)
+report[2]
+```
+
+The sprout start grows one blob at the centre for 50 rounds and divides it 7 times, into
+128 cells. A few of the small cells are cut into two pieces, as in TST, so it passes
+`splits = :allow`:
+
+```@example mlayouts
+sprout = overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = 1), 7; splits = :allow))
+op, report = layout(sprout, (200, 200); report = true)
+report[2]
 ```
 
 !!! note "DomainSets"

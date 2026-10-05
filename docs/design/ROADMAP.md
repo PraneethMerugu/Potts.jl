@@ -435,7 +435,7 @@ Every item's acceptance also includes the standing checks:
     models.
   - Accept: the absorbing frame keeps c = 0 on the ring after every substep.
   - Accept: PDE-before-sweep ordering is observable in a two-phase test.
-- [ ] **P6.3c** R2 `Eden` + splits.
+- [x] (merge, 2026-10-05; D-141) **P6.3c** R2 `Eden` + splits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Eden`, a host-routine `Splits` (not the lifecycle routine), `RandomPoints(replace = true)`, and `shortfall` with its first `:allow` consumer.
 - [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **user-approved 2026-10-01 (D-087)**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.

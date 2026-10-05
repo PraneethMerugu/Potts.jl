@@ -1969,3 +1969,9 @@ The maintainer approved F-1…F-6 (D-049).
 - **Review.** Two rounds (round 1: hex discs lopsided at exact lattice distances; load-order invalidations failing P6.0o's +5 % bound; hex tie wording). Final paired time to first MCS ×1.013–1.034 against 8eb9d210.
 - **Merge checks.** Potts, PottsModels (`-t 4`, 14 629 pass, 38 broken), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.040, others 0.971–1.016; the base measured GG sequential 1.034 in the P6.1b review, so drift). Host-only change; Metal not rerun.
 - **Open.** Spec sketches 09 and 11 still name `VoronoiBall` (peer session's files).
+
+## 2026-10-05 — P6.3c merged: `Eden`, `Splits`, `RandomPoints(replace = true)`, `shortfall` (D-141)
+
+- **The change.** `Eden` (TST GrowInCells, frontier-based, draw stream identical to the full-scan rule), the host routine `Splits` (TST DivideCells geometry, on-plane sites stay with the mother up to a relative 1e-9, one-piece warnings issued by `layout` with final ids), `RandomPoints(replace = true)`, and `shortfall = :error | :warn | :allow` on Eden and Splits; a HexSorting sibling is the first `:allow` consumer in code. LinearAlgebra (stdlib, already loaded transitively) is a new direct Potts dependency. Spec 01 §7.6 bands reproduced (de novo 357–360 cells ≈ 47.6 px; sprout 1 816–2 439 px).
+- **Review.** Two rounds (round 1: on-plane sites in Float64; paint-time ids in warnings). Follow-up folded into P6.3d: a Splits cell repaired by a later layer still warns.
+- **Merge checks.** First attempt failed to load Potts until the workspace Manifest was re-resolved for LinearAlgebra (the merge script now resolves first). Potts, PottsModels (`-t 4`, 15 258 pass, 38 broken), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.018, others 0.968–1.003). Host-only change; Metal not rerun.

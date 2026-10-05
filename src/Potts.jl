@@ -15,6 +15,7 @@ using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
+using LinearAlgebra: Symmetric, eigen
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
@@ -66,6 +67,8 @@ export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
 # shapes and point patterns (D-138): GeometryBasics' round shapes and `Point` (the same
 # bindings Makie re-exports), the lattice centre, random sites and the Voronoi layer
 export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
+# TST-style seeding (D-141): seed-and-grow and host-side divisions
+export Eden, Splits
 public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
