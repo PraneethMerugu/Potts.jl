@@ -217,6 +217,10 @@ end
     @test a.σ == Potts.anneal(prob; mcs = 8, seed = 1).σ && prob.u0.σ == σ
     # negative control: no MCS, no change
     @test total_energy(prob, Potts.anneal(prob; mcs = 0)) == total_energy(prob)
+    # no drive, offset 0: H never rises along the annealing (the same seed extends the same
+    # path; a killing copy pays λ·V₀² > 0 more in ΔH than in H, so it also lowers H)
+    Hs = [total_energy(prob, Potts.anneal(prob; mcs = m, seed = 4)) for m in (0, 1, 2, 4, 8)]
+    @test issorted(Hs; rev = true) && Hs[end] < Hs[1]
     # and from a state the run has moved (T = 4), H falls again
     u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
     @test total_energy(prob, Potts.anneal(prob, u; mcs = 8, seed = 2)) < total_energy(prob, u)

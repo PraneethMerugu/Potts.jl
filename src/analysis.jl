@@ -73,22 +73,35 @@ The annealed copy of state `u`: a new state, `u` after `mcs` MCS of `prob`'s cop
 with the copy temperature 0 for every proposal, whatever the model's temperature expression.
 
 Everything else is the run's own: the parameters `prob.p`, the lattice and relations, the
-proposal, the acceptance law (at T ≤ 0 it accepts ΔH below the offset, and ties with
-probability ½) and the full ΔH, drives included. A bias term vanishes at T = 0. Only copy
-attempts run: no MCS phases, rules, lifecycle events, ODE or field steps, so every other
-variable keeps its value in `u`.
+proposal, the acceptance law and the full ΔH, drives included. The built-in laws
+(`Metropolis`, `Barker`) at T ≤ 0 accept ΔH below their offset, and ties with probability ½;
+a custom law receives temperature 0 and follows its own `accept`. A bias term vanishes at
+T = 0.
+
+Only copy attempts run, each MCS preceded by the derived refreshes the energies read (the
+model's at-init phase: integrals and population-fold energy snapshots). No other MCS
+phases, rules, updates, lifecycle events, ODE or field steps run, so every other variable
+keeps its value in `u`; an energy that reads a cell variable maintained by an update block
+sees it frozen at `u`'s value.
 
 `u` and `prob` are not modified. The result is deterministic in `(prob, u, mcs, seed, alg)`.
-`mcs = 0` returns an equal copy of `u`; `mcs < 0` is an `ArgumentError`. Measure the result
+`mcs = 0` returns an equal copy of `u`; `mcs < 0` or `seed < 0` is an `ArgumentError`. A
+non-finite ΔH stops the dynamics, as in a run, and is an error here. Measure the result
 like any state, e.g. `boundary_lengths(prob, anneal(prob, u; mcs = 32))`.
 """
 function anneal(prob::CorePotts.PottsProblem, u = prob.u0; mcs::Integer, seed::Integer = 0,
         alg = CorePotts.SequentialCPM())
     mcs >= 0 || throw(ArgumentError("anneal: `mcs` must be non-negative, got $mcs"))
+    seed >= 0 || throw(ArgumentError("anneal: `seed` must be non-negative, got $seed"))
     f = prob.f
+    # the at-init phases (derived refreshes) before every MCS; no other phase, no lifecycle
+    refresh = CorePotts.Phases(; before_mcs = f.phases.at_init)
     cold = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
-        temperature = _ZeroTemperature(f.temperature), f.bias, f.acceptance, f.footprint,
-        f.fingerprint, f.sys)                       # no phases, no lifecycle
+        temperature = _ZeroTemperature(f.temperature), f.bias, phases = refresh, f.acceptance,
+        f.footprint, f.fingerprint, f.sys)
     q = SciMLBase.remake(prob; f = cold, u0 = u, tspan = (0, Int(mcs)), seed)
-    return solve(q, alg; save_start = false).u[end]
+    sol = solve(q, alg; save_start = false)
+    SciMLBase.successful_retcode(sol) || error("anneal: the T = 0 copy dynamics stopped with retcode " *
+                                               "$(sol.retcode) after $(sol.stats.mcs) of $mcs MCS (a non-finite ΔH; the run itself stops the same way)")
+    return sol.u[end]
 end

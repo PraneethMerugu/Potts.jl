@@ -242,3 +242,68 @@ end
     # an annealed state can be annealed again and measured
     @test valtype(Potts.boundary_lengths(driven, Potts.anneal(driven, z; mcs = 1))) === Int
 end
+
+# An energy reading a population fold (D-041): its snapshot `mean(volume for c in cells)` is
+# refreshed before every MCS of a run, and of the annealed copy (the at-init phase).
+@potts_model AnPopFold begin
+    @kinds medium A
+    @parameters begin
+        T = 5.0
+        λ = 1.0
+    end
+    @lattice Lattice((24, 24); boundary = Periodic())
+    @relations proposal = Moore(1)
+    @energy begin
+        cells => λ * (volume - 3 * mean(volume for c in cells))^2
+        contacts => 1.0
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "anneal: derived refreshes run before every MCS" begin
+    σ = zeros(Int32, 24, 24); n = 0
+    for i in 3:6:21, j in 3:6:21
+        n += 1; σ[i:(i + 2), j:(j + 2)] .= n
+    end
+    prob = PottsProblem(AnPopFold(; name = :an_pf), [ownership => σ, kind => fill(:A, n)], (0, 6); seed = 1)
+    # negative control: the same copy dynamics with the snapshot frozen at u's value (no
+    # phases at all) is not the run's
+    f = prob.f
+    frozen = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
+        temperature = Potts._ZeroTemperature(f.temperature), f.bias, f.acceptance, f.footprint, f.fingerprint, f.sys)
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        differs = 0
+        for s in 1:3
+            run0 = solve(remake(prob; p = [:T => 0.0], seed = s, tspan = (0, 6)), alg).u[end]
+            @test Potts.anneal(prob; mcs = 6, seed = s, alg).σ == run0.σ
+            stale = solve(remake(prob; f = frozen, seed = s, tspan = (0, 6)), alg; save_start = false).u[end]
+            differs += stale.σ != run0.σ
+        end
+        @test differs >= 1
+    end
+end
+
+# A non-finite ΔH stops a run (retcode Failure); the annealed copy is an error, not a partial state.
+@potts_model AnBlowup begin
+    @kinds medium A
+    @lattice Lattice((16, 16); boundary = Periodic())
+    @relations proposal = Moore(1)
+    @energy cells => 1 / (volume - 9)^2
+    @sweep Metropolis(; temperature = 5.0)
+end
+
+@testset "anneal: a non-finite ΔH is an error" begin
+    σ = zeros(Int32, 16, 16)
+    σ[5:7, 5:7] .= 1                     # volume 9, at the pole: every copy of the cell has ΔH = −Inf
+    prob = PottsProblem(AnBlowup(; name = :an_b), [ownership => σ, kind => [:A]], (0, 5); seed = 1)
+    @test Symbol(solve(prob, SequentialCPM()).retcode) === :Failure          # as in the run
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        @test_throws ErrorException Potts.anneal(prob; mcs = 5, seed = 1, alg)
+    end
+    # negative control: away from volume 8 the same model anneals
+    σ2 = zeros(Int32, 16, 16)
+    σ2[3:6, 3:6] .= 1                                        # volume 16: T = 0 grows it, ΔH finite
+    ok = PottsProblem(AnBlowup(; name = :an_b2), [ownership => σ2, kind => [:A]], (0, 5); seed = 1)
+    @test Potts.anneal(ok; mcs = 2, seed = 1).cell.volume[1] > 16
+    @test_throws ArgumentError Potts.anneal(ok; mcs = 1, seed = -1)
+end

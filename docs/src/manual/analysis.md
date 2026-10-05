@@ -48,9 +48,18 @@ from the unannealed state.
 `mcs` MCS of the problem's copy dynamics with the copy temperature 0 for every proposal,
 whatever the model's temperature expression (a parameter, `3θ`, a per-kind table). Everything
 else is the run's own: the parameters, the lattice and relations, the proposal, the
-acceptance law and the full ``\Delta H``, drives included. Only copy attempts run. MCS
-phases, rules, lifecycle events, ODE and field steps do not, so every other variable keeps
-its value. `u` and `prob` are not modified, and the same arguments give the same result.
+acceptance law and the full ``\Delta H``, drives included. With the built-in laws
+(`Metropolis`, `Barker`) a copy at ``T = 0`` is accepted when ``\Delta H`` is below the
+law's offset, and with probability ½ when it equals it; a custom law receives temperature 0
+and follows its own rule.
+
+Only copy attempts run. Before each MCS the derived quantities the energies read are
+refreshed (integrals and population folds such as `mean(volume for c in cells)`), as in a
+run. Other MCS phases, rules, updates, lifecycle events, ODE and field steps do not run, so
+every other variable keeps its value; an energy that reads a cell variable maintained by an
+update block sees it frozen at `u`'s value. `u` and `prob` are not modified, and the same
+arguments give the same result. A non-finite ``\Delta H`` stops the dynamics, as in a run,
+and `anneal` then throws an error instead of returning a partial state.
 
 ```@example analysis
 annealed = [Potts.anneal(prob, u; mcs = 32, seed = s) for s in 1:4]
@@ -59,8 +68,10 @@ annealed = [Potts.anneal(prob, u; mcs = 32, seed = s) for s in 1:4]
  heterotypic = [fractions(Potts.boundary_lengths(prob, a))[(:dark, :light)] for a in annealed])
 ```
 
-At ``T = 0`` an accepted copy never raises the energy, so the annealed copy has a lower
-energy than the state it started from:
+For a model without drives and with acceptance offset 0, like `GranerGlazier`, an accepted
+copy at ``T = 0`` never raises the energy, so the annealed copy's energy is no higher than
+that of the state it started from. A drive, a positive offset or a custom law can accept
+copies that raise ``H``.
 
 ```@example analysis
 (H = total_energy(prob, u), annealed = total_energy.(Ref(prob), annealed))
