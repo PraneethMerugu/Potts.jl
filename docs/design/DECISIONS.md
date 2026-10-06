@@ -2137,6 +2137,65 @@ session.
 - **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The next FULL run (≈ 2× the per-MCS cost) replaces it as the record for every row. The other rows read after ≈ 3000 in P6.1d (V-PRE1 @ 10⁴, V-PRE4 flatness, V-PRE5) moved by at most ≈ 0.004 and kept their verdicts.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` is edited under this entry; its `frozen.toml` decision becomes D-144. Reported in the phase report (AUTONOMY §7.5) as a pre-registered failure explained after the run.
 
+## D-145 P6.3b: `@boundary` per face and per site mask, `@schedule` as the phase order with the sweep and lifecycle as entries (2026-10-05, P6.3b; coordinator, from the P6.3b test author; implements R5 per api-synthesis §2.11–§2.12 and §6.4; amends D-035 as D-075 states)
+
+- **`@boundary <field> begin … end`.** One block per field; `<field>` must be a `(field)` variable, else an error naming it.
+  - **Face entries:** `x | y | z => (low, high)`, each side `Dirichlet(v)` or `NoFlux()`.
+    - A face value is a ghost value (01 F7, CorePotts' existing per-face rule). `Dirichlet(v)` sets the ghost to 2v − c, so the face value is reached midway; `NoFlux()` mirrors.
+    - A closed axis with no entry stays zero flux, as today.
+    - An entry on a periodic axis, or on an axis the lattice lacks, is an error naming it.
+  - **Mask entries:** `sites(pred) => Dirichlet(v)` is a node value. It is set after every explicit substep: after the write and any `lower` clip, before the next rate evaluation. `pred` is re-evaluated from σ each substep, so the mask moves with the cells.
+  - **Values** are numbers, parameters or parameter expressions; a parameter `remake` keeps `f`.
+  - `Dirichlet` and `NoFlux` are new DSL names, added to `DSL_NAMES`. The boundary spec is hashed into the D-016 fingerprint. Nothing is model-named.
+  - P6.3d's Merks 2006/2008 adopts `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` and `@schedule fields, sweep`.
+- **`@schedule a, b, …`.**
+  - **Canonical names:** `before_mcs, sweep, after_mcs, fields, components, operators, lifecycle, end_mcs`. Each is accepted even when the model has no such phase.
+  - **Default order.** No schedule means exactly that list, which is today's `step!` order. `fields` is the field PDE steps; `components` holds cell and model ODEs, discrete components and links.
+  - **Placement rule.** Listed phases run in the listed order. Each unlisted phase, in default order, goes right after the last placed phase that precedes it in the default order (first if none). A schedule in default relative order therefore equals no schedule bit for bit.
+  - **Errors**, each naming the offender: an unknown name, a duplicate, `end_mcs` not last, `before_mcs` after `sweep`, `after_mcs` before `sweep` (D-042's meanings are kept).
+  - The schedule is hashed into the fingerprint after canonicalization to the full placed order.
+- **`step!` restructuring (api-synthesis §2.12).** The sweep and the lifecycle become entries of the compiled static phase tuple (sentinels dispatched in `_run_phases`), and `step!` is one unrolled fold.
+  - Hand-written CorePotts `Phases` (before/after/end/at_init) and CPMFunction's positional and keyword constructors keep today's meaning (frozen p6_0af and p6_0d call them).
+  - The coordinator checks at merge: the gate unchanged on CPU, and Metal A/B ≤ 1.01 on the five gate models.
+- **D-035 amended (D-075 §6.1).**
+  - **Budget:** the lifecycle trigger readback on the host lifecycle path (on GPU already withdrawn by D-089), plus one device↔host round trip per declared host pass per firing.
+  - **Host passes:** `Adaptive` ODE groups and `HostPhase` now. Later: `@convert`, `HostOperator`, `uptake`/`secrete`, host field solvers, and model-scope `contacts(rel)` folds.
+  - A model with no host pass pays nothing, whatever its schedule. Each host pass is, or sits inside, a named `@schedule` phase. Reordering device phases is free.
+- **Frozen acceptance.** `lib/PottsModels/test/acceptance/p6_3b_boundary_schedule.jl` (freeze 16793f89).
+  - On 4e44381b: 16 pass, 9 fail, 17 error, 1 skip of 43, all on the missing surface.
+  - Against a stub of CorePotts phases: 301/311; the 9 failures are the error-message and DSL-name checks.
+- **Coordinator rulings on the test author's open questions.**
+  1. **Axis keys.** `x`/`y`/`z` are read syntactically as keys inside the `@boundary` block, so they do not clash with a model variable `x`. Only full `(low, high)` pairs; a one-sided form can be added later.
+  2. **Neumann.** `NoFlux()` only; a general `Neumann(g)` is deferred.
+  3. **Hex lattices.** Face entries on a hex lattice are an error naming the lattice. Mask entries work on every lattice.
+  4. **Initial state and `lower`.** Mask clamps are also applied to the initial state at init, so `sol.u[1]` satisfies them. A mask value below `lower` wins: the clamp is applied after the clip.
+  5. **Multi-field block form.** Deferred to P6.11; only the per-field form now.
+  6. **`components`** holds the cell and model ODEs, discrete components and links; `fields` is PDEs only. Named rules in a schedule are out of scope.
+  7. **The placement rule** above is adopted.
+  8. **The `before_mcs`/`after_mcs` restriction** is adopted.
+  9. **Fingerprints.** Schedules equal after canonicalization fingerprint equal; the frozen file does not pin this.
+  10. **`MerksVasculogenesis` is unchanged in this item.** The gate's Merks numerics are untouched; adoption is P6.3d.
+- **Applied (implementer, reviewed in two rounds; coordinator-accepted).** Merged from feat/p6-3b (717e0a3c).
+  - **Implementer deviations.**
+    1. Mask clamps run inside the field-step kernel, reading the substep's state; no extra launch. Accepted, together with a compile-time error naming any mask predicate that reads the field it clamps, or a field still to be stepped in the same group.
+    2. "One block per field" is not enforced: a second `@boundary` block for a field adds entries, and an axis given twice is an error. In `extend`, a field's entries replace the base's as a whole. Accepted; this relaxes the wording above.
+    3. A `@boundary` on a field with no `D(c) ~ …` equation is an error. Accepted. Review added: a face entry on a field whose equation has no `Δ` is also an error.
+    4. The order rules are checked on the placed order, which is slightly stricter than "listed together" (`after_mcs, before_mcs` is rejected). Accepted.
+    5. The special-cased integral refreshes were replaced, in review round 1, by one rule on the placed order: after each σ-moving entry (sweep, lifecycle) and each block write, every integral read by a later entry is refreshed before the next refresh point. The default order reproduces today's refreshes bit for bit. Regression tests cover S1 (`sweep, components, after_mcs`), S2 (`lifecycle, sweep`) and S4 (`lifecycle, before_mcs, sweep`).
+    6. For a scheduled model, `before_mcs`/`after_mcs`/`end_mcs` hold the phases grouped by role, for inspection only; `mcs` is what runs. Accepted.
+    7. Public: CorePotts `GhostFace`, and the Potts DSL names `Dirichlet` and `NoFlux`. `default_order` stays internal.
+  - **Review fixes.**
+    - Mask clamps apply only to a fresh initial state (host init, fresh `init`, `reinit!`), never on checkpoint restore. Tested by an exact check: a checkpoint at MCS 4 resumed to 8 equals the uninterrupted run, under `fields, sweep`. `Potts.anneal`'s per-MCS path runs no clamp (documented in src/analysis.jl).
+    - `Δ(c)` honours `@boundary` faces everywhere: in `@observed`, site energies, constraints and drives.
+    - `step!` is one `Base.afoldl` over the MCS-order tuple, with no recursion and no non-leaf `@inline`; `_derived` is Base `filter`. `sum` and `foldl` with a closure allocated 16–480 B per MCS on SequentialCPM, while `afoldl` gives 0 allocations and 0 dynamic calls. `afoldl` is allowlisted in the CorePotts ExplicitImports check.
+  - **Fingerprint.** The schedule is hashed only when its placed order differs from the default. Equal placed orders fingerprint alike (ruling 9, tested).
+  - **D-035 cost, measured.** Under every order, Metal acceptance shows one sync per MCS with one `Adaptive` ODE, and 0 syncs, 0 transfers and 0 bytes with no host pass.
+  - **Metal A/B.** The OpenVT residual of 1.07–1.115 came from the global Tuple type cache (P6.0bb), not from enqueue cost: host launches per MCS are unchanged.
+    - At merge, the plain A/B read 1.055 for GG, 1.064 for Wortel and 1.062 for Akeeb; its same-commit controls read 1.002, 1.024 and 0.952.
+    - Seeding the type cache equally on both sides gives (candidate / control): OpenVT 1.005 / 0.989, GG 0.869 / 1.026, Wortel 0.999 / 1.021, Akeeb 1.010 / 1.000. The plain A/B reads Merks 0.968 / 1.008.
+    - The bar of ≤ 1.01 is met. Caching compiled HostKernels is filed as P6.0bc.
+  - **Latency.** The cold-construct column moves with where the first full GC lands. Fresh-process `@timed` construction matches base (Merks, Wortel, GG), and time to first MCS is the stable measure.
+
 ## D-146 Full reproduction runs are offline, and their outputs are committed (2026-10-05, maintainer)
 
 - **Rule (maintainer, verbatim):** "Full reproduction runs stay offline (run by hand on an idle machine, not in CI). After each one, commit the verdict table, the per-save time series (TSV) and a provenance file (commit, seeds, threads, wall time) to lib/PottsModels/reproductions/data/NN/, and put the video in a release asset or LFS linked from the docs page. Remember this for all reproductions."
@@ -2260,3 +2319,4 @@ session.
   - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
   - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
   - The test file is re-frozen under this entry.
+

@@ -2086,3 +2086,23 @@ The maintainer approved F-1…F-6 (D-049).
   - PottsModels (`-t 4`): 16 648 pass, 46 broken.
   - Docs build.
   - `frozen.jl`: 216.
+
+## 2026-10-06 — P6.3b merged: `@boundary` faces and site masks, `@schedule` (D-145)
+
+- **The change.**
+  - `@boundary` takes `Dirichlet`/`NoFlux` face pairs per axis, plus site-mask clamps applied in every substep and on a fresh initial state.
+  - `@schedule` sets the phase order. The sweep and the lifecycle are entries of the static MCS tuple, and `step!` is one `Base.afoldl` over it.
+  - D-035 is amended: a host pass costs one round trip per firing, and a model with no host pass pays nothing.
+- **Review.** Two rounds.
+  - Round 1:
+    - integral refreshes follow one rule on the placed order (S1, S2 and S4 regression tests);
+    - clamps run on fresh states only, so checkpoint resume is exact;
+    - a mask that reads its own field is an error, as is a face on a field with no `Δ`;
+    - faces apply in every `Δ`;
+    - `default_order` stays internal.
+  - Round 2: no recursion over the tuple and no non-leaf `@inline`; `sum` and `foldl` allocated, `afoldl` does not.
+- **Merge checks** (one at a time, all exit 0):
+  - CorePotts suite; `frozen.jl`: 219; Potts suite; PottsModels (`-t 4`): 16 961 pass, 47 broken; docs build; Metal GPU suite.
+  - Gate: two runs, pass, every ratio within 0.969–1.020.
+  - Metal A/B: the type-cache-seeded ratios are at most 1.010, with same-commit controls (D-145 Applied).
+- **Filed.** P6.0bc: cache compiled HostKernels.

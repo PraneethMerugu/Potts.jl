@@ -25,7 +25,7 @@ export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, major_length, major_length_after, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
-export Phases, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
+export Phases, SweepPhase, LifecyclePhase, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
     neighborhood_mean, MeanFold, ArithmeticMean, GeometricMean, Log1pGeometricMean,
@@ -40,7 +40,7 @@ export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remo
 export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!, cluster_claims
-export FieldStep, laplacian, gradient, owner_kind, stable_substeps
+export FieldStep, FieldClamp, laplacian, gradient, owner_kind, stable_substeps
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
@@ -52,7 +52,7 @@ export read_piff, write_piff
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
 public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    TrackDeltaH, track_eltype
+    TrackDeltaH, track_eltype, GhostFace
 
 include("rng.jl")
 include("lattice.jl")

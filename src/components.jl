@@ -68,11 +68,14 @@ function _map_statements(f, sys::PottsSystem)
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
     fs = getfield(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
+    fn(x) = x isa Union{Nothing, Real} ? x : f(x)          # boundary values and masks: numbers stay
+    fbd(b::BoundaryEntry) = keep(b, BoundaryEntry(b.field, b.axis,
+        map(x -> x isa Dirichlet ? Dirichlet(fn(x.value)) : x, b.sides), fn(b.mask), fn(b.value)))
     return (; energies = map(fe, getfield(sys, :energies)), drives = map(fd, getfield(sys, :drives)),
         constraints = map(fc, getfield(sys, :constraints)), updates = map(fu, getfield(sys, :updates)),
         equations = map(fq, getfield(sys, :equations)), divisions = map(fv, getfield(sys, :divisions)),
         link_rules = map(fl, getfield(sys, :link_rules)), observed = map(fo, getfield(sys, :observed)),
-        discrete = map(fb, getfield(sys, :discrete)), sweep, sources = src)
+        discrete = map(fb, getfield(sys, :discrete)), boundaries = map(fbd, getfield(sys, :boundaries)), sweep, sources = src)
 end
 
 """The model with its components expanded into cell variables, parameters and cell ODEs."""
@@ -197,11 +200,12 @@ function _bind_components(sys::PottsSystem)
         energies = getfield(sys, :energies), drives = getfield(sys, :drives), constraints = getfield(sys, :constraints), updates = getfield(sys, :updates),
         equations = rest, divisions = getfield(sys, :divisions), relationships = getfield(sys, :relationships),
         link_rules = getfield(sys, :link_rules), observed = getfield(sys, :observed), sweep = getfield(sys, :sweep), structural = getfield(sys, :structural),
-        sources = getfield(sys, :sources)))
+        boundaries = getfield(sys, :boundaries), sources = getfield(sys, :sources)))
     return PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
         lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
         energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes], divisions = getfield(m, :divisions),
         relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
+        boundaries = getfield(m, :boundaries), schedule = getfield(sys, :schedule),
         sources = merge(getfield(sys, :sources), getfield(m, :sources)),
         kind_classes = getfield(sys, :kind_classes), metadata = getfield(sys, :metadata),
         namespacing = getfield(sys, :namespacing), complete = getfield(sys, :complete))

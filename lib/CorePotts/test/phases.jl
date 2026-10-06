@@ -114,6 +114,47 @@ end
     end
 end
 
+# P6.3b (D-145): the MCS order is one static tuple with the sweep and the lifecycle as
+# entries; a field step may carry a masked clamp.
+@testset "MCS order and field clamps" begin
+    σ, kinds = blocks((24, 24), 4)
+    lat = Lattice((24, 24))
+    @test Phases().mcs == ((), SweepPhase(), (), LifecyclePhase(), ())
+    ph = Phases(after_mcs = (CopyPhase((:site, :u) => (:site, :v)),))
+    @test ph.mcs == ((), SweepPhase(), ph.after_mcs, LifecyclePhase(), ())
+    @test Phases((), ph.after_mcs, (), ()).mcs == ph.mcs
+    @test_throws ArgumentError Phases(; mcs = ((), LifecyclePhase()))                     # no sweep
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), SweepPhase(), LifecyclePhase()))
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), LifecyclePhase(), CopyPhase((:site, :u) => (:site, :v))))
+
+    # the same phase after the sweep (default) or before it (an explicit order)
+    age!(st, p, ctx, key, mcs, i) = (@inbounds st.site.age[i] += 1; nothing)
+    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); clear_on_copy!(st.site.age, prop, 0); nothing)
+    aged = (SitePhase(age!),)
+    for (phases, fresh) in ((Phases(after_mcs = aged), 1),
+            (Phases(; before_mcs = aged, mcs = (aged, SweepPhase(), (), LifecyclePhase(), ())), 0))
+        st = initial_state(σ, kinds; site = (; age = zeros(Int32, 24, 24)))
+        f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature, phases)
+        sol = solve(PottsProblem(f, st, lat, (0, 8), gg_params()), SequentialCPM(); saveat = 0:8)
+        changed = sol.u[end - 1].σ .!= sol.u[end].σ
+        @test any(changed) && all(sol.u[end].site.age[changed] .== fresh)
+    end
+
+    # a clamp after every substep's write, and on the initial state (`FieldClamp`)
+    one_rate(st, p, ctx, key, mcs, i, c) = 1.0
+    zero_low(st, p, ctx, key, mcs, i, v) = i <= 24 ? zero(v) : v          # the first column
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        st = initial_state(σ, kinds; site = (; c = fill(5.0, 24, 24), c_next = zeros(24, 24)))
+        step = FieldStep((:site, :c) => (:site, :c_next), one_rate; substeps = 4, clamp = zero_low)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature,
+            phases = Phases(; after_mcs = (step,), at_init = (FieldClamp((:site, :c), zero_low),)))
+        sol = solve(PottsProblem(f, st, lat, (0, 3), gg_params()), alg; saveat = 1)
+        @test all(u -> all(==(0.0), u.site.c[:, 1]), sol.u)                       # the initial state too
+        @test all(==(8.0), sol.u[end].site.c[:, 2:end])
+        @test sol.stats.launches >= 3 * 2 * 4
+    end
+end
+
 # P6.0v (D-085): the counted transfer helpers. On host arrays they copy as before and count
 # nothing; the counters add under `merge` and survive `_restore_stats!` (checkpoints).
 @testset "transfer counters: host arrays count nothing; merge and restore" begin

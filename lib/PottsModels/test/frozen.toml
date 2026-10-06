@@ -361,3 +361,8 @@ decision = "D-148"
 path = "acceptance/p6_15d_openvt_analysis.jl"
 sha256 = "acc18722b4fbeaf66f776ead50ddce0816e88a54eb3a18f4df9d3e9d021c31d1"
 decision = "D-149"
+
+[[file]]
+path = "acceptance/p6_3b_boundary_schedule.jl"
+sha256 = "da7a8505ceffe0d27cdda56f026fda1f21652a74304033f20d99ec93af9a9d80"
+decision = "D-145"

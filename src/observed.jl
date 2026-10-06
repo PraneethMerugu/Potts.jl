@@ -51,29 +51,34 @@ function _observed_function_unlocked(info::PottsModelInfo, x)
     get!(info.cache, _unwrap(x)) do
         c = info.csys
         T = info.T
-        e = _expand_observed(c, _unwrap(x))
-        _check_integral_pre_outside(e)
-        rn = c.gather_names
-        scope = _observed_scope(e)
-        f = if scope === :cell
-            code = lower(e, _cell_env(T, :c, rn; mcs = :t))
-            _rgf(:((st, p, ctx, t) -> [(c == 0 ? $T(0) : $code) for c in 1:length(st.cell.kind)]))
-        elseif scope === :site
-            code = lower(e, _site_env(T, :i, rn; mcs = :t))
-            _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
-        else
-            code = lower(e, _model_env(T, rn; mcs = :t))
-            _rgf(:((st, p, ctx, t) -> $code))
-        end
-        hctx = info.ctx
-        if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
-            # observed-only integrals (D-120) have no stored column: computed here, with the rest
-            ph = _integral_phases(c, T; observed = true)
-            names = [_integral_name(x) for x in _integrals(c.sys; observed = true)]
-            (u, p, t) -> f(_fresh_integrals(T, u, p, hctx, t, ph, names), p, hctx, t)
-        else
-            (u, p, t) -> f(u, p, hctx, t)
-        end
+        _with_faces(() -> _observed_build(info, c, T, x), c)
+    end
+end
+
+# (in the scope of the model's `@boundary` faces: a `Δ` here sees them)
+function _observed_build(info::PottsModelInfo, c, T, x)
+    e = _expand_observed(c, _unwrap(x))
+    _check_integral_pre_outside(e)
+    rn = c.gather_names
+    scope = _observed_scope(e)
+    f = if scope === :cell
+        code = lower(e, _cell_env(T, :c, rn; mcs = :t))
+        _rgf(:((st, p, ctx, t) -> [(c == 0 ? $T(0) : $code) for c in 1:length(st.cell.kind)]))
+    elseif scope === :site
+        code = lower(e, _site_env(T, :i, rn; mcs = :t))
+        _rgf(:((st, p, ctx, t) -> reshape([$code for i in 1:length(st.σ)], size(st.σ))))
+    else
+        code = lower(e, _model_env(T, rn; mcs = :t))
+        _rgf(:((st, p, ctx, t) -> $code))
+    end
+    hctx = info.ctx
+    if _has_op(e, cell_integral)       # integrals of the state itself (not the stored refresh)
+        # observed-only integrals (D-120) have no stored column: computed here, with the rest
+        ph = _integral_phases(c, T; observed = true)
+        names = [_integral_name(x) for x in _integrals(c.sys; observed = true)]
+        (u, p, t) -> f(_fresh_integrals(T, u, p, hctx, t, ph, names), p, hctx, t)
+    else
+        (u, p, t) -> f(u, p, hctx, t)
     end
 end
 
