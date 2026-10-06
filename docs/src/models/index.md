@@ -39,7 +39,7 @@ tutorial, and ends with the constructor that PottsModels ships for it.
 | Page | Constructor | What it shows | New ingredients |
 |:-----|:------------|:--------------|:----------------|
 | [Cell sorting](@ref model-graner-glazier) | `GranerGlazier` | differential adhesion sorts two cell kinds (Graner & Glazier 1992) | lattice, kinds, area and contact energies, Metropolis sweep |
-| [Vasculogenesis](@ref model-merks) | `MerksVasculogenesis` | elongated cells following their own chemoattractant form vascular networks (Merks et al. 2006) | a diffusing field and its equation, a chemotaxis drive, a shape energy, connectivity |
+| [Vasculogenesis](@ref model-merks) | `MerksVasculogenesis`; the papers' parameter sets `Merks2006`, `Merks2008` | elongated cells following their own chemoattractant form vascular networks (Merks et al. 2006); contact-inhibited chemotaxis makes networks and sprouts (Merks et al. 2008) | a diffusing field and its equation, a chemotaxis drive, a shape energy, connectivity |
 | [Leader–follower invasion](@ref model-akeeb) | `AkeebInvasion` | leader cells climbing a cue pull a proliferating tumour slab into fingers (Akeeb, Marcus & Jiang 2026) | per-cell variables, growth after each MCS, division with random timing |
 | [Actin-driven migration](@ref model-wortel-act) | `WortelAct` | a site-level actin memory makes cells crawl persistently (Niculescu et al. 2015) | site variables, copy-time updates, a neighbourhood drive |
 | [Growing monolayer](@ref model-openvt) | `OpenVTGrowingMonolayer`, `OpenVTReferenceMonolayer` | one cell grows and divides into a colony (OpenVT benchmark; the 2024 Artistoo set and the manuscript's Table S1 set) | a growing target area, size-triggered division, contact counts, thresholds drawn per daughter |

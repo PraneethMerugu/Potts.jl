@@ -171,7 +171,63 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
+# CompuCell3D's LengthConstraint (λ (l − L)², l from the inertia tensor) with its
+# Connectivity plugin's hard one-arc veto, on a lattice with von Neumann copies and free
+# closed walls, instead of Merks 2006's 8-neighbour copies, soft E₀ penalty and frozen
+# border: isolated cells stretch to the target length
+@potts_model ElongatedCells begin
+    @kinds medium cell
+    @parameters begin
+        λ = 5.0
+        V₀ = 36.0
+        λ_L = 2.0
+        L = 16.0
+        T = 10.0
+        J[kind, kind] = [0.0 10.0; 10.0 20.0]
+    end
+    @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
+    @relations proposal = VonNeumann(1)
+    @energy begin
+        cells(cell) => λ * (volume - V₀)^2 + λ_L * (major_length - L)^2
+        contacts => J[kind, kind′]
+    end
+    @constraint connectivity(cell)
+    @sweep Metropolis(; temperature = T)
+end
+
+# CompuCell3D's `ChemotaxisByType … ChemotactTowards="Medium"` (chemotaxis only on a cell's
+# extensions into the medium, a contact-inhibited form) through the `Chemotaxis` term with a
+# `when` gate, in a static gradient, instead of Merks 2008's χ(c,M)/χ(c,c) drive on a
+# secreted field with 20 neighbours
+@potts_model MediumOnlyChemotaxis begin
+    @kinds medium cell
+    @parameters begin
+        λ = 2.0
+        V₀ = 25.0
+        χ = 300.0
+        T = 8.0
+        J[kind, kind] = [0.0 10.0; 10.0 20.0]
+    end
+    @variables c(site) = 0.0
+    @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
+    @relations proposal = Moore(1)
+    @energy begin
+        cells(cell) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+    end
+    @drive Chemotaxis(c; strength = χ, when = (old == 0) & (new != 0))
+    @sweep Metropolis(; temperature = T)
+end
+
 block(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
+# 4√λ_max of the covariance of cell `c`'s site coordinates (the inertia-tensor length)
+function sib_length(σ, c)
+    I = findall(==(c), σ)
+    mx, my = mean(i[1] for i in I), mean(i[2] for i in I)
+    sxx, syy = mean((i[1] - mx)^2 for i in I), mean((i[2] - my)^2 for i in I)
+    sxy = mean((i[1] - mx) * (i[2] - my) for i in I)
+    return 4 * sqrt((sxx + syy) / 2 + sqrt(((sxx - syy) / 2)^2 + sxy^2))
+end
 
 # published model => (sibling label, check); every check builds, self-checks and runs
 const SIBLINGS = Dict(
@@ -201,6 +257,27 @@ const SIBLINGS = Dict(
             mean(i[1] for i in findall(==(1), u.σ)) - 20.5
         end
         @test mean(drift) > 3
+    end),
+    :Merks2006 => ("CC3D length constraint, hard connectivity, von Neumann copies", function ()
+        σ = block((40, 40), (8:13, 8:13), (26:31, 8:13), (8:13, 26:31), (26:31, 26:31))
+        len(λ_L, seed) = (p = PottsProblem(ElongatedCells(; name = :e), [ownership => σ, kind => fill(:cell, 4), :λ_L => λ_L],
+                              (0, 300); seed);
+                          seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1e-9);
+                          u = solve(p, SequentialCPM()).u[end];
+                          mean(c -> sib_length(u.σ, c), 1:4))
+        el, ro = mean(s -> len(2.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
+        @test el > 12 && el > ro + 4                          # cells stretch towards L = 16 (≈ 7.8 as squares)
+    end),
+    :Merks2008 => ("CC3D chemotaxis towards the medium only", function ()
+        cue = [0.05 * x for x in 1:40, y in 1:40]
+        drift(χ) = map(1:4) do seed
+            p = PottsProblem(MediumOnlyChemotaxis(; name = :m), [ownership => block((40, 40), (18:22, 18:22)),
+                kind => [:cell], :c => copy(cue), :χ => χ], (0, 150); seed)
+            seed == 1 && χ > 0 && @test selfcheck(p) < 1e-9
+            u = solve(p, SequentialCPM()).u[end]
+            mean(i[1] for i in findall(==(1), u.σ)) - 20.0
+        end
+        @test mean(drift(300.0)) > 3 && abs(mean(drift(0.0))) < 2.5     # extensions alone carry the cell up the cue
     end),
     :AkeebInvasion => ("soft connectivity, leader-gated chemotaxis", function ()
         cue = [0.1 * y for x in 1:40, y in 1:30]

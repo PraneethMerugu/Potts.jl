@@ -45,6 +45,15 @@ function cases(T)
             foreach(((k, (a, b)),) -> σ[29 + 7a .+ (1:7), 29 + 7b .+ (1:7)] .= k, enumerate(Iterators.product(0:5, 0:5)));
             PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
                 [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T, capacity = 128)),
+        # D-153: the 2006 set on merks_100's start inside its 1-site frame (soft E₀ drive,
+        # length energy, absorbing field), and the 2008 sprout of the released files on 202²
+        # (20 neighbours, 2-site frame) with the field on from MCS 0 (t_relax = 0)
+        "merks2006_100" => () -> PottsProblem(Merks2006(; name = :m6, lattice = (100, 100)),
+            layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (0, 10^6); T,
+            field_solver = ExplicitEuler(substeps = 15)),
+        "merks2008_202" => () -> PottsProblem(Merks2008(; name = :m8),
+            [layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
+            field_solver = ExplicitEuler(substeps = 15)),
     ]
 end
 
