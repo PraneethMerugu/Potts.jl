@@ -201,10 +201,7 @@ end
 # The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
 # per-MCS refresh): the derived refreshes without the field clamps, which hold on a fresh
 # initial state only (D-145)
-_derived(::Tuple{}) = ()
-_derived(t::Tuple) = (_derived_one(first(t))..., _derived(Base.tail(t))...)
-_derived_one(::FieldClamp) = ()
-_derived_one(ph) = (ph,)
+_derived(t::Tuple) = filter(ph -> !(ph isa FieldClamp), t)
 
 """
     stable_substeps(D, dt, h, k = 0) -> Int
