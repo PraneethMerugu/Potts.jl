@@ -106,6 +106,10 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
             throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
+        # a contact fold (D-150) is a cell quantity read between sweeps
+        r === :contact_count && !(between_copies && :volume in allowed) && throw(ArgumentError(
+            "`count(… for _ in contacts)` is not available in $what: it is a cell quantity, exact between " *
+            "sweeps, for cell updates and equations, division conditions and rules, and cell observed quantities"))
     end
     return nothing
 end
@@ -385,6 +389,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
     (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
+    radius_read = max(radius_read, _check_contact_folds(sys, relations, contact_spec, lat))   # D-150
     # per-copy reads anchored at the target count from it; at the source, from the source
     # (CorePotts adds the proposal radius: `reach`)
     source_read = -1

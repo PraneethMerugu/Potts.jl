@@ -157,6 +157,7 @@ function lower(x, env::LowerEnv)
         stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
         return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
     end
+    (op === random_normal || op === random_normal_above) && return _lower_normal(op, args, env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
     # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
     op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
@@ -213,6 +214,9 @@ function _lower_named(x, i::Info, env::LowerEnv)
         haskey(env.bind, :__edge) || error("edge variable `$(i.name)` is only available in edge terms and link rules")
         k, a = env.bind[:__edge]
         return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
+    elseif r === :contact_count          # a contact fold (D-150): its tracker column
+        haskey(env.bind, :__cell) || error("`count(… for _ in contacts)` is per cell: use it in cell updates, division conditions or observed quantities")
+        return :($(env.T)(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell]))))
     end
     error("cannot lower `$x` (role $r)")
 end

@@ -92,3 +92,50 @@ end
 
 @inline cell_entity(id::Integer, generation::Integer) =
     (UInt32(id) << 8) | (UInt32(generation) & 0xff)
+
+"""
+    normal(T, a::UInt32, b::UInt32)
+
+A standard normal draw in float type `T` from two uniform words (Box–Muller, cosine branch:
+`√(−2 log u₁) cos(2π u₂)` with `u = uniform(T, ·)` on the open interval, so it is finite).
+"""
+@inline function normal(::Type{T}, a::UInt32, b::UInt32) where {T <: AbstractFloat}
+    u1 = uniform(T, a)
+    u2 = uniform(T, b)
+    return sqrt(-2 * log(u1)) * cos(T(6.283185307179586) * u2)
+end
+
+"""Most attempts of a bounded normal draw (`bounded_normal`)."""
+const MAX_DRAW_ATTEMPTS = 64
+"""Status bit: a bounded draw found no value above its bound in `MAX_DRAW_ATTEMPTS` attempts."""
+const STATUS_DRAW_EXHAUSTED = UInt32(2)
+"""
+Name of a model's optional status word in `st.model` (a 1-element `UInt32` array): bits a
+model's generated code sets (e.g. `STATUS_DRAW_EXHAUSTED`); the integrator reads it at host
+read points and fails the run (`ReturnCode.Failure`) when it is nonzero.
+"""
+const MODEL_STATUS = Symbol("#status")
+
+"""
+    bounded_normal(T, key, mcs, entity, stream, μ, σ, lower, status)
+
+`μ + σ z` with `z` standard normal, redrawn while `≤ lower`: attempt `k = 0, 1, …` is the draw
+at local index `k` of the address `(mcs, entity, stream)`, at most `MAX_DRAW_ATTEMPTS`. On
+exhaustion the status word `status` (a 1-element `UInt32` array, or `nothing`) takes
+`STATUS_DRAW_EXHAUSTED` and the value is NaN: no throw, so it runs inside kernels.
+"""
+@inline function bounded_normal(::Type{T}, key::RNGKey, mcs, entity, stream::UInt32, μ, σ, lower, status) where {T}
+    for k in 0:(MAX_DRAW_ATTEMPTS - 1)
+        a, b, _, _ = draw(key, mcs, entity, stream, k)
+        x = T(μ) + T(σ) * normal(T, a, b)
+        x > lower && return x
+    end
+    _set_status!(status, STATUS_DRAW_EXHAUSTED)
+    return T(NaN)
+end
+@inline _set_status!(::Nothing, bit) = nothing
+@inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)     # status has 1 entry
+# the model's status word at a host read point (`_check_status!`); 0 without one
+_model_status(stats, model::NamedTuple) = haskey(model, MODEL_STATUS) ? _readback(stats, getfield(model, MODEL_STATUS)) : UInt32(0)
+"""`normal(T, words)`: `normal(T, words[1], words[2])` of a `draw`."""
+@inline normal(::Type{T}, w::NTuple{4, UInt32}) where {T <: AbstractFloat} = normal(T, w[1], w[2])

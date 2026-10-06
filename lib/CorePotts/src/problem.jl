@@ -396,6 +396,7 @@ function _save!(integ::PottsIntegrator)
 end
 
 function _check_status!(integ::PottsIntegrator)
+    _model_status(integ.stats, integ.state.model) != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
     st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)

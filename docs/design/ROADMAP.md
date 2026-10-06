@@ -470,7 +470,7 @@ Full runs are offline (D-146).
   - The test author freezes V6–V8 and a P11 unit test: the 11-bead free-end spring–dashpot reference matches `relaxation_exact.csv` to 1e-6.
   - Implement the fixture: strips on a 5-row periodic lattice (one `Tiling` per region plus `overlay`), the A* switch at t = 0, unwrapped centroids, the 90% crossing and the MSE.
   - FULL run: 100 seeds × λ ∈ {1, 2, 3, 5}, for the 11- and 21-chains. It sets T_Potts, which every other row uses.
-- [ ] **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
+- [ ] (implemented on feat/p6-15c, 2026-10-05; D-150 Applied; merge pending, after P6.3b) **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
   - G1: per-cell free-surface fraction f_i over Moore(1), exact and incremental, as a general contact fold, not model-named.
   - G2: a per-daughter normal draw of X, redrawn while ≤ 0, on the counter RNG, with a deterministic X ≡ 2 mode. Start it in parallel with P6.15b.
   - G5: a disc start.

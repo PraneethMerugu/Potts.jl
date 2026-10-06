@@ -12,6 +12,7 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`centroids`](@ref) (with periodic axes).
 - Chains and relaxation curves: [`chain_centroids`](@ref), [`chain_width`](@ref),
   [`crossing_time`](@ref), [`relaxation_mse`](@ref).
+- Domain guard: [`near_edge`](@ref).
 
 Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
 """
@@ -20,11 +21,12 @@ module Analysis
 using Potts: Closed, Lattice, Periodic, VonNeumann, contact_graph, neighbors, relation
 
 export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trapz, cell_graph, reachable,
-    components, centroids, chain_centroids, chain_width, crossing_time, relaxation_mse
+    components, centroids, chain_centroids, chain_width, crossing_time, relaxation_mse, near_edge
 
 include("peaks.jl")
 include("profiles.jl")
 include("graphs.jl")
 include("chains.jl")
+include("edges.jl")
 
 end

@@ -667,12 +667,23 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && _rng_callee(ex.args[1]) !== nothing
+        return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
     end
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+
+# an RNG call in a model body: `Potts._rng_call(:name, args…; kws…)`, which keeps `rand()`
+# and `randn(…)` as the model's draws and rejects every other form, naming it
+function _rewrite_rng(ex)
+    args = map(rewrite, ex.args[2:end])
+    params = filter(a -> a isa Expr && a.head === :parameters, args)
+    rest = filter(a -> !(a isa Expr && a.head === :parameters), args)
+    return Expr(:call, :(Potts._rng_call), params..., QuoteNode(_rng_callee(ex.args[1])), rest...)
+end
 
 # `div`/`÷` defined in a model body (`div(a, b) = …`, `function ÷(a, b) … end`, `div = f`):
 # the name it defines, or `nothing`. `rewrite` turns their calls into `_intdiv`.

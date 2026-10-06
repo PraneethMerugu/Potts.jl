@@ -115,7 +115,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
         "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
     st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(getfield(sys, :lattice))
-    relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
+    relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
     spacing = getfield(sys, :lattice).spacing === nothing ? nothing : map(T, getfield(sys, :lattice).spacing)
     hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
@@ -602,6 +602,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if c.uses_surface
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
+    append!(cell, _contact_count_columns(c, σ, kinds, lat, ncell))          # contact folds (D-150)
+    _has_bounded_draw(sys) && push!(model, CorePotts.MODEL_STATUS => zeros(UInt32, 1))
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
     ckey = _unwrap(B.cluster)
     if c.uses_clusters

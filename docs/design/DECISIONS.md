@@ -2248,3 +2248,31 @@ session.
   5. **Base RNG calls.** The DSL rejects any Base RNG call it does not implement (`randexp`, `rand(range)`, `randn(dims…)`, …) with an error naming it. A Base RNG call never silently becomes a build-time constant again. The implementer adds a guard test (not frozen).
   6. **The O2 round-trip row** stays `@test_broken` until P6.15d merges. It runs afterwards; the coordinator checks this at the later merge.
   7. **The implementer also adds** a sibling in `siblings.jl`, a `runtests.jl` entry, the `test/gpu.jl` include, and the gate case.
+- **Applied (P6.15c implementation).**
+  - **G1 in CorePotts.** `ContactCount(column, relation, mask)` is one tracker, an `Int32` cell column. Bit `k` of `mask` counts partners of kind `k`; the medium is kind 0, and a model may have at most 63 kinds. `commit_contact_count!` updates the target's neighbours atomically, so it is safe under the checkerboard and on the device.
+    - The trackers of a problem travel as `relations.contact_counts::ContactCounts`. The lifecycle recomputes them in full on every event round: the host planner in `_rebuild_trackers!`, the device planner in two staged kernels or inside the fused kernel (no new barrier).
+    - A problem without folds has no `contact_counts`. Its generated code, fingerprint and step path are unchanged.
+  - **G1 in the DSL.** `count(pred for _ in contacts[(rel)])` is a cell quantity named by content (`contacts_<rel>_<hash of pred>`), so equal kind sets share one tracker. `pred` may read only `kind′` and constants. A `cond` (`… if kind′ == B`) folds into the kind set.
+    - Allowed in cell updates, division conditions, cell observeds and populations over cells. It is rejected by name in energies, drives, model and site updates.
+    - The relation must be declared, symmetric and exclude the origin. Its radius enters the copy footprint, because the commit writes the target's neighbours.
+    - Pair weights are ignored: it counts pairs.
+  - **G2.** `randn()` follows `rand()`'s contract: Box–Muller on one `draw` (cos branch), at a new occurrence stream. `randn(μ, σ)` is `μ + σ·randn()`.
+    - `randn(μ, σ; lower)` accepts `x > lower` and tries at most 64 times, at local indices 0–63 of one address. On exhaustion it returns `NaN` and sets `STATUS_DRAW_EXHAUSTED` in a model status word.
+    - The status word is `st.model[Symbol("#status")]`, a 1-element `UInt32` array present only in models with a bounded draw. `_check_status!` reads it at saves and at the end of the solve, and fails the run with `ReturnCode.Failure`.
+    - A division rule whose value draws is evaluated twice, once in the parent's environment and once in the daughter's (`entity = daughter`). Rules without draws are unchanged.
+  - **Ruling 5.** `rand(…)` with arguments, `randn(dims…)`, `randexp`, `shuffle`, … and `Random.`/`Base.`-qualified forms are rewritten at macro time into an error that names the call ("`rand(1:6)` is not available in a model"). The guard test is `test/draws_folds.jl`.
+    - `DSL_NAMES` gains `count`, Base's `count` except over `contacts`, and `randn`. `DSL_KEYWORDS` gains `randn => [:lower]`.
+  - **PottsModels.**
+    - `OpenVTReferenceMonolayer`, `openvt_reference_state` (exported), and `openvt_snapshot`, `stop_at_cells`, `edge_guard` (public).
+    - `Analysis.near_edge`.
+    - On a device, `edge_guard` caches a frame mask and does one masked `mapreduce` per check.
+    - PottsModels gains a direct SciMLBase dependency, for `ReturnCode` and `terminate!` with a code. Every other worktree's Manifest needs a `Pkg.resolve()`.
+    - Sibling: `KindInhibitedGrowth` (siblings.jl). It uses two kinds, a fold over `vn` with a per-kind predicate, and `θ => 1.5 + rand()` per daughter.
+  - **Gate.** New case `openvt_reference_100`: a 6 × 6 colony of 7 × 7 cells, σ_X = 0, capacity 128. Proposed baseline: sequential 20.12, checkerboard 19.60 and Metal 72.08 ns/site (this run). The coordinator sets it.
+  - **Cost (frozen G1 bound 1.5×).** Fold over surface: Sequential 1.12–1.14×, Checkerboard 0.86–1.07×.
+  - **Gate and A/B (vs 30c39601).** The CPU gate flagged `graner_glazier_72.sequential` at 1.054 against the recorded baseline. A paired CPU A/B gives 0.997 (8 rounds), so this is machine drift; no model without a fold changes code.
+    - Metal A/B, 8 rounds, fastest medians: Graner 1.033, Wortel 0.954, Merks 0.857, OpenVT 2024 0.622 and Akeeb 1.018. The Merks and OpenVT figures are below 1 only because of power-state artefacts (P6.0bb).
+  - **Latency (P6.0o, D-137, paired with base).** The first run showed a cold `PottsProblem` +19–22 % on Akeeb. The cause was new `_walk` specialisations: each closure capturing a different op function compiled a fresh walk.
+    - The fix: one shared walker, `_has_any_op(x, ::Vector{Any})`, and a `_has_bounded_draw` without splatted generators.
+    - After the fix, to_first_mcs is 0.98–1.02 on every case, and `problem` is 1.02–1.04 except Akeeb Float32 at 1.13.
+    - mtkcompile ratios (up to 1.18) are within noise. A six-pair cold `mtkcompile` A/B on Akeeb is equal: base 0.245–0.283 s, this 0.257–0.272 s.

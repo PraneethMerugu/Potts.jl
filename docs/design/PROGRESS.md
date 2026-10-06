@@ -2038,3 +2038,16 @@ The maintainer approved F-1…F-6 (D-049).
   - The coordinator's reading, unconfirmed: at margin 10, dark clusters that touched across the periodic image were probably counted as one, which inflated P6.1d's value.
   - V-PRE5 is a pre-registered target and is not changed here. The table goes to the spec owner, as P6.1d's did.
 - **Other rows moved by ≤ 0.006.** V-PRE1 heterotypic @ 10⁴ is 0.068 (was 0.073), and the cluster count @ 10⁴ is 2.2 (was 1.8).
+
+## 2026-10-06 — P6.15c implemented: Table S1 model, contact fold, `randn`, per-daughter draws (D-150); merge after P6.3b
+
+- **The change.**
+  - Core: `ContactCount`/`ContactCounts` and `commit_contact_count!` in CorePotts (atomic, recomputed on lifecycle events on the host and device planners); `normal`/`bounded_normal` and a model status word that fails a run.
+  - DSL: the cell-scope fold `count(pred for _ in contacts[(rel)])`, `randn()` / `randn(μ, σ; lower)`, per-daughter evaluation of drawing division rules, and Base RNG calls rejected by name.
+  - PottsModels: `OpenVTReferenceMonolayer`, `openvt_reference_state`, `openvt_snapshot`, `stop_at_cells`, `edge_guard` and `Analysis.near_edge`; the `KindInhibitedGrowth` sibling; gate case `openvt_reference_100`; manual sections (updates, lifecycle) and the model page section with a video.
+  - `OpenVTGrowingMonolayer` is unchanged (its pins hold).
+- **Verification** (one at a time):
+  - the frozen file on the CPU and on Metal (cost fold/surface: Sequential 1.12–1.14×, Checkerboard 0.86–1.07×, bound 1.5×);
+  - `frozen.jl`, CorePotts, Potts, PottsModels (`-t 4`), MakiePotts and the docs build;
+  - the CorePotts and Potts Metal suites;
+  - CPU and Metal gate, Metal A/B for five cases against 30c39601, and latency. Details are in the D-150 Applied notes.
