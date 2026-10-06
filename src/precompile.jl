@@ -57,6 +57,6 @@ PrecompileTools.@setup_workload begin
         end
         prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
             (0, 1); field_solver = ExplicitEuler(), capacity = 8)
-        CorePotts.step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
+        step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
     end
 end

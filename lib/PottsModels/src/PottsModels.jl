@@ -10,6 +10,8 @@ module PottsModels
 
 using Potts: Potts, @potts_model, Circle, Closed, Lattice, Metropolis, Moore, Periodic, Point,
     RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling
+# for the compile workload (precompile.jl)
+using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
 using DelimitedFiles: readdlm
 using PrecompileTools: PrecompileTools
 using Random: MersenneTwister

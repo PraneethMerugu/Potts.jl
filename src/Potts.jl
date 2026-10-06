@@ -12,7 +12,7 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LinearAlgebra: Symmetric, eigen
