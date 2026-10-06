@@ -112,6 +112,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
         push!(kws, Expr(:kw, k, :nothing))        # `Model(; λ = 2.0)` overrides the default
     end
     P = :(Potts)
+    # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
+    # included): a model without them builds exactly as before (first-construction latency)
+    bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -140,8 +143,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.ObservedEq[]
         __lattice = nothing
         __sweep = nothing
-        __boundaries = $P.BoundaryEntry[]
-        __schedule = Symbol[]
+        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -154,7 +156,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
-        sweep = __sweep, boundaries = __boundaries, schedule = __schedule, structural = $structural))
+        sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
+        structural = $structural))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -278,6 +281,7 @@ end
 # unconditional (the constructor's keywords are fixed when the macro expands).
 const _UNCONDITIONAL = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
     Symbol("@variables"), Symbol("@extend"))
+_has_section(ex, sec) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === sec) || any(a -> _has_section(a, sec), ex.args))
 _is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
 _conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
                             any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
