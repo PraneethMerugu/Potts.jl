@@ -495,6 +495,13 @@ which developers can switch off with the PrecompileTools preference. Target: fir
 under 15 s from a fresh process for the covered configuration (16.1 s measured before the
 workload).
 
+- **Applied (2026-10-06, feat/p6-3b-cold; coordinator-accepted).** The workload exists and is extended beyond Akeeb.
+  - **PottsModels.** Every exported constructor runs `mtkcompile`. The published models plus `OpenVTChain` run their first `PottsProblem` and sequential MCS, Akeeb also in Float32 under Sequential and Checkerboard.
+  - **Potts.** The workload builds `_PrecompileModel`, which goes through `@potts_model` with a field, a drive, `@after_mcs` and a division, to the first MCS, the paths every user model shares.
+  - **Dependencies.** PrecompileTools is a new PottsModels dependency. PottsModels precompiles in about 20 s.
+  - **Measured.** `p6_0o_latency.jl 5 10` against the P6.3b merge (ca3b24c3): time to first MCS falls from 9.0–13.5 s to 5.8–5.9 s on every case (ratios 0.44–0.64). Load is +2%, and construct, problem and first MCS drop to 3–10%.
+  - **Accepted residual.** warm_mtkcompile reads 1.064 on GG and 1.059 on OpenVT, a 6 μs difference on a 0.1 ms call. Warm paths do not use precompiled code, so it is noise.
+
 ## Maintainer approvals (2026-09-29)
 
 - **D-046**: approved, with the CLAUDE.md wording now in place.

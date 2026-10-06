@@ -2106,3 +2106,9 @@ The maintainer approved F-1…F-6 (D-049).
   - Gate: two runs, pass, every ratio within 0.969–1.020.
   - Metal A/B: the type-cache-seeded ratios are at most 1.010, with same-commit controls (D-145 Applied).
 - **Filed.** P6.0bc: cache compiled HostKernels.
+
+## 2026-10-06 — Cold construction: compile workloads for every published model (D-047)
+
+- **The change.** PottsModels precompiles every constructor, plus the first problem and MCS of the published models; Potts precompiles a `@potts_model` model through to its first MCS. PrecompileTools is a new PottsModels dependency.
+- **Effect.** Time to first MCS from a fresh process falls from 9.0–13.5 s to 5.8–5.9 s. About 4.9 s of that is package load, now the only real cost.
+- **Merge checks** (one at a time, all exit 0): `frozen.jl`; Potts suite; PottsModels (`-t 4`): 16 961 pass, 47 broken; docs build; latency against ca3b24c3.
