@@ -37,12 +37,32 @@ function _randn(args...; lower = nothing)
         (v === nothing || v isa Real || v isa Num) ||
             throw(ArgumentError("`randn(μ, σ; lower)`: `$what` must be a number or a model expression, got $(repr(v))"))
     end
+    σ isa Real && !(σ isa Num) && σ < 0 && throw(ArgumentError("`randn(μ, σ$(lower === nothing ? "" : "; lower"))`: σ = $σ is negative"))
     lower === nothing && return μ + σ * random_normal(Num(_next_number!()))
+    Threads.atomic_add!(_BOUNDED_BUILT, 1)
     return random_normal_above(Num(_next_number!()), μ, σ, lower)
 end
 
 """`rand()` inside a model (`_rand()`, vocabulary.jl); any other form of `rand` is an error naming the call."""
 _rand(args...) = _rng_error(:rand, args, (;))
+
+# What a model's construction built (D-150 review F1): every contact fold and bounded draw
+# bumps a counter, and the constructor records whether its own window saw any in the
+# system's metadata, so models without them skip the walks that look for them at
+# `mtkcompile` and `PottsProblem`. A concurrent build can only turn a `false` into `true`
+# (a walk, never a miss); systems built without the macro carry no record and are walked.
+const _FOLDS_BUILT = Threads.Atomic{Int}(0)
+const _BOUNDED_BUILT = Threads.Atomic{Int}(0)
+"""Metadata key: `(; folds, bounded)`, what the model constructor built."""
+struct _BuiltFeatures end
+_feature_counts() = (_FOLDS_BUILT[], _BOUNDED_BUILT[])
+_built_metadata(c0) = Base.ImmutableDict(Base.ImmutableDict{DataType, Any}(), _BuiltFeatures => (; folds = _FOLDS_BUILT[] != c0[1],
+                                                                                                bounded = _BOUNDED_BUILT[] != c0[2]))
+"""Whether `sys` may contain feature `k` (`:folds`, `:bounded`): `false` only if its constructor built none."""
+function _may_have(sys, k::Symbol)
+    m = get(getfield(sys, :metadata), _BuiltFeatures, nothing)
+    return m === nothing || getfield(m, k)::Bool
+end
 
 function _rng_error(name, args, kws)
     shown = join([map(repr, args)..., ("$k = $(repr(v))" for (k, v) in pairs(kws))...], ", ")

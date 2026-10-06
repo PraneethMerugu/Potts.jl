@@ -6,7 +6,7 @@ using Test, Potts
 using Potts: CorePotts
 
 # a model whose body is `ex` (an update, energy, …) on a small two-kind lattice
-function _df_model(sections::Expr...; extra = false)
+function _df_model(sections::Expr...; extra = false, temperature = :T)
     m = Module()
     Core.eval(m, :(using Potts))
     Core.eval(m, quote
@@ -30,12 +30,12 @@ function _df_model(sections::Expr...; extra = false)
             end
             @energy cells(A, B) => (volume - 9)^2
             $(sections...)
-            @sweep Metropolis(; temperature = T)
+            @sweep Metropolis(; temperature = $temperature)
         end
     end)
     return Core.eval(m, :(DF(; name = :df)))
 end
-_df_build(sections::Expr...; extra = false) = mtkcompile(_df_model(sections...; extra))
+_df_build(sections::Expr...; kws...) = mtkcompile(_df_model(sections...; kws...))
 _df_state() = (σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1; σ[5:7, 2:4] .= 2; σ[9:11, 9:11] .= 3; [ownership => σ, kind => [:A, :B, :A]])
 
 """The message of the error `f()` throws, unwrapping `LoadError`s and located errors."""
@@ -56,7 +56,8 @@ end
             (:(rand(1:3)), "rand(1:3)"), (:(rand(2)), "rand(2)"), (:(randn(3)), "randn(3)"),
             (:(randn(Float32)), "randn(Float32)"), (:(randexp()), "randexp()"), (:(Base.rand()), nothing),
             (:(Random.randn(2, 3, 4)), "randn(2, 3, 4)"), (:(Random.randexp(2)), "randexp(2)"),
-            (:(shuffle([1, 2])), "shuffle([1, 2])"), (:(randn(; lower = 0.0)), "randn(lower = 0.0)"))
+            (:(shuffle([1, 2])), "shuffle([1, 2])"), (:(randn(; lower = 0.0)), "randn(lower = 0.0)"),
+            (:(rand(; x = 1)), "rand(x = 1)"))
         ex = :(@after_mcs x ~ $call)
         if shown === nothing          # `Base.rand()` is the model's `rand()` (a draw, not a constant)
             c = _df_build(ex)
@@ -71,6 +72,8 @@ end
         c = _df_build(:(@after_mcs x ~ $call))
         @test any(u -> Potts._has_draw(u.eq.rhs), getfield(c.sys, :updates))
     end
+    # a negative SD is an error when it is a number
+    @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower = 0.0)))))
     # a plain helper computing a constant from Base's RNG is rejected too (it would be fixed at build)
     @test occursin("`rand(1:6)`", _df_msg(() -> _df_build(:(@after_mcs x ~ q * rand(1:6)))))
     # not a model quantity where draws are not allowed
@@ -109,6 +112,9 @@ end
         msg = _df_msg(() -> _df_build(sections...; extra = true))
         @test occursin(needle, msg)
     end
+    # not in the sweep's temperature: it is read while copies change the counts (review F2)
+    @test occursin("not available in the @sweep temperature",
+        _df_msg(() -> _df_build(; temperature = :(T + count(true for _ in contacts) / 100))))
     # `count` stays Base's elsewhere: a population fold and a plain helper
     p = _df_build(:(@after_mcs z ~ count(volume > 5 for c in cells)))
     @test !any(u -> occursin("contacts_", string(u.eq.rhs)), getfield(p.sys, :updates))
@@ -117,6 +123,11 @@ end
 
 @testset "D-150: models without folds or draws generate what they did" begin
     c = _df_build(:(@after_mcs x ~ volume + 1))
+    # the constructor records that it built neither, so mtkcompile and PottsProblem skip the walks (review F1)
+    @test !Potts._may_have(c.sys, :folds) && !Potts._may_have(c.sys, :bounded)
+    @test isempty(Potts._contact_trackers(c))
+    f = _df_build(:(@after_mcs x ~ count(true for _ in contacts) + randn(0.0, 1.0; lower = -1.0)))
+    @test Potts._may_have(f.sys, :folds) && Potts._may_have(f.sys, :bounded) && length(Potts._contact_trackers(f)) == 1
     prob = PottsProblem(c, _df_state(), (0, 1))
     @test !haskey(prob.relations, :contact_counts) && !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
     @test !occursin("contact_count", string(generated_code(c)))
@@ -125,7 +136,7 @@ end
     # exhaustion (P ≈ 3·10⁻⁷ per attempt, 64 attempts) fails the run instead of throwing
     b10 = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower = 10.0))), _df_state(), (0, 4))
     for alg in (SequentialCPM(), CheckerboardCPM())
-        sol = solve(b10, alg; saveat = 1)
+        sol = @test_logs (:warn, r"exhausted its 64 attempts") solve(b10, alg; saveat = 1)
         @test sol.retcode == Potts.SciMLBase.ReturnCode.Failure && isnan(sol.u[end].cell.x[1]) && sol.t[end] == 1
     end
 end

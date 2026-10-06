@@ -163,22 +163,24 @@ function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1
 end
 
 # `near_edge` as one masked reduction: the frame of `margin` sites, built once per array
-# type and size on its backend
+# type and size on its backend (the cache key is the state array's type and size, so a check
+# allocates nothing but the reduction's result)
 struct _EdgeGuard
     margin::Int
-    frame::Ref{Any}          # a concrete `RefValue{Any}` at construction; read only on the host
+    frame::Ref{Any}          # (array type, size, frame mask) once built; read only on the host
 end
 function (g::_EdgeGuard)(σ::AbstractArray)
     σ isa Array && return Analysis.near_edge(σ, g.margin)
-    m = g.frame[]
-    if !(m isa AbstractArray && typeof(m) == typeof(similar(σ, Bool)) && size(m) == size(σ))
+    c = g.frame[]
+    if !(c isa Tuple && c[1] === typeof(σ) && c[2] == size(σ))
         host = falses(size(σ))
         for I in CartesianIndices(host)
             host[I] = any(d -> I[d] <= g.margin || I[d] >= size(σ, d) - g.margin + 1, 1:ndims(σ))
         end
         m = similar(σ, Bool)
         copyto!(m, Array(host))
-        g.frame[] = m
+        c = (typeof(σ), size(σ), m)
+        g.frame[] = c
     end
-    return mapreduce((s, f) -> f & (s != 0), |, σ, m; init = false)
+    return mapreduce((s, f) -> f & (s != 0), |, σ, c[3]; init = false)
 end

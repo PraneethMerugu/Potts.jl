@@ -74,6 +74,11 @@ end
         @test all3 == recompute_surface(st.σ, lat, relation(Moore(1), lat), length(st.cell.kind); T = Int32)
         @test st.cell.n_med != all3[1:end] && any(>(0), st.cell.n_two)          # the masks select
         @test CorePotts.radius(CorePotts.relation(prob.relations.contact_counts, lat)) == 1
+        # masks hold kinds 0–63: more kinds, or a mask beyond the model's kinds, are errors (review F5)
+        @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1; kinds = 65)
+        @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1000; kinds = 3)
+        @test ContactCount(:n, Moore(1), 0b100; kinds = 3).mask == 0b100
+        @test CorePotts._kind_bit(typemax(UInt64), 64) == 0 && CorePotts._kind_bit(typemax(UInt64), 63) == 1
     end
     @testset "exact after every MCS: $(nameof(typeof(alg)))" for alg in (SequentialCPM(), CheckerboardCPM())
         sol = solve(cc_problem(), alg; saveat = 1)
@@ -132,6 +137,10 @@ end
     # exhaustion: NaN and the status bit, no throw
     x = CorePotts.bounded_normal(Float64, key, 3, 1, stream_id("t.b"), 0.0, 1.0, 50.0, status)
     @test isnan(x) && status[1] == CorePotts.STATUS_DRAW_EXHAUSTED
+    neg = zeros(UInt32, 1)
+    @test isnan(CorePotts.bounded_normal(Float64, key, 3, 1, stream_id("t.b"), 0.0, -1.0, -5.0, neg)) &&
+          neg[1] == CorePotts.STATUS_DRAW_NEGATIVE_SD
+    @test CorePotts._model_status(nothing, nothing) == 0                       # a model state that is not a NamedTuple
 end
 
 @testset "a model status word fails the run" begin
@@ -141,7 +150,7 @@ end
     st = initial_state(σ, Int32[1]; model = NamedTuple{(CorePotts.MODEL_STATUS,)}((zeros(UInt32, 1),)))
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, phases = Phases(; after_mcs = (CellPhase(raise),)))
     for alg in (SequentialCPM(), CheckerboardCPM())
-        sol = solve(PottsProblem(f, st, lat, (0, 6), gg_params()), alg; saveat = 1)
+        sol = @test_logs (:warn, r"exhausted its 64 attempts") solve(PottsProblem(f, st, lat, (0, 6), gg_params()), alg; saveat = 1)
         @test sol.retcode == ReturnCode.Failure && sol.t[end] == 3
     end
     ok = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature), st, lat, (0, 6), gg_params())

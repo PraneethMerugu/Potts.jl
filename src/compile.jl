@@ -43,6 +43,7 @@ struct CompiledPottsSystem
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
     discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
     discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
+    contact_trackers::Vector{Tuple{Symbol, Symbol, UInt64}}   # contact folds (name, relation, kind mask), D-150
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -389,7 +390,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
     (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
-    radius_read = max(radius_read, _check_contact_folds(sys, relations, contact_spec, lat))   # D-150
+    fold_radius, contact_trackers = _check_contact_folds(sys, relations, contact_spec, lat)   # D-150
+    radius_read = max(radius_read, fold_radius)
     # per-copy reads anchored at the target count from it; at the source, from the source
     # (CorePotts adds the proposal radius: `reach`)
     source_read = -1
@@ -451,7 +453,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
-        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops)
+        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
+        contact_trackers)
 end
 
 # A slot of a discrete component is written by its ticks only.

@@ -19,14 +19,21 @@
 One contact-count tracker: the cell column `column` (an `Int32` vector of the cell state),
 its relation (a symmetric relation without the origin, e.g. `Moore(1)`) and the kind set
 `mask` (bit `k` set: a partner of kind `k` counts; the medium is kind 0). Pairs are counted
-once each, whatever the relation's weights.
+once each, whatever the relation's weights. The mask holds kinds 0–63: pass the number of
+kinds of the model, medium included, as `kinds` (at most 64) to have that checked here.
 """
 struct ContactCount{P <: Part, R}
     column::P
     relation::R
     mask::UInt64
 end
-ContactCount(column::Symbol, relation, mask::Integer) = ContactCount(Part((:cell, column)), relation, UInt64(mask))
+function ContactCount(column::Symbol, relation, mask::Integer; kinds::Integer = 64)
+    kinds <= 64 || throw(ArgumentError("ContactCount `$column`: a kind mask holds at most 64 kinds (medium " *
+                                       "included), the model has $kinds"))
+    (mask >= 0 && (kinds == 64 || mask >> kinds == 0)) || throw(ArgumentError(
+        "ContactCount `$column`: mask $(repr(mask)) names kinds beyond the model's $kinds"))
+    return ContactCount(Part((:cell, column)), relation, UInt64(mask))
+end
 
 """
     ContactCounts(counts::Tuple)
@@ -44,7 +51,7 @@ relation(c::ContactCounts, l::Lattice) =
 radius(c::ContactCounts) = maximum(x -> radius(x.relation), c.counts; init = 0)
 
 """Whether partner kind `k` (0 = medium) is in the kind set `mask`, as 0 or 1."""
-@inline _kind_bit(mask::UInt64, k) = Int32((mask >> (UInt32(k) & 0x3f)) & UInt64(1))
+@inline _kind_bit(mask::UInt64, k) = Int32(ifelse(UInt32(k) < UInt32(64), (mask >> (UInt32(k) & 0x3f)) & UInt64(1), UInt64(0)))   # kind ≥ 64: never
 """Kind of owner `q` (0 for the medium)."""
 @inline _owner_kind(kind, q) = q == 0 ? Int32(0) : Int32(@inbounds kind[q])
 
