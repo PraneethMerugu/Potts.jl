@@ -495,6 +495,13 @@ which developers can switch off with the PrecompileTools preference. Target: fir
 under 15 s from a fresh process for the covered configuration (16.1 s measured before the
 workload).
 
+- **Applied (2026-10-06, feat/p6-3b-cold; coordinator-accepted).** The workload exists and is extended beyond Akeeb.
+  - **PottsModels.** Every exported constructor runs `mtkcompile`. The published models plus `OpenVTChain` run their first `PottsProblem` and sequential MCS, Akeeb also in Float32 under Sequential and Checkerboard.
+  - **Potts.** The workload builds `_PrecompileModel`, which goes through `@potts_model` with a field, a drive, `@after_mcs` and a division, to the first MCS, the paths every user model shares.
+  - **Dependencies.** PrecompileTools is a new PottsModels dependency. PottsModels precompiles in about 20 s.
+  - **Measured.** `p6_0o_latency.jl 5 10` against the P6.3b merge (ca3b24c3): time to first MCS falls from 9.0–13.5 s to 5.8–5.9 s on every case (ratios 0.44–0.64). Load is +2%, and construct, problem and first MCS drop to 3–10%.
+  - **Accepted residual.** warm_mtkcompile reads 1.064 on GG and 1.059 on OpenVT, a 6 μs difference on a 0.1 ms call. Warm paths do not use precompiled code, so it is noise.
+
 ## Maintainer approvals (2026-09-29)
 
 - **D-046**: approved, with the CLAUDE.md wording now in place.
@@ -2137,6 +2144,65 @@ session.
 - **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The next FULL run (≈ 2× the per-MCS cost) replaces it as the record for every row. The other rows read after ≈ 3000 in P6.1d (V-PRE1 @ 10⁴, V-PRE4 flatness, V-PRE5) moved by at most ≈ 0.004 and kept their verdicts.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` is edited under this entry; its `frozen.toml` decision becomes D-144. Reported in the phase report (AUTONOMY §7.5) as a pre-registered failure explained after the run.
 
+## D-145 P6.3b: `@boundary` per face and per site mask, `@schedule` as the phase order with the sweep and lifecycle as entries (2026-10-05, P6.3b; coordinator, from the P6.3b test author; implements R5 per api-synthesis §2.11–§2.12 and §6.4; amends D-035 as D-075 states)
+
+- **`@boundary <field> begin … end`.** One block per field; `<field>` must be a `(field)` variable, else an error naming it.
+  - **Face entries:** `x | y | z => (low, high)`, each side `Dirichlet(v)` or `NoFlux()`.
+    - A face value is a ghost value (01 F7, CorePotts' existing per-face rule). `Dirichlet(v)` sets the ghost to 2v − c, so the face value is reached midway; `NoFlux()` mirrors.
+    - A closed axis with no entry stays zero flux, as today.
+    - An entry on a periodic axis, or on an axis the lattice lacks, is an error naming it.
+  - **Mask entries:** `sites(pred) => Dirichlet(v)` is a node value. It is set after every explicit substep: after the write and any `lower` clip, before the next rate evaluation. `pred` is re-evaluated from σ each substep, so the mask moves with the cells.
+  - **Values** are numbers, parameters or parameter expressions; a parameter `remake` keeps `f`.
+  - `Dirichlet` and `NoFlux` are new DSL names, added to `DSL_NAMES`. The boundary spec is hashed into the D-016 fingerprint. Nothing is model-named.
+  - P6.3d's Merks 2006/2008 adopts `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` and `@schedule fields, sweep`.
+- **`@schedule a, b, …`.**
+  - **Canonical names:** `before_mcs, sweep, after_mcs, fields, components, operators, lifecycle, end_mcs`. Each is accepted even when the model has no such phase.
+  - **Default order.** No schedule means exactly that list, which is today's `step!` order. `fields` is the field PDE steps; `components` holds cell and model ODEs, discrete components and links.
+  - **Placement rule.** Listed phases run in the listed order. Each unlisted phase, in default order, goes right after the last placed phase that precedes it in the default order (first if none). A schedule in default relative order therefore equals no schedule bit for bit.
+  - **Errors**, each naming the offender: an unknown name, a duplicate, `end_mcs` not last, `before_mcs` after `sweep`, `after_mcs` before `sweep` (D-042's meanings are kept).
+  - The schedule is hashed into the fingerprint after canonicalization to the full placed order.
+- **`step!` restructuring (api-synthesis §2.12).** The sweep and the lifecycle become entries of the compiled static phase tuple (sentinels dispatched in `_run_phases`), and `step!` is one unrolled fold.
+  - Hand-written CorePotts `Phases` (before/after/end/at_init) and CPMFunction's positional and keyword constructors keep today's meaning (frozen p6_0af and p6_0d call them).
+  - The coordinator checks at merge: the gate unchanged on CPU, and Metal A/B ≤ 1.01 on the five gate models.
+- **D-035 amended (D-075 §6.1).**
+  - **Budget:** the lifecycle trigger readback on the host lifecycle path (on GPU already withdrawn by D-089), plus one device↔host round trip per declared host pass per firing.
+  - **Host passes:** `Adaptive` ODE groups and `HostPhase` now. Later: `@convert`, `HostOperator`, `uptake`/`secrete`, host field solvers, and model-scope `contacts(rel)` folds.
+  - A model with no host pass pays nothing, whatever its schedule. Each host pass is, or sits inside, a named `@schedule` phase. Reordering device phases is free.
+- **Frozen acceptance.** `lib/PottsModels/test/acceptance/p6_3b_boundary_schedule.jl` (freeze 16793f89).
+  - On 4e44381b: 16 pass, 9 fail, 17 error, 1 skip of 43, all on the missing surface.
+  - Against a stub of CorePotts phases: 301/311; the 9 failures are the error-message and DSL-name checks.
+- **Coordinator rulings on the test author's open questions.**
+  1. **Axis keys.** `x`/`y`/`z` are read syntactically as keys inside the `@boundary` block, so they do not clash with a model variable `x`. Only full `(low, high)` pairs; a one-sided form can be added later.
+  2. **Neumann.** `NoFlux()` only; a general `Neumann(g)` is deferred.
+  3. **Hex lattices.** Face entries on a hex lattice are an error naming the lattice. Mask entries work on every lattice.
+  4. **Initial state and `lower`.** Mask clamps are also applied to the initial state at init, so `sol.u[1]` satisfies them. A mask value below `lower` wins: the clamp is applied after the clip.
+  5. **Multi-field block form.** Deferred to P6.11; only the per-field form now.
+  6. **`components`** holds the cell and model ODEs, discrete components and links; `fields` is PDEs only. Named rules in a schedule are out of scope.
+  7. **The placement rule** above is adopted.
+  8. **The `before_mcs`/`after_mcs` restriction** is adopted.
+  9. **Fingerprints.** Schedules equal after canonicalization fingerprint equal; the frozen file does not pin this.
+  10. **`MerksVasculogenesis` is unchanged in this item.** The gate's Merks numerics are untouched; adoption is P6.3d.
+- **Applied (implementer, reviewed in two rounds; coordinator-accepted).** Merged from feat/p6-3b (717e0a3c).
+  - **Implementer deviations.**
+    1. Mask clamps run inside the field-step kernel, reading the substep's state; no extra launch. Accepted, together with a compile-time error naming any mask predicate that reads the field it clamps, or a field still to be stepped in the same group.
+    2. "One block per field" is not enforced: a second `@boundary` block for a field adds entries, and an axis given twice is an error. In `extend`, a field's entries replace the base's as a whole. Accepted; this relaxes the wording above.
+    3. A `@boundary` on a field with no `D(c) ~ …` equation is an error. Accepted. Review added: a face entry on a field whose equation has no `Δ` is also an error.
+    4. The order rules are checked on the placed order, which is slightly stricter than "listed together" (`after_mcs, before_mcs` is rejected). Accepted.
+    5. The special-cased integral refreshes were replaced, in review round 1, by one rule on the placed order: after each σ-moving entry (sweep, lifecycle) and each block write, every integral read by a later entry is refreshed before the next refresh point. The default order reproduces today's refreshes bit for bit. Regression tests cover S1 (`sweep, components, after_mcs`), S2 (`lifecycle, sweep`) and S4 (`lifecycle, before_mcs, sweep`).
+    6. For a scheduled model, `before_mcs`/`after_mcs`/`end_mcs` hold the phases grouped by role, for inspection only; `mcs` is what runs. Accepted.
+    7. Public: CorePotts `GhostFace`, and the Potts DSL names `Dirichlet` and `NoFlux`. `default_order` stays internal.
+  - **Review fixes.**
+    - Mask clamps apply only to a fresh initial state (host init, fresh `init`, `reinit!`), never on checkpoint restore. Tested by an exact check: a checkpoint at MCS 4 resumed to 8 equals the uninterrupted run, under `fields, sweep`. `Potts.anneal`'s per-MCS path runs no clamp (documented in src/analysis.jl).
+    - `Δ(c)` honours `@boundary` faces everywhere: in `@observed`, site energies, constraints and drives.
+    - `step!` is one `Base.afoldl` over the MCS-order tuple, with no recursion and no non-leaf `@inline`; `_derived` is Base `filter`. `sum` and `foldl` with a closure allocated 16–480 B per MCS on SequentialCPM, while `afoldl` gives 0 allocations and 0 dynamic calls. `afoldl` is allowlisted in the CorePotts ExplicitImports check.
+  - **Fingerprint.** The schedule is hashed only when its placed order differs from the default. Equal placed orders fingerprint alike (ruling 9, tested).
+  - **D-035 cost, measured.** Under every order, Metal acceptance shows one sync per MCS with one `Adaptive` ODE, and 0 syncs, 0 transfers and 0 bytes with no host pass.
+  - **Metal A/B.** The OpenVT residual of 1.07–1.115 came from the global Tuple type cache (P6.0bb), not from enqueue cost: host launches per MCS are unchanged.
+    - At merge, the plain A/B read 1.055 for GG, 1.064 for Wortel and 1.062 for Akeeb; its same-commit controls read 1.002, 1.024 and 0.952.
+    - Seeding the type cache equally on both sides gives (candidate / control): OpenVT 1.005 / 0.989, GG 0.869 / 1.026, Wortel 0.999 / 1.021, Akeeb 1.010 / 1.000. The plain A/B reads Merks 0.968 / 1.008.
+    - The bar of ≤ 1.01 is met. Caching compiled HostKernels is filed as P6.0bc.
+  - **Latency.** The cold-construct column moves with where the first full GC lands. Fresh-process `@timed` construction matches base (Merks, Wortel, GG), and time to first MCS is the stable measure.
+
 ## D-146 Full reproduction runs are offline, and their outputs are committed (2026-10-05, maintainer)
 
 - **Rule (maintainer, verbatim):** "Full reproduction runs stay offline (run by hand on an idle machine, not in CI). After each one, commit the verdict table, the per-save time series (TSV) and a provenance file (commit, seeds, threads, wall time) to lib/PottsModels/reproductions/data/NN/, and put the video in a release asset or LFS linked from the docs page. Remember this for all reproductions."
@@ -2243,6 +2309,80 @@ session.
   - **Byte identity is claimed only for the 25 frozen parameter-plane files and for tie-free clouds that hit neither defect.** The reviewer fuzzed about 600 such clouds with 0 mismatches. The docs say this in place of "character for character".
   - **O4** uses sequential sums, which can differ from numpy in the last ulp for ≥ 8 replicates. The "np.std" wording above means the population SD, not numpy's summation order.
 
+## D-150 P6.15c: the OpenVT Table S1 model, a cell-scope contact fold, `randn()` and per-daughter draws, disc start, edge guard, cell-count stop (2026-10-05, P6.15c; coordinator, from the P6.15c test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/acceptance/p6_15c_openvt_table_s1.jl` (freeze d1326174), from spec 15 v3 §2, §5 and §6 (G1, G2, G5, G6, G7, G11), and C3, C9, C13, C14, C16.
+  - Also re-frozen under this entry: `acceptance/p6_0v1_device_lifecycle.jl` gains the builder `:OpenVTReferenceMonolayer` (24², σ_X = 0, so the window stays quiet; D-148 Applied rule).
+- **Replace or variant (spec §5): a variant.**
+  - The Table S1 model is a new published model, `OpenVTReferenceMonolayer`.
+  - `OpenVTGrowingMonolayer` stays as the documented 2024 Artistoo set, pinned bit for bit: fingerprint 0xfcecc4612f387b5e and two 60-MCS trajectory digests.
+  - The gate case `openvt_monolayer_100` and every existing fingerprint pin are untouched.
+- **Surface: Potts DSL (general).**
+  - **G1, the contact fold.** In cell scope, `count(pred for _ in contacts)` and `count(pred for _ in contacts(rel))` count the cell's unlike pairs: s in the cell and s′ ∈ R(s) inside the lattice, for which `pred` holds.
+    - `pred` reads `kind′`, with the medium being owner 0.
+    - `count(true for _ in contacts) == surface` on the contact relation.
+    - It is exact after every copy and every lifecycle event, and maintained incrementally.
+    - Models that do not read it pay nothing; their fingerprints are pinned.
+  - **G2, per-daughter draws.** `randn()` follows `rand()`'s contract, keyed by (seed, MCS, cell, occurrence). A division state rule whose value contains a draw is evaluated separately for the parent and the daughter. Rules without draws are unchanged.
+- **Surface: PottsModels.**
+  - Exported:
+    - `OpenVTReferenceMonolayer(; lattice = (1400, 1400))`, with the Table S1 values A₀ 50, λ 2, T 20, α 50/775, μ_X 2, σ_X 0.4, β = γ = 0 and J [0 10; 10 20]. Its cell variables are A_star, X and f.
+    - `openvt_reference_state(; lattice, A₀)`, the G5 disc.
+  - Not exported:
+    - `openvt_snapshot(u; A₀, center)`, the O2 rows;
+    - `stop_at_cells(n)`, for G7 and G11;
+    - `edge_guard(margin; terminate)` and `Analysis.near_edge(σ, margin)`, for G6.
+- **Readings fixed by the freeze.**
+  - **Growth.** Once per MCS after the sweep, iff (volume / A_star ≥ β) && (f ≥ γ), using C9's ≥ and the current A_star.
+  - **Division.** At volume ≥ X·A₀. Both daughters draw X at birth, redrawn while ≤ 0. The first cell's X is drawn before the first division check. σ_X = 0 is case (f).
+  - **Disc.** Morpheus' `Sphere radius = R` centred at (L+1)/2: 52 sites on an even lattice, 45 on an odd one.
+  - **O2.** The origin is at (L+1)/2, distances are in units of R = √(A₀/π), and f is computed from σ.
+- **Checked before freezing.**
+  - A stub on today's primitives passes everything except the three gaps: cost 2.7× against the ≤ 1.5 bound, per-daughter draws, and truncation (20 non-positive X).
+  - The Metal block passes on the stub except the per-daughter check.
+  - The doubling windows come from 16 + 16 stub seeds.
+- **Coordinator rulings on the open questions.**
+  1. **Variant.** As above.
+  2. **G1 and G2 live in the core DSL and CorePotts,** being general: a per-cell incremental contact-count tracker with a kind predicate, recomputed on transitions; `randn()` in the vocabulary; per-daughter evaluation in lifecycle rules, device lifecycle included. These are core write sets: P6.3b, which restructures `step!`/phases and the vocabulary, merges first, and P6.15c rebases onto it. `count` and `randn` are new DSL names, added to `DSL_NAMES` with a justification.
+  3. **Truncation is a DSL form, `randn(μ, σ; lower)`.** It is bounded rejection on the counter RNG: at most 64 attempts, each a new occurrence on the same key. Exhaustion sets the status word; no throw inside kernels. P(exhaust) ≈ p⁶⁴ is negligible for any lower bound under ≈ μ + 2σ. A "redraw next MCS" sentinel is not acceptable, because M draws at birth.
+  4. **Performance.**
+     - The frozen bound is 1.5×, against an expected 1.05–1.2× a surface-only model.
+     - Models that do not read the fold must not regress: the gate and its fingerprints check this.
+     - At merge the new model gets a gate case on a small lattice; the coordinator sets its baseline.
+     - `stop_at_cells` and `edge_guard` take `every = k` (default 1). On Metal, each check is one host read per k MCS, declared as a host pass under D-145's budget.
+  5. **Base RNG calls.** The DSL rejects any Base RNG call it does not implement (`randexp`, `rand(range)`, `randn(dims…)`, …) with an error naming it. A Base RNG call never silently becomes a build-time constant again. The implementer adds a guard test (not frozen).
+  6. **The O2 round-trip row** stays `@test_broken` until P6.15d merges. It runs afterwards; the coordinator checks this at the later merge.
+  7. **The implementer also adds** a sibling in `siblings.jl`, a `runtests.jl` entry, the `test/gpu.jl` include, and the gate case.
+- **Applied (P6.15c implementation).**
+  - **G1 in CorePotts.** `ContactCount(column, relation, mask)` is one tracker, an `Int32` cell column. Bit `k` of `mask` counts partners of kind `k`; the medium is kind 0, and a model may have at most 63 kinds. `commit_contact_count!` updates the target's neighbours atomically, so it is safe under the checkerboard and on the device.
+    - The trackers of a problem travel as `relations.contact_counts::ContactCounts`. The lifecycle recomputes them in full on every event round: the host planner in `_rebuild_trackers!`, the device planner in two staged kernels or inside the fused kernel (no new barrier).
+    - A problem without folds has no `contact_counts`. Its generated code, fingerprint and step path are unchanged.
+  - **G1 in the DSL.** `count(pred for _ in contacts[(rel)])` is a cell quantity named by content (`contacts_<rel>_<hash of pred>`), so equal kind sets share one tracker. `pred` may read only `kind′` and constants. A `cond` (`… if kind′ == B`) folds into the kind set.
+    - Allowed in cell updates, division conditions, cell observeds and populations over cells. It is rejected by name in energies, drives, model and site updates.
+    - The relation must be declared, symmetric and exclude the origin. Its radius enters the copy footprint, because the commit writes the target's neighbours.
+    - Pair weights are ignored: it counts pairs.
+  - **G2.** `randn()` follows `rand()`'s contract: Box–Muller on one `draw` (cos branch), at a new occurrence stream. `randn(μ, σ)` is `μ + σ·randn()`.
+    - `randn(μ, σ; lower)` accepts `x > lower` and tries at most 64 times, at local indices 0–63 of one address. On exhaustion it returns `NaN` and sets `STATUS_DRAW_EXHAUSTED` in a model status word.
+    - The status word is `st.model[Symbol("#status")]`, a 1-element `UInt32` array present only in models with a bounded draw. `_check_status!` reads it at saves and at the end of the solve, and fails the run with `ReturnCode.Failure`.
+    - A division rule whose value draws is evaluated twice, once in the parent's environment and once in the daughter's (`entity = daughter`). Rules without draws are unchanged.
+  - **Ruling 5.** `rand(…)` with arguments, `randn(dims…)`, `randexp`, `shuffle`, … and `Random.`/`Base.`-qualified forms are rewritten at macro time into an error that names the call ("`rand(1:6)` is not available in a model"). The guard test is `test/draws_folds.jl`.
+    - `DSL_NAMES` gains `count`, Base's `count` except over `contacts`, and `randn`. `DSL_KEYWORDS` gains `randn => [:lower]`.
+  - **PottsModels.**
+    - `OpenVTReferenceMonolayer`, `openvt_reference_state` (exported), and `openvt_snapshot`, `stop_at_cells`, `edge_guard` (public).
+    - `Analysis.near_edge`.
+    - On a device, `edge_guard` caches a frame mask and does one masked `mapreduce` per check.
+    - PottsModels gains a direct SciMLBase dependency, for `ReturnCode` and `terminate!` with a code. Every other worktree's Manifest needs a `Pkg.resolve()`.
+    - Sibling: `KindInhibitedGrowth` (siblings.jl). It uses two kinds, a fold over `vn` with a per-kind predicate, and `θ => 1.5 + rand()` per daughter.
+  - **Gate.** New case `openvt_reference_100`: a 6 × 6 colony of 7 × 7 cells, σ_X = 0, capacity 128. Proposed baseline: sequential 20.12, checkerboard 19.60 and Metal 72.08 ns/site (this run). The coordinator sets it.
+  - **Cost (frozen G1 bound 1.5×).** Fold over surface: Sequential 1.12–1.14×, Checkerboard 0.86–1.07×.
+  - **Gate and A/B (vs 30c39601).** The CPU gate flagged `graner_glazier_72.sequential` at 1.054 against the recorded baseline. A paired CPU A/B gives 0.997 (8 rounds), so this is machine drift; no model without a fold changes code.
+    - Metal A/B, 8 rounds, fastest medians: Graner 1.033, Wortel 0.954, Merks 0.857, OpenVT 2024 0.622 and Akeeb 1.018. The Merks and OpenVT figures are below 1 only because of power-state artefacts (P6.0bb).
+  - **Latency (P6.0o, D-137, paired with base).** The first run showed a cold `PottsProblem` +19–22 % on Akeeb. The cause was new `_walk` specialisations: each closure capturing a different op function compiled a fresh walk.
+    - The fix: one shared walker, `_has_any_op(x, ::Vector{Any})`, and a `_has_bounded_draw` without splatted generators.
+    - After the fix, to_first_mcs is 0.98–1.02 on every case, and `problem` is 1.02–1.04 except Akeeb Float32 at 1.13.
+    - mtkcompile ratios (up to 1.18) are within noise. A six-pair cold `mtkcompile` A/B on Akeeb is equal: base 0.245–0.283 s, this 0.257–0.272 s.
+- **Merged (coordinator, 2026-10-06).** The `openvt_reference_100` baseline is set from the merged tree: sequential 19.55, checkerboard 19.20, Metal 72.03 ns/site. The SciMLBase dependency is in; other worktrees need `Pkg.resolve()`. The reference model joins the PottsModels compile workload (D-047). The latency residuals are accepted as reported. The merge checks are in PROGRESS; the Akeeb CPU paired A/B and latency run on the PC (D-157).
+
 ## D-151 Reproduction 09: V-PRE5's one-cluster clause is kept as frozen; late-stage coarsening is an open deviation (2026-10-05; coordinator, from the peer spec-owner ruling, spec 09 §9.5)
 
 - **Finding.** P6.1f (D-144 fixture, isolation guard clear) failed V-PRE5's one-cluster clause: the mean largest dark-cluster share at 10⁴ is 0.815, against ≥ 0.90. Per replicate the value is bimodal: 4 of 10 replicates are ≥ 0.99, the rest 0.51–0.90. A peer diagnostic used 6 independent seeds, each from the Voronoi start and from its paper-relaxed copy, to 2×10⁴. It gives mean shares of 0.75 / 0.72 at 10⁴, 0.79 / 0.72 at 13 500 and 0.81 / 0.80 at 2×10⁴: neither the start nor the reading time rescues the clause. PRE's t = 1 fractions match a dark share of 0.50, so the type fraction is not the cause either. Dark cells have no medium contact from ≈ 320, so P6.1d's 0.905 was not inflated by the periodic image; the two runs differ by ≈ 1 SE.
@@ -2309,3 +2449,115 @@ session.
   5. L 50 vs 60 stays an author question.
   6. P6.3d merges after P6.3b. Whichever of P6.3d and P6.15c merges second rebases the p6_0v1 builder dict.
   7. The implementer updates the non-frozen users of `merks_state`: `mechanisms.jl` vasculo seeds, `test/gpu.jl`, `test/ports/symbolic_models.jl`, `docs/paper_runs/merks_vasculogenesis.jl`, siblings and `runtests.jl`.
+  - **Merge with monorepo (coordinator, 2026-10-06).** `p6_0v1_device_lifecycle.jl` is re-frozen with both D-150's `:OpenVTReferenceMonolayer` and this entry's `:Merks2006`/`:Merks2008` builders (sha 19fa0ecb…). D-156's Merks rulings (the TST ring rule at a closed edge, the Figs 5/7–10/12/13 targets through M7, both clocks) and D-155 (48 h and L ship provisional) apply to this item.
+
+## D-154 Paper scope: all 12 reference models, no fallback set; deviations as a table per model; no cross-framework speed comparison (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
+
+- **Scope.** The Potts.jl paper waits for all 12 reproductions on the PI's list (paper-model list, 2026-09-29). There is no minimum or fallback set. Steps 4–12 are planned to completion; steps 6–12 become items when step 5 merges, as already planned.
+- **Deviations.**
+  - Each model's docs page, and the paper supplement, carry a deviations table. It lists every failed or provisional target with four columns:
+    - our value;
+    - the paper's value;
+    - the suspected cause;
+    - the author-question status (not asked / asked on date / answered → D-entry).
+  - The main text names only the deviations that matter. V-PRE5 (D-151) is the first row.
+  - The reproduction acceptance's "deviations table" (ROADMAP Phase 6, `TUTORIAL_TEMPLATE.md`) takes this form. Pages frozen before this entry are brought into it under P6.0bd.
+- **Speed.** The paper makes no throughput comparison against CompuCell3D, Morpheus or Artistoo; no item is filed. The OpenVT submission keeps its own time-to-10⁴ figure, as the consortium manuscript requires. P6.15g's profiling stays, for our own sweeps.
+
+## D-155 Phase 6 gates: no author question blocks a model; gated models ship provisional (2026-10-06, maintainer: "Ship provisional now", relayed by the peer session "Potts.jl models and publications"; checked against model-specs README §4–§5)
+
+- **Rule.** A ROADMAP gate never parks an item. Where an author question is open, the model ships now with a labelled default, and the default gets a row in the D-154 deviations table. An answer that arrives later becomes a D-entry and, if it changes a value, a re-run.
+  - This supersedes the "block" and "ask first" wording of README §4.3 (B2, Bauer pixel size: provisional 0.55 µm/px) and §4.4 (J3, Jiang 2005 Rb → E2F: provisional inhibitory). The spec side is amended by the peer session.
+- **Lifted as resolved.** C4 (Fortuna, P6.5d) was resolved on 2026-09-30 from the CC3D 3.7.9/3.6.2 source (README §4.11 C4, §5 item 2): F ≈ 1, with diffusion and decay before secretion. The Fortuna J_cyto–lam question (20 vs 10) is a non-gating sheet question.
+- **Provisional defaults in force:**
+  - F1 (foam): the displacement form, with γ₀ calibrated via γ₀/J ≈ 1.9.
+  - Y1 (myxobacteria): the unit vector.
+  - N1–N3 (Jafari/Andasari): a clamp, per-cell uptake, χ calibrated.
+  - Merks 48 h and L 50/60 (D-153).
+  - B2 and J3, as above.
+- **Not an author question.** Y2 is our ruling: sequential first, then checkerboard validated statistically (README §4.10).
+- **Questions.** Every model question goes on one sheet for the maintainer and Dr Jiang (`author-questions/PI_SHEET.md`, gitignored, kept by the peer session). Dr Jiang sends the letters, and nobody here contacts authors or the consortium. V-PRE5 (D-151) goes to Glazier.
+
+## D-156 Paper-run policy, rendering, release uploads and scope (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
+
+- **Compute (amended the same day).** Offline FULL reproductions and sweeps may run on the maintainer's faster PC over Tailscale (100.107.82.114).
+  - Runs are launched detached, with replicates spread across the PC's cores. Outputs are copied back to `lib/PottsModels/reproductions/data/NN/` on this Mac.
+  - Commits, merges and pushes happen only on this Mac, through the coordinator. Nothing is committed from the PC (D-025).
+  - Before a run, the PC is synced to the exact commit being reproduced, with `Pkg.instantiate()` if the Manifest changed. The provenance file records the producing machine: hostname, CPU, thread count, Julia version and commit.
+  - Metal runs and the Metal gate stay on this Mac. The PC is CPU-only until a CUDA backend exists, and whether to scope that waits on its GPU being known.
+  - Runs use the paper's n and lattice wherever the PC or this Mac makes that feasible. A cut is recorded as a D-154 deviation only when one is still needed.
+  - **The machine (read over SSH, 2026-10-06).**
+    - Host and OS: `praneeth@100.107.82.114` (praneeth-NucBox-EVO-X2), Ubuntu 24.04.
+    - CPU and memory: AMD Ryzen AI Max+ 395 with 16 cores / 32 threads, 62 GB RAM and 360 GB free disk.
+    - GPU: a Radeon 8060S iGPU (gfx1151) with ROCm 7.2.1. There is no NVIDIA GPU, so no CUDA item; an AMDGPU/ROCBackend item is not scoped.
+    - Julia 1.12.6 at `~/.juliaup/bin/julia`; it is not on the non-interactive PATH.
+  - **Where runs happen.**
+    - FULL runs use a dedicated clone, `~/potts-full`, never the self-hosted Actions runner's workspace (`~/actions-runner/_work/…`).
+    - The runner shares the machine, so a FULL run is capped below the full 32 threads, or the runner is paused, as the maintainer decides.
+    - Runs are launched in detached tmux sessions (tmux 3.4, installed by the maintainer).
+  - **In force** once the maintainer approved the clone (2026-10-06). Runs are capped at 24 threads; pausing the runner needs asking first.
+- **Unstated parameters and rules** are calibrated to the paper's figures and labelled "calibrated": Bauer recruitment and degradation; Jiang 2005 T, α, θ, γ_P and lattice; Jafari Nivlouei hypoxia, necrosis, Wnt and division.
+- **Rendering.** Cells are never drawn with outlines: no `boundaries = true` or `pottsboundaries` overlay in docs, paper-run videos or reproduction figures. `pottsplot` already defaults to `boundaries = false`. Existing uses are removed under P6.0bf.
+- **Release uploads.** Any reproduction FULL-run video may go to the `reproductions-2026-10` release without asking each time (confirmed directly by the maintainer, 2026-10-06); this amends D-146's per-upload confirmation. Anything else still asks.
+- **Publishing.** Each reproduction tutorial is published to the live docs when its model's FULL run is frozen.
+- **Scope.**
+  - The PI's deferred items 2 and 3 are closed: OpenVT is item 2, and Fortuna covers item 3, single-cell migration.
+  - Fortuna is 14a, 14b (the polarization study P1–P6) and 14c.
+  - FBCA reproduces 08a and calibrates 08b; ACRI 2018 is optional.
+  - Cell sorting is Graner–Glazier only. The Osborne/Chaste rows V-OS1–V-OS5 are retired, not parked; the 09 page's row is updated under P6.0bd.
+  - Zajac is a reconstruction with calibrated T and α (Z2). Thesis values are swapped in only if they arrive.
+  - The extended library (Mombach, Shirinifard, Wang 2025, the hard-model set) comes after the paper.
+  - The build order stays the ROADMAP order.
+- **MTK.** The maintainer wants the paper to claim Potts.jl is ModelingToolkit-native as a whole ("Full MTK-native"). That conflicts with `research/mtk-native-investigation.md` §1, which found full nativeness unachievable now or within a year: the sweep has no equation form in MTK, and per-cell state is ragged and grows. Its recommendation (§7.1) is Catalyst-spatial nativeness, Level A. P6.0be scopes what the paper can defensibly claim and what work closes the gap. The maintainer decides the wording.
+  - **Maintainer answer (2026-10-06).** Aim for the full claim. P6.0be designs toward full MTK-nativeness and reports what each step costs.
+  - **Standing rule.** Development stops and the maintainer is asked whenever MTK causes major friction (blocked designs, workarounds that fight MTK's data model, large build-cost or latency increases), or a change would bring a major slowdown in runtime, construction time or the gate.
+- **Per model.**
+  - **Merks (into P6.3d/e).**
+    - At a closed edge the ring rule matches TST (P6.0ae): out-of-domain sites count as a cell in `ring_cells`.
+    - Digitise 01b Figs 5, 7–10, 12 and 13 and target them through the continuous-χ superset (M7), with inferred parameters flagged.
+    - Plots show both clocks: relaxation-end time is the primary axis, with a note giving the code-MCS offset.
+  - **Akeeb (P6.2d).**
+    - V-A6 is un-parked with the area-equality classifier.
+    - The FULL extras are run: the V-A7 full-sweep |r|, and V-A3–V-A5.
+    - V-A8/A9 go on the PI sheet, since Dr Jiang is a co-author.
+  - **V-PRE5 (P6.1g).**
+    - One more bounded pass: ≥ 20 more replicates, and one scan per candidate cause.
+    - If no candidate explains it, a fresh seed set is also tried.
+    - After that it stays a reported deviation.
+
+## D-157 Device testing and benchmarks are backend-neutral: Metal (Mac) and ROCm (PC), with ROCm in CI (2026-10-06, maintainer; coordinator design)
+
+- **Why.** The maintainer's PC (D-156) has a Radeon 8060S (gfx1151). A probe on 2026-10-06 with AMDGPU.jl, ROCm 7.2.1 and Julia 1.12.6 passed:
+  - `AMDGPU.functional()`;
+  - KernelAbstractions kernels in Float32 and Float64;
+  - in-kernel `Atomix.@atomic` add and `@atomicreplace`.
+  Library code already reaches devices only through KernelAbstractions. The coupling to Metal is in the tests and benchmarks: 23 frozen acceptance sites call `Main.Metal.MetalBackend()`, `test/gpu.jl` does `using Metal`, `GROUP=GPU` sets `POTTS_GPU=metal`, and `gate.jl` and `ab.jl` assume Metal.
+- **Device harness (P6.0bg).**
+  - One shared helper (`test/shared/devices.jl`) reads `POTTS_GPU ∈ {"", "metal", "rocm"}`, loads Metal.jl or AMDGPU.jl, and exposes `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
+  - Every test project includes it. The frozen acceptance files are re-frozen to call it; the change is mechanical, and no assertion changes.
+  - `GROUP=GPU` takes the backend from `POTTS_GPU`. AMDGPU joins the test projects as a dependency next to Metal; each loads only on its own platform.
+- **What a device test may assert.**
+  - Exact invariants, such as volumes equal to site counts and conserved quantities.
+  - Same-seed determinism on that backend.
+  - Statistical equivalence to the CPU (the D-029 pattern).
+  - Never bitwise CPU–device equality, unless a test already pins it for an exact integer path.
+- **Float64.** The rule "device code never touches Float64" stays for every backend, so code stays Metal-portable, even though ROCm has doubles.
+- **CI (P6.0bh, approved by the maintainer).** A workflow job on the self-hosted runner (`runs-on: [self-hosted, linux, …]`) runs the GPU group under `POTTS_GPU=rocm` on pushes to `monorepo`.
+  - Metal stays a manual merge check on the Mac, under `tools/exclusive.sh`.
+  - FULL runs on the PC stay capped at 24 threads so CI keeps its share (D-156).
+- **Benchmarks (P6.0bb, expanded).**
+  - `benchmark/baseline.toml` is keyed by machine and backend, e.g. `mac.metal`, `mac.cpu`, `nucbox.rocm`, `nucbox.cpu`. Each machine checks only its own rows.
+  - `gate.jl` and `ab.jl` take the backend as an argument.
+  - By default `ab.jl` seeds the Tuple type cache equally on both sides, runs a same-commit control, and interleaves base and candidate. Today's P6.3b and P6.15c merges needed all three to read the Metal A/B: unseeded, it showed 5–6% artefacts that the seeded form measured at ≤ 1.010.
+  - Benchmarks on the PC run inside a CI job or with the runner idle, never alongside CI tests.
+- **Order.** P6.0bg, then P6.0bh, then the P6.0bb expansion, all before step 4, because every later model adds device code.
+- **Compute location (maintainer, 2026-10-06).** No more intensive compute on the Mac. Every suite, benchmark, A/B, latency check, docs build and FULL run happens on the PC.
+  - **Merge checks.** The coordinator commits the candidate merge locally, ships it to the PC as a git bundle, and runs the check script there over SSH. Feature branches stay local (CLAUDE.md), so Actions cannot gate a merge.
+  - **GitHub Actions** on the runner re-runs the CPU and ROCm suites on every push to `monorepo`, as a safety net.
+  - **Benchmarks** become paired interleaved A/Bs with a same-commit control, so a busy shared machine does not invalidate them. Absolute baselines are informational.
+  - If the PC is unreachable, merges wait.
+- **Metal verification is deferred** until all paper models are done, when the maintainer will have a Mac Studio: the Metal suites, the Metal gate rows and the Metal A/B. Until then, Metal-breaking code is caught on ROCm by a kernel-IR check (no `double` in any device kernel's LLVM IR; extends D-047) and by the static Float64 rule.
+- **Core layout on the PC (16 cores / 32 threads; logical n and n+16 share physical core n).**
+  - Benchmarks and timed checks own physical cores 12–15 (logical 12–15 and 28–31). A timed process is pinned to one logical CPU there, with its SMT sibling idle.
+  - FULL runs and CI test jobs are pinned to `taskset -c 0-11,16-27`: 24 logical CPUs, the D-156 cap.
+  - Measured 2026-10-06 under a load of 25 without pinning: an Akeeb sequential run read either ~40 or ~71 ns/site depending on SMT sharing, which made a same-commit control read 1.729.

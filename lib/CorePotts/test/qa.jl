@@ -46,6 +46,8 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
                                 # device allocator; KA declares no public API
     :RefValue,                  # Base.RefValue: concrete `Ref` type for type-stable fields
     :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
+    :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
+                                # and `sum` allocate there on SequentialCPM (P6.3b review round 2)
 )
 
 @testset "QA: ExplicitImports (CorePotts)" begin

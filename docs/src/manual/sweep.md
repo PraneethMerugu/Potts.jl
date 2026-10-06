@@ -45,6 +45,59 @@ One MCS is as many copy attempts as there are mobile lattice sites. A paper that
 `n` attempts per site as one step uses `n` of our MCS per paper step. At `T ≤ 0` ties are
 accepted with probability ½, as in CompuCell3D.
 
+## The order of one MCS: `@schedule`
+
+One MCS runs its phases in this order:
+
+| Phase | What runs |
+|---|---|
+| `before_mcs` | `@before_mcs` updates |
+| `sweep` | the copy attempts |
+| `after_mcs` | `@after_mcs` updates |
+| `fields` | the field equations (`D(c) ~ …` of `c(field)`) |
+| `components` | cell and model ODEs, discrete components, `@link`/`@unlink` |
+| `operators` | (none yet) |
+| `lifecycle` | `@divide` rules |
+| `end_mcs` | history (`Pre(x, k)`), derived quantities, then callbacks and saving |
+
+`@schedule` lists phases in another order, for models whose paper steps the field before
+the cells move (`@schedule fields, sweep`):
+
+- Listed phases run in the listed order. Each unlisted phase goes right after the last
+  placed phase that precedes it in the default order (first if none), so `@schedule
+  fields, sweep` runs `before_mcs, fields, sweep, after_mcs, components, …`, and a schedule
+  that lists phases in their default relative order is no schedule at all, bit for bit.
+- `end_mcs` is always last; `before_mcs` must precede `sweep` and `after_mcs` must follow
+  it. An unknown name, a name listed twice or a broken rule is an error naming the phase.
+- Every phase reads current values in any order: integrals (`integral(x)`) are refreshed
+  after each phase that moves cells (the sweep, a lifecycle that divides) and after each
+  update that writes their operand, before the next phase that reads them.
+- The order is part of the model (its fingerprint): a checkpoint does not cross orders.
+- Reordering costs nothing on any backend: `step!` is one fold over a static tuple of the
+  phases. A phase that runs on the host (an `Adaptive` ODE solver) costs one device↔host
+  round trip per MCS wherever the schedule puts it.
+
+```@example sweep
+using Potts
+
+@potts_model FieldFirst begin
+    @kinds medium cell
+    @variables c(field) = 0.0
+    @lattice Lattice((20, 20); neighborhood = Moore(1))
+    @energy Volume(cell; target = 16.0, strength = 1.0)
+    @drive copy => -5.0 * (c[target] - c[source])
+    @equations D(c) ~ 0.2 * Δ(c) + 0.1 * (kind == cell) - 0.05 * c
+    @schedule fields, sweep
+    @sweep Metropolis(; temperature = 4.0)
+end
+
+@named ff = FieldFirst()
+σ = zeros(Int32, 20, 20); σ[8:11, 8:11] .= 1
+sol = solve(PottsProblem(ff, [ownership => σ, kind => [:cell]], (0, 10); field_solver = ExplicitEuler(substeps = 2)),
+    SequentialCPM())
+sol.retcode
+```
+
 ## Choosing an acceptance law
 
 Without an offset, Metropolis and Barker both satisfy detailed balance, so they have the same equilibrium. Only

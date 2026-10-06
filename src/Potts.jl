@@ -12,7 +12,9 @@ module Potts
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
+# the compile workload's `@potts_model` body names these (precompile.jl)
+using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LinearAlgebra: Symmetric, eigen
@@ -42,12 +44,14 @@ export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, exten
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, RK4
 
 include("seeds.jl")
+include("draws.jl")
 include("vocabulary.jl")
 include("system.jl")
 include("macro.jl")
 include("lower.jl")
 include("schedule.jl")
 include("compile.jl")
+include("contact_folds.jl")
 include("solvers.jl")
 include("codegen.jl")
 include("problem.jl")
@@ -78,6 +82,8 @@ public lattice, paint!, LayoutState, new_cell!, assign!, owner, kindof, ncells, 
 public boundary_lengths, anneal
 # a named set of kinds declared in `@kinds` (`g = (k, …)`); for programmatic `PottsSystem(; kind_classes)`
 public KindClass
+# `@boundary` conditions (D-145), bound inside model bodies like the rest of `Potts.DSL`
+public Dirichlet, NoFlux
 
 # The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
 # runs when Potts loads, never into the precompile image. The draw is a child task's: the

@@ -280,10 +280,15 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
             "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
             "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
             "with the same `track`"))
-        integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
+        # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
+        integ = _init(prob, alg, false; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ
     end
+    return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
+end
+
+function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     t0, t1 = prob.tspan
@@ -309,7 +314,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
-    integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
+    integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
@@ -396,20 +401,54 @@ function _save!(integ::PottsIntegrator)
 end
 
 function _check_status!(integ::PottsIntegrator)
+    _status_failure!(integ, _model_status(integ.stats, integ.state.model))
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
-    st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    _status_failure!(integ, st)
     return integ.retcode
+end
+
+# A nonzero status word fails the run, with a warning naming each reason (once per run)
+const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
+    STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
+    STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower) draw was given σ < 0")
+function _status_failure!(integ, st::UInt32)
+    st == 0 && return nothing
+    if integ.retcode != SciMLBase.ReturnCode.Failure
+        why = [r for (bit, r) in _STATUS_REASONS if st & bit != 0]
+        isempty(why) && push!(why, "status word $(repr(st))")
+        @warn "the run failed at MCS $(integ.t): $(join(why, "; "))"
+    end
+    integ.retcode = SciMLBase.ReturnCode.Failure
+    return nothing
 end
 
 function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
-    lat = integ.ctx.lattice
-    phases = integ.f.phases
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
-    integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
+    # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
+    # lifecycle in the model's order: `Base.afoldl` over the tuple (unrolled by Base, no
+    # recursion here; zero allocations, where `sum` and `foldl` with a closure allocated on
+    # SequentialCPM)
+    _run_mcs!(integ, integ.f.phases.mcs)
+    integ.t += 1
+    integ.stats.mcs += 1
+    integ.stats.attempts += attempts
+    isempty(integ.callbacks) || _apply_callbacks!(integ)
+    insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
+    return integ
+end
+
+_run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
+
+# One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
+function _run_entry!(integ::PottsIntegrator, phases::Tuple)
+    integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     if integ.alg isa SequentialCPM
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t, integ.f.track)
@@ -420,17 +459,11 @@ function CommonSolve.step!(integ::PottsIntegrator)
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
     end
-    integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
-    integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
-    integ.t += 1
-    integ.stats.mcs += 1
-    integ.stats.attempts += attempts
-    isempty(integ.callbacks) || _apply_callbacks!(integ)
-    insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
-    return integ
+    return nothing
 end
 
 # The host lifecycle path (CPU; host hooks on a device): events are known on the host, and

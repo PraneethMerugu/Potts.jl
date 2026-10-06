@@ -93,6 +93,11 @@ Every item's acceptance also includes the standing checks:
 
 "Frozen:" names the files the coordinator commits first.
 
+**Gates and compute (D-155–D-157, 2026-10-06).**
+- A "Gate:" below never parks an item. Under an open author question the model ships provisional, with a labelled default in its deviations table (D-154).
+- Heavy compute runs on the PC (D-157). Metal verification is deferred to P6.0bi.
+- Any change that brings major MTK friction or a major slowdown stops for the maintainer (D-156).
+
 **Acceptance for model reproductions.** The file
 `lib/PottsModels/test/reproductions/<nn>_<model>.jl` tests the spec's V-targets.
 - The CI-sized subset runs in the suite; ensembles run under `REPRO=full`.
@@ -312,6 +317,36 @@ Every item's acceptance also includes the standing checks:
   - Interleave base and candidate in one process when only the workload or the parameters change (see the P6.2b interleaved μ A/B).
   - Otherwise, rotate which checkout runs first and add a same-commit control (base vs base) whose ratio bounds what can be read from the A/B.
   - Accept: a same-commit A/B reads within ±3% on all five Metal cases.
+  - **Expanded (D-157).** The backend is an argument of `gate.jl` and `ab.jl`. `baseline.toml` is keyed by machine and backend, and absolute baselines are informational.
+  - `ab.jl` seeds the type cache equally on both sides, runs a same-commit control, and interleaves base and candidate by default. On the PC it pins to one logical CPU on reserved cores 12–15.
+  - Accept on the PC: a pinned same-commit control within ±1% on every CPU and ROCm case. A pinned Akeeb pair read 1.001 / 1.001 on 2026-10-06.
+- [ ] **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
+  - Look up compiled kernels by (generated-function ids, backend, workgroup) instead of recompiling them per integrator.
+  - Accept: the unseeded and seeded Metal OpenVT A/B agree within ±2%, and a second `init` on the same problem compiles no kernel.
+- [ ] **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
+  - One shared helper, `test/shared/devices.jl`: `POTTS_GPU ∈ {metal, rocm}`, `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
+  - Every test project includes it. The frozen acceptance files are re-frozen to use it (23 `Main.Metal.MetalBackend()` sites); the change is mechanical and no assertion changes. `GROUP=GPU` reads the backend from the environment.
+  - Check the Metal.jl workaround in `lifecycle_device.jl` (~853) on ROCm.
+  - Add a ROCm check that no device kernel's LLVM IR contains `double` (extends D-047), so Metal-breaking code is caught without a Mac.
+  - Accept: the full GPU group passes under `POTTS_GPU=rocm` on the PC, and the double-IR check fails on a deliberate Float64 literal (negative control).
+- [ ] **P6.0bh** (D-157; approved by the maintainer) The repository's first workflow: on pushes to `monorepo`, run the CPU suites and the GPU group under `POTTS_GPU=rocm` on the self-hosted runner ("rocm,amd").
+  - Jobs pin to `taskset -c 0-11,16-27`.
+  - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
+- [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
+  - The Metal suites, the Metal gate rows (new baselines for the new machine), and a seeded Metal A/B of every gate case against the last Metal-verified commit (ebb0f823; its OpenVT pair was skipped).
+- [ ] **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
+  - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
+  - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
+  - Label every timing with its machine (spec 10 is done).
+- [ ] **P6.0be** (D-156) Design: what it takes for Potts.jl to be ModelingToolkit-native as a whole. The maintainer's aim is the full claim; `research/mtk-native-investigation.md` §1 found it unachievable as of 2026-10.
+  - Re-check the three blockers (the sweep as an MTK object, ragged growing per-cell state, lattice quantities) against current MTK.
+  - Price each route in build time, latency and gate cost.
+  - Propose the strongest claim the paper can defend, plus the work items.
+  - **Stop and report** if a route needs major MTK friction or a major slowdown (D-156).
+  - Output: `research/mtk-native-plan.md`. The maintainer decides.
+- [ ] **P6.0bf** (D-156) No cell outlines anywhere.
+  - Remove `boundaries = true` and `pottsboundaries` from `docs/paper_runs/*.jl` (GG, Akeeb, Merks, OpenVT), the docs tutorials, and the frozen 09 page (~line 427; re-freeze under D-156).
+  - Re-render the paper-run videos and the 09 FULL video on the PC. Replace the release asset `09_cell_sorting_full-2026-10-05_replicate1.mp4`, and link it from the 09 page.
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`. Also folds in the fingerprint corner cases (D-134): P6.0az; fix if cheap, else document as best-effort. Also (D-136, maintainer): consolidate the fingerprint tests into one frozen suite `lib/PottsModels/test/acceptance/fingerprint.jl` — the fingerprint testsets of p6_0p, p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0ah, p6_0c2 and the pin blocks of p6_0t, p6_0x, p6_0au, p6_0aw, p6_0av, p6_0u, p6_0ag, p6_0ax, p6_0g; every distinctness, checkpoint-refusal and cross-session check kept; each published model and fixture pinned exactly once; touched files re-frozen under D-136. Also (P6.0ax review, D-134): gather bound-variable names, population variables and `rand()` addresses share one build counter (`_next_number!`, src/vocabulary.jl), so an `@observed` fold written before other statements shifts later names and `rand()` addresses — the fingerprint changes and, under a fixed seed, the trajectory changes (adding a diagnostic changes results). Give `rand()` addresses and bound names per-statement or canonical numbering at `mtkcompile`; re-pin under D-136. Priority before reproductions that add observables to seeded runs. Also (P6.0o review): a component's algebraic observed queried as `dc₊z` gets "namespaced by another system" — say it is substituted and suggest `@observed`; `s.λ` on a `CompiledPottsSystem` is a FieldError; `Potts.parameters` vs `ModelingToolkitBase.parameters` differ for component models.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -389,6 +424,7 @@ Every item's acceptance also includes the standing checks:
   - First, cheaply: the distribution of the time to a single dark cluster over ≥ 20 replicates, against the paper's ≈ 5000.
   - Then test the candidate causes: T against the effective line tension, the cell-size difference (V-GG6), and the aggregate size and spread.
   - The targets are unchanged. It is reported in the phase report as a science question (AUTONOMY §7.5), and the author question is in README §5.
+  - **Bounded pass (D-156, running on the PC).** ≥ 20 more replicates, then one scan per candidate cause; if none explains the gap, a fresh seed set. After that it stays a reported deviation. The question goes to Glazier through the PI sheet.
 - [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
@@ -427,6 +463,11 @@ Every item's acceptance also includes the standing checks:
   Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
   confirmation).
 
+- [ ] **P6.2d** (D-156) Akeeb FULL extras.
+  - Un-park V-A6 with the area-equality classifier.
+  - Run the V-A7 full-sweep |r|, and V-A3–A5 at FULL, on the PC, with D-146 records.
+  - V-A8/A9 go on the PI sheet.
+
 ### Step 3 — Merks 2006 + 2008
 
 - [x] (merge, 2026-10-05; D-140) **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
@@ -440,7 +481,7 @@ Every item's acceptance also includes the standing checks:
     copy won, so earlier sub-cycles are never zeroed.
   - Accept: the per-MCS reduction into a host `Float64` is a device sync. Either reduce
     only at save points, or state and measure the per-MCS sync on Metal.
-- [ ] **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
+- [x] (merge, 2026-10-06; D-145) **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
   placement and an explicit phase order. The phase order **is** `@schedule`, with the
   `step!` restructuring of api-synthesis §2.12; D-035 is amended (D-075) in the same change.
   - Accept: the gate is unchanged on CPU, and the Metal A/B is ≤ 1.01 for the five gate
@@ -455,6 +496,10 @@ Every item's acceptance also includes the standing checks:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
 
+  - **Maintainer rulings (D-156).**
+    - The ring rule at a closed edge matches TST: out-of-domain sites count as a cell in `ring_cells` (P6.0ae).
+    - Digitise 01b Figs 5, 7–10, 12 and 13 and target them through the continuous-χ superset (M7), with inferred parameters flagged.
+    - Show both clocks: relaxation-end time is the primary axis, with a note giving the code-MCS offset.
 - [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
 
 ### Step 3b — OpenVT monolayer benchmark (parallel track; D-147, spec 15)
@@ -474,7 +519,7 @@ Full runs are offline (D-146).
   - The test author freezes V6–V8 and a P11 unit test: the 11-bead free-end spring–dashpot reference matches `relaxation_exact.csv` to 1e-6.
   - Implement the fixture: strips on a 5-row periodic lattice (one `Tiling` per region plus `overlay`), the A* switch at t = 0, unwrapped centroids, the 90% crossing and the MSE.
   - FULL run: 100 seeds × λ ∈ {1, 2, 3, 5}, for the 11- and 21-chains. It sets T_Potts, which every other row uses.
-- [ ] **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
+- [x] (merge, 2026-10-06; D-150) **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
   - G1: per-cell free-surface fraction f_i over Moore(1), exact and incremental, as a general contact fold, not model-named.
   - G2: a per-daughter normal draw of X, redrawn while ≤ 0, on the counter RNG, with a deterministic X ≡ 2 mode. Start it in parallel with P6.15b.
   - G5: a disc start.
@@ -533,7 +578,7 @@ Full runs are offline (D-146).
   lifecycle (D-075 clarify). Fixes A-17.
 - [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; the docs show `Plane`/`Spheres` recipes.
-- [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
+- [ ] **P6.5d** reproduction 14a/14b (and 14c, D-156). C4 resolved from the CC3D source (D-155); no gate.
 
 ### Steps 6–12
 

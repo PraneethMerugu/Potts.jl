@@ -459,8 +459,9 @@ end
     rebuild_trackers!(st, ctx, backend)
 
 Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`, `surface`
-(over `ctx.surface`, if both exist), moments (`anchor`, `m1`, `m2`) and the cluster
-trackers (`cluster_volume`, `cluster_surface`). Host-side; used at
+(over `ctx.surface`, if both exist), moments (`anchor`, `m1`, `m2`), the cluster
+trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
+`ctx.contact_counts` (`ContactCounts`). Host-side; used at
 lifecycle events and after host edits of `σ`.
 """
 rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
@@ -485,6 +486,7 @@ function _rebuild_trackers!(stats, st, ctx, backend)
         _copy!(stats, st.cell.anchor, m.anchor); _copy!(stats, st.cell.m1, m.m1); _copy!(stats, st.cell.m2, m.m2)
     end
     _has_clusters(st) && _rebuild_cluster_trackers!(stats, st, σ, ctx)
+    _rebuild_contact_counts!(stats, st, σ, lat, _contact_counts(ctx))
     return st
 end
 

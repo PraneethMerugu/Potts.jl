@@ -14,6 +14,6 @@ This is the offline record required by D-146.
 | `provenance.toml` | commit, page hash, environment, Julia, machine, start/finish, wall time |
 | `run_wrapper.jl` | the run wrapper (Literate with an appended export chunk; the page itself runs unchanged) |
 
-The replicate-1 video is published as a release asset (pending maintainer confirmation) and linked from the docs page.
+The replicate-1 video is the release asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10/09_cell_sorting_full-2026-10-05_replicate1.mp4) (release `reproductions-2026-10`). This render draws cell outlines; it will be replaced by an outline-free render (D-156, P6.0bf).
 
 **Result.** Every binding row passes except V-PRE5 "one dark cluster @ 10⁴": the largest dark-cluster fraction is 0.815 against ≥ 0.90. P6.1d read 0.905 at margin 10. V-PRE3 (b), which failed in P6.1d, now passes (t_p = 320). The isolation guard held at every save of every replicate.

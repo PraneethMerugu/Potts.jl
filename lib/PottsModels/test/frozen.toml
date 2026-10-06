@@ -144,7 +144,7 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "2f98a73e774e76f544f5dc2bf11fcc58d5fd2ddf02befef8f656379b67311f53"
+sha256 = "19fa0ecbbd0daa1d29ebb1d78f41b5dd8236f866688e55b17cc2300d11beab30"
 decision = "D-153"
 
 [[file]]
@@ -361,6 +361,16 @@ decision = "D-148"
 path = "acceptance/p6_15d_openvt_analysis.jl"
 sha256 = "acc18722b4fbeaf66f776ead50ddce0816e88a54eb3a18f4df9d3e9d021c31d1"
 decision = "D-149"
+
+[[file]]
+path = "acceptance/p6_3b_boundary_schedule.jl"
+sha256 = "da7a8505ceffe0d27cdda56f026fda1f21652a74304033f20d99ec93af9a9d80"
+decision = "D-145"
+
+[[file]]
+path = "acceptance/p6_15c_openvt_table_s1.jl"
+sha256 = "4ba26fc505c739f3e5a2f1c798358fe5ee4701740103a43d64d3540ec8c292de"
+decision = "D-150"
 
 [[file]]
 path = "acceptance/p6_3d_merks_split.jl"

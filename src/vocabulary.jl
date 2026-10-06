@@ -359,6 +359,7 @@ _around(spec, anchor) = Around(spec, anchor)
 fold for `cells(k)`, else plain Julia."""
 function _fold_or_gather(fold, body, R, s, cond)
     R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond)
+    R isa ContactDomain && return _contact_fold(fold, body, R(s), cond)          # `contacts(rel)` (D-150)
     R === cells && return _population(fold, body, cells(s), cond)
     return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
 end
@@ -367,6 +368,7 @@ end
 function _fold_iter(fold, body, itr, cond)
     itr === cells && (itr = CellDomain(Int[]))
     itr isa Union{CellDomain, SiteDomain} && return _population(fold, body, itr, cond)
+    itr isa ContactDomain && return _contact_fold(fold, body, itr, cond)         # a cell's contacts (D-150)
     return cond === nothing ? fold(body(n) for n in itr) : fold(body(n) for n in itr if cond(n))
 end
 
@@ -952,13 +954,132 @@ struct ObservedEq
     expr::Any
 end
 
+# ---------------------------------------------------------------------------------------
+# Field boundaries (`@boundary`, D-145) and the phase order (`@schedule`)
+
+"""
+    Dirichlet(v)
+
+A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), …)`) a ghost
+value, the missing neighbour set to `2v − c` so that the face value `v` is reached midway
+between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
+value, every site where `pred` holds set to `v` after every explicit substep. `v` is a
+number, a parameter or a parameter expression (a `remake` of the parameter keeps the code).
+"""
+struct Dirichlet{V}
+    value::V
+end
+
+"""
+    NoFlux()
+
+A zero-flux face in `@boundary` (`x => (NoFlux(), …)`): the missing neighbour mirrors the
+edge site. A closed axis without an entry is zero flux already.
+"""
+struct NoFlux end
+
+"""
+One entry of a `@boundary` block of field `field`: a face pair on axis `axis` (1, 2, 3 for
+`x`, `y`, `z`) with `sides = (low, high)`, each `Dirichlet` or `NoFlux`; or, with `axis = 0`,
+a site mask `sites(mask) => Dirichlet(value)`.
+"""
+struct BoundaryEntry
+    field::Any                 # the field variable (symbolic)
+    axis::Int
+    sides::Tuple{Any, Any}
+    mask::Any
+    value::Any
+end
+
+const _AXIS_NAMES = (:x, :y, :z)
+
+function _boundary_field(x)
+    i = info(x)
+    (i !== nothing && i.role === :field) || throw(ArgumentError(
+        "@boundary `$(i === nothing ? x : i.name)`: boundaries are for field variables (`c(field)`), and " *
+        "`$(i === nothing ? x : i.name)` is $(i === nothing ? "not a declared variable" : _with_article("$(i.role) variable"))"))
+    return x
+end
+_boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
+_boundary_side(s, field, axis, what) = throw(ArgumentError(
+    "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)` or `NoFlux()`"))
+function _boundary_value(v, field, what)
+    u = _unwrap(v)
+    u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
+    u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
+        "@boundary $(info(field).name): the $what value is `$v`; give a number, a parameter or a parameter expression"))
+    for y in _leaves(u)
+        j = info(y)
+        (j === nothing || j.role === :param) || throw(ArgumentError(
+            "@boundary $(info(field).name): the $what value `$v` reads `$(j.name)`; a boundary value is a number, a " *
+            "parameter or a parameter expression"))
+    end
+    return v
+end
+
+"""`x => (low, high)` of `@boundary field` (axis named `name`)."""
+function boundary_face(field, name::Symbol, sides)
+    _boundary_field(field)
+    axis = findfirst(==(name), _AXIS_NAMES)
+    axis === nothing && throw(ArgumentError("@boundary $(info(field).name): unknown axis `$name`; the axes are x, y, z"))
+    (sides isa Tuple && length(sides) == 2) || throw(ArgumentError(
+        "@boundary $(info(field).name): `$name => …` takes a pair of sides `(low, high)`, each `Dirichlet(value)` or `NoFlux()`"))
+    return BoundaryEntry(field, axis, (_boundary_side(sides[1], field, name, "low"), _boundary_side(sides[2], field, name, "high")),
+        nothing, nothing)
+end
+
+"""`sites(pred) => Dirichlet(v)` of `@boundary field`."""
+function boundary_mask(field, pred, value)
+    _boundary_field(field)
+    value isa Dirichlet || throw(ArgumentError(
+        "@boundary $(info(field).name): `sites(…) => $value`; a site mask takes `Dirichlet(value)`"))
+    (pred isa Bool || _unwrap(pred) isa SymbolicUtils.BasicSymbolic) || throw(ArgumentError(
+        "@boundary $(info(field).name): `sites($pred)` takes a site condition, e.g. `sites(kind == border)`"))
+    return BoundaryEntry(field, 0, (nothing, nothing), pred, _boundary_value(value.value, field, "site-mask"))
+end
+
+"""The canonical phases of one MCS, in their default order (`@schedule`, D-145)."""
+const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
+
+"""
+    _placed_schedule(listed) -> Vector{Symbol}
+
+The full phase order of `@schedule listed…` (D-145): the listed phases in the listed order;
+each unlisted phase, in default order, right after the last placed phase that precedes it in
+the default order (first if none). Checks the names and the order rules, naming the offender.
+"""
+function _placed_schedule(listed)
+    seen = Symbol[]
+    for n in listed
+        n isa Symbol || throw(ArgumentError("@schedule lists phase names; got `$n`"))
+        n in SCHEDULE_PHASES || throw(ArgumentError(
+            "@schedule: unknown phase `$n`; the phases are $(join(SCHEDULE_PHASES, ", "))"))
+        n in seen && throw(ArgumentError("@schedule: phase `$n` is listed twice"))
+        push!(seen, n)
+    end
+    :end_mcs in seen && last(seen) !== :end_mcs && throw(ArgumentError(
+        "@schedule: `end_mcs` must be last (the MCS boundary: history, callbacks, saving)"))
+    seq = copy(seen)
+    for (j, ph) in enumerate(SCHEDULE_PHASES)
+        ph in seq && continue
+        pos = maximum((findfirst(==(q), seq) for q in SCHEDULE_PHASES[1:(j - 1)] if q in seq); init = 0)
+        insert!(seq, pos + 1, ph)
+    end
+    at(n) = findfirst(==(n), seq)
+    at(:before_mcs) < at(:sweep) || throw(ArgumentError(
+        "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"))
+    at(:after_mcs) > at(:sweep) || throw(ArgumentError(
+        "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"))
+    return seq
+end
+
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, components,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ)
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

@@ -10,7 +10,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
-    Symbol("@extend"), Symbol("@components"))
+    Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"))
 
 """
     @potts_model Name begin
@@ -112,6 +112,9 @@ function _potts_model(name::Symbol, body::Expr, mod)
         push!(kws, Expr(:kw, k, :nothing))        # `Model(; λ = 2.0)` overrides the default
     end
     P = :(Potts)
+    # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
+    # included): a model without them builds exactly as before (first-construction latency)
+    bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -140,10 +143,12 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.ObservedEq[]
         __lattice = nothing
         __sweep = nothing
+        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
         __base_failed = $(Ref{Bool})(false)       # set when an `@extend` base's constructor throws
+        __features = $P._feature_counts()         # contact folds and bounded draws built (D-150)
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
@@ -152,7 +157,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
-        sweep = __sweep, structural = $structural))
+        sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
+        structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -276,6 +282,7 @@ end
 # unconditional (the constructor's keywords are fixed when the macro expands).
 const _UNCONDITIONAL = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
     Symbol("@variables"), Symbol("@extend"))
+_has_section(ex, sec) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === sec) || any(a -> _has_section(a, sec), ex.args))
 _is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
 _conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
                             any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
@@ -575,6 +582,38 @@ function _section!(parts, sec, args, ln = nothing)
         opts, rules = _options(args[2:end])
         kw = [Expr(:kw, k, rewrite(v)) for (k, v) in opts]
         push!(code, _located_push(:__divisions, :($P.divide($domain, $(map(rewrite, rules)...); $(kw...))), ln))
+    elseif sec === Symbol("@boundary")
+        # `@boundary c begin x => (low, high); sites(pred) => Dirichlet(v) end` (D-145): the axis
+        # keys `x`, `y`, `z` are read here, as keys, so a model variable `x` does not interfere
+        (length(args) >= 2 && args[1] isa Symbol) || throw(ArgumentError(
+            "@boundary takes a field and its conditions: `@boundary c begin x => (Dirichlet(0.0), NoFlux()); " *
+            "sites(kind == border) => Dirichlet(0.0) end`"))
+        field = args[1]
+        for (l, lln) in _lines_ln(args[2:end], ln)
+            (l isa Expr && l.head === :call && l.args[1] === :(=>) && length(l.args) == 3) || throw(ArgumentError(
+                "@boundary $field: `$l` is not a condition; write `x => (low, high)` (each side `Dirichlet(v)` or " *
+                "`NoFlux()`) or `sites(condition) => Dirichlet(v)`"))
+            lhs, rhs = l.args[2], l.args[3]
+            if lhs isa Symbol
+                push!(code, _located_push(:__boundaries, :($P.boundary_face($field, $(QuoteNode(lhs)), $(rewrite(rhs)))), lln))
+            elseif lhs isa Expr && lhs.head === :call && lhs.args[1] === :sites && length(lhs.args) == 2
+                push!(code, _located_push(:__boundaries, :($P.boundary_mask($field, $(rewrite(lhs.args[2])), $(rewrite(rhs)))), lln))
+            else
+                throw(ArgumentError("@boundary $field: `$lhs` is neither an axis (`x`, `y`, `z`) nor a site mask `sites(condition)`"))
+            end
+        end
+    elseif sec === Symbol("@schedule")
+        # `@schedule fields, sweep`: the phases of one MCS in order (D-145), checked here
+        names = length(args) == 1 && args[1] isa Expr && args[1].head === :tuple ? args[1].args : args
+        listed = Symbol[]
+        for n in names
+            n isa Symbol || throw(ArgumentError("@schedule lists phase names, e.g. `@schedule fields, sweep`; got `$n`"))
+            push!(listed, n)
+        end
+        isempty(listed) && throw(ArgumentError("@schedule lists at least one phase"))
+        _placed_schedule(listed)
+        push!(code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
+            :(append!(__schedule, Symbol[$(map(QuoteNode, listed)...)])))
     elseif sec === Symbol("@sweep")
         ex = only(args)
         ex = _replace_call(ex, :Metropolis, :($P.sweep_spec), QuoteNode(:metropolis))
@@ -667,12 +706,25 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && _rng_callee(ex.args[1]) !== nothing
+        return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
+    elseif h === :call && ex.args[1] === :rand && any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
+        return _rewrite_rng(ex, :rand)            # `rand(; x = 1)`: named like the other forms
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
     end
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+
+# an RNG call in a model body: `Potts._rng_call(:name, args…; kws…)`, which keeps `rand()`
+# and `randn(…)` as the model's draws and rejects every other form, naming it
+function _rewrite_rng(ex, name = _rng_callee(ex.args[1]))
+    args = map(rewrite, ex.args[2:end])
+    params = filter(a -> a isa Expr && a.head === :parameters, args)
+    rest = filter(a -> !(a isa Expr && a.head === :parameters), args)
+    return Expr(:call, :(Potts._rng_call), params..., QuoteNode(name), rest...)
+end
 
 # `div`/`÷` defined in a model body (`div(a, b) = …`, `function ÷(a, b) … end`, `div = f`):
 # the name it defines, or `nothing`. `rewrite` turns their calls into `_intdiv`.

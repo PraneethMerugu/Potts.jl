@@ -42,7 +42,7 @@ tutorial, and ends with the constructor that PottsModels ships for it.
 | [Vasculogenesis](@ref model-merks) | `MerksVasculogenesis` | elongated cells following their own chemoattractant form vascular networks (Merks et al. 2006) | a diffusing field and its equation, a chemotaxis drive, a shape energy, connectivity |
 | [Leader–follower invasion](@ref model-akeeb) | `AkeebInvasion` | leader cells climbing a cue pull a proliferating tumour slab into fingers (Akeeb, Marcus & Jiang 2026) | per-cell variables, growth after each MCS, division with random timing |
 | [Actin-driven migration](@ref model-wortel-act) | `WortelAct` | a site-level actin memory makes cells crawl persistently (Niculescu et al. 2015) | site variables, copy-time updates, a neighbourhood drive |
-| [Growing monolayer](@ref model-openvt) | `OpenVTGrowingMonolayer` | one cell grows and divides into a colony (OpenVT benchmark) | a growing target area, size-triggered division |
+| [Growing monolayer](@ref model-openvt) | `OpenVTGrowingMonolayer`, `OpenVTReferenceMonolayer` | one cell grows and divides into a colony (OpenVT benchmark; the 2024 Artistoo set and the manuscript's Table S1 set) | a growing target area, size-triggered division, contact counts, thresholds drawn per daughter |
 
 The pages build on one another: the first explains the parts every model shares, and
 each later page explains only what is new.

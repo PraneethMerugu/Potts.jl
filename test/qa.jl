@@ -213,6 +213,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
     :RelationSpec,        # relation dispatch in the `Around` vocabulary
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
+    :_derived,            # the `at_init` phases without field clamps (`anneal`'s refresh, D-145)
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
     :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
@@ -223,6 +224,8 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
     :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
+    :has_origin,          # a contact fold's relation must exclude the origin (D-150)
+    :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
     :no_claims,           # the no-claim-set default
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems

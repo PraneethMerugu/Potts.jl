@@ -37,6 +37,9 @@ Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for 
 """
 function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
+    return _with_faces(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
+end
+function _generated_code(c, T, field_solver, ode_solver, solvers)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in getfield(c.sys, :parameters))
     (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
@@ -115,7 +118,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
         "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
     st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
     lat = core_lattice(getfield(sys, :lattice))
-    relations = NamedTuple(k => v for (k, v) in _sorted(c.relations))
+    relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
     spacing = getfield(sys, :lattice).spacing === nothing ? nothing : map(T, getfield(sys, :lattice).spacing)
     hctx = (; lattice = lat, contact = CorePotts.relation(c.contact_spec, lat),
         map(r -> CorePotts.relation(r, lat), relations)...,
@@ -139,11 +142,13 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
     sys = c.sys
     fns, generated = _recording() do
+        _with_faces(c) do
         ce = _constraint_expr(c, T)
         (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
             constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
             phases = _phases_parts(c, T, values, spec), lifecycle = _lifecycle(c, T),
             total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
+        end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
     # every generated function, without line numbers: independent of the install path, and
@@ -159,9 +164,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # non-default `mcs_duration`; only non-default values, so a model on the default schedule
     # (every = 1, offset = 0, `mcs_duration` = 1) keeps its fingerprint
     cad = String[]
-    for f in fieldnames(typeof(phases))
+    for f in (:before_mcs, :after_mcs, :end_mcs, :at_init)      # the phases by role (`mcs` lists them again)
         _cadences!(cad, getfield(phases, f))
     end
+    # the phase order (`@schedule`, D-145), canonicalized to the full placed order; only a
+    # non-default one, so a model without `@schedule` (or one listing the default relative
+    # order) keeps its fingerprint
+    order = _phase_order(sys)
+    order == collect(SCHEDULE_PHASES) || push!(cad, "schedule=$(join(order, ","))")
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
     # the MCS length, which solvers keep as data (`Adaptive`'s dt, an explicit-substeps `FieldStep.dt`)
     getfield(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(getfield(sys, :sweep).mcs_duration))")
@@ -602,6 +612,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if c.uses_surface
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
+    append!(cell, _contact_count_columns(c, σ, kinds, lat, ncell))          # contact folds (D-150)
+    _has_bounded_draw(sys) && push!(model, CorePotts.MODEL_STATUS => zeros(UInt32, 1))
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
     ckey = _unwrap(B.cluster)
     if c.uses_clusters

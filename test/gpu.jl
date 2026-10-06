@@ -475,6 +475,14 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3a_topology_track.jl"))
 end
 
+# P6.15c: the frozen OpenVT Table S1 file; its Metal testset (contact counts exact, draws per
+# daughter and the model's free-surface fraction, CheckerboardCPM in Float32) runs only where
+# Metal is loaded (here)
+module P615cOnMetal
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_15c_openvt_table_s1.jl"))
+end
+
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")

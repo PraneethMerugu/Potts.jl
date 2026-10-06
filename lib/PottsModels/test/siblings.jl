@@ -134,6 +134,43 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
+# Contact inhibition Artistoo's way (the share of a cell's von Neumann contacts that are not
+# with cells of the other kind), in a two-kind colony, with uniform division thresholds
+# drawn per daughter: the contact fold over a named relation with a kind predicate
+@potts_model KindInhibitedGrowth begin
+    @kinds medium A B
+    @parameters begin
+        A₀ = 16.0
+        λ = 4.0
+        α = 0.4
+        φ = 0.5
+        T = 10.0
+        J[kind, kind] = [0.0 10.0 10.0; 10.0 20.0 20.0; 10.0 20.0 20.0]
+    end
+    @variables begin
+        A_star(cell) = A₀
+        θ(cell) = 2.0
+        free(cell) = 1.0
+    end
+    @lattice Lattice((40, 40); boundary = Closed(), neighborhood = Moore(1))
+    @relations begin
+        proposal = Moore(1)
+        vn = VonNeumann(1)
+    end
+    @energy begin
+        cells(A, B) => λ * (volume - A_star)^2
+        contacts => J[kind, kind′]
+    end
+    @after_mcs begin
+        free ~ ifelse(count(true for _ in contacts(vn)) > 0,
+            1 - ifelse(kind == A, count(kind′ == B for _ in contacts(vn)), count(kind′ == A for _ in contacts(vn))) /
+                count(true for _ in contacts(vn)), 1.0)
+        A_star ~ ifelse(free >= φ, Pre(A_star) + α, Pre(A_star))
+    end
+    @divide cells(A, B) when = volume >= θ * A₀, along = RandomPlane(), A_star => Split(), θ => 1.5 + rand()
+    @sweep Metropolis(; temperature = T)
+end
+
 block(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 
 # published model => (sibling label, check); every check builds, self-checks and runs
@@ -183,6 +220,35 @@ const SIBLINGS = Dict(
         @test sol.stats.lifecycle.divisions >= 2
     end),
     :SingleDivisionFixture => ("major-axis division", () -> SIBLINGS[:OpenVTGrowingMonolayer][2]()),
+    :OpenVTReferenceMonolayer => ("von Neumann inhibition by the other kind, uniform thresholds per daughter", function ()
+        σ = block((40, 40), (14:17, 14:17), (18:21, 14:17), (14:17, 18:21), (18:21, 18:21))
+        p = PottsProblem(KindInhibitedGrowth(; name = :k), [ownership => σ, kind => [:A, :B, :B, :A]], (0, 150);
+            capacity = 128, seed = 2)
+        @test selfcheck(p) < 1e-9
+        sol = solve(p, SequentialCPM(; proposal = Moore(1)); saveat = 1)
+        @test sol.stats.lifecycle.divisions >= 4
+        # the fold is exact: free = (medium or same-kind pairs) / pairs over von Neumann, from σ
+        bad = 0
+        for i in 2:length(sol.u)
+            u, v = sol.u[i], sol.u[i - 1]
+            count(>(0), u.cell.volume) == count(>(0), v.cell.volume) || continue    # quiet MCS only
+            for c in findall(>(0), u.cell.volume)
+                n = m = 0
+                for I in findall(==(c), u.σ), o in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    J = Tuple(I) .+ o
+                    all(1 .<= J .<= size(u.σ)) || continue
+                    q = u.σ[J...]
+                    q == c && continue
+                    n += 1
+                    m += q == 0 || u.cell.kind[q] == u.cell.kind[c]
+                end
+                bad += !isapprox(u.cell.free[c], m / n; atol = 1e-12)       # 1 - (n - m)/n vs m/n
+            end
+        end
+        @test bad == 0
+        θs = sol.u[end].cell.θ[sol.u[end].cell.volume .> 0]
+        @test all(x -> 1.5 < x < 2.5, θs) && length(unique(θs)) == length(θs)      # one draw per daughter
+    end),
     :OpenVTChain => ("compression released by a scheduled per-cell target", function ()
         σ = block((60, 4), [((1 + 4(c - 1)):(4c), 1:4) for c in 1:6]...)       # 6 cells of 16 sites from x = 1
         p = PottsProblem(ScheduledRelease(; name = :r), [ownership => σ, kind => fill(:cell, 6)], (0, 300); seed = 3)
