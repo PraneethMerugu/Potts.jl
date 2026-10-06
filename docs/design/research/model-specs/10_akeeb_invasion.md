@@ -292,7 +292,7 @@ The paper probably mixed dataset versions; no single dataset matches every numbe
 - "Weak adhesion increased infiltrative area to 183,406 µm² … under high migration" (p.10) reproduces only as the **unconditional** J_LF > 2 marginal. Conditional on λ ≥ 20 it is 316,703.
 - The paper's "intermediate" fingers 7.11 needs J_LF ∈ [−1, 2]. With [0, 2] it is 7.35.
 
-Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from A (V-A3–A5), not the paper's full-sweep numbers. The slice is within 1.5 % of the full sweep for areas, fingers and large counts. Running the slice, 121 × 10 runs, costs about 1.7 CPU-hours against about 18 for the full sweep.
+Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from A (V-A3–A5), not the paper's full-sweep numbers. The slice is within 1.5 % of the full sweep for areas, fingers and large counts. Running the slice, 121 × 10 runs, costs about 1.7 CPU-hours against about 18 for the full sweep (M1 Pro, sequential CPU).
 
 #### 5.3.2 Time mapping and initial layout
 
@@ -333,8 +333,8 @@ Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from
   - The frozen test should carry this self-check as a fixture test: rules against the reference CSV versus B/C. That is the D-060 lesson of testing the test.
 - **Invariants that hold in every one of A, B and C, to assert per run:** infiltrative ≥ invasive, and detached ≥ singles.
 - **Ensemble and cost.**
-  - Ours n = 10 per point, with independent seeds (the authors set no seed, D11). CI tier: V-A0, V-A1, V-A2 (P1–P8), V-A7 (+P9), V-A8, V-A11, V-C1 and V-C2. That is 9 points × 10 runs × 701 MCS on 500 × 300, about 5 s/run sequential at the gate's 47 ns/site·MCS, so about 8 CPU-minutes.
-  - FULL tier: V-A3–A5, 1210 runs, about 1.7 CPU-hours.
+  - Ours n = 10 per point, with independent seeds (the authors set no seed, D11). CI tier: V-A0, V-A1, V-A2 (P1–P8), V-A7 (+P9), V-A8, V-A11, V-C1 and V-C2. That is 9 points × 10 runs × 701 MCS on 500 × 300, about 5 s/run sequential at the gate's 47 ns/site·MCS (M1 Pro, sequential CPU), so about 8 CPU-minutes.
+  - FULL tier: V-A3–A5, 1210 runs, about 1.7 CPU-hours (M1 Pro, sequential CPU).
   - Family size at the CI tier is 48 + 6 + 18 + 1 + 2 + exact checks. The calibration above bounds the false-fail risk empirically.
 
 **Observable definitions (code-exact).** Coordinates are 0-based (x, y), x periodic, y closed. Our port is 1-based: shift the seed row and nothing else. Every quantity below is translation-invariant or is compared within the same frame.

@@ -2400,3 +2400,114 @@ session.
   - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
   - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
   - The test file is re-frozen under this entry.
+
+## D-154 Paper scope: all 12 reference models, no fallback set; deviations as a table per model; no cross-framework speed comparison (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
+
+- **Scope.** The Potts.jl paper waits for all 12 reproductions on the PI's list (paper-model list, 2026-09-29). There is no minimum or fallback set. Steps 4–12 are planned to completion; steps 6–12 become items when step 5 merges, as already planned.
+- **Deviations.**
+  - Each model's docs page, and the paper supplement, carry a deviations table. It lists every failed or provisional target with four columns:
+    - our value;
+    - the paper's value;
+    - the suspected cause;
+    - the author-question status (not asked / asked on date / answered → D-entry).
+  - The main text names only the deviations that matter. V-PRE5 (D-151) is the first row.
+  - The reproduction acceptance's "deviations table" (ROADMAP Phase 6, `TUTORIAL_TEMPLATE.md`) takes this form. Pages frozen before this entry are brought into it under P6.0bd.
+- **Speed.** The paper makes no throughput comparison against CompuCell3D, Morpheus or Artistoo; no item is filed. The OpenVT submission keeps its own time-to-10⁴ figure, as the consortium manuscript requires. P6.15g's profiling stays, for our own sweeps.
+
+## D-155 Phase 6 gates: no author question blocks a model; gated models ship provisional (2026-10-06, maintainer: "Ship provisional now", relayed by the peer session "Potts.jl models and publications"; checked against model-specs README §4–§5)
+
+- **Rule.** A ROADMAP gate never parks an item. Where an author question is open, the model ships now with a labelled default, and the default gets a row in the D-154 deviations table. An answer that arrives later becomes a D-entry and, if it changes a value, a re-run.
+  - This supersedes the "block" and "ask first" wording of README §4.3 (B2, Bauer pixel size: provisional 0.55 µm/px) and §4.4 (J3, Jiang 2005 Rb → E2F: provisional inhibitory). The spec side is amended by the peer session.
+- **Lifted as resolved.** C4 (Fortuna, P6.5d) was resolved on 2026-09-30 from the CC3D 3.7.9/3.6.2 source (README §4.11 C4, §5 item 2): F ≈ 1, with diffusion and decay before secretion. The Fortuna J_cyto–lam question (20 vs 10) is a non-gating sheet question.
+- **Provisional defaults in force:**
+  - F1 (foam): the displacement form, with γ₀ calibrated via γ₀/J ≈ 1.9.
+  - Y1 (myxobacteria): the unit vector.
+  - N1–N3 (Jafari/Andasari): a clamp, per-cell uptake, χ calibrated.
+  - Merks 48 h and L 50/60 (D-153).
+  - B2 and J3, as above.
+- **Not an author question.** Y2 is our ruling: sequential first, then checkerboard validated statistically (README §4.10).
+- **Questions.** Every model question goes on one sheet for the maintainer and Dr Jiang (`author-questions/PI_SHEET.md`, gitignored, kept by the peer session). Dr Jiang sends the letters, and nobody here contacts authors or the consortium. V-PRE5 (D-151) goes to Glazier.
+
+## D-156 Paper-run policy, rendering, release uploads and scope (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
+
+- **Compute (amended the same day).** Offline FULL reproductions and sweeps may run on the maintainer's faster PC over Tailscale (100.107.82.114).
+  - Runs are launched detached, with replicates spread across the PC's cores. Outputs are copied back to `lib/PottsModels/reproductions/data/NN/` on this Mac.
+  - Commits, merges and pushes happen only on this Mac, through the coordinator. Nothing is committed from the PC (D-025).
+  - Before a run, the PC is synced to the exact commit being reproduced, with `Pkg.instantiate()` if the Manifest changed. The provenance file records the producing machine: hostname, CPU, thread count, Julia version and commit.
+  - Metal runs and the Metal gate stay on this Mac. The PC is CPU-only until a CUDA backend exists, and whether to scope that waits on its GPU being known.
+  - Runs use the paper's n and lattice wherever the PC or this Mac makes that feasible. A cut is recorded as a D-154 deviation only when one is still needed.
+  - **The machine (read over SSH, 2026-10-06).**
+    - Host and OS: `praneeth@100.107.82.114` (praneeth-NucBox-EVO-X2), Ubuntu 24.04.
+    - CPU and memory: AMD Ryzen AI Max+ 395 with 16 cores / 32 threads, 62 GB RAM and 360 GB free disk.
+    - GPU: a Radeon 8060S iGPU (gfx1151) with ROCm 7.2.1. There is no NVIDIA GPU, so no CUDA item; an AMDGPU/ROCBackend item is not scoped.
+    - Julia 1.12.6 at `~/.juliaup/bin/julia`; it is not on the non-interactive PATH.
+  - **Where runs happen.**
+    - FULL runs use a dedicated clone, `~/potts-full`, never the self-hosted Actions runner's workspace (`~/actions-runner/_work/…`).
+    - The runner shares the machine, so a FULL run is capped below the full 32 threads, or the runner is paused, as the maintainer decides.
+    - Runs are launched in detached tmux sessions (tmux 3.4, installed by the maintainer).
+  - **In force** once the maintainer approved the clone (2026-10-06). Runs are capped at 24 threads; pausing the runner needs asking first.
+- **Unstated parameters and rules** are calibrated to the paper's figures and labelled "calibrated": Bauer recruitment and degradation; Jiang 2005 T, α, θ, γ_P and lattice; Jafari Nivlouei hypoxia, necrosis, Wnt and division.
+- **Rendering.** Cells are never drawn with outlines: no `boundaries = true` or `pottsboundaries` overlay in docs, paper-run videos or reproduction figures. `pottsplot` already defaults to `boundaries = false`. Existing uses are removed under P6.0bf.
+- **Release uploads.** Any reproduction FULL-run video may go to the `reproductions-2026-10` release without asking each time (confirmed directly by the maintainer, 2026-10-06); this amends D-146's per-upload confirmation. Anything else still asks.
+- **Publishing.** Each reproduction tutorial is published to the live docs when its model's FULL run is frozen.
+- **Scope.**
+  - The PI's deferred items 2 and 3 are closed: OpenVT is item 2, and Fortuna covers item 3, single-cell migration.
+  - Fortuna is 14a, 14b (the polarization study P1–P6) and 14c.
+  - FBCA reproduces 08a and calibrates 08b; ACRI 2018 is optional.
+  - Cell sorting is Graner–Glazier only. The Osborne/Chaste rows V-OS1–V-OS5 are retired, not parked; the 09 page's row is updated under P6.0bd.
+  - Zajac is a reconstruction with calibrated T and α (Z2). Thesis values are swapped in only if they arrive.
+  - The extended library (Mombach, Shirinifard, Wang 2025, the hard-model set) comes after the paper.
+  - The build order stays the ROADMAP order.
+- **MTK.** The maintainer wants the paper to claim Potts.jl is ModelingToolkit-native as a whole ("Full MTK-native"). That conflicts with `research/mtk-native-investigation.md` §1, which found full nativeness unachievable now or within a year: the sweep has no equation form in MTK, and per-cell state is ragged and grows. Its recommendation (§7.1) is Catalyst-spatial nativeness, Level A. P6.0be scopes what the paper can defensibly claim and what work closes the gap. The maintainer decides the wording.
+  - **Maintainer answer (2026-10-06).** Aim for the full claim. P6.0be designs toward full MTK-nativeness and reports what each step costs.
+  - **Standing rule.** Development stops and the maintainer is asked whenever MTK causes major friction (blocked designs, workarounds that fight MTK's data model, large build-cost or latency increases), or a change would bring a major slowdown in runtime, construction time or the gate.
+- **Per model.**
+  - **Merks (into P6.3d/e).**
+    - At a closed edge the ring rule matches TST (P6.0ae): out-of-domain sites count as a cell in `ring_cells`.
+    - Digitise 01b Figs 5, 7–10, 12 and 13 and target them through the continuous-χ superset (M7), with inferred parameters flagged.
+    - Plots show both clocks: relaxation-end time is the primary axis, with a note giving the code-MCS offset.
+  - **Akeeb (P6.2d).**
+    - V-A6 is un-parked with the area-equality classifier.
+    - The FULL extras are run: the V-A7 full-sweep |r|, and V-A3–V-A5.
+    - V-A8/A9 go on the PI sheet, since Dr Jiang is a co-author.
+  - **V-PRE5 (P6.1g).**
+    - One more bounded pass: ≥ 20 more replicates, and one scan per candidate cause.
+    - If no candidate explains it, a fresh seed set is also tried.
+    - After that it stays a reported deviation.
+
+## D-157 Device testing and benchmarks are backend-neutral: Metal (Mac) and ROCm (PC), with ROCm in CI (2026-10-06, maintainer; coordinator design)
+
+- **Why.** The maintainer's PC (D-156) has a Radeon 8060S (gfx1151). A probe on 2026-10-06 with AMDGPU.jl, ROCm 7.2.1 and Julia 1.12.6 passed:
+  - `AMDGPU.functional()`;
+  - KernelAbstractions kernels in Float32 and Float64;
+  - in-kernel `Atomix.@atomic` add and `@atomicreplace`.
+  Library code already reaches devices only through KernelAbstractions. The coupling to Metal is in the tests and benchmarks: 23 frozen acceptance sites call `Main.Metal.MetalBackend()`, `test/gpu.jl` does `using Metal`, `GROUP=GPU` sets `POTTS_GPU=metal`, and `gate.jl` and `ab.jl` assume Metal.
+- **Device harness (P6.0bg).**
+  - One shared helper (`test/shared/devices.jl`) reads `POTTS_GPU ∈ {"", "metal", "rocm"}`, loads Metal.jl or AMDGPU.jl, and exposes `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
+  - Every test project includes it. The frozen acceptance files are re-frozen to call it; the change is mechanical, and no assertion changes.
+  - `GROUP=GPU` takes the backend from `POTTS_GPU`. AMDGPU joins the test projects as a dependency next to Metal; each loads only on its own platform.
+- **What a device test may assert.**
+  - Exact invariants, such as volumes equal to site counts and conserved quantities.
+  - Same-seed determinism on that backend.
+  - Statistical equivalence to the CPU (the D-029 pattern).
+  - Never bitwise CPU–device equality, unless a test already pins it for an exact integer path.
+- **Float64.** The rule "device code never touches Float64" stays for every backend, so code stays Metal-portable, even though ROCm has doubles.
+- **CI (P6.0bh, approved by the maintainer).** A workflow job on the self-hosted runner (`runs-on: [self-hosted, linux, …]`) runs the GPU group under `POTTS_GPU=rocm` on pushes to `monorepo`.
+  - Metal stays a manual merge check on the Mac, under `tools/exclusive.sh`.
+  - FULL runs on the PC stay capped at 24 threads so CI keeps its share (D-156).
+- **Benchmarks (P6.0bb, expanded).**
+  - `benchmark/baseline.toml` is keyed by machine and backend, e.g. `mac.metal`, `mac.cpu`, `nucbox.rocm`, `nucbox.cpu`. Each machine checks only its own rows.
+  - `gate.jl` and `ab.jl` take the backend as an argument.
+  - By default `ab.jl` seeds the Tuple type cache equally on both sides, runs a same-commit control, and interleaves base and candidate. Today's P6.3b and P6.15c merges needed all three to read the Metal A/B: unseeded, it showed 5–6% artefacts that the seeded form measured at ≤ 1.010.
+  - Benchmarks on the PC run inside a CI job or with the runner idle, never alongside CI tests.
+- **Order.** P6.0bg, then P6.0bh, then the P6.0bb expansion, all before step 4, because every later model adds device code.
+- **Compute location (maintainer, 2026-10-06).** No more intensive compute on the Mac. Every suite, benchmark, A/B, latency check, docs build and FULL run happens on the PC.
+  - **Merge checks.** The coordinator commits the candidate merge locally, ships it to the PC as a git bundle, and runs the check script there over SSH. Feature branches stay local (CLAUDE.md), so Actions cannot gate a merge.
+  - **GitHub Actions** on the runner re-runs the CPU and ROCm suites on every push to `monorepo`, as a safety net.
+  - **Benchmarks** become paired interleaved A/Bs with a same-commit control, so a busy shared machine does not invalidate them. Absolute baselines are informational.
+  - If the PC is unreachable, merges wait.
+- **Metal verification is deferred** until all paper models are done, when the maintainer will have a Mac Studio: the Metal suites, the Metal gate rows and the Metal A/B. Until then, Metal-breaking code is caught on ROCm by a kernel-IR check (no `double` in any device kernel's LLVM IR; extends D-047) and by the static Float64 rule.
+- **Core layout on the PC (16 cores / 32 threads; logical n and n+16 share physical core n).**
+  - Benchmarks and timed checks own physical cores 12–15 (logical 12–15 and 28–31). A timed process is pinned to one logical CPU there, with its SMT sibling idle.
+  - FULL runs and CI test jobs are pinned to `taskset -c 0-11,16-27`: 24 logical CPUs, the D-156 cap.
+  - Measured 2026-10-06 under a load of 25 without pinning: an Akeeb sequential run read either ~40 or ~71 ns/site depending on SMT sharing, which made a same-commit control read 1.729.
