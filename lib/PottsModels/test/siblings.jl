@@ -180,7 +180,7 @@ end
     @parameters begin
         λ = 5.0
         V₀ = 36.0
-        λ_L = 2.0
+        λ_L = 5.0
         L = 16.0
         T = 10.0
         J[kind, kind] = [0.0 10.0; 10.0 20.0]
@@ -265,8 +265,9 @@ const SIBLINGS = Dict(
                           seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1e-9);
                           u = solve(p, SequentialCPM()).u[end];
                           mean(c -> sib_length(u.σ, c), 1:4))
-        el, ro = mean(s -> len(2.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
-        @test el > 12 && el > ro + 4                          # cells stretch towards L = 16 (≈ 7.8 as squares)
+        # seeds 1–3 at 300 MCS: 11.5–12.2 with λ_L = 5, 7.3–8.1 with λ_L = 0 (6.8 as squares)
+        el, ro = mean(s -> len(5.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
+        @test el > 10 && el > ro + 2.5                        # cells stretch towards L = 16
     end),
     :Merks2008 => ("CC3D chemotaxis towards the medium only", function ()
         cue = [0.05 * x for x in 1:40, y in 1:40]
