@@ -11,6 +11,7 @@ module PottsModels
 using Potts: Potts, @potts_model, Circle, Closed, Lattice, Metropolis, Moore, Periodic, Point,
     RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling
 using DelimitedFiles: readdlm
+using PrecompileTools: PrecompileTools
 using Random: MersenneTwister
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
@@ -25,5 +26,7 @@ include("akeeb.jl")
 
 include("analysis/Analysis.jl")
 public Analysis
+
+include("precompile.jl")
 
 end
