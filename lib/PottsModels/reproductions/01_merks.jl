@@ -181,6 +181,37 @@ record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(l
 # <video src="../01_merks_2006.mp4" controls autoplay loop muted playsinline width="600"></video>
 # ```
 
+# The same run drawn as 01a Fig. 4 draws it: the chemoattractant c in grayscale on a
+# logarithmic scale (three decades below the run's maximum), ten green isolines at
+# 5 %, 15 %, …, 95 % of the frame's maximum, and the cell outlines on top (01a Fig. 4
+# caption, p.48). The field is the model's own `c`, read from the saved states.
+
+function record_field(file, sol; title, figsize, every = 1)
+    frames = renderframes(sol, RenderRequest())
+    field(i) = Float64.(Array(sol.u[i].site.c))
+    nx, ny = frame_size(frames[1])
+    ox, oy = frame_geometry(frames[1]).origin
+    cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1e-12)
+    k = Observable(1)
+    fig = Figure(; size = figsize)
+    ax = Axis(fig[1, 1]; title, aspect = DataAspect())
+    heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), @lift(log10.(max.(field($k), 1e-3 * cmax)));
+        colormap = :grays, colorrange = (log10(cmax) - 3, log10(cmax)))
+    contour!(ax, ox .+ (1:nx) .- 0.5, oy .+ (1:ny) .- 0.5, @lift(field($k));
+        levels = @lift(collect(range(0.05, 0.95; length = 10)) .* max(maximum(field($k)), 1e-12)),
+        color = :green, linewidth = 0.8)
+    pottsboundaries!(ax, @lift(frames[$k]); color = :red3, linewidth = 0.6)
+    record(fig, file, 1:every:length(sol.u); framerate = 15) do i
+        k[] = i
+    end
+    return file
+end
+record_field("01_merks_2006_field.mp4", sol06; title = "Merks2006, $(lat06[1])²: c (log grey), isolines, cells",
+    figsize = (520, 540), every = 2)                      # every 40 MCS (20 min), to keep the file small
+# ```@raw html
+# <video src="../01_merks_2006_field.mp4" controls autoplay loop muted playsinline width="520"></video>
+# ```
+
 # The 2008 sprout: 128 cells on 202², with contact inhibition (the default), without it
 # (`χcc = χcM`, an ordinary parameter `remake`), and with extension-only chemotaxis (a
 # structural keyword, so a new model):
@@ -206,6 +237,15 @@ end
 # <video src="../01_merks_2008_ci.mp4" controls autoplay loop muted playsinline width="520"></video>
 # <video src="../01_merks_2008_noci.mp4" controls autoplay loop muted playsinline width="520"></video>
 # <video src="../01_merks_2008_eo.mp4" controls autoplay loop muted playsinline width="520"></video>
+# ```
+
+# The contact-inhibited sprout with its field, in the style of 01a Fig. 4 (the field is 0
+# during the 100 relaxation MCS):
+
+record_field("01_merks_2008_ci_field.mp4", sol_ci; title = "contact-inhibited sprout: c (log grey), isolines, cells",
+    figsize = (520, 540))
+# ```@raw html
+# <video src="../01_merks_2008_ci_field.mp4" controls autoplay loop muted playsinline width="520"></video>
 # ```
 #
 # ### Measurement
@@ -571,6 +611,9 @@ Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ou
 # - Parameter files for 01b Figs. 3, 5, 7–10, 12–13 and the code for the continuous
 #   χ(c,c)/χ(c,M) sweep. They would unpark V-C8, V-C10 and V-C11.
 # - The enclosing lattice of 01b Fig. 2 and the Fig. 10/12 lattices.
+# - At what time were the 01a Fig. 6 (cell length) and Fig. 7 (adhesion) snapshots
+#   taken? We classify them at 48 h, the last Fig. 4 time (V-E5, V-E6); the answer moves
+#   those rows to the stated time.
 #
 # We would welcome corrections, the original input files, or a joint check of these
 # results. Contact: the PottsModels maintainer. Answers are recorded as a new row in the
