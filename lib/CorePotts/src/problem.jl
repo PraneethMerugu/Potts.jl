@@ -412,8 +412,9 @@ function CommonSolve.step!(integ::PottsIntegrator)
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
     # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
-    # lifecycle in the model's order; `map` over the short tuple unrolls (no dynamic dispatch)
-    map(entry -> _run_entry!(integ, entry), integ.f.phases.mcs)
+    # lifecycle in the model's order, unrolled by recursion over the tuple and inlined, so the
+    # host enqueue is that of a hand-written sequence (a `map` with a closure cost Metal ~5 %)
+    _run_mcs!(integ, integ.f.phases.mcs)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += attempts
@@ -422,13 +423,16 @@ function CommonSolve.step!(integ::PottsIntegrator)
     return integ
 end
 
+@inline _run_mcs!(integ, ::Tuple{}) = nothing
+@inline _run_mcs!(integ, t::Tuple) = (_run_entry!(integ, first(t)); _run_mcs!(integ, Base.tail(t)))
+
 # One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
-function _run_entry!(integ::PottsIntegrator, phases::Tuple)
+@inline function _run_entry!(integ::PottsIntegrator, phases::Tuple)
     integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     return nothing
 end
-function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
+@inline function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     if integ.alg isa SequentialCPM
         acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
             integ.law, integ.key, integ.t, integ.f.track)
@@ -441,7 +445,7 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     end
     return nothing
 end
-function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
+@inline function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
     return nothing
 end

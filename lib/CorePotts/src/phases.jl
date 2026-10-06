@@ -206,7 +206,7 @@ Without it the order is today's, `(before_mcs, SweepPhase(), after_mcs, Lifecycl
 end_mcs)`; the positional form `Phases(before_mcs, after_mcs, end_mcs, at_init)` means the
 same. With an explicit `mcs`, `before_mcs`, `after_mcs` and `end_mcs` name the phases by role
 (for inspection) and are not run themselves: `mcs` is (Potts' `@schedule` builds one).
-`step!` is one fold over `mcs`, unrolled by the compiler.
+`step!` is one fold over `mcs`, unrolled at compile time (recursion over the tuple, inlined).
 """
 struct Phases{B, A, E, I, M}
     before_mcs::B
