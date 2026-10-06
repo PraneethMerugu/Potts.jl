@@ -144,8 +144,8 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "2973df9c13f83ee24dba5792c5442c8dcbbcf3797c76221c124be4f6ec532c36"
-decision = "D-148"
+sha256 = "2f98a73e774e76f544f5dc2bf11fcc58d5fd2ddf02befef8f656379b67311f53"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/p6_0ad_barker_offset.jl"
@@ -361,3 +361,18 @@ decision = "D-148"
 path = "acceptance/p6_15d_openvt_analysis.jl"
 sha256 = "acc18722b4fbeaf66f776ead50ddce0816e88a54eb3a18f4df9d3e9d021c31d1"
 decision = "D-149"
+
+[[file]]
+path = "acceptance/p6_3d_merks_split.jl"
+sha256 = "464746ce2d0706d6aa32dd9367d1b77284e355427a1ad3ccd50e320b951712db"
+decision = "D-153"
+
+[[file]]
+path = "reproductions/01_merks.jl"
+sha256 = "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
+decision = "D-153"
+
+[[file]]
+path = "../reproductions/01_merks.jl"
+sha256 = "cacb472d9bfdff811e5e6091871024d03d0d3b5747470ea32598e21ead368c1d"
+decision = "D-153"

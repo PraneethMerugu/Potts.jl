@@ -304,6 +304,12 @@ function p60v1_published(T)
         :SingleDivisionFixture => () -> PottsProblem(SingleDivisionFixture(; name = :s), [ownership => sd, kind => [:epithelial]],
             (0, 8); T, capacity = 4),
         :OpenVTChain => () -> PottsProblem(OpenVTChain(; name = :c), openvt_chain(11), (0, 8); T),   # D-148 re-freeze
+        :Merks2006 => () -> PottsProblem(Merks2006(; name = :m6, lattice = (32, 32)),                    # D-153 re-freeze
+            layout(merks2006_layout(; lattice = (32, 32), n = 6, side = 7), (32, 32)), (0, 8); T,
+            field_solver = ExplicitEuler(substeps = 15)),
+        :Merks2008 => () -> PottsProblem(Merks2008(; name = :m8, lattice = (32, 32)),                    # D-153 re-freeze
+            layout(merks2008_denovo(; lattice = (32, 32), n = 12, rounds = 2), (32, 32)), (0, 8); T,
+            field_solver = ExplicitEuler(substeps = 15)),
     )
 end
 const P60V1_PUBLISHED = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))
