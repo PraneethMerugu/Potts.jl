@@ -25,7 +25,7 @@
     end
     @drive copy => -λ * (c[target] - c[source])
     @equations D(c) ~ D_c * Δ(c) + (kind == cell) - c
-    @after_mcs V_target ~ Pre(V_target) + λ
+    @after_mcs V_target ~ Pre(V_target) + V₀ / T
     @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
     @sweep Metropolis(; temperature = T)
 end
