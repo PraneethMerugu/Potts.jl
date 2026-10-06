@@ -334,6 +334,15 @@ Every item's acceptance also includes the standing checks:
   - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
 - [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
   - The Metal suites, the Metal gate rows (new baselines for the new machine), and a seeded Metal A/B of every gate case against the last Metal-verified commit (ebb0f823; its OpenVT pair was skipped).
+- [ ] **P6.0bj** (GE0, `research/gpu-ensembles.md` §9; approved by the maintainer) Measure first, on the PC, before any GPU-ensemble code is built.
+  - K0: `EnsembleThreads` with a ROCm backend, with no new code.
+  - K1: a minimal batched-checkerboard prototype (replicas as an extra array dimension, one launch per colour).
+  - K2: S-a, one replica per work-item, for tiny lattices.
+  - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
+  - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory.
+  - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
+  - Report the pinned speedup on the PC, naming machine and backend.
 - [ ] **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
   - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
   - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
