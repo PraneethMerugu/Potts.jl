@@ -459,6 +459,7 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
     lat = core_lattice(getfield(sys, :lattice))
     N = ndims(lat)
     stepped = Set{Symbol}(info(x).name for (x, _) in fields)
+    steporder = Symbol[info(x).name for (x, _) in fields]
     seen = Set{Tuple{Symbol, Int}}()
     for b in bs
         _located(sys, b) do
@@ -473,6 +474,17 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 _check_names(b.mask, _SITE_BUILTINS, "a boundary site mask"; between_copies = true)
                 _has_op(b.mask, random_uniform) && throw(ArgumentError("@boundary $n: a site mask cannot draw `rand()`"))
                 lower(b.mask, _site_env(Float64, :i, rn; mcs = :mcs))
+                # the clamp runs in the field's step kernel: a mask reading that field, or one
+                # stepped after it in the same phase, would see a value mid-step
+                k = findfirst(==(n), steporder)
+                for (m, _, _) in _reads(b.mask)
+                    j = findfirst(==(m), steporder)
+                    (j === nothing || j < k) && continue
+                    throw(ArgumentError(m === n ?
+                        "@boundary $n: the site mask reads `$n`, the field it clamps; a mask cannot depend on the field it holds" :
+                        "@boundary $n: the site mask reads `$m`, a field stepped with or after `$n` in the same phase " *
+                        "(it would see `$m` before its step); a mask reads fields stepped before `$n`, or other variables"))
+                end
             else
                 ax = _AXIS_NAMES[b.axis]
                 lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
@@ -483,6 +495,13 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 lat.periodic[b.axis] && throw(ArgumentError(
                     "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
                 (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
+                rate = last(fields[findfirst(f -> info(first(f)).name === n, fields)])
+                lap = Ref(false)
+                _walk(y -> (iscall(y) && operation(y) === Δ && info(arguments(y)[1]) !== nothing &&
+                            info(arguments(y)[1]).name === n && (lap[] = true)), rate)
+                lap[] || throw(ArgumentError(
+                    "@boundary $n: a face condition (`$ax => …`) sets the ghost values of `Δ($n)`, but the equation " *
+                    "`D($n) ~ …` has no `Δ($n)`; drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
                 push!(seen, (n, b.axis))
             end
         end

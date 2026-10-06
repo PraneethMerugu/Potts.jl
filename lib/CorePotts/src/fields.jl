@@ -179,8 +179,9 @@ end
     FieldClamp((:site, :c), clamp)
 
 A phase applying a [`FieldStep`](@ref) `clamp` to the field as it is: `c[i] = clamp(st, p,
-ctx, key, mcs, i, c[i])` at every site of the domain (one kernel). Potts runs it at
-initialization, so the initial state satisfies the masked conditions.
+ctx, key, mcs, i, c[i])` at every site of the domain (one kernel). Potts puts it in `at_init`,
+so a fresh initial state satisfies the masked conditions; `init` from a checkpoint skips it
+(the restored state continues its run exactly).
 """
 struct FieldClamp{F <: Part, C}
     field::F
@@ -196,6 +197,14 @@ function (ph::FieldClamp)(st, p, ctx, key, mcs, backend)
     _launch(_field_clamp_body!, backend, length(c), (ph.clamp, c, st, p, ctx, key, mcs))
     return 1
 end
+
+# The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
+# per-MCS refresh): the derived refreshes without the field clamps, which hold on a fresh
+# initial state only (D-145)
+_derived(::Tuple{}) = ()
+_derived(t::Tuple) = (_derived_one(first(t))..., _derived(Base.tail(t))...)
+_derived_one(::FieldClamp) = ()
+_derived_one(ph) = (ph,)
 
 """
     stable_substeps(D, dt, h, k = 0) -> Int

@@ -101,6 +101,12 @@ function _face_bcs(c::CompiledPottsSystem)
     return out
 end
 
+# The faces of the model being generated: every `Δ` of a field with faces sees them, wherever
+# it is lowered (the field step, site updates, site energies, drives, constraints, `@observed`,
+# folds), unless its env binds `:__bc` itself
+const _FACES = Base.ScopedValues.ScopedValue{Any}(nothing)
+_with_faces(f, c::CompiledPottsSystem) = Base.ScopedValues.with(f, _FACES => _face_bcs(c))
+
 # The masked clamp of field `name` (D-145): `(st, p, ctx, key, mcs, i, v) -> v′`, `v` replaced
 # by each `sites(pred) => Dirichlet(value)` whose `pred` holds at `i` (a later entry wins), or
 # `nothing` when the field has no mask.
@@ -465,85 +471,121 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     reduces, folds = _integral_reduces(c, T)
     refresh(js) = _integral_refresh(T, rn, reduces, folds, js)
     order = _phase_order(c.sys)
-    pos(n) = findfirst(==(n), order)
-    # the groups (phases by role); `postsweep` is the refresh at the head of today's after-MCS
     groups = Dict{Symbol, Vector{Any}}(n => Any[] for n in SCHEDULE_PHASES)
-    postsweep = Any[]
-    # integrals: fresh at every MCS boundary (and at init). An update block reads them fresh
-    # (D-042: a bare name in the block is its new value): the sweep moves σ, so each integral
-    # the after-MCS updates, equations, lifecycle or ticks read is refreshed after it, and an
-    # integral whose operand an update writes is refreshed after that write, just before
-    # the stage that next reads it. Of the integrals whose operands no after-MCS update
-    # writes, only those read after the sweep cost the one refresh at the start of the
-    # after-MCS phases; those read only before the sweep (the before block, the temperature)
-    # are fresh from the previous boundary (D-120).
+    # Integrals (D-042, D-120): fresh at every MCS boundary (and at init); the sweep and a
+    # lifecycle with divisions move σ, and an update writing an integral's operand dirties
+    # it. One rule on the placed order (D-145): after each σ-moving entry, the integrals read
+    # before the next one are refreshed at once, except those an update block in between
+    # dirties (the block refreshes them itself: before the stage that reads them, and at its
+    # end for the entries after it); any integral still stale is refreshed just before an
+    # entry that reads it. In the default order this is exactly the earlier placement: the
+    # refresh at the head of the after-MCS phases, the per-stage and end-of-block refreshes,
+    # and none elsewhere.
     s = c.sys
     ints = _integrals(s)
-    # what each schedule phase reads (the uncompiled ticks: the compiled ones read their
-    # population folds through slots)
+    all_ints = Set{Int}(eachindex(ints))
     pde(eq) = info(arguments(_unwrap(eq.lhs))[1]).role in (:field, :site)
-    fields_reads = Any[eq.rhs for eq in getfield(s, :equations) if pde(eq)]
-    comp_reads = Any[(eq.rhs for eq in getfield(s, :equations) if !pde(eq))...,
-        (r.when for r in getfield(s, :link_rules))..., (x for b in getfield(s, :discrete) for x in b.next)...]
-    post = Any[(eq.rhs for eq in getfield(s, :equations))..., (d.when for d in getfield(s, :divisions))...,
-        (r for d in getfield(s, :divisions) for (_, r) in d.rules if !(r isa Split))..., (r.when for r in getfield(s, :link_rules))...,
-        (x for b in getfield(s, :discrete) for x in b.next)...]
-    after_read = _integrals_read(Any[(u.eq.rhs for u in getfield(s, :updates) if u.phase === :after_mcs)..., post...], ints)
+    hasdiv = !isempty(getfield(s, :divisions))
+    # what each non-block entry reads (the uncompiled ticks: the compiled ones read their
+    # population folds through slots)
+    reads = Dict{Symbol, Vector{Int}}(n => Int[] for n in SCHEDULE_PHASES)
+    reads[:fields] = _integrals_read(Any[eq.rhs for eq in getfield(s, :equations) if pde(eq)], ints)
+    reads[:components] = _integrals_read(Any[(eq.rhs for eq in getfield(s, :equations) if !pde(eq))...,
+            (r.when for r in getfield(s, :link_rules))..., (x for b in getfield(s, :discrete) for x in b.next)...], ints)
+    reads[:sweep] = _integrals_read(Any[getfield(s, :sweep).temperature], ints)
+    hasdiv && (reads[:lifecycle] = _integrals_read(Any[(d.when for d in getfield(s, :divisions))...,
+            (r for d in getfield(s, :divisions) for (_, r) in d.rules if !(r isa Split))...], ints))
+    blocks = (:before_mcs, :after_mcs)
+    block_reads(n) = _integrals_read(Any[u.eq.rhs for u in getfield(s, :updates) if u.phase === n], ints)
     # an operand's reads include those of its hoisted folds
     operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
     written(phase) = Set{Symbol}(_update_name(u) for u in getfield(s, :updates) if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
-    after_dirty = dirtied(:after_mcs)
-    isempty(after_read) || append!(postsweep, refresh([j for j in eachindex(ints) if !(j in after_dirty) && j in after_read]))
-    # the expressions read by the fields and components placed between the before block and the
-    # sweep (`@schedule`): the before block's stale integrals are refreshed for them too
-    between = Any[(n === :fields ? fields_reads : n === :components ? comp_reads : Any[] for n in order
-                   if pos(:before_mcs) < pos(n) < pos(:sweep))...]
-    pre_sweep = Any[getfield(s, :sweep).temperature, Iterators.flatten(between)...]
+    moves(n) = n === :sweep || (n === :lifecycle && hasdiv)
+    # the entries after position k up to the next σ-moving one (that one included) or `end_mcs`
+    function ahead(k)
+        out = Symbol[]
+        for n in order[(k + 1):end]
+            n === :end_mcs && break
+            push!(out, n)
+            moves(n) && break
+        end
+        return out
+    end
     # update blocks (D-042): snapshots of previous values, then the ordered stages, each
-    # after its hoisted population folds
-    for phase in (:before_mcs, :after_mcs)
+    # after its hoisted population folds; `stale` in, `stale` out. Run once to plan (`build =
+    # false`, nothing compiled) and once to build, in the compile order of the default layout.
+    function run_block!(phase, stale, later, build)
         dst = groups[phase]
         dirty = dirtied(phase)
-        # stale integrals: the after-MCS ones not refreshed above (the sweep moved σ); none
-        # before the MCS (the boundary refresh is fresh)
-        stale = Set{Int}(phase === :after_mcs && !isempty(after_read) ? after_dirty : Int[])
-        for (scope, n) in c.pre_snapshots[phase]
-            push!(dst, CorePotts.CopyPhase((scope, Symbol(n, :__pre)) => (scope, n)))
+        if build
+            for (scope, n) in c.pre_snapshots[phase]
+                push!(dst, CorePotts.CopyPhase((scope, Symbol(n, :__pre)) => (scope, n)))
+            end
         end
         for stage in c.schedule[phase]
-            if !isempty(dirty)
-                for j in _integrals_read(Any[(u.eq.rhs for u in stage.updates)..., (x for (_, x) in stage.pops)...], ints)
-                    j in stale || continue
-                    append!(dst, stage.every == 1 ? refresh((j,)) : [_Gated(stage.every, ph) for ph in refresh((j,))])
-                    stage.every == 1 && delete!(stale, j)      # a gated refresh leaves it stale
+            for j in _integrals_read(Any[(u.eq.rhs for u in stage.updates)..., (x for (_, x) in stage.pops)...], ints)
+                j in stale || continue
+                build && append!(dst, stage.every == 1 ? refresh((j,)) : [_Gated(stage.every, ph) for ph in refresh((j,))])
+                stage.every == 1 && delete!(stale, j)      # a gated refresh leaves it stale
+            end
+            if build
+                if !isempty(stage.pops)
+                    ph = _slots_phase(T, stage.pops, rn)
+                    push!(dst, stage.every == 1 ? ph : _Gated(stage.every, ph))
+                end
+                if stage.scope === :site
+                    append!(dst, _site_update_phases(c, T, stage.updates, stage.every, rn))
+                elseif stage.scope === :model
+                    push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
+                else
+                    ex = _cell_update_expr(c, T, stage.updates, stage.every, rn)
+                    ph = CorePotts.CellPhase(_rgf(ex))
+                    push!(dst, ph)
+                    phase === :after_mcs && (cand = (; phase = ph, writes = _stage_writes(stage), expr = ex))
                 end
             end
-            if !isempty(stage.pops)
-                ph = _slots_phase(T, stage.pops, rn)
-                push!(dst, stage.every == 1 ? ph : _Gated(stage.every, ph))
-            end
-            if stage.scope === :site
-                append!(dst, _site_update_phases(c, T, stage.updates, stage.every, rn))
-            elseif stage.scope === :model
-                push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
-            else
-                ex = _cell_update_expr(c, T, stage.updates, stage.every, rn)
-                ph = CorePotts.CellPhase(_rgf(ex))
-                push!(dst, ph)
-                phase === :after_mcs && (cand = (; phase = ph, writes = _stage_writes(stage), expr = ex))
-            end
-            if !isempty(dirty)
-                w = _stage_writes(stage)
-                foreach(j -> isempty(intersect(operands[j], w)) || push!(stale, j), dirty)
-            end
+            w = _stage_writes(stage)
+            foreach(j -> isempty(intersect(operands[j], w)) || push!(stale, j), dirty)
         end
-        # what reads the integrals after the block: the equations and lifecycle (after the
-        # MCS) or the sweep's temperature, and anything `@schedule` puts before the sweep
-        if !isempty(stale)
-            later = _integrals_read(phase === :after_mcs ? post : pre_sweep, ints)
-            append!(dst, refresh([j for j in sort!(collect(stale)) if j in later]))
+        # what reads the integrals after the block, up to the next σ-moving entry
+        js = [j for j in sort!(collect(stale)) if j in later]
+        build && append!(dst, refresh(js))
+        setdiff!(stale, js)
+        return stale
+    end
+    # plan: the refreshes before (`pre`) and after (`post`) each non-block entry, and each
+    # block's incoming stale set and later reads
+    pre = Dict{Symbol, Vector{Int}}()
+    post = Dict{Symbol, Vector{Int}}()
+    binit = Dict{Symbol, Set{Int}}()
+    blater = Dict{Symbol, Set{Int}}()
+    stale = Set{Int}()                                 # the boundary refresh is fresh
+    for (k, n) in enumerate(order)
+        if n in blocks
+            binit[n] = copy(stale)
+            blater[n] = Set{Int}(j for m in ahead(k) if !(m in blocks) for j in reads[m])
+            stale = run_block!(n, stale, blater[n], false)
+            continue
         end
+        pre[n] = sort!([j for j in stale if j in reads[n]])
+        setdiff!(stale, pre[n])
+        if moves(n)
+            stale = copy(all_ints)
+            seg = ahead(k)
+            R = Set{Int}(j for m in seg for j in (m in blocks ? block_reads(m) : reads[m]))
+            D = Set{Int}(j for m in seg if m in blocks for j in dirtied(m))
+            post[n] = sort!([j for j in R if j in stale && !(j in D)])
+            setdiff!(stale, post[n])
+        end
+        n === :end_mcs && (stale = Set{Int}())
+    end
+    # build, in the compile order of the default layout (the fingerprint hashes the generated
+    # code in compile order): the post-sweep refresh, the blocks, the energy snapshots, the
+    # fields, the components, the boundary; then the refreshes only a schedule adds
+    postsweep = refresh(post[:sweep])
+    for n in blocks
+        run_block!(n, copy(binit[n]), blater[n], true)
     end
     # energy snapshots (D-041): after the before-MCS updates, constant during the sweep
     snapshots = isempty(c.energy_snapshots) ? () : (_slots_phase(T, c.energy_snapshots, rn),)
@@ -594,25 +636,16 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         scope = any(x -> info(x).name === n && info(x).role === :model, getfield(c.sys, :variables)) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
-    # `@schedule` placing update blocks, fields or components after the lifecycle (which moves
-    # σ): the integrals they read are refreshed right after it
-    postlife = Any[]
-    if !isempty(getfield(s, :divisions))
-        k = pos(:lifecycle)
-        reads = Any[]
-        for n in order[(k + 1):end]
-            n in (:end_mcs, :sweep) && break
-            n === :after_mcs && append!(reads, (u.eq.rhs for u in getfield(s, :updates) if u.phase === :after_mcs))
-            n === :fields && append!(reads, fields_reads)
-            n === :components && append!(reads, comp_reads)
-        end
-        isempty(reads) || append!(postlife, refresh(_integrals_read(reads, ints)))
-    end
-    # masked clamps hold on the initial state too (D-145), before its derived quantities
+    # the refreshes only a non-default order needs (empty in the default order)
+    prerefresh = Dict{Symbol, Vector{Any}}(n => refresh(js) for (n, js) in pre if !isempty(js))
+    postlife = haskey(post, :lifecycle) && !isempty(post[:lifecycle]) ? refresh(post[:lifecycle]) : Any[]
+    # masked clamps hold on a fresh initial state (D-145), before its derived quantities (a
+    # checkpoint restore and `anneal` run `at_init` without them: `CorePotts._derived`)
     clamps = Any[CorePotts.FieldClamp(ph.field, ph.clamp) for ph in groups[:fields] if ph.clamp !== nothing]
     # the MCS order: entries of adjacent groups merged into one tuple
     entries = Any[]
     for n in order
+        append!(entries, get(prerefresh, n, Any[]))
         if n === :sweep
             append!(entries, snapshots)
             push!(entries, CorePotts.SweepPhase())
@@ -635,8 +668,9 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         end
     end
     push!(mcs, Tuple(run))
+    extra = Any[(ph for (_, v) in sort!(collect(prerefresh); by = first) for ph in v)...]
     before = Any[groups[:before_mcs]..., snapshots...]
-    after = Any[postsweep..., groups[:after_mcs]..., groups[:fields]..., comps..., groups[:operators]..., postlife...]
+    after = Any[postsweep..., groups[:after_mcs]..., groups[:fields]..., comps..., groups[:operators]..., postlife..., extra...]
     phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
         at_init = (clamps..., boundary..., snapshots...), mcs = Tuple(mcs))
     return phases, cand

@@ -37,6 +37,9 @@ Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for 
 """
 function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
+    return _with_faces(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
+end
+function _generated_code(c, T, field_solver, ode_solver, solvers)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in getfield(c.sys, :parameters))
     (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
@@ -139,11 +142,13 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
     sys = c.sys
     fns, generated = _recording() do
+        _with_faces(c) do
         ce = _constraint_expr(c, T)
         (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
             constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
             phases = _phases_parts(c, T, values, spec), lifecycle = _lifecycle(c, T),
             total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
+        end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
     # every generated function, without line numbers: independent of the install path, and

@@ -463,7 +463,7 @@ function _lower_laplacian(c, env)
     i = info(c)
     (i !== nothing && i.role === :field) || error("`Δ` applies to field variables")
     haskey(env.bind, :__site) || error("`Δ($(i.name))` needs a site")
-    faces = get(env.bind, :__bc, nothing)
+    faces = get(env.bind, :__bc, _FACES[])
     (faces === nothing || !haskey(faces, i.name)) &&
         return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
     return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site]); bc = $(_bc_code(faces[i.name], env))))

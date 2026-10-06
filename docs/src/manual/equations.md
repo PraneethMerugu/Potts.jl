@@ -127,20 +127,24 @@ u = solve(prob, SequentialCPM()).u[end]
   axis, each `Dirichlet(v)` or `NoFlux()`. A face value is a ghost value: `Dirichlet(v)` sets
   the missing neighbour of an edge site to `2v − c`, so the field reaches `v` midway between
   the edge site and the face; `NoFlux()` mirrors the edge site. A closed axis without an entry
-  is zero flux. An entry on a periodic axis, on an axis the lattice lacks, or on a hexagonal
-  lattice is an error naming it.
+  is zero flux. An entry on a periodic axis, on an axis the lattice lacks, on a hexagonal
+  lattice, or on a field whose equation has no `Δ` of it is an error naming it.
 - **Site masks.** `sites(condition) => Dirichlet(v)` is a node value: after every explicit
   substep (after the write and the `lower` clip, before the next rate evaluation) every site
-  where the condition holds is set to `v`, and the initial state is clamped too. The
-  condition is a site expression (`kind`, `owner`, site and field variables), evaluated
-  from the state the substep reads, so a mask on a kind moves with its cells. A clamp costs
+  where the condition holds is set to `v`, and a fresh initial state (the problem's `u0`,
+  `init`, `reinit!`) is clamped too; a state restored from a checkpoint is not (it continues
+  the run exactly), nor does `Potts.anneal` clamp. The condition is a site expression
+  (`kind`, `owner`, site and field variables), evaluated from the state the substep reads,
+  so a mask on a kind moves with its cells. It cannot read the field it clamps, or a field
+  stepped after it (in the order of `@equations`): that is an error naming it. A clamp costs
   no extra kernel launch. A mask value below `lower` wins.
 - **Values** are numbers, parameters or parameter expressions; `remake(prob; p = [:S => 2.0])`
   changes a value without regenerating code. The conditions themselves are part of the
   model's identity (the fingerprint): a checkpoint does not cross them.
 - In an extension, a field's `@boundary` replaces the base's for that field.
 
-`Δ(c)` reads the faces wherever the model uses it (equations and site updates).
+`Δ(c)` reads the faces wherever the model uses it: equations, site updates, site energies,
+drives, constraints and `@observed`.
 
 ## Components
 

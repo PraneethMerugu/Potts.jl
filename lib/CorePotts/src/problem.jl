@@ -280,10 +280,15 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
             "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
             "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
             "with the same `track`"))
-        integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
+        # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
+        integ = _init(prob, alg, false; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ
     end
+    return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
+end
+
+function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     t0, t1 = prob.tspan
@@ -309,7 +314,7 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
         Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
-    integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
+    integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)

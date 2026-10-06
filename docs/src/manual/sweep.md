@@ -69,6 +69,9 @@ the cells move (`@schedule fields, sweep`):
   that lists phases in their default relative order is no schedule at all, bit for bit.
 - `end_mcs` is always last; `before_mcs` must precede `sweep` and `after_mcs` must follow
   it. An unknown name, a name listed twice or a broken rule is an error naming the phase.
+- Every phase reads current values in any order: integrals (`integral(x)`) are refreshed
+  after each phase that moves cells (the sweep, a lifecycle that divides) and after each
+  update that writes their operand, before the next phase that reads them.
 - The order is part of the model (its fingerprint): a checkpoint does not cross orders.
 - Reordering costs nothing on any backend: `step!` is one fold over a static tuple of the
   phases. A phase that runs on the host (an `Adaptive` ODE solver) costs one device↔host

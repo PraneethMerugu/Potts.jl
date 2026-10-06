@@ -197,7 +197,8 @@ struct LifecyclePhase end
 
 Phases of every MCS: `before_mcs` before the copy sweep, `after_mcs` after it, `end_mcs`
 after the lifecycle (the state at the MCS boundary: history pushes, derived quantities);
-`at_init` once when an integrator is created (derived quantities of the initial state).
+`at_init` once when an integrator is created (derived quantities of the initial state; a
+[`FieldClamp`](@ref) in it runs only on a fresh state, not on `init` from a checkpoint).
 
 `mcs` is the order `step!` runs, one static tuple whose entries are tuples of phases and the
 sentinels [`SweepPhase`](@ref)`()` and [`LifecyclePhase`](@ref)`()` (each exactly once).

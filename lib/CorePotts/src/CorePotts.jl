@@ -52,7 +52,7 @@ export read_piff, write_piff
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
 public coordinates, shift, linear_index, draw, uniform, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    TrackDeltaH, track_eltype, GhostFace, default_order
+    TrackDeltaH, track_eltype, GhostFace
 
 include("rng.jl")
 include("lattice.jl")

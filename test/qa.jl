@@ -213,6 +213,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
     :RelationSpec,        # relation dispatch in the `Around` vocabulary
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
+    :_derived,            # the `at_init` phases without field clamps (`anneal`'s refresh, D-145)
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
     :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
