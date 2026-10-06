@@ -9,18 +9,20 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 module PottsModels
 
 using Potts: Potts, @potts_model, Circle, Closed, DiscreteCallback, Lattice, Metropolis, Moore, Periodic, Point,
-    RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling
+    RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling,
+    terminate!
 # for the compile workload (end of this file)
 using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
 using DelimitedFiles: readdlm
 using Printf: @sprintf
 using PrecompileTools: PrecompileTools
 using Random: MersenneTwister
+using SciMLBase: ReturnCode
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
-    AkeebInvasion, OpenVTChain
+    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
-    openvt_monolayer_state, merks_state
+    openvt_monolayer_state, merks_state, openvt_reference_state
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
@@ -33,6 +35,8 @@ include("wortel_act.jl")
 include("merks.jl")
 include("openvt.jl")
 include("openvt_chain.jl")
+include("openvt_reference.jl")
+public openvt_snapshot, stop_at_cells, edge_guard
 include("akeeb.jl")
 
 include("benchmarks/openvt_analysis.jl")
@@ -63,6 +67,8 @@ PrecompileTools.@setup_workload begin
         _first_mcs(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))),
             openvt_monolayer_state(; lattice = (24, 24)); capacity = 64)
         _first_mcs(mtkcompile(OpenVTChain(; name = :c)), openvt_chain(11))
+        _first_mcs(mtkcompile(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24))),
+            openvt_reference_state(; lattice = (24, 24)); capacity = 64)
         a = mtkcompile(AkeebInvasion(; name = :a, lattice = (24, 30)))
         op = akeeb_state(; lattice = (24, 30))
         _first_mcs(a, op; capacity = 1000)

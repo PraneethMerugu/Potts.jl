@@ -148,6 +148,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
         __base_failed = $(Ref{Bool})(false)       # set when an `@extend` base's constructor throws
+        __features = $P._feature_counts()         # contact folds and bounded draws built (D-150)
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
@@ -157,7 +158,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
         sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
-        structural = $structural))
+        structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -705,12 +706,25 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && _rng_callee(ex.args[1]) !== nothing
+        return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
+    elseif h === :call && ex.args[1] === :rand && any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
+        return _rewrite_rng(ex, :rand)            # `rand(; x = 1)`: named like the other forms
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
     end
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+
+# an RNG call in a model body: `Potts._rng_call(:name, args…; kws…)`, which keeps `rand()`
+# and `randn(…)` as the model's draws and rejects every other form, naming it
+function _rewrite_rng(ex, name = _rng_callee(ex.args[1]))
+    args = map(rewrite, ex.args[2:end])
+    params = filter(a -> a isa Expr && a.head === :parameters, args)
+    rest = filter(a -> !(a isa Expr && a.head === :parameters), args)
+    return Expr(:call, :(Potts._rng_call), params..., QuoteNode(name), rest...)
+end
 
 # `div`/`÷` defined in a model body (`div(a, b) = …`, `function ÷(a, b) … end`, `div = f`):
 # the name it defines, or `nothing`. `rewrite` turns their calls into `_intdiv`.

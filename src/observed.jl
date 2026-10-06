@@ -27,6 +27,7 @@ function _observed_scope(x)
     _walk(y -> (iscall(y) && operation(y) === cell_integral && (calls[y] = _unwrap(B.volume))), x)
     isempty(calls) || (x = _unwrap(Symbolics.substitute(x, calls; fold = Val(false))))
     scope = _has_op(x, cell_centroid) ? :cell : :model
+    (:contact_count in (r for (r, _) in _uses(x))) && (scope = :cell)        # a contact fold (D-150)
     for v in _bare_vars(x)
         r = info(v).role
         r === :cell && (scope = :cell)

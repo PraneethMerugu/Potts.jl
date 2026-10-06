@@ -401,10 +401,26 @@ function _save!(integ::PottsIntegrator)
 end
 
 function _check_status!(integ::PottsIntegrator)
+    _status_failure!(integ, _model_status(integ.stats, integ.state.model))
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
-    st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    _status_failure!(integ, st)
     return integ.retcode
+end
+
+# A nonzero status word fails the run, with a warning naming each reason (once per run)
+const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
+    STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
+    STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower) draw was given σ < 0")
+function _status_failure!(integ, st::UInt32)
+    st == 0 && return nothing
+    if integ.retcode != SciMLBase.ReturnCode.Failure
+        why = [r for (bit, r) in _STATUS_REASONS if st & bit != 0]
+        isempty(why) && push!(why, "status word $(repr(st))")
+        @warn "the run failed at MCS $(integ.t): $(join(why, "; "))"
+    end
+    integ.retcode = SciMLBase.ReturnCode.Failure
+    return nothing
 end
 
 function CommonSolve.step!(integ::PottsIntegrator)

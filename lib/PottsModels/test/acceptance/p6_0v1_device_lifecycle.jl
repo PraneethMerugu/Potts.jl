@@ -304,6 +304,9 @@ function p60v1_published(T)
         :SingleDivisionFixture => () -> PottsProblem(SingleDivisionFixture(; name = :s), [ownership => sd, kind => [:epithelial]],
             (0, 8); T, capacity = 4),
         :OpenVTChain => () -> PottsProblem(OpenVTChain(; name = :c), openvt_chain(11), (0, 8); T),   # D-148 re-freeze
+        # D-150 re-freeze: X ≡ 2 (σ_X = 0) keeps the disc (52 sites) below its threshold of 100
+        :OpenVTReferenceMonolayer => () -> PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24)),
+            [openvt_reference_state(; lattice = (24, 24)); :σ_X => 0.0], (0, 8); T, capacity = 64),
     )
 end
 const P60V1_PUBLISHED = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))

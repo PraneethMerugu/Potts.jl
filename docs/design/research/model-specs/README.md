@@ -24,7 +24,7 @@ Each published model ships a reproduction tutorial written to
 - Policy (D-029, D-048): validation is ensemble/statistical with pre-registered tolerances.
   There is no bitwise or trajectory parity with any author's code.
 
-Items 2 and 3 of the original list are deferred; the user handles them. Item 11 is Jafari
+Items 2 and 3 of the original list were deferred. On 2026-10-06 the maintainer ruled that OpenVT (15) is item 2 and that Fortuna (14) also covers item 3. Item 11 is Jafari
 Nivlouei et al. 2021 (11 §8). Andasari et al. 2012 is kept only as the G9 ODE-component
 conformance test (11 §8); ODE components exist (D-038, §2.3).
 
@@ -311,6 +311,25 @@ therefore the decided default, and each named alternative is the documented vari
 Items that depend on an unanswered author question (§5) keep the recommended default
 until the author answers.
 
+**Rulings of 2026-10-06 (maintainer; coordinator D-154/D-155 and follow-ups).**
+- **Provisional policy:** no model waits for an author. Every gated item ships now with its
+  default, labelled provisional in the model's deviations table (our value, the paper's
+  value, suspected cause, author-question status). This supersedes the "block" and "ask
+  first" wording in B2 and J3 below.
+- **Unstated parameters and rules** are calibrated to the paper's figures and labelled as
+  calibrated.
+- **Author questions** go on one sheet for the maintainer and Dr Jiang
+  (`research/author-questions/PI_SHEET.md`, gitignored). Dr Jiang sends every letter.
+- **Compute is this Mac only.** Runs use the paper's n and lattice where an overnight run
+  allows; any cut is recorded as a deviation.
+- **Scope:**
+  - All 12 models, plus OpenVT as original item 2. Fortuna (14a, 14b and 14c) also covers
+    original item 3.
+  - FBCA reproduces 08a and calibrates 08b's parameters.
+  - Cell sorting is Graner–Glazier only; the Osborne variant is out.
+  - Zajac is a labelled reconstruction.
+  - The extended library comes after the paper.
+
 **Feature ids.** The decisions below cite the former G-ids as approved. Bracketed R-ids
 were added for resolution via §2.3; they do not change any decision.
 
@@ -354,7 +373,7 @@ evidence. Such items need explicit re-approval.
 | # | Conflict | Options | Recommendation | Why |
 |---|---|---|---|---|
 | B1 | Two parameterisations (05 §7.3) | one model with variants / two models | **Two models, two tutorials** | Every parameter, the time scale and the rules differ (05 §7.3; 07 §7.2) |
-| B2 | Pixel size unknown. (0.55 µm)² degradation and 1.1 µm bundles fit 0.55 µm/px, but that "must not be adopted without author confirmation" (05 §7.2) | wait / provisional 0.55 µm | **Block both tutorials on Jiang's answer.** Develop with 0.55 µm labelled as a hypothesis | The spec forbids silently adopting it |
+| B2 | Pixel size unknown. (0.55 µm)² degradation and 1.1 µm bundles fit 0.55 µm/px, but that "must not be adopted without author confirmation" (05 §7.2) | wait / provisional 0.55 µm | ~~Block both tutorials on Jiang's answer.~~ **Provisional 0.55 µm/px, labelled as a hypothesis in the deviations table** (2026-10-06 provisional policy); ask Dr Jiang (PI sheet) | The spec forbids silently adopting it |
 | B3 | 2009 domain 166 × 106 µm (figure axes) vs "100 µm by 160 µm" (p.6) (05 §7.1 item 1) | – | **166 × 106** | The figures use it |
 | B4 | 2009 speed: Table 2 16.0 µm/h "averaged over 14 hours" vs Fig 1A ≈ 10 µm/h at 14 h (05 §7.1 item 2) | – | Validate against the **Fig 1A curve** (V1). Record Table 2 as unexplained | The curve is the primary data |
 | B5 | Continuity: exact BFS soft penalty α = 300 (05 §2.3) vs a local-ring approximation | exact / local | **Exact BFS** default. Local ring as a validated performance variant | Table 3's kT < 0.25 regime depends on it (05 §6 G4) |
@@ -369,7 +388,7 @@ evidence. Such items need explicit re-approval.
 |---|---|---|---|---|
 | J1 | Glucose rate b₀(P): 162 (PDF) vs 216 (erratum 06b, read 2026-09-30; it also corrects the unit to [mM/h]; it does not say which value the simulations used, which stays open) (06 §3.4, §7.1 item 4) | 162 / 216 | **162 default, `erratum = true` → 216.** This departs from the spec's suggestion | C₀ = 240 ≈ 1.5 × 162 and Q/P ≈ ½ only hold with 162. That suggests the published simulations were built on 162. Ask Jiang which produced Figs 5–8 |
 | J2 | Unfavourable chemistry: Fig 3 flow chart (P dies) vs text (P → Q, Q → N) (06 §7.1 item 1) | text / chart | **Text**; flow chart as a variant | Biologically coherent; the chart labels look swapped |
-| J3 | Rb → E2F drawn stimulatory, which gives inverted biology (06 §7.1 item 2) | as drawn / inhibitory | **Blocking: ask first.** Provisional default inhibitory, flagged | As drawn, E2F turns on only when the CKIs are on |
+| J3 | Rb → E2F drawn stimulatory, which gives inverted biology (06 §7.1 item 2) | as drawn / inhibitory | ~~Blocking: ask first.~~ **Inhibitory, provisional, flagged** (2026-10-06 provisional policy); ask Dr Jiang (PI sheet) | As drawn, E2F turns on only when the CKIs are on |
 | J4 | Necrosis conditions AND vs OR (06 §2.4) | – | **OR**, flagged | "are conditions for cell necrosis". Ask |
 | J5 | GF/IF diffusivity: Table 1 10⁻⁶ both vs text 10⁻⁷/10⁻⁶ (06 §7.1 item 3) | – | **Table 1**, plus a sweep (T10) | – |
 | J6 | Necrotic inhibitor secretion: 2 %/h/cm³ (Table 1) vs 0.1 ml/h (Appendix) (06 §7.1 item 5) | – | **Table 1** | Unit-compatible with the other rates |

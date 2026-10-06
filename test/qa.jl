@@ -224,6 +224,8 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
     :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
+    :has_origin,          # a contact fold's relation must exclude the origin (D-150)
+    :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
     :no_claims,           # the no-claim-set default
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems

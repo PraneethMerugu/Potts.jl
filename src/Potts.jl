@@ -44,12 +44,14 @@ export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, exten
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, RK4
 
 include("seeds.jl")
+include("draws.jl")
 include("vocabulary.jl")
 include("system.jl")
 include("macro.jl")
 include("lower.jl")
 include("schedule.jl")
 include("compile.jl")
+include("contact_folds.jl")
 include("solvers.jl")
 include("codegen.jl")
 include("problem.jl")

@@ -359,6 +359,7 @@ _around(spec, anchor) = Around(spec, anchor)
 fold for `cells(k)`, else plain Julia."""
 function _fold_or_gather(fold, body, R, s, cond)
     R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond)
+    R isa ContactDomain && return _contact_fold(fold, body, R(s), cond)          # `contacts(rel)` (D-150)
     R === cells && return _population(fold, body, cells(s), cond)
     return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
 end
@@ -367,6 +368,7 @@ end
 function _fold_iter(fold, body, itr, cond)
     itr === cells && (itr = CellDomain(Int[]))
     itr isa Union{CellDomain, SiteDomain} && return _population(fold, body, itr, cond)
+    itr isa ContactDomain && return _contact_fold(fold, body, itr, cond)         # a cell's contacts (D-150)
     return cond === nothing ? fold(body(n) for n in itr) : fold(body(n) for n in itr if cond(n))
 end
 
@@ -1075,7 +1077,7 @@ end
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, components,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux)
 

@@ -2309,6 +2309,80 @@ session.
   - **Byte identity is claimed only for the 25 frozen parameter-plane files and for tie-free clouds that hit neither defect.** The reviewer fuzzed about 600 such clouds with 0 mismatches. The docs say this in place of "character for character".
   - **O4** uses sequential sums, which can differ from numpy in the last ulp for ≥ 8 replicates. The "np.std" wording above means the population SD, not numpy's summation order.
 
+## D-150 P6.15c: the OpenVT Table S1 model, a cell-scope contact fold, `randn()` and per-daughter draws, disc start, edge guard, cell-count stop (2026-10-05, P6.15c; coordinator, from the P6.15c test author; under D-147)
+
+- **Frozen file.** `lib/PottsModels/test/acceptance/p6_15c_openvt_table_s1.jl` (freeze d1326174), from spec 15 v3 §2, §5 and §6 (G1, G2, G5, G6, G7, G11), and C3, C9, C13, C14, C16.
+  - Also re-frozen under this entry: `acceptance/p6_0v1_device_lifecycle.jl` gains the builder `:OpenVTReferenceMonolayer` (24², σ_X = 0, so the window stays quiet; D-148 Applied rule).
+- **Replace or variant (spec §5): a variant.**
+  - The Table S1 model is a new published model, `OpenVTReferenceMonolayer`.
+  - `OpenVTGrowingMonolayer` stays as the documented 2024 Artistoo set, pinned bit for bit: fingerprint 0xfcecc4612f387b5e and two 60-MCS trajectory digests.
+  - The gate case `openvt_monolayer_100` and every existing fingerprint pin are untouched.
+- **Surface: Potts DSL (general).**
+  - **G1, the contact fold.** In cell scope, `count(pred for _ in contacts)` and `count(pred for _ in contacts(rel))` count the cell's unlike pairs: s in the cell and s′ ∈ R(s) inside the lattice, for which `pred` holds.
+    - `pred` reads `kind′`, with the medium being owner 0.
+    - `count(true for _ in contacts) == surface` on the contact relation.
+    - It is exact after every copy and every lifecycle event, and maintained incrementally.
+    - Models that do not read it pay nothing; their fingerprints are pinned.
+  - **G2, per-daughter draws.** `randn()` follows `rand()`'s contract, keyed by (seed, MCS, cell, occurrence). A division state rule whose value contains a draw is evaluated separately for the parent and the daughter. Rules without draws are unchanged.
+- **Surface: PottsModels.**
+  - Exported:
+    - `OpenVTReferenceMonolayer(; lattice = (1400, 1400))`, with the Table S1 values A₀ 50, λ 2, T 20, α 50/775, μ_X 2, σ_X 0.4, β = γ = 0 and J [0 10; 10 20]. Its cell variables are A_star, X and f.
+    - `openvt_reference_state(; lattice, A₀)`, the G5 disc.
+  - Not exported:
+    - `openvt_snapshot(u; A₀, center)`, the O2 rows;
+    - `stop_at_cells(n)`, for G7 and G11;
+    - `edge_guard(margin; terminate)` and `Analysis.near_edge(σ, margin)`, for G6.
+- **Readings fixed by the freeze.**
+  - **Growth.** Once per MCS after the sweep, iff (volume / A_star ≥ β) && (f ≥ γ), using C9's ≥ and the current A_star.
+  - **Division.** At volume ≥ X·A₀. Both daughters draw X at birth, redrawn while ≤ 0. The first cell's X is drawn before the first division check. σ_X = 0 is case (f).
+  - **Disc.** Morpheus' `Sphere radius = R` centred at (L+1)/2: 52 sites on an even lattice, 45 on an odd one.
+  - **O2.** The origin is at (L+1)/2, distances are in units of R = √(A₀/π), and f is computed from σ.
+- **Checked before freezing.**
+  - A stub on today's primitives passes everything except the three gaps: cost 2.7× against the ≤ 1.5 bound, per-daughter draws, and truncation (20 non-positive X).
+  - The Metal block passes on the stub except the per-daughter check.
+  - The doubling windows come from 16 + 16 stub seeds.
+- **Coordinator rulings on the open questions.**
+  1. **Variant.** As above.
+  2. **G1 and G2 live in the core DSL and CorePotts,** being general: a per-cell incremental contact-count tracker with a kind predicate, recomputed on transitions; `randn()` in the vocabulary; per-daughter evaluation in lifecycle rules, device lifecycle included. These are core write sets: P6.3b, which restructures `step!`/phases and the vocabulary, merges first, and P6.15c rebases onto it. `count` and `randn` are new DSL names, added to `DSL_NAMES` with a justification.
+  3. **Truncation is a DSL form, `randn(μ, σ; lower)`.** It is bounded rejection on the counter RNG: at most 64 attempts, each a new occurrence on the same key. Exhaustion sets the status word; no throw inside kernels. P(exhaust) ≈ p⁶⁴ is negligible for any lower bound under ≈ μ + 2σ. A "redraw next MCS" sentinel is not acceptable, because M draws at birth.
+  4. **Performance.**
+     - The frozen bound is 1.5×, against an expected 1.05–1.2× a surface-only model.
+     - Models that do not read the fold must not regress: the gate and its fingerprints check this.
+     - At merge the new model gets a gate case on a small lattice; the coordinator sets its baseline.
+     - `stop_at_cells` and `edge_guard` take `every = k` (default 1). On Metal, each check is one host read per k MCS, declared as a host pass under D-145's budget.
+  5. **Base RNG calls.** The DSL rejects any Base RNG call it does not implement (`randexp`, `rand(range)`, `randn(dims…)`, …) with an error naming it. A Base RNG call never silently becomes a build-time constant again. The implementer adds a guard test (not frozen).
+  6. **The O2 round-trip row** stays `@test_broken` until P6.15d merges. It runs afterwards; the coordinator checks this at the later merge.
+  7. **The implementer also adds** a sibling in `siblings.jl`, a `runtests.jl` entry, the `test/gpu.jl` include, and the gate case.
+- **Applied (P6.15c implementation).**
+  - **G1 in CorePotts.** `ContactCount(column, relation, mask)` is one tracker, an `Int32` cell column. Bit `k` of `mask` counts partners of kind `k`; the medium is kind 0, and a model may have at most 63 kinds. `commit_contact_count!` updates the target's neighbours atomically, so it is safe under the checkerboard and on the device.
+    - The trackers of a problem travel as `relations.contact_counts::ContactCounts`. The lifecycle recomputes them in full on every event round: the host planner in `_rebuild_trackers!`, the device planner in two staged kernels or inside the fused kernel (no new barrier).
+    - A problem without folds has no `contact_counts`. Its generated code, fingerprint and step path are unchanged.
+  - **G1 in the DSL.** `count(pred for _ in contacts[(rel)])` is a cell quantity named by content (`contacts_<rel>_<hash of pred>`), so equal kind sets share one tracker. `pred` may read only `kind′` and constants. A `cond` (`… if kind′ == B`) folds into the kind set.
+    - Allowed in cell updates, division conditions, cell observeds and populations over cells. It is rejected by name in energies, drives, model and site updates.
+    - The relation must be declared, symmetric and exclude the origin. Its radius enters the copy footprint, because the commit writes the target's neighbours.
+    - Pair weights are ignored: it counts pairs.
+  - **G2.** `randn()` follows `rand()`'s contract: Box–Muller on one `draw` (cos branch), at a new occurrence stream. `randn(μ, σ)` is `μ + σ·randn()`.
+    - `randn(μ, σ; lower)` accepts `x > lower` and tries at most 64 times, at local indices 0–63 of one address. On exhaustion it returns `NaN` and sets `STATUS_DRAW_EXHAUSTED` in a model status word.
+    - The status word is `st.model[Symbol("#status")]`, a 1-element `UInt32` array present only in models with a bounded draw. `_check_status!` reads it at saves and at the end of the solve, and fails the run with `ReturnCode.Failure`.
+    - A division rule whose value draws is evaluated twice, once in the parent's environment and once in the daughter's (`entity = daughter`). Rules without draws are unchanged.
+  - **Ruling 5.** `rand(…)` with arguments, `randn(dims…)`, `randexp`, `shuffle`, … and `Random.`/`Base.`-qualified forms are rewritten at macro time into an error that names the call ("`rand(1:6)` is not available in a model"). The guard test is `test/draws_folds.jl`.
+    - `DSL_NAMES` gains `count`, Base's `count` except over `contacts`, and `randn`. `DSL_KEYWORDS` gains `randn => [:lower]`.
+  - **PottsModels.**
+    - `OpenVTReferenceMonolayer`, `openvt_reference_state` (exported), and `openvt_snapshot`, `stop_at_cells`, `edge_guard` (public).
+    - `Analysis.near_edge`.
+    - On a device, `edge_guard` caches a frame mask and does one masked `mapreduce` per check.
+    - PottsModels gains a direct SciMLBase dependency, for `ReturnCode` and `terminate!` with a code. Every other worktree's Manifest needs a `Pkg.resolve()`.
+    - Sibling: `KindInhibitedGrowth` (siblings.jl). It uses two kinds, a fold over `vn` with a per-kind predicate, and `θ => 1.5 + rand()` per daughter.
+  - **Gate.** New case `openvt_reference_100`: a 6 × 6 colony of 7 × 7 cells, σ_X = 0, capacity 128. Proposed baseline: sequential 20.12, checkerboard 19.60 and Metal 72.08 ns/site (this run). The coordinator sets it.
+  - **Cost (frozen G1 bound 1.5×).** Fold over surface: Sequential 1.12–1.14×, Checkerboard 0.86–1.07×.
+  - **Gate and A/B (vs 30c39601).** The CPU gate flagged `graner_glazier_72.sequential` at 1.054 against the recorded baseline. A paired CPU A/B gives 0.997 (8 rounds), so this is machine drift; no model without a fold changes code.
+    - Metal A/B, 8 rounds, fastest medians: Graner 1.033, Wortel 0.954, Merks 0.857, OpenVT 2024 0.622 and Akeeb 1.018. The Merks and OpenVT figures are below 1 only because of power-state artefacts (P6.0bb).
+  - **Latency (P6.0o, D-137, paired with base).** The first run showed a cold `PottsProblem` +19–22 % on Akeeb. The cause was new `_walk` specialisations: each closure capturing a different op function compiled a fresh walk.
+    - The fix: one shared walker, `_has_any_op(x, ::Vector{Any})`, and a `_has_bounded_draw` without splatted generators.
+    - After the fix, to_first_mcs is 0.98–1.02 on every case, and `problem` is 1.02–1.04 except Akeeb Float32 at 1.13.
+    - mtkcompile ratios (up to 1.18) are within noise. A six-pair cold `mtkcompile` A/B on Akeeb is equal: base 0.245–0.283 s, this 0.257–0.272 s.
+- **Merged (coordinator, 2026-10-06).** The `openvt_reference_100` baseline is set from the merged tree: sequential 19.55, checkerboard 19.20, Metal 72.03 ns/site. The SciMLBase dependency is in; other worktrees need `Pkg.resolve()`. The reference model joins the PottsModels compile workload (D-047). The latency residuals are accepted as reported. The merge checks are in PROGRESS; the Akeeb CPU paired A/B and latency run on the PC (D-157).
+
 ## D-151 Reproduction 09: V-PRE5's one-cluster clause is kept as frozen; late-stage coarsening is an open deviation (2026-10-05; coordinator, from the peer spec-owner ruling, spec 09 §9.5)
 
 - **Finding.** P6.1f (D-144 fixture, isolation guard clear) failed V-PRE5's one-cluster clause: the mean largest dark-cluster share at 10⁴ is 0.815, against ≥ 0.90. Per replicate the value is bimodal: 4 of 10 replicates are ≥ 0.99, the rest 0.51–0.90. A peer diagnostic used 6 independent seeds, each from the Voronoi start and from its paper-relaxed copy, to 2×10⁴. It gives mean shares of 0.75 / 0.72 at 10⁴, 0.79 / 0.72 at 13 500 and 0.81 / 0.80 at 2×10⁴: neither the start nor the reading time rescues the clause. PRE's t = 1 fractions match a dark share of 0.50, so the type fraction is not the cause either. Dark cells have no medium contact from ≈ 320, so P6.1d's 0.905 was not inflated by the periodic image; the two runs differ by ≈ 1 SE.
@@ -2326,4 +2400,3 @@ session.
   - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
   - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
   - The test file is re-frozen under this entry.
-

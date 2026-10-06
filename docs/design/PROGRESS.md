@@ -2112,3 +2112,18 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** PottsModels precompiles every constructor, plus the first problem and MCS of the published models; Potts precompiles a `@potts_model` model through to its first MCS. PrecompileTools is a new PottsModels dependency.
 - **Effect.** Time to first MCS from a fresh process falls from 9.0–13.5 s to 5.8–5.9 s. About 4.9 s of that is package load, now the only real cost.
 - **Merge checks** (one at a time, all exit 0): `frozen.jl`; Potts suite; PottsModels (`-t 4`): 16 961 pass, 47 broken; docs build; latency against ca3b24c3.
+
+## 2026-10-06 — P6.15c merged: OpenVT Table S1 model, contact fold, `randn`, per-daughter draws (D-150)
+
+- **The change.**
+  - In CorePotts: `ContactCount`/`ContactCounts` and `commit_contact_count!`.
+  - In the DSL: the cell-scope fold `count(pred for _ in contacts[(rel)])`, `randn()` / `randn(μ, σ; lower)`, and per-daughter evaluation of drawing division rules.
+  - In PottsModels: `OpenVTReferenceMonolayer`, `openvt_reference_state`, `openvt_snapshot`, `stop_at_cells`, `edge_guard` and `Analysis.near_edge`.
+  - The reference model joins the compile workload (D-047). `OpenVTGrowingMonolayer` is unchanged.
+- **Merge with P6.3b.** The two touched the same lines in `CorePotts.jl` (`public`: `normal`/`bounded_normal` beside `GhostFace`), `src/macro.jl` (the boundaries/schedule keywords plus `metadata`), the Analysis exports and the PottsModels imports. All were resolved by keeping both sides.
+- **Merge checks on this Mac** (one at a time, all exit 0 unless noted):
+  - CorePotts suite; `frozen.jl`; Potts suite; PottsModels (`-t 4`): 17 217 pass, 48 broken; MakiePotts; docs build; Metal GPU suite.
+  - The O2 `write_openvt`/`read_openvt` round trip now runs, since P6.15d is merged.
+  - Gate: new case `openvt_reference_100`, baseline set from this tree at sequential 19.55, checkerboard 19.20 and Metal 72.03 ns/site. The implementer measured 20.12, 19.60 and 72.08.
+  - The gate flagged Akeeb CPU against the stored baseline in both runs. The paired base read +3.0% sequential and +1.1% checkerboard; the base itself read 1.041 against the stored checkerboard value (drift). Akeeb's generated code is identical before and after the merge (diff with line comments stripped).
+  - Seeded Metal A/B (candidate / same-commit control): GG 1.001 / 1.011, Merks 0.998 / 1.005, Wortel 1.002 / 0.996, Akeeb 0.997 / 1.000. The OpenVT pair was not run: Metal verification is deferred until all paper models are done (D-157).

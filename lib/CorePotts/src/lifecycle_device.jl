@@ -14,6 +14,7 @@
 #   rules      (cells)   the daughter state rules and transitions (they see the trackers as
 #              the CPU path's rules do: not yet updated)
 #   surface    (sites)   the surface change of each parent and daughter (only the moved sites)
+#   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed from σ
 #   finalize   (cells)   volume and moments of parents and daughters, removed cells' trackers
 #   clusters   re-root clusters whose root died; cluster volume (cells) and surface (sites)
 #   mask       (sites + one item) the P6.0d frozen-mask refresh and its counts, when the mask
@@ -761,7 +762,8 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing,
-        rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh)
+        rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
+        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)))
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
         D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -902,6 +904,11 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.σ, surf, ctx.surface, lat))
         launches += 1
     end
+    if opt.cc !== nothing          # contact counts: zeroed, then summed from σ (`contact_counts.jl`)
+        _stage!(mode, _dcount_zero_body!, backend, cap, (dv, par, opt.ccols))
+        _stage!(mode, _dcount_body!, backend, n, (dv, par, st.σ, st.cell.kind, opt.cc, opt.ccols, lat))
+        launches += 2
+    end
     _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
     launches += 1
     if _has_clusters(st)
@@ -997,10 +1004,12 @@ end
     @synchronize
     ts = @index(Local, Linear)
     _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
+    _each_if!(_dcount_zero_body!, ts, length(buf.events), opt.cc, (dv, par, opt.ccols))
     @synchronize
     tz = @index(Local, Linear)
     _each_on!(_dfinalize_body!, tz, length(buf.events),
         (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
+    _each_if!(_dcount_body!, tz, length(st.σ), opt.cc, (dv, par, st.σ, st.cell.kind, opt.cc, opt.ccols, ctx.lattice))
     @synchronize
     tk = @index(Local, Linear)
     _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))

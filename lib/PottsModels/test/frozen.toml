@@ -144,8 +144,8 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "2973df9c13f83ee24dba5792c5442c8dcbbcf3797c76221c124be4f6ec532c36"
-decision = "D-148"
+sha256 = "5fbf1c3ede463e36371aa8d007ca084b543490a6916cd68cb0c3133fa904be10"
+decision = "D-150"
 
 [[file]]
 path = "acceptance/p6_0ad_barker_offset.jl"
@@ -366,3 +366,8 @@ decision = "D-149"
 path = "acceptance/p6_3b_boundary_schedule.jl"
 sha256 = "da7a8505ceffe0d27cdda56f026fda1f21652a74304033f20d99ec93af9a9d80"
 decision = "D-145"
+
+[[file]]
+path = "acceptance/p6_15c_openvt_table_s1.jl"
+sha256 = "4ba26fc505c739f3e5a2f1c798358fe5ee4701740103a43d64d3540ec8c292de"
+decision = "D-150"

@@ -142,9 +142,14 @@ end
 const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :ExplicitEuler, :Global, :NoFlux, :RK4, :RandomPlane, :Split,
     :Surface, :Volume, :cells, :centroid, :clusters, :components, :connectivity, :contacts, :displacement, :dot, :edges,
     :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
-    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ]
+    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ,
+    # D-150: `count` (Base's; `count(pred for _ in contacts)` is the cell-scope contact fold, a
+    # kind-filtered contact count that `surface` cannot express) and `randn` (`rand()`'s
+    # normal counterpart and its truncated form; without the binding `randn()` was Base's,
+    # drawn once when the model was built)
+    :count, :randn]
 const DSL_KEYWORDS = Dict(:connectivity => [:rule], :Volume => [:strength, :target], :Surface => [:strength, :target],
-    :Chemotaxis => [:kinds, :response, :strength, :when], :components => [:scope])
+    :Chemotaxis => [:kinds, :response, :strength, :when], :components => [:scope], :randn => [:lower])
 
 @testset "DSL surface snapshot" begin
     @test sort(collect(keys(Potts.DSL))) == sort(DSL_NAMES)

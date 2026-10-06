@@ -333,6 +333,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     append!(body, vals)
     c.uses_surface && push!(body, :(δs = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
     push!(body, :(CorePotts.commit_volume!(st, p, prop, ctx)))
+    append!(body, _contact_count_commits(c))            # contact folds (D-150; none: no code)
     c.uses_surface && push!(body, :(CorePotts.commit_surface!(st.cell.surface, prop, δs)))
     c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx.lattice, prop)))
     c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
@@ -1492,6 +1493,13 @@ function _division_rules(c::CompiledPottsSystem, ids, T, who, ruled)
             role(x) === :cell || throw(ArgumentError("division rules set cell variables; `$name` is $(role(x))"))
             if r isa Split
                 push!(block, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
+            elseif _has_draw(r)
+                # a drawing rule is evaluated for each daughter (D-150): the parent's draws are
+                # keyed by its id, the daughter's by hers; everything else reads the parent
+                vp = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key))
+                vd = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key, extra = (:__draw => (:key, :mcs, :daughter),)))
+                push!(block, :(vp = $vp), :(vd = $vd), :(@inbounds st.cell.$name[parent] = vp),
+                    :(@inbounds st.cell.$name[daughter] = vd))
             else
                 v = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key))
                 push!(block, :(v = $v), :(@inbounds st.cell.$name[parent] = v), :(@inbounds st.cell.$name[daughter] = v))

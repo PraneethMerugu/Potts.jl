@@ -43,6 +43,7 @@ struct CompiledPottsSystem
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
     discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
     discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
+    contact_trackers::Vector{Tuple{Symbol, Symbol, UInt64}}   # contact folds (name, relation, kind mask), D-150
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -106,6 +107,10 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
             throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
+        # a contact fold (D-150) is a cell quantity read between sweeps
+        r === :contact_count && !(between_copies && :volume in allowed) && throw(ArgumentError(
+            "`count(… for _ in contacts)` is not available in $what: it is a cell quantity, exact between " *
+            "sweeps, for cell updates and equations, division conditions and rules, and cell observed quantities"))
     end
     return nothing
 end
@@ -385,6 +390,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
     (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
+    fold_radius, contact_trackers = _check_contact_folds(sys, relations, contact_spec, lat)   # D-150
+    radius_read = max(radius_read, fold_radius)
     # per-copy reads anchored at the target count from it; at the source, from the source
     # (CorePotts adds the proposal radius: `reach`)
     source_read = -1
@@ -448,7 +455,8 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
-        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops)
+        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
+        contact_trackers)
 end
 
 # `@boundary` (D-145): a field with an equation; faces on closed axes of a square lattice the

@@ -39,6 +39,12 @@ function cases(T)
             openvt_monolayer_state(; lattice = (100, 100)), (0, 10^6); T, capacity = 64),
         "akeeb_99x60" => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
             akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000),
+        # D-150: the Table S1 model, a 6 × 6 colony of 7 × 7 cells (every cell reads the two
+        # contact folds after every MCS); X ≡ 2, so no cell reaches its threshold while timed
+        "openvt_reference_100" => () -> (σ = zeros(Int32, 100, 100);
+            foreach(((k, (a, b)),) -> σ[29 + 7a .+ (1:7), 29 + 7b .+ (1:7)] .= k, enumerate(Iterators.product(0:5, 0:5)));
+            PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
+                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T, capacity = 128)),
     ]
 end
 

@@ -243,3 +243,66 @@ fig
 # read_openvt
 # openvt_filename
 # ```
+
+# ## The manuscript's reference set (Table S1)
+#
+# The benchmark manuscript fixes the parameters every framework uses (its Table S1), and
+# some rules differ from the 2024 Artistoo file above. PottsModels ships that model as
+# `OpenVTReferenceMonolayer`; `OpenVTGrowingMonolayer` stays the documented 2024 variant.
+#
+# | | `OpenVTGrowingMonolayer` (2024 Artistoo set) | `OpenVTReferenceMonolayer` (Table S1) |
+# |:--|:--|:--|
+# | Contact energies ``J_{cc}`` / ``J_{cm}`` | 20 / 20 | 20 / 10 |
+# | ``\lambda``, ``A^*(0)`` | 20, 25 | 2, 50 |
+# | Growth | ``A_0/\tau`` per MCS | ``\alpha = 50/775`` per MCS: a cycle of 775 MCS |
+# | Division size | exactly ``2A_0`` | ``X_i A^*(0)``, ``X_i \sim N(2, 0.4)`` redrawn while ``\le 0``, drawn by each daughter at birth |
+# | Daughters' target | reset to ``A_0`` | half the mother's ``A^*`` |
+# | Contact inhibition | type 1 (``V \ge \beta V_T``) | type 1 (``A_i/A^*_i \ge \beta``) and type 2 (free-surface fraction ``f_i \ge \gamma``) |
+# | Initial cell | a 5 × 5 square | a disc of radius ``R = \sqrt{A^*(0)/\pi}`` (52 sites) |
+# | Lattice | 400 × 400 | 1400 × 1400, closed, with an edge guard |
+#
+# Two rules use DSL forms of their own. The free-surface fraction is a contact count, kept
+# exact by every copy (see [Updates](@ref manual-updates)):
+#
+# ```julia
+# f ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
+# ```
+#
+# and the division threshold is a truncated normal draw, made separately by each daughter
+# (see [Lifecycle](@ref manual-lifecycle)):
+#
+# ```julia
+# @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
+#     X => randn(μ_X, σ_X; lower = 0.0)
+# ```
+#
+# Three cell cycles on a 120 × 120 lattice, with the run stopped if a cell comes within
+# 5 sites of the edge (`PottsModels.edge_guard`) and at 64 cells
+# (`PottsModels.stop_at_cells`):
+
+@named ref = OpenVTReferenceMonolayer(; lattice = (120, 120))
+prob_ref = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
+guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
+sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
+(retcode = sol_ref.retcode, cells = count(>(0), sol_ref.u[end].cell.volume))
+
+# The colony, coloured by cell:
+
+record_potts("openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100)))
+nothing #hide
+
+# ```@raw html
+# <video src="reference.mp4" controls autoplay loop muted playsinline width="440"></video>
+# ```
+#
+# The O2 rows of the benchmark (centroid, radius, free-surface fraction and area fraction,
+# lengths in units of ``R``) for the last state:
+
+snap = PottsModels.openvt_snapshot(sol_ref.u[end])
+(n = length(snap.x), mean_f = sum(snap.f) / length(snap.f), mean_a = sum(snap.a) / length(snap.a))
+
+# ```@docs
+# OpenVTReferenceMonolayer
+# openvt_reference_state
+# ```

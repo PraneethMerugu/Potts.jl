@@ -297,7 +297,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         bad = CPMFunction((st, p, prop, ctx) -> NaN; temperature = gg_temperature)
         bprob = PottsProblem(bad, initial_state(σ0, kinds0), lat, (0, 3), gg_params())
         @test solve(bprob, SequentialCPM()).retcode == ReturnCode.Failure
-        @test solve(bprob, CheckerboardCPM()).retcode == ReturnCode.Failure
+        @test (@test_logs (:warn, r"energy change was not finite") solve(bprob, CheckerboardCPM())).retcode == ReturnCode.Failure
     end
 
     @testset "checkerboard and sequential sort alike" begin
@@ -336,6 +336,7 @@ include("lifecycle.jl")
 include("relationships.jl")
 include("compartments.jl")
 include("lifecycle_device.jl")
+include("contact_counts.jl")
 include("checkpoint.jl")
 include("oracle.jl")
 include("sciml.jl")
