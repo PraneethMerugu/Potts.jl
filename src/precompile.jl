@@ -1,5 +1,34 @@
 # Precompile the symbolic pipeline (macro-built system → mtkcompile → code generation) on a
 # small model, so the first `PottsProblem` of a session does not compile Symbolics' paths.
+# `_PrecompileModel` goes through `@potts_model` (its expansion, the generated constructor's
+# build scope and `PottsSystem` keywords, the first MCS), which every user model shares.
+@potts_model _PrecompileModel begin
+    @structural_parameters begin
+        lattice = (16, 16)
+    end
+    @kinds medium cell
+    @parameters begin
+        λ = 1.0
+        V₀ = 20.0
+        D_c = 0.1
+        T = 10.0
+        J[kind, kind] = [0.0 16.0; 16.0 2.0]
+    end
+    @variables begin
+        V_target(cell) = V₀
+        c(field) = 0.0
+    end
+    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(cell) => λ * (volume - V_target)^2
+        contacts => J[kind, kind′]
+    end
+    @drive copy => -λ * (c[target] - c[source])
+    @equations D(c) ~ D_c * Δ(c) + (kind == cell) - c
+    @after_mcs V_target ~ Pre(V_target) + λ
+    @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
+    @sweep Metropolis(; temperature = T)
+end
 PrecompileTools.@setup_workload begin
     PrecompileTools.@compile_workload begin
         (; volume, surface, kind, kind′, owner, source, target, old, new) = B
@@ -26,5 +55,8 @@ PrecompileTools.@setup_workload begin
             generated_code(csys; T = S, field_solver = ExplicitEuler())
             PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
         end
+        prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
+            (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+        CorePotts.step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
     end
 end
