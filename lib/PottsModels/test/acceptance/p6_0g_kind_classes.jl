@@ -992,10 +992,10 @@ end
 # ---------------------------------------------------------------------------------------
 # Metal: the class gates compile for the device (constants, no allocation) and match the CPU
 
-const P60G_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
-@testset "P6.0g: on Metal (Float32), class gates equal the CPU run" begin
-    if P60G_ON_METAL
-        backend = Main.Metal.MetalBackend()
+const P60G_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+@testset "P6.0g: on the device (Float32), class gates equal the CPU run" begin
+    if P60G_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         for (label, prob) in (("main", p60g_problem(p60g_model(:P60gC), 8; T = Float32)),
                               ("clusters", p60g_cluster_problem(p60g_model(:P60gClusterC); T = Float32)))
@@ -1003,9 +1003,9 @@ const P60G_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :M
             gpu = solve(prob, alg; backend, saveat = 0:4)
             @test Symbol(gpu.retcode) === :Success
             @test p60g_same(cpu, gpu)
-            p60g_same(cpu, gpu) || @info "P6.0g Metal $label" cpu = Array(cpu.u[end].σ) == Array(gpu.u[end].σ)
+            p60g_same(cpu, gpu) || @info "P6.0g device $label" cpu = Array(cpu.u[end].σ) == Array(gpu.u[end].σ)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

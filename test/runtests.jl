@@ -18,10 +18,16 @@ GROUP in ("All", "Potts") &&
     run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"))
 GROUP in ("All", "PottsModels") &&
     run_group(joinpath(ROOT, "lib/PottsModels/test"), joinpath(ROOT, "lib/PottsModels/test/runtests.jl"))
-# Device group (not part of All): the CorePotts suite plus its Metal tests.
-GROUP == "GPU" &&
+# Device group (not part of All): the CorePotts and Potts suites plus their device tests, on
+# the backend named by POTTS_GPU ("metal" or "rocm"; D-157). Unset, it is the platform's own:
+# Metal on macOS, ROCm elsewhere.
+if GROUP == "GPU"
+    gpu = lowercase(get(ENV, "POTTS_GPU", ""))
+    isempty(gpu) && (gpu = Sys.isapple() ? "metal" : "rocm")
+    gpu in ("metal", "rocm") || error("GROUP=GPU: POTTS_GPU must be \"metal\" or \"rocm\", got \"$gpu\"")
+    @info "GROUP=GPU on $gpu"
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
-        env = ("COREPOTTS_GPU" => "metal", "COREPOTTS_QA" => "false"))
-GROUP == "GPU" &&
+        env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "COREPOTTS_QA" => "false"))
     run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl");
-        env = ("POTTS_GPU" => "metal", "POTTS_QA" => "false"))
+        env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_QA" => "false"))
+end

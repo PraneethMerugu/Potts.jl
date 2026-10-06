@@ -43,7 +43,7 @@ using Potts: CorePotts
 
 const P60V_COUNTERS = (:syncs, :transfers, :transfer_bytes)
 p60v_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
-const P60V_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60V_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
 
 # ---------------------------------------------------------------------------------------
 # Fixtures
@@ -152,9 +152,9 @@ p60v_nondecreasing(tr) = all(i -> all(tr[i] .<= tr[i + 1]), 1:(length(tr) - 1))
     end
 end
 
-@testset "P6.0v: transfer counters on Metal (quiet-MCS targets, invariants)" begin
-    if P60V_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v: transfer counters on the device (quiet-MCS targets, invariants)" begin
+    if P60V_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         # (a), (b): quiet MCS of every gate model
         for (label, lifecycle, make) in p60v_gate_models(Float32)
@@ -198,7 +198,7 @@ end
         d = p60v_counts(integ.stats) .- c0
         @test d[1] >= 1 && d[2] >= 1 + length(integ.state.cell) && d[3] >= sizeof(integ.state.σ)
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 

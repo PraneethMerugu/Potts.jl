@@ -32,7 +32,7 @@
 #     tolerance). Measured on 4e81e1eb (Metal.jl 1.10): every model and solver bitwise
 #     (0 ulp); the tolerance only absorbs device math differences (cf. D-107's Hill shapes).
 
-const P60Q_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60Q_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
 const P60Q_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
 const P60Q_SOLVERS = (("ExplicitEuler()", (;), :ee, 1), ("ExplicitEuler(substeps = 4)",
     (; ode_solver = Potts.ExplicitEuler(substeps = 4)), :ee, 4), ("RK4()", (; ode_solver = Potts.RK4()), :rk4, 1))
@@ -210,21 +210,21 @@ end
     end
 end
 
-@testset "P6.0q: on Metal (Float32), each fold ($name)" for (model, name, ε, η, _) in P60Q_MODELS
-    if P60Q_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0q: on the device (Float32), each fold ($name)" for (model, name, ε, η, _) in P60Q_MODELS
+    if P60Q_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM(; proposal = Moore(1))
         for (sname, kw, solver, substeps) in P60Q_SOLVERS
             prob = p60q_problem(model, kw; T = Float32)
             cpu = solve(prob, alg; saveat = 0:P60Q_M)
             gpu = solve(prob, alg; backend, saveat = 0:P60Q_M)
             a, b = p60q_traj(cpu), p60q_traj(gpu)
-            @info "P6.0q $name, $sname: CPU vs Metal (Float32)" cpu = a[end] metal = b[end] ulps = p60q_ulps(a, b)
+            @info "P6.0q $name, $sname: CPU vs device (Float32)" cpu = a[end] device = b[end] ulps = p60q_ulps(a, b)
             @test Array(gpu.u[end].σ) == Array(cpu.u[end].σ)
             @test p60q_ulps(a, b) <= P60Q_ULPS
             @test p60q_close(b, p60q_oracle(ε, η, P60Q_M; solver, substeps), Float32)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

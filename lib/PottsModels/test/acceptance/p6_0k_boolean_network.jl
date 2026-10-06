@@ -152,14 +152,14 @@ const P60K_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; propo
     end
 end
 
-@testset "P6.0k: on Metal" begin
-    if get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0k: on the device" begin
+    if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
+        backend = Main.PottsDevices.device_backend()
         prob, rows = p60k_problem(p60k_network(); T = Float32)
         sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 0:P60K_K)
         @test p60k_mismatches(sol, rows, P60K_TABLE) == 0
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 

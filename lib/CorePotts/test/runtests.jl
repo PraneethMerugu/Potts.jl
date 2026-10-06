@@ -344,5 +344,7 @@ include("domain.jl")
 include("piff.jl")
 include("hex.jl")
 include("audit.jl")
-get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
+# device tests (D-157): COREPOTTS_GPU (or POTTS_GPU) = metal | rocm
+isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
+PottsDevices.on_device() && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")

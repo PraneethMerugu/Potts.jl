@@ -55,7 +55,7 @@
 using Potts: CorePotts
 using Statistics: mean, var
 
-const P60V1_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60V1_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
 p60v1_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 p60v1_lifecycle(s) = NamedTuple{fieldnames(typeof(s.lifecycle))}(getfield.(Ref(s.lifecycle), fieldnames(typeof(s.lifecycle))))
 p60v1_lifecycle_total(s::NamedTuple) = sum(values(s))
@@ -350,9 +350,9 @@ const P60V1_CPU_ALGS = (SequentialCPM(), CheckerboardCPM())
     end
 end
 
-@testset "P6.0v1 (i): a quiet lifecycle MCS costs 0 syncs / 0 transfers / 0 B on Metal" begin
-    if P60V1_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v1 (i): a quiet lifecycle MCS costs 0 syncs / 0 transfers / 0 B on the device" begin
+    if P60V1_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         builders = p60v1_published(Float32)
         withlc = sort([n for (n, make) in builders if make().f.lifecycle !== nothing])
         @test length(withlc) >= 3
@@ -383,7 +383,7 @@ end
             @test p60v1_lifecycle_total(checkpoint(integ).stats) > 0   # control: events fired
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
@@ -419,9 +419,9 @@ const P60V1_VARIANTS = (
     end
 end
 
-@testset "P6.0v1 (ii): event-MCS host traffic is independent of lattice size, quantities and capacity on Metal" begin
-    if P60V1_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v1 (ii): event-MCS host traffic is independent of lattice size, quantities and capacity on the device" begin
+    if P60V1_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         ev = Dict{Symbol, NTuple{3, Int}}()
         for (label, kw) in pairs(P60V1_VARIANTS)
             prob = p60v1_divide_problem(; T = Float32, kw...)
@@ -449,7 +449,7 @@ end
             end
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
@@ -526,9 +526,9 @@ const P60V1_FIXTURES = (
     end
 end
 
-@testset "P6.0v1 (iii): Metal runs the deterministic fixtures' events at the same MCS, with the CPU's result" begin
-    if P60V1_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v1 (iii): the device runs the deterministic fixtures' events at the same MCS, with the CPU's result" begin
+    if P60V1_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         for (label, (make, makeT, check)) in pairs(P60V1_FIXTURES)
             cpu = solve(make(), CheckerboardCPM(); saveat = 1)
             gpu = solve(makeT(Float32), CheckerboardCPM(); backend, saveat = 1)
@@ -542,7 +542,7 @@ end
             @test p60v1_lifecycle(gpu.stats) == p60v1_lifecycle(cpu.stats)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
@@ -572,9 +572,9 @@ p60v1_agree(a, b) = abs(mean(a) - mean(b)) <= 4sqrt((var(a) + var(b)) / length(a
     @test all(p60v1_openvt_invariants, sols)
 end
 
-@testset "P6.0v1 (iii): OpenVT divisions in law, CPU against Metal" begin
-    if P60V1_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v1 (iii): OpenVT divisions in law, CPU against the device" begin
+    if P60V1_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         cpu = [solve(p60v1_openvt(s), CheckerboardCPM(); saveat = 10) for s in P60V1_OPENVT_SEEDS]
         gpu = [solve(p60v1_openvt(s), CheckerboardCPM(); backend, saveat = 10) for s in P60V1_OPENVT_SEEDS]
         @test all(s -> Symbol(s.retcode) === :Success, gpu)
@@ -585,7 +585,7 @@ end
         p60v1_agree(dg, dc) && p60v1_agree(lg, lc) || @info "P6.0v1 OpenVT in law" mean(dc) mean(dg) mean(lc) mean(lg)
         @test all(p60v1_openvt_invariants, gpu)
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
@@ -654,9 +654,9 @@ end
     @test length(p60v1_live(p60v1_host(sol.u[end]))) == 4
 end
 
-@testset "P6.0v1 (iv): stats.lifecycle and the mask counts are exact at host read points on Metal" begin
-    if P60V1_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v1 (iv): stats.lifecycle and the mask counts are exact at host read points on the device" begin
+    if P60V1_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         prob = p60v1_frozen_problem(; T = Float32)
         r = p60v1_read_points(prob, alg; backend)
@@ -678,7 +678,7 @@ end
         @test sol.stats.lifecycle.divisions == 1 && sol.stats.lifecycle.deferred == 1
         @test length(p60v1_live(p60v1_host(sol.u[end]))) == 4
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
@@ -693,7 +693,7 @@ end
 const P60V1_WAITS = Ref(0)
 const P60V1_INFLIGHT = Ref(false)
 function p60v1_instrument_waits!()
-    M = Main.Metal
+    M = Main.PottsDevices.device_package()
     @eval M function wait_oldest_cleanup!(bq::BatchedCommandQueue)
         isempty(bq.cleanups) && return
         cmdbuf = first(bq.cleanups).cmdbuf
@@ -719,7 +719,9 @@ function p60v1_instrument_waits!()
     end
     return nothing
 end
-const P60V1_METAL_VERSION = P60V1_ON_METAL ? pkgversion(Main.Metal) : nothing
+# the wait counter wraps Metal.jl internals: Metal only (D-157)
+const P60V1_ON_METAL = P60V1_ON_DEVICE && Main.PottsDevices.device_name() == "metal"
+const P60V1_METAL_VERSION = P60V1_ON_METAL ? pkgversion(Main.PottsDevices.device_package()) : nothing
 const P60V1_WAITS_ON = P60V1_ON_METAL && P60V1_METAL_VERSION == v"1.10.0"
 P60V1_WAITS_ON && p60v1_instrument_waits!()     # at top level: the testset must see the new methods
 
@@ -729,16 +731,16 @@ P60V1_WAITS_ON && p60v1_instrument_waits!()     # at top level: the testset must
         P60V1_METAL_VERSION == v"1.10.0" || @error "p6_0v1_device_lifecycle.jl copies Metal.jl 1.10.0's " *
             "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $P60V1_METAL_VERSION: update the copies and the version"
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
     end
     if P60V1_WAITS_ON
-        backend = Main.Metal.MetalBackend()
+        backend = Main.PottsDevices.device_backend()
         builders = p60v1_published(Float32)
         for n in (:OpenVTGrowingMonolayer, :AkeebInvasion)
             integ = init(builders[n](), CheckerboardCPM(); backend, save_start = false, save_end = false)
             step!(integ); step!(integ)
             l0 = p60v1_lifecycle(checkpoint(integ).stats)
-            Main.Metal.synchronize()
+            Main.PottsDevices.device_sync()
             w0 = P60V1_WAITS[]
             for _ in 1:4
                 step!(integ)

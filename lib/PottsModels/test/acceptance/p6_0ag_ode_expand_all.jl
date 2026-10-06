@@ -50,7 +50,7 @@
 #     pinned.
 using Potts: CorePotts
 
-const P60AG_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60AG_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
 const P60AG_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
 const P60AG_FIXED = (("ExplicitEuler() (default)", (;)), ("ExplicitEuler(substeps = 4)", (; ode_solver = Potts.ExplicitEuler(substeps = 4))),
     ("RK4()", (; ode_solver = Potts.RK4())))
@@ -344,14 +344,14 @@ const P60AG_PUBLISHED = Dict{Symbol, UInt64}(
     :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-recorded at the P6.0ag merge (D-102: substep function); re-pinned under D-122
 )
 
-"""CPU and Metal runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:
-`(cpu, metal)` final states, `metal` the exception if the device run threw."""
+"""CPU and device runs (Float32, CheckerboardCPM, 10 MCS) of `M` with solver keywords `kw`:
+`(cpu, device)` final states, `device` the exception if the device run threw."""
 function p60ag_cpu_metal(M, kw)
     prob = p60ag_problem(M, (0, p60ag_N); T = Float32, kw...)
     alg = CheckerboardCPM(; proposal = Moore(1))
     cpu = solve(prob, alg).u[end]
     gpu = try
-        solve(prob, alg; backend = Main.Metal.MetalBackend()).u[end]
+        solve(prob, alg; backend = Main.PottsDevices.device_backend()).u[end]
     catch e
         e
     end
@@ -411,15 +411,15 @@ end
 # ---------------------------------------------------------------------------------------
 # Metal
 
-@testset "P6.0ag: every shape compiles and runs on Metal, equal to the CPU Float32 run ($(nameof(M)))" for M in P60AG_SHAPES
-    if P60AG_ON_METAL
+@testset "P6.0ag: every shape compiles and runs on the device, equal to the CPU Float32 run ($(nameof(M)))" for M in P60AG_SHAPES
+    if P60AG_ON_DEVICE
         for (label, kw) in P60AG_FIXED
             cpu, gpu = p60ag_cpu_metal(M, kw)
             ran = !(gpu isa Exception)
             @test ran
             if !ran
                 s = sprint(showerror, gpu)
-                @info "P6.0ag Metal: $(nameof(M)) $label does not run" error = first(s, 300) opaque_closure = occursin("opaque_closure", s)
+                @info "P6.0ag device: $(nameof(M)) $label does not run" error = first(s, 300) opaque_closure = occursin("opaque_closure", s)
                 continue
             end
             @test Array(gpu.σ) == Array(cpu.σ)
@@ -429,23 +429,23 @@ end
             else
                 @test g == c
             end
-            g == c || @info "P6.0ag Metal vs CPU: $(nameof(M)) $label" cpu = c metal = g ulps = p60ag_ulps.(c, g)
+            g == c || @info "P6.0ag device vs CPU: $(nameof(M)) $label" cpu = c device = g ulps = p60ag_ulps.(c, g)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0ag: a gather-ODE model and a plain control on Metal (bitwise to the CPU Float32 run)" begin
-    if P60AG_ON_METAL
+@testset "P6.0ag: a gather-ODE model and a plain control on the device (bitwise to the CPU Float32 run)" begin
+    if P60AG_ON_DEVICE
         for M in (P60agGather, P60agPlain, P60agModelPlain), (label, kw) in P60AG_FIXED
             cpu, gpu = p60ag_cpu_metal(M, kw)
             @test !(gpu isa Exception)
-            gpu isa Exception && (@info "P6.0ag Metal: $(nameof(M)) $label does not run" error = first(sprint(showerror, gpu), 300); continue)
+            gpu isa Exception && (@info "P6.0ag device: $(nameof(M)) $label does not run" error = first(sprint(showerror, gpu), 300); continue)
             @test Array(gpu.σ) == Array(cpu.σ)
             @test p60ag_values(M, gpu) == p60ag_values(M, cpu)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
