@@ -2260,3 +2260,52 @@ session.
   - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
   - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
   - The test file is re-frozen under this entry.
+
+## D-153 P6.3d: `Merks2006` and `Merks2008`, the `merks_state` port, and reproduction 01 frozen (2026-10-05, P6.3d; coordinator, from the P6.3d test author; implements D-050 M1–M11, D-087, P6.3e; after D-145)
+
+- **Frozen.**
+  - `acceptance/p6_3d_merks_split.jl` and `test/reproductions/01_merks.jl` (freeze 7619227b).
+  - The page `reproductions/01_merks.jl` (re-frozen in 38d1d44e with field videos).
+  - `acceptance/p6_0v1_device_lifecycle.jl` is re-frozen here, gaining builders `:Merks2006` and `:Merks2008` (D-148 rule).
+- **Surface.** As pinned in the header of `acceptance/p6_3d_merks_split.jl`. Kinds are `medium endothelial border[frozen]`, and parameters are in lattice units per MCS.
+  - **2006:** Δx = 2 µm, 30 s per MCS, Dc 0.75, α = ε = 5.4e-3.
+    - `rule = :soft | :hard`. Soft uses the D-140 E₀ drive; hard uses `connectivity(endothelial; rule = :arc_or_pair)`.
+  - **2008:** α = ε = 0.03.
+    - `mode = :extension_retraction | :extension_only`.
+    - NeighborOrder(4) for contacts and copies, with a 2-site frame (P6.3e).
+    - No field before `t_relax` = 100.
+  - **Both models** adopt D-145's `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` and `@schedule fields, sweep`.
+  - **Layout helpers:**
+    - `merks_layout` and `merks2006_layout`, with a 1-site frame;
+    - `merks2008_sprout` and `merks2008_denovo`, with a 2-site frame on 202² and Eden growth on Moore(1).
+- **The D-087 port.**
+  - `merks_state(kw…) == layout(merks_layout(kw…), lattice)`, where `merks_layout` is `Scattered(n, (side, side); region = (off+2):(off+R−1), gap = 1)`.
+  - It reproduces the former loop draw for draw under StableRNG.
+  - The default `side` stays 10 (D-137). D-087's "(7,7)" predates D-137's 2006 defaults.
+- **Splits (the D-141 follow-up).** `layout` re-checks a Splits cell against the final σ before warning.
+- **Reproduction 01.**
+  - V-target audit:
+    - READY: V-E1, E5, E6, E10; V-C1, C2, C3, C4, C5, C7, C9, C12.
+    - PARKED: V-E2–E4 (morphometry, A-18, G12), E7, E8, E9; V-C6, C8, C10, C11.
+  - SMOKE and FULL tiers.
+  - Seeds are pre-registered in the test file.
+  - The time convention is TST's loop counter, which includes the 100 relaxation MCS.
+  - FULL runs offline (D-146), about 20 CPU-h, with outputs to `reproductions/data/01/`.
+  - The page records cell videos and Fig.-4-style field videos (log grayscale c, isolines, cell outlines) for the 2006 network and the 2008 CI sprout, each ≤ 5 MB in reduced mode.
+- **Measured deviation.** TST's split field step against our unsplit step: 0.11 % of max c over one MCS on a developed sprout.
+- **Early FULL signal (pre-registered, not a target change).** The CI sprout's compactness is 0.39–0.43 at 5000 MCS. That is near V-C3's low plateau (0.35 ± 0.07) and may fail.
+- **Checks before freezing.**
+  - On 04ed45b5 the freeze fails for the right reasons.
+  - Against a stub on 04ed45b5 + feat/p6-3b:
+    - acceptance 1091/1091;
+    - p6_0v1, p6_3c and merks_2006_defaults green;
+    - SMOKE green in 106 s;
+    - the page builds, 6 PASS.
+- **Coordinator rulings.**
+  1. `MerksVasculogenesis` stays unchanged with its gate case and pins. Its start changes through the port: re-measure `merks_100` and re-baseline only if it fails. Retiring it is a separate later item. `Merks2006` and `Merks2008` get gate cases at merge.
+  2. Parameter names follow the paper and spec sketch (A, χcM, χcc, α, ε, t_relax). Paper fidelity outranks consistency with older models.
+  3. The V-E5/E6 classification time is frozen at 48 h and is an author question (page §6).
+  4. The network and lacuna measures are ours: share ≥ 0.9 and ≥ 3 enclosed medium regions of ≥ 10 sites.
+  5. L 50 vs 60 stays an author question.
+  6. P6.3d merges after P6.3b. Whichever of P6.3d and P6.15c merges second rebases the p6_0v1 builder dict.
+  7. The implementer updates the non-frozen users of `merks_state`: `mechanisms.jl` vasculo seeds, `test/gpu.jl`, `test/ports/symbolic_models.jl`, `docs/paper_runs/merks_vasculogenesis.jl`, siblings and `runtests.jl`.
