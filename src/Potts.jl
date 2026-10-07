@@ -51,6 +51,7 @@ include("macro.jl")
 include("lower.jl")
 include("schedule.jl")
 include("compile.jl")
+include("sweep_spec.jl")
 include("contact_folds.jl")
 include("solvers.jl")
 include("codegen.jl")
@@ -84,6 +85,9 @@ public boundary_lengths, anneal
 public KindClass
 # `@boundary` conditions (D-145), bound inside model bodies like the rest of `Potts.DSL`
 public Dirichlet, NoFlux
+# the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
+# read with `ModelingToolkitBase.getmetadata(sys, Potts.PottsSweepSpec, default)`
+public hamiltonian, drives, PottsSweepSpec
 
 # The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
 # runs when Potts loads, never into the precompile image. The draw is a child task's: the

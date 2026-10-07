@@ -1,0 +1,111 @@
+# The sweep's definition as an MTK-visible object (D-160, P6.0bm): `hamiltonian(sys)`,
+# `drives(sys)` and the `PottsSweepSpec` metadata payload, read with MTK's own
+# `getmetadata`/`hasmetadata`. A description only: it is derived from the system on every
+# read, so it always describes the system it is read from, and it never enters the
+# generated code or the fingerprint (D-137 rule 2).
+
+"""
+    Potts.hamiltonian(sys) -> AbstractVector{Pair}
+
+The Hamiltonian of a model as written: one `domain => expr` pair per `@energy` term, in
+declaration order (`@extend`/`extend` terms merged), for a `PottsSystem` (completed or not)
+or a `CompiledPottsSystem`.
+
+`domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`,
+`sites`, `edges(r)`); `expr` is the term's energy density, a Symbolics expression over the
+declared parameters and variables (the declared symbols, as `complete(sys).x`) and the DSL
+built-ins (`volume`, `kind′`, …). The energy of a state is the sum of each density over its
+domain (cells of the term's kinds, unordered pairs of the relation with different owners,
+…), with the conventions of `total_energy`. Drives ([`Potts.drives`](@ref)), constraints
+(`ModelingToolkitBase.constraints(sys)`) and the temperature are not terms.
+
+```julia
+H = Potts.hamiltonian(GranerGlazier(; name = :gg))
+first(H[1]), last(H[1])        # cells(…) => λ * (volume - V₀)^2
+```
+"""
+hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => e.expr for e in getfield(sys, :energies)]
+hamiltonian(c::CompiledPottsSystem) = hamiltonian(c.sys)
+
+"""
+    Potts.drives(sys) -> AbstractVector
+
+The `@drive copy => expr` expressions of a model (Symbolics expressions in the proposal
+scope: `source`, `target`, `old`, `new`, …), in declaration order; empty for a model
+without drives. Drives bias the acceptance of a copy but are not terms of
+[`Potts.hamiltonian`](@ref).
+"""
+drives(sys::PottsSystem) = Any[d.expr for d in getfield(sys, :drives)]
+drives(c::CompiledPottsSystem) = drives(c.sys)
+
+"""
+    Potts.PottsSweepSpec
+
+The lattice sweep of a Potts model as typed system metadata (D-160): both the metadata key
+and the value type. Generic code detects a Potts model with MTK's metadata API, with no
+Potts internals:
+
+```julia
+using ModelingToolkitBase: getmetadata, hasmetadata
+hasmetadata(sys, Potts.PottsSweepSpec)                 # true for every Potts model
+spec = getmetadata(sys, Potts.PottsSweepSpec, nothing) # `nothing` for a plain `System`
+```
+
+The payload is present on every system built by `@potts_model` or the `PottsSystem`
+constructor, on `complete(sys)`, on `mtkcompile(sys)` (and its `.sys`) and after `extend`,
+and always describes the system it is read from (it is derived on read).
+`setmetadata(sys, PottsSweepSpec, x)` is an `ArgumentError`. It is a description only:
+MTK never executes the sweep (build it with `PottsProblem`).
+
+Properties:
+- `hamiltonian`: [`Potts.hamiltonian`](@ref)`(sys)`, the `domain => expr` terms;
+- `drives`: [`Potts.drives`](@ref)`(sys)`;
+- `constraints`: one entry per `@constraint` (as `ModelingToolkitBase.constraints(sys)`;
+  the entry type is not public);
+- `temperature`: the `@sweep` temperature as written (a declared symbol, an expression or
+  a number);
+- `proposal`: the `@relations proposal` relation (default `VonNeumann(1)`).
+"""
+struct PottsSweepSpec
+    hamiltonian::Vector{Pair{Any, Any}}
+    drives::Vector{Any}
+    constraints::Vector{Constraint}
+    temperature::Any
+    proposal::Any
+end
+
+function _sweep_spec(sys::PottsSystem)
+    return PottsSweepSpec(hamiltonian(sys), drives(sys), copy(getfield(sys, :constraints)),
+        getfield(sys, :sweep).temperature, get(getfield(sys, :relations), :proposal, CorePotts.VonNeumann(1)))
+end
+
+_count_string(n, what) = string(n, " ", what, n == 1 ? "" : "s")
+function Base.show(io::IO, s::PottsSweepSpec)
+    print(io, "PottsSweepSpec(", _count_string(length(s.hamiltonian), "term"), ", ",
+        _count_string(length(s.drives), "drive"), ", ", _count_string(length(s.constraints), "constraint"),
+        "; temperature = ", s.temperature, ", proposal = ", s.proposal, ")")
+end
+function Base.show(io::IO, ::MIME"text/plain", s::PottsSweepSpec)
+    println(io, "PottsSweepSpec")
+    for (d, e) in s.hamiltonian
+        println(io, "  energy  ", _domain_string(d), " => ", e)
+    end
+    for d in s.drives
+        println(io, "  drive   copy => ", d)
+    end
+    for c in s.constraints
+        println(io, "  constraint ", c.kind === :expr ? c.expr : string(c.kind, c.kinds))
+    end
+    println(io, "  temperature ", s.temperature)
+    print(io, "  proposal ", s.proposal)
+end
+
+# MTK's typed metadata (D-137): the payload key is answered here, every other key by MTK's
+# `AbstractSystem` methods on the `metadata` field. A `CompiledPottsSystem` reads its `.sys`.
+SymbolicUtils.getmetadata(sys::PottsSystem, ::Type{PottsSweepSpec}, default) = _sweep_spec(sys)
+SymbolicUtils.hasmetadata(::PottsSystem, ::Type{PottsSweepSpec}) = true
+SymbolicUtils.setmetadata(::PottsSystem, ::Type{PottsSweepSpec}, v) = throw(ArgumentError(
+    "setmetadata(sys, PottsSweepSpec, …): the PottsSweepSpec payload is derived from the model " *
+    "(its @energy, @drive, @constraint, @sweep and @relations) and cannot be set; change the model instead"))
+SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(c.sys, k, default)
+SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(c.sys, k)
