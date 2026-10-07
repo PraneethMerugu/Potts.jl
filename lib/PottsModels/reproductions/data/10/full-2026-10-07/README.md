@@ -7,7 +7,7 @@ The offline record required by D-146. Both runs were made on the PC (praneeth-Nu
 1. **The page at FULL.** `lib/PottsModels/reproductions/10_akeeb.jl` (frozen, sha256 `db4b7027…`) with `POTTS_FULL_REPRODUCTION=true`, through `run_wrapper.jl`: nine points × 10 runs, 10 one-MCS V-A0 runs, and the PP = 0.5 slice (121 × 10 runs). 676 s wall time.
    - The executed text differs from the frozen page in one place, recorded in `provenance.toml`: the videos are drawn with `boundaries = false` instead of `true` (D-156: no cell outlines). This is rendering only; the page re-solves replicate 1 for each video and asserts that it equals the ensemble's replicate 1.
 2. **The full sweep.** `sweep.jl`: all 11 J_LF × 11 λ × 11 PP points × 10 runs (13,310 runs) at the authors' MCS 700, seeds 2 000 000 + 100 j + i (disjoint from the page's). `analyse.jl` turns it into `verdicts_sweep.tsv` and `10_akeeb_phenotypes.png`.
-   - The sweep is written one PP level at a time and resumes at the first missing level. PP = 0.0 and 0.1 were written by a first session; the run was then restarted under a memory cap (`systemd-run --user --scope -p MemoryMax=12G`), which wrote PP = 0.2–1.0 in 3491 s. Runs are deterministic in their seed, so the restart does not change any row.
+   - The sweep is written one PP level at a time and resumes at the first missing level. PP = 0.0 and 0.1 were written by a first session; the run was then restarted under a memory cap (`systemd-run --user --scope -p MemoryMax=12G`), which wrote PP = 0.2–1.0 in 3491 s. Runs are deterministic in their seed, so the restart does not change any row. The first session's commit, times and threads are recovered in `sweep_provenance.toml` (`[first_session]`); its per-level wall times are lost, because its log was overwritten by the second session.
 
 | File | Contents |
 |---|---|
@@ -34,3 +34,5 @@ The offline record required by D-146. Both runs were made on the PC (praneeth-Nu
   - The paper's other correlations: λ–invasive 0.701 (paper 0.70), λ–fingers 0.793 (0.80), J–singles 0.672 (0.67) and J–infiltrative 0.567 (0.57).
   - The paper's full-sweep marginals are all in their band, max(10 %, 1 count). All but one are within 10 %: clusters at J_LF > 2 are 2.00 against 1.78, +12 %, which is outside 10 % and inside the 1-count floor.
   - The sweep's own PP = 0.5 slice repeats V-A3 and V-A4 in band.
+
+**Classifier oracle.** The `akeeb_phenotype` test in `lib/PottsModels/test/analysis.jl` checks the classifier against the authors' `phenotype_classification.csv` when the released data are on disk. It ran (and passed) on the PC with `POTTS_REFERENCES=~/potts-refs`; without the data it is skipped with an `@info`.

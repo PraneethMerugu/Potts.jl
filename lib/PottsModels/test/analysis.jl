@@ -279,6 +279,7 @@ end
         @test length(kept) == length(P) == 13263
         @test all(i -> kept[i][1] == P[i][1:9] && name[kept[i][2]] == P[i][10], eachindex(P))
     else
-        @test_skip isfile(joinpath(data, "phenotype_classification.csv"))
+        @info "akeeb_phenotype oracle skipped: the authors' released data are not on disk (set POTTS_REFERENCES to the docs/references directory)" data
+        @test_skip "akeeb_phenotype oracle against the authors' phenotype_classification.csv (data not on disk)" == ""
     end
 end

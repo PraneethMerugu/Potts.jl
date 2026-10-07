@@ -258,8 +258,9 @@ end
     akeeb_phenotype(obs) -> Symbol
 
 The invasion phenotype of one measured state, by the authors' area-equality classifier
-(Akeeb, Marcus & Jiang 2026, Fig. 5B and S1 Table; the first `classify_phenotype` of their
-`ResultExtraction.ipynb`, cell 3; spec 10 §5.3.5). `obs` is any value with the fields
+(Akeeb, Marcus & Jiang 2026, Fig. 5B and S1 Table; the first `classify_phenotype` of
+`Implementation/TumorInvasionAnalysis/ResultExtraction.ipynb`, cell 3, in their released
+code; spec 10 §5.3.5). `obs` is any value with the fields
 `invasive`, `infiltrative`, `fingers`, `singles` and `clusters`, such as the result of
 [`akeeb_observables`](@ref). The tests are applied in order, and the areas are compared
 exactly:

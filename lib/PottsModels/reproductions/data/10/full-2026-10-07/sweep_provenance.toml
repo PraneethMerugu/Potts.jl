@@ -18,3 +18,18 @@ commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
 replicates = 10
 item = "P6.2d"
 saves_our_mcs = [701]
+
+# First session (PP = 0.0 and 0.1), recovered after the fact: its sweep.log was overwritten
+# when the second session started. Start: the page run's EXIT line in page.log (the same
+# script launched the sweep next); stop: the second session's START line in sweep.log (the
+# first was stopped by hand to add the memory cap); commit and threads: the launch script
+# and the PC worktree, which stayed at 246427f1 until 12:2x. Per-level wall times are lost.
+[first_session]
+commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
+pp_levels = [0.0, 0.1]
+started = "2026-10-07T10:41:44"
+stopped = "2026-10-07T10:53:41"
+wall_s_approx = 717
+threads = 12
+affinity = "taskset -c 0-11,16-27 (no memory cap)"
+note = "wall time includes compilation and the partial PP = 0.2 level discarded at the stop; the TSV keeps only whole PP levels"

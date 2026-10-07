@@ -145,6 +145,9 @@ rec_runs = rec_rows("sweep.tsv")
 rec_p6 = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0"]
 rec_p6s = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0" && r["PP"] == "0.5"]
 rfmt(x) = string(round(Int, x))
+## pass rule R1 of §5 (spec 10 §5.3.3), defined here because the deviations table uses it
+r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
+tol1(μA, sA, nA, sB, nB, f) = max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
 ## dataset A at (J_LF, λ) = (−2, 6) pooled over its 11 PP levels (`Data/invasion_metrics.csv`;
 ## PP does not matter, V-A7): invasive mean, SD, n
 const A_P6_POOLED = (2381, 383, 110)
@@ -153,11 +156,13 @@ va6_ours = join([first(split(r["ours"], " %")) for r in va6], " / ") * " %"
 va6_result = all(r -> r["result"] == "PASS", va6) ? "PASS" : "FAIL"
 va8 = [rec(rec_page, "V-A8 $p mean cluster size; leader fraction") for p in ("P1", "P2")]
 p6 = rec(rec_page, "V-A2 P6 invasive")
+p6A = parse.(Float64, match(r"^([0-9.]+) ± ([0-9.]+)", p6["paper"]).captures)        # A at P6, n = 10
+p6s_band = r1(p6A..., 10, mean(rec_p6s), std(rec_p6s), length(rec_p6s), 0.0) ? "in band (R1)" : "out of band (R1)"
 Markdown.parse("""
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-A2 P6 (−2, 6, 0.5) invasive = infiltrative (**FAIL**, full run) | $(p6["ours"]); the same point in the full sweep (other seeds): $(rfmt(mean(rec_p6s))) ± $(rfmt(std(rec_p6s))) (n = $(length(rec_p6s))), in band; pooled over all 11 PP at (−2, 6): $(rfmt(mean(rec_p6))) ± $(rfmt(std(rec_p6))) (n = $(length(rec_p6))) | $(p6["paper"]), tolerance $(p6["tolerance"]); A pooled over all 11 PP at (−2, 6): $(A_P6_POOLED[1]) ± $(A_P6_POOLED[2]) (n = $(A_P6_POOLED[3])) | reference sampling: A's PP = 0.5 cell is low against A's own (−2, 6) runs, and PP does not matter (V-A7); pooled, ours is $(round(Int, 100 * (mean(rec_p6) / A_P6_POOLED[1] - 1))) % above A, inside the 10 % floor. Both FAIL rows of the full run are this one deviation: at P6 invasive and infiltrative are the same quantity (no detached cells) | not an author question |
-| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full sweep) | $va6_ours (N = $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | provisional: the area-equality classifier (`akeeb_phenotype`), identified from the released notebooks as the one behind Fig. 5B and S1 Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The paper does not say | $(aq("q1")) |
+| V-A2 P6 (−2, 6, 0.5) invasive = infiltrative (**FAIL**, full run) | $(p6["ours"]); the same point in the full sweep (other seeds): $(rfmt(mean(rec_p6s))) ± $(rfmt(std(rec_p6s))) (n = $(length(rec_p6s))), $p6s_band; pooled over all 11 PP at (−2, 6): $(rfmt(mean(rec_p6))) ± $(rfmt(std(rec_p6))) (n = $(length(rec_p6))) | $(p6["paper"]), tolerance $(p6["tolerance"]); A pooled over all 11 PP at (−2, 6): $(A_P6_POOLED[1]) ± $(A_P6_POOLED[2]) (n = $(A_P6_POOLED[3])) | reference sampling: A's PP = 0.5 cell is low against A's own (−2, 6) runs, and PP does not matter (V-A7); pooled, ours is $(round(100 * (mean(rec_p6) / A_P6_POOLED[1] - 1); digits = 1)) % above A, inside the 10 % floor. Both FAIL rows of the full run are this one deviation: at P6 invasive and infiltrative are the same quantity (no detached cells) | not an author question |
+| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full sweep) | $va6_ours (N = $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | provisional: the area-equality classifier (`akeeb_phenotype`), identified from the released notebooks as the one behind Fig. 5B and S1 Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The paper does not say. R3's floor of 5 percentage points means the Single-cell row (≈ 1 %) cannot fail: it is a check on the other three | $(aq("q1")) |
 | V-A8 (paper) cluster composition (**PARKED**) | V-A8 binds on the released `cluster_data.csv` instead: P1 $(va8[1]["ours"]), P2 $(va8[2]["ours"]) ($(va8[1]["result"]), $(va8[2]["result"]), full run) | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |
 | V-A9 leader speed (**PARKED**) | not run (no measurement to reproduce) | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |
 | Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("q2")) |
@@ -331,8 +336,6 @@ Markdown.parse("This table was last changed in commit " *
 
 seed_of(k, i) = 10_000k + i
 const SAVES = [1, 101, 301, 501, 701]
-r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
-tol1(μA, sA, nA, sB, nB, f) = max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
 r2(μA, seA, μB, seB, f) = abs(μB - μA) <= max(3 * sqrt(seA^2 + seB^2), 0.10 * abs(μA), f)
 r3(pA, NA, pB, NB) = abs(pB - pA) <= max(3 * sqrt(pA * (1 - pA) / NA + pB * (1 - pB) / NB), 0.05)
 sd(v) = length(v) > 1 ? std(v) : 0.0
@@ -603,18 +606,23 @@ Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ou
 # FULL (`verdicts.tsv`) and the full sweep (`verdicts_sweep.tsv`) were run with the machine,
 # threads and wall time below (`provenance.toml`, `sweep_provenance.toml`):
 
-prov(file) = Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m, read(joinpath(rec_dir, file), String)))
+## top-level keys of a provenance file (tables such as `[first_session]` are not read)
+prov(file) = Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m,
+    first(split(read(joinpath(rec_dir, file), String), "\n["))))
 pp, ps = prov("provenance.toml"), prov("sweep_provenance.toml")
 tally = Dict(k => count(r -> r["result"] == k, rec_page) for k in unique(r["result"] for r in rec_page))
 Markdown.parse("""
-- **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"]), host `$(pp["hostname"])`), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts: $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation, §3).
+- **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"]), host `$(pp["hostname"])`), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts (tally of the page as run, before V-A6 was un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation, §3).
 - **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"]), host `$(ps["hostname"])`), CPU backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = 0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the record's README).
 """)
 
 # Fig. 5B side by side: the phenotype fractions of the authors' dataset A (Fig. 5B values,
-# NB:`Phenotypes.ipynb` cell 7) and of our full sweep, by the same classifier.
+# NB:`Phenotypes.ipynb` cell 7, as recorded in `verdicts_sweep.tsv`) and of our full
+# sweep, by the same classifier. R3's floor of 5 percentage points (§5) makes the
+# Single-cell comparison (≈ 1 %) unable to fail; the other three carry the verdict.
 
-let names = ["none", "single", "bulk", "multimodal"], A = [22.24, 1.08, 22.54, 54.14]
+let names = ["none", "single", "bulk", "multimodal"],
+    A = [parse(Float64, match(r"A ([0-9.]+) %", r["paper"])[1]) for r in va6]    # A's fractions, read from verdicts_sweep.tsv
     ph = [r["phenotype"] for r in rec_runs if r["phenotype"] != "unclassified"]
     ours = [100 * count(==(n), ph) / length(ph) for n in names]
     f = Figure(size = (520, 340))
