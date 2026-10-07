@@ -195,6 +195,10 @@ function _check_algebraic_lowering(sys::PottsSystem, rn)
         cell = i.options.scope === :cell
         try
             lower(o.expr, cell ? _cell_env(Float64, :c, rn; mcs = :t) : _model_env(Float64, rn; mcs = :t))
+            # an integral is evaluated by summing its operand over the cell's sites
+            _walk(o.expr) do y
+                iscall(y) && operation(y) === cell_integral && lower(arguments(y)[1], _site_env(Float64, :i, rn; mcs = :t))
+            end
         catch e
             e isa Union{ArgumentError, ErrorException} || rethrow()
             throw(ArgumentError("the algebraic equation `$(i.name) ~ $(o.expr)` cannot be evaluated at " *

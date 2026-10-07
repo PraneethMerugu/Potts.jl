@@ -204,7 +204,8 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError && !occursin("algebraic", sprint(showerror, err))
+        # (not "algebraic" alone: the source location is this file)
+        @test err isa ArgumentError && !occursin("algebraic variable", sprint(showerror, err))
     end
     # every definition is checked where it is evaluated, even if nothing reads it
     @test alg_error(() -> mtkcompile(alg_model(quote
