@@ -1,0 +1,20 @@
+capacity = 4000
+points = 1331
+started_last_session = "2026-10-07T10:53:45.892"
+threads = 12
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+seeds = "2000000 + 100j + i"
+decision = "D-156"
+dirty = false
+wall_s_last_session = 3490.9
+finished = "2026-10-07T11:52:00.957"
+script = "lib/PottsModels/reproductions/data/10/full-2026-10-07/sweep.jl"
+algorithm = "SequentialCPM(; proposal = VonNeumann(1))"
+hostname = "praneeth-NucBox-EVO-X2"
+affinity = "taskset -c 0-11,16-27; systemd-run --user --scope MemoryMax=12G"
+machine = "x86_64-linux-gnu"
+julia = "1.12.6"
+commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
+replicates = 10
+item = "P6.2d"
+saves_our_mcs = [701]

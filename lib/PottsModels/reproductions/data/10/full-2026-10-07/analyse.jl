@@ -106,13 +106,14 @@ function dominant(Js, Ls, ph)
     end for j in -5:5, l in 0:3:30]
 end
 fig = Figure(size = (1100, 380))
-ax = Axis(fig[1, 1]; title = "Phenotype fractions (Fig. 5B)", ylabel = "%", xticks = (1:4, collect(values(PHEN_TEXT))))
+ax = Axis(fig[1, 1]; title = "Phenotype fractions (Fig. 5B)", ylabel = "%", xticks = (1:4, collect(values(PHEN_TEXT))),
+    xticklabelrotation = π / 8)
 barplot!(ax, (1:4) .- 0.2, [A_FIG5B[ph][1] for ph in PHEN]; width = 0.38, color = :gray60, label = "authors (A)")
 barplot!(ax, (1:4) .+ 0.2, [100fracs[ph] for ph in PHEN]; width = 0.38, color = :red3, label = "ours")
 axislegend(ax; position = :lt, framevisible = false)
 mapB = dominant(J[slice], Λ[slice], phen[slice])
 heat(pos, title, d) = (a = Axis(fig[1, pos]; title, xlabel = "J_LF", ylabel = "λ");
-    heatmap!(a, -5:5, 0:3:30, d; colormap = colors, colorrange = (0.5, 5.5)); a)
+    heatmap!(a, -5:5, 0:3:30, d; colormap = cgrad(colors, 5; categorical = true), colorrange = (0.5, 5.5)); a)
 refs = get(ENV, "POTTS_REFERENCES", "")
 Afile = joinpath(refs, "codebases", "10_Akeeb2026_Leader_Follower_Invasion_Model", "Data", "phenotype_classification.csv")
 if isfile(Afile)
