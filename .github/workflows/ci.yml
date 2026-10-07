@@ -8,6 +8,10 @@ name: CI
 on:
   push:
     branches: [monorepo]
+    # Design notes, decisions and research docs change no code or test: skip CI for
+    # pushes that touch only them (a push touching anything else still runs).
+    paths-ignore:
+      - 'docs/design/**'
   workflow_dispatch:
 
 concurrency:
