@@ -7,6 +7,7 @@ This is the offline record required by D-146.
 - **Re-freeze after the run.** The record falsified one premise of the first freeze: bin 0 of f holds 26 cells with 0 < f < 0.01, besides the 88,803 cells with f = 0. The test was re-frozen, now sha256 `0f38ec2a…`. V4.2 now drops exactly the f = 0 cells, and the premise check became `hf[1] ≥ n_f0`. No band, seed or run changed, and every verdict below is the same under both rules. The runner, as committed and hashed in `provenance.toml`, still drops all of bin 0 for its own `verdicts.tsv`; the test recomputes the verdicts with the re-frozen rule.
 - **Protocol.** `OpenVTReferenceMonolayer` at Table S1 (β = γ = 0, σ_X = 0.4), one disc cell at the centre, a closed 400 × 400 lattice with `edge_guard(5; terminate = true)`, `SequentialCPM(; proposal = Moore(1))`, stopped at the end of the first MCS with ≥ 1000 cells. Seeds 15001–15100 (case (b)) and 15501–15520 (control, γ = 10⁻⁴).
   - Every run stopped on the cell count (`Terminated`). The closest any cell came to the lattice edge was 34 sites (case (b)) and 33 (control).
+  - **Lattice: a reading.** Spec §2.5 lists "≥ 1400², closed + guard" for Potts. That row is sized for the 10⁴-cell cases. Here we read M's "unbounded 2D plane" (§2.1) as any closed lattice the 1000-cell colony never approaches. The edge guard enforces this, and every run kept ≥ 33 sites of medium to the edge. One MCS is one attempt per site, so a boundary site is tried once per MCS whatever the lattice size, and medium-only sites never change.
   - Time to 1000 cells: 10.36 cycles on average (9.73–11.04; 1 cycle = 775 MCS) for case (b), and 20.69 (20.37–21.70) for the control.
 
 | File | Contents |
@@ -38,21 +39,41 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
 | V4.6 mean a | 0.85–0.86 | 0.849 | [0.82, 0.89] | PASS | 0.957 (fails) |
 | V4.7 mean f | ≈ 0.03 | 0.0388 | [0.02, 0.04] | PASS | 0.0484 |
 
+- **Audit of the bands.** The V4 bands were set from spec 15's V4 text only, not audited against the G files (TST_5T, Morpheus_5T); G was not on disk when the test was frozen. The causes below are therefore provisional until the frozen rules are run on TST_5T.
 - **The bulk agrees.** The f = 0 fraction, the a peak and mean a match the consortium. Mean f passes but sits at the band's upper end (0.039 against ≈ 0.03).
-- **The free surface of rim cells is shifted up.**
-  - In 0.05 bins, the nonzero-f histogram is flat-topped over 0.30–0.45 (1387, 1497 and 1579 cells), so the smoothed peak lands at 0.425. The 12-run pilot gave 0.325.
+  - V4.1 does not separate the control from case (b): the control's f = 0 fraction, 0.863, is also inside the band.
+- **Provisional: our rim cells appear to carry more free surface than the consortium's.**
+  - **Consistency check.** The consortium's f0 ≈ 0.89 and mean f ≈ 0.03 imply a mean nonzero f of about 0.03 / 0.11 ≈ 0.27. Ours is 0.346, with the median in the bin 0.35–0.36.
+  - In 0.05 bins, the nonzero-f histogram is flat-topped over 0.30–0.45 (1387, 1497 and 1579 cells).
+  - **Window sweep for V4.2.** Running-mean windows of 1, 3, 5, 7, 9 and 11 bins put the peak at 0.425, 0.435, 0.425, 0.415, 0.395 and 0.395. All are outside the consortium's 0.25–0.35, so the failure does not depend on the frozen 5-bin window.
   - 606 of 11,226 rim cells (5.4 %) have f > 0.56.
-- **The low end of a comes from crushed cells.** 30 of 100,029 cells have a < 0.42. All 30 are interior cells squeezed to 2–18 px, and 3 of them are in two or more pieces.
-- **The negative control fails V4,** as pre-registered, on V4.4 and V4.6. Arrested interior cells relax to their reference area, so mean a is 0.957 and the a peak is 0.965. The control also fails V4.2, V4.3 and V4.7. It takes twice as long to reach 1000 cells.
-- **Cause probe** (`probe_causes.jl`; 20 runs each, seeds 15001–15020, not part of the verdicts):
+- **The low end of a: squeezed young daughters (cause unresolved).**
+  - 30 of 100,029 cells have a < 0.42. All 30 are interior (f = 0) cells of 2–18 px with A_star 23–43, so they were born recently.
+  - 10 of them are 5 sister pairs, with identical A_star within one run (runs 19, 27, 31, 70, 76). 3 are in two or more pieces.
+  - For context, the low quantiles of a are 0.38 (0.01 %), 0.47 (0.1 %), 0.60 (1 %) and 0.69 (5 %).
+- **The negative control fails V4,** as pre-registered, on V4.4 and V4.6. Arrested interior cells relax to their reference area, so mean a is 0.957 and the a peak is 0.965.
+  - The control also fails V4.2, V4.3 and V4.7.
+  - It takes twice as long to reach 1000 cells.
+- **Cause probe** (`probe_causes.jl`; 20 runs each, seeds 15001–15020, not part of the verdicts). The same-seed baseline is the record's runs 1–20: max f 0.821, 5 cells with a < 0.42, min a 0.066.
 
   | Variant | max f | nonzero f > 0.56 | min a | cells with a < 0.42 | mean a |
   |---|---|---|---|---|---|
+  | record, runs 1–20 (random plane, no connectivity) | 0.821 | — | 0.066 | 5 | — |
   | TST's minor-axis division | 0.822 | 6.3 % | 0.231 | 12 | 0.849 |
   | random plane + connectivity constraint | 0.815 | 5.9 % | 0.289 | 8 | 0.852 |
 
-  Both nonzero-f histograms peak at 0.35–0.45, as in the record. So neither the division axis nor connectivity explains V4.2–V4.3, and connectivity only thins V4.5.
-  - The remaining candidates are listed in `deviations.tsv`. The pooled V4 band mixes TST's pair-count f with Morpheus's length-scaled f, and the Morpheus runs predate Table S1 (spec 15 §2.5, Q12). The G files were not re-analysed here.
-- **Distance bins.** Ours are 0–9, 9–18, 18–27, 27–36 and 36–45 R: the furthest cell is 42.8 R from the initial centre. M's legend reads 0–7 … 31–39, a 1.05 × max d of about 39.5 R (spec C11, Q15).
+  - Both variants' nonzero-f histograms peak at 0.35–0.45, as in the record. So neither the division axis nor connectivity explains V4.2–V4.3.
+  - Connectivity raises the minimum of a but does not reduce the number of cells below 0.42.
+  - The remaining candidates are in `deviations.tsv`:
+    - the pooled V4 band mixes TST's pair-count f with Morpheus's length-scaled f, and the Morpheus runs may predate Table S1 (spec 15 §2.5, Q12);
+    - TST divides on target area (C13, Q20);
+    - Morpheus draws X with σ = 0.16 (C17, Q21).
+  - New questions Q23 (the f definition and data behind V4) and Q24 (crushed cells) are on our open question list in spec 15 §7.
+- **Pilot (12 + 6 + 6 runs, seeds 1001–1012 and 2101–2206, 450² lattice, before the freeze; script not kept).**
+  - Case (b): f0 0.887, nonzero-f peak 0.325, max f 0.764, a peak 0.875, a range 0.227–1.116, mean a 0.849, mean f 0.039.
+  - γ = 10⁻⁴ and γ = 0.2: mean a 0.957 and 0.958, a peak 0.965 and 0.975.
+  - It set the throughput estimate (28 s per run) and the choice of control. The V4 bands in the test were written before its output was read.
+- **Distance bins.** The figure labels, floored as in M's notebook, are 0–8, 8–17, 17–26, 26–35 and 35–44 R (control 0–8 … 34–43). The edges are 0, 8.99, 17.98, 26.96, 35.95 and 44.94 R, and the furthest cell is 42.8 R from the initial centre. M's legend reads 0–7 … 31–39, a 1.05 × max d of about 39.5 R (spec C11, Q15).
+- **Figure range.** `fig5.png` draws a from 0.3, so the 3 case (b) cells with a < 0.30 (0.066, 0.261 and 0.297) lie left of the axis. Every f value is in range.
 
-**Videos** (local only, not uploaded): `15_openvt_f5_b_run1_seed15001.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501.mp4`. Both are rendered by `video_f5.jl`, with cells coloured by area from blue (20 px) to red (120 px) and no outlines.
+**Videos** are published as assets of the pre-release [`reproductions-2026-10-07-openvt-f5`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5): `15_openvt_f5_b_run1_seed15001.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501.mp4`. Both are rendered by `video_f5.jl`, with cells coloured by area from blue (20 px) to red (120 px) and no outlines.
