@@ -43,6 +43,9 @@ without drives. Drives bias the acceptance of a copy but are not terms of
 drives(sys::PottsSystem) = Any[_wrapped(d.expr) for d in getfield(sys, :drives)]
 drives(c::CompiledPottsSystem) = drives(c.authored)
 
+# one element of `updates(sys)`
+const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
+
 """
     Potts.updates(sys) -> AbstractVector
 
@@ -72,8 +75,6 @@ u.phase, u.scope, u.every      # (:after_mcs, :cell, Every(1))
 u.eq                           # V_target ~ ifelse(…, Pre(V_target) + …, Pre(V_target))
 ```
 """
-# one element of `updates(sys)`
-const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
 updates(sys::PottsSystem) = _UpdateRule[_update_rule(u) for u in getfield(sys, :updates)]
 updates(c::CompiledPottsSystem) = updates(c.authored)
 
