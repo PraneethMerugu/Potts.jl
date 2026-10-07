@@ -124,6 +124,12 @@ function devir_cases()
         "OpenVTReferenceMonolayer" => () -> PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (60, 60)),
             [ownership => ref, kind => fill(:cell, 36), :σ_X => 0.0], (0, 4); T, capacity = 128),
         "OpenVTChain" => () -> PottsProblem(OpenVTChain(; name = :c, lattice = (150, 5)), openvt_chain(11), (0, 4); T),
+        "Merks2006" => () -> PottsProblem(Merks2006(; name = :m6, lattice = (32, 32)),
+            layout(merks2006_layout(; lattice = (32, 32), n = 6, side = 7), (32, 32)), (0, 4); T,
+            field_solver = ExplicitEuler(substeps = 3)),
+        "Merks2008" => () -> PottsProblem(Merks2008(; name = :m8, lattice = (32, 32)),
+            layout(merks2008_denovo(; lattice = (32, 32), n = 12, rounds = 2), (32, 32)), (0, 4); T,
+            field_solver = ExplicitEuler(substeps = 3)),
     ]
 end
 
