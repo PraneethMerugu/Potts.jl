@@ -5,22 +5,93 @@
   `julia -t auto --project=benchmark benchmark/graner.jl [seq|cpu|metal] [mcs] [scale]`
 - `benchmarks.jl` — BenchmarkTools `SUITE` (AirspeedVelocity-compatible) of the warm MCS.
 - `lib/PottsModels/data/graner/` — the pre-equilibrated 72² initial condition (64 cells).
-- `gate.jl` — the performance gate (D-053) against `baseline.toml`; run it under the machine
-  lock: `tools/exclusive.sh julia --project=benchmark benchmark/gate.jl metal`.
-- `ab.jl` / `ab_one.jl` — interleaved A/B of one gate case between two checkouts
-  (AUTONOMY §7.4); each run is a fresh `ab_one.jl` process that takes the lock itself.
-- `test/p6_0s_v7_tooling.jl` (frozen, D-090) and `test/exclusive_transition.jl` — tests of
-  the lock and of the gate's timing.
+- `gate.jl` — the performance gate (D-053, D-157) against this machine's rows of
+  `baseline.toml`: `julia --project=benchmark benchmark/gate.jl [rocm|metal] [update]`
+  (CPU rows always, plus the named device backend). It fails on a warm-MCS allocation; a
+  row slower than its baseline is only flagged, because absolute baselines are
+  informational (D-157), and is decided by `ab.jl`.
+- `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4, P6.0bb), below.
+- `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
+  cache seeding shared by the gate and the A/B.
+- `test/p6_0s_v7_tooling.jl` (frozen, D-090), `test/exclusive_transition.jl` and
+  `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
+
+### Machines and baselines (D-157)
+
+`baseline.toml` is keyed by machine and backend: `[mac.cpu]`, `[mac.metal]`,
+`[nucbox.cpu]`, `[nucbox.rocm]`, each with a `[<machine>.meta]` table; rows are
+`<case>.<alg>` in ns/site per warm MCS (device rows are checkerboard). A machine is matched
+by CPU model in `machine.jl` (or named with `POTTS_MACHINE`); an unknown one gets a key from
+its CPU model, and `gate.jl ... update` writes only its own table. The `mac` rows are the
+Apple M1 Pro; a new machine (the Mac Studio of P6.0bi) gets its own key and rows.
+
+On the NucBox (Ryzen AI Max+ 395, 16 cores / 32 threads; logical n and n + 16 share
+physical core n) a timed process runs pinned to one logical CPU of the reserved cores 12–15
+(default 12, `POTTS_BENCH_CPU` to change), with its SMT sibling (n + 16) idle; everything
+else, precompilation included, runs on `taskset -c 0-11,16-27`, as CI does. Every heavy
+child also runs under a memory cap, `systemd-run --user --scope -p MemoryMax=8G`
+(`POTTS_BENCH_MEMMAX`, 0 for none), because the machine is shared with CI and other jobs. `gate.jl`
+re-runs itself pinned, and `ab.jl` pins each timed child. Both wait while a CI job (`Runner.Worker`)
+runs, and for ROCm while another process holds the GPU (a KFD client), before timing
+(`--no-wait` to skip): a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500
+instead of 47 ns/site. Both warn when the reserved CPU or its sibling is busy. Unpinned, under load, an
+Akeeb sequential run read 40 or 71 ns/site depending on SMT sharing (a same-commit control
+of 1.729).
+
+### The paired A/B (`ab.jl`, P6.0bb)
+
+    julia benchmark/ab.jl <base> <candidate> <cases|all> <cpu|rocm|metal> [rounds] [options]
+    julia benchmark/ab.jl --inprocess <checkout> <variants.jl> <cpu|rocm|metal> [rounds] [options]
+
+By default it:
+
+- **seeds the Tuple type cache** of every timed process to the same number of entries
+  (500 000) after the packages load and before anything is built. Kernel launches look up
+  Tuple types, and the table grows fourfold when it fills; a session with the packages
+  loaded sits just below a growth (222k–243k entries of 262144 on the NucBox); a session that happened to create more types times
+  differently (D-145: Metal OpenVT read 1.07–1.115 unseeded, 0.996 seeded).
+- **runs a same-commit control**: a third side, a second checkout of the base's commit
+  (`<base>-abctl`, a detached worktree created or moved there; the base must be clean, or
+  pass `--control=<dir>`). Its ratio to the base bounds what the A/B can resolve: two
+  checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b).
+- **interleaves**: every round runs each side once, each in a fresh process under the machine
+  lock, and the order rotates, so each side runs first equally often (6 rounds). When only
+  the workload or the parameters change, `--inprocess` times both in one process (and the
+  control as a second copy of the base): `<variants.jl>` defines `AB_VARIANTS`, a vector of
+  `label => T -> PottsProblem`, base first (example: `ab_variants_akeeb_mu.jl`, P6.2b's
+  μ = 30 vs 24).
+- **pins** on the NucBox, as above.
+
+The timed harness is this checkout's `ab_one.jl` and `gate.jl` for every side, run in each
+side's environment (`--project=<side>/benchmark`), so an older base is timed by the same
+code (for `rocm` against a base whose benchmark project lacks AMDGPU, its test project is
+stacked on the load path). The verdict statistic (`--stat`) is, by default for CPU and
+ROCm, `paired`: the median over rounds of the per-round ratio, which cancels a slow drift
+of the machine, since the sides of a round run back to back (a drifting ROCm hour read
+worst controls 1.024 on the fastest medians and 1.006 paired). For Metal it is `fastest`:
+each side's fastest run median, i.e. the same GPU power state (D-145). Both are printed. Exit 1: some candidate/base above 1 + `--tolerance` (0.05). Exit 2: no
+regression, but some |control/base − 1| above `--control-bound` (0.01 on the NucBox, else
+0.03), so the A/B cannot be read at that resolution. `ab.jl`'s header lists every option.
+
+The D-090 form `ab.jl <base> <candidate> <case> <sequential|checkerboard> [rounds]` (no
+options) is kept for its frozen contract: each checkout's own `ab_one.jl`, base then
+candidate, no control, the fastest run median per side.
 
 ### Device timings run to GPU completion (D-090)
 
-On a device backend `step!` only enqueues kernels. Every Metal timing in `gate.jl` and
-`ab_one.jl` is therefore `step!` followed by `KernelAbstractions.synchronize(backend)`
-(`timed_step!` in `gate.jl`), and each sample's setup synchronizes too, so no setup work is
-still in flight when the clock starts. A Metal row is therefore the latency of one MCS
+On a device backend `step!` only enqueues kernels. Every device timing (Metal, ROCm) in `gate.jl`
+and `ab_one.jl` is therefore `step!` followed by a wait for the device (`device_sync` in
+`timed_step!`, `gate.jl`), and each sample's setup waits too, so no setup work is still in
+flight when the clock starts. The wait is `KernelAbstractions.synchronize(backend)`, except
+on ROCm: AMDGPU.jl's default synchronize spins briefly, then waits for a HIP host callback
+through Julia's event loop, whose wake-up made a ROCm Graner–Glazier MCS read ~20, ~47 or
+~2500 ns/site from run to run; its blocking form (`hipStreamSynchronize`) read ~43. The
+benchmark wait therefore spins on `hipStreamQuery` until the stream is done (then calls the
+blocking synchronize, which returns at once and raises kernel errors): 13.7 ns/site, the
+same as a steady run of 2000 MCS. A device row is therefore the latency of one MCS
 launched on an idle GPU and waited for, not throughput: a run of MCS without a synchronize
-in between may overlap host and GPU work, which this timing excludes. Metal flags stay
-advisory: the gate only flags a slow Metal row, and `ab.jl` decides it. CPU rows time
+in between may overlap host and GPU work, which this timing excludes. Timing flags are
+advisory: the gate only flags a slow row, and `ab.jl` decides it. CPU rows time
 `step!` alone and must allocate nothing.
 Before 2026-10-01 the Metal rows timed host enqueue only, so Graner–Glazier and Wortel read
 far below their GPU cost; the Metal rows of `baseline.toml` were re-measured once then (the

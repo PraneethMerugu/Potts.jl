@@ -1,30 +1,62 @@
-# Performance gate (D-053): warm cost of one MCS for every published model, sequential and
-# checkerboard on the CPU (and Metal with `metal`), against `benchmark/baseline.toml`.
+# Performance gate (D-053, D-157): warm cost of one MCS for every published model,
+# sequential and checkerboard on the CPU, and checkerboard on a device backend when one is
+# named, against this machine's rows of `benchmark/baseline.toml`.
 #
-#     julia --project=benchmark benchmark/gate.jl            # compare, exit 1 on regression
-#     julia --project=benchmark benchmark/gate.jl update     # rewrite the baseline
-#     julia --project=benchmark benchmark/gate.jl metal      # also gate Metal
+#     julia --project=benchmark benchmark/gate.jl              # CPU rows
+#     julia --project=benchmark benchmark/gate.jl rocm         # CPU rows and ROCm (AMDGPU.jl)
+#     julia --project=benchmark benchmark/gate.jl metal        # CPU rows and Metal (Metal.jl)
+#     julia --project=benchmark benchmark/gate.jl rocm update  # rewrite this machine's rows
 #
-# A merge fails if any CPU case is more than `TOLERANCE` slower than its baseline (minimum
-# over samples, ns per site per MCS) or any case allocates in a warm MCS. On this Mac the
-# GPU timing is bimodal (about 1.5x between power states, the same for any commit), so a
-# slow Metal case is only flagged: it is decided by `benchmark/ab.jl`, which interleaves
-# the base and the candidate (AUTONOMY §7.4). Run it alone on the
-# machine: parallel test suites make timings meaningless. It runs single-threaded: a
-# threaded KernelAbstractions launch allocates a fixed few KB for its tasks, which would
-# hide per-site allocations, and one thread gives steadier timings.
+# Options: `--no-wait` (do not wait for a running CI job or, for rocm, another GPU client
+# to end first; `machine.jl` `wait_idle`), `--no-cpu` (device rows only), `--strict` (a CPU row more than `TOLERANCE` above
+# its baseline fails, as before D-157).
+#
+# `baseline.toml` is keyed by machine and backend (`[mac.cpu]`, `[mac.metal]`,
+# `[nucbox.cpu]`, `[nucbox.rocm]`; machines in `machine.jl`), and each machine reads only its
+# own rows. Absolute baselines are informational (D-157): the gate fails on any warm-MCS
+# allocation (CPU rows), while a row more than `TOLERANCE` slower than its baseline is only
+# flagged, to be decided by the paired A/B `benchmark/ab.jl` with its same-commit control.
+#
+# On a machine that pins (the NucBox), the gate re-runs itself pinned to one reserved logical
+# CPU (`machine.jl`). Run it alone on the machine (on the Mac under `tools/exclusive.sh`): it
+# runs single-threaded, because a threaded KernelAbstractions launch allocates a fixed few
+# KB for its tasks, which would hide per-site allocations, and one thread gives steadier
+# timings. Its Tuple type cache is seeded like an A/B side (D-145).
 #
 # On a device backend `step!` only enqueues kernels, so every device timing is `step!`
-# followed by `KernelAbstractions.synchronize(backend)`, and each sample's setup waits for
+# followed by a wait for the device (`device_sync`: `KernelAbstractions.synchronize`, or
+# on ROCm AMDGPU's blocking synchronize), and each sample's setup waits for
 # its own work too (D-090): the number is the GPU's cost, not the host's enqueue cost. CPU
 # rows (`backend === nothing`) time `step!` alone.
 using BenchmarkTools, Potts, PottsModels, TOML, Printf
 import KernelAbstractions
-const METAL = "metal" in ARGS
-METAL && using Metal
+isdefined(@__MODULE__, :BenchMachine) || include(joinpath(@__DIR__, "machine.jl"))
+
+# The device backend named in ARGS ("" | "metal" | "rocm"), loaded through the test suites'
+# shared helper (test/shared/devices.jl, D-157); including this file with no device in ARGS
+# loads no GPU package.
+function requested_device(args)
+    toks = [t for a in args for t in split(a, r"[,=]")]
+    d = unique(filter(in(("metal", "rocm")), toks))
+    length(d) <= 1 || error("one device backend per process; got $(join(d, ", "))")
+    return isempty(d) ? "" : String(only(d))
+end
+const DEVICE = requested_device(ARGS)
+if !isempty(DEVICE)
+    ENV["POTTS_GPU"] = DEVICE
+    isdefined(@__MODULE__, :PottsDevices) ||
+        include(joinpath(@__DIR__, "..", "test", "shared", "devices.jl"))
+end
+
+"""The device backend object for `DEVICE` (`nothing` when none was named)."""
+device_backend() = isempty(DEVICE) ? nothing : PottsDevices.device_backend()
 
 const TOLERANCE = 0.05
 const BASELINE = joinpath(@__DIR__, "baseline.toml")
+const BASELINE_HEADER = """
+    # Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> in ns/site per warm MCS.
+    # Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
+    """
 
 function cases(T)
     gg = graner_glazier_state()
@@ -66,13 +98,34 @@ function warm_allocs(integ)
     return m
 end
 
+# Wait for all work queued on a device backend: `KernelAbstractions.synchronize`, except on
+# ROCm. AMDGPU.jl's default (non-blocking) synchronize spins 256 times and then waits for a
+# HIP host callback through Julia's event loop, whose wake-up costs a few ms: a ROCm
+# Graner–Glazier MCS read ~20, ~47 or ~2500 ns/site by which path a run's waits took
+# (2026-10-07, NucBox); the blocking form (`hipStreamSynchronize`) adds its own wake-up
+# latency (GG ~43, Akeeb ~87). Here the host spins on `hipStreamQuery` until the stream is
+# done, then calls the blocking synchronize (which returns at once, and raises any kernel
+# exception), so the number is the GPU's completion time (D-090).
+device_sync(backend) = (KernelAbstractions.synchronize(backend); nothing)
+if DEVICE == "rocm"
+    const AMDGPU_PKG = PottsDevices.device_package()
+    function device_sync(::AMDGPU_PKG.ROCBackend)
+        s = AMDGPU_PKG.stream()
+        while !AMDGPU_PKG.HIP.isdone(s)
+            ccall(:jl_cpu_pause, Cvoid, ())
+        end
+        AMDGPU_PKG.synchronize(; blocking = true)
+        return nothing
+    end
+end
+
 # Wait until all work queued on `backend` has finished; nothing to wait for on the CPU rows.
 settle(::Nothing) = nothing
-settle(backend) = (KernelAbstractions.synchronize(backend); nothing)
+settle(backend) = device_sync(backend)
 
 # The timed expression of every gate and A/B measurement: one MCS, to completion.
 timed_step!(integ, ::Nothing) = (step!(integ); nothing)
-timed_step!(integ, backend) = (step!(integ); KernelAbstractions.synchronize(backend); nothing)
+timed_step!(integ, backend) = (step!(integ); device_sync(backend); nothing)
 
 # A warmed-up integrator (two MCS) with no work still in flight.
 function fresh_integrator(prob, alg, backend)
@@ -94,39 +147,60 @@ function measure(make, alg; backend = nothing)
     return minimum(b).time / n, allocs
 end
 
+# The baseline table of one backend on one machine: `baseline.toml` → [machine.backend].
+rows(table, machine, backend) = get(get(table, machine, Dict{String, Any}()), backend, Dict{String, Any}())
+
 function main(args)
     Threads.nthreads() == 1 || error("run the performance gate single-threaded (no -t)")
+    m = BenchMachine.machine()
+    code = BenchMachine.pin_or_reexec(m, args)
+    code === nothing || return code
     update = "update" in args
+    strict = "--strict" in args
+    "--no-wait" in args || BenchMachine.wait_idle(; gpu = DEVICE == "rocm")
+    tc = BenchMachine.seed_type_cache!()
     algs = Pair{String, Any}["sequential" => (SequentialCPM(), nothing, Float64),
         "checkerboard" => (CheckerboardCPM(), nothing, Float64)]
-    METAL && push!(algs, "metal" => (CheckerboardCPM(), Metal.MetalBackend(), Float32))
-    base = isfile(BASELINE) ? TOML.parsefile(BASELINE) : Dict{String, Any}()
-    new = Dict{String, Any}()
+    "--no-cpu" in args && empty!(algs)
+    isempty(DEVICE) || push!(algs, DEVICE => (CheckerboardCPM(), device_backend(), Float32))
+    table = isfile(BASELINE) ? TOML.parsefile(BASELINE) : Dict{String, Any}()
+    quiet = BenchMachine.pins(m) ? BenchMachine.check_quiet(BenchMachine.bench_cpu(m); reserved = m.bench) : ""
+    println("machine $(m.key) ($(BenchMachine.cpu_model())); CPUs $(something(BenchMachine.allowed_cpus(), "all"))",
+        isempty(quiet) ? "" : "; $quiet", "; Tuple cache $(tc.entries)/$(tc.capacity)")
+    new = Dict{String, Dict{String, Any}}()
     failed = String[]
     flagged = String[]
     for (aname, (alg, backend, T)) in algs, (name, make) in cases(T)
+        bk = backend === nothing ? "cpu" : aname
+        rkey = "$name.$(backend === nothing ? aname : "checkerboard")"
         key = "$name.$aname"
         ns, allocs = measure(make, alg; backend)
-        new[key] = round(ns; digits = 3)
-        old = get(base, key, nothing)
+        get!(new, bk, Dict{String, Any}())[rkey] = round(ns; digits = 3)
+        old = get(rows(table, m.key, bk), rkey, nothing)
         ratio = old === nothing ? NaN : ns / old
         slow = !update && old !== nothing && ratio > 1 + TOLERANCE
-        bad = allocs > 0 || (slow && aname != "metal")
+        bad = allocs > 0 || (strict && slow && backend === nothing)
         bad && push!(failed, key)
-        slow && aname == "metal" && push!(flagged, key)
+        slow && !bad && push!(flagged, key)
         @printf("%-36s %8.2f ns/site  baseline %8s  ratio %6s  allocs %d%s\n", key, ns,
             old === nothing ? "–" : @sprintf("%.2f", old), isnan(ratio) ? "–" : @sprintf("%.3f", ratio), allocs,
             bad ? "  FAIL" : key in flagged ? "  A/B" : "")
     end
     if update
-        meta = Dict("machine" => Sys.cpu_info()[1].model, "threads" => Threads.nthreads(), "julia" => string(VERSION))
-        open(BASELINE, "w") do io
-            TOML.print(io, merge(merge(base, new), Dict("meta" => meta)); sorted = true)
+        mt = get!(table, m.key, Dict{String, Any}())
+        for (bk, r) in new
+            merge!(get!(mt, bk, Dict{String, Any}()), r)
         end
-        println("baseline written: ", BASELINE)
+        mt["meta"] = Dict("cpu" => BenchMachine.cpu_model(), "threads" => Threads.nthreads(), "julia" => string(VERSION),
+            "cpus" => string(something(BenchMachine.allowed_cpus(), "all")))
+        open(BASELINE, "w") do io
+            println(io, BASELINE_HEADER)
+            TOML.print(io, table; sorted = true)
+        end
+        println("baseline written: ", BASELINE, " [", m.key, "]")
         return 0
     end
-    isempty(flagged) || println("Metal flagged, decide with benchmark/ab.jl: ", join(flagged, ", "))
+    isempty(flagged) || println("slower than the informational baseline, decide with benchmark/ab.jl: ", join(flagged, ", "))
     isempty(failed) || (println("REGRESSION: ", join(failed, ", ")); return 1)
     println("performance gate: pass")
     return 0

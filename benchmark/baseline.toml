@@ -1,23 +1,31 @@
+# Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> in ns/site per warm MCS.
+# Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
+
+
+[mac.cpu]
 "akeeb_99x60.checkerboard" = 46.514
-"akeeb_99x60.metal" = 123.46
 "akeeb_99x60.sequential" = 47.229
 "graner_glazier_72.checkerboard" = 27.239
-"graner_glazier_72.metal" = 86.315
 "graner_glazier_72.sequential" = 24.844
 "merks_100.checkerboard" = 287.85
-"merks_100.metal" = 142.77
 "merks_100.sequential" = 286.41
 "openvt_monolayer_100.checkerboard" = 14.983
-"openvt_monolayer_100.metal" = 50.36
 "openvt_monolayer_100.sequential" = 13.75
 "openvt_reference_100.checkerboard" = 19.2
-"openvt_reference_100.metal" = 72.03
 "openvt_reference_100.sequential" = 19.55
 "wortel_act_100.checkerboard" = 14.917
-"wortel_act_100.metal" = 139.317
 "wortel_act_100.sequential" = 13.717
 
-[meta]
+[mac.meta]
+cpu = "Apple M1 Pro"
+cpus = "all"
 julia = "1.12.6"
-machine = "Apple M1 Pro"
 threads = 1
+
+[mac.metal]
+"akeeb_99x60.checkerboard" = 123.46
+"graner_glazier_72.checkerboard" = 86.315
+"merks_100.checkerboard" = 142.77
+"openvt_monolayer_100.checkerboard" = 50.36
+"openvt_reference_100.checkerboard" = 72.03
+"wortel_act_100.checkerboard" = 139.317
