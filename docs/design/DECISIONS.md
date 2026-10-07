@@ -2831,3 +2831,28 @@ session.
 - **Gates.** The +5 % warm-MCS gate and zero warm allocations, both unaffected for published models. The paired latency check (`benchmark/p6_0o_latency.jl`) stays within +5 % on the gate models. Time to first MCS of a cell-ODE fixture is reported, not gated. Stop and ask on major MTK friction or a major slowdown (D-156).
 - **Paper wording (D-159, D-162).** True once this merges: "The continuous parts of a model, its cell- and model-scale ODEs, are ModelingToolkit systems compiled by `mtkcompile`; Potts.jl lowers the simplified equations into its batched kernels." Fields are not included. They stay Potts' `FieldStep`, unless P6.0bq adds `PDESystem` input, and even then they would not be compiled by MTK.
 - **Frozen acceptance.** `acceptance/p6_0bn_ode_mtkcompile.jl` (freeze b42755dc, sha256 `fd942b5916fc8d06aa558c3b72385225ad1fa2be748fd925917884a93e8c657d`). Red on 4b81dd79 (PC): 17 pass, 9 fail, 46 error of 72. The errors are UndefVarError `ode_system` and the old "equations are `D(x) ~ rhs`" rejection; the controls and U pins pass. A stub passes 183/183..
+
+## D-166 Reproduction 09: V-PRE7 (temperature regimes) on the page from a FULL record; page re-frozen; new page test (2026-10-07; coordinator, from the P6.1h implementer; two review rounds; under D-146, D-151, D-154, D-157, D-161)
+
+- **Change.**
+  - The 09 page reads V-PRE7's four verdicts from a committed FULL record, `data/09/vpre7-2026-10-07/`. The record has 10 paired replicates per T, for T ∈ {0, 2, 5, 10, 15, 20, 40, 80}, run on the PC (AMD Ryzen AI Max+ 395, CPU).
+  - The reduced build adds a 64-cell smoke scan, as information only.
+  - A new frozen test, `test/reproductions/09_cell_sorting.jl`, has three tiers:
+    - **record:** shape, and the verdicts and four statistics recomputed from `timeseries.tsv` to 4 digits;
+    - **smoke:** 64 cells, about 50 s, with controls;
+    - **FULL:** T = 80 is `@test_broken`, a D-154 deviation rather than a relaxed tolerance.
+  - The page's `annealed` helper no longer crashes when the highest-labelled cell has vanished. No earlier result changes.
+  - The video is in the pre-release `reproductions-2026-10-07-vpre7`.
+- **Result.**
+  - T = 0 freezes (0.000): PASS.
+  - The order at 10³ holds (0.349 > 0.191 > 0.135): PASS.
+  - T = 40 stays above 0.07 (minimum 0.098): PASS, but with no plateau, a late monolayer, and a bar that T = 10 also clears.
+  - **T = 80 fails:** 7.6 % of cells are gone at 500, against more than 50 %.
+- **Deviation.** Not a port error.
+  - The review checked bond counting, both neighbourhoods, Metropolis acceptance, the area term and the "gone" measure against the paper, and all match.
+  - It is not a uniform temperature scale either: the contact scale matches at T = 2 and T = 10.
+  - Our cells disappear too slowly, at both low and high T. This is consistent with an unstated convention for the area ΔH at a copy, or for a cell's last site. The evidence is one exploratory replicate (committed under `review_probe/`, not a verdict).
+  - It is expected to affect V-PRE8 (λ = 0.1).
+  - The question is on the PI sheet (B1, V-PRE7), status "not asked".
+- **New sha256:** page `96f28a3388b9bab2f58184ca4cffb343eded8c7fd95fb328133baf69ca29cd91`; new test `626e4f8ab5387af352c6e0147d2cb7d737bc3541271208db2bbe12b5d5257551`.
+- **Escalation.** This is a science question for the phase report (AUTONOMY §7.5).

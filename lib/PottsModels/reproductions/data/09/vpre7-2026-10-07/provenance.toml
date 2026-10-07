@@ -1,0 +1,42 @@
+item = "P6.1h"
+decision = "pending (coordinator's re-freeze entry)"
+purpose = "V-PRE7, the sorting temperature regimes of PRE Fig. 15 (spec 09 §8.5, §9.1): FULL record read by the 09 page and its test"
+commit = "a5a6419b"                 # feat/p6-1h on ce85fed4 (monorepo); model and solver code unchanged throughout
+model_commit = "ce85fed4"
+script_commits = ["a5a6419b", "62058ced", "af41d251"]   # see [execution].notes
+env = "--project=docs (workspace Manifest of ~/potts-ci/p6-0bg, instantiated)"
+manifest_sha256 = "0892219151f1038d860c70fe4234a04c548cf67817b6f40fe9e461d6a3e5764b"   # the gitignored workspace Manifest.toml used on the PC (identical to ~/potts-ci/p6-0bg/Manifest.toml)
+julia = "1.12.6"
+dirty = false
+
+[machine]
+hostname = "praneeth-NucBox-EVO-X2"
+cpu = "AMD Ryzen AI Max+ 395 (16 cores / 32 threads)"
+os = "Ubuntu 24.04, Linux 7.0.0-30-generic"
+backend = "CPU, one thread per replicate process"
+
+[execution]
+worktree = "~/potts-ci/p6-1h (detached at the synced feat/p6-1h)"
+processes = "at most 7 concurrent single-threaded replicate processes (julia -t 1, nice 5), xargs -P 7 in detached tmux"
+scope = "systemd-run --user --scope -p MemoryMax=16G taskset -c 0-11,16-27 (cores 12-15/28-31 untouched); CI runner untouched"
+main_started = "2026-10-07T12:49:09-04:00"
+main_finished = "2026-10-07T14:15:24-04:00"
+relaunch_started = "2026-10-07T14:14:38-04:00"   # the 4 T = 80 replicates s3001-s3004, see notes
+relaunch_finished = "2026-10-07T14:22:59-04:00"
+diagnostic_started = "2026-10-07T14:22:59-04:00"
+diagnostic_finished = "2026-10-07T14:25:14-04:00"
+replicate_wall_summed_h = 9.31
+replicate_wall_range_s = [330.7, 530.3]
+replicate_wall_mean_s = { T0 = 340, T2 = 353, T5 = 373, T10 = 416, T15 = 443, T20 = 467, T40 = 510, T80 = 450 }
+diagnostic_wall_summed_h = 0.16
+notes = """The first four T = 80 replicates (s3001-s3004) ran to 10^4 and then stopped while measuring: a light cell with the highest label had vanished, and the T = 0 annealed copy was built with one kind per label up to length(k) while a problem's cells are 1:maximum(sigma) ("1000 kinds for 999 labelled cells"). The copy now drops the kinds above the largest label left (62058ced; the page's `annealed` gets the same fix). Every other replicate started after the fix or never lost a top-labelled cell, so its measurement code path is unchanged; the four were rerun from scratch (deterministic: same start, seed and solver). The launcher was made relaunch-safe in af41d251."""
+
+[seeds]   # graner_glazier_aggregate(1000; seed = start, margin = 60); PottsProblem(...; seed = run); annealed copies seed 1
+main = { start = "3001-3010", run = "13001-13010", T = [0.0, 2.0, 5.0, 10.0, 15.0, 20.0, 40.0, 80.0], t_end = 10000, note = "paired: the same 10 starts and run seeds at every T; none used before (P6.1d/f: 1-16; P6.1g: 2001-2030, 5001-5020)" }
+diagnostic = { start = "3001-3005", run = "13001-13005", T = [120.0, 160.0, 240.0], t_end = 1000, note = "post hoc, after the T = 80 failure; not a verdict" }
+
+[scripts]
+"scripts/replicate.jl" = "one replicate: run + page measurement at every save"
+"scripts/run_all.sh" = "launcher (JOBS = jobs.txt or jobs_diag.txt)"
+"scripts/collect.jl" = "timeseries.tsv, summary.tsv, verdicts.tsv from the replicate files"
+"scripts/render_video.jl" = "the temperature-grid video and stills (local only), with a trajectory check against timeseries.tsv"
