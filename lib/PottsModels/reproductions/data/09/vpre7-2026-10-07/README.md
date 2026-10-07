@@ -74,18 +74,17 @@ These runs were added after the T = 80 failure. They use 5 of the same paired re
 | 160 | 0.325 | 0.495 | 0.610 | 0.256 | 0.092 | 0.000 |
 | 240 | 0.565 | 0.749 | 0.976 | 0.140 | 0.003 | 0.000 |
 
-These runs are kept as data. They are **not** a temperature scale: a uniform factor on T is ruled out, because the contact-driven sorting matches at T = 2–20 (T = 2 gives 0.321 at 3200 against the paper's ≈ 0.3; T = 10 matches V-PRE1 to 10³, and P6.1g agrees).
+These runs are kept as data. They are **not** a temperature scale: a uniform factor on T is ruled out, because the contact-driven sorting matches at T = 2 and T = 10 (T = 2 gives 0.321 at 3200 against the paper's ≈ 0.3; T = 10 matches V-PRE1 to 10³). T = 15–20 sit in the known late-coarsening gap (D-151).
 
-**Suspected cause (review of 2026-10-07).** Our cells disappear too slowly, and this holds against λ as well as against T:
-- At T = 5 and λ = 0.1 the paper loses all cells by ≈ 800 (Fig. 16), while we keep most of the dark cells at 10³.
-- At λ = 0.5 the paper loses a few light cells, and we lose none.
-- Halving λ at T = 80 reproduces Fig. 15 better than doubling T.
+**Suspected cause (review of 2026-10-07).** Our cells disappear too slowly, against λ as well as against T. The evidence is exploratory: the reviewer's probes in `review_probe/`, which are not verdicts.
+- λ scan at T = 5 (2 replicates, starts 3001 and 3002, margin 30): at λ = 0.1 the paper loses all cells by ≈ 800 (Fig. 16), while we keep 455 and 461 of 500 dark cells at 800 (all light cells are gone by 50). At λ = 0.5 the paper loses a few light cells, and we lose none.
+- One exploratory replicate (n = 1, start 3001 / seed 13001) at T = 80 with λ halved to 0.5: the light-cell loss and the F_dl → 0 timing come closer to Fig. 15 (light cells 27 of 500 left at 100 and none at 200; F_dl 0.058 at 100 and 0 at 200). Dark cells still survive (309/500 at 500).
 
-The contact energy (PRE Eq. (2)), the Moore(1) bond set counted once, the copy rule and the Metropolis rule (Eq. (3)) match the papers as stated. That points at an unstated convention for how the area ΔH is charged at a copy, or a rule for a cell's last site.
+The contact energy (PRE Eq. (2)), the Moore(1) bond set counted once, the copy rule and the Metropolis rule (Eq. (3)) match the papers as stated. The pattern is consistent with an unstated convention for how the area ΔH is charged at a copy, or a rule for a cell's last site.
 
 The same deviation is expected in V-PRE8 (λ = 0.1), which is not yet on the page. The page records this as a deviations row and proposes the question "How was the area ΔH charged at a copy, and was there any rule for a cell's last site?" for the open question list (not asked). No target changed.
 
-"Gone" is counted on the raw state; the review checked that the annealed copies give identical counts at T = 40, 80 and 160.
+"Gone" is counted on the raw state. In one replicate each at T = 40, 80 and 160 (start 3001 / seed 13001; `review_probe/p61h_review_hot.log`), the annealed copies give the same alive counts at 50, 100, 200 and 500.
 
 ## Files
 
@@ -97,6 +96,7 @@ The same deviation is expected in V-PRE8 (λ = 0.1), which is not yet on the pag
 | `diagnostic_timeseries.tsv` | the post-hoc T = 120, 160, 240 runs, same columns, to 10³ |
 | `provenance.toml` | commits, machine, scope and pinning, wall times, seeds, the rerun note |
 | `render_provenance.toml` | the video render's sidecar |
+| `review_probe/` | the reviewer's exploratory probes (script and logs; not verdicts) |
 | `scripts/` | `replicate.jl`, `run_all.sh`, `jobs.txt`, `jobs_diag.txt`, `collect.jl`, `render_video.jl` |
 
 **Video.** [`09_cell_sorting_vpre7-2026-10-07_temperatures.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-vpre7/09_cell_sorting_vpre7-2026-10-07_temperatures.mp4) (release `reproductions-2026-10-07-vpre7`). `scripts/render_video.jl` re-solves replicate 1 (seeds 3001 / 13001) at the eight temperatures with 100 log-spaced frames. It draws them as a 2 × 4 grid with no cell outlines, and checks every frame that is also a recorded save against `timeseries.tsv`. `render_provenance.toml` records the render (commit af41d251, PC, 8 threads; the trajectory check passed at all 16 shared saves). The stills are not committed.

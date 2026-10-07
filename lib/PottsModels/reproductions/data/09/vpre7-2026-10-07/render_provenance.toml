@@ -1,5 +1,7 @@
+algorithm = "SequentialCPM(; proposal = Moore(1))"
 backend = "CPU"
 commit = "af41d251"   # filled by hand: the render read the record from outside git
+dirty = false
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 finished = "2026-10-07T14:35:40.178"
 framerate = 12
