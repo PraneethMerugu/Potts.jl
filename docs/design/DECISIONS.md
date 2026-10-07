@@ -2633,3 +2633,16 @@ session.
     - The helper's Metal branch, the `device_package()`-based wait instrumentation and the staged-lifecycle testset.
     - Whether AMDGPU resolves on macOS in the shared Manifest.
   - **Open LOW (review note).** The coverage check enumerates CorePotts only. A future `@kernel` in Potts or an extension would be IR-scanned once launched, but its absence would go unnoticed; extend the enumeration if one is added.
+
+## D-158 Recorded-value pins: our own code bitwise, upstream solvers to rtol 1e-12; CI resolves fresh (2026-10-07; coordinator, from the first P6.0bh CI run; under D-048, D-157)
+
+- **Why.** CI run 37577518536 resolved the workspace fresh. It picked up newer OrdinaryDiffEqRosenbrock (2.7.4 → 2.7.5), LinearSolve, SciMLBase, ModelingToolkit and Symbolics patch releases than the agents' Manifests had.
+  - Four rows of the frozen P6.0x "results unchanged (bitwise)" testset failed in the last bit, for example 1.4999999038193912 vs 1.4999999038193916.
+  - All four were the `Adaptive(Rodas5P())` rows, which run upstream code.
+  - Every ExplicitEuler and RK4 row, and every other bitwise pin in the suites, still matched.
+- **Rule.**
+  - **Our own code stays bitwise.** A value recorded from our own code (our steppers, kernels and generated functions) is pinned bitwise, because D-107 makes the generated term order canonical.
+  - **Upstream numerics get a tolerance.** A value that passes through upstream numerical code (OrdinaryDiffEq integrators, LinearSolve factorizations) is pinned to `rtol = 1e-12`. That is still far below any modelling effect, and it does not break on an upstream patch release.
+  - **Same-run comparisons stay bitwise.** Determinism checks that compare two runs inside one session are unaffected (the free determinism of the policy).
+- **CI.** CI keeps resolving fresh, with no committed Manifest (the single gitignored Manifest stays). A future failure that is last-bit drift in an upstream-numerics pin gets the same treatment under this entry, not a chase.
+- **Applied.** `acceptance/p6_0x_gather_ode_alloc.jl` was re-frozen under D-158. Its `Adaptive` rows now compare with `≈ rtol = 1e-12` and the other rows stay `==`.

@@ -231,9 +231,16 @@ end
     end
 end
 
+# D-158: our own steppers stay bitwise; `Adaptive` rows run upstream OrdinaryDiffEq/LinearSolve
+# code, whose patch releases may move the last bit, so they are pinned to rtol 1e-12.
 @testset "P6.0x: results unchanged (bitwise, $p60x_N MCS, seed 7)" begin
     for M in (p60x_GATHERS..., p60x_CONTROLS...), (label, kw) in p60x_SOLVERS, alg in p60x_ALGS
-        @test p60x_final_y(M, alg, kw) == p60x_RESULTS[(nameof(M), label, nameof(typeof(alg)))]
+        want = p60x_RESULTS[(nameof(M), label, nameof(typeof(alg)))]
+        if startswith(label, "Adaptive")
+            @test p60x_final_y(M, alg, kw) ≈ want rtol = 1e-12
+        else
+            @test p60x_final_y(M, alg, kw) == want
+        end
     end
 end
 
