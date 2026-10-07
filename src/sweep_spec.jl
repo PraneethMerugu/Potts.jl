@@ -13,7 +13,7 @@ or a `CompiledPottsSystem` (the same terms as the model it was compiled from: as
 before `@components` are lowered).
 
 `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`,
-`sites`, `edges(r)`); `expr` is the term's energy density, a Symbolics expression over the
+`sites`, `edges(r)`); `expr` is the term's energy density (a number for a constant term), a Symbolics expression over the
 declared parameters and variables (the declared symbols, as `complete(sys).x`) and the DSL
 built-ins (`volume`, `kind′`, …). The energy of a state is the sum of each density over its
 domain (cells of the term's kinds, unordered pairs of the relation with different owners,
@@ -34,7 +34,7 @@ _wrapped(x) = Symbolics.wrap(_unwrap(x))
 """
     Potts.drives(sys) -> AbstractVector
 
-The `@drive copy => expr` expressions of a model (Symbolics expressions in the proposal
+The `@drive copy => expr` expressions of a model (Symbolics expressions, or a number for a constant, in the proposal
 scope: `source`, `target`, `old`, `new`, …), in declaration order; empty for a model
 without drives. Drives bias the acceptance of a copy but are not terms of
 [`Potts.hamiltonian`](@ref).
