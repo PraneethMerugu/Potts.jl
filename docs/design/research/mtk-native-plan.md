@@ -419,3 +419,18 @@ D(k) ~ y[Int(k)]                          ERR → MethodError: no method matchin
    processes were OOM-killed. `~/actions-runner` was not touched, but CI jobs that ran at
    the same moment may have been squeezed. Later heavy probes ran
    under a 16 GB `systemd-run` scope. Should that scope be standard for PC probes?
+
+
+## 9. Corrections from P6.0br (2026-10-07)
+
+The upstream-draft MWEs (`research/upstream-drafts/`) re-ran the probes on MTK 11.45.1/MTKB 1.77.0 and on 11.45.3/1.77.3. Two findings above are narrower than stated:
+
+- **Unknown-size parameter (q7).**
+  - It does not fail at `ODEProblem` once `using ModelingToolkit` is loaded: `ODEProblem(complete(sys))`, `remake` and `setp` to other lengths all work.
+  - It fails in `mtkcompile`, with a `ShapeVecT` TypeError in MTKTearing clock inference. It also fails in an MTKB-only `ODEProblem` with default initialization, which goes through `mtkcompile`.
+  - The q7 probes had loaded MTKB alone.
+- **Indirect indexing (q10).**
+  - Symbolics alone is fine: `build_function` with whole arrays returns the correct value. The earlier `UndefVarError: τ` came from passing `collect(τ)`.
+  - The bug is in MTK codegen. With PR #5235, the `StableIndex` typeassert is gone, and the generated RHS emits an unbound `J`/`x`.
+
+Neither correction changes the §0 verdicts or the D-159 claim.

@@ -366,7 +366,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
 - [ ] **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; about +0.5 s cold.
   - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
-- [ ] **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
+- [x] (drafts done 2026-10-07, `research/upstream-drafts/`; filing is the maintainer's) **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
   - the O(n²) dense mass-matrix bug;
   - the unknown-size parameter failure at `ODEProblem`;
   - an indirect-indexing comment on MTK #5078;
