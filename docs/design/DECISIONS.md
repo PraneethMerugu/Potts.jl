@@ -2721,3 +2721,16 @@ session.
   - Each later batch of videos gets a new dated pre-release, created by the coordinator.
 - **Also merged.** P6.0bf: the paper-run videos are re-rendered without outlines, and their sidecars record cpu, machine and hostname. Docs tutorials and manuals have no outlines.
 - **Open.** P6.3f's FULL run, its 01b figure targets and video clock overlays remain open. P6.1h may reuse this re-freeze.
+
+## D-162 P6.0bp re-scoped: no event callbacks today; `Potts.updates(sys)` now, MTK callbacks with P6.4c; the paper says "update rules" (2026-10-07, maintainer, on the P6.0bp test author's D-156 stop; amends D-159)
+
+- **Finding.**
+  - Potts has no `@discrete_events` or `@terminate` yet (P6.4c), so `ModelingToolkitBase.discrete_events(sys)` and `continuous_events(sys)` already return `[]`.
+  - Its event-like constructs run per cell, per site, per pair or per accepted copy: cell- and site-scope `@before_mcs`/`@after_mcs` blocks, `@on_copy`, `@divide … when`, `@link`/`@unlink`. Stored as `SymbolicDiscreteCallback`s, MTK tools would read per-entity rules as scalar unknowns, and so give wrong answers without any error (route B).
+  - Timing also differs: `@after_mcs Every(5)` fires at t = 1, 6, 11, where an MTK period of 5 fires at 5, 10.
+  - Only model-scope update blocks map faithfully, and no published model has one.
+- **Ruling (maintainer).**
+  1. **P6.0bp becomes `Potts.updates(sys)`** (public, not exported). It returns every update statement as written, with phase, scope, cadence and its `Equation` in MTK `Pre` form, on all four system forms. The compiled form reads the authored model (D-160).
+  2. **Events as MTK callbacks go into P6.4c.** `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as `SymbolicDiscreteCallback`s from the start. Per-entity, per-copy and structural rules are never listed as callbacks.
+  3. **Claim wording** (amends D-159 and plan §5). The paper says a model's *update rules* are Symbolics equations in ModelingToolkit's `Pre` form that MTK's generic tools can inspect. Its *events* are MTK `SymbolicDiscreteCallback`s only once P6.4c lands. Drop "compiled by MTK" for events: Potts compiles them.
+- **Unchanged.** `PottsSweepSpec`; D-137 rule 5's refusals; the F7 rejection of MTK events inside components.

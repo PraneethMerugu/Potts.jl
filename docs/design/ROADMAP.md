@@ -362,7 +362,8 @@ Every item's acceptance also includes the standing checks:
   - Remove `boundaries = true` and `pottsboundaries` from `docs/paper_runs/*.jl` (GG, Akeeb, Merks, OpenVT), the docs tutorials, and the frozen 09 page (~line 427; re-freeze under D-156).
   - Re-render the paper-run videos and the 09 FULL video on the PC. Replace the release asset `09_cell_sorting_full-2026-10-05_replicate1.mp4`, and link it from the 09 page.
 - [ ] **P6.0bm** (D-159; plan §6) A public `hamiltonian(sys)` and a typed metadata payload describing the sweep. Small. Runs first in the chain bm → bp → bn → bo, because these items edit the same files.
-- [ ] **P6.0bp** (D-159; plan §6) Events kept as MTK `SymbolicDiscreteCallback` objects. Small.
+- [ ] **P6.0bp** (D-159, re-scoped by D-162) A public `Potts.updates(sys)` returning every update statement as written: phase (`:before_mcs`/`:after_mcs`/`:on_copy`), scope (`:cell`/`:site`/`:model`/`:edge`), cadence (`Every(n)`) and its `Equation` in MTK `Pre` form. It works on the plain, `complete`, `extend` and `mtkcompile` forms (the compiled form reads the authored model, as in D-160). Small.
+  - Events as MTK callbacks move to P6.4c (D-162).
 - [ ] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
 - [ ] **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; about +0.5 s cold.
   - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
@@ -593,6 +594,7 @@ Full runs are offline (D-146).
     MetropolisHastings` is an error.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
+  - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
