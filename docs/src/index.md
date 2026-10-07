@@ -84,7 +84,7 @@ end
 σ0, kinds0 = graner_glazier_state()                      # the paper's 64-cell aggregate
 prob = PottsProblem(sorting, [ownership => σ0, kind => kinds0], (0, 3200); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 50)
-record_potts("home_sorting.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("home_sorting.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

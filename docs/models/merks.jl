@@ -191,14 +191,14 @@ round_cells = solve(remake(prob; p = [:λ_L => 0.0]), SequentialCPM(); saveat = 
 # ## The runs as movies
 #
 # `record_potts` writes a solution as a movie; endothelial cells are blue, the matrix
-# black, and `boundaries = true` outlines each cell.
+# black.
 
 using MakiePotts, CairoMakie
 mkpath("merks") #hide
 record_potts("merks/elongated.mp4", sol; framerate = 15, title = "elongated cells (λ_L = 5)",
-    figure = (; size = (400, 400)), plot = (; boundaries = true))
+    figure = (; size = (400, 400)))
 record_potts("merks/round.mp4", round_cells; framerate = 15, title = "round cells (λ_L = 0)",
-    figure = (; size = (400, 400)), plot = (; boundaries = true))
+    figure = (; size = (400, 400)))
 nothing #hide
 
 # ```@raw html

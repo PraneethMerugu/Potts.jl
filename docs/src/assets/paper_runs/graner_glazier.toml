@@ -1,25 +1,28 @@
 algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
 backend = "CPU"
 caption = "Paper run — Graner & Glazier (1992, 1993) cell sorting: 1000 cells on 347×347 (paper: ≈ 1000 cells, lattice unstated), 160 000 MCS = 10⁴ paper MCS (paper: same; 1 paper MCS = 16 MCS), seed 1, frames log-spaced in time. Start: an unrelaxed Voronoi aggregate (the paper relaxes it 400 paper MCS first)."
-date = "2026-10-01T18:17:32.211"
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+date = "2026-10-07T10:41:11.705"
 deviations = "Initial aggregate is a centroidal Voronoi disk, not Potts-relaxed (PRE §II D3 relaxes 400 paper MCS); periodic lattice (paper unstated) with a 60-site medium margin so the aggregate never meets its periodic image; no T=0 annealing of displayed frames."
 frame_spacing = "log"
 framerate = 24
 frames = 238
-git_commit = "fc47eabd"
+git_commit = "169ac06f6"
+hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "graner_glazier_aggregate(1000; seed = 1, margin = 60)"
 julia = "1.12.6"
 lattice = [347, 347]
+machine = "x86_64-linux-gnu"
 mcs_per_paper_mcs = 16
 model = "GranerGlazier"
 paper = "Graner & Glazier, PRL 69, 2013 (1992), Fig. 1; Glazier & Graner, PRE 47, 2128 (1993), Figs. 12-13"
 paper_mcs = 10000
-record_wall_s = 46.7
+record_wall_s = 46.3
 recorded_mcs = [0, 160000]
 script = "docs/paper_runs/graner_glazier.jl"
 seed = 1
-solve_wall_s = 1209.8
+solve_wall_s = 484.7
 threads = 1
 title = """Graner & Glazier (1992) cell sorting — 347×347, 1000 cells, 160000 MCS (10⁴ paper MCS), seed 1\nframes log-spaced in time"""
 tspan = [0, 160000]
-video_mb = 3.48
+video_mb = 2.38

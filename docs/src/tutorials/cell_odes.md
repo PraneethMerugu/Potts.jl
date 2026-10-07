@@ -79,7 +79,7 @@ the daughters.
 start = layout(Tiling((5, 5); region = (28:32, 28:32), kinds = [:cell]), cycling)
 prob = PottsProblem(cycling, start, (0, 200); seed = 1, capacity = 150)
 sol = solve(prob, SequentialCPM(); saveat = 3)
-record_potts("cell_odes_cycle.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("cell_odes_cycle.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

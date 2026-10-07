@@ -74,14 +74,27 @@ wants each one to be an invitation to reach a perfect reproduction together.
 
 ### 3. Deviations table
 
-Every difference from the paper or the released code is listed, including those the
-maintainer approved (README §4).
+Every failed, parked or provisional target is listed (D-154), and so is every difference
+from the paper or the released code, including those the maintainer approved (README §4).
+The table has four columns after the row label (D-154):
 
-| Item | Paper | Released code | Our default | Variant keyword | Reason |
-|---|---|---|---|---|---|
+| Item | Ours | Paper | Suspected cause | Author question |
+|---|---|---|---|---|
 
 Rules:
-- One row per decision. "—" means that source is silent.
+- **Ours** is our value or default, with the variant keyword that switches to the
+  alternative. A value about our runs is computed on the page or loaded from the committed
+  full-run record (`reproductions/data/<nn>/`).
+- **Paper** is the paper's value with its citation. Where the released code or files
+  differ, give their value too ("files: …"). "—" means the source is silent.
+- **Suspected cause** says why we differ: a convention, a provisional default (D-155), an
+  unstated value, a paper-internal conflict, or, for a failed target, the candidate causes
+  tested and excluded.
+- **Author question** is one of: "not an author question"; "not asked (on our open question
+  list, README §5)" with the item number; "asked on ⟨date⟩"; "answered → ⟨D-entry⟩". Pages
+  are public: they cite README §5 and the page's §6, never the internal PI sheet (Dr Jiang
+  sends the letters, D-155).
+- Failed targets come first. The main text of the paper names only the rows that matter.
 - Performance-over-exactness choices (D-029) are rows too, for example Float vs integer ΔH
   or checkerboard vs sequential. Each one names the statistical test that shows it is
   harmless.
@@ -90,8 +103,11 @@ Rules:
 ### 4. Build and run: public API only
 
 - Load, build, seed, solve. Show the variant switch (`remake`, keyword or `@extend`).
-- Show one snapshot plot (MakiePotts) next to the paper's snapshot description.
-- State the cost: wall time for one replicate at paper size, and the backend used.
+- Show one snapshot plot (MakiePotts) next to the paper's snapshot description. Cells are
+  never drawn with outlines: no `boundaries = true` and no `pottsboundaries` overlay in
+  plots, videos or figures (D-156). Runs are shown as videos.
+- State the cost: wall time for one replicate at paper size. Every timing names the machine
+  (CPU or GPU model) and the backend (CPU or device, solver, thread count) that produced it.
 
 ### 5. Validation
 
@@ -142,20 +158,16 @@ This is a prose skeleton only. Every result is a placeholder (`⟨…⟩`). Noth
 real run. Syntax is the current public surface. `# planned:` blocks are not executed.
 
 ```julia
-# # Reproducing Graner & Glazier (1992) and the Osborne et al. (2017) CP sorting benchmark
+# # Reproducing Graner & Glazier (1992): cell sorting by differential adhesion
 #
 # ## 1. Paper and sources
 #
 # - F. Graner, J.A. Glazier, "Simulation of Biological Cell Sorting Using a Two-Dimensional
 #   Extended Potts Model", Phys. Rev. Lett. 69, 2013 (1992). doi:10.1103/PhysRevLett.69.2013.
 #   PDF: `docs/references/09a_GranerGlazier1992_PRL_cell-sorting.pdf`.
-# - J.M. Osborne et al., "Comparing individual-based approaches to modelling the
-#   self-organization of multicellular tissues", PLoS Comput Biol 13(2): e1005387 (2017).
-#   doi:10.1371/journal.pcbi.1005387. Code: github.com/Chaste/CellBasedComparison2017 @
-#   8bb7287; Chaste core rules read at develop 44724eb (2026, not the 2017 release).
-# - Spec: `docs/design/research/model-specs/09_cell_sorting.md`.
-# - Grade: A (Osborne CP: code + parameters) / B (Graner–Glazier: energies stated; set-up in
-#   PRE 47, 2128 (1993), not on disk).
+# - Spec: `docs/design/research/model-specs/09_cell_sorting.md`. (The Osborne et al. 2017
+#   rows of the spec are retired: cell sorting is Graner–Glazier only, D-156.)
+# - Grade: B (energies stated; set-up in PRE 47, 2128 (1993)).
 #
 # ## 2. The model, term by term
 #
@@ -174,29 +186,28 @@ using Potts, PottsModels
 #
 # ## 3. Deviations
 #
-# | Item | Paper | Released code | Our default | Variant | Reason |
-# |---|---|---|---|---|---|
-# | Initial state | "square aggregate … (A=40)", 400 MCS relax (p.2015) | — | PRE 1993 §II D3 recipe (external) | — | spec S1 |
-# | T = 0 annealing | "two T=0 annealing steps" | — | measured on a copy | trajectory | spec A-GG4 |
-# | ⟨…⟩ | | | | | |
+# | Item | Ours | Paper | Suspected cause | Author question |
+# |---|---|---|---|---|
+# | ⟨failed target⟩ (**FAIL**) | ⟨mean ± SE, n⟩ | ⟨value, figure⟩ | ⟨candidates tested and excluded⟩ | not asked (on our open question list, README §5 ⟨item⟩) |
+# | Initial state | PRE 1993 §II D3 recipe | "square aggregate … (A=40)", 400 MCS relax (p.2015) | — | not an author question |
+# | T = 0 annealing | measured on a copy | "two T=0 annealing steps" | none: matches PRE p.2134 (spec A-GG4) | not an author question |
+# | ⟨…⟩ | | | | |
 #
 # ## 4. Build and run
 
 σ0, kinds = graner_glazier_state()
 prob = PottsProblem(gg, [ownership => σ0, kind => kinds], (0, 16 * 10_000); seed = 1)
-sol = solve(prob, SequentialCPM())
+t = @elapsed sol = solve(prob, SequentialCPM())
+# "⟨t⟩ s on ⟨CPU model⟩, CPU backend, one thread" (every timing names machine and backend)
+record_potts("09_replicate1.mp4", sol)       # no `boundaries = true` (D-156)
 
 # A variant is ordinary model code: symmetric contacts as the negative control.
 prob_ctrl = remake(prob; p = [:J => [0 16 16; 16 11 11; 16 11 11]])
 
-# Osborne CP is its own constructor; its two-stage protocol (equilibrate, then Bernoulli
-# labels and T·k_pert) is shown with the planned syntax (G1, G14):
-# planned: @potts_model OsborneSorting begin … end; osborne_state(); callback at t = 10 h
-
 # ## 5. Validation
 #
 # Pre-registered targets (committed in ⟨hash⟩ before the first full run): V-GG1 … V-GG6 and
-# V-OS1 … V-OS5 from spec §5.
+# V-PRE1 … V-PRE17 from spec §9.
 
 n = FULL ? 10 : 2
 ens = solve(EnsembleProblem(prob), SequentialCPM(), EnsembleThreads(); trajectories = n)
@@ -210,13 +221,12 @@ ens = solve(EnsembleProblem(prob), SequentialCPM(), EnsembleThreads(); trajector
 #
 # ## 6. Open questions for the authors
 #
-# - [B] (Osborne/Fletcher) p.11 says type A is engulfed; parameters, S1 Movie and Fig 2 say
-#   B. We follow B-engulfed (spec A-OS1). If this is wrong, row ⟨…⟩ of §3 changes.
-# - (Glazier) PRE 1993 set-up: lattice size, N, type fraction (spec A-GG5).
+# - (Glazier) PRE 1993 set-up: lattice size, boundary conditions, type fraction (spec
+#   A-GG5). The answer replaces the boundary-conditions and type-fraction rows of §3.
 # We would welcome corrections, the original input files, or a joint check of these results.
 #
 # ## 7. How to cite
 #
-# Cite Graner & Glazier (1992) and Osborne et al. (2017), then PottsModels ⟨version, commit⟩.
+# Cite Graner & Glazier (1992) and Glazier & Graner (1993), then PottsModels ⟨version, commit⟩.
 # This is an independent reimplementation, not reviewed by the authors.
 ```

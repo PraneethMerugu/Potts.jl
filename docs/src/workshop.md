@@ -222,7 +222,7 @@ and draw the starting state it gives the Graner–Glazier model.
     fig = Figure(size = (300, 300))
     ax = Axis(fig[1, 1]; aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, frame; boundaries = true)
+    pottsplot!(ax, frame)
     fig
     ```
 

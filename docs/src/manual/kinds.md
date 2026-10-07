@@ -98,7 +98,7 @@ sol = solve(PottsProblem(obstacles, op, (0, 100); seed = 1), SequentialCPM())
 fig = Figure(size = (320, 320))
 ax = Axis(fig[1, 1]; aspect = DataAspect())
 hidedecorations!(ax)
-pottsplot!(ax, renderframe(sol); boundaries = true)
+pottsplot!(ax, renderframe(sol))
 fig
 ```
 

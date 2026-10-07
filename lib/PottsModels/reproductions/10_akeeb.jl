@@ -119,23 +119,35 @@ ours(t) = t + 1                         # our MCS for the authors' snapshot t
 nothing #hide
 
 # ## 3. Deviations
+#
+# One row per parked or provisional target and per difference from the paper or the
+# released code (D-154). The columns are our value, the paper's value (with the released
+# code's where it differs), the suspected cause and the status of the question to the
+# authors: "not an author question", "not asked" (the question is on our open question
+# list, spec 10 §7 and model-specs README §5; §6 below), "asked on ⟨date⟩" or
+# "answered → ⟨D-entry⟩". Source keys: S = the authors' Python steppables, X = their CC3D
+# XML (spec 10 §1).
 
+aq(q) = "not asked (on our open question list: spec 10 §7 $q; README §5)"
 Markdown.parse("""
-| Item | Paper | Released code | Our default | Variant keyword | Reason |
-|---|---|---|---|---|---|
-| Chemotaxis term (D6) | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | the code | — | The paper's numbers come from the code (D-050 A3); spec 10 §2.1 |
-| Leader creation (D1) | 25 % of the followers "reassigned" (p.5) | new one-site leaders inserted into followers until 25 % of the inventory (S:64–75) | the code: `akeeb_state` | planned: `leaders = :reassign` (D-050 A1) | 1559 cells in the authors' files come from the code (spec 10 §4 #23) |
-| Missed seeding draws (MD-1) | — | a draw on a leader leaves an empty "ghost" leader in the inventory (S:68–75): ≈ 382 painted of 390 counted | the same count, no ghost cell allocated | `akeeb_state(; seeding = :retry)` paints exactly 390 | D-068; spec 10 §5.3.6 |
-| Division timer (D3) | one U(25, 125) draw per cycle (p.6) | clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | the code | — | D-050 A2 |
-| Competent followers (D4) | a subset of size PP × N_FC (p.6) | Bernoulli(PP) per follower (S:131) | the code | — | spec 10 §2.4 |
-| Growth (D5) | f_grow only (Table 1) | every follower grows while its target is below 20 (S:113–115) | the code | — | spec 10 §2.4 |
-| Connectivity (D7) | not mentioned | penalty 10⁵ on copies that break the losing cell's 8-ring arc (X:29–31) | a hard constraint, plus no extinction | — | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) |
-| Metrics (D12–D17) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8) | planned: paper-definition observables (D-050 A4) | The paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) |
-| Main-tumour seed row (D19) | all cells at y = 1 (p.7) | x ∈ 0…498 only (S:496) | the code: x ∈ 1:499, y = 2 (1-based) | — | Negligible |
-| Time (A6) | 700 MCS (p.4) | 701 steps, sweep first (X:15) | 701 MCS, read as the authors' 700 | — | Settled by the authors' MCS-0 data (spec 10 §5.3.2) |
-| μ default (A5) | λ = 24 for the sample | 24 (S:25) | 24 | `μ` keyword | D-050 A5, D-142 |
-| RNG (D11) | seeds 0–9 (p.6) | no seed set | `StableRNG` layouts, counter-based Potts streams; seeds listed in §5 | `seed` | Ensemble agreement only (D-029) |
-| CC3D version (D9) | 4.6.0 (p.3) | XML header 4.3.1 (X:1) | CC3D 4.6.0 semantics | — | spec 10 §7 |
+| Item | Ours | Paper | Suspected cause | Author question |
+|---|---|---|---|---|
+| V-A6 phenotype fractions (**PARKED**) | not run | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | un-parking pending P6.2d (D-156, area-equality classifier); the paper does not say which classifier produced Fig. 5 and S1 Table (spec 10 §5.3.5) | $(aq("q1")) |
+| V-A8 (paper) cluster composition (**PARKED**) | not run; V-A8 binds on the released `cluster_data.csv` instead | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |
+| V-A9 leader speed (**PARKED**) | not run | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |
+| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("q2")) |
+| Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (D-050 A1) | 25 % of the followers "reassigned" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |
+| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty "ghost" leader in the inventory, S:68–75) | emulates the released code (D-068; spec 10 §5.3.6) | $(aq("q7")) |
+| Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | one U(25, 125) draw per cycle (p.6) | the paper's numbers come from the code (D-050 A2) | not an author question |
+| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |
+| Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |
+| Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |
+| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |
+| Main-tumour seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |
+| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |
+| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (D-050 A5, D-142) | not an author question |
+| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in §5 (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only (D-029) | not an author question |
+| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 (X:1) | which release produced the runs (spec 10 §7) | $(aq("q3")) |
 """)
 
 # ## 4. Build and run
@@ -148,8 +160,9 @@ run_prob(point, seed; tmax = 701) = remake(base; u0 = akeeb_state(; pp = point[3
     p = [:μ => point[2], :J => akeeb_contacts(point[1])], seed, tspan = (0, tmax))
 solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg)                  # warm-up (compilation)
 t_one = @elapsed sol_one = solve(run_prob((2.0, 24.0, 0.5), 1), alg)
-Markdown.parse("One run, 500 × 300, 701 MCS, `SequentialCPM` on one CPU thread: " *
-               "**$(round(t_one; digits = 1)) s** ($(sol_one.stats.lifecycle.divisions) divisions).")
+const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
+Markdown.parse("One run, 500 × 300, 701 MCS, `SequentialCPM`: " *
+               "**$(round(t_one; digits = 1)) s** on $MACHINE ($(sol_one.stats.lifecycle.divisions) divisions).")
 
 # The scan is ordinary parameter `remake`: a contact table and a chemotaxis strength per
 # point. The bulk point (−2, 15, 0.5) of the paper's Fig. 4, and the variant seeding that
@@ -352,9 +365,9 @@ fig
 
 # Replicate 1 at each phenotype point of the paper's Fig. 4 (V-A10, not gating): the
 # multimodal reference P1, bulk P4, single-cell P5 and no invasion P6, every 10 MCS.
-# Leaders red, followers green, medium white. Each video re-solves its point's replicate
-# 1 with dense saves; saving does not change a run, which the last line checks against
-# the ensemble where that replicate was run.
+# Leaders red, followers green, medium white, no cell outlines (D-156). Each video
+# re-solves its point's replicate 1 with dense saves; saving does not change a run, which
+# the last line checks against the ensemble where that replicate was run.
 
 videos = String[]
 for name in (:P1, :P4, :P5, :P6)
@@ -362,7 +375,7 @@ for name in (:P1, :P4, :P5, :P6)
     v = solve(run_prob(POINTS[name], seed_of(k, 1)), alg; saveat = 1:10:701)
     file = "10_akeeb_$(name).mp4"
     record_potts(file, v; framerate = 12, title = "$name $(POINTS[name]): $(ROLE[name])",
-        plot = (; boundaries = true, category_palette = [:red3, :forestgreen], medium_color = :white),
+        plot = (; category_palette = [:red3, :forestgreen], medium_color = :white),
         figure = (; size = (640, 420)))
     haskey(runs, name) && @assert ownership(v.u[end]) == runs[name][1].final
     push!(videos, file)
@@ -588,3 +601,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | Date | Change | Reason |
 # |---|---|---|
 # | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | ROADMAP P6.2b; D-143 |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | D-154, D-156; ROADMAP P6.0bd, P6.0bf |

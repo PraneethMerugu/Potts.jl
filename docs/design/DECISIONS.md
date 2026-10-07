@@ -2691,3 +2691,33 @@ session.
   - The controls and the D-137 guard pass.
   - A stub passes 249/249.
 - **Gates.** The +5% warm-MCS gate, zero warm allocations, and the paired latency check (`benchmark/p6_0o_latency.jl`). Aqua ambiguities and piracy stay clean for the new `getmetadata`/`hasmetadata` methods. Stop and ask on major MTK friction or a major slowdown (D-156).
+
+## D-161 Reproduction pages 01, 09 and 10 re-frozen after P6.0bf, P6.0bd and the page parts of P6.3f (2026-10-07; coordinator, from the p6-pages test author; two review rounds; under D-153, D-154, D-156)
+
+- **Change (text, tables, plots and rendering only; no verdict changes).**
+  - **09.**
+    - The deviations table is in D-154's four-column form. V-PRE5 comes first, with values loaded from `data/09`.
+    - The parked targets (V-PRE6, the V-PRE16 ⟨n⟩ part, V-PRE17) have rows, and V-PRE7–12, 14 and 15 are listed as not yet on the page.
+    - V-OS1–V-OS5 are retired (D-156).
+    - Timings are labelled with machine and backend.
+    - The FULL video has no outlines and links to the new release.
+  - **10.**
+    - The four-column table gains rows for V-A6 (un-parking pending P6.2d), V-A8 and V-A9.
+    - The timing is labelled and the videos have no outlines.
+  - **01.**
+    - The four-column table is seeded from D-153's review rows, plus the parked targets.
+    - The wrong "Attempts per MCS" row is dropped, and Units is corrected (`nmobile` = TST's (sizex−2)(sizey−2)).
+    - The plots use time after relaxation, with the code-MCS offset noted; every verdict still binds on the code counter.
+    - The cell and field videos have no outlines; the field videos use a translucent cell fill.
+  - **Public pages** cite "our open question list (README §5)", never the internal PI sheet.
+  - The test files are unchanged.
+- **New sha256:**
+  - 09 `6dada30a62517729d879d4be777262466f8017b149118f9c678fd80d3a9134ed`
+  - 10 `ce8742a1112dbe622e0c4b0698acc5b109b6b1aab0a2f76f000509146ec305b2`
+  - 01 `c1f716ae1487779dc6fea97bd586fe9ac251e8010e18775c63fa0d60a41d72b7`
+- **Video hosting (maintainer).** Releases on this repo are immutable once published.
+  - The outline-free 09 FULL video is in the new pre-release `reproductions-2026-10-07`. It is byte-identical across two re-renders, and its trajectory equals the recorded `timeseries.tsv` at every save that is also a video frame.
+  - The old outlined asset stays unlinked on `reproductions-2026-10`.
+  - Each later batch of videos gets a new dated pre-release, created by the coordinator.
+- **Also merged.** P6.0bf: the paper-run videos are re-rendered without outlines, and their sidecars record cpu, machine and hostname. Docs tutorials and manuals have no outlines.
+- **Open.** P6.3f's FULL run, its 01b figure targets and video clock overlays remain open. P6.1h may reuse this re-freeze.
