@@ -174,7 +174,11 @@ per scalar type by `PottsProblem`).
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems = _compile_odes(authored)
-    sys = _bind_components(routed)
+    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems), routed)
+end
+
+# `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)
+function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
     _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]

@@ -212,6 +212,11 @@ end
     sol = solve(PottsProblem(m, [ownership => σ, kind => [1, 1]], (0, 4)), SequentialCPM(); saveat = 0:4)
     println("P6BN|code|", hash(code), "|", [Tuple(u.cell.x) for u in sol.u], "|", [u.model.m[1] for u in sol.u])
     println("P6BN|observed|", names(o.lhs for o in Potts.ModelingToolkitBase.observed(cell)), "|", sol[:xalias] == sol[:x])
+    # positive control: full ModelingToolkit's tearing solves the implicit equation that Potts
+    # rejects (so the rejection below is Potts' own); ModelingToolkitBase alone keeps it
+    @variables xi(Potts.t) = 2.0 qi(Potts.t)
+    plain = Potts.ModelingToolkitBase.mtkcompile(System([Potts.D(xi) ~ -0.1 * qi, 0 ~ qi + xi - 1.0], Potts.t; name = :plain))
+    @test ("qi" in names(Potts.ModelingToolkitBase.unknowns(plain))) == !WITH_MTK
     for M in (MTKExtImplicit, MTKExtCycle)
         err = try
             mtkcompile(M(; name = :r)); nothing

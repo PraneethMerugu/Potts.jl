@@ -134,6 +134,40 @@ function _compile_odes(sys::PottsSystem)
                boundaries = getfield(m, :boundaries), sources = merge(srcs, getfield(m, :sources), src)), odes
 end
 
+# The algebraic variables of a model with its ODEs simplified (`_compile_odes`), as the
+# `@observed` entries that carry their declared scope.
+_algebraic_observed(sys::PottsSystem) = [o for o in getfield(sys, :observed) if haskey(info(o.var).options, :scope)]
+
+"""
+`f()`, with an `ArgumentError` it raises extended by the definitions of the model's algebraic
+variables that read a quantity the message names: a statement reading `y` reads its
+definition, so an error about that definition's quantities would otherwise not name `y`.
+"""
+function _via_algebraic(f::F, sys::PottsSystem) where {F}
+    alg = _algebraic_observed(sys)
+    isempty(alg) && return f()
+    try
+        return f()
+    catch e
+        e isa ArgumentError || rethrow()
+        named = Set{String}(m.captures[1] for m in eachmatch(r"`([^`]+)`", e.msg))
+        notes = String["`$(info(o.var).name) ~ $(o.expr)`" for o in alg
+                       if !(string(info(o.var).name) in named) && any(u -> string(u[2]) in named, _uses(o.expr))]
+        isempty(notes) && rethrow()
+        throw(ArgumentError(e.msg * "\n  (read through the algebraic variable$(length(notes) == 1 ? "" : "s") " *
+                            join(notes, ", ") * ": a statement reading an algebraic variable reads its definition)"))
+    end
+end
+
+# `x` with folds over cells, sites and neighbours and cell integrals replaced by 0: what is
+# left is read at the variable's own cell (or the model)
+function _outside_folds(x)
+    x = first(_strip_populations(x))
+    sub = Dict{Any, Any}()
+    _walk(y -> (iscall(y) && (operation(y) === cell_integral || operation(y) === gather) && (sub[y] = 0)), x)
+    return isempty(sub) ? x : _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
+end
+
 # algebraic variables in the order of their equations
 _algebraic_order(alg) = sort!(collect(keys(alg)); by = x -> alg[x].order)
 
@@ -157,13 +191,23 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
                 "`$name` has two algebraic equations, `$(alg[byname[name]].eq)` and `$eq`; one definition per variable"))
             what = "an algebraic equation of a $scope variable"
             _check_names(eq.rhs, scope === :cell ? (_CELL_BUILTINS..., :time) : (:mcs, :time), what; between_copies = true)
-            if scope === :model                         # one value for the model: cell quantities are folded
-                for v in _bare_vars(first(_strip_populations(eq.rhs)))
-                    info(v).role in (:cell, :site, :field) && throw(ArgumentError(
-                        "the algebraic equation `$eq` of the model variable `$name` reads the $(info(v).role) variable " *
-                        "`$(info(v).name)` bare; fold it, e.g. `sum($(info(v).name) for c in cells)`"))
-                end
+            # the variable's own scope: a model value folds cell quantities, a cell value reads
+            # site quantities through `integral(c)` or at a site (`c[…]`)
+            for v in _bare_vars(_outside_folds(eq.rhs))
+                r = info(v).role
+                scope === :model && r in (:cell, :site, :field) && throw(ArgumentError(
+                    "the algebraic equation `$eq` of the model variable `$name` reads the $r variable " *
+                    "`$(info(v).name)` bare; fold it, e.g. `sum($(info(v).name) for c in cells)`"))
+                scope === :cell && r in (:site, :field) && throw(ArgumentError(
+                    "the algebraic equation `$eq` of the cell variable `$name` reads the $r variable `$(info(v).name)` " *
+                    "bare, which has one value per site; read it over the cell (`integral($(info(v).name))`) or at a " *
+                    "site (`$(info(v).name)[…]`)"))
             end
+            d = getfield(info(x), :default)
+            (d === nothing || (d isa Real && iszero(d))) || throw(ArgumentError(
+                "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; initial " *
+                "values of algebraic variables are not supported yet (planned: P6.0bo). Declare `$name($scope)` " *
+                "without a value"))
             _has_op(eq.rhs, random_uniform) && throw(ArgumentError(
                 "the algebraic equation `$eq` draws `rand()`; an algebraic variable is a function of the current state " *
                 "(MTK observed): keep the draw in an update or an ODE"))
@@ -234,17 +278,24 @@ and the definition of each algebraic variable in `defs`, with the inputs restore
 function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     targets = Any[[arguments(_unwrap(eq.lhs))[1] for eq in d]; [_unwrap(eq.lhs) for eq in a]]
     istarget = Set{Any}(targets)
-    # input names: the quantity's own name where it has one, never a target's or parameter's
-    used = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters))))
+    # input names: a built-in's or another scope's variable's own name, else `input_k`; never
+    # the name of a target, a parameter or another declared variable
+    reserved = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters), getfield(sys, :variables))))
+    own = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters))))
+    used = Set{Symbol}()
     params = Any[]
     inputs = Dict{Any, Any}()                          # authored expression → its parameter
     back = Dict{Any, Any}()                            # parameter → the authored expression
     function name(y)
         i = info(y)
-        base = i === nothing ? :input : i.name          # a built-in or another scope's variable
+        if i !== nothing && !(i.name in own) && !(i.name in used)    # a built-in or another scope's variable
+            push!(used, i.name)
+            return i.name
+        end
+        base = i === nothing ? :input : i.name
         n = base
         k = 1
-        while n in used
+        while n in used || n in reserved
             n = Symbol(base, :_, k += 1)
         end
         push!(used, n)
@@ -278,8 +329,8 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     # (`substitute` replaces the outermost match, so an input's own subexpressions stay in it)
     eqs = Equation[eq.lhs ~ (isempty(inputs) ? eq.rhs : Symbolics.substitute(eq.rhs, inputs; fold = Val(false)))
                    for eq in Iterators.flatten((d, a))]
-    # Potts checks units itself (`_check_units`); the inputs carry none
-    template = ModelingToolkitBase.System(eqs, t, targets, params; name = Symbol(nameof(sys), :₊, scope), checks = false)
+    # component checks only: Potts checks units itself (`_check_units`), and the inputs carry none
+    template = ModelingToolkitBase.System(eqs, t, targets, params; name = Symbol(nameof(sys), :₊, scope), checks = ModelingToolkitBase.CheckComponents)
     compiled = ModelingToolkitBase.mtkcompile(template)
     obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(compiled))
     restore(x) = _unwrap(Symbolics.substitute(

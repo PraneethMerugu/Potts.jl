@@ -130,6 +130,7 @@ function alg_model(body)
             x(cell) = 1.0
             y(cell) = 0.0
             m(model) = 0.0
+            c(field) = 0.0
         end
         @lattice Lattice((12, 8))
         @energy cells => (volume - 16.0)^2
@@ -174,6 +175,41 @@ end
     @test alg_error(() -> mtkcompile(alg_model(quote
         @equations m ~ x                                           # a model definition reading a cell variable bare
     end)), "algebraic", "`x`", "bare")
+    # a cell definition reads a field over the cell or at a site, not bare
+    @test alg_error(() -> mtkcompile(alg_model(quote
+        @equations y ~ c + x
+    end)), "algebraic", "`y`", "`c`", "integral(c)")
+    @test mtkcompile(alg_model(quote
+        @equations y ~ integral(c) / volume + c[1] + x
+    end)) isa CompiledPottsSystem                                                  # control
+    # an error about a definition's quantities names the algebraic variable read
+    @test alg_error(() -> mtkcompile(alg_model(quote
+        @equations begin
+            D(m) ~ y
+            y ~ 2x
+        end
+    end)), "algebraic variable", "`y ~")
+    # a declared initial value is not used: an error until initial values are supported
+    default_model = eval(:(@potts_model _AlgDefault begin
+        @kinds medium A
+        @variables begin
+            x(cell) = 1.0
+            y(cell) = 2.0
+        end
+        @lattice Lattice((12, 8))
+        @energy cells => (volume - 16.0)^2
+        @equations y ~ x
+        @sweep Metropolis(; temperature = 1.0)
+    end))
+    @test alg_error(() -> mtkcompile(Base.invokelatest(default_model; name = :d)), "`y`", "initial value")
+    # input names: a built-in keeps its name; a compound input never takes a declared name
+    let s = Potts.ode_system(mtkcompile(alg_model(quote
+            @variables input(cell) = 0.0
+            @equations D(x) ~ volume + sum(volume[owner[n]] for n in Moore(1)(42)) - input
+        end)), :cell)
+        ps = alg_names(ALG_M.parameters(s))
+        @test :volume in ps && :input in ps && length(ps) == 3
+    end
     # an operating-point value for an algebraic variable, by name and by symbol
     @test alg_error(() -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`", "algebraic")
     @test alg_error(() -> PottsProblem(ok, alg_op(complete(ok).y => 1.0), (0, 1)), "`y`")

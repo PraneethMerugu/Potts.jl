@@ -34,12 +34,21 @@ An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expr
 - `y` is not stored. Wherever the model reads it (ODEs, updates, energies, division
   conditions, observed quantities), it reads its definition on the current state.
 - `sol[:y]` and `getu` evaluate it on saved states, one value per cell for a cell variable.
-- It has no initial value: an operating-point entry for it is an error.
+- It has no initial value: an operating-point entry for it is an error, and so is a
+  declared value other than zero (`y(cell) = 2.0`). Initial values of algebraic variables
+  are not supported yet.
+- `y` is read bare only. Every indexed read is an error: `y[j]`, `y[new]`, `y[owner]` and
+  `sum(y[c] for c in cells)`. Write a fold over cells bare: `sum(y for c in cells)`.
+- A definition is a function of the current state: `rand()` and `Pre` in it are errors. A
+  model definition folds cell quantities (`sum(x for c in cells)`), and a cell definition
+  reads site quantities through `integral(c)` or at a site (`c[…]`).
 - Definitions must be explicit and acyclic: an implicit equation (`y + x ~ 1`), a
   definition that reads itself, two definitions that read each other, and two definitions of
-  one variable are errors. So are a variable with both `D(y)` and `y ~ …`, an update or
-  division rule that writes `y`, and reads of `y` at another cell (`y[j]`) or as a previous
-  value (`Pre(y)`). Site and field variables have no algebraic equations.
+  one variable are errors. So are a variable with both `D(y)` and `y ~ …`, and an update or
+  division rule that writes `y`, or reads it as a previous value (`Pre(y)`). Site and field
+  variables have no algebraic equations.
+- What is accepted does not depend on whether full ModelingToolkit is loaded, although its
+  tearing can solve some implicit equations.
 
 ```julia
 @equations begin
