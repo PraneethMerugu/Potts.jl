@@ -277,7 +277,7 @@ end
         @test count(==(:unclassified), labels) == 42
         kept = [(r, l) for (r, l) in zip(A, labels) if l !== :unclassified]
         @test length(kept) == length(P) == 13263
-        @test all(((r, l), p) -> r == p[1:9] && name[l] == p[10], zip(kept, P))
+        @test all(i -> kept[i][1] == P[i][1:9] && name[kept[i][2]] == P[i][10], eachindex(P))
     else
         @test_skip isfile(joinpath(data, "phenotype_classification.csv"))
     end
