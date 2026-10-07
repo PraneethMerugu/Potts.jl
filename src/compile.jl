@@ -44,6 +44,10 @@ struct CompiledPottsSystem
     discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
     discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
     contact_trackers::Vector{Tuple{Symbol, Symbol, UInt64}}   # contact folds (name, relation, kind mask), D-150
+    # the system as authored, before `_bind_components` lowers its components (`sys` is the
+    # bound one): `hamiltonian`, `drives` and the `PottsSweepSpec` payload read it (D-160);
+    # never read by codegen, so never in the code or the fingerprint
+    authored::PottsSystem
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -164,8 +168,8 @@ end
 Validate and analyse a Potts model (the symbolic half of compilation; code is generated
 per scalar type by `PottsProblem`).
 """
-function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
-    sys = _bind_components(sys)
+function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
+    sys = _bind_components(authored)
     _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
@@ -339,7 +343,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(getfield(sys, :relations), :contact, getfield(sys, :lattice).neighborhood)
-    proposal_spec = get(getfield(sys, :relations), :proposal, CorePotts.VonNeumann(1))
+    proposal_spec = _proposal_spec(sys)
     relations = Dict{Symbol, Any}()
     for (k, v) in getfield(sys, :relations)
         # `contact` and `proposal` are declarable roles (split out above); the other names
@@ -456,8 +460,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers)
+        contact_trackers, authored)
 end
+
+# the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
+_proposal_spec(sys::PottsSystem) = get(getfield(sys, :relations), :proposal, CorePotts.VonNeumann(1))
 
 # `@boundary` (D-145): a field with an equation; faces on closed axes of a square lattice the
 # model has, each axis once per field; masks are site conditions.

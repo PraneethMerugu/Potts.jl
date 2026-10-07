@@ -54,10 +54,12 @@ MTK's accessors:
 - `observed(sys)`: one `name ~ expr` per `@observed` quantity.
 - `nameof(sys)`: the model name.
 - `getmetadata(sys, key, default)`, `setmetadata(sys, key, value)`, `hasmetadata(sys, key)`:
-  MTK's typed metadata. It survives `complete`, `mtkcompile` and `extend`, and never enters
-  the generated code or the fingerprint. The key [`Potts.PottsSweepSpec`](@ref) is always
-  present and derived from the model (the sweep's Hamiltonian, drives, constraints,
-  temperature and proposal); setting it is an `ArgumentError`.
+  MTK's typed metadata. It survives `complete` and `extend`, and `mtkcompile`: read it from
+  the `CompiledPottsSystem` or its `.sys` (a compiled system is read-only, so
+  `setmetadata` on it is an `ArgumentError`: set metadata before `mtkcompile`). It never
+  enters the generated code or the fingerprint. The key [`Potts.PottsSweepSpec`](@ref) is
+  always present and derived from the model on read (the sweep's Hamiltonian, drives,
+  constraints, temperature and proposal); setting it is an `ArgumentError`.
 - `constraints(sys)`: the `@constraint` entries (the entry type is not public).
 
 [`Potts.hamiltonian(sys)`](@ref Potts.hamiltonian) gives the `@energy` terms as

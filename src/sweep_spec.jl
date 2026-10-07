@@ -9,7 +9,8 @@
 
 The Hamiltonian of a model as written: one `domain => expr` pair per `@energy` term, in
 declaration order (`@extend`/`extend` terms merged), for a `PottsSystem` (completed or not)
-or a `CompiledPottsSystem`.
+or a `CompiledPottsSystem` (the same terms as the model it was compiled from: as written,
+before `@components` are lowered).
 
 `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`,
 `sites`, `edges(r)`); `expr` is the term's energy density, a Symbolics expression over the
@@ -24,8 +25,11 @@ H = Potts.hamiltonian(GranerGlazier(; name = :gg))
 first(H[1]), last(H[1])        # cells(…) => λ * (volume - V₀)^2
 ```
 """
-hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => e.expr for e in getfield(sys, :energies)]
-hamiltonian(c::CompiledPottsSystem) = hamiltonian(c.sys)
+hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => _wrapped(e.expr) for e in getfield(sys, :energies)]
+hamiltonian(c::CompiledPottsSystem) = hamiltonian(c.authored)
+
+# an expression as the user wrote it: wrapped (`Num`) when symbolic, a number as it is
+_wrapped(x) = Symbolics.wrap(_unwrap(x))
 
 """
     Potts.drives(sys) -> AbstractVector
@@ -35,8 +39,8 @@ scope: `source`, `target`, `old`, `new`, …), in declaration order; empty for a
 without drives. Drives bias the acceptance of a copy but are not terms of
 [`Potts.hamiltonian`](@ref).
 """
-drives(sys::PottsSystem) = Any[d.expr for d in getfield(sys, :drives)]
-drives(c::CompiledPottsSystem) = drives(c.sys)
+drives(sys::PottsSystem) = Any[_wrapped(d.expr) for d in getfield(sys, :drives)]
+drives(c::CompiledPottsSystem) = drives(c.authored)
 
 """
     Potts.PottsSweepSpec
@@ -53,17 +57,20 @@ spec = getmetadata(sys, Potts.PottsSweepSpec, nothing) # `nothing` for a plain `
 
 The payload is present on every system built by `@potts_model` or the `PottsSystem`
 constructor, on `complete(sys)`, on `mtkcompile(sys)` (and its `.sys`) and after `extend`,
-and always describes the system it is read from (it is derived on read).
-`setmetadata(sys, PottsSweepSpec, x)` is an `ArgumentError`. It is a description only:
-MTK never executes the sweep (build it with `PottsProblem`).
+and always describes the system it is read from: it is derived on every read, so the key
+never appears in the system's raw `metadata` field, and `setmetadata(sys, PottsSweepSpec, x)`
+is an `ArgumentError`. On a `CompiledPottsSystem` it describes the model as written (before
+`@components` are lowered). It is a description only: MTK never executes the sweep (build
+it with `PottsProblem`). The payload shares its domain values and constraint entries with
+the model: read it, do not mutate it.
 
 Properties:
 - `hamiltonian`: [`Potts.hamiltonian`](@ref)`(sys)`, the `domain => expr` terms;
 - `drives`: [`Potts.drives`](@ref)`(sys)`;
 - `constraints`: one entry per `@constraint` (as `ModelingToolkitBase.constraints(sys)`;
   the entry type is not public);
-- `temperature`: the `@sweep` temperature as written (a declared symbol, an expression or
-  a number);
+- `temperature`: the `@sweep` temperature as written (a declared symbol or an expression,
+  wrapped; or a number);
 - `proposal`: the `@relations proposal` relation (default `VonNeumann(1)`).
 """
 struct PottsSweepSpec
@@ -76,7 +83,7 @@ end
 
 function _sweep_spec(sys::PottsSystem)
     return PottsSweepSpec(hamiltonian(sys), drives(sys), copy(getfield(sys, :constraints)),
-        getfield(sys, :sweep).temperature, get(getfield(sys, :relations), :proposal, CorePotts.VonNeumann(1)))
+        _wrapped(getfield(sys, :sweep).temperature), _proposal_spec(sys))
 end
 
 _count_string(n, what) = string(n, " ", what, n == 1 ? "" : "s")
@@ -101,11 +108,15 @@ function Base.show(io::IO, ::MIME"text/plain", s::PottsSweepSpec)
 end
 
 # MTK's typed metadata (D-137): the payload key is answered here, every other key by MTK's
-# `AbstractSystem` methods on the `metadata` field. A `CompiledPottsSystem` reads its `.sys`.
+# `AbstractSystem` methods on the `metadata` field. A `CompiledPottsSystem` reads the payload
+# of the authored system and every other key from its `.sys`; it is read-only.
 SymbolicUtils.getmetadata(sys::PottsSystem, ::Type{PottsSweepSpec}, default) = _sweep_spec(sys)
 SymbolicUtils.hasmetadata(::PottsSystem, ::Type{PottsSweepSpec}) = true
 SymbolicUtils.setmetadata(::PottsSystem, ::Type{PottsSweepSpec}, v) = throw(ArgumentError(
     "setmetadata(sys, PottsSweepSpec, …): the PottsSweepSpec payload is derived from the model " *
     "(its @energy, @drive, @constraint, @sweep and @relations) and cannot be set; change the model instead"))
 SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(c.sys, k, default)
+SymbolicUtils.getmetadata(c::CompiledPottsSystem, ::Type{PottsSweepSpec}, default) = _sweep_spec(c.authored)
 SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(c.sys, k)
+SymbolicUtils.setmetadata(::CompiledPottsSystem, k::DataType, v) = throw(ArgumentError(
+    "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"))
