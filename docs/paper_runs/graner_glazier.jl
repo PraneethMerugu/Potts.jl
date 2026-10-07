@@ -31,7 +31,7 @@ title = "Graner & Glazier (1992) cell sorting — $(L)×$(L), $(length(k0)) cell
         "$(T_END) MCS (10⁴ paper MCS), seed $SEED\nframes log-spaced in time"
 
 panel = Panel(""; plot = (; category_palette = [:steelblue4, :lightgoldenrod1],   # dark, light cells
-    medium_color = :white, boundaries = true, boundary_width = 0.4, boundary_color = :gray30))
+    medium_color = :white))
 paper_run("graner_glazier"; prob, alg, saveat, title, framerate = 24, panels = [panel],
     clock = t -> "t = $t MCS = $(round(t / PAPER_MCS; sigdigits = 3)) paper MCS",
     meta = Dict{String, Any}("model" => "GranerGlazier",

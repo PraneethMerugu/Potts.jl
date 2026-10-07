@@ -2646,3 +2646,78 @@ session.
   - **Same-run comparisons stay bitwise.** Determinism checks that compare two runs inside one session are unaffected (the free determinism of the policy).
 - **CI.** CI keeps resolving fresh, with no committed Manifest (the single gitignored Manifest stays). A future failure that is last-bit drift in an upstream-numerics pin gets the same treatment under this entry, not a chase.
 - **Applied.** `acceptance/p6_0x_gather_ode_alloc.jl` was re-frozen under D-158. Its `Adaptive` rows now compare with `≈ rtol = 1e-12` and the other rows stay `==`.
+
+## D-159 The paper's MTK claim: "built on ModelingToolkit", not "fully MTK-native" (2026-10-07, maintainer, on P6.0be; amends D-156's MTK aim)
+
+- **Why.** P6.0be (`research/mtk-native-plan.md`) re-checked the three blockers against MTKB 1.77 / MTK 11.45 and probed each route.
+  - Every route to a literal "fully MTK-native" claim trips the D-156 stop rule:
+    - MTK-run fields are a major slowdown: an O(n²) dense mass matrix, about 62 GB at 256², superlinear even when patched, and no GPU path.
+    - Per-cell state as MTK arrays is a major slowdown and friction, because fixed capacity forces a rebuild on growth.
+    - The sweep as an MTK event, and the model as an MTK `System`, are major friction.
+  - Upstream has no planned support for any of them.
+- **Ruling (maintainer).**
+  - **Wording.** Adopt the wording of plan §5: every Potts model is an MTK `AbstractSystem`; its ODE, initialization and event parts are compiled by MTK, and MTK models plug in as components; the stochastic lattice sweep is compiled by Potts.jl's own code generator (the Catalyst-style split).
+  - **Do not claim** "fully MTK-native", "MTK simulates the CPM" or "models are MTK `System`s".
+  - **Items.** P6.0bm, bp, bn and bo (in that order) and P6.0bs enter Phase 6, as an exception to D-134's Step 0 freeze. P6.0bq and P6.0bt are not adopted.
+  - **Upstream.** Drafts are prepared locally (P6.0br), and the maintainer files them.
+- **PC probes.** Heavy PC processes run under a memory cap (`systemd-run --user --scope -p MemoryMax=…`). The P6.0be probes were OOM-killed twice on 2026-10-07; CI was unaffected.
+
+## D-160 P6.0bm: `hamiltonian(sys)`, `drives(sys)` and the `PottsSweepSpec` metadata payload (2026-10-07; coordinator, from the P6.0bm test author; implements D-159 / mtk-native-plan §6)
+
+- **Why.** Plan §5 says a Potts model's Hamiltonian is a Symbolics expression "that ModelingToolkit's generic tools can inspect". Today the terms exist as `EnergyTerm`s but are reachable only through `getfield`, and generic code cannot tell that a system has a lattice sweep.
+- **API (public, not exported).**
+  1. **`Potts.hamiltonian(sys)`**, for `PottsSystem` and `CompiledPottsSystem`, returns an `AbstractVector` of `domain => expr` pairs.
+     - There is one pair per `@energy` term, in declaration order. `@extend`/`extend` terms are merged, and component namespacing is applied as for the other accessors.
+     - `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`, `sites`, `edges(r)`).
+     - `expr` is the energy density as written: a Symbolics expression over the declared parameters, variables and DSL built-ins.
+     - Drives, constraints and the temperature are not terms.
+     - H of a state is the sum of each term over its domain, with the conventions of `total_energy`.
+  2. **`Potts.drives(sys)`** returns the `@drive copy => expr` expressions, in declaration order.
+  3. **`Potts.PottsSweepSpec`** is a concrete type that serves as both the metadata key and the value type.
+     - Documented properties: `hamiltonian`, `drives`, `constraints` (one entry per `@constraint`; the entry type is not public), `temperature` (as written) and `proposal` (default `VonNeumann(1)`).
+     - `show` names the type.
+  4. **Reading the payload.**
+     - `ModelingToolkitBase.getmetadata(sys, PottsSweepSpec, default)` returns it, and `hasmetadata` is true, on every system built by `@potts_model` or the keyword constructor, on `complete(sys)`, on `mtkcompile(sys)` and its `.sys`, and after `extend`.
+     - The payload always describes the system it is read from.
+     - Whether it is stored or derived on read is the implementer's choice.
+     - `setmetadata(sys, PottsSweepSpec, x)` throws an `ArgumentError`, since the payload is derived.
+     - Other keys behave as in D-137 rule 2.
+  5. **Not in codegen.** The payload never enters generated code or the fingerprint (D-137 rule 2), so code and fingerprint pins stay byte-identical.
+  6. **Downstream detection.** Generic code tests `hasmetadata(sys, PottsSweepSpec)`. `ODEProblem`/`JumpProblem` on a Potts system remain `ArgumentError`s naming `PottsProblem` (D-137 rule 5).
+- **Constraints accessor (coordinator ruling).** No `Potts.constraints`. MTK's exported `ModelingToolkitBase.constraints(sys)` already returns the Potts `Constraint` vector; it is documented as the accessor, and the constraints also appear in the payload.
+- **Frozen acceptance.** `acceptance/p6_0bm_hamiltonian_metadata.jl` (freeze 0319469b, sha256 `a557377213a9f7b04bb879ad431be9357fa66b50c91afce82d320fdfc47b7367`).
+  - On e47f0e28 (PC): 33 pass, 6 fail and 60 error, out of 99 tests.
+  - Every error is an UndefVarError for `hamiltonian`, `drives` or `PottsSweepSpec`.
+  - The controls and the D-137 guard pass.
+  - A stub passes 249/249.
+- **Gates.** The +5% warm-MCS gate, zero warm allocations, and the paired latency check (`benchmark/p6_0o_latency.jl`). Aqua ambiguities and piracy stay clean for the new `getmetadata`/`hasmetadata` methods. Stop and ask on major MTK friction or a major slowdown (D-156).
+
+## D-161 Reproduction pages 01, 09 and 10 re-frozen after P6.0bf, P6.0bd and the page parts of P6.3f (2026-10-07; coordinator, from the p6-pages test author; two review rounds; under D-153, D-154, D-156)
+
+- **Change (text, tables, plots and rendering only; no verdict changes).**
+  - **09.**
+    - The deviations table is in D-154's four-column form. V-PRE5 comes first, with values loaded from `data/09`.
+    - The parked targets (V-PRE6, the V-PRE16 ⟨n⟩ part, V-PRE17) have rows, and V-PRE7–12, 14 and 15 are listed as not yet on the page.
+    - V-OS1–V-OS5 are retired (D-156).
+    - Timings are labelled with machine and backend.
+    - The FULL video has no outlines and links to the new release.
+  - **10.**
+    - The four-column table gains rows for V-A6 (un-parking pending P6.2d), V-A8 and V-A9.
+    - The timing is labelled and the videos have no outlines.
+  - **01.**
+    - The four-column table is seeded from D-153's review rows, plus the parked targets.
+    - The wrong "Attempts per MCS" row is dropped, and Units is corrected (`nmobile` = TST's (sizex−2)(sizey−2)).
+    - The plots use time after relaxation, with the code-MCS offset noted; every verdict still binds on the code counter.
+    - The cell and field videos have no outlines; the field videos use a translucent cell fill.
+  - **Public pages** cite "our open question list (README §5)", never the internal PI sheet.
+  - The test files are unchanged.
+- **New sha256:**
+  - 09 `6dada30a62517729d879d4be777262466f8017b149118f9c678fd80d3a9134ed`
+  - 10 `ce8742a1112dbe622e0c4b0698acc5b109b6b1aab0a2f76f000509146ec305b2`
+  - 01 `c1f716ae1487779dc6fea97bd586fe9ac251e8010e18775c63fa0d60a41d72b7`
+- **Video hosting (maintainer).** Releases on this repo are immutable once published.
+  - The outline-free 09 FULL video is in the new pre-release `reproductions-2026-10-07`. It is byte-identical across two re-renders, and its trajectory equals the recorded `timeseries.tsv` at every save that is also a video frame.
+  - The old outlined asset stays unlinked on `reproductions-2026-10`.
+  - Each later batch of videos gets a new dated pre-release, created by the coordinator.
+- **Also merged.** P6.0bf: the paper-run videos are re-rendered without outlines, and their sidecars record cpu, machine and hostname. Docs tutorials and manuals have no outlines.
+- **Open.** P6.3f's FULL run, its 01b figure targets and video clock overlays remain open. P6.1h may reuse this re-freeze.

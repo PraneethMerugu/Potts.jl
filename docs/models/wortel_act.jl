@@ -179,7 +179,7 @@ mkpath("wortel_act") #hide
 k = Observable(1)
 fig = Figure(size = (760, 380))
 ax = Axis(fig[1, 1]; title = @lift("cell, MCS $(sol.t[$k])"), aspect = DataAspect())
-pottsplot!(ax, @lift(renderframe(sol.u[$k])); boundaries = true)
+pottsplot!(ax, @lift(renderframe(sol.u[$k])))
 hidedecorations!(ax)
 ax = Axis(fig[1, 2]; title = "activity in the cell", aspect = DataAspect(), backgroundcolor = :gray92)
 hm = heatmap!(ax, @lift(act_window($k)); colormap = :inferno, colorrange = (0, 20), nan_color = :transparent)

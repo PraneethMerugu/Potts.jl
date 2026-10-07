@@ -31,7 +31,7 @@ CairoMakie.activate!(type = "png") # hide
 @named gg = GranerGlazier(; lattice = size(σ0))
 prob = PottsProblem(gg, [ownership => σ0, kind => kinds0], (0, 1600); seed = 1, T = Float32)
 sol = solve(prob, CheckerboardCPM(); saveat = 25)
-record_potts("gpu_checkerboard.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("gpu_checkerboard.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

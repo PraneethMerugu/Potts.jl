@@ -66,7 +66,7 @@ The new pieces:
 start = openvt_monolayer_state(; lattice = (80, 80))
 prob = PottsProblem(monolayer, start, (0, 420); seed = 1, capacity = 200)
 sol = solve(prob, SequentialCPM(); saveat = 6)
-record_potts("growth_monolayer.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("growth_monolayer.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 
@@ -149,7 +149,7 @@ tutorial-layouts)) so that the colony survives early deaths:
 start4 = layout(Tiling((5, 5); region = (36:45, 36:45), kinds = [:cell]), growth_death)
 prob_death = PottsProblem(growth_death, start4, (0, 420); seed = 1, capacity = 200)
 sol_death = solve(prob_death, SequentialCPM(); saveat = 6)
-record_potts("growth_death.mp4", sol_death; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("growth_death.mp4", sol_death; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

@@ -25,7 +25,7 @@ title = "Akeeb, Marcus & Jiang (2026) leader/follower invasion — 500×300, $(T
         "multimodal sample: J_LF = 2, μ = 24, PP = 0.5 (leaders red, followers green)"
 paper_run("akeeb_invasion"; prob, alg, saveat = EVERY, title, framerate = 24,
     panels = [Panel(""; plot = (; category_palette = [:red3, :forestgreen],   # leader, follower (paper Fig. 4)
-        medium_color = :white, boundaries = true, boundary_width = 0.3, boundary_color = :gray20))],
+        medium_color = :white))],
     size = (1100, 720),
     meta = Dict{String, Any}("model" => "AkeebInvasion",
         "caption" => "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is still 30).",
@@ -33,5 +33,5 @@ paper_run("akeeb_invasion"; prob, alg, saveat = EVERY, title, framerate = 24,
         "initial_state" => "akeeb_state(; lattice = (500, 300), pp = 0.5) (default layout seed 0x5cd2609, seeding = :authors)",
         "parameters" => "μ = 24, J = akeeb_contacts(2.0), other constructor defaults",
         "save_every_mcs" => EVERY,
-        "notes" => "Hollow red outlines inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings.",
+        "notes" => "Hollow red rings inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings.",
         "deviations" => "μ = 24 passed explicitly (constructor default 30; D-050 A5 sets 24, not yet in code). Dynamics seed differs from the authors' unseeded CC3D run."))

@@ -38,7 +38,7 @@ function show_layout(op; title = "")
     fig = Figure(size = (300, 300))
     ax = Axis(fig[1, 1]; title, aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(PottsProblem(tissue, op, (0, 0)).u0); boundaries = true)
+    pottsplot!(ax, renderframe(PottsProblem(tissue, op, (0, 0)).u0))
     return fig
 end
 nothing # hide
@@ -177,7 +177,7 @@ frozen frame:
 op = layout(overlay(Frame(:wall), Tiling((5, 5); region = (5:36, 5:36), kinds = [:dark, :light])), tissue)
 prob = PottsProblem(tissue, op, (0, 1500); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 25)
-record_potts("layouts_frame.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("layouts_frame.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

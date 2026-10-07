@@ -178,13 +178,12 @@ sol = solve(prob, SequentialCPM(); saveat = 0:32:1600)
 # ## The run as a movie
 #
 # MakiePotts draws saved states, one colour per kind (dark cells blue, light cells green,
-# medium black); `boundaries = true` outlines each cell. `record_potts` writes the whole
-# solution as a movie:
+# medium black). `record_potts` writes the whole solution as a movie:
 
 using MakiePotts, CairoMakie
 mkpath("graner_glazier") #hide
 record_potts("graner_glazier/sorting.mp4", sol; framerate = 10, title = "Cell sorting, 200 cells",
-    figure = (; size = (400, 400)), plot = (; boundaries = true))
+    figure = (; size = (400, 400)))
 nothing #hide
 
 # ```@raw html
