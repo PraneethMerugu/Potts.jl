@@ -1,0 +1,121 @@
+target	paper	ours	tolerance	class	result
+default μ	24 (S:25; D-050 A5, D-142)	24.0	= 24	SMOKE+FULL	PASS
+V-A0 invasive @ 0	499.4 ± 5.3 (B)	500.0 ± 7.25 (n = 10)	± 49.94	SMOKE+FULL	PASS
+V-A0 infiltrative @ 0	499.4 ± 5.3 (B)	500.0 ± 7.25 (n = 10)	± 49.94	SMOKE+FULL	PASS
+V-A0 singles @ 0	0 ± 0 (B)	0.0 ± 0.0 (n = 10)	± 1.0	SMOKE+FULL	PASS
+V-A0 fingers @ 0	0 ± 0 (B)	0.0 ± 0.0 (n = 10)	± 1.0	SMOKE+FULL	PASS
+V-A0 detached @ 0	0 ± 0 (B)	0.0 ± 0.0 (n = 10)	± 1.0	SMOKE+FULL	PASS
+V-A0 clusters @ 0	0 ± 0 (B)	0.0 ± 0.0 (n = 10)	± 1.0	SMOKE+FULL	PASS
+V-A0 control: invasive before any sweep	fails R1 (spec 10 §5.2)	0.0	must fail	SMOKE+FULL	PASS
+V-A1 (a) followers; leader inventory	1169; 390 (sample)	1169; counted 390, painted 382.0	exact	SMOKE+FULL	PASS
+V-A1 (b) leaders never divide, never lost	S:124–163	all runs	exact	SMOKE+FULL	PASS
+V-A1 (c) divisions by MCS 700	578 (one sample run)	588.0 ± 23.88 (n = 10)	± 55	SMOKE+FULL	PASS
+V-A2 P1 invasive	15734 ± 1362 (A)	15762.0 ± 1519.0 (n = 10)	± 1935.0	FULL	PASS
+V-A2 P1 infiltrative	44029 ± 1669 (A)	43666.0 ± 1586.0 (n = 10)	± 4403.0	FULL	PASS
+V-A2 P1 singles	204.5 ± 9.3 (A)	206.0 ± 6.98 (n = 10)	± 20.45	FULL	PASS
+V-A2 P1 fingers	12.0 ± 1.2 (A)	11.4 ± 1.71 (n = 10)	± 1.98	FULL	PASS
+V-A2 P1 detached	239.4 ± 11.1 (A)	244.0 ± 13.74 (n = 10)	± 23.94	FULL	PASS
+V-A2 P1 clusters	5.5 ± 2.3 (A)	7.1 ± 2.56 (n = 10)	± 3.26	FULL	PASS
+V-A2 P2 invasive	12903 ± 1185 (A)	13895.0 ± 2356.0 (n = 10)	± 2502.0	FULL	PASS
+V-A2 P2 infiltrative	50860 ± 1827 (A)	52043.0 ± 1569.0 (n = 10)	± 5086.0	FULL	PASS
+V-A2 P2 singles	246.8 ± 9.8 (A)	235.0 ± 9.67 (n = 10)	± 24.68	FULL	PASS
+V-A2 P2 fingers	10.4 ± 1.3 (A)	10.5 ± 1.65 (n = 10)	± 1.99	FULL	PASS
+V-A2 P2 detached	312.2 ± 14.1 (A)	317.0 ± 25.36 (n = 10)	± 31.22	FULL	PASS
+V-A2 P2 clusters	11.2 ± 2.7 (A)	13.4 ± 3.37 (n = 10)	± 4.1	FULL	PASS
+V-A2 P3 invasive	4771 ± 935 (A)	4384.0 ± 662.0 (n = 10)	± 1087.0	FULL	PASS
+V-A2 P3 infiltrative	54495 ± 981 (A)	54271.0 ± 1344.0 (n = 10)	± 5450.0	FULL	PASS
+V-A2 P3 singles	290.3 ± 6.7 (A)	296.0 ± 14.33 (n = 10)	± 29.03	FULL	PASS
+V-A2 P3 fingers	4.5 ± 1.1 (A)	3.7 ± 1.06 (n = 10)	± 1.45	FULL	PASS
+V-A2 P3 detached	320.5 ± 12.2 (A)	325.0 ± 14.78 (n = 10)	± 32.05	FULL	PASS
+V-A2 P3 clusters	1.4 ± 1.1 (A)	1.7 ± 1.16 (n = 10)	± 1.52	FULL	PASS
+V-A2 P4 invasive	4897 ± 826 (A)	5027.0 ± 807.0 (n = 10)	± 1095.0	FULL	PASS
+V-A2 P4 infiltrative	4897 ± 826 (A)	5027.0 ± 807.0 (n = 10)	± 1095.0	FULL	PASS
+V-A2 P4 singles	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P4 fingers	4.2 ± 1.5 (A)	4.9 ± 1.37 (n = 10)	± 1.93	FULL	PASS
+V-A2 P4 detached	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P4 clusters	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P5 invasive	2707 ± 282 (A)	2567.0 ± 320.0 (n = 10)	± 405.0	FULL	PASS
+V-A2 P5 infiltrative	2950 ± 289 (A)	2853.0 ± 274.0 (n = 10)	± 378.0	FULL	PASS
+V-A2 P5 singles	6.7 ± 2.4 (A)	7.7 ± 2.0 (n = 10)	± 2.97	FULL	PASS
+V-A2 P5 fingers	0.7 ± 0.8 (A)	1.2 ± 1.48 (n = 10)	± 1.59	FULL	PASS
+V-A2 P5 detached	6.7 ± 2.4 (A)	7.7 ± 2.0 (n = 10)	± 2.97	FULL	PASS
+V-A2 P5 clusters	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P6 invasive	2155 ± 261 (A)	2642.0 ± 392.0 (n = 10)	± 447.0	FULL	FAIL
+V-A2 P6 infiltrative	2155 ± 261 (A)	2642.0 ± 392.0 (n = 10)	± 447.0	FULL	FAIL
+V-A2 P6 singles	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P6 fingers	0.1 ± 0.3 (A)	0.4 ± 0.7 (n = 10)	± 1.0	FULL	PASS
+V-A2 P6 detached	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P6 clusters	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P7 invasive	15319 ± 1873 (A)	14899.0 ± 2220.0 (n = 10)	± 2755.0	FULL	PASS
+V-A2 P7 infiltrative	46006 ± 1286 (A)	46716.0 ± 1290.0 (n = 10)	± 4601.0	FULL	PASS
+V-A2 P7 singles	204.3 ± 7.9 (A)	207.0 ± 9.53 (n = 10)	± 20.43	FULL	PASS
+V-A2 P7 fingers	11.1 ± 1.4 (A)	10.5 ± 1.27 (n = 10)	± 1.79	FULL	PASS
+V-A2 P7 detached	249.9 ± 16.1 (A)	256.0 ± 23.41 (n = 10)	± 26.96	FULL	PASS
+V-A2 P7 clusters	7.0 ± 2.1 (A)	7.4 ± 3.92 (n = 10)	± 4.22	FULL	PASS
+V-A2 P8 invasive	1963 ± 300 (A)	1976.0 ± 359.0 (n = 10)	± 444.0	FULL	PASS
+V-A2 P8 infiltrative	1963 ± 300 (A)	1976.0 ± 359.0 (n = 10)	± 444.0	FULL	PASS
+V-A2 P8 singles	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P8 fingers	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P8 detached	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A2 P8 clusters	0 ± 0 (A)	0.0 ± 0.0 (n = 10)	± 1.0	FULL	PASS
+V-A7 P9 invasive	16493 ± 2294 (A)	16544.0 ± 1019.0 (n = 10)	± 2381.0	FULL	PASS
+V-A7 P9 infiltrative	42656 ± 2889 (A)	43207.0 ± 1512.0 (n = 10)	± 4266.0	FULL	PASS
+V-A7 P9 singles	201.8 ± 6.4 (A)	202.0 ± 9.81 (n = 10)	± 20.18	FULL	PASS
+V-A7 P9 fingers	11.7 ± 1.9 (A)	11.6 ± 1.07 (n = 10)	± 2.07	FULL	PASS
+V-A7 P9 detached	228.4 ± 12.5 (A)	234.0 ± 20.24 (n = 10)	± 22.84	FULL	PASS
+V-A7 P9 clusters	4.5 ± 1.8 (A)	5.6 ± 2.95 (n = 10)	± 3.28	FULL	PASS
+V-A11 invasive @ 100	3666 ± 515 (B)	3569.0 ± 478.0	± 666.0	FULL	PASS
+V-A11 infiltrative @ 100	3765 ± 499 (B)	3646.0 ± 474.0	± 653.0	FULL	PASS
+V-A11 singles @ 100	3.2 ± 1.5 (B)	2.5 ± 1.43	± 1.97	FULL	PASS
+V-A11 fingers @ 100	3.8 ± 1.1 (B)	3.3 ± 1.16	± 1.52	FULL	PASS
+V-A11 detached @ 100	3.2 ± 1.5 (B)	2.5 ± 1.43	± 1.97	FULL	PASS
+V-A11 clusters @ 100	0 ± 0 (B)	0.0 ± 0.0	± 1.0	FULL	PASS
+V-A11 invasive @ 300	9261 ± 1576 (B)	8647.0 ± 1429.0	± 2018.0	FULL	PASS
+V-A11 infiltrative @ 300	12657 ± 1708 (B)	11869.0 ± 1481.0	± 2144.0	FULL	PASS
+V-A11 singles @ 300	57.7 ± 4.5 (B)	57.5 ± 5.21	± 6.53	FULL	PASS
+V-A11 fingers @ 300	9.3 ± 1.6 (B)	9.1 ± 0.99	± 1.79	FULL	PASS
+V-A11 detached @ 300	58.8 ± 5.3 (B)	58.5 ± 4.99	± 6.91	FULL	PASS
+V-A11 clusters @ 300	0.1 ± 0.3 (B)	0.0 ± 0.0	± 1.0	FULL	PASS
+V-A11 invasive @ 500	15108 ± 933 (B)	14803.0 ± 1188.0	± 1511.0	FULL	PASS
+V-A11 infiltrative @ 500	28345 ± 1187 (B)	28056.0 ± 1525.0	± 2834.0	FULL	PASS
+V-A11 singles @ 500	139.2 ± 7.1 (B)	144.0 ± 8.6	± 13.92	FULL	PASS
+V-A11 fingers @ 500	10.8 ± 1.3 (B)	11.9 ± 1.37	± 1.79	FULL	PASS
+V-A11 detached @ 500	148.1 ± 6.3 (B)	153.0 ± 8.34	± 14.81	FULL	PASS
+V-A11 clusters @ 500	1.4 ± 0.5 (B)	1.9 ± 1.73	± 1.71	FULL	PASS
+V-A8 P1 mean cluster size; leader fraction	5.79 (SD 3.75, 75 clusters); 0.578 (C)	4.75 (SD 2.89, 71 clusters); 0.59	R1 (clusters as units); ± 0.10	FULL	PASS
+V-A8 P2 mean cluster size; leader fraction	5.56 (SD 3.71, 143 clusters); 0.517 (C)	5.22 (SD 3.43, 134 clusters); 0.52	R1 (clusters as units); ± 0.10	FULL	PASS
+V-A3 fingers, J_LF ∈ [−1, 2]	7.2 ± 0.24 (A, SE)	7.05 ± 0.24 (N = 440)	R2	FULL	PASS
+V-A3 fingers, λ ≥ 20	9.78 ± 0.15 (A, SE)	9.63 ± 0.15 (N = 440)	R2	FULL	PASS
+V-A3 fingers, J_LF ≤ −2	3.99 ± 0.22 (A, SE)	4.0 ± 0.22 (N = 440)	R2	FULL	PASS
+V-A3 fingers, J_LF > 2	6.08 ± 0.2 (A, SE)	6.07 ± 0.2 (N = 330)	R2	FULL	PASS
+V-A3 singles, J_LF > 2	175.94 ± 6.6 (A, SE)	176.0 ± 6.63 (N = 330)	R2	FULL	PASS
+V-A3 singles, J_LF ≤ −2	1.46 ± 0.22 (A, SE)	1.62 ± 0.25 (N = 440)	R2	FULL	PASS
+V-A3 singles, J_LF ∈ [−1, 2]	52.94 ± 3.37 (A, SE)	53.01 ± 3.34 (N = 440)	R2	FULL	PASS
+V-A3 clusters, J_LF ∈ [−1, 2]	1.63 ± 0.15 (A, SE)	1.75 ± 0.15 (N = 440)	R2	FULL	PASS
+V-A3 clusters, J_LF > 2	1.77 ± 0.16 (A, SE)	1.92 ± 0.17 (N = 330)	R2	FULL	PASS
+V-A4 invasive, J_LF ≤ −2	5381 ± 206 (A, SE)	5459.0 ± 206.0 (N = 440)	R2	FULL	PASS
+V-A4 invasive, J_LF ∈ [−1, 2]	10301 ± 335 (A, SE)	10368.0 ± 340.0 (N = 440)	R2	FULL	PASS
+V-A4 invasive, J_LF > 2	6658 ± 192 (A, SE)	6556.0 ± 186.0 (N = 330)	R2	FULL	PASS
+V-A4 invasive, λ ≥ 20	12173 ± 275 (A, SE)	12153.0 ± 277.0 (N = 440)	R2	FULL	PASS
+V-A4 invasive, λ < 10	2866 ± 53 (A, SE)	2910.0 ± 52.63 (N = 440)	R2	FULL	PASS
+V-A4 infiltrative, λ ≥ 20	30351 ± 860 (A, SE)	30373.0 ± 858.0 (N = 440)	R2	FULL	PASS
+V-A4 infiltrative, λ < 10	3545 ± 133 (A, SE)	3580.0 ± 132.0 (N = 440)	R2	FULL	PASS
+V-A4 order of invasive area	[−1, 2] > (> 2) > (≤ −2)	10368.0 > 6556.0 > 5459.0	strict	FULL	PASS
+V-A4 invasive ratio λ ≥ 20 / λ < 10	4.25	4.18	± 15 %	FULL	PASS
+V-A4 infiltrative ratio λ ≥ 20 / λ < 10	8.56	8.48	± 15 %	FULL	PASS
+V-A5 cluster incidence, all	0.283 (N = 1209)	0.28 (N = 1210)	R3	FULL	PASS
+V-A5 cluster incidence, λ ≥ 24	0.715 (N = 330)	0.73 (N = 330)	R3	FULL	PASS
+V-A5 clusters when present, λ ≥ 24	4.85 ± 0.24 (SE)	5.22 ± 0.24	R2	FULL	PASS
+V-C1 PP = 0: no division, live count constant	1559 on all 701 rows (samples)	divisions 0	exact	SMOKE+FULL	PASS
+V-C1 control: P1 runs divide	—	min 544	> 0 in every run	SMOKE+FULL	PASS
+V-C2 λ = 0: no cluster	0 in all 1209 λ = 0 runs (A)	max 0.0	0 in every run	SMOKE+FULL	PASS
+V-C2 control: P1 runs form clusters	—	max 10.0	> 0 in some run	SMOKE+FULL	PASS
+V-C2 λ = 0: mean singles	0 (A)	0.0	≤ 1	FULL	PASS
+V-C2 λ = 0: mean fingers	0 (A)	0.0	≤ 1	FULL	PASS
+V-C2 λ = 0: mean detached	0 (A)	0.0	≤ 1	FULL	PASS
+V-C2 control: P8 invasive against P1's reference	15734 ± 1362 (A, P1)	1976.0	must fail R1	SMOKE+FULL	PASS
+invariants: infiltrative ≥ invasive, detached ≥ singles	every run of A, B, C	1310 runs, every save	exact	SMOKE+FULL	PASS
+V-A6 phenotype fractions	22 / 1 / 23 / 54 % (p.13)	—	—	parked	PARKED
+V-A8 (paper) cluster sizes	≈ 7 cells, 60–70 % leaders (p.14–17)	—	—	parked	PARKED
+V-A9 leader speed	0.4 px/MCS at λ = 20 (p.6)	—	—	parked	PARKED
+V-A10 morphology	Fig. 4	videos above	—	reported	reported

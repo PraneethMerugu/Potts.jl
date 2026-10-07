@@ -2734,3 +2734,34 @@ session.
   2. **Events as MTK callbacks go into P6.4c.** `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as `SymbolicDiscreteCallback`s from the start. Per-entity, per-copy and structural rules are never listed as callbacks.
   3. **Claim wording** (amends D-159 and plan §5). The paper says a model's *update rules* are Symbolics equations in ModelingToolkit's `Pre` form that MTK's generic tools can inspect. Its *events* are MTK `SymbolicDiscreteCallback`s only once P6.4c lands. Drop "compiled by MTK" for events: Potts compiles them.
 - **Unchanged.** `PottsSweepSpec`; D-137 rule 5's refusals; the F7 rejection of MTK events inside components.
+
+## D-163 P6.2d: the Akeeb FULL extras, the `akeeb_phenotype` classifier, and page 10 re-frozen (2026-10-07; coordinator, from the P6.2d implementer; two review rounds; under D-143, D-146, D-154, D-156, D-161)
+
+- **Classifier.** New export `PottsModels.akeeb_phenotype(obs)`: the authors' area-equality classifier (`Implementation/TumorInvasionAnalysis/ResultExtraction.ipynb`, cell 3). It uses exact area equality and returns `:unclassified` otherwise.
+  - Tested by hand cases and negative controls.
+  - A data oracle rebuilds the authors' `phenotype_classification.csv` exactly from `invasion_metrics.csv`: 13,263 rows, 42 unclassified. The implementer ran it on the PC, and the reviewer reproduced it independently.
+  - It skips with a named `@info` where the data are absent, as in CI.
+  - It stays provisional until author question q1 is answered.
+- **FULL record.** `reproductions/data/10/full-2026-10-07/` (commit 246427f1; PC, AMD Ryzen AI Max+ 395, CPU, 12 threads).
+  - **Page at FULL:** 114 PASS, 2 FAIL, 3 PARKED, 1 reported. Every V-A3, V-A4 and V-A5 row passes.
+  - **Sweep:** a separate 13,310-run sweep (seeds 2,000,000 + 100j + i, disjoint from the page's).
+    - V-A6 reads 22.34 / 1.03 / 22.34 / 54.29 % against dataset A's 22.24 / 1.08 / 22.54 / 54.14 %: PASS under R3. R3's 5-point floor means the Single-cell row cannot fail; the page says so.
+    - The full-sweep V-A7 gives every |r(PP, ·)| ≤ 0.027: PASS.
+    - Both rules are verbatim from spec 10 §5.3, which predates the run.
+  - **The two FAILs are one deviation, V-A2 P6** (invasive = infiltrative; no cell detaches there): 2642 vs 2155 ± 261, tolerance 447.
+    - Attributed to sampling in the reference value: pooled over PP at (−2, 6), ours is 2487 against A's 2381 (n = 110 each; +4.5 %, z = 1.9). The sweep's own P6 runs are in band under R1.
+    - The verdict stays FAIL, and no tolerance moved.
+  - **Provenance.** The sweep's first session (PP 0.0–0.1) has a reconstructed provenance table; its per-level wall times are lost, and the record says so.
+  - **Videos** were drawn with `boundaries = false` (D-156); the substitution is recorded. They are hosted in the pre-release `reproductions-2026-10-07-akeeb`.
+- **Page 10 and its test re-frozen.**
+  - **Page.**
+    - V-A6 is un-parked: READY, with the classifier provisional.
+    - The full-sweep V-A7 row is added.
+    - Both are read as "FULL record" rows from `verdicts_sweep.tsv`.
+    - The deviations table gains V-A2 P6, and the V-A8/V-A9 rows are updated.
+    - The reported correlations and marginals appear as info, and the FULL banner links the record and the videos.
+  - **Test.** It binds V-A6 (4 rows) and the full-sweep V-A7 (6 rows) to the committed `verdicts_sweep.tsv`, by reading the file only. The V-A6 `@test_skip` is removed; V-A8 and V-A9 stay skipped.
+  - No pre-registered target, tolerance or seed changed.
+  - **New sha256:** page `e12ccbba4e268985d2c191670bde462290b9d7d1db6435cb6d404c529723b46d`; test `cb514d8defdeff189e3540cb6148bed96837150c3bfafd4e4faef15a46a700e5`.
+- **Open (P6.2e).** The FULL-record test checks the verdict strings, so a hand-edited TSV would still pass. Make it recompute V-A6's R3 and V-A7's |r| from the committed `sweep.tsv` instead.
+- **Licence note.** The authors' data release has no licence file. Only derived statistics, and one derived heatmap panel in `10_akeeb_phenotypes.png`, are committed; no raw CSV. This was flagged to the maintainer.

@@ -493,13 +493,14 @@ Every item's acceptance also includes the standing checks:
   Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
   confirmation).
 
-- [ ] **P6.2d** (D-156) Akeeb FULL extras.
+- [x] (merge 2026-10-07, D-163) **P6.2d** (D-156) Akeeb FULL extras.
   - Un-park V-A6 with the area-equality classifier.
   - Run the V-A7 full-sweep |r|, and V-A3–A5 at FULL, on the PC, with D-146 records.
   - V-A8/A9 go on the PI sheet.
 
 ### Step 3 — Merks 2006 + 2008
 
+- [ ] **P6.2e** (D-163) The page-10 FULL-record test recomputes V-A6's R3 (phenotype counts from the committed `sweep.tsv` against A's classified counts) and V-A7's six |r| values, instead of reading the PASS strings. Small; test-author re-freeze.
 - [x] (merge, 2026-10-05; D-140) **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
   placeholder. Accept: the soft-connectivity sibling; hex and 3D ring tests.
   - D-075: `track = (:ΔH,)` → `stats.accepted_ΔH` (01 F9); `nothing` when off, and the
