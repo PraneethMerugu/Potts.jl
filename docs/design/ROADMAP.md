@@ -329,7 +329,7 @@ Every item's acceptance also includes the standing checks:
   - Check the Metal.jl workaround in `lifecycle_device.jl` (~853) on ROCm.
   - Add a ROCm check that no device kernel's LLVM IR contains `double` (extends D-047), so Metal-breaking code is caught without a Mac.
   - Accept: the full GPU group passes under `POTTS_GPU=rocm` on the PC, and the double-IR check fails on a deliberate Float64 literal (negative control).
-- [ ] (workflow merged 2026-10-07; awaiting the first green run) **P6.0bh** (D-157; approved by the maintainer) The repository's first workflow: on pushes to `monorepo`, run the CPU suites and the GPU group under `POTTS_GPU=rocm` on the self-hosted runner ("rocm,amd").
+- [x] (2026-10-07; first green run 37582486493 at fd9a519c, after D-158) **P6.0bh** (D-157; approved by the maintainer) The repository's first workflow: on pushes to `monorepo`, run the CPU suites and the GPU group under `POTTS_GPU=rocm` on the self-hosted runner ("rocm,amd").
   - Jobs pin to `taskset -c 0-11,16-27`.
   - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
 - [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
