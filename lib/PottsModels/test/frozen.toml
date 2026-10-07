@@ -386,3 +386,8 @@ decision = "D-153"
 path = "../reproductions/01_merks.jl"
 sha256 = "30e2c9d2313adde34a1a6ee3f0f578894efc86edc61b21b63eafa070865db8e4"
 decision = "D-153"
+
+[[file]]
+path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
+sha256 = "a557377213a9f7b04bb879ad431be9357fa66b50c91afce82d320fdfc47b7367"
+decision = "D-160"
