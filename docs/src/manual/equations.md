@@ -1,6 +1,7 @@
 # [Equations and solvers: `@equations`, `@components`](@id manual-equations)
 
-`@equations` holds differential equations and couplings, in ModelingToolkit syntax. `D` is
+`@equations` holds differential equations, algebraic equations and couplings, in
+ModelingToolkit syntax. `D` is
 the time derivative and `Δ` the lattice Laplacian. The scope of the variable decides what
 an equation is:
 
@@ -9,12 +10,52 @@ an equation is:
 | `D(c) ~ Dc * Δ(c) + s * (kind == k) - δ * c` | `c(field)` | a reaction–diffusion PDE on the lattice | `field_solver` |
 | `D(x) ~ k₁ - k₂ * x` | `x(cell)` | one ODE per live cell | `ode_solver` |
 | `D(g) ~ -g + count(true for c in cells)` | `g(model)` | one ODE for the model | `ode_solver` |
+| `y ~ volume / V₀` | `y(cell)` or `y(model)` | an algebraic variable (see below) | — |
 | `comp.p ~ volume / V₀` | a component parameter | a coupling (see below) | — |
 
 The right side of a field equation is a site expression: `kind`, `owner`, `position`,
 other fields, kind tables (`δ[kind]`). A cell ODE reads cell quantities (`volume`, cell
 variables, `integral(c)`) and can read other cells' values (`y[j]`); every ODE step reads
 the state at the start of the step. `time` is the current time.
+
+## Cell and model ODEs are ModelingToolkit systems
+
+The cell equations of a model are one ModelingToolkit `System`, the template of one cell, and
+its model equations another. Each goes through ModelingToolkit's `mtkcompile`, and Potts
+advances the simplified equations for every cell in one batched kernel.
+`Potts.ode_system(mtkcompile(sys), :cell)` returns the compiled system (`:model` for the model
+equations, `nothing` for a scope without equations). Quantities MTK cannot express, such as
+`volume`, neighbour gathers, folds over cells and reads of other cells, appear in it as input
+parameters.
+
+An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expression.
+`mtkcompile` eliminates `y` as an observed variable, as in ModelingToolkit:
+
+- `y` is not stored. Wherever the model reads it (ODEs, updates, energies, division
+  conditions, observed quantities), it reads its definition on the current state.
+- `sol[:y]` and `getu` evaluate it on saved states, one value per cell for a cell variable.
+- It has no initial value: an operating-point entry for it is an error, and so is a
+  declared value other than zero (`y(cell) = 2.0`). Initial values of algebraic variables
+  are not supported yet.
+- `y` is read bare only. Every indexed read is an error: `y[j]`, `y[new]`, `y[owner]` and
+  `sum(y[c] for c in cells)`. Write a fold over cells bare: `sum(y for c in cells)`.
+- A definition is a function of the current state: `rand()` and `Pre` in it are errors. A
+  model definition folds cell quantities (`sum(x for c in cells)`), and a cell definition
+  reads site quantities through `integral(c)` or at a site (`c[…]`).
+- Definitions must be explicit and acyclic: an implicit equation (`y + x ~ 1`), a
+  definition that reads itself, two definitions that read each other, and two definitions of
+  one variable are errors. So are a variable with both `D(y)` and `y ~ …`, and an update or
+  division rule that writes `y`, or reads it as a previous value (`Pre(y)`). Site and field
+  variables have no algebraic equations.
+- What is accepted does not depend on whether full ModelingToolkit is loaded, although its
+  tearing can solve some implicit equations.
+
+```julia
+@equations begin
+    D(x) ~ -k * excess
+    excess ~ x - volume / V₀
+end
+```
 
 ## Solvers are part of the problem
 

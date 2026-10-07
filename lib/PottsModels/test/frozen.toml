@@ -393,6 +393,11 @@ sha256 = "a557377213a9f7b04bb879ad431be9357fa66b50c91afce82d320fdfc47b7367"
 decision = "D-160"
 
 [[file]]
+path = "acceptance/p6_0bn_ode_mtkcompile.jl"
+sha256 = "fd942b5916fc8d06aa558c3b72385225ad1fa2be748fd925917884a93e8c657d"
+decision = "D-165"
+
+[[file]]
 path = "reproductions/09_cell_sorting.jl"
 sha256 = "626e4f8ab5387af352c6e0147d2cb7d737bc3541271208db2bbe12b5d5257551"
 decision = "D-166"
