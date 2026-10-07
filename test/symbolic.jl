@@ -3296,10 +3296,13 @@ end
 @testset "discrete components with full ModelingToolkit loaded (G1)" begin
     script = joinpath(@__DIR__, "mtk_extension.jl")
     run_script(args...) = read(`$(Base.julia_cmd()) --startup-file=no --project=$(@__DIR__) $script $args`, String)
-    lines(s) = filter(startswith("P60K|"), split(s, '\n'))
-    base, full = lines(run_script()), lines(run_script("mtk"))
-    @test length(base) == 4
-    @test full == base
+    lines(s, prefix) = filter(startswith(prefix), split(s, '\n'))
+    base, full = run_script(), run_script("mtk")
+    @test length(lines(base, "P60K|")) == 4
+    @test lines(full, "P60K|") == lines(base, "P60K|")
+    # algebraic equations (P6.0bn): accepted alike, the same code and trajectories
+    @test length(lines(base, "P6BN|")) == 4
+    @test lines(full, "P6BN|") == lines(base, "P6BN|")
 end
 
 # P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H

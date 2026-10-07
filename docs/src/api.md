@@ -31,6 +31,10 @@ spec.hamiltonian, spec.drives, spec.constraints, spec.temperature, spec.proposal
 The payload is a description: a Potts model is still solved through `PottsProblem`, and
 `ODEProblem`/`JumpProblem` of a Potts model are `ArgumentError`s.
 
+A model's cell and model ODEs are ModelingToolkit systems compiled by `mtkcompile`.
+`Potts.ode_system(csys, :cell)` and `Potts.ode_system(csys, :model)` return them from a
+compiled model `csys` (see [Equations and solvers](@ref manual-equations)).
+
 ```@autodocs
 Modules = [Potts]
 Private = false

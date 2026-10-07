@@ -41,6 +41,8 @@ function _observed_scope(x)
     return scope
 end
 
+_algebraic_cell(x) = (i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
+
 # One lock for every model's observed-function cache: ensemble threads (`EnsembleThreads`)
 # read observed quantities concurrently (A-55).
 const _OBSERVED_LOCK = ReentrantLock()
@@ -62,6 +64,9 @@ function _observed_build(info::PottsModelInfo, c, T, x)
     _check_integral_pre_outside(e)
     rn = c.gather_names
     scope = _observed_scope(e)
+    # an algebraic cell variable (`y ~ expr` in `@equations`) has one value per cell, whatever
+    # its definition reads
+    scope === :model && _algebraic_cell(x) && (scope = :cell)
     f = if scope === :cell
         code = lower(e, _cell_env(T, :c, rn; mcs = :t))
         _rgf(:((st, p, ctx, t) -> [(c == 0 ? $T(0) : $code) for c in 1:length(st.cell.kind)]))

@@ -2,6 +2,8 @@
 # small model, so the first `PottsProblem` of a session does not compile Symbolics' paths.
 # `_PrecompileModel` goes through `@potts_model` (its expansion, the generated constructor's
 # build scope and `PottsSystem` keywords, the first MCS), which every user model shares.
+# Its cell ODE with an algebraic equation takes the first MTK `System` and `mtkcompile` of a
+# session (odes.jl): loading Potts invalidates MTK's own precompiled `mtkcompile` (≈ 1.2 s).
 @potts_model _PrecompileModel begin
     @structural_parameters begin
         lattice = (16, 16)
@@ -17,6 +19,8 @@
     @variables begin
         V_target(cell) = V₀
         c(field) = 0.0
+        x(cell) = 1.0
+        x_rate(cell) = 0.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
     @energy begin
@@ -24,7 +28,11 @@
         contacts => J[kind, kind′]
     end
     @drive copy => -λ * (c[target] - c[source])
-    @equations D(c) ~ D_c * Δ(c) + (kind == cell) - c
+    @equations begin
+        D(c) ~ D_c * Δ(c) + (kind == cell) - c
+        D(x) ~ -x_rate
+        x_rate ~ x / T
+    end
     @after_mcs V_target ~ Pre(V_target) + V₀ / T
     @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
     @sweep Metropolis(; temperature = T)
