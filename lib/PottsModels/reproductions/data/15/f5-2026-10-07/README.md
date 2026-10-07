@@ -22,6 +22,7 @@ This is the offline record required by D-146.
 | `plot_f5.jl`, `fig5.png` | M Fig 5's four columns (PDF and CDF of f, PDF and CDF of a; raw counts, stacked by distance bin, `viridis_r` / `inferno_r`), one row for case (b) and one for the control; Potts only |
 | `video_f5.jl` | renders case (b) run 1 and control run 1 every 39 MCS, cells coloured by area, no outlines; the videos are not committed |
 | `probe_causes.jl` | the cause probe for the failing rows (below) |
+| `v4_on_g.jl` | the frozen V4 rules applied to the consortium's TST_5T (and Morpheus_5T) files from a local G clone; information only. Its pooled histograms feed an optional consortium row of `fig5.png` (`F5_G_HIST`) and are not committed |
 
 The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec §3.1), one per run, in `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` and `…_gamma1e-4/`, are written by the runner to `F5_O2_DIR`. They are 9.4 MB (4.4 MB gzipped) and are not committed; they belong to the submission package (P6.15j). The consortium data (G) were not on disk, so no consortium row is drawn and no G file entered git.
 
