@@ -378,7 +378,7 @@ Every item's acceptance also includes the standing checks:
   - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
   - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.
   - Gate it with the paired A/B on ROCm.
-- [ ] **P6.0bx** (from the P6.0bb review) The frozen `p6_0s_v7_tooling.jl` L2 check fails on Linux. It asserts that no `/tmp/` path appears in the sandboxed `exclusive.sh`, but `mktempdir` lives under `/tmp`; base 9efdf924 fails the same way.
+- [x] (merge 2026-10-07, D-167) **P6.0bx** (from the P6.0bb review) The frozen `p6_0s_v7_tooling.jl` L2 check fails on Linux. It asserts that no `/tmp/` path appears in the sandboxed `exclusive.sh`, but `mktempdir` lives under `/tmp`; base 9efdf924 fails the same way.
   - CI never runs `benchmark/test`, which is why CI is green.
   - Fix through a test-author re-freeze, and add a CI step that runs `benchmark/test` with `TMPDIR=$RUNNER_TEMP`.
 - [ ] **P6.0bs** (D-159; after bm–bo) A frozen test that checks every MTK claim the paper makes, plus the paper and docs wording (plan §5).
@@ -508,7 +508,7 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 3 — Merks 2006 + 2008
 
-- [ ] **P6.2e** (D-163) The page-10 FULL-record test recomputes V-A6's R3 (phenotype counts from the committed `sweep.tsv` against A's classified counts) and V-A7's six |r| values, instead of reading the PASS strings. Small; test-author re-freeze.
+- [x] (merge 2026-10-07, D-167) **P6.2e** (D-163) The page-10 FULL-record test recomputes V-A6's R3 (phenotype counts from the committed `sweep.tsv` against A's classified counts) and V-A7's six |r| values, instead of reading the PASS strings. Small; test-author re-freeze.
 - [x] (merge, 2026-10-05; D-140) **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
   placeholder. Accept: the soft-connectivity sibling; hex and 3D ring tests.
   - D-075: `track = (:ΔH,)` → `stats.accepted_ΔH` (01 F9); `nothing` when off, and the

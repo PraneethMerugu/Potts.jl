@@ -2856,3 +2856,24 @@ session.
   - The question is on the PI sheet (B1, V-PRE7), status "not asked".
 - **New sha256:** page `96f28a3388b9bab2f58184ca4cffb343eded8c7fd95fb328133baf69ca29cd91`; new test `626e4f8ab5387af352c6e0147d2cb7d737bc3541271208db2bbe12b5d5257551`.
 - **Escalation.** This is a science question for the phase report (AUTONOMY §7.5).
+
+## D-167 P6.2e and P6.0bx: two test-only re-freezes; CI runs `benchmark/test` (2026-10-07; coordinator, from the test author)
+
+- **P6.2e (closes D-163's open item).** The page-10 FULL-record testset now recomputes its verdicts from the committed data instead of reading the PASS strings.
+  - **V-A6:** R3 per phenotype, as in spec 10 §5.3.3 with its 5-point floor. It compares the counts in the committed `sweep.tsv` against dataset A's classified counts: 2950 / 143 / 2989 / 7181 of 13,263, with 42 unclassified. These are cited constants, checked against the record's paper column.
+  - **V-A7:** the six |r(PP, metric)| < 0.05.
+  - **Record checks:** the phenotype column is checked against `akeeb_phenotype`, and `verdicts_sweep.tsv` must agree with the recomputation to its printed precision.
+  - **Negative controls:**
+    - a one-run phenotype shift fails the agreement check;
+    - an 800-run shift fails R3;
+    - a PP-dependent invasive area fails V-A7;
+    - a hand-edited verdict TSV was shown to fail.
+  - The test header now lists V-A6 as READY (D-163).
+  - No target, tolerance, seed or rule changed, and the test reads TSVs only.
+  - New sha256: `d3ef12f4f06a5d9e56848aad1e272076d136540ffe495027d1a7da67f310d0f6`.
+- **P6.0bx.** The P6.0s L1 privacy check (`benchmark/test/p6_0s_v7_tooling.jl`) now masks the sandbox's own `mktempdir` path before searching for `/tmp/`.
+  - Why: on Linux, `mktempdir` lives under `/tmp`, so the literal check had always failed there, base 9efdf924 included.
+  - The intent is kept, and two checks are added: the rewrite happened, and the real script fails the check (control).
+  - On the PC the file passes 32/32 with the default TMPDIR and with TMPDIR under `$HOME`.
+  - New sha256: `f05c55365955a5b11c65cc0e9756fd83c0d0461ffef0ab0c03c36a58023f926f`.
+- **CI.** A new step runs `benchmark/test/*.jl` with `TMPDIR=$RUNNER_TEMP`. Until now CI never ran these tests, which is why the Linux failure went unnoticed.

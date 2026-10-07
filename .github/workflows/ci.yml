@@ -40,6 +40,13 @@ jobs:
           julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
       - name: Frozen acceptance tests are unchanged
         run: $PIN julia --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")'
+      - name: Benchmark tooling tests (machine lock, exclusive.sh transition)
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          for f in benchmark/test/*.jl; do
+            $PIN julia --project=benchmark "$f"
+          done
       - name: CorePotts
         run: GROUP=CorePotts $PIN julia --project=test test/runtests.jl
       - name: Potts
