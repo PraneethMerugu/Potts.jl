@@ -46,8 +46,12 @@ function bond_counts(σ, k)
     return n
 end
 function annealed(σ, k, run; seed = 1)
+    ## page fix (P6.1h): a problem's cells are the labels 1:maximum(σ), so drop the kinds of
+    ## vanished cells above the largest label left; with no cell left there is nothing to anneal
+    top = maximum(σ)
+    top == 0 && return copy(σ)
     q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(σ)),
-        [ownership => copy(σ), kind => k, :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
+        [ownership => copy(σ), kind => k[1:top], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
             :V₀ => getp(run, :V₀)(run), :T => 0.0], (0, 2PAPER_MCS); seed)
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
 end
