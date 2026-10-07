@@ -2787,3 +2787,47 @@ session.
   - On the tree without `updates` (PC): 133 pass, 4 fail and 23 error, out of 160. Every error is an UndefVarError for `updates`; the controls and the timing oracle pass.
   - A stub passes 261/261.
 - **Follow-up (P6.0bv).** `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`, a pre-existing gap. Support it, or refuse with a clear `ArgumentError`. Until then the test pins edge scope on the plain and completed forms only.
+
+
+## D-165 P6.0bn: the model's own cell and model ODEs through `mtkcompile`; algebraic equations in `@equations`; `Potts.ode_system(csys, scope)` (2026-10-07; coordinator, from the P6.0bn test author; implements D-159 / mtk-native-plan §4 route A2, §6; amends D-038's wording)
+
+- **Why.** D-159 adopted plan §5: "The continuous … parts of a model are ModelingToolkit systems compiled by `mtkcompile`." Today only `@components` systems take that path (`src/components.jl`). The model's own `@equations` cell and model ODEs are validated and lowered directly (`src/compile.jl`), and any non-differential equation is rejected ("equations are `D(x) ~ rhs`"). So MTK never sees them and has nothing to simplify.
+- **What exists (measured on 4b81dd79, MTKB 1.77.0).**
+  - No published model has a cell or model ODE. Merks has field PDEs only, and fields are not in this item (plan §3.3; P6.0bq).
+  - An MTK `System` cannot be built from the authored equations directly. The DSL built-ins (`volume`, `id`) and gather and fold variables are plain symbols, so `System` throws "Variable `id` is not a function of independent variable t".
+  - A per-scope template works. The scope's targets are the unknowns. Declared parameters become MTK parameters (`toparam`) under their own names. Every other leaf or opaque call becomes an input parameter: built-ins, other scopes' variables, `at` (cross-cell reads), `gather`, `population` and kind tests.
+    - `mtkcompile` of this template eliminates explicit algebraic equations as observed.
+    - After back-substitution, the rates of all-differential models are `isequal` to the authored ones. That held for P6.0x's gather, cross-cell and fold rates, so their code can stay byte-identical (p6_0o pins).
+  - **MTKB alone vs full MTK.** With ModelingToolkitBase alone, `mtkcompile` moves `y ~ x` to `observed` but leaves `y` in the differential equations' right sides. It does not solve implicit equations (`0 ~ q + x − v` stays algebraic). With `ModelingToolkit` loaded, tearing substitutes the alias and solves linear implicit equations. Acceptance must not depend on which is loaded, so Potts accepts only explicit, acyclic definitions and checks this itself.
+- **API (public, not exported).** `Potts.ode_system(csys::CompiledPottsSystem, scope::Symbol)`, where `scope` is `:cell` or `:model`.
+  - It returns the `ModelingToolkitBase.System` that `mtkcompile` produced from that scope's `@equations`, or `nothing` when the scope has none.
+  - The system is complete and scheduled (`isscheduled`, the mark of an `mtkcompile` result).
+  - Its unknowns are the scope's differential variables, under their declared names. Each algebraic variable is an `observed` equation, not an unknown. Each declared parameter the equations read is a parameter under its declared name.
+  - **Inputs.** Everything else the equations read is an input parameter whose name is not pinned: built-ins, other scopes' variables, gathers, folds and cross-cell reads. The equations' right sides may still name observed variables, as MTKB leaves them.
+  - **Standalone use.** A template with no inputs is an ordinary MTK system, and `ODEProblem(ode_system(c, :cell), …)` solves it.
+  - Any other scope is an `ArgumentError`. So is an uncompiled `PottsSystem` (the message names `mtkcompile`).
+  - **Which equations.** The template holds the bound model's cell and model ODEs: the model's own `@equations`, merged by `extend`. Whether the ODEs of continuous `@components` are also listed is the implementer's choice; they are already `mtkcompile`d as their own systems (D-038). Coupling equations (`comp.p ~ expr`) are never algebraic equations.
+- **DSL semantics: algebraic equations.**
+  - **Form.** `@equations` accepts `y ~ expr` when `y` is a declared cell or model variable. MTK's `mtkcompile` eliminates `y` (observed).
+  - **Storage and reads.** `y` is not a stored state: it is not in `unknowns(mtkcompile(sys).sys)`. Everywhere the model reads it bare (ODE rates, updates, energies, divisions, observed quantities, folds over cells), it reads as its definition on the current state, as MTK's observed semantics do.
+  - **Inspection.** It is readable through SII (`sol[:y]`, `getu`).
+  - **Indexed reads.** Reads at an index (`y[new]`, `y[3 − id]`) are either supported (the index applied to every variable of the definition) or an `ArgumentError` naming `y`. The implementer chooses; this is not pinned.
+  - **Rejected at `mtkcompile` (`ArgumentError`).**
+    - Implicit equations (left side not a declared variable): "algebraic".
+    - Algebraic equations for site, field or edge variables: "algebraic" and the name.
+    - A variable with both `D(y)` and `y ~ …`, two definitions of one variable, a self-reference, or a cycle: "algebraic" and the name.
+    - A write to `y` by an update, an on-copy update or a division rule: "algebraic" and the name.
+  - **Operating point.** A value for `y` in the operating point (or `remake` `u0`) is an `ArgumentError` naming `y`. Initial values of algebraic variables belong to P6.0bo.
+  - **Same with full MTK.** None of this depends on whether `ModelingToolkit` is loaded.
+- **Lowering and numerics.** Potts still lowers the simplified rates into its own `CellPhase`/`ModelPhase` (D-014, D-038; the batched kernel is unchanged).
+  - All-differential models keep byte-identical code and fingerprints (D-137 rule 7, p6_0o pins). Their results are unchanged: the P6.0x pins stay bitwise, and this file's recorded values are checked at rtol 1e-12 (D-158).
+  - A model with algebraic equations runs like its hand-substituted twin, at rtol 1e-12 (D-158: MTK's symbolic pass is upstream).
+  - Gather numbering (D-107) is unchanged. Rates keep the authored statement order, not MTK's equation order.
+- **Cost.**
+  - Warm cost: about 0.5 ms per scope per `mtkcompile` (Mac M-series and PC).
+  - Cold cost: the first MTK `System` and `mtkcompile` after `using Potts` cost ≈ 1.1 s (Mac) and 1.3 s (PC). That is more than plan §4's 0.2 s, because loading Potts invalidates MTKB's own precompiled `mtkcompile`.
+  - Models without cell or model ODEs, which includes every published model, build no template and pay nothing.
+  - The P6.0bn precompile workload adds a cell ODE with one algebraic equation to `_PrecompileModel` (or `@compile_workload`), so that the cold cost is absorbed. On the PC this brings the first `System`/`mtkcompile` to 0.011 s/0.012 s, at a cost of about +0.1 s (+2 %) on `using Potts` (5.05–5.21 s → 5.21–5.27 s). **The workload addition is a merge condition** (coordinator ruling).
+- **Gates.** The +5 % warm-MCS gate and zero warm allocations, both unaffected for published models. The paired latency check (`benchmark/p6_0o_latency.jl`) stays within +5 % on the gate models. Time to first MCS of a cell-ODE fixture is reported, not gated. Stop and ask on major MTK friction or a major slowdown (D-156).
+- **Paper wording (D-159, D-162).** True once this merges: "The continuous parts of a model, its cell- and model-scale ODEs, are ModelingToolkit systems compiled by `mtkcompile`; Potts.jl lowers the simplified equations into its batched kernels." Fields are not included. They stay Potts' `FieldStep`, unless P6.0bq adds `PDESystem` input, and even then they would not be compiled by MTK.
+- **Frozen acceptance.** `acceptance/p6_0bn_ode_mtkcompile.jl` (freeze b42755dc, sha256 `fd942b5916fc8d06aa558c3b72385225ad1fa2be748fd925917884a93e8c657d`). Red on 4b81dd79 (PC): 17 pass, 9 fail, 46 error of 72. The errors are UndefVarError `ode_system` and the old "equations are `D(x) ~ rhs`" rejection; the controls and U pins pass. A stub passes 183/183..
