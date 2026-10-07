@@ -2895,7 +2895,12 @@ session.
   - V4.5 fails: min a is 0.066, from 30 crushed interior cells out of 10⁵.
   - The negative control fails V4.4 and V4.6, as pre-registered.
   - The cause probe rules out the division axis and connectivity for V4.2 and V4.3. A remaining candidate is that the pooled band mixes TST's and Morpheus's f definitions.
-- **Not done here.** The consortium data (G) were not on disk, so there is no consortium overlay and the V4 constants were not re-checked against G. A scratch clone (never in the monorepo; spec 15 §1 row G) needs the user's approval. The O2 per-cell files are kept for the submission package (P6.15j).
+- **Not done here.** The consortium data (G) were not on disk, so there is no consortium overlay and the V4 constants were not re-checked against G. The user approved a scratch clone on the PC only (2026-10-07), `~/openvt/monolayergrowth` at 54f375f with no LFS objects; it is never in the monorepo. The O2 per-cell files are kept for the submission package (P6.15j).
+- **Review round 1 (MERGE AFTER FIXES; no blocker).**
+  - **Audit.** The V4 bands were audited from spec 15 only, not against G (D-147), so the cause wording stays provisional. Once G is available, the frozen rules are run on TST_5T, the only like-for-like f; Morpheus's f is length-scaled. This is recorded as information only.
+  - **Expected failing set.** The record tier expects exactly {V4.2, V4.3, V4.5} to fail. The FULL rerun tier asserts every row with `@test`, so `REPRO=full` is red on those three by construction.
+  - **Checks only some files.** The record tier checks only that `deviations.tsv` lists each failing row. It does not check the control rows or the "ours" column. Pinning both waits for the next re-freeze.
+  - **First freeze not entered.** The first freeze (3dc6fbc4) was not entered in frozen.toml (AUTONOMY §7.2 step 2). The file was unchanged until the re-freeze, so there was no harm.
 - **Videos.** These go in a new pre-release, `reproductions-2026-10-07-openvt-f5`: case (b) run 1 and control run 1, cells coloured by area, no outlines.
 
 ## D-169 P6.0bv: edge-scope MCS updates through `mtkcompile` (2026-10-07; coordinator, from the P6.0bv test author; follow-up of D-164)
