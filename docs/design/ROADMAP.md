@@ -348,7 +348,7 @@ Every item's acceptance also includes the standing checks:
   - Quantify it across the gate models.
   - Decide whether it is expected (the colouring order, proposal law) and document it, or whether it is a defect.
   - This matters for P6.0bj: GPU ensembles are checkerboard-only, and frozen reproductions use SequentialCPM.
-- [ ] **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
+- [x] (merge 2026-10-07, D-161) **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
   - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
   - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
   - Label every timing with its machine (spec 10 is done).
@@ -358,7 +358,7 @@ Every item's acceptance also includes the standing checks:
   - Propose the strongest claim the paper can defend, plus the work items.
   - **Stop and report** if a route needs major MTK friction or a major slowdown (D-156).
   - Output: `research/mtk-native-plan.md`. The maintainer decides.
-- [ ] **P6.0bf** (D-156) No cell outlines anywhere.
+- [x] (merge 2026-10-07, D-161) **P6.0bf** (D-156) No cell outlines anywhere.
   - Remove `boundaries = true` and `pottsboundaries` from `docs/paper_runs/*.jl` (GG, Akeeb, Merks, OpenVT), the docs tutorials, and the frozen 09 page (~line 427; re-freeze under D-156).
   - Re-render the paper-run videos and the 09 FULL video on the PC. Replace the release asset `09_cell_sorting_full-2026-10-05_replicate1.mp4`, and link it from the 09 page.
 - [ ] **P6.0bm** (D-159; plan §6) A public `hamiltonian(sys)` and a typed metadata payload describing the sweep. Small. Runs first in the chain bm → bp → bn → bo, because these items edit the same files.
@@ -541,7 +541,7 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
-- [ ] **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+- [ ] (page parts merged 2026-10-07, D-161; FULL run, 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
   - Remove the cell outlines (page lines ~179, 203, 234).
   - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
