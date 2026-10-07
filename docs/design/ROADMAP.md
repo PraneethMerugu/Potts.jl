@@ -364,7 +364,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge 2026-10-07, D-160) **P6.0bm** (D-159; plan §6) A public `hamiltonian(sys)` and a typed metadata payload describing the sweep. Small. Runs first in the chain bm → bp → bn → bo, because these items edit the same files.
 - [x] (merge 2026-10-07, D-164) **P6.0bp** (D-159, re-scoped by D-162) A public `Potts.updates(sys)` returning every update statement as written: phase (`:before_mcs`/`:after_mcs`/`:on_copy`), scope (`:cell`/`:site`/`:model`/`:edge`), cadence (`Every(n)`) and its `Equation` in MTK `Pre` form. It works on the plain, `complete`, `extend` and `mtkcompile` forms (the compiled form reads the authored model, as in D-160). Small.
   - Events as MTK callbacks move to P6.4c (D-162).
-- [ ] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
+- [x] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
 - [ ] **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; about +0.5 s cold.
   - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
 - [x] (drafts done 2026-10-07, `research/upstream-drafts/`; filing is the maintainer's) **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
@@ -373,7 +373,7 @@ Every item's acceptance also includes the standing checks:
   - an indirect-indexing comment on MTK #5078;
   - a scaling comment on #5139.
   Nobody here posts them.
-- [ ] **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small.
+- [ ] **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small–Medium (D-169: supported, `distance` and the edge environment made available to edge updates).
 - [ ] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
   - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
   - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.

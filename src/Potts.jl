@@ -60,6 +60,7 @@ include("analysis.jl")
 include("observed.jl")
 include("compose.jl")
 include("components.jl")
+include("odes.jl")
 include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""
@@ -88,6 +89,8 @@ public Dirichlet, NoFlux
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(sys, Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
+# the model's cell and model ODEs as the MTK systems `mtkcompile` produced
+public ode_system
 # the update rules as written (D-164), with their cadence value and the contact-fold term
 # they print
 public updates, Every, count_contacts

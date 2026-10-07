@@ -48,6 +48,9 @@ struct CompiledPottsSystem
     # bound one): `hamiltonian`, `drives` and the `PottsSweepSpec` payload read it (D-160);
     # never read by codegen, so never in the code or the fingerprint
     authored::PottsSystem
+    # the cell and model ODE templates as compiled by MTK (`ode_system`, odes.jl), by scope;
+    # never read by codegen
+    ode_systems::Dict{Symbol, Any}
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -169,7 +172,13 @@ Validate and analyse a Potts model (the symbolic half of compilation; code is ge
 per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
-    sys = _bind_components(authored)
+    # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
+    routed, ode_systems, origin = _compile_odes(authored)
+    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems), routed, origin)
+end
+
+# `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)
+function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
     _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
@@ -450,6 +459,7 @@ function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
                              for b in getfield(sys, :discrete)]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
+    _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
     isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
     _check_units(sys)
@@ -460,7 +470,7 @@ function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers, authored)
+        contact_trackers, authored, ode_systems)
 end
 
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
@@ -668,7 +678,7 @@ function _located(f, sys::PottsSystem, x)
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)\n  in $(_describe(x))$loc"))
+        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x))$loc"))
     end
 end
 

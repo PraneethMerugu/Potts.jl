@@ -140,3 +140,90 @@ end
     end
     @test err isa ArgumentError && occursin("brownians", err.msg)
 end
+
+# Algebraic equations in `@equations` (P6.0bn): what is accepted, the generated code and the
+# trajectories are the same whether or not full ModelingToolkit (with tearing, which solves
+# implicit linear equations itself) is loaded
+@potts_model MTKExtAlgebraic begin
+    @kinds medium A
+    @parameters begin
+        k = 0.1
+        r = 0.2
+    end
+    @variables begin
+        x(cell) = 2.0
+        xalias(cell) = 0.0
+        g(cell) = 0.0
+        m(model) = 0.0
+        gap(model) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -k * xalias + 0.001 * g
+        xalias ~ x
+        g ~ sum(volume[owner[n]] for n in Moore(1)(42)) - volume
+        D(m) ~ r * gap
+        gap ~ 1 - m
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtImplicit begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 2.0
+        q(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -0.1 * q
+        0 ~ q + x - 1.0
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtCycle begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 2.0
+        p(cell) = 0.0
+        q(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -0.1p
+        p ~ q + x
+        q ~ p - x
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "algebraic equations ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
+    σ = zeros(Int32, 12, 8)
+    σ[3:6, 3:6] .= 1
+    σ[7:10, 3:6] .= 2
+    m = MTKExtAlgebraic(; name = :alg)
+    c = mtkcompile(m)
+    names(xs) = sort!([string(Potts.SymbolicIndexingInterface.getname(x)) for x in xs])
+    cell = Potts.ode_system(c, :cell)
+    @test names(Potts.ModelingToolkitBase.unknowns(cell)) == ["x"]
+    code = canonical(Potts.generated_code(m; T = Float64).phases)
+    sol = solve(PottsProblem(m, [ownership => σ, kind => [1, 1]], (0, 4)), SequentialCPM(); saveat = 0:4)
+    println("P6BN|code|", hash(code), "|", [Tuple(u.cell.x) for u in sol.u], "|", [u.model.m[1] for u in sol.u])
+    println("P6BN|observed|", names(o.lhs for o in Potts.ModelingToolkitBase.observed(cell)), "|", sol[:xalias] == sol[:x])
+    # positive control: full ModelingToolkit's tearing solves the implicit equation that Potts
+    # rejects (so the rejection below is Potts' own); ModelingToolkitBase alone keeps it
+    @variables xi(Potts.t) = 2.0 qi(Potts.t)
+    plain = Potts.ModelingToolkitBase.mtkcompile(System([Potts.D(xi) ~ -0.1 * qi, 0 ~ qi + xi - 1.0], Potts.t; name = :plain))
+    @test ("qi" in names(Potts.ModelingToolkitBase.unknowns(plain))) == !WITH_MTK
+    for M in (MTKExtImplicit, MTKExtCycle)
+        err = try
+            mtkcompile(M(; name = :r)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("algebraic", sprint(showerror, err))
+        println("P6BN|", nameof(M), "|", typeof(err))
+    end
+end

@@ -44,6 +44,10 @@ end
 Potts compiles and runs these rules in its sweep; they are not ModelingToolkit events, so
 `ModelingToolkitBase.discrete_events(sys)` is empty.
 
+A model's cell and model ODEs are ModelingToolkit systems compiled by `mtkcompile`.
+`Potts.ode_system(csys, :cell)` and `Potts.ode_system(csys, :model)` return them from a
+compiled model `csys` (see [Equations and solvers](@ref manual-equations)).
+
 ```@autodocs
 Modules = [Potts]
 Private = false
