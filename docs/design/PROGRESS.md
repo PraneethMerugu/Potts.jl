@@ -2177,3 +2177,11 @@ The maintainer approved F-1…F-6 (D-049).
   - `GROUP=GPU POTTS_GPU=rocm`: 35261 pass, 0 fail, 6 broken (Metal-only).
   - CorePotts 23574 and Potts 7575 pass on CPU; PottsModels counts identical to base; `frozen.jl` 231.
 - **Next.** P6.0bh, the ROCm CI workflow on the self-hosted runner. Metal verification waits for P6.0bi.
+
+## 2026-10-07 — P6.0bh: the first CI workflow (D-157)
+
+- **The workflow.** `.github/workflows/ci.yml` runs on the self-hosted runner (`self-hosted, Linux, X64, rocm`), on pushes to `monorepo` and on manual dispatch only. It never runs on pull requests.
+  - Steps: workspace resolve and instantiate, `frozen.jl`, the CorePotts, Potts, PottsModels and MakiePotts suites, and `GROUP=GPU POTTS_GPU=rocm`.
+  - Every step is pinned to `taskset -c 0-11,16-27`.
+- **Safety.** The repository is public. With the maintainer's approval, fork-PR workflows now need approval for all outside contributors (`all_external_contributors`, set through the API).
+- **Runner.** It had been offline since 2026-08-23. The maintainer installs it as a service (`svc.sh`, needs sudo). Until then the first run waits in the queue.
