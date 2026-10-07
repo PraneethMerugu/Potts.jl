@@ -18,7 +18,7 @@
 #   (D-146): its shape (the 8 temperatures, ≥ 5 replicates at every save, the saves the rules
 #   read), and its `verdicts.tsv` equals the four verdicts recomputed here from
 #   `timeseries.tsv`.
-# - SMOKE (always; ≈ 1 min on 4 threads). The reduced build's 64-cell `graner_glazier_state`
+# - SMOKE (always; well under 1 min on 4 threads). The reduced build's 64-cell `graner_glazier_state`
 #   on 72², n = 4 (seed 1, replicas 1:4), T ∈ {0, 2, 5, 10, 80}. Only the size-free parts bind:
 #   T = 0 freezes (the T = 0 rule as stated); F_dl(T = 2) above F_dl(T = 5) and F_dl(T = 10) at
 #   10³ (the small aggregate levels off by 10³, so T = 5 against T = 10 is not resolved at this
@@ -70,6 +70,14 @@ end
     written = Dict(r["criterion"] => r["result"] == "PASS" for r in p61h_rows(joinpath(P61H_REC, "verdicts.tsv")))
     @test written == Dict("T = 0 frozen" => v.ok.frozen, "order at 10³" => v.ok.order,
         "T = 40 plateau" => v.ok.plateau, "T = 80 disintegration" => v.ok.disintegration)
+    # and so are its statistics, to the 4 digits written
+    ours = Dict(r["criterion"] => r["ours"] for r in p61h_rows(joinpath(P61H_REC, "verdicts.tsv")))
+    nums(str) = [parse(Float64, m[1]) for m in eachmatch(r"(?:= |\) )([0-9]+\.[0-9]+)", str)]
+    r4(x) = round(x; digits = 4)
+    @test nums(ours["T = 0 frozen"]) == [r4(v.d0)]
+    @test nums(ours["order at 10³"]) == collect(r4.(v.o))
+    @test first(nums(ours["T = 40 plateau"])) == r4(v.f40)
+    @test nums(ours["T = 80 disintegration"]) == [r4(v.g80)]
     @test isfile(joinpath(P61H_REC, "provenance.toml"))
 end
 
@@ -93,17 +101,21 @@ end
     gone(σa) = 1 - length(setdiff(unique(σa), 0)) / length(k)
     base = PottsProblem(GranerGlazier(; name = :p61h_gg), [ownership => σ, kind => k], (0, 16 * 2000); seed = 1)
     ts = [100, 500, 1000, 2000]
+    # run length per T: T = 0 and the T = 10 control to 2000 (the T = 0 rule), T = 2 and 5 to
+    # 10³ (the order), T = 80 to 500 (cell loss)
+    t_end = Dict(0.0 => 2000, 2.0 => 1000, 5.0 => 1000, 10.0 => 2000, 80.0 => 500)
+    tsT = Dict(T => filter(<=(te), ts) for (T, te) in t_end)
     F, G = Dict{Float64, Matrix{Float64}}(), Dict{Float64, Matrix{Float64}}()
     for T in (0.0, 2.0, 5.0, 10.0, 80.0)
-        q = remake(base; p = [:T => T])
+        q = remake(base; p = [:T => T], tspan = (0, 16 * t_end[T]))
         ens = solve(EnsembleProblem(q), SequentialCPM(; proposal = Moore(1)), EnsembleThreads();
-            trajectories = 4, saveat = 16 .* ts)
-        raw = [ownership(sol.u[findfirst(==(16t), sol.t)]) for sol in ens.u, t in ts]
+            trajectories = 4, saveat = 16 .* tsT[T])
+        raw = [ownership(sol.u[findfirst(==(16t), sol.t)]) for sol in ens.u, t in tsT[T]]
         F[T] = hetero.(anneal.(raw, Ref(q)))
         G[T] = gone.(raw)
     end
-    mF(T, t) = mean(F[T][:, findfirst(==(t), ts)])
-    mG(T, t) = mean(G[T][:, findfirst(==(t), ts)])
+    mF(T, t) = mean(F[T][:, findfirst(==(t), tsT[T])])
+    mG(T, t) = mean(G[T][:, findfirst(==(t), tsT[T])])
     @test abs(mF(0.0, 2000) - mF(0.0, 100)) < 0.02                  # T = 0 freezes
     @test abs(mF(10.0, 2000) - mF(10.0, 100)) > 0.02                 # control: T = 10 does not
     @test mF(2.0, 1000) > mF(5.0, 1000) && mF(2.0, 1000) > mF(10.0, 1000)

@@ -53,7 +53,11 @@ Paper (PRE Fig. 15 and p.2144; spec §9.1, read at 110 dpi):
 ## Reading
 
 - **Three rows pass.** T = 0 is frozen (the T = 0 rule with ties at ½ does not move a relaxed aggregate). The order at 10³ holds with wide margins, and T = 2 matches the paper's ≈ 0.3.
-- **The T = 40 bar is weak.** Our T = 40 curve does not level off: it falls from 0.162 at 10³ to 0.098 at 10⁴. It passes the 0.07 bar, but T = 10 passes that bar too (its minimum over [10³, 10⁴] is 0.072 at 10⁴). The pre-registered row therefore does not tell T = 40 from T = 10 in our model. That is a lesson for future specs, not an amendment.
+- **T = 40 passes its bar but does not match the paper's picture.**
+  - The paper forms the light monolayer by ≈ 50 and plateaus at heterotypic ≈ 0.1.
+  - Our curve does not level off: it falls from 0.162 at 10³ to 0.098 at 10⁴.
+  - Our monolayer is late: dark–medium is still 0.011 at 50 and first falls below 0.003 at 500.
+  - The bar is also weak. T = 10 passes it too (its minimum over [10³, 10⁴] is 0.072 at 10⁴), so the pre-registered row cannot tell T = 40 from T = 10 in our model. That is a lesson for future specs, not an amendment.
 - **T = 80 fails.**
   - At 500, 7.6% of cells are gone, against the target of more than half. The paper has all cells gone by ≈ 100.
   - Every lost cell is light: by 10⁴ all 500 light cells are gone and every dark cell survives (gone = 0.499).
@@ -70,14 +74,18 @@ These runs were added after the T = 80 failure. They use 5 of the same paired re
 | 160 | 0.325 | 0.495 | 0.610 | 0.256 | 0.092 | 0.000 |
 | 240 | 0.565 | 0.749 | 0.976 | 0.140 | 0.003 | 0.000 |
 
-The paper's T = 80 behaviour (all cells gone, F_dl → 0 by ≈ 100) needs our T ≈ 160–240, a factor of about 2–3. The direction matches P6.1g, where T ≥ 14 brought our late coarsening closer to the paper's.
+These runs are kept as data. They are **not** a temperature scale: a uniform factor on T is ruled out, because the contact-driven sorting matches at T = 2–20 (T = 2 gives 0.321 at 3200 against the paper's ≈ 0.3; T = 10 matches V-PRE1 to 10³, and P6.1g agrees).
 
-The mechanism is not identified. The energy (PRE Eq. (2)), the Moore(1) bond set counted once, and the Metropolis rule (Eq. (3)) are as the page states them. Three things would hide a factor of 2–3:
-- a factor in k;
-- each bond counted from both sides in the paper's H, which would make the paper's effective T lower, the wrong direction;
-- a different ΔH convention.
+**Suspected cause (review of 2026-10-07).** Our cells disappear too slowly, and this holds against λ as well as against T:
+- At T = 5 and λ = 0.1 the paper loses all cells by ≈ 800 (Fig. 16), while we keep most of the dark cells at 10³.
+- At λ = 0.5 the paper loses a few light cells, and we lose none.
+- Halving λ at T = 80 reproduces Fig. 15 better than doubling T.
 
-The page records this as a deviations row, with a question proposed for the open question list. No target changed.
+The contact energy (PRE Eq. (2)), the Moore(1) bond set counted once, the copy rule and the Metropolis rule (Eq. (3)) match the papers as stated. That points at an unstated convention for how the area ΔH is charged at a copy, or a rule for a cell's last site.
+
+The same deviation is expected in V-PRE8 (λ = 0.1), which is not yet on the page. The page records this as a deviations row and proposes the question "How was the area ΔH charged at a copy, and was there any rule for a cell's last site?" for the open question list (not asked). No target changed.
+
+"Gone" is counted on the raw state; the review checked that the annealed copies give identical counts at T = 40, 80 and 160.
 
 ## Files
 
@@ -88,6 +96,7 @@ The page records this as a deviations row, with a question proposed for the open
 | `verdicts.tsv` | the four criteria (written by `scripts/collect.jl`; the page and the test recompute them from `timeseries.tsv`) |
 | `diagnostic_timeseries.tsv` | the post-hoc T = 120, 160, 240 runs, same columns, to 10³ |
 | `provenance.toml` | commits, machine, scope and pinning, wall times, seeds, the rerun note |
+| `render_provenance.toml` | the video render's sidecar |
 | `scripts/` | `replicate.jl`, `run_all.sh`, `jobs.txt`, `jobs_diag.txt`, `collect.jl`, `render_video.jl` |
 
-**Video.** `scripts/render_video.jl` re-solves replicate 1 (seeds 3001 / 13001) at the eight temperatures with 100 log-spaced frames. It draws them as a 2 × 4 grid with no cell outlines, and checks every frame that is also a recorded save against `timeseries.tsv`. The video and stills are kept locally and are not committed; hosting is the coordinator's step (D-161: a new dated pre-release).
+**Video.** [`09_cell_sorting_vpre7-2026-10-07_temperatures.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-vpre7/09_cell_sorting_vpre7-2026-10-07_temperatures.mp4) (release `reproductions-2026-10-07-vpre7`). `scripts/render_video.jl` re-solves replicate 1 (seeds 3001 / 13001) at the eight temperatures with 100 log-spaced frames. It draws them as a 2 × 4 grid with no cell outlines, and checks every frame that is also a recorded save against `timeseries.tsv`. `render_provenance.toml` records the render (commit af41d251, PC, 8 threads; the trajectory check passed at all 16 shared saves). The stills are not committed.

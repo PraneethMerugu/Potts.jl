@@ -5,6 +5,7 @@ commit = "a5a6419b"                 # feat/p6-1h on ce85fed4 (monorepo); model a
 model_commit = "ce85fed4"
 script_commits = ["a5a6419b", "62058ced", "af41d251"]   # see [execution].notes
 env = "--project=docs (workspace Manifest of ~/potts-ci/p6-0bg, instantiated)"
+manifest_sha256 = "0892219151f1038d860c70fe4234a04c548cf67817b6f40fe9e461d6a3e5764b"   # the gitignored workspace Manifest.toml used on the PC (identical to ~/potts-ci/p6-0bg/Manifest.toml)
 julia = "1.12.6"
 dirty = false
 
