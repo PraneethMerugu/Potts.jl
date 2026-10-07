@@ -46,6 +46,12 @@ for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEn
     ax = Axis(fig[1, i]; aspect = DataAspect())
     hidedecorations!(ax)
     pottsplot!(ax, frame; encoding = enc)
+    if enc isa ChannelEncoding       # show the cells over the field as a translucent fill, not outlines
+        nx, ny = frame_size(frame)
+        ox, oy = frame_geometry(frame).origin
+        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.σ)];
+            colormap = [(:white, 0.35), (:white, 0.35)], colorrange = (0, 1), nan_color = :transparent)
+    end
 end
 fig
 ```

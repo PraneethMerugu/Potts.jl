@@ -123,31 +123,31 @@ nothing #hide
 # One row per parked or provisional target and per difference from the paper or the
 # released code (D-154). The columns are our value, the paper's value (with the released
 # code's where it differs), the suspected cause and the status of the question to the
-# authors: "not an author question", "not asked" (the question is on the PI sheet, from
-# model-specs README §5 and §6 below; Dr Jiang, a co-author, answers or sends it, D-155),
-# "asked on ⟨date⟩" or "answered → ⟨D-entry⟩". Source keys: S = the authors' Python
-# steppables, X = their CC3D XML (spec 10 §1).
+# authors: "not an author question", "not asked" (the question is on our open question
+# list, spec 10 §7 and model-specs README §5; §6 below), "asked on ⟨date⟩" or
+# "answered → ⟨D-entry⟩". Source keys: S = the authors' Python steppables, X = their CC3D
+# XML (spec 10 §1).
 
-aq(id) = "not asked (PI sheet item $id; README §5, Jiang item 11)"
+aq(q) = "not asked (on our open question list: spec 10 §7 $q; README §5)"
 Markdown.parse("""
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-A6 phenotype fractions (**PARKED**) | not run | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | which classifier produced Fig. 5 and S1 Table is not stated (spec 10 §5.3.5) | $(aq("V-A6 / 10-q1")) |
-| V-A8 (paper) cluster composition (**PARKED**) | not run; V-A8 binds on the released `cluster_data.csv` instead | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("V-A8 / 10-q8")) |
-| V-A9 leader speed (**PARKED**) | not run | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("V-A9 / 10-q6")) |
-| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("10-q2")) |
+| V-A6 phenotype fractions (**PARKED**) | not run | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | un-parking pending P6.2d (D-156, area-equality classifier); the paper does not say which classifier produced Fig. 5 and S1 Table (spec 10 §5.3.5) | $(aq("q1")) |
+| V-A8 (paper) cluster composition (**PARKED**) | not run; V-A8 binds on the released `cluster_data.csv` instead | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |
+| V-A9 leader speed (**PARKED**) | not run | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |
+| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("q2")) |
 | Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (D-050 A1) | 25 % of the followers "reassigned" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |
-| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty "ghost" leader in the inventory, S:68–75) | emulates the released code (D-068; spec 10 §5.3.6) | $(aq("10-q7 / MD-1")) |
+| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty "ghost" leader in the inventory, S:68–75) | emulates the released code (D-068; spec 10 §5.3.6) | $(aq("q7")) |
 | Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | one U(25, 125) draw per cycle (p.6) | the paper's numbers come from the code (D-050 A2) | not an author question |
 | Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |
 | Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |
 | Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |
-| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("10-q5")) (adjacency) |
+| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |
 | Main-tumour seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |
-| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question (answered by data) |
+| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |
 | μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (D-050 A5, D-142) | not an author question |
 | RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in §5 (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only (D-029) | not an author question |
-| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 (X:1) | which release produced the runs (spec 10 §7) | $(aq("10-q3")) (repository and commit) |
+| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 (X:1) | which release produced the runs (spec 10 §7) | $(aq("q3")) |
 """)
 
 # ## 4. Build and run

@@ -226,14 +226,26 @@ nothing # hide
 ```
 
 To show the field, attach it to each frame as a **channel** and colour the frame by that
-channel:
+channel. The cells are drawn on top as a translucent fill (cells are never outlined in
+these docs), with an ordinary Makie `heatmap!` over the same axis:
 
 ```@example chemo
 key = SiteChannelKey(:c, Float64)
 frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, u.site.c; label = "c"),))
           for (u, t) in zip(sol.u, sol.t)]
-record_potts("chemotaxis_aggregation.mp4", frames; framerate = 12, encoding = ChannelEncoding(key),
-    title = "", figure = (; size = (420, 420)))
+cellfill(u) = [c != 0 ? 1.0 : NaN for c in Array(u.σ)]      # cell sites; NaN is transparent
+nx, ny = frame_size(frames[1])
+ox, oy = frame_geometry(frames[1]).origin
+k = Observable(1)
+fig = Figure(size = (420, 420))
+ax = Axis(fig[1, 1]; aspect = DataAspect())
+hidedecorations!(ax)
+pottsplot!(ax, @lift(frames[$k]); encoding = ChannelEncoding(key))
+heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), @lift(cellfill(sol.u[$k])); colormap = [(:white, 0.35), (:white, 0.35)],
+    colorrange = (0, 1), nan_color = :transparent)
+record(fig, "chemotaxis_aggregation.mp4", eachindex(frames); framerate = 12) do i
+    k[] = i
+end
 nothing # hide
 ```
 

@@ -1,14 +1,17 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
 caption = "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is still 30)."
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 date = "2026-10-07T10:33:11.658"
 deviations = "μ = 24 passed explicitly (constructor default 30; D-050 A5 sets 24, not yet in code). Dynamics seed differs from the authors' unseeded CC3D run."
 framerate = 24
 frames = 235
 git_commit = "169ac06f6"
+hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "akeeb_state(; lattice = (500, 300), pp = 0.5) (default layout seed 0x5cd2609, seeding = :authors)"
 julia = "1.12.6"
 lattice = [500, 300]
+machine = "x86_64-linux-gnu"
 model = "AkeebInvasion"
 notes = "Hollow red rings inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings."
 paper = "Akeeb, Marcus & Jiang, PLoS Comput. Biol. (2026), Fig. 4 bottom row, S2 Video (D); authors' Sample/Multimodal_invasion (2, 24, 0.5)"

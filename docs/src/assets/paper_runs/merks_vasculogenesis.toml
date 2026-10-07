@@ -1,15 +1,18 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
 caption = "Paper run — Merks et al. (2006) vasculogenesis, the paper's 2006 parameter set: 282 cells on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1. Remaining differences: a hard connectivity veto instead of the E₀ penalty; free closed walls instead of a frozen border with J_cB = 100; a zero-flux field boundary instead of an absorbing c = 0 ring; 10×10 initial cells (unstated in the paper)."
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 date = "2026-10-07T10:41:18.464"
 deviations = "Hard one-arc connectivity veto (paper: E₀ > 2000 penalty); free closed walls (paper: frozen border, J_cB = 100); zero-flux field boundary (authors' code: absorbing c = 0 ring); initial cells 10×10 squares (paper unstated); L = 50 px from the paper text (longcells.par: 60)."
 field_solver = "ExplicitEuler(substeps = 15, lower = 0.0)"
 framerate = 24
 frames = 241
 git_commit = "169ac06f6"
+hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "merks_state(; seed = 1, side = 10): 282 square 10×10 cells in the central 333×333 of 500×500"
 julia = "1.12.6"
 lattice = [500, 500]
+machine = "x86_64-linux-gnu"
 model = "MerksVasculogenesis"
 paper = "Merks et al., Dev. Biol. 289, 44 (2006), Figs. 4-5"
 parameters = "V₀ = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, Dc = 0.75, σc = δc = 5.4e-3, J = [0 20; 20 40], contact_inhibited = false"

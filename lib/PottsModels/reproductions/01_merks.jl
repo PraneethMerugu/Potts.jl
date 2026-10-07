@@ -107,9 +107,13 @@ Markdown.parse("""
 # excluded: (500 − 2)² = 248 004 attempts on the 2006 lattice (1-site frame) and
 # (202 − 4)² = 39 204 on the 2008 one (2-site frame). That is exactly TST's
 # (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices, so the
-# attempt count is not a deviation (D-153 review correction). Every "MCS" on this page
-# counts from the start of the run, so the 2008 times include the 100 relaxation MCS (TST's
-# loop counter, spec 01 §8 A-19).
+# attempt count is not a deviation (D-153 review correction).
+#
+# **Clocks (D-156).** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
+# use the time from the end of relaxation as their primary axis; the code's MCS counter
+# (TST's loop counter) is that time + 100, noted on each axis. The pass/fail rows bind on
+# the code counter, as frozen (D-153; spec 01 §8 A-19), and the full run also reports them
+# at the end-of-relaxation reading.
 #
 # ## 3. Deviations
 #
@@ -147,33 +151,32 @@ nothing #hide
 # the released files (D-154; the rows of D-153's review). The columns are our value, the
 # paper's value (with the released files' where they differ), the suspected cause and the
 # status of the question to the authors: "not an author question", "not asked" (the
-# question is on the PI sheet, from model-specs README §5; Dr Jiang sends the letters,
-# D-155), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩". Provisional defaults ship labelled
-# (D-155).
+# question is on our open question list, model-specs README §5 and §6 below), "asked on
+# ⟨date⟩" or "answered → ⟨D-entry⟩". Provisional defaults ship labelled (D-155).
 
-aq(id) = "not asked (PI sheet item $id; README §5, Merks)"
+aq(item) = "not asked (on our open question list: README §5, Merks item $item; §6 below)"
 Markdown.parse("""
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-C3 low plateau (FULL; at risk) | pending the FULL run; an early FULL signal read 0.39–0.43 at 5000 MCS (D-153) | 0.35 ± 0.07 (01b Fig. 5) | not known; the FULL run decides | not an author question yet |
-| 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labelled file | the text and the files conflict (D-050 M2) | $(aq("M2, M3 / A-1, A-15")) |
-| 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; D-050 M3, D-140) | $(aq("M2, M3 / A-1, A-15")) |
-| 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (D-050 M11; spec A-15) | $(aq("M2, M3 / A-1, A-15")) |
-| V-E5/V-E6 classification time (provisional) | 48 h (5760 MCS), the last Fig. 4 time | unstated (01a Figs. 6–7) | unstated (D-153 ruling 3; D-155) | $(aq("D-153-48h")) |
-| 2008 time origin | TST's loop counter, which includes the 100 relaxation MCS; every 2008 value also reported at N + 100 | — (relaxation not mentioned; Dataset S1 `relaxation = 100`) | unstated whether figure times include the relaxation (spec A-19; D-050 M6) | $(aq("M6 / A-19")) |
-| 01b Fig. 2 set-up | the paper's: `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`; the files' as `merks2008_denovo()` | 1000 cells over 333² in a ~500² lattice; files: 360 seeds × 10 Eden rounds on 200² | the enclosing lattice is printed ambiguously (D-050 M10; spec A-9) | $(aq("M10 / A-9")) |
+| V-C3 low plateau (FULL; at risk) | $(FULL ? "computed in this run: the V-C3 plateau rows of the §5 pass/fail table" : "pending the FULL run; D-153 signal 0.39–0.43 at 5000 MCS, not a committed record") | 0.35 ± 0.07 (01b Fig. 5) | not known; the FULL run decides | not an author question |
+| 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labelled file | the text and the files conflict (D-050 M2) | $(aq(1)) |
+| 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; D-050 M3, D-140) | $(aq(1)) |
+| 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (D-050 M11; spec A-15) | $(aq(1)) |
+| V-E5/V-E6 classification time (provisional) | 48 h (5760 MCS), the last Fig. 4 time | unstated (01a Figs. 6–7) | unstated (D-153 ruling 3; D-155) | not asked (on our open question list: §6 below) |
+| 2008 time origin | TST's loop counter, which includes the 100 relaxation MCS; every 2008 value also reported at N + 100 | — (relaxation not mentioned; Dataset S1 `relaxation = 100`) | unstated whether figure times include the relaxation (spec A-19; D-050 M6) | $(aq(2)) |
+| 01b Fig. 2 set-up | the paper's: `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`; the files' as `merks2008_denovo()` | 1000 cells over 333² in a ~500² lattice; files: 360 seeds × 10 Eden rounds on 200² | the enclosing lattice is printed ambiguously (D-050 M10; spec A-9) | $(aq(5)) |
 | Field scheme | unsplit explicit Euler, 15 substeps, before the sweep | "finite-difference", 15 steps of 2 s; files: FTCS 5-point, split secretion/decay then diffusion, before the sweep | one MCS differs from the split scheme by $(round(100 * split_rel; digits = 2)) % of max c on a developed sprout, within the scheme's own first-order error (D-050 M5) | not an author question |
 | ΔH arithmetic | Float | real; files: integer, each term truncated | performance over exactness (D-050 M9, D-029) | not an author question |
-| χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq("A-20")) |
+| χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labelled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
 | Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
 | Copy proposal | random source, random target among its neighbours | source among the neighbours of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
-| Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq("A-14, A-18")) |
-| PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq("A-14, A-18")) |
-| PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not on the sheet) |
-| PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not on the sheet) |
-| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq("A-20")) |
+| Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
+| PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
+| PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not yet on our open question list) |
+| PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not yet on our open question list) |
+| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq(4)) |
 """)
 
 # ## 4. Build and run
@@ -209,7 +212,10 @@ record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(l
 function record_field(file, sol; title, figsize, every = 1)
     frames = renderframes(sol, RenderRequest())
     field(i) = Float64.(Array(sol.u[i].site.c))
-    cells(i) = [σ >= 2 ? 1.0 : NaN for σ in Array(sol.u[i].σ)]     # endothelial sites; NaN is transparent
+    ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
+    frame_kind = sol.u[1].cell.kind[Array(sol.u[1].σ)[1, 1]]         # the corner site is the frozen frame
+    cells(i) = (σ = Array(sol.u[i].σ); kd = sol.u[i].cell.kind;
+                [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ])
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin
     cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1e-12)
@@ -246,7 +252,9 @@ prob_eo = PottsProblem(Merks2008(; name = :m8, mode = :extension_only), op08, (0
 t_ci = @elapsed sol_ci = solve(prob_ci, SequentialCPM(); saveat = 0:20:t08)
 sol_noci = solve(prob_noci, SequentialCPM(); saveat = 0:20:t08)
 sol_eo = solve(prob_eo, SequentialCPM(); saveat = 0:20:t08)
-Markdown.parse("One sprout run, 202 × 202, $t08 MCS: **$(round(t_ci; digits = 1)) s** on $MACHINE.")
+const T_RELAX = Int(v8(:t_relax))
+Markdown.parse("One sprout run, 202 × 202, $t08 code MCS ($(t08 - T_RELAX) MCS after relaxation): " *
+               "**$(round(t_ci; digits = 1)) s** on $MACHINE.")
 
 #-
 for (file, sol, title) in (("01_merks_2008_ci.mp4", sol_ci, "contact-inhibited (χcc = 0)"),
@@ -332,13 +340,15 @@ isnetwork(r) = r.share >= 0.9 && r.lacunae >= 3
 nothing #hide
 
 # Compactness of the three sprouts over time (01b Fig. 12 shows the same three regimes for
-# 256 cells; our reduced build stops at 1000 MCS):
+# 256 cells; our reduced build stops at 1000 code MCS). The axis is the time from the end of
+# relaxation; the relaxation itself is drawn at negative times:
 
 fig = Figure(; size = (640, 360))
-ax = Axis(fig[1, 1]; xlabel = "MCS (incl. 100 relaxation)", ylabel = "compactness C")
+ax = Axis(fig[1, 1]; xlabel = "MCS after relaxation (code MCS = this + $T_RELAX)", ylabel = "compactness C")
+vlines!(ax, [0]; color = :gray70, linestyle = :dash)
 for (sol, lab, col) in ((sol_ci, "contact-inhibited", :red3), (sol_noci, "no contact inhibition", :black),
                         (sol_eo, "extension only", :steelblue))
-    lines!(ax, sol.t, compactness.(σs(sol)); label = lab, color = col)
+    lines!(ax, sol.t .- T_RELAX, compactness.(σs(sol)); label = lab, color = col)
 end
 axislegend(ax; position = :lb)
 fig

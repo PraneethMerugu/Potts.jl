@@ -5,8 +5,9 @@
 # `GranerGlazier` defaults, problem seed 1, `SequentialCPM(; proposal = Moore(1))`, to 2×10⁴
 # paper MCS (16 MCS each). The solve, the saves and the video call are the page's video cell
 # (`09_cell_sorting.jl`, §5 "Replicate 1 as a video") in its FULL form, without
-# `boundaries = true`. The trajectory check: the annealed bond counts of the end state are
-# compared with replicate 1 of `timeseries.tsv` at 20 000 (the page's own `bond_counts` and
+# `boundaries = true`. The trajectory check: at every recorded save of `timeseries.tsv` that
+# is also a video frame (2×10⁴ among them), the annealed bond fractions and the total
+# mismatched-bond count are compared with replicate 1 (the page's own `bond_counts` and
 # `annealed`, copied verbatim). Stills: the frame nearest 10, 10², 10³, 10⁴ and 2×10⁴ paper MCS.
 #
 #     julia --project=docs lib/PottsModels/reproductions/data/09/full-2026-10-05/render_video.jl <outdir>
@@ -24,7 +25,8 @@ ts = Int.(meta["saves_paper_mcs"])
 @assert meta["page_seed"] == SEED && meta["margin"] == MARGIN && meta["paper_mcs_per_mcs"] == PAPER_MCS
 started = now()
 
-σ0, k0 = graner_glazier_aggregate(1000; seed = meta["start_seeds"][1], margin = MARGIN)
+const START_SEED = meta["start_seeds"][1]
+σ0, k0 = graner_glazier_aggregate(1000; seed = START_SEED, margin = MARGIN)
 gg = GranerGlazier(; name = :gg, lattice = size(σ0))
 prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = SEED)
 alg = SequentialCPM(; proposal = Moore(1))
@@ -58,17 +60,24 @@ function annealed(σ, k, run; seed = 1)
             :V₀ => getp(run, :V₀)(run), :T => 0.0], (0, 2PAPER_MCS); seed)
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
 end
-b = bond_counts(annealed(ownership(video.u[end]), k0, prob), k0)
-total = sum(values(b))
 rows = split.(readlines(joinpath(HERE, "timeseries.tsv")), '\t')
 hdr = rows[1]
-want = Dict(zip(hdr, only(r for r in rows[2:end] if r[1] == "1" && r[2] == string(last(ts)))))
-check = Dict{String, Tuple{Float64, Float64}}("mismatched_bonds" => (total, parse(Float64, want["mismatched_bonds"])))
-for (key, col) in ((:dl, "F_dl"), (:dd, "F_dd"), (:ll, "F_ll"), (:dM, "F_dM"), (:lM, "F_lM"))
-    check[col] = (b[key] / total, parse(Float64, want[col]))
+recorded(t) = Dict(zip(hdr, only(r for r in rows[2:end] if r[1] == "1" && r[2] == string(t))))
+checked_t = [t for t in ts if PAPER_MCS * t in video.t]
+@assert last(ts) in checked_t
+check = Dict{Int, Dict{String, Tuple{Float64, Float64}}}()
+for t in checked_t
+    b = bond_counts(annealed(ownership(video.u[findfirst(==(PAPER_MCS * t), video.t)]), k0, prob), k0)
+    total = sum(values(b))
+    want = recorded(t)
+    c = Dict{String, Tuple{Float64, Float64}}("mismatched_bonds" => (total, parse(Float64, want["mismatched_bonds"])))
+    for (key, col) in ((:dl, "F_dl"), (:dd, "F_dd"), (:ll, "F_ll"), (:dM, "F_dM"), (:lM, "F_lM"))
+        c[col] = (b[key] / total, parse(Float64, want[col]))
+    end
+    check[t] = c
 end
-same = all(((ours, rec),) -> isapprox(ours, rec; rtol = 1e-9, atol = 1e-12), values(check))
-@info "trajectory check at $(last(ts)) paper MCS" same check
+same = all(c -> all(((ours, rec),) -> isapprox(ours, rec; rtol = 1e-9, atol = 1e-12), values(c)), values(check))
+@info "trajectory check at paper MCS $(checked_t)" same
 
 ## stills
 stills = String[]
@@ -94,12 +103,13 @@ open(joinpath(OUT, "render_provenance.toml"), "w") do io
         "commit" => git("rev-parse", "HEAD"), "dirty" => !isempty(git("status", "--porcelain", "--", "lib", "src")),
         "julia" => string(VERSION), "machine" => Sys.MACHINE, "cpu" => Sys.cpu_info()[1].model, "hostname" => gethostname(),
         "threads" => Threads.nthreads(), "backend" => "CPU", "algorithm" => string(alg),
-        "start" => "graner_glazier_aggregate(1000; seed = 1, margin = $MARGIN)", "problem_seed" => SEED,
+        "start" => "graner_glazier_aggregate(1000; seed = $START_SEED, margin = $MARGIN)", "problem_seed" => SEED,
         "replica" => Int(q1.replica), "frames" => length(video.u), "framerate" => 12,
         "video" => basename(file), "video_mb" => round(filesize(file) / 2^20; digits = 2), "stills" => stills,
         "solve_wall_s" => round(wall; digits = 1), "record_wall_s" => round(rec; digits = 1),
         "started" => string(started), "finished" => string(now()),
-        "trajectory_check" => Dict("paper_mcs" => last(ts), "matches_timeseries_tsv" => same,
-            "ours" => Dict(k => v[1] for (k, v) in check), "recorded" => Dict(k => v[2] for (k, v) in check))); sorted = true)
+        "trajectory_check" => Dict("paper_mcs" => checked_t, "matches_timeseries_tsv" => same,
+            "saves" => Dict(string(t) => Dict("ours" => Dict(k => v[1] for (k, v) in c),
+                "recorded" => Dict(k => v[2] for (k, v) in c)) for (t, c) in check))); sorted = true)
 end
 @info "done" file same wall rec

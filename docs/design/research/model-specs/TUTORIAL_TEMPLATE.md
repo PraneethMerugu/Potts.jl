@@ -90,8 +90,10 @@ Rules:
 - **Suspected cause** says why we differ: a convention, a provisional default (D-155), an
   unstated value, a paper-internal conflict, or, for a failed target, the candidate causes
   tested and excluded.
-- **Author question** is one of: "not an author question"; "not asked" with its PI-sheet
-  item (Dr Jiang sends the letters, D-155); "asked on ⟨date⟩"; "answered → ⟨D-entry⟩".
+- **Author question** is one of: "not an author question"; "not asked (on our open question
+  list, README §5)" with the item number; "asked on ⟨date⟩"; "answered → ⟨D-entry⟩". Pages
+  are public: they cite README §5 and the page's §6, never the internal PI sheet (Dr Jiang
+  sends the letters, D-155).
 - Failed targets come first. The main text of the paper names only the rows that matter.
 - Performance-over-exactness choices (D-029) are rows too, for example Float vs integer ΔH
   or checkerboard vs sequential. Each one names the statistical test that shows it is
@@ -186,7 +188,7 @@ using Potts, PottsModels
 #
 # | Item | Ours | Paper | Suspected cause | Author question |
 # |---|---|---|---|---|
-# | ⟨failed target⟩ (**FAIL**) | ⟨mean ± SE, n⟩ | ⟨value, figure⟩ | ⟨candidates tested and excluded⟩ | not asked (PI sheet ⟨item⟩) |
+# | ⟨failed target⟩ (**FAIL**) | ⟨mean ± SE, n⟩ | ⟨value, figure⟩ | ⟨candidates tested and excluded⟩ | not asked (on our open question list, README §5 ⟨item⟩) |
 # | Initial state | PRE 1993 §II D3 recipe | "square aggregate … (A=40)", 400 MCS relax (p.2015) | — | not an author question |
 # | T = 0 annealing | measured on a copy | "two T=0 annealing steps" | none: matches PRE p.2134 (spec A-GG4) | not an author question |
 # | ⟨…⟩ | | | | |
