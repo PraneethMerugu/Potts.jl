@@ -44,7 +44,7 @@ frame = renderframe(solution;
 
 encoded = encode(frame, ChannelEncoding(activity_key))
 figure, axis, plot = CairoMakie.plot(
-    frame; encoding=ChannelEncoding(activity_key), boundaries=true,
+    frame; encoding=ChannelEncoding(activity_key),
 )
 size(encoded.values) == size(saved.ownership) && plot isa PottsPlot
 ```

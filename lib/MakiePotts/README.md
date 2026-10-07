@@ -12,7 +12,7 @@ using CairoMakie
 
 owners = fill(RenderOwner(MediumSite, 1), 3, 2)
 frame = PottsRenderFrame(0, owners, RenderCellMetadata[])
-fig, axis, plot = plot(frame; boundaries = true)
+fig, axis, plot = plot(frame)
 potts_legend(fig[1, 2], plot)
 ```
 

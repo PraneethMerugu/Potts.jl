@@ -31,8 +31,7 @@ frame = PottsRenderFrame(0, owners, cells;
 
 figure, axis, plot = plot(frame;
     axis = (; title = "Native MakiePotts recipe",
-        xlabel = "x (μm)", ylabel = "y (μm)"),
-    boundaries = true)
+        xlabel = "x (μm)", ylabel = "y (μm)"))
 potts_legend(figure[1, 2], plot)
 
 # Ordinary Makie composition remains available on the returned axis.

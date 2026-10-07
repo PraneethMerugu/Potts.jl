@@ -103,11 +103,13 @@ Markdown.parse("""
 """)
 
 # **Units.** One site is 2 µm × 2 µm; one MCS is 30 s (01a p.50; 01b p.11), the 15 field
-# substeps of 2 s. One of our MCS is N copy attempts, N the number of lattice sites
-# including the frozen frame (frame picks are rejected and count); TST makes
-# (sizex − 2)(sizey − 2) attempts (ca.cpp:385), about 1.6 % (2006) and 4 % (2008) fewer —
-# a deviations-table row. Every "MCS" on this page counts from the start of the run, so
-# the 2008 times include the 100 relaxation MCS (TST's loop counter, spec 01 §8 A-19).
+# substeps of 2 s. One of our MCS is one copy attempt per mobile site, the frozen frame
+# excluded: (500 − 2)² = 248 004 attempts on the 2006 lattice (1-site frame) and
+# (202 − 4)² = 39 204 on the 2008 one (2-site frame). That is exactly TST's
+# (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices, so the
+# attempt count is not a deviation (D-153 review correction). Every "MCS" on this page
+# counts from the start of the run, so the 2008 times include the 100 relaxation MCS (TST's
+# loop counter, spec 01 §8 A-19).
 #
 # ## 3. Deviations
 #
@@ -141,23 +143,37 @@ split_rel = maximum(abs, field_mcs(dev_c, dev_σ, dev_p; split = true) .- field_
             maximum(dev_c)
 nothing #hide
 
+# One row per failed, parked or provisional target and per difference from the papers or
+# the released files (D-154; the rows of D-153's review). The columns are our value, the
+# paper's value (with the released files' where they differ), the suspected cause and the
+# status of the question to the authors: "not an author question", "not asked" (the
+# question is on the PI sheet, from model-specs README §5; Dr Jiang sends the letters,
+# D-155), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩". Provisional defaults ship labelled
+# (D-155).
+
+aq(id) = "not asked (PI sheet item $id; README §5, Merks)"
 Markdown.parse("""
-| Item | Paper | Released code | Our default | Variant keyword | Reason |
-|---|---|---|---|---|---|
-| Parameter sets | two papers, two sets (spec A-17) | `longcells.par` (2006-labelled), Dataset S1 (2008) | `Merks2006`, `Merks2008`, no shared values | keywords on either | D-050 M1 |
-| 2006 target length L | "about 100 µm" = 50 px (01a p.50) | 60 px in every 2006-labelled file | 50 | `Merks2006(; L = 60.0)` | D-050 M2; author question 1 |
-| 2006 connectivity | soft, "E0 > 2000" (01a p.49) | `conn_diss` 5000 (`longcells.par`) / 2000 (`default.par`), threshold shift | E₀ = 5000 drive (≡ the threshold shift under Metropolis) | `E₀ = 2000`; `rule = :hard` | D-050 M3, D-140 |
-| 2006 seeding | 282 cells over 333² of 500²; shape unstated | 100 point seeds × 10 Eden rounds on 200² | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087) | any layout | D-050 M11 (blocks allowed for 2006); A-15 open |
-| 2008 seeding | "rounded clusters" (01b p.5) | one Eden blob, 50 rounds, 7 divisions → 128 cells | the same, `merks2008_sprout` (`Eden`, `Splits`) | `divisions = 8` (256 cells) | D-050 M11, D-141 |
-| 01b Fig. 2 set-up | 1000 cells over 333² in a ~500² lattice | 360 seeds × 10 Eden rounds on 200² | the paper's, `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))` | the files' (`merks2008_denovo()`) | D-050 M10; A-9 |
-| Border | frozen pixels, J(c,B) = 100 | 1-px frame; the 20-site stencil reads the off-lattice ring as border | 1-site frame (2006); 2-site frame on 202² (2008) | — | D-050 M4; P6.3e |
-| Attempts per MCS | N sites | interior sites only | all sites, frame picks rejected (1.6 % / 4 % more attempts) | — | engine convention (one attempt per site) |
-| Field scheme | "finite-difference", 15 steps of 2 s | FTCS 5-point, split secretion/decay then diffusion, before the sweep | unsplit explicit Euler, 15 substeps, before the sweep; one MCS differs from the split scheme by $(round(100 * split_rel; digits = 2)) % of max c on a developed sprout | — | D-050 M5; a first-order difference within the scheme's own error |
-| Relaxation | not mentioned | 100 MCS without the field (2008) | 100 (2008), 0 (2006) | `t_relax` | D-050 M6; time origin open (A-19) |
-| ΔH arithmetic | real | integer, each term truncated | Float | — | D-050 M9 (D-029) |
-| χ(c,c) | continuous ratio swept (01b Fig. 5) | boolean (χ(c,c) ∈ {0, χ(c,M)}) | a real parameter | `χcc` | D-050 M7; A-20 |
-| Copy proposal | source among the neighbours of a random target | same | random source, random target among its neighbours | — | same ordered-pair law away from the frame (spec D-8) |
-| Compactness | A_cluster / A_hull (01b p.5) | `Compactness()`: all cell sites over the hull of their centres (never called) | TST's | — | spec D-18, A-14 |
+| Item | Ours | Paper | Suspected cause | Author question |
+|---|---|---|---|---|
+| V-C3 low plateau (FULL; at risk) | pending the FULL run; an early FULL signal read 0.39–0.43 at 5000 MCS (D-153) | 0.35 ± 0.07 (01b Fig. 5) | not known; the FULL run decides | not an author question yet |
+| 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labelled file | the text and the files conflict (D-050 M2) | $(aq("M2, M3 / A-1, A-15")) |
+| 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; D-050 M3, D-140) | $(aq("M2, M3 / A-1, A-15")) |
+| 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (D-050 M11; spec A-15) | $(aq("M2, M3 / A-1, A-15")) |
+| V-E5/V-E6 classification time (provisional) | 48 h (5760 MCS), the last Fig. 4 time | unstated (01a Figs. 6–7) | unstated (D-153 ruling 3; D-155) | $(aq("D-153-48h")) |
+| 2008 time origin | TST's loop counter, which includes the 100 relaxation MCS; every 2008 value also reported at N + 100 | — (relaxation not mentioned; Dataset S1 `relaxation = 100`) | unstated whether figure times include the relaxation (spec A-19; D-050 M6) | $(aq("M6 / A-19")) |
+| 01b Fig. 2 set-up | the paper's: `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`; the files' as `merks2008_denovo()` | 1000 cells over 333² in a ~500² lattice; files: 360 seeds × 10 Eden rounds on 200² | the enclosing lattice is printed ambiguously (D-050 M10; spec A-9) | $(aq("M10 / A-9")) |
+| Field scheme | unsplit explicit Euler, 15 substeps, before the sweep | "finite-difference", 15 steps of 2 s; files: FTCS 5-point, split secretion/decay then diffusion, before the sweep | one MCS differs from the split scheme by $(round(100 * split_rel; digits = 2)) % of max c on a developed sprout, within the scheme's own first-order error (D-050 M5) | not an author question |
+| ΔH arithmetic | Float | real; files: integer, each term truncated | performance over exactness (D-050 M9, D-029) | not an author question |
+| χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq("A-20")) |
+| Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labelled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
+| 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
+| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
+| Copy proposal | random source, random target among its neighbours | source among the neighbours of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
+| Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq("A-14, A-18")) |
+| PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq("A-14, A-18")) |
+| PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not on the sheet) |
+| PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not on the sheet) |
+| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq("A-20")) |
 """)
 
 # ## 4. Build and run
@@ -170,25 +186,30 @@ m06 = Merks2006(; name = :m6, lattice = lat06)
 prob06 = PottsProblem(m06, layout(merks2006_layout(; lattice = lat06, n = n06, seed = 1), lat06), (0, FULL ? 5760 : 1440);
     field_solver = SOLVER, seed = 1)
 t06 = @elapsed sol06 = solve(prob06, SequentialCPM(); saveat = 0:20:(FULL ? 5760 : 1440))
+const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
 Markdown.parse("One run, $(join(lat06, " × ")), $(Int(last(sol06.t))) MCS ($(Int(last(sol06.t)) ÷ 120) h), " *
-               "`SequentialCPM` on one CPU thread: **$(round(t06; digits = 1)) s**.")
+               "`SequentialCPM`: **$(round(t06; digits = 1)) s** on $MACHINE (not warmed up: includes compilation).")
 
-# Endothelial cells red, the frozen frame grey, the matrix white, every 20 MCS (10 min):
+# Endothelial cells red, the frozen frame grey, the matrix white, every 20 MCS (10 min);
+# cells are drawn without outlines (D-156):
 
 record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(lat06[1])²",
-    plot = (; boundaries = true, category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (600, 620)))
+    plot = (; category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (600, 620)))
 # ```@raw html
 # <video src="../01_merks_2006.mp4" controls autoplay loop muted playsinline width="600"></video>
 # ```
 
 # The same run drawn as 01a Fig. 4 draws it: the chemoattractant c in grayscale on a
-# logarithmic scale (three decades below the run's maximum), ten green isolines at
-# 5 %, 15 %, …, 95 % of the frame's maximum, and the cell outlines on top (01a Fig. 4
-# caption, p.48). The field is the model's own `c`, read from the saved states.
+# logarithmic scale (three decades below the run's maximum) and ten green isolines at
+# 5 %, 15 %, …, 95 % of the frame's maximum (01a Fig. 4 caption, p.48). The paper draws the
+# cell outlines on top; we draw the cells as a translucent red fill instead, since cell
+# outlines are never drawn here (D-156). The field is the model's own `c`, read from the
+# saved states.
 
 function record_field(file, sol; title, figsize, every = 1)
     frames = renderframes(sol, RenderRequest())
     field(i) = Float64.(Array(sol.u[i].site.c))
+    cells(i) = [σ >= 2 ? 1.0 : NaN for σ in Array(sol.u[i].σ)]     # endothelial sites; NaN is transparent
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin
     cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1e-12)
@@ -200,7 +221,8 @@ function record_field(file, sol; title, figsize, every = 1)
     contour!(ax, ox .+ (1:nx) .- 0.5, oy .+ (1:ny) .- 0.5, @lift(field($k));
         levels = @lift(collect(range(0.05, 0.95; length = 10)) .* max(maximum(field($k)), 1e-12)),
         color = :green, linewidth = 0.8)
-    pottsboundaries!(ax, @lift(frames[$k]); color = :red3, linewidth = 0.6)
+    heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), @lift(cells($k)); colormap = [(:red3, 0.45), (:red3, 0.45)],
+        colorrange = (0, 1), nan_color = :transparent)
     record(fig, file, 1:every:length(sol.u); framerate = 15) do i
         k[] = i
     end
@@ -224,14 +246,14 @@ prob_eo = PottsProblem(Merks2008(; name = :m8, mode = :extension_only), op08, (0
 t_ci = @elapsed sol_ci = solve(prob_ci, SequentialCPM(); saveat = 0:20:t08)
 sol_noci = solve(prob_noci, SequentialCPM(); saveat = 0:20:t08)
 sol_eo = solve(prob_eo, SequentialCPM(); saveat = 0:20:t08)
-Markdown.parse("One sprout run, 202 × 202, $t08 MCS: **$(round(t_ci; digits = 1)) s** on one CPU thread.")
+Markdown.parse("One sprout run, 202 × 202, $t08 MCS: **$(round(t_ci; digits = 1)) s** on $MACHINE.")
 
 #-
 for (file, sol, title) in (("01_merks_2008_ci.mp4", sol_ci, "contact-inhibited (χcc = 0)"),
                            ("01_merks_2008_noci.mp4", sol_noci, "no contact inhibition (χcc = χcM)"),
                            ("01_merks_2008_eo.mp4", sol_eo, "extension only"))
     record_potts(file, sol; framerate = 15, title,
-        plot = (; boundaries = true, category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (520, 540)))
+        plot = (; category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (520, 540)))
 end
 # ```@raw html
 # <video src="../01_merks_2008_ci.mp4" controls autoplay loop muted playsinline width="520"></video>
@@ -636,3 +658,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | Date | Change | Reason |
 # |---|---|---|
 # | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | ROADMAP P6.3d; D-153 |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156; ROADMAP P6.3f |

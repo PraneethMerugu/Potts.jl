@@ -86,7 +86,7 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
     rec = @elapsed record_run(mp4, sol, panels; title, framerate, size, clock, frames = idx)
     if filesize(mp4) > 5 * 2^20
         tmp = joinpath(ASSETS, ".$name.reenc.mp4")
-        run(`/opt/homebrew/bin/ffmpeg -v error -y -i $mp4 -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
+        run(`$(CairoMakie.Makie.FFMPEG_jll.ffmpeg()) -v error -y -i $mp4 -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
         mv(tmp, mp4; force = true)
     end
     info = merge(Dict{String, Any}(

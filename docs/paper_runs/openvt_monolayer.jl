@@ -30,7 +30,7 @@ title(sol, idx) = "OpenVT growing monolayer (Artistoo set, no contact inhibition
                   "at $(sol.t[last(idx)]) MCS; one frame every $EVERY MCS"
 paper_run("openvt_monolayer"; prob, alg, saveat = EVERY, title, frames, framerate = 24,
     panels = [Panel(""; encoding = CellIdentityEncoding(),
-        plot = (; medium_color = :white, boundaries = true, boundary_width = 0.2, boundary_color = :gray20))],
+        plot = (; medium_color = :white))],
     size = (760, 800),
     meta = (sol, idx) -> Dict{String, Any}("model" => "OpenVTGrowingMonolayer",
         "caption" => "Paper run — OpenVT growing monolayer, Artistoo set, no contact inhibition: one cell to N = $(ncells(sol.u[last(idx)])) cells (benchmark: until N = 10⁴) at $(sol.t[last(idx)]) MCS on 800×800 (constructor default 400×400 is too small for 10⁴ cells), seed 1.",

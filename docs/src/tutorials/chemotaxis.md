@@ -112,7 +112,7 @@ Switch it on with `remake`:
 ```@example chemo
 prob_chemo = remake(prob; p = [:χ => 300.0])
 sol_chemo = solve(prob_chemo, SequentialCPM(); saveat = 25)
-record_potts("chemotaxis_gradient.mp4", sol_chemo; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (600, 330)))
+record_potts("chemotaxis_gradient.mp4", sol_chemo; framerate = 12, title = "", figure = (; size = (600, 330)))
 nothing # hide
 ```
 
@@ -226,14 +226,14 @@ nothing # hide
 ```
 
 To show the field, attach it to each frame as a **channel** and colour the frame by that
-channel. `boundaries = true` draws the cell outlines on top:
+channel:
 
 ```@example chemo
 key = SiteChannelKey(:c, Float64)
 frames = [renderframe(u; mcs = t, channels = (RenderChannel(key, u.site.c; label = "c"),))
           for (u, t) in zip(sol.u, sol.t)]
 record_potts("chemotaxis_aggregation.mp4", frames; framerate = 12, encoding = ChannelEncoding(key),
-    plot = (; boundaries = true), title = "", figure = (; size = (420, 420)))
+    title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

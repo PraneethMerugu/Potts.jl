@@ -29,8 +29,8 @@ julia --project=docs docs/paper_runs/graner_glazier.jl
 
 The run is deterministic for a given seed, commit and Julia version. All runs use the CPU
 `SequentialCPM` with the model's declared proposal neighbourhood. `common.jl` holds the shared
-solve, record and sidecar code. ffmpeg must be at `/opt/homebrew/bin/ffmpeg` only for the
-re-encode step. Wall times are for a shared 8-core Apple Silicon machine:
+solve, record and sidecar code. The re-encode step uses Makie's bundled ffmpeg (`FFMPEG_jll`).
+Cells are drawn without outlines (D-156). Wall times are for a shared 8-core Apple Silicon machine:
 
 | Script | Wall time (approx.) |
 |---|---|
