@@ -134,8 +134,8 @@ decision = "D-092"
 
 [[file]]
 path = "acceptance/p6_0w_substream_seeds.jl"
-sha256 = "62f0ed1402fda94284e57720285881dd2f66a7cb201b1ec26a9d2016c69e734f"
-decision = "D-138"
+sha256 = "706381914975b992ca982b533b4431b96ab8d7e5f65d4b7ce665dea377e35257"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/merks_2006_defaults.jl"
@@ -144,8 +144,8 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "5fbf1c3ede463e36371aa8d007ca084b543490a6916cd68cb0c3133fa904be10"
-decision = "D-150"
+sha256 = "19fa0ecbbd0daa1d29ebb1d78f41b5dd8236f866688e55b17cc2300d11beab30"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/p6_0ad_barker_offset.jl"
@@ -159,8 +159,8 @@ decision = "D-099"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "86f715f9112341fed7ec21f38f9a7e89cc5db20f088bfcefabc5c93ba3a210bd"
-decision = "D-101"
+sha256 = "e811441afb88d30917eaa2067e8ac489ed583e47888761538daa2c45cb9a6e45"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
@@ -371,3 +371,18 @@ decision = "D-145"
 path = "acceptance/p6_15c_openvt_table_s1.jl"
 sha256 = "4ba26fc505c739f3e5a2f1c798358fe5ee4701740103a43d64d3540ec8c292de"
 decision = "D-150"
+
+[[file]]
+path = "acceptance/p6_3d_merks_split.jl"
+sha256 = "464746ce2d0706d6aa32dd9367d1b77284e355427a1ad3ccd50e320b951712db"
+decision = "D-153"
+
+[[file]]
+path = "reproductions/01_merks.jl"
+sha256 = "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
+decision = "D-153"
+
+[[file]]
+path = "../reproductions/01_merks.jl"
+sha256 = "30e2c9d2313adde34a1a6ee3f0f578894efc86edc61b21b63eafa070865db8e4"
+decision = "D-153"

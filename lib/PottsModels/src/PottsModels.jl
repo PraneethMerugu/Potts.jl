@@ -8,21 +8,21 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts: Potts, @potts_model, Circle, Closed, DiscreteCallback, Lattice, Metropolis, Moore, Periodic, Point,
-    RandomPlane, RandomPoints, VonNeumann, Voronoi, kind, layout, major_length, ownership, overlay, InsertUntil, Tiling,
-    terminate!
+using Potts: Potts, @potts_model, Center, Circle, Closed, DiscreteCallback, Eden, Frame, Lattice, Metropolis, Moore,
+    NeighborOrder, Periodic, Point, RandomPlane, RandomPoints, Scattered, Splits, VonNeumann, Voronoi, kind, layout,
+    major_length, ownership, overlay, InsertUntil, Tiling, terminate!
 # for the compile workload (end of this file)
 using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
 using DelimitedFiles: readdlm
 using Printf: @sprintf
 using PrecompileTools: PrecompileTools
-using Random: MersenneTwister
 using SciMLBase: ReturnCode
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
-    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer
+    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
-    openvt_monolayer_state, merks_state, openvt_reference_state
+    openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout, merks2008_sprout,
+    merks2008_denovo
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
@@ -63,7 +63,11 @@ PrecompileTools.@setup_workload begin
         _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
         _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])
         _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
-            merks_state(; lattice = (24, 24), n = 2); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+            merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower = 0.0))
+        _first_mcs(mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
+            layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
+        _first_mcs(mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),
+            layout(merks2008_denovo(; lattice = (24, 24), n = 4, rounds = 2), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
         _first_mcs(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))),
             openvt_monolayer_state(; lattice = (24, 24)); capacity = 64)
         _first_mcs(mtkcompile(OpenVTChain(; name = :c)), openvt_chain(11))

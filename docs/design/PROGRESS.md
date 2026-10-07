@@ -2143,3 +2143,21 @@ The maintainer approved F-1…F-6 (D-049).
   - Temperature is a strong sensitivity. Cell sizes, aggregate size and seed set are excluded.
   - Details are in the D-151 outcome note and `data/09/p6-1g-2026-10-06/README.md`.
 - **Filed.** P6.1h: V-PRE7 on the page, as an independent check of the temperature scale.
+
+## 2026-10-06 — P6.3d/e merged: `Merks2006` and `Merks2008`, the `merks_state` port, reproduction 01 (D-153)
+
+- **The change.**
+  - Two published Merks models (2006, and 2008 with extension-only and 20-neighbour contacts).
+  - `merks_state` rebuilt on `Scattered` (D-087), plus the layout helpers.
+  - Two gate cases, two siblings, and the compile workload.
+- **Checks.** All on the PC, pinned (D-157):
+  - frozen acceptance 1091/1091; the reproduction 01 CI tier 16/16;
+  - CorePotts, Potts, docs;
+  - the full PottsModels suite after the re-freeze: 18118 pass, 0 fail, 50 broken;
+  - gate `merks_100` 0.999 / 0.997; latency 1.003–1.007.
+  - The Metal device paths are deferred to P6.0bi.
+- **Re-freeze (coordinator, D-153).** The p6_0v3 Merks digests and the p6_0w RNG-site bound, both moved by the port.
+- **Review.** One round, APPROVE. It hand-checked ΔH against ca.cpp, independently reimplemented TST's sprout growth (blob area 2146 vs 2153 px), scanned for Float64 under Float32 and recomputed the digests.
+- **Filed.**
+  - P6.0bl: checkerboard vs sequential kinetics differ on Merks models.
+  - P6.3f: corrected (the attempts row is not a deviation).
