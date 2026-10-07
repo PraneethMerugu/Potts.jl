@@ -1,0 +1,38 @@
+## new page-parameter runs (dist + fresh): k = 50
+single (≥ 0.90) by 5000: 20/50 = 0.40 ± 0.07
+single by 10⁴: 26/50 = 0.52 ± 0.07
+single by 2×10⁴: 38/50 = 0.76 ± 0.06
+t90 over the 50 with saves ≥ every 1000: median 8500, IQR [1500, 20000], restricted mean (censored at 2×10⁴) 9870, mean over those reaching it 6671
+largest@10⁴: mean 0.836 ± 0.027
+F_dl@10⁴: mean 0.0706 ± 0.0016; min 0.0471; ≤ 0.050: 2, ≤ 0.040: 0
+F_dl@2×10⁴: mean 0.0590 ± 0.0015; min 0.0465
+
+## earlier 22 (P6.1f + D-151 diag): k = 22
+single (≥ 0.90) by 5000: 5/20 = 0.25 ± 0.10
+single by 10⁴: 8/22 = 0.36 ± 0.10
+single by 2×10⁴: 5/12 = 0.42 ± 0.14
+t90 over the 12 with saves ≥ every 1000: median >20000, IQR [8000, >20000], restricted mean (censored at 2×10⁴) 15042, mean over those reaching it 8100
+largest@10⁴: mean 0.770 ± 0.039
+F_dl@10⁴: mean 0.0727 ± 0.0022; min 0.0504; ≤ 0.050: 0, ≤ 0.040: 0
+F_dl@2×10⁴: mean 0.0626 ± 0.0022; min 0.0479
+
+## pooled: k = 72
+single (≥ 0.90) by 5000: 25/70 = 0.36 ± 0.06
+single by 10⁴: 34/72 = 0.47 ± 0.06
+single by 2×10⁴: 43/62 = 0.69 ± 0.06
+t90 over the 62 with saves ≥ every 1000: median 12000, IQR [2000, >20000], restricted mean (censored at 2×10⁴) 10871, mean over those reaching it 6837
+largest@10⁴: mean 0.816 ± 0.022
+F_dl@10⁴: mean 0.0712 ± 0.0013; min 0.0471; ≤ 0.050: 2, ≤ 0.040: 0
+F_dl@2×10⁴: mean 0.0601 ± 0.0013; min 0.0465
+
+bootstrap over the pooled 72: P(10-replicate mean largest@10⁴ ≥ 0.90) = 0.075
+F_dl@10⁴ ≤ 0.050 in 2 of 72; ≤ 0.040 in 0 of 72
+fresh seeds 5001–5010 as a 10-replicate page ensemble: mean largest@10⁴ 0.876 (frozen bound ≥ 0.90)
+fresh seeds 5011–5020 as a 10-replicate page ensemble: mean largest@10⁴ 0.824 (frozen bound ≥ 0.90)
+
+## light inclusions (post hoc, descriptive): k = 30; trajectories identical to dist: 30/30
+no light inclusion left by 5000: 19/30; by 10⁴: 21; by 2×10⁴: 26; median 2500
+inclusions at 10³ / 10⁴: mean 1.00 / 0.30
+one dark cluster (≥ 0.99) and no inclusion @1e4: k = 8, F_dl@1e4 mean 0.0542 ± 0.0021, range 0.0471–0.0650
+one dark cluster (≥ 0.99) with inclusions @1e4: k = 3, F_dl@1e4 mean 0.0713 ± 0.0079, range 0.0568–0.0838
+several dark clusters (< 0.99) @1e4: k = 19, F_dl@1e4 mean 0.0760 ± 0.0019, range 0.0650–0.0984

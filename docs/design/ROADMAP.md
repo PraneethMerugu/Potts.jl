@@ -429,11 +429,14 @@ Every item's acceptance also includes the standing checks:
   amended page: `MARGIN = 60` (347²) and the isolation-guard row. It costs about 2× P6.1d. It replaces P6.1d as the record for
   every row; P6.1d stays on record as a FAIL of V-PRE3 (b) caused by periodic-image contact. Record the table in PROGRESS,
   send it to the spec owner, and report it in the phase report as a pre-registered failure explained after the run.
-- [ ] **P6.1g** (D-151; spec 09 §9.5) Late-stage coarsening in reproduction 09 is an open deviation: V-PRE5's one-cluster clause fails in P6.1f, and both published runs coarsen faster than almost all of our 22 replicates after 10³.
+- [x] (run 2026-10-06, 192 runs on the PC; D-151 outcome: stays a reported deviation) **P6.1g** (D-151; spec 09 §9.5) Late-stage coarsening in reproduction 09 is an open deviation: V-PRE5's one-cluster clause fails in P6.1f, and both published runs coarsen faster than almost all of our 22 replicates after 10³.
   - First, cheaply: the distribution of the time to a single dark cluster over ≥ 20 replicates, against the paper's ≈ 5000.
   - Then test the candidate causes: T against the effective line tension, the cell-size difference (V-GG6), and the aggregate size and spread.
   - The targets are unchanged. It is reported in the phase report as a science question (AUTONOMY §7.5), and the author question is in README §5.
   - **Bounded pass (D-156, running on the PC).** ≥ 20 more replicates, then one scan per candidate cause; if none explains the gap, a fresh seed set. After that it stays a reported deviation. The question goes to Glazier through the PI sheet.
+- [ ] **P6.1h** (D-151 outcome) Put V-PRE7, the sorting temperature regimes (spec 09 §8.5), on the 09 page, as an independent check of our temperature scale. P6.1g found that late coarsening is strongly T-sensitive.
+  - It needs a re-freeze of the page and test under a new D-entry; it can share the re-freeze with P6.0bd/P6.0bf.
+  - Runs at FULL on the PC.
 - [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.

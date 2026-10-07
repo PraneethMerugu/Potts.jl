@@ -2391,6 +2391,16 @@ session.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` gains, as text only, one deviations row, one §6 question and a changelog row; its `frozen.toml` decision becomes D-151. No verdict code changes.
 - **Evidence** is committed under `docs/design/research/model-specs/evidence/09_v-pre5/`: the diagnostic scripts and their TSV.
 - **Follow-up** is ROADMAP P6.1g. Measure the distribution of the time to a single dark cluster over ≥ 20 replicates against the paper's ≈ 5000, then test the untested candidate causes: T against the effective line tension, the V-GG6 size difference, and the aggregate size.
+- **P6.1g outcome (2026-10-06; 192 FULL-size runs on the PC; record `data/09/p6-1g-2026-10-06/`).** The bounded pass (D-156) is done. V-PRE5 stays a reported deviation.
+  - **Time to a single dark cluster is not the real gap.** Pooled over 72 runs: single by 5000 is 0.36 ± 0.06, single by 10⁴ is 0.47 ± 0.06, and the paper's run sits at about our 40th percentile. The frozen ≥ 0.90 ensemble bound is met by a 10-seed set with probability ≈ 0.075, so it is a property of the model, not of the seed set; 20 fresh seeds match the baseline.
+  - **What is off is late F_dl.** It reads 0.0712 ± 0.0013 at 10⁴, against PRE 0.050 and PRL ≈ 0.04 (both inside V-PRE1's widened envelope, so V-PRE1 passes).
+    - Fully sorted runs (one dark cluster, no light inclusions) read 0.054 ± 0.002. The excess comes from runs that are not yet fully sorted.
+  - **Candidate causes.** Paired scans with 16 replicates per point:
+    - **Temperature** is a strong, monotone sensitivity: at T = 14–20 every run is single by 2×10⁴, and early F_dl stays inside the envelope. It does not bring F_dl(10⁴) to the paper's value, and the paper states T = 10. A sensitivity, not an identified cause.
+    - **Equal cell sizes:** not the cause.
+    - **Aggregate size** (500 or 1500 cells): not the cause.
+  - **Deviations-table row (D-154).** "V-PRE5 one-cluster share: ours 0.816 ± 0.022 at 10⁴, paper ≥ 0.90 (one run); suspected cause: slower late coarsening, with temperature scale a sensitivity; author question pending (Glazier, PI sheet)."
+  - **Follow-up.** V-PRE7 (the T = 40 plateau and T = 80 disintegration) is pre-registered but not on the page. It would check our temperature scale independently (P6.1h).
 
 ## D-152 Spec 10 P9: the infiltrative-area SD is 2888, not 2889 (2026-10-05; coordinator, from the peer spec-owner check; amends D-143's frozen constant)
 

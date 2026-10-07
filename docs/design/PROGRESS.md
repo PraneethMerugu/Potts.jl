@@ -2133,3 +2133,13 @@ The maintainer approved F-1…F-6 (D-049).
   - So the Mac gate's Akeeb flag was drift.
   - Latency (`p6_0o_latency.jl 5 10` against 82e240ba): to_first_mcs 1.004–1.028 on every case.
   - `problem` reads 1.07–1.11 on GG, Wortel, Merks and OpenVT, which is +4–9 ms on a 44–90 ms step (contact-count relation wrapping and initial-state work at construction). Accepted: time to first MCS is unchanged.
+
+## 2026-10-06 — P6.1g: the late-coarsening pass for reproduction 09 (D-151 outcome)
+
+- **Runs.** 192 FULL-size runs on the PC (praneeth-NucBox-EVO-X2, Ryzen AI Max+ 395, CPU), 24 single-threaded processes, 2 h 58 min wall time. The plan and scripts were committed before launch (a09312a6). The isolation guard held at every save, and a re-run of 30 seeds was bit-identical.
+- **Result.** No candidate clearly explains the gap, so V-PRE5 stays a reported deviation.
+  - Time to single is not off (the paper's run sits at about our 40th percentile).
+  - Late F_dl is off (0.071 against 0.050), and it comes from runs that are not yet fully sorted.
+  - Temperature is a strong sensitivity. Cell sizes, aggregate size and seed set are excluded.
+  - Details are in the D-151 outcome note and `data/09/p6-1g-2026-10-06/README.md`.
+- **Filed.** P6.1h: V-PRE7 on the page, as an independent check of the temperature scale.
