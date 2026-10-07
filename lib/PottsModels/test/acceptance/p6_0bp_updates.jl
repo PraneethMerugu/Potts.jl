@@ -59,8 +59,10 @@
 # code, D-137 rule 2: the p6_0o and fingerprint suites check that); the element type; the
 # order of `extend`'s merge (compared as a multiset); field-variable updates' scope.
 #
-# On fe7269cf every A/U/F/P target errors (`Potts.updates` is undefined, `Potts.Every` is
-# not public); the N controls pass.
+# On fe7269cf (PC): 133 pass, 4 fail and 23 error of 160. Every error is an UndefVarError
+# for `updates`; the failures are `updates`/`Every` not public or documented and the timing
+# set's `updates` check. The events, payload, refusal and timing controls pass. A stub
+# (`updates` from the stored statements, `Every` made public) passes 261/261.
 using Potts: CorePotts
 
 const P60BP_M = Potts.ModelingToolkitBase
