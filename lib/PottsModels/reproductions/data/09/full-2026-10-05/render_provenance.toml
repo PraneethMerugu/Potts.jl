@@ -1,0 +1,44 @@
+algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
+backend = "CPU"
+commit = "d6d1aed1aa2cd7960ce652e83c5acaffa5b0ed93"
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+decision = "D-156"
+dirty = false
+finished = "2026-10-07T11:06:29.596"
+framerate = 12
+frames = 101
+hostname = "praneeth-NucBox-EVO-X2"
+item = "P6.0bf"
+julia = "1.12.6"
+machine = "x86_64-linux-gnu"
+problem_seed = 1
+record_wall_s = 34.2
+replica = 1
+script = "lib/PottsModels/reproductions/data/09/full-2026-10-05/render_video.jl"
+solve_wall_s = 901.0
+start = "graner_glazier_aggregate(1000; seed = 1, margin = 60)"
+started = "2026-10-07T10:50:05.952"
+stills = ["09_cell_sorting_full-2026-10-05_replicate1_t10.png", "09_cell_sorting_full-2026-10-05_replicate1_t100.png", "09_cell_sorting_full-2026-10-05_replicate1_t1000.png", "09_cell_sorting_full-2026-10-05_replicate1_t10000.png", "09_cell_sorting_full-2026-10-05_replicate1_t20000.png"]
+threads = 1
+video = "09_cell_sorting_full-2026-10-05_replicate1.mp4"
+video_mb = 0.88
+
+[trajectory_check]
+matches_timeseries_tsv = true
+paper_mcs = 20000
+
+    [trajectory_check.ours]
+    F_dM = 0.0
+    F_dd = 0.4841857893281725
+    F_dl = 0.05131324301907658
+    F_lM = 0.05993917611280066
+    F_ll = 0.40456179153995026
+    mismatched_bonds = 36170.0
+
+    [trajectory_check.recorded]
+    F_dM = 0.0
+    F_dd = 0.4841857893281725
+    F_dl = 0.05131324301907658
+    F_lM = 0.05993917611280066
+    F_ll = 0.40456179153995026
+    mismatched_bonds = 36170.0
