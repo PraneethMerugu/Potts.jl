@@ -56,8 +56,8 @@ _is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l)
 # `ifelse`, registered user functions). Potts' own operations (`at`, `gather`,
 # `population`, `cell_integral`, …), operators (`Pre`) and `getindex` stand for a quantity MTK
 # cannot express: the whole call is an input.
-_template_op(op) = op isa Function && !(op isa Symbolics.Operator) && op !== getindex &&
-                   parentmodule(op) !== @__MODULE__
+_template_op(op) = op isa Function && op !== getindex && parentmodule(op) !== (@__MODULE__) &&
+                   !(op isa Union{Differential, Pre, ModelingToolkitBase.Shift, ModelingToolkitBase.Sample, ModelingToolkitBase.Hold})
 
 """
 The model's cell and model ODEs through `mtkcompile`: one template per scope that has
@@ -234,13 +234,14 @@ and the definition of each algebraic variable in `defs`, with the inputs restore
 function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     targets = Any[[arguments(_unwrap(eq.lhs))[1] for eq in d]; [_unwrap(eq.lhs) for eq in a]]
     istarget = Set{Any}(targets)
-    used = Set{Symbol}(info(x).name for x in targets)
+    # input names: the quantity's own name where it has one, never a target's or parameter's
+    used = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters))))
     params = Any[]
     inputs = Dict{Any, Any}()                          # authored expression → its parameter
     back = Dict{Any, Any}()                            # parameter → the authored expression
     function name(y)
         i = info(y)
-        base = i === nothing ? :input : i.name
+        base = i === nothing ? :input : i.name          # a built-in or another scope's variable
         n = base
         k = 1
         while n in used
@@ -258,18 +259,25 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
             p
         end
     end
-    function walk(y)
+    # the inputs of a right side: its outermost subexpressions MTK cannot express
+    function scan(y)
         y = _unwrap(y)
-        (y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y)) || return y
-        y in istarget && return y
+        (y isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(y)) || return
+        (y in istarget || isequal(y, _unwrap(t))) && return
         i = info(y)
-        i !== nothing && return i.role === :param ? input(y; declared = true) : input(y)
-        isequal(y, _unwrap(t)) && return y
-        iscall(y) && _template_op(operation(y)) &&
-            return SymbolicUtils.maketerm(typeof(y), operation(y), map(walk, arguments(y)), SymbolicUtils.metadata(y))
-        return input(y)
+        if i !== nothing
+            input(y; declared = i.role === :param)
+        elseif iscall(y) && _template_op(operation(y))
+            foreach(scan, arguments(y))
+        else
+            input(y)
+        end
+        return
     end
-    eqs = Equation[eq.lhs ~ Symbolics.wrap(walk(eq.rhs)) for eq in Iterators.flatten((d, a))]
+    foreach(eq -> scan(eq.rhs), Iterators.flatten((d, a)))
+    # (`substitute` replaces the outermost match, so an input's own subexpressions stay in it)
+    eqs = Equation[eq.lhs ~ (isempty(inputs) ? eq.rhs : Symbolics.substitute(eq.rhs, inputs; fold = Val(false)))
+                   for eq in Iterators.flatten((d, a))]
     # Potts checks units itself (`_check_units`); the inputs carry none
     template = ModelingToolkitBase.System(eqs, t, targets, params; name = Symbol(nameof(sys), :₊, scope), checks = false)
     compiled = ModelingToolkitBase.mtkcompile(template)
