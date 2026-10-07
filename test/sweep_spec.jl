@@ -53,3 +53,49 @@ end
     # derived on read: the key is never stored in the raw metadata
     @test !any(kv -> kv[1] === Potts.PottsSweepSpec, getfield(sys, :metadata))
 end
+
+# `updates` (D-164, P6.0bp review H1): a contact fold prints as the fold it stands for,
+# `count_contacts(contact_partner, pred, relation)`, never as its tracker's internal name
+# (`contacts_<relation>_<hash>`), on the plain and the compiled form alike.
+using PottsModels: OpenVTReferenceMonolayer
+
+function ss_names(e)
+    SU = Potts.SymbolicUtils
+    out = Set{Symbol}()
+    walk(y) = (y = Potts.Symbolics.unwrap(y);
+               y isa SU.BasicSymbolic || return;
+               if SU.issym(y)
+                   push!(out, Potts.SymbolicIndexingInterface.getname(y))
+               elseif SU.iscall(y)
+                   op = SU.operation(y)
+                   op isa SU.BasicSymbolic && SU.issym(op) ? push!(out, Potts.SymbolicIndexingInterface.getname(op)) :
+                   foreach(walk, SU.arguments(y))
+               end)
+    walk(e)
+    return out
+end
+ss_eq_names(eq) = union(ss_names(eq.lhs), ss_names(eq.rhs))
+
+@testset "updates: contact folds print as count_contacts, not as tracker names" begin
+    M = Potts.ModelingToolkitBase
+    sys = OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24))
+    U = Potts.updates(sys)
+    declared = Set{Symbol}(Potts.SymbolicIndexingInterface.getname(x) for x in [M.parameters(sys); M.unknowns(sys)])
+    allowed = union(declared, Set(Potts.BUILTIN_NAMES), Set([:kind′, :contact_partner]))
+    for u in U
+        @test isempty(setdiff(ss_eq_names(u.eq), allowed))
+        @test !any(n -> startswith(string(n), "contacts_"), ss_eq_names(u.eq))
+    end
+    # the fold update reads `count_contacts` (the cell's contacts, all and with the medium)
+    f = only(filter(u -> :f in ss_names(u.eq.lhs), U))
+    @test occursin("count_contacts(contact_partner, true, contact)", string(f.eq.rhs))
+    @test occursin("count_contacts(contact_partner, kind′ == 0, contact)", string(f.eq.rhs))
+    # isequal-stable across the plain, completed and compiled forms
+    for V in (Potts.updates(complete(sys)), Potts.updates(mtkcompile(sys)), Potts.updates(sys))
+        @test length(V) == length(U) && all(i -> isequal(V[i].eq, U[i].eq), eachindex(U, V))
+    end
+    # negative control: the stored statements still name the trackers, which this check catches
+    raw = [u.eq for u in getfield(sys, :updates)]
+    @test any(eq -> any(n -> startswith(string(n), "contacts_"), ss_eq_names(eq)), raw)
+    @test any(eq -> !isempty(setdiff(ss_eq_names(eq), allowed)), raw)
+end

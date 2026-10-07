@@ -88,8 +88,9 @@ public Dirichlet, NoFlux
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(sys, Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
-# the update rules as written (D-164), with their cadence value
-public updates, Every
+# the update rules as written (D-164), with their cadence value and the contact-fold term
+# they print
+public updates, Every, count_contacts
 
 # The session token (D-130, `_SESSION_TOKEN` in solvers.jl), drawn at every load: `__init__`
 # runs when Potts loads, never into the precompile image. The draw is a child task's: the
