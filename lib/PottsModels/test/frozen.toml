@@ -134,8 +134,8 @@ decision = "D-092"
 
 [[file]]
 path = "acceptance/p6_0w_substream_seeds.jl"
-sha256 = "62f0ed1402fda94284e57720285881dd2f66a7cb201b1ec26a9d2016c69e734f"
-decision = "D-138"
+sha256 = "706381914975b992ca982b533b4431b96ab8d7e5f65d4b7ce665dea377e35257"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/merks_2006_defaults.jl"
@@ -159,8 +159,8 @@ decision = "D-099"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-sha256 = "86f715f9112341fed7ec21f38f9a7e89cc5db20f088bfcefabc5c93ba3a210bd"
-decision = "D-101"
+sha256 = "e811441afb88d30917eaa2067e8ac489ed583e47888761538daa2c45cb9a6e45"
+decision = "D-153"
 
 [[file]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"

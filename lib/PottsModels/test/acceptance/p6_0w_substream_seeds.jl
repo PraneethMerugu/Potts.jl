@@ -241,7 +241,7 @@ end
     @test any(endswith(joinpath("src", "layouts.jl")), files)
     @test any(endswith(joinpath("PottsModels", "src", "akeeb.jl")), files)
     @test any(endswith(joinpath("CorePotts", "src", "rng.jl")), files)
-    @test sum(f -> p60w_rng_sites(read(f, String)), files) >= 5   # Scattered, InsertUntil, VoronoiBall, merks, akeeb
+    @test sum(f -> p60w_rng_sites(read(f, String)), files) >= 4   # Scattered, InsertUntil, VoronoiBall, akeeb (merks draws through Scattered since D-153)
     hits = [(relpath(f, P60W_ROOT), h...) for f in files for h in p60w_scan(read(f, String))]
     @test isempty(hits)
     isempty(hits) || @info "P6.0w: seed derivations by arithmetic" hits
