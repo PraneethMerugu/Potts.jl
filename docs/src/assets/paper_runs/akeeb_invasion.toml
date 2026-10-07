@@ -1,25 +1,25 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
-caption = "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is 30)."
-date = "2026-10-01T17:42:15.580"
+caption = "Paper run — Akeeb, Marcus & Jiang (2026), multimodal sample (J_LF = 2, μ = 24, PP = 0.5): 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1. μ = 24 is passed explicitly (the constructor default is still 30)."
+date = "2026-10-07T10:33:11.658"
 deviations = "μ = 24 passed explicitly (constructor default 30; D-050 A5 sets 24, not yet in code). Dynamics seed differs from the authors' unseeded CC3D run."
 framerate = 24
 frames = 235
-git_commit = "e5aade2e"
+git_commit = "169ac06f6"
 initial_state = "akeeb_state(; lattice = (500, 300), pp = 0.5) (default layout seed 0x5cd2609, seeding = :authors)"
 julia = "1.12.6"
 lattice = [500, 300]
 model = "AkeebInvasion"
-notes = "Hollow red outlines inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings."
+notes = "Hollow red rings inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings."
 paper = "Akeeb, Marcus & Jiang, PLoS Comput. Biol. (2026), Fig. 4 bottom row, S2 Video (D); authors' Sample/Multimodal_invasion (2, 24, 0.5)"
 parameters = "μ = 24, J = akeeb_contacts(2.0), other constructor defaults"
-record_wall_s = 178.8
+record_wall_s = 44.2
 recorded_mcs = [0, 701]
 save_every_mcs = 3
 script = "docs/paper_runs/akeeb_invasion.jl"
 seed = 1
-solve_wall_s = 17.3
+solve_wall_s = 4.2
 threads = 1
 title = """Akeeb, Marcus & Jiang (2026) leader/follower invasion — 500×300, 701 MCS, seed 1\nmultimodal sample: J_LF = 2, μ = 24, PP = 0.5 (leaders red, followers green)"""
 tspan = [0, 701]
-video_mb = 2.74
+video_mb = 2.35

@@ -1,25 +1,25 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
 caption = "Paper run — Merks et al. (2006) vasculogenesis, the paper's 2006 parameter set: 282 cells on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1. Remaining differences: a hard connectivity veto instead of the E₀ penalty; free closed walls instead of a frozen border with J_cB = 100; a zero-flux field boundary instead of an absorbing c = 0 ring; 10×10 initial cells (unstated in the paper)."
-date = "2026-10-01T18:37:07.908"
+date = "2026-10-07T10:41:18.464"
 deviations = "Hard one-arc connectivity veto (paper: E₀ > 2000 penalty); free closed walls (paper: frozen border, J_cB = 100); zero-flux field boundary (authors' code: absorbing c = 0 ring); initial cells 10×10 squares (paper unstated); L = 50 px from the paper text (longcells.par: 60)."
 field_solver = "ExplicitEuler(substeps = 15, lower = 0.0)"
 framerate = 24
 frames = 241
-git_commit = "9c5e6d14"
+git_commit = "169ac06f6"
 initial_state = "merks_state(; seed = 1, side = 10): 282 square 10×10 cells in the central 333×333 of 500×500"
 julia = "1.12.6"
 lattice = [500, 500]
 model = "MerksVasculogenesis"
 paper = "Merks et al., Dev. Biol. 289, 44 (2006), Figs. 4-5"
 parameters = "V₀ = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, Dc = 0.75, σc = δc = 5.4e-3, J = [0 20; 20 40], contact_inhibited = false"
-record_wall_s = 50.4
+record_wall_s = 47.6
 recorded_mcs = [0, 6000]
 save_every_mcs = 25
 script = "docs/paper_runs/merks_vasculogenesis.jl"
 seed = 1
-solve_wall_s = 432.5
+solve_wall_s = 486.1
 threads = 1
 title = """Merks et al. (2006) vasculogenesis — 500×500, 282 cells, 6000 MCS (50 h), seed 1\n2006 set: A = 100, λ = 50, L = 50, λ_L = 5, χ = 1000, T = 50; one frame every 25 MCS (12.5 min)"""
 tspan = [0, 6000]
-video_mb = 4.12
+video_mb = 3.61

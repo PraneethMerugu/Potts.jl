@@ -1,26 +1,26 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
 caption = "Paper run — OpenVT growing monolayer, Artistoo set, no contact inhibition: one cell to N = 10137 cells (benchmark: until N = 10⁴) at 1405 MCS on 800×800 (constructor default 400×400 is too small for 10⁴ cells), seed 1."
-date = "2026-10-01T17:59:52.927"
+date = "2026-10-07T10:33:57.455"
 deviations = "Lattice 800×800 (constructor default 400×400 cannot hold 10^4 cells; the benchmark fixes no lattice). Uninhibited case only (β = 0)."
 final_cells = 10137
 final_mcs = 1405
 framerate = 24
 frames = 282
-git_commit = "e5aade2e"
+git_commit = "169ac06f6"
 initial_state = "openvt_monolayer_state(; lattice = (800, 800)): one 5×5 cell at the centre"
 julia = "1.12.6"
 lattice = [800, 800]
 model = "OpenVTGrowingMonolayer"
 paper = "OpenVT reference models, monolayer growth (github.com/OpenVT/reference_models, monolayer/; spec email R. Vetter 2024-10-12): grow until N = 10^4 cells"
-record_wall_s = 385.4
+record_wall_s = 65.5
 recorded_mcs = [0, 1405]
 save_every_mcs = 5
 script = "docs/paper_runs/openvt_monolayer.jl"
 seed = 1
-solve_wall_s = 170.3
+solve_wall_s = 25.6
 stop_rule = "video ends at the first save with N ≥ 10000"
 threads = 1
 title = """OpenVT growing monolayer (Artistoo set, no contact inhibition) — 800×800, seed 1\none cell to N = 10137 cells at 1405 MCS; one frame every 5 MCS"""
 tspan = [0, 1500]
-video_mb = 3.57
+video_mb = 2.98
