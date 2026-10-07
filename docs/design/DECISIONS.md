@@ -2765,3 +2765,25 @@ session.
   - **New sha256:** page `e12ccbba4e268985d2c191670bde462290b9d7d1db6435cb6d404c529723b46d`; test `cb514d8defdeff189e3540cb6148bed96837150c3bfafd4e4faef15a46a700e5`.
 - **Open (P6.2e).** The FULL-record test checks the verdict strings, so a hand-edited TSV would still pass. Make it recompute V-A6's R3 and V-A7's |r| from the committed `sweep.tsv` instead.
 - **Licence note.** The authors' data release has no licence file. Only derived statistics, and one derived heatmap panel in `10_akeeb_phenotypes.png`, are committed; no raw CSV. This was flagged to the maintainer.
+
+## D-164 P6.0bp: `Potts.updates(sys)` (2026-10-07; coordinator, from the P6.0bp test author; implements D-162 ruling 1)
+
+- **API (public, not exported).** `Potts.updates(sys)`, for `PottsSystem` and `CompiledPottsSystem`, returns an `AbstractVector`. There is one element per `@before_mcs`/`@after_mcs`/`@on_copy` statement, in declaration order across phases. Each element has these properties:
+  - **`phase`:** `:before_mcs`, `:after_mcs` or `:on_copy`.
+  - **`scope`:** `:cell`, `:site`, `:model` or `:edge`. It is the declared scope of the written variable; for `@on_copy x[target]`, the scope of `x`. A field-variable update reports `:site` (coordinator ruling).
+  - **`every`:** `Potts.Every(n)`. It is `Every(1)` when no cadence is written, and always for `@on_copy`.
+    - The statement runs after (or before) MCS m when `m % n == 0`, with MCS numbered from 0.
+    - So `@after_mcs Every(5)` is seen at t = 1, 6, 11.
+  - **`eq`:** a Symbolics `Equation` as written, in MTK `Pre` form.
+    - The new value is on the left (at `target`/`new` for on-copy).
+    - `Pre(x)` appears where it was written, and `x += e` becomes `x ~ Pre(x) + e`.
+    - The symbols are the declared ones (as `complete(sys).x`).
+- **Forms.** The result is the same on the plain, `complete` and `mtkcompile` forms. The compiled form reads the authored model (D-160): statements as written, before `@components` lowering. After `extend`, it lists the merged model's statements; the merge order is not pinned. The element type is the implementer's choice.
+- **`Potts.Every`** becomes public (coordinator ruling), because it is the cadence value returned.
+- **No codegen change.** The payload is not in generated code or the fingerprint, so code and fingerprints stay byte-identical (D-137 rule 2).
+- **Events.** `discrete_events`/`continuous_events` stay `[]` until P6.4c, which re-freezes that check (D-162).
+- **Gates.** The +5% warm-MCS gate, zero warm allocations, and the paired latency check.
+- **Frozen acceptance.** `acceptance/p6_0bp_updates.jl` (sha256 `5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0`).
+  - On the tree without `updates` (PC): 133 pass, 4 fail and 23 error, out of 160. Every error is an UndefVarError for `updates`; the controls and the timing oracle pass.
+  - A stub passes 261/261.
+- **Follow-up (P6.0bv).** `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`, a pre-existing gap. Support it, or refuse with a clear `ArgumentError`. Until then the test pins edge scope on the plain and completed forms only.
