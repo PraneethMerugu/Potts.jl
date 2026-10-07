@@ -63,7 +63,7 @@ total = sum(values(b))
 rows = split.(readlines(joinpath(HERE, "timeseries.tsv")), '\t')
 hdr = rows[1]
 want = Dict(zip(hdr, only(r for r in rows[2:end] if r[1] == "1" && r[2] == string(last(ts)))))
-check = Dict("mismatched_bonds" => (total, parse(Float64, want["mismatched_bonds"])))
+check = Dict{String, Tuple{Float64, Float64}}("mismatched_bonds" => (total, parse(Float64, want["mismatched_bonds"])))
 for (key, col) in ((:dl, "F_dl"), (:dd, "F_dd"), (:ll, "F_ll"), (:dM, "F_dM"), (:lM, "F_lM"))
     check[col] = (b[key] / total, parse(Float64, want[col]))
 end
