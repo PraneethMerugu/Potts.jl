@@ -15,7 +15,7 @@
 #     committed full-run record is `lib/PottsModels/reproductions/data/09/full-2026-10-05/`
 #     (P6.1f, D-144: verdicts, time series, provenance), with the late-coarsening pass in
 #     `data/09/p6-1g-2026-10-06/` (D-151). The full run's replicate-1 video is the release
-#     asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10/09_cell_sorting_full-2026-10-05_replicate1.mp4).
+#     asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4).
 #
 # ## 1. Paper and sources
 #
@@ -456,8 +456,8 @@ record_potts("09_cell_sorting_replicate1.mp4", video; framerate = 12, title = ""
 # ```
 #
 # The full run's replicate 1 (1000 cells, 2×10⁴ paper MCS; P6.1f, D-144) is the release
-# asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10/09_cell_sorting_full-2026-10-05_replicate1.mp4).
-# This render (replaced 2026-10-07) draws no outlines (D-156).
+# asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4).
+# The video draws no cell outlines (D-156).
 
 # ### Contrasting regimes and negative control
 #

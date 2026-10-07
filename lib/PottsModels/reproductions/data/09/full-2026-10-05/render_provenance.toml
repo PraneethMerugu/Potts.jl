@@ -1,10 +1,10 @@
 algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
 backend = "CPU"
-commit = "d6d1aed1aa2cd7960ce652e83c5acaffa5b0ed93"
+commit = "31db7de8424251cbebc0b4729d09373c2bbb264d"
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 decision = "D-156"
 dirty = false
-finished = "2026-10-07T11:06:29.596"
+finished = "2026-10-07T11:45:51.686"
 framerate = 12
 frames = 101
 hostname = "praneeth-NucBox-EVO-X2"
@@ -12,12 +12,12 @@ item = "P6.0bf"
 julia = "1.12.6"
 machine = "x86_64-linux-gnu"
 problem_seed = 1
-record_wall_s = 34.2
+record_wall_s = 32.5
 replica = 1
 script = "lib/PottsModels/reproductions/data/09/full-2026-10-05/render_video.jl"
-solve_wall_s = 901.0
+solve_wall_s = 1032.8
 start = "graner_glazier_aggregate(1000; seed = 1, margin = 60)"
-started = "2026-10-07T10:50:05.952"
+started = "2026-10-07T11:27:10.935"
 stills = ["09_cell_sorting_full-2026-10-05_replicate1_t10.png", "09_cell_sorting_full-2026-10-05_replicate1_t100.png", "09_cell_sorting_full-2026-10-05_replicate1_t1000.png", "09_cell_sorting_full-2026-10-05_replicate1_t10000.png", "09_cell_sorting_full-2026-10-05_replicate1_t20000.png"]
 threads = 1
 video = "09_cell_sorting_full-2026-10-05_replicate1.mp4"
@@ -25,9 +25,57 @@ video_mb = 0.88
 
 [trajectory_check]
 matches_timeseries_tsv = true
-paper_mcs = 20000
+paper_mcs = [1, 2, 3, 10, 20000]
 
-    [trajectory_check.ours]
+    [trajectory_check.saves.1.ours]
+    F_dM = 0.024829231269651957
+    F_dd = 0.2884907296974954
+    F_dl = 0.4238859373305866
+    F_lM = 0.03464165672774585
+    F_ll = 0.22815244497452022
+    mismatched_bonds = 36892.0
+
+    [trajectory_check.saves.1.recorded]
+    F_dM = 0.024829231269651957
+    F_dd = 0.2884907296974954
+    F_dl = 0.4238859373305866
+    F_lM = 0.03464165672774585
+    F_ll = 0.22815244497452022
+    mismatched_bonds = 36892.0
+
+    [trajectory_check.saves.10.ours]
+    F_dM = 0.019072235070058497
+    F_dd = 0.3230852945177527
+    F_dl = 0.36340633927356825
+    F_lM = 0.040511495034689156
+    F_ll = 0.25392463610393146
+    mismatched_bonds = 36755.0
+
+    [trajectory_check.saves.10.recorded]
+    F_dM = 0.019072235070058497
+    F_dd = 0.3230852945177527
+    F_dl = 0.36340633927356825
+    F_lM = 0.040511495034689156
+    F_ll = 0.25392463610393146
+    mismatched_bonds = 36755.0
+
+    [trajectory_check.saves.2.ours]
+    F_dM = 0.02447325769854133
+    F_dd = 0.29689357104267966
+    F_dl = 0.41042679632631013
+    F_lM = 0.03506212857914641
+    F_ll = 0.23314424635332254
+    mismatched_bonds = 37020.0
+
+    [trajectory_check.saves.2.recorded]
+    F_dM = 0.02447325769854133
+    F_dd = 0.29689357104267966
+    F_dl = 0.41042679632631013
+    F_lM = 0.03506212857914641
+    F_ll = 0.23314424635332254
+    mismatched_bonds = 37020.0
+
+    [trajectory_check.saves.20000.ours]
     F_dM = 0.0
     F_dd = 0.4841857893281725
     F_dl = 0.05131324301907658
@@ -35,10 +83,26 @@ paper_mcs = 20000
     F_ll = 0.40456179153995026
     mismatched_bonds = 36170.0
 
-    [trajectory_check.recorded]
+    [trajectory_check.saves.20000.recorded]
     F_dM = 0.0
     F_dd = 0.4841857893281725
     F_dl = 0.05131324301907658
     F_lM = 0.05993917611280066
     F_ll = 0.40456179153995026
     mismatched_bonds = 36170.0
+
+    [trajectory_check.saves.3.ours]
+    F_dM = 0.023558017020126977
+    F_dd = 0.301553424287451
+    F_dl = 0.40399837903552616
+    F_lM = 0.03603944346886397
+    F_ll = 0.23485073618803187
+    mismatched_bonds = 37015.0
+
+    [trajectory_check.saves.3.recorded]
+    F_dM = 0.023558017020126977
+    F_dd = 0.301553424287451
+    F_dl = 0.40399837903552616
+    F_lM = 0.03603944346886397
+    F_ll = 0.23485073618803187
+    mismatched_bonds = 37015.0
