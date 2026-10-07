@@ -401,3 +401,8 @@ decision = "D-166"
 path = "acceptance/p6_0bp_updates.jl"
 sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
 decision = "D-164"
+
+[[file]]
+path = "reproductions/15_openvt_f5.jl"
+sha256 = "0f38ec2a495cd97e3da2ce1d70325db0e0651452d5838367003ab69d8ae14731"
+decision = "D-168"
