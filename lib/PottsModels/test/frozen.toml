@@ -391,3 +391,8 @@ decision = "D-161"
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
 sha256 = "a557377213a9f7b04bb879ad431be9357fa66b50c91afce82d320fdfc47b7367"
 decision = "D-160"
+
+[[file]]
+path = "acceptance/p6_0bp_updates.jl"
+sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
+decision = "D-164"
