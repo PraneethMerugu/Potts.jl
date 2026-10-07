@@ -2391,6 +2391,16 @@ session.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` gains, as text only, one deviations row, one §6 question and a changelog row; its `frozen.toml` decision becomes D-151. No verdict code changes.
 - **Evidence** is committed under `docs/design/research/model-specs/evidence/09_v-pre5/`: the diagnostic scripts and their TSV.
 - **Follow-up** is ROADMAP P6.1g. Measure the distribution of the time to a single dark cluster over ≥ 20 replicates against the paper's ≈ 5000, then test the untested candidate causes: T against the effective line tension, the V-GG6 size difference, and the aggregate size.
+- **P6.1g outcome (2026-10-06; 192 FULL-size runs on the PC; record `data/09/p6-1g-2026-10-06/`).** The bounded pass (D-156) is done. V-PRE5 stays a reported deviation.
+  - **Time to a single dark cluster is not the real gap.** Pooled over 72 runs: single by 5000 is 0.36 ± 0.06, single by 10⁴ is 0.47 ± 0.06, and the paper's run sits at about our 40th percentile. The frozen ≥ 0.90 ensemble bound is met by a 10-seed set with probability ≈ 0.075, so it is a property of the model, not of the seed set; 20 fresh seeds match the baseline.
+  - **What is off is late F_dl.** It reads 0.0712 ± 0.0013 at 10⁴, against PRE 0.050 and PRL ≈ 0.04 (both inside V-PRE1's widened envelope, so V-PRE1 passes).
+    - Fully sorted runs (one dark cluster, no light inclusions) read 0.054 ± 0.002. The excess comes from runs that are not yet fully sorted.
+  - **Candidate causes.** Paired scans with 16 replicates per point:
+    - **Temperature** is a strong, monotone sensitivity: at T = 14–20 every run is single by 2×10⁴, and early F_dl stays inside the envelope. It does not bring F_dl(10⁴) to the paper's value, and the paper states T = 10. A sensitivity, not an identified cause.
+    - **Equal cell sizes:** not the cause.
+    - **Aggregate size** (500 or 1500 cells): not the cause.
+  - **Deviations-table row (D-154).** "V-PRE5 one-cluster share: ours 0.816 ± 0.022 at 10⁴, paper ≥ 0.90 (one run); suspected cause: slower late coarsening, with temperature scale a sensitivity; author question pending (Glazier, PI sheet)."
+  - **Follow-up.** V-PRE7 (the T = 40 plateau and T = 80 disintegration) is pre-registered but not on the page. It would check our temperature scale independently (P6.1h).
 
 ## D-152 Spec 10 P9: the infiltrative-area SD is 2888, not 2889 (2026-10-05; coordinator, from the peer spec-owner check; amends D-143's frozen constant)
 
@@ -2400,6 +2410,94 @@ session.
   - In the frozen `lib/PottsModels/test/reproductions/10_akeeb.jl`, the P9 constant is now 2888 and the tolerance comment is reworded.
   - The one-unit tolerance stays as frozen; tightening it to half a unit is not part of this change. No verdict changes.
   - The test file is re-frozen under this entry.
+
+## D-153 P6.3d: `Merks2006` and `Merks2008`, the `merks_state` port, and reproduction 01 frozen (2026-10-05, P6.3d; coordinator, from the P6.3d test author; implements D-050 M1–M11, D-087, P6.3e; after D-145)
+
+- **Frozen.**
+  - `acceptance/p6_3d_merks_split.jl` and `test/reproductions/01_merks.jl` (freeze 7619227b).
+  - The page `reproductions/01_merks.jl` (re-frozen in 38d1d44e with field videos).
+  - `acceptance/p6_0v1_device_lifecycle.jl` is re-frozen here, gaining builders `:Merks2006` and `:Merks2008` (D-148 rule).
+- **Surface.** As pinned in the header of `acceptance/p6_3d_merks_split.jl`. Kinds are `medium endothelial border[frozen]`, and parameters are in lattice units per MCS.
+  - **2006:** Δx = 2 µm, 30 s per MCS, Dc 0.75, α = ε = 5.4e-3.
+    - `rule = :soft | :hard`. Soft uses the D-140 E₀ drive; hard uses `connectivity(endothelial; rule = :arc_or_pair)`.
+  - **2008:** α = ε = 0.03.
+    - `mode = :extension_retraction | :extension_only`.
+    - NeighborOrder(4) for contacts and copies, with a 2-site frame (P6.3e).
+    - No field before `t_relax` = 100.
+  - **Both models** adopt D-145's `@boundary c begin sites(kind == border) => Dirichlet(0.0) end` and `@schedule fields, sweep`.
+  - **Layout helpers:**
+    - `merks_layout` and `merks2006_layout`, with a 1-site frame;
+    - `merks2008_sprout` and `merks2008_denovo`, with a 2-site frame on 202² and Eden growth on Moore(1).
+- **The D-087 port.**
+  - `merks_state(kw…) == layout(merks_layout(kw…), lattice)`, where `merks_layout` is `Scattered(n, (side, side); region = (off+2):(off+R−1), gap = 1)`.
+  - It reproduces the former loop draw for draw under StableRNG.
+  - The default `side` stays 10 (D-137). D-087's "(7,7)" predates D-137's 2006 defaults.
+- **Splits (the D-141 follow-up).** `layout` re-checks a Splits cell against the final σ before warning.
+- **Reproduction 01.**
+  - V-target audit:
+    - READY: V-E1, E5, E6, E10; V-C1, C2, C3, C4, C5, C7, C9, C12.
+    - PARKED: V-E2–E4 (morphometry, A-18, G12), E7, E8, E9; V-C6, C8, C10, C11.
+  - SMOKE and FULL tiers.
+  - Seeds are pre-registered in the test file.
+  - The time convention is TST's loop counter, which includes the 100 relaxation MCS.
+  - FULL runs offline (D-146), about 20 CPU-h, with outputs to `reproductions/data/01/`.
+  - The page records cell videos and Fig.-4-style field videos (log grayscale c, isolines, cell outlines) for the 2006 network and the 2008 CI sprout, each ≤ 5 MB in reduced mode.
+- **Measured deviation.** TST's split field step against our unsplit step: 0.11 % of max c over one MCS on a developed sprout.
+- **Early FULL signal (pre-registered, not a target change).** The CI sprout's compactness is 0.39–0.43 at 5000 MCS. That is near V-C3's low plateau (0.35 ± 0.07) and may fail.
+- **Checks before freezing.**
+  - On 04ed45b5 the freeze fails for the right reasons.
+  - Against a stub on 04ed45b5 + feat/p6-3b:
+    - acceptance 1091/1091;
+    - p6_0v1, p6_3c and merks_2006_defaults green;
+    - SMOKE green in 106 s;
+    - the page builds, 6 PASS.
+- **Coordinator rulings.**
+  1. `MerksVasculogenesis` stays unchanged with its gate case and pins. Its start changes through the port: re-measure `merks_100` and re-baseline only if it fails. Retiring it is a separate later item. `Merks2006` and `Merks2008` get gate cases at merge.
+  2. Parameter names follow the paper and spec sketch (A, χcM, χcc, α, ε, t_relax). Paper fidelity outranks consistency with older models.
+  3. The V-E5/E6 classification time is frozen at 48 h and is an author question (page §6).
+  4. The network and lacuna measures are ours: share ≥ 0.9 and ≥ 3 enclosed medium regions of ≥ 10 sites.
+  5. L 50 vs 60 stays an author question.
+  6. P6.3d merges after P6.3b. Whichever of P6.3d and P6.15c merges second rebases the p6_0v1 builder dict.
+  7. The implementer updates the non-frozen users of `merks_state`: `mechanisms.jl` vasculo seeds, `test/gpu.jl`, `test/ports/symbolic_models.jl`, `docs/paper_runs/merks_vasculogenesis.jl`, siblings and `runtests.jl`.
+  - **Merge with monorepo (coordinator, 2026-10-06).** `p6_0v1_device_lifecycle.jl` is re-frozen with both D-150's `:OpenVTReferenceMonolayer` and this entry's `:Merks2006`/`:Merks2008` builders (sha 19fa0ecb…). D-156's Merks rulings (the TST ring rule at a closed edge, the Figs 5/7–10/12/13 targets through M7, both clocks) and D-155 (48 h and L ship provisional) apply to this item.
+- **Applied (implementer 7df247e1 and 6e28cbd4; coordinator re-freeze c7845c0a; review APPROVE; merged 2026-10-06).**
+  - **What landed.**
+    - `Merks2006` and `Merks2008`, with `merks_layout`; `merks_state` rebuilt on `Scattered` (D-087 equality holds); `merks2006_layout`, `merks2008_sprout` and `merks2008_denovo`.
+    - The `Splits` warning re-check in `src/layouts.jl` (a D-141 follow-up).
+    - Two siblings and gate cases `merks2006_100` and `merks2008_202` (`t_relax = 0`, so the field is timed).
+    - The compile workload; it uses `side = 5`, since 2 boxes of side 10 on 24² are nearly infeasible for random sequential placement. Every documented size places fine; jamming starts only around n ≈ 520 at 500².
+    - `Random` is dropped from PottsModels' dependencies.
+    - No new DSL names. The 2008 relaxation is `D(c) ~ ifelse(mcs >= t_relax, …, 0.0)`. Chemotaxis is an explicit `@drive` matching ca.cpp:264-274.
+  - **Re-freezes under this entry (AUTONOMY §7.3.1).**
+    - `p6_0v3_launch_fusion.jl` Merks checkerboard digests, re-pinned because the D-087 port starts from Scattered's StableRNG stream instead of MersenneTwister:
+      - Float64 `(0xf1d750bea912b50c, 0x5600efddf14d35a6)` → `(0x2aba158700292a8c, 0xb15865e4b5748ee9)`;
+      - Float32 `(…, 0x2b64b4f3b29d28e5)` → `(0x2aba158700292a8c, 0x6529835b3477095c)`;
+      - recomputed independently by the reviewer on the PC, and repeatable;
+      - the Metal = CPU-Float32 assertion is re-verified in P6.0bi.
+    - `p6_0w_substream_seeds.jl` RNG-site non-vacuity bound 5 → 4. Only the merks `MersenneTwister` site disappeared; it now draws through `Scattered`.
+    - New sha256: p6_0v3 `e811441a…`, p6_0w `70638191…`.
+  - **Deferred.**
+    - The P6.0ae core ring-rule change stays with P6.0ae: frozen `p6_0aa` asserts the current rule. Both Merks models already match TST, because their frame is a real cell that counts in `ring_cells`.
+    - The 01b figure targets, the four-column table, the outlines and the clocks go to P6.3f.
+  - **Measured on the PC** (praneeth-NucBox-EVO-X2, CPU, pinned single core).
+    - Gate: `merks_100` sequential / checkerboard reads 0.999 / 0.997 against a881ba46.
+    - New-case PC numbers: `merks2006_100` 230.03 / 230.34 and `merks2008_202` 233.30 / 236.14 ns/site. These are not yet in `baseline.toml`, which holds Mac rows until P6.0bb keys it by machine.
+    - Latency to first MCS: 1.003–1.007.
+    - Full PottsModels suite on c7845c0a: 18118 pass, 0 fail, 50 broken.
+  - **Review corrections.** The frozen page's "Attempts per MCS" row is wrong. CorePotts makes `nmobile` attempts per MCS: 39204 = 198² on a 202² Merks2008 run, exactly TST's `(sizex−2)(sizey−2)`. That is not a deviation; P6.3f drops the row and fixes the Units paragraph.
+  - **Deviation rows for P6.3f** (D-154 form). Each row gives our value, the paper's, the cause and the author-question status:
+
+    | Row | Ours | Paper | Cause | Author question |
+    |---|---|---|---|---|
+    | 2006 L | 50 px | ~100 µm (files: 60) | text and files conflict | provisional (D-155), on the sheet |
+    | V-E5/E6 time | 48 h | unstated | provisional | — |
+    | 2008 time origin | TST counter including 100 relaxation MCS, also reported as N + 100 | — | A-19 | on the sheet |
+    | 2006 E₀ | 5000 | > 2000 (files: 2000 or 5000) | the files disagree (D-13) | on the sheet |
+    | field scheme | unsplit explicit Euler | operator-split | differs by 0.11 % of max c per MCS | not an author question |
+    | ΔH arithmetic | Float | integer-truncated | M9 | not an author question |
+    | 2006 seeding | 10² squares | Eden | A-15 | on the sheet |
+    | 01b Fig. 2 geometry | 1000 seeds on 85:417 of 502² | — | A-9 | on the sheet |
+    | V-C3 low plateau | early 0.39–0.43 | 0.35 ± 0.07 | — | the FULL run decides |
 
 ## D-154 Paper scope: all 12 reference models, no fallback set; deviations as a table per model; no cross-framework speed comparison (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
 

@@ -334,6 +334,20 @@ Every item's acceptance also includes the standing checks:
   - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
 - [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
   - The Metal suites, the Metal gate rows (new baselines for the new machine), and a seeded Metal A/B of every gate case against the last Metal-verified commit (ebb0f823; its OpenVT pair was skipped).
+  - Confirm p6_0v3's Metal Merks digest equals the CPU Float32 digest re-pinned under D-153 (`0x2aba158700292a8c, 0x6529835b3477095c`), and run the Float32 Merks2006/2008 device paths.
+- [ ] **P6.0bj** (GE0, `research/gpu-ensembles.md` §9; approved by the maintainer) Measure first, on the PC, before any GPU-ensemble code is built.
+  - K0: `EnsembleThreads` with a ROCm backend, with no new code.
+  - K1: a minimal batched-checkerboard prototype (replicas as an extra array dimension, one launch per colour).
+  - K2: S-a, one replica per work-item, for tiny lattices.
+  - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
+  - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory.
+  - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
+  - Report the pinned speedup on the PC, naming machine and backend.
+- [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
+  - Quantify it across the gate models.
+  - Decide whether it is expected (the colouring order, proposal law) and document it, or whether it is a defect.
+  - This matters for P6.0bj: GPU ensembles are checkerboard-only, and frozen reproductions use SequentialCPM.
 - [ ] **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
   - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
   - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
@@ -420,11 +434,14 @@ Every item's acceptance also includes the standing checks:
   amended page: `MARGIN = 60` (347²) and the isolation-guard row. It costs about 2× P6.1d. It replaces P6.1d as the record for
   every row; P6.1d stays on record as a FAIL of V-PRE3 (b) caused by periodic-image contact. Record the table in PROGRESS,
   send it to the spec owner, and report it in the phase report as a pre-registered failure explained after the run.
-- [ ] **P6.1g** (D-151; spec 09 §9.5) Late-stage coarsening in reproduction 09 is an open deviation: V-PRE5's one-cluster clause fails in P6.1f, and both published runs coarsen faster than almost all of our 22 replicates after 10³.
+- [x] (run 2026-10-06, 192 runs on the PC; D-151 outcome: stays a reported deviation) **P6.1g** (D-151; spec 09 §9.5) Late-stage coarsening in reproduction 09 is an open deviation: V-PRE5's one-cluster clause fails in P6.1f, and both published runs coarsen faster than almost all of our 22 replicates after 10³.
   - First, cheaply: the distribution of the time to a single dark cluster over ≥ 20 replicates, against the paper's ≈ 5000.
   - Then test the candidate causes: T against the effective line tension, the cell-size difference (V-GG6), and the aggregate size and spread.
   - The targets are unchanged. It is reported in the phase report as a science question (AUTONOMY §7.5), and the author question is in README §5.
   - **Bounded pass (D-156, running on the PC).** ≥ 20 more replicates, then one scan per candidate cause; if none explains the gap, a fresh seed set. After that it stays a reported deviation. The question goes to Glazier through the PI sheet.
+- [ ] **P6.1h** (D-151 outcome) Put V-PRE7, the sorting temperature regimes (spec 09 §8.5), on the 09 page, as an independent check of our temperature scale. P6.1g found that late coarsening is strongly T-sensitive.
+  - It needs a re-freeze of the page and test under a new D-entry; it can share the re-freeze with P6.0bd/P6.0bf.
+  - Runs at FULL on the PC.
 - [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
@@ -490,7 +507,7 @@ Every item's acceptance also includes the standing checks:
   - Accept: PDE-before-sweep ordering is observable in a two-phase test.
 - [x] (merge, 2026-10-05; D-141) **P6.3c** R2 `Eden` + splits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Eden`, a host-routine `Splits` (not the lifecycle routine), `RandomPoints(replace = true)`, and `shortfall` with its first `:allow` consumer.
-- [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
+- [x] (merge, 2026-10-06; D-153) **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **user-approved 2026-10-01 (D-087)**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
@@ -500,7 +517,7 @@ Every item's acceptance also includes the standing checks:
     - The ring rule at a closed edge matches TST: out-of-domain sites count as a cell in `ring_cells` (P6.0ae).
     - Digitise 01b Figs 5, 7–10, 12 and 13 and target them through the continuous-χ superset (M7), with inferred parameters flagged.
     - Show both clocks: relaxation-end time is the primary axis, with a note giving the code-MCS offset.
-- [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
+- [x] (merge, 2026-10-06; D-153, folded into P6.3d) **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
 
 ### Step 3b — OpenVT monolayer benchmark (parallel track; D-147, spec 15)
 
@@ -512,6 +529,12 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
+- [ ] **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+  - Remove the cell outlines (page lines ~179, 203, 234).
+  - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
+  - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
+  - Add digitised 01b Figs 5, 7–10, 12 and 13 as targets through the M7 continuous-χ superset, with inferred parameters flagged. The model side is ready: `χcc`, `merks2008_sprout(; divisions = 8)` on 502², and `track = (:ΔH,)`.
+  - Run the FULL tier on the PC, with D-146 records; the FULL run decides V-C3's low plateau.
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.

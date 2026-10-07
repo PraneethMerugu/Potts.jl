@@ -1366,7 +1366,8 @@ routine (no state, no trackers); it shares only the cut geometry with
 - After the passes, every cell of this layer that is not one piece under the lattice
   neighbourhood (whether a cut or `layer` itself left it so) counts once in the report row's
   `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
-  warning; `splits = :allow` silences the warning, not the count.
+  warning, unless later layers left it one piece in the final state; `splits = :allow`
+  silences the warning, not the count.
 
 The report row (one row for `Splits` and its `layer`) has `requested` = m·2ᵏ, m the cells of
 `layer` that own a site, `painted` = the cells owning a site after the passes, `misses` =
@@ -1671,12 +1672,17 @@ end
 _final_id(counts, c) = count(>(0), view(counts, 1:c))
 
 # The cells a `Splits` left in pieces at the end of its paint: counted in its row, and
-# warned (under `splits = :warn`, by their final id) unless dropped later or already named by
-# the split warning above.
-function _report_pieces!(op::LayoutState, counts, warned)
+# warned (under `splits = :warn`, by their final id) unless dropped later, already named by
+# the split warning above, or one piece again in the final σ (a later layer removed or
+# filled the other pieces; D-141 review, D-153).
+function _report_pieces!(op::LayoutState, lat::LatticeSpec, counts, warned)
+    check = falses(length(counts))
     for (c, row, warn) in op.pieces
         op.rows[row].splits += 1
-        (warn && counts[c] > 0 && !warned[c]) || continue
+        check[c] = warn && counts[c] > 0 && !warned[c]
+    end
+    any(check) || return nothing
+    _disconnected(op.σ, check, lat) do c
         @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
               "(pass `splits = :allow` to that Splits to accept it)"
     end
@@ -1736,7 +1742,7 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
         s > 0 && (counts[s] += 1)
     end
     warned = _check_splits!(op, lat, counts, report)
-    _report_pieces!(op, counts, warned)
+    _report_pieces!(op, lat, counts, warned)
     mask = lat.domain
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
