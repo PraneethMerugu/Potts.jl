@@ -29,10 +29,15 @@
 # k/100 ≤ x < (k + 1)/100, k = floor(Int, 100x + 1e-9) (the 1e-9 puts values that are
 # decimal bin edges up to rounding, e.g. 0.29 = 29/100, in their own bin). The peak is the
 # centre (k + 0.5)/100 of the bin whose centred 5-bin running mean (bins k − 2 … k + 2,
-# truncated at the ends) is largest; the first such bin on ties. For V4.2 bin 0 is
-# excluded: it holds exactly the cells with f == 0 as long as no cell has 0 < f < 0.01
-# (a nonzero f is 1/u or more for a cell with u unlike pairs, and u < 100 here); SMOKE and
-# the record check this premise on every run.
+# truncated at the ends) is largest; the first such bin on ties. For V4.2 the cells with
+# f == 0 are removed from bin 0 (a cell with u ≥ 100 unlike pairs can have 0 < f < 0.01, so
+# bin 0 also holds nonzero f: 26 cells of 10⁵ in the FULL record).
+#
+# Re-freeze (P6.15e, before merge): the first freeze dropped all of bin 0 for V4.2 and
+# asserted that bin 0 held exactly the f == 0 cells; the FULL record falsified that premise
+# (bin 0: 88 829 cells, f == 0: 88 803). The rule now drops exactly the f == 0 cells and the
+# premise assertion is replaced by hf[1] ≥ n_f0. No band, seed, run or target changed; every
+# V4 verdict of the record is the same under both rules.
 #
 # Negative control (D-048; spec V4 "γ > 0 shifts f mass"). The same runs with type-2
 # contact inhibition γ = 1e-4 (any cell without medium contact stops growing: the lattice
@@ -128,7 +133,9 @@ end
 p615e_in(x, (lo, hi)) = lo <= x <= hi
 # V4: the statistics and the per-row verdicts of a pooled summary
 function p615e_v4(s)
-    v = (f0 = s.n_f0 / s.n, f_peak = p615e_peak(s.hf; skip0 = true), f_max = s.f_max,
+    hfn = copy(s.hf)
+    hfn[1] -= s.n_f0                                 # nonzero f only
+    v = (f0 = s.n_f0 / s.n, f_peak = p615e_peak(hfn), f_max = s.f_max,
         a_peak = p615e_peak(s.ha), a_min = s.a_min, a_max = s.a_max, a_mean = s.sum_a / s.n,
         f_mean = s.sum_f / s.n)
     B = P615E_BAND
@@ -213,8 +220,6 @@ if !P615E_FULL
             @test all(x -> 0 <= x <= 1, r.rows.f) && all(>(0), r.rows.a) && all(>(0), r.rows.r)
             # the O2 lengths are in R from the centre: inside the lattice (120 px = 30.1 R)
             @test 10 < maximum(hypot.(r.rows.x, r.rows.y)) < 30
-            # bin 0 of f holds exactly the f == 0 cells (the V4.2 rule's premise)
-            @test !any(x -> 0 < x < 0.01, r.rows.f)
             @test count(==(0), r.rows.f) > 0
         end
         sb = p615e_merge([p615e_summary(r.rows.f, r.rows.a) for r in b])
@@ -222,7 +227,7 @@ if !P615E_FULL
         vb, vc = p615e_v4(sb), p615e_v4(sc)
         @info "P6.15e SMOKE" vb.v vc.v
         @test all(isfinite, values(vb.v)) && all(isfinite, values(vc.v))
-        @test sb.n == sum(sb.hf) == sum(sb.ha) && sb.n_f0 == sb.hf[1]
+        @test sb.n == sum(sb.hf) == sum(sb.ha) && sb.n_f0 <= sb.hf[1]
         # the control's mechanism: arrested interior cells relax toward their reference area
         @test vc.v.a_mean > vb.v.a_mean + 0.015          # measured 0.957 vs 0.925 on these seeds
         # and the control takes longer to reach 300 cells
@@ -268,10 +273,10 @@ end
         @test all(r -> parse(Float64, r["gamma"]) == 0, rb) && all(r -> parse(Float64, r["gamma"]) == P615E_GAMMA_CTL, rc)
         @test all(r -> r["retcode"] == "Terminated" && parse(Int, r["N"]) >= P615E_CELLS, [rb; rc])
         @test all(r -> parse(Int, r["lattice"]) == P615E_L, [rb; rc])
-        # the histograms hold every cell once per quantity, and bin 0 of f is f == 0
+        # the histograms hold every cell once per quantity; bin 0 of f holds the f == 0 cells
         for s in (sb, sc)
             @test sum(s.hf) == s.n == sum(s.ha)
-            @test s.hf[1] == s.n_f0
+            @test s.hf[1] >= s.n_f0
         end
         dev_f = joinpath(P615E_RECORD, "deviations.tsv")
         devs = isfile(dev_f) ? [d["target"] for d in p615e_tsv(dev_f)] : String[]
