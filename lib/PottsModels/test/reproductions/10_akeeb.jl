@@ -55,7 +55,7 @@
 # | V-A3 | fingers / singles / clusters marginals over the PP = 0.5 slice | R2 | — | 1210 runs |
 # | V-A4 | invasive / infiltrative marginals; order; ratios 4.25 and 8.56 | R2; strict; ±15 % | — | 1210 runs |
 # | V-A5 | cluster incidence 28.3 % (N 1209), 71.5 % at λ ≥ 24 (N 330); 4.85 ± 0.24 when present | R3; R2 | — | 1210 runs |
-# | V-A6 | phenotype fractions 22 / 1 / 23 / 54 % | PARKED (author question 1) | — | — |
+# | V-A6 | phenotype fractions 22 / 1 / 23 / 54 % (A classified: 2950 / 143 / 2989 / 7181 of 13,263) | R3 per phenotype; READY (D-163), classifier `akeeb_phenotype` provisional (author question 1) | — | FULL record: recomputed from the committed 13,310-run sweep (P6.2e) |
 # | V-A7 | P1, P7, P9 each match their own reference | R1 (P9 adds 6) | — | n = 10 |
 # | V-A8 | cluster composition, pooled (C): P1 mean size 5.79 (SD 3.75, 75), leader fraction 0.578; P2 5.56 (3.71, 143), 0.517 | R1 with clusters as units; ±0.10 | — | P1, P2 n = 10 |
 # | V-A8 paper | "mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F" | PARKED (not reproducible from the release) | — | — |
