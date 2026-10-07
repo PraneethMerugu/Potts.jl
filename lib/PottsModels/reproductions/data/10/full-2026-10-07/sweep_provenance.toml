@@ -1,0 +1,35 @@
+capacity = 4000
+points = 1331
+started_last_session = "2026-10-07T10:53:45.892"
+threads = 12
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+seeds = "2000000 + 100j + i"
+decision = "D-156"
+dirty = false
+wall_s_last_session = 3490.9
+finished = "2026-10-07T11:52:00.957"
+script = "lib/PottsModels/reproductions/data/10/full-2026-10-07/sweep.jl"
+algorithm = "SequentialCPM(; proposal = VonNeumann(1))"
+hostname = "praneeth-NucBox-EVO-X2"
+affinity = "taskset -c 0-11,16-27; systemd-run --user --scope MemoryMax=12G"
+machine = "x86_64-linux-gnu"
+julia = "1.12.6"
+commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
+replicates = 10
+item = "P6.2d"
+saves_our_mcs = [701]
+
+# First session (PP = 0.0 and 0.1), recovered after the fact: its sweep.log was overwritten
+# when the second session started. Start: the page run's EXIT line in page.log (the same
+# script launched the sweep next); stop: the second session's START line in sweep.log (the
+# first was stopped by hand to add the memory cap); commit and threads: the launch script
+# and the PC worktree, which stayed at 246427f1 until 12:2x. Per-level wall times are lost.
+[first_session]
+commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
+pp_levels = [0.0, 0.1]
+started = "2026-10-07T10:41:44"
+stopped = "2026-10-07T10:53:41"
+wall_s_approx = 717
+threads = 12
+affinity = "taskset -c 0-11,16-27 (no memory cap)"
+note = "wall time includes compilation and the partial PP = 0.2 level discarded at the stop; the TSV keeps only whole PP levels"

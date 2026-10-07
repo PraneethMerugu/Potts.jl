@@ -12,8 +12,14 @@
 #     carry a verdict there; the tables are a smoke check, not validation. The full run
 #     (`POTTS_FULL_REPRODUCTION=true`) runs the spec's ensembles: 10 runs at each of nine
 #     parameter points and 10 at each of the 121 points of the PP = 0.5 slice. The
-#     committed full-run outputs (`lib/PottsModels/reproductions/data/10/`) are **pending**:
-#     no full run has been made yet.
+#     committed full-run record is `lib/PottsModels/reproductions/data/10/full-2026-10-07/`
+#     (P6.2d, D-146: verdicts, time series, provenance). It holds the page at FULL and a
+#     separate 13,310-run sweep of the whole (J_LF, λ, PP) grid for V-A6 and the full-sweep
+#     form of V-A7; §5 reads its verdicts from there. The full run's replicate-1 videos
+#     are release assets: [P1](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P1_replicate1.mp4),
+#     [P4](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P4_replicate1.mp4),
+#     [P5](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P5_replicate1.mp4) and
+#     [P6](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P6_replicate1.mp4).
 #
 # ## 1. Paper and sources
 #
@@ -129,12 +135,36 @@ nothing #hide
 # XML (spec 10 §1).
 
 aq(q) = "not asked (on our open question list: spec 10 §7 $q; README §5)"
+
+## the committed FULL record (D-146): verdict tables and per-run TSVs, read here, not retyped
+rec_dir = joinpath(pkgdir(PottsModels), "reproductions", "data", "10", "full-2026-10-07")
+rec_rows(file) = (l = split.(readlines(joinpath(rec_dir, file)), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]])
+rec_page, rec_sweep = rec_rows("verdicts.tsv"), rec_rows("verdicts_sweep.tsv")
+rec(rows, target) = only(r for r in rows if r["target"] == target)
+rec_runs = rec_rows("sweep.tsv")
+rec_p6 = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0"]
+rec_p6s = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0" && r["PP"] == "0.5"]
+rfmt(x) = string(round(Int, x))
+## pass rule R1 of §5 (spec 10 §5.3.3), defined here because the deviations table uses it
+r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
+tol1(μA, sA, nA, sB, nB, f) = max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
+## dataset A at (J_LF, λ) = (−2, 6) pooled over its 11 PP levels (`Data/invasion_metrics.csv`;
+## PP does not matter, V-A7): invasive mean, SD, n
+const A_P6_POOLED = (2381, 383, 110)
+va6 = [rec(rec_sweep, "V-A6 $p fraction") for p in ("No invasion", "Single-cell", "Bulk", "Multimodal")]
+va6_ours = join([first(split(r["ours"], " %")) for r in va6], " / ") * " %"
+va6_result = all(r -> r["result"] == "PASS", va6) ? "PASS" : "FAIL"
+va8 = [rec(rec_page, "V-A8 $p mean cluster size; leader fraction") for p in ("P1", "P2")]
+p6 = rec(rec_page, "V-A2 P6 invasive")
+p6A = parse.(Float64, match(r"^([0-9.]+) ± ([0-9.]+)", p6["paper"]).captures)        # A at P6, n = 10
+p6s_band = r1(p6A..., 10, mean(rec_p6s), std(rec_p6s), length(rec_p6s), 0.0) ? "in band (R1)" : "out of band (R1)"
 Markdown.parse("""
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-A6 phenotype fractions (**PARKED**) | not run | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | un-parking pending P6.2d (D-156, area-equality classifier); the paper does not say which classifier produced Fig. 5 and S1 Table (spec 10 §5.3.5) | $(aq("q1")) |
-| V-A8 (paper) cluster composition (**PARKED**) | not run; V-A8 binds on the released `cluster_data.csv` instead | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |
-| V-A9 leader speed (**PARKED**) | not run | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |
+| V-A2 P6 (−2, 6, 0.5) invasive = infiltrative (**FAIL**, full run) | $(p6["ours"]); the same point in the full sweep (other seeds): $(rfmt(mean(rec_p6s))) ± $(rfmt(std(rec_p6s))) (n = $(length(rec_p6s))), $p6s_band; pooled over all 11 PP at (−2, 6): $(rfmt(mean(rec_p6))) ± $(rfmt(std(rec_p6))) (n = $(length(rec_p6))) | $(p6["paper"]), tolerance $(p6["tolerance"]); A pooled over all 11 PP at (−2, 6): $(A_P6_POOLED[1]) ± $(A_P6_POOLED[2]) (n = $(A_P6_POOLED[3])) | reference sampling: A's PP = 0.5 cell is low against A's own (−2, 6) runs, and PP does not matter (V-A7); pooled, ours is $(round(100 * (mean(rec_p6) / A_P6_POOLED[1] - 1); digits = 1)) % above A, inside the 10 % floor. Both FAIL rows of the full run are this one deviation: at P6 invasive and infiltrative are the same quantity (no detached cells) | not an author question |
+| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full sweep) | $va6_ours (N = $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | provisional: the area-equality classifier (`akeeb_phenotype`), identified from the released notebooks as the one behind Fig. 5B and S1 Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The paper does not say. R3's floor of 5 percentage points means the Single-cell row (≈ 1 %) cannot fail: it is a check on the other three | $(aq("q1")) |
+| V-A8 (paper) cluster composition (**PARKED**) | V-A8 binds on the released `cluster_data.csv` instead: P1 $(va8[1]["ours"]), P2 $(va8[2]["ours"]) ($(va8[1]["result"]), $(va8[2]["result"]), full run) | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |
+| V-A9 leader speed (**PARKED**) | not run (no measurement to reproduce) | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |
 | Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("q2")) |
 | Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (D-050 A1) | 25 % of the followers "reassigned" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |
 | Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty "ghost" leader in the inventory, S:68–75) | emulates the released code (D-068; spec 10 §5.3.6) | $(aq("q7")) |
@@ -217,8 +247,9 @@ akeeb_observables(sol_one.u[end])
 # | V-A3 fingers, singles, clusters marginals over the PP = 0.5 slice | A slice; p.10–11 | R2, 1210 runs | FULL | READY |
 # | V-A4 invasive and infiltrative marginals | A slice; p.10 | R2 on seven means; [−1, 2] > (> 2) > (≤ −2) strictly; both λ ratios within ±15 % | FULL | READY |
 # | V-A5 cluster incidence 28.3 % (N 1209), 71.5 % at λ ≥ 24 (N 330); 4.85 ± 0.24 when present | A slice; p.10–11 | R3; R2 | FULL | READY |
-# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B | — | — | **PARKED** (author question 1) |
+# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B; A classified (13,263 runs) | the area-equality classifier `akeeb_phenotype` (provisional, spec 10 §5.3.5) on the full sweep, 13,310 runs; R3 per phenotype | FULL record | READY (P6.2d, D-156; un-parked) |
 # | V-A7 PP barely matters: P1, P7, P9 each match their own reference | A; p.10–11 | R1 (P9 adds 6 tests) | FULL | READY |
+# | V-A7 (full sweep) \|r(PP, metric)\| < 0.05 for the six metrics | A; p.10–11 (\|r\| < 0.03) | the full sweep, 13,310 runs | FULL record | READY (P6.2d) |
 # | V-A8 cluster composition: P1 mean size 5.79 (SD 3.75, 75 clusters), leader fraction 0.578; P2 5.56 (3.71, 143), 0.517 | C `cluster_data.csv` | R1 with clusters as the units; pooled leader fraction ± 0.10 | FULL | READY |
 # | V-A8 (paper) mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F | p.14–17 | — | — | **PARKED** (not reproducible from the release; author question 8) |
 # | V-A9 leader speed 0.4 px/MCS at λ = 20 | p.6 | — | — | **PARKED** (undefined; author question 6) |
@@ -305,8 +336,6 @@ Markdown.parse("This table was last changed in commit " *
 
 seed_of(k, i) = 10_000k + i
 const SAVES = [1, 101, 301, 501, 701]
-r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
-tol1(μA, sA, nA, sB, nB, f) = max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.10 * abs(μA), f)
 r2(μA, seA, μB, seB, f) = abs(μB - μA) <= max(3 * sqrt(seA^2 + seB^2), 0.10 * abs(μA), f)
 r3(pA, NA, pB, NB) = abs(pB - pA) <= max(3 * sqrt(pA * (1 - pA) / NA + pB * (1 - pB) / NB), 0.05)
 sd(v) = length(v) > 1 ? std(v) : 0.0
@@ -380,6 +409,12 @@ for name in (:P1, :P4, :P5, :P6)
     haskey(runs, name) && @assert ownership(v.u[end]) == runs[name][1].final
     push!(videos, file)
 end
+# This build's videos are below. The full run's are release assets (the same seeds and
+# rendering): [P1](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P1_replicate1.mp4),
+# [P4](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P4_replicate1.mp4),
+# [P5](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P5_replicate1.mp4),
+# [P6](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P6_replicate1.mp4).
+#
 # ```@raw html
 # <video src="../10_akeeb_P1.mp4" controls autoplay loop muted playsinline width="640"></video>
 # <video src="../10_akeeb_P4.mp4" controls autoplay loop muted playsinline width="640"></video>
@@ -537,7 +572,13 @@ addrow!("invariants: infiltrative ≥ invasive, detached ≥ singles", "every ru
     "exact", "SMOKE+FULL", inv_all)
 
 ## parked and reported rows
-addrow!("V-A6 phenotype fractions", "22 / 1 / 23 / 54 % (p.13)", "—", "—", "parked", nothing)
+## V-A6 and the full-sweep V-A7: read from the committed full sweep (they need all 13,310
+## runs, which no docs build makes); class "FULL record"
+for r in rec_sweep
+    (startswith(r["target"], "V-A6") || startswith(r["target"], "V-A7")) && r["class"] == "FULL" || continue
+    push!(rows, (; target = r["target"], paper = r["paper"], ours = r["ours"], tol = r["tolerance"], class = "FULL record",
+        ok = r["result"] == "PASS", result = r["result"]))
+end
 addrow!("V-A8 (paper) cluster sizes", "≈ 7 cells, 60–70 % leaders (p.14–17)", "—", "—", "parked", nothing)
 addrow!("V-A9 leader speed", "0.4 px/MCS at λ = 20 (p.6)", "—", "—", "parked", nothing)
 addrow!("V-A10 morphology", "Fig. 4", "videos above", "—", "reported", true)
@@ -552,10 +593,55 @@ $heading
 |---|---|---|---|---|---|
 """ * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(display_result(r)) |" for r in rows], "\n"))
 
-# Rows that fail or fall out of band:
+# Rows of class "FULL record" are read from the committed full sweep
+# (`data/10/full-2026-10-07/verdicts_sweep.tsv`), whatever this build runs. Rows that fail
+# or fall out of band:
 
 failing = filter(r -> r.ok === false, rows)
 Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in failing], "\n"))
+
+# ### The full run (committed record)
+#
+# The verdicts of the full run, read from `data/10/full-2026-10-07/` (D-146). The page at
+# FULL (`verdicts.tsv`) and the full sweep (`verdicts_sweep.tsv`) were run with the machine,
+# threads and wall time below (`provenance.toml`, `sweep_provenance.toml`):
+
+## top-level keys of a provenance file (tables such as `[first_session]` are not read)
+prov(file) = Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m,
+    first(split(read(joinpath(rec_dir, file), String), "\n["))))
+pp, ps = prov("provenance.toml"), prov("sweep_provenance.toml")
+tally = Dict(k => count(r -> r["result"] == k, rec_page) for k in unique(r["result"] for r in rec_page))
+Markdown.parse("""
+- **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"]), host `$(pp["hostname"])`), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts (tally of the page as run, before V-A6 was un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation, §3).
+- **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"]), host `$(ps["hostname"])`), CPU backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = 0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the record's README).
+""")
+
+# Fig. 5B side by side: the phenotype fractions of the authors' dataset A (Fig. 5B values,
+# NB:`Phenotypes.ipynb` cell 7, as recorded in `verdicts_sweep.tsv`) and of our full
+# sweep, by the same classifier. R3's floor of 5 percentage points (§5) makes the
+# Single-cell comparison (≈ 1 %) unable to fail; the other three carry the verdict.
+
+let names = ["none", "single", "bulk", "multimodal"],
+    A = [parse(Float64, match(r"A ([0-9.]+) %", r["paper"])[1]) for r in va6]    # A's fractions, read from verdicts_sweep.tsv
+    ph = [r["phenotype"] for r in rec_runs if r["phenotype"] != "unclassified"]
+    ours = [100 * count(==(n), ph) / length(ph) for n in names]
+    f = Figure(size = (520, 340))
+    ax = Axis(f[1, 1]; ylabel = "% of classified runs", xticks = (1:4, ["No invasion", "Single-cell", "Bulk", "Multimodal"]))
+    barplot!(ax, (1:4) .- 0.2, A; width = 0.38, color = :gray60, label = "authors (A, Fig. 5B)")
+    barplot!(ax, (1:4) .+ 0.2, ours; width = 0.38, color = :red3, label = "ours (full sweep)")
+    axislegend(ax; position = :lt, framevisible = false)
+    f
+end
+
+# Reported, not gating: the paper's correlations and full-sweep marginals (p.10–11),
+# which only the full sweep can compute, and the sweep's own PP = 0.5 slice as a second,
+# independent replicate of V-A3 and V-A4. "info" rows carry no verdict; their bands are in
+# the table.
+
+Markdown.parse("""
+| Quantity | Paper / authors | Ours (full sweep) | Band | Result |
+|---|---|---|---|---|
+""" * join(["| $(r["target"]) | $(r["paper"]) | $(r["ours"]) | $(r["tolerance"]) | $(r["result"]) |" for r in rec_sweep if r["class"] == "info"], "\n"))
 
 # ## 6. Known limitations and open questions for the authors
 #
@@ -564,7 +650,8 @@ Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ou
 # - Which classifier produced Fig. 5 and S1 Table? The released notebooks suggest that
 #   Fig. 5B and S1 Table use the area-equality classifier (`ResultExtraction.ipynb` cell
 #   3, first function) and Fig. 5A the probability map of the fingers/singles/clusters
-#   classifier (spec 10 §5.3.5). The answer unparks V-A6.
+#   classifier (spec 10 §5.3.5). The answer confirms or replaces V-A6's provisional
+#   classifier.
 # - Is the third term of Eq. (1) shorthand for CompuCell3D's per-copy chemotaxis? The
 #   answer replaces the chemotaxis row of §3.
 # - Which repository and commit produced the 13,310 runs? The release holds three
@@ -602,3 +689,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # |---|---|---|
 # | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | ROADMAP P6.2b; D-143 |
 # | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | D-154, D-156; ROADMAP P6.0bd, P6.0bf |
+# | 2026-10-07 | The full-run record (`data/10/full-2026-10-07/`): V-A6 un-parked with the provisional area-equality classifier and V-A7's full-sweep form, both read from the committed sweep; the V-A2 P6 deviation; reported correlations and marginals; links to the full-run videos | ROADMAP P6.2d; D-156 |

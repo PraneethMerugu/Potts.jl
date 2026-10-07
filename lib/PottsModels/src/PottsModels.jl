@@ -21,8 +21,8 @@ using SciMLBase: ReturnCode
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
     AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
-    openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout, merks2008_sprout,
-    merks2008_denovo
+    akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout,
+    merks2008_sprout, merks2008_denovo
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")

@@ -1,0 +1,12 @@
+capacity = 4000
+saves_paper_mcs = [0, 100, 300, 500, 700]
+slice_points = 121
+threads = 12
+slice_replicates = 10
+va0_seeds = "100000 + i"
+point_seeds = "10000k + i (k = point index P1..P9, i = 1..10)"
+algorithm = "SequentialCPM(; proposal = VonNeumann(1))"
+one_run_s = 2.586012191
+slice_seeds = "1000000 + 100j + i (j = slice point, J_LF-major)"
+replicates_per_point = 10
+saves_our_mcs = [1, 101, 301, 501, 701]

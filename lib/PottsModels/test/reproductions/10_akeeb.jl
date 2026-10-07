@@ -456,9 +456,30 @@ end
 # ---------------------------------------------------------------------------------------------
 
 @testset "P6.2b: parked V-targets" begin
-    @test_skip "V-A6 phenotype fractions 22/1/23/54 % (author question 1; classifier identified, §5.3.5)" == ""
     @test_skip "V-A8 paper cluster values: mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (author question 8)" == ""
     @test_skip "V-A9 leader speed 0.4 px/MCS at λ = 20 (undefined; author question 6)" == ""
+end
+
+# ---------------------------------------------------------------------------------------------
+# FULL-record rows (P6.2d, D-156): V-A6 and the full-sweep form of V-A7 need the 13,310-run
+# sweep, so they bind in the committed record only, as the page reads them. Cheap: the
+# verdict TSV is read, nothing is run
+# ---------------------------------------------------------------------------------------------
+
+@testset "P6.2d FULL record: V-A6 (provisional classifier) and full-sweep V-A7" begin
+    file = joinpath(pkgdir(PottsModels), "reproductions", "data", "10", "full-2026-10-07", "verdicts_sweep.tsv")
+    @test isfile(file)
+    l = split.(readlines(file), '\t')
+    rows = [Dict(zip(l[1], r)) for r in l[2:end]]
+    result(t) = only(r["result"] for r in rows if r["target"] == t)
+    for p in ("No invasion", "Single-cell", "Bulk", "Multimodal")
+        @test result("V-A6 $p fraction") == "PASS"
+    end
+    for m in ("invasive", "infiltrative", "singles", "fingers", "detached", "clusters")
+        @test result("V-A7 r(PP, $m), full sweep") == "PASS"
+    end
+    @test count(r -> startswith(r["target"], "V-A6") && r["class"] == "FULL", rows) == 4
+    @test count(r -> startswith(r["target"], "V-A7") && r["class"] == "FULL", rows) == 6
 end
 
 # ---------------------------------------------------------------------------------------------

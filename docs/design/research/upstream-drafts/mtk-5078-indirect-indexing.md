@@ -17,12 +17,16 @@ under `systemd-run --user --scope -p MemoryMax=16G`; ~/p6-0br-mwe/mwe3_indirect.
 mwe3_code.jl and mwe3_arr.jl. Three environments were used: latest registered, the workspace pin,
 and PR #5235's head.
 Everything below the line is the comment body.
+Finalized 2026-10-07 (finalization pass, not yet posted): #5078 still OPEN, one comment (the bot's
+"Taking this"); #5235 still OPEN at 529f9b69. The "Invalid symbol table[1] for setsym" quote was
+checked against #5235's body ("Not verified / remaining for #5078"). Dropped the mtkcompile
+`Missing` side observation; it is unrelated to indexing, and draft 4 already reports it.
 -->
 
-The same `StableIndex{Int}` typeassert also hits plain **equations** (no events) when an array
-is indexed by an `Int` parameter. On #5235's head, the typeassert goes away and the next failure
-appears: the generated RHS refers to the bare array symbol, which is not bound in the function.
-Reproducer, using `complete` only:
+The same `StableIndex{Int}` typeassert also hits plain **equations** (no events) when an array is
+indexed by an `Int` parameter. Behind it is a second bug that already shows on released versions
+with `build_initializeprob = false`, and that remains on #5235's head: the generated RHS refers to
+the bare array symbol, which is never bound in the function. Reproducer, `complete` only:
 
 ```julia
 using ModelingToolkit
@@ -50,17 +54,17 @@ for (label, (sys, u0, expected)) in cases, init in (true, false)
 end
 ```
 
-Every case should print `OK`. What it prints instead:
+Every case should print `OK`. Instead:
 
-| case | init | MTK 11.45.3 / MTKB 1.77.3 (also 11.45.1 / 1.77.0) | PR #5235 head `529f9b69` |
+| case | init | MTK 11.45.3 / MTKB 1.77.3 (same on 11.45.1 / 1.77.0) | #5235 head `529f9b69` |
 |---|---|---|---|
-| `D(y) ~ J[k]` | true | `TypeError: expected Int64, got BasicSymbolic` (`StableIndex{Int64}` ← `get_possibly_indexed`, `atomic_array_dict.jl:173` ← `add_observed_equations!`, `problem_utils.jl:198` ← `InitializationProblem`) | `UndefVarError: J not defined in ModelingToolkitBase` |
+| `D(y) ~ J[k]` | true | `TypeError: expected Int64, got BasicSymbolic` (`StableIndex{Int64}` ← `get_possibly_indexed`, `atomic_array_dict.jl:173` ← `add_observed_equations!`, `problem_utils.jl:198` ← `InitializationProblem`) | `UndefVarError: J` |
 | `D(y) ~ J[k]` | false | `UndefVarError: J` | `UndefVarError: J` |
-| `D(x[1]) ~ x[k]` | true | same `TypeError` as the first row | `UndefVarError: x` |
+| `D(x[1]) ~ x[k]` | true | same `TypeError` | `UndefVarError: x` |
 | `D(x[1]) ~ x[k]` | false | `UndefVarError: x` | `UndefVarError: x` |
-| `D(x[i]) ~ x[s[i]] - x[i]` | both | `UndefVarError: x` (the `System` and the `ODEProblem` both build, with either init setting; the error is at the first `f` call) | `UndefVarError: x` |
+| `D(x[i]) ~ x[s[i]] - x[i]` | both | `UndefVarError: x` (`System` and `ODEProblem` build; the error is at the first `f` call) | `UndefVarError: x` |
 
-So #5235 fixes the lookup, as intended, and the remaining problem is codegen.
+So #5235 fixes the lookup, as intended, and what remains is codegen.
 `generate_rhs(complete(sys_a); expression = Val{true})` on #5235's head contains:
 
 ```julia
@@ -72,13 +76,13 @@ local var"##cse#2" = __mtk_arg_4[1]       # k
 local var"##cse#3" = var"##cse#1"[var"##cse#2"]
 ```
 
-For the `x[s[i]]` case it emits `x(t)` the same way, as `local var"##cse#1" = x` applied to `t`,
-instead of a view of `___mtkunknowns___`. A constant index is rewritten to the buffer slot. A
-symbolic index needs the whole array bound to a view of its buffer (the tunable slice for `J`,
-the `u` slice for `x`), and the codegen does not do that. That is presumably the same gap as
-#5235's remaining `Invalid symbol table[1] for setsym`, on the affect side.
+The `x[s[i]]` case is the same with an unknown: the code reads the free symbol `x` (and calls it
+with `t`) instead of a view of `___mtkunknowns___`. A constant index is rewritten to its buffer
+slot, but a symbolic index needs the whole array bound to a view of its buffer (the tunable slice
+for `J`, the `u` slice for `x`), and codegen never emits that binding. This is presumably the same
+gap as #5235's remaining `Invalid symbol table[1] for setsym` on the affect side.
 
-Plain Symbolics handles this when the arrays are passed whole:
+Plain Symbolics handles it when the arrays are passed whole:
 
 ```julia
 using Symbolics
@@ -87,28 +91,18 @@ f = build_function(J[τ[σ[1]], τ[σ[2]]], σ, τ, J; expression = Val{false})
 f([1, 2], [1, 2, 3], [0.0 1 2; 1 0 3; 2 3 0])   # 1.0, correct
 ```
 
-So what MTK needs is a binding: whenever an array symbol appears under a non-constant index,
-bind it as a whole (`J = view(tunables, idxs_of_J)`, `x = view(u, idxs_of_x)`).
+So what MTK needs is: whenever an array symbol appears under a non-constant index, bind it as a
+whole (`J = view(tunables, idxs_of_J)`, `x = view(u, idxs_of_x)`).
 
 The use case is lookup tables indexed by discrete state. In our setting that is a contact energy
-`J[τ[σ[i]], τ[σ[j]]]`, where `σ` maps sites to entities and `τ` maps entities to types. The
-scalar affect in #5078 is the simplest member of that family. A test covering `J[k]` in an
-equation, as well as in an affect, would keep the two paths from drifting apart.
+`J[τ[σ[i]], τ[σ[j]]]`, where `σ` maps sites to entities and `τ` maps entities to types; the scalar
+affect in this issue is the simplest member of that family. A test for `J[k]` in an equation as
+well as in an affect would keep the two paths from drifting apart.
 
-Two side observations from `mtkcompile`. They may be separate bugs, and we did not reduce them
-further:
+Workaround for equations: `mtkcompile` scalarizes, and `D(x[1]) ~ x[k]` then gives the right
+`du = [2.0, 0.0, 0.0]` (with the default `build_initializeprob = true`).
 
-- `D(x[1]) ~ x[k]` with `mtkcompile` and the default `build_initializeprob = true` gives the
-  right `du = [2.0, 0.0, 0.0]`.
-- With `build_initializeprob = false`, the same system fails with `MethodError: Cannot convert
-  an object of type Missing to an object of type Float64`. A 2-D array diffusion system with no
-  symbolic index does the same.
-
-Versions:
-- ModelingToolkit 11.45.3, ModelingToolkitBase 1.77.3, ModelingToolkitTearing 1.20.7,
-  Symbolics 7.44.1, SymbolicUtils 4.49.0 and SciMLBase 3.57.0;
-- ModelingToolkit 11.45.1, ModelingToolkitBase 1.77.0, Symbolics 7.41.1 and SymbolicUtils
-  4.48.0;
-- #5235 at `529f9b69`, with ModelingToolkitBase 1.77.2 from that tree.
-
-All on Julia 1.12.6, x86_64-linux-gnu.
+Versions: ModelingToolkit 11.45.3, ModelingToolkitBase 1.77.3, ModelingToolkitTearing 1.20.7,
+Symbolics 7.44.1, SymbolicUtils 4.49.0, SciMLBase 3.57.0; also ModelingToolkit 11.45.1,
+ModelingToolkitBase 1.77.0, Symbolics 7.41.1, SymbolicUtils 4.48.0; and #5235 at `529f9b69`
+(ModelingToolkitBase 1.77.2 from that tree). Julia 1.12.6, x86_64-linux-gnu.

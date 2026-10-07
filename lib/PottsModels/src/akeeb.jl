@@ -253,3 +253,34 @@ function akeeb_observables(u)
     n = Int(maximum(σ; init = 0))
     return akeeb_observables(σ, [codes[c] == 1 ? :leader : :follower for c in 1:n])
 end
+
+"""
+    akeeb_phenotype(obs) -> Symbol
+
+The invasion phenotype of one measured state, by the authors' area-equality classifier
+(Akeeb, Marcus & Jiang 2026, Fig. 5B and S1 Table; the first `classify_phenotype` of
+`Implementation/TumorInvasionAnalysis/ResultExtraction.ipynb`, cell 3, in their released
+code; spec 10 §5.3.5). `obs` is any value with the fields
+`invasive`, `infiltrative`, `fingers`, `singles` and `clusters`, such as the result of
+[`akeeb_observables`](@ref). The tests are applied in order, and the areas are compared
+exactly:
+
+- `:none`: `invasive == infiltrative`, no fingers, no singles, no clusters;
+- `:single`: `invasive < infiltrative`, no fingers, singles, no clusters;
+- `:bulk`: `invasive == infiltrative`, fingers, no singles, no clusters;
+- `:multimodal`: `invasive < infiltrative`, fingers and singles (any clusters);
+- `:unclassified`: anything else. The authors drop these states before computing
+  phenotype fractions.
+
+The paper's Fig. 5A uses a different rule, on fingers, singles and clusters only (spec 10
+§5.3.5); it is not this function.
+"""
+function akeeb_phenotype(obs)
+    inv, inf = obs.invasive, obs.infiltrative
+    f, s, c = obs.fingers, obs.singles, obs.clusters
+    inv == inf && f == 0 && s == 0 && c == 0 && return :none
+    inv < inf && f == 0 && s > 0 && c == 0 && return :single
+    inv == inf && f > 0 && s == 0 && c == 0 && return :bulk
+    inv < inf && f > 0 && s > 0 && c >= 0 && return :multimodal
+    return :unclassified
+end

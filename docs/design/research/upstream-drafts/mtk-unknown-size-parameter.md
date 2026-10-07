@@ -22,25 +22,28 @@ The text was machine-drafted. Add whatever AI-disclosure line you normally use b
 Verified on the PC under `systemd-run --user --scope -p MemoryMax=16G`;
 ~/p6-0br-mwe/mwe2_final.jl and mwe2_probe.jl.
 Everything below the line is the issue body.
+Finalized 2026-10-07 (finalization pass, not yet filed): MWE already minimal (= mwe2_final.jl).
+Added permalinks. ModelingToolkitTearing lives in JuliaComputing/StateSelection.jl
+(lib/ModelingToolkitTearing); line 248 is unchanged on its main 2cc04c02. Its issues were searched
+for ShapeVecT / Unknown shape too: nothing. The suggested fix is an untested sketch, and the body says so.
 -->
 
-**Title:** `mtkcompile` throws `TypeError: expected ShapeVecT, got Unknown` for a system with an unknown-size array parameter (`@parameters w::Vector{Float64}`)
+**Title:** `mtkcompile` throws `TypeError: expected ShapeVecT, got Unknown` for an unknown-size array parameter (`@parameters w::Vector{Float64}`)
 
 ---
 
 ## Summary
 
-`@parameters w::Vector{Float64}` creates a parameter of shape `Unknown(1)`, whose length is
-fixed only by the value supplied at problem construction.
+`@parameters w::Vector{Float64}` creates a parameter of shape `Unknown(1)`, whose length is fixed
+only by the value given at problem construction.
 
-- On the `complete` path this already works end to end. `ODEProblem` builds, the RHS is right,
-  and `remake` and `setp` to a *different* length work too.
-- `mtkcompile` of the same system throws. Clock inference in ModelingToolkitTearing sees an
-  array-shaped symbol and calls `SU.stable_eachindex` on it, which requires a known shape.
-- With only ModelingToolkitBase loaded, `ODEProblem(complete(sys))` fails the same way,
-  because it builds the initialization system with ModelingToolkitBase's `mtkcompile`.
-  `ModelingToolkitBase/src/systems/systems.jl:249` expands every array variable with
-  `SU.stable_eachindex`.
+- On the `complete` path this already works end to end: `ODEProblem` builds, the RHS is right, and
+  `remake` and `setp` to a *different* length work too.
+- `mtkcompile` of the same system throws. Clock inference in ModelingToolkitTearing expands every
+  array-shaped symbol with `SU.stable_eachindex`, which needs a known shape.
+- With only ModelingToolkitBase loaded, `ODEProblem(complete(sys))` fails the same way, because it
+  builds the initialization system with ModelingToolkitBase's `mtkcompile`, whose variable
+  collection ([`systems.jl:249`](https://github.com/SciML/ModelingToolkit.jl/blob/fd0cbadb43dc273ef8d7e167d83a7236b394eec7/lib/ModelingToolkitBase/src/systems/systems.jl#L247-L253)) expands array symbols the same way.
 
 ## MWE
 
@@ -52,16 +55,14 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 @parameters w::Vector{Float64}   # length not fixed: shape(w) == Unknown(1)
 
 sys = System([D(x) ~ sum(w)], t, [x], [w]; name = :s)
-prob = ODEProblem(complete(sys), [x => 0.0, w => [1.0, 2.0]], (0.0, 1.0))  # works, and remake/setp to other lengths work
+prob = ODEProblem(complete(sys), [x => 0.0, w => [1.0, 2.0]], (0.0, 1.0))  # works; remake/setp to other lengths work too
 simp = mtkcompile(sys)                                                     # throws
 ```
 
 ## Expected
 
-`mtkcompile(sys)` returns a system equivalent to `complete(sys)` here (there is nothing to
-simplify), with `w` kept as an atomic, opaque-length parameter, as the `complete` path already
-does. Clock inference and the variable collection in `__mtkcompile` should treat an
-array-shaped symbol whose shape is `Unknown` as one atomic variable instead of expanding it.
+`mtkcompile(sys)` returns a system equivalent to `complete(sys)` (there is nothing to simplify),
+keeping `w` as one atomic parameter of runtime length, as the `complete` path already does.
 
 ## Actual
 
@@ -83,51 +84,51 @@ Stacktrace:
     @ ModelingToolkitBase/src/systems/systems.jl:154
 ```
 
-The full matrix of outcomes (`du` expected `[3.0]`, then `[10.0]` after `remake` to length 4,
-then `[15.0]` after `setp` to `[5, 5, 5]`):
+All outcomes (expected `du = [3.0]`; `[10.0]` after `remake` to length 4; `[15.0]` after `setp` to `[5, 5, 5]`):
 
-| loaded | `ODEProblem(complete(sys))` | same, `build_initializeprob = false` | `remake` / `setp` to new length | `mtkcompile(sys)` |
+| loaded | `ODEProblem(complete(sys))` | same, `build_initializeprob = false` | `remake` / `setp` to a new length | `mtkcompile(sys)` |
 |---|---|---|---|---|
-| `using ModelingToolkit` | OK, `du = [3.0]` | OK | OK (`[10.0]`, `[15.0]`) | **TypeError** (above) |
-| `using ModelingToolkitBase` only | **TypeError**, via `InitializationProblem` → `mtkcompile_initialization_system` → `ModelingToolkitBase.__mtkcompile` (`systems.jl:249`) | OK | OK (`[10.0]`, `[15.0]`) | **TypeError** (`systems.jl:249`) |
+| `using ModelingToolkit` | OK | OK | OK | **TypeError** (above) |
+| `using ModelingToolkitBase` only | **TypeError** at `systems.jl:249`, via `InitializationProblem` → `mtkcompile_initialization_system` → `__mtkcompile` | OK | OK | **TypeError** at `systems.jl:249` |
 
 The same happens when `w` is used only inside a registered function
-(`@register_symbolic mysum(w::AbstractVector)`, with `w` marked `[tunable = false]`), so the
-failure is not caused by `sum` being traced through `w`.
+(`@register_symbolic mysum(w::AbstractVector)`, `w` marked `[tunable = false]`), so it is not
+caused by `sum` being traced through `w`.
 
-## Suggested fix
+## Suggested fix (untested sketch)
 
-At both call sites, expand an array symbol only when its shape is concrete, and otherwise keep
-the symbol whole:
+Expand an array symbol only when its shape is concrete; otherwise keep it whole.
 
-```julia
-sh = SU.shape(v)
-if Symbolics.isarraysymbolic(v) && sh isa SU.ShapeVecT
-    for i in SU.stable_eachindex(v)
-        push!(_all_dvs, v[i])
-    end
-else
-    push!(_all_dvs, v)
-end
-```
+- [`clock_inference.jl:246-251`](https://github.com/JuliaComputing/StateSelection.jl/blob/ModelingToolkitTearing-v1.20.7/lib/ModelingToolkitTearing/src/clock_inference/clock_inference.jl#L246-L251) in ModelingToolkitTearing (JuliaComputing/StateSelection.jl):
+  change the guard `if SU.is_array_shape(SU.shape(var)) end` to `if SU.shape(var) isa SU.ShapeVecT end`,
+  so that an unknown-shape symbol falls through to `_ => return`, like any other non-clocked variable.
+- [`systems.jl:247-253`](https://github.com/SciML/ModelingToolkit.jl/blob/fd0cbadb43dc273ef8d7e167d83a7236b394eec7/lib/ModelingToolkitBase/src/systems/systems.jl#L247-L253) in ModelingToolkitBase:
 
-Do the same with `SU.is_array_shape(SU.shape(var))` in `InferVariableClosure`
-(`clock_inference.jl:248` of ModelingToolkitTearing 1.20.7). We have not checked whether later
-`mtkcompile` passes need the same guard.
+  ```julia
+  if Symbolics.isarraysymbolic(v) && SU.shape(v) isa SU.ShapeVecT
+      for i in SU.stable_eachindex(v)
+          push!(_all_dvs, v[i])
+      end
+  else
+      push!(_all_dvs, v)
+  end
+  ```
+
+We have not checked whether later `mtkcompile` passes need the same guard.
 
 ## Why it matters
 
 A parameter of runtime length is the natural way to pass a per-entity table (rates, positions,
 lookup data) whose size depends on the data and not on the model, without rebuilding the system
-for each size. `complete` already supports it, so this is the remaining step for users who need
-`mtkcompile`, which includes anyone with an algebraic equation in the same model.
+for each size. `complete` already supports it, so this is the remaining step for anyone who needs
+`mtkcompile`, e.g. a model with an algebraic equation.
 
 ## Versions
 
-- Reproduced on ModelingToolkit 11.45.3, ModelingToolkitBase 1.77.3, ModelingToolkitTearing
-  1.20.7, Symbolics 7.44.1, SymbolicUtils 4.49.0 and SciMLBase 3.57.0: the latest registered
-  versions on 2026-10-07.
-- Also reproduced on ModelingToolkit 11.45.1, ModelingToolkitBase 1.77.0, Symbolics 7.41.1,
-  SymbolicUtils 4.48.0 and SciMLBase 3.56.1, with an identical outcome matrix.
-- `systems.jl:249` is unchanged on master `fd0cbadb` (2026-10-06).
+- ModelingToolkit 11.45.3, ModelingToolkitBase 1.77.3, ModelingToolkitTearing 1.20.7, Symbolics
+  7.44.1, SymbolicUtils 4.49.0, SciMLBase 3.57.0 (latest registered on 2026-10-07).
+- Also ModelingToolkit 11.45.1, ModelingToolkitBase 1.77.0, Symbolics 7.41.1, SymbolicUtils 4.48.0,
+  SciMLBase 3.56.1, with the same outcome table.
+- Both sites are unchanged on ModelingToolkit master `fd0cbadb` (2026-10-06) and StateSelection.jl
+  `main` `2cc04c02`.
 - Julia 1.12.6, x86_64-linux-gnu.
