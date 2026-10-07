@@ -1,0 +1,43 @@
+algorithm = "SequentialCPM(; proposal = Moore(1))"
+backend = "CPU"
+commit = "af41d251"   # filled by hand: the render read the record from outside git
+dirty = false
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+finished = "2026-10-07T14:35:40.178"
+framerate = 12
+frames = 100
+hostname = "praneeth-NucBox-EVO-X2"
+item = "P6.1h"
+julia = "1.12.6"
+problem_seed = 13001
+record_wall_s = 18.8
+script = "lib/PottsModels/reproductions/data/09/vpre7-2026-10-07/scripts/render_video.jl"
+solve_wall_s = 493.6
+start = "graner_glazier_aggregate(1000; seed = 3001, margin = 60)"
+started = "2026-10-07T14:26:15.328"
+stills = ["09_cell_sorting_vpre7-2026-10-07_temperatures_t100.png", "09_cell_sorting_vpre7-2026-10-07_temperatures_t1000.png", "09_cell_sorting_vpre7-2026-10-07_temperatures_t10000.png"]
+temperatures = [0.0, 2.0, 5.0, 10.0, 15.0, 20.0, 40.0, 80.0]
+threads = 8
+video = "09_cell_sorting_vpre7-2026-10-07_temperatures.mp4"
+video_mb = 6.59
+
+[trajectory_check]
+matches_timeseries_tsv = true
+
+    [trajectory_check.saves]
+    T0_t1 = true
+    T0_t10000 = true
+    T10_t1 = true
+    T10_t10000 = true
+    T15_t1 = true
+    T15_t10000 = true
+    T20_t1 = true
+    T20_t10000 = true
+    T2_t1 = true
+    T2_t10000 = true
+    T40_t1 = true
+    T40_t10000 = true
+    T5_t1 = true
+    T5_t10000 = true
+    T80_t1 = true
+    T80_t10000 = true
