@@ -70,7 +70,21 @@ const P60BP_SII = Potts.SymbolicIndexingInterface
 
 p60bp_updates(s) = Potts.updates(s)
 p60bp_name(x) = P60BP_SII.getname(x)
-p60bp_names(e) = Set{Symbol}(p60bp_name(v) for v in P60BP_S.get_variables(P60BP_S.unwrap(e)))
+# the names of the symbols in `e` (`x(t)` is `x`; through `Pre`, indexing and calls)
+function p60bp_names(e)
+    out = Set{Symbol}()
+    walk(y) = (y = P60BP_S.unwrap(y);
+               y isa P60BP_SU.BasicSymbolic || return;
+               if P60BP_SU.issym(y)
+                   push!(out, p60bp_name(y))
+               elseif P60BP_SU.iscall(y)
+                   op = P60BP_SU.operation(y)
+                   op isa P60BP_SU.BasicSymbolic && P60BP_SU.issym(op) ? push!(out, p60bp_name(op)) :
+                   foreach(walk, P60BP_SU.arguments(y))
+               end)
+    walk(e)
+    return out
+end
 p60bp_isPre(y) = P60BP_SU.iscall(y) && P60BP_SU.operation(y) isa P60BP_M.Pre
 # the names of the variables read through MTK's `Pre` in `e`
 function p60bp_pre_args(e)
@@ -96,8 +110,10 @@ function p60bp_eval(e, vals::AbstractDict{Symbol})
     walk(x)
     isempty(pre) || (x = P60BP_S.unwrap(P60BP_S.substitute(x, pre)))
     vs = P60BP_S.get_variables(x)
-    isempty(vs) || (x = P60BP_S.substitute(x, Dict{Any, Any}(v => vals[p60bp_name(v)] for v in vs)))
-    return Float64(P60BP_S.value(x))
+    isempty(vs) || (x = P60BP_S.unwrap(P60BP_S.substitute(x, Dict{Any, Any}(v => vals[p60bp_name(v)] for v in vs))))
+    v = P60BP_S.value(x)
+    # a numeric term left unfolded by `substitute` (e.g. `ifelse(3.0 != 0, 2.0, 0.0)`): evaluate it
+    return Float64(v isa Number ? v : Core.eval(@__MODULE__, P60BP_S.toexpr(v)))
 end
 p60bp_row(u) = (u.phase, u.scope, u.every)
 p60bp_same(a, b) = length(a) == length(b) &&
