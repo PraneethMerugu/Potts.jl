@@ -2877,3 +2877,23 @@ session.
   - On the PC the file passes 32/32 with the default TMPDIR and with TMPDIR under `$HOME`.
   - New sha256: `f05c55365955a5b11c65cc0e9756fd83c0d0461ffef0ab0c03c36a58023f926f`.
 - **CI.** A new step runs `benchmark/test/*.jl` with `TMPDIR=$RUNNER_TEMP`. Until now CI never ran these tests, which is why the Linux failure went unnoticed.
+
+## D-168 Reproduction 15, P6.15e: the F5 FULL record (100 runs of 1000 cells, case (b), and the γ = 10⁻⁴ control); V4 frozen (2026-10-07; coordinator, from the P6.15e test author and implementer; under D-146, D-148, D-154, D-157)
+
+- **Frozen test.** `test/reproductions/15_openvt_f5.jl` pre-registers V4 as seven rows (V4.1–V4.7), with:
+  - the pass bands and the peak rule;
+  - seeds 15001–15100 and 15501–15520;
+  - a closed 400² lattice with `edge_guard(5; terminate = true)`;
+  - the γ = 10⁻⁴ negative control.
+  
+  It recomputes every verdict from the committed record, `data/15/f5-2026-10-07/`.
+- **Re-freeze after the run.** The record falsified one premise of the first freeze (sha256 `92eee663…`): bin 0 of f also holds 26 cells with 0 < f < 0.01. V4.2 now drops exactly the f = 0 cells. No band, seed, run or verdict changes. Final sha256: `0f38ec2a495cd97e3da2ce1d70325db0e0651452d5838367003ab69d8ae14731`.
+- **Result.** V4 fails for case (b) on three of seven rows. These are D-154 deviations, recorded in `deviations.tsv`; no tolerance was relaxed.
+  - V4.1 (f = 0 fraction 0.888), V4.4 (a peak 0.865), V4.6 (mean a 0.849) and V4.7 (mean f 0.039) pass.
+  - V4.2 fails: the nonzero-f peak is 0.425, against 0.25–0.35.
+  - V4.3 fails: max f is 0.847, against ≤ 0.56.
+  - V4.5 fails: min a is 0.066, from 30 crushed interior cells out of 10⁵.
+  - The negative control fails V4.4 and V4.6, as pre-registered.
+  - The cause probe rules out the division axis and connectivity for V4.2 and V4.3. A remaining candidate is that the pooled band mixes TST's and Morpheus's f definitions.
+- **Not done here.** The consortium data (G) were not on disk, so there is no consortium overlay and the V4 constants were not re-checked against G. A scratch clone (never in the monorepo; spec 15 §1 row G) needs the user's approval. The O2 per-cell files are kept for the submission package (P6.15j).
+- **Videos.** These go in a new pre-release, `reproductions-2026-10-07-openvt-f5`: case (b) run 1 and control run 1, cells coloured by area, no outlines.
