@@ -27,7 +27,7 @@ labels(c) = [let k = findfirst(i -> case[i] == c && dbin[i] == j, eachindex(cnt)
 
 mm = 72 / 25.4
 s = 2.2
-fig = Figure(; size = (4 * 48mm * s, 2 * 44mm * s), fontsize = 8 * s, fonts = (; regular = "TeX Gyre Heros Makie"))
+fig = Figure(; size = (5.0 * 48mm * s, 2 * 44mm * s), fontsize = 8 * s, fonts = (; regular = "TeX Gyre Heros Makie"))
 rowtitle = Dict("b" => "Potts.jl, case (b): β = γ = 0 (100 runs)", "control" => "Potts.jl, negative control: γ = 10⁻⁴ (20 runs)")
 x = ((0:(NBINS - 1)) .+ 0.5) ./ 100
 for (r, c) in enumerate(("b", "control"))
@@ -43,17 +43,19 @@ for (r, c) in enumerate(("b", "control"))
             titlesize = 8 * s)
         xlims!(ax, qq == "f" ? (-0.01, 1.01) : (0.3, 1.2))
         base = zeros(NBINS)
+        handles = Any[]
         for k in 1:NB
             top = base .+ H[:, k]
             lo = logy ? max.(base, 0.8) : base
             keep = top .> (logy ? 0.8 : 0)
             barplot!(ax, x[keep], top[keep]; fillto = lo[keep], width = 0.01, gap = 0, strokewidth = 0,
-                color = cols[k], label = labels(c)[k])
+                color = cols[k])
+            push!(handles, PolyElement(; color = cols[k]))
             base = top
         end
         logy && ylims!(ax, 0.8, nothing)
-        j in (2, 4) && axislegend(ax, "d [R]"; position = :lt, framevisible = false, labelsize = 7 * s,
-            titlesize = 7 * s, patchsize = (8, 8), rowgap = 0)
+        j in (2, 4) && Legend(fig[r, 4 + j ÷ 2], handles, labels(c), "d [R] ($qq)"; framevisible = false,
+            labelsize = 7 * s, titlesize = 7 * s, patchsize = (8, 8), rowgap = 0, tellheight = false)
     end
 end
 save(joinpath(DIR, "fig5.png"), fig; px_per_unit = 1)
