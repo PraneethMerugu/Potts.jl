@@ -2661,3 +2661,33 @@ session.
   - **Items.** P6.0bm, bp, bn and bo (in that order) and P6.0bs enter Phase 6, as an exception to D-134's Step 0 freeze. P6.0bq and P6.0bt are not adopted.
   - **Upstream.** Drafts are prepared locally (P6.0br), and the maintainer files them.
 - **PC probes.** Heavy PC processes run under a memory cap (`systemd-run --user --scope -p MemoryMax=…`). The P6.0be probes were OOM-killed twice on 2026-10-07; CI was unaffected.
+
+## D-160 P6.0bm: `hamiltonian(sys)`, `drives(sys)` and the `PottsSweepSpec` metadata payload (2026-10-07; coordinator, from the P6.0bm test author; implements D-159 / mtk-native-plan §6)
+
+- **Why.** Plan §5 says a Potts model's Hamiltonian is a Symbolics expression "that ModelingToolkit's generic tools can inspect". Today the terms exist as `EnergyTerm`s but are reachable only through `getfield`, and generic code cannot tell that a system has a lattice sweep.
+- **API (public, not exported).**
+  1. **`Potts.hamiltonian(sys)`**, for `PottsSystem` and `CompiledPottsSystem`, returns an `AbstractVector` of `domain => expr` pairs.
+     - There is one pair per `@energy` term, in declaration order. `@extend`/`extend` terms are merged, and component namespacing is applied as for the other accessors.
+     - `domain` is the DSL domain value (`cells(k…)`, `clusters(k…)`, `contacts`, `contacts(r)`, `sites`, `edges(r)`).
+     - `expr` is the energy density as written: a Symbolics expression over the declared parameters, variables and DSL built-ins.
+     - Drives, constraints and the temperature are not terms.
+     - H of a state is the sum of each term over its domain, with the conventions of `total_energy`.
+  2. **`Potts.drives(sys)`** returns the `@drive copy => expr` expressions, in declaration order.
+  3. **`Potts.PottsSweepSpec`** is a concrete type that serves as both the metadata key and the value type.
+     - Documented properties: `hamiltonian`, `drives`, `constraints` (one entry per `@constraint`; the entry type is not public), `temperature` (as written) and `proposal` (default `VonNeumann(1)`).
+     - `show` names the type.
+  4. **Reading the payload.**
+     - `ModelingToolkitBase.getmetadata(sys, PottsSweepSpec, default)` returns it, and `hasmetadata` is true, on every system built by `@potts_model` or the keyword constructor, on `complete(sys)`, on `mtkcompile(sys)` and its `.sys`, and after `extend`.
+     - The payload always describes the system it is read from.
+     - Whether it is stored or derived on read is the implementer's choice.
+     - `setmetadata(sys, PottsSweepSpec, x)` throws an `ArgumentError`, since the payload is derived.
+     - Other keys behave as in D-137 rule 2.
+  5. **Not in codegen.** The payload never enters generated code or the fingerprint (D-137 rule 2), so code and fingerprint pins stay byte-identical.
+  6. **Downstream detection.** Generic code tests `hasmetadata(sys, PottsSweepSpec)`. `ODEProblem`/`JumpProblem` on a Potts system remain `ArgumentError`s naming `PottsProblem` (D-137 rule 5).
+- **Constraints accessor (coordinator ruling).** No `Potts.constraints`. MTK's exported `ModelingToolkitBase.constraints(sys)` already returns the Potts `Constraint` vector; it is documented as the accessor, and the constraints also appear in the payload.
+- **Frozen acceptance.** `acceptance/p6_0bm_hamiltonian_metadata.jl` (freeze 0319469b, sha256 `a557377213a9f7b04bb879ad431be9357fa66b50c91afce82d320fdfc47b7367`).
+  - On e47f0e28 (PC): 33 pass, 6 fail and 60 error, out of 99 tests.
+  - Every error is an UndefVarError for `hamiltonian`, `drives` or `PottsSweepSpec`.
+  - The controls and the D-137 guard pass.
+  - A stub passes 249/249.
+- **Gates.** The +5% warm-MCS gate, zero warm allocations, and the paired latency check (`benchmark/p6_0o_latency.jl`). Aqua ambiguities and piracy stay clean for the new `getmetadata`/`hasmetadata` methods. Stop and ask on major MTK friction or a major slowdown (D-156).
