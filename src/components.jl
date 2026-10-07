@@ -53,9 +53,11 @@ function _slot_name(u)
 end
 
 # Replace every expression of a model with `f(expr)`, keeping source locations.
-function _map_statements(f, sys::PottsSystem)
+# `seen` (an `IdDict`), when given, maps each new statement to the one it replaces.
+function _map_statements(f, sys::PottsSystem; seen = nothing)
     src = IdDict{Any, LineNumberNode}()
-    keep(old, new) = (haskey(getfield(sys, :sources), old) && (src[new] = getfield(sys, :sources)[old]); new)
+    keep(old, new) = (haskey(getfield(sys, :sources), old) && (src[new] = getfield(sys, :sources)[old]);
+                      seen === nothing || (seen[new] = old); new)
     fe(e::EnergyTerm) = keep(e, EnergyTerm(e.domain, f(e.expr)))
     fd(d::Drive) = keep(d, Drive(f(d.expr)))
     fc(c::Constraint) = keep(c, c.kind === :expr ? Constraint(c.kind, c.kinds, f(c.expr)) : c)

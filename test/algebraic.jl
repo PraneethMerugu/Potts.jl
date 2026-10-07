@@ -189,6 +189,30 @@ end
             y ~ 2x
         end
     end)), "algebraic variable", "`y ~")
+    # ... and only for a statement that reads one: no note on an unrelated error
+    for body in (quote
+            @equations begin
+                D(m) ~ x
+                y ~ 2x
+            end
+        end, quote
+            @drive copy => volume
+            @equations y ~ volume
+        end)
+        err = try
+            mtkcompile(alg_model(body)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && !occursin("algebraic", sprint(showerror, err))
+    end
+    # every definition is checked where it is evaluated, even if nothing reads it
+    @test alg_error(() -> mtkcompile(alg_model(quote
+        @equations y ~ integral(x)
+    end)), "algebraic", "`y")
+    @test alg_error(() -> mtkcompile(alg_model(quote
+        @equations y ~ sum(c for n in Moore(1)(42)) + x
+    end)), "algebraic", "`y")
     # a declared initial value is not used: an error until initial values are supported
     default_model = eval(:(@potts_model _AlgDefault begin
         @kinds medium A

@@ -90,7 +90,7 @@ function _compile_odes(sys::PottsSystem)
         end
     end
     odes = Dict{Symbol, Any}()
-    isempty(deqs) && isempty(aeqs) && return sys, odes
+    isempty(deqs) && isempty(aeqs) && return sys, odes, IdDict{Any, Any}()
     alg = _check_algebraic(sys, deqs, aeqs)
     rates = Dict{Symbol, Any}()                       # differential variable → simplified rate
     defs = Dict{Any, Any}()                           # algebraic variable → its definition
@@ -108,8 +108,9 @@ function _compile_odes(sys::PottsSystem)
     end
     src = IdDict{Any, LineNumberNode}()
     srcs = getfield(sys, :sources)
-    keep(old, new) = (haskey(srcs, old) && (src[new] = srcs[old]); new)
-    m = isempty(alg) ? nothing : _map_statements(expand, sys)
+    origin = IdDict{Any, Any}()                       # rewritten statement → the authored one
+    keep(old, new) = (haskey(srcs, old) && (src[new] = srcs[old]); origin[new] = old; new)
+    m = isempty(alg) ? nothing : _map_statements(expand, sys; seen = origin)
     equations = Equation[]
     for (j, eq) in enumerate(getfield(sys, :equations))
         l = _unwrap(eq.lhs)
@@ -122,7 +123,7 @@ function _compile_odes(sys::PottsSystem)
             push!(equations, m === nothing ? eq : keep(eq, getfield(m, :equations)[j]))
         end
     end
-    m === nothing && return _replace(sys; equations, sources = merge(srcs, src)), odes
+    m === nothing && return _replace(sys; equations, sources = merge(srcs, src)), odes, origin
     names = Set{Symbol}(info(x).name for x in keys(alg))
     variables = Any[x for x in getfield(sys, :variables) if !(info(x).name in names)]
     observed = [getfield(m, :observed);
@@ -131,32 +132,76 @@ function _compile_odes(sys::PottsSystem)
     return _replace(sys; variables, equations, observed, energies = getfield(m, :energies), drives = getfield(m, :drives),
                constraints = getfield(m, :constraints), updates = getfield(m, :updates), divisions = getfield(m, :divisions),
                link_rules = getfield(m, :link_rules), discrete = getfield(m, :discrete), sweep = getfield(m, :sweep),
-               boundaries = getfield(m, :boundaries), sources = merge(srcs, getfield(m, :sources), src)), odes
+               boundaries = getfield(m, :boundaries), sources = merge(srcs, getfield(m, :sources), src)), odes, origin
 end
 
 # The algebraic variables of a model with its ODEs simplified (`_compile_odes`), as the
 # `@observed` entries that carry their declared scope.
 _algebraic_observed(sys::PottsSystem) = [o for o in getfield(sys, :observed) if haskey(info(o.var).options, :scope)]
 
-"""
-`f()`, with an `ArgumentError` it raises extended by the definitions of the model's algebraic
-variables that read a quantity the message names: a statement reading `y` reads its
-definition, so an error about that definition's quantities would otherwise not name `y`.
-"""
-function _via_algebraic(f::F, sys::PottsSystem) where {F}
+# The statement being compiled reads its algebraic variables as their definitions, so an
+# error about a definition's quantities would not name the variable. While `_via_algebraic`
+# runs, `_located` adds a note naming the algebraic variables the failing statement itself
+# read (as authored: `origin` maps each rewritten statement to the authored one). Statements
+# rewritten again later (component binding) have no entry and get no note.
+const _ALGEBRAIC_READS = Base.ScopedValues.ScopedValue{Any}(nothing)
+
+function _via_algebraic(f::F, sys::PottsSystem, origin) where {F}
     alg = _algebraic_observed(sys)
     isempty(alg) && return f()
-    try
-        return f()
-    catch e
-        e isa ArgumentError || rethrow()
-        named = Set{String}(m.captures[1] for m in eachmatch(r"`([^`]+)`", e.msg))
-        notes = String["`$(info(o.var).name) ~ $(o.expr)`" for o in alg
-                       if !(string(info(o.var).name) in named) && any(u -> string(u[2]) in named, _uses(o.expr))]
-        isempty(notes) && rethrow()
-        throw(ArgumentError(e.msg * "\n  (read through the algebraic variable$(length(notes) == 1 ? "" : "s") " *
-                            join(notes, ", ") * ": a statement reading an algebraic variable reads its definition)"))
+    defs = Dict{Symbol, Any}(info(o.var).name => o.expr for o in alg)
+    return Base.ScopedValues.with(f, _ALGEBRAIC_READS => (; origin, defs))
+end
+
+# the note for an error in statement `x` (empty when `x` read no algebraic variable, or the
+# message already names every one it read)
+function _algebraic_note(x, msg)
+    ctx = _ALGEBRAIC_READS[]
+    ctx === nothing && return ""
+    old = get(ctx.origin, x, nothing)
+    old === nothing && return ""
+    read = Symbol[]
+    _walk_statement(old) do y
+        i = info(y)
+        i !== nothing && haskey(ctx.defs, i.name) && !(i.name in read) && push!(read, i.name)
     end
+    filter!(n -> !occursin("`$n`", msg), read)
+    isempty(read) && return ""
+    return "\n  (this statement reads the algebraic variable$(length(read) == 1 ? "" : "s") " *
+           join(("`$n ~ $(ctx.defs[n])`" for n in read), ", ") * ", which stand$(length(read) == 1 ? "s" : "") " *
+           "for $(length(read) == 1 ? "its definition" : "their definitions"))"
+end
+
+# every symbolic value of a statement (its expressions, equations, rules and conditions)
+_walk_statement(f, x::Union{Num, SymbolicUtils.BasicSymbolic}) = _walk_all(f, x)
+_walk_statement(f, x::Equation) = (_walk_all(f, x.lhs); _walk_all(f, x.rhs))
+_walk_statement(f, x::Pair) = (_walk_statement(f, x.first); _walk_statement(f, x.second))
+_walk_statement(f, x::Union{AbstractArray, Tuple, NamedTuple}) = foreach(y -> _walk_statement(f, y), x)
+_walk_statement(f, ::Union{Number, Symbol, AbstractString, Nothing, Function, Module, DataType}) = nothing
+function _walk_statement(f, x)
+    isstructtype(typeof(x)) || return nothing
+    foreach(n -> isdefined(x, n) && _walk_statement(f, getfield(x, n)), fieldnames(typeof(x)))
+    return nothing
+end
+
+"""
+Each algebraic definition lowered once where `sol[:y]` evaluates it (its cell, or the
+model), so that one that cannot be evaluated there fails at `mtkcompile`, naming `y`, and
+not when it is first observed.
+"""
+function _check_algebraic_lowering(sys::PottsSystem, rn)
+    for o in _algebraic_observed(sys)
+        i = info(o.var)
+        cell = i.options.scope === :cell
+        try
+            lower(o.expr, cell ? _cell_env(Float64, :c, rn; mcs = :t) : _model_env(Float64, rn; mcs = :t))
+        catch e
+            e isa Union{ArgumentError, ErrorException} || rethrow()
+            throw(ArgumentError("the algebraic equation `$(i.name) ~ $(o.expr)` cannot be evaluated at " *
+                                "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"))
+        end
+    end
+    return nothing
 end
 
 # `x` with folds over cells, sites and neighbours and cell integrals replaced by 0: what is

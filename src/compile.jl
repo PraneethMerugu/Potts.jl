@@ -173,8 +173,8 @@ per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
-    routed, ode_systems = _compile_odes(authored)
-    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems), routed)
+    routed, ode_systems, origin = _compile_odes(authored)
+    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems), routed, origin)
 end
 
 # `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)
@@ -459,6 +459,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
                              for b in getfield(sys, :discrete)]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
+    _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
     isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
     _check_units(sys)
@@ -677,7 +678,7 @@ function _located(f, sys::PottsSystem, x)
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)\n  in $(_describe(x))$loc"))
+        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x))$loc"))
     end
 end
 
