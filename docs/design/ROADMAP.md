@@ -334,6 +334,7 @@ Every item's acceptance also includes the standing checks:
   - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
 - [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
   - The Metal suites, the Metal gate rows (new baselines for the new machine), and a seeded Metal A/B of every gate case against the last Metal-verified commit (ebb0f823; its OpenVT pair was skipped).
+  - Confirm p6_0v3's Metal Merks digest equals the CPU Float32 digest re-pinned under D-153 (`0x2aba158700292a8c, 0x6529835b3477095c`), and run the Float32 Merks2006/2008 device paths.
 - [ ] **P6.0bj** (GE0, `research/gpu-ensembles.md` §9; approved by the maintainer) Measure first, on the PC, before any GPU-ensemble code is built.
   - K0: `EnsembleThreads` with a ROCm backend, with no new code.
   - K1: a minimal batched-checkerboard prototype (replicas as an extra array dimension, one launch per colour).
@@ -524,6 +525,12 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
+- [ ] **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+  - Remove the cell outlines (page lines ~179, 203, 234).
+  - Add the four-column deviations table, seeded from the P6.3d implementer's ten rows.
+  - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
+  - Add digitised 01b Figs 5, 7–10, 12 and 13 as targets through the M7 continuous-χ superset, with inferred parameters flagged. The model side is ready: `χcc`, `merks2008_sprout(; divisions = 8)` on 502², and `track = (:ΔH,)`.
+  - Run the FULL tier on the PC, with D-146 records; the FULL run decides V-C3's low plateau.
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
