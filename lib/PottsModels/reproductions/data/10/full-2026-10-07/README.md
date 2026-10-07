@@ -18,11 +18,11 @@ The offline record required by D-146. Both runs were made on the PC (praneeth-Nu
 | `page_meta.toml`, `provenance.toml` | the page run's seeds, saves, threads, and its commit, page hash, machine and wall time |
 | `sweep.tsv`, `sweep_provenance.toml` | the full sweep: per run, the metrics, the division count and the `akeeb_phenotype` class |
 | `verdicts_sweep.tsv` | V-A6, V-A7 (full-sweep \|r\|) and reported cross-checks |
-| `deviations.tsv` | the D-154 deviations rows for the page (our value, paper's value, suspected cause, author-question status) |
+| `deviations.tsv` | the D-154 deviations rows of this run (our value, paper's value, suspected cause, author-question status); the page builds its rows from the verdict and run TSVs |
 | `10_akeeb_phenotypes.png` | Fig. 5B side by side, and the dominant phenotype over (J_LF, λ) at PP = 0.5 (authors, ours) |
 | `run_wrapper.jl`, `sweep.jl`, `analyse.jl` | the scripts |
 
-**Videos** (replicate 1 at P1, P4, P5, P6, every 10 MCS, no outlines): video pending. They are kept locally until the coordinator publishes them in a dated `reproductions-YYYY-MM-DD` pre-release; the release `reproductions-2026-10` is immutable.
+**Videos** (replicate 1 at P1, P4, P5, P6, every 10 MCS, no outlines) are assets of the pre-release `reproductions-2026-10-07-akeeb`: [`10_akeeb_full-2026-10-07_P1_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P1_replicate1.mp4), [`10_akeeb_full-2026-10-07_P4_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P4_replicate1.mp4), [`10_akeeb_full-2026-10-07_P5_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P5_replicate1.mp4), [`10_akeeb_full-2026-10-07_P6_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P6_replicate1.mp4).
 
 ## Result
 
@@ -32,5 +32,5 @@ The offline record required by D-146. Both runs were made on the PC (praneeth-Nu
 - **V-A7, full-sweep \|r(PP, metric)\| < 0.05, PASS on all six metrics:** −0.027, −0.026, −0.004, 0.002, −0.007 and 0.005 (A: −0.025, −0.026, −0.004, 0.001, −0.007, −0.002). All are also under the paper's 0.03.
 - **Reported:**
   - The paper's other correlations: λ–invasive 0.701 (paper 0.70), λ–fingers 0.793 (0.80), J–singles 0.672 (0.67) and J–infiltrative 0.567 (0.57).
-  - The paper's full-sweep marginals are all within 10 %, except clusters at J_LF > 2: 2.00 against 1.78 (+12 %, inside the count floor of 1).
+  - The paper's full-sweep marginals are all in their band, max(10 %, 1 count). All but one are within 10 %: clusters at J_LF > 2 are 2.00 against 1.78, +12 %, which is outside 10 % and inside the 1-count floor.
   - The sweep's own PP = 0.5 slice repeats V-A3 and V-A4 in band.
