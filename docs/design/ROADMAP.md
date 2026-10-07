@@ -373,7 +373,7 @@ Every item's acceptance also includes the standing checks:
   - an indirect-indexing comment on MTK #5078;
   - a scaling comment on #5139.
   Nobody here posts them.
-- [ ] **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small.
+- [ ] **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small–Medium (D-169: supported, `distance` and the edge environment made available to edge updates).
 - [ ] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
   - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
   - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.

@@ -2897,3 +2897,25 @@ session.
   - The cause probe rules out the division axis and connectivity for V4.2 and V4.3. A remaining candidate is that the pooled band mixes TST's and Morpheus's f definitions.
 - **Not done here.** The consortium data (G) were not on disk, so there is no consortium overlay and the V4 constants were not re-checked against G. A scratch clone (never in the monorepo; spec 15 §1 row G) needs the user's approval. The O2 per-cell files are kept for the submission package (P6.15j).
 - **Videos.** These go in a new pre-release, `reproductions-2026-10-07-openvt-f5`: case (b) run 1 and control run 1, cells coloured by area, no outlines.
+
+## D-169 P6.0bv: edge-scope MCS updates through `mtkcompile` (2026-10-07; coordinator, from the P6.0bv test author; follow-up of D-164)
+
+- **Finding (405915dc).**
+  - `@before_mcs`/`@after_mcs` statements that write an edge variable are accepted by `@potts_model` and listed by `Potts.updates` with scope `:edge` (D-164).
+  - `mtkcompile` then fails with `KeyError: :edge`: `_schedule_block` (`src/schedule.jl`) orders stages by `:model`/`:cell`/`:site` only. `PottsProblem` compiles first, so no model with an edge update can run.
+  - The update vocabulary also rejects `distance` in an edge update when the model is built.
+  - No published model has an edge update.
+- **Ruling: supported, not refused.** The meaning is already defined by the edge machinery: `_link_phases` loops over existing links and reads `_edge_env`. Support opens the remodelling family, from rest-length relaxation to bond ageing and FocalPointPlasticity-style adhesion maturation.
+  - **When it runs.** An edge-scope MCS update runs once per existing link of the written variable's relationship. It runs after (or before) MCS m when `m % n == 0`, as D-164 sets out.
+  - **What it reads.** It reads the environment of `edges(rel) => …` and `@unlink`: `a`, `b`, `distance` (the centroid distance), parameters, `mcs`, and its own relationship's edge variables. `Pre(x)` is the value at the start of the block.
+  - **Both ends.** Both stored ends of a link get the same new value.
+  - **No structural change.** No link is created or removed, and empty slots are untouched.
+  - **Refusal.** An edge update reading another relationship's edge variable is an `ArgumentError` at `mtkcompile` naming the variable and its relationship (as `_check_edge_vars` does for edge terms and link rules).
+  - **Not pinned.** How the stage is generated (host phase or kernel); stage order beyond the pinned values; reads of endpoint cell variables or of other updates' new values; `@on_copy` writes of edge variables.
+- **Forms.** `Potts.updates(mtkcompile(sys))` equals the authored listing for edge updates, which extends D-164's F check to the compiled form. MTK's `discrete_events` stays empty.
+- **Unchanged.** Generated code and fingerprints of models without edge updates, which includes every published model (D-137 rule 2). D-127's link payload initial values.
+- **Gates.** The +5 % warm-MCS gate, zero warm allocations, and the paired latency check.
+- **Frozen acceptance.** `acceptance/p6_0bv_edge_after_mcs.jl` (freeze d859bc10, sha256 `f2525d9f92aa3fc4886adde543a24a0b81733cc811676faeaf0b7d3dee23422e`).
+  - Red on 405915dc (Mac): 24 pass, 1 fail, 2 error, 1 broken (device skip) of 28. The errors are the `KeyError: :edge` and the `distance` rejection; R gets a KeyError instead of an `ArgumentError`.
+  - The 22 negative-control assertions pass.
+- **ROADMAP.** P6.0bv grows from Small to Small–Medium.
