@@ -352,7 +352,7 @@ Every item's acceptance also includes the standing checks:
   - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
   - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
   - Label every timing with its machine (spec 10 is done).
-- [ ] **P6.0be** (D-156) Design: what it takes for Potts.jl to be ModelingToolkit-native as a whole. The maintainer's aim is the full claim; `research/mtk-native-investigation.md` §1 found it unachievable as of 2026-10.
+- [x] (2026-10-07; D-159, `research/mtk-native-plan.md`) **P6.0be** (D-156) Design: what it takes for Potts.jl to be ModelingToolkit-native as a whole. The maintainer's aim is the full claim; `research/mtk-native-investigation.md` §1 found it unachievable as of 2026-10.
   - Re-check the three blockers (the sweep as an MTK object, ragged growing per-cell state, lattice quantities) against current MTK.
   - Price each route in build time, latency and gate cost.
   - Propose the strongest claim the paper can defend, plus the work items.
@@ -361,6 +361,18 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0bf** (D-156) No cell outlines anywhere.
   - Remove `boundaries = true` and `pottsboundaries` from `docs/paper_runs/*.jl` (GG, Akeeb, Merks, OpenVT), the docs tutorials, and the frozen 09 page (~line 427; re-freeze under D-156).
   - Re-render the paper-run videos and the 09 FULL video on the PC. Replace the release asset `09_cell_sorting_full-2026-10-05_replicate1.mp4`, and link it from the 09 page.
+- [ ] **P6.0bm** (D-159; plan §6) A public `hamiltonian(sys)` and a typed metadata payload describing the sweep. Small. Runs first in the chain bm → bp → bn → bo, because these items edit the same files.
+- [ ] **P6.0bp** (D-159; plan §6) Events kept as MTK `SymbolicDiscreteCallback` objects. Small.
+- [ ] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
+- [ ] **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; about +0.5 s cold.
+  - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
+- [ ] **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
+  - the O(n²) dense mass-matrix bug;
+  - the unknown-size parameter failure at `ODEProblem`;
+  - an indirect-indexing comment on MTK #5078;
+  - a scaling comment on #5139.
+  Nobody here posts them.
+- [ ] **P6.0bs** (D-159; after bm–bo) A frozen test that checks every MTK claim the paper makes, plus the paper and docs wording (plan §5).
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`. Also folds in the fingerprint corner cases (D-134): P6.0az; fix if cheap, else document as best-effort. Also (D-136, maintainer): consolidate the fingerprint tests into one frozen suite `lib/PottsModels/test/acceptance/fingerprint.jl` — the fingerprint testsets of p6_0p, p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0ah, p6_0c2 and the pin blocks of p6_0t, p6_0x, p6_0au, p6_0aw, p6_0av, p6_0u, p6_0ag, p6_0ax, p6_0g; every distinctness, checkpoint-refusal and cross-session check kept; each published model and fixture pinned exactly once; touched files re-frozen under D-136. Also (P6.0ax review, D-134): gather bound-variable names, population variables and `rand()` addresses share one build counter (`_next_number!`, src/vocabulary.jl), so an `@observed` fold written before other statements shifts later names and `rand()` addresses — the fingerprint changes and, under a fixed seed, the trajectory changes (adding a diagnostic changes results). Give `rand()` addresses and bound names per-statement or canonical numbering at `mtkcompile`; re-pin under D-136. Priority before reproductions that add observables to seeded runs. Also (P6.0o review): a component's algebraic observed queried as `dc₊z` gets "namespaced by another system" — say it is substituted and suggest `@observed`; `s.λ` on a `CompiledPottsSystem` is a FieldError; `Potts.parameters` vs `ModelingToolkitBase.parameters` differ for component models.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:

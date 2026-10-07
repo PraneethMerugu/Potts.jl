@@ -2646,3 +2646,18 @@ session.
   - **Same-run comparisons stay bitwise.** Determinism checks that compare two runs inside one session are unaffected (the free determinism of the policy).
 - **CI.** CI keeps resolving fresh, with no committed Manifest (the single gitignored Manifest stays). A future failure that is last-bit drift in an upstream-numerics pin gets the same treatment under this entry, not a chase.
 - **Applied.** `acceptance/p6_0x_gather_ode_alloc.jl` was re-frozen under D-158. Its `Adaptive` rows now compare with `≈ rtol = 1e-12` and the other rows stay `==`.
+
+## D-159 The paper's MTK claim: "built on ModelingToolkit", not "fully MTK-native" (2026-10-07, maintainer, on P6.0be; amends D-156's MTK aim)
+
+- **Why.** P6.0be (`research/mtk-native-plan.md`) re-checked the three blockers against MTKB 1.77 / MTK 11.45 and probed each route.
+  - Every route to a literal "fully MTK-native" claim trips the D-156 stop rule:
+    - MTK-run fields are a major slowdown: an O(n²) dense mass matrix, about 62 GB at 256², superlinear even when patched, and no GPU path.
+    - Per-cell state as MTK arrays is a major slowdown and friction, because fixed capacity forces a rebuild on growth.
+    - The sweep as an MTK event, and the model as an MTK `System`, are major friction.
+  - Upstream has no planned support for any of them.
+- **Ruling (maintainer).**
+  - **Wording.** Adopt the wording of plan §5: every Potts model is an MTK `AbstractSystem`; its ODE, initialization and event parts are compiled by MTK, and MTK models plug in as components; the stochastic lattice sweep is compiled by Potts.jl's own code generator (the Catalyst-style split).
+  - **Do not claim** "fully MTK-native", "MTK simulates the CPM" or "models are MTK `System`s".
+  - **Items.** P6.0bm, bp, bn and bo (in that order) and P6.0bs enter Phase 6, as an exception to D-134's Step 0 freeze. P6.0bq and P6.0bt are not adopted.
+  - **Upstream.** Drafts are prepared locally (P6.0br), and the maintainer files them.
+- **PC probes.** Heavy PC processes run under a memory cap (`systemd-run --user --scope -p MemoryMax=…`). The P6.0be probes were OOM-killed twice on 2026-10-07; CI was unaffected.
