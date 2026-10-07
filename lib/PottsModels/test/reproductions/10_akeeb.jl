@@ -461,25 +461,112 @@ end
 end
 
 # ---------------------------------------------------------------------------------------------
-# FULL-record rows (P6.2d, D-156): V-A6 and the full-sweep form of V-A7 need the 13,310-run
-# sweep, so they bind in the committed record only, as the page reads them. Cheap: the
-# verdict TSV is read, nothing is run
+# FULL-record rows (P6.2d, D-156; recomputed under P6.2e, D-163): V-A6 and the full-sweep
+# form of V-A7 need the 13,310-run sweep, so they bind in the committed record. The test
+# recomputes both verdicts from the committed per-run `sweep.tsv` (spec 10 §5.3.3 R3; |r| <
+# 0.05) and checks that `verdicts_sweep.tsv` reports the same values and verdicts, so a
+# hand-edited verdict or a hand-edited phenotype column fails. Cheap: two TSVs are read,
+# nothing is run
 # ---------------------------------------------------------------------------------------------
 
-@testset "P6.2d FULL record: V-A6 (provisional classifier) and full-sweep V-A7" begin
-    file = joinpath(pkgdir(PottsModels), "reproductions", "data", "10", "full-2026-10-07", "verdicts_sweep.tsv")
-    @test isfile(file)
-    l = split.(readlines(file), '\t')
+const P62E_DIR = joinpath(pkgdir(PottsModels), "reproductions", "data", "10", "full-2026-10-07")
+const P62E_PHEN = (:none, :single, :bulk, :multimodal)
+const P62E_PHEN_TEXT = (none = "No invasion", single = "Single-cell", bulk = "Bulk", multimodal = "Multimodal")
+# Dataset A classified by the area-equality classifier (D-163: rebuilt exactly from the
+# authors' `invasion_metrics.csv`; 13,263 classified, 42 unclassified of 13,305). The record's
+# paper column prints only A's percentages and N, so the counts are cited here and checked
+# against that column below
+const P62E_A_COUNT = (none = 2950, single = 143, bulk = 2989, multimodal = 7181)
+const P62E_A_UNCLASSIFIED = 42
+
+p62e_cor(x, y) = (dx = x .- mean(x); dy = y .- mean(y); sum(dx .* dy) / sqrt(sum(abs2, dx) * sum(abs2, dy)))
+
+# V-A6 and V-A7 from per-run columns: PP, the six metrics (NamedTuple of vectors) and the
+# phenotype per run
+function p62e_verdicts(PP, met, phen)
+    NA = sum(values(P62E_A_COUNT))
+    NB = count(!=(:unclassified), phen)
+    pB = NamedTuple{P62E_PHEN}(Tuple(count(==(ph), phen) / NB for ph in P62E_PHEN))
+    pass6 = NamedTuple{P62E_PHEN}(Tuple(p62b_r3(P62E_A_COUNT[ph] / NA, NA, pB[ph], NB) for ph in P62E_PHEN))
+    r = NamedTuple{P62B_METRICS}(Tuple(p62e_cor(PP, met[m]) for m in P62B_METRICS))
+    pass7 = map(x -> abs(x) < 0.05, r)
+    return (; NB, unclassified = count(==(:unclassified), phen), pB, pass6, r, pass7)
+end
+
+# the recomputed values agree with the record's "ours" column to its printed digits (half a
+# unit of the last digit: 2 decimals for the percentages, 3 for r) and give its verdicts
+p62e_near(x, printed) = (d = something(findfirst('.', printed), lastindex(printed)); digs = length(printed) - d;
+    abs(x - parse(Float64, printed)) <= 0.5 * 10.0^-digs + 1e-9)
+function p62e_agrees(v, rows)
+    rec(t) = only(r for r in rows if r["target"] == t)
+    ok = true
+    for ph in P62E_PHEN
+        r = rec("V-A6 $(P62E_PHEN_TEXT[ph]) fraction")
+        m = match(r"^([0-9.]+) % \(N = ([0-9]+)\)", r["ours"])
+        ok &= m !== nothing && p62e_near(100 * v.pB[ph], m[1]) && parse(Int, m[2]) == v.NB
+        ok &= r["result"] == (v.pass6[ph] ? "PASS" : "FAIL")
+    end
+    m = match(r"^([0-9]+) / ([0-9]+) ", rec("V-A6 unclassified (dropped before the fractions)")["ours"])
+    ok &= m !== nothing && parse(Int, m[1]) == v.unclassified && parse(Int, m[2]) == v.NB + v.unclassified
+    for k in P62B_METRICS
+        r = rec("V-A7 r(PP, $k), full sweep")
+        ok &= p62e_near(v.r[k], r["ours"]) && r["result"] == (v.pass7[k] ? "PASS" : "FAIL")
+    end
+    return ok
+end
+
+@testset "P6.2d/P6.2e FULL record: V-A6 (provisional classifier) and full-sweep V-A7, recomputed" begin
+    vfile, sfile = joinpath(P62E_DIR, "verdicts_sweep.tsv"), joinpath(P62E_DIR, "sweep.tsv")
+    @test isfile(vfile) && isfile(sfile)
+    l = split.(readlines(vfile), '\t')
     rows = [Dict(zip(l[1], r)) for r in l[2:end]]
-    result(t) = only(r["result"] for r in rows if r["target"] == t)
-    for p in ("No invasion", "Single-cell", "Bulk", "Multimodal")
-        @test result("V-A6 $p fraction") == "PASS"
-    end
-    for m in ("invasive", "infiltrative", "singles", "fingers", "detached", "clusters")
-        @test result("V-A7 r(PP, $m), full sweep") == "PASS"
-    end
     @test count(r -> startswith(r["target"], "V-A6") && r["class"] == "FULL", rows) == 4
     @test count(r -> startswith(r["target"], "V-A7") && r["class"] == "FULL", rows) == 6
+
+    s = split.(readlines(sfile), '\t')
+    head, runs = s[1], s[2:end]
+    col(c) = (j = findfirst(==(c), head); [r[j] for r in runs])
+    num(c) = parse.(Float64, col(c))
+    @test length(runs) == 13_310 && all(==("Success"), col("retcode"))
+    PP = num("PP")
+    met = NamedTuple{P62B_METRICS}(Tuple(num(string(m)) for m in P62B_METRICS))
+    phen = Symbol.(col("phenotype"))
+    # the phenotype column is the classifier's output on the committed metrics
+    obs = [NamedTuple{P62B_METRICS}(Tuple(met[m][k] for m in P62B_METRICS)) for k in eachindex(phen)]
+    @test akeeb_phenotype.(obs) == phen
+
+    # A's cited counts are the record's A percentages and N
+    NA = sum(values(P62E_A_COUNT))
+    @test NA == 13_263 && NA + P62E_A_UNCLASSIFIED == 13_305
+    for ph in P62E_PHEN
+        m = match(r"A ([0-9.]+) % \(N = ([0-9]+)\)",
+            only(r["paper"] for r in rows if r["target"] == "V-A6 $(P62E_PHEN_TEXT[ph]) fraction"))
+        @test m !== nothing && p62e_near(100 * P62E_A_COUNT[ph] / NA, m[1]) && parse(Int, m[2]) == NA
+    end
+
+    v = p62e_verdicts(PP, met, phen)
+    @test (v.NB, v.unclassified) == (13_268, 42)
+    for ph in P62E_PHEN
+        @test v.pass6[ph]                              # V-A6: R3 per phenotype
+    end
+    for k in P62B_METRICS
+        @test v.pass7[k]                               # V-A7: |r(PP, metric)| < 0.05
+    end
+    @test p62e_agrees(v, rows)
+
+    # negative controls (D-048): perturbed copies of the sweep must fail
+    shift(phen, from, to, n) = (q = copy(phen); q[findall(==(from), q)[1:n]] .= to; q)
+    # one run moved from Multimodal to No invasion: R3 still passes, but the record disagrees
+    v1 = p62e_verdicts(PP, met, shift(phen, :multimodal, :none, 1))
+    @test all(values(v1.pass6)) && !p62e_agrees(v1, rows)
+    @test akeeb_phenotype.(obs) != shift(phen, :multimodal, :none, 1)   # and the classifier check catches it
+    # 800 runs moved (6 points of No invasion): R3 fails on No invasion, so R3 can fail
+    v800 = p62e_verdicts(PP, met, shift(phen, :multimodal, :none, 800))
+    @test !v800.pass6.none && !p62e_agrees(v800, rows)
+    # invasive made to depend on PP (+0.2 SD per SD of PP): V-A7 fails
+    α = 0.2 * std(met.invasive) / std(PP)
+    vr = p62e_verdicts(PP, merge(met, (; invasive = met.invasive .+ α .* PP)), phen)
+    @test !vr.pass7.invasive && all(vr.pass7[k] for k in P62B_METRICS if k !== :invasive) && !p62e_agrees(vr, rows)
 end
 
 # ---------------------------------------------------------------------------------------------

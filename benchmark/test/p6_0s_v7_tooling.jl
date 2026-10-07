@@ -269,9 +269,15 @@ end
 @testset "P6.0s and P6.0v7 tooling acceptance" begin
     @testset "P6.0s fair machine lock" begin
         sb = sandbox()
+        # L1: the sandbox is private. No `/tmp/` path is left except the sandbox's own: on
+        # Linux `mktempdir` is itself under /tmp, so the rewritten prefix (inside
+        # `sb.lockroot`) is masked before the search (P6.0bx).
+        private(txt) = !occursin(PREFIX, txt) && !occursin("/tmp/", replace(txt, sb.lockroot => "<sandbox>"))
         for f in ("tools/exclusive.sh", "benchmark/ab.jl")
-            @test !occursin("/tmp/", read(joinpath(sb.root, f), String))     # L1: sandbox is private
+            @test private(read(joinpath(sb.root, f), String))
         end
+        @test occursin(joinpath(sb.lockroot, "potts-exclusive"), read(sb.excl, String))  # the rewrite happened
+        @test !private(read(joinpath(REPO, "tools", "exclusive.sh"), String))          # control: the real script fails
         fair = mut = stale = nothing
         @sync begin
             @async fair = fairness_scenario()
