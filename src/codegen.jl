@@ -539,6 +539,8 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
                     append!(dst, _site_update_phases(c, T, stage.updates, stage.every, rn))
                 elseif stage.scope === :model
                     push!(dst, CorePotts.ModelPhase(_rgf(_model_update_expr(c, T, stage.updates, stage.every, rn))))
+                elseif stage.scope === :edge
+                    append!(dst, _edge_update_phases(c, T, stage.updates, stage.every, rn))
                 else
                     ex = _cell_update_expr(c, T, stage.updates, stage.every, rn)
                     ph = CorePotts.CellPhase(_rgf(ex))
@@ -1268,6 +1270,47 @@ function _cell_update_expr(c, T, us, every, rn)
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, gate,
         :(@inbounds st.cell.volume[c] > 0 || return nothing), vals..., writes..., :(return nothing))))
+end
+
+# Edge-scope updates of one stage (D-169): once per existing link `(ea, eb)` of the written
+# variables' relationship, run by the link's lower-numbered end `ea` (one work item per cell),
+# in the environment of `edges(rel)` and `@unlink` (`a`, `b`, `distance`, parameters, `mcs`,
+# the relationship's edge variables at slot `ek` of `ea`'s row). Every new value of the link
+# is computed before any is written, and each is written at both stored ends (`ek` in `ea`'s
+# row, its partner slot in `eb`'s): each slot is written and read by one work item only, so
+# the cells run in parallel. Links are neither created nor removed; empty slots and links
+# with a dead end (volume 0, whose centroid is 0/0: `link_delta` skips them too) are left as
+# they are.
+# One phase per relationship of the stage, in declaration order (an edge update reads only
+# its own relationship's variables, so they are independent).
+function _edge_update_phases(c, T, us, every, rn)
+    rel(u) = only(r for (r, vs) in c.edge_vars if any(x -> info(x).name === _update_name(u), vs))
+    return Any[CorePotts.CellPhase(_rgf(_edge_update_expr(c, T, r.name, filter(u -> rel(u) === r.name, us), every, rn)))
+               for r in c.relationships if any(u -> rel(u) === r.name, us)]
+end
+function _edge_update_expr(c, T, r::Symbol, us, every, rn)
+    names = [info(_unwrap(u.eq.lhs)).name for u in us]
+    env = _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)
+    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    writes = [begin
+        col = :(st.cell.$(Symbol(:link_, n)))
+        :(@inbounds ($col[ek, ea] = $(Symbol(:v_, j)); $col[kb, eb] = $(Symbol(:v_, j))))
+    end for (j, n) in enumerate(names)]
+    gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
+    return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, gate,
+        :(@inbounds st.cell.volume[c] > 0 || return nothing),
+        :(store = $(_link_store(c, r))),
+        :(ea = c),
+        :(for ek in 1:size(store.links, 1)
+            eb = @inbounds store.links[ek, ea]
+            eb > ea || continue                        # empty (0) or counted from `eb`
+            @inbounds st.cell.volume[eb] > 0 || continue
+            ed = CorePotts.centroid_distance($T, st.cell, ctx.lattice, ea, eb)
+            $(vals...)
+            kb = CorePotts.link_slot(store, eb, ea)    # ≥ 1: links are stored at both ends
+            $(writes...)
+        end),
+        :(return nothing))))
 end
 
 # Explicit-Euler substeps from a bound on the diffusion coefficient D (the factor multiplying

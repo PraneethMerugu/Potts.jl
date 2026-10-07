@@ -20,7 +20,7 @@
 
 """A group of updates of one scope and cadence, run as one phase after the folds `pops`."""
 struct Stage
-    scope::Symbol                         # :cell, :site, :model
+    scope::Symbol                         # :cell, :site, :model, :edge
     every::Int
     updates::Vector{Update}               # right-hand sides rewritten (snapshots, slots)
     pops::Vector{Pair{Symbol, Any}}       # model slot => population fold, before the stage
@@ -215,6 +215,45 @@ function _written(u::Update)
 end
 _update_name(u::Update) = info(_unwrap(u.eq.lhs)).name
 
+# Edge-variable reads in `x` as (name, through Pre). Edge variables are not in `_reads`: an
+# edge stage computes every new value of a link before writing any, so within a stage a read
+# is the value before the block, and there is nothing to snapshot.
+function _edge_reads!(out, x, pre::Bool = false)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return out
+    i = info(x)
+    i !== nothing && i.role === :edge && return push!(out, (i.name, pre))
+    iscall(x) || return out
+    p = pre || operation(x) isa ModelingToolkitBase.Pre
+    foreach(a -> _edge_reads!(out, a, p), arguments(x))
+    return out
+end
+
+# An edge update (D-169) reads the other edge variables its block writes only through `Pre`
+# and only when they are written in its own stage (one cadence): those reads see the values
+# before the block. A bare read (a new value) or a read across stages is refused rather than
+# given a value that depends on the stage order.
+function _check_edge_block(sys, us, stages)
+    stage_of = Dict{Symbol, Int}()
+    for (s, st) in enumerate(stages), u in st.updates
+        st.scope === :edge && (stage_of[_update_name(u)] = s)
+    end
+    for u in us
+        _update_scope(u) === :edge || continue
+        me = _update_name(u)
+        for (n, pre) in _edge_reads!(Tuple{Symbol, Bool}[], u.eq.rhs)
+            (n === me || !haskey(stage_of, n)) && continue
+            (pre && stage_of[n] == stage_of[me]) && continue
+            _located(sys, u) do
+                throw(ArgumentError("the edge update of `$me` reads `$n`, which the same block writes " *
+                                    (pre ? "at another cadence" : "(a new value)") * "; edge updates read the edge " *
+                                    "variables of their block through `Pre` and at their own cadence"))
+            end
+        end
+    end
+    return nothing
+end
+
 """
     _schedule_block(sys, us, rn, popslots) -> (stages, snapshots)
 
@@ -275,7 +314,7 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     roles = Dict(_update_name(u) => info(_unwrap(u.eq.lhs)).role for u in us)
     snap = Dict{Symbol, Any}(n => _standin(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre))
                              for n in snapnames)
-    order = Dict(:model => 1, :cell => 2, :site => 3)
+    order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)
     groups = Dict{Tuple{Int, Int, Int}, Vector{Int}}()
     for (j, u) in enumerate(us)
         push!(get!(groups, (level[j], order[_update_scope(u)], u.every), Int[]), j)
@@ -300,6 +339,7 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
         end
         push!(stages, Stage(scope, key[3], rewritten, pops))
     end
+    _check_edge_block(sys, us, stages)
     snaps = sort!([(roles[n] === :field ? :site : roles[n], n) for n in snapnames]; by = last)
     return stages, snaps
 end
