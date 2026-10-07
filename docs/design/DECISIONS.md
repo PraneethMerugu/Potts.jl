@@ -2609,3 +2609,27 @@ session.
   - Benchmarks and timed checks own physical cores 12–15 (logical 12–15 and 28–31). A timed process is pinned to one logical CPU there, with its SMT sibling idle.
   - FULL runs and CI test jobs are pinned to `taskset -c 0-11,16-27`: 24 logical CPUs, the D-156 cap.
   - Measured 2026-10-06 under a load of 25 without pinning: an Akeeb sequential run read either ~40 or ~71 ns/site depending on SMT sharing, which made a same-commit control read 1.729.
+- **Applied: P6.0bg (implementer ab17932a…5177eaf1; review: round 1 REQUEST CHANGES, round 2 APPROVE; merged 2026-10-07).**
+  - **The harness.**
+    - `test/shared/devices.jl` (module `PottsDevices`): `device_name`, `on_device`, `device_backend`, `device_sync`, `device_array`, `device_arraytype`, `device_package`. It loads Metal.jl or AMDGPU.jl only on request.
+    - `test/shared/device_select.jl` (`PottsDeviceSelect.requested()`): POTTS_GPU, else COREPOTTS_GPU, with an error when they disagree. It is shared by the helper and the `GROUP=GPU` runner; when neither is set, the runner uses the platform's backend.
+    - AMDGPU (compat "2"; 2.7.0 resolved on the PC) joins the test projects, with Metal and StableRNGs compat added.
+    - Library code changed only in a comment: the `lifecycle_device.jl` compile-only path is correct on ROCm and is guarded by `test/device_ir.jl`.
+  - **Re-freeze under this entry.** 15 frozen acceptance files, all mechanical: 26 `Main.Metal.MetalBackend()` sites become `device_backend()`, plus the `*_ON_DEVICE` predicates, `device_sync()`, and skip and title text.
+    - No assertion, tolerance, seed or model changed. The reviewer read every hunk and recomputed all 77 sha256 values.
+    - New Metal-only gates `P60V1_ON_METAL` and `P60V3_ON_METAL` cover only Metal.jl-internal instrumentation (wait counters, the Float64-refusal control).
+    - p6_0n, p6_0r and p6_3b device testsets are newly wired into the GPU group.
+  - **No-double guard** (stands in for Metal until P6.0bi).
+    - A post-suite scan of every compiled kernel in AMDGPU's cache (`test/shared/device_ir_scan.jl`): optimized LLVM, with a cache-route negative control. 107 kernels in the CorePotts process and 372 in the Potts process, 0 containing `double`, including the P6.0ao `÷` fixture.
+    - The hook-based controls and compile-only check stay in `test/device_ir.jl`.
+    - A coverage check (`test/device_coverage.jl`): every CorePotts `gpu_*` and `*_body!` (39) must be scanned. 37 are; `propose_body!` and `commit_body!` are allowlisted because they are only inlined into scanned sweep kernels. A stale entry fails.
+    - A new staged-lifecycle device testset (`FUSE_SITES = 0`, 13 checks against oracles) reaches nine previously unexercised stage kernels.
+  - **Results on the PC (ROCm, gfx1151).**
+    - `GROUP=GPU POTTS_GPU=rocm`: 35261 pass, 0 fail, 6 broken (the Metal-only skips).
+    - CPU suites green.
+    - PottsModels: counts identical to base, so no CPU test was lost.
+    - `frozen.jl`: 231/231.
+  - **Not yet verified on Metal (P6.0bi).**
+    - The helper's Metal branch, the `device_package()`-based wait instrumentation and the staged-lifecycle testset.
+    - Whether AMDGPU resolves on macOS in the shared Manifest.
+  - **Open LOW (review note).** The coverage check enumerates CorePotts only. A future `@kernel` in Potts or an extension would be IR-scanned once launched, but its absence would go unnoticed; extend the enumeration if one is added.

@@ -323,7 +323,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
   - Look up compiled kernels by (generated-function ids, backend, workgroup) instead of recompiling them per integrator.
   - Accept: the unseeded and seeded Metal OpenVT A/B agree within ±2%, and a second `init` on the same problem compiles no kernel.
-- [ ] **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
+- [x] (merge, 2026-10-07; D-157) **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
   - One shared helper, `test/shared/devices.jl`: `POTTS_GPU ∈ {metal, rocm}`, `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
   - Every test project includes it. The frozen acceptance files are re-frozen to use it (23 `Main.Metal.MetalBackend()` sites); the change is mechanical and no assertion changes. `GROUP=GPU` reads the backend from the environment.
   - Check the Metal.jl workaround in `lifecycle_device.jl` (~853) on ROCm.

@@ -1,10 +1,13 @@
-# Symbolic models on Metal (POTTS_GPU=metal): generated code with T = Float32 runs on the
-# device with exact trackers and CPU-equivalent statistics (D-029).
-using Metal
+# Symbolic models on the device (POTTS_GPU = metal | rocm; test/shared/devices.jl, D-157):
+# generated code with T = Float32 runs on the device with exact trackers and CPU-equivalent
+# statistics (D-029).
 using Statistics: mean, var
 
-@testset "symbolic models on Metal" begin
-    backend = MetalBackend()
+# ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
+PottsDevices.device_name() == "rocm" && include("device_ir.jl")
+
+@testset "symbolic models on the device" begin
+    backend = PottsDevices.device_backend()
     σ, kinds = graner_state()
     prob = symbolic_graner_problem(; nmcs = 40, T = Float32)
     u = solve(prob, CheckerboardCPM(); backend).u[end]
@@ -12,7 +15,7 @@ using Statistics: mean, var
     xs = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
     ys = [total_energy(prob, solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
     t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-    @info "symbolic Graner H, CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
+    @info "symbolic Graner H, CPU vs device" cpu = mean(xs) device = mean(ys) t
     @test abs(t) < 4
     for (label, p) in (
             ("wortel", PottsProblem(WORTEL, [ownership => wortel_state(), kind => [1, 1]], (0, 20); T = Float32)),
@@ -148,8 +151,8 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-@testset "several relationships on Metal (Float32)" begin
-    backend = MetalBackend()
+@testset "several relationships on the device (Float32)" begin
+    backend = PottsDevices.device_backend()
     σ = zeros(Int32, 64, 30); σ[5:10, 12:17] .= 1; σ[30:35, 12:17] .= 2; σ[55:60, 12:17] .= 3
     mp = PottsProblem(MetalSprings(; name = :ms), [ownership => σ, kind => [:blob, :blob, :blob],
         :bond => [(1, 2)], :tether => [(2, 3)]], (0, 1500); T = Float32)
@@ -162,12 +165,12 @@ end
         (CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 1, 2),
             CorePotts.centroid_distance(Float64, u.cell, mp.lattice, 2, 3))
     end
-    @info "two relationships on Metal" bond = mean(first.(d)) tether = mean(last.(d))
+    @info "two relationships on the device" bond = mean(first.(d)) tether = mean(last.(d))
     @test abs(mean(first.(d)) - 12.0) < 2.5
     @test abs(mean(last.(d)) - 18.0) < 2.5
 end
 
-@testset "Akeeb invasion on Metal (Float32) agrees with the CPU (Float64)" begin
+@testset "Akeeb invasion on the device (Float32) agrees with the CPU (Float64)" begin
     # A-77: leaders' mean height after 150 MCS (the invasion) and the trackers
     lat = (99, 60)
     function leader_y(backend, T, seed)
@@ -181,15 +184,15 @@ end
         return mean(ys)
     end
     cpu = [leader_y(CorePotts.CPU(), Float64, s) for s in 1:4]
-    gpu = [leader_y(MetalBackend(), Float32, s) for s in 11:14]
+    gpu = [leader_y(PottsDevices.device_backend(), Float32, s) for s in 11:14]
     t = (mean(cpu) - mean(gpu)) / sqrt(var(cpu) / 4 + var(gpu) / 4)
-    @info "Akeeb leader height, CPU vs Metal" cpu = mean(cpu) metal = mean(gpu) t
+    @info "Akeeb leader height, CPU vs device" cpu = mean(cpu) device = mean(gpu) t
     @test abs(t) < 4
     @test all(>(20), gpu)          # leaders invade (start ≈ 11; ≈ 15.5 at 200 MCS without the cue)
 end
 
-@testset "P6.0e contact terms reading site values on Metal (Float32)" begin
-    backend = MetalBackend()
+@testset "P6.0e contact terms reading site values on the device (Float32)" begin
+    backend = PottsDevices.device_backend()
     sys = SiteContacts(; name = :sq)
     p64 = site_contact_problem(sys, (24, 24); tspan = (0, 60))
     p32 = site_contact_problem(sys, (24, 24); tspan = (0, 60), T = Float32)
@@ -199,7 +202,7 @@ end
     xs = [total_energy(p64, solve(remake(p64; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:8]
     ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 11:18]
     t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-    @info "P6.0e site-value contacts H, CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
+    @info "P6.0e site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) t
     @test abs(t) < 4
     # an on-copy write read by the contact term, on the device
     σ, kinds, cue = site_contact_state((20, 20); side = 4)
@@ -210,8 +213,8 @@ end
     @test any(!=(0.5f0), Array(v.site.tag)) && count(==(0.5f0), Array(v.site.tag)) > 0   # copies cleared tags
 end
 
-@testset "P6.0f per-rule cadence on Metal (Float32)" begin
-    backend = MetalBackend()
+@testset "P6.0f per-rule cadence on the device (Float32)" begin
+    backend = PottsDevices.device_backend()
     σ, kinds = rule_cadence_state((48, 32))
     for (na, nb) in ((2, 3), (2, 4), (3, 3))
         prob = PottsProblem(RuleCadences(; name = :rc, na, nb), [ownership => σ, kind => kinds], (0, 5); T = Float32, capacity = 128)
@@ -221,8 +224,8 @@ end
     end
 end
 
-@testset "P6.0f rule-carrying events on Metal (Float32)" begin
-    backend = MetalBackend()
+@testset "P6.0f rule-carrying events on the device (Float32)" begin
+    backend = PottsDevices.device_backend()
     σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
     function run(sys, tspan)
         prob = PottsProblem(sys, [ownership => σ, kind => [:ka]], tspan; capacity = 32, T = Float32)
@@ -246,15 +249,16 @@ end
     end
 end
 
-# P6.0k: the frozen Boolean-network acceptance file, whose Metal testset runs only where Metal
-# is loaded (here), and discrete components with couplings and model scope on the device.
-module P60kOnMetal
+# P6.0k: the frozen Boolean-network acceptance file (its device testset runs only where a
+# device backend is loaded: here), then discrete components with couplings and model scope
+# on the device.
+module P60kOnDevice
 using Test, Potts
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0k_boolean_network.jl"))
 end
 
-@testset "P6.0k discrete components on Metal (Float32)" begin
-    backend = MetalBackend()
+@testset "P6.0k discrete components on the device (Float32)" begin
+    backend = PottsDevices.device_backend()
     σ = _discrete_blocks(2)
     prob = PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 8);
         T = Float32)
@@ -288,9 +292,9 @@ end
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-@testset "P6.0k scratch-published ticks on Metal (Float32)" begin
+@testset "P6.0k scratch-published ticks on the device (Float32)" begin
     prob = PottsProblem(GPUDiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]], (0, 5); T = Float32)
-    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:5)
+    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend(), saveat = 0:5)
     Z = [isodd(t ÷ 2) for t in 0:5]
     @test [Array(u.model.mm₊dM)[1] for u in sol.u] == Float32[0; fill(3, 5)]
     @test [Array(u.cell.cc₊dX)[1] for u in sol.u] == Float32[0, 0, 1, 1, 1, 1]
@@ -298,21 +302,21 @@ end
     @test [Array(u.cell.yy₊dY)[2] for u in sol.u] == Float32.([false; Z[1:5]])
 end
 
-@testset "P6.0k Jacobi across cells on Metal (shift register, Float32)" begin
+@testset "P6.0k Jacobi across cells on the device (shift register, Float32)" begin
     prob = PottsProblem(DiscreteShiftRegister(; name = :s), [ownership => _discrete_blocks(6, 16), kind => fill(1, 6)], (0, 4);
         T = Float32)
-    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:4)
+    sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend(), saveat = 0:4)
     @test [Array(u.cell.xc₊dX) for u in sol.u] == [Float32.(shift_register_oracle(m)) for m in 0:4]
     ua = solve(PottsProblem(DiscreteArray(; name = :a), [ownership => _discrete_blocks(1, 8), kind => [1]], (0, 5); T = Float32),
-        CheckerboardCPM(; proposal = Moore(1)); backend = MetalBackend(), saveat = 0:5)
+        CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend(), saveat = 0:5)
     @test [(Array(u.cell.ar₊dz_1)[1], Array(u.cell.ar₊dz_2)[1]) for u in ua.u] ==
           Tuple{Float32, Float32}[(0, 1), (0, 0), (1, 0), (1, 1), (0, 1), (0, 0)]
 end
 
 # P6.0c: several ODE solver groups step through scratch `x__ode` on the device (fixed-step
 # kernels) and through the host (adaptive), then publish: the CPU result in Float32.
-@testset "solver groups on Metal (Jacobi scratch)" begin
-    backend = MetalBackend()
+@testset "solver groups on the device (Jacobi scratch)" begin
+    backend = PottsDevices.device_backend()
     sys = SolverTriple(; name = :t)
     v(n) = solver_var(sys, n)
     for kw in ((; solvers = [v(:s) => RK4(), v(:h) => RK4()]),
@@ -330,18 +334,18 @@ end
     end
 end
 
-# P6.0d: the frozen acceptance scenario on Metal (Float32, CheckerboardCPM). The `[frozen]`
+# P6.0d: the frozen acceptance scenario on the device (Float32, CheckerboardCPM). The `[frozen]`
 # kinds are the standard rule, so the mask is rebuilt on the device after the transition.
-module P60dOnMetal
+module P60dOnDevice
 using Test, Potts
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0d_frozen_kind_mask.jl"))
 end
 
-@testset "P6.0d frozen-kind transitions on Metal (Float32, device-built mask)" begin
-    M = P60dOnMetal
-    backend = MetalBackend()
+@testset "P6.0d frozen-kind transitions on the device (Float32, device-built mask)" begin
+    M = P60dOnDevice
+    backend = PottsDevices.device_backend()
     σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
-    function metal_problem(moves...)
+    function device_problem(moves...)
         prob = PottsProblem(M.P60dKinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.P60D_T1);
             seed = 1, T = Float32)
         f = prob.f
@@ -351,7 +355,7 @@ end
             lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
         return remake(prob; f = g)
     end
-    prob = metal_problem(M.P60D_CELL => M.P60D_WALL, M.P60D_WALL => M.P60D_CELL)
+    prob = device_problem(M.P60D_CELL => M.P60D_WALL, M.P60D_WALL => M.P60D_CELL)
     @test Potts.CorePotts.frozen_varies(prob.f.sys) && Potts.CorePotts.frozen_kinds(prob.f.sys) == (M.P60D_WALL,)
     sol = solve(prob, CheckerboardCPM(); backend, saveat = 1)
     @test Symbol(sol.retcode) === :Success && sol.stats.lifecycle.transitions == 2
@@ -362,47 +366,47 @@ end
     @test M.p60d_moved(sol, 2, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2   # released
     @test frozen_sites(prob, sol.u[end]) == (Array(sol.u[end].σ) .== 1)
     # negative control: the transition into a free kind keeps moving
-    ctl = solve(metal_problem(M.P60D_CELL => M.P60D_OTHER), CheckerboardCPM(); backend, saveat = 1)
+    ctl = solve(device_problem(M.P60D_CELL => M.P60D_OTHER), CheckerboardCPM(); backend, saveat = 1)
     @test M.p60d_moved(ctl, 1, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2
     @test M.p60d_moved(ctl, 2, 2:(M.P60D_T1 + 1)) == 0
 end
 
-# P6.0v: the frozen transfer-counter acceptance file, whose Metal testset runs only where
-# Metal is loaded (here)
-module P60vOnMetal
+# P6.0v: the frozen transfer-counter acceptance file, whose device testset runs only where
+# a device backend is loaded (here)
+module P60vOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl"))
 end
 
-# P6.0v2: the frozen column-copy acceptance file (Metal testsets run only here)
-module P60v2OnMetal
+# P6.0v2: the frozen column-copy acceptance file (device testsets run only here)
+module P60v2OnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2_column_copies.jl"))
 end
 
-# P6.0v2b: the frozen custom-rule refresh acceptance file (Metal testsets run only here)
-module P60v2bOnMetal
+# P6.0v2b: the frozen custom-rule refresh acceptance file (device testsets run only here)
+module P60v2bOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v2b_frozen_refresh_bytes.jl"))
 end
 
-# P6.0v1: the frozen device-lifecycle acceptance file, whose Metal testsets run only where
-# Metal is loaded (here). It wraps `Metal.wait_cmdbuf!` for its own wait count;
-# `transfer_counts.jl` below re-wraps it for its own.
-module P60v1OnMetal
+# P6.0v1: the frozen device-lifecycle acceptance file, whose device testsets run only where
+# a device backend is loaded (here). On Metal it wraps `Metal.wait_cmdbuf!` for its own wait
+# count; `transfer_counts.jl` below re-wraps it for its own.
+module P60v1OnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v1_device_lifecycle.jl"))
 end
 
-# P6.0v3 (with P6.0v8): launch fusion and no hidden GPU wait. The acceptance file's Metal
-# testsets run only where Metal is loaded (here); it wraps `Metal.wait_cmdbuf!` for its own
-# wait count, and `transfer_counts.jl` below re-wraps it for its own.
-module P60v3OnMetal
+# P6.0v3 (with P6.0v8): launch fusion and no hidden GPU wait. The acceptance file's device
+# testsets run only where a device backend is loaded (here); on Metal it wraps
+# `Metal.wait_cmdbuf!` for its own wait count, and `transfer_counts.jl` below re-wraps it.
+module P60v3OnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v3_launch_fusion.jl"))
 end
 
-# P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's Metal testsets
+# P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's device testsets
 # (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
 # P6.0ao: `÷`/`div` in generated code stays in Float32 on the device (Base's Float32 `div`
 # goes through Float64): a parameter, a variable, a literal and the Int32 `volume`, in an
@@ -428,11 +432,11 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-@testset "÷ and div on Metal (Float32)" begin
+@testset "÷ and div on the device (Float32)" begin
     σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[9:12, 9:11] .= 2
     prob = PottsProblem(MetalIntDiv(; name = :d), [ownership => σ, kind => [:A, :A]], (0, 4); seed = 1, T = Float32)
     @test total_energy(prob) == sum((v - 3 - div(v, 3))^2 for v in (9, 12))
-    u = solve(prob, CheckerboardCPM(); backend = MetalBackend()).u[end]
+    u = solve(prob, CheckerboardCPM(); backend = PottsDevices.device_backend()).u[end]
     V = Array(u.cell.volume)[1:2]
     @test all(>(0), V)
     @test Array(u.cell.h)[1:2] == Float32.(div.(V, 2))
@@ -442,47 +446,69 @@ end
     @test total_energy(prob, u) == sum((v - 3 - div(v, 3))^2 for v in V)
 end
 
-# run only where Metal is loaded (here).
-module P60agOnMetal
+# run only where a device backend is loaded (here).
+module P60agOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0ag_ode_expand_all.jl"))
 end
 
-# P6.0af: the staged-form handover after the fused `before` ran (D-108); Metal testsets here
-module P60afOnMetal
+# P6.0af: the staged-form handover after the fused `before` ran (D-108); device testsets here
+module P60afOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0af_lifecycle_followups.jl"))
 end
 
-# P6.0q: a population fold reading `time` inside a cell ODE (unhoisted) on Metal (D-119);
-# the acceptance file's Metal testsets run only where Metal is loaded (here)
-module P60qOnMetal
+# P6.0q: a population fold reading `time` inside a cell ODE (unhoisted) on the device (D-119);
+# the acceptance file's device testsets run only where a device backend is loaded (here)
+module P60qOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0q_time_fold_metal.jl"))
 end
 
 # P6.0g: kind classes lower to constant kind comparisons, so the class gates compile for
 # the device and match the CPU run in Float32 (D-135)
-module P60gOnMetal
+module P60gOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
 end
 
-# P6.3a: the frozen topology/track acceptance file; its Metal testset (the ΔH track in
-# Float32, no per-MCS sync) runs only where Metal is loaded (here)
-module P63aOnMetal
+# P6.3a: the frozen topology/track acceptance file; its device testset (the ΔH track in
+# Float32, no per-MCS sync) runs only where a device backend is loaded (here)
+module P63aOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3a_topology_track.jl"))
 end
 
-# P6.15c: the frozen OpenVT Table S1 file; its Metal testset (contact counts exact, draws per
+# P6.15c: the frozen OpenVT Table S1 file; its device testset (contact counts exact, draws per
 # daughter and the model's free-surface fraction, CheckerboardCPM in Float32) runs only where
-# Metal is loaded (here)
-module P615cOnMetal
+# a device backend is loaded (here)
+module P615cOnDevice
 using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_15c_openvt_table_s1.jl"))
+end
+
+# P6.0n, P6.0r, P6.3b: frozen acceptance files whose device testsets (a cell ODE across cells,
+# a partner killed during a device run, boundaries and the schedule) were not wired into the
+# GPU group before D-157; they run only where a device backend is loaded (here)
+module P60nOnDevice
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0n_cell_ode_jacobi.jl"))
+end
+module P60rOnDevice
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0r_killing_copy_energy.jl"))
+end
+module P63bOnDevice
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_3b_boundary_schedule.jl"))
 end
 
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")
+
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
+if PottsDevices.device_name() == "rocm"
+    include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))
+    DeviceIRScan.check("Potts")
+end

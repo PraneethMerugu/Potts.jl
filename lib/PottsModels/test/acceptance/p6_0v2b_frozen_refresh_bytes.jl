@@ -58,7 +58,7 @@
 # the model and site leaves) and exceed the bound. The Standard and fallback testsets pass.
 using Potts: CorePotts
 
-const P60V2B_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60V2B_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60V2B_SLACK = 16
 const P60V2B_NCELL = 32
 const P60V2B_DIMS = (16, 16)
@@ -209,9 +209,9 @@ end
     end
 end
 
-@testset "P6.0v2b: custom-rule refresh copies only the declared leaves on Metal" begin
-    if P60V2B_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v2b: custom-rule refresh copies only the declared leaves on the device" begin
+    if P60V2B_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         T = Float32
         m0, m1 = p60v2b_expected(P60V2B_STIFF0), p60v2b_expected(P60V2B_STIFF1)
@@ -245,13 +245,13 @@ end
             refresh_frozen!(integ)
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v2b: standard-rule refresh on Metal (device, twin-invariant)" begin
-    if P60V2B_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v2b: standard-rule refresh on the device (twin-invariant)" begin
+    if P60V2B_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         nar = p60v2b_refreshes(P60v2bStandard(), alg; backend, T = Float32)
         wid = p60v2b_refreshes(P60v2bStandard(), alg; backend, T = Float32, wide = true)
@@ -261,6 +261,6 @@ end
         @test all(d -> d[3] <= P60V2B_SLACK, nar.deltas)                    # the counts only (12 B)
         @test nar.masks == wid.masks == [p60v2b_expected((2,)), p60v2b_expected((3,)), p60v2b_expected((3,))]
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

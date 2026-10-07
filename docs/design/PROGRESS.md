@@ -2161,3 +2161,19 @@ The maintainer approved F-1…F-6 (D-049).
 - **Filed.**
   - P6.0bl: checkerboard vs sequential kinetics differ on Merks models.
   - P6.3f: corrected (the attempts row is not a deviation).
+
+## 2026-10-07 — P6.0bg merged: backend-neutral device testing for Metal and ROCm (D-157)
+
+- **The change.**
+  - One device helper and backend resolver for every test project; 15 frozen files re-frozen mechanically.
+  - ROCm (AMDGPU.jl 2.7, gfx1151) runs the full GPU group.
+  - A post-suite no-double scan of every compiled device kernel (479 across both processes, 0 with `double`), with negative controls.
+  - A coverage check over all 39 CorePotts kernel bodies.
+  - The staged device lifecycle is now exercised.
+- **Review.** Two rounds.
+  - Round 1 found that the IR check covered only part of the kernels (HIGH), plus four LOWs.
+  - Round 2 approved, after confirming that the kernel cache is complete and the coverage enumeration is exhaustive.
+- **Checks (PC, pinned).**
+  - `GROUP=GPU POTTS_GPU=rocm`: 35261 pass, 0 fail, 6 broken (Metal-only).
+  - CorePotts 23574 and Potts 7575 pass on CPU; PottsModels counts identical to base; `frozen.jl` 231.
+- **Next.** P6.0bh, the ROCm CI workflow on the self-hosted runner. Metal verification waits for P6.0bi.

@@ -60,7 +60,7 @@
 # the coordinator's).
 using Potts: CorePotts
 
-const P60AF_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60AF_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60AF_HOOK = isdefined(CorePotts, :_STAGED_FAULT_AFTER)
 # fingerprints recorded on 457104d8 (T = Float64): `generated_code` must not change the code
 const P60AF_FP_COUNTER = 0x42dacb8c1f75522b   # re-pinned under D-122
@@ -258,11 +258,11 @@ end
         end
     end
 
-    if P60AF_ON_METAL
-        @testset "(a) on Metal" begin
+    if P60AF_ON_DEVICE
+        @testset "(a) on the device" begin
             @test P60AF_HOOK
             if P60AF_HOOK
-                backend = Main.Metal.MetalBackend()
+                backend = Main.PottsDevices.device_backend()
                 for (name, prob) in p60af_cases(Float32), k in (1, 2)
                     @testset "$name, fault after kernel $k" begin
                         p60af_check_handover(name, remake(prob; seed = 1), k; backend)

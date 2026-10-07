@@ -850,8 +850,10 @@ end
 # Compile without dispatching: a launch over an empty range. That this compiles the kernel
 # (cached by argument types, which do not depend on the range) and then returns before
 # dispatching is a property of the backend's KA launch, not of the KA API: verified for
-# Metal.jl 1.10 (`Metal.kernel_instances` grows here and not at the launch that follows) and
-# (from its source) CUDA.jl. The CPU backend has no separate compilation step.
+# Metal.jl 1.10 (`Metal.kernel_instances` grows here and not at the launch that follows),
+# AMDGPU.jl (`@roc launch = false`, then a return on zero blocks; verified on 2.7, guarded by
+# `test/device_ir.jl`, D-157) and (from its source) CUDA.jl. The CPU backend has no separate
+# compilation step.
 _stage!(::_CompileOnly, body::B, backend::KernelAbstractions.CPU, n, args::A) where {B, A} = nothing
 function _stage!(::_CompileOnly, body::B, backend, n, args::A) where {B, A}
     _each_kernel!(backend)(body, args; ndrange = 0, workgroupsize = 1)

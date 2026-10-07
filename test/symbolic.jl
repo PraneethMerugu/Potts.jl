@@ -1012,12 +1012,11 @@ end
     end
 end
 
-get(ENV, "POTTS_GPU", "") == "metal" && @eval using Metal
-get(ENV, "POTTS_GPU", "") == "metal" && @testset "cell and cluster divisions in one model on Metal" begin
+PottsDevices.on_device() && @testset "cell and cluster divisions in one model on the device" begin
     σ, kinds, groups = compartment_state()
     prob = PottsProblem(NucleusDivision(; name = :nd), [ownership => σ, kind => kinds, cluster => groups], (0, 5);
         T = Float32)
-    check_nucleus_division(solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = Metal.MetalBackend()).u[end])
+    check_nucleus_division(solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend()).u[end])
 end
 
 @testset "ensembles and callbacks of generated problems" begin

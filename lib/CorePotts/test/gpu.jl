@@ -1,9 +1,9 @@
-# GPU group (opt-in: COREPOTTS_GPU=metal). Trackers stay exact on the device; statistics
+# GPU group (opt-in: COREPOTTS_GPU or POTTS_GPU = metal | rocm; the backend comes from
+# test/shared/devices.jl, D-157). Trackers stay exact on the device; statistics
 # agree with the CPU (D-029: statistical, not bitwise, CPU/GPU agreement).
-using Metal
 
-@testset "Metal" begin
-    backend = MetalBackend()
+@testset "device ($(PottsDevices.device_name()))" begin
+    backend = PottsDevices.device_backend()
     σ, kinds = blocks((64, 64), 6)
     σ = circshift(σ, (3, 3))
     lat = Lattice((64, 64))
@@ -36,17 +36,17 @@ using Metal
         @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c); atol = 1e-9))
     end
 
-    # statistical parity of an observable, CPU vs Metal checkerboard
+    # statistical parity of an observable, CPU vs device checkerboard
     function energy_proxy(u)          # mean |volume − V0|, a fast-relaxing observable
         sum(abs.(u.cell.volume .- 36)) / length(u.cell.volume)
     end
     xs = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:12]
     ys = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:112]
     t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 12 + var(ys) / 12)
-    @info "CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
+    @info "CPU vs device" cpu = mean(xs) device = mean(ys) t
     @test abs(t) < 4
 
-    @testset "phases on Metal" begin
+    @testset "phases on the device" begin
         σp, kp = blocks((32, 32), 4)
         latp = Lattice((32, 32))
         u0 = Float32[sin(2π * i / 32) + cos(2π * j / 16) for i in 1:32, j in 1:32]
@@ -63,7 +63,7 @@ using Metal
         @test g.history.u ≈ c.history.u rtol = 1e-5
     end
 
-    @testset "fields on Metal" begin
+    @testset "fields on the device" begin
         σf, kf = blocks((64, 32), 6)
         latf = Lattice((64, 32))
         c0 = Float32[exp(-((i - 20)^2 + (j - 10)^2) / 30) for i in 1:64, j in 1:32]
@@ -77,7 +77,7 @@ using Metal
         @test sum(g) ≈ sum(c0) rtol = 1e-4
     end
 
-    @testset "frozen sites and cell reductions on Metal" begin
+    @testset "frozen sites and cell reductions on the device" begin
         σz, kz = blocks((32, 32), 5; gap = 0)
         latz = Lattice((32, 32))
         frozen = falses(32, 32); frozen[:, 1:2] .= true
@@ -99,7 +99,7 @@ using Metal
         end
     end
 
-    @testset "division on Metal" begin
+    @testset "division on the device" begin
         latd = Lattice((48, 48))
         σd = zeros(Int32, 48, 48); σd[20:27, 20:27] .= 1
         grow!(st, p, ctx, key, mcs, c) = (@inbounds st.cell.target[c] += 1.0f0; nothing)
@@ -127,7 +127,7 @@ using Metal
         end
     end
 
-    @testset "Act, chemotaxis, connectivity and bias on Metal" begin
+    @testset "Act, chemotaxis, connectivity and bias on the device" begin
         latA = Lattice((64, 64))
         σA, kA = blocks((64, 64), 6; gap = 2)
         nA = length(kA)
@@ -156,18 +156,18 @@ using Metal
         @test all(c -> components(uA.σ, latA, c) == 1, 1:nA)
         @test all(>(0), uA.cell.volume)
         @test any(>(0), uA.site.act)
-        # chemotaxis moves mass up the gradient; CPU and Metal agree on how far
+        # chemotaxis moves mass up the gradient; CPU and the device agree on how far
         drift(u) = sum(i -> u.σ[i] != 0 ? grad[i] : 0.0f0, eachindex(u.σ)) / count(!=(0), u.σ)
         d0 = drift(stA)
         xs = [drift(solve(remake(probA; seed), CheckerboardCPM(); save_start = false).u[end]) - d0 for seed in 1:8]
         ys = [drift(solve(remake(probA; seed), CheckerboardCPM(); backend, save_start = false).u[end]) - d0 for seed in 101:108]
         @test mean(xs) > 0 && mean(ys) > 0
         t = (mean(xs) - mean(ys)) / sqrt(var(xs) / 8 + var(ys) / 8)
-        @info "Act/chemotaxis drift CPU vs Metal" cpu = mean(xs) metal = mean(ys) t
+        @info "Act/chemotaxis drift CPU vs device" cpu = mean(xs) device = mean(ys) t
         @test abs(t) < 4
     end
 
-    @testset "ring connectivity rule and Barker on Metal" begin
+    @testset "ring connectivity rule and Barker on the device" begin
         σM, kM = blocks((48, 48), 5; gap = 1)
         latM = Lattice((48, 48))
         okM(st, p, prop, ctx) = ring_arcs(st.σ, ctx, prop) <= 1 ||
@@ -184,7 +184,7 @@ using Metal
         @test abs(t) < 4
     end
 
-    @testset "3D second-order neighbourhood with surface on Metal" begin
+    @testset "3D second-order neighbourhood with surface on the device" begin
         lat3 = Lattice((24, 24, 24))
         σ3, k3 = blocks((24, 24, 24), 5; gap = 1)
         n3 = length(k3)
@@ -214,7 +214,7 @@ using Metal
         @test all(c -> all(isapprox.(centroid(u.cell, lat3, c), centroid(ref, lat3, c); atol = 1e-9)), 1:n3)
     end
 
-    @testset "links, host rules and the contact table on Metal" begin
+    @testset "links, host rules and the contact table on the device" begin
         latL = Lattice((60, 30))
         σL = zeros(Int32, 60, 30); σL[5:10, 12:17] .= 1; σL[40:45, 12:17] .= 2
         cellL = merge(init_moments(σL, latL, 2), empty_links(1, 2; rest = Float32))
@@ -262,7 +262,7 @@ using Metal
         end
     end
 
-    @testset "link_delta skips a dead partner on Metal (P6.0l)" begin
+    @testset "link_delta skips a dead partner on the device (P6.0l)" begin
         # the spring of the previous testset, plus cell 3: linked to cell 1 but owning no
         # site (copy-killed, volume 0, centroid 0/0). The kernel skips it: ΔH stays finite.
         latD = Lattice((60, 30))
@@ -293,7 +293,7 @@ using Metal
         @test abs(mean(ds) - 12.0) < 2.5                            # the live spring still acts
     end
 
-    @testset "a killing copy removes the dying cell's links on Metal (P6.0r)" begin
+    @testset "a killing copy removes the dying cell's links on the device (P6.0r)" begin
         # cell 2 owns one site, 22.5 from blob 1's centroid, on a spring of rest 3 and
         # stiffness 1 (≈ 380 stretched). Dying costs it +λd = 50 (E = λd·v(v − 2)), growing
         # +50, and medium contacts with it are free: at T = 1 only the killing copy, whose
@@ -332,7 +332,7 @@ using Metal
         @test all(u -> u.cell.volume[2] == 1, solve(free, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1).u)
     end
 
-    @testset "checkpoint continuation on Metal" begin
+    @testset "checkpoint continuation on the device" begin
         σc, kc = blocks((48, 48), 6)
         latc = Lattice((48, 48))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, fingerprint = 0x7)
@@ -351,10 +351,10 @@ using Metal
         @test rest.cell.volume == whole.cell.volume
     end
 
-    @testset "transfer counters (D-085): exact counts of the helpers on Metal" begin
+    @testset "transfer counters (D-085): exact counts of the helpers on the device" begin
         stats = CorePotts.PottsStats()
         counts() = (stats.syncs, stats.transfers, stats.transfer_bytes)
-        d = MtlArray(Float32[1, 2, 3, 4]); d2 = MtlArray(zeros(Float32, 4))
+        d = PottsDevices.device_array(Float32[1, 2, 3, 4]); d2 = PottsDevices.device_array(zeros(Float32, 4))
         CorePotts._sync!(stats, backend)
         @test counts() == (1, 0, 0)
         @test CorePotts._to_host(stats, d) == Float32[1, 2, 3, 4]
@@ -366,7 +366,7 @@ using Metal
         @test h == Float32[5, 6, 7, 8] && counts() == (1, 3, 48)
         CorePotts._copy!(stats, d, d2)                                       # device → device: not a transfer
         @test counts() == (1, 3, 48)
-        @test CorePotts._readback(stats, MtlArray(Int32[7])) == 7
+        @test CorePotts._readback(stats, PottsDevices.device_array(Int32[7])) == 7
         @test counts() == (1, 4, 52)
         # a snapshot: one transfer per device leaf
         st = CorePotts._to_backend(backend, initial_state(Int32[1 0; 0 2], Int32[1, 1]))
@@ -384,7 +384,7 @@ using Metal
         @test counts() .- before == (0, 1, 16)
     end
 
-    @testset "compartments on Metal" begin
+    @testset "compartments on the device" begin
         σ, kinds, cluster = compartment_cells((48, 48), 8, 4)
         lat = Lattice((48, 48))
         n = length(kinds)
@@ -430,7 +430,7 @@ using Metal
         @test Array(um.cell.cluster_volume) == recompute_cluster_volume(Array(um.σ), Array(um.cell.cluster))
     end
 
-    @testset "lattice domains on Metal" begin
+    @testset "lattice domains on the device" begin
         disk(x) = (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2
         lat = Lattice((40, 40); boundary = Closed(), domain = disk)
         σ = zeros(Int32, 40, 40); σ[16:25, 16:25] .= 1; σ[5:10, 18:23] .= 2
@@ -448,7 +448,7 @@ using Metal
         @test u.cell.volume == [count(==(c), u.σ) for c in 1:4] && u.cell.volume[3] > 0
         @test sum(u.site.c[lat.mask]) ≈ 36 rtol = 1e-4
     end
-    @testset "relationship reads (shared read claims) on Metal" begin
+    @testset "relationship reads (shared read claims) on the device" begin
         # P6.0b4: a chain of two relationships whose link partners are reads (D-058): 1–2 a
         # bond (rest 12), 2–3 a tether (len 18); every centroid distance starts at 25
         latR = Lattice((64, 30))
@@ -474,12 +474,12 @@ using Metal
         prob(g, k, seed) = PottsProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
         # write claims are device buffers with reads, ghost `nothing` without (P6.0b3)
         wc = init(prob(f, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims
-        @test all(w -> w isa MtlArray && eltype(w) == UInt32 && length(w) == 3, wc)
+        @test all(w -> w isa PottsDevices.device_arraytype() && eltype(w) == UInt32 && length(w) == 3, wc)
         @test init(prob(GG, 2, 1), CheckerboardCPM(); backend, save_start = false).cache.wclaims === (nothing, nothing)
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
         runs(k, dev, seeds) = map(seeds) do seed
             integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
-            dev && @test integ.state.σ isa MtlArray && integ.state.cell.links__bond isa MtlArray
+            dev && @test integ.state.σ isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
             sol = solve!(integ)
             @test sol.retcode == ReturnCode.Success
             sol.u[end]
@@ -499,18 +499,18 @@ using Metal
         gpu = dist.(us)
         cpu = dist.(runs(2, false, 101:104))            # independent seeds (D-029)
         m(x, i) = mean(getindex.(x, i))
-        @info "reads on Metal: bond, tether distance" metal = (m(gpu, 1), m(gpu, 2)) cpu = (m(cpu, 1), m(cpu, 2))
+        @info "reads on the device: bond, tether distance" device = (m(gpu, 1), m(gpu, 2)) cpu = (m(cpu, 1), m(cpu, 2))
         @test abs(m(gpu, 1) - 12) < 2.5 && abs(m(gpu, 2) - 18) < 2.5             # relaxed toward rest
         # a consistency smoke check only: claim races are covered by the CPU kernel-mutation
         # tests in relationships.jl ("claim protocol in the real propose/commit kernels")
         @test abs(m(gpu, 1) - m(cpu, 1)) < 2.5 && abs(m(gpu, 2) - m(cpu, 2)) < 2.5  # comparable to CPU
         # negative control: without the spring the chain stays far from its rest lengths
         free = dist.(runs(0, true, 1:4))
-        @info "reads on Metal, k = 0" free = (m(free, 1), m(free, 2))
+        @info "reads on the device, k = 0" free = (m(free, 1), m(free, 2))
         @test m(free, 1) > 18 && m(free, 2) > 21
     end
 
-    @testset "the frozen mask follows a lifecycle transition on Metal (P6.0d)" begin
+    @testset "the frozen mask follows a lifecycle transition on the device (P6.0d)" begin
         # fixture in lifecycle.jl: cell 1 → frozen kind 2, cell 2 → free kind 1 at MCS 10
         S = 10
         for sys in (FrozenKind(2), HostFrozen(2))       # device rule, host fallback
@@ -554,7 +554,7 @@ using Metal
         @test all(sol.u[end].σ[.!dp.lattice.mask] .== 0)
     end
 
-    @testset "3D shell rule and the ΔH track on Metal (P6.3a)" begin
+    @testset "3D shell rule and the ΔH track on the device (P6.3a)" begin
         # the arc-or-pair rule on the 26-site shell compiles for the device
         lat3 = Lattice((18, 18, 18))
         σ3, k3 = blocks((18, 18, 18), 4; gap = 1)
@@ -589,4 +589,65 @@ using Metal
             @test (integ.stats.syncs, integ.stats.transfers) == c0
         end
     end
+end
+
+# The device lifecycle's staged form (one kernel per stage; what problems above FUSE_SITES
+# use) with the optional stages: the surface tracker, contact counts, cluster volume and
+# surface, and the frozen-mask refresh. The fixtures above are small, so they run fused;
+# here they run staged, against the same oracles (and the full no-`double` scan below then
+# sees every stage kernel, D-157).
+@testset "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" begin
+    backend = PottsDevices.device_backend()
+    fuse = CorePotts.FUSE_SITES[]
+    CorePotts.FUSE_SITES[] = 0
+    try
+        # a cluster divides as a unit; cell surface and cluster surface tracked (Moore(1))
+        σd = zeros(Int32, 40, 40); σd[11:30, 15:22] .= 1; σd[18:23, 17:20] .= 2
+        latd = Lattice((40, 40))
+        rel = relation(Moore(1), latd)
+        cell = merge(init_moments(σd, latd, 2), init_clusters(σd, [1, 1], latd; relation = Moore(1), T = Float32),
+            (; surface = recompute_surface(σd, latd, rel, 2; T = Float32)))
+        std = with_capacity(initial_state(σd, Int32[1, 2]; cell), 6)
+        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
+        fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+            lifecycle = Lifecycle(tr; cluster_normal = AlongMinorAxis{Float32}()))
+        pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
+        prob = PottsProblem(fd, std, latd, (0, 1), pd; relations = (; surface = Moore(1)))
+        integ = init(prob, CheckerboardCPM(); backend)
+        @test integ.lcache.device.fused! === nothing                     # control: staged
+        u = solve!(integ).u[end]
+        σu, cl = Array(u.σ), Array(u.cell.cluster)
+        @test Array(u.cell.volume)[1:4] == Int32[68, 12, 68, 12]
+        @test cl[1:4] == Int32[1, 1, 3, 3]
+        @test Array(u.cell.volume) == Int32[count(==(c), σu) for c in eachindex(cl)]
+        @test Array(u.cell.cluster_volume) == recompute_cluster_volume(σu, cl)
+        @test Array(u.cell.cluster_surface) ≈ recompute_cluster_surface(σu, cl, latd, Moore(1); T = Float32)
+        @test Array(u.cell.surface) ≈ brute_surface(σu, latd, rel, length(cl))
+        # contact counts through divisions and a kind change (contact_counts.jl's fixture)
+        cp = remake(cc_problem(); p = merge(gg_params(Float32), (; V0 = 36.0f0, T = 8.0f0)))
+        integ = init(cp, CheckerboardCPM(); backend, saveat = 1)
+        @test integ.lcache.device.fused! === nothing
+        sol = solve!(integ)
+        @test sol.stats.lifecycle.divisions >= 3 && sol.stats.lifecycle.transitions >= 1
+        @test cc_bad(sol, cp.lattice) == 0
+        # the frozen mask follows a removal (lifecycle.jl's fixture); counts as fused
+        S = 10
+        rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
+        fp = fk_problem(rm2; T = Float32)
+        integ = init(fp, CheckerboardCPM(); backend)
+        @test integ.lcache.device.fused! === nothing
+        sol = solve!(integ)
+        @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
+        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+    finally
+        CorePotts.FUSE_SITES[] = fuse
+    end
+end
+
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
+# D-157); the scan lives with the monorepo's shared test helpers
+const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
+if PottsDevices.device_name() == "rocm" && isfile(DEVICE_IR_SCAN)
+    include(DEVICE_IR_SCAN)
+    DeviceIRScan.check("CorePotts")
 end

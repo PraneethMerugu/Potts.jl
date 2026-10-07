@@ -3,6 +3,9 @@
 using Test, Potts, PottsModels, Aqua
 using Potts: CorePotts
 using Statistics: mean
+# device selection (D-157): the acceptance files' device testsets run here only when
+# POTTS_GPU = metal | rocm; the GPU group runs them from test/gpu.jl
+isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
 
 function selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))

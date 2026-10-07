@@ -1,4 +1,5 @@
 using Potts, Test
+isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 
 @testset "Potts re-exports CorePotts" begin
     @test isdefined(Potts, :PottsProblem)
@@ -19,5 +20,5 @@ include("layouts.jl")
 include("solvers.jl")
 include("analysis.jl")
 include("boundary_schedule.jl")
-get(ENV, "POTTS_GPU", "") == "metal" && include("gpu.jl")
+PottsDevices.on_device() && include("gpu.jl")     # POTTS_GPU = metal | rocm (D-157)
 get(ENV, "POTTS_QA", "true") == "true" && include("qa.jl")

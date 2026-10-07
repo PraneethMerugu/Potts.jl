@@ -681,11 +681,11 @@ end
 # ---------------------------------------------------------------------------------------
 # Metal
 
-const P63A_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 
-@testset "P6.3a: track on Metal (CheckerboardCPM, Float32)" begin
-    if P63A_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.3a: track on the device (CheckerboardCPM, Float32)" begin
+    if P63A_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         off = p63a_track_problem(; T = Float32)
         on = p63a_track_problem(; T = Float32, track = (:ΔH,))
@@ -711,6 +711,6 @@ const P63A_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :M
             end
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

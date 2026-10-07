@@ -1,6 +1,8 @@
 [deps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 PottsModels = "7ddeed3b-134f-4313-a104-79862f0bd557"
@@ -10,8 +12,10 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+AMDGPU = "2"
 Aqua = "0.8"
 ExplicitImports = "1.15"
+Metal = "1"
 OrdinaryDiffEqRosenbrock = "2"
 SHA = "0.7, 1"
 StableRNGs = "1"
