@@ -693,7 +693,15 @@ struct Update
     eq::Equation
     every::Int
 end
-"""`Every(n)`: the cadence of an update or rule (`@divide`, `@link`): it runs at MCS where `mcs % n == 0`."""
+"""
+    Every(n)
+
+The cadence of an update or rule: `@before_mcs Every(n) …`, `@after_mcs Every(n) …`,
+`@divide … Every(n)`, `@link … Every(n)`. It runs at the MCS where `mcs % n == 0`, with MCS
+numbered from 0, so `@after_mcs Every(5)` runs after MCS 0, 5, 10, … and its writes are seen
+at t = 1, 6, 11, …. The default is `Every(1)`, every MCS; `n ≥ 1`.
+[`Potts.updates`](@ref) reports each update's cadence as an `Every`.
+"""
 struct Every
     n::Int
     Every(n::Integer) = n >= 1 ? new(Int(n)) : throw(ArgumentError("Every(n) needs n ≥ 1; got $n"))

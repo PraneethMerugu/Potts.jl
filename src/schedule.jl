@@ -206,7 +206,13 @@ function _check_integral_pre(sys, u::Update, writers)
     return nothing
 end
 
-_update_scope(u::Update) = (r = info(_unwrap(u.eq.lhs)).role; r === :field ? :site : r)
+# the declared scope of the variable an update writes (`x` of an on-copy `x[target]`); a
+# field variable is site scope
+_update_scope(u::Update) = (r = role(_written(u)); r === :field ? :site : r)
+function _written(u::Update)
+    x = _unwrap(u.eq.lhs)
+    return u.phase === :on_copy && iscall(x) && operation(x) === at ? arguments(x)[1] : x
+end
 _update_name(u::Update) = info(_unwrap(u.eq.lhs)).name
 
 """

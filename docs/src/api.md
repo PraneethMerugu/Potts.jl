@@ -31,6 +31,19 @@ spec.hamiltonian, spec.drives, spec.constraints, spec.temperature, spec.proposal
 The payload is a description: a Potts model is still solved through `PottsProblem`, and
 `ODEProblem`/`JumpProblem` of a Potts model are `ArgumentError`s.
 
+The update rules are visible the same way. `Potts.updates(sys)` lists every `@before_mcs`,
+`@after_mcs` and `@on_copy` statement as written, with its phase, the scope of the variable
+it writes, its cadence (a `Potts.Every`) and its `Equation` in ModelingToolkit's `Pre` form:
+
+```julia
+for u in Potts.updates(sys)
+    println(u.phase, " ", u.scope, " ", u.every, ": ", u.eq)   # e.g. after_mcs cell Every(1): x ~ Pre(x) + 1
+end
+```
+
+Potts compiles and runs these rules in its sweep; they are not ModelingToolkit events, so
+`ModelingToolkitBase.discrete_events(sys)` is empty.
+
 ```@autodocs
 Modules = [Potts]
 Private = false

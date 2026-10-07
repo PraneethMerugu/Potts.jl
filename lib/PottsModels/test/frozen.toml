@@ -396,3 +396,8 @@ decision = "D-160"
 path = "reproductions/09_cell_sorting.jl"
 sha256 = "626e4f8ab5387af352c6e0147d2cb7d737bc3541271208db2bbe12b5d5257551"
 decision = "D-166"
+
+[[file]]
+path = "acceptance/p6_0bp_updates.jl"
+sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
+decision = "D-164"

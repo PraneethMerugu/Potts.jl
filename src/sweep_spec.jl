@@ -1,8 +1,9 @@
 # The sweep's definition as an MTK-visible object (D-160, P6.0bm): `hamiltonian(sys)`,
 # `drives(sys)` and the `PottsSweepSpec` metadata payload, read with MTK's own
-# `getmetadata`/`hasmetadata`. A description only: it is derived from the system on every
-# read, so it always describes the system it is read from, and it never enters the
-# generated code or the fingerprint (D-137 rule 2).
+# `getmetadata`/`hasmetadata`; and the update rules as written, `updates(sys)` (D-164).
+# Descriptions only: they are derived from the system on every read, so they always
+# describe the system they are read from, and they never enter the generated code or the
+# fingerprint (D-137 rule 2).
 
 """
     Potts.hamiltonian(sys) -> AbstractVector{Pair}
@@ -25,11 +26,24 @@ H = Potts.hamiltonian(GranerGlazier(; name = :gg))
 first(H[1]), last(H[1])        # cells(…) => λ * (volume - V₀)^2
 ```
 """
-hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => _wrapped(e.expr) for e in getfield(sys, :energies)]
+hamiltonian(sys::PottsSystem) = Pair{Any, Any}[e.domain => _wrapped(_described(e.expr)) for e in getfield(sys, :energies)]
 hamiltonian(c::CompiledPottsSystem) = hamiltonian(c.authored)
 
 # an expression as the user wrote it: wrapped (`Num`) when symbolic, a number as it is
 _wrapped(x) = Symbolics.wrap(_unwrap(x))
+
+# `x` with every contact fold's tracker symbol replaced by the fold it stands for
+# (`count_contacts(…)`): descriptions show the folds, never internal names (D-164)
+function _described(x)
+    y = _unwrap(x)
+    y isa SymbolicUtils.BasicSymbolic || return y
+    sub = Dict{Any, Any}()
+    _walk_all(y) do z
+        i = info(z)
+        i !== nothing && i.role === :contact_count && (sub[z] = _fold_description(i))
+    end
+    return isempty(sub) ? y : _unwrap(Symbolics.substitute(y, sub; fold = Val(false)))
+end
 
 """
     Potts.drives(sys) -> AbstractVector
@@ -39,8 +53,57 @@ scope: `source`, `target`, `old`, `new`, …), in declaration order; empty for a
 without drives. Drives bias the acceptance of a copy but are not terms of
 [`Potts.hamiltonian`](@ref).
 """
-drives(sys::PottsSystem) = Any[_wrapped(d.expr) for d in getfield(sys, :drives)]
+drives(sys::PottsSystem) = Any[_wrapped(_described(d.expr)) for d in getfield(sys, :drives)]
 drives(c::CompiledPottsSystem) = drives(c.authored)
+
+# one element of `updates(sys)`
+const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
+
+"""
+    Potts.updates(sys) -> AbstractVector
+
+The update rules of a model as written: one element per `@before_mcs`, `@after_mcs` and
+`@on_copy` statement, in declaration order across the three phases (`@extend`/`extend`
+statements merged), for a `PottsSystem` (completed or not) or a `CompiledPottsSystem` (the
+statements of the model it was compiled from: as written, before `@components` are
+lowered). Empty for a model without updates. Each element `u` has the properties
+
+- `u.phase`: `:before_mcs`, `:after_mcs` or `:on_copy`;
+- `u.scope`: `:cell`, `:site`, `:model` or `:edge`, the declared scope of the variable the
+  statement writes (for `@on_copy x[target] ~ …`, the scope of `x`; a field variable is
+  `:site`);
+- `u.every`: the cadence, a [`Potts.Every`](@ref) (`Every(1)` when none is written, and
+  always for `@on_copy`);
+- `u.eq`: the statement as a Symbolics `Equation` in ModelingToolkit's `Pre` form: the new
+  value on the left (at `target`/`new` for `@on_copy`), `Pre(x)` where it was written, and a
+  compound write `x += e` as `x ~ Pre(x) + e`. Its symbols are the declared ones (as
+  `complete(sys).x`) and the DSL built-ins (`volume`, `new`, …).
+
+Folds appear as Potts fold terms over their bound variable: a contact fold as
+[`Potts.count_contacts`](@ref)`(contact_partner, pred, relation)`, a population fold as
+`population(c_k, body, cond)`, a gather with its bound `n_k`; random draws appear as
+`random_*` terms numbered in declaration order. Scope and cadence are those of a valid
+model: the statements are checked when the model is compiled (`mtkcompile`,
+`PottsProblem`), not here.
+
+The rules are a description: Potts compiles and runs them in its sweep, and they are not
+ModelingToolkit events (`ModelingToolkitBase.discrete_events(sys)` is empty).
+
+```julia
+u = first(Potts.updates(OpenVTGrowingMonolayer(; name = :openvt)))
+u.phase, u.scope, u.every   # (:after_mcs, :cell, Potts.Every(1))
+u.eq                        # V_target(t) ~ ifelse(volume >= (Pre(V_target(t))*β), Pre(V_target(t)) + A₀ / τ, Pre(V_target(t)))
+```
+"""
+updates(sys::PottsSystem) = _UpdateRule[_update_rule(u) for u in getfield(sys, :updates)]
+updates(c::CompiledPottsSystem) = updates(c.authored)
+
+_update_rule(u::Update) = _UpdateRule((u.phase, _update_scope(u), Every(u.every), _described(u.eq)))
+
+function _described(eq::Equation)
+    lhs, rhs = _described(eq.lhs), _described(eq.rhs)
+    return lhs === _unwrap(eq.lhs) && rhs === _unwrap(eq.rhs) ? eq : lhs ~ rhs
+end
 
 """
     Potts.PottsSweepSpec
