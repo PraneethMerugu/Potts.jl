@@ -15,6 +15,22 @@ solver specifications, and measurements of a state: `total_energy` and the publi
 exported, `Potts.boundary_lengths` and `Potts.anneal` (see [Boundary lengths and annealed
 states](@ref manual-analysis)).
 
+The sweep's definition is visible to ModelingToolkit's generic tools.
+`Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
+expressions, `Potts.drives(sys)` gives the `@drive` expressions, and MTK's
+`ModelingToolkitBase.constraints(sys)` gives the `@constraint` entries. Generic code detects
+a Potts model, and reads its sweep, with MTK's metadata API:
+
+```julia
+using ModelingToolkitBase: getmetadata, hasmetadata
+hasmetadata(sys, Potts.PottsSweepSpec)               # true for every Potts model, false for a System
+spec = getmetadata(sys, Potts.PottsSweepSpec, nothing)
+spec.hamiltonian, spec.drives, spec.constraints, spec.temperature, spec.proposal
+```
+
+The payload is a description: a Potts model is still solved through `PottsProblem`, and
+`ODEProblem`/`JumpProblem` of a Potts model are `ArgumentError`s.
+
 ```@autodocs
 Modules = [Potts]
 Private = false
