@@ -1,8 +1,9 @@
 # The sweep's definition as an MTK-visible object (D-160, P6.0bm): `hamiltonian(sys)`,
 # `drives(sys)` and the `PottsSweepSpec` metadata payload, read with MTK's own
-# `getmetadata`/`hasmetadata`. A description only: it is derived from the system on every
-# read, so it always describes the system it is read from, and it never enters the
-# generated code or the fingerprint (D-137 rule 2).
+# `getmetadata`/`hasmetadata`; and the update rules as written, `updates(sys)` (D-164).
+# Descriptions only: they are derived from the system on every read, so they always
+# describe the system they are read from, and they never enter the generated code or the
+# fingerprint (D-137 rule 2).
 
 """
     Potts.hamiltonian(sys) -> AbstractVector{Pair}
@@ -41,6 +42,50 @@ without drives. Drives bias the acceptance of a copy but are not terms of
 """
 drives(sys::PottsSystem) = Any[_wrapped(d.expr) for d in getfield(sys, :drives)]
 drives(c::CompiledPottsSystem) = drives(c.authored)
+
+"""
+    Potts.updates(sys) -> AbstractVector
+
+The update rules of a model as written: one element per `@before_mcs`, `@after_mcs` and
+`@on_copy` statement, in declaration order across the three phases (`@extend`/`extend`
+statements merged), for a `PottsSystem` (completed or not) or a `CompiledPottsSystem` (the
+statements of the model it was compiled from: as written, before `@components` are
+lowered). Empty for a model without updates. Each element `u` has the properties
+
+- `u.phase`: `:before_mcs`, `:after_mcs` or `:on_copy`;
+- `u.scope`: `:cell`, `:site`, `:model` or `:edge`, the declared scope of the variable the
+  statement writes (for `@on_copy x[target] ~ …`, the scope of `x`; a field variable is
+  `:site`);
+- `u.every`: the cadence, a [`Potts.Every`](@ref) (`Every(1)` when none is written, and
+  always for `@on_copy`);
+- `u.eq`: the statement as a Symbolics `Equation` in ModelingToolkit's `Pre` form: the new
+  value on the left (at `target`/`new` for `@on_copy`), `Pre(x)` where it was written, and a
+  compound write `x += e` as `x ~ Pre(x) + e`. Its symbols are the declared ones (as
+  `complete(sys).x`) and the DSL built-ins (`volume`, `new`, …).
+
+The rules are a description: Potts compiles and runs them in its sweep, and they are not
+ModelingToolkit events (`ModelingToolkitBase.discrete_events(sys)` is empty).
+
+```julia
+u = first(Potts.updates(OpenVTGrowingMonolayer(; name = :openvt)))
+u.phase, u.scope, u.every      # (:after_mcs, :cell, Every(1))
+u.eq                           # V_target ~ ifelse(…, Pre(V_target) + …, Pre(V_target))
+```
+"""
+# one element of `updates(sys)`
+const _UpdateRule = @NamedTuple{phase::Symbol, scope::Symbol, every::Every, eq::Equation}
+updates(sys::PottsSystem) = _UpdateRule[_update_rule(u) for u in getfield(sys, :updates)]
+updates(c::CompiledPottsSystem) = updates(c.authored)
+
+_update_rule(u::Update) = _UpdateRule((u.phase, _written_scope(u), Every(u.every), u.eq))
+
+# the declared scope of the variable an update writes (`x` of an on-copy `x[target]`)
+function _written_scope(u::Update)
+    x = _unwrap(u.eq.lhs)
+    w = u.phase === :on_copy && iscall(x) && operation(x) === at ? arguments(x)[1] : x
+    r = role(w)
+    return r === :field ? :site : r
+end
 
 """
     Potts.PottsSweepSpec
