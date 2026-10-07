@@ -55,7 +55,7 @@
 using Potts: CorePotts
 using Statistics: mean, var
 
-const P60V1_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60V1_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 p60v1_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 p60v1_lifecycle(s) = NamedTuple{fieldnames(typeof(s.lifecycle))}(getfield.(Ref(s.lifecycle), fieldnames(typeof(s.lifecycle))))
 p60v1_lifecycle_total(s::NamedTuple) = sum(values(s))

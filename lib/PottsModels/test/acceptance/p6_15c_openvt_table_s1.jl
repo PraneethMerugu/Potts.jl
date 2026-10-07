@@ -114,7 +114,7 @@ using Statistics: mean, var, std, cor
 using Potts: SciMLBase
 const ReturnCode = SciMLBase.ReturnCode
 
-const P615C_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P615C_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P615C_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM())
 const P615C_R = sqrt(50 / π)                       # 1 R in px (spec §2.3), A₀ = 50
 const P615C_MOORE = [(dx, dy) for dx in -1:1 for dy in -1:1 if (dx, dy) != (0, 0)]

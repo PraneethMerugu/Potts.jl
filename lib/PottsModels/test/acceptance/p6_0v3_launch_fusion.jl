@@ -74,7 +74,7 @@ using Potts: CorePotts
 using OrdinaryDiffEqRosenbrock: Rodas5P
 using Potts.CorePotts.KernelAbstractions: @kernel, @index
 
-const P60V3_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60V3_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 p60v3_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 p60v3_lifecycle_total(s) = sum(f -> getfield(s.lifecycle, f), fieldnames(typeof(s.lifecycle)))
 

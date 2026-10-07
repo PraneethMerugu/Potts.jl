@@ -55,7 +55,7 @@
 using Potts: CorePotts
 using OrdinaryDiffEqRosenbrock: Rodas5P
 
-const P60V2_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60V2_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60V2_SLACK = 16
 const P60V2_CAPACITY = 64
 p60v2_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)

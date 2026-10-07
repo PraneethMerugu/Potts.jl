@@ -32,7 +32,7 @@
 #     tolerance). Measured on 4e81e1eb (Metal.jl 1.10): every model and solver bitwise
 #     (0 ulp); the tolerance only absorbs device math differences (cf. D-107's Hill shapes).
 
-const P60Q_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60Q_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60Q_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
 const P60Q_SOLVERS = (("ExplicitEuler()", (;), :ee, 1), ("ExplicitEuler(substeps = 4)",
     (; ode_solver = Potts.ExplicitEuler(substeps = 4)), :ee, 4), ("RK4()", (; ode_solver = Potts.RK4()), :rk4, 1))

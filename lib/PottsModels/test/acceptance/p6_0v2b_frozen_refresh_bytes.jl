@@ -58,7 +58,7 @@
 # the model and site leaves) and exceed the bound. The Standard and fallback testsets pass.
 using Potts: CorePotts
 
-const P60V2B_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60V2B_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60V2B_SLACK = 16
 const P60V2B_NCELL = 32
 const P60V2B_DIMS = (16, 16)

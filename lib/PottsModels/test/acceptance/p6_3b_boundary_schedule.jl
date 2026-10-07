@@ -697,7 +697,7 @@ end
 # =======================================================================================
 # 9. Metal
 # =======================================================================================
-const P63B_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P63B_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 
 function p63b_metal_counts(prob; nwarm = 1, n = 3)
     integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_end = false)

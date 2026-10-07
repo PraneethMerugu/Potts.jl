@@ -992,7 +992,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Metal: the class gates compile for the device (constants, no allocation) and match the CPU
 
-const P60G_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60G_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 @testset "P6.0g: on the device (Float32), class gates equal the CPU run" begin
     if P60G_ON_DEVICE
         backend = Main.PottsDevices.device_backend()

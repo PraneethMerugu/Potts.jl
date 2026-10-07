@@ -43,7 +43,7 @@ using Potts: CorePotts
 
 const P60V_COUNTERS = (:syncs, :transfers, :transfer_bytes)
 p60v_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
-const P60V_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60V_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 
 # ---------------------------------------------------------------------------------------
 # Fixtures

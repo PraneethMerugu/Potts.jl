@@ -60,7 +60,7 @@
 # the coordinator's).
 using Potts: CorePotts
 
-const P60AF_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P60AF_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60AF_HOOK = isdefined(CorePotts, :_STAGED_FAULT_AFTER)
 # fingerprints recorded on 457104d8 (T = Float64): `generated_code` must not change the code
 const P60AF_FP_COUNTER = 0x42dacb8c1f75522b   # re-pinned under D-122

@@ -681,7 +681,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Metal
 
-const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) \&\& Main.PottsDevices.on_device()
+const P63A_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 
 @testset "P6.3a: track on the device (CheckerboardCPM, Float32)" begin
     if P63A_ON_DEVICE
