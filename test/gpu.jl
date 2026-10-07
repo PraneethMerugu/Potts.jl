@@ -3,8 +3,7 @@
 # statistics (D-029).
 using Statistics: mean, var
 
-# ROCm: no `double` in any device kernel's IR (stands in for Metal's refusal, D-157). First,
-# so every kernel it captures compiles here.
+# ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
 PottsDevices.device_name() == "rocm" && include("device_ir.jl")
 
 @testset "symbolic models on the device" begin
@@ -250,8 +249,9 @@ end
     end
 end
 
-# P6.0k: the frozen Boolean-network acceptance file, whose device testset runs only where a device
-# backend is loaded (here), and discrete components with couplings and model scope on the device.
+# P6.0k: the frozen Boolean-network acceptance file (its device testset runs only where a
+# device backend is loaded: here), then discrete components with couplings and model scope
+# on the device.
 module P60kOnDevice
 using Test, Potts
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0k_boolean_network.jl"))
@@ -506,3 +506,9 @@ end
 # P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
 # update its formulas)
 include("transfer_counts.jl")
+
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache)
+if PottsDevices.device_name() == "rocm"
+    include(joinpath(@__DIR__, "shared", "device_ir_scan.jl"))
+    DeviceIRScan.check("Potts")
+end

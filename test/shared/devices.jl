@@ -1,7 +1,7 @@
 # Backend-neutral device selection for the test suites (D-157).
 #
-#   POTTS_GPU ∈ {"", "metal", "rocm"}   (the CorePotts suite reads COREPOTTS_GPU when
-#                                         POTTS_GPU is empty; both set must agree)
+#   POTTS_GPU ∈ {"", "metal", "rocm"}   (else COREPOTTS_GPU; both set must agree; the rule
+#                                         is `PottsDeviceSelect.requested`, device_select.jl)
 #
 # Including this file defines the module `PottsDevices` in the including module (the test
 # runners include it into `Main`, guarded with `isdefined(Main, :PottsDevices) ||`). It
@@ -26,19 +26,9 @@
 # so they still load where this file was not included.
 module PottsDevices
 
-function _requested()
-    a = lowercase(strip(get(ENV, "POTTS_GPU", "")))
-    b = lowercase(strip(get(ENV, "COREPOTTS_GPU", "")))
-    for v in (a, b)
-        v in ("", "metal", "rocm") ||
-            error("POTTS_GPU/COREPOTTS_GPU must be \"\", \"metal\" or \"rocm\"; got \"$v\"")
-    end
-    isempty(a) || isempty(b) || a == b ||
-        error("POTTS_GPU = \"$a\" and COREPOTTS_GPU = \"$b\" disagree; set one, or both alike")
-    return isempty(a) ? b : a
-end
+isdefined(@__MODULE__, :PottsDeviceSelect) || include(joinpath(@__DIR__, "device_select.jl"))
 
-const NAME = _requested()
+const NAME = PottsDeviceSelect.requested()
 
 if NAME == "metal"
     import Metal

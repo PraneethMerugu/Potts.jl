@@ -590,3 +590,64 @@
         end
     end
 end
+
+# The device lifecycle's staged form (one kernel per stage; what problems above FUSE_SITES
+# use) with the optional stages: the surface tracker, contact counts, cluster volume and
+# surface, and the frozen-mask refresh. The fixtures above are small, so they run fused;
+# here they run staged, against the same oracles (and the full no-`double` scan below then
+# sees every stage kernel, D-157).
+@testset "the staged device lifecycle on the device (surface, contact counts, clusters, frozen mask)" begin
+    backend = PottsDevices.device_backend()
+    fuse = CorePotts.FUSE_SITES[]
+    CorePotts.FUSE_SITES[] = 0
+    try
+        # a cluster divides as a unit; cell surface and cluster surface tracked (Moore(1))
+        σd = zeros(Int32, 40, 40); σd[11:30, 15:22] .= 1; σd[18:23, 17:20] .= 2
+        latd = Lattice((40, 40))
+        rel = relation(Moore(1), latd)
+        cell = merge(init_moments(σd, latd, 2), init_clusters(σd, [1, 1], latd; relation = Moore(1), T = Float32),
+            (; surface = recompute_surface(σd, latd, rel, 2; T = Float32)))
+        std = with_capacity(initial_state(σd, Int32[1, 2]; cell), 6)
+        tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
+        fd = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+            lifecycle = Lifecycle(tr; cluster_normal = AlongMinorAxis{Float32}()))
+        pd = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 40.0f0, T = 10.0f0)
+        prob = PottsProblem(fd, std, latd, (0, 1), pd; relations = (; surface = Moore(1)))
+        integ = init(prob, CheckerboardCPM(); backend)
+        @test integ.lcache.device.fused! === nothing                     # control: staged
+        u = solve!(integ).u[end]
+        σu, cl = Array(u.σ), Array(u.cell.cluster)
+        @test Array(u.cell.volume)[1:4] == Int32[68, 12, 68, 12]
+        @test cl[1:4] == Int32[1, 1, 3, 3]
+        @test Array(u.cell.volume) == Int32[count(==(c), σu) for c in eachindex(cl)]
+        @test Array(u.cell.cluster_volume) == recompute_cluster_volume(σu, cl)
+        @test Array(u.cell.cluster_surface) ≈ recompute_cluster_surface(σu, cl, latd, Moore(1); T = Float32)
+        @test Array(u.cell.surface) ≈ brute_surface(σu, latd, rel, length(cl))
+        # contact counts through divisions and a kind change (contact_counts.jl's fixture)
+        cp = remake(cc_problem(); p = merge(gg_params(Float32), (; V0 = 36.0f0, T = 8.0f0)))
+        integ = init(cp, CheckerboardCPM(); backend, saveat = 1)
+        @test integ.lcache.device.fused! === nothing
+        sol = solve!(integ)
+        @test sol.stats.lifecycle.divisions >= 3 && sol.stats.lifecycle.transitions >= 1
+        @test cc_bad(sol, cp.lattice) == 0
+        # the frozen mask follows a removal (lifecycle.jl's fixture); counts as fused
+        S = 10
+        rm2(st, p, ctx, key, mcs, c) = mcs == S && c == 2 ? EVENT_REMOVE : EVENT_NONE
+        fp = fk_problem(rm2; T = Float32)
+        integ = init(fp, CheckerboardCPM(); backend)
+        @test integ.lcache.device.fused! === nothing
+        sol = solve!(integ)
+        @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
+        @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+    finally
+        CorePotts.FUSE_SITES[] = fuse
+    end
+end
+
+# ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
+# D-157); the scan lives with the monorepo's shared test helpers
+const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
+if PottsDevices.device_name() == "rocm" && isfile(DEVICE_IR_SCAN)
+    include(DEVICE_IR_SCAN)
+    DeviceIRScan.check("CorePotts")
+end

@@ -23,4 +23,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 [compat]
 AMDGPU = "2"
 ExplicitImports = "1.15"
+Metal = "1"
+StableRNGs = "1"
 Test = "1"

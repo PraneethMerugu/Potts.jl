@@ -19,15 +19,19 @@ GROUP in ("All", "Potts") &&
 GROUP in ("All", "PottsModels") &&
     run_group(joinpath(ROOT, "lib/PottsModels/test"), joinpath(ROOT, "lib/PottsModels/test/runtests.jl"))
 # Device group (not part of All): the CorePotts and Potts suites plus their device tests, on
-# the backend named by POTTS_GPU ("metal" or "rocm"; D-157). Unset, it is the platform's own:
-# Metal on macOS, ROCm elsewhere.
+# the backend that POTTS_GPU / COREPOTTS_GPU request (test/shared/device_select.jl, D-157).
+# Neither set: the platform's own, Metal on macOS and ROCm elsewhere. On ROCm both suites end
+# with the full no-`double` scan of their compiled kernels, and a last step checks that every
+# CorePotts kernel and launch body was scanned (test/device_coverage.jl).
 if GROUP == "GPU"
-    gpu = lowercase(get(ENV, "POTTS_GPU", ""))
+    include(joinpath(@__DIR__, "shared", "device_select.jl"))
+    gpu = PottsDeviceSelect.requested()
     isempty(gpu) && (gpu = Sys.isapple() ? "metal" : "rocm")
-    gpu in ("metal", "rocm") || error("GROUP=GPU: POTTS_GPU must be \"metal\" or \"rocm\", got \"$gpu\"")
     @info "GROUP=GPU on $gpu"
+    irdir = mktempdir()
+    env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_DEVICE_IR_DIR" => irdir)
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
-        env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "COREPOTTS_QA" => "false"))
-    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl");
-        env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_QA" => "false"))
+        env = (env..., "COREPOTTS_QA" => "false"))
+    run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"); env = (env..., "POTTS_QA" => "false"))
+    gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
 end

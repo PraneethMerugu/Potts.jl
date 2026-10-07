@@ -1,20 +1,15 @@
-# No `double` in any device kernel's LLVM IR (D-157; extends D-047). Metal has no doubles,
-# so device code never touches Float64 (CLAUDE.md); ROCm has them and would run such code
-# silently. While Metal verification is deferred (P6.0bi), this check stands in for Metal's
-# own refusal: every kernel the device runs compiles, in Float32, to IR with no `double`.
+# No `double` in device kernels' LLVM IR (D-157; extends D-047): the hook-based half. Metal
+# has no doubles, so device code never touches Float64 (CLAUDE.md); ROCm has them and would
+# run such code silently. The full scan of every kernel the GPU group compiles is
+# `test/shared/device_ir_scan.jl` (run at the end of both GPU suites) with its coverage
+# check `test/device_coverage.jl`; this file holds what needs GPUCompiler's compile hook:
 #
-# Representative set: every published model (PottsModels) in Float32 under CheckerboardCPM,
-# with its sweep (propose/commit), field steps, phases, folds and lifecycle (divisions forced
-# where the model has them), each run until its kernels have compiled. Every kernel compiled
-# while the set runs is captured through GPUCompiler's compile hook (it fires on every
-# compilation, cached or not) and its optimized module (the IR the backend lowers) is
-# scanned for the LLVM type `double`.
+# - negative controls for the scan itself: a kernel that widens to Float64 through a
+#   Float64 literal, and one that converts explicitly, are flagged; their Float32 twin is not;
+# - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_device.jl) compiles
+#   and does not dispatch on ROCm, as that code assumes.
 #
-# Negative controls: a kernel that widens to Float64 through a Float64 literal, and one that
-# converts explicitly, are both flagged by the same scan; the Float32 twin of the first is not.
-#
-# ROCm only (included from test/gpu.jl when POTTS_GPU=rocm); the backend's own reflection
-# hook is needed, and Metal refuses such kernels itself (p6_0v3 (6)).
+# ROCm only (included first from test/gpu.jl when POTTS_GPU=rocm).
 module DeviceIR
 using Test, Potts, PottsModels
 using Potts: CorePotts
@@ -97,100 +92,4 @@ end
     @test Array(a) == fill(2.0f0, 4)
 end
 
-# --- the representative set ------------------------------------------------------------
-"""`name => () -> problem` for every published model, small, Float32, with events forced."""
-function devir_cases()
-    T = Float32
-    gg = graner_glazier_state()
-    two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-    ref = (σ = zeros(Int32, 60, 60);
-        foreach(((k, (a, b)),) -> σ[9 + 7a .+ (1:7), 9 + 7b .+ (1:7)] .= k, enumerate(Iterators.product(0:5, 0:5)));
-        σ)
-    return [
-        "GranerGlazier" => () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], (0, 4); T),
-        "WortelAct" => () -> PottsProblem(WortelAct(; name = :w, lattice = (40, 40)),
-            [ownership => two((40, 40), (5:12, 5:12), (25:32, 25:32)), kind => [:cell, :cell]], (0, 4); T),
-        "WortelAct (connected)" => () -> PottsProblem(WortelAct(; name = :wc, lattice = (40, 40), connected = true),
-            [ownership => two((40, 40), (5:12, 5:12), (25:32, 25:32)), kind => [:cell, :cell]], (0, 4); T),
-        "MerksVasculogenesis" => () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (60, 60)),
-            merks_state(; lattice = (60, 60), n = 9), (0, 4); T, field_solver = ExplicitEuler(substeps = 3, lower = 0.0)),
-        # one cell of 144 sites, far above 2A₀ = 50: it divides in the first MCS
-        "OpenVTGrowingMonolayer" => () -> PottsProblem(OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40)),
-            [ownership => (s = zeros(Int32, 40, 40); s[15:26, 15:26] .= 1; s), kind => [:cell]], (0, 4); T, capacity = 64),
-        "SingleDivisionFixture" => () -> PottsProblem(SingleDivisionFixture(; name = :f),
-            [ownership => (s = zeros(Int32, 12, 8); s[5:8, 3:6] .= 1; s), kind => [:epithelial]], (0, 4); T, capacity = 8),
-        "AkeebInvasion" => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
-            akeeb_state(; lattice = (99, 60)), (0, 4); T, capacity = 1000),
-        "OpenVTReferenceMonolayer" => () -> PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (60, 60)),
-            [ownership => ref, kind => fill(:cell, 36), :σ_X => 0.0], (0, 4); T, capacity = 128),
-        "OpenVTChain" => () -> PottsProblem(OpenVTChain(; name = :c, lattice = (150, 5)), openvt_chain(11), (0, 4); T),
-        "Merks2006" => () -> PottsProblem(Merks2006(; name = :m6, lattice = (32, 32)),
-            layout(merks2006_layout(; lattice = (32, 32), n = 6, side = 7), (32, 32)), (0, 4); T,
-            field_solver = ExplicitEuler(substeps = 3)),
-        "Merks2008" => () -> PottsProblem(Merks2008(; name = :m8, lattice = (32, 32)),
-            layout(merks2008_denovo(; lattice = (32, 32), n = 12, rounds = 2), (32, 32)), (0, 4); T,
-            field_solver = ExplicitEuler(substeps = 3)),
-    ]
-end
-
-@testset "device IR: no `double` in any kernel of the published models (Float32)" begin
-    backend = AMDGPU.ROCBackend()
-    seen = String[]
-    # While the hook is set every launch recompiles, so each run is one MCS; the von Neumann
-    # sweep (the other proposal kernels) runs for Graner–Glazier only.
-    for (name, make) in devir_cases(), alg in (CheckerboardCPM(; proposal = Moore(1)), CheckerboardCPM())
-        name == "GranerGlazier" || alg.proposal isa Moore || continue
-        prob = make()
-        divisions = Ref(0)
-        irs = kernels_ir() do
-            integ = init(prob, alg; backend, save_start = false, save_end = false)
-            step!(integ)
-            divisions[] = checkpoint(integ).stats.lifecycle.divisions
-        end
-        @test !isempty(irs)
-        for (k, ir) in irs
-            push!(seen, k)
-            d = doubles(ir)
-            @test isempty(d)
-            isempty(d) || @info "device IR: `double` in a kernel of $name" kernel = first(k, 300) lines = first(d, 5)
-        end
-        # control: the lifecycle ran on the device where an event was forced
-        if name in ("OpenVTGrowingMonolayer", "SingleDivisionFixture")
-            @test divisions[] > 0
-            divisions[] > 0 || @info "device IR: no division in $name (fused)"
-        end
-    end
-    # the staged lifecycle (one kernel per stage; the fused form above is for small problems)
-    fs = CorePotts.FUSE_SITES[]
-    try
-        CorePotts.FUSE_SITES[] = 0
-        for (name, make) in devir_cases()
-            name in ("OpenVTGrowingMonolayer", "SingleDivisionFixture", "AkeebInvasion") || continue
-            divisions = Ref(0)
-            irs = kernels_ir() do
-                integ = init(make(), CheckerboardCPM(; proposal = Moore(1)); backend, save_start = false, save_end = false)
-                step!(integ)
-                divisions[] = checkpoint(integ).stats.lifecycle.divisions
-            end
-            for (k, ir) in irs
-                push!(seen, k)
-                d = doubles(ir)
-                @test isempty(d)
-                isempty(d) || @info "device IR: `double` in a staged-lifecycle kernel of $name" kernel = first(k, 300) lines = first(d, 5)
-            end
-            name == "AkeebInvasion" || @test divisions[] > 0
-            name == "AkeebInvasion" || divisions[] > 0 || @info "device IR: no division in $name (staged)"
-        end
-    finally
-        CorePotts.FUSE_SITES[] = fs
-    end
-    names = join(sort!(unique!([m.captures[1] for k in seen for m in eachmatch(r"CorePotts\.(\w+!?)", k)])), " ")
-    @info "device IR: kernels scanned" n = length(seen) distinct = length(unique(seen)) names
-    # the set covers the sweep, the generic kernel around phase, field-step and staged
-    # lifecycle bodies, and both device lifecycle forms (fused, and planner + stages)
-    has(p) = any(k -> occursin(p, k), seen)
-    @test has("propose_kernel!") && has("commit_kernel!")
-    @test has("_each_kernel!") && has("_cell_phase_body!") && has("_field_step_body!")
-    @test has("_fused_kernel!") && has("_plan_kernel!") && has("_dpartition_body!")
-end
 end # module DeviceIR
