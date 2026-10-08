@@ -3219,3 +3219,22 @@ session.
   - **Ensembles.** Matched ensemble statistics on published models, such as OpenVT growth curves.
   - **Speed.** Speed-up on mostly-medium lattices.
   - **Unchanged default.** Zero warm allocations, and an unchanged `SequentialCPM` gate.
+
+## D-178 Reproduction 15, P6.15i: the "OpenVT monolayer benchmark" page test frozen (2026-10-08; coordinator, from the P6.15i test author; under D-146, D-154, D-156, D-161, D-168, D-172–D-175)
+
+- **Frozen test.** `test/reproductions/15_openvt_page.jl` (commit c9a3b929, sha256 `8cbcb84a28bd213837e89aa10c8ed69f2bdcdc45c57cdf341fce3392f871d2a4`). It pins the Literate page `reproductions/15_openvt_monolayer.jl`. It runs no simulation.
+- **Structure.**
+  - One heading per item, in M's order: Fig 1–6, Table 1, Fig 7, Fig 8, Tables S1 and S5.
+  - Each rendered section names its data directory, commit, machine and figure file.
+- **Differences table (D-154).** It holds:
+  - spec §1.1's C1–C17;
+  - every recorded deviation, and every non-control FAIL (V4.2, V4.3, V4.5) marked FAIL;
+  - the V1 row: 15.17 vs 13.57 cycles, 11–12 % slow beyond 10³ cells, dividing on actual area rather than target area (C13), never marked PASS;
+  - the F1 per-cell colour row.
+- **Media.**
+  - The six release videos are linked from the current releases. Superseded releases are banned, and no video files are committed.
+  - No cell outlines. `pottsplot` is used only with identity or type colours.
+- **G-derived content.** Cited records need clean provenance, and only small figure and statistics files are allowed.
+- **Banned.** The private sheet, `docs/references`, and any wording that implies contact.
+- **Pending sweeps.** F6, T1 and F7 may read "pending: FULL run parked (D-174)" only while no P6.15g record is in `data/15/`. Once one merges, they must render from it, without a re-freeze.
+- **Docs build.** The full docs build check is opt-in (`POTTS_DOCS_BUILD=true`).
