@@ -208,10 +208,10 @@ record_figure("calibration-2026-10-05", "fig2_bde.png"; alt = "Figure 2 b, d, e:
 # reference at every λ (mean squared error 0.38–1.69 times Table S5's); at λ = 2,
 # w₁₁(0.5 T) = 7.859 and w₁₁(2 T) = 9.794, inside the lattice frameworks' spread of
 # 7.83–7.87 and 9.78–9.80. With T = 156 MCS from panel b, the 21-chain gives
-# w₂₁ = 15.96, 19.28 and 19.89 CD at 1, 5 and 10 T, and the plateau ends at 0.173 T, all
-# within the lattice spread ± 0.15 CD. The full verdict table is in the Table S5 section
-# below. Panels a and c of M are
-# schematics of the two chains and are not redrawn.
+# w₂₁ = 15.96, 19.28 and 19.89 CD at 1, 5 and 10 T, within the lattice spread ± 0.15 CD,
+# and its initial plateau ends at 0.173 T, inside the band of 0.1–0.3 T. The full verdict
+# table is in the Table S5 section below. Panels a and c of M are schematics of the two
+# chains and are not redrawn.
 
 # ## Figure 3: Comparing monolayer growth over time
 #
@@ -245,7 +245,8 @@ verdict_table(filter(r -> startswith(r["target"], "F3") && r["case"] in ("f", "b
 
 verdict_table(filter(r -> occursin("must FAIL", r["band"]), f3f8), cols, hdr)
 
-# Every row passes. The deterministic case (f) reproduces TST's synchronous doublings
+# Every pre-registered row passes, and every negative control fails, as required. The
+# deterministic case (f) reproduces TST's synchronous doublings
 # exactly (L = 0, 1, …, 8) and reaches 10³ cells at 9.97 cycles against TST's 10.01. Its
 # colony area is the largest margin used: 8.6 % above TST at t = 4.5, rising to 14.3 % at
 # t = 8.5, against a 20 % band. Potts.jl divides a cell when its *actual* area reaches
@@ -323,6 +324,11 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 # sister pairs. TST and Morpheus each pass all seven rows under the same rules, so the
 # bands describe the consortium's data, and the failures are ours.
 #
+# The V4.2 rule was re-frozen once after the run, because the record showed that the
+# lowest f bin also holds 26 cells with 0 < f < 0.01: V4.2 now drops exactly the f = 0
+# cells instead of the whole bin. No band, seed or run changed, and every verdict is the
+# same under both rules (D-168).
+#
 # Two candidate causes were tested and ruled out on 20 runs each: dividing along TST's
 # minor axis instead of a random plane, and a connectivity constraint. The leading
 # remaining candidate is the division trigger: TST divides on the target area, Potts.jl
@@ -360,8 +366,13 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 #
 # One of its targets is already measured. The ten case (a) runs of the Figure 3/8 record
 # reach 10⁴ cells at 15.17 cycles (14.92–15.49), against M's 13.57; the gap opens between
-# 10³ and 10⁴ cells. Case (e) at β = 0.8 matches TST (16.26 against 16.15 cycles). This is
-# the V1 row of the differences table.
+# 10³ and 10⁴ cells. M's 13.57 is PhysiCell's γ = 0 value; TST's low-β plateau is
+# 13.61–13.86 cycles, so TST takes about 3.4–3.6 cycles from 10³ to 10⁴ cells (from its
+# 10.24 cycles to 10³) where we take 4.6–4.8. The F3/F8 record's README quotes about 3.3
+# cycles, measured from 13.57; this page uses the TST plateau. Case (e) at β = 0.8 matches
+# TST (16.26 against 16.15 cycles). This is the V1 row of the differences table.
+#
+# Per D-174, a V1 failure also makes the 1.1× β threshold of Table 1 "—".
 
 # ## Table 1: Inferred thresholds
 #
@@ -473,7 +484,7 @@ for λ in (1, 2, 3, 5)
 end
 Markdown.parse(s5)
 
-# T decreases strictly with λ and lies within 1–3 % of Table S5 at every λ; the
+# T decreases strictly with λ and lies within 3 % of Table S5 at every λ; the
 # mean squared errors are 0.38–1.69 times Table S5's. At λ = 2, the value used for growth,
 # T = 156 MCS against 155. Every row of the calibration record:
 
@@ -494,7 +505,7 @@ verdict_table(cal, ["target", "paper", "ours", "tolerance", "result"],
 # | V4.2 peak of nonzero f (FAIL) | 0.425 (100 runs, 11,226 cells with f > 0); 0.395–0.435 for smoothing windows of 1–11 bins; mean nonzero f 0.346 | 0.25–0.35 (TST and Morpheus pooled); TST alone 0.295, mean nonzero f 0.288 | leading: Potts.jl divides on actual area, TST on target area (C13). Not the Morpheus f definition or σ_X (C17): TST alone uses our f and σ_X = 0.4 and passes. Ruled out on 20 runs each: the division axis and a connectivity constraint | not asked; on our open question list as Q20 (leading) and Q23 |
 # | V4.3 max f (FAIL) | 0.847; 606 of 11,226 rim cells (5.4 %) above 0.56 | at most 0.56, no cell above (TST max 0.553) | the same upward shift of the rim cells' f as V4.2; causes as for V4.2 | not asked; on our open question list as Q20 (leading) and Q23 |
 # | V4.5 range of a (FAIL) | 0.066–1.130; 30 of 100,029 cells below 0.42, all small interior cells born shortly before, 10 of them sister pairs | 0.42–1.09; TST 0.425–1.092 with no cell below 0.42 | squeezed young daughters, cause unresolved; leading candidate the target-area division (C13). A connectivity constraint raises the minimum but not the count | not asked; on our open question list as Q20 (leading) and Q24 |
-# | V1 time to 10⁴ cells, uninhibited (measured in the Figure 3/8 record; judged with the sweeps) | 15.17 cycles (case (a), 10 runs, 14.92–15.49); 9 of 10 runs above the band; case (e) at β = 0.8: 16.26 | 13.57 cycles, band ± 10 % = 12.21–14.93; TST at β = 0.8: 16.15 | about 11.8 % slow. The gap opens beyond 10³ cells (TST takes about 3.3 cycles from 10³ to 10⁴ cells, we take 4.6–4.8), past the Figure 3 window. Traced to division on actual area (M, C13) against TST's division on target area, as for V4 | not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value) |
+# | V1 time to 10⁴ cells, uninhibited (measured in the Figure 3/8 record; judged with the sweeps) | 15.17 cycles (case (a), 10 runs, 14.92–15.49); 9 of 10 runs above the band; case (e) at β = 0.8: 16.26 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15 | about 11.8 % slow. The gap opens beyond 10³ cells (TST takes about 3.4–3.6 cycles from 10³ to 10⁴ cells, we take 4.6–4.8), past the Figure 3 window. Leading candidate: division on actual area (M, C13) against TST's division on target area, as for V4 | not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value) |
 # | F1 panel colours | per-cell identity colours (one categorical colour per cell), white medium, no outlines | the other frameworks' panels colour cells by a blue-to-red variable (most likely cell area) with grey boundaries | a stylistic choice: per-cell colours, never outlines (D-156, D-175) | not asked; on our open question list as Q10 (the colour variable) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed) |
 # | F1 window | a 64 × 64-site block (about 8 cell diameters) centred on the colony rim | 45 × 45 mm close-ups; the window size is not stated | estimated from the TST close-up; the other panels show more colony than medium | not an author question |
 # | F2 consortium curves | Potts.jl curves and the spring–dashpot reference only | panels b, d, e overlay all frameworks | the consortium's curves are compared through the frozen spread values (the Table S5 section), not redrawn | not an author question |
