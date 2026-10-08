@@ -3116,7 +3116,7 @@ session.
   - a brute-force oracle;
   - `openvt_snapshot(u).f`, the F5 analysis path;
   - for all four cells, the ratio of medium to unlike pairs.
-- **F1 (M Fig 1; `G:results/introduction.tex:52-92`).**
+- **F1 (M Fig 1; `G:results/introduction.tex:50-92`).**
   - **Surface.** `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`, public.
     - The panel is one square Axis with one `pottsplot`: `CellIdentityEncoding` with the automatic palette (D-172), white medium, and no lines or stroked polygons.
     - It shows an unchanged window × window block centred on the colony rim, along the 45° diagonal from the centroid.
