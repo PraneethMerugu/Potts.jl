@@ -17,6 +17,7 @@ using DelimitedFiles: readdlm
 using Printf: @sprintf
 using PrecompileTools: PrecompileTools
 using SciMLBase: ReturnCode
+using TOML: TOML
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
     AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008
@@ -82,6 +83,8 @@ function openvt_f1_figure end
 public openvt_f4_figure, openvt_f1_figure
 
 include("benchmarks/openvt_analysis.jl")
+include("benchmarks/openvt_package.jl")
+public openvt_submission_package
 
 # Precompile the models (D-047; in this file because the guardrails build every other src
 # file from `using Potts` alone): every constructor and its `mtkcompile`, and for the published
