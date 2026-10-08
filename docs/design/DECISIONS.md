@@ -3259,3 +3259,22 @@ session.
   - **Checkpoints.** Continuing from a checkpoint is equal in law, not bitwise.
   - **Backends.** A non-CPU backend is an `ArgumentError`.
   - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
+
+## D-179 P6.0bw: the library's device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm (2026-10-08; coordinator, from the P6.0bw test author; under D-157, D-158, D-171)
+
+- **Measured (PC, ROCm, AMDGPU 2.8.0, CPU 12 under exclusive.sh).**
+  - `step!` itself does not synchronize or transfer anything on the gate cases. The cost is at host read points.
+  - Reading `integ.u` right after `step!` with the default wait:
+    - the OpenVT lifecycle models: 12.9 ms median, about 110–170 MCS of GPU time;
+    - Merks: 0.12 ms.
+  - With a `hipStreamQuery` spin plus async device→host copies, every model reads in 0.12–0.19 ms.
+  - AMDGPU's `copyto!` waits through its own default synchronize, so copies must also go through the helper.
+- **Rule.** Library device waits (`_sync!` and device→host copies) go through `CorePotts._device_wait(backend; timeout)`.
+  - **On ROCm.** A non-allocating `hipStreamQuery` spin (raw `ccall`; `HIP.isdone` allocates 16 B), then `hipStreamSynchronize`. `CorePotts._spin_until(done, timeout)` runs the spin: a GC safepoint, a `yield`, and a clear error on timeout.
+  - **On CPU and Metal.** A plain synchronize.
+- **Frozen test.** `acceptance/p6_0bw_rocm_wait.jl` (commit 7451d9f0, sha256 `7d464db54decea554bdfa11e5fb5a20b3e6a40ed1452a83836c955de074eca24`). It runs in the PottsModels suite and in the GPU group, with the include in `test/gpu.jl`.
+  - **Helper.** The helper itself, yield and safepoint, and the timeout error.
+  - **Hostcalls.** A hostcall kernel completes (`HostCallHolder`/`hostcall!`, because `@rocprintf` does not wait for the host).
+  - **Results and allocations.** Results are bitwise unchanged on every gate case (D-158), with zero allocations on CPU and ROCm.
+  - **Read points.** On ROCm, at most 6 of 300 reads take over 1 ms. On the current code it is 176–180.
+- **Gate.** ab.jl's timed `step!` contains no library wait, so a ratio of about 1.00 is expected. The ROCm A/B is the merge gate.
