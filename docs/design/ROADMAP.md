@@ -584,7 +584,7 @@ Full runs are offline (D-146).
   - every figure in M's layout;
   - a differences table, which is spec 15 §1.1 plus the deviations;
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
-- [ ] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
+- [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
 
 ### Step 4 — Foam
 

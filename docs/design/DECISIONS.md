@@ -3327,3 +3327,15 @@ session.
 - **Bare closeup.** `closeup.png` is now the bare Potts.jl panel, `fig1_panel.png`, which is added (not named "closeup", which D-178 bans in record names) to the F1 record and rendered from its `window.tsv` without the banner. The consortium's closeups have no banner because the .tex adds one; the banner-carrying `fig1.png` would have shown it twice.
 - **Re-frozen file.** `15_openvt_package.jl`, sha256 `3749800b464995fd8281aa362e92bc01996f2c86356471d520a610a5c71f018a`. Only the closeup line and its comment change.
 - **Excluded scripts.** The package leaves out the record scripts that need a local consortium clone (`*_on_g.jl`, `compose_f1.jl`). They hold paths to G files, and they are of no use to the consortium.
+
+**D-180 result (2026-10-08).**
+- **Tests.** The generator passes the frozen package test (11/11). The page test and the F1/F4 test still pass.
+- **Review fixes.**
+  - Scripts that need a consortium clone are left out of the package.
+  - Reruns are described as reproducible in distribution, not bit for bit.
+  - The README's facts are read from the records, not hard-coded.
+  - There is no duplicate V1 row.
+- **Not adopted (both would need re-freezes; revisit if the consortium asks).**
+  - O5 file names keep the frozen pattern `Potts.jl_gamma_<γ>_<MCS>MCS.csv`. β is 0 and stated in the README, rather than TST's `beta_<b>_gamma_<g>`.
+  - The backend is a column of the README's records table, not a provenance field.
+- **Licence.** The repository has no LICENSE. The package states none until the maintainer chooses one.
