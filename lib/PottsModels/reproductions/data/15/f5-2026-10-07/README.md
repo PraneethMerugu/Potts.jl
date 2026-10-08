@@ -24,7 +24,14 @@ This is the offline record required by D-146.
 | `probe_causes.jl` | the cause probe for the failing rows (below) |
 | `v4_on_g.jl` | the frozen V4 rules applied to the consortium's TST_5T (and Morpheus_5T) files from a local G clone; information only. Its pooled histograms feed an optional consortium row of `fig5.png` (`F5_G_HIST`) and are not committed |
 
-The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec §3.1), one per run, in `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` and `…_gamma1e-4/`, are written by the runner to `F5_O2_DIR`. They are 9.4 MB (4.4 MB gzipped) and are not committed; they belong to the submission package (P6.15j). No G file and no G-derived table entered git; the only G-derived item committed is the rendered TST row of `fig5.png`.
+The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec §3.1), one per run, in `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` and `…_gamma1e-4/`, are written by the runner to `F5_O2_DIR`. They are 9.4 MB (4.4 MB gzipped) and are not committed; they belong to the submission package (P6.15j). No G file entered git. G-derived content in git:
+
+- the rendered TST row of `fig5.png`;
+- the small statistics of TST_5T and Morpheus_5T (V4 statistics, window peaks, quantiles, counts) in this README's audit table;
+- the information notes in `deviations.tsv`;
+- the TST numbers in spec 15 §7 Q23.
+
+The G-derived histograms behind the TST row are not committed.
 
 ## Result
 
@@ -57,7 +64,7 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
   | V4.7 mean f | 0.0306 | 0.0304 | 0.0388 |
 
   - Both consortium sets pass every band, so the bands describe the consortium data.
-  - TST, the only other implementation of Table S1 with M's pair-count f, already gives the consortium's distribution on its own. So the mixed-definition explanation for V4.2–V4.3 is weakened.
+  - TST is the only other implementation of Table S1, and it uses M's pair-count f and σ_X = 0.4. On its own it reproduces the consortium's distribution. So neither the Morpheus f definition nor Morpheus's σ_X = 0.16 (C17, Q21) can explain the gap between Potts and TST.
 - **The bulk agrees.** The f = 0 fraction, the a peak and mean a match the consortium. Mean f passes but sits at the band's upper end (0.039 against ≈ 0.03).
   - V4.1 does not separate the control from case (b): the control's f = 0 fraction, 0.863, is also inside the band.
 - **Our rim cells carry more free surface than TST's** (confirmed on TST_5T above: mean nonzero f 0.346 against 0.288).
@@ -82,11 +89,14 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
 
   - Both variants' nonzero-f histograms peak at 0.35–0.45, as in the record. So neither the division axis nor connectivity explains V4.2–V4.3.
   - Connectivity raises the minimum of a but does not reduce the number of cells below 0.42.
-  - The remaining candidates are in `deviations.tsv`:
-    - TST divides on target area (C13, Q20). Since TST_5T alone reproduces the band, this is now the leading candidate;
-    - how TST counts the Moore pairs for f (spec §2.4 records a loop that skips one offset when counting n_i);
-    - weakened by the G check: the pooled band mixes TST's pair-count f with Morpheus's length-scaled f, and the Morpheus runs may predate Table S1 (spec 15 §2.5, Q12); Morpheus draws X with σ = 0.16 (C17, Q21).
-  - New questions Q23 (the f definition and data behind V4) and Q24 (crushed cells) are on our open question list in spec 15 §7.
+  - **Cause ranking** (the same in `deviations.tsv` and spec 15 §7):
+    1. **Leading:** TST divides on target area, not actual area (C13, Q20).
+    2. **Cannot explain the gap with TST:** the Morpheus f definition, the Morpheus parameters (Q12) and Morpheus's σ_X = 0.16 (C17, Q21). TST alone uses our pair-count f and σ_X = 0.4, and still reproduces the band.
+    3. **Unverified and unlikely:** TST counting Moore pairs for f differently. Spec §2.4 records a skipped offset only in TST's neighbour-count loop. Dropping one Moore offset uniformly barely moves a ratio, so it cannot plausibly raise mean nonzero f by 20 %.
+    4. **Ruled out by the probe:** the division axis, and a connectivity constraint.
+  - Our open question list in spec 15 §7 now holds Q23 and Q24:
+    - Q23 asks which TST implementation detail differs from ours.
+    - Q24 asks about crushed cells.
 - **Pilot (12 + 6 + 6 runs, seeds 1001–1012 and 2101–2206, 450² lattice, before the freeze; script not kept).**
   - Case (b): f0 0.887, nonzero-f peak 0.325, max f 0.764, a peak 0.875, a range 0.227–1.116, mean a 0.849, mean f 0.039.
   - γ = 10⁻⁴ and γ = 0.2: mean a 0.957 and 0.958, a peak 0.965 and 0.975.
@@ -94,4 +104,4 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
 - **Distance bins.** The figure labels, floored as in M's notebook, are 0–8, 8–17, 17–26, 26–35 and 35–44 R (control 0–8 … 34–43). The edges are 0, 8.99, 17.98, 26.96, 35.95 and 44.94 R, and the furthest cell is 42.8 R from the initial centre. M's legend reads 0–7 … 31–39, a 1.05 × max d of about 39.5 R (spec C11, Q15).
 - **Figure range.** `fig5.png` draws a from 0.3, so the 3 case (b) cells with a < 0.30 (0.066, 0.261 and 0.297) lie left of the axis. Every f value is in range.
 
-**Videos** are coloured per cell: each cell gets its own categorical colour from MakiePotts' default per-cell palette (`CellIdentityEncoding`), the medium is dark grey, and there are no outlines and no colour bar. They are rendered by `video_f5.jl` from case (b) run 1 (seed 15001) and control run 1 (seed 15501), saved every 39 MCS to the 1000-cell stop: `15_openvt_f5_b_run1_seed15001_cells.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501_cells.mp4`. They are published in the pre-release [`reproductions-2026-10-07-openvt-f5-cells`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5-cells). They replace the earlier area-coloured renders, which were published as [`reproductions-2026-10-07-openvt-f5`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5).
+**Videos** are coloured per cell: each cell has its own categorical colour (`CellIdentityEncoding`), the medium is dark grey, and there are no outlines and no colour bar. Neighbouring cells may share near-identical hues: MakiePotts derives each cell's colour from a hash (`_stable_category_color`, key `id << 32 ⊻ generation`) that is being fixed separately, and the videos will be re-rendered after the fix. `video_f5.jl` renders case (b) run 1 (seed 15001) and control run 1 (seed 15501), saved every 39 MCS up to the 1000-cell stop, as `15_openvt_f5_b_run1_seed15001_cells.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501_cells.mp4`. The coordinator publishes them in a pre-release. The earlier area-coloured renders are in [`reproductions-2026-10-07-openvt-f5`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5).
