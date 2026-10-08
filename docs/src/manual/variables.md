@@ -51,7 +51,9 @@ built, before the first MCS:
   for a cell (`k * x ~ volume` with `k = 0`, or `a + b ~ volume` with `a + b ~ volume + 1`)
   and equations that do not determine the variables uniquely (`a + b ~ volume` with
   `2a + 2b ~ 2volume`: their Jacobian is singular at the solution) are errors naming the
-  cell and the variables; neither a least-squares answer nor the guess is returned.
+  cell and the variables; neither a least-squares answer nor the guess is returned. A root
+  where the terms vanish (`sin(v) ~ 0` at `π`) passes on its Newton correction instead. A
+  repeated root (`(v - 1)^2 ~ 0`) is solved only to about `1e-7` (√eps).
 - A nonlinear equation is solved from the variable's guess (`[guess = g]`, else 0.0), which
   picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`. Without a guess,
   an equation symmetric in the variable such as `r^2 ~ volume` fails: its Jacobian is zero at
@@ -65,6 +67,11 @@ built, before the first MCS:
   only: it neither initializes again nor re-evaluates written values such as `w(cell) = c0`,
   so pass `u0 = map` as well when the start depends on the new parameters. Daughter cells
   are not initialized.
+- Initialization adds to the first problem of a session, beyond the same model without it,
+  about 0.05 s for explicit equations, 0.1–0.15 s for one nonlinear or a linear system, and
+  0.25–0.45 s for coupled nonlinear equations mixed with explicit ones and steady ODE starts
+  (measured on an Apple M-series laptop); later problems pay a few milliseconds, plus about
+  2 µs per cell.
 - Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbour gathers,
   folds over cells, and site, field and edge variables are errors for now.
 

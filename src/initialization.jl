@@ -493,6 +493,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
     # on a small absolute residual, and a linear solve may return a least-squares answer
     check = _InitCheck(ieqs, params, free)
+    gs = Float64[_init_guess(x) for x in free]
     dst = Any[_column(scope === :cell ? cell : model, info(x).name) for x in free]
     entity(k) = scope === :cell ? "cell $k" : "the model"
     conditions = join((r.text for r in rows), ", ")
@@ -526,7 +527,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
                 retcode = sol.retcode
                 x = at_state(sol.u)
                 all(isfinite, x) || break
-                _init_residual(check, pk, x) === nothing && break
+                _init_accept(check, pk, x, gs) === nothing && break
                 tighter = _INIT_NEWTON_RTOL * minimum((v for v in _init_scales(check, pk, x) if v > 0); init = floatmin(Float64))
                 step2 = _init_step(sol.u)
                 (tighter < abstol / 2 || !(step / 2 < step2 < 2step)) || break
@@ -544,16 +545,17 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             isfinite(v) || failed(k, "it gives `$(info(free[j]).name)` = $v" *
                                      (retcode === nothing ? "" : "; the solve stopped with $retcode"))
         end
-        bad = _init_residual(check, pk, out)
+        bad = _init_accept(check, pk, out, gs)
         if bad !== nothing
             r, res, sc = bad
             failed(k, "$(rows[r].text) is not satisfied: residual $res against terms of size $sc" *
                       (retcode === nothing ? "" : "; the solve stopped with $retcode"))
         end
-        _init_singular(check, pk, out) && throw(ArgumentError(
-            "initialization of $(entity(k)) does not determine $names uniquely: the conditions are dependent there " *
-            "(their Jacobian at the solution is singular, as for `a + b ~ volume` with `2a + 2b ~ 2volume`, a " *
-            "coefficient that is zero for this $(scope === :cell ? "cell" : "model"), or a repeated root); check $conditions"))
+        _init_singular(check, pk, out, gs) && throw(ArgumentError(
+            "initialization of $(entity(k)) does not determine $names uniquely: their Jacobian at the solution is " *
+            "singular (dependent conditions, as for `a + b ~ volume` with `2a + 2b ~ 2volume`; a coefficient that is " *
+            "zero for this $(scope === :cell ? "cell" : "model"); or conditions that are flat in a variable there); " *
+            "check $conditions"))
         for (j, v) in enumerate(out)
             dst[j][k] = v
         end
@@ -707,39 +709,39 @@ function _init_residual(c::_InitCheck, p, x)
     return nothing
 end
 
-function _init_jacobian!(J, c::_InitCheck, p, x)
+# the scale of each free value: its magnitude or its guess's, 1 when both are zero
+_init_scale(x, g) = Float64[(s = max(abs(x[j]), abs(g[j])); s > 0 ? s : 1.0) for j in eachindex(x)]
+
+# the conditions' Jacobian in the free values (central differences). The step is relative to
+# the value's scale (`_init_scale`), and grows while a column is exactly zero, so a root at
+# about 0 (`exp(v) ~ 1` lands at 1e-17) is not judged below the residual's resolution.
+function _init_jacobian!(J, c::_InitCheck, p, x, g)
     y = collect(Float64, x)
+    sc = _init_scale(x, g)
     for j in eachindex(y)
-        h = cbrt(eps(Float64)) * (x[j] == 0 ? 1.0 : abs(x[j]))
-        y[j] = x[j] + h
-        _init_eval!(c, p, y)
-        for (q, (l, r)) in enumerate(c.rows)
-            J[q, j] = c.v[l] - c.v[r]
+        h = cbrt(eps(Float64)) * sc[j]
+        for _ in 1:8
+            y[j] = x[j] + h
+            _init_eval!(c, p, y)
+            for (q, (l, r)) in enumerate(c.rows)
+                J[q, j] = c.v[l] - c.v[r]
+            end
+            y[j] = x[j] - h
+            _init_eval!(c, p, y)
+            for (q, (l, r)) in enumerate(c.rows)
+                J[q, j] = (J[q, j] - (c.v[l] - c.v[r])) / 2h
+            end
+            y[j] = x[j]
+            any(!iszero, view(J, :, j)) && break
+            h *= 100
         end
-        y[j] = x[j] - h
-        _init_eval!(c, p, y)
-        for (q, (l, r)) in enumerate(c.rows)
-            J[q, j] = (J[q, j] - (c.v[l] - c.v[r])) / 2h
-        end
-        y[j] = x[j]
     end
     return J
 end
 
-"""
-Whether the conditions' Jacobian in the free values at (`p`, `x`) is singular (central
-differences), after scaling each row and column to unit maximum: a solution that is not
-isolated (dependent conditions) is refused rather than one of many returned.
-"""
-function _init_singular(c::_InitCheck, p, x)
-    n = length(x)
-    J = zeros(n, n)
-    try
-        _init_jacobian!(J, c, p, x)
-    catch e
-        e isa InterruptException && rethrow()
-        return false                                    # not evaluable beside the solution: not judged
-    end
+# whether `J`, scaled in place to unit row and column maxima, is singular
+function _init_flat!(J)
+    n = size(J, 1)
     all(isfinite, J) || return true
     for q in 1:n
         s = maximum(abs, view(J, q, :))
@@ -754,6 +756,49 @@ function _init_singular(c::_InitCheck, p, x)
     n == 1 && return false
     σ = svdvals(J)
     return σ[end] <= _INIT_SINGULAR * σ[1]
+end
+
+"""
+Whether the result (`p`, `x`; guesses `g`) solves the conditions: `nothing`, or the first
+condition not satisfied (row, residual, size of its terms). A residual small against the size
+of the terms passes; so does one whose Newton correction `J⁻¹ r` is below `_INIT_RTOL` of each
+value's scale, which covers roots where the terms themselves vanish (`sin(v) ~ 0` at `π`).
+"""
+function _init_accept(c::_InitCheck, p, x, g)
+    bad = _init_residual(c, p, x)
+    bad === nothing && return nothing
+    isfinite(bad[2]) || return bad
+    n = length(x)
+    J = zeros(n, n)
+    δ = try
+        _init_jacobian!(J, c, p, x, g)
+        _init_eval!(c, p, x)
+        r = Float64[c.v[l] - c.v[q] for (l, q) in c.rows]
+        _init_flat!(copy(J)) && return bad
+        J \ r
+    catch e
+        e isa InterruptException && rethrow()
+        return bad
+    end
+    sc = _init_scale(x, g)
+    return all(j -> abs(δ[j]) <= _INIT_RTOL * sc[j], 1:n) ? nothing : bad
+end
+
+"""
+Whether the conditions' Jacobian in the free values at (`p`, `x`) is singular, after scaling
+each row and column to unit maximum: a solution that is not isolated (dependent conditions)
+is refused rather than one of many returned.
+"""
+function _init_singular(c::_InitCheck, p, x, g)
+    n = length(x)
+    J = zeros(n, n)
+    try
+        _init_jacobian!(J, c, p, x, g)
+    catch e
+        e isa InterruptException && rethrow()
+        return false                                    # not evaluable beside the solution: not judged
+    end
+    return _init_flat!(J)
 end
 
 """The residual of an MTK `InitializationProblem` (`f`, its parameter object `p`), behind an

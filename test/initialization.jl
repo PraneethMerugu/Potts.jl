@@ -355,6 +355,62 @@ end
     @test ini_error(() -> PottsProblem(IniNoRoot(; name = :c), ini_op(), (0, 1)), "found no solution", "`q`")
 end
 
+# roots at 0 and roots where the terms vanish (the Jacobian step follows the value's scale and
+# is not judged below the residual's resolution; a vanishing-term root passes on its Newton
+# correction): each solved, against its oracle
+@potts_model IniRoots begin
+    @kinds medium A
+    @variables begin
+        e1(cell), [guess = 0.5]
+        e2(cell), [guess = -2.0]
+        e3(cell), [guess = 0.5]
+        e4(cell), [guess = 0.5]
+        s1(cell), [guess = 3.0]
+        c1(cell), [guess = 1.0]
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations begin
+        exp(e1) ~ 1
+        1 - exp(e2) ~ 0
+        log(1 + e3) ~ 0
+        exp(e4) - 1 ~ (volume - 16) / 16          # root 0 in cell 1
+        sin(s1) ~ 0
+        cos(c1) ~ 0
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniRepeated begin
+    @kinds medium A
+    @variables q2(cell), [guess = 2.0]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations (q2 - 1)^2 ~ 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniFlat begin
+    @kinds medium A
+    @variables f3(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations f3^3 ~ 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization: roots at zero and where the terms vanish" begin
+    p = PottsProblem(IniRoots(; name = :z), ini_op(), (0, 1))
+    for n in (:e1, :e2, :e3)
+        @test all(v -> abs(v) <= 1e-9, ini_u0(p, n))
+    end
+    @test ini_u0(p, :e4) ≈ log.(1 .+ (INI_VOL .- 16) ./ 16) atol = 1e-12
+    @test ini_u0(p, :s1) ≈ [π, π] rtol = 1e-9
+    @test ini_u0(p, :c1) ≈ [π / 2, π / 2] rtol = 1e-9
+    # a repeated root: solved to about √eps
+    @test ini_u0(PottsProblem(IniRepeated(; name = :z), ini_op(), (0, 1)), :q2) ≈ [1.0, 1.0] atol = 1e-6
+    # a flat root reached exactly (the start): the growing step still sees the equation
+    @test ini_u0(PottsProblem(IniFlat(; name = :z), ini_op(), (0, 1)), :f3) == [0.0, 0.0]
+end
+
 # kind tables are read at the cell's own kind
 @potts_model IniTable begin
     @kinds medium A B
