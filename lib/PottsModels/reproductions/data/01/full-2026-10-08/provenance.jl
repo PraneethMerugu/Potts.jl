@@ -8,6 +8,9 @@ sha(p) = first(split(readchomp(`sha256sum $(joinpath(root, p))`)))
 rows = [TOML.parsefile(joinpath(OUT, "rows", f)) for f in readdir(joinpath(OUT, "rows")) if endswith(f, ".toml")]
 loglines = readlines(LOG)
 launches = filter(startswith("launch "), loglines)
+launch_commit = String(split(first(launches))[3])
+@assert occursin(r"^[0-9a-f]{40}$", launch_commit)
+@assert success(Cmd(`git merge-base --is-ancestor $launch_commit HEAD`; dir = root))
 # per-job wall from the log (rows recovered from snapshots carry wall_s = -1)
 logtext = read(LOG, String)
 ts(s) = DateTime(s, dateformat"yyyy-mm-ddTHH:MM:SS.sss")
@@ -29,7 +32,10 @@ known = filter(!isnan, collect(values(walls)))
 open(joinpath(OUT, "provenance.toml"), "w") do io
     TOML.print(io, Dict(
         "item" => "P6.3f", "decisions" => ["D-146", "D-153", "D-156"],
-        "commit" => git("rev-parse", "HEAD"), "dirty" => !isempty(git("status", "--porcelain", "--untracked-files=no")),
+        # the simulations ran at the launch commit; rows of jobs that failed in `observe` (launch 1's
+        # sort bug) were rebuilt from their snapshots by the runner at `rebuild_commit`
+        "commit" => launch_commit, "rebuild_commit" => git("rev-parse", "HEAD"),
+        "dirty" => !isempty(git("status", "--porcelain", "--untracked-files=no")),
         "frozen_test" => "lib/PottsModels/test/reproductions/01_merks.jl",
         "frozen_test_sha256" => sha("lib/PottsModels/test/reproductions/01_merks.jl"),
         "page" => "lib/PottsModels/reproductions/01_merks.jl",
