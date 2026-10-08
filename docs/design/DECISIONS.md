@@ -3295,3 +3295,10 @@ session.
   - The switch is made before any FULL run, so no data informed it.
 - **Cost.** The FULL estimate drops from about 125 to about 45 core-hours (2.83× on case (a)).
 - **Re-frozen file.** `test/reproductions/15_openvt_sweeps.jl`, sha256 `474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41`. The only changes are `P615G_ALG` and its protocol comment.
+
+**D-179 result (2026-10-08).**
+- **Frozen test.** It passes on CPU, Metal and ROCm, including the hostcall control on single-threaded Julia. (P) has at most 1 of 300 reads over 1 ms, against 176–180 before. Median reads are 111–199 µs.
+- **Gate.** The ROCm A/B passes: 0.996 and 1.009 against a margin of 1.042.
+- **Timeout.** It is 600 s by default (`CorePotts.DEVICE_WAIT_TIMEOUT`), the implementer's choice.
+- **Review.** The stream is now drained before each device→host copy as well. An async copy into pageable memory may block inside HIP with no yield or timeout, which deadlocks a hostcall kernel on one thread.
+- **Environment.** The ROCm code is an AMDGPU package extension of CorePotts. An existing local Manifest needs one `Pkg.resolve()` to pick it up; CI resolves fresh.
