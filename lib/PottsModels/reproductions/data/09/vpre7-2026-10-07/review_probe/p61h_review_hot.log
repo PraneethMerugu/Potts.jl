@@ -1,0 +1,22 @@
+┌ Warning: Assignment to `H` in soft scope is ambiguous because a global variable by the same name exists: `H` will be treated as a new local. Disambiguate by using `local H` to suppress this warning or `global H` to assign to the existing global variable.
+└ @ ~/p61h_review_probe.jl:61
+T=40.0 λ=1.0
+   (t = 50, raw_alive = (500, 500), ann_alive = (500, 500), Fdl_ann = 0.295, frag_raw = (0.741, 0.191), frag_ann = (0.129, 0.038), medium_sites_in_aggregate_box = 6)
+   (t = 100, raw_alive = (500, 500), ann_alive = (500, 500), Fdl_ann = 0.256, frag_raw = (0.735, 0.2), frag_ann = (0.117, 0.036), medium_sites_in_aggregate_box = 0)
+   (t = 200, raw_alive = (500, 500), ann_alive = (500, 500), Fdl_ann = 0.23, frag_raw = (0.727, 0.194), frag_ann = (0.101, 0.033), medium_sites_in_aggregate_box = 27)
+   (t = 500, raw_alive = (500, 500), ann_alive = (500, 500), Fdl_ann = 0.178, frag_raw = (0.737, 0.203), frag_ann = (0.135, 0.043), medium_sites_in_aggregate_box = 63)
+T=80.0 λ=1.0
+   (t = 50, raw_alive = (500, 495), ann_alive = (500, 495), Fdl_ann = 0.327, frag_raw = (0.935, 0.274), frag_ann = (0.168, 0.052), medium_sites_in_aggregate_box = 0)
+   (t = 100, raw_alive = (500, 484), ann_alive = (500, 484), Fdl_ann = 0.314, frag_raw = (0.919, 0.28), frag_ann = (0.148, 0.049), medium_sites_in_aggregate_box = 6)
+   (t = 200, raw_alive = (500, 470), ann_alive = (500, 470), Fdl_ann = 0.281, frag_raw = (0.929, 0.296), frag_ann = (0.175, 0.054), medium_sites_in_aggregate_box = 40)
+   (t = 500, raw_alive = (500, 420), ann_alive = (500, 420), Fdl_ann = 0.264, frag_raw = (0.94, 0.302), frag_ann = (0.183, 0.058), medium_sites_in_aggregate_box = 322)
+T=160.0 λ=1.0
+   (t = 50, raw_alive = (491, 336), ann_alive = (491, 336), Fdl_ann = 0.329, frag_raw = (0.983, 0.397), frag_ann = (0.237, 0.073), medium_sites_in_aggregate_box = 546)
+   (t = 100, raw_alive = (481, 177), ann_alive = (481, 177), Fdl_ann = 0.262, frag_raw = (0.985, 0.421), frag_ann = (0.242, 0.072), medium_sites_in_aggregate_box = 1695)
+   (t = 200, raw_alive = (462, 31), ann_alive = (462, 31), Fdl_ann = 0.069, frag_raw = (0.996, 0.478), frag_ann = (0.318, 0.096), medium_sites_in_aggregate_box = 4553)
+   (t = 500, raw_alive = (376, 0), ann_alive = (376, 0), Fdl_ann = 0.0, frag_raw = (1.0, 0.458), frag_ann = (0.348, 0.109), medium_sites_in_aggregate_box = 8335)
+T=80.0 λ=0.5
+   (t = 50, raw_alive = (495, 176), ann_alive = (495, 174), Fdl_ann = 0.244, frag_raw = (0.954, 0.353), frag_ann = (0.185, 0.058), medium_sites_in_aggregate_box = 1022)
+   (t = 100, raw_alive = (484, 27), ann_alive = (484, 27), Fdl_ann = 0.058, frag_raw = (0.988, 0.436), frag_ann = (0.235, 0.076), medium_sites_in_aggregate_box = 3484)
+   (t = 200, raw_alive = (444, 0), ann_alive = (444, 0), Fdl_ann = 0.0, frag_raw = (0.993, 0.448), frag_ann = (0.23, 0.068), medium_sites_in_aggregate_box = 6475)
+   (t = 500, raw_alive = (309, 0), ann_alive = (309, 0), Fdl_ann = 0.0, frag_raw = (0.981, 0.431), frag_ann = (0.269, 0.083), medium_sites_in_aggregate_box = 11308)

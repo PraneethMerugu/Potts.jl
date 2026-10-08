@@ -41,6 +41,14 @@ function components(σ, lat::Lattice{N}, c) where {N}
     return n
 end
 
+# A custom `track` (CPMFunction's hook): the effective ΔH, bias included.
+struct EffectiveTrack end
+(::EffectiveTrack)(st, p, prop, ctx, dH) = dH - p.T * p.b * (prop.new == 0 ? -1.0 : 1.0)
+CorePotts.track_eltype(::EffectiveTrack) = Float64
+# a custom track without `track_eltype`: fine sequentially, a clear error on the checkerboard
+struct UntypedTrack end
+(::UntypedTrack)(st, p, prop, ctx, dH) = dH
+
 @testset "drives and connectivity" begin
     @testset "proposal predicates and chemotaxis" begin
         p1 = Proposal(3, 4, (3, 1), 1, Int32(0), Int32(2))
@@ -184,5 +192,112 @@ end
             ue = solve(PottsProblem(fe, initial_state(σ, kinds), lat, (0, 10), pb), alg).u[end]
             @test ub.σ == ue.σ
         end
+    end
+
+    @testset "3D shell values against a brute-force shell ($(periodic ? "Periodic" : "Closed"))" for periodic in (true, false)
+        lat = Lattice((6, 5, 7); boundary = periodic ? Periodic() : Closed())
+        ctx = (; lattice = lat)
+        shell = [o for o in Iterators.product(-1:1, -1:1, -1:1) if o != (0, 0, 0)]
+        rng = Random.Xoshiro(11)
+        seen = Set{Int}()
+        n = 0
+        for _ in 1:400
+            σ = Int32.(rand(rng, 0:3, lat.dims))
+            x = (rand(rng, 1:6), rand(rng, 1:5), rand(rng, 1:7))
+            t = linear_index(lat, x)
+            prop = Proposal(t, t, x, 1, σ[t], Int32(0))
+            own = Int[]; mine = NTuple{3, Int}[]
+            for o in shell
+                inside, y = shift(lat, x, Int32.(o))
+                inside || continue
+                c = Int(σ[linear_index(lat, y)])
+                push!(own, c)
+                (σ[t] != 0 && c == σ[t]) && push!(mine, o)
+            end
+            pieces = 0; left = Set(mine)                 # BFS over face-adjacent shell sites
+            while !isempty(left)
+                pieces += 1; front = [pop!(left)]
+                while !isempty(front)
+                    a = pop!(front)
+                    for b in collect(left)
+                        sum(abs.(a .- b)) == 1 && (delete!(left, b); push!(front, b))
+                    end
+                end
+            end
+            @test ring_arcs(σ, ctx, prop) == pieces == local_components(σ, ctx, prop)
+            @test ring_cells(σ, ctx, prop) == length(unique(filter(>(0), own)))
+            @test ring_medium(σ, ctx, prop) == count(==(0), own)
+            push!(seen, pieces); n += 1
+        end
+        @test length(seen) >= 4                           # several piece counts occur
+        # the shell is 26 sites: a closed corner sees 7, a periodic one all 26
+        σ = zeros(Int32, lat.dims)
+        corner = Proposal(1, 1, (1, 1, 1), 1, Int32(0), Int32(0))
+        @test ring_medium(σ, ctx, corner) == (periodic ? 26 : 7)
+    end
+
+    @testset "track: Σ accepted ΔH = H(end) − H(start) ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        σ, kinds = blocks((30, 30), 5)
+        lat = Lattice((30, 30))
+        prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 15), gg_params())
+        b(st, p, prop, ctx) = p.b * (prop.new == 0 ? -1.0 : 1.0)
+        pb = merge(gg_params(), (; b = 0.4))
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = CorePotts.TrackDeltaH{Float64}())
+        off = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b)
+        a = solve(PottsProblem(off, initial_state(σ, kinds), lat, (0, 15), pb), alg)
+        sol = solve(PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), pb), alg)
+        u0, u = sol.u[1], sol.u[end]
+        H(u) = total_H(u, lat, prob.contact, gg_params())
+        # the bias is not part of ΔH: integer energies, so the sum is exact
+        @test sol.stats.accepted_ΔH == H(u) - H(u0)
+        @test abs(H(u) - H(u0)) > 100                      # non-vacuous
+        @test a.stats.accepted_ΔH === nothing
+        @test a.u[end].σ == u.σ && a.stats.accepted == sol.stats.accepted   # nothing else changes
+        # negative control: a track of the effective ΔH (bias included) misses the oracle
+        eff = CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = EffectiveTrack())
+        se = solve(PottsProblem(eff, initial_state(σ, kinds), lat, (0, 15), pb), alg)
+        @test se.u[end].σ == u.σ
+        @test abs(se.stats.accepted_ΔH - (H(u) - H(u0))) > 1
+        # warm steps allocate nothing, tracked or not (the checkerboard reduces only at read points)
+        for f in (off, on)
+            integ = init(PottsProblem(f, initial_state(σ, kinds), lat, (0, 15), pb), alg; save_start = false)
+            step!(integ); step!(integ)
+            @test minimum(_ -> @allocated(step!(integ)), 1:3) == 0
+        end
+        # a custom track: sums on both algorithms (here the effective one, `track_eltype`
+        # given); without `track_eltype` only the checkerboard refuses, naming it
+        @test se.stats.accepted_ΔH isa Float64
+        un = PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, bias = b, track = UntypedTrack()),
+            initial_state(σ, kinds), lat, (0, 15), pb)
+        if alg isa SequentialCPM
+            @test solve(un, alg).stats.accepted_ΔH == sol.stats.accepted_ΔH
+        else
+            e = try
+                solve(un, alg); nothing
+            catch err
+                err
+            end
+            @test e isa ArgumentError && occursin("track_eltype", sprint(showerror, e))
+        end
+        # a checkpoint continues only into an equally tracked run (hand-written: fingerprint 0
+        # either way), in both directions
+        pon = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), pb)
+        poff = PottsProblem(off, initial_state(σ, kinds), lat, (0, 15), pb)
+        @test pon.f.fingerprint == poff.f.fingerprint
+        for (from, into) in ((poff, pon), (pon, poff))
+            i = init(from, alg); step!(i)
+            ck = checkpoint(i)
+            e = try
+                init(into, alg; checkpoint = ck); nothing
+            catch err
+                err
+            end
+            @test e isa ArgumentError && occursin("tracking", sprint(showerror, e))
+        end
+        i = init(pon, alg); step!(i); step!(i)                  # control: the same track continues
+        @test solve!(init(pon, alg; checkpoint = checkpoint(i))).stats.accepted_ΔH == sol.stats.accepted_ΔH
+        # merge adds; `nothing` wins
+        @test merge(sol.stats, sol.stats).accepted_ΔH == 2 * sol.stats.accepted_ΔH
+        @test merge(sol.stats, a.stats).accepted_ΔH === nothing
     end
 end

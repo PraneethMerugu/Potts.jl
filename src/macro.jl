@@ -10,7 +10,8 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
-    Symbol("@extend"), Symbol("@components"))
+    Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
+    Symbol("@initialization_equations"))
 
 """
     @potts_model Name begin
@@ -38,6 +39,26 @@ struct _Parts
     code::Vector{Any}
     mod::Module                  # the calling module (globals shadowed by component names)
     declared::Dict{Symbol, String}   # name → what declared it (collision checks)
+    bound::Set{Symbol}           # names bound by `@extend a, b = base = Base()` (kind class members)
+end
+_Parts(structural, params, code, mod, declared) = _Parts(structural, params, code, mod, declared, Set{Symbol}())
+
+# The names `@extend n₁, n₂ = base = Base()` binds before the first `@kinds` (the constructor
+# runs the sections in order, so only those are bound when the classes are built).
+function _extend_bound_names(body::Expr)
+    out = Set{Symbol}()
+    for ex in body.args
+        ex isa Expr && ex.head === :macrocall || continue
+        ex.args[1] === Symbol("@kinds") && break
+        ex.args[1] === Symbol("@extend") || continue
+        es = filter(a -> !(a isa LineNumberNode), ex.args[3:end])
+        length(es) == 1 || continue                 # malformed: the `@extend` section reports it
+        e = es[1]
+        e isa Expr && e.head === :(=) && e.args[2] isa Expr && e.args[2].head === :(=) || continue
+        lhs = e.args[1]
+        lhs isa Symbol ? push!(out, lhs) : foreach(a -> a isa Symbol && push!(out, a), lhs.args)
+    end
+    return out
 end
 
 # The hidden local holding parameter `k`'s constructor keyword. `@extend λ = base = Base()`
@@ -72,6 +93,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     d === nothing || throw(ArgumentError("@potts_model $name defines `$d`: inside a model `div(a, b)` and `a ÷ b` " *
                                          "are integer division; give the helper another name"))
     parts = _Parts(Any[], Symbol[], Any[], mod, Dict{Symbol, String}())
+    union!(parts.bound, _extend_bound_names(body))
     for ex in body.args
         ex isa LineNumberNode && (push!(parts.code, ex); continue)
         if ex isa Expr && ex.head === :macrocall && ex.args[1] in SECTIONS
@@ -91,6 +113,11 @@ function _potts_model(name::Symbol, body::Expr, mod)
         push!(kws, Expr(:kw, k, :nothing))        # `Model(; λ = 2.0)` overrides the default
     end
     P = :(Potts)
+    # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
+    # included): a model without them builds exactly as before (first-construction latency)
+    bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
+    # likewise `@initialization_equations` (D-170)
+    inits = _has_section(body, Symbol("@initialization_equations"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -104,6 +131,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
         __kinds = Symbol[]
         __frozen = Int[]
+        __classes = $P.KindClass[]
         __params = Any[]
         __vars = Any[]
         __relations = Dict{Symbol, Any}()
@@ -118,18 +146,24 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __observed = $P.ObservedEq[]
         __lattice = nothing
         __sweep = nothing
+        $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
+        $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
+        __base_failed = $(Ref{Bool})(false)       # set when an `@extend` base's constructor throws
+        __features = $P._feature_counts()         # contact folds and bounded draws built (D-150)
     end
     structural = Expr(:tuple, Expr(:parameters, [Expr(:kw, k, k) for (k, _) in parts.structural]...))
     extends = any(ex -> ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@extend"), body.args)
     finish = :($P.PottsSystem(; name, kinds = __kinds, lattice = __lattice, parameters = __params,
-        variables = $P._bind_edge_scope(__vars, __relationships), relations = __relations, energies = __energies, drives = __drives,
+        variables = $P._bind_edge_scope(__vars, __relationships, __bases), relations = __relations, energies = __energies, drives = __drives,
         constraints = __constraints, updates = __updates, equations = __equations,
         divisions = __divisions, relationships = __relationships, link_rules = __links,
-        observed = __observed, frozen_kinds = __frozen, sources = __sources, components = __components,
-        sweep = __sweep, structural = $structural))
+        observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
+        sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
+        $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
+        structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
         Base.@__doc__ function $name(; $(kws...))
@@ -138,13 +172,14 @@ function _potts_model(name::Symbol, body::Expr, mod)
             try
                 $(parts.code...)
             catch __e
-                $P._prime_error(__e, $targets, __bases)
+                # an error from inside a base propagates as the base raised it (D-133)
+                __base_failed[] || $P._prime_error(__e, $targets, __bases)
                 rethrow()
             end
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare
-                __lattice === nothing && (__lattice = b.lattice)
-                __sweep === nothing && (__sweep = b.sweep)
-                isempty(__kinds) && append!(__kinds, b.kinds)
+                __lattice === nothing && (__lattice = getfield(b, :lattice))
+                __sweep === nothing && (__sweep = getfield(b, :sweep))
+                isempty(__kinds) && append!(__kinds, getfield(b, :kinds))
             end) : nothing)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
@@ -169,6 +204,7 @@ function _prime_targets(parts::_Parts, body::Expr)
         _is_section(ex) && ex.args[1] === Symbol("@variables") || continue
         for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
             decl = l isa Expr && l.head === :(=) ? l.args[1] : l
+            decl isa Expr && decl.head === :tuple && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell), [guess = g]`
             decl isa Expr && decl.head === :ref && (decl = decl.args[1])
             decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
         end
@@ -186,21 +222,43 @@ _with_article(what) = (first(what) in "aeiou" ? "an " : "a ") * what
 _scope_description(role, rel) = role === :edge ? (rel === nothing ? "an edge variable" : "an edge variable of `$rel`") :
                                 "a $role variable"
 
+"""
+`F(args...; kws...)` for an `@extend` base `F` whose constructor raising sets `failed[]`: the
+extending constructor then rethrows the error unchanged instead of translating it as one of
+its own `x′` (each constructor call has its own flag, so nested or concurrent builds never
+share it). The flag is set only on the error path, which leaves the extending constructor.
+"""
+# Accepted trade-off: a closure the extension passes to a hand-written base runs inside the
+# base's constructor, so an `x′` error raised in it is reported as the base's (the raw
+# `UndefVarError`), not translated.
+struct _BaseCall{F, R <: Ref{Bool}}
+    f::F
+    failed::R
+end
+function (c::_BaseCall)(args...; kws...)
+    try
+        return c.f(args...; kws...)
+    catch
+        c.failed[] = true
+        rethrow()
+    end
+end
+
 """What `x` is in one of `bases` (for `_prime_error`), or `nothing`."""
 function _base_description(bases, x::Symbol)
     named(i) = i !== nothing && (i.name === x || get(i.options, :vector, nothing) === x)
     for b in bases
-        for v in b.variables
+        for v in getfield(b, :variables)
             i = info(v)
             named(i) || continue
             i.role in (:site, :field) && return nothing
             return _scope_description(i.role, get(i.options, :relationship, nothing))
         end
-        any(p -> named(info(p)), b.parameters) && return "a parameter"
-        x in b.kinds && return "a kind"
-        any(o -> named(info(o.var)), b.observed) && return "an observed quantity"
-        haskey(b.relations, x) && return "a relation"
-        any(r -> r.name === x, b.relationships) && return "a relationship"
+        any(p -> named(info(p)), getfield(b, :parameters)) && return "a parameter"
+        x in getfield(b, :kinds) && return "a kind"
+        any(o -> named(info(o.var)), getfield(b, :observed)) && return "an observed quantity"
+        haskey(getfield(b, :relations), x) && return "a relation"
+        any(r -> r.name === x, getfield(b, :relationships)) && return "a relationship"
     end
     return nothing
 end
@@ -230,6 +288,7 @@ end
 # unconditional (the constructor's keywords are fixed when the macro expands).
 const _UNCONDITIONAL = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@parameters"),
     Symbol("@variables"), Symbol("@extend"))
+_has_section(ex, sec) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === sec) || any(a -> _has_section(a, sec), ex.args))
 _is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
 _conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
                             any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
@@ -329,7 +388,16 @@ function _section!(parts, sec, args, ln = nothing)
         end
     elseif sec === Symbol("@kinds")
         names = Symbol[]
+        classes = Any[]
         for l in _lines(args)
+            if l isa Expr && l.head === :(=)        # `endothelial = (tip, stalk)`: a kind class
+                g, m = l.args[1], _strip(l.args[2])
+                g isa Symbol || throw(ArgumentError("@kinds: a kind class is `name = (kind, …)`"))
+                members = m isa Expr && m.head === :tuple ? m.args : Any[m]
+                all(x -> x isa Symbol, members) || throw(ArgumentError("@kinds: kind class `$g` lists kind or class names, `$g = (kind, …)`"))
+                push!(classes, (g, members))
+                continue
+            end
             if l isa Expr && l.head === :ref && l.args[2:end] == [:frozen]
                 isempty(names) && throw(ArgumentError("the medium (the first kind) cannot be frozen"))
                 push!(code, :(push!(__frozen, $(length(names)))))    # `wall[frozen]`: an obstacle kind
@@ -341,6 +409,18 @@ function _section!(parts, sec, args, ln = nothing)
         for (i, k) in enumerate(names)
             _declare!(parts, k, "kind")
             push!(code, :($k = $(i - 1)), :(push!(__kinds, $(QuoteNode(k)))))
+        end
+        for (g, members) in classes
+            # members resolve at expansion (D-135): a kind (of any @kinds), an earlier class, or
+            # a name bound by `@extend`; anything else (a misspelling, a later class, a global)
+            # is rejected here, naming it
+            for m in members
+                get(parts.declared, m, "") in ("kind", "kind class") || m in parts.bound ||
+                    throw(ArgumentError("kind class `$g`: `$m` is not a kind or an earlier kind class" *
+                                        (m === g ? " (a class cannot contain itself)" : "")))
+            end
+            _declare!(parts, g, "kind class")
+            push!(code, :($g = $P._kind_class($(QuoteNode(g)), $(Tuple(members)), ($(members...),))), :(push!(__classes, $g)))
         end
     elseif sec === Symbol("@parameters")
         for l in _lines(args)
@@ -373,6 +453,11 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@variables")
         for l in _lines(args)
             decl, rhs = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
+            # `x(cell), [guess = g]`: options without a value (MTK's metadata syntax)
+            if rhs === nothing && decl isa Expr && decl.head === :tuple && length(decl.args) == 2 &&
+               decl.args[2] isa Expr && decl.args[2].head === :vect
+                decl, rhs = decl.args[1], Expr(:tuple, nothing, decl.args[2])
+            end
             range = nothing
             if decl isa Expr && decl.head === :ref                         # `p(cell)[1:n]`: a vector
                 range = decl.args[2]
@@ -423,9 +508,12 @@ function _section!(parts, sec, args, ln = nothing)
             push!(params.args, Expr(:kw, :name, QuoteNode(bname)))
         # an extension without its own @lattice uses the base's dimension (vector builtins, A-38)
         # `_nested(F, args...; kws...)`: the arguments are evaluated before the base is entered
-        nested = Expr(:call, :($P._nested), params, call.args[1], filter(x -> x !== params, call.args[2:end])...)
+        # (the extension's own code); only an error the base's constructor raises is marked
+        # `__base_failed`, so the extension does not relabel it (`_BaseCall`, D-133)
+        nested = Expr(:call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
+            filter(x -> x !== params, call.args[2:end])...)
         push!(code, :($bname = $nested), :(push!(__bases, $bname)),
-            :($P._build().dim == 0 && $P._set_dim!(length($bname.lattice.dims))))
+            :($P._build().dim == 0 && $P._set_dim!(length(getfield($bname, :lattice).dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along
         for n in names
@@ -495,16 +583,52 @@ function _section!(parts, sec, args, ln = nothing)
         every = length(args) == 2 ? args[1] : nothing
         for (l, lln) in _combine_compound(_lines_ln(args[end:end], ln))
             l = _rewrite_eq(l)
-            push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
-                                                  :($P.update($phase, $every, $l)), lln))
+            # `a`, `b` are bound for edge updates (D-169); in any other update `_check_names`
+            # rejects them, as it does every name outside the update's scope
+            push!(code, _edge_scope(_located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
+                                                              :($P.update($phase, $every, $l)), lln)))
         end
     elseif sec === Symbol("@equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__equations, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+    elseif sec === Symbol("@initialization_equations")
+        foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])
         kw = [Expr(:kw, k, rewrite(v)) for (k, v) in opts]
         push!(code, _located_push(:__divisions, :($P.divide($domain, $(map(rewrite, rules)...); $(kw...))), ln))
+    elseif sec === Symbol("@boundary")
+        # `@boundary c begin x => (low, high); sites(pred) => Dirichlet(v) end` (D-145): the axis
+        # keys `x`, `y`, `z` are read here, as keys, so a model variable `x` does not interfere
+        (length(args) >= 2 && args[1] isa Symbol) || throw(ArgumentError(
+            "@boundary takes a field and its conditions: `@boundary c begin x => (Dirichlet(0.0), NoFlux()); " *
+            "sites(kind == border) => Dirichlet(0.0) end`"))
+        field = args[1]
+        for (l, lln) in _lines_ln(args[2:end], ln)
+            (l isa Expr && l.head === :call && l.args[1] === :(=>) && length(l.args) == 3) || throw(ArgumentError(
+                "@boundary $field: `$l` is not a condition; write `x => (low, high)` (each side `Dirichlet(v)` or " *
+                "`NoFlux()`) or `sites(condition) => Dirichlet(v)`"))
+            lhs, rhs = l.args[2], l.args[3]
+            if lhs isa Symbol
+                push!(code, _located_push(:__boundaries, :($P.boundary_face($field, $(QuoteNode(lhs)), $(rewrite(rhs)))), lln))
+            elseif lhs isa Expr && lhs.head === :call && lhs.args[1] === :sites && length(lhs.args) == 2
+                push!(code, _located_push(:__boundaries, :($P.boundary_mask($field, $(rewrite(lhs.args[2])), $(rewrite(rhs)))), lln))
+            else
+                throw(ArgumentError("@boundary $field: `$lhs` is neither an axis (`x`, `y`, `z`) nor a site mask `sites(condition)`"))
+            end
+        end
+    elseif sec === Symbol("@schedule")
+        # `@schedule fields, sweep`: the phases of one MCS in order (D-145), checked here
+        names = length(args) == 1 && args[1] isa Expr && args[1].head === :tuple ? args[1].args : args
+        listed = Symbol[]
+        for n in names
+            n isa Symbol || throw(ArgumentError("@schedule lists phase names, e.g. `@schedule fields, sweep`; got `$n`"))
+            push!(listed, n)
+        end
+        isempty(listed) && throw(ArgumentError("@schedule lists at least one phase"))
+        _placed_schedule(listed)
+        push!(code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
+            :(append!(__schedule, Symbol[$(map(QuoteNode, listed)...)])))
     elseif sec === Symbol("@sweep")
         ex = only(args)
         ex = _replace_call(ex, :Metropolis, :($P.sweep_spec), QuoteNode(:metropolis))
@@ -597,12 +721,25 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && _rng_callee(ex.args[1]) !== nothing
+        return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
+    elseif h === :call && ex.args[1] === :rand && any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
+        return _rewrite_rng(ex, :rand)            # `rand(; x = 1)`: named like the other forms
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
     end
     return Expr(h, map(rewrite, ex.args)...)
 end
 _isblock(e) = e isa Expr && e.head === :block
+
+# an RNG call in a model body: `Potts._rng_call(:name, args…; kws…)`, which keeps `rand()`
+# and `randn(…)` as the model's draws and rejects every other form, naming it
+function _rewrite_rng(ex, name = _rng_callee(ex.args[1]))
+    args = map(rewrite, ex.args[2:end])
+    params = filter(a -> a isa Expr && a.head === :parameters, args)
+    rest = filter(a -> !(a isa Expr && a.head === :parameters), args)
+    return Expr(:call, :(Potts._rng_call), params..., QuoteNode(name), rest...)
+end
 
 # `div`/`÷` defined in a model body (`div(a, b) = …`, `function ÷(a, b) … end`, `div = f`):
 # the name it defines, or `nothing`. `rewrite` turns their calls into `_intdiv`.

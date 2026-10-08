@@ -292,7 +292,7 @@ The paper probably mixed dataset versions; no single dataset matches every numbe
 - "Weak adhesion increased infiltrative area to 183,406 µm² … under high migration" (p.10) reproduces only as the **unconditional** J_LF > 2 marginal. Conditional on λ ≥ 20 it is 316,703.
 - The paper's "intermediate" fingers 7.11 needs J_LF ∈ [−1, 2]. With [0, 2] it is 7.35.
 
-Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from A (V-A3–A5), not the paper's full-sweep numbers. The slice is within 1.5 % of the full sweep for areas, fingers and large counts. Running the slice, 121 × 10 runs, costs about 1.7 CPU-hours against about 18 for the full sweep.
+Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from A (V-A3–A5), not the paper's full-sweep numbers. The slice is within 1.5 % of the full sweep for areas, fingers and large counts. Running the slice, 121 × 10 runs, costs about 1.7 CPU-hours against about 18 for the full sweep (M1 Pro, sequential CPU).
 
 #### 5.3.2 Time mapping and initial layout
 
@@ -333,8 +333,8 @@ Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from
   - The frozen test should carry this self-check as a fixture test: rules against the reference CSV versus B/C. That is the D-060 lesson of testing the test.
 - **Invariants that hold in every one of A, B and C, to assert per run:** infiltrative ≥ invasive, and detached ≥ singles.
 - **Ensemble and cost.**
-  - Ours n = 10 per point, with independent seeds (the authors set no seed, D11). CI tier: V-A0, V-A1, V-A2 (P1–P8), V-A7 (+P9), V-A8, V-A11, V-C1 and V-C2. That is 9 points × 10 runs × 701 MCS on 500 × 300, about 5 s/run sequential at the gate's 47 ns/site·MCS, so about 8 CPU-minutes.
-  - FULL tier: V-A3–A5, 1210 runs, about 1.7 CPU-hours.
+  - Ours n = 10 per point, with independent seeds (the authors set no seed, D11). CI tier: V-A0, V-A1, V-A2 (P1–P8), V-A7 (+P9), V-A8, V-A11, V-C1 and V-C2. That is 9 points × 10 runs × 701 MCS on 500 × 300, about 5 s/run sequential at the gate's 47 ns/site·MCS (M1 Pro, sequential CPU), so about 8 CPU-minutes.
+  - FULL tier: V-A3–A5, 1210 runs, about 1.7 CPU-hours (M1 Pro, sequential CPU).
   - Family size at the CI tier is 48 + 6 + 18 + 1 + 2 + exact checks. The calibration above bounds the false-fail risk empirically.
 
 **Observable definitions (code-exact).** Coordinates are 0-based (x, y), x periodic, y closed. Our port is 1-based: shift the seed row and nothing else. Every quantity below is translation-invariant or is compared within the same frame.
@@ -363,7 +363,9 @@ Sweep-level targets use the **PP = 0.5 slice**, whose values are re-derived from
 | P6 | (−2, 6, 0.5) | no invasion (the paper's λ = 5 is off-grid; 9/10 no invasion) | 2155 ± 261 | = invasive | 0 | 0.1 ± 0.3 | 0 | 0 |
 | P7 | (2, 24, 0.0) | V-C1 (PP = 0) | 15319 ± 1873 | 46006 ± 1286 | 204.3 ± 7.9 | 11.1 ± 1.4 | 249.9 ± 16.1 | 7.0 ± 2.1 |
 | P8 | (2, 0, 0.5) | V-C2 (λ = 0) | 1963 ± 300 | = invasive | 0 | 0 | 0 | 0 |
-| P9 | (2, 24, 1.0) | V-A7 (PP = 1) | 16493 ± 2294 | 42656 ± 2889 | 201.8 ± 6.4 | 11.7 ± 1.9 | 228.4 ± 12.5 | 4.5 ± 1.8 |
+| P9 | (2, 24, 1.0) | V-A7 (PP = 1) | 16493 ± 2294 | 42656 ± 2888 | 201.8 ± 6.4 | 11.7 ± 1.9 | 228.4 ± 12.5 | 4.5 ± 1.8 |
+
+*Correction 2026-10-05 (peer session):* P9's infiltrative SD was printed 2889; dataset A gives 2888.46 (sample SD, n = 10), so it is 2888. A recheck of every P1–P9 mean and SD against dataset A (sample SD, rounded to the printed digits) found no other difference.
 
 The paper's single-cell representative (4, 10, 0.5) is off-grid. The nearest grid point, (4, 12, 0.5), has 7.6 ± 1.0 fingers and is 10/10 multimodal in the authors' own data, so it is **not** a single-cell point.
 

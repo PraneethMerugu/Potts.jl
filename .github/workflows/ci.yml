@@ -1,0 +1,59 @@
+# CI on the maintainer's self-hosted ROCm PC (D-157, P6.0bh).
+# Runs only on pushes to `monorepo` and on manual dispatch, never on pull requests: the
+# runner is a personal machine and the repository is public (fork PRs from outside
+# contributors also need approval before any workflow runs).
+# Jobs are pinned to logical CPUs 0-11,16-27; cores 12-15 (28-31) are reserved for benchmarks.
+name: CI
+
+on:
+  push:
+    branches: [monorepo]
+    # Design notes, decisions and research docs change no code or test: skip CI for
+    # pushes that touch only them (a push touching anything else still runs).
+    paths-ignore:
+      - 'docs/design/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: "0"
+  PIN: taskset -c 0-11,16-27
+
+jobs:
+  test:
+    name: CPU suites and ROCm GPU group
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Resolve and instantiate the workspace
+        run: |
+          julia --version
+          julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+      - name: Frozen acceptance tests are unchanged
+        run: $PIN julia --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")'
+      - name: Benchmark tooling tests (machine lock, exclusive.sh transition)
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          for f in benchmark/test/*.jl; do
+            $PIN julia --project=benchmark "$f"
+          done
+      - name: CorePotts
+        run: GROUP=CorePotts $PIN julia --project=test test/runtests.jl
+      - name: Potts
+        run: GROUP=Potts $PIN julia --project=test test/runtests.jl
+      - name: PottsModels
+        run: GROUP=PottsModels $PIN julia -t 4 --project=test test/runtests.jl
+      - name: MakiePotts
+        run: GROUP=MakiePotts $PIN julia --project=test test/runtests.jl
+      - name: GPU group (ROCm)
+        run: GROUP=GPU POTTS_GPU=rocm $PIN julia --project=test test/runtests.jl

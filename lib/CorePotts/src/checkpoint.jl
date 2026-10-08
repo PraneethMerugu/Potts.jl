@@ -7,8 +7,8 @@
 """
     PottsCheckpoint
 
-Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics and the
-model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
+Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics (with
+`accepted_ΔH`, exact here) and the model fingerprint. Continue with `init(prob, alg; checkpoint = ck)`; the continuation uses
 the problem's `p` (so parameters may change at a restart; `ck.p` records the old ones).
 """
 struct PottsCheckpoint{S, P}
@@ -74,8 +74,8 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.t = t0
     integ.retcode = SciMLBase.ReturnCode.Default
     empty!(integ.saved_t); empty!(integ.saved_u)
-    _restore_stats!(integ.stats, PottsStats())
-    integ.cache === nothing || (fill!(integ.cache.status, 0); foreach(c -> c === nothing || fill!(c, 0), (integ.cache.claims..., integ.cache.wclaims...)))
+    _restore_stats!(integ.stats, _initial_stats(integ.f))      # `accepted_ΔH`: 0.0 when tracked
+    _reset_cache!(integ.cache, integ)
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
@@ -84,6 +84,18 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     integ.save_start && _save!(integ)
     return integ
 end
+
+# the algorithm's scratch for the new run: nothing (SequentialCPM), the checkerboard's status,
+# claims and track, or the boundary set of the new state (rebuilt)
+_reset_cache!(::Nothing, integ) = nothing
+function _reset_cache!(cache::CheckerboardCache, integ)
+    fill!(cache.status, 0)
+    foreach(c -> c === nothing || fill!(c, 0), (cache.claims..., cache.wclaims...))
+    cache.track === nothing || fill!(cache.track.acc, 0)
+    return nothing
+end
+_reset_cache!(B::BoundaryCache, integ) =
+    (_rebuild_boundary!(B, integ.state.σ, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets); nothing)
 
 function _key_difference(a::CPMState, b::CPMState)
     parts = String[]

@@ -185,8 +185,23 @@ function _hsv_rgb(h::Float64, s::Float64 = 0.62, v::Float64 = 0.88)
     return Makie.RGBf(r, g, b)
 end
 
-_stable_category_color(key::UInt64) =
-    _hsv_rgb(mod(Float64(key) * 0.6180339887498949, 1.0))
+# splitmix64 finalizer (Steele, Lea & Flood 2014): a fixed bijection of UInt64, so colours
+# never depend on Julia's `hash`, the session or the frame.
+function _splitmix64(x::UInt64)
+    x += 0x9e3779b97f4a7c15
+    x = (x ⊻ (x >> 30)) * 0xbf58476d1ce4e5b9
+    x = (x ⊻ (x >> 27)) * 0x94d049bb133111eb
+    return x ⊻ (x >> 31)
+end
+
+# Small keys (cell types) take golden-ratio hues, which stay well spaced for the first few
+# categories. Keys from 2^32 up (generation-aware cell identities, `id << 32 ⊻ generation`)
+# would alias under that formula (frac(2^32 φ⁻¹) ≈ 0.497, and Float64 loses the low bits),
+# so they are scrambled with splitmix64 and the top 53 bits become the hue (D-172).
+function _stable_category_color(key::UInt64)
+    key < UInt64(1) << 32 && return _hsv_rgb(mod(Float64(key) * 0.6180339887498949, 1.0))
+    return _hsv_rgb(Float64(_splitmix64(key) >> 11) * 2.0^-53)
+end
 
 function _categorical_colors(entries::Vector{LegendEntry}, palette, medium_color)
     isempty(entries) && return Makie.RGBf[]

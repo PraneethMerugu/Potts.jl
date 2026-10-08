@@ -9,7 +9,11 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`merge_peaks`](@ref).
 - Profiles and areas: [`column_tops`](@ref), [`trapz`](@ref).
 - Cell adjacency: [`cell_graph`](@ref), [`reachable`](@ref), [`components`](@ref),
-  [`centroids`](@ref).
+  [`centroids`](@ref) (with periodic axes).
+- Chains and relaxation curves: [`chain_centroids`](@ref), [`chain_width`](@ref),
+  [`crossing_time`](@ref), [`relaxation_mse`](@ref).
+- Point clouds: [`concave_hull`](@ref) (the OpenVT benchmark's Graham scan + concaveman).
+- Domain guard: [`near_edge`](@ref).
 
 Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
 """
@@ -18,10 +22,14 @@ module Analysis
 using Potts: Closed, Lattice, Periodic, VonNeumann, contact_graph, neighbors, relation
 
 export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trapz, cell_graph, reachable,
-    components, centroids
+    components, centroids, chain_centroids, chain_width, crossing_time, relaxation_mse, near_edge
+export concave_hull
 
 include("peaks.jl")
 include("profiles.jl")
 include("graphs.jl")
+include("chains.jl")
+include("concave_hull.jl")
+include("edges.jl")
 
 end

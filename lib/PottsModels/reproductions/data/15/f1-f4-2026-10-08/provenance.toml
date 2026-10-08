@@ -1,0 +1,26 @@
+decisions = ["D-146", "D-157", "D-175"]
+run_wall_s = 476.9
+memory_cap = "MemoryMax=12G"
+runner_sha256 = "309857de234b484ef27cea5d6f7e29ae60eaeb0603c9a4aa209aa5d1ce021652"
+protocol_test_sha256 = "da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d"
+extension_sha256 = "d52e53ecce7e1e3a494ec2a44f68a59648d157e7f868a274aa80a543fc43adc8"
+threads = 1
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+record_sha256 = "ba49cd5c4d50e4ca65d57d78f440de1505ff0de1ada2f3c4df9c3f6ead894537"
+wall_s = 540.1
+finished = "2026-10-08T03:10:22.943"
+test_sha256 = "a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb"
+hostname = "praneeth-NucBox-EVO-X2"
+affinity = "taskset -c 0-11,16-27"
+started = "2026-10-08T03:01:22.830"
+machine = "x86_64-linux-gnu"
+manifest_sha256 = "4ab21acf95090fc1cd2848c679bac55e06771d44fda055a4312333cd1e810c78"
+record = "lib/PottsModels/reproductions/data/15/f3-f8-2026-10-08/runs.tsv"
+protocol_test = "lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl"
+runner = "lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/run_f1.jl"
+julia = "1.12.6"
+test = "lib/PottsModels/test/reproductions/15_openvt_f1_f4.jl"
+commit = "c6ca4bc440ad665ce93c1ab5bbe2e107fb77b1f6"
+item = "P6.15h"
+dirty_tracked = false
+commit_date = "2026-10-08"

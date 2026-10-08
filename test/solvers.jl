@@ -176,6 +176,9 @@ end
     @named lonely = System([Potts.D(y_c) ~ -y_c], _tc)
     e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [lonely => RK4()]))
     @test e isa ArgumentError && occursin("`lonely`", sprint(showerror, e)) && length(sprint(showerror, e)) < 300
+    # a PottsSystem is an AbstractSystem too (D-137), never a component key
+    e = solver_err(() -> PottsProblem(cs, cop, (0, 2); solvers = [cs => RK4()]))
+    @test e isa ArgumentError && occursin("Potts model", sprint(showerror, e))
     # unknown keywords: `@sweep`, `remake`; `f` together with a solver keyword
     @test solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, substeps = 2)) isa ArgumentError
     @test occursin("PottsProblem", sprint(showerror, solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0,
@@ -446,4 +449,186 @@ end
     # the default `mcs_duration` adds nothing: an explicit 1.0 equals an unset one
     @test fd(1.0).f.fingerprint == PottsProblem(md_field_model(1), [ownership => md_sigma(), kind => [:A],
         :c => [Float64(x + y) for x in 1:12, y in 1:12]], (0, 3); field_solver = ExplicitEuler(substeps = 4)).f.fingerprint
+end
+# The fingerprint resolves the default proposal and contact neighbourhoods only to compare
+# with them (D-122): on a thin periodic lattice where the default aliases (VonNeumann(1) on
+# a 2- or 1-wide axis, a lattice `neighborhood = Moore(1)` overridden by a valid contact),
+# a model with valid stencils still builds, runs and fingerprints deterministically.
+function thin_model(dims, contact, nbhd)
+    @potts_model ThinStrip begin
+        @kinds medium A
+        @lattice Lattice(dims; neighborhood = nbhd)
+        @relations begin
+            proposal = Stencil([[0, 1], [0, -1]])
+            contact = contact
+        end
+        @energy cells => (volume - 4.0)^2
+        @energy contacts => 1.0
+        @sweep Metropolis(; temperature = 2.0)
+    end
+    ThinStrip(; name = :t)
+end
+@testset "D-122: thin lattices whose default neighbourhood aliases" begin
+    line = Stencil([[0, 1], [0, -1]])
+    line2 = Stencil([[0, 1], [0, -1], [0, 2], [0, -2]])
+    for (dims, nbhd) in (((2, 12), VonNeumann(1)), ((1, 12), VonNeumann(1)), ((2, 12), Moore(1)))
+        σ = zeros(Int32, dims); σ[:, 2:3] .= 1
+        op = [ownership => σ, kind => [:A]]
+        # control: the default itself does not resolve on this lattice
+        @test_throws ArgumentError Potts.CorePotts.relation(VonNeumann(1), Potts.CorePotts.Lattice(dims))
+        p = PottsProblem(thin_model(dims, line, nbhd), op, (0, 3); seed = 1)
+        @test Symbol(solve(p, SequentialCPM()).retcode) === :Success
+        @test PottsProblem(thin_model(dims, line, nbhd), op, (0, 3); seed = 1).f.fingerprint == p.f.fingerprint
+        @test PottsProblem(thin_model(dims, line2, nbhd), op, (0, 3); seed = 1).f.fingerprint != p.f.fingerprint
+    end
+end
+
+# `@sweep` validation beyond the frozen P6.0as acceptance (D-123, review round 1): `combine`
+# is judged by the printed form that is hashed, so wrappers are checked through; non-Real
+# offsets get the same `offset` error as non-finite ones.
+struct SweepHolder{F}
+    f::F
+end
+(h::SweepHolder)(a, b) = h.f(a, b)
+struct SweepFnSub <: Function end
+(::SweepFnSub)(a, b) = min(a, b)
+struct SweepMix
+    w::Float64
+end
+(m::SweepMix)(a, b) = m.w * a + (1 - m.w) * b
+@testset "@sweep: combine judged by its printed form; offset must be a finite Real" begin
+    spec(; kw...) = Potts.sweep_spec(:metropolis; temperature = 1.0, kw...)
+    function argerr(f)
+        try
+            f()
+        catch e
+            return e
+        end
+        return nothing
+    end
+    anon = (a, b) -> a
+    for c in (anon, Base.Fix2(anon, 1), SweepHolder(anon), SweepHolder(SweepHolder(anon)))
+        e = argerr(() -> spec(combine = c))
+        @test e isa ArgumentError && occursin("combine", e.msg) && occursin("callable struct", e.msg)
+    end
+    for c in (min, max, min ∘ max, splat(min), SweepFnSub(), SweepMix(0.7), SweepHolder(min), Base.Fix2(min, 1))
+        @test spec(combine = c).combine === c
+    end
+    for o in (:a, "1", nothing, 1 + 1im, NaN, Inf32, -Inf)
+        e = argerr(() -> spec(offset = o))
+        @test e isa ArgumentError && occursin("offset", e.msg)
+    end
+    @test spec(offset = 2).offset === 2.0 && spec(offset = -1.5f0).offset === -1.5
+end
+
+# `mcs_duration` validation beyond the frozen P6.0av acceptance (D-126): the `offset`,
+# `combine` and `mcs_duration` checks also live in the `SweepSpec` constructor, so a hand-built
+# spec passed to `PottsSystem(; sweep)` cannot bypass them, and its errors are those of `@sweep`.
+@testset "@sweep: mcs_duration validated; a hand-built SweepSpec is checked too" begin
+    spec(; kw...) = Potts.sweep_spec(:metropolis; temperature = 1.0, kw...)
+    hand(o, md) = Potts.SweepSpec(:metropolis, 1.0, min, o, md)
+    sys(sw) = Potts.PottsSystem(; name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+        energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw)
+    function argerr(f)
+        try
+            f()
+        catch e
+            return e
+        end
+        return nothing
+    end
+    isoff(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`offset`", e.msg)
+    ismd(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`mcs_duration`", e.msg) &&
+              occursin("positive, finite", e.msg)
+    bad_md = (NaN, Inf, -Inf, NaN32, Inf32, 0, 0.0, -0.0, -1, -0.5f0, big"1e400", big"1e-400",
+              :a, "1", nothing, 1 + 1im)
+    for md in bad_md
+        @test ismd(argerr(() -> spec(mcs_duration = md)))
+        @test ismd(argerr(() -> hand(0.0, md)))
+        @test ismd(argerr(() -> sys(hand(0.0, md))))
+    end
+    for o in (NaN, Inf32, -Inf, big"1e400", :a, "1", 1 + 1im)
+        @test isoff(argerr(() -> spec(offset = o)))
+        @test isoff(argerr(() -> hand(o, 1.0)))
+        @test isoff(argerr(() -> sys(hand(o, 1.0))))
+    end
+    # an unstable `combine` is rejected by hand too; a named or callable-struct one is accepted
+    iscomb(e) = e isa ArgumentError && occursin("`@sweep`", e.msg) && occursin("`combine`", e.msg)
+    anon = (a, b) -> a
+    for c in (anon, Base.Fix2(anon, 1))
+        @test iscomb(argerr(() -> Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)))
+        @test iscomb(argerr(() -> sys(Potts.SweepSpec(:barker, 1.0, c, 0.0, 1.0))))
+    end
+    for c in (max, SweepMix(0.3), Base.Fix2(min, 1))
+        @test Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0).combine === c
+        @test getfield(sys(Potts.SweepSpec(:metropolis, 1.0, c, 0.0, 1.0)), :sweep).combine === c
+    end
+    # the order of `@sweep`'s checks: offset, then combine, then mcs_duration
+    @test isoff(argerr(() -> spec(offset = NaN, combine = anon, mcs_duration = 0)))
+    @test iscomb(argerr(() -> spec(combine = anon, mcs_duration = 0)))
+    @test isoff(argerr(() -> Potts.SweepSpec(:metropolis, 1.0, anon, NaN, 0)))
+    # accepted values are stored as Float64, by `@sweep` and by hand alike
+    for md in (1, 0.5f0, 3 // 2, big"0.25", 1e300, floatmin(Float64), nextfloat(0.0))
+        @test spec(mcs_duration = md).mcs_duration === Float64(md)
+        @test hand(2, md).mcs_duration === Float64(md) && hand(2, md).offset === 2.0
+    end
+    # control: a valid hand-built spec builds, compiles, and fingerprints like the `@sweep` one
+    good = sys(hand(0, 0.5))
+    @test getfield(good, :sweep).mcs_duration === 0.5
+    fp(sw) = (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
+              PottsProblem(mtkcompile(sys(sw)), [ownership => σ, kind => [:A]], (0, 2)).f.fingerprint)
+    @test fp(hand(0, 0.5)) == fp(spec(mcs_duration = 0.5))
+    @test fp(hand(0, 0.5)) != fp(spec(mcs_duration = 0.25))                     # control
+end
+
+# D-130: a value too deep (or cyclic) for the canonical printer, met outside the solvers, is
+# an `ArgumentError` naming the part, never the private `_CanonicalDepthError`
+struct SolverDeep
+    a::Any
+end
+solver_nest(k) = k == 0 ? 1.0 : SolverDeep(solver_nest(k - 1))
+"""A model with an inline gather relation whose weight closure captures `solver_nest(k)`,
+compiled; returns the compiled system or the unwrapped exception."""
+function solver_deep_relation(k)
+    nm = Symbol(:SolverDeepRel, k)
+    R = let d = solver_nest(k)
+        Weighted(Moore(1), o -> d isa SolverDeep ? 1.0 : 2.0)
+    end
+    compiled = Ref{Any}(nothing)
+    e = solver_err() do
+        Core.eval(@__MODULE__, quote
+            @potts_model $nm begin
+                @kinds medium A
+                @lattice Lattice((12, 12))
+                @energy cells => (volume - 9.0)^2 + 0.1 * count(owner[n] == id for n in $R(40))
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        end)
+        sys = Base.invokelatest(Base.invokelatest(getglobal, @__MODULE__, nm); name = :x)
+        compiled[] = mtkcompile(sys)
+    end
+    e === nothing && return compiled[]
+    while e isa LoadError
+        e = e.error
+    end
+    return e
+end
+
+@testset "D-130: values too deep outside the solvers are an ArgumentError naming the part" begin
+    deep = solver_deep_relation(9)
+    @test deep isa ArgumentError
+    @test deep isa ArgumentError && occursin("relation", deep.msg) && occursin("nested deeper", deep.msg)
+    # control: the same relation within the cap compiles and runs
+    ok = solver_deep_relation(3)
+    @test ok isa Potts.CompiledPottsSystem
+    σ = zeros(Int32, 12, 12)
+    σ[3:5, 3:5] .= 1
+    @test Symbol(solve(PottsProblem(ok, [ownership => σ, kind => [:A]], (0, 2)), SequentialCPM()).retcode) === :Success
+    # a constant in an expression key (`_symkey`): too deep names it, within the cap prints
+    e = solver_err(() -> Potts._symkey(solver_nest(12)))
+    @test e isa ArgumentError && occursin("symbolic constant", e.msg)
+    @test Potts._symkey(solver_nest(3)) isa String
+    cyc = Ref{Any}(nothing)
+    cyc[] = cyc
+    @test solver_err(() -> Potts._symkey(cyc)) isa ArgumentError
 end

@@ -1,0 +1,42 @@
+target	paper	ours	tolerance	class	result
+V-A6 No invasion fraction	22 % (p.13); A 22.24 % (N = 13263), Fig. 5B 22.24 ± 0.66 %	22.34 % (N = 13268); per replicate 22.34 ± 0.399 %	R3	FULL	PASS
+V-A6 Single-cell fraction	1 % (p.13); A 1.08 % (N = 13263), Fig. 5B 1.08 ± 0.21 %	1.03 % (N = 13268); per replicate 1.03 ± 0.184 %	R3	FULL	PASS
+V-A6 Bulk fraction	23 % (p.13); A 22.54 % (N = 13263), Fig. 5B 22.54 ± 0.67 %	22.34 % (N = 13268); per replicate 22.34 ± 0.576 %	R3	FULL	PASS
+V-A6 Multimodal fraction	54 % (p.13); A 54.14 % (N = 13263), Fig. 5B 54.14 ± 0.48 %	54.29 % (N = 13268); per replicate 54.29 ± 0.394 %	R3	FULL	PASS
+V-A6 unclassified (dropped before the fractions)	42 / 13,305 = 0.32 % (A)	42 / 13310 = 0.316 %	R3	info	info: in band
+V-A7 r(PP, invasive), full sweep	|r| < 0.03 (p.10–11); A -0.025	-0.027	|r| < 0.05	FULL	PASS
+V-A7 r(PP, infiltrative), full sweep	|r| < 0.03 (p.10–11); A -0.026	-0.026	|r| < 0.05	FULL	PASS
+V-A7 r(PP, singles), full sweep	|r| < 0.03 (p.10–11); A -0.004	-0.004	|r| < 0.05	FULL	PASS
+V-A7 r(PP, fingers), full sweep	|r| < 0.03 (p.10–11); A 0.001	0.002	|r| < 0.05	FULL	PASS
+V-A7 r(PP, detached), full sweep	|r| < 0.03 (p.10–11); A -0.007	-0.007	|r| < 0.05	FULL	PASS
+V-A7 r(PP, clusters), full sweep	|r| < 0.03 (p.10–11); A -0.002	0.005	|r| < 0.05	FULL	PASS
+r(λ, invasive), full sweep	0.7 (p.10–11; A 0.7)	0.701	± 0.05	info	info: in band
+r(λ, fingers), full sweep	0.8 (p.10–11; A 0.795)	0.793	± 0.05	info	info: in band
+r(J_LF, singles), full sweep	0.67 (p.10–11; A 0.672)	0.672	± 0.05	info	info: in band
+r(J_LF, infiltrative), full sweep	0.57 (p.10–11; A 0.567)	0.567	± 0.05	info	info: in band
+full-sweep fingers, J_mid	7.11 (p.10–11)	7.08 ± 0.071 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep fingers, λ_high	9.74 (p.10–11)	9.68 ± 0.045 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep fingers, J_strong	4.03 (p.10–11)	4.07 ± 0.066 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep fingers, J_weak	6.11 (p.10–11)	6.05 ± 0.06 (N = 3630)	max(± 10 %, 1)	info	info: in band
+full-sweep singles, J_weak	175.79 (p.10–11)	176.0 ± 1.99 (N = 3630)	max(± 10 %, 1)	info	info: in band
+full-sweep singles, J_strong	1.53 (p.10–11)	1.55 ± 0.072 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep singles, J_mid	53.06 (p.10–11)	53.0 ± 1.0 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep clusters, J_mid	1.69 (p.10–11)	1.75 ± 0.047 (N = 4840)	max(± 10 %, 1)	info	info: in band
+full-sweep clusters, J_weak	1.78 (p.10–11)	2.0 ± 0.052 (N = 3630)	max(± 10 %, 1)	info	info: in band
+full-sweep cluster incidence	28.3 % (3763 / 13,310, p.10); A 28.6 %	29.28 %	R3 against A	info	info: in band
+sweep slice fingers, J_mid	7.2 ± 0.24 (A slice, SE)	7.13 ± 0.236 (N = 440)	R2	info	info: in band
+sweep slice fingers, λ_high	9.78 ± 0.15 (A slice, SE)	9.74 ± 0.147 (N = 440)	R2	info	info: in band
+sweep slice fingers, J_strong	3.99 ± 0.22 (A slice, SE)	4.07 ± 0.219 (N = 440)	R2	info	info: in band
+sweep slice fingers, J_weak	6.08 ± 0.2 (A slice, SE)	6.17 ± 0.202 (N = 330)	R2	info	info: in band
+sweep slice singles, J_weak	175.94 ± 6.6 (A slice, SE)	176.0 ± 6.62 (N = 330)	R2	info	info: in band
+sweep slice singles, J_strong	1.46 ± 0.22 (A slice, SE)	1.53 ± 0.233 (N = 440)	R2	info	info: in band
+sweep slice singles, J_mid	52.94 ± 3.37 (A slice, SE)	52.88 ± 3.34 (N = 440)	R2	info	info: in band
+sweep slice clusters, J_mid	1.63 ± 0.15 (A slice, SE)	1.76 ± 0.157 (N = 440)	R2	info	info: in band
+sweep slice clusters, J_weak	1.77 ± 0.16 (A slice, SE)	2.07 ± 0.175 (N = 330)	R2	info	info: in band
+sweep slice invasive, J_strong	5381 ± 206 (A slice, SE)	5423.0 ± 208.0 (N = 440)	R2	info	info: in band
+sweep slice invasive, J_mid	10301 ± 335 (A slice, SE)	10313.0 ± 337.0 (N = 440)	R2	info	info: in band
+sweep slice invasive, J_weak	6658 ± 192 (A slice, SE)	6803.0 ± 196.0 (N = 330)	R2	info	info: in band
+sweep slice invasive, λ_high	12173 ± 275 (A slice, SE)	12252.0 ± 279.0 (N = 440)	R2	info	info: in band
+sweep slice invasive, λ_low	2866 ± 53 (A slice, SE)	2892.0 ± 56.62 (N = 440)	R2	info	info: in band
+sweep slice infiltrative, λ_high	30351 ± 860 (A slice, SE)	30410.0 ± 855.0 (N = 440)	R2	info	info: in band
+sweep slice infiltrative, λ_low	3545 ± 133 (A slice, SE)	3569.0 ± 136.0 (N = 440)	R2	info	info: in band

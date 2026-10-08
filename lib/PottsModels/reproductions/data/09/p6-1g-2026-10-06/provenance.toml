@@ -1,0 +1,42 @@
+item = "P6.1g"
+decision = "D-151"
+purpose = "late-stage coarsening in reproduction 09: time to a single dark cluster, candidate-cause scans, fresh seeds (not a verdict run)"
+commit = "82e240ba73bf4efd23d0a1c1fbe0068fac9966b0"   # the PC clone ~/potts-full, clean; model and frozen page as merged
+plan_commit = "a09312a6"                            # plan + scripts committed before launch
+page_untouched = "lib/PottsModels/reproductions/09_cell_sorting.jl"
+env = "--project=docs (workspace Manifest instantiated on the PC)"
+julia = "1.12.6"
+
+[machine]
+hostname = "praneeth-NucBox-EVO-X2"
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (16 cores / 32 threads)"
+os = "Ubuntu 24.04, Linux 7.0.0-30-generic"
+ram_gb = 62
+
+[execution]
+processes = "24 concurrent single-threaded replicate processes (julia -t 1), nice 5, via xargs -P 24 inside detached tmux"
+pinning = "taskset -c 0-11,16-27 (12 physical cores / 24 logical). run_all.sh was launched unpinned at 17:31 EDT; its launcher and in-flight replicates were pinned with taskset -a -p at 18:14 EDT (children inherit). run_inclusions.sh was pinned before it started."
+ci_runner = "untouched (~/actions-runner not accessed)"
+main_started = "2026-10-06T17:31:01-04:00"
+main_finished = "2026-10-06T19:53:17-04:00"
+main_wall_s = 8536
+inclusions_started = "2026-10-06T19:53:21-04:00"
+inclusions_finished = "2026-10-06T20:29:00-04:00"
+inclusions_wall_s = 2139
+replicate_wall_summed_h = 62.8   # 52.8 h (162 main) + 10.0 h (30 inclusion re-runs)
+replicate_wall_range_s = [744, 1912]
+
+[scripts]
+"scripts/replicate.jl" = "145544d7b1ed4feeaa07da4ba01498f12c4b7bbe1fe88c24d36977f6ca8367d6"
+"scripts/replicate_inclusions.jl" = "a83050ed8b321269acf4b6ef83aa96cfc2760db283799372a41a9d3b4c79357c"
+launchers = ["scripts/run_all.sh", "scripts/run_inclusions.sh"]
+job_lists = ["scripts/jobs.txt", "scripts/jobs_inclusions.txt"]
+analysis = "scripts/analyze.py (python3 stdlib)"
+
+[seeds]   # graner_glazier_aggregate(n; seed = start, margin = 60); PottsProblem(...; seed = run); annealed copies seed 1
+dist = { start = "2001-2030", run = "12001-12030", n = 1000, T = 10.0 }
+Tscan = { start = "2001-2016", run = "12001-12016", n = 1000, T = [5.0, 7.0, 14.0, 20.0] }
+equalsize = { start = "2001-2016", run = "12001-12016", n = 1000, T = 10.0, V_d = 38.73, V_l = 41.27 }
+aggsize = { start = "2001-2016", run = "12001-12016", n = [500, 1500], T = 10.0 }
+fresh = { start = "5001-5020", run = "15001-15020", n = 1000, T = 10.0 }
+incl = { start = "2001-2030", run = "12001-12030", n = 1000, T = 10.0, note = "re-run of dist with light-inclusion columns; 30/30 trajectories identical to dist" }

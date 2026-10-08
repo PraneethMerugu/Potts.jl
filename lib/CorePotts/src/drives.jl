@@ -105,38 +105,45 @@ site, an isolated fragment) is rejected like two.
 """
     ring_arcs(σ, ctx, prop) -> Int
 
-Maximal runs of the losing cell's sites around the target's neighbour ring (the 8-ring on
-a square 2D lattice, the 6-ring on a hexagonal one; out-of-domain sites are not the cell).
+Pieces of the losing cell's (`prop.old`) sites on the target's neighbour shell, two shell
+sites joined when they are lattice face neighbours: the maximal runs (arcs) of the 8-ring
+on a square 2D lattice and of the 6-ring on a hexagonal one; the face-connected pieces of
+the 26-site Moore shell on a cubic 3D lattice. It equals [`local_components`](@ref) on every
+geometry. Zero for the medium. Out-of-domain sites are not the cell; periodic axes wrap.
+The shell is fixed, whatever the model's neighbourhood.
 """
 @inline ring_arcs(σ, ctx, prop::Proposal{2}) = prop.old == 0 ? 0 : _arcs(map(==(prop.old), _ring_owners(ctx.lattice, σ, prop.x)))
+@inline ring_arcs(σ, ctx, prop::Proposal{3}) = _local_components(ctx.lattice, σ, prop)
 
 """
     ring_cells(σ, ctx, prop) -> Int
 
-Number of distinct cells (medium excluded) on the target's neighbour ring (see
+Number of distinct cells (medium excluded) on the target's neighbour shell (see
 [`ring_arcs`](@ref)).
 """
-@inline ring_cells(σ, ctx, prop::Proposal{2}) = _distinct_cells(_ring_owners(ctx.lattice, σ, prop.x))
+@inline ring_cells(σ, ctx, prop::Proposal) = _distinct_cells(_ring_owners(ctx.lattice, σ, prop.x))
 
 """
     ring_medium(σ, ctx, prop) -> Int
 
-Number of medium sites on the target's neighbour ring (see [`ring_arcs`](@ref)).
+Number of medium sites on the target's neighbour shell (see [`ring_arcs`](@ref)).
 Out-of-domain sites (a closed face, outside a domain mask) are not medium; on a periodic
-axis the ring wraps.
+axis the shell wraps.
 """
-@inline ring_medium(σ, ctx, prop::Proposal{2}) = _count_medium(_ring_owners(ctx.lattice, σ, prop.x))
+@inline ring_medium(σ, ctx, prop::Proposal) = _count_medium(_ring_owners(ctx.lattice, σ, prop.x))
 
 # The 6 hex neighbours in angular order (axial offsets at 0°, 60°, …, 300°).
 const _HEX_RING = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
 # The 8 square neighbours in clockwise order.
 const _MOORE_RING = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
+# The 26 sites of the cubic Moore shell (ternary order, the origin left out).
+const _CUBIC_SHELL = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
 
 @inline _ring_owners(lat::Lattice{2, M, Hexagonal}, σ, x) where {M} = _owners(lat, σ, x, _HEX_RING)
 @inline _ring_owners(lat::Lattice{2}, σ, x) = _owners(lat, σ, x, _MOORE_RING)
+@inline _ring_owners(lat::Lattice{3}, σ, x) = _owners(lat, σ, x, _CUBIC_SHELL)
 @inline _owners(lat, σ, x, ring::NTuple{K}) where {K} = ntuple(Val(K)) do k
-    o = ring[k]
-    inside, y = shift(lat, x, (Int32(o[1]), Int32(o[2])))
+    inside, y = shift(lat, x, map(Int32, ring[k]))
     # an out-of-domain site reads −1: neither the medium (0) nor a cell (> 0)
     inside ? @inbounds(σ[linear_index(lat, y)]) : -one(eltype(σ))
 end

@@ -162,15 +162,21 @@ coordinator, each iteration:
    - Changing a tolerance, target, seed count or run length needs a new DECISIONS entry
      that states the measured value and the reason. A test that fails for a scientific
      reason is a science question (§7.5), not a tolerance to relax.
-2. **Performance gate.** `tools/exclusive.sh julia --project=benchmark benchmark/gate.jl metal`
-   times one warm MCS of every published model: sequential, checkerboard and Metal.
-   - It compares against `benchmark/baseline.toml` and fails on a slowdown over 5 % or
-     on any warm-step allocation.
-   - It runs single-threaded and alone.
-   - A deliberate slowdown (a model that now does more) is rebased with `update` in the
-     same merge. PROGRESS records the old and new numbers and the reason. The reviewer
-     must agree.
+2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the NucBox PC.
+   - **CPU.** `julia benchmark/ab.jl <base> <candidate> all cpu`.
+   - **ROCm.** Add `... all rocm` when the change touches device code.
+   - **Defaults.** Two same-commit controls (`<base>-abctl`, `<candidate>-abctl`) and Tuple-cache seeding. Rounds rotate over 8, pinned to CPU 12, and the harness waits for an idle runner and GPU inside the machine lock. The statistic is paired, with a 95 % bootstrap interval.
+   - **Verdict.** Let `dev` be the largest control deviation |ratio − 1| and margin = 1.05 − dev.
+     - Exit 0 (pass): every candidate/base ≤ margin.
+     - Exit 1 (regression): some candidate/base > 1.05.
+     - Exit 2 (unreadable): in between. Re-run, or judge with the controls' range stated.
+     - Exit 3: a run was disturbed; re-time with the machine idle.
+     - Exit 4: harness error.
+   - **Measured resolution** (2026-10-07): ~1.0 % CPU and ~2.3 % ROCm, a per-checkout offset.
+   - **Allocations.** `benchmark/gate.jl [cpu|rocm|metal]` is the zero-warm-allocation check, with informational timings against this machine's `baseline.toml` rows. It fails only on an allocation; `--strict` restores the old 5 % rule.
+   - **Rebasing.** A deliberate slowdown (a model that now does more) is rebased with `gate.jl update` in the same merge. PROGRESS records the old and new numbers and the reason, and the reviewer must agree.
    - New published models are added to the gate's `cases` when they merge.
+   - Metal A/Bs (`... metal`, fastest statistic) wait for P6.0bi.
 3. **Adversarial review.** No merge without APPROVE from a fresh reviewer. The reviewer
    checks the composability list (review §4), D-048 test quality (negative controls,
    independent oracles), the CLAUDE.md code rules and the guardrails.
@@ -207,16 +213,12 @@ must justify it.
     Julia process, then compare with the same run of the base commit;
   - the coordinator runs the final pre-merge gate itself, on the merged tree, with no
     agents running.
-  - Metal cases are only flagged by the gate. The GPU flips between power states (about
-    75 and 115 ns/site for OpenVT, whatever the commit). A flagged case is decided by
-    `julia benchmark/ab.jl <base checkout> <candidate checkout> <case> metal`, which runs
-    the two alternately in fresh processes and compares the fastest run median of each
-    side (tolerance 5 %).
+  - Benchmarks run on the reserved cores 12–13 (14–15 for a second agent), never alongside a CI job. The coordinator holds pushes to `monorepo` during a benchmark window, because each push starts CI on the same PC.
 - **Docs build.** `julia --project=docs docs/make.jl` is a standing suite. P6.1a's docstrings
   cross-referenced undocumented names, and only the merged-tree build caught it.
 - **Suites** (all must pass on the merged tree):
   - `GROUP=CorePotts`, `Potts` with `POTTS_GPU=metal`, `PottsModels` and `MakiePotts`;
-  - `benchmark/gate.jl metal`.
+  - `benchmark/gate.jl` (allocations), plus the paired `ab.jl` A/B (§7.3.2) when the change can affect speed.
 
 ### 7.5 Checkpoints (the only times the maintainer is asked)
 

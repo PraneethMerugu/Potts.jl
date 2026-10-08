@@ -28,9 +28,12 @@ The operating point is a vector of pairs:
 | Algorithm | Where | Updates |
 |---|---|---|
 | `SequentialCPM(; proposal)` | CPU | one copy attempt at a time: the classic model |
+| `BoundarySiteCPM(; proposal)` | CPU | `SequentialCPM`'s dynamics, drawing only sites at a cell boundary and skipping the others' null attempts exactly: equal in distribution, faster on mostly-medium lattices |
 | `CheckerboardCPM(; proposal)` | CPU and GPU | all sites of one colour of a checkerboard at once |
 
 `proposal` overrides the model's proposal neighbourhood for this solve.
+
+Which one to use, and what `BoundarySiteCPM` does exactly, is on [Choosing an algorithm](@ref manual-algorithms).
 
 ## `solve`, `init` and the integrator
 
@@ -104,8 +107,25 @@ resumed.t
 
 The resumed run continues with the same random stream, so it equals the uninterrupted run.
 A checkpoint loads only into a problem built from the same model and solvers, with the same
-schedule: the cadences of clocked components, `Every(n)` rules and `mcs_duration` are part of
-the check.
+schedule, acceptance law and neighbourhoods: the cadences of clocked components, `Every(n)`
+rules, `mcs_duration`, the `@sweep` law (`Metropolis` or `Barker`) and its `offset`, and the
+`@relations proposal` and `@relations contact` neighbourhoods (resolved on the lattice) are part
+of the check. A neighbourhood that resolves to its default (`VonNeumann(1)` for the proposal,
+the lattice's `neighborhood` for contact) checks like omitting it. Named relations
+(`@relations far = Ball(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and
+inline relations (`Moore(1)(42)`) are part of the check too, each resolved on the lattice:
+specs that resolve to the same offsets and weights (`Ball(1.5)` and `Moore(1)` on a square
+lattice) check alike, and a relation nothing reads, or one read only by `@observed`
+quantities, is not checked. The algorithm's `proposal` keyword (`SequentialCPM(; proposal)`)
+is a run choice and is not checked.
+
+A solver holding an anonymous function or closure, such as
+`Adaptive(Rodas5P(); isoutofdomain = (u, p, t) -> any(<(0), u))`, has no name that survives
+the Julia session, so its checkpoints are session-bound: they load in the session that
+made them and are refused (an `ArgumentError`) in any other, even one running the same
+script. To resume such a run in a new session, pass a named function defined at the top
+level (`nonnegative(u, p, t) = any(<(0), u)`, then `isoutofdomain = nonnegative`) or an
+instance of a callable struct.
 
 ## Changing a problem: `remake`
 

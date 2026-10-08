@@ -12,10 +12,21 @@ written in the **copy scope**:
 | `x[target]`, `x[new]` | a site variable at a site, a cell variable of a cell |
 | `owner[s]`, `volume[owner[s]]` | the owner of a site, its volume |
 | `displacement(c, k)` | how far the copy would move cell `c`'s centroid along axis `k` (`c` is `new` or `old`) |
-| `local_components`, `ring_arcs`, `ring_cells`, `ring_medium` | connectivity of the losing cell around the target |
+| `local_components`, `ring_arcs`, `ring_cells`, `ring_medium` | connectivity of the losing cell around the target: its pieces on the target's neighbour shell (8 sites in square 2D, 6 hexagonal, 26 in 3D), the cells and the medium sites there ([Constraints](@ref manual-constraint)) |
 | `mcs` | the current MCS |
 
-A drive is added with weight 1: a negative value favours the copy.
+A drive is added with weight 1: a negative value favours the copy. A drive can stand for a
+soft constraint, e.g. the `E₀` connectivity threshold of Merks et al.:
+`copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))`.
+
+`PottsProblem(…; track = (:ΔH,))` sums the ΔH of every committed copy, energy plus drives
+(without the acceptance law's offset), into `sol.stats.accepted_ΔH`. When the drives are
+copy differences of a state function ``G``, that sum is ``Φ(\text{end}) − Φ(\text{start})``
+with ``Φ = H + G``, a check of a run's bookkeeping. The identity holds with no lifecycle
+events or killing copies (a killing copy also pays its cell's empty-state energy, D-083).
+Without `track` nothing is accumulated and the run costs nothing extra.
+`remake(prob; track)` switches it on a problem built from a model; a hand-written
+problem passes a new `f` (`CPMFunction(…; track)`).
 
 ```@example drive
 using Potts
@@ -97,3 +108,25 @@ parameters is `WortelAct`.
 !!! note "No random numbers in drives"
     `rand()` is not allowed in drives, energies and constraints: a random ``\Delta H``
     breaks detailed balance. Draw random values in updates and read the stored result.
+
+!!! note "No `integral` in drives, constraints and on-copy updates"
+    `integral(x)`, including `integral(Pre(x))` and an `integral` inside a fold over cells
+    or in the arguments of `Chemotaxis`, is not allowed in drives, constraints and
+    [on-copy updates](@ref manual-updates), and building such a model is an
+    `ArgumentError`. Drives and constraints are evaluated at every copy attempt, and
+    on-copy updates at every accepted copy, where the cells change, while an integral
+    is refreshed only between sweeps. Keep the integral in a cell variable updated at the
+    start of the MCS and read it at the copy's cells:
+
+    ```julia
+    @variables begin
+        u(site) = 0.0
+        s(cell) = 0.0
+    end
+    @before_mcs s ~ integral(u)                # the sum of u over the cell's sites
+    @drive copy => -0.5 * (s[new] - s[old])
+    @constraint s[new] < 100.0
+    ```
+
+    `s` holds the value at the start of the MCS; it does not follow the copies within it. A copy-scope `@sweep` temperature
+    may read `integral` directly and sees the same start-of-MCS value.

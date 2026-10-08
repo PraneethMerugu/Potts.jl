@@ -6,15 +6,28 @@ version = "0.1.0-DEV"
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
-Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
+
+[extensions]
+PottsModelsMakieExt = ["Makie", "MakiePotts"]
 
 [sources]
 Potts = {path = "../.."}
 
 [compat]
 DelimitedFiles = "1"
+Makie = "0.24"
+MakiePotts = "0.4"
 Potts = "0.4"
-Random = "1"
-StableRNGs = "1"
+Printf = "1"
+PrecompileTools = "1"
+SciMLBase = "3"
+TOML = "1"
 julia = "1.12"

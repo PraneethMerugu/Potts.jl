@@ -1,0 +1,15 @@
+page_sha256 = "72ede40be7dffbf9f3f8ca0661036b70a8ab16dd0bcedaa9f8e01595c85d6ca6"
+env = "POTTS_FULL_REPRODUCTION=true"
+threads = 6
+cpu = "Apple M1 Pro"
+wall_s = 5051.8
+decision = "D-144"
+dirty = false
+finished = "2026-10-05T17:21:33.666"
+started = "2026-10-05T15:57:21.488"
+machine = "arm64-apple-darwin24.0.0"
+julia = "1.12.6"
+commit = "0eb1ea72378f57fe1f1e87fc900dfdfbcb6e6634"
+item = "P6.1f"
+page = "lib/PottsModels/reproductions/09_cell_sorting.jl"
+commit_date = "2026-10-05"

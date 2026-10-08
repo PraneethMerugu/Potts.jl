@@ -140,3 +140,206 @@ end
     end
     @test err isa ArgumentError && occursin("brownians", err.msg)
 end
+
+# Algebraic equations in `@equations` (P6.0bn): what is accepted, the generated code and the
+# trajectories are the same whether or not full ModelingToolkit (with tearing, which solves
+# implicit linear equations itself) is loaded
+@potts_model MTKExtAlgebraic begin
+    @kinds medium A
+    @parameters begin
+        k = 0.1
+        r = 0.2
+    end
+    @variables begin
+        x(cell) = 2.0
+        xalias(cell) = 0.0
+        g(cell) = 0.0
+        m(model) = 0.0
+        gap(model) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -k * xalias + 0.001 * g
+        xalias ~ x
+        g ~ sum(volume[owner[n]] for n in Moore(1)(42)) - volume
+        D(m) ~ r * gap
+        gap ~ 1 - m
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtImplicit begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 2.0
+        q(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -0.1 * q
+        0 ~ q + x - 1.0
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtCycle begin
+    @kinds medium A
+    @variables begin
+        x(cell) = 2.0
+        p(cell) = 0.0
+        q(cell) = 0.0
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations begin
+        D(x) ~ -0.1p
+        p ~ q + x
+        q ~ p - x
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "algebraic equations ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
+    σ = zeros(Int32, 12, 8)
+    σ[3:6, 3:6] .= 1
+    σ[7:10, 3:6] .= 2
+    m = MTKExtAlgebraic(; name = :alg)
+    c = mtkcompile(m)
+    names(xs) = sort!([string(Potts.SymbolicIndexingInterface.getname(x)) for x in xs])
+    cell = Potts.ode_system(c, :cell)
+    @test names(Potts.ModelingToolkitBase.unknowns(cell)) == ["x"]
+    code = canonical(Potts.generated_code(m; T = Float64).phases)
+    sol = solve(PottsProblem(m, [ownership => σ, kind => [1, 1]], (0, 4)), SequentialCPM(); saveat = 0:4)
+    println("P6BN|code|", hash(code), "|", [Tuple(u.cell.x) for u in sol.u], "|", [u.model.m[1] for u in sol.u])
+    println("P6BN|observed|", names(o.lhs for o in Potts.ModelingToolkitBase.observed(cell)), "|", sol[:xalias] == sol[:x])
+    # positive control: full ModelingToolkit's tearing solves the implicit equation that Potts
+    # rejects (so the rejection below is Potts' own); ModelingToolkitBase alone keeps it
+    @variables xi(Potts.t) = 2.0 qi(Potts.t)
+    plain = Potts.ModelingToolkitBase.mtkcompile(System([Potts.D(xi) ~ -0.1 * qi, 0 ~ qi + xi - 1.0], Potts.t; name = :plain))
+    @test ("qi" in names(Potts.ModelingToolkitBase.unknowns(plain))) == !WITH_MTK
+    for M in (MTKExtImplicit, MTKExtCycle)
+        err = try
+            mtkcompile(M(; name = :r)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin("algebraic", sprint(showerror, err))
+        println("P6BN|", nameof(M), "|", typeof(err))
+    end
+end
+
+# Entity-local initialization (P6.0bo, D-170) is strict, so full ModelingToolkit (with its
+# tearing and least-squares fallbacks) solves the same conditions to the same values and
+# refuses the same under- and overdetermined ones
+@potts_model MTKExtInit begin
+    @kinds medium A
+    @parameters begin
+        α = 0.1
+        κ = 0.5
+    end
+    @variables begin
+        Vt(cell)
+        w(cell) = 1.0
+        r(cell), [guess = -1.0]
+        a_u(cell)
+        b_u(cell)
+        xs(cell)
+        m(model)
+        z(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(xs) ~ α * volume - κ * xs
+    @initialization_equations begin
+        Vt ~ 2volume + id + w
+        r^2 ~ volume
+        a_u + b_u ~ volume
+        a_u - b_u ~ id
+        D(xs) ~ 0
+        m ~ 3κ
+        z ~ m + volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitUnder begin
+    @kinds medium A
+    @variables begin
+        alpha_u(cell)
+        beta_u(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations alpha_u + beta_u ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+# conditions without a solution or without a unique one: refused alike (Potts checks every
+# result against the conditions, so neither MTK's least-squares answer nor the guess comes back)
+@potts_model MTKExtInitZero begin
+    @kinds medium A
+    @parameters k_z = 0.0
+    @variables kz(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations k_z * kz ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitClash begin
+    @kinds medium A
+    @variables begin
+        ta(cell)
+        tb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        ta + tb ~ volume
+        ta + tb ~ volume + 1
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitDependent begin
+    @kinds medium A
+    @variables begin
+        sa(cell)
+        sb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        sa + sb ~ volume
+        2sa + 2sb ~ 2volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
+    σ = zeros(Int32, 12, 8)
+    σ[3:6, 3:6] .= 1
+    σ[7:10, 3:5] .= 2
+    op = [ownership => σ, kind => [1, 1]]
+    prob = PottsProblem(MTKExtInit(; name = :init), op, (0, 2))
+    vals = Dict(n => round.(Vector{Float64}(Array(getproperty(prob.u0.cell, n))); sigdigits = 10)
+                for n in (:Vt, :r, :a_u, :b_u, :xs, :z))
+    @test vals[:Vt] == [34.0, 27.0] && vals[:r] == [-4.0, round(-sqrt(12.0); sigdigits = 10)]
+    println("P6BO|values|", sort!(collect(vals); by = first), "|", only(Array(prob.u0.model.m)))
+    for (M, o) in ((MTKExtInitUnder, op), (MTKExtInit, [op; :Vt => [1.0, 2.0]]))
+        err = try
+            PottsProblem(M(; name = :r), o, (0, 1)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin("determined", sprint(showerror, err)))
+    end
+    for (M, words) in ((MTKExtInitZero, "found no solution"), (MTKExtInitClash, "found no solution"),
+                       (MTKExtInitDependent, "uniquely"))
+        err = try
+            PottsProblem(M(; name = :r), op, (0, 1)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin(words, sprint(showerror, err))
+        println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin(words, sprint(showerror, err)))
+    end
+end

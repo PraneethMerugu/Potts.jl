@@ -61,6 +61,7 @@
 # formula (it passes with margin at the freeze: |√N r| ≤ 1.7, χ² ≤ 124). Negative controls:
 # today's `seed + 1` derivation and bare StableRNG(s) vs StableRNG(s + 1) fail the same test.
 using Potts: CorePotts
+using StableRNGs: StableRNG   # D-138: PottsModels no longer depends on StableRNGs
 
 # ---------------------------------------------------------------------------------------------
 # Independent reference of the pinned mixer
@@ -117,7 +118,7 @@ function p60w_discrete_pair(a, b, m)
     return (; zr, chi, ok = abs(zr) <= P60W_Z && chi <= p60w_chi2_bound(m - 1))
 end
 
-p60w_first(x) = rand(PottsModels.StableRNG(x))
+p60w_first(x) = rand(StableRNG(x))
 # first draws of sub-stream f at seeds s and of sub-stream g at s + 1, over the block
 p60w_consecutive(f, g, seeds) = p60w_uniform_pair([p60w_first(f(s)) for s in seeds], [p60w_first(g(s + 1)) for s in seeds])
 
@@ -240,18 +241,19 @@ end
     @test any(endswith(joinpath("src", "layouts.jl")), files)
     @test any(endswith(joinpath("PottsModels", "src", "akeeb.jl")), files)
     @test any(endswith(joinpath("CorePotts", "src", "rng.jl")), files)
-    @test sum(f -> p60w_rng_sites(read(f, String)), files) >= 5   # Scattered, InsertUntil, VoronoiBall, merks, akeeb
+    @test sum(f -> p60w_rng_sites(read(f, String)), files) >= 4   # Scattered, InsertUntil, VoronoiBall, akeeb (merks draws through Scattered since D-153)
     hits = [(relpath(f, P60W_ROOT), h...) for f in files for h in p60w_scan(read(f, String))]
     @test isempty(hits)
     isempty(hits) || @info "P6.0w: seed derivations by arithmetic" hits
-    # akeeb_state's clocks go through the mixer
+    # akeeb_state's clocks go through the mixer (directly, or through the public
+    # `Potts.layer_rng(seed, stream)` that wraps it, D-138)
     akeeb = Meta.parseall(read(joinpath(pkgdir(PottsModels), "src", "akeeb.jl"), String))
     body = nothing
     walkdef(ex) = ex isa Expr && (p60w_defname(ex) === :akeeb_state ? (body = ex) : foreach(walkdef, ex.args))
     walkdef(akeeb)
     @test body !== nothing
     uses = Ref(0)
-    count_uses(ex) = ex isa Expr && (p60w_iscall(ex, (:_substream_seed,)) && (uses[] += 1); foreach(count_uses, ex.args))
+    count_uses(ex) = ex isa Expr && ((p60w_iscall(ex, (:_substream_seed,)) || (p60w_iscall(ex, (:layer_rng,)) && length(ex.args) >= 3)) && (uses[] += 1); foreach(count_uses, ex.args))
     count_uses(body)
     @test uses[] >= 1
 
@@ -323,7 +325,7 @@ p60w_recipe(kinds, pp, rng) = [k === :leader || rand(rng) > pp ? -1.0 : Float64(
     @test r.ok
     r.ok || @info "P6.0w: akeeb clocks coupled across seeds" r.zr r.chi bound = p60w_chi2_bound(74)
     # negative control: the same statistic on today's recipe, StableRNG(seed + 1), fails
-    w = [p60w_recipe(p60w_get(o, kind)[1:1], 1.0, PottsModels.StableRNG(s + 1))[1] for (s, o) in zip(0:N, sts)]
+    w = [p60w_recipe(p60w_get(o, kind)[1:1], 1.0, StableRNG(s + 1))[1] for (s, o) in zip(0:N, sts)]
     @test !p60w_discrete_pair(w[1:(end - 1)], w[2:end], 75).ok
 end
 
@@ -341,14 +343,14 @@ end
         clocks = p60w_get(a, :clock)
         # the law: today's recipe, in id order, on the mixed clock stream
         if p60w_has()
-            @test clocks == p60w_recipe(ks, pp, PottsModels.StableRNG(p60w_mix(seed, :clock)))
+            @test clocks == p60w_recipe(ks, pp, StableRNG(p60w_mix(seed, :clock)))
             # negative control: the oracle sees the stream (another sub-stream name differs)
-            pp > 0 && @test clocks != p60w_recipe(ks, pp, PottsModels.StableRNG(p60w_mix(seed, :clocks)))
+            pp > 0 && @test clocks != p60w_recipe(ks, pp, StableRNG(p60w_mix(seed, :clocks)))
         else
             @test p60w_has()
         end
         # no longer today's stream
-        pp > 0 && @test clocks != p60w_recipe(ks, pp, PottsModels.StableRNG(seed + 1))
+        pp > 0 && @test clocks != p60w_recipe(ks, pp, StableRNG(seed + 1))
         @test p60w_get(a, :rate) == [k === :leader ? 0.0 : 0.015 for k in ks]
         @test p60w_get(a, :cue) == [Float64(y - 1) for x in 1:lat[1], y in 1:lat[2]]
         @test all(c -> c == -1.0 || (isinteger(c) && 0 <= c <= 74), clocks)

@@ -1,0 +1,8 @@
+start_seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+threads = 6
+replicates = 10
+page_seed = 1
+algorithm = "SequentialCPM(; proposal = Moore(1))"
+paper_mcs_per_mcs = 16
+margin = 60
+saves_paper_mcs = [1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320, 400, 500, 640, 800, 1000, 1280, 1600, 2000, 2560, 3200, 4000, 5000, 6400, 8000, 10000, 12800, 16000, 20000]

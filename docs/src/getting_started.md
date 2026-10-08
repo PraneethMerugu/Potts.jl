@@ -173,7 +173,7 @@ sol.t[1:5]
 `record_potts` turns the saved states into a video, one frame per saved state:
 
 ```@example start
-record_potts("getting_started_sorting.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("getting_started_sorting.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 

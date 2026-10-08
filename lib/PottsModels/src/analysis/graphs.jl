@@ -83,22 +83,45 @@ function components(g, cells)
 end
 
 """
-    centroids(σ) -> Vector{NTuple{N, Float64}}
+    centroids(σ; periodic = (false, …)) -> Vector{NTuple{N, Float64}}
 
-The mean site coordinate (lattice indices, with no unwrapping across periodic boundaries)
-of each cell `1:maximum(σ)`; `NaN`s for an id that owns no site. (Unlike the model-level
-reading of a dead slot, which is 0, a missing cell is NaN here so it cannot pass
-as a real position.)
+The mean site coordinate (lattice indices) of each cell `1:maximum(σ)`; `NaN`s for an id
+that owns no site. (Unlike the model-level reading of a dead slot, which is 0, a missing
+cell is NaN here so it cannot pass as a real position.)
+
+`periodic` has one `Bool` per axis, as in [`cell_graph`](@ref); a single `Bool` applies to
+every axis. On a periodic axis `d` a cell's sites are taken at their minimum image relative
+to the cell's first site in column-major order, and the mean is wrapped into
+`[1, size(σ, d) + 1)`, CorePotts `centroid`'s convention: a cell owning columns 10 and 1 of
+a 10-wide periodic lattice has its centroid at 10.5. Non-periodic axes (the default) take
+the plain mean of the indices, with no unwrapping. The minimum image is exact for a cell
+at most half the lattice wide along `d`. A wider cell gets a result that depends on where its
+first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads 5.83, not 7.5.
 """
-function centroids(σ::AbstractArray{<:Integer, N}) where {N}
+function centroids(σ::AbstractArray{<:Integer, N}; periodic = ntuple(_ -> false, N)) where {N}
+    per = _periodic_axes(periodic, Val(N))
+    dims = size(σ)
     n = Int(maximum(σ; init = 0))
     sums = fill(ntuple(_ -> 0.0, N), n)
     counts = zeros(Int, n)
+    anchor = fill(ntuple(_ -> 0, N), n)
     for i in CartesianIndices(σ)
         c = σ[i]
         c > 0 || continue
-        sums[c] = sums[c] .+ Tuple(i)
+        counts[c] == 0 && (anchor[c] = Tuple(i))
+        a = anchor[c]
+        x = ntuple(d -> per[d] ? a[d] + _min_image(i[d] - a[d], dims[d]) : i[d], N)
+        sums[c] = sums[c] .+ x
         counts[c] += 1
     end
-    return [sums[c] ./ counts[c] for c in 1:n]
+    return [ntuple(d -> _wrap(sums[c][d] / counts[c], dims[d], per[d]), N) for c in 1:n]
 end
+
+_periodic_axes(p::Bool, ::Val{N}) where {N} = ntuple(_ -> p, N)
+function _periodic_axes(p, ::Val{N}) where {N}
+    length(p) == N || throw(ArgumentError("centroids: `periodic` needs one entry per axis ($N), got $(repr(p))"))
+    return ntuple(d -> Bool(p[d]), N)
+end
+# the offset δ taken modulo L into [-L ÷ 2, L - L ÷ 2)
+_min_image(δ, L) = mod(δ + L ÷ 2, L) - L ÷ 2
+_wrap(m, L, periodic) = periodic ? mod(m - 1, L) + 1 : m

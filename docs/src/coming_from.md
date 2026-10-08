@@ -49,7 +49,9 @@ are not available yet are on the [Roadmap](@ref roadmap).
 **Temperature in detail.** See [Sweep](@ref manual-sweep) for runnable examples.
 
 - `FluctuationAmplitudeFunctionName` `Min` / `Max` / `ArithmeticAverage` is
-  `combine = min` / `max` / `(a, b) -> (a + b) / 2`. `combine` receives two numbers, so
+  `combine = min` / `max` / `amean`, with `amean(a, b) = (a + b) / 2` defined at the top
+  level (`combine` must be a named function or a callable struct, not `(a, b) -> …`; see
+  [Sweep](@ref manual-sweep)). `combine` receives two numbers, so
   `mean` from Statistics does not work (it expects a collection). As in CC3D, the medium
   never contributes: a copy between a cell and the medium uses the cell's value.
 - A per-cell `fluctAmpl`, where −1 means "use the type's value", is a cell variable:

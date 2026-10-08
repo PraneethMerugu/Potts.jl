@@ -43,6 +43,17 @@ struct CompiledPottsSystem
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
     discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
     discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
+    contact_trackers::Vector{Tuple{Symbol, Symbol, UInt64}}   # contact folds (name, relation, kind mask), D-150
+    # the system as authored, before `_bind_components` lowers its components (`sys` is the
+    # bound one): `hamiltonian`, `drives` and the `PottsSweepSpec` payload read it (D-160);
+    # never read by codegen, so never in the code or the fingerprint
+    authored::PottsSystem
+    # the cell and model ODE templates as compiled by MTK (`ode_system`, odes.jl), by scope;
+    # never read by codegen
+    ode_systems::Dict{Symbol, Any}
+    # the cell and model `@initialization_equations` (`initialization_system`, initialization.jl),
+    # by scope; run when a problem is built, never read by codegen
+    initialization::Dict{Symbol, Any}
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -106,6 +117,10 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
             throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
+        # a contact fold (D-150) is a cell quantity read between sweeps
+        r === :contact_count && !(between_copies && :volume in allowed) && throw(ArgumentError(
+            "`count(… for _ in contacts)` is not available in $what: it is a cell quantity, exact between " *
+            "sweeps, for cell updates and equations, division conditions and rules, and cell observed quantities"))
     end
     return nothing
 end
@@ -113,7 +128,7 @@ end
 # Relationships (P6.0b): names are unique; each edge variable belongs to one relationship,
 # named by its scope (`rest(bond)`) or, with a single relationship, `rest(edge)`.
 function _relationships(sys::PottsSystem)
-    rels = sys.relationships
+    rels = getfield(sys, :relationships)
     names = [r.name for r in rels]
     for (i, n) in enumerate(names)
         n in view(names, 1:(i - 1)) && throw(ArgumentError("@relationship `$n` is declared twice"))
@@ -122,7 +137,7 @@ function _relationships(sys::PottsSystem)
     end
     edge_vars = Dict{Symbol, Vector{Any}}(n => Any[] for n in names)
     edge_rel = Dict{Symbol, Symbol}()                 # edge variable name → relationship
-    for x in sys.variables
+    for x in getfield(sys, :variables)
         i = info(x)
         i.role === :edge || continue
         r = get(i.options, :relationship, nothing)
@@ -159,8 +174,16 @@ end
 Validate and analyse a Potts model (the symbolic half of compilation; code is generated
 per scalar type by `PottsProblem`).
 """
-function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
-    sys = _bind_components(sys)
+function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
+    # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
+    routed, ode_systems, origin = _compile_odes(authored)
+    # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
+    initialization = _compile_initialization(routed)
+    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
+end
+
+# `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)
+function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, initialization)
     _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
@@ -168,7 +191,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     site_terms = Any[]
     edge_terms = Tuple{Symbol, Any}[]
     relationships, edge_vars, edge_rel = _relationships(sys)
-    for e in sys.energies
+    for e in getfield(sys, :energies)
         d = e.domain
         _located(sys, e) do
         if d isa CellDomain
@@ -205,7 +228,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     # energies may read on-copy-written variables only where ΔH can apply the write (D-045):
     # cell terms at the written cell (`x[new]`, `x[old]`), site and contact terms (`x`, `x′`)
     # at the target
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         u.phase === :on_copy || continue
         lhs = _unwrap(u.eq.lhs)
         (iscall(lhs) && operation(lhs) === at) || continue
@@ -224,17 +247,17 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
                                 "reading a site variable written at the target"))
         end
     end
-    drive = isempty(sys.drives) ? nothing : sum(d -> d.expr, sys.drives)
-    for d in sys.drives
+    drive = isempty(getfield(sys, :drives)) ? nothing : sum(d -> d.expr, getfield(sys, :drives))
+    for d in getfield(sys, :drives)
         _located(() -> _check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"), sys, d)
     end
-    for c in sys.constraints
+    for c in getfield(sys, :constraints)
         c.kind === :expr && _located(() -> _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint"), sys, c)
     end
 
     # updates by phase and scope
     updates = Dict{Tuple{Symbol, Symbol}, Vector{Update}}()
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         lhs = _unwrap(u.eq.lhs)
         scope = _located(sys, u) do
         if u.phase === :on_copy
@@ -245,8 +268,18 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         else
             i = info(lhs)
             (i !== nothing && i.role in SCOPES) || throw(ArgumentError("update target `$lhs` is not a declared variable"))
-            allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
-            _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+            if i.role === :edge
+                # once per existing link, in the environment of `edges(rel)` and `@unlink` (D-169)
+                _check_names(u.eq.rhs, _LINK_BUILTINS, "an edge update"; between_copies = true)
+                _has_op(u.eq.rhs, random_uniform) && throw(ArgumentError(
+                    "`rand()` is not available in an edge update: draws are not addressed per link"))
+                (_has_op(u.eq.rhs, random_normal) || _has_op(u.eq.rhs, random_normal_above)) && throw(ArgumentError(
+                    "`randn()` is not available in an edge update: draws are not addressed per link"))
+                _check_edge_vars(u.eq.rhs, edge_rel[i.name], edge_rel, "an edge update of `$(i.name)($(edge_rel[i.name]))`")
+            else
+                allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
+                _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+            end
             i.role === :field ? :site : i.role
         end
         end
@@ -258,7 +291,7 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     cell_odes = Tuple{Any, Any}[]
     model_odes = Tuple{Any, Any}[]
     derivatives = Dict{Symbol, Any}()
-    for eq in sys.equations
+    for eq in getfield(sys, :equations)
         _located(sys, eq) do
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) ||
@@ -283,19 +316,19 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         end
         end
     end
-    for d in sys.divisions
+    for d in getfield(sys, :divisions)
         _located(() -> _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true),
             sys, d)
     end
     # each rule divides by its own domain (P6.0a); a kind is divided by one domain only
-    cluster_division = any(d -> d.domain isa ClusterDomain, sys.divisions)
-    domain_kinds(D) = unique(Iterators.flatten(isempty(d.domain.kinds) ? (1:(length(sys.kinds) - 1)) : d.domain.kinds
-                                               for d in sys.divisions if d.domain isa D))
+    cluster_division = any(d -> d.domain isa ClusterDomain, getfield(sys, :divisions))
+    domain_kinds(D) = unique(Iterators.flatten(isempty(d.domain.kinds) ? (1:(length(getfield(sys, :kinds)) - 1)) : d.domain.kinds
+                                               for d in getfield(sys, :divisions) if d.domain isa D))
     both = intersect(domain_kinds(CellDomain), domain_kinds(ClusterDomain))
     isempty(both) || throw(ArgumentError("kind$(length(both) == 1 ? "" : "s") " *
-                                         join(("`$(sys.kinds[k + 1])`" for k in sort(both)), ", ") *
+                                         join(("`$(getfield(sys, :kinds)[k + 1])`" for k in sort(both)), ", ") *
                                          " divided by both @divide cells(…) and @divide clusters(…); a kind divides alone or with its cluster, not both"))
-    for r in sys.link_rules
+    for r in getfield(sys, :link_rules)
         _located(sys, r) do
             haskey(edge_vars, r.relationship) ||
                 throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
@@ -305,18 +338,18 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     end
 
     # discrete components (P6.0k): a tick reads the pre-tick state, between copies
-    for b in sys.discrete
+    for b in getfield(sys, :discrete)
         _located(sys, b) do
             for x in b.next
                 _check_names(x, b.scope === :cell ? _CELL_BUILTINS : (:mcs,), "a discrete component"; between_copies = true)
             end
         end
     end
-    tick_exprs = Any[x for b in sys.discrete for x in b.next]
+    tick_exprs = Any[x for b in getfield(sys, :discrete) for x in b.next]
 
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         k = (_target_key(u)..., u.every)
         haskey(writers, k) && _located(sys, u) do
             throw(ArgumentError("`$(u.eq.lhs)` is already written @$(u.phase)$(u.every == 1 ? "" : " Every($(u.every))") " *
@@ -325,18 +358,23 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
         writers[k] = u
     end
     geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
-    needs_moments = !isempty(sys.divisions) || !isempty(relationships) ||
-                    any(geometric, Any[(e.expr for e in sys.energies)..., (d.expr for d in sys.drives)...,
-                        (u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
-                        (o.expr for o in sys.observed)..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-                        (r.when for r in sys.link_rules)..., sys.sweep.temperature,
-                        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., tick_exprs...])
+    needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) ||
+                    any(geometric, Any[(e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
+                        (u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
+                        (o.expr for o in getfield(sys, :observed))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
+                        (r.when for r in getfield(sys, :link_rules))..., getfield(sys, :sweep).temperature,
+                        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...])
 
     # relations: contact (ctx.contact), surface, named, gathers
-    contact_spec = get(sys.relations, :contact, sys.lattice.neighborhood)
-    proposal_spec = get(sys.relations, :proposal, CorePotts.VonNeumann(1))
+    contact_spec = get(getfield(sys, :relations), :contact, getfield(sys, :lattice).neighborhood)
+    proposal_spec = _proposal_spec(sys)
     relations = Dict{Symbol, Any}()
-    for (k, v) in sys.relations
+    for (k, v) in getfield(sys, :relations)
+        # `contact` and `proposal` are declarable roles (split out above); the other names
+        # CorePotts reserves are run-context fields, so a relation may not take them (the
+        # fingerprint resolves every relation the code reads by its context name, D-124)
+        k in (:lattice, :mobility, :spacing) && throw(ArgumentError(
+            "relation names `contact`, `proposal`, `lattice`, `mobility`, `spacing` are reserved"))
         k in (:contact, :proposal) || (relations[k] = v)
     end
     for r in keys(contact_terms)
@@ -344,46 +382,54 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     end
     gather_names = Dict{Any, Symbol}()
     all_exprs = Any[last.(cell_terms)..., last.(cluster_terms)..., values(contact_terms)..., site_terms...,
-        (drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-        (u.eq.rhs for u in sys.updates)..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
-        sys.sweep.temperature, tick_exprs...]
-    # everything evaluated against the state, including division rules, observed quantities
-    # and link rules: every tracker flag scans the same set (A-35)
-    scanned = Any[all_exprs..., (d.when for d in sys.divisions)...,
-        (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))..., (o.expr for o in sys.observed)...,
-        (r.when for r in sys.link_rules)...]
+        (drive === nothing ? () : (drive,))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
+        (u.eq.rhs for u in getfield(sys, :updates))..., (last(f) for f in fields)..., (last(f) for f in cell_odes)..., (last(f) for f in model_odes)...,
+        getfield(sys, :sweep).temperature, tick_exprs...]
+    # everything evaluated against the state: the copy-step expressions, then the sites
+    # evaluated outside the copy step (division conditions and rules, link rules, edge
+    # energies, on-copy update indices) and observed quantities last. One list serves both
+    # the tracker flags (A-35, order-free) and gather numbering (D-107: statement order, and
+    # new sites append after the existing ones so their numbers stay; observed quantities
+    # are not fingerprinted, D-124), so the two always cover the same sites.
+    scanned = Any[all_exprs..., (d.when for d in getfield(sys, :divisions))...,
+        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in getfield(sys, :link_rules))..., last.(edge_terms)...,
+        (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_clusters = cluster_division || uses_cluster_surface ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
-        (relations[:surface] = sys.lattice.neighborhood)
+        (relations[:surface] = getfield(sys, :lattice).neighborhood)
     radius_read = 1
-    # gather relations numbered in statement order and, within one, by content (D-107)
-    for x in all_exprs
+    # gather relations numbered in `scanned` order and, within one, by content (D-107)
+    for x in scanned
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
                             if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
-        for spec in specs[sortperm(map(_canonical_value, specs))]
+        ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
+        for spec in specs[sortperm(ckeys)]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
             relations[gather_names[spec]] = spec
         end
     end
 
     # footprint: largest distance from the target read by the per-copy functions
-    lat = core_lattice(sys.lattice)
+    lat = core_lattice(getfield(sys, :lattice))
     rad(spec) = CP.radius(CP.relation(spec, lat))
     isempty(contact_terms) || (radius_read = max(radius_read, maximum(r -> rad(r === :contact ? contact_spec : relations[r]), keys(contact_terms))))
     (uses_surface || uses_cluster_surface) && (radius_read = max(radius_read, rad(relations[:surface])))
+    fold_radius, contact_trackers = _check_contact_folds(sys, relations, contact_spec, lat)   # D-150
+    radius_read = max(radius_read, fold_radius)
     # per-copy reads anchored at the target count from it; at the source, from the source
     # (CorePotts adds the proposal radius: `reach`)
     source_read = -1
     source_write = -1
     oncopy = get(updates, (:on_copy, :proposal), Update[])
-    for x in Any[(drive === nothing ? () : (drive,))..., (c.expr for c in sys.constraints if c.kind === :expr)...,
-            (u.eq.rhs for u in oncopy)..., sys.sweep.temperature]
+    for x in Any[(drive === nothing ? () : (drive,))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
+            (u.eq.rhs for u in oncopy)..., (u.eq.lhs for u in oncopy)..., getfield(sys, :sweep).temperature]
         for (ni, anchor) in _gathers(x)
             spec = ni.options.relation
-            r = rad(spec isa RelationRef ? sys.relations[spec.name] : spec)
+            r = rad(spec isa RelationRef ? getfield(sys, :relations)[spec.name] : spec)
             if _uses_builtin(anchor, :source)
                 source_read = max(source_read, r)
             else
@@ -411,11 +457,11 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     schedule = Dict{Symbol, Vector{Stage}}()
     pre_snapshots = Dict{Symbol, Vector{Tuple{Symbol, Symbol}}}()
     for ph in (:before_mcs, :after_mcs)
-        schedule[ph], pre_snapshots[ph] = _schedule_block(sys, Update[u for u in sys.updates if u.phase === ph],
+        schedule[ph], pre_snapshots[ph] = _schedule_block(sys, Update[u for u in getfield(sys, :updates) if u.phase === ph],
             gather_names, update_pops)
     end
     # folds hoisted out of integral operands: model slots too, computed by the integrals' refresh
-    for fs in last(_integrals_folds(sys)), sl in fs
+    for fs in last(_integrals_folds(sys; observed = true)), sl in fs
         any(q -> q.first === sl.first, update_pops) || push!(update_pops, sl)
     end
     cell_ode_pops = Pair{Symbol, Any}[]
@@ -425,26 +471,91 @@ function ModelingToolkitBase.mtkcompile(sys::PottsSystem)
     discrete = DiscreteBlock[b.scope === :cell ?
                              DiscreteBlock(b.name, b.scope, b.kinds, b.slots,
         Any[_hoist_populations(x, discrete_pops, gather_names, :__tickpop) for x in b.next], b.every, b.offset) : b
-                             for b in sys.discrete]
+                             for b in getfield(sys, :discrete)]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
+    _check_algebraic_lowering(sys, gather_names)
+    _check_boundaries(sys, fields, gather_names)
+    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
-        sys.constraints, updates, fields, cell_odes, model_odes, sys.divisions, relationships, edge_terms, edge_vars,
-        sys.link_rules, uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
+        getfield(sys, :constraints), updates, fields, cell_odes, model_odes, getfield(sys, :divisions), relationships, edge_terms, edge_vars,
+        getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
-        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops)
+        scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
+        contact_trackers, authored, ode_systems, initialization)
+end
+
+# the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
+_proposal_spec(sys::PottsSystem) = get(getfield(sys, :relations), :proposal, CorePotts.VonNeumann(1))
+
+# `@boundary` (D-145): a field with an equation; faces on closed axes of a square lattice the
+# model has, each axis once per field; masks are site conditions.
+function _check_boundaries(sys::PottsSystem, fields, rn)
+    bs = getfield(sys, :boundaries)
+    isempty(bs) && return nothing
+    lat = core_lattice(getfield(sys, :lattice))
+    N = ndims(lat)
+    stepped = Set{Symbol}(info(x).name for (x, _) in fields)
+    steporder = Symbol[info(x).name for (x, _) in fields]
+    seen = Set{Tuple{Symbol, Int}}()
+    for b in bs
+        _located(sys, b) do
+            i = info(b.field)
+            n = i.name
+            (i.role === :field && any(x -> info(x) !== nothing && info(x).name === n && info(x).role === :field,
+                getfield(sys, :variables))) || throw(ArgumentError(
+                "@boundary $n: `$n` is not a field variable of $(nameof(sys)); boundaries are for `c(field)` variables"))
+            n in stepped || throw(ArgumentError(
+                "@boundary $n: `$n` has no equation `D($n) ~ …`; a boundary condition applies to a field the model steps"))
+            if b.axis == 0
+                _check_names(b.mask, _SITE_BUILTINS, "a boundary site mask"; between_copies = true)
+                _has_op(b.mask, random_uniform) && throw(ArgumentError("@boundary $n: a site mask cannot draw `rand()`"))
+                lower(b.mask, _site_env(Float64, :i, rn; mcs = :mcs))
+                # the clamp runs in the field's step kernel: a mask reading that field, or one
+                # stepped after it in the same phase, would see a value mid-step
+                k = findfirst(==(n), steporder)
+                for (m, _, _) in _reads(b.mask)
+                    j = findfirst(==(m), steporder)
+                    (j === nothing || j < k) && continue
+                    throw(ArgumentError(m === n ?
+                        "@boundary $n: the site mask reads `$n`, the field it clamps; a mask cannot depend on the field it holds" :
+                        "@boundary $n: the site mask reads `$m`, a field stepped with or after `$n` in the same phase " *
+                        "(it would see `$m` before its step); a mask reads fields stepped before `$n`, or other variables"))
+                end
+            else
+                ax = _AXIS_NAMES[b.axis]
+                lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
+                    "@boundary $n: face conditions (`$ax => …`) are for square lattices; this lattice is Hexagonal " *
+                    "(its missing neighbours are zero flux); a site mask `sites(…) => Dirichlet(v)` works on every lattice"))
+                b.axis <= N || throw(ArgumentError(
+                    "@boundary $n: axis `$ax` does not exist on this $(N)D lattice (its axes are $(join(_AXIS_NAMES[1:N], ", ")))"))
+                lat.periodic[b.axis] && throw(ArgumentError(
+                    "@boundary $n: axis `$ax` is periodic; a face condition needs a closed axis (`Closed()` on axis $(b.axis))"))
+                (n, b.axis) in seen && throw(ArgumentError("@boundary $n: axis `$ax` is given twice"))
+                rate = last(fields[findfirst(f -> info(first(f)).name === n, fields)])
+                lap = Ref(false)
+                _walk(y -> (iscall(y) && operation(y) === Δ && info(arguments(y)[1]) !== nothing &&
+                            info(arguments(y)[1]).name === n && (lap[] = true)), rate)
+                lap[] || throw(ArgumentError(
+                    "@boundary $n: a face condition (`$ax => …`) sets the ghost values of `Δ($n)`, but the equation " *
+                    "`D($n) ~ …` has no `Δ($n)`; drop the face entry, or use a site mask `sites(…) => Dirichlet(v)`"))
+                push!(seen, (n, b.axis))
+            end
+        end
+    end
+    return nothing
 end
 
 # A slot of a discrete component is written by its ticks only.
 function _check_discrete_slots(sys)
-    isempty(sys.discrete) && return nothing
-    slots = Dict{Symbol, Symbol}(info(x).name => b.name for b in sys.discrete for x in b.slots)
+    isempty(getfield(sys, :discrete)) && return nothing
+    slots = Dict{Symbol, Symbol}(info(x).name => b.name for b in getfield(sys, :discrete) for x in b.slots)
     target(lhs) = (x = _standin_var(lhs);
         iscall(x) && (operation(x) === at || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x)
-    for s in Iterators.flatten((sys.updates, sys.equations))
+    for s in Iterators.flatten((getfield(sys, :updates), getfield(sys, :equations)))
         lhs = _unwrap(s isa Update ? s.eq.lhs : s.lhs)
         i = info(target(lhs))
         (i !== nothing && haskey(slots, i.name)) || continue
@@ -457,7 +568,7 @@ function _check_discrete_slots(sys)
 end
 
 # A kind filter naming every cell kind is no filter (the generated code skips the test).
-_all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(sys.kinds) - 1) ? Int[] : kinds
+_all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(getfield(sys, :kinds)) - 1) ? Int[] : kinds
 
 # Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
 # derived only for cell terms.
@@ -580,9 +691,9 @@ function _located(f, sys::PottsSystem, x)
     catch e
         e isa Union{ArgumentError, ErrorException} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        ln = get(sys.sources, x, nothing)
+        ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)\n  in $(_describe(x))$loc"))
+        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x))$loc"))
     end
 end
 
@@ -596,6 +707,9 @@ _describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
+_describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
+_describe(b::BoundaryEntry) = "@boundary $(info(b.field).name) " *
+                              (b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" : "$(_AXIS_NAMES[b.axis]) => …")
 _describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
@@ -604,7 +718,7 @@ _describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cel
 function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     T = Float64
     cellenv = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
-    for e in sys.energies
+    for e in getfield(sys, :energies)
         _located(sys, e) do
             d = e.domain
             d isa CellDomain ? lower(e.expr, _cell_env(T, :c, rn)) :
@@ -614,26 +728,33 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             d isa EdgeDomain ? lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn)) : nothing
         end
     end
-    for d in sys.drives
-        _located(() -> lower(d.expr, _proposal_env(T, rn)), sys, d)
+    # The integral check runs before lowering, which would otherwise fail on a bare
+    # `integral` with the generic "is per cell" message (D-125).
+    for d in getfield(sys, :drives)
+        _located(() -> (_check_copy_integral(d.expr, "drives"); lower(d.expr, _proposal_env(T, rn))), sys, d)
     end
-    for c in sys.constraints
-        c.kind === :expr && _located(() -> lower(c.expr, _proposal_env(T, rn)), sys, c)
+    for c in getfield(sys, :constraints)
+        c.kind === :expr &&
+            _located(() -> (_check_copy_integral(c.expr, "constraints"); lower(c.expr, _proposal_env(T, rn))), sys, c)
     end
-    for u in sys.updates
+    for u in getfield(sys, :updates)
         _located(sys, u) do
             if u.phase === :on_copy
+                # Both sides: an index on the left (`y[ifelse(…, new, old)]`) runs at the copy too (D-129).
+                foreach(x -> _check_copy_integral(x, "on-copy updates"; when = "every accepted copy"),
+                        (u.eq.lhs, u.eq.rhs))
                 env = _proposal_env(T, rn)
                 lower(u.eq.rhs, env)
                 _write(_unwrap(u.eq.lhs), :v, env)
             else
                 r = info(_unwrap(u.eq.lhs)).role
                 lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn; key = :key) :
+                                r === :edge ? _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update) :
                                 _site_env(T, :i, rn; mcs = :mcs, key = :key))
             end
         end
     end
-    for eq in sys.equations
+    for eq in getfield(sys, :equations)
         _located(sys, eq) do
             x = arguments(_unwrap(eq.lhs))[1]
             r = info(x).role
@@ -642,37 +763,37 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
                           _site_env(T, :i, rn; mcs = :mcs, key = :key))
         end
     end
-    for d in sys.divisions
+    for d in getfield(sys, :divisions)
         _located(sys, d) do
             lower(d.when, cellenv)
             foreach(((x, r),) -> r isa Split || lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key)), d.rules)
         end
     end
-    for r in sys.link_rules
+    for r in getfield(sys, :link_rules)
         _located(() -> lower(r.when, _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)), sys, r)
     end
-    for b in sys.discrete
+    for b in getfield(sys, :discrete)
         env = b.scope === :cell ? cellenv : _model_env(T, rn; key = :key)
-        _located(() -> foreach(x -> (lower(x, env); _check_geometry(x, length(sys.lattice.dims))), b.next), sys, b)
+        _located(() -> foreach(x -> (lower(x, env); _check_geometry(x, length(getfield(sys, :lattice).dims))), b.next), sys, b)
     end
     # geometry axes, and names the lowering environments cannot rule out
-    N = length(sys.lattice.dims)
-    for e in sys.energies
+    N = length(getfield(sys, :lattice).dims)
+    for e in getfield(sys, :energies)
         _located(() -> _check_geometry(e.expr, N; energy = true), sys, e)
     end
-    for (x, items) in ((d -> d.expr, sys.drives), (c -> c.kind === :expr ? c.expr : 0, sys.constraints),
-            (u -> u.eq.rhs, sys.updates), (eq -> eq.rhs, sys.equations),
-            (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], sys.divisions))
+    for (x, items) in ((d -> d.expr, getfield(sys, :drives)), (c -> c.kind === :expr ? c.expr : 0, getfield(sys, :constraints)),
+            (u -> u.eq.rhs, getfield(sys, :updates)), (eq -> eq.rhs, getfield(sys, :equations)),
+            (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)))
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N), vcat(x(i))), sys, i), items)
     end
     # `integral(Pre(x))` is the block-start fold of an update block (D-042). Outside the
     # blocks `Pre(x)` is the stored value, so the integral would silently be another one.
-    for (x, items) in ((eq -> eq.rhs, sys.equations), (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], sys.divisions),
-            (r -> r.when, sys.link_rules), (b -> b.next, sys.discrete), (o -> o.expr, sys.observed))
+    for (x, items) in ((eq -> eq.rhs, getfield(sys, :equations)), (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)),
+            (r -> r.when, getfield(sys, :link_rules)), (b -> b.next, getfield(sys, :discrete)), (o -> o.expr, getfield(sys, :observed)))
         foreach(i -> _located(() -> foreach(_check_integral_pre_outside, vcat(x(i))), sys, i), items)
     end
-    _check_integral_pre_outside(sys.sweep.temperature)
-    for o in sys.observed
+    _located(() -> _check_integral_pre_outside(getfield(sys, :sweep).temperature), sys, getfield(sys, :sweep))   # D-133
+    for o in getfield(sys, :observed)
         _located(sys, o) do
             _check_geometry(o.expr, N)
             _has_op(o.expr, history_lag) &&
@@ -697,6 +818,17 @@ function _check_integral_pre_outside(x)
         "`integral(Pre(x))` is only available in update blocks, where it folds the values before the " *
         "block; elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
         "the block (`s ~ integral(Pre(x))`), or write `integral(x)`"))
+    return nothing
+end
+
+# Drives and expression constraints are evaluated at every copy attempt (D-125), and on-copy
+# updates, both sides, at every accepted copy (D-129); σ changes with each accepted copy, while
+# an integral is refreshed only between sweeps.
+function _check_copy_integral(x, what; when = "every copy attempt")
+    _has_op(x, cell_integral) && throw(ArgumentError(
+        "`integral` is not available in $what: they are evaluated at $when, while an " *
+        "integral is refreshed only between sweeps. Keep it in a cell variable updated @before_mcs " *
+        "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"))
     return nothing
 end
 

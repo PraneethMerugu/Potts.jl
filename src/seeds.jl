@@ -29,3 +29,31 @@ ids do too. Use it wherever a seed is derived from another seed, e.g.
 function _substream_seed(seed::Integer, stream::Union{Symbol, AbstractString})
     return _splitmix64(_splitmix64(UInt64(seed)) ⊻ UInt64(CorePotts.stream_id(stream)))
 end
+
+"""
+    Potts.layer_rng(seed) -> StableRNG
+    Potts.layer_rng(seed, stream) -> StableRNG
+
+The random stream of a randomized layout layer or initial-state builder with top-level seed
+`seed` (an integer in `0:typemax(UInt64)`): `StableRNG(UInt64(seed))`, or, for the named
+sub-stream `stream` (a `Symbol` or string), `StableRNG(Potts._substream_seed(seed, stream))`
+(D-093). Both are the same on every Julia version (StableRNGs). Use the two-argument form for
+a second, independent stream drawn from the same seed (for example a builder's clocks next
+to its layout): a seed derived as `seed + 1` would give a shifted copy of the first stream.
+Throws an `ArgumentError` for a seed outside `0:typemax(UInt64)`.
+
+```julia
+rng = Potts.layer_rng(seed, :clock)
+clocks = [rand(rng, 0:74) for _ in 1:n]
+```
+"""
+layer_rng(seed::Integer) = (_check_seed(seed, "layer_rng"); StableRNG(UInt64(seed)))
+function layer_rng(seed::Integer, stream::Union{Symbol, AbstractString})
+    _check_seed(seed, "layer_rng")
+    return StableRNG(_substream_seed(seed, stream))
+end
+
+function _check_seed(seed::Integer, what)
+    0 <= seed <= typemax(UInt64) || throw(ArgumentError("$what: seed must be in 0:typemax(UInt64), got $seed"))
+    return nothing
+end

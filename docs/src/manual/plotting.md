@@ -13,8 +13,9 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 | `potts_legend(position, plot)` | a legend of the kinds |
 
 `pottsplot` attributes: `encoding` (`CellTypeEncoding()`, the default, colours by kind;
-`CellIdentityEncoding()` by cell; `ChannelEncoding(key)` by a channel), `boundaries = true`
-(cell outlines), `medium_color`, `obstacle_color`, `colormap`, `category_palette`.
+`CellIdentityEncoding()` by cell; `ChannelEncoding(key)` by a channel), `boundaries`
+(cell outlines; off by default, and never used in these docs), `medium_color`,
+`obstacle_color`, `colormap`, `category_palette`.
 
 ```@example plotting
 using Potts, MakiePotts, CairoMakie
@@ -44,7 +45,13 @@ fig = Figure(size = (900, 300))
 for (i, enc) in enumerate((CellTypeEncoding(), CellIdentityEncoding(), ChannelEncoding(key)))
     ax = Axis(fig[1, i]; aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, frame; encoding = enc, boundaries = true)
+    pottsplot!(ax, frame; encoding = enc)
+    if enc isa ChannelEncoding       # show the cells over the field as a translucent fill, not outlines
+        nx, ny = frame_size(frame)
+        ox, oy = frame_geometry(frame).origin
+        heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), [c != 0 ? 1.0 : NaN for c in Array(u.σ)];
+            colormap = [(:white, 0.35), (:white, 0.35)], colorrange = (0, 1), nan_color = :transparent)
+    end
 end
 fig
 ```
@@ -57,7 +64,7 @@ and `plot` are named tuples passed to the Makie figure, axis and `pottsplot`. To
 field, pass a vector of frames with channels, as in [Tutorial 2](@ref tutorial-chemotaxis).
 
 ```@example plotting
-record_potts("plotting_mix.mp4", sol; framerate = 10, title = "Mix", plot = (; boundaries = true),
+record_potts("plotting_mix.mp4", sol; framerate = 10, title = "Mix",
     figure = (; size = (300, 300)))
 nothing # hide
 ```

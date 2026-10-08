@@ -156,7 +156,8 @@ bit(b) = [(fig3[(i, r, w)][c + 1] >> (4 - b)) & 1 == 1 for i in 0:1, r in 0:1, w
 end
 
 @named ta = TumourAngiogenesis()
-tumour0 = VoronoiBall(4; radius = sqrt(131 / π), kinds = [:proliferating], seed = 1)  # 4 P cells, 131 px (p.13; S1 "Figure 9" B5) [R2]
+seed0   = Circle(Point(150.5, 150.5), sqrt(131 / π))    # tumour seed disc at the 300² lattice centre (= Center()); position UNSPECIFIED (11 §2A)
+tumour0 = Voronoi(RandomPoints(4; region = seed0, seed = 1); region = seed0, kinds = [:proliferating])  # 4 P cells, 131 px (p.13; S1 "Figure 9" B5); D-138
 vessel  = Tiling((8, 4); region = (1:300, 40:43), kinds = [:endothelial])      # vessel geometry UNSPECIFIED (11 §7 item 11): placeholder
 prob = PottsProblem(ta, layout(overlay(vessel, tumour0), ta), (0, 15 * 1440); seed = 1)   # 15 days (Fig 9)
 sol  = solve(prob, SequentialCPM(); saveat = 0:10:(15 * 1440))                 # S1 cadence 10 MCS (11 §9.1)
@@ -221,7 +222,7 @@ end
 | `@divide` | §2A; §4B claim 8 | p.9 ("double their size"), p.22 (EC daughters) |
 | Therapy event | §2A "Therapy"; §4B claim 10 | p.27–29, Figs 18–19 |
 | Observables (area, count, r_eq) | §5A V11a-5, -6, -6b, -7, -8, -10; §9.3 items 2, 5 | Figs 5, 9, 10, 11, 13, 18; S1 Data |
-| `VoronoiBall(4 …)`, 131 px | §2A "Initial conditions"; §9.1 | p.13, p.17; S1 "Figure 9" B5 |
+| `Voronoi(RandomPoints(4 …))` in a 131-px disc | §2A "Initial conditions"; §9.1 | p.13, p.17; S1 "Figure 9" B5 |
 | 15 days, 10-MCS saves | §3A, §9.1 | p.13 (1 MCS = 1 min); S1 cadence |
 | `ecad` Eqs 7–12, Table 1 values | §2B, §3B | 11b Eqs 7–12 p.15–16; Table 1 p.4 |
 | ν/α swap on type change | §2B "Threshold switching" | 11b p.4–5 |
@@ -251,7 +252,7 @@ end
 | Per-equation solvers (`@equations solver = … begin … end`) | planned **P6.0c**. The implicit field solver is **R14** |
 | `neighbors(c)`, `contact(c, o)` (medium included) | planned **R11a** |
 | `@transition`, `@retire`, `@discrete_events`; component state across transitions | planned **R3** (+ the R3 composition fix "scope across transitions") |
-| `VoronoiBall` layout | exists in PottsModels; moves to core in P6.1a5 (**R2**) |
+| `Voronoi`, `RandomPoints`, `Circle`/`Point` | exist in core (P6.1a5, D-138; `VoronoiBall` removed, no alias) |
 | Sub-clock: several Boolean ticks per MCS (run to the attractor) | **NEW** |
 | Component activation window (`ec.on ~ mcs >= 20`) | the coupling exists. A first-class `start = 20` is **NEW** |
 | Directed edge variables, incident-edge folds `links(c, rel)`, edge-scope `@after_mcs` | **NEW** |

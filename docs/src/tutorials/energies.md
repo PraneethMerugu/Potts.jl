@@ -89,7 +89,7 @@ for (i, S₀) in enumerate((40.0, 70.0, 110.0))
     s = solve(remake(prob; p = [:λₛ => 1.0, :S₀ => S₀]), SequentialCPM())
     ax = Axis(fig[1, i]; title = "S₀ = $S₀", aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
+    pottsplot!(ax, renderframe(s.u[end]))
 end
 fig
 ```
@@ -143,7 +143,7 @@ for (i, (label, J)) in enumerate(tables)
     s = solve(remake(base; p = [:J => J]), SequentialCPM())
     ax = Axis(fig[1, i]; title = label, aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
+    pottsplot!(ax, renderframe(s.u[end]))
 end
 fig
 ```
@@ -170,7 +170,7 @@ for (i, T) in enumerate((2.0, 10.0, 30.0))
     s = solve(remake(base; p = [:T => T], tspan = (0, 300)), SequentialCPM())
     ax = Axis(fig[1, i]; title = "T = $T", aspect = DataAspect())
     hidedecorations!(ax)
-    pottsplot!(ax, renderframe(s.u[end]); boundaries = true)
+    pottsplot!(ax, renderframe(s.u[end]))
 end
 fig
 ```

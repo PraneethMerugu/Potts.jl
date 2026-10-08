@@ -3,6 +3,9 @@
 using Test, Potts, PottsModels, Aqua
 using Potts: CorePotts
 using Statistics: mean
+# device selection (D-157): the acceptance files' device testsets run here only when
+# POTTS_GPU = metal | rocm; the GPU group runs them from test/gpu.jl
+isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
 
 function selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))
@@ -35,6 +38,16 @@ end
             [ownership => two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]]),
         ("Merks", MerksVasculogenesis(; name = :merks, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
             (; field_solver = ExplicitEuler(substeps = 2, lower = 0.0))),
+        ("Merks 2006", Merks2006(; name = :m6, lattice = (16, 16)),
+            layout(merks2006_layout(; lattice = (16, 16), n = 3, side = 4), (16, 16)), (; field_solver = ExplicitEuler(substeps = 15))),
+        ("Merks 2006 (hard connectivity)", Merks2006(; name = :m6, lattice = (16, 16), rule = :hard),
+            layout(merks2006_layout(; lattice = (16, 16), n = 3, side = 4), (16, 16)), (; field_solver = ExplicitEuler(substeps = 15))),
+        ("Merks 2008", Merks2008(; name = :m8, lattice = (16, 16)),
+            [layout(merks2008_denovo(; lattice = (16, 16), n = 4, rounds = 2), (16, 16)); :t_relax => 0.0],
+            (; field_solver = ExplicitEuler(substeps = 15))),
+        ("Merks 2008 (extension only)", Merks2008(; name = :m8, lattice = (16, 16), mode = :extension_only),
+            [layout(merks2008_denovo(; lattice = (16, 16), n = 4, rounds = 2), (16, 16)); :t_relax => 0.0],
+            (; field_solver = ExplicitEuler(substeps = 15))),
         ("single-division fixture", SingleDivisionFixture(; name = :fixture), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]]),
         ("OpenVT growing monolayer", OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24))),
     ]
@@ -108,19 +121,28 @@ end
         @test all(s -> count(==(:leader), akeeb_state(; seed = s, seeding = :retry)[2].second) == 390, 1:5)
         @test_throws ArgumentError akeeb_state(; seeding = :other)
     end
-    @test GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0).lattice.dims == (144, 144)
+    @test Potts.lattice(GranerGlazier(; name = :big, lattice = (144, 144), T = 5.0)).dims == (144, 144)
     @test occursin("Graner & Glazier", string(@doc GranerGlazier))
 end
 
-include("mechanisms.jl")
-include("papers.jl")
-include("siblings.jl")
-include("analysis.jl")
-include("guardrails.jl")
-include("frozen.jl")
-include("tutorial_models.jl")
-foreach(f -> include(joinpath(@__DIR__, "acceptance", f)), sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))
+# Every file runs in its own testset, all inside one: a file whose tests fail, or that
+# throws while loading, is recorded and the later files still run (a bare `include` chain
+# stopped at the first failing file's top-level testset). The outer testset throws at its
+# end, so a failure still exits non-zero. `include` evaluates each file at top level, so its
+# `const`s, structs and `@potts_model`s are globals as before.
+const POTTSMODELS_TEST_FILES = [
+    "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "openvt_analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
+    (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
+    # paper reproductions (ROADMAP Phase 6 "Acceptance for model reproductions"): the SMOKE
+    # tier runs here, the FULL tier under POTTS_FULL_REPRODUCTION=true
+    (joinpath("reproductions", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "reproductions")))))...,
+]
 
-@testset "Aqua" begin
-    Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
+@testset "PottsModels files" begin
+    @testset "$f" for f in POTTSMODELS_TEST_FILES
+        include(joinpath(@__DIR__, f))
+    end
+    @testset "Aqua" begin
+        Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
+    end
 end

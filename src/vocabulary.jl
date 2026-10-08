@@ -63,14 +63,27 @@ kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """
-`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope. A scope
+`variable(x, scope; default, guess, options...)`: tag an `x(t)` variable with its scope. Without
+`default` the variable starts at 0.0 and is free for `@initialization_equations` (D-170);
+`guess` (MTK's guess metadata) seeds its initialization solve. A scope
 outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@relationship
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 """
 const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship)
 
-function variable(x, scope::Symbol; default = 0.0, unit = nothing, kwargs...)
+# `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
+# before, and is marked `PottsNoValue`, so that initialization solves for it when its
+# scope's initialization conditions name it. A written value (`= 0.0` included) fixes it.
+struct _NoValue end
+const _NO_VALUE = _NoValue()
+"""Metadata key marking a variable declared without a value (D-170); see `_written`."""
+struct PottsNoValue end
+_written(x) = (u = Symbolics.unwrap(x); !(u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.getmetadata(u, PottsNoValue, false)))
+
+function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, kwargs...)
+    written = !(default isa _NoValue)
+    written || (default = 0.0)
     options = NamedTuple(kwargs)
     if !(scope in SCOPES)
         haskey(options, :relationship) && throw(ArgumentError("`relationship` is given twice"))
@@ -83,12 +96,17 @@ function variable(x, scope::Symbol; default = 0.0, unit = nothing, kwargs...)
         throw(ArgumentError("variable `$name`: `relationship` applies to edge variables"))
     for (k, v) in pairs(options)
         k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
-                                                      "(options: `unit`, `clear_on_ownership_change`)"))
+                                                      "(options: `unit`, `guess`, `clear_on_ownership_change`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
     end
-    return _with_unit(_tag(x, Info(scope, name, default, options)), unit)
+    v = _with_unit(_tag(x, Info(scope, name, default, options)), unit)
+    written || (v = _with_metadata(v, PottsNoValue, true))
+    # `[guess = g]` (MTK's variable metadata): seeds the variable's initialization solve
+    guess === nothing || (v = ModelingToolkitBase.setguess(v, guess))
+    return v
 end
+_with_metadata(x, key, value) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), key, value))
 
 # ---------------------------------------------------------------------------------------
 # Vector quantities: `p(cell)[1:2]`, `d[1:3] = …` declare scalar components `p_1, p_2, …`
@@ -123,12 +141,13 @@ function _check_components(name, v, n)
     return v
 end
 
-function vector_variable(name::Symbol, r, scope::Symbol; default = 0.0, unit = nothing, options...)
+function vector_variable(name::Symbol, r, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, options...)
     n = _vector_length(r)
     _check_components(name, default, n)
+    _check_components(name, guess, n)
     return QuantityVector(name, [variable(only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
                                      default = _component(default, i), unit = _component(unit, i),
-                                     vector = name, index = i, options...) for i in 1:n])
+                                     guess = _component(guess, i), vector = name, index = i, options...) for i in 1:n])
 end
 """`vector_parameter(name, 1:n, default; unit)`: components `name_i` of a vector parameter."""
 function vector_parameter(name::Symbol, r, default; unit = nothing)
@@ -279,7 +298,8 @@ initial value. Lags are available where the MCS clock is: updates, equations,
 division conditions and rules, link rules.
 """
 _pre(x) = ModelingToolkitBase.Pre(x)
-_pre(v::AbstractVector, k...) = [_pre(x, k...) for x in v]
+_pre(v::AbstractVector) = [_pre(x) for x in v]
+_pre(v::AbstractVector, k::Integer) = [_pre(x, k) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
 
 """
@@ -308,11 +328,11 @@ _rand() = random_uniform(Num(_next_number!()))
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
 # a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
-_index(x::Num, i) = SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i)
+_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i))
 _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
-_index(x::Num, i, j) = at2(x, i, j)
-_index(x, i...) = getindex(x, i...)
+_index(x::Num, i, j) = (_no_class_index(i, j); at2(x, i, j))
+_index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 
 """
 `x′` of a site (or field) variable `x`: its value at the other site `s′` of a contact pair
@@ -358,6 +378,7 @@ _around(spec, anchor) = Around(spec, anchor)
 fold for `cells(k)`, else plain Julia."""
 function _fold_or_gather(fold, body, R, s, cond)
     R isa Union{CorePotts.RelationSpec, RelationRef} && return _gather(fold, body, Around(R, s), cond)
+    R isa ContactDomain && return _contact_fold(fold, body, R(s), cond)          # `contacts(rel)` (D-150)
     R === cells && return _population(fold, body, cells(s), cond)
     return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
 end
@@ -366,6 +387,7 @@ end
 function _fold_iter(fold, body, itr, cond)
     itr === cells && (itr = CellDomain(Int[]))
     itr isa Union{CellDomain, SiteDomain} && return _population(fold, body, itr, cond)
+    itr isa ContactDomain && return _contact_fold(fold, body, itr, cond)         # a cell's contacts (D-150)
     return cond === nothing ? fold(body(n) for n in itr) : fold(body(n) for n in itr if cond(n))
 end
 
@@ -406,6 +428,85 @@ function _gather(fold, body, a::Around, cond = nothing)
 end
 
 # ---------------------------------------------------------------------------------------
+# Kind classes (D-135): a named set of cell kinds, declared in `@kinds` as `name = (k, …)`
+
+"""
+    KindClass
+
+A named set of cell kinds, declared in `@kinds` as `name = (kind, …)` (members are kinds
+or earlier classes, flattened in order). A class is usable wherever a list of kinds is:
+`cells(g)`, `clusters(g)`, `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`,
+`Chemotaxis(…; kinds = g)`, mixed with kinds (`cells(g, k)`). On a symbolic kind,
+`kind[x] ∈ g` is `(kind[x] == k₁) | … | (kind[x] == kₙ)` in member order and `kind[x] ∉ g`
+its negation, so a class costs nothing at run time. `∈ g` is meant for kind-valued
+expressions (`kind`, `kind′`, `kind[new]`, `kind[c]`, …): on any other quantity it compares
+that value with the kind numbers. `kind == g` is an error (a kind is never equal to a
+set of kinds). A class is not an index into a kind table, and operating points and layouts
+take kinds, not classes.
+
+`PottsSystem(; kind_classes = [KindClass(:name, [k₁, …])])` declares classes
+programmatically (kind numbers: the medium is 0, then the cell kinds in order).
+"""
+struct KindClass
+    name::Symbol
+    kinds::Vector{Int}
+end
+Base.iterate(g::KindClass, i...) = iterate(g.kinds, i...)
+Base.length(g::KindClass) = length(g.kinds)
+Base.isempty(g::KindClass) = isempty(g.kinds)
+Base.eltype(::Type{KindClass}) = Int
+Base.:(==)(g::KindClass, h::KindClass) = g.name === h.name && g.kinds == h.kinds
+Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)))
+Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
+Base.in(x::Integer, g::KindClass) = x in g.kinds
+# `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
+_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with `kind ∈ $(g.name)`"))
+Base.:(==)(::Num, g::KindClass) = _class_compare(g)
+Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
+Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
+Base.:(!=)(g::KindClass, ::Num) = _class_compare(g)
+# on a symbolic kind: an unrolled `|` of equalities with constant kind numbers, folded left
+# in member order (the same expression as the explicit `(x == k₁) || (x == k₂) || …`)
+function Base.in(x::Num, g::KindClass)
+    ks = g.kinds
+    isempty(ks) && throw(ArgumentError("kind class `$(g.name)` is empty"))
+    r = x == ks[1]
+    for i in 2:length(ks)
+        r = r | (x == ks[i])
+    end
+    return r
+end
+
+"""Build the class `name` from its members' names and values (kind numbers or classes)."""
+function _kind_class(name::Symbol, names::Tuple, members::Tuple)
+    isempty(members) && throw(ArgumentError("kind class `$name` is empty; list at least one kind"))
+    ks = Int[]
+    for (n, m) in zip(names, members)
+        if m isa KindClass
+            append!(ks, m.kinds)
+        elseif m isa Integer && !(m isa Bool)
+            m == 0 && throw(ArgumentError("kind class `$name` lists the medium `$n`, which is not a cell kind; " *
+                                          "write `kind[x] == $n || kind[x] ∈ $name` instead"))
+            push!(ks, m)
+        else
+            throw(ArgumentError("kind class `$name`: `$n` is not a kind or an earlier kind class"))
+        end
+    end
+    allunique(ks) || throw(ArgumentError("kind class `$name` lists a kind twice (after flattening its classes): $(Tuple(ks))"))
+    return KindClass(name, ks)
+end
+function _no_class_index(is...)
+    for i in is
+        i isa KindClass && throw(ArgumentError("`$(i.name)` is a kind class and cannot index a kind table; " *
+                                               "index by a kind (e.g. `J[kind, kind′]`) and gate with `kind ∈ $(i.name)`"))
+    end
+    return nothing
+end
+"""Kind numbers of a list of kinds and classes, classes flattened in place."""
+_flat_kinds(ks) = Int[k for x in ks for k in (x isa KindClass ? x.kinds : (x,))]
+const _KindArg = Union{Integer, KindClass}
+
+# ---------------------------------------------------------------------------------------
 # Domains, statements
 
 """Energy domains: `cells(kinds...)`, `contacts`, `contacts(relation)`, `sites`."""
@@ -422,8 +523,8 @@ struct ClusterDomain
     kinds::Vector{Int}
 end
 
-cells(kinds::Integer...) = CellDomain(collect(Int, kinds))
-clusters(kinds::Integer...) = ClusterDomain(collect(Int, kinds))
+cells(kinds::_KindArg...) = CellDomain(_flat_kinds(kinds))
+clusters(kinds::_KindArg...) = ClusterDomain(_flat_kinds(kinds))
 (d::ContactDomain)(relation::Symbol) = ContactDomain(relation)
 const contacts = ContactDomain(:contact)
 const sites = SiteDomain()
@@ -463,14 +564,53 @@ a constraint over the proposal-scope connectivity values, applied when the losin
   frame as a cell, so at a closed edge the two rules can differ. Zero arcs pass, so the
   last site can be taken.
 
+Both rules read the target's neighbour shell (8 sites on a square lattice, 6 on a hexagonal
+one, 26 in 3D; see `CorePotts.ring_arcs`), so they hold on every geometry.
+
 Other rules are expressions: a soft penalty is `@drive copy => λ * (local_components > 1)`.
+The soft arc-or-pair rule (TST's `conn_diss`, Merks' E₀ threshold shift under Metropolis)
+charges `E₀` to every copy the rule would refuse:
+
+    @drive copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
+
+Connectivity of the whole cell (not only around the target) is `components(x; scope =
+Global())`, reserved until P6.9.
 """
-function connectivity(kinds::Integer...; rule::Symbol = :local)
+function connectivity(kinds::_KindArg...; rule::Symbol = :local)
     rule in _CONNECTIVITY_RULES ||
         throw(ArgumentError("connectivity: unknown rule `:$rule` (one of $(join(repr.(_CONNECTIVITY_RULES), ", ")))"))
     test = rule === :local ? (B.local_components == 1) : ((B.ring_arcs <= 1) | ((B.ring_cells == 2) & (B.ring_medium == 0)))
-    return Constraint(:connectivity, collect(Int, kinds), test)
+    return Constraint(:connectivity, _flat_kinds(kinds), test)
 end
+"""
+    Global(; window = nothing)
+
+The global scope of [`components`](@ref): connectivity of the whole cell, not of the
+target's neighbour shell. `window` is `nothing` or a positive number of MCS. A reserved
+placeholder: using it in a model is an `ArgumentError` until P6.9.
+"""
+struct Global
+    window::Union{Nothing, Int}
+    function Global(; window = nothing)
+        window === nothing || (window isa Integer && window > 0) ||
+            throw(ArgumentError("Global: `window` must be `nothing` or a positive integer, got $(repr(window))"))
+        return new(window === nothing ? nothing : Int(window))
+    end
+end
+
+"""
+    components(x; scope = Global())
+
+The number of pieces of cell `x` (e.g. `old`) over `scope`. Only `Global()` is a scope, and
+it is not available yet: a model that uses it raises an `ArgumentError` when it is built.
+The local count around the target is the proposal value `local_components`.
+"""
+function components(x; scope = Global())
+    scope isa Global || throw(ArgumentError("components: `scope` must be `Global()`, got $(repr(scope))"))
+    throw(ArgumentError("global connectivity (`Global()`) is not available yet (P6.9); the local " *
+                        "rules (`connectivity`, `local_components`, `ring_arcs`) read the target's neighbour shell"))
+end
+
 """`no_extinction`: forbid copies that remove a cell's last site."""
 const no_extinction = Constraint(:no_extinction, Int[], nothing)
 
@@ -511,20 +651,54 @@ function link_rule(action::Symbol, r::RelationshipRef, args...; when, every = no
 end
 
 """
-Bind each unscoped edge variable `x(edge)` of one model body to that body's only
-relationship, when the body is built (before `@extend` merges it with others, so a base's
-`rest(edge)` stays its own relationship's). A body declaring several relationships leaves
-them unscoped; `mtkcompile` reports them as ambiguous.
+Bind each unscoped edge variable `x(edge)` of one model body, when the body is built
+(before `@extend` merges it with others, so a base's `rest(edge)` stays its own
+relationship's). A re-declaration of an edge variable of one of `bases` (the body's
+`@extend`s) keeps that variable's relationship, whatever relationships the body declares;
+only its default is the body's. A new one binds to the body's only relationship (marked
+`implicit_relationship`, so a later functional `extend` over a base declaring it may still
+re-bind it); a body declaring several leaves it unscoped, and `mtkcompile` reports it as
+ambiguous. Two bases declaring one edge variable on different relationships is an
+`ArgumentError`.
 """
-function _bind_edge_scope(vars, rels)
-    length(rels) == 1 || return vars
-    r = only(rels).name
+function _bind_edge_scope(vars, rels, bases = ())
+    # D-127: a payload column belongs to one relationship, so a re-declaration inherits it
+    inherited = Dict{Symbol, Symbol}()
+    from = Dict{Symbol, Symbol}()                      # edge variable → the base declaring it
+    for b in bases, (n, r) in _edge_relationships(getfield(b, :variables))
+        old = get!(inherited, n, r)
+        old === r || throw(ArgumentError("bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
+            "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"))
+        get!(from, n, nameof(b))
+    end
+    own = length(rels) == 1 ? only(rels).name : nothing
+    isempty(inherited) && own === nothing && return vars
     return map(vars) do x
         i = info(x)
-        (i.role === :edge && !haskey(i.options, :relationship)) || return x
-        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+        (i !== nothing && i.role === :edge && !haskey(i.options, :relationship)) || return x
+        r = get(inherited, i.name, nothing)
+        r === nothing || return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+        own === nothing && return x
+        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = own, implicit_relationship = true)))
     end
 end
+"""Edge variable name → relationship, for the edge variables among `xs` bound to one."""
+function _edge_relationships(xs)
+    out = Dict{Symbol, Symbol}()
+    for x in xs
+        i = info(x)
+        i !== nothing && i.role === :edge && haskey(i.options, :relationship) &&
+            (out[i.name] = i.options.relationship)
+    end
+    return out
+end
+"""`x` with its relationship settled: the `implicit_relationship` mark dropped."""
+function _settle_edge_scope(x)
+    i = info(x)
+    (i !== nothing && i.role === :edge && haskey(i.options, :implicit_relationship)) || return x
+    return _tag(x, Info(:edge, i.name, i.default, _without_implicit(i.options)))
+end
+_without_implicit(o::NamedTuple) = (; (k => v for (k, v) in pairs(o) if k !== :implicit_relationship)...)
 """`new_contact(a, b)`: the pair touches and is not yet linked (the candidates of `@link`)."""
 new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)
@@ -538,7 +712,15 @@ struct Update
     eq::Equation
     every::Int
 end
-"""`Every(n)`: the cadence of an update or rule (`@divide`, `@link`): it runs at MCS where `mcs % n == 0`."""
+"""
+    Every(n)
+
+The cadence of an update or rule: `@before_mcs Every(n) …`, `@after_mcs Every(n) …`,
+`@divide … Every(n)`, `@link … Every(n)`. It runs at the MCS where `mcs % n == 0`, with MCS
+numbered from 0, so `@after_mcs Every(5)` runs after MCS 0, 5, 10, … and its writes are seen
+at t = 1, 6, 11, …. The default is `Every(1)`, every MCS; `n ≥ 1`.
+[`Potts.updates`](@ref) reports each update's cadence as an `Every`.
+"""
 struct Every
     n::Int
     Every(n::Integer) = n >= 1 ? new(Int(n)) : throw(ArgumentError("Every(n) needs n ≥ 1; got $n"))
@@ -660,6 +842,14 @@ Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`
 `solvers` map. One integrator is created on first use and re-initialized per cell and per
 MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
 systemic models, at host speed (a device state is copied once per MCS).
+
+Every keyword and algorithm field enters the problem fingerprint, so a checkpoint resumes
+only under an equal solver. Values must be at most 8 levels deep and not cyclic (deeper
+ones are an `ArgumentError` when the problem is built). An anonymous function or closure
+(`isoutofdomain = (u, p, t) -> any(<(0), u)`, `Rodas5P(step_limiter! = …)`) is accepted, but
+it has no name that survives the Julia session: its problem's checkpoints load only in the
+session that made them. To resume in a new session, pass a named function defined at the
+top level or an instance of a callable struct (or a stable wrapper such as `Returns(false)`).
 """
 struct Adaptive{A, K}
     alg::A
@@ -680,7 +870,66 @@ struct SweepSpec
     combine::Any              # combines the source and target cells' temperatures
     offset::Float64
     mcs_duration::Float64
+    # D-126: the `offset`, `combine` and `mcs_duration` checks live here, in that order, so a
+    # hand-built `SweepSpec` passed to `PottsSystem(; sweep)` is checked as `@sweep` checks it
+    function SweepSpec(law::Symbol, temperature, combine, offset, mcs_duration)
+        o = _sweep_offset(offset)
+        _sweep_combine(combine)
+        return new(law, temperature, combine, o, _sweep_mcs_duration(mcs_duration))
+    end
 end
+# D-123: a finite real, also after conversion to Float64
+function _sweep_offset(offset)
+    o = offset isa Real ? (try Float64(offset) catch; NaN end) : NaN
+    isfinite(o) || throw(ArgumentError(
+        "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
+        "pass a finite number (`offset = 0` disables it)"))
+    return o
+end
+# D-126: a positive, finite real, also after conversion to Float64 (a `BigFloat` can overflow
+# to Inf or underflow to 0); a symbolic parameter does not convert and is rejected
+function _sweep_mcs_duration(mcs_duration)
+    md = mcs_duration isa Real ? (try Float64(mcs_duration) catch; NaN end) : NaN
+    (isfinite(md) && md > 0) || throw(ArgumentError(
+        "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
+        "it is the time one MCS stands for (default 1.0)"))
+    return md
+end
+# D-123: `combine` is interpolated into the generated temperature code, whose printed form
+# the fingerprint hashes, so it must print the same in every session. Test exactly that
+# printed form: a compiler-generated name (`var"#…"`: an anonymous function, a closure, a
+# local named function, a gensym'd module, or any of these inside a wrapper's type or
+# fields) carries a session counter. Module paths such as Pluto's `var"workspace#3"` pass:
+# stable within a session, the user's contract across sessions.
+_stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
+_sweep_combine(combine) = _stable_callable(combine) || throw(ArgumentError(
+    "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+    "function or closure, or a wrapper holding one, is named differently in every session, so " *
+    "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+    "`combine = f`, or a callable struct whose fields are values, not anonymous functions"))
+"""
+    sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
+
+The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
+`@sweep Barker(; …)` (`law = :barker`).
+
+- `offset` must be finite; NaN and ±Inf are an `ArgumentError`.
+- `mcs_duration`, the time one MCS stands for, must be a positive, finite real number; NaN,
+  ±Inf, 0, negative values, a `BigFloat` beyond the `Float64` range, non-numbers and a
+  symbolic parameter are an `ArgumentError`, so the system does not build. It is stored as
+  `Float64(mcs_duration)`.
+- `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
+  at the top level and passed as `combine = amean`), a composition of named functions
+  (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous
+  function, a closure, a function defined inside another function, or a wrapper holding
+  one (`Base.Fix2((a, b) -> a, 1)`, a struct with an anonymous-function field) is an
+  `ArgumentError`: its compiler-generated name changes between Julia sessions, so a
+  checkpoint written in one session would not load in the next. To carry parameters, use
+  a callable struct (`struct Mix; w::Float64; end; (m::Mix)(a, b) = m.w * a + (1 - m.w) * b`).
+
+A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks `offset`,
+`combine` and `mcs_duration` the same way.
+"""
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
     for k in keys(kwargs)
         k in (:field_solver, :ode_solver, :solvers) && throw(ArgumentError(
@@ -689,16 +938,17 @@ function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_d
     end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
-    return SweepSpec(law, temperature, combine, Float64(offset), Float64(mcs_duration))
+    # `offset`, `combine` and `mcs_duration` are checked by the constructor, in that order
+    return SweepSpec(law, temperature, combine, offset, mcs_duration)
 end
 
 # ---------------------------------------------------------------------------------------
 # Library one-liners (AUTHORING §4): functions returning the same `domain => expr` pairs
 
 """`Volume(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (volume - target)^2`."""
-Volume(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
+Volume(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.volume - target)^2
 """`Surface(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (surface - target)^2`."""
-Surface(kinds::Integer...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
+Surface(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
 """`Adhesion(J)` ≡ `contacts => J[kind, kind′]` for a kind table `J`."""
 Adhesion(J) = contacts => _index(J, B.kind, B.kind′)
 """
@@ -716,7 +966,8 @@ concentration (`identity`, `saturating(s)` = `c/(s + c)`, `saturating_linear(s)`
   (`kind[new] ∈ kinds`), so retractions stay 0 whatever `when` says.
 """
 function Chemotaxis(c; strength, response::F = identity, kinds = (), when = (B.new != 0)) where {F}
-    gate = isempty(kinds) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in kinds]) & when)
+    ks = _flat_kinds(kinds)          # kinds and kind classes, flattened in order
+    gate = isempty(ks) ? when : (foldl(|, [_index(B.kind, B.new) == k for k in ks]) & when)
     return COPY => ifelse(gate, -strength * (response(_index(c, B.target)) - response(_index(c, B.source))), 0.0)
 end
 
@@ -730,13 +981,132 @@ struct ObservedEq
     expr::Any
 end
 
+# ---------------------------------------------------------------------------------------
+# Field boundaries (`@boundary`, D-145) and the phase order (`@schedule`)
+
+"""
+    Dirichlet(v)
+
+A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), …)`) a ghost
+value, the missing neighbour set to `2v − c` so that the face value `v` is reached midway
+between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
+value, every site where `pred` holds set to `v` after every explicit substep. `v` is a
+number, a parameter or a parameter expression (a `remake` of the parameter keeps the code).
+"""
+struct Dirichlet{V}
+    value::V
+end
+
+"""
+    NoFlux()
+
+A zero-flux face in `@boundary` (`x => (NoFlux(), …)`): the missing neighbour mirrors the
+edge site. A closed axis without an entry is zero flux already.
+"""
+struct NoFlux end
+
+"""
+One entry of a `@boundary` block of field `field`: a face pair on axis `axis` (1, 2, 3 for
+`x`, `y`, `z`) with `sides = (low, high)`, each `Dirichlet` or `NoFlux`; or, with `axis = 0`,
+a site mask `sites(mask) => Dirichlet(value)`.
+"""
+struct BoundaryEntry
+    field::Any                 # the field variable (symbolic)
+    axis::Int
+    sides::Tuple{Any, Any}
+    mask::Any
+    value::Any
+end
+
+const _AXIS_NAMES = (:x, :y, :z)
+
+function _boundary_field(x)
+    i = info(x)
+    (i !== nothing && i.role === :field) || throw(ArgumentError(
+        "@boundary `$(i === nothing ? x : i.name)`: boundaries are for field variables (`c(field)`), and " *
+        "`$(i === nothing ? x : i.name)` is $(i === nothing ? "not a declared variable" : _with_article("$(i.role) variable"))"))
+    return x
+end
+_boundary_side(s::Union{Dirichlet, NoFlux}, field, axis, what) = s isa Dirichlet ? Dirichlet(_boundary_value(s.value, field, "`$axis` $what face")) : s
+_boundary_side(s, field, axis, what) = throw(ArgumentError(
+    "@boundary $(info(field).name): the $what side of axis `$axis` is `$s`; each side is `Dirichlet(value)` or `NoFlux()`"))
+function _boundary_value(v, field, what)
+    u = _unwrap(v)
+    u isa Real && return Float64(u)                  # a number (`Num` is a `Real` too: unwrapped first)
+    u isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
+        "@boundary $(info(field).name): the $what value is `$v`; give a number, a parameter or a parameter expression"))
+    for y in _leaves(u)
+        j = info(y)
+        (j === nothing || j.role === :param) || throw(ArgumentError(
+            "@boundary $(info(field).name): the $what value `$v` reads `$(j.name)`; a boundary value is a number, a " *
+            "parameter or a parameter expression"))
+    end
+    return v
+end
+
+"""`x => (low, high)` of `@boundary field` (axis named `name`)."""
+function boundary_face(field, name::Symbol, sides)
+    _boundary_field(field)
+    axis = findfirst(==(name), _AXIS_NAMES)
+    axis === nothing && throw(ArgumentError("@boundary $(info(field).name): unknown axis `$name`; the axes are x, y, z"))
+    (sides isa Tuple && length(sides) == 2) || throw(ArgumentError(
+        "@boundary $(info(field).name): `$name => …` takes a pair of sides `(low, high)`, each `Dirichlet(value)` or `NoFlux()`"))
+    return BoundaryEntry(field, axis, (_boundary_side(sides[1], field, name, "low"), _boundary_side(sides[2], field, name, "high")),
+        nothing, nothing)
+end
+
+"""`sites(pred) => Dirichlet(v)` of `@boundary field`."""
+function boundary_mask(field, pred, value)
+    _boundary_field(field)
+    value isa Dirichlet || throw(ArgumentError(
+        "@boundary $(info(field).name): `sites(…) => $value`; a site mask takes `Dirichlet(value)`"))
+    (pred isa Bool || _unwrap(pred) isa SymbolicUtils.BasicSymbolic) || throw(ArgumentError(
+        "@boundary $(info(field).name): `sites($pred)` takes a site condition, e.g. `sites(kind == border)`"))
+    return BoundaryEntry(field, 0, (nothing, nothing), pred, _boundary_value(value.value, field, "site-mask"))
+end
+
+"""The canonical phases of one MCS, in their default order (`@schedule`, D-145)."""
+const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
+
+"""
+    _placed_schedule(listed) -> Vector{Symbol}
+
+The full phase order of `@schedule listed…` (D-145): the listed phases in the listed order;
+each unlisted phase, in default order, right after the last placed phase that precedes it in
+the default order (first if none). Checks the names and the order rules, naming the offender.
+"""
+function _placed_schedule(listed)
+    seen = Symbol[]
+    for n in listed
+        n isa Symbol || throw(ArgumentError("@schedule lists phase names; got `$n`"))
+        n in SCHEDULE_PHASES || throw(ArgumentError(
+            "@schedule: unknown phase `$n`; the phases are $(join(SCHEDULE_PHASES, ", "))"))
+        n in seen && throw(ArgumentError("@schedule: phase `$n` is listed twice"))
+        push!(seen, n)
+    end
+    :end_mcs in seen && last(seen) !== :end_mcs && throw(ArgumentError(
+        "@schedule: `end_mcs` must be last (the MCS boundary: history, callbacks, saving)"))
+    seq = copy(seen)
+    for (j, ph) in enumerate(SCHEDULE_PHASES)
+        ph in seq && continue
+        pos = maximum((findfirst(==(q), seq) for q in SCHEDULE_PHASES[1:(j - 1)] if q in seq); init = 0)
+        insert!(seq, pos + 1, ph)
+    end
+    at(n) = findfirst(==(n), seq)
+    at(:before_mcs) < at(:sweep) || throw(ArgumentError(
+        "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"))
+    at(:after_mcs) > at(:sweep) || throw(ArgumentError(
+        "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"))
+    return seq
+end
+
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
-const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction,
+const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, components,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
-    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand,
+    RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ)
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

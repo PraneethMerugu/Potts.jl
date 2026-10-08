@@ -1,0 +1,18 @@
+page_sha256 = "db4b7027836b7f1dfcbbfc8b2e43429a17ae355b75313ce098870ee668872572"
+env = "POTTS_FULL_REPRODUCTION=true"
+threads = 12
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+wall_s = 675.8
+decision = "D-156"
+dirty = false
+finished = "2026-10-07T10:41:43.541"
+hostname = "praneeth-NucBox-EVO-X2"
+executed_substitution = "plot = (; boundaries = true, => plot = (; boundaries = false, (D-156: no cell outlines; rendering only)"
+affinity = "taskset -c 0-11,16-27"
+started = "2026-10-07T10:30:27.274"
+machine = "x86_64-linux-gnu"
+julia = "1.12.6"
+commit = "246427f1e13f9e814529cfd2b373840ac6704d18"
+item = "P6.2d"
+page = "lib/PottsModels/reproductions/10_akeeb.jl"
+commit_date = "2026-10-07"

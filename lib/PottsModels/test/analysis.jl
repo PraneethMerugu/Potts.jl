@@ -227,3 +227,59 @@ end
     @test length(g) == k && all(c -> length(g[c]) <= 4, 1:k)
     @test bytes < 50 * 2^20                                  # ~2 MB measured; no per-site allocation
 end
+
+@testset "akeeb_observables reads kinds only of ids that own sites" begin
+    # 6 × 5: follower 1 at (3, 2) is the main tumour; leader 3 at (5, 4) is alone above it;
+    # id 2 owns no site, so its kind (here not a leader or follower) is never read
+    σ = zeros(Int, 6, 5)
+    σ[3, 2] = 1
+    σ[5, 4] = 3
+    o = akeeb_observables(σ, [:follower, :medium, :leader])
+    @test (o.singles, o.detached, o.clusters, o.fingers) == (1, 1, 0, 0)
+    @test o.invasive === 0.0 && o.infiltrative === 0.0         # one kept column (x = 3)
+    # negative control: once id 2 owns a site its kind is checked
+    σ[2, 4] = 2
+    @test_throws ArgumentError akeeb_observables(σ, [:follower, :medium, :leader])
+end
+
+@testset "akeeb_phenotype: the authors' area-equality classifier (V-A6, P6.2d)" begin
+    o(inv, inf, f, s, c) = (; invasive = inv, infiltrative = inf, fingers = f, singles = s, clusters = c)
+    @test akeeb_phenotype(o(2233.0, 2233.0, 0, 0, 0)) === :none
+    @test akeeb_phenotype(o(2950.0, 3100.5, 0, 7, 0)) === :single
+    @test akeeb_phenotype(o(4897.0, 4897.0, 4, 0, 0)) === :bulk
+    @test akeeb_phenotype(o(15734.0, 44029.0, 12, 204, 5)) === :multimodal
+    @test akeeb_phenotype(o(15734.0, 44029.0, 12, 204, 0)) === :multimodal     # clusters ≥ 0
+    # the areas are compared exactly: half a pixel of detached area is not "no invasion"
+    @test akeeb_phenotype(o(2233.0, 2233.5, 0, 0, 0)) === :unclassified
+    @test akeeb_phenotype(o(4897.0, 4897.5, 4, 0, 0)) === :unclassified
+    # the authors' 42 unclassified rows: fingers and detached area but no singles
+    @test akeeb_phenotype(o(5464.0, 5515.0, 9, 0, 1)) === :unclassified
+    @test akeeb_phenotype(o(2950.0, 3100.5, 0, 7, 1)) === :unclassified       # singles + clusters, no fingers
+    # it reads the fields of `akeeb_observables`
+    σ = zeros(Int, 6, 5)
+    σ[3, 2] = 1
+    @test akeeb_phenotype(akeeb_observables(σ, [:follower])) === :none
+    σ[5, 4] = 2
+    @test akeeb_phenotype(akeeb_observables(σ, [:follower, :leader])) === :unclassified # one kept column
+    # oracle: the authors' `phenotype_classification.csv` is this classifier applied to
+    # `invasion_metrics.csv` with the unclassified rows dropped (spec 10 §5.3.5), when the
+    # released data are on disk (`docs/references` is gitignored)
+    data = joinpath(get(ENV, "POTTS_REFERENCES", joinpath(@__DIR__, "..", "..", "..", "docs", "references")),
+        "codebases", "10_Akeeb2026_Leader_Follower_Invasion_Model", "Data")
+    if isfile(joinpath(data, "phenotype_classification.csv"))
+        rows(f) = [split(l, ',') for l in eachline(joinpath(data, f))][2:end]
+        A = filter(r -> !isempty(r[4]), rows("invasion_metrics.csv"))
+        P = rows("phenotype_classification.csv")
+        name = Dict(:none => "No invasion", :single => "Single cell invasion", :bulk => "Bulk invasion",
+            :multimodal => "Multimodal invasion")
+        labels = [akeeb_phenotype(o(parse.(Float64, r[4:5])..., parse(Float64, r[7]), parse(Float64, r[6]),
+                      parse(Float64, r[9]))) for r in A]
+        @test count(==(:unclassified), labels) == 42
+        kept = [(r, l) for (r, l) in zip(A, labels) if l !== :unclassified]
+        @test length(kept) == length(P) == 13263
+        @test all(i -> kept[i][1] == P[i][1:9] && name[kept[i][2]] == P[i][10], eachindex(P))
+    else
+        @info "akeeb_phenotype oracle skipped: the authors' released data are not on disk (set POTTS_REFERENCES to the docs/references directory)" data
+        @test_skip "akeeb_phenotype oracle against the authors' phenotype_classification.csv (data not on disk)" == ""
+    end
+end

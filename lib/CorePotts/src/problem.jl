@@ -93,6 +93,8 @@ frozen_kinds(sys) = nothing
 
 Whether the frozen mask follows the state during a run. Default: `frozen_kinds(sys) !==
 nothing`. `false` means a static mask (none, a domain, a user `frozen`), never recomputed.
+A system with a custom `remake_frozen` defines it: `true` to follow the state,
+`false` for a deliberately static mask.
 """
 frozen_varies(sys) = frozen_kinds(sys) !== nothing
 
@@ -103,19 +105,56 @@ The frozen mask of a remade or reinitialized state `u0`: the standard rule when
 `frozen_kinds(sys)` names kinds, else `prob.frozen` (a static mask).
 
 A custom rule overrides this method **and must also define `frozen_varies(sys) = true`**;
-without it the integrator treats the mask as static and never recomputes it (no error).
-A custom rule runs on a host copy of the state at every refresh.
+without it the integrator treats the mask as static and never recomputes it, and `init`
+warns. Defining `frozen_varies(sys) = false` (a deliberately static mask) silences the
+warning.
+A custom rule runs on a host copy of the state at every refresh; `frozen_reads(sys)`
+limits that copy to the leaves the rule reads.
 """
 remake_frozen(sys, prob, u0) = (k = frozen_kinds(sys)) === nothing ? prob.frozen : _standard_frozen(k, u0)
+
+"""
+    frozen_reads(sys)
+
+The state leaves a custom `remake_frozen` rule reads at a refresh, as a tuple of `Symbol`s:
+`:σ` (the labels) or cell column names, each at most once. On a device, a refresh then
+copies only these leaves to the host before running the rule; every other leaf is the live
+device array: do not read it on the host (scalar indexing errors; `Array(...)` works but is
+an uncounted transfer). `nothing` (the default) copies the whole state. A rule that reads model, site
+or history quantities keeps the default. A name that is neither `:σ` nor a cell column of
+the state, or that is repeated, is an `ArgumentError` at `init` (and at every refresh), on every backend. The
+standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this hook.
+"""
+frozen_reads(sys) = nothing
 
 # A custom `remake_frozen` without `frozen_varies(sys) = true` gives a static mask: say so.
 function _check_frozen_hooks(sys)
     frozen_varies(sys) && return nothing
     which(remake_frozen, Tuple{typeof(sys), Any, Any}).module === CorePotts && return nothing
+    # a `frozen_varies` defined outside CorePotts (even `false`, also on a supertype) is a choice (D-133)
+    which(frozen_varies, Tuple{typeof(sys)}).module === CorePotts || return nothing
     @warn "`remake_frozen` is overridden for $(typeof(sys)) but `frozen_varies(sys)` is false: the " *
           "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
     return nothing
 end
+
+# The declared reads of a custom rule (D-128): `nothing`, or a tuple of distinct `:σ` and
+# cell column names of `st`; checked at `init` and at every custom-rule refresh.
+function _frozen_reads(sys, st)
+    reads = frozen_reads(sys)
+    reads === nothing && return nothing
+    (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
+        "`frozen_reads` must be `nothing` or a tuple of Symbols (`:σ` or cell column names); got $(repr(reads))"))
+    for n in reads
+        n === :σ || haskey(st.cell, n) || throw(ArgumentError(
+            "`frozen_reads` declares `$n`, which is neither `:σ` nor a cell column of the state " *
+            "(cell columns: $(join(keys(st.cell), ", ")))"))
+    end
+    allunique(reads) || throw(ArgumentError(
+        "`frozen_reads` declares `$(reads[findfirst(n -> count(==(n), reads) > 1, reads)])` more than once; got $(repr(reads))"))
+    return reads
+end
+_custom_frozen(sys) = frozen_varies(sys) && frozen_kinds(sys) === nothing
 
 # the standard rule on a host state (without the domain, which `PottsProblem` adds)
 function _standard_frozen(kinds, u)
@@ -163,6 +202,10 @@ Base.@kwdef mutable struct PottsStats
     transfers::Int = 0
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
+    # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:ΔH,)`):
+    # `nothing` without a track. Exact after every step under `SequentialCPM`; under
+    # `CheckerboardCPM` brought up to date at the host read points (D-140)
+    accepted_ΔH::Union{Nothing, Float64} = nothing
 end
 
 """
@@ -214,7 +257,8 @@ function Base.merge(a::PottsStats, b::PottsStats)
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
-        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l)
+        transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l,
+        accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -230,12 +274,25 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
         callback = nothing)
     if checkpoint !== nothing
         prob = _from_checkpoint(prob, checkpoint)
-        integ = init(prob, alg; backend, saveat, save_start, save_end, callback)
+        # the accumulator continues only into an equally tracked run (a hand-written model
+        # may keep fingerprint 0 whatever its track, so this is checked here too)
+        (checkpoint.stats.accepted_ΔH === nothing) == (prob.f.track === nothing) || throw(ArgumentError(
+            "checkpoint was taken with tracking $(checkpoint.stats.accepted_ΔH === nothing ? "off" : "on") " *
+            "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
+            "with the same `track`"))
+        # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
+        integ = _init(prob, alg, false; backend, saveat, save_start, save_end, callback)
         _restore_stats!(integ.stats, checkpoint.stats)
         return integ
     end
+    return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
+end
+
+function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
+    alg isa BoundarySiteCPM && !(backend isa CPU) &&
+        throw(ArgumentError("BoundarySiteCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
     saveat isa Number && (saveat = (t0 + Int(saveat)):Int(saveat):t1)
@@ -247,18 +304,20 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
     _preflight(prob, alg, ctx)
     _check_frozen_hooks(prob.f.sys)
+    _custom_frozen(prob.f.sys) && _frozen_reads(prob.f.sys, prob.u0)
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) : nothing
+            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) :
+            alg isa BoundarySiteCPM ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
     integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], sort!(collect(Int, saveat)), save_start, save_end,
-        Int[], Any[], SciMLBase.ReturnCode.Default, PottsStats(), _callbacks(callback),
+        Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f), _callbacks(callback),
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
-    integ.stats.launches += _run_phases(prob.f.phases.at_init, integ.state, integ.p, integ.ctx,
+    integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
     for cb in integ.callbacks
         cb.initialize(cb, integ.state, integ.t, integ)
@@ -328,6 +387,7 @@ the device lifecycle's statistics and frozen-mask counts are folded into `integ.
 function current_state(integ::PottsIntegrator)
     _sync!(integ.stats, integ.backend)
     _fold_lifecycle!(integ)
+    _fold_track!(integ)
     return _snapshot(integ.stats, integ.backend, integ.state)
 end
 
@@ -344,40 +404,75 @@ function _save!(integ::PottsIntegrator)
 end
 
 function _check_status!(integ::PottsIntegrator)
+    _status_failure!(integ, _model_status(integ.stats, integ.state.model))
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(integ.stats, integ.cache.status)
-    st != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    _status_failure!(integ, st)
     return integ.retcode
+end
+
+# A nonzero status word fails the run, with a warning naming each reason (once per run)
+const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
+    STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
+    STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower) draw was given σ < 0")
+function _status_failure!(integ, st::UInt32)
+    st == 0 && return nothing
+    if integ.retcode != SciMLBase.ReturnCode.Failure
+        why = [r for (bit, r) in _STATUS_REASONS if st & bit != 0]
+        isempty(why) && push!(why, "status word $(repr(st))")
+        @warn "the run failed at MCS $(integ.t): $(join(why, "; "))"
+    end
+    integ.retcode = SciMLBase.ReturnCode.Failure
+    return nothing
 end
 
 function CommonSolve.step!(integ::PottsIntegrator)
     integ.retcode == SciMLBase.ReturnCode.Default ||
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
-    lat = integ.ctx.lattice
-    phases = integ.f.phases
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
-    integ.stats.launches += _run_phases(phases.before_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
-    if integ.alg isa SequentialCPM
-        acc, status = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
-            integ.law, integ.key, integ.t)
-        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
-    else
-        integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
-            integ.p, integ.ctx, integ.law, integ.key, integ.t)
-    end
-    integ.stats.launches += _run_phases(phases.after_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
-    integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
-    integ.stats.launches += _run_phases(phases.end_mcs, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, integ.stats)
+    # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
+    # lifecycle in the model's order: `Base.afoldl` over the tuple (unrolled by Base, no
+    # recursion here; zero allocations, where `sum` and `foldl` with a closure allocated on
+    # SequentialCPM)
+    _run_mcs!(integ, integ.f.phases.mcs)
     integ.t += 1
     integ.stats.mcs += 1
     integ.stats.attempts += attempts
     isempty(integ.callbacks) || _apply_callbacks!(integ)
     insorted(integ.t, integ.saveat) && (_check_status!(integ); _save!(integ))
     return integ
+end
+
+_run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
+
+# One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
+function _run_entry!(integ::PottsIntegrator, phases::Tuple)
+    integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, integ.stats)
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
+    if integ.alg isa SequentialCPM
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+            integ.law, integ.key, integ.t, integ.f.track)
+        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    elseif integ.alg isa BoundarySiteCPM
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    else
+        integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
+            integ.p, integ.ctx, integ.law, integ.key, integ.t)
+    end
+    return nothing
+end
+function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
+    integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
+    return nothing
 end
 
 # The host lifecycle path (CPU; host hooks on a device): events are known on the host, and
@@ -418,8 +513,7 @@ function _device_planned(backend, alg, f::CPMFunction)
     lc === nothing && return false
     (backend isa CPU && !(_FORCE_DEVICE_LIFECYCLE[] && alg isa CheckerboardCPM)) && return false
     lc.rebuild! === no_rebuild || return false
-    sys = f.sys
-    return !(frozen_varies(sys) && frozen_kinds(sys) === nothing)
+    return !_custom_frozen(f.sys)
 end
 const _FORCE_DEVICE_LIFECYCLE = Ref(false)
 
@@ -428,6 +522,25 @@ _mobility_scratch(backend, prob, ::AllMobile) = nothing
 function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
     return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3))
+end
+
+# Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`.
+_initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 0.0)
+
+# Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
+# is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
+# Nothing without a track or under `SequentialCPM` / `BoundarySiteCPM`, which add into the
+# stats every step.
+_fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
+_fold_track!(stats, ::Nothing) = nothing
+_fold_track!(stats, ::BoundaryCache) = nothing
+_fold_track!(stats, cache::CheckerboardCache) = _fold_track!(stats, cache.track)
+function _fold_track!(stats, tk::NamedTuple)
+    acc = tk.acc
+    h = _ondevice(acc) ? _to_host(stats, acc) : acc
+    stats.accepted_ΔH += sum(Float64, h)
+    fill!(acc, zero(eltype(acc)))
+    return nothing
 end
 
 # bring the device lifecycle's counts into `integ.stats` (synchronizes; only off the MCS loop)
@@ -446,7 +559,8 @@ Only models whose mask follows the state (`frozen_varies`; Potts: a `[frozen]` k
 any work; for a static mask (none, the domain, a user `frozen`) it returns at once. The
 standard rule (`frozen_kinds`) runs as one kernel on the integrator's backend; called
 directly, it then reads back its counts (one small transfer). A custom rule
-(`remake_frozen`) runs on a host copy of the state.
+(`remake_frozen`) runs on a host copy of the state (of the leaves `frozen_reads` names, if
+it names them).
 
 On a device, the integrator's own refreshes after lifecycle events run on the device:
 `integrator.nmobile`, `integrator.stats.attempts` and `stats.refreshes` are brought
@@ -477,10 +591,14 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
     return nothing
 end
-# a custom rule: `remake_frozen` on a host copy of the state
+# a custom rule: `remake_frozen` on a host copy of the state; with `frozen_reads`, a copy
+# of the declared leaves only (D-128; the other leaves stay device arrays)
 function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
+    reads = _frozen_reads(integ.f.sys, integ.state)
     _sync!(integ.stats, integ.backend)
-    u = integ.backend isa CPU ? integ.state : _snapshot(integ.stats, integ.backend, integ.state)
+    u = integ.backend isa CPU ? integ.state :
+        reads === nothing ? _snapshot(integ.stats, integ.backend, integ.state) :
+        _host_leaves(integ.stats, integ.state; σ = :σ in reads, cell = filter(n -> n !== :σ, reads))
     fz = frozen_sites(integ.prob, u)
     _set_mobility!(integ.stats, m, fz)
     integ.nmobile = count(!, fz)
@@ -510,6 +628,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
         step!(integ)
     end
     _flush_counts!(integ)                           # exact `stats` at the end (D-089)
+    _fold_track!(integ)
     _check_status!(integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success
@@ -573,6 +692,7 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
     dst.refreshes = src.refreshes
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
+    dst.accepted_ΔH = src.accepted_ΔH
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end

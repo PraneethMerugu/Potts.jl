@@ -5,10 +5,8 @@ using ExplicitImports
 @testset "PottsModels uses only public names" begin
     @test check_no_implicit_imports(PottsModels) === nothing
     @test check_all_explicit_imports_are_public(PottsModels) === nothing
-    # one internal exception: the sub-stream seed mixer, pinned internal by D-093 (P6.0w);
-    # `akeeb_state` derives its clock seed with it. Nothing else may be ignored here
-    @test check_all_qualified_accesses_are_public(PottsModels; ignore = (:_substream_seed,)) === nothing
-    @test_throws Exception check_all_qualified_accesses_are_public(PottsModels)   # the exception is used
+    # no exception: `akeeb_state` draws its clocks through the public `Potts.layer_rng` (D-138)
+    @test check_all_qualified_accesses_are_public(PottsModels) === nothing
     @test check_all_qualified_accesses_via_owners(PottsModels) === nothing
     @test check_no_stale_explicit_imports(PottsModels) === nothing
     @test check_no_self_qualified_accesses(PottsModels) === nothing
@@ -141,12 +139,17 @@ end
 # The reviewed DSL surface: every name the model body sees, and every keyword of its
 # constructors. A new name or option (a model-shaped flag under a generic name, like the
 # removed `extension_only`) must be reviewed and added here.
-const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Every, :ExplicitEuler, :RK4, :RandomPlane, :Split,
-    :Surface, :Volume, :cells, :centroid, :clusters, :connectivity, :contacts, :displacement, :dot, :edges,
+const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :ExplicitEuler, :Global, :NoFlux, :RK4, :RandomPlane, :Split,
+    :Surface, :Volume, :cells, :centroid, :clusters, :components, :connectivity, :contacts, :displacement, :dot, :edges,
     :geomean, :integral, :log1p_geomean, :major_axis, :mean, :minor_axis, :new_contact, :no_extinction, :norm,
-    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ]
+    :normalize, :principal_axis, :rand, :saturating, :saturating_linear, :sites, :Δ,
+    # D-150: `count` (Base's; `count(pred for _ in contacts)` is the cell-scope contact fold, a
+    # kind-filtered contact count that `surface` cannot express) and `randn` (`rand()`'s
+    # normal counterpart and its truncated form; without the binding `randn()` was Base's,
+    # drawn once when the model was built)
+    :count, :randn]
 const DSL_KEYWORDS = Dict(:connectivity => [:rule], :Volume => [:strength, :target], :Surface => [:strength, :target],
-    :Chemotaxis => [:kinds, :response, :strength, :when])
+    :Chemotaxis => [:kinds, :response, :strength, :when], :components => [:scope], :randn => [:lower])
 
 @testset "DSL surface snapshot" begin
     @test sort(collect(keys(Potts.DSL))) == sort(DSL_NAMES)

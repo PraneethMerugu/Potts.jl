@@ -187,10 +187,10 @@ p60x_published() = (
         openvt_monolayer_state(; lattice = (24, 24)), (0, 10))),
 )
 const p60x_PUBLISHED = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x8942dc9ed483ec21,
-    :WortelAct => 0xeec6e447bfffba66,
-    :MerksVasculogenesis => 0xe8c37fa651d985f6,   # re-recorded at the P6.0y merge (D-102: substep function)
-    :OpenVTGrowingMonolayer => 0xfe0d128235b9b8a6,
+    :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
+    :WortelAct => 0xce4f1cec820b20fe,   # re-pinned under D-124
+    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122
+    :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,   # re-pinned under D-122
 )
 
 # ---------------------------------------------------------------------------------------
@@ -231,9 +231,16 @@ end
     end
 end
 
+# D-158: our own steppers stay bitwise; `Adaptive` rows run upstream OrdinaryDiffEq/LinearSolve
+# code, whose patch releases may move the last bit, so they are pinned to rtol 1e-12.
 @testset "P6.0x: results unchanged (bitwise, $p60x_N MCS, seed 7)" begin
     for M in (p60x_GATHERS..., p60x_CONTROLS...), (label, kw) in p60x_SOLVERS, alg in p60x_ALGS
-        @test p60x_final_y(M, alg, kw) == p60x_RESULTS[(nameof(M), label, nameof(typeof(alg)))]
+        want = p60x_RESULTS[(nameof(M), label, nameof(typeof(alg)))]
+        if startswith(label, "Adaptive")
+            @test p60x_final_y(M, alg, kw) ≈ want rtol = 1e-12
+        else
+            @test p60x_final_y(M, alg, kw) == want
+        end
     end
 end
 

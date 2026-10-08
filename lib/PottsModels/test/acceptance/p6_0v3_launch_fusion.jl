@@ -74,7 +74,7 @@ using Potts: CorePotts
 using OrdinaryDiffEqRosenbrock: Rodas5P
 using Potts.CorePotts.KernelAbstractions: @kernel, @index
 
-const P60V3_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60V3_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 p60v3_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 p60v3_lifecycle_total(s) = sum(f -> getfield(s.lifecycle, f), fieldnames(typeof(s.lifecycle)))
 
@@ -220,9 +220,11 @@ p60v3_bits(x::Int32) = UInt64(reinterpret(UInt32, x))
 p60v3_digest(a) = foldl((h, x) -> (h ⊻ p60v3_bits(x)) * 0x00000100000001b3, vec(Array(a)); init = 0xcbf29ce484222325)
 # Recorded from the current code (feat/p6-0v3 at d111e625) for `p60v3_merks_problem(; T)`
 # after 6 MCS with `CheckerboardCPM()`: (σ, field c). Metal (Float32) equals the CPU's.
+# Re-pinned under D-153: the D-087 `merks_state` port (Scattered's StableRNG stream) changes
+# the start; recorded on the PC from feat/p6-3d 6e28cbd4. Metal re-verification is P6.0bi.
 const P60V3_MERKS_DIGESTS = Dict(
-    Float64 => (0xf1d750bea912b50c, 0x5600efddf14d35a6),
-    Float32 => (0xf1d750bea912b50c, 0x2b64b4f3b29d28e5),
+    Float64 => (0x2aba158700292a8c, 0xb15865e4b5748ee9),
+    Float32 => (0x2aba158700292a8c, 0x6529835b3477095c),
 )
 
 # Does a type contain a Float64 leaf (fields, recursively)?
@@ -249,7 +251,7 @@ end
 const P60V3_WAITS = Ref(0)
 const P60V3_INFLIGHT = Ref(false)
 function p60v3_instrument_waits!()
-    M = Main.Metal
+    M = Main.PottsDevices.device_package()
     @eval M function wait_oldest_cleanup!(bq::BatchedCommandQueue)
         isempty(bq.cleanups) && return
         cmdbuf = first(bq.cleanups).cmdbuf
@@ -275,7 +277,9 @@ function p60v3_instrument_waits!()
     end
     return nothing
 end
-const P60V3_METAL_VERSION = P60V3_ON_METAL ? pkgversion(Main.Metal) : nothing
+# the wait counter wraps Metal.jl internals: Metal only (D-157)
+const P60V3_ON_METAL = P60V3_ON_DEVICE && Main.PottsDevices.device_name() == "metal"
+const P60V3_METAL_VERSION = P60V3_ON_METAL ? pkgversion(Main.PottsDevices.device_package()) : nothing
 const P60V3_WAITS_ON = P60V3_ON_METAL && P60V3_METAL_VERSION == v"1.10.0"
 P60V3_WAITS_ON && p60v3_instrument_waits!()     # at top level: the testsets must see the new methods
 
@@ -284,7 +288,7 @@ synchronize; then `(quiet, checkpoint waits)`: the window is quiet when checkpoi
 after it show no lifecycle event, and the second checkpoint's waits show the wrapper is live."""
 function p60v3_window!(integ; nstep = 3)
     l0 = p60v3_lifecycle_total(checkpoint(integ).stats)
-    Main.Metal.synchronize()
+    Main.PottsDevices.device_sync()
     out = Tuple{NTuple{3, Int}, Int, Int}[]
     for _ in 1:nstep
         c, w, n = p60v3_counts(integ.stats), P60V3_WAITS[], integ.stats.launches
@@ -296,7 +300,7 @@ function p60v3_window!(integ; nstep = 3)
     return out, l0 == l1, P60V3_WAITS[] - w
 end
 function p60v3_metal_integ(prob; nwarm = 2)
-    integ = init(prob, CheckerboardCPM(); backend = Main.Metal.MetalBackend(), save_start = false, save_end = false)
+    integ = init(prob, CheckerboardCPM(); backend = Main.PottsDevices.device_backend(), save_start = false, save_end = false)
     foreach(_ -> step!(integ), 1:nwarm)
     return integ
 end
@@ -374,7 +378,7 @@ end
         P60V3_METAL_VERSION == v"1.10.0" || @error "p6_0v3_launch_fusion.jl copies Metal.jl 1.10.0's " *
             "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $P60V3_METAL_VERSION: update the copies and the version"
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
     end
 end
 
@@ -391,7 +395,7 @@ end
                 @info "P6.0v8 quiet MCS (counters, waits, launches)" name out
         end
     else
-        @test_skip "Metal 1.10.0 (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
     end
 end
 
@@ -423,12 +427,12 @@ end
         @info "P6.0v8 Merks: GPU waits per MCS by substeps" mw
         @test mw[2] == mw[15] == 0
     else
-        @test_skip "Metal 1.10.0 (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
     end
 end
 
-@testset "P6.0v3 (3): launches per quiet MCS of the gate models on Metal" begin
-    if P60V3_ON_METAL
+@testset "P6.0v3 (3): launches per quiet MCS of the gate models on the device" begin
+    if P60V3_ON_DEVICE
         for (name, make) in p60v3_gate_cases(Float32)
             integ = p60v3_metal_integ(make())
             l0 = p60v3_lifecycle_total(checkpoint(integ).stats)
@@ -444,12 +448,12 @@ end
             all(n -> lo <= n <= hi, ns) || @info "P6.0v3 launches per quiet MCS" name ns floor = lo bound = hi
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v3 (4): two consecutive adaptive-ODE host phases sync once on Metal" begin
-    if P60V3_ON_METAL
+@testset "P6.0v3 (4): two consecutive adaptive-ODE host phases sync once on the device" begin
+    if P60V3_ON_DEVICE
         host(a) = Array(a)
         syncs = Dict{Bool, Vector{Int}}()
         for two in (false, true)
@@ -468,13 +472,13 @@ end
         @test all(==(1), syncs[false])                                  # control: the counter is live
         @test all(==(1), syncs[true])
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v3 (5): exactness on Metal" begin
-    if P60V3_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v3 (5): exactness on the device" begin
+    if P60V3_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         for N in (1, 3, 15)
             u = solve(p60v3_field_problem(; T = Float32, N), alg; backend, save_start = false).u[end]
@@ -486,33 +490,38 @@ end
         end
         m = solve(p60v3_merks_problem(; T = Float32), alg; backend, save_start = false).u[end]
         c = solve(p60v3_merks_problem(; T = Float32), alg; save_start = false).u[end]
-        @test Array(m.σ) == c.σ && Array(m.site.c) == c.site.c          # bitwise, CPU = Metal
+        @test Array(m.σ) == c.σ && Array(m.site.c) == c.site.c          # bitwise, CPU = device
         @test (p60v3_digest(m.σ), p60v3_digest(m.site.c)) == P60V3_MERKS_DIGESTS[Float32]
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v3 (6): no Float64 reaches a Metal kernel (gate models)" begin
-    if P60V3_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v3 (6): no Float64 reaches a device kernel (gate models)" begin
+    if P60V3_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         for (name, make) in p60v3_gate_cases(Float32)
             integ = p60v3_metal_integ(make())
             @test !any(p60v3_hasf64, p60v3_kernel_types(integ))
             foreach(_ -> step!(integ), 1:2)
             @test count(>(0), Array(integ.u.cell.volume)) > 0           # ran and saved on the device
         end
-        # control: Metal refuses a kernel that touches a Float64 (a leak fails loudly)
-        a = Main.Metal.MtlArray(ones(Float32, 8))
-        err = try
-            p60v3_f64_kernel!(backend)(a; ndrange = 8)
-            CorePotts.KernelAbstractions.synchronize(backend)
-            nothing
-        catch e
-            e
+        # control: Metal refuses a kernel that touches a Float64 (a leak fails loudly). ROCm
+        # has doubles; there the no-`double` IR check (test/device_ir.jl, D-157) is the control.
+        if Main.PottsDevices.device_name() == "metal"
+            a = Main.PottsDevices.device_array(ones(Float32, 8))
+            err = try
+                p60v3_f64_kernel!(backend)(a; ndrange = 8)
+                CorePotts.KernelAbstractions.synchronize(backend)
+                nothing
+            catch e
+                e
+            end
+            @test err !== nothing && nameof(typeof(err)) === :InvalidIRError    # GPUCompiler's IR check
+        else
+            @test_skip "device (POTTS_GPU=metal; Metal's Float64 refusal)"
         end
-        @test err !== nothing && nameof(typeof(err)) === :InvalidIRError    # GPUCompiler's IR check
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

@@ -58,7 +58,7 @@ n = length(op[2].second)                          # number of cells
 neighbours = [(i, i + 1) for i in 1:(n - 1)]
 prob = PottsProblem(chain, [op; :bond => neighbours], (0, 600); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 10)
-record_potts("links_chain.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (600, 330)))
+record_potts("links_chain.mp4", sol; framerate = 12, title = "", figure = (; size = (600, 330)))
 nothing # hide
 ```
 
@@ -94,7 +94,7 @@ end
 fig = Figure(size = (600, 330))
 ax = Axis(fig[1, 1]; aspect = DataAspect(), title = "MCS 600, links in white")
 hidedecorations!(ax)
-pottsplot!(ax, renderframe(sol.u[end]); boundaries = true)
+pottsplot!(ax, renderframe(sol.u[end]))
 draw_links!(ax, sol.u[end], :bond)
 fig
 ```
@@ -132,7 +132,7 @@ end
 op = layout(Scattered(40, (4, 4); kinds = [:cell], seed = 2, gap = 2), sticky)
 prob = PottsProblem(sticky, op, (0, 1500); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 25)
-record_potts("links_sticky.mp4", sol; framerate = 12, title = "", plot = (; boundaries = true), figure = (; size = (420, 420)))
+record_potts("links_sticky.mp4", sol; framerate = 12, title = "", figure = (; size = (420, 420)))
 nothing # hide
 ```
 
@@ -154,8 +154,9 @@ fig
 The conditions can use the kinds of the two cells (`kind[a] == leader`), cell variables
 (`x[a]`), the `distance`, edge variables and `mcs`. A rule can run less often: `@link bond
 when = …, every = 10`. A model can declare several relationships, each with its own
-capacity, edge variables, energy and rules. Cells that die lose their links, and daughters
-start unlinked. See [Relationships](@ref manual-relationships).
+capacity, edge variables, energy and rules. Cells removed by the lifecycle lose their links
+(a cell squeezed out by copies keeps them until the next link rule), and daughters start
+unlinked. See [Relationships](@ref manual-relationships).
 
 ## What you learned
 

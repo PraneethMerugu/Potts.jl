@@ -62,7 +62,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
-    for (k, s) in given, n in _solver_keys(k, [fields; odes])
+    for (k, s) in given, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
         n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
                                           (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
         push!(named, n)
@@ -89,10 +89,16 @@ _ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(1
 # The variable names a `solvers` key stands for: a name, a Potts variable, an MTK component
 # variable (`comp.x`, the cell variable `comp₊x`), or a component system (its integrated
 # unknowns `comp₊…`).
-function _solver_keys(k, integrated)
+function _solver_keys(k, integrated, model::Symbol)
     k isa Symbol && return (k,)
+    # a PottsSystem is an AbstractSystem too (D-137), but not a component
+    k isa PottsSystem && throw(ArgumentError("`solvers`: the key is the Potts model `$(nameof(k))`; key by a variable " *
+                                             "(`x => solver`) or a component system"))
     if k isa ModelingToolkitBase.AbstractSystem
-        prefix = string(nameof(k), "₊")
+        # `sys.dc` of an uncompleted model is `pr₊dc` (D-137): the component `dc`
+        cname = string(nameof(k))
+        startswith(cname, string(model, '₊')) && (cname = cname[(ncodeunits(string(model)) + ncodeunits("₊") + 1):end])
+        prefix = string(cname, "₊")
         ns = sort!([n for n in integrated if startswith(string(n), prefix)])
         isempty(ns) && throw(ArgumentError("`solvers`: the component `$(nameof(k))` has no integrated variable in this " *
                                            "model (no component of that name, or no `D(x) ~ …` equation)"))
@@ -113,7 +119,7 @@ _key_string(k) = (s = sprint(show, k; context = :limit => true); length(s) > 60 
 
 # A-68: an adaptive step re-evaluates the rate at trial steps, so it cannot replay draws.
 function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
-    for eq in c.sys.equations
+    for eq in getfield(c.sys, :equations)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
@@ -192,29 +198,77 @@ _ode_scratch_name(n::Symbol) = Symbol(n, :__ode)
 _canonical(s::ExplicitEuler) = "ExplicitEuler(substeps=$(repr(s.substeps)),lower=$(repr(s.lower)))"
 _canonical(s::RK4) = "RK4(substeps=$(s.substeps))"
 function _canonical(s::Adaptive)
-    kw = sort!([string(k, "=", _canonical_value(v)) for (k, v) in pairs(s.kwargs)])
-    return "Adaptive($(_canonical_value(s.alg));$(join(kw, ",")))"
+    alg = _canonical_solver_part(s.alg, "the algorithm")
+    kw = sort!([string(k, "=", _canonical_solver_part(v, "the keyword `$k`")) for (k, v) in pairs(s.kwargs)])
+    return "Adaptive($alg;$(join(kw, ",")))"
+end
+
+# A solver part's canonical string (D-130). A value beyond the printer's depth cap, or a
+# cyclic one, is an `ArgumentError` naming `Adaptive` and the part: cut to its type, two
+# different solvers would fingerprint alike and share one ODE group. A compiler-generated
+# name (`var"#…"`: an anonymous function, a closure, a local function) is accepted; the
+# problem fingerprint then also hashes the session token (`_session_bound`).
+_canonical_solver_part(v, what) = _canonical_checked(() -> "`Adaptive`: $what", v)
+
+# `_canonical_value(v)`, with a value too deep or cyclic turned into an `ArgumentError` that
+# starts with `describe()` (built only then): every caller that can meet a user value (solver
+# parts, gather relations, symbolic constants and bound options) goes through here, so the
+# private `_CanonicalDepthError` never reaches the user (D-130).
+function _canonical_checked(describe, v)
+    try
+        return _canonical_value(v)
+    catch e
+        e isa _CanonicalDepthError || rethrow()
+        throw(ArgumentError(string(describe(), " holds a value nested deeper than ", _CANONICAL_DEPTH,
+            " levels, or a cyclic value (at a `", e.type, "`): too deep to print in the canonical form that ",
+            "orders, names and fingerprints the model's parts; pass a flatter value, e.g. a callable struct ",
+            "holding only the values that matter")))
+    end
 end
 
 _canonical_type(T) = sprint(show, T; context = :module => Core)
 
+# How deep `_canonical_value` descends. A value with parts below this depth, or a cyclic one,
+# is an error (`_CanonicalDepthError`), never cut to its type (D-130). The depth is the only
+# cycle check: build-time, no visited set.
+const _CANONICAL_DEPTH = 8
+struct _CanonicalDepthError <: Exception
+    type::String
+end
+Base.showerror(io::IO, e::_CanonicalDepthError) =
+    print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
+        "`), too deep to print in canonical form; pass a flatter value")
+
 # Values print with their full type. Scalars, enums and other primitives, strings and
 # ranges by `repr`; containers element by element (dictionaries and sets sorted by the
 # printed key, never their hash slots); types and singleton functions by type; any other
-# struct, closures included (their captures are fields), by type and fields.
+# struct, closures included (their captures are fields), by type and fields. Leaves print at
+# any depth; a value with parts below `_CANONICAL_DEPTH` throws.
 function _canonical_value(x, depth = 0)
     T = typeof(x)
     (x isa Union{Number, Symbol, AbstractString, Nothing, Missing, Enum, AbstractRange} || isprimitivetype(T)) &&
         return string(_canonical_type(T), ":", repr(x))
     x isa Type && return _canonical_type(x)
-    depth > 8 && return _canonical_type(T)
+    container = x isa Union{AbstractDict, AbstractSet, Tuple, NamedTuple, AbstractArray}
+    !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
+    depth > _CANONICAL_DEPTH && throw(_CanonicalDepthError(_canonical_type(T)))
     item(v) = _canonical_value(v, depth + 1)
     x isa AbstractDict && return string(_canonical_type(T), "{",
         join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}")
     x isa AbstractSet && return string(_canonical_type(T), "{", join(sort!([item(v) for v in x]), ","), "}")
-    x isa Union{Tuple, NamedTuple, AbstractArray} &&
+    container &&
         return string(_canonical_type(T), "[", join((string(k, "=", item(v)) for (k, v) in pairs(x)), ","), "]")
-    (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
     return string(_canonical_type(T), "(",
         join((string(n, "=", item(getfield(x, n))) for n in fieldnames(T) if isdefined(x, n)), ","), ")")
 end
+
+# The per-session token (D-130), drawn in `__init__` (Potts.jl) at every load, never baked
+# into the precompile image. A solver whose canonical string holds a compiler-generated name
+# is identified only within this session: `_problem_function` hashes the token into such a
+# problem's fingerprint (only there: the canonical string and solver grouping never see it),
+# so its checkpoints never load into another session, nor collide with another session's
+# closure that happens to get the same name. Construction and `remake` both build through
+# `_problem_function`, and `spec.canonical` covers every solver (`field_solver`,
+# `ode_solver`, `solvers`).
+const _SESSION_TOKEN = Ref{UInt64}(0)
+_session_bound(spec::SolverSpec) = occursin("var\"#", spec.canonical)

@@ -213,6 +213,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
     :RelationSpec,        # relation dispatch in the `Around` vocabulary
     :_run_phases,         # runs the `at_init` phases when a problem is initialised
+    :_derived,            # the `at_init` phases without field clamps (`anneal`'s refresh, D-145)
     :_snapshot,           # host copy of a device state for the adaptive ODE phase
     :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
     :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
@@ -222,6 +223,9 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :_host_lattice,       # counted host copy of the lattice's domain mask (D-085)
     :adjacency_name,      # field name of a relation's adjacency store
     :always,              # the no-constraint default
+    :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
+    :has_origin,          # a contact fold's relation must exclude the origin (D-150)
+    :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
     :no_claims,           # the no-claim-set default
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
@@ -254,6 +258,11 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # loaded): MTK's discrete-compilation hook and the MTKBase compiler it re-enters.
     :discrete_compile_pass, :with_reversible_transformation, :UnhackSystemTransformation,
     :__mtkcompile, :AbstractSystem,
+    # --- Potts -> MTKBase: `PottsSystem <: AbstractSystem` (D-137). `sys.x` is MTK's
+    # `getproperty`, which calls `getvar`; PottsSystem's `observed` field holds Potts'
+    # `ObservedEq`s, so it needs its own `getvar`. `extend` drops MTK's mutable cache entry
+    # from the merged metadata, as MTK's own `extend` does.
+    :getvar, :MutableCacheKey,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (
@@ -282,6 +291,9 @@ const RAW_TRANSFER_ALLOW = Dict(
     # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`;
     # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted)
     "lib/CorePotts/src/problem.jl" => 3,
+    # `BoundarySiteCPM`'s shadow copies of σ and the frozen mask (120, 125): host arrays only,
+    # the algorithm is CPU-only (D-177)
+    "lib/CorePotts/src/boundary_site.jl" => 2,
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
     # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since
     # Metal.jl's device→device `copyto!` waits for the GPU twice (P6.0v3, D-101)
@@ -310,4 +322,29 @@ end
     end
     hits == RAW_TRANSFER_ALLOW || @error "raw synchronize/Array/adapt/copyto! outside transfers.jl" hits RAW_TRANSFER_ALLOW
     @test hits == RAW_TRANSFER_ALLOW
+end
+
+# P6.1a5 (D-138): the Voronoi layer (tessellation, Lloyd, repair) and shape regions are type
+# stable on square, hexagonal and 3D lattices (host-side, but `graner_glazier_aggregate`
+# runs it at paper size for every replicate).
+@testset "QA: Voronoi and shape regions are type stable ($label)" for (label, L) in (
+        ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
+        ("3D", Lattice((12, 12, 12); boundary = Closed())))
+    lat = Potts._layout_spec(L)
+    N = length(lat.dims)
+    S = HyperSphere{N, Float64}
+    @test_opt target_modules = (Potts,) Potts._region_sites(S(Point(ntuple(_ -> 6.0, N)), 4.0), lat, "")
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims),
+        Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat)
+end
+
+# P6.3c (D-141): Eden's growth and the Splits passes are type stable on square, hexagonal and
+# 3D lattices (host-side; the growth loop runs once per round over the frontier).
+@testset "QA: Eden and Splits are type stable ($label)" for (label, L) in (
+        ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
+        ("3D", Lattice((12, 12, 12); boundary = Closed())))
+    lat = Potts._layout_spec(L)
+    e = Eden(RandomPoints(5; replace = true, seed = 1); rounds = 3, kinds = [:a], seed = 1, shortfall = :allow)
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), e, lat)
+    @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), Splits(e, 2; shortfall = :allow, splits = :allow), lat)
 end

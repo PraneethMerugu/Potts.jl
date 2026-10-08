@@ -69,6 +69,11 @@ on_model_page(x) = x isa Union{Function, Type} && nameof(x) in MODEL_PAGE_NAMES
 
 const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
+# The "Paper models: status" page, generated from the committed verdict records at build
+# time (`docs/status/render.jl`; the page itself is gitignored).
+include(joinpath(@__DIR__, "status", "render.jl"))
+const STATUS_PAGE = render_status(; published = WITH_PUBLISHED)
+
 """
     paper_run(stem, prefix = "")
 
@@ -116,8 +121,10 @@ manual = [
     "manual/relationships.md",
     "manual/sweep.md",
     "manual/problems.md",
+    "manual/algorithms.md",
     "manual/indexing.md",
     "manual/observables.md",
+    "manual/analysis.md",
     "manual/callbacks.md",
     "manual/layouts.md",
     "manual/plotting.md",
@@ -125,6 +132,7 @@ manual = [
 
 pages = Any[
     "Home" => "index.md",
+    "Paper models: status" => STATUS_PAGE,
     "Getting started" => "getting_started.md",
     "Tutorials" => tutorials,
 ]
@@ -134,6 +142,7 @@ WITH_PUBLISHED && push!(pages, "Published models" => ["published/index.md"; publ
 append!(pages, Any[
     "Coming from CompuCell3D or Morpheus" => "coming_from.md",
     "FAQ and common errors" => "faq.md",
+    "Relation to ModelingToolkit" => "modelingtoolkit.md",
     "API" => "api.md",
     "Roadmap" => "roadmap.md",
 ])

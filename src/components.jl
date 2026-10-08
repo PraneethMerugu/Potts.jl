@@ -16,9 +16,13 @@
 parameters, couplings to model-scope expressions such as `sum(volume for c in cells)`).
 The system is continuous (`D(x) ~ f`, cell or model ODEs) or discrete-time (clocked, `Shift`:
 Boolean and discrete networks, ticking after the ODEs of each period of its clock).
-A system with `initialization_eqs`, `discrete_events`, `continuous_events` or `jumps`, or
-with a binding (`y(t) = 2k`, `k2 = 2k`) that involves a parameter coupled with `@equations`,
-is rejected by name; `guesses` are ignored (MTK initialisation is not run).
+Values are plain numbers: a system with `initialization_eqs`, `discrete_events`,
+`continuous_events`, `jumps`, `brownians`, `tstops` or `assertions` (also in a subsystem), or
+whose quantities Potts reads (unknowns, parameters, discrete nodes, names the model reads
+as `comp.x`) are bound to expressions (`y(t) = 2k`, `k2 = 2k`, `initial_conditions =
+[y => 2k]`, a discrete `X(t) = !Y`), is rejected by name. Bindings of observed variables and
+of parameters nothing reads are ignored, as by MTK; `guesses` are ignored too (MTK
+initialisation is not run).
 """
 struct ComponentSpec
     name::Symbol
@@ -49,9 +53,11 @@ function _slot_name(u)
 end
 
 # Replace every expression of a model with `f(expr)`, keeping source locations.
-function _map_statements(f, sys::PottsSystem)
+# `seen` (an `IdDict`), when given, maps each new statement to the one it replaces.
+function _map_statements(f, sys::PottsSystem; seen = nothing)
     src = IdDict{Any, LineNumberNode}()
-    keep(old, new) = (haskey(sys.sources, old) && (src[new] = sys.sources[old]); new)
+    keep(old, new) = (haskey(getfield(sys, :sources), old) && (src[new] = getfield(sys, :sources)[old]);
+                      seen === nothing || (seen[new] = old); new)
     fe(e::EnergyTerm) = keep(e, EnergyTerm(e.domain, f(e.expr)))
     fd(d::Drive) = keep(d, Drive(f(d.expr)))
     fc(c::Constraint) = keep(c, c.kind === :expr ? Constraint(c.kind, c.kinds, f(c.expr)) : c)
@@ -62,47 +68,52 @@ function _map_statements(f, sys::PottsSystem)
     fl(r::LinkRule) = keep(r, LinkRule(r.relationship, r.action, f(r.when), r.every))
     fo(o::ObservedEq) = keep(o, ObservedEq(o.var, f(o.expr)))
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
-    fs = sys.sweep
+    fs = getfield(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
-    return (; energies = map(fe, sys.energies), drives = map(fd, sys.drives),
-        constraints = map(fc, sys.constraints), updates = map(fu, sys.updates),
-        equations = map(fq, sys.equations), divisions = map(fv, sys.divisions),
-        link_rules = map(fl, sys.link_rules), observed = map(fo, sys.observed),
-        discrete = map(fb, sys.discrete), sweep, sources = src)
+    fn(x) = x isa Union{Nothing, Real} ? x : f(x)          # boundary values and masks: numbers stay
+    fbd(b::BoundaryEntry) = keep(b, BoundaryEntry(b.field, b.axis,
+        map(x -> x isa Dirichlet ? Dirichlet(fn(x.value)) : x, b.sides), fn(b.mask), fn(b.value)))
+    return (; energies = map(fe, getfield(sys, :energies)), drives = map(fd, getfield(sys, :drives)),
+        constraints = map(fc, getfield(sys, :constraints)), updates = map(fu, getfield(sys, :updates)),
+        equations = map(fq, getfield(sys, :equations)), divisions = map(fv, getfield(sys, :divisions)),
+        link_rules = map(fl, getfield(sys, :link_rules)), observed = map(fo, getfield(sys, :observed)),
+        discrete = map(fb, getfield(sys, :discrete)), boundaries = map(fbd, getfield(sys, :boundaries)), sweep, sources = src)
 end
 
 """The model with its components expanded into cell variables, parameters and cell ODEs."""
 function _bind_components(sys::PottsSystem)
-    isempty(sys.components) && return sys
-    params = copy(sys.parameters)
-    vars = copy(sys.variables)
+    isempty(getfield(sys, :components)) && return sys
+    params = copy(getfield(sys, :parameters))
+    vars = copy(getfield(sys, :variables))
     odes = Equation[]
     # namespaced name (`clock₊m`) → the Potts quantity or expression it stands for
     names = Dict{Symbol, Any}()
     # couplings `clock.τ ~ expr` (component parameter ← cell-scope expression)
     couplings = Dict{Symbol, Any}()
     rest = Equation[]
-    for eq in sys.equations
+    for eq in getfield(sys, :equations)
         lhs = _unwrap(eq.lhs)
         n = iscall(lhs) && operation(lhs) isa Differential ? nothing : _mtkname(lhs)
         n === nothing ? push!(rest, eq) : (couplings[n] = eq.rhs)
     end
     time = _unwrap(B.time)
     coupleable = Set{Symbol}()                  # component parameters (the only coupling targets)
-    blocks = copy(sys.discrete)
+    blocks = copy(getfield(sys, :discrete))
     slotnames_all = Set{Symbol}()               # every discrete slot (`Pre` of one is the slot)
-    for comp in sys.components
+    unread = Dict{Symbol, String}()             # bound names no component equation reads → their error
+    for comp in getfield(sys, :components)
         _reject_ignored_features(comp)
         discrete = _is_discrete(comp.system)
         cs = discrete ? _compile_discrete(comp) : ModelingToolkitBase.mtkcompile(comp.system)
         _reject_coupled_bindings(comp, cs, couplings)
+        _reject_bindings(comp, cs, discrete, unread)
         ics = ModelingToolkitBase.initial_conditions(cs)
         # a missing value stays `nothing`: the operating point must give it (checked there)
         value(x) = (v = get(ics, _unwrap(x), nothing); v === nothing ? nothing :
                                                         (w = _unwrap(v); SymbolicUtils.isconst(w) ? Float64(SymbolicUtils.unwrap_const(w)) : w))
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         scope = comp.domain === :model ? :model : :cell
-        plan = discrete ? _discrete_plan(comp, cs, sys.sweep.mcs_duration) : nothing
+        plan = discrete ? _discrete_plan(comp, cs, getfield(sys, :sweep).mcs_duration) : nothing
         if discrete
             # one slot per discrete variable (and per older lag): the value of its latest tick
             for (x, standin) in zip(plan.slots, plan.standins)
@@ -152,7 +163,9 @@ function _bind_components(sys::PottsSystem)
         obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(cs))
         expand(x) = _fixpoint(y -> Symbolics.substitute(y, obs; fold = Val(false)), _unwrap(x))
         for o in ModelingToolkitBase.observed(cs)          # `comp.y` for an observed y
-            names[Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(o.lhs))] =
+            oname = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(o.lhs))
+            _check_internal_suffix("component observed quantity", oname)    # D-130
+            names[oname] =
                 _unwrap(Symbolics.substitute(expand(o.rhs), local_sub; fold = Val(false)))
         end
         for eq in ModelingToolkitBase.equations(cs)
@@ -170,23 +183,35 @@ function _bind_components(sys::PottsSystem)
                                                "(component unknowns evolve by their own equations)"))
     end
     # couplings may read other components' state (`dec.k ~ clock.m`)
-    odes = [eq.lhs ~ Symbolics.wrap(_substitute_names(eq.rhs, names, slotnames_all)) for eq in odes]
-    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[_substitute_names(x, names, slotnames_all) for x in b.next],
+    # a bound name no component equation reads is ignored, unless the model reads it (`comp.k2`)
+    function subst(x)
+        isempty(unread) || _walk_all(x) do y
+            n = _mtkname(y)
+            n !== nothing && haskey(unread, n) && throw(ArgumentError(unread[n]))
+        end
+        return _substitute_names(x, names, slotnames_all)
+    end
+    odes = [eq.lhs ~ Symbolics.wrap(subst(eq.rhs)) for eq in odes]
+    blocks = [DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[subst(x) for x in b.next],
                   b.every, b.offset)
               for b in blocks]
     # the model's own statements: `clock.m` (an MTK variable) → the cell variable `clock₊m`
-    sub(x) = _substitute_names(x, names, slotnames_all)
-    m = _map_statements(sub, PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
-        lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
-        energies = sys.energies, drives = sys.drives, constraints = sys.constraints, updates = sys.updates,
-        equations = rest, divisions = sys.divisions, relationships = sys.relationships,
-        link_rules = sys.link_rules, observed = sys.observed, sweep = sys.sweep, structural = sys.structural,
-        sources = sys.sources))
-    return PottsSystem(; name = sys.name, kinds = sys.kinds, frozen_kinds = sys.frozen_kinds,
-        lattice = sys.lattice, parameters = params, variables = vars, relations = sys.relations,
-        m.energies, m.drives, m.constraints, m.updates, equations = [m.equations; odes], m.divisions,
-        relationships = sys.relationships, m.link_rules, m.observed, discrete = blocks, m.sweep, structural = sys.structural,
-        sources = merge(sys.sources, m.sources))
+    sub(x) = subst(x)
+    m = _map_statements(sub, PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
+        lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
+        energies = getfield(sys, :energies), drives = getfield(sys, :drives), constraints = getfield(sys, :constraints), updates = getfield(sys, :updates),
+        equations = rest, divisions = getfield(sys, :divisions), relationships = getfield(sys, :relationships),
+        link_rules = getfield(sys, :link_rules), observed = getfield(sys, :observed), sweep = getfield(sys, :sweep), structural = getfield(sys, :structural),
+        boundaries = getfield(sys, :boundaries), sources = getfield(sys, :sources)))
+    return PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
+        lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
+        energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes],
+        initialization_eqs = getfield(sys, :initialization_eqs), divisions = getfield(m, :divisions),
+        relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
+        boundaries = getfield(m, :boundaries), schedule = getfield(sys, :schedule),
+        sources = merge(getfield(sys, :sources), getfield(m, :sources)),
+        kind_classes = getfield(sys, :kind_classes), metadata = getfield(sys, :metadata),
+        namespacing = getfield(sys, :namespacing), complete = getfield(sys, :complete))
 end
 
 # What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
@@ -204,18 +229,24 @@ function _reject_ignored_features(comp)
             ("jumps", ModelingToolkitBase.jumps(sys),
                 "write the jump as a Potts update with `rand()`"),
             ("brownians", ModelingToolkitBase.brownians(sys),
-                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"))
+                "Potts integrates cell ODEs deterministically; write the noise as a Potts update with `rand()`"),
+            ("tstops", _all_tstops(sys),
+                "Potts advances cell ODEs once per MCS and never stops inside a step; write the stop as a Potts update (`@after_mcs`)"),
+            ("assertions", collect(keys(ModelingToolkitBase.assertions(sys))),
+                "Potts does not check MTK assertions; write the check as a Potts update or a callback"))
         isempty(items) || throw(ArgumentError("component `$(comp.name)`: MTK $field are not supported " *
                                               "(they would be ignored): $(what(items)); $why"))
     end
     return nothing
 end
 
+# the tstops of a system and its subsystems (`get_tstops` is the system's own)
+_all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_tstops(s))...]
+
 # An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
 # `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
 # value of its own (it is a per-cell or model expression), so such a binding would be wrong or
-# dropped (P6.0k2 F7). Other bindings are not supported either, but are rejected elsewhere
-# (unknown symbol, missing initial value).
+# dropped (P6.0k2 F7). Other bindings are not supported either (`_reject_bindings`).
 function _reject_coupled_bindings(comp, cs, couplings)
     namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
     leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
@@ -233,6 +264,51 @@ function _reject_coupled_bindings(comp, cs, couplings)
                             "(`@equations $(first(touched)) ~ …`); a coupled parameter has no value of its own for MTK " *
                             "to bind with. Write the expression inline in the component's equations instead, or give " *
                             "a plain value"))
+    end
+    return nothing
+end
+
+# Any other binding Potts reads (D-133): Potts takes a component's values as plain numbers
+# (it does not run MTK initialisation), so a value given as an expression (`y(t) = 2k`,
+# `k2 = 2k`, `initial_conditions = [y => 2k]`, a discrete `X(t) = !Y`) is rejected here, naming
+# the component, instead of failing later as a missing value or an unknown symbol. Only
+# bindings of what Potts reads count: unknowns, parameters, symbols the equations or observed
+# expressions read, and (discrete) the nodes, which are observed. A binding of a continuous
+# observed variable (its equation gives its value) or of an unused parameter stays ignored,
+# unless the model reads it (`comp.k2`): `unread` collects namespaced name → error for that.
+function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String}())
+    used = Set{Any}()
+    function use(y)
+        y = _unwrap(y)
+        push!(used, y)
+        iscall(y) && operation(y) === getindex && push!(used, _unwrap(arguments(y)[1]))   # `z[1]` reads `z`
+        return nothing
+    end
+    foreach(use, ModelingToolkitBase.unknowns(cs))
+    foreach(use, ModelingToolkitBase.parameters(cs))
+    for eq in ModelingToolkitBase.equations(cs)
+        _walk_all(use, eq.lhs)
+        _walk_all(use, eq.rhs)
+    end
+    observed = Set{Any}()
+    for o in ModelingToolkitBase.observed(cs)
+        discrete ? _walk_all(use, o.lhs) : push!(observed, _unwrap(o.lhs))
+        _walk_all(use, o.rhs)
+    end
+    reads(x) = (u = _unwrap(x); u in used && !(u in observed))
+    for (x, v) in ModelingToolkitBase.bindings(cs)
+        msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding); " *
+              "Potts takes a component's values as plain numbers: give `$x` a value, or write " *
+              "the expression inline in the component's equations"
+        reads(x) && throw(ArgumentError(msg))
+        u = _unwrap(x)
+        u in observed || (unread[Symbol(comp.name, :₊, _slot_name(u))] = msg)
+    end
+    for (x, v) in ModelingToolkitBase.initial_conditions(cs)
+        w = _unwrap(v)
+        w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && reads(x) &&
+            throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression; " *
+                                "Potts takes a component's values as plain numbers (it does not run MTK initialisation)"))
     end
     return nothing
 end

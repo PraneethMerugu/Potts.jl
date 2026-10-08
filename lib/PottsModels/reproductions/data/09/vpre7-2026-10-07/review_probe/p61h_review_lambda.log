@@ -1,0 +1,8 @@
+┌ Warning: Assignment to `H` in soft scope is ambiguous because a global variable by the same name exists: `H` will be treated as a new local. Disambiguate by using `local H` to suppress this warning or `global H` to assign to the existing global variable.
+└ @ ~/p61h_review_probe.jl:61
+lambda=0.1 seed=3001 alive (dark, light) of (500,500): [(50, (500, 0)), (100, (500, 0)), (200, (500, 0)), (500, (479, 0)), (800, (455, 0)), (1000, (440, 0))]
+lambda=0.1 seed=3002 alive (dark, light) of (500,500): [(50, (500, 0)), (100, (500, 0)), (200, (500, 0)), (500, (482, 0)), (800, (461, 0)), (1000, (447, 0))]
+lambda=0.2 seed=3001 alive (dark, light) of (500,500): [(50, (500, 371)), (100, (500, 252)), (200, (500, 9)), (500, (500, 0)), (800, (500, 0)), (1000, (500, 0))]
+lambda=0.2 seed=3002 alive (dark, light) of (500,500): [(50, (500, 373)), (100, (500, 239)), (200, (500, 21)), (500, (500, 0)), (800, (500, 0)), (1000, (500, 0))]
+lambda=0.5 seed=3001 alive (dark, light) of (500,500): [(50, (500, 500)), (100, (500, 500)), (200, (500, 500)), (500, (500, 500)), (800, (500, 500)), (1000, (500, 500))]
+lambda=0.5 seed=3002 alive (dark, light) of (500,500): [(50, (500, 500)), (100, (500, 500)), (200, (500, 500)), (500, (500, 500)), (800, (500, 500)), (1000, (500, 500))]

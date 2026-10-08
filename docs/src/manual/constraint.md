@@ -7,12 +7,34 @@ Metropolis test. Each line is a condition in the copy scope (the names of
 | Statement | Meaning |
 |---|---|
 | `connectivity(k₁, k₂, …)` | the losing cell (of these kinds; all kinds if none) stays locally connected around the target: its sites there form exactly one piece (CompuCell3D's `Connectivity`). A cell under this rule cannot lose its last site. |
-| `connectivity(k…; rule = :arc_or_pair)` | at most one arc of the losing cell on the target's neighbour ring, or exactly two cells on it; the last site can be taken. It is modelled on the ring rule of the Tissue Simulation Toolkit but is not identical to it: medium sites on the ring are ignored |
+| `connectivity(k…; rule = :arc_or_pair)` | at most one piece of the losing cell on the target's neighbour shell, or else exactly two cells and no medium on it (the ring rule of the Tissue Simulation Toolkit); the last site can be taken |
 | `no_extinction` | no copy takes a cell's last site, so cells never disappear |
 | any condition | e.g. `kind[target] != wall` or `volume[old] > 5` |
 
+Conditions follow the rules of drives: `rand()` and `integral` are not allowed; keep an
+integral in a cell variable updated `@before_mcs` and read it as `s[new]`, `s[old]` (see
+[Drives](@ref manual-drive)).
+
+Both rules read the target's **neighbour shell**, whatever the model's neighbourhood: the 8
+surrounding sites on a square lattice, the 6 on a hexagonal one, the 26 on a cubic 3D one.
+`local_components` (and `ring_arcs`, the same count) is the number of pieces the losing
+cell's shell sites form, two sites joined when they are lattice face neighbours; on a 2D
+ring these pieces are its arcs. `ring_cells` and `ring_medium` count the cells and the
+medium sites on the shell. Sites outside the lattice (a closed face) are neither; a periodic
+axis wraps. So both rules work on every geometry, in 2D and 3D.
+
 A soft version of a rule is a drive: `@drive copy => λ * (local_components > 1)` penalises
-fragmentation instead of forbidding it.
+fragmentation instead of forbidding it. The soft arc-or-pair rule, the `E₀` threshold of
+Merks et al. (TST's `conn_diss`), charges `E₀` to every copy the hard rule would refuse:
+
+```julia
+@drive copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
+```
+
+These rules are local: they see only the shell around each copy, so a cell can still
+become a ring or lose a piece far away. The global count, `components(old; scope =
+Global())`, is a reserved name: a model using it is an `ArgumentError` when it is built,
+until it is implemented.
 
 ```@example constraint
 using Potts

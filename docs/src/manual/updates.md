@@ -5,12 +5,12 @@ is the variable's new value, `Pre(x)` its value before the update.
 
 | Section | When | Scope of the left side |
 |---|---|---|
-| `@before_mcs` | at the start of every MCS | site, field, cell or model variables |
-| `@after_mcs` | at the end of every MCS, after the copy attempts | site, field, cell or model variables |
+| `@before_mcs` | at the start of every MCS | site, field, cell, model or edge variables |
+| `@after_mcs` | at the end of every MCS, after the copy attempts | site, field, cell, model or edge variables |
 | `@on_copy` | after every accepted copy | `x[target]` of a site variable |
 
-A bare variable on the left updates every site, every live cell, or the model, depending
-on its scope.
+A bare variable on the left updates every site, every live cell, the model, or every link
+of a relationship (see [Relationships](@ref manual-relationships)), depending on its scope.
 
 ```@example updates
 using Potts
@@ -58,11 +58,59 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   MCS `k` before the current one (`k` ≥ 1). Lags of cell variables are not supported (chain
   `Pre` through an extra variable instead).
 - **Randomness.** `rand()` is a uniform number in (0, 1), drawn fresh for every cell or site
-  and every MCS from the problem's seed; runs are reproducible, on any backend.
+  and every MCS from the problem's seed; runs are reproducible, on any backend. `randn()`
+  is a standard normal number with the same contract, `randn(μ, σ)` is `μ + σ * randn()`,
+  and `randn(μ, σ; lower)` is redrawn while it is `≤ lower` (a truncated normal; after 64
+  draws all `≤ lower` the value is NaN and the run fails with `ReturnCode.Failure`, which
+  for a bound below `μ + 2σ` does not happen in practice). Each draw depends only on the
+  seed, the MCS, the cell or site and the draw's place in the model, so it is the same on
+  every algorithm and thread count. Other random functions (`rand(1:6)`, `randn(3)`,
+  `randexp()`, `shuffle(v)`, `Base.rand(…)` with arguments) are an error when the model is
+  built: they would run once, at build time, and become constants.
 - **Folds.** Updates can fold over the cells (`count(true for c in cells(k))`,
   `sum(volume for c in cells)`, `mean`, `minimum`, `maximum`, `any`, `all`), over the sites
   (`sum(x[s] for s in sites)`) and over a relation around a site (`sum(c[n] for n in
   Moore(1)(site))`).
+- **Contact counts.** In cell scope (cell updates and equations, division conditions and
+  rules, cell observed quantities), `count(pred for _ in contacts)` is the number of the
+  cell's contact pairs (s, s′), s in the cell and s′ a neighbour of s (inside the lattice)
+  owned by another cell or the medium, for which `pred` holds; `contacts(rel)` uses a
+  relation declared in `@relations` instead of the contact neighbourhood. `pred` reads the
+  partner's kind `kind′` (`medium` for the medium) and constants: `count(true for _ in
+  contacts)` is the unweighted `surface` over the contact relation, and the free-surface
+  fraction `count(kind′ == medium for _ in contacts) / count(true for _ in contacts)` is
+  the share of a cell's contacts with the medium. Each count is a tracker kept exact by
+  every accepted copy and every division, removal and kind change, so reading it costs
+  nothing per MCS; it is not available in energies, drives or constraints.
+
+  ```@example updates
+  @potts_model Exposure begin
+      @kinds medium A B
+      @variables begin
+          free(cell) = 0.0
+          touching_b(cell) = 0.0
+      end
+      @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
+      @energy begin
+          Volume(A, B; target = 25.0, strength = 1.0)
+          contacts => 8.0 * (kind != kind′)
+      end
+      @after_mcs begin
+          free ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
+          touching_b ~ count(kind′ == B for _ in contacts)
+      end
+      @sweep Metropolis(; temperature = 8.0)
+  end
+
+  @named exposure = Exposure()
+  σ = zeros(Int32, 30, 30)                          # a 4 × 4 block of 5 × 5 cells
+  for (k, (a, b)) in enumerate(Iterators.product(0:3, 0:3))
+      σ[5 + 5a .+ (1:5), 5 + 5b .+ (1:5)] .= k
+  end
+  op = [ownership => σ, kind => [isodd(k) ? :A : :B for k in 1:16]]
+  u = solve(PottsProblem(exposure, op, (0, 10); seed = 1), SequentialCPM()).u[end]
+  (corner = u.cell.free[1], inner = u.cell.free[6], b_contacts = u.cell.touching_b[1:4])
+  ```
 - **Cell quantities.** `centroid(k)` is the `k`-th centroid coordinate of a cell;
   `integral(x)` sums a site expression over the cell's sites. A fold inside `x` that does
   not read the site, such as `integral(w * mean(volume[c] for c in cells))`, is computed
@@ -71,3 +119,6 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   folds nested inside a fold that reads the site, stay per site.
 - **`@on_copy`** writes the target site of an accepted copy, with the copy names `new`,
   `old`, `source`, `target`: `act[target] ~ ifelse(new != 0, max_act, 0.0)`.
+  It runs inside the sweep, while `integral(x)` is refreshed only between sweeps, so an
+  `integral` in an `@on_copy` right-hand side is an error at build; keep it in a cell
+  variable updated `@before_mcs` (`s ~ integral(x)`) and read `s[new]`, `s[old]`.

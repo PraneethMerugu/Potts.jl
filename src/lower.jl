@@ -22,7 +22,7 @@ end
 LowerEnv(T, mode, bind, relname) = LowerEnv(T, mode, bind, relname, IdDict{Any, String}())
 
 const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
 
 _unwrap(x) = Symbolics.unwrap(x)
 
@@ -79,13 +79,14 @@ function _symkey(x)
 end
 function _symkey!(names, x)
     x = _unwrap(x)
-    x isa SymbolicUtils.BasicSymbolic || return _canonical_value(x)
-    SymbolicUtils.isconst(x) && return _canonical_value(SymbolicUtils.unwrap_const(x))
+    x isa SymbolicUtils.BasicSymbolic || return _symkey_value(x)
+    SymbolicUtils.isconst(x) && return _symkey_value(SymbolicUtils.unwrap_const(x))
     i = info(x)
     if i !== nothing
         i.role in (:bound, :bound_cell, :bound_site) || return string(i.role, ":", i.name)
         push!(names, string(nameof(x)))
-        return string(i.role, ":", i.name, _canonical_value(i.options))
+        return string(i.role, ":", i.name,
+            _canonical_checked(() -> "the bound variable `$(i.name)` (its relation or options)", i.options))
     end
     issym(x) && return string("sym:", nameof(x))
     op = operation(x)
@@ -94,7 +95,9 @@ function _symkey!(names, x)
     return string(_symop_key(op), "(", join(ks, ","), ")")
 end
 _symop_key(op::Function) = string(nameof(parentmodule(op)), ".", nameof(op))
-_symop_key(op) = _canonical_value(op)
+_symop_key(op) = _canonical_checked(() -> "the operation `$(_key_string(op))`", op)
+# a constant in an expression, printed canonically (an `ArgumentError` naming it if too deep, D-130)
+_symkey_value(v) = _canonical_checked(() -> "the symbolic constant `$(_key_string(v))`", v)
 
 """64-bit FNV-1a of a string: a content hash fixed by its definition (names, not order)."""
 function _fnv64(s::AbstractString)
@@ -154,6 +157,7 @@ function lower(x, env::LowerEnv)
         stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
         return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
     end
+    (op === random_normal || op === random_normal_above) && return _lower_normal(op, args, env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
     # `_nonzero(at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
     op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
@@ -210,6 +214,9 @@ function _lower_named(x, i::Info, env::LowerEnv)
         haskey(env.bind, :__edge) || error("edge variable `$(i.name)` is only available in edge terms and link rules")
         k, a = env.bind[:__edge]
         return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
+    elseif r === :contact_count          # a contact fold (D-150): its tracker column
+        haskey(env.bind, :__cell) || error("`count(… for _ in contacts)` is per cell: use it in cell updates, division conditions or observed quantities")
+        return :($(env.T)(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell]))))
     end
     error("cannot lower `$x` (role $r)")
 end
@@ -236,17 +243,30 @@ end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
 
 """Distinct site expressions `x` of `integral(x)` in the model's statements, as stored
-(`_integral_operand`)."""
-_integrals(sys::PottsSystem) = first(_integrals_folds(sys))
+(`_integral_operand`): those read by a statement other than `@observed`, and with
+`observed = true` also those read only by `@observed`, after them."""
+# Observed-only integrals have no cell column (D-120). The stored ones keep the order of the
+# full gather, so models without observed-only integrals keep their layout and fingerprint.
+_integrals(sys::PottsSystem; observed = false) = first(_integrals_folds(sys; observed))
 
 # The stored operands and, per operand, the slots of its hoisted folds (`_integral_hoist`).
-function _integrals_folds(sys::PottsSystem)
+function _integrals_folds(sys::PottsSystem; observed = false)
     out = Any[]
     folds = Vector{Pair{Symbol, Any}}[]
-    xs = Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
-        (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in sys.link_rules)..., (o.expr for o in sys.observed)..., sys.sweep.temperature,
-        (x for b in sys.discrete for x in b.next)...]
+    head = Any[(u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
+        (d.when for d in getfield(sys, :divisions))..., (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in getfield(sys, :link_rules))...]
+    tail = Any[getfield(sys, :sweep).temperature, (x for b in getfield(sys, :discrete) for x in b.next)...]
+    xs = Any[head..., (o.expr for o in getfield(sys, :observed))..., tail...]
+    # operands read by a statement other than `@observed`
+    stored = Any[]
+    for x in Any[head..., tail...]
+        _walk(x) do y
+            iscall(y) && operation(y) === cell_integral || return
+            a = first(_integral_hoist(arguments(y)[1]))
+            any(z -> isequal(z, a), stored) || push!(stored, a)
+        end
+    end
     for x in xs
         new = Any[]
         newfolds = Vector{Pair{Symbol, Any}}[]
@@ -259,13 +279,15 @@ function _integrals_folds(sys::PottsSystem)
         append!(out, new[perm])
         append!(folds, newfolds[perm])
     end
-    return out, folds
+    keep = [any(z -> isequal(z, a), stored) for a in out]
+    order = observed ? [findall(keep); findall(!, keep)] : findall(keep)
+    return out[order], folds[order]
 end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
-_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in sys.updates)..., (eq.rhs for eq in sys.equations)...,
-    (d.when for d in sys.divisions)..., (r for d in sys.divisions for (_, r) in d.rules if !(r isa Split))...,
-    (r.when for r in sys.link_rules)..., (x for b in sys.discrete for x in b.next)...])
+_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
+    (d.when for d in getfield(sys, :divisions))..., (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+    (r.when for r in getfield(sys, :link_rules))..., (x for b in getfield(sys, :discrete) for x in b.next)...])
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
     for x in xs
@@ -445,7 +467,22 @@ function _lower_laplacian(c, env)
     i = info(c)
     (i !== nothing && i.role === :field) || error("`Δ` applies to field variables")
     haskey(env.bind, :__site) || error("`Δ($(i.name))` needs a site")
-    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
+    faces = get(env.bind, :__bc, _FACES[])
+    (faces === nothing || !haskey(faces, i.name)) &&
+        return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site])))
+    return :(CorePotts.laplacian(st.site.$(i.name), ctx, $(env.bind[:__site]); bc = $(_bc_code(faces[i.name], env))))
+end
+
+# The `bc` of a field's `@boundary` faces (D-145): one `(low, high)` pair of `GhostFace`s per
+# axis (homogeneous, so kernels index it per axis without a union); an axis without an entry
+# is zero flux. Values are lowered here, so a parameter value is read from `p` (a `remake`
+# keeps the code).
+function _bc_code(axes, env)
+    T = env.T
+    side(::Nothing) = :(CorePotts.GhostFace(false, zero($T)))
+    side(::NoFlux) = side(nothing)
+    side(d::Dirichlet) = :(CorePotts.GhostFace(true, $T($(lower(d.value, env)))))
+    return Expr(:tuple, (Expr(:tuple, side(a === nothing ? nothing : a[1]), side(a === nothing ? nothing : a[2])) for a in axes)...)
 end
 
 function _lower_gather(args, env)

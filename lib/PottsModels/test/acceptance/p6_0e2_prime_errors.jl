@@ -85,23 +85,23 @@ end
         # a cell variable named `c′`
         cprime = Potts.variable(only(Potts.Symbolics.@variables c′(t)), :cell)
         @test p60e2_rejection("c′") do
-            sys = PottsSystem(; name = :p60e2prog, kinds = base.kinds, lattice = base.lattice,
-                parameters = base.parameters, variables = [base.variables; cprime],
-                energies = base.energies, sweep = base.sweep)
+            sys = PottsSystem(; name = :p60e2prog, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice),
+                parameters = Potts.parameters(base), variables = [Potts.variables(base); cprime],
+                energies = getfield(base, :energies), sweep = getfield(base, :sweep))
             mtkcompile(sys)
         end === :ok
         # a parameter named `c′`
         pprime = Potts.parameter(Symbol("c′"), 1.0)
         @test p60e2_rejection("c′") do
-            sys = PottsSystem(; name = :p60e2prog, kinds = base.kinds, lattice = base.lattice,
-                parameters = [base.parameters; pprime], variables = base.variables,
-                energies = base.energies, sweep = base.sweep)
+            sys = PottsSystem(; name = :p60e2prog, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice),
+                parameters = [Potts.parameters(base); pprime], variables = Potts.variables(base),
+                energies = getfield(base, :energies), sweep = getfield(base, :sweep))
             mtkcompile(sys)
         end === :ok
         # control: the same programmatic rebuild without the clash builds and runs
-        ok = PottsSystem(; name = :p60e2prog, kinds = base.kinds, lattice = base.lattice,
-            parameters = base.parameters, variables = base.variables,
-            energies = base.energies, sweep = base.sweep)
+        ok = PottsSystem(; name = :p60e2prog, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice),
+            parameters = Potts.parameters(base), variables = Potts.variables(base),
+            energies = getfield(base, :energies), sweep = getfield(base, :sweep))
         @test p60e2_runs(ok)
     end
 

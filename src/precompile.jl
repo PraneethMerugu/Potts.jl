@@ -1,5 +1,66 @@
 # Precompile the symbolic pipeline (macro-built system → mtkcompile → code generation) on a
 # small model, so the first `PottsProblem` of a session does not compile Symbolics' paths.
+# `_PrecompileModel` goes through `@potts_model` (its expansion, the generated constructor's
+# build scope and `PottsSystem` keywords, the first MCS), which every user model shares.
+# Its cell ODE with an algebraic equation takes the first MTK `System` and `mtkcompile` of a
+# session (odes.jl): loading Potts invalidates MTK's own precompiled `mtkcompile` (≈ 1.2 s).
+# Its `@initialization_equations` take the first initialization `System`, MTK
+# `InitializationProblem` and solves of a session (initialization.jl; ≈ 9 s cold): a linear
+# model pair (MTK's linear initialization problem) and cells with an explicit and a
+# nonlinear condition (a solve from the guess); with `explicit_init = true`, explicit
+# conditions only (MTK's observed values). Initialization changes no kernel, so the second
+# build reuses the first one's compiled code.
+@potts_model _PrecompileModel begin
+    @structural_parameters begin
+        lattice = (16, 16)
+        explicit_init = false
+    end
+    @kinds medium cell
+    @parameters begin
+        λ = 1.0
+        V₀ = 20.0
+        D_c = 0.1
+        T = 10.0
+        J[kind, kind] = [0.0 16.0; 16.0 2.0]
+    end
+    @variables begin
+        V_target(cell) = V₀
+        c(field) = 0.0
+        x(cell) = 1.0
+        x_rate(cell) = 0.0
+        s₀(cell)
+        q(cell), [guess = 1.0]
+        m₀(model)
+        m₁(model)
+    end
+    @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(cell) => λ * (volume - V_target)^2
+        contacts => J[kind, kind′]
+    end
+    @drive copy => -λ * (c[target] - c[source])
+    @equations begin
+        D(c) ~ D_c * Δ(c) + (kind == cell) - c
+        D(x) ~ -x_rate
+        x_rate ~ x / T
+    end
+    if explicit_init
+        @initialization_equations begin
+            m₀ ~ 2V₀
+            s₀ ~ volume / m₀ + id
+        end
+    else
+        @initialization_equations begin
+            m₀ + m₁ ~ 3V₀
+            m₀ - m₁ ~ V₀
+            s₀ ~ volume / m₀ + id
+            q^2 ~ volume + s₀
+        end
+    end
+    @after_mcs V_target ~ Pre(V_target) + V₀ / T
+    @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
+    @sweep Metropolis(; temperature = T)
+end
 PrecompileTools.@setup_workload begin
     PrecompileTools.@compile_workload begin
         (; volume, surface, kind, kind′, owner, source, target, old, new) = B
@@ -26,5 +87,10 @@ PrecompileTools.@setup_workload begin
             generated_code(csys; T = S, field_solver = ExplicitEuler())
             PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
         end
+        prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
+            (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+        step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
+        PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
+            [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8)
     end
 end

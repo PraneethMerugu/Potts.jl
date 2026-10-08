@@ -55,7 +55,7 @@
 using Potts: CorePotts
 using OrdinaryDiffEqRosenbrock: Rodas5P
 
-const P60V2_ON_METAL = get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
+const P60V2_ON_DEVICE = isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
 const P60V2_SLACK = 16
 const P60V2_CAPACITY = 64
 p60v2_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
@@ -306,9 +306,9 @@ end
     end
 end
 
-@testset "P6.0v2: adaptive-ODE column-only copies on Metal" begin
-    if P60V2_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v2: adaptive-ODE column-only copies on the device" begin
+    if P60V2_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         host(a) = Array(a)
         nar = p60v2_ode_problem(; T = Float32)
@@ -330,13 +330,13 @@ end
         @test host(ia.state.cell.y)[1:2] ≈ cpu.cell.y[1:2] rtol = 1e-5
         @test host(ia.state.model.g) ≈ cpu.model.g rtol = 1e-5
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v2: HostPhase column-only copies on Metal" begin
-    if P60V2_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v2: HostPhase column-only copies on the device" begin
+    if P60V2_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         host(a) = Array(a)
         for body in (:xy, :sigma)
@@ -367,13 +367,13 @@ end
             end
         end
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
-@testset "P6.0v2: @link column-only copies on Metal" begin
-    if P60V2_ON_METAL
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0v2: @link column-only copies on the device" begin
+    if P60V2_ON_DEVICE
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM()
         host(a) = Array(a)
         nar = p60v2_link_problem(; T = Float32)
@@ -393,6 +393,6 @@ end
         end
         @test host(ib.state.cell.z1)[1:3] == fill(6.0f0, 3)
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

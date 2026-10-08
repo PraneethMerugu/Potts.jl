@@ -1845,3 +1845,343 @@ The maintainer approved F-1…F-6 (D-049).
 - **The change.** The fingerprint also hashes non-default cadences kept outside the generated code: discrete-component clocks (period and phase, resolved after `mcs_duration`), `@divide … Every(n)`, `@link`/`@unlink … Every(n)`, and a non-default `mcs_duration` (the `Adaptive` ODE solver's step). A checkpoint no longer loads into a problem with another schedule. Models on the default schedule — every PottsModels system and every existing pin — keep their fingerprints.
 - **Review.** Two rounds (round 2: `mcs_duration`), approved. Follow-up P6.0aq (the acceptance law's offset).
 - **Merge checks.** Potts and PottsModels (`-t 4`) exit 0. Host-only (problem build); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0aq merged: the fingerprint includes the acceptance law (D-121)
+
+- **The change.** The fingerprint also hashes a non-Metropolis `@sweep` law and a non-zero `offset`, so a checkpoint no longer loads across `Metropolis`/`Barker` or across offsets. Defaults (Metropolis, offset 0) keep their fingerprints; every PottsModels pin holds.
+- **Review.** One round, approved. Follow-ups P6.0ar (neighbourhoods) and P6.0as (NaN offset, closure `combine`).
+- **Merge checks.** Potts and PottsModels (`-t 4`) and the docs build exit 0. Host-only (problem build); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ar merged: the fingerprint includes the proposal and contact neighbourhoods (D-122)
+
+- **The change.** The fingerprint also hashes `@relations proposal` and `@relations contact` when they resolve to something other than their default (`VonNeumann(1)`; the lattice neighbourhood), so a checkpoint no longer loads across copy or contact neighbourhoods. Because the proposal default is `VonNeumann(1)`, the models declaring `proposal = Moore(1)` — GranerGlazier, WortelAct (both), MerksVasculogenesis, OpenVTGrowingMonolayer — and one fixture were re-pinned in six earlier frozen files under D-122 (pins only); AkeebInvasion and every model without `@relations` keep theirs.
+- **Review.** Two rounds (round 1: thin lattices whose default aliases), approved. Follow-up P6.0at (named and inline relations).
+- **Merge checks.** Potts, PottsModels (`-t 4`), CorePotts and the docs build exit 0. Host-only (problem build); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0t merged: integrals refresh only for readers after the sweep (D-120)
+
+- **The change.** The integral refresh at the start of the after-MCS phases covers only integrals read after the sweep; integrals read only by the before block or the temperature stay fresh from the previous boundary, and an integral read only by `@observed` has no cell column and is computed from the saved state on query. Values seen by every reader are unchanged. 8 observed-only integrals on 128×128 went from 3.6× to ≈1.0× per warm MCS.
+- **Review.** Two rounds (round 1: a discrete tick's population fold reading an integral ran one MCS behind; stored-integral order changed for some models), approved. Follow-up P6.0au (integral in drives and constraints).
+- **Merge checks.** Potts, CorePotts, MakiePotts and the docs build exit 0; Potts and CorePotts on Metal exit 0; Metal gate passes (all allocs 0) — it flagged graner_glazier_72.metal 1.095 and wortel_act_100.metal 1.058, decided by `benchmark/ab.jl` (6 rounds) as noise: 0.986 and 1.005 (neither model has integrals). PottsModels (`-t 4`) first failed 5 pins of this item's frozen file that P6.0ar had moved; re-pinned to the D-122 values at merge, then exit 0.
+
+## 2026-10-04 — P6.0as merged: `@sweep` validation and `combine` identity (D-123)
+
+- **The change.** `@sweep` rejects a non-finite or non-real `offset`, and a `combine` whose printed form holds a compiler-generated name (anonymous functions, closures, wrappers holding them) — those fingerprinted differently in every session and could collide across sessions. Named functions, stable wrappers (`min ∘ max`) and callable structs with value fields are accepted. No fingerprint or pin changes; the CC3D `ArithmeticAverage` translation in "Coming from" now uses a named function.
+- **Review.** Two rounds (round 1: the stability check tested the wrong thing), approved. Follow-up P6.0av (`mcs_duration`).
+- **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build. Host-only (sweep validation); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0au merged: no `integral` in drives and constraints (D-125)
+
+- **The change.** A drive or expression constraint that reads `integral` (plain, `Pre`, inside a cell fold or `Chemotaxis` arguments) is an `ArgumentError` at build naming `integral`, the statement and the workaround: store it with `@before_mcs s ~ integral(u)` and read `s[new]`/`s[old]`. Before, a plain read failed with an unhelpful message and a folded one built and crashed at the first `solve`. Drive, constraint and variables manual pages updated.
+- **Review.** Approved in round 1: no bypass (Chemotaxis `when`/field, `ifelse`, `@extend`, functional `extend`, 3D), no false rejection; the documented workaround runs as written on both algorithms. Coordinator added a sentence that a copy-scope temperature may read `integral` directly. Follow-ups P6.0aw (`@on_copy` reading an integral) and, from the P6.0at review, P6.0ax.
+- **Merge checks.** Potts and the docs build exit 0. PottsModels (`-t 4`) failed one timing check, P6.0t's "observed-only integrals cost nothing" (1.854 vs 1.545 ms, limit 1.1×), with about six other Julia suites running; the file alone passes on both algorithms. Build-time check only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0at merged: the fingerprint includes named and inline gather relations (D-124)
+
+- **The change.** Named relations (`@relations far = Ball(2.0)`, read by `contacts(far)` or a fold) and inline gathers (`Moore(1)(42)`) reached the generated code only as run-context fields, so twin models differing in them fingerprinted alike and a checkpoint loaded across them. The fingerprint now hashes every such relation the generated code reads, resolved on the lattice; unread and observed-only relations are left out. Relations named `lattice`, `mobility` or `spacing` are refused at `mtkcompile` with CorePotts' reserved-names error.
+- **Pins.** WortelAct (both variants) and the `P60ahAt` fixture moved: 9 lines in 5 frozen files on the branch, plus WortelAct in `p6_0as` and `p6_0au` at merge (D-124). No dynamics change.
+- **Review.** Two rounds (round 1 approved with a reserved-name nit, fixed in round 2). Follow-up P6.0ax (an inline gather in a division `when` fails at build, pre-existing).
+- **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0av merged: `@sweep mcs_duration` validation; the `@sweep` checks live in `SweepSpec` (D-126)
+
+- **The change.** `mcs_duration` must be a real number that is finite and > 0 after conversion to Float64; NaN, ±Inf, 0, negatives, out-of-range `BigFloat`s, non-numbers and symbolic parameters are an `ArgumentError` naming it when the model is built (before: silent NaN runs, frozen or backwards time, opaque `MethodError`s). The `offset`, `combine` (D-123) and `mcs_duration` checks now run in `SweepSpec`'s inner constructor, so a hand-built spec passed to `PottsSystem(; sweep)` cannot skip them. Messages show the rejected value's type. No fingerprint changes.
+- **Review.** Approved in round 1 (constructor is the only method; serialization round-trips; fields stay Float64; build-time only). Coordinator nits at merge: docstring order, type in the message. WortelAct's pins in `p6_0av` re-pinned under D-124 at merge.
+- **Merge checks.** Potts and the docs build exit 0. PottsModels: the first run was suspended by a ≈3 h machine sleep and killed at the background limit; the rerun failed only P6.0t's timing check (1.075 vs 0.975 ms, limit 1.1×), which aborted the chain; P6.0t and every later acceptance file then ran separately (exit 0, 93 testsets) and Aqua passed. P6.0ay (load-robust cost check, chain collects failures) is in progress. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0aw merged: no `integral` in `@on_copy` updates (D-129)
+
+- **The change.** An `integral` on either side of an `@on_copy` statement (right-hand side or a computed left-hand-side index; bare, in a fold, with `Pre`, at any scope) is an `ArgumentError` at build naming `integral`, `@on_copy`, "every accepted copy" and the `@before_mcs` workaround. Before, a folded read built and wrote the start-of-MCS value, which could enter ΔH through an energy reading the written variable. Updates, drive and variables manual pages say so.
+- **Review.** Two rounds (round 1: an integral in the left-hand-side index bypassed the check). WortelAct's pins in `p6_0aw` re-pinned under D-124 at merge. Follow-up filed meanwhile: P6.0az (closure-weighted lattice neighbourhood not fingerprinted by value, from the P6.0c2 review).
+- **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build, run one after another: exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ay merged: P6.0t's cost check is structural; the acceptance chain collects failures (D-131)
+
+- **The change.** P6.0t's frozen "observed-only integrals cost nothing" check, which flaked at 1.1× under parallel agent load and then aborted the include chain, now compares the executed phase lists and integral columns (re-frozen) with a loose paired-timing backstop (≤ 1.5×, defect ≈ 3.6×). PottsModels' test and acceptance files now run one testset per file inside an outer testset, so a failing file no longer hides later ones; the run still exits 1.
+- **Review.** Approved in round 1.
+
+## 2026-10-04 — P6.0v2b merged: a custom frozen rule declares the leaves it reads (D-128)
+
+- **The change.** `CorePotts.frozen_reads(sys)` (public; default `nothing`) lets a custom `remake_frozen` declare `:σ` and the cell columns it reads; a device refresh then copies only those (Metal, test fixture: 1408 B per refresh for both twins, vs 1792/3460 B undeclared). Bad or repeated names are an `ArgumentError` at `init` and every refresh. Standard rule unchanged (no gate model uses a custom rule). Audit row R4 resolved.
+- **Review.** Two rounds (round 1: a repeated name crashed on Metal only).
+
+## 2026-10-04 — P6.0b2 merged: re-declared edge variables keep their relationship; operating-point edge values seed initial links (D-127)
+
+- **The change.** An extension that re-declares a base edge variable (to change its default) keeps the base's relationship, with `@extend` and with functional `extend`; an explicit re-scope, conflicting bases, and a change of scope are clear `ArgumentError`s at build. `:rest => 9.0` (or a parameter expression) in the operating point now seeds every initial link of its relationship instead of being silently ignored; a non-number is rejected. No generated-code or fingerprint change.
+- **Review.** Two rounds (round 1: functional `extend` disagreed with `@extend` for a body built on its own).
+- **Merge checks (P6.0ay, P6.0v2b, P6.0b2 together).** Merged locally one after another and checked once on the combined tree, one suite at a time: CorePotts, Potts, PottsModels and the docs build exit 0; `GROUP=GPU` on Metal under `tools/exclusive.sh` exit 0, including the P6.0v2b Metal testsets. Standard frozen-rule path unchanged, so no gate run.
+
+## 2026-10-04 — P6.0c2 merged: canonical solver strings, session-bound closures, reserved suffixes (D-130)
+
+- **The change.** A solver value nested deeper than the canonical printer's cap, or cyclic, is an `ArgumentError` instead of a silent truncation (two different `Adaptive` solvers used to share a group and a fingerprint, dropping the second). Closures in `Adaptive` keywords stay allowed (SciML idiom; coordinator decision) and make the fingerprint session-bound: on base, three processes with different closures shared one fingerprint and a checkpoint resumed across them. Reserved suffixes are checked on vector, `@observed` and component observed names. New `tools/fingerprint_compare.jl` (D-078 merge check). AUTHORING §6 and INTERNALS §1.6 state the after-MCS phase order.
+- **Review.** Approved in round 1, with nits applied before merge. Re-frozen once before implementation (rule 2 changed from rejecting closures to session-binding them).
+- **Merge checks.** Potts, PottsModels (`-t 4`) and the docs build, one at a time: exit 0. `tools/fingerprint_compare.jl` against the pre-merge `HEAD`: all 10 fingerprints agree. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0u merged: remaining `@components` gaps (D-133)
+
+- **The change.** MTK `tstops`/`assertions` on a component are rejected instead of ignored; every rejected component binding names the component and the bound name, including a bound parameter the model reads as `comp.x`; an error inside a hand-written `@extend` base propagates as the base raised it; `frozen_varies(sys) = false` silences `init`'s static-mask warning; the temperature's `integral(Pre)` error says "in @sweep".
+- **Review.** Two rounds (round 1: a model read of a let-through bound parameter still gave the old message). Two pre-existing component limitations noted in D-133, not filed (D-134).
+- **Merge checks.** CorePotts, Potts, PottsModels (`-t 4`) and the docs build, one at a time: exit 0. Build-time only (the CorePotts change is an `init` warning guard); gate and Metal not rerun.
+
+## 2026-10-04 — P6.0ax merged: inline gathers outside the copy step are numbered (D-132)
+
+- **The change.** Every inline gather the compiler lowers is numbered, including those in division `when`s and rules, link `when`s, edge energies and `@on_copy` update indices (they used to fail at build with `KeyError`). One `scanned` list drives both tracker flags and numbering; the footprint scans on-copy indices (a named relation read there now reports its full reach). Models that built before keep their fingerprints; `@observed` gathers are not fingerprinted.
+- **Review.** Two rounds (round 1: the on-copy index was not scanned; D-132 overstated `@observed` fingerprint stability — the shared build counter is folded into P6.0z).
+- **Merge checks.** Potts, PottsModels (`-t 4`, 13278 pass, 37 broken) and the docs build, one at a time: exit 0. Build-time only; gate and Metal not rerun.
+
+## 2026-10-04 — P6.0g merged: kind classes (D-135)
+
+- **The change.** `@kinds medium tip stalk endothelial = (tip, stalk)` declares a kind class; `x ∈ g` / `x ∉ g` lower to a constant `==` chain in every gate, and `cells(g)` and `Chemotaxis(kinds = …)` take classes. Members are resolved when the macro expands; `kind == g` is an error pointing to `∈`; `extend` merges classes; operating points and layouts reject class names. Programmatic `kind_classes` are validated at construction. Published models' generated code and fingerprints are unchanged.
+- **Review.** Two rounds (round 1: `kind == g` silently constant; members unchecked at expansion; layouts partly ignored class names).
+- **Merge checks.** Potts, PottsModels (`-t 4`, 13617 pass, 38 broken) and the docs build, one at a time: exit 0. `GROUP=GPU POTTS_GPU=metal` under `tools/exclusive.sh`: exit 0. Gate with Metal: pass (CPU within tolerance; Metal GG/Wortel/Merks flagged). `benchmark/ab.jl` on all five Metal cases against 03db26ed: Akeeb 1.010, Merks 1.026, OpenVT 1.010, Wortel 0.965; GG 1.052 in 4 rounds, rerun with 8 rounds 1.011 (generated kernels are byte-identical, so treated as power-state noise).
+
+## 2026-10-04 — P6.0o merged: `PottsSystem <: AbstractSystem` (D-137)
+
+- **The change.** `PottsSystem` is a `ModelingToolkitBase.AbstractSystem` with MTK's `System` fields mirrored; `equations`, `unknowns`, `parameters`, `observed`, `nameof`, metadata, `toggle_namespacing`, `independent_variables` and `sys.x` work as in MTK. `sys.x` is strict (a non-symbol name is an `ArgumentError` naming its category); keys namespaced by the model's own name resolve at every key site, others are rejected. `complete` is exported and Potts-owned; `@set` on a mirror field maps to the Potts field; `extend` keeps the newest metadata. `compose`, `ODEProblem`, `JumpProblem` and `extend` with a plain `System` are clear errors (`compose(sys, [x])` used to recurse forever). 378 internal property reads now use `getfield`; public `Potts.lattice`. New direct dependencies JumpProcesses and ConstructionBase (both already loaded by MTKBase). Generated code and fingerprints unchanged (25 pins). Seven frozen files re-frozen under D-137 (property reads → `getfield`/accessors only).
+- **Review.** Three rounds (round 1: namespaced keys inconsistent per site; `complete` not exported; `@set` on mirrors a no-op; stale metadata on `extend`. Round 2: foreign-namespaced keys leaked through `getp`, `prob.ps`, `solvers` and expressions).
+- **Maintainer.** D-137 rule 8: the absolute D-047 figure is reported, not gated — the maintainer, on the 14.69 s baseline: "14.69 s is fine" (2026-10-04).
+- **Merge checks.** Potts, PottsModels (`-t 4`), MakiePotts and the docs build, one at a time: exit 0 (first attempt failed to load Potts until the workspace Manifest was re-resolved for the new dependencies). `GROUP=GPU POTTS_GPU=metal`: exit 0. Gate with Metal: pass (Wortel, Merks Metal flagged). `benchmark/ab.jl`, 8 rounds against 8be0df58: Akeeb 1.007, Merks 0.979, Wortel 0.985, GG 0.975, OpenVT 0.976. Latency (`benchmark/p6_0o_latency.jl 5 10`, paired against 8be0df58): time to first MCS 0.988–1.004, cold construct/mtkcompile/problem ≤ 1.035; Akeeb Float32 first MCS 14.32 s (base 14.4 s). Warm medians for Merks and OpenVT construct/mtkcompile read 1.10–1.17; a paired minimum-time micro-benchmark (BenchmarkTools, two alternations) gives 0.98–1.04 for all three tested models, so treated as GC noise.
+
+## 2026-10-05 — P6.1d: reproduction 09 FULL run (no code change; page frozen, D-072)
+
+- **Run.** Commit 8eb9d210, Julia 1.12.6, 6 threads, `POTTS_FULL_REPRODUCTION=true`, base seed 1, 10 replicates each from `graner_glazier_aggregate(1000; seed = i, margin = 10)` on 247 × 247 periodic. Executed with `Literate.markdown(…; execute = true)` on the page alone; wall time 3 h 6 min (11 166 s, 2026-10-04 23:22 → 2026-10-05 02:29) on a heavily loaded machine (load average up to 59). Outputs (executed page, replicate-1 video, log) kept outside the repo in `PottsWorktrees/p6-1d-out/`; the page writes nothing to `data/09/`, which stays pending.
+- **Verdict (n = 10, nominal times).** Every FULL and SMOKE+FULL row passes except one:
+  - V-PRE1 fractions at 10/100/10³/10⁴ (heterotypic 0.372, 0.250, 0.133, 0.073; dark–dark 0.318, 0.382, 0.444, 0.474; light–light 0.250, 0.308, 0.363, 0.394): all PASS. Log law 5–4000: R² 0.991, slope −0.114 per decade: PASS.
+  - V-PRE2 (homotypic > heterotypic at every save; dd crossing 25, ll crossing 64, dd first; NC1 no crossing): PASS.
+  - V-PRE3 (a) dark–medium < 0.003 by 320: PASS; NC1 0.03: PASS. (c) size-free plateau R = 1.013: PASS. (d) raw 0.06: PASS.
+  - **V-PRE3 (b) light–medium plateau reached before 10³: FAIL** — our plateau is reached at 3200 paper MCS (within 5 % of the 20 000 value; last-decade slope −0.003 per decade), against ≈ 200 (PRE) / ≈ 300 (PRL). Also FAIL at the informational time scale s = 1. The plateau level itself matches (rows (c), (d)).
+  - V-PRE4 drop D 0.021 ± 0.003 in [0.005, 0.03]; flat over [10³, 10⁴] (−27.5 bonds/decade ≤ 181): PASS. Start check: D = 0.02 from Voronoi starts and 0.02 from relaxed copies (replicates 1–3).
+  - V-PRE5 dark clusters 20.3 → 12.2 → 5.1 → 1.8, largest 0.905 at 10⁴: PASS.
+  - V-PRE13 partial sorting (dark–medium 0.023; heterotypic 0.322, 0.228, 0.153): PASS.
+  - V-GG6 Δa = −2.861 ± 0.061 SE, NC1 0.073: PASS. NC1 symmetric contacts (share 0.497, dark–medium 0.03, 0 engulfed): PASS.
+  - Periodic-boundary variant (494 × 494, 9 Bonferroni comparisons at 5 %): all within, PASS.
+- **Next.** Send the table to the spec owner (spec 09 §9.1) for the V-PRE3 (b) failure: the slow light–medium approach may come from the unrelaxed Voronoi start (cell-area SD 6.9 vs 1.8 relaxed) or the aggregate shape, not the dynamics. No change to the frozen page without a DECISIONS entry (D-072).
+
+## 2026-10-05 — P6.1b merged: `Potts.boundary_lengths` and `Potts.anneal` (D-139)
+
+- **The change.** Two public (not exported) analysis functions next to `total_energy`: `boundary_lengths(prob, u; relation)` splits the boundary by kind pair (each bond once, relation weights, periodic wrap, domains; Σ J·L == `total_energy` for a contact-only model), and `anneal(prob, u; mcs, seed, alg)` returns a copy relaxed at copy temperature 0 with the run's own ΔH (drives included), refreshing integrals and energy snapshots before each MCS and running nothing else. No CorePotts or kernel change. New manual page `manual/analysis.md`; HexSorting sibling. The frozen 09 page keeps its own helpers (D-072; switch later under its own entry).
+- **Review.** Two rounds (round 1: frozen population-fold snapshots and integrals; a failed run returned silently; docs overclaimed a lower energy).
+- **Merge checks.** Potts, PottsModels (`-t 4`), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.022, others 0.968–1.017; 0 allocations). No device code touched; Metal not rerun.
+
+## 2026-10-05 — P6.1a5 merged: core `Voronoi`, shapes, `RandomPoints`, clipping, `layer_rng` (D-138)
+
+- **The change.** `VoronoiBall` (PottsModels) is replaced by the core `Voronoi(points; region, lloyd, kinds, splits)` (medium-only fill, minimum-image nearest generator, Lloyd, D-063 repair), with `RandomPoints`, `Center()`, public `Potts.points`, and the GeometryBasics shapes `HyperSphere`/`Circle`/`Sphere`/`Point` (exported; closed membership with a relative rounding tolerance, wrapping on periodic axes). Every layout report row gains `clipped`. Public `Potts.layer_rng`; Akeeb clocks use it; StableRNGs leaves PottsModels. `graner_glazier_aggregate` and the Akeeb clocks are byte-identical (44 Voronoi pins, 8 aggregate pins). GeometryBasics is imported last in Potts (its `OffsetInteger` converts invalidate the symbolic stack otherwise: `using Potts` +29 % → +4 %).
+- **Review.** Two rounds (round 1: hex discs lopsided at exact lattice distances; load-order invalidations failing P6.0o's +5 % bound; hex tie wording). Final paired time to first MCS ×1.013–1.034 against 8eb9d210.
+- **Merge checks.** Potts, PottsModels (`-t 4`, 14 629 pass, 38 broken), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.040, others 0.971–1.016; the base measured GG sequential 1.034 in the P6.1b review, so drift). Host-only change; Metal not rerun.
+- **Open.** Spec sketches 09 and 11 still name `VoronoiBall` (peer session's files).
+
+## 2026-10-05 — P6.3c merged: `Eden`, `Splits`, `RandomPoints(replace = true)`, `shortfall` (D-141)
+
+- **The change.** `Eden` (TST GrowInCells, frontier-based, draw stream identical to the full-scan rule), the host routine `Splits` (TST DivideCells geometry, on-plane sites stay with the mother up to a relative 1e-9, one-piece warnings issued by `layout` with final ids), `RandomPoints(replace = true)`, and `shortfall = :error | :warn | :allow` on Eden and Splits; a HexSorting sibling is the first `:allow` consumer in code. LinearAlgebra (stdlib, already loaded transitively) is a new direct Potts dependency. Spec 01 §7.6 bands reproduced (de novo 357–360 cells ≈ 47.6 px; sprout 1 816–2 439 px).
+- **Review.** Two rounds (round 1: on-plane sites in Float64; paint-time ids in warnings). Follow-up folded into P6.3d: a Splits cell repaired by a later layer still warns.
+- **Merge checks.** First attempt failed to load Potts until the workspace Manifest was re-resolved for LinearAlgebra (the merge script now resolves first). Potts, PottsModels (`-t 4`, 15 258 pass, 38 broken), MakiePotts and the docs build, one at a time: exit 0. CPU gate: pass (GG sequential 1.018, others 0.968–1.003). Host-only change; Metal not rerun.
+
+## 2026-10-05 — P6.3a merged: shell topology, soft E₀, `Global()`, `track = (:ΔH,)` (D-140)
+
+- **The change.** Shell topology for the lattice relations, a soft E₀, the `Global()` scope, and an opt-in `track = (:ΔH,)` that records per-proposal ΔH. The track lives in the checkerboard buffers `(; track, dH, acc)` and is a `sequential_mcs!` argument, not part of `DeviceFunctions`. Untracked runs use the unchanged base kernels; tracked runs use separate kernels (76e98133).
+- **Review.** Three rounds. The first merge check read Merks Metal A/B at 1.098. The implementer could not reproduce it (1.024, identical device LLVM) but split the track kernels anyway, and round 3 approved.
+- **Merge checks.** These ran one at a time on the staged tree and all exited 0: CorePotts (9 021 pass), Potts, PottsModels (`-t 4`, 15 911 pass, 39 broken), MakiePotts, the docs build, CorePotts Metal and Potts Metal. CPU gate: pass, with GG sequential at 1.034 (the known tight baseline, D-140 drift note) and the others 0.990–1.028.
+- **Metal.** The gate's Metal rows were measured while other jobs were running (1.8–6.2×), so the A/B decides. Metal A/B, 8 rounds against 9016f53b: GG 0.974, Wortel 1.000, Merks 0.989, OpenVT 0.991, Akeeb 0.901. All pass.
+- **Caveat.** P6.2b found that `ab.jl` shows 5–16% offsets between two checkouts of the same commit on Akeeb Metal. The Merks 1.098 reading was probably this artefact. The follow-up is P6.0bb.
+
+## 2026-10-05 — P6.1f staged: reproduction 09 margin 60 and an isolation guard (D-144); FULL rerun pending
+
+- **The change.** This applies the peer spec-owner's ruling on P6.1d's V-PRE3 (b) failure. The cause is the fixture: with margin 10, aggregates touch their own periodic image after ≈ 3000 paper MCS. On 494², the frozen rule gives t_p = 200, a PASS. The 09 page now uses `MARGIN = 60` (347²) and has a FULL isolation-guard row. Spec 09 §9.4 is new, and the 09 and 11 sketches are updated. No target, tolerance, n or run length changed. The 09 page is re-frozen under D-144.
+- **Merge checks.** `frozen.jl` 204/204; the docs build exits 0, and the reduced 09 page renders the guard row.
+- **Record.** P6.1d stays on record as a FAIL of V-PRE3 (b) with this cause. The P6.1f FULL rerun replaces it.
+
+## 2026-10-05 — P6.2b merged: Akeeb μ = 24 default, `akeeb_observables` (D-142, D-143)
+
+- **The change.**
+  - The default μ moves from 30 to 24 (D-142), and the docstrings now state the paper-vs-code items P14 and the time mapping P12.
+  - `akeeb_observables(σ, kinds)` and `akeeb_observables(u)` compute O1–O8 by composing existing Analysis primitives.
+  - The Akeeb docs page runs 701 MCS (the authors' MCS 700) and shows the observables beside the P1 reference. Every one of the six reads within one SD.
+- **Review.** Two rounds. Round 1 found the page stopping one MCS short of the paper's endpoint, the missing observables table, and the kinds check reading ids that own no site. In round 2 the coordinator fixed the plot axis nit.
+- **Merge checks.** These ran one at a time and all exited 0: `frozen.jl` (210), Potts, PottsModels (`-t 4`, 16 251 pass, 42 broken) and the docs build. No solver or device code changed, so Metal was not rerun.
+- **Gate.** Gate metal passed on the implementer's run. The baseline was not re-set. Measured in one process, alternating μ 30 and 24, the change costs ≈ 1%. The `ab.jl` reading of 1.24 was mostly a per-checkout artefact (P6.0bb).
+
+## 2026-10-05 — P6.15a merged: OpenVT monolayer benchmark track (D-147); full-run outputs rule (D-146)
+
+- **Spec.** Spec 15 v3 was written by the peer session "Potts.jl models and publications" and verified by the coordinator's spec verifier. The verifier re-derived the spring–dashpot reference to 5e-13, and found that `metrics.cpp` reproduces its own output byte for byte only with `-ffp-contract=off` (D11). It also corrected CC3D's J, the V4 shape target and the Artistoo replicate counts, and added item A3.
+- **Plan.** ROADMAP Step 3b, P6.15b–j. The P6.15b (calibration) and P6.15d (analysis port) test authors are running.
+- **D-146.** Full reproduction runs are offline, and their verdicts, per-save TSVs and provenance are committed under `reproductions/data/NN/`. Videos go to release assets.
+- **Merge checks.** Docs only: `frozen.jl` passes.
+
+## 2026-10-05 — P6.15b merged: OpenVT chain calibration (F2 / Table S5, D-148)
+
+- **The change.**
+  - In `Analysis`: `centroids(σ; periodic)`, plus `chain_centroids`, `chain_width`, `crossing_time` and `relaxation_mse`.
+  - Exported from PottsModels: `OpenVTChain`, `openvt_chain(11 | 21)`, `openvt_release` (a `DiscreteCallback` that switches A*) and `spring_dashpot_width` (an exact eigenmode solution; no new dependency).
+  - Nothing in core changed.
+  - `p6_0v1_device_lifecycle.jl` is re-frozen under D-148, gaining one `:OpenVTChain` builder.
+  - A new `ScheduledRelease` sibling covers generality.
+- **FULL tier (implementer's run, 14.5 s).** Every V6–V8 row passes:
+  - T = 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5, against Table S5's 290, 155, 110 and 75;
+  - at λ = 2 the MSE is 0.38× Table S5;
+  - the 21-chain predictions without refitting fall inside the consortium spread.
+- **Review.** One round, APPROVE; the coordinator fixed three nits.
+- **Merge checks** (one at a time, all exit 0):
+  - `frozen.jl`;
+  - the frozen calibration test with `OPENVT_MONOLAYER_REPO` set;
+  - PottsModels (`-t 4`): 16 457 pass, 44 broken;
+  - the docs build.
+
+  No core or device change, so no gate run.
+
+## 2026-10-05 — P6.1f: reproduction 09 FULL rerun at margin 60 (D-144); the record moves to it
+
+- **Run.** Commit 0eb1ea72 on an otherwise busy machine, 10 replicates on 347², 6 threads, 5052 s. The D-146 outputs are committed under `lib/PottsModels/reproductions/data/09/full-2026-10-05/`: verdicts, per-save time series, clusters, page metadata, provenance and the wrapper.
+- **Verdicts.**
+  - The isolation guard is clear at every save of all 10 replicates.
+  - **V-PRE3 (b) now passes** (t_p = 320; P6.1d's FAIL was the fixture, as D-144 found).
+  - Every other binding row passes except **V-PRE5 "one dark cluster @ 10⁴": the largest fraction is 0.815 against ≥ 0.90.** Per replicate it is 0.99, 0.76, 0.64, 1, 1, 0.90, 0.75, 0.51, 1, 0.60, and three replicates have one cluster. P6.1d read 0.905.
+  - The coordinator's reading, unconfirmed: at margin 10, dark clusters that touched across the periodic image were probably counted as one, which inflated P6.1d's value.
+  - V-PRE5 is a pre-registered target and is not changed here. The table goes to the spec owner, as P6.1d's did.
+- **Other rows moved by ≤ 0.006.** V-PRE1 heterotypic @ 10⁴ is 0.068 (was 0.073), and the cluster count @ 10⁴ is 2.2 (was 1.8).
+
+## 2026-10-05 — P6.15b data: the F2 / Table S5 calibration FULL record (D-148, D-146)
+
+- **Run.** Commit 30c39601, 4 threads, 13.9 s wall time (11.2 s of simulation). The D-146 outputs are committed under `lib/PottsModels/reproductions/data/15/calibration-2026-10-05/`: verdicts, the per-MCS 11- and 21-chain time series (mean and SD, from the burn-in at t = −100), per-run crossings, the spring–dashpot reference, metadata, provenance, the runner, and a Fig 2b/2d/2e-layout PNG (Potts only; no G data).
+- **The runner is the frozen FULL tier.** It uses the test's seeds, run lengths, algorithm, observables and bands through the public API, and also saves the burn-in. Checks:
+  - all five width matrices (t ≥ 0) are bitwise identical to the test's own `p615b_runs`;
+  - the frozen test with `POTTS_FULL_REPRODUCTION=true` passes (213 pass, 2 G rows skipped).
+- **Verdicts.** Every V6–V8 row passes, and the numbers equal the implementer's run.
+  - V6: T = 297, 156, 111 and 77 MCS.
+  - V7: MSE/S5 = 1.69, 0.38, 0.92 and 0.76. At λ = 2, w₁₁(0.5T) = 7.859 and w₁₁(2T) = 9.794.
+  - V8: w₂₁ = 15.96, 19.28 and 19.89 at 1, 5 and 10 T. The inner w₁₁ = 7.24, 9.51 and 9.93. The plateau ends at 0.173 T.
+  - w₂₁(10T) = 19.889 is 0.011 below the lattice spread but inside the ± 0.15 band.
+- **Reported.** The per-run crossing SD is 33, 14, 9 and 5 MCS for λ = 1, 2, 3 and 5. The cycle 5·T(2) is 780 MCS, against M's 775.
+
+## 2026-10-05 — P6.1g filed: V-PRE5 kept as frozen, late coarsening an open deviation (D-151); spec 10 P9 SD 2888 (D-152)
+
+- **V-PRE5.** The peer spec-owner ruled that the one-cluster clause stays as frozen and P6.1f's FAIL stands.
+  - The coordinator's periodic-image reading was wrong: F_dM is 0 from ≈ 320, so no dark–dark bond crosses the seam. P6.1d's 0.905 and P6.1f's 0.815 differ by ≈ 1 SE.
+  - Diagnostic: 6 seeds from both the Voronoi and the relaxed starts, run to 2×10⁴. The mean largest share is 0.72–0.81 at every reading time, and several replicates arrest with two or three domains.
+  - Both published runs coarsen faster than almost all of our 22 replicates after 10³ (p ≈ 0.004).
+  - The page gains, as text only, an open-deviation row and an author question. P6.1g is the follow-up, and the question goes to the phase report (§7.5).
+- **Spec 10 P9.** The infiltrative-area SD is 2888, not 2889. The frozen Akeeb test constant is corrected and the file re-frozen.
+- **Checks.**
+  - `frozen.jl`: 213.
+  - Reproduction 10 test: SMOKE passes, and with `POTTS_REFERENCES` set the reference rows pass 208/208.
+  - Docs build: exit 0.
+
+## 2026-10-05 — P6.15d merged: OpenVT analysis port (D-149)
+
+- **The change.**
+  - `Analysis.concave_hull`: the Graham scan of `metrics.cpp` followed by concaveman, with uniform-grid candidate filtering.
+  - The `openvt_*` metrics, the neighbour histogram, the A3 inhibition codes and fractions, and `write_openvt`/`read_openvt`/`openvt_filename` for O1–O6, all in `src/benchmarks/`.
+  - `Printf` is a new stdlib dependency.
+- **Fidelity.**
+  - The 25 frozen parameter-plane rows match `metrics.cpp -ffp-contract=off` byte for byte.
+  - 53 of 54 real consortium frames match. The other, a TST frame, is D13: the reference's R-tree pruning error.
+  - Fuzzing found no other mismatches outside exact ties.
+  - Spec 15 records two deliberate departures, D12 (an exact, strict Graham order) and D13 (unpruned search).
+- **Speed.** A 10⁴-centroid hull takes 6–27 ms, and 10⁴ lattice points take 45 ms.
+- **Review.** Two rounds.
+  - Round 1 found D12 and D13 on real data.
+  - In round 2 the coordinator added an underflow-safe bound, an exact integer fast path and a timing note.
+- **Merge checks** (one at a time, all exit 0):
+  - P6.15d acceptance with the repo set: 186/186.
+  - P6.15b calibration: 240/240.
+  - PottsModels (`-t 4`): 16 648 pass, 46 broken.
+  - Docs build.
+  - `frozen.jl`: 216.
+
+## 2026-10-06 — P6.3b merged: `@boundary` faces and site masks, `@schedule` (D-145)
+
+- **The change.**
+  - `@boundary` takes `Dirichlet`/`NoFlux` face pairs per axis, plus site-mask clamps applied in every substep and on a fresh initial state.
+  - `@schedule` sets the phase order. The sweep and the lifecycle are entries of the static MCS tuple, and `step!` is one `Base.afoldl` over it.
+  - D-035 is amended: a host pass costs one round trip per firing, and a model with no host pass pays nothing.
+- **Review.** Two rounds.
+  - Round 1:
+    - integral refreshes follow one rule on the placed order (S1, S2 and S4 regression tests);
+    - clamps run on fresh states only, so checkpoint resume is exact;
+    - a mask that reads its own field is an error, as is a face on a field with no `Δ`;
+    - faces apply in every `Δ`;
+    - `default_order` stays internal.
+  - Round 2: no recursion over the tuple and no non-leaf `@inline`; `sum` and `foldl` allocated, `afoldl` does not.
+- **Merge checks** (one at a time, all exit 0):
+  - CorePotts suite; `frozen.jl`: 219; Potts suite; PottsModels (`-t 4`): 16 961 pass, 47 broken; docs build; Metal GPU suite.
+  - Gate: two runs, pass, every ratio within 0.969–1.020.
+  - Metal A/B: the type-cache-seeded ratios are at most 1.010, with same-commit controls (D-145 Applied).
+- **Filed.** P6.0bc: cache compiled HostKernels.
+
+## 2026-10-06 — Cold construction: compile workloads for every published model (D-047)
+
+- **The change.** PottsModels precompiles every constructor, plus the first problem and MCS of the published models; Potts precompiles a `@potts_model` model through to its first MCS. PrecompileTools is a new PottsModels dependency.
+- **Effect.** Time to first MCS from a fresh process falls from 9.0–13.5 s to 5.8–5.9 s. About 4.9 s of that is package load, now the only real cost.
+- **Merge checks** (one at a time, all exit 0): `frozen.jl`; Potts suite; PottsModels (`-t 4`): 16 961 pass, 47 broken; docs build; latency against ca3b24c3.
+
+## 2026-10-06 — P6.15c merged: OpenVT Table S1 model, contact fold, `randn`, per-daughter draws (D-150)
+
+- **The change.**
+  - In CorePotts: `ContactCount`/`ContactCounts` and `commit_contact_count!`.
+  - In the DSL: the cell-scope fold `count(pred for _ in contacts[(rel)])`, `randn()` / `randn(μ, σ; lower)`, and per-daughter evaluation of drawing division rules.
+  - In PottsModels: `OpenVTReferenceMonolayer`, `openvt_reference_state`, `openvt_snapshot`, `stop_at_cells`, `edge_guard` and `Analysis.near_edge`.
+  - The reference model joins the compile workload (D-047). `OpenVTGrowingMonolayer` is unchanged.
+- **Merge with P6.3b.** The two touched the same lines in `CorePotts.jl` (`public`: `normal`/`bounded_normal` beside `GhostFace`), `src/macro.jl` (the boundaries/schedule keywords plus `metadata`), the Analysis exports and the PottsModels imports. All were resolved by keeping both sides.
+- **Merge checks on this Mac** (one at a time, all exit 0 unless noted):
+  - CorePotts suite; `frozen.jl`; Potts suite; PottsModels (`-t 4`): 17 217 pass, 48 broken; MakiePotts; docs build; Metal GPU suite.
+  - The O2 `write_openvt`/`read_openvt` round trip now runs, since P6.15d is merged.
+  - Gate: new case `openvt_reference_100`, baseline set from this tree at sequential 19.55, checkerboard 19.20 and Metal 72.03 ns/site. The implementer measured 20.12, 19.60 and 72.08.
+  - The gate flagged Akeeb CPU against the stored baseline in both runs. The paired base read +3.0% sequential and +1.1% checkerboard; the base itself read 1.041 against the stored checkerboard value (drift). Akeeb's generated code is identical before and after the merge (diff with line comments stripped).
+  - Seeded Metal A/B (candidate / same-commit control): GG 1.001 / 1.011, Merks 0.998 / 1.005, Wortel 1.002 / 0.996, Akeeb 0.997 / 1.000. The OpenVT pair was not run: Metal verification is deferred until all paper models are done (D-157).
+- **Checks on the PC** (`praneeth-NucBox-EVO-X2`, Ryzen AI Max+ 395, CPU; D-156/D-157):
+  - Akeeb CPU A/B, paired and pinned to one logical CPU on a reserved core (`taskset -c 12`): sequential 1.001, with a same-commit control of 1.001. Each round reads 38.2–39.4 ns/site.
+  - Unpinned under a load of 25: sequential 1.006 and checkerboard 1.005. The unpinned control read 1.729, because SMT sharing makes timings bimodal (≈ 40 vs ≈ 71 ns/site); this is why the core pinning was adopted.
+  - So the Mac gate's Akeeb flag was drift.
+  - Latency (`p6_0o_latency.jl 5 10` against 82e240ba): to_first_mcs 1.004–1.028 on every case.
+  - `problem` reads 1.07–1.11 on GG, Wortel, Merks and OpenVT, which is +4–9 ms on a 44–90 ms step (contact-count relation wrapping and initial-state work at construction). Accepted: time to first MCS is unchanged.
+
+## 2026-10-06 — P6.1g: the late-coarsening pass for reproduction 09 (D-151 outcome)
+
+- **Runs.** 192 FULL-size runs on the PC (praneeth-NucBox-EVO-X2, Ryzen AI Max+ 395, CPU), 24 single-threaded processes, 2 h 58 min wall time. The plan and scripts were committed before launch (a09312a6). The isolation guard held at every save, and a re-run of 30 seeds was bit-identical.
+- **Result.** No candidate clearly explains the gap, so V-PRE5 stays a reported deviation.
+  - Time to single is not off (the paper's run sits at about our 40th percentile).
+  - Late F_dl is off (0.071 against 0.050), and it comes from runs that are not yet fully sorted.
+  - Temperature is a strong sensitivity. Cell sizes, aggregate size and seed set are excluded.
+  - Details are in the D-151 outcome note and `data/09/p6-1g-2026-10-06/README.md`.
+- **Filed.** P6.1h: V-PRE7 on the page, as an independent check of the temperature scale.
+
+## 2026-10-06 — P6.3d/e merged: `Merks2006` and `Merks2008`, the `merks_state` port, reproduction 01 (D-153)
+
+- **The change.**
+  - Two published Merks models (2006, and 2008 with extension-only and 20-neighbour contacts).
+  - `merks_state` rebuilt on `Scattered` (D-087), plus the layout helpers.
+  - Two gate cases, two siblings, and the compile workload.
+- **Checks.** All on the PC, pinned (D-157):
+  - frozen acceptance 1091/1091; the reproduction 01 CI tier 16/16;
+  - CorePotts, Potts, docs;
+  - the full PottsModels suite after the re-freeze: 18118 pass, 0 fail, 50 broken;
+  - gate `merks_100` 0.999 / 0.997; latency 1.003–1.007.
+  - The Metal device paths are deferred to P6.0bi.
+- **Re-freeze (coordinator, D-153).** The p6_0v3 Merks digests and the p6_0w RNG-site bound, both moved by the port.
+- **Review.** One round, APPROVE. It hand-checked ΔH against ca.cpp, independently reimplemented TST's sprout growth (blob area 2146 vs 2153 px), scanned for Float64 under Float32 and recomputed the digests.
+- **Filed.**
+  - P6.0bl: checkerboard vs sequential kinetics differ on Merks models.
+  - P6.3f: corrected (the attempts row is not a deviation).
+
+## 2026-10-07 — P6.0bg merged: backend-neutral device testing for Metal and ROCm (D-157)
+
+- **The change.**
+  - One device helper and backend resolver for every test project; 15 frozen files re-frozen mechanically.
+  - ROCm (AMDGPU.jl 2.7, gfx1151) runs the full GPU group.
+  - A post-suite no-double scan of every compiled device kernel (479 across both processes, 0 with `double`), with negative controls.
+  - A coverage check over all 39 CorePotts kernel bodies.
+  - The staged device lifecycle is now exercised.
+- **Review.** Two rounds.
+  - Round 1 found that the IR check covered only part of the kernels (HIGH), plus four LOWs.
+  - Round 2 approved, after confirming that the kernel cache is complete and the coverage enumeration is exhaustive.
+- **Checks (PC, pinned).**
+  - `GROUP=GPU POTTS_GPU=rocm`: 35261 pass, 0 fail, 6 broken (Metal-only).
+  - CorePotts 23574 and Potts 7575 pass on CPU; PottsModels counts identical to base; `frozen.jl` 231.
+- **Next.** P6.0bh, the ROCm CI workflow on the self-hosted runner. Metal verification waits for P6.0bi.
+
+## 2026-10-07 — P6.0bh: the first CI workflow (D-157)
+
+- **The workflow.** `.github/workflows/ci.yml` runs on the self-hosted runner (`self-hosted, Linux, X64, rocm`), on pushes to `monorepo` and on manual dispatch only. It never runs on pull requests.
+  - Steps: workspace resolve and instantiate, `frozen.jl`, the CorePotts, Potts, PottsModels and MakiePotts suites, and `GROUP=GPU POTTS_GPU=rocm`.
+  - Every step is pinned to `taskset -c 0-11,16-27`.
+- **Safety.** The repository is public. With the maintainer's approval, fork-PR workflows now need approval for all outside contributors (`all_external_contributors`, set through the API).
+- **Runner.** It had been offline since 2026-08-23. The maintainer installs it as a service (`svc.sh`, needs sudo). Until then the first run waits in the queue.

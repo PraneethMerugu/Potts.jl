@@ -373,10 +373,10 @@ p60ah_published() = (
     (:P60ahAt_Euler, () -> p60ah_problem(P60ahAt, Potts.ExplicitEuler())),
 )
 const P60AH_FINGERPRINTS = Dict{Symbol, UInt64}(
-    :GranerGlazier => 0x8942dc9ed483ec21,
-    :MerksVasculogenesis => 0xe8c37fa651d985f6,
-    :P60ahAt_RK4 => 0x5df9f7a97301532a,
-    :P60ahAt_Euler => 0x2130555794801e36,
+    :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
+    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-pinned under D-122
+    :P60ahAt_RK4 => 0x52fad8cebbee12ed,   # re-pinned under D-124
+    :P60ahAt_Euler => 0xe41e0c4a682a9697,   # re-pinned under D-124
 )
 
 @testset "P6.0ah: fingerprints unchanged" begin

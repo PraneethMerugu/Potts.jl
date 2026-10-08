@@ -47,7 +47,8 @@ plot(sol, 100)                      # MakiePotts recipe
 ```
 
 `@potts_model` mirrors `@mtkmodel`: a block of sections that produce a
-`PottsSystem <: ModelingToolkitBase.AbstractSystem` (planned, P6.0o; today a plain struct). Everything the macro does is also
+`PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137: MTK's `equations`, `unknowns`,
+`parameters`, `observed`, metadata and `sys.x` namespacing work on it). Everything the macro does is also
 available as plain constructors (`PottsSystem(energies, equations, …; name)`); the macro
 is sugar.
 
@@ -58,7 +59,7 @@ is sugar.
 | Section | Purpose | MTK analogue |
 |---|---|---|
 | `@structural_parameters` | values baked into generated code (lattice size, orders) | same |
-| `@kinds` | cell kinds; the first is the medium (kind 0); `[frozen]` marks obstacles | — |
+| `@kinds` | cell kinds; the first is the medium (kind 0); `[frozen]` marks obstacles; `name = (kind, …)` declares a kind class (D-135) | — |
 | `@parameters` | numeric parameters, incl. kind-indexed arrays `J[kind, kind]` | same |
 | `@variables` | state with a **scope** in the signature: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(edge)` or `e(rel)` (an edge variable of `@relationship rel`) | `@variables`, scope is Potts |
 | `@lattice` | `Lattice(dims; boundary, neighborhood, spacing)` | — |
@@ -66,6 +67,7 @@ is sugar.
 | `@drive` | non-energetic proposal biases (`copy => expr`) | — |
 | `@constraint` | hard proposal constraints | — |
 | `@equations` | differential equations (`D(x) ~ …`, `∂t`) for fields, per-cell ODEs, model ODEs | same |
+| `@initialization_equations` | conditions on initial cell and model values (`Vt ~ 2volume`, `D(x) ~ 0`), solved per cell before the first MCS (D-170) | `initialization_eqs` |
 | `@before_mcs`, `@after_mcs`, `@on_copy` | discrete updates as equations with `Pre` | discrete events |
 | `@divide`, `@retire`, `@create`, `@transition` | lifecycle rules | — |
 | `@relationship`, `@link`, `@unlink` | cell–cell edges | — |
@@ -87,6 +89,43 @@ end
 
 Declaring sections (`@structural_parameters`, `@kinds`, `@parameters`, `@variables`,
 `@extend`) cannot be conditional.
+
+**Kind classes (D-135, implemented).** A line `name = (member, …)` in `@kinds` declares a
+named set of kinds; members are declared kinds or earlier classes, flattened in order.
+Class lines may sit anywhere among the kinds (block or one-line form) and never shift kind
+numbers:
+
+```julia
+@kinds begin
+    medium; fluid; matrix
+    ecm = (fluid, matrix)
+    tip; stalk
+    endothelial = (tip, stalk)
+    mix = (ecm, tip)                  # (fluid, matrix, tip)
+end
+```
+
+- A class goes wherever a list of kinds does, alone or mixed with kinds: `cells(g)` (energy
+  domains, `@divide`, `@components`, population folds `for c in cells(g)`), `clusters(g)`,
+  `connectivity(g)`, `Volume(g; …)`, `Surface(g; …)`, `Chemotaxis(…; kinds = g)`,
+  `cells(ecm, tip)`.
+- On a symbolic kind (`kind`, `kind′`, `kind[new]`, `kind[old]`, `kind[c]`, `kind[n]`),
+  `x ∈ g` is `(x == k₁) | … | (x == kₙ)` in member order, and `x ∉ g` its negation: constant
+  kind numbers, nothing allocated, so it runs on every backend. A model written with classes
+  has the same generated code and fingerprint as the one with the `||` chains spelled out;
+  a class no statement reads changes nothing.
+- A class is not an index: `J[g, kind′]` and `γ[g]` are errors naming the class, and so is
+  `kind == g` / `kind != g` (use `∈`/`∉`). Operating points and layouts (`Tiling`,
+  `Scattered`, `Frame`, `InsertUntil` `kind`/`into`) take kinds, not classes: `layout(l, sys)`
+  rejects a class name.
+- Rejected at construction (`ArgumentError`): an empty class, a member listed twice (also
+  after flattening), the medium as a member (write `kind[x] == medium || kind[x] ∈ g`), a
+  member that is not a kind or an earlier class, a name used by another declaration (D-113:
+  "kind class" is a category) or a reserved name.
+- Classes are stored on the `PottsSystem` (`kind_classes`, `Potts.KindClass`; not hashed,
+  their effect is in the code). `@extend g = base = Base()` binds a base class like a kind;
+  an extension may restate a base class with the same members in the same order and add new
+  ones; restating it with other members, or in another order, is an error naming it.
 
 ---
 
@@ -156,10 +195,10 @@ expression may refer to:
 
 | Domain | Sum over | Names in scope |
 |---|---|---|
-| `cells(kinds…)` | every cell of those kinds | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
+| `cells(kinds…)` | every cell of those kinds (kinds or kind classes, flattened) | `volume`, `surface`, `centroid`, `inertia`, `elongation`, `kind`, `id`, `generation`, any `x(cell)`; `x[c]` explicit |
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
-| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
+| `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, kind class, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
 | `model` | once | model-scoped variables |
 
 Examples:
@@ -336,9 +375,23 @@ end
   ```
   `sum`, `prod`, `mean`, `geomean`, `minimum`, `maximum`, `count`, `any`, `all` are
   recognised and lowered to unrolled loops with the right fold; `if` filters become
-  masks.
+  masks. Inline comprehensions work everywhere an expression does, including division
+  conditions and rules, `@link`/`@unlink` conditions, `edges(name) =>` energies, the
+  index of an `@on_copy` update and `@observed` quantities (D-132).
 - `rand(dist)` inside any expression is an addressed draw: reproducible, backend
   independent, keyed to the site/cell/MCS it belongs to.
+- **After-MCS order (D-130; INTERNALS §1.6).** After the copy sweep, every MCS runs, in
+  this order: the after-MCS updates (`@after_mcs`), the field steps, the cell ODEs, the
+  model ODEs, the discrete ticks (discrete `@components`), and the link rules
+  (`@link`/`@unlink`); then the lifecycle (division, removal, …) and the MCS boundary
+  (integrals refreshed, `Pre(x, k)` rings pushed). Each stage sees what the earlier ones
+  wrote in the same MCS (the ODEs see the updated values, the ticks the stepped unknowns).
+- **Reserved suffixes (D-130).** Names ending in `__ode`, `__tick` or `__next` are Potts'
+  internal state slots: any declared name with one is an `ArgumentError` naming the
+  quantity and the suffix, at build or `mtkcompile`: variables and parameters (scalar or
+  vector, `@variables v(cell)[1:2]`), `@observed` names, and a component's unknowns,
+  parameters, discrete nodes and observed names (`comp₊w__ode`). A suffix elsewhere in the
+  name (`v__oder`, `ode__d`) is accepted.
 
 ### Differential equations, in MTK syntax
 
@@ -405,6 +458,20 @@ prob2 = remake(prob; field_solver = ExplicitEuler(substeps = 30, lower = 0.0))
   loads only into an equally discretised problem; equal specifications built from fresh
   objects match. The algorithm's type and fields belong to the solver package, so the
   fingerprint can change with its version (as it does with Julia's).
+- **Depth cap and session-bound closures (D-130).** The canonical string prints values at
+  most 8 levels deep; a deeper or cyclic value in an `Adaptive` algorithm or keyword is an
+  `ArgumentError` naming `Adaptive` (and the keyword) from `PottsProblem` and `remake`,
+  never a truncation (which grouped different solvers together). A closure or anonymous
+  function (`isoutofdomain = (u, p, t) -> …`, `Rodas5P(step_limiter! = …)`) is accepted:
+  its canonical string holds a compiler-generated name (`var"#…"`), so the fingerprint
+  also hashes a token drawn when Potts loads. Within a session the same closure, or one
+  of the same type and captures, fingerprints alike and its checkpoints load; across
+  sessions the fingerprint always differs, so its checkpoints are session-bound. Named
+  functions, callable structs and stable wrappers (`Returns(false)`) load across sessions;
+  use one of them to resume in a new session. The token enters only the fingerprint hash,
+  never the canonical string or the solver grouping. `tools/fingerprint_compare.jl A B`
+  compares the published systems' and ODE fixtures' fingerprints between two checkouts
+  (the D-078 merge check).
 
 **Adaptive and stiff solvers (implemented).**
 `ode_solver = Adaptive(Rodas5P(); reltol = 1e-8)` (or a `solvers` entry) integrates cell
@@ -547,9 +614,28 @@ end
   ("ambiguous"), as is a scope that is neither a scope nor a relationship. An edge term or
   link rule reads only its own relationship's edge variables (another relationship's
   payload has no slot for its links).
+- **Re-declared edge variables keep their relationship** (D-127). An extension that
+  re-declares an inherited edge variable to change its default (`@variables rest(edge) =
+  9.0` over a base's `rest(bond)`) changes only the default: an unscoped `x(edge)` takes
+  the inherited relationship, whatever relationships the extension declares (none, one or
+  several). A new unscoped edge variable follows the rule above. Re-declaring it scoped to
+  another relationship (`rest(tether)`) is an `ArgumentError` when the extension is built
+  (`@extend` or `extend`), naming the variable and both relationships: a payload column
+  belongs to one relationship. So is re-declaring it in another scope (`rest(cell)`), or a
+  base's other variable as an edge variable, and two `@extend` bases declaring one edge
+  variable on different relationships. A body built on its own binds its `rest(edge)` to
+  its only relationship, but a functional `extend(body, base)` over a base declaring `rest`
+  re-binds it to the base's relationship, as `@extend` would.
 - **Initial links** are given per name in the operating point:
-  `PottsProblem(sys, [ownership => σ, :bond => [(1, 2)], :tether => [(2, 3)]], tspan)`. A
-  new link's edge variables start at their defaults.
+  `PottsProblem(sys, [ownership => σ, :bond => [(1, 2)], :tether => [(2, 3)]], tspan)`. An
+  edge variable's operating-point value (`:rest => 9.0`, one number, or a parameter
+  expression evaluated at construction: a later `remake` of parameters does not re-seed
+  it) is its initial value
+  on every initial link of its relationship, both ends, converted to `T`, at construction
+  and in `remake(prob; u0 = op)` (D-127); anything but a number is an `ArgumentError`
+  naming the variable. Without it, initial links start at the declared default. A link
+  made by `@link` starts at the declared default (compiled into the rule); the operating
+  point is state and never changes the fingerprint.
 - **Storage.** Relationship `r` keeps its adjacency in the cell column `links__r`
   (`maxdeg × capacity`, 0 = empty slot; `CorePotts.adjacency_name(r)`), and each edge
   variable `x` its payload in `link_x` (edge variable names are unique per model, so a
@@ -876,7 +962,8 @@ end
   - Observed integrals are computed from the queried state itself.
   - It is not maintained through copies: site values also change through updates and
     fields, so a maintained sum would drift, and a recompute costs one pass over the
-    sites. For the same reason it is rejected in energies and drives.
+    sites. For the same reason it is rejected in energies, drives, expression constraints
+    and `@on_copy` right-hand sides (D-125, D-129).
 
 ### 12.4 Shape descriptors (CompuCell3D definitions)
 

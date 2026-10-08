@@ -25,8 +25,7 @@ alg = SequentialCPM()                       # the model declares Moore(1) propos
 title = "Merks et al. (2006) vasculogenesis — 500×500, 282 cells, $(T_END) MCS (50 h), seed $SEED\n" *
         "2006 set: A = 100, λ = 50, L = 50, λ_L = 5, χ = 1000, T = 50; one frame every $EVERY MCS (12.5 min)"
 paper_run("merks_vasculogenesis"; prob, alg, saveat = EVERY, title, framerate = 24,
-    panels = [Panel(""; plot = (; category_palette = [:firebrick3], medium_color = :white,
-        boundaries = true, boundary_width = 0.3, boundary_color = :gray15))],
+    panels = [Panel(""; plot = (; category_palette = [:firebrick3], medium_color = :white))],
     size = (760, 800),
     meta = Dict{String, Any}("model" => "MerksVasculogenesis",
         "caption" => "Paper run — Merks et al. (2006) vasculogenesis, the paper's 2006 parameter set: 282 cells on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1. Remaining differences: a hard connectivity veto instead of the E₀ penalty; free closed walls instead of a frozen border with J_cB = 100; a zero-flux field boundary instead of an absorbing c = 0 ring; 10×10 initial cells (unstated in the paper).",

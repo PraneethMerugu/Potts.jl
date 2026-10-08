@@ -334,9 +334,9 @@ end
     end
 end
 
-@testset "P6.0n: on Metal" begin
-    if get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0n: on the device" begin
+    if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
+        backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM(; proposal = Moore(1))
         T = Float32
         for k in (1.0, 0.25)
@@ -357,6 +357,6 @@ end
         wy, wz = p60n_mixed_oracle([1.0, 2.0], [4.0, 8.0], 3; zsolver = :rk4)
         @test p60n_close(p60n_traj(sol, :y), wy, T) && p60n_close(p60n_traj(sol, :z), wz, T)
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end

@@ -297,7 +297,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         bad = CPMFunction((st, p, prop, ctx) -> NaN; temperature = gg_temperature)
         bprob = PottsProblem(bad, initial_state(σ0, kinds0), lat, (0, 3), gg_params())
         @test solve(bprob, SequentialCPM()).retcode == ReturnCode.Failure
-        @test solve(bprob, CheckerboardCPM()).retcode == ReturnCode.Failure
+        @test (@test_logs (:warn, r"energy change was not finite") solve(bprob, CheckerboardCPM())).retcode == ReturnCode.Failure
     end
 
     @testset "checkerboard and sequential sort alike" begin
@@ -336,6 +336,7 @@ include("lifecycle.jl")
 include("relationships.jl")
 include("compartments.jl")
 include("lifecycle_device.jl")
+include("contact_counts.jl")
 include("checkpoint.jl")
 include("oracle.jl")
 include("sciml.jl")
@@ -343,5 +344,9 @@ include("domain.jl")
 include("piff.jl")
 include("hex.jl")
 include("audit.jl")
-get(ENV, "COREPOTTS_GPU", "") == "metal" && include("gpu.jl")
+# device tests (D-157): COREPOTTS_GPU (or POTTS_GPU) = metal | rocm
+# (test/shared/devices.jl is the monorepo's; a standalone CorePotts tree runs on the CPU)
+const COREPOTTS_DEVICES = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl")
+isdefined(Main, :PottsDevices) || !isfile(COREPOTTS_DEVICES) || include(COREPOTTS_DEVICES)
+isdefined(Main, :PottsDevices) && PottsDevices.on_device() && include("gpu.jl")
 get(ENV, "COREPOTTS_QA", "true") == "true" && include("qa.jl")

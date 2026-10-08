@@ -1,0 +1,5 @@
+criterion	ours	rule	result
+T = 0 frozen	|F_dl(2000) − F_dl(100)| = 0.0	< 0.02	PASS
+order at 10³	F_dl(T=2) 0.3492, F_dl(T=5) 0.1914, F_dl(T=10) 0.1346	F_dl(T=2) > F_dl(T=5) > F_dl(T=10)	PASS
+T = 40 plateau	min F_dl over [10³, 10⁴] = 0.0978 (at 10000)	> 0.07 at every save in [10³, 10⁴]	PASS
+T = 80 disintegration	share of cells gone at 500 = 0.0763	> 0.5	FAIL

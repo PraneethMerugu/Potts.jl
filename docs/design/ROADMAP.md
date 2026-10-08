@@ -93,6 +93,11 @@ Every item's acceptance also includes the standing checks:
 
 "Frozen:" names the files the coordinator commits first.
 
+**Gates and compute (D-155–D-157, 2026-10-06).**
+- A "Gate:" below never parks an item. Under an open author question the model ships provisional, with a labelled default in its deviations table (D-154).
+- Heavy compute runs on the PC (D-157). Metal verification is deferred to P6.0bi.
+- Any change that brings major MTK friction or a major slowdown stops for the maintainer (D-156).
+
 **Acceptance for model reproductions.** The file
 `lib/PottsModels/test/reproductions/<nn>_<model>.jl` tests the spec's V-targets.
 - The CI-sized subset runs in the suite; ensembles run under `REPRO=full`.
@@ -103,6 +108,8 @@ Every item's acceptance also includes the standing checks:
 
 ### Step 0 — composition fixes and infrastructure
 
+**Frozen (maintainer, 2026-10-04, D-134).** No new P6.0 rows. In flight and finishing: P6.0c2, P6.0u, P6.0ax. Then P6.0g, then P6.0o; after those two, the paper reproductions (Step 1 on) start. Fingerprint corner cases go to P6.0z or are dropped as best-effort (P6.0az folded into P6.0z). Deferred until after the reproductions start, not blocking them: P6.0ac, P6.0ba, P6.0v4, P6.0v5; P6.0ae is settled inside the Merks reproduction (Step 3). P6.0z runs after P6.0o and does not block Step 1.
+
 - [x] (merge, 2026-09-30; gate CPU ≤ 1.013, Metal A/B = base) **P6.0a** division kinds per rule domain: cell division and cluster division in one
   model (lift `compile.jl` mutual exclusion).
   - Write set: `src/compile.jl`, `src/codegen.jl`, `lib/CorePotts/src/lifecycle.jl`.
@@ -110,7 +117,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; D-058) **P6.0b** several named relationships per model, each with its own link store and
   claim set. Depends: none. Accept: two relationships with different laws, checked by the
   springs oracle on each; checkerboard equals sequential statistically.
-- [ ] **P6.0b2** P6.0b review follow-ups:
+- [x] (merge, 2026-10-04; D-127) **P6.0b2** P6.0b review follow-ups:
   - An extension that re-declares a base edge variable while adding its own single
     relationship re-binds it to the new relationship, which gives a confusing error. Keep
     the base's binding, or improve the message.
@@ -156,7 +163,7 @@ Every item's acceptance also includes the standing checks:
   contact term that reads a site field.
 - [x] (merge, 2026-09-30; D-070; gate CPU ≤ 1.037, Metal A/B 0.96–1.02) **P6.0f** `Every(n)` per lifecycle rule. Accept: two rules at different cadences fire
   at their counts.
-- [ ] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
+- [x] **P6.0g** kind classes. `@kinds` groups; `kind[x] ∈ group` in every gate; `cells(group)`.
   Accept: a Bauer-style model where the matrix is a cell kind uses class gates; the
   denylist and DSL snapshots are updated with the reviewer's justification.
 - [x] (merge, 2026-09-30; docs build ≈ 2 min) **P6.0h** Literate + Documenter "Published models" pipeline; `TUTORIAL_TEMPLATE.md`
@@ -184,7 +191,7 @@ Every item's acceptance also includes the standing checks:
     - Accept: generated code and fingerprints for existing models are byte-identical.
     - Accept: build time and first MCS are unchanged within noise.
 - [x] (merge, 2026-10-01; D-086) **P6.0n** Cell ODEs that read another cell's ODE state (P6.0k review N3). As found by the P6.0n test author: `y[j]` on a variable of the same solver group does not compile today (`cannot index __y1`, `_substitute_locals`), and only unhoisted population folds (those reading `time`) are Gauss–Seidel and order-dependent. Use the P6.0k scratch rule. Accept: a two-cell ODE coupling that is order-independent on both algorithms and on Metal.
-- [ ] **P6.0o** (D-075 §0.1, maintainer-approved 2026-09-30; MTK-native review, `research/mtk-native-review.md`) `PottsSystem <: ModelingToolkitBase.AbstractSystem`. Land it before P6.4a. MTK's `getproperty(::AbstractSystem)` takes over field access, so the ≈281 internal `sys.<field>` reads must change.
+- [x] **P6.0o** (D-075 §0.1, maintainer-approved 2026-09-30; MTK-native review, `research/mtk-native-review.md`) `PottsSystem <: ModelingToolkitBase.AbstractSystem`. Land it before P6.4a. MTK's `getproperty(::AbstractSystem)` takes over field access, so the ≈281 internal `sys.<field>` reads must change.
   - Accept: `PottsSystem` mirrors the `System` field names read by the MTK accessors it supports. It has an all-fields constructor taking `checks`, sets `namespacing`, and defines Potts-owned `complete`, `extend` and `show`.
   - Accept: every internal `sys.<field>` read uses `getfield` or an accessor. `sys.x` returns the namespaced symbolic, as in MTK.
   - Accept: `equations`, `unknowns`, `parameters`, `observed`, `nameof`, `getmetadata` and `setmetadata` each return a documented value or throw a clear error, never a silently partial view.
@@ -194,7 +201,7 @@ Every item's acceptance also includes the standing checks:
   - Latency: `@potts_model` construction, `mtkcompile` and `PottsProblem` build time each within +5 % of the pre-change baseline on the five gate models.
   - Latency: fresh-process time to first MCS (`benchmark/graner.jl`, D-047 target under 15 s) within +5 %.
   - Latency: the warm-MCS gate is unchanged.
-- [ ] **P6.0c2** P6.0c round-3 follow-ups (D-078):
+- [x] (merge, 2026-10-04; D-130) **P6.0c2** P6.0c round-3 follow-ups (D-078):
   - Document the after-MCS phase order in AUTHORING §6 and INTERNALS §1.6: updates, then field steps, then cell ODEs, then model ODEs, then discrete ticks, then links.
   - `_canonical_value` prints only the type below depth 8, so two `Adaptive` solvers that differ deeper would share a group and a fingerprint. Error at the cap, or group by `isequal` within equal strings.
   - `_check_internal_suffix` misses component unknowns (`comp₊x__ode`), `:vector` option names and observed names.
@@ -227,11 +234,11 @@ Every item's acceptance also includes the standing checks:
   - `benchmark/ab.jl` takes `tools/exclusive.sh` per process and re-takes it at once, so a waiter polling every 20 s starved for the whole A/B (a P6.0n Metal suite waited about 40 minutes).
   - Fix: `ab.jl` holds one lock for all its rounds (its per-run calls skip the lock when the holder is the parent), or the lock becomes a ticket queue.
   - Accept: a waiter queued before an A/B starts runs before the A/B's second round.
-- [ ] **P6.0t** Integral refresh waste (from the P6.0m3 review; low priority).
+- [x] (merge, 2026-10-04; D-120) **P6.0t** Integral refresh waste (from the P6.0m3 review; low priority).
   - `src/codegen.jl` refreshes every integral that is not dirty after the sweep at the start of the after block once any after reader exists, including integrals read only by the before block or the temperature (fresh from `end_mcs`). `end_mcs` also refreshes observed-only integrals, which observed queries recompute anyway.
   - Fix: filter the start-of-after refresh to integrals read after the sweep; give observed-only integrals no slot or refresh.
   - Accept: probe `PWaste` (`/tmp/p60m3/rv1/`) emits 1 `CellReduce` at the start of the after block and none for the observed integral; fingerprints of models without such integrals unchanged.
-- [ ] **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
+- [x] (merge, 2026-10-04; D-133) **P6.0u** Remaining `@components` gaps (from the P6.0k2 review; small).
   - MTK `tstops` and `assertions` are accepted and ignored; reject them like F7's fields.
   - Binding rejections that do not name the component (`2k` does not reduce…, unknown symbol `k2`, "no initial value" for `y(t) = 2z`) should name it.
   - Hand-written (non-`@potts_model`) `@extend` bases: an untranslated `x′` error from inside the base is labelled with the outer model's description (P6.0e2 review; wrap the base call in its own catch, about 3 lines).
@@ -253,7 +260,7 @@ Every item's acceptance also includes the standing checks:
   - Accept: on Metal, total host traffic on an event MCS is O(events): bytes independent of lattice size and of the number of cell quantities, on a division fixture scaled in both; Akeeb Metal improves measurably in `ab.jl` against the pre-change base; results unchanged up to floating-point differences ordinary tests allow (D-048).
 - [x] **P6.0v2** (merge, 2026-10-01; D-092) ODE and `HostPhase` column-only copies (after P6.0v). `_AdaptiveODE` and `HostPhase` move only the columns they read and write, or run on the device.
   - Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale with the columns used, not with all cell quantities; results unchanged up to floating-point tolerance.
-- [ ] **P6.0v2b** (from the P6.0v2 review) Audit R4: a custom-rule `refresh_frozen!` snapshots the whole state to the host; copy only the leaves `remake_frozen` reads, or run the standard rule on the device. Accept: per-refresh bytes independent of unused cell quantities on Metal.
+- [x] (merge, 2026-10-04; D-128) **P6.0v2b** (from the P6.0v2 review) Audit R4: a custom-rule `refresh_frozen!` snapshots the whole state to the host; copy only the leaves `remake_frozen` reads, or run the standard rule on the device. Accept: per-refresh bytes independent of unused cell quantities on Metal.
 - [x] (merge, 2026-10-02; D-101) **P6.0v3** Launch fusion and Metal codegen fixes from the audit (after P6.0v): fuse the phases the audit lists, remove Float64 leaks, boxed values and redundant per-site passes (absorbs P6.0t if not done first). Also from the P6.0v2 review: an MCS with two adaptive-ODE phases syncs twice although the second sync waits on an idle queue (merge consecutive host phases, or skip a sync when nothing was enqueued since the last one).
   - Accept: launches per MCS reduced as listed in the audit, per gate model; no gate case regresses.
 - [x] **P6.0v7** (merge, 2026-10-01; D-090) (top priority within P6.0v, before v1–v3; from the P6.0v audit and review) `benchmark/gate.jl` and `benchmark/ab_one.jl` time Metal `step!` to GPU completion (`synchronize`), then rebaseline Metal once. Today Graner–Glazier and Wortel Metal numbers measure only host enqueue time, so Metal A/B verdicts on them say nothing about GPU cost.
@@ -294,8 +301,90 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-10-03; D-115) **P6.0an** `remake(prob; p = (p₁ = 3.0,))` with a NamedTuple silently replaces `prob.p` with a one-field NamedTuple (falls back to CorePotts' default `remake_parameters`; P6.0ak review). Accept a NamedTuple like a `Dict`/pairs, or reject it with a clear error; test both.
 - [x] (merge, 2026-10-03; D-117) **P6.0ao** Computed parameter defaults that call functions (`sqrt(a₀) + π`, `ifelse(a₀ > 1, …)`) or read a kind-table entry (`w = V₀[2] + 1`) fail at build with "does not reduce to numbers" (P6.0ak review). Evaluate them numerically (substitute, then evaluate registered/Base functions and indexing), keeping the parameter type; the input graph of D-112 must see through them.
 - [x] (merge, 2026-10-03; D-116) **P6.0ap** Parameter-setter loose ends (P6.0ak review): a `setp` list mixing states and parameters throws a `MethodError` (raise an `ArgumentError` pointing to `setu`/`setsym`); `SII.setsym(integ, [names…])` is applied one name at a time (batch it like `setp`); `SII.remake_buffer(prob, prob.p, [:x], [v])` overflows the stack; `setp` on a hand-written CorePotts problem raises `MethodError` (`symbolic_container(::Nothing)`). A test for each.
-- [ ] **P6.0aq** The acceptance law's parameters (`Metropolis(; offset)`, `Barker(; offset)`) are solver data outside the generated code and are not fingerprinted: `offset = 0` and `offset = 2` fingerprint alike, so a checkpoint loads across them (P6.0p review). Hash non-default acceptance parameters (pins unchanged) or document why not.
-- [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`.
+- [x] (merge, 2026-10-04; D-121) **P6.0aq** The acceptance law's parameters (`Metropolis(; offset)`, `Barker(; offset)`) are solver data outside the generated code and are not fingerprinted: `offset = 0` and `offset = 2` fingerprint alike, so a checkpoint loads across them (P6.0p review). Hash non-default acceptance parameters (pins unchanged) or document why not.
+- [x] (merge, 2026-10-04; D-122) **P6.0ar** `@relations proposal` and `@relations contact` neighbourhoods are not fingerprinted (P6.0aq test author): `Moore(1)` and the default collide, so a checkpoint loads across copy neighbourhoods and across contact neighbourhoods although the contact one changes the energy. Hash them; this moves the WortelAct/OpenVT/Merks pins (they set `proposal = Moore(1)`), so re-pin the affected frozen fingerprints under the decision (or hash only when different from the lattice default and show the pins hold).
+- [x] (merge, 2026-10-04; D-123) **P6.0as** `@sweep` validation and combine hashing (P6.0aq review): `sweep_spec` accepts a non-finite `offset` (NaN makes acceptance meaningless) — reject it; a user closure as the temperature `combine` is fingerprinted through its printed, compiler-generated name, which may differ between sessions — hash a stable identity or document that closures make checkpoints session-bound.
+- [x] (merge, 2026-10-04; D-124) **P6.0at** Named relations (`@relations far = Ball(2.0)` read by `contacts(far)` or a fold `far(site)`) and inline gather relations (`Moore(1)(42)` vs `Moore(2)(42)`) are not fingerprinted (P6.0ar test author): models differing only in them collide. They have no default, so hashing them moves every pin of a fixture that uses one (e.g. the p6_0x XPlain/XPair pins) — decide whether they are already reflected in the generated code (then close as no-gap) or hash them and re-pin under the decision.
+- [x] (merge, 2026-10-04; D-125) **P6.0au** `integral(...)` inside `@drive` and constraint expressions is accepted (`_check_geometry` rejects it only in energies) but `_integrals_folds` never collects it, so it has no column (P6.0t review). Either collect and refresh it like other readers or reject it at build with a clear error; test both a drive and a constraint.
+- [x] (merge, 2026-10-04; D-126) **P6.0av** `@sweep mcs_duration` is not validated (P6.0as test author): NaN, Inf, zero or negative durations are accepted and silently break the `Adaptive` ODE step and cadences. Reject non-finite and non-positive values at `sweep_spec` with an `ArgumentError` naming `mcs_duration`.
+  - Accept: each invalid `mcs_duration` is an `ArgumentError` naming it when the model is built; valid values behave and fingerprint as before.
+- [x] (merge, 2026-10-04; D-129) **P6.0aw** `@on_copy` right-hand sides that read an `integral` run during the sweep and see the value from the last boundary (P6.0au follow-up, D-125). Reject at build like drives (same message and workaround), or document that they read the start-of-MCS value; test both a site and a cell `@on_copy`.
+- [x] **P6.0ax** An inline gather in a `@divide when` (`count(owner[n] == id for n in Ball(2.0)(40)) > 100`) fails at build with `KeyError: key Ball(2.0, false) not found` (P6.0at review): gather numbering (`src/compile.jl` ~362) scans `all_exprs`, which leaves out division `when`/rules and `@link when`. A named fold there works. Include them in the scan; test a gather in a division `when` and a link `when`, and that it is fingerprinted (D-124).
+- [x] (merge, 2026-10-04; D-131) **P6.0ay** P6.0t's frozen cost check ("observed-only integrals cost nothing per MCS", `to <= 1.1 * tl`, `p6_0t_integral_refresh.jl` ~425) fails under parallel agent load (1.854 vs 1.545 ms at the P6.0au merge; again in the P6.0av implementer's run, load average 11–13) and passes alone each time. Make it load-robust under a new decision (e.g. more interleaved rounds with the minimum ratio of paired rounds, or a structural check that observed-only integrals emit no per-MCS `CellReduce`, which P6.0t's accept already names), re-freezing the file. Priority: a failure there aborts the acceptance include chain, so every later frozen file goes unrun in that suite run (P6.0aw implementer); at minimum the cost check must not stop the chain.
+- [ ] (→ P6.0z, D-134) **P6.0az** A closure-weighted lattice neighbourhood is not fingerprinted by value and not session-bound (P6.0c2 review; pre-existing, D-122 path): `@lattice Lattice((12, 12); neighborhood = Weighted(Moore(1), o -> $W))` with `@energy contacts => 1.0 * weight` gives the same fingerprint for W = 2.0 and 3.0 in two fresh processes, so a checkpoint loads across different dynamics. Cause: `src/problem.jl` (~165–176) skips the contact relation equal to its default (`sys.lattice.neighborhood`), and `_fingerprint_seed` prints only the closure type; `_session_bound` checks only the solver string. Always hash the resolved lattice neighbourhood (offsets, weights), or apply the D-130 session token when the seed contains `var"#`; decide which, re-pin if needed.
+- [ ] **P6.0ba** CheckerboardCPM's preflight refuses a relation that reaches beyond the copy footprint even when only an MCS-boundary rule reads it (P6.0ax test author; pre-existing, named and inline alike): a named `far = Ball(2.0)` read only in a division `when` fails with "declares Footprint(read = 1) but … reach distance 2". A relation read only at the boundary (lifecycle, link rules, boundary updates, observed) needs no copy footprint; restrict the preflight reach to relations read in the copy step. Test a boundary-only Ball(2.0) under Checkerboard, and that a copy-step read still raises.
+- [x] (merge 2026-10-07, D-171; CPU and ROCm acceptance: candidate/base 0.990–1.004 CPU and 0.991–1.017 ROCm; same-commit controls within 1.01 % CPU and 2.26 % ROCm; the Metal ±3 % accept moves to P6.0bi) **P6.0bb** Make `benchmark/ab.jl` reliable. P6.2b measured 5–16% offsets between two checkouts of the same commit on `akeeb_99x60` Metal: a false 1.16, and a 1.24 reading that was mostly this artefact. P6.3a's Merks 1.098 was probably the same artefact.
+  - Interleave base and candidate in one process when only the workload or the parameters change (see the P6.2b interleaved μ A/B).
+  - Otherwise, rotate which checkout runs first and add a same-commit control (base vs base) whose ratio bounds what can be read from the A/B.
+  - Accept: a same-commit A/B reads within ±3% on all five Metal cases.
+  - **Expanded (D-157).** The backend is an argument of `gate.jl` and `ab.jl`. `baseline.toml` is keyed by machine and backend, and absolute baselines are informational.
+  - `ab.jl` seeds the type cache equally on both sides, runs a same-commit control, and interleaves base and candidate by default. On the PC it pins to one logical CPU on reserved cores 12–15.
+  - Accept on the PC: a pinned same-commit control within ±1% on every CPU and ROCm case. A pinned Akeeb pair read 1.001 / 1.001 on 2026-10-06.
+- [x] (closed 2026-10-08, D-182: symptom gone, nothing recompiles) **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
+  - Look up compiled kernels by (generated-function ids, backend, workgroup) instead of recompiling them per integrator.
+  - Accept: the unseeded and seeded Metal OpenVT A/B agree within ±2%, and a second `init` on the same problem compiles no kernel.
+- [x] (merge, 2026-10-07; D-157) **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
+  - One shared helper, `test/shared/devices.jl`: `POTTS_GPU ∈ {metal, rocm}`, `device_backend()`, `device_sync()`, `device_name()` and a uniform skip.
+  - Every test project includes it. The frozen acceptance files are re-frozen to use it (23 `Main.Metal.MetalBackend()` sites); the change is mechanical and no assertion changes. `GROUP=GPU` reads the backend from the environment.
+  - Check the Metal.jl workaround in `lifecycle_device.jl` (~853) on ROCm.
+  - Add a ROCm check that no device kernel's LLVM IR contains `double` (extends D-047), so Metal-breaking code is caught without a Mac.
+  - Accept: the full GPU group passes under `POTTS_GPU=rocm` on the PC, and the double-IR check fails on a deliberate Float64 literal (negative control).
+- [x] (2026-10-07; first green run 37582486493 at fd9a519c, after D-158) **P6.0bh** (D-157; approved by the maintainer) The repository's first workflow: on pushes to `monorepo`, run the CPU suites and the GPU group under `POTTS_GPU=rocm` on the self-hosted runner ("rocm,amd").
+  - Jobs pin to `taskset -c 0-11,16-27`.
+  - Accept: a push runs green, and a deliberately broken commit on a scratch branch runs red.
+- [ ] **P6.0bi** (D-157) Metal verification batch, after all paper models are done, on the maintainer's Mac Studio.
+  - The Metal suites, the Metal gate rows (new baselines for the new machine), and a seeded Metal A/B of every gate case against the last Metal-verified commit (ebb0f823; its OpenVT pair was skipped).
+  - Confirm p6_0v3's Metal Merks digest equals the CPU Float32 digest re-pinned under D-153 (`0x2aba158700292a8c, 0x6529835b3477095c`), and run the Float32 Merks2006/2008 device paths.
+- [ ] **P6.0bj** (GE0, `research/gpu-ensembles.md` §9; approved by the maintainer) Measure first, on the PC, before any GPU-ensemble code is built.
+  - K0: `EnsembleThreads` with a ROCm backend, with no new code.
+  - K1: a minimal batched-checkerboard prototype (replicas as an extra array dimension, one launch per colour).
+  - K2: S-a, one replica per work-item, for tiny lattices.
+  - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
+  - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.)
+  - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
+  - Report the pinned speedup on the PC, naming machine and backend.
+- [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
+  - Quantify it across the gate models.
+  - Decide whether it is expected (the colouring order, proposal law) and document it, or whether it is a defect.
+  - This matters for P6.0bj: GPU ensembles are checkerboard-only, and frozen reproductions use SequentialCPM.
+- [x] (merge 2026-10-07, D-161) **P6.0bd** (D-154, D-156) Deviations tables in the four-column form: our value, the paper's value, suspected cause, author-question status.
+  - Apply it to the frozen 09 and 10 pages and the tutorial template, re-freezing under D-154.
+  - Retire the 09 V-OS1–V-OS5 rows (Graner–Glazier only, D-156).
+  - Label every timing with its machine (spec 10 is done).
+- [x] (2026-10-07; D-159, `research/mtk-native-plan.md`) **P6.0be** (D-156) Design: what it takes for Potts.jl to be ModelingToolkit-native as a whole. The maintainer's aim is the full claim; `research/mtk-native-investigation.md` §1 found it unachievable as of 2026-10.
+  - Re-check the three blockers (the sweep as an MTK object, ragged growing per-cell state, lattice quantities) against current MTK.
+  - Price each route in build time, latency and gate cost.
+  - Propose the strongest claim the paper can defend, plus the work items.
+  - **Stop and report** if a route needs major MTK friction or a major slowdown (D-156).
+  - Output: `research/mtk-native-plan.md`. The maintainer decides.
+- [x] (merge 2026-10-07, D-161) **P6.0bf** (D-156) No cell outlines anywhere.
+  - Remove `boundaries = true` and `pottsboundaries` from `docs/paper_runs/*.jl` (GG, Akeeb, Merks, OpenVT), the docs tutorials, and the frozen 09 page (~line 427; re-freeze under D-156).
+  - Re-render the paper-run videos and the 09 FULL video on the PC. Replace the release asset `09_cell_sorting_full-2026-10-05_replicate1.mp4`, and link it from the 09 page.
+- [x] (merge 2026-10-07, D-160) **P6.0bm** (D-159; plan §6) A public `hamiltonian(sys)` and a typed metadata payload describing the sweep. Small. Runs first in the chain bm → bp → bn → bo, because these items edit the same files.
+- [x] (merge 2026-10-07, D-164) **P6.0bp** (D-159, re-scoped by D-162) A public `Potts.updates(sys)` returning every update statement as written: phase (`:before_mcs`/`:after_mcs`/`:on_copy`), scope (`:cell`/`:site`/`:model`/`:edge`), cadence (`Every(n)`) and its `Equation` in MTK `Pre` form. It works on the plain, `complete`, `extend` and `mtkcompile` forms (the compiled form reads the authored model, as in D-160). Small.
+  - Events as MTK callbacks move to P6.4c (D-162).
+- [x] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
+- [x] (merge 2026-10-08, D-170) **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; ≈ +9 s cold before a precompile workload, ≈ 0.1 s after (D-170: the workload is a merge condition).
+  - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
+- [x] (drafts done 2026-10-07, `research/upstream-drafts/`; filing is the maintainer's) **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
+  - the O(n²) dense mass-matrix bug;
+  - the unknown-size parameter failure at `ODEProblem`;
+  - an indirect-indexing comment on MTK #5078;
+  - a scaling comment on #5139.
+  Nobody here posts them.
+- [x] (merge 2026-10-07, D-169) **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small–Medium (D-169: supported, `distance` and the edge environment made available to edge updates).
+- [x] (merge 2026-10-07, D-172) **P6.0by** (D-172; from the P6.15e review, AUDIT A-80) MakiePotts per-cell colours: hash the identity key well so neighbouring ids get clearly different colours; regenerate the OpenVT docs figures and the F5 per-cell videos. Small.
+- [ ] **P6.0bz** (from P6.0bb, D-171) Find the per-checkout timing offset. Two checkouts of one commit differ by up to 1.0 % CPU and 2.3 % ROCm (Merks 100², Wortel) after pinning and seeding; is it the per-path precompile cache or the code layout? Shrinking it tightens the A/B margin. Low priority.
+- [x] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
+  - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
+  - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.
+  - Gate it with the paired A/B on ROCm.
+- [x] (merge 2026-10-07, D-167) **P6.0bx** (from the P6.0bb review) The frozen `p6_0s_v7_tooling.jl` L2 check fails on Linux. It asserts that no `/tmp/` path appears in the sandboxed `exclusive.sh`, but `mktempdir` lives under `/tmp`; base 9efdf924 fails the same way.
+  - CI never runs `benchmark/test`, which is why CI is green.
+  - Fix through a test-author re-freeze, and add a CI step that runs `benchmark/test` with `TMPDIR=$RUNNER_TEMP`.
+- [x] **P6.0bs** (D-159; after bm–bo) A frozen test that checks every MTK claim the paper makes, plus the paper and docs wording (plan §5).
+- [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`. Also folds in the fingerprint corner cases (D-134): P6.0az; fix if cheap, else document as best-effort. Also (D-136, maintainer): consolidate the fingerprint tests into one frozen suite `lib/PottsModels/test/acceptance/fingerprint.jl` — the fingerprint testsets of p6_0p, p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0ah, p6_0c2 and the pin blocks of p6_0t, p6_0x, p6_0au, p6_0aw, p6_0av, p6_0u, p6_0ag, p6_0ax, p6_0g; every distinctness, checkpoint-refusal and cross-session check kept; each published model and fixture pinned exactly once; touched files re-frozen under D-136. Also (P6.0ax review, D-134): gather bound-variable names, population variables and `rand()` addresses share one build counter (`_next_number!`, src/vocabulary.jl), so an `@observed` fold written before other statements shifts later names and `rand()` addresses — the fingerprint changes and, under a fixed seed, the trajectory changes (adding a diagnostic changes results). Give `rand()` addresses and bound names per-statement or canonical numbering at `mtkcompile`; re-pin under D-136. Priority before reproductions that add observables to seeded runs. Also (P6.0o review): a component's algebraic observed queried as `dc₊z` gets "namespaced by another system" — say it is substituted and suggest `@observed`; `s.λ` on a `CompiledPottsSystem` is a FieldError; `Potts.parameters` vs `ModelingToolkitBase.parameters` differ for component models.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
     - naming consistency, e.g. the `CPM*` names left after `PottsProblem` (`CPMAlgorithm`, `CPMFunction`, `CPMState`, `SequentialCPM`, `CheckerboardCPM`), and SciML/MTK conventions (D-075);
@@ -326,7 +415,7 @@ Every item's acceptance also includes the standing checks:
   needs a flood fill (it is 32 MB at 200³ today).
 - [x] (merge, 2026-09-30) **P6.1a2** `Frame` on a masked lattice paints the domain boundary (P6.1a review).
   Today a frame on a lattice with a domain always throws.
-- [ ] **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
+- [x] (merge, 2026-10-05; D-138) **P6.1a5** Move `VoronoiBall` (added to PottsModels in P6.1b2) into `src/layouts.jl` as
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): shapes and points scoped to 09/11 (`Sphere`, `RandomPoints`, `Voronoi(points; region, lloyd)`, `Center()`); the GeometryBasics decision (Q1: reuse only round shapes and `Point`, closed membership; index boxes stay ranges); `Voronoi` replaces `VoronoiBall` only if it reproduces its σ or D-063's area statistics (Q3); shape layers clip to the domain and report `clipped` (Q5, D-057 amendment).
   a core layout, next to the planned `Spheres`. It needs a DSL and export review, and moves
   the StableRNGs dependency to Potts only.
@@ -344,7 +433,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-10-01; D-088) **P6.0e2** Using `m′` for a cell variable `m` gives a bare UndefVarError. Emit a Potts
   error ("primes exist only for site/field variables"). Also check programmatically built
   `PottsSystem`s for declarations named `x′`.
-- [ ] **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
+- [x] (merge, 2026-10-05; D-139) **P6.1b** R16 analysis in the docs: boundary-length decomposition, annealed-copy
   measurement (D-051 item 6: in Potts.jl's docs unless a composable package is merited).
 - [x] (merge, 2026-09-30) **P6.0a2** capacity-limited mixed-division test in `lib/CorePotts/test/compartments.jl` (P6.0a review nit 2).
 - [x] (merge, 2026-09-30; D-059, D-060, D-063) **P6.1b2** follow-ups from the P6.0h review:
@@ -361,9 +450,21 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge + freeze, 2026-09-30; D-072) **P6.1c** reproduction 09 (V-target audit done 2026-09-30: freeze from spec 09 §9.1 only; the tutorial prose was ratified with 8 changes). Reproduction 09. Frozen: `reproductions/09_cell_sorting.jl` from 09 §5.
   **Gate:** S1 provenance flag.
 
-- [ ] **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
+- [x] (run 2026-10-05, 8eb9d210; every binding row passes except V-PRE3 (b)) **P6.1d** Run reproduction 09 in FULL on an idle machine: `POTTS_FULL_REPRODUCTION=true`, 1000 cells
   per replicate, about 25–40 CPU-min each. Record the verdict table in PROGRESS and send it to the spec
   owner. There is no code change: the page is frozen (D-072).
+- [x] (run 2026-10-05, 0eb1ea72; every binding row passes except V-PRE5 "one dark cluster @ 10⁴", 0.815 vs ≥ 0.90; sent to the spec owner) **P6.1f** (D-144; spec 09 §9.4, peer spec-owner ruling) Rerun reproduction 09 in FULL on an idle machine with the
+  amended page: `MARGIN = 60` (347²) and the isolation-guard row. It costs about 2× P6.1d. It replaces P6.1d as the record for
+  every row; P6.1d stays on record as a FAIL of V-PRE3 (b) caused by periodic-image contact. Record the table in PROGRESS,
+  send it to the spec owner, and report it in the phase report as a pre-registered failure explained after the run.
+- [x] (run 2026-10-06, 192 runs on the PC; D-151 outcome: stays a reported deviation) **P6.1g** (D-151; spec 09 §9.5) Late-stage coarsening in reproduction 09 is an open deviation: V-PRE5's one-cluster clause fails in P6.1f, and both published runs coarsen faster than almost all of our 22 replicates after 10³.
+  - First, cheaply: the distribution of the time to a single dark cluster over ≥ 20 replicates, against the paper's ≈ 5000.
+  - Then test the candidate causes: T against the effective line tension, the cell-size difference (V-GG6), and the aggregate size and spread.
+  - The targets are unchanged. It is reported in the phase report as a science question (AUTONOMY §7.5), and the author question is in README §5.
+  - **Bounded pass (D-156, running on the PC).** ≥ 20 more replicates, then one scan per candidate cause; if none explains the gap, a fresh seed set. After that it stays a reported deviation. The question goes to Glazier through the PI sheet.
+- [x] (merge 2026-10-07, D-166; T = 80 is a deviation: cells disappear too slowly) **P6.1h** (D-151 outcome) Put V-PRE7, the sorting temperature regimes (spec 09 §8.5), on the 09 page, as an independent check of our temperature scale. P6.1g found that late coarsening is strongly T-sensitive.
+  - It needs a re-freeze of the page and test under a new D-entry; it can share the re-freeze with P6.0bd/P6.0bf.
+  - Runs at FULL on the PC.
 - [x] (merge, 2026-09-30; D-076) **P6.0m** Confirmed small defects, found in the API-synthesis review and verified by
   script:
   - `Chemotaxis` forces `new != 0` (`src/vocabulary.jl:636`), so a retraction drive reads 0.
@@ -398,13 +499,19 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge, 2026-09-30; D-068, D-071) **P6.2c** Akeeb seeding per D-068 (MD-1).
   - Default: emulate the authors' ghost leaders; keyword variant: retry.
   - Re-baseline the frozen `papers.jl` Akeeb testset (ensemble band; μ = 24) and the gate's Akeeb case.
-- [ ] **P6.2b** (V-target audit done 2026-09-30: freeze from spec 10 §5.3, with 12 READY rows and 3 PARKED; SciPy 1.7 `find_peaks` finger detection is exact against stored outputs; do not reuse `akeeb_metrics.jl`). Reproduction 10 against the authors' 13,310-run data (10 §5).
+- [x] (merge, 2026-10-05; D-142, D-143) **P6.2b** (V-target audit done 2026-09-30: freeze from spec 10 §5.3, with 12 READY rows and 3 PARKED; SciPy 1.7 `find_peaks` finger detection is exact against stored outputs; do not reuse `akeeb_metrics.jl`). Reproduction 10 against the authors' 13,310-run data (10 §5).
   Frozen: `reproductions/10_akeeb.jl`. **Gate:** A5 default μ (D-050: μ = 24, pending
   confirmation).
 
+- [x] (merge 2026-10-07, D-163) **P6.2d** (D-156) Akeeb FULL extras.
+  - Un-park V-A6 with the area-equality classifier.
+  - Run the V-A7 full-sweep |r|, and V-A3–A5 at FULL, on the PC, with D-146 records.
+  - V-A8/A9 go on the PI sheet.
+
 ### Step 3 — Merks 2006 + 2008
 
-- [ ] **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
+- [x] (merge 2026-10-07, D-167) **P6.2e** (D-163) The page-10 FULL-record test recomputes V-A6's R3 (phenotype counts from the committed `sweep.tsv` against A's classified counts) and V-A7's six |r| values, instead of reading the PASS strings. Small; test-author re-freeze.
+- [x] (merge, 2026-10-05; D-140) **P6.3a** R4 topology values dispatched on geometry; the soft E₀ drive; `Global()`
   placeholder. Accept: the soft-connectivity sibling; hex and 3D ring tests.
   - D-075: `track = (:ΔH,)` → `stats.accepted_ΔH` (01 F9); `nothing` when off, and the
     A/B is unchanged.
@@ -415,22 +522,69 @@ Every item's acceptance also includes the standing checks:
     copy won, so earlier sub-cycles are never zeroed.
   - Accept: the per-MCS reduction into a host `Float64` is a device sync. Either reduce
     only at save points, or state and measure the per-MCS sync on Metal.
-- [ ] **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
+- [x] (merge, 2026-10-06; D-145) **P6.3b** R5 `@boundary` per face with a masked clamp every substep; field phase
   placement and an explicit phase order. The phase order **is** `@schedule`, with the
   `step!` restructuring of api-synthesis §2.12; D-035 is amended (D-075) in the same change.
   - Accept: the gate is unchanged on CPU, and the Metal A/B is ≤ 1.01 for the five gate
     models.
   - Accept: the absorbing frame keeps c = 0 on the ring after every substep.
   - Accept: PDE-before-sweep ordering is observable in a two-phase test.
-- [ ] **P6.3c** R2 `Eden` + splits.
+- [x] (merge, 2026-10-05; D-141) **P6.3c** R2 `Eden` + splits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Eden`, a host-routine `Splits` (not the lifecycle routine), `RandomPoints(replace = true)`, and `shortfall` with its first `:allow` consumer.
-- [ ] **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
+- [x] (merge, 2026-10-06; D-153) **P6.3d** Merks split into `Merks2006` and `Merks2008` per D-050 M1–M11: the frame,
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): port `merks_state` to `Scattered(282, (7,7); region, kinds = [:endothelial], seed, gap = 1)` (same algorithm, draw-for-draw identical under a shared RNG) — **user-approved 2026-10-01 (D-087)**; it changes the gate's Merks initial state, so re-check the gate and the `mechanisms.jl` seeds.
   15 FTCS substeps, relaxation and `mode = :extension_retraction`. Frozen:
   `reproductions/01_merks.jl` (V-E1…, V-C1…). **Gate:** M1–M7 sign-off (approved, D-050);
   L 50 vs 60 remains an author question.
 
-- [ ] **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
+  - **Maintainer rulings (D-156).**
+    - The ring rule at a closed edge matches TST: out-of-domain sites count as a cell in `ring_cells` (P6.0ae).
+    - Digitise 01b Figs 5, 7–10, 12 and 13 and target them through the continuous-χ superset (M7), with inferred parameters flagged.
+    - Show both clocks: relaxation-end time is the primary axis, with a note giving the code-MCS offset.
+- [x] (merge, 2026-10-06; D-153, folded into P6.3d) **P6.3e** The 2008 contact-inhibited variant uses 20 neighbours (`NeighborOrder(4)`) for contacts and copies, as the authors' parameter files do; `contact_inhibited = true` keeps `Moore(1)` today (topology audit §6.1). Folds into P6.3d's 2008 set; a `Frame` border must then be 2 sites thick (TST border contacts reach through the √5 stencil). No frozen gate uses `contact_inhibited = true`.
+
+### Step 3b — OpenVT monolayer benchmark (parallel track; D-147, spec 15)
+
+Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
+- Follow the manuscript wherever possible.
+- Recreate every simulation figure and meet every submission requirement.
+- Include the 1D-chain mechanical calibration.
+- Publish all results as offline files in the docs.
+
+Full runs are offline (D-146).
+
+- [ ] (page parts merged 2026-10-07, D-161; FULL run, 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+  - Remove the cell outlines (page lines ~179, 203, 234).
+  - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
+  - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
+  - Add digitised 01b Figs 5, 7–10, 12 and 13 as targets through the M7 continuous-χ superset, with inferred parameters flagged. The model side is ready: `χcc`, `merks2008_sprout(; divisions = 8)` on 502², and `track = (:ΔH,)`.
+  - Run the FULL tier on the PC, with D-146 records; the FULL run decides V-C3's low plateau.
+- [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
+  - Written by the peer session "Potts.jl models and publications".
+  - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
+- [x] (merge, 2026-10-05; D-148; FULL record 2026-10-05, every V6–V8 row passes) **P6.15b** F2 and Table S5 mechanical calibration (spec 15 §4.2, P1–P12; gap G10).
+  - The test author freezes V6–V8 and a P11 unit test: the 11-bead free-end spring–dashpot reference matches `relaxation_exact.csv` to 1e-6.
+  - Implement the fixture: strips on a 5-row periodic lattice (one `Tiling` per region plus `overlay`), the A* switch at t = 0, unwrapped centroids, the 90% crossing and the MSE.
+  - FULL run: 100 seeds × λ ∈ {1, 2, 3, 5}, for the 11- and 21-chains. It sets T_Potts, which every other row uses.
+- [x] (merge, 2026-10-06; D-150) **P6.15c** Model update to Table S1 (spec 15 §5) with a D-entry: replace the 2024 defaults or keep them as a documented variant. Close these gaps:
+  - G1: per-cell free-surface fraction f_i over Moore(1), exact and incremental, as a general contact fold, not model-named.
+  - G2: a per-daughter normal draw of X, redrawn while ≤ 0, on the counter RNG, with a deterministic X ≡ 2 mode. Start it in parallel with P6.15b.
+  - G5: a disc start.
+  - G6: a domain guard.
+  - G11: stops at 1000 and 10⁴ cells and the O2 snapshot writer. Use the existing `DiscreteCallback` plus `terminate!` (G7).
+- [x] (merge, 2026-10-05; D-149) **P6.15d** Analysis port (G8; can run in parallel with P6.15b):
+  - a concaveman port and a `metrics.cpp` port, with the inhibition fractions of M's Category 3 analysis (spec item A3);
+  - the O1–O6 writers.
+  - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
+- [x] (merge 2026-10-07, D-168; V4 fails V4.2, V4.3, V4.5 as D-154 deviations; consortium TST_5T and Morpheus_5T pass 7/7 under the frozen rules) **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
+- [x] (merge 2026-10-08, D-173; all rows pass, controls fail; V1 warning for P6.15g) **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
+- [ ] (D-174: test frozen; FULL run unparked 2026-10-08, BoundarySiteCPM 2.83× on case (a)) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [x] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
+- [x] **P6.15i** Docs page "OpenVT monolayer benchmark":
+  - every figure in M's layout;
+  - a differences table, which is spec 15 §1.1 plus the deviations;
+  - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
+- [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
 
 ### Step 4 — Foam
 
@@ -441,6 +595,7 @@ Every item's acceptance also includes the standing checks:
     and the §2.6 energy ban.
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
+- [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
 - [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
@@ -451,6 +606,7 @@ Every item's acceptance also includes the standing checks:
     MetropolisHastings` is an error.
 - [ ] **P6.4c** R3: `@retire`, `@transition`, `rand(dist)`, `hazard`, `@discrete_events` →
   SciMLBase callbacks, `@terminate`.
+  - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
@@ -471,7 +627,7 @@ Every item's acceptance also includes the standing checks:
   lifecycle (D-075 clarify). Fixes A-17.
 - [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; the docs show `Plane`/`Spheres` recipes.
-- [ ] **P6.5d** reproduction 14a/14b. **Gate:** C4 blocks the quantitative S/P/D targets.
+- [ ] **P6.5d** reproduction 14a/14b (and 14c, D-156). C4 resolved from the CC3D source (D-155); no gate.
 
 ### Steps 6–12
 

@@ -69,6 +69,7 @@
 # other expected value is derived by hand in the comments; the one draw-dependent count (the
 # report fixture's misses) is also recomputed from the documented draw rule.
 using Potts: CorePotts
+using StableRNGs: StableRNG   # D-138: PottsModels no longer depends on StableRNGs
 using SHA: sha256
 
 p61a6_get(op, key) = only(last(p) for p in op if isequal(first(p), key))
@@ -347,7 +348,7 @@ end
         Tiling((1, 3); region = (5:5, 1:3), kinds = [:x], splits = s3),
         InsertUntil(:y; into = [:a], number = 1, seed = S, misses = :count, region = (2:2, 3:4)))
     # the misses from the documented draw rule: StableRNG(seed), rand(rng, 1:length(sites))
-    rng = PottsModels.StableRNG(S)
+    rng = StableRNG(S)
     m = 0
     while rand(rng, 1:2) == 2
         m += 1
@@ -510,13 +511,15 @@ end
     @test !(isdefined(PottsModels, :layout_tally) && Base.ispublic(PottsModels, :layout_tally))
     @test Base.ispublic(Potts, :paint!)
     ms = [m for m in methods(Potts.paint!) if m.module in (Potts, PottsModels)]
-    @test length(ms) >= 6               # Tiling, Scattered, Frame, InsertUntil, overlay, VoronoiBall
+    @test length(ms) >= 6               # Tiling, Scattered, Frame, InsertUntil, overlay, Voronoi (VoronoiBall's successor, D-138)
     @test all(m -> m.nargs == 4, ms)    # #self#, op, l, lat: no paint!(σ, kinds, l, lat)
-    for T in (Tiling, Scattered, Frame, InsertUntil, typeof(overlay(Frame(:w), Frame(:v))), PottsModels.VoronoiBall)
+    for T in (Tiling, Scattered, Frame, InsertUntil, typeof(overlay(Frame(:w), Frame(:v))), Potts.Voronoi)
         @test isempty(methods(Potts.paint!, (AbstractArray, Any, T, Any)))
         @test any(m -> m.nargs == 4, methods(Potts.paint!, (Potts.LayoutState, T, Potts.LatticeSpec)))
     end
-    # VoronoiBall still paints (on the new protocol)
-    op = layout(PottsModels.VoronoiBall(4; radius = 8, kinds = Int32[1, 2], seed = 1), (24, 24))
+    # VoronoiBall's successor paints (on the new protocol; D-138: `VoronoiBall(n; radius, kinds, seed)`
+    # is `Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)`)
+    ball = Potts.Circle(Potts.Point(12.5, 12.5), 8.0)
+    op = layout(Potts.Voronoi(Potts.RandomPoints(4; region = ball, seed = 1); region = ball, lloyd = 30, kinds = Int32[1, 2]), (24, 24))
     @test sort(unique(p61a6_σ(op))) == 0:4 && length(p61a6_kinds(op)) == 4
 end

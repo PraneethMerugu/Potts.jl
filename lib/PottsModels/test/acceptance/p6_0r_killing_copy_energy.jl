@@ -354,9 +354,9 @@ end
     @test all(u -> p60r_vol(u)[2] == 1, solve(free, alg; saveat = 1).u)
 end
 
-@testset "P6.0r: a partner killed during a Metal run" begin
-    if get(ENV, "POTTS_GPU", "") == "metal" && isdefined(Main, :Metal)
-        backend = Main.Metal.MetalBackend()
+@testset "P6.0r: a partner killed during a device run" begin
+    if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
+        backend = Main.PottsDevices.device_backend()
         prob = p60r_snap(; T = Float32)
         sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend, saveat = 1)
         p60r_snap_check(sol)
@@ -370,7 +370,7 @@ end
         @test p60r_vol(solp.u[1])[2] == 4 && p60r_vol(solp.u[end])[2] == 0
         @test p60r_vol(solp.u[end])[1] > 0
     else
-        @test_skip "Metal (POTTS_GPU=metal with Metal loaded)"
+        @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
 
