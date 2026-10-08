@@ -406,3 +406,8 @@ decision = "D-166"
 path = "acceptance/p6_0bp_updates.jl"
 sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
 decision = "D-164"
+
+[[file]]
+path = "acceptance/p6_0bo_initialization.jl"
+sha256 = "bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca"
+decision = "D-170"
