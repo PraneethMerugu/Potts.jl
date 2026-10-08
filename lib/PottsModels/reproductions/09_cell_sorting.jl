@@ -25,13 +25,11 @@
 # - F. Graner, J.A. Glazier, "Simulation of Biological Cell Sorting Using a Two-Dimensional
 #   Extended Potts Model", *Phys. Rev. Lett.* **69**, 2013 (1992).
 #   doi:[10.1103/PhysRevLett.69.2013](https://doi.org/10.1103/PhysRevLett.69.2013).
-#   PDF: `docs/references/09a_GranerGlazier1992_PRL_cell-sorting.pdf` (version of record,
-#   OCR text layer; equations read from the page images).
+#   Read in the version of record (OCR text layer; equations read from the page images).
 # - J.A. Glazier, F. Graner, "Simulation of the differential adhesion driven rearrangement
 #   of biological cells", *Phys. Rev. E* **47**, 2128 (1993).
 #   doi:[10.1103/PhysRevE.47.2128](https://doi.org/10.1103/PhysRevE.47.2128).
-#   PDF: `docs/references/09c_GranerGlazier1993_PRE_differential-adhesion-rearrangement.pdf`
-#   (version of record). It gives the initial-condition recipe (§II D3), the measurement
+#   Read in the version of record. It gives the initial-condition recipe (§II D3), the measurement
 #   protocol (§II D1) and the full sorting run (§III B, Fig. 13).
 # - Erratum status: the spec records no erratum for either paper. We have not checked the
 #   APS erratum listings.

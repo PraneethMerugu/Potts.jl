@@ -19,17 +19,15 @@
 #   elongation is key to in silico replication of in vitro vasculogenesis and subsequent
 #   remodeling", *Developmental Biology* **289**, 44–54 (2006).
 #   doi:[10.1016/j.ydbio.2005.10.003](https://doi.org/10.1016/j.ydbio.2005.10.003).
-#   PDF: `docs/references/01a_Merks2006_DevBiol_vasculogenesis-elongation.pdf` (version of
-#   record); the PMC author manuscript (PMC2562951) has the same text for every value used
+#   Read in the version of record; the PMC author manuscript (PMC2562951) has the same text for every value used
 #   here. The supplementary methods cited in the Fig. 2 caption could not be located.
 # - **01b.** R.M.H. Merks, E.D. Perryn, A. Shirinifard, J.A. Glazier, "Contact-Inhibited
 #   Chemotaxis in De Novo and Sprouting Blood-Vessel Growth", *PLoS Comput. Biol.* **4**(9),
 #   e1000163 (2008). doi:[10.1371/journal.pcbi.1000163](https://doi.org/10.1371/journal.pcbi.1000163).
-#   PDF: `docs/references/01b_Merks2008_PLoSCB_contact-inhibited-chemotaxis.pdf`.
+#   Read in the version of record.
 # - Erratum status: none recorded in the spec; not checked against the journals.
-# - Released code: Tissue Simulation Toolkit 0.1.3 (01b Protocol S1),
-#   `docs/references/codebases/01b_Merks2008_TissueSimulationToolkit-v0.1.3/`, and the 12
-#   parameter files of 01b Dataset S1, `docs/references/supplementary/01b_Merks2008_DatasetS1_parameter-files/`.
+# - Released code: Tissue Simulation Toolkit 0.1.3 (01b Protocol S1) and the 12
+#   parameter files of 01b Dataset S1.
 #   No code was released with 01a; the TST files headed "Cf. Fig. 4 of Merks et al. 2006"
 #   are 2008-release values, assumed for 2006 (spec 01 §7.8).
 # - Spec: `docs/design/research/model-specs/01_merks.md` (§2, §3, §5, §7, §8); decisions
