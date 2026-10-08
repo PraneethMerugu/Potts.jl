@@ -273,6 +273,46 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+# conditions without a solution or without a unique one: refused alike (Potts checks every
+# result against the conditions, so neither MTK's least-squares answer nor the guess comes back)
+@potts_model MTKExtInitZero begin
+    @kinds medium A
+    @parameters k_z = 0.0
+    @variables kz(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations k_z * kz ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitClash begin
+    @kinds medium A
+    @variables begin
+        ta(cell)
+        tb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        ta + tb ~ volume
+        ta + tb ~ volume + 1
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitDependent begin
+    @kinds medium A
+    @variables begin
+        sa(cell)
+        sb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        sa + sb ~ volume
+        2sa + 2sb ~ 2volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 @testset "initialization ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
     σ = zeros(Int32, 12, 8)
     σ[3:6, 3:6] .= 1
@@ -291,5 +331,15 @@ end
         end
         @test err isa ArgumentError
         println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin("determined", sprint(showerror, err)))
+    end
+    for (M, words) in ((MTKExtInitZero, "found no solution"), (MTKExtInitClash, "found no solution"),
+                       (MTKExtInitDependent, "uniquely"))
+        err = try
+            PottsProblem(M(; name = :r), op, (0, 1)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin(words, sprint(showerror, err))
+        println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin(words, sprint(showerror, err)))
     end
 end

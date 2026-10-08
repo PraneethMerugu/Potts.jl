@@ -231,7 +231,18 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
+# a model variable that only a cell equation names
+@potts_model IniModelByCell begin
+    @kinds medium A
+    @variables mm(model)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations mm ~ 2volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 @testset "initialization: rejections" begin
+    @test ini_error(() -> PottsProblem(IniModelByCell(; name = :r), ini_op(), (0, 1)), "model variable", "`mm`", "model equation")
     @test ini_error(() -> mtkcompile(IniNoODE(; name = :r)), "D(v", "ODE")
     @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "initialization", "surface")
     @test ini_error(() -> PottsProblem(IniTwice(; name = :r), ini_op(), (0, 1)), "overdetermined", "v")
@@ -239,6 +250,137 @@ end
     @test ini_error(() -> mtkcompile(IniGatherRate(; name = :r)), "initialization", "D(g")
     # errors name where the equation was written
     @test ini_error(() -> mtkcompile(IniSurface(; name = :r)), "@initialization_equations", "initialization.jl")
+end
+
+# every result is checked against the conditions: no solution, no unique solution, small scales
+@potts_model IniCoef begin
+    @kinds medium A
+    @parameters k = 0.0
+    @variables kx(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations k * kx ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniCellCoef begin
+    @kinds medium A
+    @variables zz(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations (id - 1) * zz ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniPair begin
+    @kinds medium A
+    @parameters shift = 1.0
+    @variables begin
+        ta(cell)
+        tb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations begin
+        ta + tb ~ volume
+        ta + tb ~ volume + shift
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniDependent begin
+    @kinds medium A
+    @variables begin
+        sa(cell)
+        sb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations begin
+        sa + sb ~ volume
+        2sa + 2sb ~ 2volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniSmall begin
+    @kinds medium A
+    @parameters begin
+        kp = 1.0e-12
+        kd = 1.0
+    end
+    @variables begin
+        ty(cell), [guess = 1.0]
+        cc(cell), [guess = 1.0e-3]
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @equations D(cc) ~ kp * volume - kd * cc^2
+    @initialization_equations begin
+        ty^2 ~ 1.0e-20volume
+        D(cc) ~ 0
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniNoGuess begin
+    @kinds medium A
+    @variables r(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations r^2 ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniNoRoot begin
+    @kinds medium A
+    @variables q(cell), [guess = 1.0]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations q^2 + 1 ~ 0
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization: results are checked against the conditions" begin
+    # oracle: k·kx = volume; with k = 0 there is none (MTK's linear solve would return 0)
+    @test ini_u0(PottsProblem(IniCoef(; name = :c, k = 2.0), ini_op(), (0, 1)), :kx) ≈ INI_VOL ./ 2 rtol = 1e-12
+    @test ini_error(() -> PottsProblem(IniCoef(; name = :c), ini_op(), (0, 1)), "cell 1", "found no solution", "kx")
+    # a coefficient zero for one cell only names that cell
+    @test ini_error(() -> PottsProblem(IniCellCoef(; name = :c), ini_op(), (0, 1)), "cell 1", "zz")
+    # inconsistent pair: no least-squares compromise; control: consistent (shift = 0) but
+    # dependent, and an independent pair solves
+    @test ini_error(() -> PottsProblem(IniPair(; name = :c), ini_op(), (0, 1)), "found no solution", "ta", "tb")
+    @test ini_error(() -> PottsProblem(IniPair(; name = :c, shift = 0.0), ini_op(), (0, 1)), "uniquely", "ta", "tb")
+    @test ini_error(() -> PottsProblem(IniDependent(; name = :c), ini_op(), (0, 1)), "uniquely", "sa", "sb")
+    # small scales: the stop follows the size of the terms (oracle: sqrt(1e-20 V), sqrt(kp V / kd))
+    p = PottsProblem(IniSmall(; name = :c), ini_op(), (0, 1))
+    @test ini_u0(p, :ty) ≈ sqrt.(1.0e-20 .* INI_VOL) rtol = 1e-9
+    @test ini_u0(p, :cc) ≈ sqrt.(1.0e-12 .* INI_VOL) rtol = 1e-9
+    # no guess: 0.0 makes the Jacobian of `r^2 ~ volume` singular; an ArgumentError, not a LinearAlgebra one
+    @test ini_error(() -> PottsProblem(IniNoGuess(; name = :c), ini_op(), (0, 1)), "initialization", "`r`", "guess")
+    @test ini_error(() -> PottsProblem(IniNoRoot(; name = :c), ini_op(), (0, 1)), "found no solution", "`q`")
+end
+
+# kind tables are read at the cell's own kind
+@potts_model IniTable begin
+    @kinds medium A B
+    @parameters g[kind] = [0.0, 1.0, 3.0]
+    @variables kv(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations kv ~ g[kind] * volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniTableFixed begin
+    @kinds medium A B
+    @parameters g[kind] = [0.0, 1.0, 3.0]
+    @variables kv(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations kv ~ g[2] * volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization: kind tables" begin
+    @test ini_u0(PottsProblem(IniTable(; name = :t), ini_op(; kinds = [:A, :B]), (0, 1)), :kv) == [16.0, 36.0]
+    @test ini_u0(PottsProblem(IniTable(; name = :t), ini_op(; kinds = [:B, :A]), (0, 1)), :kv) == [48.0, 12.0]
+    s = Potts.initialization_system(mtkcompile(IniTable(; name = :t)), :cell)
+    @test :g_kind in ini_names(INI_M.parameters(s))
+    @test ini_error(() -> mtkcompile(IniTableFixed(; name = :t)), "kind table", "g[kind]")
 end
 
 # no value written: recorded, and nothing else changes (code, fingerprint, the start at 0.0)

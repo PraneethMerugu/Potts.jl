@@ -18,7 +18,7 @@ using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, C
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
-using LinearAlgebra: Symmetric, eigen
+using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions

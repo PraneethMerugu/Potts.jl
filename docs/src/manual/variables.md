@@ -37,23 +37,34 @@ syntax (MTK's `initialization_eqs`), and Potts solves them for every cell when t
 built, before the first MCS:
 
 - An equation is `lhs ~ rhs`, explicit or implicit, linear or nonlinear. It reads the cell's
-  own variables (bare), its built-ins `volume`, `id` and `kind`, parameters, model
-  variables, and `D(x)` of a cell or model ODE variable `x`, its rate at the start
-  (`D(x) ~ 0` is a steady start).
+  own variables (bare), its built-ins `volume`, `id` and `kind`, parameters, kind tables at
+  the cell's own kind (`g[kind]`), model variables, and `D(x)` of a cell or model ODE
+  variable `x`, its rate at the start (`D(x) ~ 0` is a steady start).
 - A variable declared **without a value** (`Vt(cell)`) is solved for when an equation of its
   scope names it; otherwise it starts at 0.0, as before. A **written value**, `= 0.0`
   included, or a value in the operating point fixes the variable, as in ModelingToolkit.
 - Every solved variable needs exactly one equation: too many conditions ("overdetermined",
   for example a fixed variable that an equation also determines) and too few
-  ("underdetermined") are errors naming a variable, and so is an equation without a solution.
+  ("underdetermined") are errors naming a variable.
+- Every result is checked against the equations, each to a residual small against the size
+  of its terms, so small and large scales are solved alike. Equations without a solution
+  for a cell (`k * x ~ volume` with `k = 0`, or `a + b ~ volume` with `a + b ~ volume + 1`)
+  and equations that do not determine the variables uniquely (`a + b ~ volume` with
+  `2a + 2b ~ 2volume`: their Jacobian is singular at the solution) are errors naming the
+  cell and the variables; neither a least-squares answer nor the guess is returned.
 - A nonlinear equation is solved from the variable's guess (`[guess = g]`, else 0.0), which
-  picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`.
+  picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`. Without a guess,
+  an equation symmetric in the variable such as `r^2 ~ volume` fails: its Jacobian is zero at
+  0.0, so the solve cannot start. Give such variables a guess.
 - An equation that reads no cell quantity is a model equation. The model is initialized first,
   and cell equations read its values.
 - An operating-point value for an algebraic variable (`y ~ expr` in `@equations`) is the
   condition `y ~ value`, so the variables of its definition are solved for.
 - Initialization runs when the problem is built and again on `remake(prob; u0 = map)`. A
-  saved state passed as `u0` keeps its values. Daughter cells are not initialized.
+  saved state passed as `u0` keeps its values. `remake(prob; p = …)` changes parameters
+  only: it neither initializes again nor re-evaluates written values such as `w(cell) = c0`,
+  so pass `u0 = map` as well when the start depends on the new parameters. Daughter cells
+  are not initialized.
 - Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbour gathers,
   folds over cells, and site, field and edge variables are errors for now.
 

@@ -3303,8 +3303,9 @@ end
     # algebraic equations (P6.0bn): accepted alike, the same code and trajectories
     @test length(lines(base, "P6BN|")) == 4
     @test lines(full, "P6BN|") == lines(base, "P6BN|")
-    # entity-local initialization (P6.0bo): the same values and rejections
-    @test length(lines(base, "P6BO|")) == 3
+    # entity-local initialization (P6.0bo): the same values and rejections (under- and
+    # overdetermined counts, no solution, no unique solution)
+    @test length(lines(base, "P6BO|")) == 6
     @test lines(full, "P6BO|") == lines(base, "P6BO|")
 end
 
