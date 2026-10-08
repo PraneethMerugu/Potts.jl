@@ -50,7 +50,9 @@ fᵢ; `G:results/free_surface.tex`, D-175): the 2D ownership array `σ` (`σ[I] 
 `0` medium) drawn with `pottsplot` (`CellIdentityEncoding`, medium RGB(236,236,236), no
 boundaries), a white site grid, and one short dash for every pair (site of cell `c`, Moore(1)
 neighbour owned by anything else), across the pair's shared edge or corner: magenta
-RGB(231,41,138) for medium partners and amber RGB(255,192,0) for other cells. A label shows
+RGB(231,41,138) for medium partners and amber RGB(255,192,0) for other cells. Cells are
+tinted with the .tex's cell colours when `σ`'s ids are exactly `1:n` with `n ≤ 4`, and with
+the automatic identity palette (D-172) otherwise. A label shows
 both counts, `fᵢ = m / (m + n)`, the G1 count of [`openvt_snapshot`](@ref
 PottsModels.openvt_snapshot). The .tex's black outline of cell i is left out on purpose: no
 cell outlines are drawn (D-156).
