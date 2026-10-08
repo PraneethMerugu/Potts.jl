@@ -57,7 +57,11 @@ function CorePotts._device_wait(::ROCBackend; timeout::Real = CorePotts.DEVICE_W
 end
 
 # Device→host copies: enqueued on the task's stream without AMDGPU's wait, then waited for.
+# The stream is drained first: an async copy into pageable host memory may itself block in
+# HIP until earlier work finishes, with no yield (a hostcall kernel would deadlock) and no
+# timeout, so the copy is only enqueued on an idle stream.
 function CorePotts._copy_to_host!(dst::Array{T}, doff::Integer, src::ROCArray{T}, soff::Integer, n::Integer) where {T}
+    CorePotts._device_wait(ROCBackend())
     copyto!(dst, doff, src, soff, n; async = true)
     CorePotts._device_wait(ROCBackend())
     return dst
