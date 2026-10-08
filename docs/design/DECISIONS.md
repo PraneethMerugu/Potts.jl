@@ -3322,3 +3322,8 @@ session.
   - There is a scan for private and contact wording.
   - Two builds must be byte-identical.
 - **Submission.** Submitting the package to the consortium stays the maintainer's call. Nothing is sent.
+
+**D-180 amendment (2026-10-08, coordinator, from the P6.15j review).**
+- **Bare closeup.** `closeup.png` is now the bare Potts.jl panel, `fig1_closeup.png`, which is added to the F1 record and rendered from its `window.tsv` without the banner. The consortium's closeups have no banner because the .tex adds one; the banner-carrying `fig1.png` would have shown it twice.
+- **Re-frozen file.** `15_openvt_package.jl`, sha256 `9f654f9c06eaf61f37613cb9c889d500ad69172837e2557e4d793545f94c6f40`. Only the closeup line and its comment change.
+- **Excluded scripts.** The package leaves out the record scripts that need a local consortium clone (`*_on_g.jl`, `compose_f1.jl`). They hold paths to G files, and they are of no use to the consortium.
