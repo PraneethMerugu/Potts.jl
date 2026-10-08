@@ -20,7 +20,7 @@ This is the offline record required by D-146.
 | `meta.toml`, `provenance.toml` | parameters, seeds, distance-bin edges, threads; commit, test and runner hashes, Manifest hash, machine, start/finish and wall time |
 | `run_f5.jl` | the runner |
 | `plot_f5.jl`, `fig5.png` | M Fig 5's four columns (PDF and CDF of f, PDF and CDF of a; raw counts, stacked by distance bin, `viridis_r` / `inferno_r`), rows for the consortium's TST_5T (drawn only when `F5_G_HIST` points at `v4_on_g.jl`'s output; distances in px from the pooled centroid mean, as in M's notebook), case (b) and the control. The committed PNG has the TST row; the G-derived histograms are not committed |
-| `video_f5.jl` | renders case (b) run 1 and control run 1 every 39 MCS, cells coloured by area, no outlines; the videos are not committed |
+| `video_f5.jl` | renders case (b) run 1 and control run 1 every 39 MCS, one categorical colour per cell, no outlines; the videos are not committed |
 | `probe_causes.jl` | the cause probe for the failing rows (below) |
 | `v4_on_g.jl` | the frozen V4 rules applied to the consortium's TST_5T (and Morpheus_5T) files from a local G clone; information only. Its pooled histograms feed an optional consortium row of `fig5.png` (`F5_G_HIST`) and are not committed |
 
@@ -94,4 +94,4 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
 - **Distance bins.** The figure labels, floored as in M's notebook, are 0–8, 8–17, 17–26, 26–35 and 35–44 R (control 0–8 … 34–43). The edges are 0, 8.99, 17.98, 26.96, 35.95 and 44.94 R, and the furthest cell is 42.8 R from the initial centre. M's legend reads 0–7 … 31–39, a 1.05 × max d of about 39.5 R (spec C11, Q15).
 - **Figure range.** `fig5.png` draws a from 0.3, so the 3 case (b) cells with a < 0.30 (0.066, 0.261 and 0.297) lie left of the axis. Every f value is in range.
 
-**Videos** are published as assets of the pre-release [`reproductions-2026-10-07-openvt-f5`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5): `15_openvt_f5_b_run1_seed15001.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501.mp4`. Both are rendered by `video_f5.jl`, with cells coloured by area from blue (20 px) to red (120 px) and no outlines.
+**Videos** are coloured per cell: each cell gets its own categorical colour from MakiePotts' default per-cell palette (`CellIdentityEncoding`), the medium is dark grey, and there are no outlines and no colour bar. They are rendered by `video_f5.jl` from case (b) run 1 (seed 15001) and control run 1 (seed 15501), saved every 39 MCS to the 1000-cell stop: `15_openvt_f5_b_run1_seed15001_cells.mp4` and `15_openvt_f5_control_gamma1e-4_run1_seed15501_cells.mp4`. The coordinator publishes them in a pre-release. They replace the earlier area-coloured renders, which were published as [`reproductions-2026-10-07-openvt-f5`](https://github.com/PraneethMerugu/Potts.jl/releases/tag/reproductions-2026-10-07-openvt-f5).
