@@ -83,6 +83,8 @@ built, before the first MCS:
   folds over cells, and site, field and edge variables are errors for now.
 
 ```@example vars
+using Potts
+
 @potts_model Initialized begin
     @kinds medium cell
     @parameters begin
