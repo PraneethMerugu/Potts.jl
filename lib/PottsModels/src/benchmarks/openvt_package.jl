@@ -100,7 +100,7 @@ function _openvt_pkg_build(out, recs)
     _openvt_pkg_write(joinpath(impl, "README.md"), _openvt_pkg_impl_readme(recs, prov, scripts, facts))
 
     # results/Potts.jl
-    cp(joinpath(rec(:f1f4), "fig1_closeup.png"), joinpath(res, "closeup.png"))
+    cp(joinpath(rec(:f1f4), "fig1_panel.png"), joinpath(res, "closeup.png"))
     mkpath(joinpath(res, "provenance"))
     for k in _openvt_pkg_keys(recs)
         p = copy(prov[k])

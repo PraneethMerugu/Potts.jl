@@ -2,7 +2,7 @@
 # consortium's `results/<framework>/closeup.png`: fig1.png's 64 × 64 block, colours and
 # scale, without the banner (the .tex adds it) and with no cell outlines (D-156). Rebuilt
 # from this record's window.tsv (owners and generations; the identity colours depend only on
-# them, D-172), so no rerun is needed. Writes fig1_closeup.png; with the banner the same
+# them, D-172), so no rerun is needed. Writes fig1_panel.png; with the banner the same
 # block gives fig1.png, which the script checks first.
 #     julia --project=lib/PottsModels/test lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/plot_f1_bare.jl
 using Potts, PottsModels, CairoMakie, MakiePotts
@@ -31,6 +31,6 @@ save(check, PottsModels.openvt_f1_figure(block; window = W); px_per_unit = 2)
 read(check) == read(joinpath(DIR, "fig1.png")) || error("the window.tsv block does not reproduce fig1.png")
 rm(check)
 
-path = joinpath(DIR, "fig1_closeup.png")
+path = joinpath(DIR, "fig1_panel.png")
 save(path, PottsModels.openvt_f1_figure(block; window = W, banner = false); px_per_unit = 2)
 println(path)

@@ -48,7 +48,7 @@
 # results/Potts.jl/
 #   README.md            units, seeds, a Deviations table (D-154), the readings C1–C17, the
 #                        per-cell colour choice (D-175), a "Pending" section (see below)
-#   closeup.png          byte-identical to the P6.15h record's fig1_closeup.png, the bare Potts.jl
+#   closeup.png          byte-identical to the P6.15h record's fig1_panel.png, the bare Potts.jl
 #                        panel without the banner, which the .tex adds (G:results/<FW>/closeup.png)
 #   provenance/<record>.toml
 #                        each record's provenance.toml, with the key `hostname` removed
@@ -501,7 +501,7 @@ end
 @testset "P6.15j (6) closeup and provenance equal the records" begin
     @test p615j_build()
     p = p615j_res("closeup.png")
-    @test isfile(p) && read(p) == read(joinpath(p615j_rec(:f1f4), "fig1_closeup.png"))
+    @test isfile(p) && read(p) == read(joinpath(p615j_rec(:f1f4), "fig1_panel.png"))
     for k in (:calib, :f5, :f3f8, :f1f4, :sweeps)
         haskey(P615J_RECS, k) || continue
         want = TOML.parsefile(joinpath(p615j_rec(k), "provenance.toml"))

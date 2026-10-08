@@ -45,13 +45,13 @@ This is the record pre-registered by D-175. The frozen test is `lib/PottsModels/
 | File | Contents |
 |---|---|
 | `fig1.png` | the Potts.jl panel and banner, 45 mm at 10 px/mm, saved at 2× |
-| `fig1_closeup.png` | the bare Potts.jl panel (no banner, no outlines): the same 64×64 block, colours and scale as `fig1.png`, rendered by `plot_f1_bare.jl` with `openvt_f1_figure(block; banner = false)` from `window.tsv`. The submission package (P6.15j) ships it as `results/Potts.jl/closeup.png` (D-180 amendment) |
+| `fig1_panel.png` | the bare Potts.jl panel (no banner, no outlines): the same 64×64 block, colours and scale as `fig1.png`, rendered by `plot_f1_bare.jl` with `openvt_f1_figure(block; banner = false)` from `window.tsv`. The submission package (P6.15j) ships it as `results/Potts.jl/closeup.png` (D-180 amendment) |
 | `fig1_colony.png` | the whole 10⁴-cell colony at the stop, same colours, with the panel's block shaded (an unstroked translucent square). For orientation only |
 | `window.tsv` | the panel's block: lattice site (x, y), owner id (0 = medium) and generation, 64² rows |
 | `meta.toml`, `provenance.toml` | case, seed, stop MCS and N, the record's values and the match, the window; commit, hashes of the test, protocol test, record, runner and extension, Manifest hash, machine, timing |
 | `run_f1.jl` | the runner (PC). `F1_STATE` optionally serializes the full render frame outside git |
 | `compose_f1.jl` | opt-in: with `OPENVT_MONOLAYER_REPO` set to a G clone (54f375f), M Fig 1's ten closeups and banners (colours from `colors.tex`) with the Potts.jl panel after Artistoo. The panel is rebuilt from `window.tsv`. The output goes to `OPENVT_F1_OUT` and is **not committed** |
-| `plot_f1_bare.jl` | renders `fig1_closeup.png` from `window.tsv` (Mac, seconds); it first checks that the same block with the banner reproduces `fig1.png` byte for byte |
+| `plot_f1_bare.jl` | renders `fig1_panel.png` from `window.tsv` (Mac, seconds); it first checks that the same block with the banner reproduces `fig1.png` byte for byte |
 | `plot_f4.jl` | the F4 renderer (Mac) |
 
 No G file and no G image entered git. The composite was rendered once on the PC, in `~/potts-ci/p6-15h-impl-out/compose/`, for review only.
