@@ -3099,3 +3099,71 @@ session.
   - **V1 warning (information, judged in P6.15g).** Uninhibited case (a) reaches 10⁴ cells at 15.17 cycles, against 13.57 ± 10 %, while case (e) matches TST at β = 0.8 (16.26 against 16.15). The gap opens between 10³ and 10⁴ cells, beyond the F3 and V5 windows. It is consistent with the F5 deviations and C13/Q20.
   - **Discrimination.** F8.1–F8.3 cannot fail, and V5 does not separate β = 0.8 from β = 0. The rows that discriminate are F3.5, the end values of (b), F3.2 and F8.4.
   - **Videos.** `reproductions-2026-10-08-openvt-f3f8`.
+
+## D-175 Reproduction 15, P6.15h: F1 (Potts.jl panel and banner) and F4 (free-surface schematic) pre-registered; G1 equals the drawn count (2026-10-08; coordinator, from the P6.15h test author; under D-146, D-156, D-168, D-172, D-173)
+
+- **Frozen test.** `test/reproductions/15_openvt_f1_f4.jl` (commit 2eb72e93, sha256 `a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb`). It is one light tier with no simulation.
+- **F4 (M Fig 4, lattice panel; `G:results/free_surface.tex:31-110`).**
+  - **Configuration.** A 7×7 closed crop, transcribed into the test: medium 13, cell i 12, i−1 7, i+1 9 and i+2 8 sites.
+  - **Counts.** The .tex draws 13 magenta and 25 amber dashes, which equals the Moore(1) pair count, so f_i = 13/38. The commented-out 11/(11+29) caption is stale.
+  - **Surface.** `PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure`, public.
+    - One Axis titled "Lattice models", with one `pottsplot` of σ: `CellIdentityEncoding`, medium RGB(236,236,236), `boundaries = false`.
+    - One dash per pair of cell c, in data coordinates, across the shared edge or corner. Medium partners are RGB(231,41,138) and cell partners RGB(255,192,0).
+    - A text shows both counts.
+  - **No outlines.** The .tex's black cell outline and partial boundaries are not drawn (D-156). Only full-length lattice lines are allowed: a uniform site grid and the panel frame.
+- **G1 unit test (spec §6).** The marks decoded from the figure must equal all of these:
+  - the transcribed .tex dashes (the hand count);
+  - a brute-force oracle;
+  - `openvt_snapshot(u).f`, the F5 analysis path;
+  - for all four cells, the ratio of medium to unlike pairs.
+- **F1 (M Fig 1; `G:results/introduction.tex:52-92`).**
+  - **Surface.** `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`, public.
+    - The panel is one square Axis with one `pottsplot`: `CellIdentityEncoding` with the automatic palette (D-172), white medium, and no lines or stroked polygons.
+    - It shows an unchanged window × window block centred on the colony rim, along the 45° diagonal from the centroid.
+    - The banner is a `Makie.Box` of RGB(8,29,88), the Q18 proposal: panel-wide, 5/45 of the panel high and 1/45 above it, with a white bold `Makie.Label` "Potts.jl".
+  - **Ruling (coordinator).** The panel is coloured per cell identity, not spec §4.0.2's "area blue→red with light-grey boundaries", following the user's preference for per-cell colours (2026-10-07) and D-156. It is listed as a stylistic deviation in the differences table, because other frameworks' panels colour by area (Q10).
+  - **Window.** The 64-site default, about 8 cell diameters, is estimated from the TST closeup and stated as such.
+  - **State.** The first state with N ≥ 10⁴ of case (a), run 1 (seed 15701, 1400², D-173 protocol), rendered on the PC by one FULL rerun. A composite with the consortium closeups is an opt-in `OPENVT_MONOLAYER_REPO` script, and no G image enters git.
+- **Negative controls.**
+  - Two perturbed configurations change both counts, and the snapshot's f, the decoded marks and the shown text all follow.
+  - The outline detector catches `boundaries = true`, a `pottsboundaries!` overlay and boundary `lines!`.
+- **Checked before freezing.** Red on b7379cd7: the figure testsets error, while the oracle and detector testsets pass. A scratch stub passes 120/120. CairoMakie and MakiePotts join the PottsModels test environment, and the functions live in a PottsModels Makie extension.
+
+## D-176 P6.0bs: a frozen test of every MTK claim in the paper and docs, and of their wording (2026-10-08; coordinator, from the P6.0bs test author; implements D-159 and plan §5–§6; covers D-160, D-162, D-164, D-165, D-170)
+
+- **Why.** D-159 settled the paper's claim as "built on ModelingToolkit", and D-162, D-165 and D-170 fixed its sentences. Plan §5 asks for a test that keeps the claim from drifting away from the code.
+- **Frozen acceptance.** `acceptance/p6_0bs_mtk_claims.jl` (commit d6337cbb, sha256 `a7029706215ef4559ee098531bfcd12e312dd6b5a25d3356f9e1714f0487f856`). It has one testset per claim (C1–C9):
+  - C1: every model is an `AbstractSystem`, not a `System`.
+  - C2: generic accessors and SII work on models.
+  - C3: `hamiltonian` and the `PottsSweepSpec` metadata.
+  - C4: `ode_system` returns a scheduled system with algebraics as observed and not stored, checked against an Euler oracle.
+  - C5: components: the alias is eliminated and a clocked recurrence runs.
+  - C6: `updates` are in `Pre` form, and there are no MTK events.
+  - C7: per cell, `initialization_system` equals MTK's own `InitializationProblem`.
+  - C8: no field is in any MTK system.
+  - C9: the sweep is Potts' own `mtkcompile`, and `ODEProblem`/`JumpProblem` are refused.
+  
+  It ends with a wording part (W) and its controls (N).
+- **Wording (pinned).**
+  - **Approved.** The docs (`docs/src`), and an in-repo paper source if one exists, contain eight sentences:
+    - "Potts.jl is built on ModelingToolkit".
+    - "Every Potts model is a ModelingToolkit `AbstractSystem`".
+    - "…Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can inspect".
+    - The D-165 sentence.
+    - "ModelingToolkit models plug in as components".
+    - "update rules are Symbolics equations in ModelingToolkit's `Pre` form".
+    - The D-170 sentence.
+    - "compiled from the symbolic Hamiltonian by Potts.jl's own code generator".
+  - **Forbidden.** Ten patterns are banned wherever a reader sees text: `docs/` outside `docs/design/`, the READMEs, and the sources. They cover:
+    - "fully MTK-native" and "MTK-native" as a whole;
+    - events compiled by MTK, or events as callbacks or Symbolics parts;
+    - fields compiled, solved or stepped by MTK, or written as `PDESystem`s;
+    - MTK compiling or simulating the CPM;
+    - models being MTK `System`s.
+  - **Changes from plan §5.** "events" becomes "update rules" (D-162). Initialization uses the D-170 form, not "compiled by `mtkcompile`".
+- **Red on 07757b51 (Mac).** 821 of 829 pass and 8 fail. Every code claim and control passes; the 8 failures are the approved sentences, which no docs page carries yet. A stub page passes 829/829, and an injected forbidden phrase is caught.
+- **Implementation.** A docs page "Relation to ModelingToolkit" (docs/src, linked from the index and the API page) carries the eight sentences, each cited to its testset. No code changes.
+- **Re-freeze triggers.**
+  - P6.4c, when events become `SymbolicDiscreteCallback`s (C6 and the callbacks pattern).
+  - P6.4a, cross-entity initialization.
+  - Any new MTK claim.
