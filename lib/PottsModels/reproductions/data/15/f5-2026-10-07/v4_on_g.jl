@@ -29,7 +29,7 @@ end
 
 # rows of one framework: per file (f, a, x, y); `cols` = positions of x, y, f, a (1-based)
 function readdir_rows(dir, delim, cols; header = true)
-    files = sort(filter(f -> endswith(f, ".csv"), readdir(dir; join = true)))
+    files = sort(filter(f -> endswith(f, ".csv") && !startswith(basename(f), "._"), readdir(dir; join = true)))
     out = []
     for p in files
         ls = filter(!isempty ∘ strip, readlines(p))
@@ -44,7 +44,7 @@ function readdir_rows(dir, delim, cols; header = true)
     return out
 end
 unzip(zip) = (d = mktempdir(); run(`unzip -q -o $zip -d $d`); d)
-csvdir(d) = (fs = [root for (root, _, files) in walkdir(d) if any(endswith(".csv"), files)]; only(fs))
+csvdir(d) = only([root for (root, _, files) in walkdir(d) if !occursin("__MACOSX", root) && any(endswith(".csv"), files)])
 
 sets = Dict{String, Any}()
 tst = csvdir(unzip(joinpath(G, "results", "TST", "TST_5T_MonolayerGrowth_1000_Data.zip")))
