@@ -461,3 +461,8 @@ decision = "D-179"
 path = "reproductions/15_openvt_package.jl"
 sha256 = "3749800b464995fd8281aa362e92bc01996f2c86356471d520a610a5c71f018a"
 decision = "D-180"
+
+[[file]]
+path = "reproductions/01_merks_page.jl"
+sha256 = "b8e101646de5b28909be70e75067580777c892ba130fc90d3cb45768640a2428"
+decision = "D-184"
