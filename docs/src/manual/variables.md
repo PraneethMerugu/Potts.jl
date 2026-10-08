@@ -53,7 +53,14 @@ built, before the first MCS:
   `2a + 2b ~ 2volume`: their Jacobian is singular at the solution) are errors naming the
   cell and the variables; neither a least-squares answer nor the guess is returned. A root
   where the terms vanish (`sin(v) ~ 0` at `π`) passes on its Newton correction instead. A
-  repeated root (`(v - 1)^2 ~ 0`) is solved only to about `1e-7` (√eps).
+  root of multiplicity `m` is solved only to about `eps^(1/m)`: about `1e-8` for a double
+  root (`(v - 1)^2 ~ 0`), `1e-5` for a triple one; at 0, where its terms vanish too
+  (`v^3 ~ 0` from `guess = 1.0`), it cannot be told from a miss and is refused. Equations
+  flat around the result (`max(v, 1000) ~ 1000` from `v = 1`, `clamp`, `floor`) do not
+  determine it and are refused, and so are equations whose terms are so much larger than
+  the variable that Float64 cannot resolve it (`v + 1e15 ~ 1e15 + volume`).
+- A guess may be an expression of parameters (`[guess = g0]`), evaluated with the problem's
+  parameter values.
 - A nonlinear equation is solved from the variable's guess (`[guess = g]`, else 0.0), which
   picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`. Without a guess,
   an equation symmetric in the variable such as `r^2 ~ volume` fails: its Jacobian is zero at

@@ -411,6 +411,51 @@ end
     @test ini_u0(PottsProblem(IniFlat(; name = :z), ini_op(), (0, 1)), :f3) == [0.0, 0.0]
 end
 
+# flat equations are refused (the finite-difference step never crosses a kink or a branch);
+# a large guess does not loosen the check; a guess may be an expression of parameters
+@potts_model IniKink begin
+    @kinds medium A
+    @variables v(cell), [guess = 1.0]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations max(v, 1000.0) ~ 1000.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniClamp begin
+    @kinds medium A
+    @variables v(cell), [guess = 5.0]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations clamp(v, -1.0, 1.0) ~ 1.0
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniBigGuess begin
+    @kinds medium A
+    @variables v(cell), [guess = 1.0e6]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations v^2 ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model IniParamGuess begin
+    @kinds medium A
+    @parameters pz = -1.0
+    @variables v(cell), [guess = pz]
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 14.0)^2
+    @initialization_equations v^2 ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization: flat equations, large and symbolic guesses" begin
+    @test ini_error(() -> PottsProblem(IniKink(; name = :f), ini_op(), (0, 1)), "uniquely", "`v`")
+    @test ini_error(() -> PottsProblem(IniClamp(; name = :f), ini_op(), (0, 1)), "uniquely", "`v`")
+    @test ini_u0(PottsProblem(IniBigGuess(; name = :f), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1e-12
+    # the guess is the parameter's value for the problem: it picks the root
+    @test ini_u0(PottsProblem(IniParamGuess(; name = :f), ini_op(), (0, 1)), :v) ≈ -sqrt.(INI_VOL) rtol = 1e-12
+    @test ini_u0(PottsProblem(IniParamGuess(; name = :f, pz = 1.0), ini_op(), (0, 1)), :v) ≈ sqrt.(INI_VOL) rtol = 1e-12
+end
+
 # kind tables are read at the cell's own kind
 @potts_model IniTable begin
     @kinds medium A B

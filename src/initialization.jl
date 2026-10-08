@@ -451,12 +451,17 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
                     src[1] === :cell ? Float64(_column(cell, src[2])[k]) : Float64(_column(model, src[2])[1])
     vals(k) = Float64[value(src, k) for src in sources]
     names = join(("`$(info(x).name)`" for x in free), ", ")
+    # a guess may be an expression of parameters (as in MTK): its value for this problem
+    gs = Float64[(g = _init_guess(x); v = _evaluate(g, pvals, "the guess `$g` of `$(info(x).name)`");
+                  v isa Real || throw(ArgumentError("the guess of `$(info(x).name)` is a number or an expression of " *
+                                                    "parameters; got `$g`"));
+                  Float64(v)) for x in free]
     ip = try
         isys = ModelingToolkitBase.System(Equation[D(x) ~ 0 for x in free], t, free, params;
             name = Symbol(nameof(sys), :₊, scope, :_initialization), initialization_eqs = ieqs,
             checks = ModelingToolkitBase.CheckComponents)
         ModelingToolkitBase.InitializationProblem(ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
-            guesses = Dict{Any, Any}(x => _init_guess(x) for x in free), fully_determined = true, use_scc = false)
+            guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false)
     catch e
         e isa ArgumentError && rethrow()
         throw(ArgumentError("initialization of $where_: ModelingToolkit could not build the initialization problem for " *
@@ -493,7 +498,6 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
     # on a small absolute residual, and a linear solve may return a least-squares answer
     check = _InitCheck(ieqs, params, free)
-    gs = Float64[_init_guess(x) for x in free]
     dst = Any[_column(scope === :cell ? cell : model, info(x).name) for x in free]
     entity(k) = scope === :cell ? "cell $k" : "the model"
     conditions = join((r.text for r in rows), ", ")
@@ -520,7 +524,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             # finite-difference step at the scale of the iterate while the result fails the check
             nlp.u0 .= guess
             abstol = _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64))
-            step = _init_step(guess)
+            step = _init_step(guess, guess)
             local x
             for _ in 1:_INIT_ROUNDS
                 sol = solving(() -> SciMLBase.solve(nlp, _init_solver(step); abstol, maxiters = 100), k)
@@ -529,7 +533,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
                 all(isfinite, x) || break
                 _init_accept(check, pk, x, gs) === nothing && break
                 tighter = _INIT_NEWTON_RTOL * minimum((v for v in _init_scales(check, pk, x) if v > 0); init = floatmin(Float64))
-                step2 = _init_step(sol.u)
+                step2 = _init_step(sol.u, guess)
                 (tighter < abstol / 2 || !(step / 2 < step2 < 2step)) || break
                 abstol = min(abstol, tighter)
                 step = step2
@@ -575,8 +579,10 @@ const _INIT_FD = cbrt(eps(Float64))
 _init_solver(scale::Float64) = SimpleNewtonRaphson(;
     autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale))
 const _INIT_SOLVER = _init_solver(1.0)
-# the scale of the step: the smallest nonzero magnitude among the values (1 when all are zero)
-_init_step(x) = (s = minimum((abs(v) for v in x if v != 0); init = Inf); isfinite(s) ? Float64(s) : 1.0)
+# the scale of the step: the smallest nonzero scale among the values, each its magnitude or its
+# guess's (a value converging to 0 keeps its guess's scale), 1 when all are zero
+_init_step(x, g) = (s = minimum((m for (v, w) in zip(x, g) for m in (max(abs(v), abs(w)),) if m != 0); init = Inf);
+                    isfinite(s) ? Float64(s) : 1.0)
 const _INIT_NEWTON_RTOL = 1.0e-13
 const _INIT_RTOL = 1.0e-9
 const _INIT_ROUNDS = 6
@@ -713,14 +719,17 @@ end
 _init_scale(x, g) = Float64[(s = max(abs(x[j]), abs(g[j])); s > 0 ? s : 1.0) for j in eachindex(x)]
 
 # the conditions' Jacobian in the free values (central differences). The step is relative to
-# the value's scale (`_init_scale`), and grows while a column is exactly zero, so a root at
-# about 0 (`exp(v) ~ 1` lands at 1e-17) is not judged below the residual's resolution.
+# the value's scale (`_init_scale`: a root at about 0, `exp(v) ~ 1` landing at 1e-17, is
+# judged at its guess's scale), and grows once, to `_INIT_FD_MAX` of the scale, while a column
+# is exactly zero: never so far that it crosses a kink or a branch (`max(v, 1000) ~ 1000` from
+# `v = 1` is flat, not unique).
+const _INIT_FD_MAX = 1.0e-4
 function _init_jacobian!(J, c::_InitCheck, p, x, g)
     y = collect(Float64, x)
     sc = _init_scale(x, g)
     for j in eachindex(y)
         h = cbrt(eps(Float64)) * sc[j]
-        for _ in 1:8
+        while true
             y[j] = x[j] + h
             _init_eval!(c, p, y)
             for (q, (l, r)) in enumerate(c.rows)
@@ -732,8 +741,8 @@ function _init_jacobian!(J, c::_InitCheck, p, x, g)
                 J[q, j] = (J[q, j] - (c.v[l] - c.v[r])) / 2h
             end
             y[j] = x[j]
-            any(!iszero, view(J, :, j)) && break
-            h *= 100
+            (any(!iszero, view(J, :, j)) || h >= _INIT_FD_MAX * sc[j]) && break
+            h = min(100h, _INIT_FD_MAX * sc[j])
         end
     end
     return J
@@ -762,7 +771,7 @@ end
 Whether the result (`p`, `x`; guesses `g`) solves the conditions: `nothing`, or the first
 condition not satisfied (row, residual, size of its terms). A residual small against the size
 of the terms passes; so does one whose Newton correction `J⁻¹ r` is below `_INIT_RTOL` of each
-value's scale, which covers roots where the terms themselves vanish (`sin(v) ~ 0` at `π`).
+value (floored at 1e-9 of its guess), which covers roots where the terms themselves vanish (`sin(v) ~ 0` at `π`).
 """
 function _init_accept(c::_InitCheck, p, x, g)
     bad = _init_residual(c, p, x)
@@ -780,8 +789,8 @@ function _init_accept(c::_InitCheck, p, x, g)
         e isa InterruptException && rethrow()
         return bad
     end
-    sc = _init_scale(x, g)
-    return all(j -> abs(δ[j]) <= _INIT_RTOL * sc[j], 1:n) ? nothing : bad
+    # against the value itself (a large guess must not loosen it), floored far below the guess
+    return all(j -> abs(δ[j]) <= _INIT_RTOL * max(abs(x[j]), 1.0e-9 * abs(g[j]), floatmin(Float64)), 1:n) ? nothing : bad
 end
 
 """
