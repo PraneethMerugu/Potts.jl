@@ -170,7 +170,9 @@ Using your answer to Exercise 3, **measure how far the leaders travel as a funct
 ## Exercise 5: contact inhibition in a growing colony
 
 The OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameters) grows without
-inhibition by default (`β = 0`); the benchmark's inhibited runs use `β = 0.9`. **Compare
+inhibition by default (`β = 0`); the benchmark's inhibited runs use `β = 0.9`. This exercise
+uses that 2024 set as a lighter teaching example; the benchmark's reference model is
+`OpenVTReferenceMonolayer` (Table S1). **Compare
 the cell counts of both after 900 MCS.** (Benchmark lattice: 400×400; here: 150×150.)
 
 !!! details "Answer"

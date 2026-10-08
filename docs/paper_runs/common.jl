@@ -29,13 +29,15 @@ Base.@kwdef struct Panel
     plot::NamedTuple = (;)
     channels::Function = u -> ()
     colorbar = nothing
+    limits = nothing
 end
 Panel(name; kw...) = Panel(; name, kw...)
 
 """Record the saved states of `sol` as an mp4: one axis per panel, a fixed title, an MCS clock."""
 function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
-        clock = t -> "t = $t MCS", frames = eachindex(sol.u))
-    frame(p, i) = renderframe(sol; index = i, channels = p.channels(sol.u[i]))
+        clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing)
+    frame(p, i) = state === nothing ? renderframe(sol; index = i, channels = p.channels(sol.u[i])) :
+                  (u = state(sol.u[i], i); renderframe(u; mcs = sol.t[i], channels = p.channels(u)))
     fig = Figure(; size, fontsize = 14)
     Label(fig[0, 1:length(panels)], title; fontsize = 15, font = :bold, tellwidth = false)
     clk = Observable(clock(sol.t[first(frames)]))
@@ -45,8 +47,9 @@ function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
         ax = Axis(sub[1, 1]; title = p.name, aspect = DataAspect())
         hidedecorations!(ax)
         o = Observable(frame(p, first(frames)))
-        pottsplot!(ax, o; encoding = p.encoding, p.plot...)
+        pottsplot!(ax, o; encoding = p.encoding, boundaries = false, p.plot...)
         tightlimits!(ax)
+        p.limits === nothing || limits!(ax, p.limits...)
         if p.colorbar !== nothing
             label, cmap, limits = p.colorbar
             Colorbar(sub[1, 2]; colormap = cmap, limits, label, height = Relative(0.8))
@@ -71,10 +74,12 @@ Warm up (a 2-MCS copy of `prob`), solve `prob` with `alg` saving at `saveat`, re
 `docs/src/assets/paper_runs/<name>.mp4` (`record_run`), re-encode it with ffmpeg (H.264,
 CRF 28, yuv420p) when it is larger than 5 MB, and write the sidecar `<name>.toml`.
 `frames(sol)` picks the saved states to record (default: all); `title` may be a function of
-`sol` and the recorded frame indices.
+`sol` and the recorded frame indices. `state(u, i)` maps saved state `i` to the state drawn
+(default: `u` itself; the Graner–Glazier run draws a T = 0 annealed copy).
 """
 function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size = (720, 760),
-        clock = t -> "t = $t MCS", frames = sol -> eachindex(sol.u), meta = Dict{String, Any}(), solve_kw = (;))
+        clock = t -> "t = $t MCS", frames = sol -> eachindex(sol.u), meta = Dict{String, Any}(), solve_kw = (;),
+        state = nothing)
     t0, t1 = prob.tspan
     solve(remake(prob; tspan = (t0, t0 + 2)), alg; solve_kw...)          # compile
     wall = @elapsed sol = solve(prob, alg; saveat, save_start = true, solve_kw...)
@@ -83,13 +88,9 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
     idx = frames(sol)
     title isa Function && (title = title(sol, idx))
     meta isa Function && (meta = meta(sol, idx))
-    rec = @elapsed record_run(mp4, sol, panels; title, framerate, size, clock, frames = idx)
-    if filesize(mp4) > 5 * 2^20
-        tmp = joinpath(ASSETS, ".$name.reenc.mp4")
-        run(`$(CairoMakie.Makie.FFMPEG_jll.ffmpeg()) -v error -y -i $mp4 -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
-        mv(tmp, mp4; force = true)
-    end
-    info = merge(Dict{String, Any}(
+    rec = @elapsed record_run(mp4, sol, panels; title, framerate, size, clock, frames = idx, state)
+    reencode(mp4)
+    info = merge(run_info(name; wall, rec, mp4), Dict{String, Any}(
             "title" => title,
             "lattice" => collect(Base.size(sol.u[1].σ)),
             "tspan" => [t0, t1],
@@ -97,22 +98,45 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
             "recorded_mcs" => [sol.t[first(idx)], sol.t[last(idx)]],
             "framerate" => framerate,
             "seed" => Int(prob.seed),
-            "algorithm" => string(alg),
-            "backend" => "CPU",
-            "cpu" => strip(Sys.cpu_info()[1].model),
-            "machine" => Sys.MACHINE,
-            "hostname" => gethostname(),
-            "threads" => Threads.nthreads(),
-            "solve_wall_s" => round(wall; digits = 1),
-            "record_wall_s" => round(rec; digits = 1),
-            "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
-            "git_commit" => git_commit(),
-            "julia" => string(VERSION),
-            "date" => string(now()),
-            "script" => "docs/paper_runs/$name.jl"), meta)
+            "algorithm" => string(alg)), meta)
+    write_sidecar(name, info)
+    return sol, info
+end
+
+"""Re-encode `mp4` in place with ffmpeg (H.264, CRF 28, yuv420p) when it is larger than 5 MB."""
+function reencode(mp4)
+    if filesize(mp4) > 5 * 2^20
+        tmp = joinpath(dirname(mp4), "." * basename(mp4) * ".reenc.mp4")
+        run(`$(CairoMakie.Makie.FFMPEG_jll.ffmpeg()) -v error -y -i $mp4 -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
+        mv(tmp, mp4; force = true)
+    end
+    return mp4
+end
+
+"""The provenance entries every sidecar carries: machine, backend, times, commit, Julia."""
+run_info(name; wall, rec, mp4) = Dict{String, Any}(
+    "backend" => "CPU",
+    "cpu" => strip(Sys.cpu_info()[1].model),
+    "machine" => Sys.MACHINE,
+    "hostname" => gethostname(),
+    "threads" => Threads.nthreads(),
+    "solve_wall_s" => round(wall; digits = 1),
+    "record_wall_s" => round(rec; digits = 1),
+    "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
+    "git_commit" => git_commit(),
+    "julia" => string(VERSION),
+    "date" => string(now()),
+    "script" => "docs/paper_runs/$name.jl")
+
+"""Write the sidecar `docs/src/assets/paper_runs/<name>.toml`."""
+function write_sidecar(name, info)
     open(joinpath(ASSETS, "$name.toml"), "w") do io
         TOML.print(io, info; sorted = true)
     end
-    @info "$name: wrote $mp4 ($(info["video_mb"]) MB)"
-    return sol, info
+    @info "$name: wrote $(name).mp4 ($(info["video_mb"]) MB)"
+    return info
 end
+
+"""The caption's provenance clause: machine, backend, threads and commit of this render."""
+rendered_on() = "Rendered on $(strip(Sys.cpu_info()[1].model)) ($(gethostname())), CPU backend, " *
+                "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), commit $(git_commit())."
