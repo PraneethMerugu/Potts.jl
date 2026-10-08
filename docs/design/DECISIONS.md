@@ -3287,3 +3287,11 @@ session.
 - **SequentialCPM.** Its D-171 A/B passes: worst candidate/base 1.010, against a margin of 1.032.
 - **Review.** It found a stale skip constant: the constant was cached on |B| alone, so a mask change that moved N gave about 12.5 % too many picks. It is now cached on (|B|, N), with a regression test (335c8fec).
 - **Shadow compare.** Its O(N) cost per MCS is documented: about 0.25 ms on 1400².
+
+**D-174 amendment (2026-10-08, coordinator; the user's "wait for BoundarySite" ruling).**
+- **Change.** The sweep algorithm is now `BoundarySiteCPM(; proposal = Moore(1))` (D-177) instead of `SequentialCPM(; proposal = Moore(1))`. Nothing else in the protocol, bands, seeds or controls changes.
+- **Why this is legitimate.**
+  - The two algorithms are equal in law (D-177's exact-law and time-equivalence tests).
+  - The switch is made before any FULL run, so no data informed it.
+- **Cost.** The FULL estimate drops from about 125 to about 45 core-hours (2.83× on case (a)).
+- **Re-frozen file.** `test/reproductions/15_openvt_sweeps.jl`, sha256 `474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41`. The only changes are `P615G_ALG` and its protocol comment.
