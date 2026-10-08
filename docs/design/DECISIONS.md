@@ -3008,3 +3008,31 @@ session.
   - **Checks.** It covers neighbour separation, identity-only dependence, generations, hue spread and cell-type distinctness. A local copy of the old formula is the negative control.
   - **Red on bba4d963:** 12 of 45 checks fail. A splitmix64 prototype passes 45/45.
   - **Wiring.** It is included from `lib/MakiePotts/test/runtests.jl`.
+
+## D-171 P6.0bb: the paired A/B with two same-commit controls decides performance; `gate.jl` is the allocation check (2026-10-07; coordinator, from the P6.0bb implementer; three review rounds; under D-157, D-145, D-090)
+
+- **Ruling.** "The +5 % gate" (D-160, D-164, D-165 and later) means `ab.jl <base> <cand> all cpu` on the NucBox, plus `rocm` when device code changes, with the defaults.
+  - `dev` is the largest |ratio − 1| over every case and both same-commit controls; margin = 1.05 − dev.
+  - **Exit codes.** Exit 0 (pass) when every candidate/base ≤ margin. Exit 1 when some candidate/base > 1.05. Exit 2 (unreadable) in between. Exit 3 for a disturbed run, which takes precedence over 1. Exit 4 for a harness error.
+  - A noisy control cannot loosen the verdict. A control interval that excludes 1 is flagged on its case and enters the verdict only through `dev`.
+  - `gate.jl` checks zero warm allocations, with informational timings; `--strict` restores the old 5 % rule.
+- **`ab.jl` defaults.**
+  - **Sides.** Base, candidate, `<base>-abctl` and `<cand>-abctl`, each in fresh processes under `exclusive.sh`, in an order rotating over 8 rounds.
+  - **Seeding.** Each process is seeded to 500k Tuple-cache entries. With packages loaded the table already holds 222k–243k of 262 144 slots, so the earlier 8k seed did nothing.
+  - **Environments.** Side environments are identical: `<side>/benchmark` with `<side>/test` stacked.
+  - **Pinning.** Timed children are pinned to CPU 12 (sibling idle) under an 8 G cap; the parent pins itself to 0–11,16–27.
+  - **Waiting and disturbances.** The harness waits for an idle runner and GPU inside the lock, under one deadline. It flags as disturbances a CI job other than its own ancestors, another GPU client, a busy SMT sibling, or another reserved CPU over 50 %.
+  - **Statistic.** Paired (fastest for Metal), with a fixed-seed 95 % bootstrap interval.
+  - **Control checkouts.** A control checkout must be a clean worktree at the top level of the same repository.
+  - **Other modes.** `--inprocess` runs parameter and workload A/Bs.
+- **ROCm timing.** AMDGPU's default `synchronize` read Graner–Glazier at 20, 47 or 2500 ns/site; its blocking form read about 43. The harness spins on `hipStreamQuery` (GC safepoint, yield, 120 s timeout), then `AMDGPU.synchronize(blocking = true)`, and reads 13.7.
+- **D-090 contract narrowed.**
+  - **L2.** The legacy `<case> <sequential|checkerboard> [rounds]` form with no options is kept for the frozen P6.0s test. The 3-argument default-metal form now errors, and `<case> metal` takes the paired form.
+  - **T1 on ROCm.** It is the stream spin plus blocking synchronize above, not `KernelAbstractions.synchronize`. The generic `device_sync` still calls `KernelAbstractions.synchronize`.
+- **Baselines.** `baseline.toml` is keyed `[machine.backend]`: mac rows (M1 Pro) and NucBox CPU and ROCm rows written at bbc39f07.
+- **Measured 2026-10-07** (idle runner, 0 disturbed runs; base 9efdf924, candidate bbc39f07, which differs from the merged harness only in docs and baselines).
+  - **Per-checkout offset.** Two checkouts of one commit differ by up to 0.0101 CPU (6/32 control intervals exclude 1) and 0.0226 ROCm (Merks 100², Wortel; 5/16). The offset survives pinning and seeding and sets the resolution: margins 1.0399 CPU and 1.0274 ROCm.
+  - **Candidate vs base.** The candidate is a harness-only change. Candidate/base was CPU 0.9904–1.0043 and ROCm 0.9909–1.0173, so both pass under the ruling.
+  - **Accept changed.** This replaces ROADMAP's ±1 % control accept. The Metal ±3 % accept moves to P6.0bi.
+- **Open.** The cause of the per-checkout offset (P6.0bz) and library-side ROCm sync cost (P6.0bw).
+- **AUTONOMY.** §7.3.2 and §7.4 are rewritten to match.
