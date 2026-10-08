@@ -26,12 +26,10 @@
 # - S. Akeeb, A.I. Marcus, Y. Jiang, "Clusters, fingers, and singles: A mechanical
 #   landscape of tumor invasion", *PLoS Comput. Biol.* **22**(9), e1014747 (2026).
 #   doi:[10.1371/journal.pcbi.1014747](https://doi.org/10.1371/journal.pcbi.1014747).
-#   PDF: `docs/references/10_Akeeb2026_PLoSCB_tumor-invasion-fingering.pdf` (version of
-#   record, 24 pp.). Erratum status: none known; not checked against the journal's
+#   Read in the version of record (24 pp.). Erratum status: none known; not checked against the journal's
 #   correction notices.
 # - Released code and data: `https://github.com/Jiang-Lab/Leader_Follower_Invasion_Model`
-#   at commit `0b9673faa736b2ee54bb200142546ade9e841093` (21 Nov 2025), on disk at
-#   `docs/references/codebases/10_Akeeb2026_Leader_Follower_Invasion_Model/`. The model
+#   at commit `0b9673faa736b2ee54bb200142546ade9e841093` (21 Nov 2025). The model
 #   is `Implementation/Main_Simulation_Scan/cclc_math_path/Simulation/` (`CCIecm.xml`,
 #   `CCIecmSteppables.py`, `CCIecm.py`; cited as X:, S: and P: with line numbers). The
 #   paper gives a second URL (`Tumor_Invasion_Model`, p.7), not read (spec 10 §1).

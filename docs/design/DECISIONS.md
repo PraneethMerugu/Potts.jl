@@ -3362,3 +3362,12 @@ session.
   - **Single-run spread.** 53 against 87 ns/site in both modes. That is the GPU's power state, not the type cache.
 - **Ruling.** Nothing to build, so the item is closed.
 - **Test not merged.** The drafted test (96525c71 on `feat/p6-0bc`) pins counters that would guard nothing today, so it is not merged. If the symptom returns, its fresh-process bitwise check and env-gated seeded/unseeded A/B are the starting point.
+
+## D-183 Public pages do not name local reference files (2026-10-08; coordinator, before the first public deploy of the published models)
+
+- **Problem.** The source notes of reproduction pages 01, 09 and 10 named local `docs/references/…` paths of the copyrighted PDFs and codebases we keep, which are gitignored and never committed. The published docs would have shown these. The P6.15i rule (D-178) already bans this on the OpenVT page.
+- **Change.**
+  - The PDF lines now read "Read in the version of record", keeping the DOI links.
+  - The codebase and dataset path mentions are dropped.
+- **Re-freeze.** Only these comment lines change. The three page files are re-frozen with their new sha256 in frozen.toml; their tests do not read these lines.
+- **Rule.** Future public pages name sources by DOI or public URL, never by local path.
