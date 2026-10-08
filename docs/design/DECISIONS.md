@@ -3238,3 +3238,24 @@ session.
 - **Banned.** The private sheet, `docs/references`, and any wording that implies contact.
 - **Pending sweeps.** F6, T1 and F7 may read "pending: FULL run parked (D-174)" only while no P6.15g record is in `data/15/`. Once one merges, they must render from it, without a re-freeze.
 - **Docs build.** The full docs build check is opt-in (`POTTS_DOCS_BUILD=true`).
+
+**D-177 test frozen (2026-10-08).**
+- **File.** `acceptance/p6_4b1_boundary_site.jl` (commit 41c14870, sha256 `3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf`).
+- **Checks.**
+  - **Exact law.** The 2×4 oracle with 6050 states: stationarity, and the laws at MCS 1 and 2, as χ² z-scores below 3.72.
+  - **Time equivalence.** 60², Welch tests on means and variances.
+  - **Boundary set.** It equals a from-scratch recompute.
+  - **OpenVT growth.** SMOKE as an exact permutation test with p ≥ 1e-3; FULL as |z| ≤ 3.89.
+  - **Allocations.** Zero warm allocations.
+  - **Speed.** At least 1.5× on 400² at 5 % cover, asserted only when `POTTS_BENCH_PINNED=1`.
+  - **Determinism.**
+  - **SequentialCPM unchanged.** Two new bitwise records.
+  - Every check is held to a false-failure probability of at most 1e-3, and each has a negative control.
+- **Amendments.**
+  - **Signature.** `BoundarySiteCPM(; acceptance = nothing, proposal = nothing)`, with SequentialCPM's defaults. `Moore(1)` above was only an example.
+  - **Boundary set B.** It is exposed for tests as `CorePotts._boundary_sites(integ)`: linear indices, any order, no duplicates. Frozen and off-lattice neighbours do not make a site a boundary site.
+  - **When B is rebuilt or updated.** On lifecycle events, `reinit!`, `u_modified!` / `refresh_frozen!`, and checkpoint restore.
+  - **Attempts.** `stats.attempts` is still N per MCS, and a skip run never crosses an MCS end.
+  - **Checkpoints.** Continuing from a checkpoint is equal in law, not bitwise.
+  - **Backends.** A non-CPU backend is an `ArgumentError`.
+  - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
