@@ -72,7 +72,9 @@ if CACHED
     res = deserialize(CACHE)
     sim_s = NaN
 else
-    sim_s = @elapsed Threads.@threads :dynamic for j in eachindex(jobs)
+    # :greedy hands out one job at a time (:dynamic splits the list into nthreads contiguous
+    # chunks, which put all 20 large runs on one thread)
+    sim_s = @elapsed Threads.@threads :greedy for j in eachindex(jobs)
         res[j] = run_job(jobs[j]...)
         r = res[j]
         @info "run" r.case r.k r.seed r.retcode r.mcs N = r.series.N[end] wall = round(r.wall; digits = 1) gap = r.gap
