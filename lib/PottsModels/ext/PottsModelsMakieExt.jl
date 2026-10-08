@@ -16,6 +16,12 @@ const MEDIUM_PAIR = _rgb(231, 41, 138)       # free_surface.tex `m`
 const CELL_PAIR = _rgb(255, 192, 0)          # free_surface.tex `c`
 const MEDIUM_F4 = _rgb(236, 236, 236)        # free_surface.tex `ma!10`
 const POTTS_COLOUR = _rgb(8, 29, 88)         # spec §4.0.2, Q18 proposal
+# free_surface.tex's cell fills `ca!60`, `cb!60`, `cc!60`, `cd!60` (60 % colour on white) for
+# cells i, i−1, i+1, i+2 (ids 1–4); a configuration with more cells takes the automatic palette
+_tint(r, g, b; p = 0.6) = Makie.RGBf((p .* (r, g, b) ./ 255 .+ (1 - p))...)
+const TEX_CELLS = [_tint(34, 94, 168), _tint(65, 182, 196), _tint(29, 145, 192), _tint(117, 195, 177)]
+# `mydash` (on 0.125, off 0.065 of the dash scale), in units of the line width
+const TEX_DASH = Makie.Linestyle([0.0, 1.9, 2.9])
 
 # ---- F4 ---------------------------------------------------------------------------------
 
@@ -65,9 +71,12 @@ function PottsModels.openvt_f4_figure(σ::AbstractMatrix{<:Integer}, c::Integer)
     m, n = length(medium), length(cell)
 
     fig = Makie.Figure(; size = (420, 470), backgroundcolor = :white)
-    ax = Makie.Axis(fig[1, 1]; title = "Lattice models", aspect = Makie.DataAspect(), titlefont = :regular)
+    ax = Makie.Axis(fig[1, 1]; title = "Lattice models", aspect = Makie.DataAspect(), titlefont = :bold,
+        titlesize = 18, spinewidth = 1.5)
     Makie.hidedecorations!(ax)
-    pottsplot!(ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, boundaries = false)
+    palette = ids == 1:length(ids) && length(ids) <= length(TEX_CELLS) ? TEX_CELLS[1:length(ids)] : Makie.automatic
+    pottsplot!(ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, category_palette = palette,
+        boundaries = false)
     # the .tex's white site grid: full-length lattice lines only (no partial cell boundaries)
     grid = Makie.Point2f[]
     for k in 0:g.size[1]
@@ -79,8 +88,8 @@ function PottsModels.openvt_f4_figure(σ::AbstractMatrix{<:Integer}, c::Integer)
         push!(grid, Makie.Point2f(lo[1], y), Makie.Point2f(hi[1], y))
     end
     Makie.linesegments!(ax, grid; color = :white, linewidth = 1.5)
-    isempty(medium) || Makie.linesegments!(ax, _dashes(medium, g); color = MEDIUM_PAIR, linewidth = 3.5)
-    isempty(cell) || Makie.linesegments!(ax, _dashes(cell, g); color = CELL_PAIR, linewidth = 3.5)
+    isempty(medium) || Makie.linesegments!(ax, _dashes(medium, g); color = MEDIUM_PAIR, linewidth = 3.5, linestyle = TEX_DASH)
+    isempty(cell) || Makie.linesegments!(ax, _dashes(cell, g); color = CELL_PAIR, linewidth = 3.5, linestyle = TEX_DASH)
     Makie.limits!(ax, lo[1], hi[1], lo[2], hi[2])
     f = m + n == 0 ? NaN : m / (m + n)
     Makie.Label(fig[2, 1], "fᵢ = $m / ($m + $n) = $(round(f; digits = 3))"; fontsize = 18, tellwidth = false)
