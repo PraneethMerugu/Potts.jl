@@ -84,8 +84,10 @@ its own owner (a null move), so the run of such picks between two boundary picks
 at once, geometric in the boundary fraction. One MCS is still `N` attempts over all mobile
 sites (`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after
 every MCS is `SequentialCPM`'s; the random stream differs, so results are equal in
-distribution, not bitwise. Fast on mostly-medium lattices. Host only (CPU). The keywords
-are `SequentialCPM`'s.
+distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one O(N)
+pass comparing the state with the boundary set's shadow copy (a few percent of the sweep at
+typical cover, more on nearly empty lattices). Host only (CPU). The keywords are
+`SequentialCPM`'s.
 """
 Base.@kwdef struct BoundarySiteCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
