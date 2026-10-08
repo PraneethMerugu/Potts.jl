@@ -15,12 +15,12 @@
 spec = "01"
 name = "Vasculogenesis and sprouting (Merks et al. 2006, 2008)"
 status = "partial"
-status_note = "page frozen; no FULL record yet; the FULL run and the 01b figure targets are open (P6.3f)"
+status_note = "FULL record 2026-10-08 (590 jobs, PC, CPU); the 01b digitised figure targets are open (P6.3f)"
 data = "01"
 models_page = "model-merks"
 published = "01_merks"
 deviations = [
-    "V-C3 low plateau at risk; the FULL run decides it.",
+    "V-C12 FAIL: CI/no-CI displacement ratio 1.26 against [1.5, 2.5] (68 vs 54 µm; paper about 85 vs 42); measure and time origin unstated.",
     "Provisional default: 2006 target length L = 50 px (the text) rather than 60 px (the parameter files).",
     "Provisional default: V-E5/V-E6 read at 48 h, the last time shown in the paper.",
     "Ten targets parked: V-E2–V-E4, V-E7–V-E9, V-C6, V-C8, V-C10, V-C11 (pipeline or set-up not published).",

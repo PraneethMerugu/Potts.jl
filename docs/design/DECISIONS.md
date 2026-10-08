@@ -3392,3 +3392,13 @@ session.
   - There are no outlines and no `docs/references`.
 - **Negative controls.** Perturbed plateau values, perturbed network values, a missing or duplicate seed, and an edited snapshot value.
 - **Opt-in checks.** `P63F_SNAPSHOTS` (all snapshots) and `POTTS_DOCS_BUILD`.
+
+**D-184 result (2026-10-08).**
+- **The run.** The FULL record `data/01/full-2026-10-08` covers 590 jobs. It ran on the PC (CPU, 12 threads) in 3 h 37 min, about 39 thread-hours.
+- **Verdicts.** 36 of 37 rows pass under the frozen D-153 rules.
+  - V-C3's low plateau passes: 0.377 against 0.35 ± 0.07, so the at-risk row is gone.
+  - **V-C12 fails.** The CI/no-CI displacement ratio is 1.26 against the band [1.5, 2.5]: 68.1 against 54.0 µm, where the paper has about 85 against 42. It is a deviation row. The displacement measure and time origin are unstated in the paper, and the frame bounds the sprout. It is on our open question list.
+- **Page test.** It passes 365/365.
+- **Videos.** They are on the pre-release `reproductions-2026-10-08-merks`.
+- **Runner.** A sort bug in the observe step meant every job had to be rebuilt from its σ snapshots after the run. No data was lost.
+- **Still open in P6.3f.** The 01b digitised figure targets (Figs 5, 7–10, 12, 13; 12 and 13 need new runs) and the video clock overlays.

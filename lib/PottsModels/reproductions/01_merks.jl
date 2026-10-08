@@ -5,13 +5,18 @@
 #     separate pass will revise it. Every number about our runs is computed on this page
 #     when the docs are built. Values quoted from the papers carry a citation.
 #
-# !!! warning "Reduced run"
+# !!! warning "Reduced run and the full-run record"
 #     The docs build runs the reduced (SMOKE) set: a density-matched 200² version of the
 #     2006 run, 1000-MCS sprouts and short random walks. Only the rows of class SMOKE+FULL
-#     carry a verdict there; the tables are a smoke check, not validation. The full run
-#     (`POTTS_FULL_REPRODUCTION=true`, offline, D-146) runs the paper-size ensembles of
-#     every READY row. The committed full-run outputs (`lib/PottsModels/reproductions/data/01/`)
-#     are **pending**: no full run has been made yet.
+#     carry a verdict there; those tables are a smoke check, not validation. The full run
+#     (every READY row at the paper's size and replicate counts, 590 runs; offline, D-146)
+#     is committed as `lib/PottsModels/reproductions/data/01/full-2026-10-08/`: commit
+#     `3f1c441a`, made on an AMD Ryzen AI Max+ 395 (praneeth-NucBox-EVO-X2, CPU backend,
+#     12 threads). Its verdicts are read from that record on this page, class "FULL record"
+#     in §5. Two of its replicates, rerun with dense saves and checked against the record's
+#     snapshots, are videos with one colour per cell:
+#     [the 2006 network, seed 1001](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-merks/01_merks_full-2026-10-08_E1_std_s1001_cells.mp4) and
+#     [the 2008 contact-inhibited sprout, seed 3101](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-merks/01_merks_full-2026-10-08_C3_r0_s3101_cells.mp4).
 #
 # ## 1. Paper and sources
 #
@@ -47,10 +52,38 @@ using Potts, PottsModels
 using MakiePotts, CairoMakie
 using Statistics: mean, std
 using Markdown
+using TOML
 CairoMakie.activate!(type = "png")
 
 const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
 const SOLVER = ExplicitEuler(substeps = 15)          # 15 × Δt = 2 s per MCS (01a p.49; 01b p.12)
+nothing #hide
+
+# The committed full-run record (D-146) is read here, not rerun: its verdicts, the frozen
+# FULL rules applied to its 590 per-replicate rows, and the sweep means at both clocks.
+
+## FULL record (P6.3f): begin
+const RECORD = joinpath(pkgdir(PottsModels), "reproductions", "data", "01", "full-2026-10-08")
+function record_tsv(file)
+    lines = filter(!isempty, readlines(joinpath(RECORD, file)))
+    head = split(lines[1], '\t')
+    return [Dict(String(h) => String(v) for (h, v) in zip(head, split(l, '\t'; keepempty = true))) for l in lines[2:end]]
+end
+record_prov = TOML.parsefile(joinpath(RECORD, "provenance.toml"))
+record_verdicts = record_tsv("verdicts.tsv")
+record_points = record_tsv("points.tsv")
+record_causes = record_tsv("deviations.tsv")        # cause and question status of each failing check
+full_verdicts_md = "| Target | Paper | Ours | Tolerance | Class | Result |\n|---|---|---|---|---|---|\n" *
+                   join(["| $(v["row"]) $(v["check"]) | $(v["paper"]) | $(v["ours"]) | $(v["rule"]) | FULL record | $(v["result"]) |"
+                         for v in record_verdicts], "\n")
+function deviation_row(v)
+    c = findfirst(d -> d["row"] == v["row"] && d["check"] == v["check"], record_causes)
+    cause = c === nothing ? "not yet diagnosed" : record_causes[c]["suspected_cause"]
+    status = c === nothing ? "not an author question" : record_causes[c]["author_question"]
+    return "| $(v["row"]) $(v["check"]) (FAIL; full run) | $(v["ours"]) | $(v["paper"]) | $cause | $status |"
+end
+full_deviation_rows = [deviation_row(v) for v in record_verdicts if v["result"] == "FAIL"]
+## FULL record (P6.3f): end
 nothing #hide
 
 # ## 2. The model, term by term
@@ -146,7 +179,8 @@ split_rel = maximum(abs, field_mcs(dev_c, dev_σ, dev_p; split = true) .- field_
 nothing #hide
 
 # One row per failed, parked or provisional target and per difference from the papers or
-# the released files (D-154; the rows of D-153's review). The columns are our value, the
+# the released files (D-154; the rows of D-153's review). The failing checks of the full
+# run are the last rows, read from the record with its diagnosis (`deviations.tsv`). The columns are our value, the
 # paper's value (with the released files' where they differ), the suspected cause and the
 # status of the question to the authors: "not an author question", "not asked" (the
 # question is on our open question list, model-specs README §5 and §6 below), "asked on
@@ -156,7 +190,6 @@ aq(item) = "not asked (on our open question list: README §5, Merks item $item; 
 Markdown.parse("""
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-C3 low plateau (FULL; at risk) | $(FULL ? "computed in this run: the V-C3 plateau rows of the §5 pass/fail table" : "pending the FULL run; D-153 signal 0.39–0.43 at 5000 MCS, not a committed record") | 0.35 ± 0.07 (01b Fig. 5) | not known; the FULL run decides | not an author question |
 | 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labelled file | the text and the files conflict (D-050 M2) | $(aq(1)) |
 | 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; D-050 M3, D-140) | $(aq(1)) |
 | 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (D-050 M11; spec A-15) | $(aq(1)) |
@@ -175,6 +208,7 @@ Markdown.parse("""
 | PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not yet on our open question list) |
 | PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not yet on our open question list) |
 | PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq(4)) |
+$(join(full_deviation_rows, "\n"))
 """)
 
 # ## 4. Build and run
@@ -191,11 +225,11 @@ const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend
 Markdown.parse("One run, $(join(lat06, " × ")), $(Int(last(sol06.t))) MCS ($(Int(last(sol06.t)) ÷ 120) h), " *
                "`SequentialCPM`: **$(round(t06; digits = 1)) s** on $MACHINE (not warmed up: includes compilation).")
 
-# Endothelial cells red, the frozen frame grey, the matrix white, every 20 MCS (10 min);
-# cells are drawn without outlines (D-156):
+# One colour per cell (D-172; the frozen frame is a cell too), the matrix white, every 20
+# MCS (10 min); cells are drawn without outlines (D-156):
 
 record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(lat06[1])²",
-    plot = (; category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (600, 620)))
+    encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (600, 620)))
 # ```@raw html
 # <video src="../01_merks_2006.mp4" controls autoplay loop muted playsinline width="600"></video>
 # ```
@@ -259,7 +293,7 @@ for (file, sol, title) in (("01_merks_2008_ci.mp4", sol_ci, "contact-inhibited (
                            ("01_merks_2008_noci.mp4", sol_noci, "no contact inhibition (χcc = χcM)"),
                            ("01_merks_2008_eo.mp4", sol_eo, "extension only"))
     record_potts(file, sol; framerate = 15, title,
-        plot = (; category_palette = [:red3, :gray40], medium_color = :white), figure = (; size = (520, 540)))
+        encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (520, 540)))
 end
 # ```@raw html
 # <video src="../01_merks_2008_ci.mp4" controls autoplay loop muted playsinline width="520"></video>
@@ -525,7 +559,7 @@ nothing #hide
 
 pf(ok) = ok ? "PASS" : "FAIL"
 binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
-verdict(ok, class) = ok === nothing ? "pending full run" : binding(class) ? pf(ok) : "info"
+verdict(ok, class) = ok === nothing ? "see the FULL record table" : binding(class) ? pf(ok) : "info"
 fmt(x) = string(round(x; digits = 3))
 ms(v) = length(v) > 1 ? "$(fmt(mean(v))) ± $(fmt(std(v))) (n = $(length(v)))" : "$(fmt(mean(v))) (n = 1)"
 rows = []
@@ -621,10 +655,50 @@ Markdown.parse("""
 |---|---|---|---|---|---|
 """ * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) |" for r in rows], "\n"))
 
+# ### The full run (the committed record)
+#
+# Every check of the frozen FULL tier, applied to the record's per-replicate rows
+# (`replicates.tsv`) by its evaluator and recomputed from those rows by the frozen page
+# test. Verdicts bind on the code counter (TST's loop counter, which includes the 100
+# relaxation MCS). This table is the same in every build:
+
+Markdown.parse(full_verdicts_md)
+
+# The record's provenance:
+
+Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["hostname"]) ($(record_prov["cpu"]), " *
+               "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
+               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`.")
+
+# The 2008 sweep means at both clocks (`points.tsv`; D-153 M6). The binding reading is the
+# code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:
+
+Markdown.parse("| Row | Point | n | mean C at N code MCS | mean C at N MCS after relaxation (code MCS = N + 100) |\n|---|---|---|---|---|\n" *
+               join(["| $(p["row"]) | $(p["point"]) | $(p["n"]) | $(p["mean_C_N"]) ± $(p["std_C_N"]) | $(p["mean_C_N+100"]) ± $(p["std_C_N+100"]) |"
+                     for p in record_points], "\n"))
+
+# V-C3 (01b Fig. 5) from the record, at both clocks:
+
+let pts = filter(p -> p["row"] == "V-C3", record_points)
+    x = [parse(Float64, split(p["point"])[end]) for p in pts]
+    fig = Figure(; size = (640, 360))
+    ax = Axis(fig[1, 1]; xlabel = "χcc / χcM", ylabel = "compactness C",
+        title = "V-C3: 10⁴ MCS after relaxation (code MCS 10 100) and code MCS 10⁴")
+    band!(ax, [0.0, 0.4], [0.28, 0.28], [0.42, 0.42]; color = (:gray80, 0.6))
+    band!(ax, [0.7, 1.0], [0.83, 0.83], [0.97, 0.97]; color = (:gray80, 0.6))
+    scatterlines!(ax, x, [parse(Float64, p["mean_C_N+100"]) for p in pts]; label = "10⁴ MCS after relaxation", color = :red3)
+    scatterlines!(ax, x, [parse(Float64, p["mean_C_N"]) for p in pts]; label = "code MCS 10⁴ (binding)", color = :black)
+    axislegend(ax; position = :lt)
+    fig
+end
+
+# The grey bands are the pre-registered plateaus (0.35 ± 0.07, 0.9 ± 0.07).
+#
 # Rows that fail:
 
-failing = filter(r -> r.result == "FAIL", rows)
-Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in failing], "\n"))
+failing = [["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in rows if r.result == "FAIL"];
+           ["- $(v["row"]) $(v["check"]) (full run): ours $(v["ours"]), tolerance $(v["rule"])." for v in record_verdicts if v["result"] == "FAIL"]]
+Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
 
 # ## 6. Known limitations and open questions for the authors
 #
@@ -667,3 +741,4 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # |---|---|---|
 # | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | ROADMAP P6.3d; D-153 |
 # | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156; ROADMAP P6.3f |
+# | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one colour per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172; ROADMAP P6.3f |
