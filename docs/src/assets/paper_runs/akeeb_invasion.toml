@@ -1,6 +1,6 @@
 algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
 backend = "CPU"
-caption = "Paper run — AkeebInvasion (Akeeb, Marcus & Jiang 2026), the authors' multimodal sample: J = akeeb_contacts(2.0) (J_LF = 2), default μ = 24, PP = 0.5, other constructor defaults; akeeb_state(; lattice = (500, 300), pp = 0.5), 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1, SequentialCPM, one frame every 3 MCS. Leaders red, followers green. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (praneeth-NucBox-EVO-X2), CPU backend, one thread, commit cda818379."
+caption = "Paper run — AkeebInvasion (Akeeb, Marcus & Jiang 2026), the authors' multimodal sample: J = akeeb_contacts(2.0) (J_LF = 2), default μ = 24, PP = 0.5, other constructor defaults; akeeb_state(; lattice = (500, 300), pp = 0.5), 500×300, 701 MCS (paper: 701 CC3D steps, MCS 0–700), seed 1, SequentialCPM, one frame every 3 MCS. Leaders red, followers green. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S, CPU backend, one thread, commit cda818379."
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 date = "2026-10-08T16:15:18.459"
 deviations = "Dynamics seed differs from the authors' unseeded CC3D run. Reproduction 10 lists the rest."

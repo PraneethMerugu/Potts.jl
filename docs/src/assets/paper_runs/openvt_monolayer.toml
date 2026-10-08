@@ -1,6 +1,6 @@
 algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
 backend = "CPU"
-caption = "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 (β = γ = 0, no contact inhibition): one cell to N = 10007 cells at MCS 11446 (14.77 cell cycles of 775 MCS) on a closed 1400×1400 lattice, seed 15001, SequentialCPM(; proposal = Moore(1)), one frame every 39 MCS. Each cell has its own colour. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (praneeth-NucBox-EVO-X2), CPU backend, one thread, commit cda818379."
+caption = "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 (β = γ = 0, no contact inhibition): one cell to N = 10007 cells at MCS 11446 (14.77 cell cycles of 775 MCS) on a closed 1400×1400 lattice, seed 15001, SequentialCPM(; proposal = Moore(1)), one frame every 39 MCS. Each cell has its own colour. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S, CPU backend, one thread, commit cda818379."
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 date = "2026-10-08T16:41:49.177"
 deviations = "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15."
