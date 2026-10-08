@@ -20,7 +20,9 @@ The OpenVT *growing monolayer* benchmark starts from one cell. Each cell's targe
 steadily, and a cell that has reached twice the initial area divides along a random plane.
 This is the model with the parameters of the benchmark's Artistoo implementation (it is
 the shipped constructor `OpenVTGrowingMonolayer`); only the lattice is smaller (benchmark:
-400×400; here: 80×80) and the run shorter:
+400×400; here: 80×80) and the run shorter. This tutorial uses that 2024 set as a lighter
+teaching example; the benchmark's reference model is `OpenVTReferenceMonolayer` (the
+manuscript's Table S1, [Models](@ref model-openvt)).
 
 ```@example growth
 @potts_model GrowingMonolayer begin
@@ -195,12 +197,14 @@ fig
 - `@extend` builds a new model on an existing one; an update of the same variable replaces
   the base's.
 
-The full run of the benchmark, from one cell to 10⁴ cells:
+The benchmark's reference model, `OpenVTReferenceMonolayer` (Table S1), from one cell to
+10⁴ cells:
 
 ```@example growth
 Main.paper_run("openvt_monolayer", "../../") # hide
 ```
 
-**See also:** [`OpenVTGrowingMonolayer`](@ref model-openvt) for the full construction of the benchmark.
+**See also:** [the OpenVT model page](@ref model-openvt) for `OpenVTReferenceMonolayer` and, as a
+variant, the step-by-step construction of `OpenVTGrowingMonolayer`.
 
 Next, [Tutorial 4](@ref tutorial-layouts) builds initial states from layouts.

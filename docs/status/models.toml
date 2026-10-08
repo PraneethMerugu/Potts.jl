@@ -5,8 +5,9 @@
 # - `data` is the model's directory under lib/PottsModels/reproductions/data/. Its PASS /
 #   FAIL / PARKED counts are computed from the committed verdict TSVs at docs build time.
 # - `models_page` is the @id of the model's Models page; `published` is the stem of its
-#   reproduction page in lib/PottsModels/reproductions/ (linked only when that section is
-#   built, POTTS_DOCS_PUBLISHED=true).
+#   reproduction page in lib/PottsModels/reproductions/. When that section is built
+#   (POTTS_DOCS_PUBLISHED=true) the row links the reproduction page only; otherwise the
+#   Models page.
 # - `deviations`: the open deviations, one line each, as on the model's deviations table.
 #   Edit these lines when a page's deviations table changes.
 
@@ -90,7 +91,7 @@ deviations = [
 
 [[model]]
 spec = "11"
-name = "2D multiscale intracellular / cell / extracellular (Andasari et al. 2012)"
+name = "2D multiscale: Boolean network / cell / ECM-PDE (Jafari Nivlouei et al. 2021; Andasari et al. 2012 as an ODE conformance test)"
 status = "not started"
 status_note = "Steps 6–12, P6.10"
 deviations = ["Planned provisional defaults N1–N3: a clamp, per-cell uptake, χ calibrated; hypoxia, necrosis, Wnt and division calibrated."]

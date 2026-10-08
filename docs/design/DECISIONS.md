@@ -3371,3 +3371,24 @@ session.
   - The codebase and dataset path mentions are dropped.
 - **Re-freeze.** Only these comment lines change. The three page files are re-frozen with their new sha256 in frozen.toml; their tests do not read these lines.
 - **Rule.** Future public pages name sources by DOI or public URL, never by local path.
+
+## D-184 P6.3f: reproduction 01's page shows the FULL record; the page test is re-frozen (2026-10-08; coordinator, from the P6.3f test author; under D-146, D-153–D-156, D-161, D-172, D-183)
+
+- **Frozen test.** `test/reproductions/01_merks_page.jl` (commit 5307d504, sha256 `b8e101646de5b28909be70e75067580777c892ba130fc90d3cb45768640a2428`).
+- **Page.** The page renders the FULL record `data/01/full-2026-10-08/` in one self-contained "FULL record (P6.3f)" chunk that runs no simulation. The test reads only files.
+- **Provenance.** The item is P6.3f. The launch commit is clean and an ancestor of HEAD. The frozen 01 test's sha256 is `cc52d26c…`.
+- **Jobs.** All 590 pre-registered jobs appear exactly once each, with their parameters, keyed by (row, seed, CI). The frozen test reuses seeds 7601–7910 across V-C7's CI and no-CI arms, hence the CI field in the key.
+- **Snapshot oracle.** At least one 2006 job and one 2008 job have their observables recomputed bitwise, using the frozen test's own definitions.
+- **Checks.**
+  - 37 checks are recomputed from `replicates.tsv` by the frozen FULL rules. They must match exactly in `verdicts.tsv` and in the page's table.
+  - V-C3's plateau check is split into its low and high halves.
+  - `points.tsv` holds N and N+100.
+- **Deviations.**
+  - Every failing check gets a deviations row: FAIL, our value, the cause, and the question status.
+  - D-161's rows, the provisional L 50/60 and 48 h rows, and the PARKED rows (V-E2–4, E7–9, C6, C8, C10, C11) are kept.
+- **Videos.**
+  - They are listed in `videos.toml`, with per-cell `CellIdentityEncoding` and `boundaries = false`, and their final state matches the record.
+  - They are linked from a dated pre-release, `reproductions-2026-10-08-merks`.
+  - There are no outlines and no `docs/references`.
+- **Negative controls.** Perturbed plateau values, perturbed network values, a missing or duplicate seed, and an edited snapshot value.
+- **Opt-in checks.** `P63F_SNAPSHOTS` (all snapshots) and `POTTS_DOCS_BUILD`.
