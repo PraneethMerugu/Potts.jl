@@ -2901,6 +2901,17 @@ session.
   - **Expected failing set.** The record tier expects exactly {V4.2, V4.3, V4.5} to fail. The FULL rerun tier asserts every row with `@test`, so `REPRO=full` is red on those three by construction.
   - **Checks only some files.** The record tier checks only that `deviations.tsv` lists each failing row. It does not check the control rows or the "ours" column. Pinning both waits for the next re-freeze.
   - **First freeze not entered.** The first freeze (3dc6fbc4) was not entered in frozen.toml (AUTONOMY §7.2 step 2). The file was unchanged until the re-freeze, so there was no harm.
+- **Review round 2 (consortium data; MERGE AFTER FIXES; fixed).**
+  - **G audit.** The frozen V4 rules, run verbatim by `v4_on_g.jl` on G at 54f375f, pass all 7 rows for TST_5T and for Morpheus_5T. So the bands are right, and our three failures are real deviations.
+    - Nonzero-f peak: TST 0.295, ours 0.425.
+    - Max f: 0.553 against our 0.847.
+    - Cells with a < 0.42: 0 against our 30.
+  - **Causes re-ranked.** TST alone uses our pair-count f and σ_X = 0.4, and still reproduces the band. So the pooled-band mixing, the Morpheus f definition and Morpheus σ (C17/Q21) cannot explain the gap.
+    - The leading candidate is TST's division on target area (C13/Q20).
+    - A difference in TST's f pair loop is unverified and unlikely.
+    - Q23 and Q24 are in spec 15 §7.
+  - **G content in git.** On 2026-10-07 the user approved publishing the comparison: the fig5 TST row and a small table of G-derived statistics (README, `deviations.tsv`, spec Q23). Raw G files and histograms stay on the PC.
+  - **Videos.** These are re-rendered with one categorical colour per cell (`CellIdentityEncoding`), at the user's preference, in `reproductions-2026-10-07-openvt-f5-cells`. That palette has a hashing bug that makes neighbouring ids share hues (P6.0by, D-172), so they are re-rendered again once it is fixed.
 - **Videos.** These go in a new pre-release, `reproductions-2026-10-07-openvt-f5`: case (b) run 1 and control run 1, cells coloured by area, no outlines.
 
 ## D-169 P6.0bv: edge-scope MCS updates through `mtkcompile` (2026-10-07; coordinator, from the P6.0bv test author; follow-up of D-164)
@@ -2977,3 +2988,23 @@ session.
   - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
   - The N controls pass.
 - **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
+
+## D-172 P6.0by: per-cell colours separate neighbouring ids (2026-10-07; coordinator, from the P6.0by test author and the P6.15e review; AUDIT A-80, A-87)
+
+- **Gap.**
+  - The automatic palette for `CellIdentityEncoding` mapped the key `(id << 32) ⊻ generation` to the hue frac(key·φ⁻¹). Since frac(2³²·φ⁻¹) ≈ 0.497, hues alternate between about 0.5 and about 1.0, drifting −0.005 per id.
+  - Ids two apart look the same, and cells born together are neighbours. We never draw outlines, so colonies read as two colours.
+  - From id 2²⁰ the Float64 product also loses hue resolution, and near id 4·10⁹ every cell gets one colour.
+- **Rule.**
+  - **Deterministic.** An automatic identity colour is a function of (id, generation) alone. It does not depend on the frame, the MCS, the site layout or the other cells present, and it does not use Julia's `hash`.
+  - **Well mixed.** The key goes through a 64-bit integer mixer (splitmix64 or equivalent) before it is mapped to a colour. Ids at distance 1–8 are confusable (CIE Lab ΔE*76 < 10) for at most 12 % of pairs at every id range, and hues cover the circle.
+  - **Generations.** A new generation of the same id gets a different colour.
+  - **Cell types.** `CellTypeEncoding` colours for small type counts keep their golden-ratio spacing (types 1–8 pairwise ΔE ≥ 15).
+  - **Unchanged.** A user-supplied `category_palette` is unchanged.
+- **Consequences.**
+  - Identity colours change from today's, so the OpenVT docs figures (`docs/models/openvt.jl`) and the F5 per-cell videos are regenerated, with no outlines.
+  - No reference image or pin covers identity colours.
+- **Frozen acceptance.** `lib/MakiePotts/test/acceptance/p6_0by_cell_colours.jl` (commit 43c495fc, sha256 `912671c407849f835eeb66f6fe1cf4f141bc0c3c34ad9d4bcbe63207b48933e5`).
+  - **Checks.** It covers neighbour separation, identity-only dependence, generations, hue spread and cell-type distinctness. A local copy of the old formula is the negative control.
+  - **Red on bba4d963:** 12 of 45 checks fail. A splitmix64 prototype passes 45/45.
+  - **Wiring.** It is included from `lib/MakiePotts/test/runtests.jl`.
