@@ -22,7 +22,7 @@ end
 LowerEnv(T, mode, bind, relname) = LowerEnv(T, mode, bind, relname, IdDict{Any, String}())
 
 const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
 
 _unwrap(x) = Symbolics.unwrap(x)
 

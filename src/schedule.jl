@@ -230,24 +230,26 @@ function _edge_reads!(out, x, pre::Bool = false)
 end
 
 # An edge update (D-169) reads the other edge variables its block writes only through `Pre`
-# and only when they are written in its own stage (one cadence): those reads see the values
-# before the block. A bare read (a new value) or a read across stages is refused rather than
+# and only when they are written at its own cadence alone (so in its own stage, where every
+# new value of a link is computed before any is written): those reads see the values before
+# the block. A bare read (a new value) or a read across cadences is refused rather than
 # given a value that depends on the stage order.
-function _check_edge_block(sys, us, stages)
-    stage_of = Dict{Symbol, Int}()
-    for (s, st) in enumerate(stages), u in st.updates
-        st.scope === :edge && (stage_of[_update_name(u)] = s)
+function _check_edge_block(sys, us)
+    cadences = Dict{Symbol, Set{Int}}()               # edge variable => cadences writing it
+    for u in us
+        _update_scope(u) === :edge && push!(get!(cadences, _update_name(u), Set{Int}()), u.every)
     end
     for u in us
         _update_scope(u) === :edge || continue
         me = _update_name(u)
         for (n, pre) in _edge_reads!(Tuple{Symbol, Bool}[], u.eq.rhs)
-            (n === me || !haskey(stage_of, n)) && continue
-            (pre && stage_of[n] == stage_of[me]) && continue
+            (n === me || !haskey(cadences, n)) && continue
+            (pre && cadences[n] == Set((u.every,))) && continue
             _located(sys, u) do
                 throw(ArgumentError("the edge update of `$me` reads `$n`, which the same block writes " *
-                                    (pre ? "at another cadence" : "(a new value)") * "; edge updates read the edge " *
-                                    "variables of their block through `Pre` and at their own cadence"))
+                                    (pre ? "at another cadence" : "(a bare read is its new value)") *
+                                    "; an edge update reads the edge variables its block writes only as " *
+                                    "`Pre(x)`, written at the update's own cadence"))
             end
         end
     end
@@ -263,6 +265,7 @@ stages, and rewrite their right-hand sides (snapshots, hoisted folds). `snapshot
 """
 function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symbol, Any}})
     isempty(us) && return Stage[], Tuple{Symbol, Symbol}[]
+    _check_edge_block(sys, us)
     names = map(_update_name, us)
     # the components of a vector are one quantity: reading a sibling is a self-reference
     unit = Dict{Symbol, Symbol}()
@@ -315,9 +318,22 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     snap = Dict{Symbol, Any}(n => _standin(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre))
                              for n in snapnames)
     order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)
-    groups = Dict{Tuple{Int, Int, Int}, Vector{Int}}()
+    # Edge updates (D-169): nothing reads an edge variable's new value (`_check_edge_block`),
+    # so all edge updates of one cadence form one stage, after every other update of the
+    # block; edge stages run in the order their cadences first appear (keeping several
+    # writers of one variable in declaration order). Other stages keep their keys `(level,
+    # scope order, 0, every)`.
+    isedge = [_update_scope(u) === :edge for u in us]
+    last_level = 1 + maximum((level[j] for j in eachindex(us) if !isedge[j]); init = 0)
+    first_of = Dict{Int, Int}()
+    for j in eachindex(us)
+        isedge[j] && get!(first_of, us[j].every, j)
+    end
+    groups = Dict{NTuple{4, Int}, Vector{Int}}()
     for (j, u) in enumerate(us)
-        push!(get!(groups, (level[j], order[_update_scope(u)], u.every), Int[]), j)
+        key = isedge[j] ? (last_level, order[:edge], first_of[u.every], u.every) :
+              (level[j], order[_update_scope(u)], 0, u.every)
+        push!(get!(groups, key, Int[]), j)
     end
     stages = Stage[]
     for key in sort!(collect(keys(groups)))
@@ -337,9 +353,8 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
             end
             Update(u.phase, Equation(u.eq.lhs, rhs), u.every)
         end
-        push!(stages, Stage(scope, key[3], rewritten, pops))
+        push!(stages, Stage(scope, key[4], rewritten, pops))
     end
-    _check_edge_block(sys, us, stages)
     snaps = sort!([(roles[n] === :field ? :site : roles[n], n) for n in snapnames]; by = last)
     return stages, snaps
 end

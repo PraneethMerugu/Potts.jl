@@ -740,7 +740,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             else
                 r = info(_unwrap(u.eq.lhs)).role
                 lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn; key = :key) :
-                                r === :edge ? _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs) :
+                                r === :edge ? _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update) :
                                 _site_env(T, :i, rn; mcs = :mcs, key = :key))
             end
         end

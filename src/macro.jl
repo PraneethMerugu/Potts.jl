@@ -572,8 +572,10 @@ function _section!(parts, sec, args, ln = nothing)
         every = length(args) == 2 ? args[1] : nothing
         for (l, lln) in _combine_compound(_lines_ln(args[end:end], ln))
             l = _rewrite_eq(l)
-            push!(code, _located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
-                                                  :($P.update($phase, $every, $l)), lln))
+            # `a`, `b` are bound for edge updates (D-169); in any other update `_check_names`
+            # rejects them, as it does every name outside the update's scope
+            push!(code, _edge_scope(_located_push(:__updates, every === nothing ? :($P.update($phase, $l)) :
+                                                              :($P.update($phase, $every, $l)), lln)))
         end
     elseif sec === Symbol("@equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__equations, _rewrite_eq(l), lln)), _lines_ln(args, ln))

@@ -131,7 +131,7 @@ _contact_env(T, a, ka, n, kn, w, site, site′, relname; extra = ()) = LowerEnv(
     Dict{Symbol, Any}(:kind => ka, :kind′ => kn, :owner => a, :owner′ => n, :weight => w,
         :__site => site, :site => site, :site′ => site′, :__cell => a, extra...), relname)
 
-_edge_env(T, a, b, k, d, relname; mcs = nothing) = LowerEnv(T, :edge,
+_edge_env(T, a, b, k, d, relname; mcs = nothing, mode = :edge) = LowerEnv(T, mode,
     Dict{Symbol, Any}(:a => a, :b => b, :distance => d, :__edge => (k, a),
         (mcs === nothing ? () : (:mcs => mcs,))...), relname)
 
@@ -1290,7 +1290,7 @@ function _edge_update_phases(c, T, us, every, rn)
 end
 function _edge_update_expr(c, T, r::Symbol, us, every, rn)
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
-    env = _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs)
+    env = _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update)
     vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
     writes = [begin
         col = :(st.cell.$(Symbol(:link_, n)))
