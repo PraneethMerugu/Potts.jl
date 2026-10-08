@@ -15,6 +15,9 @@ solver specifications, and measurements of a state: `total_energy` and the publi
 exported, `Potts.boundary_lengths` and `Potts.anneal` (see [Boundary lengths and annealed
 states](@ref manual-analysis)).
 
+[Relation to ModelingToolkit](@ref modelingtoolkit) explains, with examples, how each
+part of a model relates to ModelingToolkit; this section lists the functions it uses.
+
 The sweep's definition is visible to ModelingToolkit's generic tools.
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
 expressions, `Potts.drives(sys)` gives the `@drive` expressions, and MTK's
