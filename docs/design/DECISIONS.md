@@ -2927,6 +2927,9 @@ session.
   - **Kernel.** Edge updates run as a per-cell kernel (`CellPhase`), not a host phase: the CorePotts `HostPhase` with declared reads allocates on every call. The work item of cell `ea` handles each link with `eb > ea` and writes both ends, so each slot has exactly one writer.
   - **One stage per cadence.** All edge updates of one cadence run in one stage, after that cadence's non-edge updates.
   - **Reads of other edge variables in the same block.** These are allowed only as `Pre(y)`, and only when `y` is written at the same cadence. A bare read (the new value) or a cross-cadence `Pre(y)` is an `ArgumentError`, because edge variables are not in the snapshot machinery. This narrows "reads its own relationship's edge variables" for those two cases. An edge variable not written in the block reads its stored value.
+  - **Several writers.** Writers of one edge variable at different cadences run in declaration order: the cadence stages are sorted topologically (D-042). Writers whose cadences would have to alternate, such as `rest` at Every(1) then Every(2) and `w` at Every(2) then Every(1), are an `ArgumentError` naming the variables and cadences. Cell scope has no such restriction because it orders by dependency levels; this one follows from the one-stage-per-cadence design.
+  - **Draws.** `rand()`/`randn()` in an edge update are refused, because draws are not addressed per link.
+  - **Review.** Three review rounds; the third returned MERGE.
   - **Links with a dead end.** A link with a dead end (volume 0, e.g. squeezed out by copies; lifecycle removals already drop links) is left untouched at both ends, as `link_delta` does (D-066), rather than given a NaN distance.
 - **ROADMAP.** P6.0bv grows from Small to Small–Medium.
 
