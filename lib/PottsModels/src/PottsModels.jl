@@ -63,7 +63,7 @@ Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 function openvt_f4_figure end
 
 """
-    PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure
+    PottsModels.openvt_f1_figure(frame; window = 64, banner = true) -> Makie.Figure
 
 The Potts.jl panel of the OpenVT monolayer benchmark's Fig 1 ("Overview of participating
 frameworks"; `G:results/introduction.tex`, D-175). `frame` is a 2D MakiePotts render frame
@@ -74,7 +74,8 @@ of `frame` (same owners, same cell identities and generations), centred on the c
 along the 45° diagonal from the colony centroid (colony lower left, medium upper right),
 coloured per cell identity with the automatic palette (D-172) on a white medium, with no
 cell outlines (D-156). Above it, 1/45 of the panel high apart, is the 5/45-high banner in the
-proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white bold. The 64-site default,
+proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white bold; `banner = false` leaves
+it out and gives the bare panel (the consortium's `closeup.png`). The 64-site default,
 about 8 cell diameters, is an estimate of what the TST closeup shows.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
