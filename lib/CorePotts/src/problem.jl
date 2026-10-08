@@ -291,6 +291,8 @@ end
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
+    alg isa BoundarySiteCPM && !(backend isa CPU) &&
+        throw(ArgumentError("BoundarySiteCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
     saveat isa Number && (saveat = (t0 + Int(saveat)):Int(saveat):t1)
@@ -306,7 +308,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) : nothing
+            CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) :
+            alg isa BoundarySiteCPM ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
@@ -455,6 +458,12 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    elseif integ.alg isa BoundarySiteCPM
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, integ.ctx, integ.law, integ.key, integ.t)
@@ -520,9 +529,11 @@ _initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
 # is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
-# Nothing without a track or under `SequentialCPM`, which adds into the stats every step.
+# Nothing without a track or under `SequentialCPM` / `BoundarySiteCPM`, which add into the
+# stats every step.
 _fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
 _fold_track!(stats, ::Nothing) = nothing
+_fold_track!(stats, ::BoundaryCache) = nothing
 _fold_track!(stats, cache::CheckerboardCache) = _fold_track!(stats, cache.track)
 function _fold_track!(stats, tk::NamedTuple)
     acc = tk.acc

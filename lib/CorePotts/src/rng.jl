@@ -67,7 +67,8 @@ stream_id(name::Symbol) = stream_id(String(name))
 const STREAM_PROPOSAL = stream_id("CorePotts.proposal")      # direction, acceptance, priority
 const STREAM_SEQUENTIAL_TARGET = stream_id("CorePotts.sequential_target")
 const STREAM_COLOR_ORDER = stream_id("CorePotts.color_order")
-const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER)
+const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")  # skip, target, direction, acceptance
+const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BOUNDARY_SITE)
 
 """
     draw(key, mcs, entity, stream, local = 0) -> NTuple{4, UInt32}
