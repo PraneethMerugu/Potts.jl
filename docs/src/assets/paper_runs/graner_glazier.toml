@@ -1,28 +1,30 @@
 algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
 backend = "CPU"
-caption = "Paper run — Graner & Glazier (1992, 1993) cell sorting: 1000 cells on 347×347 (paper: ≈ 1000 cells, lattice unstated), 160 000 MCS = 10⁴ paper MCS (paper: same; 1 paper MCS = 16 MCS), seed 1, frames log-spaced in time. Start: an unrelaxed Voronoi aggregate (the paper relaxes it 400 paper MCS first)."
+caption = "Paper run — GranerGlazier with its defaults, the papers' sorting set (J_dd = 2, J_dl = 11, J_ll = 14, J_cM = 16, λ = 1, V₀ = 40, T = 10), reproduction 09's FULL fixture: 1000 cells (graner_glazier_aggregate(1000; seed = 1, margin = 60)) on a periodic 347×347 lattice, relaxed as one type for 400 paper MCS before the kinds are assigned (PRE §II D3), then 160 000 MCS = 10⁴ paper MCS (1 paper MCS = 16 MCS), seed 1, SequentialCPM(; proposal = Moore(1)). Each frame is a copy annealed 2 paper MCS at T = 0 (PRE: \"We anneal the displayed data only\"); frames are log-spaced in time. Dark cells blue, light cells yellow. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (praneeth-NucBox-EVO-X2), CPU backend, one thread, commit c1f16e8be."
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
-date = "2026-10-07T10:41:11.705"
-deviations = "Initial aggregate is a centroidal Voronoi disk, not Potts-relaxed (PRE §II D3 relaxes 400 paper MCS); periodic lattice (paper unstated) with a 60-site medium margin so the aggregate never meets its periodic image; no T=0 annealing of displayed frames."
+date = "2026-10-08T16:39:10.756"
+deviations = "Periodic lattice (paper unstated) with a 60-site medium margin; the relaxed aggregate starts from a centroidal Voronoi disk of 1000 cells rather than the PRE's staggered bricks; equal dark/light numbers (paper unstated). Reproduction 09 lists the rest (V-PRE5 late coarsening)."
+display = "each frame annealed 2 paper MCS (32 MCS) at T = 0 with the run's energies, seed 1, on a copy"
 frame_spacing = "log"
 framerate = 24
 frames = 238
-git_commit = "169ac06f6"
+git_commit = "c1f16e8be"
 hostname = "praneeth-NucBox-EVO-X2"
-initial_state = "graner_glazier_aggregate(1000; seed = 1, margin = 60)"
+initial_state = "graner_glazier_aggregate(1000; seed = 1, margin = 60), relaxed as one type (J_ll = 2, J_lM = 8, T = 5, λ = 1, V₀ = 40) for 6400 MCS (400 paper MCS), seed 1; then the aggregate's kinds"
 julia = "1.12.6"
 lattice = [347, 347]
 machine = "x86_64-linux-gnu"
 mcs_per_paper_mcs = 16
 model = "GranerGlazier"
-paper = "Graner & Glazier, PRL 69, 2013 (1992), Fig. 1; Glazier & Graner, PRE 47, 2128 (1993), Figs. 12-13"
+paper = "Graner & Glazier, PRL 69, 2013 (1992), Fig. 1; Glazier & Graner, PRE 47, 2128 (1993), Figs. 12-13; reproduction 09"
 paper_mcs = 10000
-record_wall_s = 46.3
+record_wall_s = 61.4
 recorded_mcs = [0, 160000]
+relax_wall_s = 17.5
 script = "docs/paper_runs/graner_glazier.jl"
 seed = 1
-solve_wall_s = 484.7
+solve_wall_s = 414.5
 threads = 1
-title = """Graner & Glazier (1992) cell sorting — 347×347, 1000 cells, 160000 MCS (10⁴ paper MCS), seed 1\nframes log-spaced in time"""
+title = """Graner & Glazier (1992) cell sorting — GranerGlazier, seed 1\n347×347, 1000 cells, 160000 MCS (10⁴ paper MCS); relaxed start\nframes annealed 2 paper MCS at T = 0, log-spaced in time"""
 tspan = [0, 160000]
-video_mb = 2.38
+video_mb = 1.8
