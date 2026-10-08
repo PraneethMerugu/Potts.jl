@@ -50,11 +50,19 @@
 #    same power state on a GPU that switches between them (Metal, D-145).
 #  - Interval: a 95 % bootstrap interval (rounds resampled with replacement, a fixed seed)
 #    of the median paired ratio, for the candidate and for both controls.
-# Verdict: exit 1 when some candidate/base exceeds 1 + tolerance (on `--stat`); else 3 when
-# some timed run was disturbed (the counts are printed; time again with the machine idle);
-# else 2 when some control's interval excludes 1 (two checkouts of one commit differ: the
-# A/B cannot be read); else 0. The printed resolution is the largest control deviation from
-# 1 and the largest control interval half-width.
+# Verdict. `dev` is the largest control deviation |ratio - 1| over every case and both
+# controls (0 without controls), and the pass margin is 1 + tolerance - dev, so a control
+# that reads apart narrows what passes and never loosens it:
+#   exit 0  pass: every candidate/base <= margin
+#   exit 1  regression: some candidate/base > 1 + tolerance
+#   exit 2  unreadable: some candidate/base between margin and 1 + tolerance (re-run, or
+#           judge with the controls' range stated)
+#   exit 3  some timed run was disturbed (listed; takes precedence: time again with the
+#           machine idle)
+#   exit 4  harness error (bad arguments, a dirty or misplaced checkout, a candidate that
+#           skips a case, a child that crashed)
+# A control whose interval excludes 1 is flagged per case (a per-checkout offset); it
+# enters the verdict through `dev`.
 #
 # Options:
 #   --alg=<sequential|checkerboard,…>  CPU algorithms (default both)
@@ -178,19 +186,44 @@ function describe(dir)
     end
 end
 
+"""The canonical top level of the git checkout `dir`, or `nothing` (not inside one)."""
+function toplevel(dir)
+    t = try
+        git(dir, "rev-parse", "--show-toplevel")
+    catch
+        return nothing
+    end
+    return realpath(t)
+end
+
+"""
+`dir` must be the top level of its own git checkout, not a directory inside one.
+"""
+function require_toplevel(dir, what)
+    t = toplevel(dir)
+    t == realpath(dir) ||
+        error("$what $dir is not the top level of a git checkout",
+            t === nothing ? "" : " (it lies inside $t)")
+    return dir
+end
+
 """
 A second checkout of `dir`'s commit, `<dir>-abctl`. A missing one is added as a detached
 worktree of `dir`'s repository (the one write into that repository's `.git`, announced
 first); an existing one must be a clean worktree of the same repository, and is moved to the
-commit. Both checkouts must be clean, and the control ends at exactly `dir`'s commit.
+commit. Both must be the top level of a checkout (`git rev-parse --show-toplevel`, so a
+directory inside a repository is refused before anything is written), both must be clean,
+and the control ends at exactly `dir`'s commit.
 """
 function control_checkout(dir)
     dir = rstrip(normpath(abspath(dir)), '/')
+    require_toplevel(dir, "the checkout")
+    ctl = dir * "-abctl"
+    isdir(ctl) && require_toplevel(ctl, "the control checkout")
     sha = git(dir, "rev-parse", "HEAD")
     isclean(dir) ||
         error("the checkout $dir has uncommitted changes: a same-commit control needs a ",
             "clean checkout (commit them, or pass --no-control)")
-    ctl = dir * "-abctl"
     gitdir = common_dir(dir)
     if !isdir(ctl)
         println(
@@ -198,8 +231,6 @@ function control_checkout(dir)
             "into $gitdir")
         run(`git -C $dir worktree add --quiet --detach $ctl $sha`)
     else
-        isdir(joinpath(ctl, ".git")) || isfile(joinpath(ctl, ".git")) ||
-            error("$ctl exists but is not a git checkout")
         common_dir(ctl) == gitdir ||
             error("$ctl is a checkout of another repository ($(common_dir(ctl)))")
         isclean(ctl) || error("control checkout $ctl has uncommitted changes")
@@ -329,7 +360,11 @@ function mid(x)
     (s = sort(x); n = length(s); isodd(n) ? s[(n + 1) ÷ 2] : (s[n ÷ 2] + s[n ÷ 2 + 1]) / 2)
 end
 fastest(v) = minimum(first, v)
-ratios(a, b) = [y[1] / x[1] for (x, y) in zip(a, b)]
+function ratios(a, b)
+    length(a) == length(b) ||
+        error("sides timed in different numbers of rounds ($(length(a)) and $(length(b)))")
+    return [y[1] / x[1] for (x, y) in zip(a, b)]
+end
 paired(a, b) = mid(ratios(a, b))
 
 """
@@ -367,8 +402,19 @@ function verdict(R, D, o)
     point(x, y) = o.stat == "paired" ? paired(x, y) : fastest(y) / fastest(x)
     iv(x, y) = boot_interval(ratios(x, y))
     fmt(t) = @sprintf("[%.4f, %.4f]", t...)
-    slow, wide = String[], String[]
+    # the controls first: their largest deviation from 1 narrows what passes
     dev, half = 0.0, 0.0
+    ctlv = Dict{Tuple{String, String}, Tuple{Float64, Tuple{Float64, Float64}}}()
+    for k in keys_, (s, ref) in ctls
+
+        x, y = R[ref][k], R[s][k]
+        rk, (lo, hi) = point(x, y), iv(x, y)
+        ctlv[(k, s)] = (rk, (lo, hi))
+        dev = max(dev, abs(rk - 1))
+        half = max(half, (hi - lo) / 2)
+    end
+    margin = 1 + o.tolerance - dev
+    slow, unread = String[], String[]
     @printf("\n%-34s %9s %9s | %-26s",
         "case (ns/site, fastest median)", "base", "candidate",
         "candidate/base ($(o.stat)) 95%")
@@ -378,16 +424,19 @@ function verdict(R, D, o)
     println()
     for k in keys_
         rc = point(b[k], c[k])
-        rc > 1 + o.tolerance && push!(slow, k)
+        flags = String[]
+        if rc > 1 + o.tolerance
+            push!(slow, k)
+            push!(flags, "SLOWER")
+        elseif rc > margin
+            push!(unread, k)
+            push!(flags, "UNREADABLE")
+        end
         @printf("%-34s %9.2f %9.2f | %.4f %s", k, fastest(b[k]), fastest(c[k]), rc,
             fmt(iv(b[k], c[k])))
-        flags = rc > 1 + o.tolerance ? ["SLOWER"] : String[]
         for (s, ref) in ctls
-            x, y = R[ref][k], R[s][k]
-            rk, (lo, hi) = point(x, y), iv(x, y)
-            dev = max(dev, abs(rk - 1))
-            half = max(half, (hi - lo) / 2)
-            lo <= 1 <= hi || (push!(wide, "$k ($s)"); push!(flags, "$s EXCLUDES 1"))
+            rk, (lo, hi) = ctlv[(k, s)]
+            lo <= 1 <= hi || push!(flags, "$s interval excludes 1")
             @printf(" | %.4f %s", rk, fmt((lo, hi)))
         end
         println(isempty(flags) ? "" : "  " * join(flags, ", "))
@@ -396,15 +445,17 @@ function verdict(R, D, o)
     o.control &&
         @printf("resolution: largest control deviation %.4f, largest control interval half-width %.4f\n",
             dev, half)
+    @printf("pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control deviation %.4f)\n",
+        margin, o.tolerance, dev)
     nd == 0 || println("disturbed runs ($nd):\n  ", join(D, "\n  "))
-    code = !isempty(slow) ? 1 : nd > 0 ? 3 : !isempty(wide) ? 2 : 0
-    @printf("verdict (%s, tolerance %.3f): %s\n", o.stat,
-        o.tolerance,
-        code == 1 ? "REGRESSION: " * join(slow, ", ") :
-        code == 3 ? "$nd disturbed run(s): time again with the machine idle" :
-        code == 2 ?
-        "a control interval excludes 1 ($(join(wide, ", "))): the A/B cannot be read" :
-        "pass")
+    code = nd > 0 ? 3 : !isempty(slow) ? 1 : !isempty(unread) ? 2 : 0
+    msg = code == 3 ? "$nd disturbed run(s): time again with the machine idle" :
+          code == 1 ? "REGRESSION: " * join(slow, ", ") :
+          code == 2 ?
+          "UNREADABLE: $(join(unread, ", ")) above the margin " *
+          "$(@sprintf("%.4f", margin)): re-run, or judge with the controls' range stated" :
+          "pass"
+    println("verdict ($(o.stat)): ", msg)
     return code
 end
 
@@ -412,6 +463,7 @@ function ab_main(args)
     islegacy(args) && return legacy_main(args)
     o = parse_ab(args)
     m = o.machine
+    BenchMachine.pin_self_to_work!(m)     # the parent and the lock's keeper stay off 12–15
     harness = dirname(@__DIR__)
     deadline = time() + o.maxwait
     @printf("machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s\n",
@@ -440,4 +492,18 @@ function ab_main(args)
     return verdict(R, D, o)
 end
 
-abspath(PROGRAM_FILE) == (@__FILE__) && exit(ab_main(ARGS))
+"""
+`ab_main`, with any harness error (a dirty checkout, a candidate skip, a child that crashed,
+bad arguments) reported and turned into exit code 4.
+"""
+function ab_cli(args)
+    try
+        return ab_main(args)
+    catch e
+        e isa InterruptException && rethrow()
+        println(stderr, "ab.jl: harness error: ", sprint(showerror, e))
+        return 4
+    end
+end
+
+abspath(PROGRAM_FILE) == (@__FILE__) && exit(ab_cli(ARGS))

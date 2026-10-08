@@ -138,10 +138,11 @@ end
 """
 Is a GitHub Actions job running on this host (a `Runner.Worker` process)?
 """
-function ci_job_running()
+function ci_job_running(; exclude = ancestors())
     Sys.islinux() || return false
     for p in readdir("/proc")
         all(isdigit, p) || continue
+        parse(Int, p) in exclude && continue        # inside a CI job: not a disturbance
         f = joinpath("/proc", p, "comm")
         s = try
             strip(read(f, String))
@@ -151,6 +152,25 @@ function ci_job_running()
         s == "Runner.Worker" && return true
     end
     return false
+end
+
+"""
+The PIDs of this process and all its ancestors (Linux; else empty).
+"""
+function ancestors(pid = getpid())
+    out = Int[]
+    Sys.islinux() || return out
+    while pid > 1
+        push!(out, pid)
+        st = try
+            read("/proc/$pid/stat", String)
+        catch
+            break
+        end
+        # fields after the parenthesised command name: state, ppid, …
+        pid = parse(Int, split(st[(findlast(')', st) + 2):end])[2])
+    end
+    return out
 end
 
 """
@@ -200,20 +220,33 @@ What disturbs a timed run on logical CPU `c` right now: `busy_reasons`, plus a b
 sibling of `c` (over 5 %) or a busy other reserved CPU (over 50 %; a benchmark there shares
 the L3 and the power budget). Empty when nothing does.
 """
-function disturbances(c, reserved; gpu = false, ci = true, dt = 0.5)
-    why = busy_reasons(; gpu, ci)
-    Sys.islinux() && c >= 0 || return why
+function disturbances(c, reserved; gpu = false, ci = true, dt = 0.5,
+        busy = cpus -> cpu_busy(cpus; dt), siblings = siblings,
+        linux = Sys.islinux(), reasons = () -> busy_reasons(; gpu, ci))
+    why = reasons()
+    linux && c >= 0 || return why
     sib = siblings(c)
     others = setdiff(reserved, [c; sib])
     others = unique([others; reduce(vcat, siblings.(others); init = Int[])])
-    busy = cpu_busy(unique([sib; others]); dt)
-    for (k, v) in sort(collect(busy))
+    b = busy(unique([sib; others]))
+    for (k, v) in sort(collect(b))
         k in sib && v > 0.05 &&
             push!(why, @sprintf("SMT sibling cpu%d %.0f%% busy", k, 100v))
         k in others && v > 0.5 &&
             push!(why, @sprintf("reserved cpu%d %.0f%% busy", k, 100v))
     end
     return why
+end
+
+"""
+On a pinning machine, move this process (all its threads) to the CPUs for untimed work
+(`m.work`), so the `ab.jl` parent and the lock's keeper, which inherit it, never run on the
+reserved cores. Timed children are pinned explicitly.
+"""
+function pin_self_to_work!(m)
+    pins(m) && !isempty(m.work) || return false
+    p = run(pipeline(ignorestatus(`taskset -a -cp $(m.work) $(getpid())`); stdout = devnull))
+    return success(p)
 end
 
 """

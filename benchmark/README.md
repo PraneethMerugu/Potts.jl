@@ -77,19 +77,31 @@ code; a side's own `ab_one.jl` is not used, and only the base and its control ma
 case that `all` names.
 
 Per case it prints three ratios, candidate/base, base-ctl/base and cand-ctl/candidate, each
-as the verdict statistic (`--stat`) and a 95 % bootstrap interval of the median per-round
-ratio (rounds resampled with replacement, fixed seed). The statistic is `paired` for CPU
-and ROCm: the median over rounds of the per-round ratio, which cancels a slow drift of the
+as the statistic (`--stat`) and a 95 % bootstrap interval of the median per-round ratio
+(rounds resampled with replacement, fixed seed). The statistic is `paired` for CPU and
+ROCm: the median over rounds of the per-round ratio, which cancels a slow drift of the
 machine, since the sides of a round run back to back (a drifting ROCm hour read worst
 controls 1.024 on the fastest medians and 1.006 paired). For Metal it is `fastest`: each
-side's fastest run median, i.e. the same GPU power state (D-145). Exit codes:
+side's fastest run median, i.e. the same GPU power state (D-145).
+
+The verdict uses the controls as the resolution (coordinator ruling, 2026-10-07). `dev` is
+the largest control deviation |ratio − 1| over every case and both controls (0 without
+controls), and the pass margin is `1 + tolerance − dev` (printed). A control that reads
+apart narrows what passes; it never loosens it.
 
 | exit | meaning |
 |---|---|
-| 0 | pass: every candidate/base ≤ 1 + `--tolerance` (0.05) and both controls' intervals contain 1 |
-| 1 | regression: some candidate/base above 1 + tolerance |
-| 3 | some timed run was disturbed (listed): time again with the machine idle |
-| 2 | some control interval excludes 1: two checkouts of one commit differ, so the A/B cannot be read |
+| 0 | pass: every candidate/base ≤ margin |
+| 1 | regression: some candidate/base > 1 + `--tolerance` (0.05) |
+| 2 | unreadable: some candidate/base between the margin and 1 + tolerance; re-run, or judge with the controls' range stated |
+| 3 | some timed run was disturbed (listed); takes precedence: time again with the machine idle |
+| 4 | harness error: bad arguments, a dirty checkout or one that is not a checkout's top level, a candidate that skips a case, a child that crashed |
+
+A control whose interval excludes 1 is flagged on its case (a per-checkout offset, below);
+it enters the verdict through `dev`. Inside a CI job, the job's own `Runner.Worker` is an
+ancestor of the harness and is not counted as a disturbance; another job's is (use
+`--wait=gpu` to wait only for other GPU clients). The `ab.jl` parent moves itself to the
+untimed CPUs (0-11,16-27), so it and the lock's keeper never run on the reserved cores.
 
 It also prints the resolution: the largest control deviation from 1 and the largest control
 interval half-width. Measured on the NucBox (pinned CPU 12, 8 rounds, machine idle;
@@ -103,9 +115,8 @@ run):
 
 So two checkouts of one commit differ by up to ~1 % on the CPU and ~2.3 % on ROCm
 (Merks 100² and Wortel), a per-checkout offset that pinning and seeding do not remove and
-that the rounds' bootstrap interval does not cover; differences below that cannot be read,
-and such a run exits 2. A candidate/base inside the controls' range is no evidence either
-way.
+that the rounds' bootstrap interval does not cover. With tolerance 0.05 the pass margin of
+these runs is therefore 1.0399 (CPU) and 1.0274 (ROCm); every candidate/base read below it.
 
 The D-090 form `ab.jl <base> <candidate> <case> <sequential|checkerboard> [rounds]` (no
 options) is kept for its frozen contract (`test/p6_0s_v7_tooling.jl`, L2): each checkout's

@@ -135,7 +135,24 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             @test BenchMachine.allowed_cpus() isa Vector{Int}
             @test BenchMachine.siblings(0) isa Vector{Int}
             @test BenchMachine.disturbances(-1, Int[]; ci = false) == String[]
+            @test getpid() in BenchMachine.ancestors()
+            # inside a CI job the runner's worker is an ancestor, and does not count
+            @test BenchMachine.ci_job_running() isa Bool
         end
+        # disturbances with injected CPU load and topology
+        sibs(c) = c < 16 ? [c + 16] : [c - 16]
+        dist(load; reasons = () -> String[]) = BenchMachine.disturbances(12, 12:15;
+            busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
+            linux = true, reasons)
+        @test dist(Dict()) == String[]
+        @test dist(Dict(28 => 0.10)) == ["SMT sibling cpu28 10% busy"]
+        @test dist(Dict(28 => 0.03)) == String[]                     # below 5 %: idle enough
+        @test dist(Dict(14 => 0.90, 30 => 0.40)) == ["reserved cpu14 90% busy"]
+        @test dist(Dict(13 => 0.30)) == String[]                     # below 50 %
+        @test dist(Dict(); reasons = () -> ["a CI job (Runner.Worker) is running"]) ==
+              ["a CI job (Runner.Worker) is running"]
+        @test BenchMachine.disturbances(12, 12:15; linux = false,
+            reasons = () -> String[], busy = _ -> error("not called")) == String[]
     end
 
     @testset "Tuple type cache seeding is equal whatever the session made before" begin
@@ -197,6 +214,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         lo, hi = boot_interval(r)
         @test lo <= mid(r) <= hi && lo < 1 < hi && hi - lo < 0.04
         @test boot_interval(r) == boot_interval(r)     # fixed seed: reproducible
+        @test_throws ErrorException ratios(x, y[1:3])   # mismatched round counts
         lo, hi = boot_interval(r .+ 0.05)
         @test lo > 1                                   # an offset control excludes 1
     end
@@ -210,7 +228,21 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         scen = [
             (Dict(), 0, String[]),                                   # all equal: pass
             (Dict("cand" => (1.10,), "cand-abctl" => (1.10,)), 1, String[]),          # 10 % slower
-            (Dict("base-abctl" => (1.05,)), 2, String[]),            # an offset control
+            # an offset control (3 %) narrows the pass margin to 1.02: 1.03 is unreadable
+            (Dict("base-abctl" => (1.03,), "cand" => (1.03,), "cand-abctl" => (1.03,)),
+                2,
+                String[]),
+            # probe B: controls offset by 1 %, candidate 1.03 <= margin 1.04: pass
+            (Dict("base-abctl" => (1.01,), "cand" => (1.03,), "cand-abctl" => (1.0403,)),
+                0,
+                String[]),
+            # probe A: a noisy control (point 1.04, its interval containing 1) and a
+            # candidate at 1.048, inside 1 + tolerance but above the margin 1.01: unreadable
+            (
+                Dict("base-abctl" => (0.95, 0.96, 1.03, 1.04, 1.04, 1.05, 1.10, 1.10),
+                    "cand" => (1.048,), "cand-abctl" => (1.048,)),
+                2,
+                ["--rounds=8"]),
             # drift: the base's first run is fast, so paired (1.0) and fastest (1.1) differ
             (
                 Dict("base" => (1.0, 1.1, 1.1, 1.1), "base-abctl" => (1.0, 1.1, 1.1, 1.1),
@@ -228,12 +260,14 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             for (n, f) in fs
                 setf(sd, n, f...)
             end
-            st, out, ev = run_ab(sb, sd, [
-                b, c, "gg,wa", "cpu", "--rounds=4", common..., extra...])
+            st, out, ev = run_ab(sb, sd,
+                [b, c, "gg,wa", "cpu", "--rounds=4", common..., extra...])
             @test st == code
-            code == 0 && @test occursin("pass", out)
+            code == 0 && @test occursin("verdict (paired): pass", out)
+            code == 2 && @test occursin("UNREADABLE", out)
+            @test occursin("pass margin: candidate/base <=", out)
             @test isdir(b * "-abctl") && isdir(c * "-abctl")
-            @test length(ev) == 16                                     # 4 sides × 4 rounds
+            @test length(ev) == 4 * ("--rounds=8" in extra ? 8 : 4)    # 4 sides × rounds
             @test first.(ev[1:8]) == ["base", "cand", "base-abctl", "cand-abctl",
                 "cand", "base-abctl", "cand-abctl", "base"]
             @test all(
@@ -255,15 +289,24 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         root, b, c, sd = checkouts()
         write(joinpath(sd, "cand.skip"), "wa.sequential")            # the candidate may not skip
         st, out, _ = run_ab(sb, sd, [b, c, "gg,wa", "cpu", "--rounds=4", common...])
-        @test st != 0 && occursin("only the base and its control may lack a case", out)
+        @test st == 4 && occursin("only the base and its control may lack a case", out)
         root, b, c, sd = checkouts()
         write(joinpath(sd, "base.skip"), "gg.sequential")
         st, out, _ = run_ab(sb, sd, [b, c, "gg", "cpu", "--rounds=4", common...])
-        @test st != 0 && occursin("no case was timed on every side", out)
+        @test st == 4 && occursin("no case was timed on every side", out)
         root, b, c, sd = checkouts()
         write(joinpath(sd, "cand.disturb"), "a CI job (Runner.Worker) is running")
         st, out, _ = run_ab(sb, sd, [b, c, "gg", "cpu", "--rounds=4", common...])
         @test st == 3 && occursin("disturbed runs (4)", out)
+        root, b, c, sd = checkouts()                                 # disturbed beats slower
+        write(joinpath(sd, "cand.disturb"), "a CI job (Runner.Worker) is running")
+        setf(sd, "cand", 1.2)
+        setf(sd, "cand-abctl", 1.2)
+        st, out, _ = run_ab(sb, sd, [b, c, "gg", "cpu", "--rounds=4", common...])
+        @test st == 3
+        root, b, c, sd = checkouts()                                 # bad arguments: harness error
+        st, out, _ = run_ab(sb, sd, [b, c, "gg", "cuda", common...])
+        @test st == 4 && occursin("harness error", out)
         root, b, c, sd = checkouts()
         st, out, ev = run_ab(sb, sd, [
             b, c, "gg", "cpu", "--rounds=4", "--no-control", common...])
@@ -273,7 +316,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         root, b, c, sd = checkouts()
         write(joinpath(c, "a.txt"), "dirty")                         # a control needs a clean checkout
         st, out, _ = run_ab(sb, sd, [b, c, "gg", "cpu", "--rounds=4", common...])
-        @test st != 0 && occursin("uncommitted changes", out)
+        @test st == 4 && occursin("uncommitted changes", out)
     end
 
     @testset "in-process form" begin
@@ -313,8 +356,63 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         mv(base * "-other", ctl)
         @test_throws ErrorException control_checkout(base)
         rm(ctl; recursive = true)
+        # a directory inside a checkout is refused before anything is written (H-B)
+        nw = length(readlines(`git -C $base worktree list`))
+        mkpath(joinpath(base, "sub"))                                   # a plain nested directory
+        mkpath(joinpath(base, "benchmark"))                             # like <checkout>/benchmark
+        write(joinpath(base, "benchmark", "x.txt"), "x")
+        g(base, "add", "benchmark/x.txt")
+        g(base, "commit", "-qm", "bench")
+        for d in (joinpath(base, "sub"), joinpath(base, "benchmark"))
+            @test_throws ErrorException control_checkout(d)
+            @test !isdir(d * "-abctl")
+        end
+        @test length(readlines(`git -C $base worktree list`)) == nw
+        mkpath(ctl)                                                     # a plain directory at the path
+        @test_throws ErrorException control_checkout(base)
+        @test length(readlines(`git -C $base worktree list`)) == nw
+        rm(ctl; recursive = true)
         write(joinpath(base, "a.txt"), "dirty")
         @test_throws ErrorException control_checkout(base)             # a dirty base has no control
+    end
+
+    @testset "ab_one.jl with a mocked gate" begin
+        sb2 = sandbox()
+        write(joinpath(sb2, "benchmark", "gate.jl"), """
+            using BenchmarkTools
+            const DEVICE = ""
+            device_backend() = nothing
+            struct SequentialCPM end
+            struct CheckerboardCPM end
+            cases(T) = ["fake" => () -> (; u0 = (; σ = zeros(T, 10)))]
+            fresh_integrator(prob, alg, backend) = nothing
+            timed_step!(i, backend) = (sleep(0.0005); nothing)
+            """)
+        one = joinpath(sb2, "benchmark", "ab_one.jl")
+        proj = joinpath(REPO, "benchmark")
+        run1(args...) = read(ignorestatus(`$(jl()) --project=$proj $one $args`), String)
+        out = run1("fake", "sequential,checkerboard", "--samples=3", "--seconds=1",
+            "--wait=none", "--seed=0")
+        l = filter(!isempty, split(out, '\n'))
+        @test count(startswith("ABR fake.sequential "), l) == 1
+        @test count(startswith("ABR fake.checkerboard "), l) == 1
+        @test count(startswith("TC "), l) == 2 && !any(startswith("DISTURBED"), l)
+        r = split(only(filter(startswith("ABR fake.sequential "), l)))
+        @test 2e3 < parse(Float64, r[3]) < 1e6        # ~0.5 ms per MCS over 10 sites, in ns
+        out = run1(
+            "fake", "sequential", "--samples=3", "--seconds=1", "--wait=gpu", "--seed=0")
+        @test occursin("ABR fake.sequential", out)    # nothing to wait for without a device
+        out = run1(
+            "all", "sequential", "--samples=3", "--seconds=1", "--wait=none", "--seed=0")
+        @test occursin("ABR fake.sequential", out)
+        out = run1("fake", "sequential")             # the D-090 form: one AB line only
+        l = filter(!isempty, split(out, '\n'))
+        @test length(l) == 1 && startswith(l[1], "AB ")
+        buf = IOBuffer()
+        p = run(pipeline(
+            ignorestatus(`$(jl()) --project=$proj $one nope sequential --wait=none --seed=0`);
+            stdout = buf, stderr = buf))
+        @test !success(p) && occursin("unknown case", String(take!(buf)))
     end
 
     @testset "gate.jl with a mocked measure" begin
