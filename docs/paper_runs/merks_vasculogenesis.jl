@@ -33,11 +33,11 @@ sol, info = paper_run("merks_vasculogenesis"; prob, alg, saveat = EVERY, title, 
     size = (760, 800),
     clock = t -> "t = $t MCS = $(hours(t)) h",
     meta = Dict{String, Any}("model" => "Merks2006",
-        "caption" => "Paper run — `Merks2006` (Merks et al. 2006, Figs. 4–5) with its defaults, the paper's set: " *
+        "caption" => "Paper run — Merks2006 (Merks et al. 2006, Figs. 4–5) with its defaults, the paper's set: " *
                      "A = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, D = 0.75, α = ε = 5.4·10⁻³, soft connectivity " *
                      "penalty E₀ = 5000, frozen border (J_cB = 100) with c = 0, 15 field substeps per MCS. 282 cells of 10² " *
-                     "(`merks2006_layout`) on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1, " *
-                     "`SequentialCPM`, one frame every 25 MCS; the clock shows MCS and hours. Each cell has its own colour. " *
+                     "(merks2006_layout) on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1, " *
+                     "SequentialCPM, one frame every 25 MCS; the clock shows MCS and hours. Each cell has its own colour. " *
                      rendered_on(),
         "paper" => "Merks et al., Dev. Biol. 289, 44 (2006), Figs. 4-5; reproduction 01",
         "initial_state" => "layout(merks2006_layout(; lattice = (500, 500), seed = $SEED), (500, 500)): 282 square 10×10 cells in the central 333×333, one-site frozen border",

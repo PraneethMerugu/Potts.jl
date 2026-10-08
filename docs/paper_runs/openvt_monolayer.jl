@@ -5,7 +5,7 @@
 # Reproduction 15 runs case (b) to 10³ cells (Figures 3 and 5) and the same parameters to 10⁴
 # as case (a); this video follows the 10⁴ stop. The problem is the reproduction's
 # (`p615f_problem` in its frozen test; `video_f3_f8.jl` in `data/15/f3-f8-2026-10-08/`):
-# `SequentialCPM(; proposal = Moore(1))`, `edge_guard(5; terminate = true)`, run seed 15001
+# SequentialCPM(; proposal = Moore(1)), `edge_guard(5; terminate = true)`, run seed 15001
 # (case (b), run 1). Frames are recorded during the run (no states kept), one every 39 MCS
 # (≈ 1/20 cycle) and at the stop; the view zooms out with the colony.
 #
@@ -81,10 +81,10 @@ merge!(info, Dict{String, Any}(
     "stop_rule" => "end of the first MCS with N ≥ $N_STOP (stop_at_cells), edge_guard(5; terminate = true)",
     "paper" => "OpenVT consortium, Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition (in preparation), §2.1 and Table S1; reproduction 15, case (b)",
     "deviations" => "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15.",
-    "caption" => "Paper run — `OpenVTReferenceMonolayer` (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, " *
+    "caption" => "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, " *
                  "α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 " *
                  "(β = γ = 0, no contact inhibition): one cell to N = $N cells at MCS $T_STOP " *
                  "($(round(T_STOP / CYCLE; digits = 2)) cell cycles of 775 MCS) on a closed $(L)×$(L) lattice, seed $SEED, " *
-                 "`SequentialCPM(; proposal = Moore(1))`, one frame every $EVERY MCS. Each cell has its own colour. " *
+                 "SequentialCPM(; proposal = Moore(1)), one frame every $EVERY MCS. Each cell has its own colour. " *
                  rendered_on()))
 write_sidecar("openvt_monolayer", info)

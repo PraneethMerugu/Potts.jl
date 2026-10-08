@@ -62,11 +62,11 @@ sol, info = paper_run("graner_glazier"; prob, alg, saveat, title, framerate = 24
     state = display_state,
     clock = t -> "t = $t MCS = $(round(t / PAPER_MCS; sigdigits = 3)) paper MCS",
     meta = Dict{String, Any}("model" => "GranerGlazier",
-        "caption" => "Paper run — `GranerGlazier` with its defaults, the papers' sorting set (J_dd = 2, J_dl = 11, " *
+        "caption" => "Paper run — GranerGlazier with its defaults, the papers' sorting set (J_dd = 2, J_dl = 11, " *
                      "J_ll = 14, J_cM = 16, λ = 1, V₀ = 40, T = 10), reproduction 09's FULL fixture: 1000 cells " *
-                     "(`graner_glazier_aggregate(1000; seed = 1, margin = 60)`) on a periodic $(L)×$(L) lattice, relaxed " *
+                     "(graner_glazier_aggregate(1000; seed = 1, margin = 60)) on a periodic $(L)×$(L) lattice, relaxed " *
                      "as one type for 400 paper MCS before the kinds are assigned (PRE §II D3), then 160 000 MCS = 10⁴ " *
-                     "paper MCS (1 paper MCS = 16 MCS), seed 1, `SequentialCPM(; proposal = Moore(1))`. Each frame is a " *
+                     "paper MCS (1 paper MCS = 16 MCS), seed 1, SequentialCPM(; proposal = Moore(1)). Each frame is a " *
                      "copy annealed 2 paper MCS at T = 0 (PRE: \"We anneal the displayed data only\"); frames are " *
                      "log-spaced in time. Dark cells blue, light cells yellow. " * rendered_on(),
         "paper" => "Graner & Glazier, PRL 69, 2013 (1992), Fig. 1; Glazier & Graner, PRE 47, 2128 (1993), Figs. 12-13; reproduction 09",

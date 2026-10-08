@@ -193,9 +193,13 @@ function render_status(; published::Bool = false)
         end
         pf(k) = counts === nothing ? "—" : string(counts[k])
         devs = join(("• " * _cell(d) for d in get(m, "deviations", String[])), "<br>")
+        # the paper-accurate reproduction page when it is built; the Models tutorial otherwise
         links = String[]
-        haskey(m, "models_page") && push!(links, "[model](@ref $(m["models_page"]))")
-        published && haskey(m, "published") && push!(links, "[reproduction](published/$(m["published"]).md)")
+        if published && haskey(m, "published")
+            push!(links, "[reproduction](published/$(m["published"]).md)")
+        elseif haskey(m, "models_page")
+            push!(links, "[model](@ref $(m["models_page"]))")
+        end
         println(io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $devs | ",
                 isempty(links) ? "—" : join(links, ", "), " |")
         isempty(recs) && continue
@@ -214,10 +218,11 @@ function render_status(; published::Bool = false)
     println(io, """
 
     A dash means the model has no committed full-run record yet. A model whose results come only
-    from the docs-build (SMOKE) tier is "partial (smoke tier)". The model links go to the
-    construction tutorials in [Models](@ref models).""",
-            published ? " The reproduction links go to the full reproduction pages." :
-            " The full reproduction pages are built only with `POTTS_DOCS_PUBLISHED=true`.")
+    from the docs-build (SMOKE) tier is "partial (smoke tier)".""",
+            published ? " Each row links its full reproduction page, which runs the paper's published " *
+                        "constructor against the paper's targets; the construction tutorials are in [Models](@ref models)." :
+            " The model links go to the construction tutorials in [Models](@ref models). The full reproduction " *
+            "pages are built only with `POTTS_DOCS_PUBLISHED=true`, and then each row links its reproduction page.")
     println(io, """
 
     ## How the counts are made

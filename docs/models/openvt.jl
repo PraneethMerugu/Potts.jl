@@ -1,25 +1,171 @@
-# # [A growing monolayer (OpenVT benchmark)](@id model-openvt)
+# # [A growing monolayer (OpenVT reference model)](@id model-openvt)
 #
 # A single cell on a dish grows, divides, and its daughters do the same, until a colony
 # covers the dish. The OpenVT project (Open Virtual Tissues) uses this as a benchmark for
-# comparing cell-based simulators: every framework implements the same growth and division
-# rules, and the colony's cell count, area and radius are compared over time. This page
-# builds the cellular Potts version, with the parameter set of the Artistoo
-# implementation.
+# comparing cell-based simulators: every framework implements the same growth, division and
+# contact-inhibition rules, and the colonies are compared over time. The consortium's
+# manuscript (*Reference Model for the Simulation of a Growing Tissue Monolayer with Contact
+# Inhibition*, in preparation) fixes the parameters every framework uses in its Table S1.
+# PottsModels ships that model as `OpenVTReferenceMonolayer`, and this page is about it. The
+# full benchmark, figure by figure, is reproduction 15 (*OpenVT monolayer benchmark*, in the
+# Published models section).
 #
 # **What you will learn**
 #
-# - how a per-cell target area grows through an `@after_mcs` rule, and how that rule
-#   expresses contact inhibition;
-# - how `@divide` triggers division on a size threshold, chooses the division plane and
-#   resets the daughters' variables;
-# - how to reserve room for new cells, and measure a population's doubling time.
+# - how a per-cell reference area grows through an `@after_mcs` rule, and how that rule
+#   expresses both kinds of contact inhibition;
+# - how `@divide` triggers division on a per-cell random threshold and splits the mother's
+#   variables between the daughters;
+# - how to stop a run at a cell count or near the lattice edge, and write the benchmark's
+#   output files.
 #
 # The [cell sorting](@ref model-graner-glazier) page explains the parts every model shares.
 #
-# ## The benchmark
+# ## The reference model (Table S1)
 #
-# The OpenVT reference models specify the monolayer by rules rather than equations:
+# The manuscript specifies the monolayer by rules:
+#
+# - each cell has a reference area ``A^*_i`` and an area constraint
+#   ``\lambda (A_i - A^*_i)^2``, with contact energies ``J_{cc} = 20`` between cells and
+#   ``J_{cM} = 10`` with the medium, Metropolis acceptance at ``T = 20``;
+# - **growth:** ``A^*_i`` grows by ``\alpha = 50/775`` per MCS, so a cell cycle is
+#   ``A^*(0)/\alpha = 775`` MCS;
+# - **division:** a cell divides when its area reaches ``X_i A^*(0)``, with
+#   ``X_i \sim N(2, 0.4)`` (redrawn while ``\le 0``) drawn by each cell at birth, along a
+#   uniformly random plane; both daughters take half the mother's ``A^*``;
+# - **contact inhibition:** type 1, a cell grows only while ``a_i = A_i/A^*_i \ge \beta``;
+#   type 2, only while its free-surface fraction ``f_i \ge \gamma`` (the share of its
+#   unlike contacts that face the medium). Growth and division are decoupled;
+# - one disc-shaped cell of area ``A^*(0) = 50`` starts the colony, and a run stops at the
+#   end of the first MCS with at least 10⁴ cells. Lengths are in ``R = \sqrt{A^*(0)/\pi}``.
+#
+# ## The paper run
+#
+# `OpenVTReferenceMonolayer` with its Table S1 defaults, run as reproduction 15's case (b)
+# (β = γ = 0, stochastic X) from one cell to 10⁴ cells on a closed 1400 × 1400 lattice.
+# It is computed outside the docs build:
+#
+# <<paper_run>>
+#
+# ## The model in Potts.jl
+#
+# The constructor's definition, abridged:
+#
+# ```julia
+# @potts_model OpenVTReferenceMonolayer begin
+#     @structural_parameters begin
+#         lattice = (1400, 1400)
+#     end
+#     @kinds medium cell
+#     @parameters begin
+#         A₀ = 50.0; λ = 2.0; T = 20.0; α = 50 / 775
+#         μ_X = 2.0; σ_X = 0.4; β = 0.0; γ = 0.0
+#         J[kind, kind] = [0.0 10.0; 10.0 20.0]
+#     end
+#     @variables begin
+#         A_star(cell) = A₀
+#         X(cell) = 0.0
+#         f(cell) = 1.0
+#     end
+#     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
+#     @relations proposal = Moore(1)
+#     @energy begin
+#         cells(cell) => λ * (volume - A_star)^2
+#         contacts => J[kind, kind′]
+#     end
+#     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower = 0.0))
+#     @after_mcs begin
+#         f ~ ifelse(count(true for _ in contacts) > 0,
+#             count(kind′ == medium for _ in contacts) / count(true for _ in contacts), 1.0)
+#         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+#     end
+#     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
+#         X => randn(μ_X, σ_X; lower = 0.0)
+#     @sweep Metropolis(; temperature = T)
+# end
+# ```
+#
+using Potts, PottsModels
+using MakiePotts, CairoMakie
+mkpath("openvt") #hide
+
+# Two rules use DSL forms of their own. The free-surface fraction is a contact count, kept
+# exact by every copy (see [Updates](@ref manual-updates)):
+#
+# ```julia
+# f ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
+# ```
+#
+# and the division threshold is a truncated normal draw, made separately by each daughter
+# (see [Lifecycle](@ref manual-lifecycle)):
+#
+# ```julia
+# @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
+#     X => randn(μ_X, σ_X; lower = 0.0)
+# ```
+#
+# ## Running it
+#
+# Three cell cycles on a 120 × 120 lattice, with the run stopped if a cell comes within
+# 5 sites of the edge (`PottsModels.edge_guard`) and at 64 cells
+# (`PottsModels.stop_at_cells`):
+
+@named ref = OpenVTReferenceMonolayer(; lattice = (120, 120))
+prob_ref = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
+guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
+sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
+(retcode = sol_ref.retcode, cells = count(>(0), sol_ref.u[end].cell.volume))
+
+# The colony, coloured by cell:
+
+record_potts("openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100)))
+nothing #hide
+
+# ```@raw html
+# <video src="reference.mp4" controls autoplay loop muted playsinline width="440"></video>
+# ```
+#
+# The O2 rows of the benchmark (centroid, radius, free-surface fraction and area fraction,
+# lengths in units of ``R``) for the last state:
+
+snap = PottsModels.openvt_snapshot(sol_ref.u[end])
+(n = length(snap.x), mean_f = sum(snap.f) / length(snap.f), mean_a = sum(snap.a) / length(snap.a))
+
+# The O1 rows, M's time-series format (`PottsModels.openvt_frame`): the same centroids, the
+# inhibition code at given thresholds β and γ, and the number of distinct neighbouring cells
+# on `Moore(1)`. `write_openvt(path, :O1, frame)` writes them.
+
+frame = PottsModels.openvt_frame(sol_ref.u[end]; β = 0.0, γ = 0.0)
+(n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n), growing = count(==(0), frame.i))
+
+# ```@docs
+# OpenVTReferenceMonolayer
+# openvt_reference_state
+# ```
+
+# ## Variant: the 2024 Artistoo set (`OpenVTGrowingMonolayer`)
+#
+# Before the manuscript fixed Table S1, the benchmark circulated with the parameter set of
+# its Artistoo implementation (2024). PottsModels keeps it as `OpenVTGrowingMonolayer`, a
+# documented variant: it is lighter (a smaller cell, exact division at ``2A_0``, no
+# free-surface fraction), so it serves as the teaching example of the
+# [growth tutorial](@ref tutorial-growth) and the workshop. It is **not** the benchmark's
+# reference model. How the two differ:
+#
+# | | `OpenVTGrowingMonolayer` (2024 Artistoo set) | `OpenVTReferenceMonolayer` (Table S1) |
+# |:--|:--|:--|
+# | Contact energies ``J_{cc}`` / ``J_{cm}`` | 20 / 20 | 20 / 10 |
+# | ``\lambda``, ``A^*(0)`` | 20, 25 | 2, 50 |
+# | Growth | ``A_0/\tau`` per MCS | ``\alpha = 50/775`` per MCS: a cycle of 775 MCS |
+# | Division size | exactly ``2A_0`` | ``X_i A^*(0)``, ``X_i \sim N(2, 0.4)`` redrawn while ``\le 0``, drawn by each daughter at birth |
+# | Daughters' target | reset to ``A_0`` | half the mother's ``A^*`` |
+# | Contact inhibition | type 1 (``V \ge \beta V_T``) | type 1 (``A_i/A^*_i \ge \beta``) and type 2 (free-surface fraction ``f_i \ge \gamma``) |
+# | Initial cell | a 5 × 5 square | a disc of radius ``R = \sqrt{A^*(0)/\pi}`` (52 sites) |
+# | Lattice | 400 × 400 | 1400 × 1400, closed, with an edge guard |
+#
+# The rest of this section builds the 2024 variant step by step and runs it at a size that
+# takes seconds. Its rules:
 #
 # - each cell has a target area ``V_T`` and an area constraint
 #   ``\lambda (V - V_T)^2``; cell–cell and cell–medium contact energies are equal, so
@@ -31,30 +177,19 @@
 # - contact inhibition (type 1): a cell grows only while its area is at least
 #   ``\beta V_T``. A compressed cell, squeezed below its target by its neighbours, stops
 #   growing.
-
-# ## The paper run
 #
-# The finished model, built step by step below, run at the paper's size, with the paper's
-# starting state, parameters and run length. It is computed outside the docs build:
-#
-# <<paper_run>>
-#
-# The rest of this page builds the model and runs it at a size that takes seconds.
-
-using Potts, PottsModels
-
-# ## Step 1: the lattice
+# ### Step 1: the lattice
 #
 # <<fragment lattice>>
 #
 # A closed 400 × 400 lattice (the Artistoo reference file uses 1100 × 1100) with Moore
 # contacts and copies.
 #
-# ## Step 2: cell kinds
+# ### Step 2: cell kinds
 #
 # <<fragment kinds>>
 #
-# ## Step 3: parameters
+# ### Step 3: parameters
 #
 # <<fragment parameters>>
 #
@@ -62,14 +197,14 @@ using Potts, PottsModels
 # ``\tau = 84`` MCS and ``T = 20``. Both contact energies are 20. `β = 0` switches contact
 # inhibition off (the benchmark's baseline); its inhibited runs use ``\beta \approx 0.9``.
 #
-# ## Step 4: the target area
+# ### Step 4: the target area
 #
 # <<fragment variables>>
 #
 # `V_target(cell)` is one value per cell. Its default refers to a parameter: a new cell
 # starts at `A₀`.
 #
-# ## Step 5: the energy
+# ### Step 5: the energy
 #
 # <<fragment area>>
 #
@@ -77,7 +212,7 @@ using Potts, PottsModels
 #
 # <<fragment contacts>>
 #
-# ## Step 6: growth with contact inhibition
+# ### Step 6: growth with contact inhibition
 #
 # <<fragment growth>>
 #
@@ -85,7 +220,7 @@ using Potts, PottsModels
 # target; the others keep it. `Pre(V_target)` is the value before the update, and `volume`
 # the cell's current area. With `β = 0` the condition always holds.
 #
-# ## Step 7: division
+# ### Step 7: division
 #
 # <<fragment division>>
 #
@@ -94,11 +229,11 @@ using Potts, PottsModels
 # cell's centre) and what the daughters' variables become: both start again at
 # ``V_T = A_0``.
 #
-# ## Step 8: the sweep
+# ### Step 8: the sweep
 #
 # <<fragment sweep>>
 #
-# ## The whole model
+# ### The whole model
 
 # <<model>>
 
@@ -107,7 +242,7 @@ using Potts, PottsModels
 dims = (400, 400)
 @named mono = GrowingMonolayer()
 
-# ## The starting state
+# ### The starting state
 #
 # One square cell of area ``A_0`` at the centre. A `Tiling` layer restricted to a 5 × 5
 # region makes exactly one 5 × 5 box. It is the state that `openvt_monolayer_state`
@@ -116,7 +251,7 @@ dims = (400, 400)
 u0 = layout(Tiling((5, 5); region = (198:202, 198:202), kinds = [:cell]), dims)
 u0[1].second == openvt_monolayer_state()[1].second
 
-# ## Solving
+# ### Solving
 #
 # 840 MCS are ten doubling times ``\tau``. New cells need room in the state: `capacity`
 # is the largest number of cells the run can hold.
@@ -124,14 +259,12 @@ u0[1].second == openvt_monolayer_state()[1].second
 prob = PottsProblem(mono, u0, (0, 840); seed = 1, capacity = 4096)
 sol = solve(prob, SequentialCPM(); saveat = 0:8:840)
 
-# ## The run as a movie
+# ### The run as a movie
 #
 # All cells are of one kind, so the movie colours them by identity
 # (`CellIdentityEncoding`), and zooms in on the central 180 × 180 sites, where the colony
 # grows, through the `axis` limits:
 
-using MakiePotts, CairoMakie
-mkpath("openvt") #hide
 record_potts("openvt/monolayer.mp4", sol; framerate = 15, title = "Growing monolayer",
     encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (110, 290, 110, 290)))
 nothing #hide
@@ -140,7 +273,7 @@ nothing #hide
 # <video src="monolayer.mp4" controls autoplay loop muted playsinline width="440"></video>
 # ```
 #
-# ## Measuring growth
+# ### Measuring growth
 #
 # The benchmark's first observable is the number of cells. `sol[:volume]` gives every
 # cell's area at every saved time (zero for slots not yet used), so the live cells are
@@ -166,7 +299,7 @@ slope = sum((sol.t[half] .- tm) .* log2.(ncells[half])) / sum(abs2, sol.t[half] 
 # It is somewhat longer than ``\tau = 84``: a cell's area lags its growing target, and
 # a cell divides only when its area itself reaches ``2A_0``.
 #
-# ## The benchmark's colony metrics
+# ### The benchmark's colony metrics
 #
 # The benchmark measures each saved colony with the consortium's `metrics.cpp`: the tissue
 # boundary is a concave hull of the cell centroids, and from it come the mean radius `r`,
@@ -210,18 +343,18 @@ fig
 # `openvt_inhibition_fractions` gives the shares of the four codes; `read_openvt` reads any
 # of the files back and `openvt_filename` names them as the benchmark expects.
 
-# ## Differences from the benchmark
+# ### Differences from the 2024 Artistoo file
 #
 # | | Artistoo reference file | Here |
 # |:--|:--|:--|
 # | Lattice | 1100 × 1100 | 400 × 400 (constructor default); enough while the colony stays clear of the walls, not for the benchmark's 10⁴ cells |
 # | Division size | random, ``N(2, 0.4) \cdot A_0`` | exactly ``2A_0``, as in the benchmark's written baseline specification |
 #
-# The energies, growth law, division plane and parameters are the Artistoo set. This page
-# runs the uninhibited baseline (`β = 0`) for ten doubling times; the benchmark also runs
-# contact-inhibited colonies (`β ≈ 0.9`).
+# The energies, growth law, division plane and parameters are the Artistoo set. This section
+# runs the uninhibited baseline (`β = 0`) for ten doubling times; the 2024 set's inhibited
+# runs use `β ≈ 0.9`. For the benchmark itself, use `OpenVTReferenceMonolayer` (above).
 #
-# ## This model ships as `OpenVTGrowingMonolayer`
+# ### This variant ships as `OpenVTGrowingMonolayer`
 #
 # PottsModels exports this model as `OpenVTGrowingMonolayer`; the test suite checks that
 # it compiles to the same code and defaults as `GrowingMonolayer` above.
@@ -244,72 +377,3 @@ fig
 # openvt_filename
 # ```
 
-# ## The manuscript's reference set (Table S1)
-#
-# The benchmark manuscript fixes the parameters every framework uses (its Table S1), and
-# some rules differ from the 2024 Artistoo file above. PottsModels ships that model as
-# `OpenVTReferenceMonolayer`; `OpenVTGrowingMonolayer` stays the documented 2024 variant.
-#
-# | | `OpenVTGrowingMonolayer` (2024 Artistoo set) | `OpenVTReferenceMonolayer` (Table S1) |
-# |:--|:--|:--|
-# | Contact energies ``J_{cc}`` / ``J_{cm}`` | 20 / 20 | 20 / 10 |
-# | ``\lambda``, ``A^*(0)`` | 20, 25 | 2, 50 |
-# | Growth | ``A_0/\tau`` per MCS | ``\alpha = 50/775`` per MCS: a cycle of 775 MCS |
-# | Division size | exactly ``2A_0`` | ``X_i A^*(0)``, ``X_i \sim N(2, 0.4)`` redrawn while ``\le 0``, drawn by each daughter at birth |
-# | Daughters' target | reset to ``A_0`` | half the mother's ``A^*`` |
-# | Contact inhibition | type 1 (``V \ge \beta V_T``) | type 1 (``A_i/A^*_i \ge \beta``) and type 2 (free-surface fraction ``f_i \ge \gamma``) |
-# | Initial cell | a 5 × 5 square | a disc of radius ``R = \sqrt{A^*(0)/\pi}`` (52 sites) |
-# | Lattice | 400 × 400 | 1400 × 1400, closed, with an edge guard |
-#
-# Two rules use DSL forms of their own. The free-surface fraction is a contact count, kept
-# exact by every copy (see [Updates](@ref manual-updates)):
-#
-# ```julia
-# f ~ count(kind′ == medium for _ in contacts) / count(true for _ in contacts)
-# ```
-#
-# and the division threshold is a truncated normal draw, made separately by each daughter
-# (see [Lifecycle](@ref manual-lifecycle)):
-#
-# ```julia
-# @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
-#     X => randn(μ_X, σ_X; lower = 0.0)
-# ```
-#
-# Three cell cycles on a 120 × 120 lattice, with the run stopped if a cell comes within
-# 5 sites of the edge (`PottsModels.edge_guard`) and at 64 cells
-# (`PottsModels.stop_at_cells`):
-
-@named ref = OpenVTReferenceMonolayer(; lattice = (120, 120))
-prob_ref = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
-guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
-sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
-(retcode = sol_ref.retcode, cells = count(>(0), sol_ref.u[end].cell.volume))
-
-# The colony, coloured by cell:
-
-record_potts("openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
-    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100)))
-nothing #hide
-
-# ```@raw html
-# <video src="reference.mp4" controls autoplay loop muted playsinline width="440"></video>
-# ```
-#
-# The O2 rows of the benchmark (centroid, radius, free-surface fraction and area fraction,
-# lengths in units of ``R``) for the last state:
-
-snap = PottsModels.openvt_snapshot(sol_ref.u[end])
-(n = length(snap.x), mean_f = sum(snap.f) / length(snap.f), mean_a = sum(snap.a) / length(snap.a))
-
-# The O1 rows, M's time-series format (`PottsModels.openvt_frame`): the same centroids, the
-# inhibition code at given thresholds β and γ, and the number of distinct neighbouring cells
-# on `Moore(1)`. `write_openvt(path, :O1, frame)` writes them.
-
-frame = PottsModels.openvt_frame(sol_ref.u[end]; β = 0.0, γ = 0.0)
-(n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n), growing = count(==(0), frame.i))
-
-# ```@docs
-# OpenVTReferenceMonolayer
-# openvt_reference_state
-# ```
