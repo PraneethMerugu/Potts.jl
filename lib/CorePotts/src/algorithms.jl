@@ -86,8 +86,9 @@ sites (`stats.attempts`), and a skip run ends at the MCS end, so the law of the 
 every MCS is `SequentialCPM`'s; the random stream differs, so results are equal in
 distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one O(N)
 pass comparing the state with the boundary set's shadow copy (a few percent of the sweep at
-typical cover, more on nearly empty lattices). Host only (CPU). The keywords are
-`SequentialCPM`'s.
+typical cover, more on nearly empty lattices). Host only (CPU): a non-CPU `backend` raises
+an `ArgumentError`. The keywords and their defaults are `SequentialCPM`'s: `nothing` means
+the model's acceptance law and the problem's proposal neighbourhood.
 """
 Base.@kwdef struct BoundarySiteCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
