@@ -263,8 +263,18 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
         else
             i = info(lhs)
             (i !== nothing && i.role in SCOPES) || throw(ArgumentError("update target `$lhs` is not a declared variable"))
-            allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
-            _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+            if i.role === :edge
+                # once per existing link, in the environment of `edges(rel)` and `@unlink` (D-169)
+                _check_names(u.eq.rhs, _LINK_BUILTINS, "an edge update"; between_copies = true)
+                _has_op(u.eq.rhs, random_uniform) && throw(ArgumentError(
+                    "`rand()` is not available in an edge update: draws are not addressed per link"))
+                (_has_op(u.eq.rhs, random_normal) || _has_op(u.eq.rhs, random_normal_above)) && throw(ArgumentError(
+                    "`randn()` is not available in an edge update: draws are not addressed per link"))
+                _check_edge_vars(u.eq.rhs, edge_rel[i.name], edge_rel, "an edge update of `$(i.name)($(edge_rel[i.name]))`")
+            else
+                allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
+                _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+            end
             i.role === :field ? :site : i.role
         end
         end
@@ -734,6 +744,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             else
                 r = info(_unwrap(u.eq.lhs)).role
                 lower(u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn; key = :key) :
+                                r === :edge ? _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update) :
                                 _site_env(T, :i, rn; mcs = :mcs, key = :key))
             end
         end
