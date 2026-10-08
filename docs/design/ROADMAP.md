@@ -320,7 +320,7 @@ Every item's acceptance also includes the standing checks:
   - **Expanded (D-157).** The backend is an argument of `gate.jl` and `ab.jl`. `baseline.toml` is keyed by machine and backend, and absolute baselines are informational.
   - `ab.jl` seeds the type cache equally on both sides, runs a same-commit control, and interleaves base and candidate by default. On the PC it pins to one logical CPU on reserved cores 12–15.
   - Accept on the PC: a pinned same-commit control within ±1% on every CPU and ROCm case. A pinned Akeeb pair read 1.001 / 1.001 on 2026-10-06.
-- [ ] **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
+- [x] (closed 2026-10-08, D-182: symptom gone, nothing recompiles) **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
   - Look up compiled kernels by (generated-function ids, backend, workgroup) instead of recompiling them per integrator.
   - Accept: the unseeded and seeded Metal OpenVT A/B agree within ±2%, and a second `init` on the same problem compiles no kernel.
 - [x] (merge, 2026-10-07; D-157) **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.

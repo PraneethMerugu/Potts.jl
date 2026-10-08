@@ -3346,3 +3346,19 @@ session.
 - **Files.** A `LICENSE` file sits at the repository root, with a copy in every `lib/<pkg>/` so that each package can be registered on its own.
 - **Copyright line.** "Praneeth Merugu and contributors".
 - **Follow-up.** The OpenVT submission package (D-180) should state the licence in its README. That is a small change to the generator, checked against the frozen package test's README rules.
+
+## D-182 P6.0bc closed: the D-145 kernel-cache symptom no longer occurs (2026-10-08; coordinator, from the P6.0bc test author's measurement)
+
+- **Measured on 8938d07a.**
+  - **Compilation.** A second `init`, `remake`+`init`, `remake`+`solve`, or an ensemble trajectory compiles no kernel. On OpenVT monolayer 48² the first init spends 983 ms (CPU) and 16.3 s (Metal) in the compiler; every later one spends 0 ms.
+  - **Tuple-cache seeding in-process.** No timing effect (1.001 and 0.985).
+  - **Metal A/B** (Mac, `openvt_monolayer_100`, 8 rounds, D-171 controls, base = candidate). Both modes pass, with exit 0:
+
+    | Ratio | Seeded | Unseeded |
+    |---|---|---|
+    | candidate/base | 0.992 | 1.009 |
+
+    The difference of 0.017 is inside the ±2 % accept. D-145 saw 1.07–1.115.
+  - **Single-run spread.** 53 against 87 ns/site in both modes. That is the GPU's power state, not the type cache.
+- **Ruling.** Nothing to build, so the item is closed.
+- **Test not merged.** The drafted test (96525c71 on `feat/p6-0bc`) pins counters that would guard nothing today, so it is not merged. If the symptom returns, its fresh-process bitwise check and env-gated seeded/unseeded A/B are the starting point.
