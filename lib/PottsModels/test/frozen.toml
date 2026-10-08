@@ -411,3 +411,8 @@ decision = "D-164"
 path = "reproductions/15_openvt_f5.jl"
 sha256 = "0f38ec2a495cd97e3da2ce1d70325db0e0651452d5838367003ab69d8ae14731"
 decision = "D-168"
+
+[[file]]
+path = "../../MakiePotts/test/acceptance/p6_0by_cell_colours.jl"
+sha256 = "912671c407849f835eeb66f6fe1cf4f141bc0c3c34ad9d4bcbe63207b48933e5"
+decision = "D-172"
