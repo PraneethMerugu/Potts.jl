@@ -14,6 +14,7 @@
 #     OPENVT_MONOLAYER_REPO=~/openvt/monolayergrowth julia --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/compose_f1.jl
 using Potts, PottsModels, CairoMakie, MakiePotts
+using CairoMakie: Makie
 
 const DIR = @__DIR__
 const G = get(ENV, "OPENVT_MONOLAYER_REPO", "")
@@ -67,7 +68,7 @@ for (k, (name, path, colour, labelcolour)) in enumerate(PANELS)
         pottsplot!(ax, block; encoding = CellIdentityEncoding(), medium_color = :white, boundaries = false)
         limits!(ax, x0, x0 + W, y0, y0 + W)
     else
-        img = load(joinpath(G, "results", path))
+        img = Makie.FileIO.load(joinpath(G, "results", path))
         image!(ax, rotr90(img))
         limits!(ax, 0, size(img, 2), 0, size(img, 1))
     end
