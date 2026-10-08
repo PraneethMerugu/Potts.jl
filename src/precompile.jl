@@ -7,11 +7,13 @@
 # Its `@initialization_equations` take the first initialization `System`, MTK
 # `InitializationProblem` and solves of a session (initialization.jl; ≈ 9 s cold): a linear
 # model pair (MTK's linear initialization problem) and cells with an explicit and a
-# nonlinear condition (a solve from the guess); `_PrecompileExplicit` has explicit
-# conditions only (MTK's observed values).
+# nonlinear condition (a solve from the guess); with `explicit_init = true`, explicit
+# conditions only (MTK's observed values). Initialization changes no kernel, so the second
+# build reuses the first one's compiled code.
 @potts_model _PrecompileModel begin
     @structural_parameters begin
         lattice = (16, 16)
+        explicit_init = false
     end
     @kinds medium cell
     @parameters begin
@@ -42,27 +44,22 @@
         D(x) ~ -x_rate
         x_rate ~ x / T
     end
-    @initialization_equations begin
-        m₀ + m₁ ~ 3V₀
-        m₀ - m₁ ~ V₀
-        s₀ ~ volume / m₀ + id
-        q^2 ~ volume + s₀
+    if explicit_init
+        @initialization_equations begin
+            m₀ ~ 2V₀
+            s₀ ~ volume / m₀ + id
+        end
+    else
+        @initialization_equations begin
+            m₀ + m₁ ~ 3V₀
+            m₀ - m₁ ~ V₀
+            s₀ ~ volume / m₀ + id
+            q^2 ~ volume + s₀
+        end
     end
     @after_mcs V_target ~ Pre(V_target) + V₀ / T
     @divide cells(cell) when = volume >= 2V₀, along = RandomPlane(), V_target => V₀
     @sweep Metropolis(; temperature = T)
-end
-@potts_model _PrecompileExplicit begin
-    @kinds medium cell
-    @parameters V₀ = 20.0
-    @variables begin
-        V_target(cell)
-        w(cell) = 1.0
-    end
-    @lattice Lattice((8, 8); boundary = Closed(), neighborhood = Moore(1))
-    @energy cells(cell) => (volume - V_target)^2
-    @initialization_equations V_target ~ V₀ + volume * w + id
-    @sweep Metropolis(; temperature = 10.0)
 end
 PrecompileTools.@setup_workload begin
     PrecompileTools.@compile_workload begin
@@ -93,8 +90,7 @@ PrecompileTools.@setup_workload begin
         prob = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile)), [CorePotts.ownership => σ, B.kind => [:cell]],
             (0, 1); field_solver = ExplicitEuler(), capacity = 8)
         step!(init(prob, CorePotts.SequentialCPM(); save_start = false))
-        σ₈ = zeros(Int32, 8, 8)
-        σ₈[2:4, 2:4] .= 1
-        PottsProblem(_PrecompileExplicit(; name = :precompile), [CorePotts.ownership => σ₈, B.kind => [:cell]], (0, 1))
+        PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
+            [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8)
     end
 end
