@@ -154,8 +154,9 @@ fig
 The conditions can use the kinds of the two cells (`kind[a] == leader`), cell variables
 (`x[a]`), the `distance`, edge variables and `mcs`. A rule can run less often: `@link bond
 when = …, every = 10`. A model can declare several relationships, each with its own
-capacity, edge variables, energy and rules. Cells that die lose their links, and daughters
-start unlinked. See [Relationships](@ref manual-relationships).
+capacity, edge variables, energy and rules. Cells removed by the lifecycle lose their links
+(a cell squeezed out by copies keeps them until the next link rule), and daughters start
+unlinked. See [Relationships](@ref manual-relationships).
 
 ## What you learned
 

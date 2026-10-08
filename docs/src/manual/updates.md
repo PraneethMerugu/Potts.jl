@@ -5,12 +5,12 @@ is the variable's new value, `Pre(x)` its value before the update.
 
 | Section | When | Scope of the left side |
 |---|---|---|
-| `@before_mcs` | at the start of every MCS | site, field, cell or model variables |
-| `@after_mcs` | at the end of every MCS, after the copy attempts | site, field, cell or model variables |
+| `@before_mcs` | at the start of every MCS | site, field, cell, model or edge variables |
+| `@after_mcs` | at the end of every MCS, after the copy attempts | site, field, cell, model or edge variables |
 | `@on_copy` | after every accepted copy | `x[target]` of a site variable |
 
-A bare variable on the left updates every site, every live cell, or the model, depending
-on its scope.
+A bare variable on the left updates every site, every live cell, the model, or every link
+of a relationship (see [Relationships](@ref manual-relationships)), depending on its scope.
 
 ```@example updates
 using Potts

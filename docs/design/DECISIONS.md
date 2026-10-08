@@ -2901,6 +2901,17 @@ session.
   - **Expected failing set.** The record tier expects exactly {V4.2, V4.3, V4.5} to fail. The FULL rerun tier asserts every row with `@test`, so `REPRO=full` is red on those three by construction.
   - **Checks only some files.** The record tier checks only that `deviations.tsv` lists each failing row. It does not check the control rows or the "ours" column. Pinning both waits for the next re-freeze.
   - **First freeze not entered.** The first freeze (3dc6fbc4) was not entered in frozen.toml (AUTONOMY §7.2 step 2). The file was unchanged until the re-freeze, so there was no harm.
+- **Review round 2 (consortium data; MERGE AFTER FIXES; fixed).**
+  - **G audit.** The frozen V4 rules, run verbatim by `v4_on_g.jl` on G at 54f375f, pass all 7 rows for TST_5T and for Morpheus_5T. So the bands are right, and our three failures are real deviations.
+    - Nonzero-f peak: TST 0.295, ours 0.425.
+    - Max f: 0.553 against our 0.847.
+    - Cells with a < 0.42: 0 against our 30.
+  - **Causes re-ranked.** TST alone uses our pair-count f and σ_X = 0.4, and still reproduces the band. So the pooled-band mixing, the Morpheus f definition and Morpheus σ (C17/Q21) cannot explain the gap.
+    - The leading candidate is TST's division on target area (C13/Q20).
+    - A difference in TST's f pair loop is unverified and unlikely.
+    - Q23 and Q24 are in spec 15 §7.
+  - **G content in git.** On 2026-10-07 the user approved publishing the comparison: the fig5 TST row and a small table of G-derived statistics (README, `deviations.tsv`, spec Q23). Raw G files and histograms stay on the PC.
+  - **Videos.** These are re-rendered with one categorical colour per cell (`CellIdentityEncoding`), at the user's preference, in `reproductions-2026-10-07-openvt-f5-cells`. That palette has a hashing bug that makes neighbouring ids share hues (P6.0by, D-172), so they are re-rendered again once it is fixed.
 - **Videos.** These go in a new pre-release, `reproductions-2026-10-07-openvt-f5`: case (b) run 1 and control run 1, cells coloured by area, no outlines.
 
 ## D-169 P6.0bv: edge-scope MCS updates through `mtkcompile` (2026-10-07; coordinator, from the P6.0bv test author; follow-up of D-164)
@@ -2927,6 +2938,9 @@ session.
   - **Kernel.** Edge updates run as a per-cell kernel (`CellPhase`), not a host phase: the CorePotts `HostPhase` with declared reads allocates on every call. The work item of cell `ea` handles each link with `eb > ea` and writes both ends, so each slot has exactly one writer.
   - **One stage per cadence.** All edge updates of one cadence run in one stage, after that cadence's non-edge updates.
   - **Reads of other edge variables in the same block.** These are allowed only as `Pre(y)`, and only when `y` is written at the same cadence. A bare read (the new value) or a cross-cadence `Pre(y)` is an `ArgumentError`, because edge variables are not in the snapshot machinery. This narrows "reads its own relationship's edge variables" for those two cases. An edge variable not written in the block reads its stored value.
+  - **Several writers.** Writers of one edge variable at different cadences run in declaration order: the cadence stages are sorted topologically (D-042). Writers whose cadences would have to alternate, such as `rest` at Every(1) then Every(2) and `w` at Every(2) then Every(1), are an `ArgumentError` naming the variables and cadences. Cell scope has no such restriction because it orders by dependency levels; this one follows from the one-stage-per-cadence design.
+  - **Draws.** `rand()`/`randn()` in an edge update are refused, because draws are not addressed per link.
+  - **Review.** Three review rounds; the third returned MERGE.
   - **Links with a dead end.** A link with a dead end (volume 0, e.g. squeezed out by copies; lifecycle removals already drop links) is left untouched at both ends, as `link_delta` does (D-066), rather than given a NaN distance.
 - **ROADMAP.** P6.0bv grows from Small to Small–Medium.
 
@@ -2974,3 +2988,51 @@ session.
   - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
   - The N controls pass.
 - **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
+
+## D-172 P6.0by: per-cell colours separate neighbouring ids (2026-10-07; coordinator, from the P6.0by test author and the P6.15e review; AUDIT A-80, A-87)
+
+- **Gap.**
+  - The automatic palette for `CellIdentityEncoding` mapped the key `(id << 32) ⊻ generation` to the hue frac(key·φ⁻¹). Since frac(2³²·φ⁻¹) ≈ 0.497, hues alternate between about 0.5 and about 1.0, drifting −0.005 per id.
+  - Ids two apart look the same, and cells born together are neighbours. We never draw outlines, so colonies read as two colours.
+  - From id 2²⁰ the Float64 product also loses hue resolution, and near id 4·10⁹ every cell gets one colour.
+- **Rule.**
+  - **Deterministic.** An automatic identity colour is a function of (id, generation) alone. It does not depend on the frame, the MCS, the site layout or the other cells present, and it does not use Julia's `hash`.
+  - **Well mixed.** The key goes through a 64-bit integer mixer (splitmix64 or equivalent) before it is mapped to a colour. Ids at distance 1–8 are confusable (CIE Lab ΔE*76 < 10) for at most 12 % of pairs at every id range, and hues cover the circle.
+  - **Generations.** A new generation of the same id gets a different colour.
+  - **Cell types.** `CellTypeEncoding` colours for small type counts keep their golden-ratio spacing (types 1–8 pairwise ΔE ≥ 15).
+  - **Unchanged.** A user-supplied `category_palette` is unchanged.
+- **Consequences.**
+  - Identity colours change from today's, so the OpenVT docs figures (`docs/models/openvt.jl`) and the F5 per-cell videos are regenerated, with no outlines.
+  - No reference image or pin covers identity colours.
+- **Frozen acceptance.** `lib/MakiePotts/test/acceptance/p6_0by_cell_colours.jl` (commit 43c495fc, sha256 `912671c407849f835eeb66f6fe1cf4f141bc0c3c34ad9d4bcbe63207b48933e5`).
+  - **Checks.** It covers neighbour separation, identity-only dependence, generations, hue spread and cell-type distinctness. A local copy of the old formula is the negative control.
+  - **Red on bba4d963:** 12 of 45 checks fail. A splitmix64 prototype passes 45/45.
+  - **Wiring.** It is included from `lib/MakiePotts/test/runtests.jl`.
+
+## D-171 P6.0bb: the paired A/B with two same-commit controls decides performance; `gate.jl` is the allocation check (2026-10-07; coordinator, from the P6.0bb implementer; three review rounds; under D-157, D-145, D-090)
+
+- **Ruling.** "The +5 % gate" (D-160, D-164, D-165 and later) means `ab.jl <base> <cand> all cpu` on the NucBox, plus `rocm` when device code changes, with the defaults.
+  - `dev` is the largest |ratio − 1| over every case and both same-commit controls; margin = 1.05 − dev.
+  - **Exit codes.** Exit 0 (pass) when every candidate/base ≤ margin. Exit 1 when some candidate/base > 1.05. Exit 2 (unreadable) in between. Exit 3 for a disturbed run, which takes precedence over 1. Exit 4 for a harness error.
+  - A noisy control cannot loosen the verdict. A control interval that excludes 1 is flagged on its case and enters the verdict only through `dev`.
+  - `gate.jl` checks zero warm allocations, with informational timings; `--strict` restores the old 5 % rule.
+- **`ab.jl` defaults.**
+  - **Sides.** Base, candidate, `<base>-abctl` and `<cand>-abctl`, each in fresh processes under `exclusive.sh`, in an order rotating over 8 rounds.
+  - **Seeding.** Each process is seeded to 500k Tuple-cache entries. With packages loaded the table already holds 222k–243k of 262 144 slots, so the earlier 8k seed did nothing.
+  - **Environments.** Side environments are identical: `<side>/benchmark` with `<side>/test` stacked.
+  - **Pinning.** Timed children are pinned to CPU 12 (sibling idle) under an 8 G cap; the parent pins itself to 0–11,16–27.
+  - **Waiting and disturbances.** The harness waits for an idle runner and GPU inside the lock, under one deadline. It flags as disturbances a CI job other than its own ancestors, another GPU client, a busy SMT sibling, or another reserved CPU over 50 %.
+  - **Statistic.** Paired (fastest for Metal), with a fixed-seed 95 % bootstrap interval.
+  - **Control checkouts.** A control checkout must be a clean worktree at the top level of the same repository.
+  - **Other modes.** `--inprocess` runs parameter and workload A/Bs.
+- **ROCm timing.** AMDGPU's default `synchronize` read Graner–Glazier at 20, 47 or 2500 ns/site; its blocking form read about 43. The harness spins on `hipStreamQuery` (GC safepoint, yield, 120 s timeout), then `AMDGPU.synchronize(blocking = true)`, and reads 13.7.
+- **D-090 contract narrowed.**
+  - **L2.** The legacy `<case> <sequential|checkerboard> [rounds]` form with no options is kept for the frozen P6.0s test. The 3-argument default-metal form now errors, and `<case> metal` takes the paired form.
+  - **T1 on ROCm.** It is the stream spin plus blocking synchronize above, not `KernelAbstractions.synchronize`. The generic `device_sync` still calls `KernelAbstractions.synchronize`.
+- **Baselines.** `baseline.toml` is keyed `[machine.backend]`: mac rows (M1 Pro) and NucBox CPU and ROCm rows written at bbc39f07.
+- **Measured 2026-10-07** (idle runner, 0 disturbed runs; base 9efdf924, candidate bbc39f07, which differs from the merged harness only in docs and baselines).
+  - **Per-checkout offset.** Two checkouts of one commit differ by up to 0.0101 CPU (6/32 control intervals exclude 1) and 0.0226 ROCm (Merks 100², Wortel; 5/16). The offset survives pinning and seeding and sets the resolution: margins 1.0399 CPU and 1.0274 ROCm.
+  - **Candidate vs base.** The candidate is a harness-only change. Candidate/base was CPU 0.9904–1.0043 and ROCm 0.9909–1.0173, so both pass under the ruling.
+  - **Accept changed.** This replaces ROADMAP's ±1 % control accept. The Metal ±3 % accept moves to P6.0bi.
+- **Open.** The cause of the per-checkout offset (P6.0bz) and library-side ROCm sync cost (P6.0bw).
+- **AUTONOMY.** §7.3.2 and §7.4 are rewritten to match.

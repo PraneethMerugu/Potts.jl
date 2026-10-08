@@ -1,0 +1,22 @@
+decisions = ["D-146", "D-147"]
+runner_sha256 = "1fb900c72d8513f5b31f7ae050d2984d10562e0dab5b51fa142a009760395acf"
+threads = 12
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+simulation_s = 446.7
+seeds = "case (b): 15000 + k, k = 1:100; control (γ = 1e-4): 15500 + k, k = 1:20"
+wall_s = 468.2
+finished = "2026-10-07T18:08:23.379"
+test_sha256 = "92eee663d3478fd7748e962c799d7d0ac44a95b8998cadcb85536a90319441a8"
+hostname = "praneeth-NucBox-EVO-X2"
+affinity = "taskset -c 0-11,16-27"
+started = "2026-10-07T18:00:35.173"
+machine = "x86_64-linux-gnu"
+manifest_sha256 = "0892219151f1038d860c70fe4234a04c548cf67817b6f40fe9e461d6a3e5764b"
+cpu_s_runs = 3304.3
+julia = "1.12.6"
+runner = "lib/PottsModels/reproductions/data/15/f5-2026-10-07/run_f5.jl"
+test = "lib/PottsModels/test/reproductions/15_openvt_f5.jl"
+commit = "3af81ae894d7d4cf46487fdbb597610a83d3f12d"
+item = "P6.15e"
+dirty_tracked = false
+commit_date = "2026-10-07"
