@@ -585,3 +585,75 @@ with the frozen rules of `lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl`
   stays read as cycles (775 MCS): only then does the 0–10 axis span the runs to 1000 cells.
 - F8.3/F8.4 references: mean neighbour number of `neighbors_{compucell3d,morpheus}.csv` 5.842,
   6.480; g at the first row with N ≥ 10⁴ of `measurements_*` 0.4987, 0.3498 (legacy).
+
+**v3.3 (2026-10-08, P6.15g V-target audit).** Checked against G at 54f375f on the PC clone,
+with the frozen rules of `lib/PottsModels/test/reproductions/15_openvt_sweeps.jl`
+(`p615g_mrule`, `p615g_g_reference`; its G tier recomputes every constant, 13/13):
+- **V1.** 13.57 is PhysiCell's γ = 0 entry, 13.5693 (`G:results/PhysiCell/Monolayer/gamma_time_10K.csv`
+  row 2), as §2.3 suspected (Q17 stays open). TST has no run below β = 0.25: its β ≤ 0.2 and
+  0.3 rows are `nan`, and so is γ = 0. Its β = 0.25–0.5 runs give 13.61–13.86, with a mean of
+  13.77. Artistoo's β ≤ 0.52 runs give 13.65–14.04, with a mean of 13.856. Both lie in the
+  ±10 % band [12.213, 14.927], whose upper edge is the 1.1× target. The band is kept as
+  proposed. D-173's case (a), at 15.17 cycles, lies outside it. A failure is a D-154 deviation,
+  and the band is not widened for it.
+- **V2 / V3: the threshold rule.** M's rule (§3.5) is the sample nearest the target, and G
+  has two forms of it.
+  - TST's Table 1 row is the nearest *run*: β 0.7037, 0.9361, 0.9867, 1.006, 1.02 and
+    γ 0.12, 0.5, 0.75. With repeated γ rows averaged, its 10× γ would be 0.5113 (138.64,
+    against 132.14 for the mean of the two γ = 0.5 runs).
+  - Artistoo's row is the nearest *point mean*: γ 0.07562, 0.450193 (printed 0.45),
+    0.715045. Its nearest run at 20× is γ = 0.7 (272.27). The 1.1× β is the known exception:
+    the rule gives 0.698182, Table 1 has 0.6868.
+  - Every value under either form lies inside the V2/V3 bands. Potts uses the point mean,
+    because its final points are replicated as Artistoo's are.
+  - The Table 1 spread includes values from frameworks without sweep data in G: 0.943 at 2×,
+    0.9916 at 5×, 1.011 at 10×, 1.024 at 20× and γ 0.76. They are taken from M as v3 verified
+    them. G's lattice γ rows give "—" at 1.1× and 2× under both forms.
+- **V2b.** The Artistoo abscissae are 0.872727 and 0.933368; "0.873" and "0.933" are rounded.
+  The references are 18.59, 20.40 (TST 0.9), 25.59, 32.11 (TST 0.95) and 105.76 (TST 1.0;
+  "105.8" is rounded). Potts samples at 0.8727 and 0.9334, on its 10⁻⁴ grid.
+- **V3b.** TST gives 61.37, 61.59 and 62.38 at γ = 10⁻⁴, 0.001 and 0.01. Artistoo's first
+  sample, γ = 0.0195, gives 63.09. Both confirm 61.4–63.1. The band [61, 70] and the γ = 0
+  control are kept.
+- **Grids (§4.3).** TST sampled β = 0–1.031 (41 rows, of which 9 are `nan`) and γ = 0–0.95
+  (36 rows, γ = 0 `nan`). Artistoo sampled β = 0.087–1.036 and γ = 0.0195–0.998.
+  - In TST every γ ≥ 0.75 run is past 20× (278.78 at 0.75), and so is β = 1.02 (275.21). The
+    Potts γ grid therefore stops at 0.8, one point past the 20× bracket. Fig 6 marks the capped
+    points "> 20×".
+  - Dense where the curves turn up: 14 β points ≥ 0.9 and 9 γ points ≥ 0.4. γ = 10⁻⁴ is
+    included.
+- **Run counts.** TST used single runs, except two each at γ = 0.5 and 0.94. Artistoo's β
+  file is single runs; its γ file repeats 5 runs at {0.08, 0.12, 0.16, 0.45} and 6 at
+  {0.5, 0.55, 0.7, 0.75, 0.8}. Both confirm §3.5.
+  - "Per point, ≥ 5 seeds" is read as applying to every *reported* point: V1 (10, from C4),
+    V2b (5), V3b (5), and the two final bracket ends of each threshold (6, Artistoo).
+  - The bracketing and bisection samples are single runs, as TST's are.
+  - Bisection takes 2 steps on a 10⁻⁴ grid. That gives a spacing of at most 0.0125 at
+    1.1×/2× β and in γ, and at most 0.004 at 5× and above in β. The bands are ±0.02 and ±0.05,
+    and ±0.005 at 5× and above in β.
+- **The 20× cap.** 20 × 13.57 = 271.4 cycles = 210 335 MCS, the "≈ 2.1·10⁵" of §4.3. TST's own
+  20× β sample (1.02, 213 287 MCS) and its 20× γ sample (0.75, 216 055 MCS) lie above the cap.
+  So, under the cap, a Potts 20× threshold can only be a sample at or below 271.4: the end of
+  the bracket that is not capped (or lo, when both are capped). TST's raw samples under the
+  cap would give β 1.01 at 20×, outside the band, because TST has no sample between 1.01 and
+  1.02; they would give γ 0.7, inside it. The bisection is what resolves the 20× β: on a
+  synthetic curve through TST's Table 1 samples, the protocol gives 1.0187.
+- **Lattices.** In TST's final 10⁴-cell snapshots the furthest centroid lies 491 px from the
+  colony centre at β = 1.02, and 602 px at γ = 0.75. Inhibited fractions are 0.961, 0.978 and
+  0.990 at γ = 0.12, 0.5 and 0.75. Potts' colonies are larger: (a) is about 10 % wider, and
+  its γ colonies are less compact. The β sweep therefore runs on 1400² and the γ sweep on 1800².
+- **Fig 7.** "Five panels at the T1 γ" are read as γ = 0, γ = 10⁻⁴ (standing in for the
+  lattice "—" at 1.1× and 2×) and the three T1 γ values [unverified against M's panel list].
+  F7.1 pre-registers an inhibited fraction ≥ 0.90 at the three T1 γ values.
+- **Throughput (G9).** Measured on the PC, one pinned thread, no recorder.
+  - SequentialCPM(Moore(1)) costs 13.9 ns/site/MCS on an empty 1000² lattice and 15.3 on
+    1400²; occupied sites add 40–90 ns each.
+  - Time to 10⁴ cells on 1400²: case (a) 428 s (11 264 MCS; 38.0 ms/MCS, 19.4 ns/site/MCS);
+    β = 0.8 486 s (12 682 MCS; 38.3 ms/MCS).
+  - D-173's 12-thread FULL took 1600–1750 s per such run, a contention factor of about 4
+    (including its recorder).
+  - The frozen sweep is about 160 runs and 11 M MCS·runs: ≈ 125 core-hours single-threaded,
+    and about 1.5–2 days of wall time on 12 PC threads. The critical path is three sequential
+    near-20× stages, each about 10 h contended.
+  - The medium term, 15 ns per site, is 60–80 % of the cost, so `BoundarySite` (P6.4b)
+    would roughly halve it.
