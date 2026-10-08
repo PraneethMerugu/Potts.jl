@@ -3339,3 +3339,10 @@ session.
   - O5 file names keep the frozen pattern `Potts.jl_gamma_<γ>_<MCS>MCS.csv`. β is 0 and stated in the README, rather than TST's `beta_<b>_gamma_<g>`.
   - The backend is a column of the README's records table, not a provenance field.
 - **Licence.** The repository has no LICENSE. The package states none until the maintainer chooses one.
+
+## D-181 Licence: MIT (2026-10-08; user)
+
+- **Ruling.** Potts.jl and its `lib/` packages are MIT-licensed, the SciML and Julia norm.
+- **Files.** A `LICENSE` file sits at the repository root, with a copy in every `lib/<pkg>/` so that each package can be registered on its own.
+- **Copyright line.** "Praneeth Merugu and contributors".
+- **Follow-up.** The OpenVT submission package (D-180) should state the licence in its README. That is a small change to the generator, checked against the frozen package test's README rules.
