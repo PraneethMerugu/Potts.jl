@@ -53,8 +53,9 @@ display_state(u, i) = get!(() -> annealed(u), ANNEALED, i)
 
 # log-spaced saves from 1 paper MCS (16 MCS) to the end
 saveat = unique(round.(Int, exp10.(range(log10(PAPER_MCS), log10(T_END); length = NFRAMES))))
-title = "Graner & Glazier (1992) cell sorting — GranerGlazier, $(L)×$(L), $(ncell) cells, " *
-        "$(T_END) MCS (10⁴ paper MCS), seed $SEED\nrelaxed start; frames annealed 2 paper MCS at T = 0, log-spaced in time"
+title = "Graner & Glazier (1992) cell sorting — GranerGlazier, seed $SEED\n" *
+        "$(L)×$(L), $(ncell) cells, $(T_END) MCS (10⁴ paper MCS); relaxed start\n" *
+        "frames annealed 2 paper MCS at T = 0, log-spaced in time"
 
 # phenotype colours: sorting is read by kind (dark, light)
 panel = Panel(""; plot = (; category_palette = [:steelblue4, :lightgoldenrod1], medium_color = :white))
