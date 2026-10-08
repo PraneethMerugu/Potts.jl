@@ -3302,3 +3302,23 @@ session.
 - **Timeout.** It is 600 s by default (`CorePotts.DEVICE_WAIT_TIMEOUT`), the implementer's choice.
 - **Review.** The stream is now drained before each device→host copy as well. An async copy into pageable memory may block inside HIP with no yield or timeout, which deadlocks a hostcall kernel on one thread.
 - **Environment.** The ROCm code is an AMDGPU package extension of CorePotts. An existing local Manifest needs one `Pkg.resolve()` to pick it up; CI resolves fresh.
+
+## D-180 Reproduction 15, P6.15j: the OpenVT submission package test frozen (2026-10-08; coordinator, from the P6.15j test author; under D-146, D-154, D-168, D-173–D-175, D-178)
+
+- **Frozen test.** `test/reproductions/15_openvt_package.jl` (commit 1bb3ba3d, sha256 `0df9ec8774c72067a7a30a67997e8fef3d4a36f8897164420a7888a126edbb85`).
+- **Generator.** `PottsModels.openvt_submission_package(outdir) -> outdir` builds `implementations/Potts.jl/` and `results/Potts.jl/` from the `data/15` records. The output directory must be outside git and empty; otherwise it raises `ArgumentError`.
+- **Required files.** Each must equal the records:
+  - the TST-style O4 relaxation CSVs (λ = 2 runs and the λ scan);
+  - `table_S5.csv`, with its MSEs recomputed by the test;
+  - per-run `measurements_s<seed>.csv` (`MCS,t,N,r,A,C,w,g`) for cases a, b, e and f, plus the replicate means the schema asks for;
+  - `neighbors_<case>.csv`;
+  - `closeup.png`, which is fig1.png;
+  - the provenance without the hostname;
+  - parameters, model sources, runners and READMEs.
+- **Present or pending.** O1, O2, A3, O3 and O5 are either present and checked, or listed under "Pending". O3 and O5 (the D-174 sweeps) become required once a P6.15g record exists.
+- **README.** It carries the D-154 deviations: C1–C17, V4.2/4.3/4.5 FAIL, and V1 (15.17 against 13.57, C13). It also states the per-cell colour choice (D-175) and the closed lattice.
+- **Guards.**
+  - An allowlist keeps G data and stray files out.
+  - There is a scan for private and contact wording.
+  - Two builds must be byte-identical.
+- **Submission.** Submitting the package to the consortium stays the maintainer's call. Nothing is sent.
