@@ -1,0 +1,17 @@
+target	case	paper	ours	band	result
+V4.1 fraction of cells with f = 0	b	V4: ≈ 0.89 (TST_5T, Morpheus_5T pooled)	0.8878	[0.86, 0.92]	PASS
+V4.2 peak of nonzero f	b	V4: 0.25–0.35 (TST_5T, Morpheus_5T pooled)	0.425	[0.22, 0.38]	FAIL
+V4.3 max f	b	V4: ≤ 0.56 (TST_5T, Morpheus_5T pooled)	0.8472	≤ 0.61	FAIL
+V4.4 peak of a	b	V4: 0.85–0.90 (TST_5T, Morpheus_5T pooled)	0.865	[0.82, 0.93]	PASS
+V4.5 range of a	b	V4: 0.42–1.09 (TST_5T, Morpheus_5T pooled)	0.066 – 1.13	[0.32, 1.19]	FAIL
+V4.6 mean a	b	V4: 0.85–0.86 (TST_5T, Morpheus_5T pooled)	0.8489	[0.82, 0.89]	PASS
+V4.7 mean f	b	V4: ≈ 0.03 (TST_5T, Morpheus_5T pooled)	0.0388	[0.02, 0.04]	PASS
+V4.1 fraction of cells with f = 0	control	V4: ≈ 0.89 (TST_5T, Morpheus_5T pooled)	0.8633	[0.86, 0.92]	PASS
+V4.2 peak of nonzero f	control	V4: 0.25–0.35 (TST_5T, Morpheus_5T pooled)	0.185	[0.22, 0.38]	FAIL
+V4.3 max f	control	V4: ≤ 0.56 (TST_5T, Morpheus_5T pooled)	1.0	≤ 0.61	FAIL
+V4.4 peak of a	control	V4: 0.85–0.90 (TST_5T, Morpheus_5T pooled)	0.965	[0.82, 0.93]	FAIL
+V4.5 range of a	control	V4: 0.42–1.09 (TST_5T, Morpheus_5T pooled)	0.557 – 1.159	[0.32, 1.19]	PASS
+V4.6 mean a	control	V4: 0.85–0.86 (TST_5T, Morpheus_5T pooled)	0.9572	[0.82, 0.89]	FAIL
+V4.7 mean f	control	V4: ≈ 0.03 (TST_5T, Morpheus_5T pooled)	0.0484	[0.02, 0.04]	FAIL
+V4 (all rows)	b	pass	fail	every row	FAIL
+V4 negative control fails (V4.4, V4.6)	control	fails (γ > 0 shifts the distributions)	fails	V4 fails, V4.4 and V4.6 fail	PASS

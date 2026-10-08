@@ -1,0 +1,28 @@
+decisions = ["D-146", "D-147", "D-154"]
+model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, α = 50/775, μ_X = 2, σ_X = 0.4, J 20/10)"
+boundary = "closed"
+threads = 12
+lattice = [400, 400]
+edge_guard = "edge_guard(5; terminate = true)"
+stop = "stop_at_cells(1000): end of the first MCS with ≥ 1000 live cells"
+o2_columns = "x,y,r,f,a (x, y, r in R = √(A₀/π) from the lattice centre)"
+algorithm = "SequentialCPM(; proposal = Moore(1))"
+initial = "openvt_reference_state: one disc of radius √(A₀/π) at the lattice centre"
+item = "P6.15e"
+cycle_mcs = 775
+
+[case_b]
+seeds = "15000 + k, k = 1:100"
+gamma = 0.0
+runs = 100
+beta = 0.0
+
+[distance_bins]
+b = [0.0, 8.988237462592911, 17.976474925185823, 26.964712387778736, 35.952949850371645, 44.94118731296456]
+control = [0.0, 8.651051413001996, 17.302102826003992, 25.953154239005986, 34.604205652007984, 43.25525706500998]
+
+[control]
+seeds = "15500 + k, k = 1:20"
+gamma = 0.0001
+runs = 20
+beta = 0.0
