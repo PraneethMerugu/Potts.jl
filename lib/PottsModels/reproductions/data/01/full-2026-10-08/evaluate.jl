@@ -21,8 +21,10 @@ end
 verdicts = Any[]
 add!(row, test, value, rule, ok) = push!(verdicts, (row, test, value, rule, ok ? "PASS" : "FAIL"))
 points = Any[]
-pt!(row, label, rs, t) = push!(points, (row, label, length(rs), mean(r -> r["C_$t"], rs), std(r -> r["C_$t"], rs),
-    mean(r -> r["C_$(t + 100)"], rs), std(r -> r["C_$(t + 100)"], rs)))
+function pt!(row, label, rs, t)
+    a, b = [r["C_$t"] for r in rs], [r["C_$(t + 100)"] for r in rs]
+    push!(points, (row, label, length(rs), mean(a), std(a), mean(b), std(b)))
+end
 
 # V-E1
 std_ = pick(r -> r["row"] == "V-E1" && r["arm"] == "standard")
