@@ -3278,3 +3278,12 @@ session.
   - **Results and allocations.** Results are bitwise unchanged on every gate case (D-158), with zero allocations on CPU and ROCm.
   - **Read points.** On ROCm, at most 6 of 300 reads take over 1 ms. On the current code it is 176–180.
 - **Gate.** ab.jl's timed `step!` contains no library wait, so a ratio of about 1.00 is expected. The ROCm A/B is the merge gate.
+
+**D-177 result (2026-10-08).**
+- **Frozen test.** It passes at both tiers. SMOKE: 369 pass. FULL on the PC: 106 pass, every |z| ≤ 2.4.
+- **Speed.**
+  - 400² at 5 % cover: 4.40× (pinned).
+  - OpenVT case (a), 1400² to 10⁴ cells: 2.83× (178 s against 504 s, one run each).
+- **SequentialCPM.** Its D-171 A/B passes: worst candidate/base 1.010, against a margin of 1.032.
+- **Review.** It found a stale skip constant: the constant was cached on |B| alone, so a mask change that moved N gave about 12.5 % too many picks. It is now cached on (|B|, N), with a regression test (335c8fec).
+- **Shadow compare.** Its O(N) cost per MCS is documented: about 0.25 ms on 1400².

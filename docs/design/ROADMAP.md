@@ -578,7 +578,7 @@ Full runs are offline (D-146).
   - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
 - [x] (merge 2026-10-07, D-168; V4 fails V4.2, V4.3, V4.5 as D-154 deviations; consortium TST_5T and Morpheus_5T pass 7/7 under the frozen rules) **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
 - [x] (merge 2026-10-08, D-173; all rows pass, controls fail; V1 warning for P6.15g) **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
-- [ ] (parked 2026-10-08, D-174: test frozen; FULL run waits for P6.4b1) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [ ] (D-174: test frozen; FULL run unparked 2026-10-08, BoundarySiteCPM 2.83× on case (a)) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
 - [x] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
 - [x] **P6.15i** Docs page "OpenVT monolayer benchmark":
   - every figure in M's layout;
@@ -595,7 +595,7 @@ Full runs are offline (D-146).
     and the §2.6 energy ban.
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
-- [ ] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
+- [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
 - [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
