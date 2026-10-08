@@ -90,7 +90,7 @@ function paper_run(stem::AbstractString, prefix::AbstractString = "")
                                            "and will appear here.</em></p>")
     side = joinpath(PAPER_RUNS, stem * ".toml")
     caption = isfile(side) ? strip(get(TOML.parsefile(side), "caption", "")) : ""
-    esc_html(s) = replace(String(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
+    esc_html(s) = replace(String(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "*" => "&#42;", "_" => "&#95;")  # `*`/`_` would read as emphasis
     return Base.Docs.HTML("""<figure><video src="$(prefix)assets/paper_runs/$stem.mp4" controls loop muted playsinline width="480"></video>""" *
                           "<figcaption>$(esc_html(caption))</figcaption></figure>")
 end
