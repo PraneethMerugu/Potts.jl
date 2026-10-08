@@ -125,6 +125,59 @@ function openvt_snapshot(u; A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
     return (; x, y, r, f, a)
 end
 
+"""
+    openvt_frame(u; β, γ, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2) -> (; x, y, i, n)
+
+The O1 rows of a saved state `u` of [`OpenVTReferenceMonolayer`](@ref) (spec §3.1, M's
+DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready for
+`write_openvt(dest, :O1, frame)`:
+
+- `x`, `y`: the centroid in units of `R = √(A₀/π)` from `center`, exactly as
+  [`openvt_snapshot`](@ref PottsModels.openvt_snapshot) gives them;
+- `i`: the inhibition code [`openvt_inhibition_code`](@ref) of the snapshot's `a` and `f` at
+  the thresholds `β` (type 1, area) and `γ` (type 2, free surface): 0 growing, 1, 2 or 3;
+- `n`: the number of distinct other cells (medium and the cell itself excluded) among the
+  `Moore(1)` neighbours of the cell's sites (spec §2.4), on the closed lattice (no wrap).
+
+Like `openvt_snapshot`, it takes any `u` with `u.σ` (2D), `u.cell.volume` and
+`u.cell.A_star`, on the host or a device (the arrays are copied to the host once).
+"""
+function openvt_frame(u; β::Real, γ::Real, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
+    o = openvt_snapshot(u; A₀, center)
+    σ = Array(u.σ)
+    live = findall(>(0), Array(u.cell.volume))
+    i = [openvt_inhibition_code(o.a[j], o.f[j]; β, γ) for j in eachindex(o.a)]
+    deg = _moore_degrees(σ, length(u.cell.volume))
+    return (; o.x, o.y, i, n = deg[live])
+end
+
+# the number of distinct other nonzero ids Moore(1)-adjacent to each id 1:ncell of σ (closed
+# lattice). Adjacency is symmetric, so the four forward offsets visit every unlike adjacent
+# pair once per direction; each pair is stored once (packed lo << 32 | hi), deduplicated, and
+# counted at both ends.
+function _moore_degrees(σ::AbstractMatrix{<:Integer}, ncell::Integer)
+    nx, ny = size(σ)
+    pairs = UInt64[]
+    for j in 1:ny, i in 1:nx
+        c = σ[i, j]
+        c == 0 && continue
+        for (di, dj) in ((1, 0), (-1, 1), (0, 1), (1, 1))
+            (1 <= i + di <= nx && j + dj <= ny) || continue
+            q = σ[i + di, j + dj]
+            (q == 0 || q == c) && continue
+            lo, hi = minmax(UInt64(c), UInt64(q))
+            push!(pairs, (lo << 32) | hi)
+        end
+    end
+    unique!(sort!(pairs))
+    deg = zeros(Int, ncell)
+    for p in pairs
+        deg[p >> 32] += 1
+        deg[p & 0xffffffff] += 1
+    end
+    return deg
+end
+
 # ---------------------------------------------------------------------------------------
 # Run guards (callbacks checked at every MCS boundary, after the lifecycle)
 

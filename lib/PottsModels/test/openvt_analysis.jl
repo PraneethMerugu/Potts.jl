@@ -224,3 +224,43 @@ end
     @test_throws ArgumentError openvt_metrics([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1, 0.5, 1])
     @test_throws ArgumentError openvt_neighbor_histogram(Int[])
 end
+
+# `PottsModels.openvt_frame` (P6.15f, D-173): the O1 rows. The frozen
+# `reproductions/15_openvt_f3_f8.jl` checks a hand-built fixture; here random tilings with
+# ids touching the lattice edges, dead and absent ids, against a brute-force neighbour scan
+function ovt_frame_oracle(σ, c)
+    s = Set{Int}()
+    for I in CartesianIndices(σ)
+        σ[I] == c || continue
+        for d in CartesianIndices((-1:1, -1:1))
+            J = I + d
+            checkbounds(Bool, σ, J) && σ[J] != 0 && σ[J] != c && push!(s, σ[J])
+        end
+    end
+    return length(s)
+end
+
+@testset "OpenVT analysis: openvt_frame against a brute-force neighbour count" begin
+    rng = MersenneTwister(173)
+    for trial in 1:20
+        nx, ny = rand(rng, 3:25), rand(rng, 3:25)
+        ncell = rand(rng, 1:30)
+        σ = Int32[rand(rng) < 0.3 ? 0 : rand(rng, 1:ncell) for _ in 1:nx, _ in 1:ny]
+        vol = Float64[count(==(c), σ) for c in 1:(ncell + 2)]          # two trailing dead ids
+        A = 1.0 .+ 10 .* rand(rng, ncell + 2)
+        u = (; σ, cell = (; volume = vol, A_star = A))
+        β, γ = rand(rng), rand(rng)
+        fr = PottsModels.openvt_frame(u; β, γ)
+        o = PottsModels.openvt_snapshot(u)
+        live = findall(>(0), vol)
+        @test fr.x == o.x && fr.y == o.y
+        @test fr.n == [ovt_frame_oracle(σ, c) for c in live]
+        @test fr.i == [openvt_inhibition_code(o.a[j], o.f[j]; β, γ) for j in eachindex(live)]
+    end
+    # a 2 × 2 block of four cells: every cell touches the other three (two by faces, one by a corner)
+    u = (; σ = Int32[1 2; 3 4], cell = (; volume = ones(4), A_star = ones(4)))
+    @test PottsModels.openvt_frame(u; β = 0, γ = 0).n == [3, 3, 3, 3]
+    # A₀ and center pass through to the snapshot
+    @test PottsModels.openvt_frame(u; β = 0, γ = 0, A₀ = π, center = (0, 0)).x == [1.0, 1.0, 2.0, 2.0]
+    @test_throws ArgumentError PottsModels.openvt_frame((; σ = zeros(Int32, 2, 2, 2), cell = u.cell); β = 0, γ = 0)
+end
