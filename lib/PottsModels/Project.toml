@@ -9,6 +9,7 @@ Potts = "e4c62a4c-8889-4cc8-ad3a-75efc86c53b9"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [weakdeps]
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
@@ -28,4 +29,5 @@ Potts = "0.4"
 Printf = "1"
 PrecompileTools = "1"
 SciMLBase = "3"
+TOML = "1"
 julia = "1.12"

@@ -135,22 +135,26 @@ function _crop(frame, off, window)
     return PottsRenderFrame(frame_mcs(frame), owners, cells; geometry)
 end
 
-function PottsModels.openvt_f1_figure(frame; window::Integer = 64)
+function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool = true)
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_f1_figure: a 2D frame is required"))
     window > 0 || throw(ArgumentError("openvt_f1_figure: window must be positive"))
     crop = _crop(frame, _rim_window(frame, window), window)
     g = frame_geometry(crop)
     # M's layout in mm (introduction.tex): a 45 mm panel, a 5 mm banner 1 mm above it; 10 px/mm
     P = 450
-    fig = Makie.Figure(; size = (P + 20, P + P * 6 ÷ 45 + 20), figure_padding = 10, backgroundcolor = :white)
-    Makie.Box(fig[1, 1]; width = P, height = P * 5 / 45, color = POTTS_COLOUR, strokevisible = false)
-    Makie.Label(fig[1, 1], "Potts.jl"; color = :white, font = :bold, fontsize = 30, tellwidth = false, tellheight = false)
-    ax = Makie.Axis(fig[2, 1]; width = P, height = P, backgroundcolor = :white)
+    height = banner ? P + P * 6 ÷ 45 + 20 : P + 20
+    fig = Makie.Figure(; size = (P + 20, height), figure_padding = 10, backgroundcolor = :white)
+    if banner
+        Makie.Box(fig[1, 1]; width = P, height = P * 5 / 45, color = POTTS_COLOUR, strokevisible = false)
+        Makie.Label(fig[1, 1], "Potts.jl"; color = :white, font = :bold, fontsize = 30, tellwidth = false,
+            tellheight = false)
+    end
+    ax = Makie.Axis(fig[banner ? 2 : 1, 1]; width = P, height = P, backgroundcolor = :white)
     Makie.hidedecorations!(ax)
     Makie.hidespines!(ax)
     pottsplot!(ax, crop; encoding = CellIdentityEncoding(), medium_color = :white, boundaries = false)
     Makie.limits!(ax, g.origin[1], g.origin[1] + window * g.spacing[1], g.origin[2], g.origin[2] + window * g.spacing[2])
-    Makie.rowgap!(fig.layout, 1, P / 45)
+    banner && Makie.rowgap!(fig.layout, 1, P / 45)
     return fig
 end
 
