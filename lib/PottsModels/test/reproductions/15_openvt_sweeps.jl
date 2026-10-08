@@ -81,7 +81,8 @@
 #
 # Protocol. `OpenVTReferenceMonolayer` at its Table S1 defaults (σ_X = 0.4), with β and γ set
 # per point, from one disc cell at the centre (`openvt_reference_state`). The algorithm is
-# `SequentialCPM(; proposal = Moore(1))`. The lattice is closed, with
+# `BoundarySiteCPM(; proposal = Moore(1))`, equal in law to `SequentialCPM` (D-177; chosen
+# before any FULL run, D-174 amendment). The lattice is closed, with
 # `edge_guard(5; terminate = true)`, and a run that reaches the guard invalidates the record.
 # The run stops at the end of the first MCS with ≥ 10⁴ cells (`stop_at_cells`), or at the cap.
 #
@@ -152,7 +153,7 @@ p615g_tau(m) = round(P615G_T0 * m; digits = 4)         # 14.927, 27.14, 67.85, 1
 const P615G_CAP = 210_335                              # 271.4 × 775 MCS: the 20× cap
 const P615G_CELLS = 10_000
 const P615G_GUARD = 5
-const P615G_ALG = SequentialCPM(; proposal = Moore(1))
+const P615G_ALG = BoundarySiteCPM(; proposal = Moore(1))
 const P615G_LATTICE = (beta = 1400, gamma = 1800)
 const P615G_GRID = (
     beta = [0, 2500, 5000, 6000, 6500, 7000, 7500, 8000, 8500, 8727, 9000, 9334, 9500, 9600, 9700, 9800, 9900,
