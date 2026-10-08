@@ -39,6 +39,46 @@ include("openvt_reference.jl")
 public openvt_snapshot, openvt_frame, stop_at_cells, edge_guard
 include("akeeb.jl")
 
+# OpenVT figure functions (D-175). The methods live in the `PottsModelsMakieExt` extension,
+# which loads with Makie and MakiePotts (`using CairoMakie, MakiePotts`); without them
+# PottsModels neither loads nor depends on Makie.
+"""
+    PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure
+
+The lattice panel of the OpenVT monolayer benchmark's Fig 4 (the free-surface fraction
+fᵢ; `G:results/free_surface.tex`, D-175): the 2D ownership array `σ` (`σ[I] > 0` a cell id,
+`0` medium) drawn with `pottsplot` (`CellIdentityEncoding`, medium RGB(236,236,236), no
+boundaries), a white site grid, and one short dash for every pair (site of cell `c`, Moore(1)
+neighbour owned by anything else), across the pair's shared edge or corner: magenta
+RGB(231,41,138) for medium partners and amber RGB(255,192,0) for other cells. A label shows
+both counts, `fᵢ = m / (m + n)`, the G1 count of [`openvt_snapshot`](@ref
+PottsModels.openvt_snapshot). The .tex's black outline of cell i is left out on purpose: no
+cell outlines are drawn (D-156).
+
+Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
+"""
+function openvt_f4_figure end
+
+"""
+    PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure
+
+The Potts.jl panel of the OpenVT monolayer benchmark's Fig 1 ("Overview of participating
+frameworks"; `G:results/introduction.tex`, D-175). `frame` is a 2D MakiePotts render frame
+of a colony, e.g. `renderframe(u)` of the first state of case (a) with 10⁴ cells.
+
+The panel is a square axis holding one `pottsplot` of an unchanged `window × window` block
+of `frame` (same owners, same cell identities and generations), centred on the colony rim
+along the 45° diagonal from the colony centroid (colony lower left, medium upper right),
+coloured per cell identity with the automatic palette (D-172) on a white medium, with no
+cell outlines (D-156). Above it, 1/45 of the panel high apart, is the 5/45-high banner in the
+proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white bold. The 64-site default,
+about 8 cell diameters, is an estimate of what the TST closeup shows.
+
+Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
+"""
+function openvt_f1_figure end
+public openvt_f4_figure, openvt_f1_figure
+
 include("benchmarks/openvt_analysis.jl")
 
 # Precompile the models (D-047; in this file because the guardrails build every other src

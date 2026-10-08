@@ -10,11 +10,20 @@ Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 
+[weakdeps]
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+MakiePotts = "95794c00-c762-4965-bf31-de18bcca2bc9"
+
+[extensions]
+PottsModelsMakieExt = ["Makie", "MakiePotts"]
+
 [sources]
 Potts = {path = "../.."}
 
 [compat]
 DelimitedFiles = "1"
+Makie = "0.24"
+MakiePotts = "0.4"
 Potts = "0.4"
 Printf = "1"
 PrecompileTools = "1"
