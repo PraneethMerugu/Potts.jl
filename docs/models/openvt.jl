@@ -302,6 +302,13 @@ nothing #hide
 snap = PottsModels.openvt_snapshot(sol_ref.u[end])
 (n = length(snap.x), mean_f = sum(snap.f) / length(snap.f), mean_a = sum(snap.a) / length(snap.a))
 
+# The O1 rows, M's time-series format (`PottsModels.openvt_frame`): the same centroids, the
+# inhibition code at given thresholds β and γ, and the number of distinct neighbouring cells
+# on `Moore(1)`. `write_openvt(path, :O1, frame)` writes them.
+
+frame = PottsModels.openvt_frame(sol_ref.u[end]; β = 0.0, γ = 0.0)
+(n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n), growing = count(==(0), frame.i))
+
 # ```@docs
 # OpenVTReferenceMonolayer
 # openvt_reference_state

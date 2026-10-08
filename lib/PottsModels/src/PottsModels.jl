@@ -36,7 +36,7 @@ include("merks.jl")
 include("openvt.jl")
 include("openvt_chain.jl")
 include("openvt_reference.jl")
-public openvt_snapshot, stop_at_cells, edge_guard
+public openvt_snapshot, openvt_frame, stop_at_cells, edge_guard
 include("akeeb.jl")
 
 include("benchmarks/openvt_analysis.jl")

@@ -442,7 +442,7 @@ confirmed at the V-target audit before the reproduction freezes.
 | V3 | γ at 5× / 10× / 20× (1.1× and 2× are "—") | 0.076–0.12 / 0.45–0.50 / 0.715–0.76 (Table 1) | spread ± 0.05 |
 | V3b | γ → 0⁺ jump | the time at γ = 10⁻⁴ … 0.02 is 61.4–63.1 × 5T (TST, Artistoo), against 13.6 at γ = 0 | Potts at γ = 10⁻⁴ within 61–70; a negative control at γ = 0 gives ≈ 13.6 |
 | V4 | Fig 5 shape | pooled over 100 runs (TST_5T, Morpheus_5T; G zips): ≈ 89% of cells at f = 0; nonzero f peaked at 0.25–0.35 with no cell above f = 0.56; a peaked at 0.85–0.90, range 0.42–1.09; mean a = 0.85–0.86, mean f ≈ 0.03 | the same; a negative control (γ > 0 shifts f mass) |
-| V5 | Fig 8 uninhibited N(t) tracks the bulk law N ≈ 2^{t/T} early | Fig 8a | qualitative |
+| V5 | Fig 8 uninhibited N(t) tracks the bulk law N ≈ 2^{t/T} early | Fig 8a (its draft curves are legacy β = 0.8 runs, D4); TST No_CI stochastic (uninhibited, Table S1): slope 1.013, offset 0.45 | **P6.15f audit:** V5.1 slope of the mean log₂ N on t = 4.5:1:8.5 cycles ∈ [0.9, 1.1]; V5.2 max |mean log₂ N − t| on t = 0.5:1:8.5 ≤ 1.0; cases (a) and (e); negative control γ = 1e-4 fails V5.1 |
 | V6 | T(λ) for λ = 1, 2, 3, 5 | 290, 155, 110, 75 MCS (Table S5); **155 at λ = 2 confirmed** by TST, Artistoo and Morpheus-J10 data | ±15% each, monotone decreasing in λ |
 | V7 | w₁₁(t) shape (2b) | MSE vs reference: Table S5 7.6·10⁻⁴ (λ = 1) … 1.4·10⁻² (λ = 5); G data at λ = 2: 7.4·10⁻⁴–1.6·10⁻³ (P9). w₁₁(0.5 T) = 7.83–7.87 and w₁₁(2 T) = 9.78–9.80 across TST, Morpheus-J10 and Artistoo (reference 7.90, 9.77) | MSE ≤ 3× Table S5 at the same λ; w₁₁(0.5T), w₁₁(2T) within ±0.1 CD of the lattice spread |
 | V8 | (2d, e) with T from (b) | w₂₁ at 1/5/10 T: 15.90–16.25 / 19.20–19.57 / 19.90–19.96 CD; plateau (w₂₁ < w₂₁(0) + 0.05) ends at 0.15–0.22 T; inner w₁₁ at 1/5/10 T: 7.20–7.51 / 9.46–9.71 / 9.92–9.96 (CC3D, Morpheus-J10, TST, Artistoo; G csv) | within the lattice spread ± 0.15 CD; plateau end within 0.1–0.3 T |
@@ -567,3 +567,21 @@ the worktree code (`feat/p6-15a`). Scripts ran in scratch only; nothing from G o
 **Not verified** (left or marked [unverified]): E and C (§1; not opened in this pass); the PhysiCell 1/62 dt; Morpheus `rand_norm` semantics (C17); Morpheus-J10 λ; Artistoo relaxation replicate count and division orientation; which framework's legend M's Fig 5 shows; F1 colour maps other than Morpheus; Fig 3's framework; whether one `Voronoi` generator paints a full disc; per-daughter `rand()` in division state rules; the CC3D and TST initial-cell shapes.
 
 **v3.1 (2026-10-05, P6.15d review).** D12 and D13 added (and Q22) from 54 real frames in G (25 Morpheus parameter-plane, 21 Artistoo Type 1, 8 TST final snapshots) run through `metrics.cpp -ffp-contract=off` and the Potts port: 53 identical after the D12 fix; the TST β = 1.006 frame differs by D13, where Potts equals the unpruned C++.
+
+**v3.2 (2026-10-08, P6.15f V-target audit).** Checked against G at 54f375f on the PC clone,
+with the frozen rules of `lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl`:
+- V5 had no numeric band ("qualitative"). It is now V5.1/V5.2 (row above). Fig 8a's draft
+  lattice curves are legacy β = 0.8 runs in legacy cycles (D4, Q7), not uninhibited ones; in
+  their own cycles they pass both rows (CompuCell3D slope 1.000, offset 0.50; Morpheus 0.985,
+  0.55). TST No_CI deterministic gives slope 1.000, offset 0.50; stochastic 1.013, 0.45.
+- F3 has no V-target in this spec; P6.15f pre-registers F3.1–F3.5 against TST No_CI (the only
+  Table S1 CPM data in G). TST deterministic: all 100 runs identical, N = 2^k exactly from MCS
+  780·k (target-area division every 770 MCS, C13, C16), 1024 cells at MCS 7761 (t = 10.01).
+  TST stochastic: 98 of 100 runs end on their last 39-MCS save below 1000 cells (N = 960–996;
+  the build stops at N > 1000 between saves), so the time to 1000 cells is interpolated in
+  log₂ N between saves (9.58–10.89, mean 10.24 cycles); synchrony at t = k + 0.5, k = 0:3:
+  0.91, 0.62, 0.42, 0.17.
+- Both TST zips carry a `note.txt`: "155 MCS = 1 T", the mechanical T. Fig 3's axis "[T]" (Q2)
+  stays read as cycles (775 MCS): only then does the 0–10 axis span the runs to 1000 cells.
+- F8.3/F8.4 references: mean neighbour number of `neighbors_{compucell3d,morpheus}.csv` 5.842,
+  6.480; g at the first row with N ≥ 10⁴ of `measurements_*` 0.4987, 0.3498 (legacy).

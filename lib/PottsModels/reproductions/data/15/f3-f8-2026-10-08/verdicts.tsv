@@ -1,0 +1,27 @@
+target	case	paper	ours	band	result
+F3.1 max |L − L_TST| on t = 0.5:1:8.5 (log₂ N)	f	TST No_CI deterministic: L = 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0	0.0	≤ 0.3	PASS
+F3.2 t̄_s / t̄_s,TST (time to 1000 cells)	f	TST No_CI deterministic: t̄_s = 10.01 cycles	0.9954	[0.95, 1.05]	PASS
+F3.3 max |r̄/r̄_TST − 1| on t = 4.5:1:8.5 and at the end	f	TST No_CI deterministic: r̄ = 3.817, 5.705, 8.459, 12.38, 17.46; r̄_e = 0.9265	0.06905	≤ 0.1	PASS
+F3.4 max |Ā/Ā_TST − 1| on t = 4.5:1:8.5 and at the end	f	TST No_CI deterministic: Ā = 39.23, 96.43, 220.3, 479.3, 957.8; Ā_e = 2.702	0.1435	≤ 0.2	PASS
+F3.5 min over k = 0:3 of sync(k)	f	TST No_CI deterministic: sync = 1.0, 1.0, 1.0, 1.0	1.0	≥ 0.9	PASS
+F3.1 max |L − L_TST| on t = 0.5:1:8.5 (log₂ N)	b	TST No_CI stochastic: L = 0.09, 1.072, 2.05, 3.114, 4.111, 5.156, 6.182, 7.188, 8.162	0.1343	≤ 0.3	PASS
+F3.2 t̄_s / t̄_s,TST (time to 1000 cells)	b	TST No_CI stochastic: t̄_s = 10.24 cycles	1.012	[0.95, 1.05]	PASS
+F3.3 max |r̄/r̄_TST − 1| on t = 4.5:1:8.5 and at the end	b	TST No_CI stochastic: r̄ = 3.928, 5.911, 8.795, 12.92, 18.33; r̄_e = 1.057	0.04476	≤ 0.1	PASS
+F3.4 max |Ā/Ā_TST − 1| on t = 4.5:1:8.5 and at the end	b	TST No_CI stochastic: Ā = 42.18, 104.5, 243.1, 530.5, 1068.0; Ā_e = 3.522	0.09172	≤ 0.2	PASS
+V5.1 slope of L on t = 4.5:1:8.5	a	TST No_CI: slope 1.000 (det.), 1.013 (stoch.)	1.022	[0.9, 1.1]	PASS
+V5.2 max |L − t| on t = 0.5:1:8.5	a	TST No_CI: offset 0.5 (det.), 0.4497 (stoch.)	0.6009	≤ 1.0	PASS
+V5.1 slope of L on t = 4.5:1:8.5	e	TST No_CI: slope 1.000 (det.), 1.013 (stoch.)	1.009	[0.9, 1.1]	PASS
+V5.2 max |L − t| on t = 0.5:1:8.5	e	TST No_CI: offset 0.5 (det.), 0.4497 (stoch.)	0.4923	≤ 1.0	PASS
+F8.1 min g over every save	a	β = γ = 0: every cell grows	1.0	== 1	PASS
+F8.2 min C/(2√(πA)); min w (saves with N ≥ 3)	a	isoperimetric inequality	1.059; 0.06212	≥ 1 − 1e-9; ≥ 0	PASS
+F8.2 min C/(2√(πA)); min w (saves with N ≥ 3)	e	isoperimetric inequality	1.073; 0.01617	≥ 1 − 1e-9; ≥ 0	PASS
+F8.3 mean n, pooled final histogram	a	legacy CompuCell3D 5.842, Morpheus 6.48 (β = 0.8, D4)	5.97	[5.542, 6.78]	PASS
+F8.4 mean g at the 10⁴-cell stop	e	legacy CompuCell3D 0.4987, Morpheus 0.3498 (β = 0.8, D4)	0.2973	[0.2498, 0.5987]	PASS
+F3.1 max |L − L_TST| on t = 0.5:1:8.5 (log₂ N)	control	TST No_CI stochastic: L = 0.09, 1.072, 2.05, 3.114, 4.111, 5.156, 6.182, 7.188, 8.162	1.426	≤ 0.3 (control: must FAIL)	FAIL
+F3.2 t̄_s / t̄_s,TST (time to 1000 cells)	control	TST No_CI stochastic: t̄_s = 10.24 cycles	2.021	[0.95, 1.05] (control: must FAIL)	FAIL
+V5.1 slope of L on t = 4.5:1:8.5	control	TST No_CI: slope 1.000 (det.), 1.013 (stoch.)	0.6467	[0.9, 1.1] (control: must FAIL)	FAIL
+F3.5 min over k = 0:3 of sync(k)	b	TST No_CI stochastic: sync = 0.91, 0.62, 0.42, 0.17	0.19	≥ 0.9 (control: must FAIL)	FAIL
+Fig3 (all F3 rows)	f, b	pass	pass	every F3 row	PASS
+V5 (V5.1, V5.2)	a, e	pass	pass	every V5 row	PASS
+Fig8 (V5 and F8.1–F8.4)	a, e	pass	pass	every row	PASS
+Controls fail as pre-registered	control, b	fail	fail	F3.1, F3.2, V5.1 (control) and F3.5 (b) fail	PASS

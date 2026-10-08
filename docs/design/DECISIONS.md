@@ -3076,3 +3076,10 @@ session.
   - A synthetic record exercises the record tier (874 pass, 5 deviations broken). Removing `deviations.tsv` turns those into failures.
 - **Expected deviation risk (information).** Potts divides on actual area and TST on target area (C13/Q20, which also leads the F5 causes). So F3.2–F3.5 for case (f) may fail as D-154 deviations.
 - **FULL compute.** About 3.3 core-hours, roughly 25 min on 12 threads on the PC.
+- **Result (merge 2026-10-08).** The record is `data/15/f3-f8-2026-10-08/`: 240 runs, 9.2 core-hours. A first `:dynamic` launch was killed and none of its output kept. A post-freeze 12-run dry run is disclosed in the README.
+  - **Pass.** Every pre-registered row passes, and every control fails as required. There are no deviations.
+  - **Independent check.** The review recomputed all 22 verdicts in Python and confirmed the runner evaluates the frozen rules verbatim.
+  - **Margins.** The closest margin is F3.4 for (f) at 0.143 of 0.20: our deterministic colony is up to 14 % larger than TST's.
+  - **V1 warning (information, judged in P6.15g).** Uninhibited case (a) reaches 10⁴ cells at 15.17 cycles, against 13.57 ± 10 %, while case (e) matches TST at β = 0.8 (16.26 against 16.15). The gap opens between 10³ and 10⁴ cells, beyond the F3 and V5 windows. It is consistent with the F5 deviations and C13/Q20.
+  - **Discrimination.** F8.1–F8.3 cannot fail, and V5 does not separate β = 0.8 from β = 0. The rows that discriminate are F3.5, the end values of (b), F3.2 and F8.4.
+  - **Videos.** `reproductions-2026-10-08-openvt-f3f8`.
