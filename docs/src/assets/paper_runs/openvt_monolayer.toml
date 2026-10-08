@@ -1,29 +1,33 @@
-algorithm = "SequentialCPM{Nothing, Nothing}(nothing, nothing)"
+algorithm = "SequentialCPM{Nothing, Moore}(nothing, Moore(1, false))"
 backend = "CPU"
-caption = "Paper run — OpenVT growing monolayer, Artistoo set, no contact inhibition: one cell to N = 10137 cells (benchmark: until N = 10⁴) at 1405 MCS on 800×800 (constructor default 400×400 is too small for 10⁴ cells), seed 1."
+caption = "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 (β = γ = 0, no contact inhibition): one cell to N = 10007 cells at MCS 11446 (14.77 cell cycles of 775 MCS) on a closed 1400×1400 lattice, seed 15001, SequentialCPM(; proposal = Moore(1)), one frame every 39 MCS. Each cell has its own colour. Rendered on AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (praneeth-NucBox-EVO-X2), CPU backend, one thread, commit cda818379."
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
-date = "2026-10-07T10:33:57.455"
-deviations = "Lattice 800×800 (constructor default 400×400 cannot hold 10^4 cells; the benchmark fixes no lattice). Uninhibited case only (β = 0)."
-final_cells = 10137
-final_mcs = 1405
+date = "2026-10-08T16:41:49.177"
+deviations = "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15."
+final_cells = 10007
+final_cycles = 14.77
+final_mcs = 11446
 framerate = 24
-frames = 282
-git_commit = "169ac06f6"
+frames = 295
+git_commit = "cda818379"
 hostname = "praneeth-NucBox-EVO-X2"
-initial_state = "openvt_monolayer_state(; lattice = (800, 800)): one 5×5 cell at the centre"
+initial_state = "openvt_reference_state(; lattice = (1400, 1400)): one disc of area A*(0) at the centre"
 julia = "1.12.6"
-lattice = [800, 800]
+lattice = [1400, 1400]
 machine = "x86_64-linux-gnu"
-model = "OpenVTGrowingMonolayer"
-paper = "OpenVT reference models, monolayer growth (github.com/OpenVT/reference_models, monolayer/; spec email R. Vetter 2024-10-12): grow until N = 10^4 cells"
-record_wall_s = 65.5
-recorded_mcs = [0, 1405]
-save_every_mcs = 5
+model = "OpenVTReferenceMonolayer"
+paper = "OpenVT consortium, Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition (in preparation), §2.1 and Table S1; reproduction 15, case (b)"
+parameters = "Table S1 defaults: A*(0) = 50, λ = 2, T = 20, α = 50/775, J_cc = 20, J_cM = 10, μ_X = 2, σ_X = 0.4; β = γ = 0"
+record_wall_s = 191.8
+recorded_mcs = [0, 11446]
+retcode = "Terminated"
+save_every_mcs = 39
 script = "docs/paper_runs/openvt_monolayer.jl"
-seed = 1
-solve_wall_s = 25.6
-stop_rule = "video ends at the first save with N ≥ 10000"
+seed = 15001
+solve_wall_s = 1418.1
+stop_rule = "end of the first MCS with N ≥ 10000 (stop_at_cells), edge_guard(5; terminate = true)"
 threads = 1
-title = """OpenVT growing monolayer (Artistoo set, no contact inhibition) — 800×800, seed 1\none cell to N = 10137 cells at 1405 MCS; one frame every 5 MCS"""
-tspan = [0, 1500]
-video_mb = 2.98
+title = "OpenVT reference monolayer (Table S1), case (b)"
+tspan = [0, 11446]
+video_mb = 4.37
+video_reencode = "ffmpeg -c:v libx264 -crf 31 -preset slow -pix_fmt yuv420p (from the script's 6.1 MB CRF-28 output, to stay under 5 MB)"
