@@ -3036,3 +3036,43 @@ session.
   - **Accept changed.** This replaces ROADMAP's ±1 % control accept. The Metal ±3 % accept moves to P6.0bi.
 - **Open.** The cause of the per-checkout offset (P6.0bz) and library-side ROCm sync cost (P6.0bw).
 - **AUTONOMY.** §7.3.2 and §7.4 are rewritten to match.
+
+## D-173 Reproduction 15, P6.15f: F3 and F8 / V5 pre-registered (2026-10-08; coordinator, from the P6.15f test author; under D-146, D-147, D-154, D-157, D-168)
+
+- **Frozen test.** `test/reproductions/15_openvt_f3_f8.jl` (commit 8c9b2c9a, sha256 `da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d`).
+  - **Targets.**
+    - F3.1–F3.5 for cases (f) (σ_X = 0) and (b), against TST No_CI deterministic and stochastic. The F3 bands:
+      - F3.1: |log₂ N − TST| ≤ 0.3.
+      - F3.2: time to 1000 cells within ±5 %.
+      - F3.3: r within ±10 %.
+      - F3.4: A within ±20 %, both on t = 4.5:1:8.5 and at the end.
+      - F3.5: deterministic synchrony at k = 0..3 must be ≥ 0.9.
+    - V5.1 and V5.2 for cases (a) and (e) (β = 0.8). V5 was qualitative in the spec and is now numeric:
+      - V5.1: the slope of mean log₂ N over t = 4.5:1:8.5 cycles is in [0.9, 1.1].
+      - V5.2: max |mean log₂ N − t| over t = 0.5:1:8.5 is ≤ 1.0.
+    - F8.1–F8.4. F8.3 (mean neighbour number) and F8.4 (g at 10⁴ cells) use bands from the CompuCell3D and Morpheus files in G.
+  - **Negative controls.** The γ = 10⁻⁴ runs must fail F3.1, F3.2 and V5.1. Case (b) must fail F3.5's synchrony rule.
+  - **Seeds:**
+
+    | Case | Seeds |
+    |---|---|
+    | (f) | 15201–15300 |
+    | (b) | 15001–15100 |
+    | control | 15501–15520 |
+    | (a) | 15701–15710 |
+    | (e) | 15801–15810 |
+
+  - **Lattices.** 400² to 1000 cells, and 1400² to 10⁴ cells.
+  - **Cadence.** Saves every 39 MCS plus the stop, with `edge_guard(5; terminate = true)`.
+- **G audit (D-147).** The test's own rules were run on G at 54f375f, on the PC. The resulting constants are frozen with their provenance, and an opt-in G tier (`OPENVT_MONOLAYER_REPO`) recomputes them (20/20). Spec 15 v3.2 records the audit.
+  - TST deterministic is fully synchronous: N = 2^k from MCS 780·k, reaching 1024 cells at t = 10.01.
+  - TST stochastic ends below 1000 cells in 98 of 100 runs, so t_stop is interpolated in log₂ N.
+  - The TST `note.txt` gives T = 155 MCS. Fig 3 is still read in 775-MCS cycles (Q2 open).
+  - The draft Fig 8a curves are legacy β = 0.8 runs (D4). Read in their own cycles they pass V5, as information only.
+- **New public surface.** `PottsModels.openvt_frame(u; β, γ) -> (; x, y, i, n)` gives the O1 rows, where n is the number of distinct Moore(1) neighbour cells. It is checked against a brute-force oracle.
+- **Checked before freezing.**
+  - Red on e590f34e: the oracle and SMOKE O1 testsets error, and the record is missing.
+  - A scratch stub passes every tier except the record.
+  - A synthetic record exercises the record tier (874 pass, 5 deviations broken). Removing `deviations.tsv` turns those into failures.
+- **Expected deviation risk (information).** Potts divides on actual area and TST on target area (C13/Q20, which also leads the F5 causes). So F3.2–F3.5 for case (f) may fail as D-154 deviations.
+- **FULL compute.** About 3.3 core-hours, roughly 25 min on 12 threads on the PC.
