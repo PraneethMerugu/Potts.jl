@@ -19,12 +19,12 @@ This is the offline record required by D-146.
 | `extremes.tsv` | every cell outside the consortium's ranges (f > 0.56, a < 0.42 or a > 1.09): f, a, volume, A_star, distance and its number of 4-connected pieces |
 | `meta.toml`, `provenance.toml` | parameters, seeds, distance-bin edges, threads; commit, test and runner hashes, Manifest hash, machine, start/finish and wall time |
 | `run_f5.jl` | the runner |
-| `plot_f5.jl`, `fig5.png` | M Fig 5's four columns (PDF and CDF of f, PDF and CDF of a; raw counts, stacked by distance bin, `viridis_r` / `inferno_r`), one row for case (b) and one for the control; Potts only |
+| `plot_f5.jl`, `fig5.png` | M Fig 5's four columns (PDF and CDF of f, PDF and CDF of a; raw counts, stacked by distance bin, `viridis_r` / `inferno_r`), rows for the consortium's TST_5T (drawn only when `F5_G_HIST` points at `v4_on_g.jl`'s output; distances in px from the pooled centroid mean, as in M's notebook), case (b) and the control. The committed PNG has the TST row; the G-derived histograms are not committed |
 | `video_f5.jl` | renders case (b) run 1 and control run 1 every 39 MCS, cells coloured by area, no outlines; the videos are not committed |
 | `probe_causes.jl` | the cause probe for the failing rows (below) |
 | `v4_on_g.jl` | the frozen V4 rules applied to the consortium's TST_5T (and Morpheus_5T) files from a local G clone; information only. Its pooled histograms feed an optional consortium row of `fig5.png` (`F5_G_HIST`) and are not committed |
 
-The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec §3.1), one per run, in `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` and `…_gamma1e-4/`, are written by the runner to `F5_O2_DIR`. They are 9.4 MB (4.4 MB gzipped) and are not committed; they belong to the submission package (P6.15j). The consortium data (G) were not on disk, so no consortium row is drawn and no G file entered git.
+The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec §3.1), one per run, in `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` and `…_gamma1e-4/`, are written by the runner to `F5_O2_DIR`. They are 9.4 MB (4.4 MB gzipped) and are not committed; they belong to the submission package (P6.15j). No G file and no G-derived table entered git; the only G-derived item committed is the rendered TST row of `fig5.png`.
 
 ## Result
 
@@ -40,10 +40,27 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
 | V4.6 mean a | 0.85–0.86 | 0.849 | [0.82, 0.89] | PASS | 0.957 (fails) |
 | V4.7 mean f | ≈ 0.03 | 0.0388 | [0.02, 0.04] | PASS | 0.0484 |
 
-- **Audit of the bands.** The V4 bands were set from spec 15's V4 text only, not audited against the G files (TST_5T, Morpheus_5T); G was not on disk when the test was frozen. The causes below are therefore provisional until the frozen rules are run on TST_5T.
+- **Audit of the bands.** The V4 bands were set from spec 15's V4 text alone: G was not on disk when the test was frozen. `v4_on_g.jl` later applied the frozen rules to G's files (54f375f, scratch clone on the PC). This is information only, and no verdict changes.
+
+  | Statistic | TST_5T (G) | Morpheus_5T (G) | Potts.jl case (b) |
+  |---|---|---|---|
+  | V4 verdict under the frozen rules | PASS (7/7) | PASS (7/7) | FAIL (V4.2, V4.3, V4.5) |
+  | cells (100 files each) | 100,122 | 100,020 | 100,029 |
+  | V4.1 fraction with f = 0 | 0.894 | 0.895 | 0.888 |
+  | V4.2 nonzero-f peak (windows 1–11) | 0.295 (0.285–0.305) | 0.315 (0.295–0.315) | 0.425 (0.395–0.435) |
+  | mean / median nonzero f | 0.288 / 0.292 | 0.288 / 0.293 | 0.346 / 0.35–0.36 |
+  | V4.3 max f; cells with f > 0.56 | 0.553; 0 | 0.556; 0 | 0.847; 606 |
+  | V4.4 a peak | 0.865 | 0.875 | 0.865 |
+  | V4.5 a range; cells with a < 0.42 | 0.425–1.092; 0 | 0.435–1.074; 0 | 0.066–1.130; 30 |
+  | a at 0.01 / 0.1 / 1 / 5 % | 0.52 / 0.59 / 0.66 / 0.72 | 0.55 / 0.60 / 0.67 / 0.72 | 0.38 / 0.47 / 0.60 / 0.69 |
+  | V4.6 mean a | 0.850 | 0.856 | 0.849 |
+  | V4.7 mean f | 0.0306 | 0.0304 | 0.0388 |
+
+  - Both consortium sets pass every band, so the bands describe the consortium data.
+  - TST, the only other implementation of Table S1 with M's pair-count f, already gives the consortium's distribution on its own. So the mixed-definition explanation for V4.2–V4.3 is weakened.
 - **The bulk agrees.** The f = 0 fraction, the a peak and mean a match the consortium. Mean f passes but sits at the band's upper end (0.039 against ≈ 0.03).
   - V4.1 does not separate the control from case (b): the control's f = 0 fraction, 0.863, is also inside the band.
-- **Provisional: our rim cells appear to carry more free surface than the consortium's.**
+- **Our rim cells carry more free surface than TST's** (confirmed on TST_5T above: mean nonzero f 0.346 against 0.288).
   - **Consistency check.** The consortium's f0 ≈ 0.89 and mean f ≈ 0.03 imply a mean nonzero f of about 0.03 / 0.11 ≈ 0.27. Ours is 0.346, with the median in the bin 0.35–0.36.
   - In 0.05 bins, the nonzero-f histogram is flat-topped over 0.30–0.45 (1387, 1497 and 1579 cells).
   - **Window sweep for V4.2.** Running-mean windows of 1, 3, 5, 7, 9 and 11 bins put the peak at 0.425, 0.435, 0.425, 0.415, 0.395 and 0.395. All are outside the consortium's 0.25–0.35, so the failure does not depend on the frozen 5-bin window.
@@ -66,9 +83,9 @@ The O2 files (`x,y,r,f,a` per cell, lengths in R from the lattice centre; spec �
   - Both variants' nonzero-f histograms peak at 0.35–0.45, as in the record. So neither the division axis nor connectivity explains V4.2–V4.3.
   - Connectivity raises the minimum of a but does not reduce the number of cells below 0.42.
   - The remaining candidates are in `deviations.tsv`:
-    - the pooled V4 band mixes TST's pair-count f with Morpheus's length-scaled f, and the Morpheus runs may predate Table S1 (spec 15 §2.5, Q12);
-    - TST divides on target area (C13, Q20);
-    - Morpheus draws X with σ = 0.16 (C17, Q21).
+    - TST divides on target area (C13, Q20). Since TST_5T alone reproduces the band, this is now the leading candidate;
+    - how TST counts the Moore pairs for f (spec §2.4 records a loop that skips one offset when counting n_i);
+    - weakened by the G check: the pooled band mixes TST's pair-count f with Morpheus's length-scaled f, and the Morpheus runs may predate Table S1 (spec 15 §2.5, Q12); Morpheus draws X with σ = 0.16 (C17, Q21).
   - New questions Q23 (the f definition and data behind V4) and Q24 (crushed cells) are on our open question list in spec 15 §7.
 - **Pilot (12 + 6 + 6 runs, seeds 1001–1012 and 2101–2206, 450² lattice, before the freeze; script not kept).**
   - Case (b): f0 0.887, nonzero-f peak 0.325, max f 0.764, a peak 0.875, a range 0.227–1.116, mean a 0.849, mean f 0.039.
