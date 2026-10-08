@@ -175,8 +175,8 @@ and `MTK.discrete_events(sys)` and `MTK.continuous_events(sys)` are empty:
 
 `Potts.initialization_system(csys, :cell)` is a complete `System` whose
 `initialization_equations` are the model's `@initialization_equations`, with inputs such
-as `volume` as its parameters. When a problem is built, Potts solves MTK's
-`InitializationProblem` of that system for every cell. Here `rt = √volume`, so the two
+as `volume` as its parameters. When a problem is built, Potts builds MTK's
+`InitializationProblem` of that system and solves its residual for every cell. Here `rt = √volume`, so the two
 cells start with different values:
 
 ```@example mtk
@@ -210,7 +210,5 @@ Cross-entity and lattice initialization stay in Potts' own initialization phase 
 - **Update rules are not MTK events** [C6]. They are compiled and run by Potts, so a
   reader of `MTK.discrete_events` sees none.
 
-These are the current limits, not promises. Keeping update rules as ModelingToolkit
-callbacks (`SymbolicDiscreteCallback`) is planned for step P6.4c, and cross-entity
-initialization through MTK for P6.4a. When either lands, the acceptance test and this
-page change with it.
+Planned: update rules as ModelingToolkit callbacks (`SymbolicDiscreteCallback`), and
+cross-entity initialization through MTK. When either lands, this page changes with it.
