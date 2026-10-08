@@ -1,39 +1,38 @@
-row	check	ours	rule	result
-V-E1	network at 1440 MCS	10/10	>= 8/10	PASS
-V-E1	mean lacunae 5760 < 1440	6.7 vs 28.5	<	PASS
-V-E1	mean share at 5760	1.0	>= 0.9	PASS
-V-E1	control λ_L = 0 share at 1440	0.21161334973607032 vs standard 0.9868686231533605	<= standard - 0.2	PASS
-V-E5	L = 10.0 px at 5760: networks	0/10	islands >= 8/10	PASS
-V-E5	L = 20.0 px at 5760: networks	0/10	islands >= 8/10	PASS
-V-E5	L = 30.0 px at 5760: networks	8/10	network >= 8/10	PASS
-V-E5	L = 40.0 px at 5760: networks	10/10	network >= 8/10	PASS
-V-E5	L = 50.0 px at 5760: networks	10/10	network >= 8/10	PASS
-V-E6	J_cc = 20.0 at 5760: networks	10/10	>= 8/10	PASS
-V-E6	J_cc = 5.0 at 5760: networks	10/10	>= 8/10	PASS
-V-E6	J_cc = 1.0 at 5760: networks	9/10	>= 8/10	PASS
-V-E6	J_cc = 1 mean lacunae vs V-E1 at 5760	4.7 vs 6.7	<=	PASS
-V-E10	mean anisotropy, elongated	14.5751	> 1.2	PASS
-V-E10	mean anisotropy, round	0.9688	< 1.2 and < elongated	PASS
-V-C2	mean C ratio 0 (CI) vs ratio 1 (no CI) at 10^4	0.35499372070390056 vs 0.9189618310920673	< no CI - 0.3	PASS
-V-C3	low plateau (ratio 0-0.4)	0.3774	0.35 ± 0.07	PASS
-V-C3	high plateau (ratio 0.7-1)	0.9123	0.9 ± 0.07	PASS
-V-C3	plateaus jointly (frozen @test)	0.37742143412299534, 0.9122550776552705	both	PASS
-V-C3	midpoint	0.533	in [0.45, 0.65]	PASS
-V-C4	CI: C at J_cc 20, 40, 80	0.28989650000701717, 0.37818417201633237, 0.8536257535964301	0.3, 0.3, 0.85 ± 0.1	PASS
-V-C4	no CI: C at J_cc 0, 15, 20, 40	0.3153576960793897, 0.9211208582422172, 0.9191711280482151, 0.9174131717831425	0.35, 0.83, 0.83, 0.83 ± 0.1	PASS
-V-C4	rise lowest to highest J_cc (CI, no CI)	0.5396248907193099, 0.6020554757037528	> 0.3 both	PASS
-V-C5	χcM = 0.0, CI = true	0.9108	0.9 ± 0.1	PASS
-V-C5	χcM = 500.0, CI = true	0.3987	0.35 ± 0.1	PASS
-V-C5	χcM = 5000.0, CI = true	0.1755	0.2 ± 0.1	PASS
-V-C5	χcM = 0.0, CI = false	0.914	0.95 ± 0.1	PASS
-V-C5	χcM = 5000.0, CI = false	0.6825	0.7 ± 0.1	PASS
-V-C7	CI midpoint in s	0.1074	in [0.07, 0.15]	PASS
-V-C7	no CI, s = 0.0	0.9166	0.95 ± 0.1	PASS
-V-C7	no CI, s = 0.1	0.9588	0.95 ± 0.1	PASS
-V-C7	no CI, s = 0.25	0.9682	0.95 ± 0.1	PASS
-V-C9	ext-only C(T = 50)	0.9583	> 0.85	PASS
-V-C9	ext-retr C(T = 50)	0.3814	< 0.5	PASS
-V-C9	both C(T = 800)	0.18038753206092506, 0.17507043884375834	< 0.3 both	PASS
-V-C12	displacement ratio CI / no CI (100 -> 19300)	1.2605	in [1.5, 2.5]	FAIL
-V-C1	CI networks at 10^4	5/5	>= 4/5	PASS
-V-C1	no CI share < 0.5 at 10^4	5/5	>= 4/5	PASS
+row	check	ours	rule	result	paper
+V-E1	network at 1440 MCS (12 h)	10/10	>= 8/10	PASS	network at 12 h (01a Fig. 4)
+V-E1	mean lacunae at 5760 vs 1440 MCS	6.7 vs 28.5	5760 < 1440	PASS	coarsens, 12 → 48 h (01a Figs. 4, 5)
+V-E1	mean share at 5760 MCS (48 h)	1.0	>= 0.9	PASS	still one network at 48 h (01a Fig. 4)
+V-E1	control λ_L = 0: mean share at 1440 MCS vs standard	0.212 vs 0.987	<= standard - 0.2	PASS	round cells form islands (01a p.50)
+V-E5	L = 10 px (20 µm): networks at 5760 MCS	0/10	islands in >= 8/10	PASS	islands (01a Fig. 6)
+V-E5	L = 20 px (40 µm): networks at 5760 MCS	0/10	islands in >= 8/10	PASS	islands (01a Fig. 6)
+V-E5	L = 30 px (60 µm): networks at 5760 MCS	8/10	networks in >= 8/10	PASS	network (01a Fig. 6)
+V-E5	L = 40 px (80 µm): networks at 5760 MCS	10/10	networks in >= 8/10	PASS	network (01a Fig. 6)
+V-E5	L = 50 px (100 µm): networks at 5760 MCS	10/10	networks in >= 8/10	PASS	network (01a Fig. 6)
+V-E6	J_cc = 20: networks at 5760 MCS	10/10	>= 8/10	PASS	network (01a Fig. 7)
+V-E6	J_cc = 5: networks at 5760 MCS	10/10	>= 8/10	PASS	network (01a Fig. 7)
+V-E6	J_cc = 1: networks at 5760 MCS	9/10	>= 8/10	PASS	network (01a Fig. 7)
+V-E6	J_cc = 1: mean lacunae vs V-E1 standard at 5760 MCS	4.7 vs 6.7	<=	PASS	not more lacunae (01a Fig. 7)
+V-E10	elongated: mean anisotropy	14.575	> 1.2	PASS	faster along the long axis (01a Fig. 11)
+V-E10	round control: mean anisotropy	0.969	< 1.2 and < elongated	PASS	isotropic
+V-C2	mean C at ratio 0 (CI) vs ratio 1 (no CI), 10⁴ MCS	0.355 vs 0.919	CI < no CI - 0.3	PASS	sprouts vs compact (01b Fig. 4)
+V-C3	low plateau (ratio 0–0.4)	0.377	0.35 ± 0.07	PASS	0.35 (01b Fig. 5)
+V-C3	high plateau (ratio 0.7–1)	0.912	0.9 ± 0.07	PASS	0.9 (01b Fig. 5)
+V-C3	midpoint	0.533	in [0.45, 0.65]	PASS	≈ 0.5 (01b p.6)
+V-C4	CI: mean C at J_cc = 20, 40, 80	0.29, 0.378, 0.854	0.3, 0.3, 0.85 ± 0.1	PASS	0.3, 0.3, 0.85 (01b Fig. 7)
+V-C4	no CI: mean C at J_cc = 0, 15, 20, 40	0.315, 0.921, 0.919, 0.917	0.35, 0.83, 0.83, 0.83 ± 0.1	PASS	0.35, 0.83, 0.83, 0.83 (01b Fig. 7)
+V-C4	rise from the lowest to the highest J_cc (CI; no CI)	0.54; 0.602	> 0.3 both	PASS	both rise (01b Fig. 7)
+V-C5	χcM = 0, CI: mean C	0.911	0.9 ± 0.1	PASS	0.9 (01b Fig. 8)
+V-C5	χcM = 500, CI: mean C	0.399	0.35 ± 0.1	PASS	0.35 (01b Fig. 8)
+V-C5	χcM = 5000, CI: mean C	0.176	0.2 ± 0.1	PASS	0.2 (01b Fig. 8)
+V-C5	χcM = 0, no CI: mean C	0.914	0.95 ± 0.1	PASS	0.95 (01b Fig. 8)
+V-C5	χcM = 5000, no CI: mean C	0.682	0.7 ± 0.1	PASS	0.7 (01b Fig. 8)
+V-C7	CI: transition midpoint in s	0.107	in [0.07, 0.15]	PASS	≈ 0.08–0.13 (01b Fig. 9)
+V-C7	no CI, s = 0.0: mean C	0.917	0.95 ± 0.1	PASS	0.93–0.97 (01b Fig. 9)
+V-C7	no CI, s = 0.1: mean C	0.959	0.95 ± 0.1	PASS	0.93–0.97 (01b Fig. 9)
+V-C7	no CI, s = 0.25: mean C	0.968	0.95 ± 0.1	PASS	0.93–0.97 (01b Fig. 9)
+V-C9	extension-only, T = 50: mean C	0.958	> 0.85	PASS	≈ 1 (01b Fig. 11)
+V-C9	extension-retraction, T = 50: mean C	0.381	< 0.5	PASS	sprouts (01b Fig. 11)
+V-C9	both modes, T = 800: mean C (ext-only; ext-retr)	0.18; 0.175	< 0.3 both	PASS	break-up (01b Fig. 11)
+V-C12	displacement ratio CI / no CI (MCS 100 to 19 300)	1.26	in [1.5, 2.5]	FAIL	85 / 42 µm ≈ 2.0 (01b Fig. 6E)
+V-C1	CI: networks at 10⁴ MCS	5/5	>= 4/5	PASS	network (01b Fig. 2D)
+V-C1	no CI: share < 0.5 at 10⁴ MCS	5/5	>= 4/5	PASS	islands (01b Fig. 2C)
