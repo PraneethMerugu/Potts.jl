@@ -2929,3 +2929,48 @@ session.
   - **Reads of other edge variables in the same block.** These are allowed only as `Pre(y)`, and only when `y` is written at the same cadence. A bare read (the new value) or a cross-cadence `Pre(y)` is an `ArgumentError`, because edge variables are not in the snapshot machinery. This narrows "reads its own relationship's edge variables" for those two cases. An edge variable not written in the block reads its stored value.
   - **Links with a dead end.** A link with a dead end (volume 0, e.g. squeezed out by copies; lifecycle removals already drop links) is left untouched at both ends, as `link_delta` does (D-066), rather than given a NaN distance.
 - **ROADMAP.** P6.0bv grows from Small to Small–Medium.
+
+## D-170 P6.0bo: entity-local initialization through MTK's `InitializationProblem`; `@initialization_equations`; `Potts.initialization_system(csys, scope)` (2026-10-07; coordinator, from the P6.0bo test author; implements D-159 / mtk-native-plan §4 route A1, §6; supersedes D-165's operating-point refusal; amends D-075 §3.2 for entity-local equations)
+
+- **Why.** D-159 adopted plan §5, under which a model's initialization parts are ModelingToolkit systems. Potts has no initialization equations today. Initial values are numbers or parameter expressions, and D-165 refuses operating-point values for algebraic variables ("belong to P6.0bo").
+- **What exists (measured on 2bcc4b75, MTKB 1.77.0, Mac).**
+  - MTKB's `InitializationProblem` works on a fixed-size per-cell template, with inputs as parameters. It handles explicit, implicit and nonlinear equations, guesses, `D(x) ~ 0`, and op values for observed variables.
+  - MTKB has no default nonlinear solver, so Potts passes one; SimpleNonlinearSolve is already in the Manifest.
+  - Parameters solved by initialization fail at `solve`, so the template uses unknowns with `D(v) ~ 0`.
+  - Underdetermined least squares differs between MTKB alone and full MTK (x = 0.99 vs −0.0), so Potts is strict (`fully_determined = true`).
+  - Warm cost is 2–3.5 µs per cell, at construction only.
+- **API (public, not exported).** `Potts.initialization_system(csys::CompiledPottsSystem, scope)`, with scope `:cell` or `:model`.
+  - It returns a complete `ModelingToolkitBase.System` whose `initialization_equations` are that scope's `@initialization_equations`, or `nothing` when the scope has none.
+  - Its unknowns include the scope's variables the equations name, under their declared names, with no value when initialization solves for them. Declared parameters keep their names; declared guesses are the template's guesses. Other quantities are inputs, and their names are not pinned.
+  - A template without inputs is solved by MTK's own `InitializationProblem`.
+  - Any other scope, or an uncompiled `PottsSystem`, is an `ArgumentError`; the latter names `mtkcompile`.
+  - It is separate from `ode_system` (D-165), which stays `nothing` for models without ODEs.
+- **DSL semantics.**
+  - **Form.** `@initialization_equations` holds equations `lhs ~ rhs`: explicit or implicit, linear or nonlinear.
+  - **What they read.** A cell's own variables (bare), its built-ins, parameters, model variables, and `D(x)` of ODE variables (steady start).
+  - **Guesses.** `r(cell), [guess = g]`.
+  - **Scopes.** An equation that reads no cell quantity is model scope. Model scope is initialized before the cells, and cell templates read model values as inputs.
+  - **Fixed and free variables.**
+    - A written value (`= 0.0` included) or an op value is fixed.
+    - A variable written with no value is solved for when its scope's equations name it; otherwise it starts at 0.0, as before. The macro records "no value written".
+    - An op value `y => v` for an algebraic variable is the condition `y ~ v`, which supersedes D-165's refusal. Declared defaults of algebraic variables keep D-165's rule.
+  - **Rejected (`ArgumentError`).**
+    - Overdetermined: "overdetermined" and the variable.
+    - Underdetermined: "underdetermined" and a free variable.
+    - No solution: "initialization" and the variable.
+    - Cross-entity reads (another cell, gathers, folds, site, field or edge variables): "initialization" and the name. They wait for P6.4a (R17), which re-freezes this.
+- **Running.**
+  - **When.** Once per `PottsProblem` construction and on `remake(prob; u0 = map)`, per cell on the host, before the first MCS. A saved state passed as `u0` keeps its values. Daughter cells are not initialized.
+  - **Kernels.** Kernels, warm MCS cost and allocations are unchanged.
+  - **Not pinned.** How the template is built; which solver runs; whether `remake(p = …)` re-initializes; `x => nothing`; `rand()`; one template per kind; which stage raises each rejection.
+- **Unchanged.** Code and fingerprints of models without the section, which includes every published model (D-137, p6_0o pins). The F7 rejection of a component's `initialization_eqs` (p6_0k2).
+- **Cost and merge condition.**
+  - **Without a workload.** The first `InitializationProblem` after `using Potts` takes about 8.9 s, because Potts invalidates MTKB's compiled code.
+  - **With a workload.** A `@compile_workload` building small initialization problems brings it to 0.07–0.14 s, with `using Potts` unchanged at about 4.8 s. **The workload addition is a merge condition**, as in D-165, so this is not a D-156 slowdown. The first nonlinear solve (0.3–0.6 s) should also be absorbed.
+  - Models without the section pay nothing.
+- **Gates.** The +5 % warm-MCS gate, zero warm allocations, and the paired latency check (`benchmark/p6_0o_latency.jl`).
+- **Paper wording.** True once this merges: "Entity-local initialization equations are ModelingToolkit initialization systems, solved per cell by MTK's `InitializationProblem`."
+- **Frozen acceptance.** `acceptance/p6_0bo_initialization.jl` (commit 68dd26a2, sha256 `bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca`).
+  - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
+  - The N controls pass.
+- **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
