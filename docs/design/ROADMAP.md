@@ -341,7 +341,7 @@ Every item's acceptance also includes the standing checks:
   - K2: S-a, one replica per work-item, for tiny lattices.
   - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
   - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
-- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory.
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.)
   - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
   - Report the pinned speedup on the PC, naming machine and backend.
 - [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
@@ -365,7 +365,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge 2026-10-07, D-164) **P6.0bp** (D-159, re-scoped by D-162) A public `Potts.updates(sys)` returning every update statement as written: phase (`:before_mcs`/`:after_mcs`/`:on_copy`), scope (`:cell`/`:site`/`:model`/`:edge`), cadence (`Every(n)`) and its `Equation` in MTK `Pre` form. It works on the plain, `complete`, `extend` and `mtkcompile` forms (the compiled form reads the authored model, as in D-160). Small.
   - Events as MTK callbacks move to P6.4c (D-162).
 - [x] **P6.0bn** (D-159; plan §6) The model's own cell and model ODEs go through `mtkcompile` before Potts lowers them. Medium; about +0.2 s cold, to be absorbed by the precompile workload.
-- [ ] **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; ≈ +9 s cold before a precompile workload, ≈ 0.1 s after (D-170: the workload is a merge condition).
+- [x] (merge 2026-10-08, D-170) **P6.0bo** (D-159; plan §6) Initialization equations that touch one cell go through MTK's `InitializationProblem`. Medium; ≈ +9 s cold before a precompile workload, ≈ 0.1 s after (D-170: the workload is a merge condition).
   - All four items (bm, bp, bn, bo) pass the standard +5% performance gate and the paired latency check. Stop and ask on major MTK friction or a major slowdown (D-156).
 - [x] (drafts done 2026-10-07, `research/upstream-drafts/`; filing is the maintainer's) **P6.0br** (D-159) Upstream drafts, written locally for the maintainer to file:
   - the O(n²) dense mass-matrix bug;
@@ -383,7 +383,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge 2026-10-07, D-167) **P6.0bx** (from the P6.0bb review) The frozen `p6_0s_v7_tooling.jl` L2 check fails on Linux. It asserts that no `/tmp/` path appears in the sandboxed `exclusive.sh`, but `mktempdir` lives under `/tmp`; base 9efdf924 fails the same way.
   - CI never runs `benchmark/test`, which is why CI is green.
   - Fix through a test-author re-freeze, and add a CI step that runs `benchmark/test` with `TMPDIR=$RUNNER_TEMP`.
-- [ ] **P6.0bs** (D-159; after bm–bo) A frozen test that checks every MTK claim the paper makes, plus the paper and docs wording (plan §5).
+- [x] **P6.0bs** (D-159; after bm–bo) A frozen test that checks every MTK claim the paper makes, plus the paper and docs wording (plan §5).
 - [ ] **P6.0z** API surface audit and correction. This is the last item of step 0: it starts only when every other P6.0 row is merged, so it audits the API those rows leave behind (D-075 breaking batch, P6.0o `AbstractSystem`, P6.0k2/P6.0c2/P6.0m3/P6.0n fixes). Include from `research/initial-state-review.md`: `Any()` cannot be a Potts name (shadows `Base.Any`: layout `into`, D-075 Q5 `clamp = Any()`), and `Box` in `@create … at = Box(lo, hi)` clashes with Makie's `Box`. Also folds in the fingerprint corner cases (D-134): P6.0az; fix if cheap, else document as best-effort. Also (D-136, maintainer): consolidate the fingerprint tests into one frozen suite `lib/PottsModels/test/acceptance/fingerprint.jl` — the fingerprint testsets of p6_0p, p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0ah, p6_0c2 and the pin blocks of p6_0t, p6_0x, p6_0au, p6_0aw, p6_0av, p6_0u, p6_0ag, p6_0ax, p6_0g; every distinctness, checkpoint-refusal and cross-session check kept; each published model and fixture pinned exactly once; touched files re-frozen under D-136. Also (P6.0ax review, D-134): gather bound-variable names, population variables and `rand()` addresses share one build counter (`_next_number!`, src/vocabulary.jl), so an `@observed` fold written before other statements shifts later names and `rand()` addresses — the fingerprint changes and, under a fixed seed, the trajectory changes (adding a diagnostic changes results). Give `rand()` addresses and bound names per-statement or canonical numbering at `mtkcompile`; re-pin under D-136. Priority before reproductions that add observables to seeded runs. Also (P6.0o review): a component's algebraic observed queried as `dc₊z` gets "namespaced by another system" — say it is substituted and suggest `@observed`; `s.λ` on a `CompiledPottsSystem` is a FieldError; `Potts.parameters` vs `ModelingToolkitBase.parameters` differ for component models.
   - **Scope.** Every exported and `public` name of Potts, CorePotts, MakiePotts and PottsModels: types, functions, macros, DSL vocabulary, keyword arguments and their defaults, and error messages a user sees.
   - **Audit.** An adversarial review writes `research/api-surface-audit.md`, one table row per name: what it is, who uses it, and the finding. It checks:
@@ -578,9 +578,9 @@ Full runs are offline (D-146).
   - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
 - [x] (merge 2026-10-07, D-168; V4 fails V4.2, V4.3, V4.5 as D-154 deviations; consortium TST_5T and Morpheus_5T pass 7/7 under the frozen rules) **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
 - [x] (merge 2026-10-08, D-173; all rows pass, controls fail; V1 warning for P6.15g) **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
-- [ ] **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
-- [ ] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
-- [ ] **P6.15i** Docs page "OpenVT monolayer benchmark":
+- [ ] (D-174: test frozen; FULL run unparked 2026-10-08, BoundarySiteCPM 2.83× on case (a)) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [x] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
+- [x] **P6.15i** Docs page "OpenVT monolayer benchmark":
   - every figure in M's layout;
   - a differences table, which is spec 15 §1.1 plus the deviations;
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
@@ -595,6 +595,7 @@ Full runs are offline (D-146).
     and the §2.6 energy ban.
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
+- [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
 - [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).

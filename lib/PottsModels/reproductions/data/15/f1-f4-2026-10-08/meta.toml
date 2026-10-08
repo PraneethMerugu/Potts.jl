@@ -1,0 +1,26 @@
+decisions = ["D-146", "D-156", "D-172", "D-173", "D-175"]
+run_wall_s = 476.9
+record_mcs = 11600
+window_offset = [976, 974]
+sigma_X = 0.4
+lattice = 1400
+N = 10001
+threads = 1
+mcs = 11600
+record_N = 10001
+window_medium_sites = 1792
+case = "a"
+algorithm = "SequentialCPM(; proposal = Moore(1))"
+cycles = 14.96774193548387
+beta = 0.0
+figure = "OpenVT M Fig 1, Potts.jl panel and banner (PottsModels.openvt_f1_figure, window = 64)"
+matches_record = true
+stop_cells = 10000
+run = 1
+problem = "p615f_problem(1400, 10000) of the frozen F3/F8 test (capacity 13100)"
+item = "P6.15h"
+gamma = 0.0
+window = 64
+seed = 15701
+window_cells = 41
+retcode = "Terminated"

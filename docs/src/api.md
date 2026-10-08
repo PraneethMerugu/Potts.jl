@@ -15,6 +15,9 @@ solver specifications, and measurements of a state: `total_energy` and the publi
 exported, `Potts.boundary_lengths` and `Potts.anneal` (see [Boundary lengths and annealed
 states](@ref manual-analysis)).
 
+[Relation to ModelingToolkit](@ref modelingtoolkit) explains, with examples, how each
+part of a model relates to ModelingToolkit; this section lists the functions it uses.
+
 The sweep's definition is visible to ModelingToolkit's generic tools.
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
 expressions, `Potts.drives(sys)` gives the `@drive` expressions, and MTK's
@@ -47,6 +50,10 @@ Potts compiles and runs these rules in its sweep; they are not ModelingToolkit e
 A model's cell and model ODEs are ModelingToolkit systems compiled by `mtkcompile`.
 `Potts.ode_system(csys, :cell)` and `Potts.ode_system(csys, :model)` return them from a
 compiled model `csys` (see [Equations and solvers](@ref manual-equations)).
+Its entity-local initialization is too: `Potts.initialization_system(csys, :cell)` and
+`Potts.initialization_system(csys, :model)` are the systems whose `initialization_equations`
+are the model's `@initialization_equations`, solved through MTK's `InitializationProblem`
+when a problem is built (see [Variables](@ref manual-variables)).
 
 ```@autodocs
 Modules = [Potts]

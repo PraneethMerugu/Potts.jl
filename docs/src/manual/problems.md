@@ -28,6 +28,7 @@ The operating point is a vector of pairs:
 | Algorithm | Where | Updates |
 |---|---|---|
 | `SequentialCPM(; proposal)` | CPU | one copy attempt at a time: the classic model |
+| `BoundarySiteCPM(; proposal)` | CPU | `SequentialCPM`'s dynamics, drawing only sites at a cell boundary and skipping the others' null attempts exactly: equal in distribution, faster on mostly-medium lattices |
 | `CheckerboardCPM(; proposal)` | CPU and GPU | all sites of one colour of a checkerboard at once |
 
 `proposal` overrides the model's proposal neighbourhood for this solve.

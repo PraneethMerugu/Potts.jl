@@ -52,6 +52,8 @@ MTK's accessors:
   parameters namespaced. (`Potts.parameters(sys)` and `Potts.variables(sys)` are the model's
   own declarations.)
 - `observed(sys)`: one `name ~ expr` per `@observed` quantity.
+- `initialization_equations(sys)`: the `@initialization_equations` as written (see
+  [`Potts.initialization_system`](@ref)).
 - `nameof(sys)`: the model name.
 - `getmetadata(sys, key, default)`, `setmetadata(sys, key, value)`, `hasmetadata(sys, key)`:
   MTK's typed metadata. It survives `complete` and `extend`, and `mtkcompile`: read it from
@@ -94,6 +96,9 @@ Base.@kwdef struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     constraints::Vector{Constraint} = Constraint[]
     updates::Vector{Update} = Update[]
     equations::Vector{Equation} = Equation[]
+    # `@initialization_equations` as written (MTK's field name, so `initialization_equations(sys)`
+    # lists them, D-170); compiled into per-scope initialization systems (initialization.jl)
+    initialization_eqs::Vector{Equation} = Equation[]
     divisions::Vector{DivideRule} = DivideRule[]
     relationships::Vector{RelationshipSpec} = RelationshipSpec[]
     link_rules::Vector{LinkRule} = LinkRule[]
@@ -409,6 +414,9 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     end
     for e in getfield(sys, :equations)
         println(io, "  equation ", e)
+    end
+    for e in getfield(sys, :initialization_eqs)
+        println(io, "  initialization ", e)
     end
     for b in getfield(sys, :discrete)
         println(io, "  tick    ", b.name, b.scope === :model ? " (model)" : "", b.every == 1 ? "" : " every $(b.every) MCS",

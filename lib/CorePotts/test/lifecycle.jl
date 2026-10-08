@@ -359,3 +359,23 @@ CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
         @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
     end
 end
+
+# P6.4b1 review: BoundarySiteCPM's skip constant log(1 - n/N) is keyed on both n = |B| and
+# the mobile count N. Removing a frozen cell embedded in medium frees its sites (N grows by
+# 36) and leaves |B| unchanged; the constant must follow N.
+@testset "BoundarySiteCPM: the skip constant follows a mask change that keeps |B| (P6.4b1)" begin
+    integ = init(fk_problem(), BoundarySiteCPM(); save_start = false)
+    step!(integ)
+    B = integ.cache
+    n0, N0 = length(CorePotts._boundary_sites(integ)), integ.nmobile
+    CorePotts._skip_lq!(B, n0, N0)                           # cached for (n0, N0)
+    integ.state.σ[integ.state.σ .== 2] .= 0                  # the frozen cell 2 is removed
+    u_modified!(integ, true)
+    @test integ.nmobile == N0 + 36
+    n = length(CorePotts._boundary_sites(integ))
+    @test n == n0                                            # |B| unchanged
+    @test CorePotts._skip_lq!(B, n, integ.nmobile) == log1p(-n / integ.nmobile)
+    @test CorePotts._skip_lq!(B, n, integ.nmobile) != log1p(-n / N0)   # not the stale constant
+    step!(integ)
+    @test integ.stats.attempts == N0 + integ.nmobile
+end

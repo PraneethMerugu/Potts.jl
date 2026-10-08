@@ -200,7 +200,8 @@ function main(args; baseline = BASELINE)
     "--no-wait" in args || BenchMachine.wait_idle(; gpu = DEVICE == "rocm")
     tc = BenchMachine.seed_type_cache!()
     algs = Pair{String, Any}["sequential" => (SequentialCPM(), nothing, Float64),
-        "checkerboard" => (CheckerboardCPM(), nothing, Float64)]
+        "checkerboard" => (CheckerboardCPM(), nothing, Float64),
+        "boundary" => (BoundarySiteCPM(), nothing, Float64)]          # D-177
     "--no-cpu" in args && empty!(algs)
     isempty(DEVICE) || push!(algs, DEVICE => (CheckerboardCPM(), device_backend(), Float32))
     table = isfile(baseline) ? TOML.parsefile(baseline) : Dict{String, Any}()

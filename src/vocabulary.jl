@@ -63,14 +63,27 @@ kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """
-`variable(x, scope; default, options...)`: tag an `x(t)` variable with its scope. A scope
+`variable(x, scope; default, guess, options...)`: tag an `x(t)` variable with its scope. Without
+`default` the variable starts at 0.0 and is free for `@initialization_equations` (D-170);
+`guess` (MTK's guess metadata) seeds its initialization solve. A scope
 outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@relationship
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 """
 const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship)
 
-function variable(x, scope::Symbol; default = 0.0, unit = nothing, kwargs...)
+# `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
+# before, and is marked `PottsNoValue`, so that initialization solves for it when its
+# scope's initialization conditions name it. A written value (`= 0.0` included) fixes it.
+struct _NoValue end
+const _NO_VALUE = _NoValue()
+"""Metadata key marking a variable declared without a value (D-170); see `_written`."""
+struct PottsNoValue end
+_written(x) = (u = Symbolics.unwrap(x); !(u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.getmetadata(u, PottsNoValue, false)))
+
+function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, kwargs...)
+    written = !(default isa _NoValue)
+    written || (default = 0.0)
     options = NamedTuple(kwargs)
     if !(scope in SCOPES)
         haskey(options, :relationship) && throw(ArgumentError("`relationship` is given twice"))
@@ -83,12 +96,17 @@ function variable(x, scope::Symbol; default = 0.0, unit = nothing, kwargs...)
         throw(ArgumentError("variable `$name`: `relationship` applies to edge variables"))
     for (k, v) in pairs(options)
         k in _VARIABLE_OPTIONS || throw(ArgumentError("variable `$name`: unknown option `$k` " *
-                                                      "(options: `unit`, `clear_on_ownership_change`)"))
+                                                      "(options: `unit`, `guess`, `clear_on_ownership_change`)"))
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
     end
-    return _with_unit(_tag(x, Info(scope, name, default, options)), unit)
+    v = _with_unit(_tag(x, Info(scope, name, default, options)), unit)
+    written || (v = _with_metadata(v, PottsNoValue, true))
+    # `[guess = g]` (MTK's variable metadata): seeds the variable's initialization solve
+    guess === nothing || (v = ModelingToolkitBase.setguess(v, guess))
+    return v
 end
+_with_metadata(x, key, value) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), key, value))
 
 # ---------------------------------------------------------------------------------------
 # Vector quantities: `p(cell)[1:2]`, `d[1:3] = …` declare scalar components `p_1, p_2, …`
@@ -123,12 +141,13 @@ function _check_components(name, v, n)
     return v
 end
 
-function vector_variable(name::Symbol, r, scope::Symbol; default = 0.0, unit = nothing, options...)
+function vector_variable(name::Symbol, r, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, options...)
     n = _vector_length(r)
     _check_components(name, default, n)
+    _check_components(name, guess, n)
     return QuantityVector(name, [variable(only(Symbolics.@variables $(_component_name(name, i))(t)), scope;
                                      default = _component(default, i), unit = _component(unit, i),
-                                     vector = name, index = i, options...) for i in 1:n])
+                                     guess = _component(guess, i), vector = name, index = i, options...) for i in 1:n])
 end
 """`vector_parameter(name, 1:n, default; unit)`: components `name_i` of a vector parameter."""
 function vector_parameter(name::Symbol, r, default; unit = nothing)

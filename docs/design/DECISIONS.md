@@ -2987,6 +2987,22 @@ session.
 - **Frozen acceptance.** `acceptance/p6_0bo_initialization.jl` (commit 68dd26a2, sha256 `bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca`).
   - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
   - The N controls pass.
+- **Implementation notes (coordinator, after four review rounds; merge 2026-10-08).**
+  - **Results are checked, never trusted.** Every result, in all three MTK problem shapes (explicit/observed, nonlinear, linear/SCC), is checked against its conditions.
+    - **Residual.** The residual must be ≤ 1e-9 × the size of its terms, or the Newton correction must be ≤ 1e-9·max(|x|, floor) when terms vanish.
+    - **Singular systems.** A scaled finite-difference Jacobian, whose step grows at most once to 1e-4·scale, refuses singular, dependent or flat systems ("does not determine `x` uniquely").
+    - **No answer without a solution.** Systems with no solution, rank-deficient systems and least-squares answers are refused, so MTKB alone and full MTK decide alike.
+  - **Solver.** Newton (SimpleNonlinearSolve) uses a relative tolerance of 1e-13 with restarts. Solver exceptions become ArgumentErrors naming initialization and the variables.
+  - **Guesses.** Guesses may be symbolic and are evaluated with the parameter values.
+  - **Kind tables.** Kind tables at the cell's own kind (`g[kind]`) are readable.
+  - **Limits (documented).**
+    - A root of multiplicity m is solved to about eps^(1/m). Multiple roots at exactly 0 are refused.
+    - A kink closer than 1e-4·scale to the result is not seen.
+    - Cancellation beyond Float64 (`v + 1e15 ~ 1e15 + volume`) is refused.
+    - A 0.0 default guess fails for symmetric equations.
+    - `remake(p = …)` neither re-initializes nor re-evaluates written defaults.
+  - **Built-ins read.** Initialization reads only `volume`, `id` and `kind`.
+  - **Cold cost** of the first problem, over the same model without the section: explicit equations +0.05 s; one nonlinear equation or a linear system +0.10–0.15 s; mixed coupled nonlinear with steady ODE starts +0.25–0.45 s (Mac). The remainder is SymbolicUtils' per-task cache, which no workload can cover. MTK's own `InitializationProblem` on the template takes about 0.6–1.2 s cold. `using Potts` costs +2 %.
 - **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
 
 ## D-172 P6.0by: per-cell colours separate neighbouring ids (2026-10-07; coordinator, from the P6.0by test author and the P6.15e review; AUDIT A-80, A-87)
@@ -3083,3 +3099,191 @@ session.
   - **V1 warning (information, judged in P6.15g).** Uninhibited case (a) reaches 10⁴ cells at 15.17 cycles, against 13.57 ± 10 %, while case (e) matches TST at β = 0.8 (16.26 against 16.15). The gap opens between 10³ and 10⁴ cells, beyond the F3 and V5 windows. It is consistent with the F5 deviations and C13/Q20.
   - **Discrimination.** F8.1–F8.3 cannot fail, and V5 does not separate β = 0.8 from β = 0. The rows that discriminate are F3.5, the end values of (b), F3.2 and F8.4.
   - **Videos.** `reproductions-2026-10-08-openvt-f3f8`.
+
+## D-175 Reproduction 15, P6.15h: F1 (Potts.jl panel and banner) and F4 (free-surface schematic) pre-registered; G1 equals the drawn count (2026-10-08; coordinator, from the P6.15h test author; under D-146, D-156, D-168, D-172, D-173)
+
+- **Frozen test.** `test/reproductions/15_openvt_f1_f4.jl` (commit 2eb72e93, sha256 `a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb`). It is one light tier with no simulation.
+- **F4 (M Fig 4, lattice panel; `G:results/free_surface.tex:31-110`).**
+  - **Configuration.** A 7×7 closed crop, transcribed into the test: medium 13, cell i 12, i−1 7, i+1 9 and i+2 8 sites.
+  - **Counts.** The .tex draws 13 magenta and 25 amber dashes, which equals the Moore(1) pair count, so f_i = 13/38. The commented-out 11/(11+29) caption is stale.
+  - **Surface.** `PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure`, public.
+    - One Axis titled "Lattice models", with one `pottsplot` of σ: `CellIdentityEncoding`, medium RGB(236,236,236), `boundaries = false`.
+    - One dash per pair of cell c, in data coordinates, across the shared edge or corner. Medium partners are RGB(231,41,138) and cell partners RGB(255,192,0).
+    - A text shows both counts.
+  - **No outlines.** The .tex's black cell outline and partial boundaries are not drawn (D-156). Only full-length lattice lines are allowed: a uniform site grid and the panel frame.
+- **G1 unit test (spec §6).** The marks decoded from the figure must equal all of these:
+  - the transcribed .tex dashes (the hand count);
+  - a brute-force oracle;
+  - `openvt_snapshot(u).f`, the F5 analysis path;
+  - for all four cells, the ratio of medium to unlike pairs.
+- **F1 (M Fig 1; `G:results/introduction.tex:50-92`).**
+  - **Surface.** `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`, public.
+    - The panel is one square Axis with one `pottsplot`: `CellIdentityEncoding` with the automatic palette (D-172), white medium, and no lines or stroked polygons.
+    - It shows an unchanged window × window block centred on the colony rim, along the 45° diagonal from the centroid.
+    - The banner is a `Makie.Box` of RGB(8,29,88), the Q18 proposal: panel-wide, 5/45 of the panel high and 1/45 above it, with a white bold `Makie.Label` "Potts.jl".
+  - **Ruling (coordinator).** The panel is coloured per cell identity, not spec §4.0.2's "area blue→red with light-grey boundaries", following the user's preference for per-cell colours (2026-10-07) and D-156. It is listed as a stylistic deviation in the differences table, because other frameworks' panels colour by area (Q10).
+  - **Window.** The 64-site default, about 8 cell diameters, is estimated from the TST closeup and stated as such.
+  - **State.** The first state with N ≥ 10⁴ of case (a), run 1 (seed 15701, 1400², D-173 protocol), rendered on the PC by one FULL rerun. A composite with the consortium closeups is an opt-in `OPENVT_MONOLAYER_REPO` script, and no G image enters git.
+- **Negative controls.**
+  - Two perturbed configurations change both counts, and the snapshot's f, the decoded marks and the shown text all follow.
+  - The outline detector catches `boundaries = true`, a `pottsboundaries!` overlay and boundary `lines!`.
+- **Checked before freezing.** Red on b7379cd7: the figure testsets error, while the oracle and detector testsets pass. A scratch stub passes 120/120. CairoMakie and MakiePotts join the PottsModels test environment, and the functions live in a PottsModels Makie extension.
+
+## D-176 P6.0bs: a frozen test of every MTK claim in the paper and docs, and of their wording (2026-10-08; coordinator, from the P6.0bs test author; implements D-159 and plan §5–§6; covers D-160, D-162, D-164, D-165, D-170)
+
+- **Why.** D-159 settled the paper's claim as "built on ModelingToolkit", and D-162, D-165 and D-170 fixed its sentences. Plan §5 asks for a test that keeps the claim from drifting away from the code.
+- **Frozen acceptance.** `acceptance/p6_0bs_mtk_claims.jl` (commit d6337cbb, sha256 `a7029706215ef4559ee098531bfcd12e312dd6b5a25d3356f9e1714f0487f856`). It has one testset per claim (C1–C9):
+  - C1: every model is an `AbstractSystem`, not a `System`.
+  - C2: generic accessors and SII work on models.
+  - C3: `hamiltonian` and the `PottsSweepSpec` metadata.
+  - C4: `ode_system` returns a scheduled system with algebraics as observed and not stored, checked against an Euler oracle.
+  - C5: components: the alias is eliminated and a clocked recurrence runs.
+  - C6: `updates` are in `Pre` form, and there are no MTK events.
+  - C7: per cell, `initialization_system` equals MTK's own `InitializationProblem`.
+  - C8: no field is in any MTK system.
+  - C9: the sweep is Potts' own `mtkcompile`, and `ODEProblem`/`JumpProblem` are refused.
+  
+  It ends with a wording part (W) and its controls (N).
+- **Wording (pinned).**
+  - **Approved.** The docs (`docs/src`), and an in-repo paper source if one exists, contain eight sentences:
+    - "Potts.jl is built on ModelingToolkit".
+    - "Every Potts model is a ModelingToolkit `AbstractSystem`".
+    - "…Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can inspect".
+    - The D-165 sentence.
+    - "ModelingToolkit models plug in as components".
+    - "update rules are Symbolics equations in ModelingToolkit's `Pre` form".
+    - The D-170 sentence.
+    - "compiled from the symbolic Hamiltonian by Potts.jl's own code generator".
+  - **Forbidden.** Ten patterns are banned wherever a reader sees text: `docs/` outside `docs/design/`, the READMEs, and the sources. They cover:
+    - "fully MTK-native" and "MTK-native" as a whole;
+    - events compiled by MTK, or events as callbacks or Symbolics parts;
+    - fields compiled, solved or stepped by MTK, or written as `PDESystem`s;
+    - MTK compiling or simulating the CPM;
+    - models being MTK `System`s.
+  - **Changes from plan §5.** "events" becomes "update rules" (D-162). Initialization uses the D-170 form, not "compiled by `mtkcompile`".
+- **Red on 07757b51 (Mac).** 821 of 829 pass and 8 fail. Every code claim and control passes; the 8 failures are the approved sentences, which no docs page carries yet. A stub page passes 829/829, and an injected forbidden phrase is caught.
+- **Implementation.** A docs page "Relation to ModelingToolkit" (docs/src, linked from the index and the API page) carries the eight sentences, each cited to its testset. No code changes.
+- **Re-freeze triggers.**
+  - P6.4c, when events become `SymbolicDiscreteCallback`s (C6 and the callbacks pattern).
+  - P6.4a, cross-entity initialization.
+  - Any new MTK claim.
+
+## D-174 Reproduction 15, P6.15g: the F6 / T1 / F7 sweeps pre-registered; V1, V2, V2b, V3 and V3b frozen; G9 profile; FULL run parked for P6.4b1 (2026-10-08; coordinator, from the P6.15g test author; user ruling on cost; under D-146, D-147, D-154, D-157, D-168, D-173)
+
+- **Frozen test.** `test/reproductions/15_openvt_sweeps.jl` (commit e17cafed, sha256 `877341215460d18ff89f24d0b685436035eef276c0da848b339178598253d961`).
+- **Protocol.** A deterministic adaptive protocol that the record tier replays:
+  - **Grid.** A grid with 10 / 5 / 1 replicates per point.
+  - **Bisection.** Two steps on a 10⁻⁴ grid, for 8 targets: β at 1.1–20×, γ at 5–20×.
+  - **Final points.** Both bracket ends are topped up to 6 replicates, except capped ends.
+  - **Thresholds.** M's nearest rule, applied to point means.
+  - **Cap.** The 20× cap is 210 335 MCS (t = Inf).
+- **Lattices and seeds.** The β sweep runs on 1400² and the γ sweep on 1800². Seeds are 160 000 000 or 170 000 000 + 100q + k.
+- **Rows.**
+
+  | Row | Band |
+  |---|---|
+  | V1 | [12.213, 14.927] |
+  | V2 at 1.1–20× | spread ± 0.02, or ± 0.005 from 5× |
+  | V2b at 0.8727, 0.9, 0.9334, 0.95, 1.0 | ± 25 % |
+  | V3 | "—" at 1.1× and 2×; spread ± 0.05 at 5–20× |
+  | V3b | [61, 70] |
+  | F7.1 | ≥ 0.90 |
+- **Controls.**
+  - NC1: γ = 0 must fail V3b.
+  - NC2: V2b at a β offset of 0.05 must fail.
+  - NC3: γ = 10⁻⁴ must fail V1.
+- **G audit (spec v3.3).**
+  - 13.57 is PhysiCell's γ = 0 value. The TST and Artistoo plateaus are 13.77 and 13.86.
+  - G uses both forms of the threshold rule; Potts uses point means. Every G value under either form lies inside the bands.
+  - The V2b abscissae are matched to Artistoo (0.8727, 0.9334).
+  - Lattices are sized from the TST snapshots.
+- **V1 risk.** V1 is frozen as stated, although D-173 measured 15.17 cycles for case (a). A V1 failure also makes the 1.1× β threshold "—". Both would be D-154 deviations. Relative thresholds based on t̄(β = 0) are reported alongside as information.
+- **G9 profile (PC).**
+  - The empty lattice costs 13.9–15.3 ns/site/MCS; each occupied site adds 40–90 ns.
+  - Time to 10⁴ cells on 1400² is 428 s, or 486 s at β = 0.8, single-threaded.
+  - The FULL run is about 160 runs and 11 M MCS·runs: about 125 core-hours, or 1.5–2 days on 12 PC threads. The empty-medium term is 60–80 % of the cost.
+- **User ruling (2026-10-08).** Park the FULL run until boundary-site sampling lands (P6.4b1, D-177), which should roughly halve the cost. The design is unchanged.
+- **Checked before freezing.** Red at b7379cd7 only on the record tier. Synthetic records exercise the pass, broken and fail paths.
+
+## D-177 `BoundarySiteCPM`: a separate sweep algorithm that samples only boundary sites, statistically identical to `SequentialCPM` (2026-10-08; coordinator, user ruling; splits R10's boundary part out of P6.4b as P6.4b1)
+
+- **User ruling.** BoundarySite is a separate algorithm from `SequentialCPM`, or at least an option. `SequentialCPM` is untouched: its code, fingerprints, results and gate stay as they are.
+- **Design.**
+  - **New algorithm.** `BoundarySiteCPM(; proposal = Moore(1))` is a new sweep algorithm next to `SequentialCPM` and `CheckerboardCPM`.
+  - **Interior picks are null moves.** A site whose whole proposal neighbourhood has its own owner can only propose a copy of itself, which is a null move.
+  - **Exact equivalence.** The algorithm draws only boundary sites. The run of interior picks skipped between two boundary picks is accounted exactly: it is geometric in the boundary fraction, with the same attempt count per MCS over all sites. So the sequence of non-null attempts has the same law as `SequentialCPM`'s, and MCS time means the same thing.
+  - **Not bitwise.** The random stream differs, so results are equal in distribution, not bitwise (D-158 applies only to our own algorithm's determinism).
+- **Scope.** P6.4b1 covers the boundary-set bookkeeping (incremental under copies, divisions and deaths), CPU first, and an option to select it wherever `SequentialCPM` is accepted. A GPU form, and the general `ProposalLaw` with Hastings acceptance, stay in P6.4b.
+- **Acceptance (for the test author).**
+  - **Equivalence.** Statistical equivalence with `SequentialCPM` on enumerable small systems: the exact stationary distribution, and transition statistics per MCS.
+  - **Ensembles.** Matched ensemble statistics on published models, such as OpenVT growth curves.
+  - **Speed.** Speed-up on mostly-medium lattices.
+  - **Unchanged default.** Zero warm allocations, and an unchanged `SequentialCPM` gate.
+
+## D-178 Reproduction 15, P6.15i: the "OpenVT monolayer benchmark" page test frozen (2026-10-08; coordinator, from the P6.15i test author; under D-146, D-154, D-156, D-161, D-168, D-172–D-175)
+
+- **Frozen test.** `test/reproductions/15_openvt_page.jl` (commit c9a3b929, sha256 `8cbcb84a28bd213837e89aa10c8ed69f2bdcdc45c57cdf341fce3392f871d2a4`). It pins the Literate page `reproductions/15_openvt_monolayer.jl`. It runs no simulation.
+- **Structure.**
+  - One heading per item, in M's order: Fig 1–6, Table 1, Fig 7, Fig 8, Tables S1 and S5.
+  - Each rendered section names its data directory, commit, machine and figure file.
+- **Differences table (D-154).** It holds:
+  - spec §1.1's C1–C17;
+  - every recorded deviation, and every non-control FAIL (V4.2, V4.3, V4.5) marked FAIL;
+  - the V1 row: 15.17 vs 13.57 cycles, 11–12 % slow beyond 10³ cells, dividing on actual area rather than target area (C13), never marked PASS;
+  - the F1 per-cell colour row.
+- **Media.**
+  - The six release videos are linked from the current releases. Superseded releases are banned, and no video files are committed.
+  - No cell outlines. `pottsplot` is used only with identity or type colours.
+- **G-derived content.** Cited records need clean provenance, and only small figure and statistics files are allowed.
+- **Banned.** The private sheet, `docs/references`, and any wording that implies contact.
+- **Pending sweeps.** F6, T1 and F7 may read "pending: FULL run parked (D-174)" only while no P6.15g record is in `data/15/`. Once one merges, they must render from it, without a re-freeze.
+- **Docs build.** The full docs build check is opt-in (`POTTS_DOCS_BUILD=true`).
+
+**D-177 test frozen (2026-10-08).**
+- **File.** `acceptance/p6_4b1_boundary_site.jl` (commit 41c14870, sha256 `3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf`).
+- **Checks.**
+  - **Exact law.** The 2×4 oracle with 6050 states: stationarity, and the laws at MCS 1 and 2, as χ² z-scores below 3.72.
+  - **Time equivalence.** 60², Welch tests on means and variances.
+  - **Boundary set.** It equals a from-scratch recompute.
+  - **OpenVT growth.** SMOKE as an exact permutation test with p ≥ 1e-3; FULL as |z| ≤ 3.89.
+  - **Allocations.** Zero warm allocations.
+  - **Speed.** At least 1.5× on 400² at 5 % cover, asserted only when `POTTS_BENCH_PINNED=1`.
+  - **Determinism.**
+  - **SequentialCPM unchanged.** Two new bitwise records.
+  - Every check is held to a false-failure probability of at most 1e-3, and each has a negative control.
+- **Amendments.**
+  - **Signature.** `BoundarySiteCPM(; acceptance = nothing, proposal = nothing)`, with SequentialCPM's defaults. `Moore(1)` above was only an example.
+  - **Boundary set B.** It is exposed for tests as `CorePotts._boundary_sites(integ)`: linear indices, any order, no duplicates. Frozen and off-lattice neighbours do not make a site a boundary site.
+  - **When B is rebuilt or updated.** On lifecycle events, `reinit!`, `u_modified!` / `refresh_frozen!`, and checkpoint restore.
+  - **Attempts.** `stats.attempts` is still N per MCS, and a skip run never crosses an MCS end.
+  - **Checkpoints.** Continuing from a checkpoint is equal in law, not bitwise.
+  - **Backends.** A non-CPU backend is an `ArgumentError`.
+  - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
+
+## D-179 P6.0bw: the library's device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm (2026-10-08; coordinator, from the P6.0bw test author; under D-157, D-158, D-171)
+
+- **Measured (PC, ROCm, AMDGPU 2.8.0, CPU 12 under exclusive.sh).**
+  - `step!` itself does not synchronize or transfer anything on the gate cases. The cost is at host read points.
+  - Reading `integ.u` right after `step!` with the default wait:
+    - the OpenVT lifecycle models: 12.9 ms median, about 110–170 MCS of GPU time;
+    - Merks: 0.12 ms.
+  - With a `hipStreamQuery` spin plus async device→host copies, every model reads in 0.12–0.19 ms.
+  - AMDGPU's `copyto!` waits through its own default synchronize, so copies must also go through the helper.
+- **Rule.** Library device waits (`_sync!` and device→host copies) go through `CorePotts._device_wait(backend; timeout)`.
+  - **On ROCm.** A non-allocating `hipStreamQuery` spin (raw `ccall`; `HIP.isdone` allocates 16 B), then `hipStreamSynchronize`. `CorePotts._spin_until(done, timeout)` runs the spin: a GC safepoint, a `yield`, and a clear error on timeout.
+  - **On CPU and Metal.** A plain synchronize.
+- **Frozen test.** `acceptance/p6_0bw_rocm_wait.jl` (commit 7451d9f0, sha256 `7d464db54decea554bdfa11e5fb5a20b3e6a40ed1452a83836c955de074eca24`). It runs in the PottsModels suite and in the GPU group, with the include in `test/gpu.jl`.
+  - **Helper.** The helper itself, yield and safepoint, and the timeout error.
+  - **Hostcalls.** A hostcall kernel completes (`HostCallHolder`/`hostcall!`, because `@rocprintf` does not wait for the host).
+  - **Results and allocations.** Results are bitwise unchanged on every gate case (D-158), with zero allocations on CPU and ROCm.
+  - **Read points.** On ROCm, at most 6 of 300 reads take over 1 ms. On the current code it is 176–180.
+- **Gate.** ab.jl's timed `step!` contains no library wait, so a ratio of about 1.00 is expected. The ROCm A/B is the merge gate.
+
+**D-177 result (2026-10-08).**
+- **Frozen test.** It passes at both tiers. SMOKE: 369 pass. FULL on the PC: 106 pass, every |z| ≤ 2.4.
+- **Speed.**
+  - 400² at 5 % cover: 4.40× (pinned).
+  - OpenVT case (a), 1400² to 10⁴ cells: 2.83× (178 s against 504 s, one run each).
+- **SequentialCPM.** Its D-171 A/B passes: worst candidate/base 1.010, against a margin of 1.032.
+- **Review.** It found a stale skip constant: the constant was cached on |B| alone, so a mask change that moved N gave about 12.5 % too many picks. It is now cached on (|B|, N), with a regression test (335c8fec).
+- **Shadow compare.** Its O(N) cost per MCS is documented: about 0.25 ms on 1400².

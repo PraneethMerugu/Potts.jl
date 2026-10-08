@@ -65,7 +65,7 @@
 # enters the verdict through `dev`.
 #
 # Options:
-#   --alg=<sequential|checkerboard,…>  CPU algorithms (default both)
+#   --alg=<sequential|checkerboard|boundary,…>  CPU algorithms (default sequential,checkerboard)
 #   --rounds=<n>        rounds (default 8; also the optional positional [rounds])
 #   --stat=<paired|fastest>  the verdict statistic (default paired; fastest for metal)
 #   --tolerance=<x>     regression tolerance (default 0.05)
@@ -149,8 +149,8 @@ function parse_ab(args)
     stat = get(opts, "stat", backend == "metal" ? "fastest" : "paired")
     stat in ("paired", "fastest") || error("--stat is paired or fastest")
     for a in split(algs, ',')
-        a in ("sequential", "checkerboard") ||
-            error("--alg takes sequential and/or checkerboard; got $(repr(a))")
+        a in ("sequential", "checkerboard", "boundary") ||
+            error("--alg takes sequential, checkerboard and/or boundary; got $(repr(a))")
     end
     wait = get(opts, "wait", "all")
     wait in ("all", "gpu", "none") || error("--wait is all, gpu or none")

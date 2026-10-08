@@ -135,6 +135,7 @@ WITH_PUBLISHED && push!(pages, "Published models" => ["published/index.md"; publ
 append!(pages, Any[
     "Coming from CompuCell3D or Morpheus" => "coming_from.md",
     "FAQ and common errors" => "faq.md",
+    "Relation to ModelingToolkit" => "modelingtoolkit.md",
     "API" => "api.md",
     "Roadmap" => "roadmap.md",
 ])

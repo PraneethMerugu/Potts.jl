@@ -8,7 +8,8 @@ generates fast code for the CPU or a GPU.
 
 Potts.jl follows the conventions of [SciML](https://sciml.ai) and
 [ModelingToolkit](https://docs.sciml.ai/ModelingToolkit/stable/). If you have used
-`ODEProblem` and `solve`, you already know the workflow.
+`ODEProblem` and `solve`, you already know the workflow. What Potts.jl takes from ModelingToolkit, and
+what it does itself, is set out in [Relation to ModelingToolkit](@ref modelingtoolkit).
 
 ## The workflow at a glance
 
@@ -108,6 +109,8 @@ Main.paper_run("graner_glazier", "") # hide
   try the [Workshop](@ref workshop) exercises.
 - **Looking something up?** The [Manual](@ref manual-models) has one page per part of the
   model language, and the [API](@ref api) lists every exported function.
+- **Using ModelingToolkit already?** [Relation to ModelingToolkit](@ref modelingtoolkit)
+  says which parts of a model are ModelingToolkit systems and which are Potts' own.
 - **Coming from CompuCell3D or Morpheus?** See the [translation tables](@ref coming-from).
 - **Want a published model?** The [Models](@ref models) section builds five published
   models step by step, each with a video of a full paper-scale run.
