@@ -451,3 +451,8 @@ decision = "D-178"
 path = "acceptance/p6_4b1_boundary_site.jl"
 sha256 = "3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf"
 decision = "D-177"
+
+[[file]]
+path = "acceptance/p6_0bw_rocm_wait.jl"
+sha256 = "7d464db54decea554bdfa11e5fb5a20b3e6a40ed1452a83836c955de074eca24"
+decision = "D-179"

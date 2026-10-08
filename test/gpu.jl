@@ -406,6 +406,14 @@ using Test, Potts, PottsModels
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v3_launch_fusion.jl"))
 end
 
+# P6.0bw: the library's device wait (D-179). The acceptance file's device testsets (the
+# helper on the device, its allocations, results on every gate case; on ROCm hostcalls and
+# the read-point timing) run only where a device backend is loaded (here)
+module P60bwOnDevice
+using Test, Potts, PottsModels
+include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0bw_rocm_wait.jl"))
+end
+
 # P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's device testsets
 # (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
 # P6.0ao: `÷`/`div` in generated code stays in Float32 on the device (Base's Float32 `div`

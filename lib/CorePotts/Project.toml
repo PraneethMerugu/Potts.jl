@@ -12,7 +12,14 @@ SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
+[weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+
+[extensions]
+CorePottsAMDGPUExt = "AMDGPU"
+
 [compat]
+AMDGPU = "2"
 Adapt = "4"
 Atomix = "1"
 CommonSolve = "0.2"
