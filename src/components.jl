@@ -205,7 +205,8 @@ function _bind_components(sys::PottsSystem)
         boundaries = getfield(sys, :boundaries), sources = getfield(sys, :sources)))
     return PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
         lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
-        energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes], divisions = getfield(m, :divisions),
+        energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes],
+        initialization_eqs = getfield(sys, :initialization_eqs), divisions = getfield(m, :divisions),
         relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
         boundaries = getfield(m, :boundaries), schedule = getfield(sys, :schedule),
         sources = merge(getfield(sys, :sources), getfield(m, :sources)),

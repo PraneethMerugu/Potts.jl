@@ -2987,6 +2987,22 @@ session.
 - **Frozen acceptance.** `acceptance/p6_0bo_initialization.jl` (commit 68dd26a2, sha256 `bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca`).
   - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
   - The N controls pass.
+- **Implementation notes (coordinator, after four review rounds; merge 2026-10-08).**
+  - **Results are checked, never trusted.** Every result, in all three MTK problem shapes (explicit/observed, nonlinear, linear/SCC), is checked against its conditions.
+    - **Residual.** The residual must be ≤ 1e-9 × the size of its terms, or the Newton correction must be ≤ 1e-9·max(|x|, floor) when terms vanish.
+    - **Singular systems.** A scaled finite-difference Jacobian, whose step grows at most once to 1e-4·scale, refuses singular, dependent or flat systems ("does not determine `x` uniquely").
+    - **No answer without a solution.** Systems with no solution, rank-deficient systems and least-squares answers are refused, so MTKB alone and full MTK decide alike.
+  - **Solver.** Newton (SimpleNonlinearSolve) uses a relative tolerance of 1e-13 with restarts. Solver exceptions become ArgumentErrors naming initialization and the variables.
+  - **Guesses.** Guesses may be symbolic and are evaluated with the parameter values.
+  - **Kind tables.** Kind tables at the cell's own kind (`g[kind]`) are readable.
+  - **Limits (documented).**
+    - A root of multiplicity m is solved to about eps^(1/m). Multiple roots at exactly 0 are refused.
+    - A kink closer than 1e-4·scale to the result is not seen.
+    - Cancellation beyond Float64 (`v + 1e15 ~ 1e15 + volume`) is refused.
+    - A 0.0 default guess fails for symmetric equations.
+    - `remake(p = …)` neither re-initializes nor re-evaluates written defaults.
+  - **Built-ins read.** Initialization reads only `volume`, `id` and `kind`.
+  - **Cold cost** of the first problem, over the same model without the section: explicit equations +0.05 s; one nonlinear equation or a linear system +0.10–0.15 s; mixed coupled nonlinear with steady ODE starts +0.25–0.45 s (Mac). The remainder is SymbolicUtils' per-task cache, which no workload can cover. MTK's own `InitializationProblem` on the template takes about 0.6–1.2 s cold. `using Potts` costs +2 %.
 - **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
 
 ## D-172 P6.0by: per-cell colours separate neighbouring ids (2026-10-07; coordinator, from the P6.0by test author and the P6.15e review; AUDIT A-80, A-87)

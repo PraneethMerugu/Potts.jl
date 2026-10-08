@@ -34,9 +34,11 @@ An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expr
 - `y` is not stored. Wherever the model reads it (ODEs, updates, energies, division
   conditions, observed quantities), it reads its definition on the current state.
 - `sol[:y]` and `getu` evaluate it on saved states, one value per cell for a cell variable.
-- It has no initial value: an operating-point entry for it is an error, and so is a
-  declared value other than zero (`y(cell) = 2.0`). Initial values of algebraic variables
-  are not supported yet.
+- It has no value of its own: a declared value other than zero (`y(cell) = 2.0`) is an
+  error. An operating-point entry `y => v` is the initial condition `y ~ v`: the variables of
+  its definition that have no value are solved for (see
+  [Initialization equations](@ref manual-variables)), and one whose definition reads only
+  fixed variables is an "overdetermined" error.
 - `y` is read bare only. Every indexed read is an error: `y[j]`, `y[new]`, `y[owner]` and
   `sum(y[c] for c in cells)`. Write a fold over cells bare: `sum(y for c in cells)`.
 - A definition is a function of the current state: `rand()` and `Pre` in it are errors. A

@@ -67,6 +67,7 @@ is sugar.
 | `@drive` | non-energetic proposal biases (`copy => expr`) | — |
 | `@constraint` | hard proposal constraints | — |
 | `@equations` | differential equations (`D(x) ~ …`, `∂t`) for fields, per-cell ODEs, model ODEs | same |
+| `@initialization_equations` | conditions on initial cell and model values (`Vt ~ 2volume`, `D(x) ~ 0`), solved per cell before the first MCS (D-170) | `initialization_eqs` |
 | `@before_mcs`, `@after_mcs`, `@on_copy` | discrete updates as equations with `Pre` | discrete events |
 | `@divide`, `@retire`, `@create`, `@transition` | lifecycle rules | — |
 | `@relationship`, `@link`, `@unlink` | cell–cell edges | — |

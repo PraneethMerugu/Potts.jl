@@ -254,9 +254,10 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
             end
             d = getfield(info(x), :default)
             (d === nothing || (d isa Real && iszero(d))) || throw(ArgumentError(
-                "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; initial " *
-                "values of algebraic variables are not supported yet (planned: P6.0bo). Declare `$name($scope)` " *
-                "without a value"))
+                "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; an " *
+                "algebraic variable's value follows from its definition. Declare `$name($scope)` without a value; to " *
+                "start it at a value, give `$name => value` in the operating point (the initial condition " *
+                "`$name ~ value`, D-170) or write the condition in @initialization_equations"))
             _has_op(eq.rhs, random_uniform) && throw(ArgumentError(
                 "the algebraic equation `$eq` draws `rand()`; an algebraic variable is a function of the current state " *
                 "(MTK observed): keep the draw in an update or an ODE"))
