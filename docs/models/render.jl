@@ -56,11 +56,13 @@ function _paper_run(name)
     stem = get(PAPER_RUN_STEMS, name, name)
     video, sidecar = joinpath.(PAPER_RUNS, stem .* (".mp4", ".toml"))
     if isfile(video)
+        caption = isfile(sidecar) ? _caption(TOML.parsefile(sidecar)) : ""
+        # raw HTML, not Markdown emphasis: `A*(0)` and `J_cc` would otherwise read as emphasis
+        html = replace(caption, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "*" => "&#42;", "_" => "&#95;")
         lines = ["```@raw html",
             "<video src=\"../../assets/paper_runs/$stem.mp4\" controls loop muted playsinline width=\"560\"></video>",
+            isempty(caption) ? "" : "<p><em>$html</em></p>",
             "```"]
-        caption = isfile(sidecar) ? _caption(TOML.parsefile(sidecar)) : ""
-        isempty(caption) || push!(lines, "", "*" * replace(caption, "*" => "\\*") * "*")
     else
         lines = ["!!! note \"Paper run\"", "    The video of the paper run is being generated and will appear here."]
     end
