@@ -214,7 +214,7 @@ end
     @test alg_error(() -> mtkcompile(alg_model(quote
         @equations y ~ sum(c for n in Moore(1)(42)) + x
     end)), "algebraic", "`y")
-    # a declared initial value is not used: an error until initial values are supported
+    # a declared value is not used (D-165, kept by D-170): its value follows from its definition
     default_model = eval(:(@potts_model _AlgDefault begin
         @kinds medium A
         @variables begin
@@ -235,9 +235,10 @@ end
         ps = alg_names(ALG_M.parameters(s))
         @test :volume in ps && :input in ps && length(ps) == 3
     end
-    # an operating-point value for an algebraic variable, by name and by symbol
-    @test alg_error(() -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`", "algebraic")
-    @test alg_error(() -> PottsProblem(ok, alg_op(complete(ok).y => 1.0), (0, 1)), "`y`")
+    # an operating-point value for an algebraic variable is the condition `y ~ value` (D-170):
+    # here its definition reads only the fixed `x`, so it overdetermines, by name and by symbol
+    @test alg_error(() -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`", "algebraic", "overdetermined")
+    @test alg_error(() -> PottsProblem(ok, alg_op(complete(ok).y => 1.0), (0, 1)), "`y`", "overdetermined")
     @test PottsProblem(ok, alg_op(:x => 2.0), (0, 1)) isa PottsProblem               # control
     # every published-model-free model still compiles without templates
     c = mtkcompile(alg_model(quote end))

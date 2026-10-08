@@ -47,6 +47,10 @@ Potts compiles and runs these rules in its sweep; they are not ModelingToolkit e
 A model's cell and model ODEs are ModelingToolkit systems compiled by `mtkcompile`.
 `Potts.ode_system(csys, :cell)` and `Potts.ode_system(csys, :model)` return them from a
 compiled model `csys` (see [Equations and solvers](@ref manual-equations)).
+Its entity-local initialization is too: `Potts.initialization_system(csys, :cell)` and
+`Potts.initialization_system(csys, :model)` are the systems whose `initialization_equations`
+are the model's `@initialization_equations`, solved through MTK's `InitializationProblem`
+when a problem is built (see [Variables](@ref manual-variables)).
 
 ```@autodocs
 Modules = [Potts]

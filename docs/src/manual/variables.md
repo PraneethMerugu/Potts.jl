@@ -21,9 +21,102 @@ Options go in brackets after the default:
   0 whenever the site changes owner. This is how the "act" memory of the Act model forgets
   the previous cell.
 - `[unit = u"…"]`: a unit, see [Parameters](@ref manual-parameters).
+- `[guess = g]` (cell and model variables): the starting point when
+  `@initialization_equations` solve for the variable, see below. A variable with a guess and
+  no value is written `r(cell), [guess = -1.0]`.
 
 A vector variable `p(cell)[1:2] = [0.0, 0.0]` has components `p_1`, `p_2`; `p ~ …`, `Pre(p)`,
 `dot`, `norm` and `normalize` work component-wise.
+
+## Initialization equations: `@initialization_equations`
+
+Some initial values follow from others: a target volume twice the starting volume, a
+protein level at its steady state, a variable that makes an algebraic quantity start at a
+given value. `@initialization_equations` states them as equations, in ModelingToolkit's
+syntax (MTK's `initialization_eqs`), and Potts solves them for every cell when the problem is
+built, before the first MCS:
+
+- An equation is `lhs ~ rhs`, explicit or implicit, linear or nonlinear. It reads the cell's
+  own variables (bare), its built-ins `volume`, `id` and `kind`, parameters, kind tables at
+  the cell's own kind (`g[kind]`), model variables, and `D(x)` of a cell or model ODE
+  variable `x`, its rate at the start (`D(x) ~ 0` is a steady start).
+- A variable declared **without a value** (`Vt(cell)`) is solved for when an equation of its
+  scope names it; otherwise it starts at 0.0, as before. A **written value**, `= 0.0`
+  included, or a value in the operating point fixes the variable, as in ModelingToolkit.
+- Every solved variable needs exactly one equation: too many conditions ("overdetermined",
+  for example a fixed variable that an equation also determines) and too few
+  ("underdetermined") are errors naming a variable.
+- Every result is checked against the equations, each to a residual small against the size
+  of its terms, so small and large scales are solved alike. Equations without a solution
+  for a cell (`k * x ~ volume` with `k = 0`, or `a + b ~ volume` with `a + b ~ volume + 1`)
+  and equations that do not determine the variables uniquely (`a + b ~ volume` with
+  `2a + 2b ~ 2volume`: their Jacobian is singular at the solution) are errors naming the
+  cell and the variables; neither a least-squares answer nor the guess is returned. A root
+  where the terms vanish (`sin(v) ~ 0` at `π`) passes on its Newton correction instead. A
+  root of multiplicity `m` is solved only to about `eps^(1/m)`: about `1e-8` for a double
+  root (`(v - 1)^2 ~ 0`), `1e-5` for a triple one; at 0, where its terms vanish too
+  (`v^3 ~ 0` from `guess = 1.0`), it cannot be told from a miss and is refused. Equations
+  flat around the result (`max(v, 1000) ~ 1000` from `v = 1`, `clamp`, `floor`) do not
+  determine it and are refused, and so are equations whose terms are so much larger than
+  the variable that Float64 cannot resolve it (`v + 1e15 ~ 1e15 + volume`).
+- A guess may be an expression of parameters (`[guess = g0]`), evaluated with the problem's
+  parameter values.
+- A nonlinear equation is solved from the variable's guess (`[guess = g]`, else 0.0), which
+  picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`. Without a guess,
+  an equation symmetric in the variable such as `r^2 ~ volume` fails: its Jacobian is zero at
+  0.0, so the solve cannot start. Give such variables a guess.
+- An equation that reads no cell quantity is a model equation. The model is initialized first,
+  and cell equations read its values.
+- An operating-point value for an algebraic variable (`y ~ expr` in `@equations`) is the
+  condition `y ~ value`, so the variables of its definition are solved for.
+- Initialization runs when the problem is built and again on `remake(prob; u0 = map)`. A
+  saved state passed as `u0` keeps its values. `remake(prob; p = …)` changes parameters
+  only: it neither initializes again nor re-evaluates written values such as `w(cell) = c0`,
+  so pass `u0 = map` as well when the start depends on the new parameters. Daughter cells
+  are not initialized.
+- Initialization adds to the first problem of a session, beyond the same model without it,
+  about 0.05 s for explicit equations, 0.1–0.15 s for one nonlinear or a linear system, and
+  0.25–0.45 s for coupled nonlinear equations mixed with explicit ones and steady ODE starts
+  (measured on an Apple M-series laptop); later problems pay a few milliseconds, plus about
+  2 µs per cell.
+- Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbour gathers,
+  folds over cells, and site, field and edge variables are errors for now.
+
+```@example vars
+@potts_model Initialized begin
+    @kinds medium cell
+    @parameters begin
+        α = 0.1
+        κ = 0.5
+    end
+    @variables begin
+        V_target(cell)
+        p(cell)
+        r(cell), [guess = -1.0]
+    end
+    @lattice Lattice((30, 30))
+    @energy cells(cell) => (volume - V_target)^2
+    @equations D(p) ~ α * volume - κ * p
+    @initialization_equations begin
+        V_target ~ 2volume                # explicit
+        D(p) ~ 0                          # steady start: p = α volume / κ
+        r^2 ~ volume                      # the root picked by the guess
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+@named initialized = Initialized()
+σ = zeros(Int32, 30, 30); σ[5:8, 5:8] .= 1; σ[15:17, 15:17] .= 2
+prob = PottsProblem(initialized, [ownership => σ, kind => [:cell, :cell]], (0, 10))
+(V_target = prob.u0.cell.V_target, p = prob.u0.cell.p, r = prob.u0.cell.r)
+```
+
+Each scope's equations are a ModelingToolkit system:
+[`Potts.initialization_system(mtkcompile(sys), :cell)`](@ref Potts.initialization_system)
+(`:model` for the model) is a complete `System` whose `initialization_equations` are the
+equations as written, with the variables they name as unknowns and inputs such as `volume`
+as parameters. Potts builds MTK's `InitializationProblem` of each scope once per problem and
+solves it for every cell.
 
 ## Reading variables inside a model
 

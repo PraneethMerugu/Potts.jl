@@ -408,6 +408,11 @@ sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
 decision = "D-164"
 
 [[file]]
+path = "acceptance/p6_0bo_initialization.jl"
+sha256 = "bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca"
+decision = "D-170"
+
+[[file]]
 path = "reproductions/15_openvt_f5.jl"
 sha256 = "0f38ec2a495cd97e3da2ce1d70325db0e0651452d5838367003ab69d8ae14731"
 decision = "D-168"

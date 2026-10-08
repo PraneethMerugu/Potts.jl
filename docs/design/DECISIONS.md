@@ -2987,6 +2987,22 @@ session.
 - **Frozen acceptance.** `acceptance/p6_0bo_initialization.jl` (commit 68dd26a2, sha256 `bb0cf66ec0a433d52cc9f005d07fc354c0dfbda48a1eb32c921788679b1f57ca`).
   - Red on 2bcc4b75 (Mac): 10 pass, 11 fail, 42 error of 63.
   - The N controls pass.
+- **Implementation notes (coordinator, after four review rounds; merge 2026-10-08).**
+  - **Results are checked, never trusted.** Every result, in all three MTK problem shapes (explicit/observed, nonlinear, linear/SCC), is checked against its conditions.
+    - **Residual.** The residual must be ≤ 1e-9 × the size of its terms, or the Newton correction must be ≤ 1e-9·max(|x|, floor) when terms vanish.
+    - **Singular systems.** A scaled finite-difference Jacobian, whose step grows at most once to 1e-4·scale, refuses singular, dependent or flat systems ("does not determine `x` uniquely").
+    - **No answer without a solution.** Systems with no solution, rank-deficient systems and least-squares answers are refused, so MTKB alone and full MTK decide alike.
+  - **Solver.** Newton (SimpleNonlinearSolve) uses a relative tolerance of 1e-13 with restarts. Solver exceptions become ArgumentErrors naming initialization and the variables.
+  - **Guesses.** Guesses may be symbolic and are evaluated with the parameter values.
+  - **Kind tables.** Kind tables at the cell's own kind (`g[kind]`) are readable.
+  - **Limits (documented).**
+    - A root of multiplicity m is solved to about eps^(1/m). Multiple roots at exactly 0 are refused.
+    - A kink closer than 1e-4·scale to the result is not seen.
+    - Cancellation beyond Float64 (`v + 1e15 ~ 1e15 + volume`) is refused.
+    - A 0.0 default guess fails for symmetric equations.
+    - `remake(p = …)` neither re-initializes nor re-evaluates written defaults.
+  - **Built-ins read.** Initialization reads only `volume`, `id` and `kind`.
+  - **Cold cost** of the first problem, over the same model without the section: explicit equations +0.05 s; one nonlinear equation or a linear system +0.10–0.15 s; mixed coupled nonlinear with steady ODE starts +0.25–0.45 s (Mac). The remainder is SymbolicUtils' per-task cache, which no workload can cover. MTK's own `InitializationProblem` on the template takes about 0.6–1.2 s cold. `using Potts` costs +2 %.
 - **ROADMAP.** P6.0bo stays Medium. The cold cost reads "≈ +9 s cold before the workload, ≈ 0.1 s after", not "+0.5 s".
 
 ## D-172 P6.0by: per-cell colours separate neighbouring ids (2026-10-07; coordinator, from the P6.0by test author and the P6.15e review; AUDIT A-80, A-87)
@@ -3083,3 +3099,32 @@ session.
   - **V1 warning (information, judged in P6.15g).** Uninhibited case (a) reaches 10⁴ cells at 15.17 cycles, against 13.57 ± 10 %, while case (e) matches TST at β = 0.8 (16.26 against 16.15). The gap opens between 10³ and 10⁴ cells, beyond the F3 and V5 windows. It is consistent with the F5 deviations and C13/Q20.
   - **Discrimination.** F8.1–F8.3 cannot fail, and V5 does not separate β = 0.8 from β = 0. The rows that discriminate are F3.5, the end values of (b), F3.2 and F8.4.
   - **Videos.** `reproductions-2026-10-08-openvt-f3f8`.
+
+## D-175 Reproduction 15, P6.15h: F1 (Potts.jl panel and banner) and F4 (free-surface schematic) pre-registered; G1 equals the drawn count (2026-10-08; coordinator, from the P6.15h test author; under D-146, D-156, D-168, D-172, D-173)
+
+- **Frozen test.** `test/reproductions/15_openvt_f1_f4.jl` (commit 2eb72e93, sha256 `a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb`). It is one light tier with no simulation.
+- **F4 (M Fig 4, lattice panel; `G:results/free_surface.tex:31-110`).**
+  - **Configuration.** A 7×7 closed crop, transcribed into the test: medium 13, cell i 12, i−1 7, i+1 9 and i+2 8 sites.
+  - **Counts.** The .tex draws 13 magenta and 25 amber dashes, which equals the Moore(1) pair count, so f_i = 13/38. The commented-out 11/(11+29) caption is stale.
+  - **Surface.** `PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure`, public.
+    - One Axis titled "Lattice models", with one `pottsplot` of σ: `CellIdentityEncoding`, medium RGB(236,236,236), `boundaries = false`.
+    - One dash per pair of cell c, in data coordinates, across the shared edge or corner. Medium partners are RGB(231,41,138) and cell partners RGB(255,192,0).
+    - A text shows both counts.
+  - **No outlines.** The .tex's black cell outline and partial boundaries are not drawn (D-156). Only full-length lattice lines are allowed: a uniform site grid and the panel frame.
+- **G1 unit test (spec §6).** The marks decoded from the figure must equal all of these:
+  - the transcribed .tex dashes (the hand count);
+  - a brute-force oracle;
+  - `openvt_snapshot(u).f`, the F5 analysis path;
+  - for all four cells, the ratio of medium to unlike pairs.
+- **F1 (M Fig 1; `G:results/introduction.tex:52-92`).**
+  - **Surface.** `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`, public.
+    - The panel is one square Axis with one `pottsplot`: `CellIdentityEncoding` with the automatic palette (D-172), white medium, and no lines or stroked polygons.
+    - It shows an unchanged window × window block centred on the colony rim, along the 45° diagonal from the centroid.
+    - The banner is a `Makie.Box` of RGB(8,29,88), the Q18 proposal: panel-wide, 5/45 of the panel high and 1/45 above it, with a white bold `Makie.Label` "Potts.jl".
+  - **Ruling (coordinator).** The panel is coloured per cell identity, not spec §4.0.2's "area blue→red with light-grey boundaries", following the user's preference for per-cell colours (2026-10-07) and D-156. It is listed as a stylistic deviation in the differences table, because other frameworks' panels colour by area (Q10).
+  - **Window.** The 64-site default, about 8 cell diameters, is estimated from the TST closeup and stated as such.
+  - **State.** The first state with N ≥ 10⁴ of case (a), run 1 (seed 15701, 1400², D-173 protocol), rendered on the PC by one FULL rerun. A composite with the consortium closeups is an opt-in `OPENVT_MONOLAYER_REPO` script, and no G image enters git.
+- **Negative controls.**
+  - Two perturbed configurations change both counts, and the snapshot's f, the decoded marks and the shown text all follow.
+  - The outline detector catches `boundaries = true`, a `pottsboundaries!` overlay and boundary `lines!`.
+- **Checked before freezing.** Red on b7379cd7: the figure testsets error, while the oracle and detector testsets pass. A scratch stub passes 120/120. CairoMakie and MakiePotts join the PottsModels test environment, and the functions live in a PottsModels Makie extension.

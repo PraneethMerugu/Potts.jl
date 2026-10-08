@@ -51,6 +51,9 @@ struct CompiledPottsSystem
     # the cell and model ODE templates as compiled by MTK (`ode_system`, odes.jl), by scope;
     # never read by codegen
     ode_systems::Dict{Symbol, Any}
+    # the cell and model `@initialization_equations` (`initialization_system`, initialization.jl),
+    # by scope; run when a problem is built, never read by codegen
+    initialization::Dict{Symbol, Any}
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -174,11 +177,13 @@ per scalar type by `PottsProblem`).
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)
     # the model's own cell and model ODEs through MTK's `mtkcompile` first (odes.jl)
     routed, ode_systems, origin = _compile_odes(authored)
-    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems), routed, origin)
+    # entity-local initialization through MTK's `InitializationProblem` (initialization.jl)
+    initialization = _compile_initialization(routed)
+    return _via_algebraic(() -> _compile_bound(authored, _bind_components(routed), ode_systems, initialization), routed, origin)
 end
 
 # `mtkcompile` of the model with its ODEs simplified and its components bound (`sys`)
-function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
+function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, initialization)
     _check_discrete_slots(sys)
     cell_terms = Tuple{Vector{Int}, Any}[]
     cluster_terms = Tuple{Vector{Int}, Any}[]
@@ -480,7 +485,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers, authored, ode_systems)
+        contact_trackers, authored, ode_systems, initialization)
 end
 
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`

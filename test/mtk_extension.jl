@@ -227,3 +227,119 @@ end
         println("P6BN|", nameof(M), "|", typeof(err))
     end
 end
+
+# Entity-local initialization (P6.0bo, D-170) is strict, so full ModelingToolkit (with its
+# tearing and least-squares fallbacks) solves the same conditions to the same values and
+# refuses the same under- and overdetermined ones
+@potts_model MTKExtInit begin
+    @kinds medium A
+    @parameters begin
+        α = 0.1
+        κ = 0.5
+    end
+    @variables begin
+        Vt(cell)
+        w(cell) = 1.0
+        r(cell), [guess = -1.0]
+        a_u(cell)
+        b_u(cell)
+        xs(cell)
+        m(model)
+        z(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @equations D(xs) ~ α * volume - κ * xs
+    @initialization_equations begin
+        Vt ~ 2volume + id + w
+        r^2 ~ volume
+        a_u + b_u ~ volume
+        a_u - b_u ~ id
+        D(xs) ~ 0
+        m ~ 3κ
+        z ~ m + volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitUnder begin
+    @kinds medium A
+    @variables begin
+        alpha_u(cell)
+        beta_u(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations alpha_u + beta_u ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+# conditions without a solution or without a unique one: refused alike (Potts checks every
+# result against the conditions, so neither MTK's least-squares answer nor the guess comes back)
+@potts_model MTKExtInitZero begin
+    @kinds medium A
+    @parameters k_z = 0.0
+    @variables kz(cell)
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations k_z * kz ~ volume
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitClash begin
+    @kinds medium A
+    @variables begin
+        ta(cell)
+        tb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        ta + tb ~ volume
+        ta + tb ~ volume + 1
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+@potts_model MTKExtInitDependent begin
+    @kinds medium A
+    @variables begin
+        sa(cell)
+        sb(cell)
+    end
+    @lattice Lattice((12, 8))
+    @energy cells => (volume - 16.0)^2
+    @initialization_equations begin
+        sa + sb ~ volume
+        2sa + 2sb ~ 2volume
+    end
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+@testset "initialization ($(WITH_MTK ? "full ModelingToolkit" : "ModelingToolkitBase"))" begin
+    σ = zeros(Int32, 12, 8)
+    σ[3:6, 3:6] .= 1
+    σ[7:10, 3:5] .= 2
+    op = [ownership => σ, kind => [1, 1]]
+    prob = PottsProblem(MTKExtInit(; name = :init), op, (0, 2))
+    vals = Dict(n => round.(Vector{Float64}(Array(getproperty(prob.u0.cell, n))); sigdigits = 10)
+                for n in (:Vt, :r, :a_u, :b_u, :xs, :z))
+    @test vals[:Vt] == [34.0, 27.0] && vals[:r] == [-4.0, round(-sqrt(12.0); sigdigits = 10)]
+    println("P6BO|values|", sort!(collect(vals); by = first), "|", only(Array(prob.u0.model.m)))
+    for (M, o) in ((MTKExtInitUnder, op), (MTKExtInit, [op; :Vt => [1.0, 2.0]]))
+        err = try
+            PottsProblem(M(; name = :r), o, (0, 1)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError
+        println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin("determined", sprint(showerror, err)))
+    end
+    for (M, words) in ((MTKExtInitZero, "found no solution"), (MTKExtInitClash, "found no solution"),
+                       (MTKExtInitDependent, "uniquely"))
+        err = try
+            PottsProblem(M(; name = :r), op, (0, 1)); nothing
+        catch e
+            e
+        end
+        @test err isa ArgumentError && occursin(words, sprint(showerror, err))
+        println("P6BO|", nameof(M), "|", err isa ArgumentError && occursin(words, sprint(showerror, err)))
+    end
+end
