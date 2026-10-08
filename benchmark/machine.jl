@@ -92,13 +92,38 @@ end
 The prefix that caps a heavy child's memory (the NucBox is shared with CI and other agents,
 and processes there have been OOM-killed): `systemd-run --user --scope -p MemoryMax=<cap>`,
 the cap from `POTTS_BENCH_MEMMAX` (`0` = none), else the machine's. Empty where there is no
-cap or no `systemd-run`.
+cap, no `systemd-run`, or no user service manager to talk to (`user_scope_works`): a CI job
+runs under the runner's system service, which has no user bus, and there
+`systemd-run --user` fails ("Failed to connect to bus"), which made every timed child of a
+CI run fail (CI run 37721528049).
 """
-function mem_cmd(m)
+function mem_cmd(m; works = user_scope_works)
     cap = strip(get(ENV, "POTTS_BENCH_MEMMAX", m.memmax))
     (isempty(cap) || cap == "0" || !Sys.islinux() ||
      Sys.which("systemd-run") === nothing) && return ``
+    works() || return ``
     return `systemd-run --user --scope -q -p MemoryMax=$cap`
+end
+
+const USER_SCOPE = Ref{Union{Nothing, Bool}}(nothing)
+
+"""
+Can this process start a transient user scope (`systemd-run --user --scope true`)? Probed
+once per process and cached; when it cannot, a warning says that children run without
+the memory cap.
+"""
+function user_scope_works()
+    USER_SCOPE[] === nothing || return USER_SCOPE[]
+    ok = try
+        success(pipeline(`systemd-run --user --scope -q true`; stdout = devnull,
+            stderr = devnull))
+    catch
+        false
+    end
+    ok || @warn "systemd-run --user is unavailable here (no user service manager, e.g. " *
+                "inside a CI job): timed children run without the memory cap"
+    USER_SCOPE[] = ok
+    return ok
 end
 
 """

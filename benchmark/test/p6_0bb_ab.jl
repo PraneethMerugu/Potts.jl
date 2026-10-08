@@ -114,11 +114,42 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             @test m.key == "nucbox" && m.bench == 12:15 && m.work == "0-11,16-27"
             @test BenchMachine.bench_cpu(m) == 12
             if Sys.islinux() && Sys.which("systemd-run") !== nothing
+                # with a user service manager (a login or SSH session) the cap applies;
+                # without one (a CI job) it is dropped, tested below
                 @test BenchMachine.mem_cmd(m) ==
-                      `systemd-run --user --scope -q -p MemoryMax=8G`
+                      (BenchMachine.user_scope_works() ?
+                       `systemd-run --user --scope -q -p MemoryMax=8G` : ``)
                 withenv(() -> (@test BenchMachine.mem_cmd(m) == ``), "POTTS_BENCH_MEMMAX" => "0")
             end
             withenv(() -> (@test BenchMachine.bench_cpu(m) == 14), "POTTS_BENCH_CPU" => "14")
+        end
+        # no user service manager (a CI job under the runner's system service): no cap,
+        # rather than a `systemd-run --user` prefix that fails every child (CI 37721528049)
+        withenv("POTTS_MACHINE" => "nucbox") do
+            m = BenchMachine.machine()
+            @test BenchMachine.mem_cmd(m; works = () -> false) == ``
+            if Sys.islinux() && Sys.which("systemd-run") !== nothing
+                @test BenchMachine.mem_cmd(m; works = () -> true) ==
+                      `systemd-run --user --scope -q -p MemoryMax=8G`
+                # the real probe, in a process without a user bus, as under the runner
+                mj = joinpath(REPO, "benchmark", "machine.jl")
+                code = "include($(repr(mj))); m = BenchMachine.machine(); " *
+                       "print(BenchMachine.user_scope_works(), \" \", isempty(BenchMachine.mem_cmd(m).exec))"
+                env = filter(p -> !(first(p) in ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")), ENV)
+                env["POTTS_MACHINE"] = "nucbox"
+                out = read(setenv(`$(jl()) -e $code`, env), String)
+                @test out == "false true"
+                # and the D-090 run itself works there: a stub child runs and prints its line
+                stubco = mktempdir(; cleanup = true)
+                mkpath(joinpath(stubco, "benchmark"))
+                write(joinpath(stubco, "benchmark", "Project.toml"), "")
+                write(joinpath(stubco, "benchmark", "ab_one.jl"), "println(\"AB 1.0\")")
+                sbx = sandbox()
+                p = run(pipeline(ignorestatus(setenv(
+                        `$(jl()) $(joinpath(sbx, "benchmark", "ab.jl")) $stubco $stubco c sequential 1`,
+                        env; dir = sbx)); stdout = devnull, stderr = devnull))
+                @test success(p)
+            end
         end
         withenv("POTTS_MACHINE" => "elsewhere") do
             m = BenchMachine.machine()
