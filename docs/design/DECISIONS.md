@@ -3167,3 +3167,55 @@ session.
   - P6.4c, when events become `SymbolicDiscreteCallback`s (C6 and the callbacks pattern).
   - P6.4a, cross-entity initialization.
   - Any new MTK claim.
+
+## D-174 Reproduction 15, P6.15g: the F6 / T1 / F7 sweeps pre-registered; V1, V2, V2b, V3 and V3b frozen; G9 profile; FULL run parked for P6.4b1 (2026-10-08; coordinator, from the P6.15g test author; user ruling on cost; under D-146, D-147, D-154, D-157, D-168, D-173)
+
+- **Frozen test.** `test/reproductions/15_openvt_sweeps.jl` (commit e17cafed, sha256 `877341215460d18ff89f24d0b685436035eef276c0da848b339178598253d961`).
+- **Protocol.** A deterministic adaptive protocol that the record tier replays:
+  - **Grid.** A grid with 10 / 5 / 1 replicates per point.
+  - **Bisection.** Two steps on a 10⁻⁴ grid, for 8 targets: β at 1.1–20×, γ at 5–20×.
+  - **Final points.** Both bracket ends are topped up to 6 replicates, except capped ends.
+  - **Thresholds.** M's nearest rule, applied to point means.
+  - **Cap.** The 20× cap is 210 335 MCS (t = Inf).
+- **Lattices and seeds.** The β sweep runs on 1400² and the γ sweep on 1800². Seeds are 160 000 000 or 170 000 000 + 100q + k.
+- **Rows.**
+
+  | Row | Band |
+  |---|---|
+  | V1 | [12.213, 14.927] |
+  | V2 at 1.1–20× | spread ± 0.02, or ± 0.005 from 5× |
+  | V2b at 0.8727, 0.9, 0.9334, 0.95, 1.0 | ± 25 % |
+  | V3 | "—" at 1.1× and 2×; spread ± 0.05 at 5–20× |
+  | V3b | [61, 70] |
+  | F7.1 | ≥ 0.90 |
+- **Controls.**
+  - NC1: γ = 0 must fail V3b.
+  - NC2: V2b at a β offset of 0.05 must fail.
+  - NC3: γ = 10⁻⁴ must fail V1.
+- **G audit (spec v3.3).**
+  - 13.57 is PhysiCell's γ = 0 value. The TST and Artistoo plateaus are 13.77 and 13.86.
+  - G uses both forms of the threshold rule; Potts uses point means. Every G value under either form lies inside the bands.
+  - The V2b abscissae are matched to Artistoo (0.8727, 0.9334).
+  - Lattices are sized from the TST snapshots.
+- **V1 risk.** V1 is frozen as stated, although D-173 measured 15.17 cycles for case (a). A V1 failure also makes the 1.1× β threshold "—". Both would be D-154 deviations. Relative thresholds based on t̄(β = 0) are reported alongside as information.
+- **G9 profile (PC).**
+  - The empty lattice costs 13.9–15.3 ns/site/MCS; each occupied site adds 40–90 ns.
+  - Time to 10⁴ cells on 1400² is 428 s, or 486 s at β = 0.8, single-threaded.
+  - The FULL run is about 160 runs and 11 M MCS·runs: about 125 core-hours, or 1.5–2 days on 12 PC threads. The empty-medium term is 60–80 % of the cost.
+- **User ruling (2026-10-08).** Park the FULL run until boundary-site sampling lands (P6.4b1, D-177), which should roughly halve the cost. The design is unchanged.
+- **Checked before freezing.** Red at b7379cd7 only on the record tier. Synthetic records exercise the pass, broken and fail paths.
+
+## D-177 `BoundarySiteCPM`: a separate sweep algorithm that samples only boundary sites, statistically identical to `SequentialCPM` (2026-10-08; coordinator, user ruling; splits R10's boundary part out of P6.4b as P6.4b1)
+
+- **User ruling.** BoundarySite is a separate algorithm from `SequentialCPM`, or at least an option. `SequentialCPM` is untouched: its code, fingerprints, results and gate stay as they are.
+- **Design.**
+  - **New algorithm.** `BoundarySiteCPM(; proposal = Moore(1))` is a new sweep algorithm next to `SequentialCPM` and `CheckerboardCPM`.
+  - **Interior picks are null moves.** A site whose whole proposal neighbourhood has its own owner can only propose a copy of itself, which is a null move.
+  - **Exact equivalence.** The algorithm draws only boundary sites. The run of interior picks skipped between two boundary picks is accounted exactly: it is geometric in the boundary fraction, with the same attempt count per MCS over all sites. So the sequence of non-null attempts has the same law as `SequentialCPM`'s, and MCS time means the same thing.
+  - **Not bitwise.** The random stream differs, so results are equal in distribution, not bitwise (D-158 applies only to our own algorithm's determinism).
+- **Scope.** P6.4b1 covers the boundary-set bookkeeping (incremental under copies, divisions and deaths), CPU first, and an option to select it wherever `SequentialCPM` is accepted. A GPU form, and the general `ProposalLaw` with Hastings acceptance, stay in P6.4b.
+- **Acceptance (for the test author).**
+  - **Equivalence.** Statistical equivalence with `SequentialCPM` on enumerable small systems: the exact stationary distribution, and transition statistics per MCS.
+  - **Ensembles.** Matched ensemble statistics on published models, such as OpenVT growth curves.
+  - **Speed.** Speed-up on mostly-medium lattices.
+  - **Unchanged default.** Zero warm allocations, and an unchanged `SequentialCPM` gate.
