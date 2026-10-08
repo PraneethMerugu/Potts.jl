@@ -2923,4 +2923,9 @@ session.
 - **Frozen acceptance.** `acceptance/p6_0bv_edge_after_mcs.jl` (freeze d859bc10, sha256 `f2525d9f92aa3fc4886adde543a24a0b81733cc811676faeaf0b7d3dee23422e`).
   - Red on 405915dc (Mac): 24 pass, 1 fail, 2 error, 1 broken (device skip) of 28. The errors are the `KeyError: :edge` and the `distance` rejection; R gets a KeyError instead of an `ArgumentError`.
   - The 22 negative-control assertions pass.
+- **Implementation notes (coordinator, after review round 1).**
+  - **Kernel.** Edge updates run as a per-cell kernel (`CellPhase`), not a host phase: the CorePotts `HostPhase` with declared reads allocates on every call. The work item of cell `ea` handles each link with `eb > ea` and writes both ends, so each slot has exactly one writer.
+  - **One stage per cadence.** All edge updates of one cadence run in one stage, after that cadence's non-edge updates.
+  - **Reads of other edge variables in the same block.** These are allowed only as `Pre(y)`, and only when `y` is written at the same cadence. A bare read (the new value) or a cross-cadence `Pre(y)` is an `ArgumentError`, because edge variables are not in the snapshot machinery. This narrows "reads its own relationship's edge variables" for those two cases. An edge variable not written in the block reads its stored value.
+  - **Links with a dead end.** A link with a dead end (volume 0, e.g. squeezed out by copies; lifecycle removals already drop links) is left untouched at both ends, as `link_delta` does (D-066), rather than given a NaN distance.
 - **ROADMAP.** P6.0bv grows from Small to Small–Medium.
