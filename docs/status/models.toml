@@ -90,7 +90,7 @@ deviations = [
 
 [[model]]
 spec = "11"
-name = "2D multiscale intracellular / cell / extracellular (Andasari et al. 2012)"
+name = "2D multiscale: Boolean network / cell / ECM-PDE (Jafari Nivlouei et al. 2021; Andasari et al. 2012 as an ODE conformance test)"
 status = "not started"
 status_note = "Steps 6–12, P6.10"
 deviations = ["Planned provisional defaults N1–N3: a clamp, per-cell uptake, χ calibrated; hypoxia, necrosis, Wnt and division calibrated."]

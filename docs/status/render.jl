@@ -192,7 +192,7 @@ function render_status(; published::Bool = false)
             status = "**partial (smoke tier)** ($(m["status_note"]))"
         end
         pf(k) = counts === nothing ? "—" : string(counts[k])
-        devs = join(("• " * _cell(d) for d in get(m, "deviations", String[])), "<br>")
+        devs = join(("• " * _cell(d) for d in get(m, "deviations", String[])), " ")
         links = String[]
         haskey(m, "models_page") && push!(links, "[model](@ref $(m["models_page"]))")
         published && haskey(m, "published") && push!(links, "[reproduction](published/$(m["published"]).md)")
