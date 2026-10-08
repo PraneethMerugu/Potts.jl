@@ -1,0 +1,27 @@
+decisions = ["D-146", "D-153", "D-156"]
+frozen_test_sha256 = "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
+page_sha256 = "b9a266675981db044d3aaa8d98c2f448cf37b9a8f4619aa44b80a7d02f9b5286"
+frozen_test = "lib/PottsModels/test/reproductions/01_merks.jl"
+written = "2026-10-08T18:47:00.456"
+env = "POTTS_FULL_REPRODUCTION unset in the runner (the frozen FULL tier's jobs are run one replicate per job)"
+threads = 12
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+jobs = 590
+recovered_from_snapshot = 570
+seeds = "pre-registered in the frozen test; per job in replicates.tsv"
+provenance_commit = "80d6fb9f6a317bf74b1f8c21ced623383cb7a013"
+dirty = false
+jobs_with_known_wall = 576
+hostname = "praneeth-NucBox-EVO-X2"
+affinity = "taskset -c 0-5,16-21; MemoryMax=40G"
+machine = "x86_64-linux-gnu"
+last_job_end = "2026-10-08T18:44:53.647"
+thread_s_sum_of_jobs = 141566.1
+julia = "1.12.6"
+runner = "lib/PottsModels/reproductions/data/01/full-2026-10-08/run_full.jl"
+commit = "3f1c441a03b0fe3f396c275e82ec753da93935b8"
+first_job_start = "2026-10-08T15:07:32.109"
+item = "P6.3f"
+rebuild_commit = "4f3a210ed5094a730cdee066a066731dddf69451"
+page = "lib/PottsModels/reproductions/01_merks.jl"
+launches = ["launch 2026-10-08T15:06:45-04:00 3f1c441a03b0fe3f396c275e82ec753da93935b8 praneeth-NucBox-EVO-X2", "launch 2026-10-08T18:45:29-04:00 4f3a210ed5094a730cdee066a066731dddf69451 praneeth-NucBox-EVO-X2"]
