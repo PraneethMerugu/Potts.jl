@@ -3128,3 +3128,42 @@ session.
   - Two perturbed configurations change both counts, and the snapshot's f, the decoded marks and the shown text all follow.
   - The outline detector catches `boundaries = true`, a `pottsboundaries!` overlay and boundary `lines!`.
 - **Checked before freezing.** Red on b7379cd7: the figure testsets error, while the oracle and detector testsets pass. A scratch stub passes 120/120. CairoMakie and MakiePotts join the PottsModels test environment, and the functions live in a PottsModels Makie extension.
+
+## D-176 P6.0bs: a frozen test of every MTK claim in the paper and docs, and of their wording (2026-10-08; coordinator, from the P6.0bs test author; implements D-159 and plan §5–§6; covers D-160, D-162, D-164, D-165, D-170)
+
+- **Why.** D-159 settled the paper's claim as "built on ModelingToolkit", and D-162, D-165 and D-170 fixed its sentences. Plan §5 asks for a test that keeps the claim from drifting away from the code.
+- **Frozen acceptance.** `acceptance/p6_0bs_mtk_claims.jl` (commit d6337cbb, sha256 `a7029706215ef4559ee098531bfcd12e312dd6b5a25d3356f9e1714f0487f856`). It has one testset per claim (C1–C9):
+  - C1: every model is an `AbstractSystem`, not a `System`.
+  - C2: generic accessors and SII work on models.
+  - C3: `hamiltonian` and the `PottsSweepSpec` metadata.
+  - C4: `ode_system` returns a scheduled system with algebraics as observed and not stored, checked against an Euler oracle.
+  - C5: components: the alias is eliminated and a clocked recurrence runs.
+  - C6: `updates` are in `Pre` form, and there are no MTK events.
+  - C7: per cell, `initialization_system` equals MTK's own `InitializationProblem`.
+  - C8: no field is in any MTK system.
+  - C9: the sweep is Potts' own `mtkcompile`, and `ODEProblem`/`JumpProblem` are refused.
+  
+  It ends with a wording part (W) and its controls (N).
+- **Wording (pinned).**
+  - **Approved.** The docs (`docs/src`), and an in-repo paper source if one exists, contain eight sentences:
+    - "Potts.jl is built on ModelingToolkit".
+    - "Every Potts model is a ModelingToolkit `AbstractSystem`".
+    - "…Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can inspect".
+    - The D-165 sentence.
+    - "ModelingToolkit models plug in as components".
+    - "update rules are Symbolics equations in ModelingToolkit's `Pre` form".
+    - The D-170 sentence.
+    - "compiled from the symbolic Hamiltonian by Potts.jl's own code generator".
+  - **Forbidden.** Ten patterns are banned wherever a reader sees text: `docs/` outside `docs/design/`, the READMEs, and the sources. They cover:
+    - "fully MTK-native" and "MTK-native" as a whole;
+    - events compiled by MTK, or events as callbacks or Symbolics parts;
+    - fields compiled, solved or stepped by MTK, or written as `PDESystem`s;
+    - MTK compiling or simulating the CPM;
+    - models being MTK `System`s.
+  - **Changes from plan §5.** "events" becomes "update rules" (D-162). Initialization uses the D-170 form, not "compiled by `mtkcompile`".
+- **Red on 07757b51 (Mac).** 821 of 829 pass and 8 fail. Every code claim and control passes; the 8 failures are the approved sentences, which no docs page carries yet. A stub page passes 829/829, and an injected forbidden phrase is caught.
+- **Implementation.** A docs page "Relation to ModelingToolkit" (docs/src, linked from the index and the API page) carries the eight sentences, each cited to its testset. No code changes.
+- **Re-freeze triggers.**
+  - P6.4c, when events become `SymbolicDiscreteCallback`s (C6 and the callbacks pattern).
+  - P6.4a, cross-entity initialization.
+  - Any new MTK claim.
