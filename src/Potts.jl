@@ -10,6 +10,7 @@ module Potts
 # The bare `using CorePotts` only backs the re-export loop below (`export $name` needs each
 # exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
 # explicitly on the next line (ExplicitImports, P6.0j).
+using ADTypes: AutoFiniteDiff
 using ConstructionBase: ConstructionBase
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
@@ -22,6 +23,7 @@ using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @na
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
+using SimpleNonlinearSolve: SimpleNonlinearSolve, SimpleNewtonRaphson
 using StableRNGs: StableRNG
 using StaticArrays: SMatrix, SVector
 using SymbolicUtils: SymbolicUtils
@@ -61,6 +63,7 @@ include("observed.jl")
 include("compose.jl")
 include("components.jl")
 include("odes.jl")
+include("initialization.jl")
 include("precompile.jl")
 
 """Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""
@@ -91,6 +94,8 @@ public Dirichlet, NoFlux
 public hamiltonian, drives, PottsSweepSpec
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
+# the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)
+public initialization_system
 # the update rules as written (D-164), with their cadence value and the contact-fold term
 # they print
 public updates, Every, count_contacts

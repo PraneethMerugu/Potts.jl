@@ -75,6 +75,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         constraints = [getfield(base, :constraints); getfield(sys, :constraints)],
         updates = [_unreplaced(getfield(base, :updates), getfield(sys, :updates), _target_key); getfield(sys, :updates)],
         equations = [_unreplaced(getfield(base, :equations), getfield(sys, :equations), eq -> string(eq.lhs)); getfield(sys, :equations)],
+        initialization_eqs = [getfield(base, :initialization_eqs); getfield(sys, :initialization_eqs)],
         divisions = [getfield(base, :divisions); getfield(sys, :divisions)],
         relationships = unique(r -> r.name, [getfield(sys, :relationships); getfield(base, :relationships)]),
         link_rules = [getfield(base, :link_rules); getfield(sys, :link_rules)],

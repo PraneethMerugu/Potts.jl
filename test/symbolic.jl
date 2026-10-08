@@ -3303,6 +3303,9 @@ end
     # algebraic equations (P6.0bn): accepted alike, the same code and trajectories
     @test length(lines(base, "P6BN|")) == 4
     @test lines(full, "P6BN|") == lines(base, "P6BN|")
+    # entity-local initialization (P6.0bo): the same values and rejections
+    @test length(lines(base, "P6BO|")) == 3
+    @test lines(full, "P6BO|") == lines(base, "P6BO|")
 end
 
 # P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H

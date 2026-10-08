@@ -10,7 +10,8 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@drive"), Symbol("@constraint"), Symbol("@on_copy"), Symbol("@after_mcs"),
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
-    Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"))
+    Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
+    Symbol("@initialization_equations"))
 
 """
     @potts_model Name begin
@@ -115,6 +116,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     # `@boundary`/`@schedule` state only in models that use them (anywhere, conditionals
     # included): a model without them builds exactly as before (first-construction latency)
     bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
+    # likewise `@initialization_equations` (D-170)
+    inits = _has_section(body, Symbol("@initialization_equations"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -144,6 +147,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __lattice = nothing
         __sweep = nothing
         $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
+        $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -158,6 +162,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         divisions = __divisions, relationships = __relationships, link_rules = __links,
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
         sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
+        $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
         structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -199,6 +204,7 @@ function _prime_targets(parts::_Parts, body::Expr)
         _is_section(ex) && ex.args[1] === Symbol("@variables") || continue
         for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
             decl = l isa Expr && l.head === :(=) ? l.args[1] : l
+            decl isa Expr && decl.head === :tuple && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell), [guess = g]`
             decl isa Expr && decl.head === :ref && (decl = decl.args[1])
             decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
         end
@@ -447,6 +453,11 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@variables")
         for l in _lines(args)
             decl, rhs = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
+            # `x(cell), [guess = g]`: options without a value (MTK's metadata syntax)
+            if rhs === nothing && decl isa Expr && decl.head === :tuple && length(decl.args) == 2 &&
+               decl.args[2] isa Expr && decl.args[2].head === :vect
+                decl, rhs = decl.args[1], Expr(:tuple, nothing, decl.args[2])
+            end
             range = nothing
             if decl isa Expr && decl.head === :ref                         # `p(cell)[1:n]`: a vector
                 range = decl.args[2]
@@ -577,6 +588,8 @@ function _section!(parts, sec, args, ln = nothing)
         end
     elseif sec === Symbol("@equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__equations, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+    elseif sec === Symbol("@initialization_equations")
+        foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])

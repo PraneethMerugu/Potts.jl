@@ -21,9 +21,77 @@ Options go in brackets after the default:
   0 whenever the site changes owner. This is how the "act" memory of the Act model forgets
   the previous cell.
 - `[unit = u"…"]`: a unit, see [Parameters](@ref manual-parameters).
+- `[guess = g]` (cell and model variables): the starting point when
+  `@initialization_equations` solve for the variable, see below. A variable with a guess and
+  no value is written `r(cell), [guess = -1.0]`.
 
 A vector variable `p(cell)[1:2] = [0.0, 0.0]` has components `p_1`, `p_2`; `p ~ …`, `Pre(p)`,
 `dot`, `norm` and `normalize` work component-wise.
+
+## Initialization equations: `@initialization_equations`
+
+Some initial values follow from others: a target volume twice the starting volume, a
+protein level at its steady state, a variable that makes an algebraic quantity start at a
+given value. `@initialization_equations` states them as equations, in ModelingToolkit's
+syntax (MTK's `initialization_eqs`), and Potts solves them for every cell when the problem is
+built, before the first MCS:
+
+- An equation is `lhs ~ rhs`, explicit or implicit, linear or nonlinear. It reads the cell's
+  own variables (bare), its built-ins `volume`, `id` and `kind`, parameters, model
+  variables, and `D(x)` of a cell or model ODE variable `x`, its rate at the start
+  (`D(x) ~ 0` is a steady start).
+- A variable declared **without a value** (`Vt(cell)`) is solved for when an equation of its
+  scope names it; otherwise it starts at 0.0, as before. A **written value**, `= 0.0`
+  included, or a value in the operating point fixes the variable, as in ModelingToolkit.
+- Every solved variable needs exactly one equation: too many conditions ("overdetermined",
+  for example a fixed variable that an equation also determines) and too few
+  ("underdetermined") are errors naming a variable, and so is an equation without a solution.
+- A nonlinear equation is solved from the variable's guess (`[guess = g]`, else 0.0), which
+  picks the root: `r^2 ~ volume` gives `-√volume` with `guess = -1.0`.
+- An equation that reads no cell quantity is a model equation. The model is initialized first,
+  and cell equations read its values.
+- An operating-point value for an algebraic variable (`y ~ expr` in `@equations`) is the
+  condition `y ~ value`, so the variables of its definition are solved for.
+- Initialization runs when the problem is built and again on `remake(prob; u0 = map)`. A
+  saved state passed as `u0` keeps its values. Daughter cells are not initialized.
+- Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbour gathers,
+  folds over cells, and site, field and edge variables are errors for now.
+
+```@example vars
+@potts_model Initialized begin
+    @kinds medium cell
+    @parameters begin
+        α = 0.1
+        κ = 0.5
+    end
+    @variables begin
+        V_target(cell)
+        p(cell)
+        r(cell), [guess = -1.0]
+    end
+    @lattice Lattice((30, 30))
+    @energy cells(cell) => (volume - V_target)^2
+    @equations D(p) ~ α * volume - κ * p
+    @initialization_equations begin
+        V_target ~ 2volume                # explicit
+        D(p) ~ 0                          # steady start: p = α volume / κ
+        r^2 ~ volume                      # the root picked by the guess
+    end
+    @sweep Metropolis(; temperature = 8.0)
+end
+
+@named initialized = Initialized()
+σ = zeros(Int32, 30, 30); σ[5:8, 5:8] .= 1; σ[15:17, 15:17] .= 2
+prob = PottsProblem(initialized, [ownership => σ, kind => [:cell, :cell]], (0, 10))
+(V_target = prob.u0.cell.V_target, p = prob.u0.cell.p, r = prob.u0.cell.r)
+```
+
+Each scope's equations are a ModelingToolkit system:
+[`Potts.initialization_system(mtkcompile(sys), :cell)`](@ref Potts.initialization_system)
+(`:model` for the model) is a complete `System` whose `initialization_equations` are the
+equations as written, with the variables they name as unknowns and inputs such as `volume`
+as parameters. Potts builds MTK's `InitializationProblem` of each scope once per problem and
+solves it for every cell.
 
 ## Reading variables inside a model
 

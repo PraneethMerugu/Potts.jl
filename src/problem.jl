@@ -331,13 +331,20 @@ function _operating_point(sys::PottsSystem, op)
     byname[:kind] = _unwrap(B.kind)
     byname[:cluster] = _unwrap(B.cluster)
     byname[:ownership] = CorePotts.ownership
+    # an algebraic variable's value is an initial condition `y ~ value` (D-170, initialization.jl),
+    # keyed by its name or by its symbol as declared in `@variables`
+    algebraic = Dict{Symbol, Any}(info(o.var).name => _unwrap(o.var) for o in _algebraic_observed(sys))
+    merge!(byname, algebraic)
     rels = Set(r.name for r in getfield(sys, :relationships))
     known = Set{Any}(values(byname))
     opd = Dict{Any, Any}()
     for (k, v) in op
         key = k isa Symbol ? get(byname, k, k) : _opkey(k)
+        if !(key in known) && !isempty(algebraic)
+            i = info(key)
+            i !== nothing && i.role in _ODE_SCOPES && (key = get(algebraic, i.name, key))
+        end
         if !(key in known || (key isa Symbol && key in rels))
-            _algebraic_key(sys, k)
             throw(ArgumentError(
                 "operating-point key `$k` names nothing in model `$(nameof(sys))`; it has parameters " *
                 "$(join((info(x).name for x in getfield(sys, :parameters)), ", ")), variables " *
@@ -389,20 +396,6 @@ function _vector_entry(name, v, i, n, role)
     v isa AbstractVector && all(e -> e isa Union{AbstractVector, Tuple}, v) && return [e[i] for e in v]
     v isa AbstractArray && size(v, ndims(v)) == n && return copy(selectdim(v, ndims(v), i))
     throw(ArgumentError("values for the $n-component `$name`: a number, per-entry vectors, or an array whose last dimension is $n"))
-end
-
-# A variable defined by an algebraic equation (`y ~ expr`, eliminated by `mtkcompile` as an
-# observed quantity) has no initial value of its own.
-function _algebraic_key(sys::PottsSystem, k)
-    name = k isa Symbol ? k : (i = info(_opkey(k)); i === nothing ? nothing : i.name)
-    for o in getfield(sys, :observed)
-        i = info(o.var)
-        (i.name === name && haskey(i.options, :scope)) || continue
-        throw(ArgumentError("operating-point key `$k`: `$name` is defined by an algebraic equation in @equations " *
-                            "(`mtkcompile` eliminates it as an observed quantity, `$name ~ $(o.expr)`), so it has no " *
-                            "initial value; remove it from the operating point"))
-    end
-    return nothing
 end
 
 _opkey(k::typeof(CorePotts.ownership)) = k
@@ -623,6 +616,8 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             push!(model, i.name => fill(T(v), 1))
         end
     end
+    # `@initialization_equations` and operating-point values of algebraic variables (D-170)
+    _initialize!(c, opd, σ, kinds, ncell, cell, model, pvals)
     for x in _integrals(sys)
         push!(cell, _integral_name(x) => zeros(T, ncell))
     end
