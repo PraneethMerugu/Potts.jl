@@ -25,7 +25,7 @@
 #     | Figure 3 and Figure 8 | rendered; every target passes | `data/15/f3-f8-2026-10-08/` |
 #     | Figure 4 (free-surface schematic) | rendered | `data/15/f1-f4-2026-10-08/` |
 #     | Figure 5 | rendered; three of seven targets fail | `data/15/f5-2026-10-07/` |
-#     | Figure 6, Table 1, Figure 7 (threshold sweeps) | protocol frozen, full run parked | none yet (D-174) |
+#     | Figure 6, Table 1, Figure 7 (threshold sweeps) | protocol frozen; full run unparked (D-174 amendment), not started | none yet (D-174) |
 #
 #     The failures and every other difference from M are listed in the
 #     [differences table](#Differences-from-the-manuscript) at the end of the page.
@@ -354,15 +354,20 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 #
 # pending: FULL run parked (D-174)
 #
+# The run is unparked since the D-174 amendment: the sweeps run on `BoundarySiteCPM`,
+# which is equal in law to `SequentialCPM` (D-177), and the estimated cost is now about 45
+# core-hours on the PC (AMD Ryzen AI Max+ 395, CPU). The run has not started as of this
+# build.
+#
 # M's Figure 6 plots the mean time to 10⁴ cells, in cycles, against β (γ = 0, case (c))
 # and against γ (β = 0, case (d)), with dashed lines at 1.1, 2, 5, 10 and 20 times the
 # uninhibited time of 13.57 cycles. The Potts.jl sweep is pre-registered (D-174): an
 # adaptive grid with bisection near each threshold, β on 1400² and γ on 1800² lattices,
 # runs capped at 20× (210 335 MCS). Its targets are V1 (uninhibited time within ±10 % of
 # 13.57 cycles), V2 and V2b (the β curve and thresholds), V3 and V3b (the γ thresholds and
-# the jump at γ → 0⁺, 61–70 cycles at γ = 10⁻⁴), with three negative controls. The full
-# run, about 125 core-hours, waits for boundary-site sampling, which roughly halves its
-# cost.
+# the jump at γ → 0⁺, 61–70 cycles at γ = 10⁻⁴), with three negative controls. With
+# `SequentialCPM` the full run was estimated at about 125 core-hours (PC, CPU); the switch
+# to `BoundarySiteCPM` cuts it to about 45.
 #
 # One of its targets is already measured. The ten case (a) runs of the Figure 3/8 record
 # reach 10⁴ cells at 15.17 cycles (14.92–15.49), against M's 13.57; the gap opens between
@@ -378,6 +383,11 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 #
 # pending: FULL run parked (D-174)
 #
+# The run is unparked since the D-174 amendment: the sweeps run on `BoundarySiteCPM`,
+# which is equal in law to `SequentialCPM` (D-177), and the estimated cost is now about 45
+# core-hours on the PC (AMD Ryzen AI Max+ 395, CPU). The run has not started as of this
+# build.
+#
 # M's Table 1 lists, per framework, the β (γ = 0) and γ (β = 0) at which the time to 10⁴
 # cells reaches 1.1, 2, 5, 10 and 20 times the uninhibited time. The lattice frameworks
 # agree on β = 0.687–0.704, 0.936–0.943, 0.9867–0.9916, 1.006–1.011 and 1.020–1.024, and
@@ -388,6 +398,11 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 # ## Figure 7: Monolayer of 10⁴ cells, β = 0, varying γ
 #
 # pending: FULL run parked (D-174)
+#
+# The run is unparked since the D-174 amendment: the sweeps run on `BoundarySiteCPM`,
+# which is equal in law to `SequentialCPM` (D-177), and the estimated cost is now about 45
+# core-hours on the PC (AMD Ryzen AI Max+ 395, CPU). The run has not started as of this
+# build.
 #
 # M's Figure 7 shows one row per framework: the colony at 10⁴ cells for each of its
 # Table 1 γ thresholds, labelled with γ and the time in cycles. The Potts.jl row will show
@@ -513,7 +528,7 @@ verdict_table(cal, ["target", "paper", "ours", "tolerance", "result"],
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked; on our open question list as Q20 |
 # | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, coloured count glyphs | no outlines (D-156) | not an author question |
 # | F5 distance bins and origin | 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R), from the initial cell's centre | legend 0–7, …, 31–39; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
-# | F6, T1, F7 | not run; protocol and targets frozen | Figure 6, Table 1, Figure 7 | the full sweep (about 125 core-hours) is parked until boundary-site sampling lands (D-174) | not an author question |
+# | F6, T1, F7 | not run; protocol and targets frozen | Figure 6, Table 1, Figure 7 | the full sweep has not run yet: unparked by the D-174 amendment, on `BoundarySiteCPM` (equal in law to `SequentialCPM`, D-177), about 45 core-hours on the PC (CPU) | not an author question |
 # | F8 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |
 # | Domain | closed 400² or 1400² lattice with a 5-site edge guard; no run came closer than 33 sites | unbounded plane | a finite lattice the colony never reaches is equivalent | not an author question |
 # | Division axis | random plane | not stated for CPMs (CompuCell3D and Morpheus: random; TST: minor axis) | majority practice; TST's minor axis tested on 20 runs and it does not change V4 | not an author question |

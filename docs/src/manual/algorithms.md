@@ -64,8 +64,8 @@ before their full run (D-174).
   `CheckerboardCPM` on a GPU.
 - **One O(N) pass per MCS.** At the start of each MCS the state and the frozen mask are
   compared with a shadow copy, to catch writes made outside the sweep. On a nearly empty
-  lattice this pass is a visible part of the cost: about 0.25 ms per MCS on 1400² (CPU;
-  D-177 does not name the machine).
+  lattice this pass is a visible part of the cost: about 0.25 ms per MCS on 1400² (Mac, Apple
+  Silicon, CPU; measured in the P6.4b1 review).
 - **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` updates sites in parallel by
   colour, which is a different dynamics. Whether its kinetics are statistically equivalent
   to `SequentialCPM`'s is open (ROADMAP P6.0bl): on the Merks models they differ
