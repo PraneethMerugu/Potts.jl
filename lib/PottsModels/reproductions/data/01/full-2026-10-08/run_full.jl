@@ -122,7 +122,7 @@ function observe(job, res, wall)
     if res isa Real                                   # V-E10 walk: par / perp
         d["anisotropy"] = Float64(res)
     else
-        for (t, σ) in sort(collect(res))
+        for (t, σ) in sort(collect(res); by = first)
             nw = p63d_network(σ)
             d["C_$t"] = p63d_compactness(σ)
             d["share_$t"] = nw.share
@@ -141,6 +141,18 @@ function atomic(f, path)
     mv(tmp, path; force = true)
 end
 rowpath(j) = joinpath(OUT, "rows", j.key * ".toml")
+snappath(j) = joinpath(OUT, "snap", j.key * ".jls")
+# Recovery (launch 1 had a sort bug in `observe` after the snapshot was written): a job with a
+# snapshot and no row gets its row from the snapshot; its wall time is read from the log by
+# provenance.jl, so wall_s = -1 here.
+for j in jobs
+    (isfile(snappath(j)) && !isfile(rowpath(j))) || continue
+    res = Dict(t => Int32.(σ) for (t, σ) in deserialize(snappath(j)))
+    d = observe(j, res, -1.0)
+    d["recovered_from_snapshot"] = true
+    atomic(io -> TOML.print(io, d), rowpath(j))
+    logmsg("recovered ", j.key, " from its snapshot")
+end
 todo = sort(filter(j -> !isfile(rowpath(j)), jobs); by = j -> -j.cost)
 logmsg("jobs: ", length(jobs), " total, ", length(jobs) - length(todo), " done, ", length(todo), " to run on ",
     Threads.nthreads(), " threads; remaining work ", round(sum(j -> j.cost, todo; init = 0.0) / 1e9; digits = 2), " G site-MCS")
@@ -154,7 +166,7 @@ failures = Threads.Atomic{Int}(0)
             logmsg("start ", job.key)
             wall = @elapsed res = job.run()
             if !(res isa Real)
-                atomic(joinpath(OUT, "snap", job.key * ".jls")) do io
+                atomic(snappath(job)) do io
                     serialize(io, Dict(t => UInt16.(σ) for (t, σ) in res))
                 end
             end
