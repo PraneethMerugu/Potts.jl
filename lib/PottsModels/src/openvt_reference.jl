@@ -140,7 +140,8 @@ DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready
   `Moore(1)` neighbours of the cell's sites (spec §2.4), on the closed lattice (no wrap).
 
 Like `openvt_snapshot`, it takes any `u` with `u.σ` (2D), `u.cell.volume` and
-`u.cell.A_star`, on the host or a device (the arrays are copied to the host once).
+`u.cell.A_star`, on the host or a device. `σ` and the volumes are copied to the host twice,
+once by the snapshot and once for the neighbour count.
 """
 function openvt_frame(u; β::Real, γ::Real, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
     o = openvt_snapshot(u; A₀, center)

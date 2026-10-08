@@ -2,8 +2,15 @@
 
 This is the offline record required by D-146, pre-registered by D-173.
 
-- **Run.** `run_f3_f8.jl` at commit `a64ae188` on the PC (praneeth-NucBox-EVO-X2, AMD Ryzen AI Max+ 395, Julia 1.12.6). It ran with 12 threads pinned to `taskset -c 0-11,16-27`, under a 24 GB memory cap (`systemd-run --user --scope -p MemoryMax=24G`). Wall time was 2790 s, and the 240 runs took 33,171 CPU-s (9.2 core-hours). The D-173 estimate was 3.3 core-hours. Each 10⁴-cell run costs 20–29 min on one thread, and those 20 runs are 85 % of the total. `provenance.toml` holds the workspace Manifest's sha256.
+- **Run.** `run_f3_f8.jl` at commit `a64ae188` on the PC (praneeth-NucBox-EVO-X2, AMD Ryzen AI Max+ 395, Julia 1.12.6). It ran with 12 threads pinned to `taskset -c 0-11,16-27`, under a 24 GB memory cap (`systemd-run --user --scope -p MemoryMax=24G`). Wall time was 2790 s, and the 240 runs took 33,171 CPU-s (9.2 core-hours). The D-173 estimate was 3.3 core-hours. Each 10⁴-cell run costs 16–29 min on one thread (947–1747 s), and those 20 runs are 85 % of the total. `provenance.toml` holds the workspace Manifest's sha256.
   - A first launch used `Threads.@threads :dynamic`. That scheduler splits the job list into 12 contiguous chunks, so all 20 large runs landed on one thread. It was stopped after 20 min and relaunched with `:greedy`. No output of the first launch was kept. Scheduling does not change a run (each run's RNG is its seed).
+  - The frozen test's FULL tier (`p615f_runs`, `REPRO=full`) still uses `:dynamic`. A rerun through it hands all 20 large runs to one thread and takes several times longer. That changes the time, not the result.
+  - **Dry run after the freeze.** One dry run was made before the record, on 2026-10-08 between 00:13 and 00:15, on the PC, in `~/potts-ci/p6-15f-impl-out/dry/` (not committed).
+    - **What ran.** A patched copy of the test and runner, with 12 runs: 2–3 per case, and cases (a) and (e) on 400² stopped at about 300 cells.
+    - **Attempts.** It took three attempts. The first stopped on the runner's hard-coded lattice table. The second stopped at the verdict stage, because the runner's statistics hard-coded the 10⁴ stop.
+    - **What it checked.** That the runner writes the frozen schema and that the verdict path runs end to end.
+    - **What changed afterwards.** The runner edits were mechanical: the lattice table and stop count taken from `P615F_CASES`, and a summation-order tolerance in the TSV round-trip check. The thread scheduler changed later, after the first FULL launch.
+    - Its values are not comparable with the record (different lattices and stops for (a) and (e)). No band, rule, seed or protocol changed in response to them.
 - **Same computation as the frozen test.** The runner loads every top-level `P615F_*` constant and `p615f_*` function of `lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl` (sha256 `da7d145f…`) verbatim, by evaluating that file's source without its testsets and tiers. It then runs the test's recorder (`p615f_run`) and rules (`p615f_verdicts`). The test's record tier recomputes every verdict from `runs.tsv`, `timeseries.tsv` and `neighbors.tsv`. The runner also checked that the verdicts from the written TSVs equal those from the in-memory series.
 - **Protocol** (D-173).
   - Model: `OpenVTReferenceMonolayer` at Table S1, starting from one disc cell at the centre.
@@ -86,6 +93,26 @@ No G file entered git. The G-derived content in git is:
 - **V5.** Cases (a) and (e) both follow the bulk law 2^t until a few hundred cells, then bend toward boundary-limited growth (`fig8.png` a–c).
   - On the pre-registered window the slopes are 1.022 and 1.009, and the offsets 0.60 and 0.49.
   - The control (γ = 10⁻⁴: interior cells arrest) bends early: slope 0.647, L = 6.74 at t = 8.5.
+- **What the rows can and cannot tell apart** (information; all of it follows from the pre-registered rows, nothing was changed).
+  - **Rows that cannot fail:**
+    - F8.1 (g ≡ 1 at β = γ = 0) holds by construction: no cell is ever inhibited.
+    - F8.2 is the isoperimetric inequality, true of any closed curve.
+    - F8.3's band, [5.54, 6.78], surrounds 6, the Euler value of the mean neighbour number of any confluent planar tiling.
+  - **Rows that do not separate the cases:**
+    - V5 does not separate β = 0.8 from β = 0 on its window (t = 0.5–8.5): (a) 1.022 / 0.601 and (e) 1.009 / 0.492 both pass, because type-1 inhibition acts only later.
+    - Our case (f) also passes F3.1–F3.4 against TST *stochastic*, with max |ΔL| 0.18, t̄_s ratio 0.974, max |Δr̄| 7.6 % and max |ΔĀ| 14.6 %. So F3.1–F3.4 do not tell the deterministic from the stochastic protocol.
+  - **The rows that discriminate:**
+    - F3.5 for (f): synchrony 1.00, against 0.19 for (b).
+    - The end values of (b) in F3.3/F3.4: r̄_e 1.105 and Ā_e 3.84, against (f)'s 0.977 and 3.01.
+    - F3.2's time to 1000 cells.
+    - F8.4: g at 10⁴ cells, 0.297 for (e) against 1 for (a).
+  - **The controls exercise the failure paths but sit far from the band edges:** F3.1 1.43 (band ≤ 0.3), F3.2 2.02 (≤ 1.05), V5.1 0.647 (≥ 0.9) and F3.5 0.19 (≥ 0.9). None targets F3.3, F3.4, F8.3 or F8.4.
+- **Warning for V1 (information; V1 is P6.15g's target and is judged there).**
+  - Case (a), uninhibited Table S1, reaches 10⁴ cells at 15.17 cycles (14.92–15.49). Spec V1 gives 13.57 ± 10 %, a band of [12.21, 14.93]. We are about 11.8 % slow, with 9 of 10 runs above the band.
+  - Like for like, case (e) at β = 0.8 matches TST: 16.26 cycles against TST's 16.15 (`G:results/TST/TST_time_to_10k_vs_beta.csv`).
+  - The gap opens in the boundary-limited stretch from 10³ to 10⁴ cells. TST takes about 3.3 cycles there (13.57 − 10.24). We take 4.6–4.8: 4.63 within case (a)'s own runs, 4.81 from case (b)'s t̄_s.
+  - That stretch lies past the F3 and V5 windows (t ≤ 8.5 and 1000 cells), which is why F3 and F8 pass here while V1 and the F5 rim statistics do not.
+  - It is consistent with the F5 deviations and with the leading candidate there, actual-area against target-area division (C13, Q20).
 - **F8.3 and F8.4 against the legacy curves** (information on units: those curves are legacy β = 0.8 runs in legacy cycles, D4, Q7).
   - Case (a)'s mean neighbour number is 5.970, between CompuCell3D's 5.842 and Morpheus's 6.480. Case (e)'s is 5.976.
   - Case (e)'s final g is 0.297, below Morpheus's 0.350 and CompuCell3D's 0.499, inside the band.

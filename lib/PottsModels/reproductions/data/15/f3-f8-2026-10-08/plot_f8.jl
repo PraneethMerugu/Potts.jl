@@ -2,8 +2,8 @@
 # record's timeseries.tsv and neighbors.tsv: seven panels, (a) N, (b) r [R], (c) A [R²]
 # (semilog, x 0–20, dashed bulk and dotted boundary laws), (d) C / C_circle, (e) w / r,
 # (f) g (log-log, dashed g = 1, dotted 2/t from t = 2) and (g) the final neighbour-number
-# histogram (p in %). Potts.jl case (a) (β = γ = 0, orange) and case (e) (β = 0.8, the Potts.jl
-# colour 8,29,88; the like-for-like case of the legacy curves), 10 runs each to
+# histogram (p in %). Potts.jl case (a) (β = γ = 0, orange) and case (e) (β = 0.8, magenta; the
+# like-for-like case of the legacy curves; distinct from the CompuCell3D blue), 10 runs each to
 # 10⁴ cells, time in 775-MCS cycles. With F3F8_G_OUT set to `consortium_on_g.jl`'s output, the
 # draft Fig 8's CompuCell3D and Morpheus curves are overlaid after converting px to R (C10):
 # they are legacy β = 0.8 runs in their own legacy cycles (D4), footnoted; never committed.
@@ -47,7 +47,7 @@ end
 
 # series: (label, colour, runs, neighbour histogram, line width)
 SER = Any[("Potts.jl (a): β = γ = 0, 10 runs", rgb(230, 97, 1), potts("a"), nhist("a"), 0.8),
-    ("Potts.jl (e): β = 0.8, 10 runs", rgb(8, 29, 88), potts("e"), nhist("e"), 0.8)]
+    ("Potts.jl (e): β = 0.8, 10 runs", rgb(190, 80, 140), potts("e"), nhist("e"), 0.8)]
 const LEGACY = !isempty(GO) && isfile(joinpath(GO, "legacy_morpheus.tsv"))
 if LEGACY
     for (fw, name, c) in (("compucell3d", "CompuCell3D", rgb(37, 52, 148)), ("morpheus", "Morpheus", rgb(44, 127, 184)))
