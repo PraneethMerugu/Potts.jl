@@ -482,7 +482,8 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             @test t["test-machine"]["metal"]["c1.checkerboard"] == 5.0              # other backends kept
             @test t["test-machine"]["cpu"] ==
                   Dict("c1.sequential" => 7.0, "c2.sequential" => 8.0,
-                "c1.checkerboard" => 7.0, "c2.checkerboard" => 8.0)
+                "c1.checkerboard" => 7.0, "c2.checkerboard" => 8.0,
+                "c1.boundary" => 7.0, "c2.boundary" => 8.0)                          # D-177's row
             @test t["test-machine"]["meta"]["threads"] == 1
             @test startswith(read(bl, String), "# Informational per-machine baselines")
         end

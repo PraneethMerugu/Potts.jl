@@ -76,6 +76,25 @@ Base.@kwdef struct SequentialCPM{A, R} <: CPMAlgorithm
 end
 
 """
+    BoundarySiteCPM(; acceptance = nothing, proposal = nothing)
+
+`SequentialCPM`'s dynamics, drawing only boundary sites (D-177): a mobile site with a mobile
+proposal neighbour of another owner. Every other pick of `SequentialCPM` proposes a copy of
+its own owner (a null move), so the run of such picks between two boundary picks is drawn
+at once, geometric in the boundary fraction. One MCS is still `N` attempts over all mobile
+sites (`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after
+every MCS is `SequentialCPM`'s; the random stream differs, so results are equal in
+distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one O(N)
+pass comparing the state with the boundary set's shadow copy (a few percent of the sweep at
+typical cover, more on nearly empty lattices). Host only (CPU). The keywords are
+`SequentialCPM`'s.
+"""
+Base.@kwdef struct BoundarySiteCPM{A, R} <: CPMAlgorithm
+    acceptance::A = nothing
+    proposal::R = nothing
+end
+
+"""
     CheckerboardCPM(; acceptance = nothing, proposal = nothing)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color

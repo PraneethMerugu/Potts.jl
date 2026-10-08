@@ -5,7 +5,7 @@
 #     julia --project=<checkout>/benchmark benchmark/ab_one.jl --variants=<file.jl> <variant> [options]
 #
 # <cases>: gate case names, comma-separated, or `all`. <variants>: `sequential`,
-# `checkerboard` (CPU, Float64), `metal` or `rocm` (checkerboard on that device, Float32),
+# `checkerboard`, `boundary` (CPU, Float64), `metal` or `rocm` (checkerboard on that device, Float32),
 # comma-separated; at most one device. Timed like the gate: on a device, `step!` followed by
 # the device wait `device_sync` (D-090).
 #
@@ -80,14 +80,18 @@ const AB_START_DISTURBANCES = ab_disturbances()
 include(joinpath(@__DIR__, "gate.jl"))
 using Statistics: median
 
+# `boundary` (D-177): BoundarySiteCPM, on checkouts that have it (an older side has no such
+# name; there the variant is an error when named, and nothing otherwise)
 const AB_ALGS = Dict("sequential" => (SequentialCPM(), false),
     "checkerboard" => (CheckerboardCPM(), false),
+    "boundary" => (isdefined(Main, :BoundarySiteCPM) ? Main.BoundarySiteCPM() : nothing, false),
     "metal" => (CheckerboardCPM(), true), "rocm" => (CheckerboardCPM(), true))
 
 function ab_variant(v)
     haskey(AB_ALGS, v) ||
         error("unknown variant $(repr(v)); one of $(join(sort(collect(keys(AB_ALGS))), ", "))")
     alg, dev = AB_ALGS[v]
+    alg === nothing && error("variant $v: this checkout has no BoundarySiteCPM")
     dev && v != DEVICE && error("variant $v needs the $v backend loaded")
     return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
 end
