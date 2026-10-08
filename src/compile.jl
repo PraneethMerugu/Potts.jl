@@ -266,6 +266,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems)
             if i.role === :edge
                 # once per existing link, in the environment of `edges(rel)` and `@unlink` (D-169)
                 _check_names(u.eq.rhs, _LINK_BUILTINS, "an edge update"; between_copies = true)
+                _has_op(u.eq.rhs, random_uniform) && throw(ArgumentError(
+                    "`rand()` is not available in an edge update: draws are not addressed per link"))
+                (_has_op(u.eq.rhs, random_normal) || _has_op(u.eq.rhs, random_normal_above)) && throw(ArgumentError(
+                    "`randn()` is not available in an edge update: draws are not addressed per link"))
                 _check_edge_vars(u.eq.rhs, edge_rel[i.name], edge_rel, "an edge update of `$(i.name)($(edge_rel[i.name]))`")
             else
                 allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS

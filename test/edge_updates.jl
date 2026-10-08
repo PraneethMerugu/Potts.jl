@@ -215,5 +215,24 @@ end
 end
 
 @testset "edge updates: rand() names the edge update" begin
-    @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + rand()))), "rand()", "an edge update")
+    @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + rand()))), "rand()", "an edge update",
+        "draws are not addressed per link")
+    @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + randn()))), "randn()", "an edge update")
+end
+
+# several writers of one edge variable run in declaration order (D-042), whichever cadence
+# appears first in the block (the review repro: `age` puts Every(2) first)
+@testset "edge updates: writers of one variable in declaration order" begin
+    op = Any[ownership => eu_state(), kind => [:blob, :blob, :blob], :bond => [(1, 2), (2, 3)]]
+    for stmts in ((:(@after_mcs Every(2) age ~ Pre(age) + 1), :(@after_mcs rest ~ Pre(rest) + 1),
+                      :(@after_mcs Every(2) rest ~ 2 * Pre(rest))),
+                  (:(@after_mcs rest ~ Pre(rest) + 1), :(@after_mcs Every(2) rest ~ 2 * Pre(rest))))
+        sol = solve(PottsProblem(eu_model(stmts...), op, (0, 3)), SequentialCPM(); saveat = 1)
+        @test [eu_payload(u.cell, :bond, :rest, 1, 2) for u in sol.u] == [12.0, 26.0, 27.0, 56.0]   # +1, then ×2
+        @test [eu_payload(u.cell, :bond, :rest, 3, 2) for u in sol.u] == [12.0, 26.0, 27.0, 56.0]
+    end
+    # writers that alternate between two cadences have no stage order: refused, naming them
+    @test eu_error(() -> mtkcompile(eu_model(:(@after_mcs rest ~ Pre(rest) + 1), :(@after_mcs Every(2) rest ~ 2 * Pre(rest)),
+            :(@after_mcs Every(2) age ~ Pre(age) + 1), :(@after_mcs age ~ 2 * Pre(age)))),
+        "`age`", "`rest`", "declaration order")
 end
