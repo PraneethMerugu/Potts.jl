@@ -406,3 +406,8 @@ decision = "D-166"
 path = "acceptance/p6_0bp_updates.jl"
 sha256 = "5847cfa4569c1e661e8a28354e1dcd8b40572dadfab2e6c59cb45f7a1f606dd0"
 decision = "D-164"
+
+[[file]]
+path = "../../MakiePotts/test/acceptance/p6_0by_cell_colours.jl"
+sha256 = "912671c407849f835eeb66f6fe1cf4f141bc0c3c34ad9d4bcbe63207b48933e5"
+decision = "D-172"
