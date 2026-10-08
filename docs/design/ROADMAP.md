@@ -553,7 +553,7 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
-- [ ] (page parts merged 2026-10-07, D-161; FULL run, 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+- [ ] (FULL record and page merged 2026-10-08, D-184: 36/37 pass, V-C12 FAIL; 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
   - Remove the cell outlines (page lines ~179, 203, 234).
   - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
