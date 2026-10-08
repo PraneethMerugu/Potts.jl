@@ -29,3 +29,37 @@ threads = 1
 "openvt_monolayer_100.checkerboard" = 50.36
 "openvt_reference_100.checkerboard" = 72.03
 "wortel_act_100.checkerboard" = 139.317
+
+[nucbox.cpu]
+"akeeb_99x60.checkerboard" = 36.716
+"akeeb_99x60.sequential" = 33.307
+"graner_glazier_72.checkerboard" = 20.89
+"graner_glazier_72.sequential" = 16.064
+"merks2006_100.checkerboard" = 217.033
+"merks2006_100.sequential" = 216.481
+"merks2008_202.checkerboard" = 222.139
+"merks2008_202.sequential" = 218.87
+"merks_100.checkerboard" = 229.187
+"merks_100.sequential" = 226.17
+"openvt_monolayer_100.checkerboard" = 15.768
+"openvt_monolayer_100.sequential" = 10.915
+"openvt_reference_100.checkerboard" = 18.578
+"openvt_reference_100.sequential" = 14.542
+"wortel_act_100.checkerboard" = 15.686
+"wortel_act_100.sequential" = 11.232
+
+[nucbox.meta]
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+cpus = "12"
+julia = "1.12.6"
+threads = 1
+
+[nucbox.rocm]
+"akeeb_99x60.checkerboard" = 21.407
+"graner_glazier_72.checkerboard" = 12.662
+"merks2006_100.checkerboard" = 30.272
+"merks2008_202.checkerboard" = 8.821
+"merks_100.checkerboard" = 25.741
+"openvt_monolayer_100.checkerboard" = 7.492
+"openvt_reference_100.checkerboard" = 10.838
+"wortel_act_100.checkerboard" = 24.082

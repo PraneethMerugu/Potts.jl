@@ -1,5 +1,4 @@
 [deps]
-AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
@@ -15,7 +14,3 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 CorePotts = {path = "../lib/CorePotts"}
 Potts = {path = ".."}
 PottsModels = {path = "../lib/PottsModels"}
-
-[compat]
-AMDGPU = "2"
-Metal = "1"

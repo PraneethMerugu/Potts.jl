@@ -4,8 +4,10 @@
 #
 #     julia benchmark/ab.jl --inprocess <checkout> benchmark/ab_variants_akeeb_mu.jl cpu
 const AB_VARIANTS = [
-    "mu30" => T -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60), μ = 30.0),
-        akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000),
-    "mu24" => T -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60), μ = 24.0),
-        akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000),
+    "mu30" =>
+        T -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60), μ = 30.0),
+            akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000),
+    "mu24" =>
+        T -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60), μ = 24.0),
+            akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000)
 ]
