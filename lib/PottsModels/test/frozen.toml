@@ -441,3 +441,8 @@ decision = "D-176"
 path = "reproductions/15_openvt_f1_f4.jl"
 sha256 = "a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb"
 decision = "D-175"
+
+[[file]]
+path = "acceptance/p6_4b1_boundary_site.jl"
+sha256 = "3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf"
+decision = "D-177"
