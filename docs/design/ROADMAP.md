@@ -573,7 +573,7 @@ Full runs are offline (D-146).
   - One shell read per generated function, a 2D run-count kernel for `Local()`, and a table-driven 3D flood fill with no div/rem in the loop.
   - *Accept:* oracles unchanged; A/B ≤ 1.00 within the controls' spread (D-171); zero warm allocations; Metal and ROCm equal the CPU.
 - [ ] **P6.3i** (D-189; may fold into P6.3g) Gain-side and hole negative controls (§12) on `Moore(1)` and `NeighborOrder(2)` proposals.
-- [ ] **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
+- [x] (merge, 2026-10-09; D-192, D-194; a67f16da) **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
   - Exact local χ updates per copy from the 2×2 (2D) and 2×2×2 (3D) configurations.
   - Design note first.
   - *Accept:* enumeration oracles on small lattices; an A/B showing zero cost for models that do not use it.
