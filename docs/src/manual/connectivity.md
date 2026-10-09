@@ -55,8 +55,8 @@ Details:
   out of domain is nothing.
 - **`Simple()`.** The cell uses `adjacency`, and the background (other cells, the medium, out
   of domain) uses the dual one: `:face` is (4, 8) in 2D and (6, 26) in 3D, `:full` is (8, 4)
-  and (26, 6). In 2D, out-of-domain positions are background, so a pocket against a wall is
-  not a hole.
+  and (26, 6). On every geometry, out-of-domain positions are background, so a pocket
+  against a wall is not a hole.
 - **3D.** `Local()` counts the face pieces of the 26-site shell. It is conservative for
   splitting and allows tunnels. `Simple()` is exact.
 
@@ -79,7 +79,17 @@ medium. It composes like any condition:
 | `pieces(n for n in shell(target) if cond(n); adjacency = :face)` | the pieces of the shell sites where `cond` holds |
 | `distinct(body(n) for n in R(s) if cond(n))` | the number of distinct values of `body` over relation `R` (or `shell`); the medium's 0 is a value |
 
-`pieces` takes only `shell`; there are no custom shells.
+`pieces` takes only `shell`; there are no custom shells. The shell is anchored at a site
+(`shell(target)`, `shell(source)`) and takes no options: `shell(old)` and
+`shell(target; include_self = true)` are `ArgumentError`s.
+
+**Shadowing (D-195).** These names came after published models used some of them as
+structural parameters (`WortelAct(; connected)`). A structural parameter may take the name
+`connected`, `shell`, `pieces`, `distinct`, `Local`, `ArcOrPair` or `Simple`; inside its own
+model it then shadows the helper, and that model cannot call the helper. For example, with
+`@structural_parameters connected = true`, a line `@constraint connected(old)` fails with
+"objects of type Bool are not callable". Other declarations (kinds, parameters, variables)
+may not take these names.
 
 ```julia
 # a lumen (the medium) must not be split by a gaining cell

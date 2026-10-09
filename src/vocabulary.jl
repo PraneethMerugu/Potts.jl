@@ -417,6 +417,7 @@ function _is_true(x)
     return x === true || (x isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(x) && SymbolicUtils.unwrap_const(x) === true)
 end
 function _shell_fold(fold, body, a::Around, cond; kws...)
+    _shell_anchor(a.anchor)
     count0 = _build().count
     g = _gather(fold, body, a, cond; kws...)
     n, anchor, b, c = arguments(_unwrap(g))
@@ -771,7 +772,19 @@ not part of it.
 """
 struct ShellRelation end
 const shell = ShellRelation()
-(s::ShellRelation)(anchor) = Around(s, anchor)
+function (s::ShellRelation)(anchor; kws...)
+    isempty(kws) || throw(ArgumentError("shell($anchor; $(join(keys(kws), ", "))): the shell takes no options; it is " *
+                                        "the target's neighbour shell without the target itself (no `include_self`)"))
+    return Around(s, _shell_anchor(anchor))
+end
+# the shell is anchored at a site (`target`, `source`), never at a cell
+function _shell_anchor(anchor)
+    x = _unwrap(anchor)
+    (isequal(x, _unwrap(B.old)) || isequal(x, _unwrap(B.new))) && throw(ArgumentError(
+        "shell($anchor): the shell is anchored at a site, e.g. `shell(target)`; `$anchor` is a cell. For the pieces " *
+        "of a cell's shell sites write `pieces($anchor, shell(target))`"))
+    return anchor
+end
 Base.show(io::IO, ::ShellRelation) = print(io, "shell")
 
 """
@@ -790,6 +803,7 @@ Base.show(io::IO, ::_Pieces) = print(io, "pieces")
 const pieces = _Pieces()
 function (f::_Pieces)(c, a::Around; adjacency = :face)
     a.relation isa ShellRelation || _not_shell()
+    _shell_anchor(a.anchor)
     return _gather(f, n -> n, a, n -> _index(B.owner, n) == c; adjacency)
 end
 (::_Pieces)(args...; kws...) = throw(ArgumentError("pieces: write `pieces(c, shell(target))` or " *
