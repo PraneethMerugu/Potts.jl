@@ -274,8 +274,8 @@ decision = "D-196"
 
 [[file]]
 path = "acceptance/p6_0at_relation_fingerprint.jl"
-sha256 = "bf4c9f6558de10e28195810e20e3a23e46380a5fd2e8884ca1afdfe7ed894c71"
-decision = "D-196"
+sha256 = "a19643173806ab53605accd33f7027930b0029595c861be41016ff865cc632f8"
+decision = "D-209"
 
 [[file]]
 path = "acceptance/p6_0av_mcs_duration.jl"
@@ -284,8 +284,8 @@ decision = "D-196"
 
 [[file]]
 path = "acceptance/p6_0ax_gather_scan.jl"
-sha256 = "a927364cce0e8aed1cef015815bb23a4e654106ce29a88960736a97fedfa47e7"
-decision = "D-196"
+sha256 = "9a4dc06b7e530920e3ca97b3262bf847536ca5b5d29b46799be35cbee652e13a"
+decision = "D-209"
 
 [[file]]
 path = "acceptance/p6_0aw_on_copy_integral.jl"
@@ -549,5 +549,10 @@ decision = "D-205"
 
 [[file]]
 path = "acceptance/p6_0ba_boundary_only_reach.jl"
-sha256 = "1ce9e28511f5c42ab32bec4fd3d6f2679f436bb54fb5adbc4ccb4a880a951896"
-decision = "D-208"
+sha256 = "a559af4ad77db74d9bda4ff4b361fb5a68e27e6ea6fa115cd820220d32da4709"
+decision = "D-209"
+
+[[file]]
+path = "acceptance/p6_0ca_gather_energy.jl"
+sha256 = "83cce600addf22487a93f97a5dd4eb3f9f8d0629d5d5241963e616b02264f162"
+decision = "D-209"

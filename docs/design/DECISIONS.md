@@ -3839,3 +3839,9 @@ session.
 - **Separate rough edges, not in this item.**
   - A fixed-site anchor given as a parameter (a Float64 parameter gives a `MethodError` in `coordinates`; `::Int` parameter syntax fails at macro expansion).
   - AUTHORING §4 lists a `model` energy domain that does not exist.
+- **Freeze (P6.0ca test author, commit 7df0cc95).**
+  - **New test:** `acceptance/p6_0ca_gather_energy.jl`, sha256 `83cce600…`. A refusal is an `ArgumentError` containing "a copy changes" and "in @energy <domain>", checked at `mtkcompile` and at `PottsProblem`. It covers 26 refused forms, 6 accepted static gathers, each with a ΔH oracle (0 mismatches over 3000 attempts), the GranerGlazier oracle, and GranerGlazier/OpenVT fingerprint and trajectory pins. On the base: 83 pass, 77 fail, and every fail is the missing refusal.
+  - **Re-frozen, with fixtures moved to valid forms that keep each test's intent:**
+    - `p6_0at_relation_fingerprint.jl` (`a1964317…`): the cell energies read the static `q` map through `volume`.
+    - `p6_0ax_gather_scan.jl` (`9a4dc06b…`): the energy and edge folds read `q`. Two fingerprint pins were re-recorded on the base, "at energy Moore(1)(40)" 0xfc8f…→0x674d… and "edge far=Moore(1)" 0xef5c…→0xe970…; the hand values are unchanged.
+    - `p6_0ba_boundary_only_reach.jl` (`a559af4a…`): the copy-step edge fixtures read `0.1·distance·count(q[n] == a/b …)`. ΔH still reads `ctx.far` beyond the declared `Footprint(read = 1)`, so the reach refusal stays. That refusal is conservative, since no copy writes what is read. Base results are identical to D-208.
