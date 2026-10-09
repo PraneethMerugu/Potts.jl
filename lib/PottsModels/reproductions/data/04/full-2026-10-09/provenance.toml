@@ -1,0 +1,47 @@
+frozen_test = "lib/PottsModels/test/reproductions/04_foam.jl"
+wall_s_this_launch = 34922.5
+tau = 3.4472094822805346
+r_star = 4.827142974814126
+threads = 24
+kappa = 2.4967980904210996
+decision = "D-190"
+dirty = false
+frozen_sha256 = "b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d"
+finished = "2026-10-09T11:31:03.283"
+algorithm = "BoundarySiteCPM(), proposals NeighborOrder(4) (DV1)"
+started = "2026-10-09T01:49:00.791"
+machine = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (x86_64-linux-gnu), CPU, 32 hardware threads"
+julia = "1.12.6"
+runner = "lib/PottsModels/reproductions/data/04/run_full.jl"
+commit = "0ca8cdd76e30cd37d6b76d5dfbc82895eae2067b"
+item = "P6.4r"
+commit_date = "2026-10-08"
+
+[jobs]
+calibration = 165
+steady = 15
+bulk = 200
+foams = 40
+loops = 530
+
+[seeds]
+run = "p64r_run_seed(block, idx, k) = 5_000_000 + 1_000_000 block + 10 idx + k"
+foam = "p64r_prep_seed(f, k, try) = 4_000_000 + 100_000 code(f) + 100k + try"
+
+    [seeds.blocks]
+    v9c = 7
+    v16c = 11
+    v4 = 3
+    v14 = 9
+    v9 = 6
+    spec = 8
+    v16 = 10
+    v2 = 5
+    cal = 12
+    scan = 1
+    v3 = 2
+    v6 = 4
+
+[verdicts]
+fail = 24
+pass = 22

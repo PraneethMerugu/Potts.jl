@@ -29,9 +29,18 @@ deviations = [
 [[model]]
 spec = "04"
 name = "2D foam rheology (Jiang et al. 1999)"
-status = "not started"
-status_note = "Step 4, P6.4a–P6.4e"
-deviations = ["Planned provisional default F1: the displacement form of the shear, γ₀ calibrated by γ₀/J ≈ 1.9."]
+status = "partial"
+status_note = "FULL record 2026-10-09 (provisional, D-154): 18 of 42 rows and 4 of 4 negative controls pass, 24 rows fail; the low-β pinning finding is under review"
+data = "04"
+published = "04_foam"
+deviations = [
+    "Provisional default F1: the displacement form of the shear, γ₀ calibrated by γ₀/J ≈ 1.9 (κ = 2.50).",
+    "Pinning (under review): the provisional displacement-form drive (F1) has a pinning threshold at low β. Model β = κ × 0.001 ≈ 0.0025 gives a bias of about 0.64, below the integer ΔH barriers, so there are no T1s at β ≤ 0.001 and none in the ordered foam at β = 0.005; ordered β·t_first is 0.105 against the paper's ≈ 48. Rows V11a, V11c, V12, V14a, V14b, V15a, V15c, V15d and part of V13a.",
+    "V18: the fixed 100 paper-MCS window saturates in steady flow at β ≥ 0.02 (0.996 against < 0.5).",
+    "Under review: loops and calibration (V3b loop height 5.7e-4 against 0.01–0.03; V4 and V5b, a cliff in the κ calibration curve; V6b, T not scaled with κ).",
+    "Under review: no shear localisation in the ordered foam (V7i 0.32; V7ii and V20 drop ratio 0.79), V7iii slip peak (1 of 5 in band), V9 (2 of 5 disordered foams yield before 100 MCS), V2ii (2 of 5, narrow misses).",
+    "Under review: spectra (V10a, V11b: a strong T1 peak near 6.7e-3 flattens the slope; V13a, V13b: φ spectra steeper than 1/f, 2.24 and 2.09) and V14c (320² foams' N̄ not rescaled for L).",
+]
 
 [[model]]
 spec = "05"
