@@ -153,7 +153,7 @@ p615g_tau(m) = round(P615G_T0 * m; digits = 4)         # 14.927, 27.14, 67.85, 1
 const P615G_CAP = 210_335                              # 271.4 × 775 MCS: the 20× cap
 const P615G_CELLS = 10_000
 const P615G_GUARD = 5
-const P615G_ALG = BoundarySiteCPM(; proposal = Moore(1))
+const P615G_ALG = SequentialCPM(; skip_interior = true, proposal = Moore(1))
 const P615G_LATTICE = (beta = 1400, gamma = 1800)
 const P615G_GRID = (
     beta = [0, 2500, 5000, 6000, 6500, 7000, 7500, 8000, 8500, 8727, 9000, 9334, 9500, 9600, 9700, 9800, 9900,

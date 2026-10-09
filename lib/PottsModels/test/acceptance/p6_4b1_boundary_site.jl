@@ -151,7 +151,7 @@ const P64B1_Z_FULL = 3.89
 const P64B1_SPEEDUP = 1.5
 
 # The algorithm under test, constructed only inside testsets (it does not exist on the base).
-p64b1_bs(; kw...) = Potts.BoundarySiteCPM(; kw...)
+p64b1_bs(; kw...) = Potts.SequentialCPM(; skip_interior = true, kw...)
 const P64B1_MOORE = [(a, b) for a in -1:1 for b in -1:1 if (a, b) != (0, 0)]
 const P64B1_VN = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
@@ -564,20 +564,21 @@ end
 # 1. API
 
 @testset "P6.4b1: BoundarySiteCPM is a public algorithm with SequentialCPM's keywords" begin
-    @test isdefined(CorePotts, :BoundarySiteCPM) && Base.isexported(CorePotts, :BoundarySiteCPM)
-    @test isdefined(Potts, :BoundarySiteCPM) && Base.isexported(Potts, :BoundarySiteCPM)
-    @test Potts.BoundarySiteCPM === CorePotts.BoundarySiteCPM
+    # D-198: the name is removed with no alias; the algorithm is SequentialCPM(; skip_interior = true)
+    @test !isdefined(CorePotts, :BoundarySiteCPM) && !Base.isexported(CorePotts, :BoundarySiteCPM)
+    @test !isdefined(Potts, :BoundarySiteCPM) && !Base.isexported(Potts, :BoundarySiteCPM)
+    @test !isdefined(PottsModels, :BoundarySiteCPM)
     a = p64b1_bs()
     @test a isa CorePotts.CPMAlgorithm
     @test Potts.SciMLBase.isdiscrete(a)
-    @test fieldnames(typeof(a)) == (:acceptance, :proposal)
+    @test a isa SequentialCPM && a.skip_interior === true
     @test a.acceptance === nothing && a.proposal === nothing
     @test p64b1_bs(; proposal = Moore(1)).proposal == Moore(1)
     @test p64b1_bs(; acceptance = Barker()).acceptance == Barker()
-    # SequentialCPM itself is unchanged
-    @test fieldnames(SequentialCPM) == (:acceptance, :proposal)
+    # SequentialCPM's default is unchanged
+    @test SequentialCPM().skip_interior === false
     @test SequentialCPM().acceptance === nothing && SequentialCPM().proposal === nothing
-    @test !(a isa SequentialCPM) && !(a isa CheckerboardCPM)
+    @test !(a isa CheckerboardCPM)
 end
 
 @testset "P6.4b1: BoundarySiteCPM is accepted wherever SequentialCPM is" begin
