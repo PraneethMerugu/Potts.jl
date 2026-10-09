@@ -3502,3 +3502,21 @@ session.
   - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
   - **Stop rule.** A major slowdown stops the work for a question to the maintainer (standing rule). The rule values are plain structs, so no MTK friction is expected.
 - **Items.** P6.3g (surface), P6.3h (shell kernels), P6.3i (negative controls), P6.3j (Euler tracker) and P6.3k (CC3D source check). Also P6.0ae (ruled) and an amendment to P6.9. They are scheduled alongside the foam streams (D-186).
+
+## D-190 P6.4r: reproduction 04 (foam, Jiang et al. 1999) test frozen (2026-10-08; coordinator, from the repro 04 test author; under D-186)
+
+- **Frozen test.** `reproductions/04_foam.jl` (commit 27890d50, sha256 `b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d`). Rows V1–V20 are pre-registered with the bands of spec 04 §5.2.
+- **Tiers.**
+  - V1 (interior hexagon share ≥ 0.95), V1b (μ2(n) ∈ [0.3, 0.6]), PREP and V19 run on SMOKE (2 foams) and FULL (10).
+  - V2–V20 run on FULL with 5 replicates, plus the record tier.
+- **Negative controls.** C-V1, C-V1b (counting the wall as a side gives 0.109; periodic y gives 0), C-V9, C-V12, C-V16 and C-V18, plus two in the SMOKE shear check.
+- **Calibrations.** These are pre-registered and are not tuned against the results.
+  - **A-1 (κ).** Set in two stages: a J = 3 grid fixes κ from γ₀/J ≈ 1.9, and the V5 scan then runs in paper units.
+  - **A-2 (wall).** Closed y with no wall cells. The brick wall then gives μ2(n) = 7/16, the paper's 0.437.
+  - **A-5 (time scale, new).** τ = 1/ū ≈ 3.45, because our MCS runs about 3.4× slower than the paper's with a uniform neighbour. Every shear time is in paper MCS. τ is listed as a deviation (DV1).
+  - **A-8 (preparation).** Anneal at T = 3 for 10 MCS, then relax at T = 0 for 1000 MCS. Coarsen at Γ = 0 and T = 3 until μ2(n) reaches its target, then relax.
+  - **A-14.** The two low-μ2(a) foams run on 320².
+  - **A-15 (T1 counting).** `:t1`.
+- **Shear gating (accepted).** The shear rows are gated on P6.4a1. Until it lands, the record tier is `@test_broken`; once it lands, the record tier fails until a FULL record exists. P6.4a1 is reviewed and merges first, so in practice the gate is open.
+- **FULL cost.** About 4 ms per MCS on the Mac, so about 150 CPU-h, or 6–8 h on the PC. It runs on the PC (D-157) after the page implementation, outside benchmark windows.
+- **Early signal.** V18 (< 0.5) reached 0.50–0.77 at β = 0.05 in reduced runs. A FAIL is reported under D-154, not tuned away.
