@@ -193,12 +193,13 @@ function render_status(; published::Bool = false)
         end
         pf(k) = counts === nothing ? "—" : string(counts[k])
         devs = join(("• " * _cell(d) for d in get(m, "deviations", String[])), " ")
-        # the paper-accurate reproduction page when it is built; the Models tutorial otherwise
+        # the paper's page in the "Paper models" section: its reproduction page when that is
+        # built, its model page otherwise (docs/make.jl, D-185)
         links = String[]
         if published && haskey(m, "published")
             push!(links, "[reproduction](published/$(m["published"]).md)")
         elseif haskey(m, "models_page")
-            push!(links, "[model](@ref $(m["models_page"]))")
+            push!(links, "[model page](@ref $(m["models_page"]))")
         end
         println(io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $devs | ",
                 isempty(links) ? "—" : join(links, ", "), " |")
@@ -219,10 +220,16 @@ function render_status(; published::Bool = false)
 
     A dash means the model has no committed full-run record yet. A model whose results come only
     from the docs-build (SMOKE) tier is "partial (smoke tier)".""",
-            published ? " Each row links its full reproduction page, which runs the paper's published " *
-                        "constructor against the paper's targets; the construction tutorials are in [Models](@ref models)." :
-            " The model links go to the construction tutorials in [Models](@ref models). The full reproduction " *
-            "pages are built only with `POTTS_DOCS_PUBLISHED=true`, and then each row links its reproduction page.")
+            published ? " Each row links its paper's page in this section: the reproduction page, which " *
+                        "builds the model and runs it against the paper's targets." :
+            " Each row links its paper's page in this section, the model page. The full reproduction " *
+            "pages are built only with `POTTS_DOCS_PUBLISHED=true`; each row then links its reproduction page.")
+    println(io, """
+
+    The section also has one model page that is **not a reproduction**:
+    [Actin-driven migration (the Act model)](@ref model-wortel-act) builds the Act model of
+    Niculescu et al. (2015) and Wortel et al. (2021) as a tutorial, without comparing it with
+    the papers' results.""")
     println(io, """
 
     ## How the counts are made

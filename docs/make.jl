@@ -1,10 +1,18 @@
 # Build the documentation offline: `julia --project=docs docs/make.jl`.
 #
-# The Models pages are rendered from the Literate scripts in `docs/models/` (see
-# `docs/models/render.jl`). The paper reproductions in `lib/PottsModels/reproductions/*.jl`
-# are not part of the site yet; `POTTS_DOCS_PUBLISHED=true` renders them by Literate into
-# `docs/src/published/` (generated, gitignored) and adds a "Published models" section.
-# `POTTS_FULL_REPRODUCTION=true` makes those pages run their full-size ensembles.
+# The "Paper models" section (D-185) has one page per paper, after the status page:
+#
+# - Default build: the model pages rendered from the Literate scripts in `docs/models/` (see
+#   `docs/models/render.jl`), at `models/<name>/`.
+# - `POTTS_DOCS_PUBLISHED=true`: the paper reproductions in
+#   `lib/PottsModels/reproductions/*.jl` are rendered by Literate into `docs/src/published/`
+#   (generated, gitignored) and replace the model page of their paper. The old URL
+#   `models/<name>/` becomes a short page linking to `published/<NN_name>/`. A model with no
+#   reproduction page (Wortel Act) keeps its model page in both builds.
+#
+# Either way the heading of each paper's page carries the `@id model-<name>`, so
+# `[…](@ref model-merks)` reaches the paper's page in both builds.
+# `POTTS_FULL_REPRODUCTION=true` makes the reproduction pages run their full-size ensembles.
 using Documenter, Literate, TOML
 using Potts, CorePotts, PottsModels, MakiePotts
 
@@ -14,49 +22,92 @@ const PUBLISHED = joinpath(SRC, "published")
 const MODELS = joinpath(SRC, "models")
 const WITH_PUBLISHED = get(ENV, "POTTS_DOCS_PUBLISHED", "false") == "true"
 
+# One page per paper, in the order of the status page: the reproduction page's stem, the
+# model page it replaces (`docs/models/<name>.jl`, `@id model-<name>`), and its title in
+# the navigation. A reproduction script not listed here is added after these, under its
+# own heading.
+const PAPER_PAGES = [
+    ("01_merks", "merks", "Vasculogenesis (Merks et al. 2006, 2008)"),
+    ("09_cell_sorting", "graner_glazier", "Cell sorting (Graner & Glazier 1992)"),
+    ("10_akeeb", "akeeb", "Leader–follower invasion (Akeeb, Marcus & Jiang 2026)"),
+    ("15_openvt_monolayer", "openvt", "Growing monolayer (OpenVT benchmark)"),
+]
+# model pages that are not reproductions of a paper's results
+const NOT_REPRODUCTIONS = [("wortel_act", "Actin-driven migration (not a reproduction)")]
+
+_model_id(name) = "model-" * replace(name, "_" => "-")
+
+# Give a reproduction page's first heading the `@id` of the model page it replaces, unless
+# the heading already has an `@id`. Returns the script's text and whether it got the id.
+function _with_model_id(src, name)
+    lines = String.(split(src, '\n'))
+    i = findfirst(l -> startswith(l, "# # "), lines)
+    (i === nothing || occursin("(@id ", lines[i])) && return src, occursin("(@id $(_model_id(name)))", src)
+    lines[i] = "# # [" * strip(lines[i][5:end]) * "](@id $(_model_id(name)))"
+    return join(lines, '\n'), true
+end
+
 # stale generated pages would be built even when they are not in `pages`
 for f in (isdir(PUBLISHED) ? readdir(PUBLISHED) : String[])
     endswith(f, ".md") && rm(joinpath(PUBLISHED, f))
 end
-published = String[]
+published = String[]       # every rendered reproduction page, `published/<stem>.md`
+has_model_id = Set{String}()   # reproduction stems whose heading carries `model-<name>`
 if WITH_PUBLISHED
     for f in sort(readdir(REPRODUCTIONS))
         endswith(f, ".jl") || continue
-        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false)
-        push!(published, joinpath("published", splitext(f)[1] * ".md"))
+        stem = splitext(f)[1]
+        k = findfirst(p -> p[1] == stem, PAPER_PAGES)
+        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false,
+            preprocess = s -> begin
+                k === nothing && return s
+                s, ok = _with_model_id(s, PAPER_PAGES[k][2])
+                ok && push!(has_model_id, stem)
+                s
+            end)
+        push!(published, joinpath("published", stem * ".md"))
     end
-    # the section's index page lists the generated pages
+    # the old index page of the "Published models" section, now a page linking onward
     write(joinpath(PUBLISHED, "index.md"), """
-    # [Published models](@id published-models)
+    # [Published models (moved)](@id published-models)
 
-    Each page reproduces one paper from the public constructor in `PottsModels`. The pages
-    are generated from the Literate scripts in `lib/PottsModels/reproductions/`. The docs
-    build runs a reduced ensemble; `POTTS_FULL_REPRODUCTION=true` runs the full one.
-
-    ```@contents
-    Pages = $(repr([basename(p) for p in published]))
-    Depth = 1
-    ```
+    !!! note "This section has moved"
+        The reproduction pages are now in the **Paper models** section, one page per paper,
+        listed on [Paper models: status](../status.md). Their addresses are unchanged.
     """)
 end
 
-# The "Models" section: rendered by `docs/models/render.jl` when it exists (its pages go to
-# `docs/src/models/`); otherwise `models/index.md` and every other `models/*.md` found at
-# build time. Neither: no section.
-models = if isfile(joinpath(@__DIR__, "models", "render.jl"))
-    include(joinpath(@__DIR__, "models", "render.jl"))
-    ["models/index.md"; render_models()]
-elseif isdir(MODELS)
-    rest = sort([joinpath("models", f) for f in readdir(MODELS) if endswith(f, ".md") && f != "index.md"])
-    isfile(joinpath(MODELS, "index.md")) ? ["models/index.md"; rest] : rest
-else
-    String[]
+# The model pages (`docs/models/render.jl`): a model whose reproduction page is built gets a
+# short page at its old URL instead (`render_model_stub`), linking to the reproduction page.
+include(joinpath(@__DIR__, "models", "render.jl"))
+paper_pages = Any[]
+let built = Set(basename.(published))
+    rendered = String[]
+    for (stem, name, title) in PAPER_PAGES
+        if stem * ".md" in built
+            render_model_stub(name, joinpath("published", stem * ".md"), title;
+                id = stem in has_model_id ? nothing : _model_id(name))
+            push!(paper_pages, title => joinpath("published", stem * ".md"))
+        else
+            append!(rendered, render_models(; names = [name]))
+            push!(paper_pages, title => joinpath("models", name * ".md"))
+        end
+    end
+    # reproduction pages with no model page of their own, under their own headings
+    for p in published
+        any(q -> q[1] * ".md" == basename(p), PAPER_PAGES) || push!(paper_pages, p)
+    end
+    for (name, title) in NOT_REPRODUCTIONS
+        render_models(; names = [name])
+        push!(paper_pages, title => joinpath("models", name * ".md"))
+    end
 end
 
-# Names that a Models page documents with an `@docs` block; the API page leaves them out,
-# since Documenter allows each docstring on one page only.
+# Names that a model or reproduction page documents with an `@docs` block; the API page
+# leaves them out, since Documenter allows each docstring on one page only. A name that no
+# page documents (e.g. on a moved model's short page) is listed on the API page.
 const MODEL_PAGE_NAMES = let names = Set{Symbol}()
-    for f in (isdir(MODELS) ? readdir(MODELS; join = true) : String[])
+    for d in (MODELS, PUBLISHED), f in (isdir(d) ? readdir(d; join = true) : String[])
         endswith(f, ".md") || continue
         for m in eachmatch(r"```@docs\n(.*?)```"s, read(f, String)), l in split(m[1], '\n')
             l = strip(l)
@@ -130,15 +181,16 @@ manual = [
     "manual/plotting.md",
 ]
 
+# `models/index.md` and `published/index.md` (the old section index pages) are built at their
+# old URLs but are not in the navigation.
 pages = Any[
     "Home" => "index.md",
-    "Paper models: status" => STATUS_PAGE,
     "Getting started" => "getting_started.md",
     "Tutorials" => tutorials,
+    "Paper models" => Any["Paper models: status" => STATUS_PAGE; paper_pages],
+    "Workshop" => "workshop.md",
+    "Manual" => manual,
 ]
-isempty(models) || push!(pages, "Models" => models)
-push!(pages, "Workshop" => "workshop.md", "Manual" => manual)
-WITH_PUBLISHED && push!(pages, "Published models" => ["published/index.md"; published])
 append!(pages, Any[
     "Coming from CompuCell3D or Morpheus" => "coming_from.md",
     "FAQ and common errors" => "faq.md",

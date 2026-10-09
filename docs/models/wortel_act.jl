@@ -1,5 +1,9 @@
 # # [Actin-driven cell migration (the Act model)](@id model-wortel-act)
 #
+# !!! note "Not a reproduction"
+#     This page builds the Act model and runs it as a tutorial. Unlike the other pages of
+#     this section, it does not compare the model's results with the papers' figures.
+#
 # A crawling cell pushes its front forward by polymerising actin, and newly protruded
 # regions are the most active. Niculescu, Textor and de Boer (2015) captured this with one
 # extra rule in the cellular Potts model: every site remembers how recently its cell

@@ -258,4 +258,4 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 #
 # A full reproduction page, which runs `GranerGlazier` against the papers' figures (the
 # sorting time course, the engulfment end state, partial sorting and a negative control),
-# is in preparation.
+# is reproduction 09, which takes this page's place in the published docs.
