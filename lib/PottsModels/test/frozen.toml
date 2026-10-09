@@ -471,3 +471,8 @@ decision = "D-184"
 path = "acceptance/p6_4b2_foam_analysis.jl"
 sha256 = "2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044"
 decision = "D-187"
+
+[[file]]
+path = "acceptance/p6_3j_euler_tracker.jl"
+sha256 = "0529f43e9676c8c3899945b63c766a3e1c09f278c58b2da72a143709efc09d5b"
+decision = "D-194"
