@@ -180,7 +180,8 @@ These names are always available where they make sense:
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
 | `kind′`, `owner′`, `weight` | the other side of a contact pair, the relation weight | contacts |
 | `source`, `target`, `new`, `old` | the sites and cells of a copy | drives, constraints, on-copy |
+| `direction[k]`, `position[target][k]` | the copy's source→target offset (minimum image on periodic axes), a copy site's coordinates | drives, constraints, on-copy |
 | `displacement(c, k)` | shift of cell `c`'s centroid along `k` if the copy is accepted | drives |
 | `a`, `b`, `distance` | the two cells of a link, their centroid distance | edges, link rules |
-| `mcs`, `time` | the current MCS, and the time (`mcs × mcs_duration`) | updates, equations, rules |
+| `mcs`, `time` | the number of completed MCS, and the time (`mcs × mcs_duration`) | updates, equations, rules (`mcs`: also drives, constraints, on-copy) |
 | `cluster`, `cluster_volume`, `cluster_surface` | compartments (see [Energy](@ref manual-energy)) | cell |

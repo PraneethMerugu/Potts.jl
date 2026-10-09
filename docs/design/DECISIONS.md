@@ -3548,7 +3548,7 @@ session.
   1. **`holes = pieces − euler`** comes with P6.9, because it needs cell-scope `pieces`. v1 ships `euler(c; adjacency)` only.
   2. **A cell that wraps a torus** reports its true torus χ. For example, a wrapping band reads as one hole. This is documented.
   3. **3D in v1** ships `euler` only. Tunnels and cavities are derived later, once `pieces` exists.
-  4. **`adjacency = :full` on hex** is a build error. Hex has a single adjacency, so `:full` would only suggest a difference that does not exist.
+  4. **`adjacency = :full` on hex** is accepted and equals `:face`, because hex has a single, self-dual adjacency. This is amended to match P6.3g (D-193); the first ruling here was a build error.
   5. **Tracking.** `euler` is tracked whenever the model reads it, whether in an energy or only as an observable.
   6. **Cluster-scope χ** is not in v1.
 - **Accept criteria (P6.3j).**
@@ -3557,3 +3557,32 @@ session.
   - An A/B showing zero cost when unused (D-171).
   - Zero warm allocations.
   - The device path works with no Float64.
+
+## D-193 P6.3g: connectivity vocabulary test frozen (2026-10-08; coordinator, from the P6.3g test author; under D-189, D-191)
+
+- **Frozen test.** `acceptance/p6_3g_connectivity_vocabulary.jl` (commit 37ffd8d5, sha256 `30f2c67e783ecf2d8c8c295550f6654e9a2c44312e7c6165b6590b5c91b2444b`). The P6.3i gain-side and hole controls are folded in, on Moore(1), NeighborOrder(2) and NeighborOrder(3).
+- **What it covers.**
+  - Rule values and options.
+  - `components` is gone.
+  - Enumeration oracles for the 7 rules, the folds, `connected` and the old-name values, on square, hex and cubic lattices, periodic and closed. The oracle agrees with CorePotts on 1764 states and with a global 2D oracle on 6000 of 6000.
+  - Ruling 10 in 2D, hex and 3D.
+  - D-191's CC3D rules 1 and 2 as the `Local()` defaults.
+  - The ArcOrPair frame at a closed edge.
+  - Build errors, each with a control.
+  - The penalty form.
+  - Byte-identical aliases.
+  - Akeeb invariance.
+- **Readings fixed by the test.**
+  - A full shell means every position is in the domain and owned by `old`, so a full shell never occurs at a wall.
+  - Under `:full`, gain means any shell site.
+  - On hex, `:full` equals `:face`.
+  - `connected(new)` under Local and ArcOrPair is not pinned.
+  - The aliases are defined as: `ring_cells` ≡ `distinct(owner[n] for n in shell(target) if owner[n] != 0)`, and `ring_medium` ≡ `count(owner[n] == 0 for n in shell(target))`.
+- **Re-freezes this forces.** These go through test authors, and the implementer lists the exact set.
+  - The fingerprint pins of MerksVasculogenesis, AkeebInvasion and WortelAct: p6_0x, 0ag, 0ah, 0p, 0t, 0aq, 0ar, 0as, 0au, 0at, 0av, 0ax, 0aw, 0c2 and 0g.
+  - p6_3a's Global testset (`components` → `pieces`).
+  - p6_0aa's edge testset (P6.0ae).
+  - p6_0m (e), where diagonal sources now hit the gain test.
+  - Possibly p6_0v3 (the Merks digests) and p6_0bm.
+  
+  A fingerprint change with no change in dynamics is re-pinned. A change in dynamics on any FULL record is re-run on the PC and reported under D-154. Akeeb must show no change in dynamics (its frozen record test plus an A/B).
