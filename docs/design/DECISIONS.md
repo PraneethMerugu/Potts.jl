@@ -3857,3 +3857,7 @@ session.
   - kind names in `show`/`@extend` output;
   - doc wording on what a fold may read.
 - **Re-frozen for the widening.** Commit 174bc91e, sha256 `eab48311…`. New section 5 has 21 refused fixtures; on the implementation head they give 69 reds. New section 6 holds the controls, whose ΔH oracles are exact. The original 160 checks are unchanged. `kind[40]` in cells and contacts must carry the D-209 wording; today it raises the older "needs a site" message.
+- **Second review round (2026-10-09; coordinator).**
+  - **Also refused.** An explicit-site read of a copy-written site variable, outside any fold, in every domain. Examples: `act[40]` where `@on_copy` writes `act`, and `tag[40]` for a `clear_on_ownership_change` variable. On the oracle this was accepted with a silently wrong ΔH: 69 mismatches, worst error 9.3 (in contacts). The bare `x`/`x′` pair reads in contact terms stay allowed.
+  - **Kept allowed.** The bound variable of a population fold (`for c in cells`, `for s in sites`). `sum(volume[c] for c in cells)`, `sum((owner[s] == 1) for s in sites)` and an on-copy `y[c]` were exact before (0 mismatches) and the whole-term walk had refused them. They are exempt again, as D-041 makes them exact.
+  - **Cosmetics.** `kind[id]` gets the "read it bare" hint. AUTHORING names the indexed `euler`/`pieces` family. energy.md says the bare quantities are fine inside a fold too.
