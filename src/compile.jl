@@ -639,16 +639,25 @@ function _copy_written_vars(sys::PottsSystem)
     return sites, cells
 end
 
-# `owner[…]` or `kind[…]`: σ at a site
-_is_sigma_at(y) = iscall(y) && operation(y) === at && (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
+# the bound variable of a population fold (`for c in cells`, `for s in sites`): reads at it
+# are exact (D-041), so they are exempt
+_pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
+# `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
+_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) &&
+                  (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
 const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_NAMES...)
+# an explicit site index: not a pair's own site (`x′` is `x[site′]`), not a bound variable
+_explicit_index(i) = (r = info(i); r === nothing || !(r.role in (:bound, :bound_cell, :bound_site) ||
+                                                         (r.role === :builtin && r.name in (:site, :site′))))
 
 # The first read in `x` that a copy changes (outermost first), as (read as written, bare form
-# to suggest or `nothing`), or `nothing`. `sites`: copy-written site variables (`nothing`: not
-# checked); `cells`: on-copy cell variables (`nothing`: indexed cell quantities not checked).
-function _copy_varying_read(x, sites, cells)
+# to suggest or `nothing`), or `nothing`. `sites`: copy-written site variables, refused at any
+# index and bare (`:all`, in fold bodies) or at an explicit index only (`:explicit`), or not
+# checked (`nothing`); `cells`: on-copy cell variables (`nothing`: indexed cell quantities
+# not checked).
+function _copy_varying_read(x, sites, cells; mode = :all)
     hit = Ref{Any}(nothing)
     bare = Ref{Any}(nothing)
     _walk(x) do y
@@ -658,22 +667,26 @@ function _copy_varying_read(x, sites, cells)
             i = info(a[1])
             if _is_sigma_at(y) || _reads_sigma(a[2])
                 hit[] = y                                 # `x[owner[i]]`, `owner[i]`, `kind[i]`
-            elseif i !== nothing && sites !== nothing && i.role in (:site, :field) && i.name in sites
-                hit[] = y                                 # `act[n]`
-            elseif i !== nothing && cells !== nothing &&
+                # `kind[id]`: the cell's own kind, read bare
+                i.name === :kind && (r = info(a[2]); r !== nothing && r.role === :builtin && r.name === :id) &&
+                    (bare[] = "kind")
+            elseif i !== nothing && sites !== nothing && i.role in (:site, :field) && i.name in sites &&
+                   (mode === :all || _explicit_index(a[2]))
+                hit[] = y                                 # `act[n]`, `act[40]`
+            elseif i !== nothing && cells !== nothing && !_pop_bound(a[2]) &&
                    ((i.role === :builtin && i.name in _COPY_VARYING_INDEXED) || (i.role === :cell && i.name in cells))
                 hit[] = y                                 # `volume[id]`, `y[id]` with `@on_copy y[…]`
                 bare[] = _authored_name(i)
             end
         elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
             hit[] = y                                     # `J[kind[n], …]`
-        elseif sites !== nothing
+        elseif sites !== nothing && mode === :all
             i = info(y)
             i !== nothing && i.role in (:site, :field) && i.name in sites && (hit[] = y)
         end
     end
     hit[] === nothing && return nothing
-    return replace(_indexed_string(hit[]), r"\bn_\d+\b" => "n"), bare[]   # the gather's bound site, as authored
+    return replace(_indexed_string(hit[]), r"\b([a-z])_\d+\b" => s"\1"), bare[]   # bound variables as authored
 end
 
 # a scoped variable or builtin by its authored name: `y`, not `y(t)`; a vector component `v[1]`
@@ -710,9 +723,11 @@ end
 # D-209: refuse a term of domain `d` that reads something a copy changes beyond what ΔH applies
 function _check_copy_reads(E, d, sites, cells)
     # σ at an explicit site, anywhere in the term (cell and edge terms have no site of their
-    # own; a contact term's pair is the bare `owner`, `owner′`, `kind`, `kind′`), and indexed
-    # copy-varying cell quantities in cell terms
-    r = _copy_varying_read(E, nothing, d isa CellDomain ? cells : nothing)
+    # own; a contact term's pair is the bare `owner`, `owner′`, `kind`, `kind′`), indexed
+    # copy-varying cell quantities in cell terms, and
+    # copy-written site variables at an explicit site, in every domain (a contact term's bare
+    # `x`, `x′` read the pair and stay allowed)
+    r = _copy_varying_read(E, sites, d isa CellDomain ? cells : nothing; mode = :explicit)
     r === nothing || throw(_copy_read_error(r..., ""))
     # gather bodies and filters: also copy-written site variables
     _walk(E) do y

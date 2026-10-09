@@ -259,8 +259,15 @@ their links, and a contact term on the pairs at the target. So:
 - σ at an explicit site is refused anywhere in these terms: `owner[i]`, `kind[i]`,
   `x[owner[i]]` (including `volume[owner[i]]`), in a fold or outside one.
 - In a cell term, indexed copy-varying cell quantities are refused: `volume[·]`,
-  `surface[·]`, and `y[·]` for a cell variable an `@on_copy` update writes; read them bare.
-  `y[id]` of a static or `@after_mcs`-written `y` is fine.
+  `surface[·]`, the indexed `euler`/`euler_full` and `pieces` family (`pieces`,
+  `largest_piece` and their `:full` forms), `kind[id]`, and `y[·]` for a cell variable an
+  `@on_copy` update writes; read them bare. `y[id]` of a static or `@after_mcs`-written `y`
+  is fine.
+- An explicit-site read (`act[40]`) of a site or field variable that an `@on_copy` update
+  writes or that is `clear_on_ownership_change` is refused in every domain; a contact
+  term's bare `act`, `act′` read the pair and stay allowed.
+- Population folds (`for c in cells`, `for s in sites`) are exempt: reads at their bound
+  variable (`volume[c]`, `owner[s]`, an on-copy `y[c]`) are exact (D-041).
 
 Each is an `ArgumentError` at `mtkcompile` ("… which a copy changes") naming the statement.
 Use a static field or parameter instead, or a `@drive` (§5), which reads ownership at the
