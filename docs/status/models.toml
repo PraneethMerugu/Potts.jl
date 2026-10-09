@@ -70,7 +70,7 @@ data = "09"
 models_page = "model-graner-glazier"
 published = "09_cell_sorting"
 deviations = [
-    "V-PRE5 FAIL: largest dark cluster 0.815 of the dark cells at 10⁴ MCS, against ≥ 0.90 (late coarsening is slower; cause not found, D-151).",
+    "V-PRE5 FAIL: largest dark cluster 0.815 of the dark cells at 10⁴ MCS, against ≥ 0.90 (suspected: stochastic late coalescence; paper n = 1; light:dark share unstated; D-151).",
     "V-PRE7 FAIL: at T = 80 only 0.076 of the cells are gone at 500 MCS, against > 0.5 (D-166).",
     "Parked: V-PRE6, the ⟨n⟩ part of V-PRE16, and V-PRE17 (the neighbour rule is not stated).",
 ]
