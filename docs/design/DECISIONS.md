@@ -3618,3 +3618,21 @@ session.
   - Example: WortelAct's existing `connected` structural parameter.
   - Renaming it instead would force about 12 more re-freezes, for no gain to users.
   - The docs page notes the shadowing.
+
+## D-196 P6.3g re-freezes (2026-10-09; coordinator, from the P6.3g re-freeze test author, commit 6d2dfd03; under D-189, D-193, D-195)
+
+- **Scope.** Twenty frozen acceptance files are re-frozen, for P6.3g alone.
+- **Fingerprint-only changes.** The models' dynamics are unchanged. The check was a same-seed σ hash on Sequential and Checkerboard with Moore(1) proposals, 3 seeds each, matching base 2299d21d.
+  - AkeebInvasion (both pins)
+  - WortelAct with `connected`
+  - p6_0g's `P60G_X_PIN`
+- **Dynamics change.** The legacy `MerksVasculogenesis` (`rule = :local`) changes σ on every algorithm, because the gain test and the full-shell refusal now apply to Moore(1) copies (D-189 rulings 3 and 10). Its pins in these files are updated, each with a comment citing D-189 rulings 3 and 10:
+  - p6_0ag, 0ah, 0aq, 0as, 0at, 0au, 0av, 0ax, 0c2, 0g, 0o (4 pins), 0p, 0t and 0x.
+- **Fingerprint-only re-freezes:** p6_0ar and p6_0aw.
+- **Behaviour changes.**
+  - p6_0aa: the closed-edge frame is now refused (ruling 5, P6.0ae).
+  - p6_0m (e): the oracle gains the gain test and full-ring refusal (D-191 rules 1 and 2).
+  - p6_3a: `components(old; scope = Global())` becomes `!connected(old; rule = Global())` (ruling 6).
+  - p6_3g: its alias testsets call through `Base.invokelatest`, to fix Julia 1.12 world age. Nothing else changes.
+- **Unchanged.** Merks2006/2008 (reproduction 01), p6_0v3's Merks digests and p6_0bm. No FULL record uses the legacy `MerksVasculogenesis`, so no FULL re-run is needed under D-154.
+- **Follow-up.** The default-build model-page video `paper_runs/merks_vasculogenesis` was rendered with the old rule. Re-render it once P6.3g lands (P6.3g-v).
