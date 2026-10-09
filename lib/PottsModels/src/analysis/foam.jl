@@ -82,6 +82,13 @@ distinct neighbours; spec 04 §2.8): `length.(cell_graph(σ, lattice; neighborho
 sharing (`VonNeumann(1)`) is the default; `Moore(1)` also counts corner-only contacts, which
 inflates n (spec §2.8, topology audit 2026-10-01). Contacts wrap on `Periodic()` axes; a
 `Closed()` wall is not a side (D-187 reading (b)), and neither is the medium.
+
+!!! warning
+
+    The result is indexed by id: an id in `1:maximum(σ)` that owns no site is not a bubble
+    but still gets an entry, `0`. Drop those ids (keep `n[i]` only for the `i` with sites)
+    before passing `n` to [`topology_distribution`](@ref) or [`central_moment`](@ref);
+    [`topology_moments`](@ref) does this itself.
 """
 function side_counts(σ::AbstractArray, lat::Lattice; neighborhood = VonNeumann(1))
     length.(cell_graph(σ, lat; neighborhood))
@@ -93,6 +100,11 @@ end
 The topology distribution ρ(n) (04b p.5823; spec 04 §2.8): the sorted distinct values of
 `n` (a `Vector{Int}`, e.g. from [`side_counts`](@ref)) and the fraction ρ of entries taking
 each. Empty input is an `ArgumentError`.
+
+!!! warning
+
+    Every entry of `n` counts as a bubble. [`side_counts`](@ref) gives an id that owns no
+    site an entry of `0`; drop such ids first, as [`topology_moments`](@ref) does.
 """
 function topology_distribution(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("topology_distribution: no bubbles"))
@@ -114,10 +126,11 @@ function topology_distribution(n::AbstractVector{<:Integer})
 end
 
 """
-    central_moment(x, m = 2) -> Float64
+    central_moment(x, m = 2) -> AbstractFloat
 
 The `m`-th central moment μ_m ≡ Σ_v ρ(v)(v − ⟨v⟩)^m (04b p.5823; spec 04 §2.8) of the values
-`x`, which is the population moment (1/N) Σ_i (x_i − x̄)^m. μ2(n) and μ2(a) of the paper are
+`x`, which is the population moment (1/N) Σ_i (x_i − x̄)^m, in `float(eltype(x))` (`Float64`
+for integer `x`, `Float32` for `Float32` `x`). μ2(n) and μ2(a) of the paper are
 `central_moment(n)` and `central_moment(a)`. Empty `x` is an `ArgumentError`.
 """
 function central_moment(x::AbstractVector{<:Real}, m::Integer = 2)
@@ -287,7 +300,8 @@ end
 
 The exponent α of a power law S ∝ f^−α (spec 04 §2.8; the f^−α guides of Figs. 8 and 10):
 `α = −` the ordinary least-squares slope of `log10(S)` on `log10(f)` over the bins with
-`range[1] ≤ f ≤ range[2]` and `S > 0`. Fewer than two such bins is an `ArgumentError`.
+`range[1] ≤ f ≤ range[2]` and `S > 0`. Fewer than two such bins, or bins that all share one
+frequency (no slope to fit), is an `ArgumentError`.
 """
 function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real}; range)
     length(f) == length(S) ||
@@ -295,14 +309,18 @@ function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real};
     lo, hi = range[1], range[2]
     n = 0
     su = sv = 0.0
+    fmin, fmax = Inf, -Inf
     for (fk, Sk) in zip(f, S)
         (lo <= fk <= hi && Sk > 0) || continue
         n += 1
+        fmin, fmax = min(fmin, fk), max(fmax, fk)
         su += log10(fk)
         sv += log10(Sk)
     end
     n >= 2 ||
-        throw(ArgumentError("spectral_exponent: $n bin(s) with $lo ≤ f ≤ $hi, need at least 2"))
+        throw(ArgumentError("spectral_exponent: $n bin(s) with $lo ≤ f ≤ $hi and S > 0, need at least 2"))
+    fmin < fmax ||
+        throw(ArgumentError("spectral_exponent: the $n bins with $lo ≤ f ≤ $hi and S > 0 all have f = $fmin"))
     ū, v̄ = su / n, sv / n
     suv = suu = 0.0
     for (fk, Sk) in zip(f, S)
