@@ -3535,3 +3535,25 @@ session.
   - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
   - CC3D ≥ 4.7.0 → `penalty = 64`;
   - the hard form is the T → 0 limit.
+
+## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
+
+- **Design.** One `Int32` per cell for each adjacency that the model reads, wired like `surface`.
+  - A copy changes only the losing and gaining cells.
+  - Δχ comes from each cell's mask on the 8-, 6- or 26-site shell, using popcounts and bit masks; there is no lookup table.
+  - `:full` reuses the `:face` formula on the complemented mask, with the sign flipped in 3D.
+  - A model that never names `euler` gets no code.
+  - A check script verified the local Δχ against full recounts in 2D, hex and 3D, on closed and periodic lattices, under both adjacencies.
+- **Open questions.** I took the note's recommendation on each.
+  1. **`holes = pieces − euler`** comes with P6.9, because it needs cell-scope `pieces`. v1 ships `euler(c; adjacency)` only.
+  2. **A cell that wraps a torus** reports its true torus χ. For example, a wrapping band reads as one hole. This is documented.
+  3. **3D in v1** ships `euler` only. Tunnels and cavities are derived later, once `pieces` exists.
+  4. **`adjacency = :full` on hex** is a build error. Hex has a single adjacency, so `:full` would only suggest a difference that does not exist.
+  5. **Tracking.** `euler` is tracked whenever the model reads it, whether in an energy or only as an observable.
+  6. **Cluster-scope χ** is not in v1.
+- **Accept criteria (P6.3j).**
+  - Enumeration oracles: brute-force χ from flood fills of the cell and its complement, compared with the tracked value after random copy sequences. They cover 2D, hex and 3D, both adjacencies, and closed and periodic boundaries.
+  - Negative controls.
+  - An A/B showing zero cost when unused (D-171).
+  - Zero warm allocations.
+  - The device path works with no Float64.
