@@ -3443,3 +3443,15 @@ session.
   5. **Shear runs.** V2–V20 run as FULL on the PC once stream 1 lands.
 - **Proposal law.** Until P6.4b's `UnlikeNeighbor` lands, the proposal is `BoundarySiteCPM` with a uniform neighbour. This is a labelled deviation; the targets avoid absolute MCS (A-5).
 - **Not blockers.** P6.4c (events) and P6.4d (Tiling, T1 counts as library) are conveniences only.
+
+## D-187 P6.4b2: foam analysis functions, test frozen (2026-10-08; coordinator, from the P6.4b2 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4b2_foam_analysis.jl` (commit 1457cc6c, sha256 `2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044`).
+- **Surface** (public in `PottsModels.Analysis`, spec 04 §2.8): `stored_energy` (Eq. 8), `side_counts`, `contact_changes`, `t1_events(prev, next; unit = :t1 | :pairs | :bubbles)`, `topology_distribution`, `central_moment`, `topology_moments`, `power_spectrum` (Eq. 9), `spectral_exponent`, `mean_t1` (N̄) and `yield_strain`.
+- **Readings.** Spec questions go to the spec owner.
+  - **Stored energy (φ).** Each unordered pair is counted once; the factor 2 cancels in φ/φ(0).
+  - **Walls.** The closed y wall is not a side. With that reading the 256² brick wall gives μ2(n) = 7/16 = 0.4375, matching Fig. 11(c)'s 0.437, against 0.109 if the wall counted. This supports V1b.
+  - **A-15 counting units.** One T1 counts 1 under `:t1`, 2 under `:pairs` and 4 under `:bubbles`.
+  - **Periodogram.** |X|²/L, without the f = 0 bin.
+  - **Yield.** The first T1 avalanche, as the paper defines it. Converting it to strain is the caller's job (A-9).
+  - **μ2(a) unit.** It is a P6.4r calibration; areas stay in sites.
