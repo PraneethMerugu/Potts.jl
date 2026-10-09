@@ -123,7 +123,10 @@ _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => 
     :local_components => :(Int32(CorePotts.local_components(st.σ, ctx, prop))),
     :ring_arcs => :(Int32(CorePotts.ring_arcs(st.σ, ctx, prop))),
     :ring_cells => :(Int32(CorePotts.ring_cells(st.σ, ctx, prop))),
-    :ring_medium => :(Int32(CorePotts.ring_medium(st.σ, ctx, prop)))), relname)
+    :ring_medium => :(Int32(CorePotts.ring_medium(st.σ, ctx, prop))),
+    # P6.4a1 (D-188): functions of (source, target) and of the sweep's MCS alone; code is
+    # emitted only where a model reads them (`direction[k]`, `position[s][k]`, `mcs`)
+    :direction => :(Potts._direction($T, ctx, source, target)), :mcs => :(Potts._copy_mcs(ctx))), relname)
 
 # a contact pair (s, s′): owners `a`, `n`, their kinds, the relation weight, and the sites
 # (site variables `x ≡ x[site]`, `x′ ≡ x[site′]`)

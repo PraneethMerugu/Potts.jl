@@ -69,7 +69,7 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
-    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium)
+    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction)
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
 # The link endpoints `a`, `b` are reserved globally (D-075 Q8): no declaration (kind,
 # parameter, variable, observed quantity, relation, relationship, component) may take their
