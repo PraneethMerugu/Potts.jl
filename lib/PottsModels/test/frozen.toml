@@ -541,3 +541,8 @@ decision = "D-202"
 path = "reproductions/data/01b/fig13.tsv"
 sha256 = "02a843bd35149499e99915e7e2c2788cf01e76723c4b871b5b63f2e26cce2496"
 decision = "D-202"
+
+[[file]]
+path = "reproductions/04_foam_kb_scan.jl"
+sha256 = "dc6de6bcf838173521af39db92cf0476d3ea25b963ee61465d43ba5a2b5d969c"
+decision = "D-205"
