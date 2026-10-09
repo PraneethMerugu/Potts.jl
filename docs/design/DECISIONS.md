@@ -3471,3 +3471,32 @@ session.
 - **Corrections.**
   - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
   - The drive docs wrongly list `mcs`; the implementer fixes them.
+
+## D-189 Connectivity vocabulary: a compositional connectivity layer and 12 maintainer rulings (2026-10-08; maintainer rulings relayed by the "models and publications" session; research doc `docs/design/research/connectivity-vocabulary.md`)
+
+- **Design** (doc §8). Connectivity is expressed with these pieces:
+  - the rule values `Local()`, `ArcOrPair()`, `Simple()` and `Global(; window)`;
+  - one helper, `connectivity(kinds…; rule, penalty)`: the veto form in `@constraint`, the penalty form in `@drive`, and a build error on misuse. Merks' E₀ becomes `@drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)`;
+  - the composable Boolean `connected(c; rule)`;
+  - the `shell` relation, the `pieces` fold and the `distinct` fold. `distinct` replaces `ring_cells`.
+  
+  Literature coverage (doc §5): of 33 connectivity forms, 9 are expressible exactly today, 6 approximately and 18 not at all. With this layer it is 20 / 11 / 2, and ruling 12 closes one of the two remaining gaps.
+- **Rulings** (doc §13.1):
+  1. **Names.** Mechanism names only. Provenance lives in the docs' mapping table.
+  2. **One helper in two statements.** Misuse is a build error.
+  3. **Gain test.** `Local(; gain)` checks the gaining cell, and it is **on by default**.
+  4. **Adjacency.** `adjacency = :face | :full` on `Local()`, `Simple()`, `Global()` and `pieces`. The default is `:face`.
+  5. **Closed edges (P6.0ae).** They count as a cell inside `ArcOrPair()` only. The raw folds keep "out of domain is nothing". Re-freeze `p6_0aa`'s edge testset.
+  6. **Rename.** `components` → `pieces`, with **no alias**. `p6_3a` and every reference are renamed in the same change.
+  7. **Out of domain in `Simple()`.** Out-of-domain sites are background.
+  8. **Shells.** No custom shells in v1. Windows exist only inside `Global(; window)`.
+  9. **`largest_piece`.** Comes with P6.9.
+  10. **Full shell.** `Local()` refuses a full shell of the losing cell, as CC3D does.
+  11. **CC3D claims.** Check the CC3D 4.3.1 source before claiming any behaviour is "exactly CC3D".
+  12. **Euler tracker.** A cell-scope Euler-characteristic tracker is added now.
+- **Consequences.** Rulings 3 and 10 change `Local()`'s dynamics wherever proposals reach past the face neighbours, or wherever a full shell is reachable.
+  - **Akeeb.** It uses von Neumann proposals, so no change is expected. P6.3g confirms this with the frozen record test and an A/B.
+  - **Re-freezes.** Pins of the legacy `MerksVasculogenesis` `rule = :local` and of full-shell acceptance are re-frozen through a test author.
+  - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
+  - **Stop rule.** A major slowdown stops the work for a question to the maintainer (standing rule). The rule values are plain structs, so no MTK friction is expected.
+- **Items.** P6.3g (surface), P6.3h (shell kernels), P6.3i (negative controls), P6.3j (Euler tracker) and P6.3k (CC3D source check). Also P6.0ae (ruled) and an amendment to P6.9. They are scheduled alongside the foam streams (D-186).
