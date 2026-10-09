@@ -636,7 +636,7 @@ Full runs are offline (D-146).
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4r-kb** (D-203) Pre-registered κ_b scan on the ordered foam (test author freezes the protocol; PC free cores); decision rule (d); then re-freeze + re-run of 200 bulk jobs, or stop and go to the F1 gate.
-- [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
+- [x] (first FULL record merged 2026-10-09, provisional: 18/42 rows, 4/4 controls; κ_b scan under D-203 open) **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
 ### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
 
