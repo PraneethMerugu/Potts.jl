@@ -589,7 +589,7 @@ Full runs are offline (D-146).
 ### Step 4 — Foam
 
 - [ ] **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
-- [ ] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain.
+- [x] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain. Merged 482e163a (D-187; power_spectrum on FFTW). For P6.4r: drop empty ids before topology_distribution; consider a log-binned spectral fit if α lands at the band edges.
 - [ ] **P6.4r** (D-186; foam streams 3–5) Reproduction 04 (Jiang et al. 1999): frozen test from spec §5.2 V1–V20; the no-shear page; FULL shear runs once P6.4a1 lands.
 - [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
   - D-075: **R17** initialization, as the `at_init` host phase: `A(cell) = volume`,
