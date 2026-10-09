@@ -282,6 +282,7 @@ dev_rows = [ #hide
     "| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |", #hide
+    "| Closed bottom edge (D7) | ring positions off the lattice read as nothing | not mentioned (code: CompuCell3D reads ring positions off the lattice as the cell at pixel (0, 0, 0)) | a CompuCell3D source artefact we do not reproduce; suspected small, affects bottom-wall cells only; unmeasured | not an author question |", #hide
     "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
     "| Main-tumour seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
     "| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |", #hide
@@ -365,6 +366,11 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 # | followers' target grows 0.015 per MCS while below 20 (S:111–115) | `@after_mcs V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))` |
 # | clock +1 per MCS; divide when volume > 20 and clock > 75 + U{0…49}, redrawn every MCS (S:136–147) | `@after_mcs clock ~ …` and `@divide cells(follower) when = … (clock > clock_min + clock_spread * rand())` |
 # | random division plane; target halved, clocks reset (S:151–163) | `along = RandomPlane(), V_target => Split(), clock => 0.0` |
+#
+# The authors' 2D XMLs set the connectivity `<Penalty>` to 10⁵, which CompuCell3D 4.3.1 and
+# 4.6.0 honour, so it acts as a veto at T = 10; CompuCell3D 4.7.0 and later ignore the value
+# and use a hard-coded 64, so re-running the XML on current CompuCell3D gives a soft penalty
+# of about 1.7 × 10⁻³ acceptance per violation at T = 10.
 #
 # The published constructor carries the defaults; the scan parameters J_LF, λ and PP are
 # set per run:
