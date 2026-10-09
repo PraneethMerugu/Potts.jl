@@ -513,3 +513,95 @@ end
         @test count(>(0), unique(solve(prob, SequentialCPM()).u[end].σ)) >= 1
     end
 end
+
+# P6.3g primitives outside their first model (Merks, Akeeb, WortelAct use `connectivity`):
+# the simple-point rule on a hexagonal lattice with the shell folds `pieces` and `distinct`
+# in a drive, and `connected` composed with a death clause on a cubic 3D lattice
+@potts_model HexSimpleCell begin
+    @structural_parameters begin
+        simple = true
+    end
+    @kinds medium cell
+    @parameters begin
+        T = 6.0
+        λ_lumen = 2.0
+        λ_mix = 1.0
+        J[kind, kind] = [0.0 -1.0; -1.0 4.0]
+    end
+    @lattice Lattice((24, 24); geometry = Hexagonal(), boundary = Closed(), neighborhood = Hex(1))
+    @energy begin
+        cells(cell) => (volume - 64.0)^2
+        contacts => J[kind, kind′]
+    end
+    # soft: copies that split the target's medium shell sites, or touch three cells
+    @drive copy => λ_lumen * (pieces(n for n in shell(target) if owner[n] == 0) > 1) +
+                   λ_mix * (distinct(owner[n] for n in shell(target) if owner[n] != 0) > 2)
+    if simple
+        @constraint connectivity(cell; rule = Simple())
+    end
+    @sweep Metropolis(; temperature = T)
+end
+@potts_model CubicConnectedOrDead begin
+    @structural_parameters begin
+        connected_rule = true
+    end
+    @kinds medium cell
+    @parameters T = 8.0
+    @lattice Lattice((10, 10, 10); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(cell) => (volume - 27.0)^2
+        contacts => 2.0 * (kind != kind′)
+    end
+    if connected_rule
+        @constraint connected(old) | (volume[old] == 1)
+    end
+    @sweep Metropolis(; temperature = T)
+end
+
+"""Components of `mask` under `offs` adjacency (closed edges), and how many touch the edge."""
+function sib_comps(mask, offs)
+    seen = falses(size(mask)); n = 0; edge = 0
+    for I in CartesianIndices(mask)
+        (mask[I] && !seen[I]) || continue
+        n += 1; seen[I] = true; st = [I]; e = false
+        while !isempty(st)
+            J = pop!(st)
+            e |= any(d -> J[d] in (1, size(mask, d)), 1:ndims(mask))
+            for o in offs
+                K = J + CartesianIndex(o)
+                (checkbounds(Bool, mask, K) && mask[K] && !seen[K]) || continue
+                seen[K] = true; push!(st, K)
+            end
+        end
+        edge += e
+    end
+    return n, edge
+end
+
+@testset "P6.3g primitives outside their first model" begin
+    hex = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
+    σ = zeros(Int32, 24, 24); σ[9:16, 9:16] .= 1
+    # splits or holes (hex is self-dual: one adjacency for the cell and the background)
+    broken(u) = (c = sib_comps(u.σ .== 1, hex); b = sib_comps(u.σ .!= 1, hex); c[1] > 1 || b[1] - b[2] > 0)
+    runs(simple) = [solve(PottsProblem(HexSimpleCell(; name = :h, simple), [ownership => σ, kind => [:cell]], (0, 60); seed),
+                          SequentialCPM(); saveat = 10:10:60) for seed in 1:3]
+    p = PottsProblem(HexSimpleCell(; name = :h), [ownership => σ, kind => [:cell]], (0, 1))
+    @test selfcheck(p) < 1e-9
+    held, free = runs(true), runs(false)
+    @test sum(sol -> count(broken, sol.u), held) == 0                # Simple(): no split, no hole
+    @test sum(sol -> count(broken, sol.u), free) > 0                 # control: without it, some
+    @test all(sol -> sol.u[end].σ != σ, held)                         # the cell moved
+    # 3D: `connected(old) | (volume[old] == 1)` keeps the cell face-connected. `Local()` tests
+    # only a losing cell, so gains must be face-connected by construction: VonNeumann(1) copies
+    # (with Moore(1) copies a medium loser lets a corner-only gain detach a piece)
+    face3 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+    σ3 = zeros(Int32, 10, 10, 10); σ3[4:6, 4:6, 4:6] .= 1
+    split3(rule) = sum(1:2) do seed
+        sol = solve(PottsProblem(CubicConnectedOrDead(; name = :c, connected_rule = rule), [ownership => σ3, kind => [:cell]],
+                                 (0, 40); seed), SequentialCPM(; proposal = VonNeumann(1)); saveat = 5:5:40)
+        count(u -> sib_comps(u.σ .== 1, face3)[1] > 1, sol.u)
+    end
+    @test selfcheck(PottsProblem(CubicConnectedOrDead(; name = :c), [ownership => σ3, kind => [:cell]], (0, 1))) < 1e-9
+    @test split3(true) == 0
+    @test split3(false) > 0                                          # control
+end

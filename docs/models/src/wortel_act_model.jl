@@ -41,7 +41,7 @@
     @after_mcs act ~ max(Pre(act) - 1, 0)
     #> constraint
     if connected
-        @constraint connectivity(cell; rule = :arc_or_pair)
+        @constraint connectivity(cell; rule = ArcOrPair())
     end
     #> sweep
     @sweep Metropolis(; temperature = T)

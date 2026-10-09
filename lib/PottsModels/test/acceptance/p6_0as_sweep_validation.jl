@@ -350,11 +350,11 @@ const P60AS_FINGERPRINTS = Dict{String, UInt64}(
     "combine P60asCombine.mix Float32" => 0x60ffc4e9af6c0abe,
     "GranerGlazier" => 0x04a4528dcdf3fcb8,
     "WortelAct" => 0xce4f1cec820b20fe,  # re-pinned under D-124
-    "WortelAct connected" => 0x993142c5fb9c8f2f,  # re-pinned under D-124
-    "MerksVasculogenesis" => 0x984e2ad5906fc999,
+    "WortelAct connected" => 0x7f27099ea6f348a3,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
+    "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
     "SingleDivisionFixture" => 0x13a4ddc2bb677287,
     "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "AkeebInvasion" => 0x8d33bd0bb1eddd1c,
+    "AkeebInvasion" => 0xc0529959e030d017,   # re-pinned under P6.3g (D-193): fingerprint only
 )
 
 @testset "P6.0as: fingerprints unchanged" begin

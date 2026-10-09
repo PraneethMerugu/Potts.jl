@@ -419,7 +419,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     # gather relations numbered in `scanned` order and, within one, by content (D-107)
     for x in scanned
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
-                            if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
+                            if !(ni.options.relation isa Union{RelationRef, ShellRelation}) && !haskey(gather_names, ni.options.relation)])
         ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
         for spec in specs[sortperm(ckeys)]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
@@ -443,7 +443,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             (u.eq.rhs for u in oncopy)..., (u.eq.lhs for u in oncopy)..., getfield(sys, :sweep).temperature]
         for (ni, anchor) in _gathers(x)
             spec = ni.options.relation
-            r = rad(spec isa RelationRef ? getfield(sys, :relations)[spec.name] : spec)
+            r = spec isa ShellRelation ? 1 : rad(spec isa RelationRef ? getfield(sys, :relations)[spec.name] : spec)
             if _uses_builtin(anchor, :source)
                 source_read = max(source_read, r)
             else

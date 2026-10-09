@@ -166,6 +166,7 @@ manual = [
     "manual/energy.md",
     "manual/drive.md",
     "manual/constraint.md",
+    "manual/connectivity.md",
     "manual/updates.md",
     "manual/equations.md",
     "manual/lifecycle.md",
