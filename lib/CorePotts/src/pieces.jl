@@ -158,7 +158,7 @@ end
 # Flood cell `c` from site `s0` (marked `S` by the caller), never through `skip`: marks
 # reached sites `S`, counts the touches it meets (sites pre-marked `S + 1`) into `found`,
 # and stops once `found == stop` (`stop = 0`: never). Returns (sites reached, found).
-@inline function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
+function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
         S::UInt32, adj::Val, found::Int, stop::Int)
     mark = fl.mark
     stack = fl.stack
@@ -192,7 +192,7 @@ end
 end
 
 # pre-mark the touches (shell positions in `touch`) of x with `S + 1`; their count and the first
-@inline function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
+function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
     n = 0
     first = 0
     m = touch
@@ -221,7 +221,7 @@ end
 end
 
 # exact: the touches are connected in `c` without x
-@inline function _keeps_exact(
+function _keeps_exact(
         σ, lat, fl::FloodScratch, x, t::Int, c, touch::UInt32, adj::Val)
     S = _stamps!(fl, UInt32(2))
     n, s0 = _mark_touches!(lat, fl, x, touch, S)
@@ -269,7 +269,7 @@ box |Δ| ≤ W round x; otherwise a touching piece that stays inside the box is 
 the visited bits are `MVector`s sized by `CAP` (no allocation, device-safe). `CAP` bounds
 the box (`_box_size`); a larger box is refused for want of window.
 """
-@inline function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
+function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
         adj::Val, ::Val{W}, ::Val{CAP}) where {N, W, CAP}
     _box_size(lat, W) <= CAP || return GLOBAL_WINDOW
     seen = MVector{cld(CAP, 32), UInt32}(ntuple(_ -> UInt32(0), Val(cld(CAP, 32))))
@@ -380,7 +380,7 @@ Whether `global_keeps` needs the search for this copy (the local test fails).
 # Cell-scope pieces and largest_piece
 
 # after-values of the losing cell `a`: (pieces, largest piece)
-@inline function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
+function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     a = prop.old
     v = Int(@inbounds V[a])                 # a nonzero owner is a cell id in 1:capacity
     p0 = Int(@inbounds P[a])
@@ -429,7 +429,7 @@ Whether `global_keeps` needs the search for this copy (the local test fails).
 end
 
 # after-values of the gaining cell `b`
-@inline function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
+function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     b = prop.new
     v = Int(@inbounds V[b])
     p0 = Int(@inbounds P[b])

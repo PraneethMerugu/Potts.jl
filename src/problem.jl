@@ -152,6 +152,9 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
+    # a shell-based quantity on a periodic axis of length 1 reads the target as its own
+    # neighbour: refused on the host, at build, by the one CorePotts check
+    foreach(q -> CorePotts.check_shell_lattice(hctx.lattice, q), _shell_quantities(generated))
     # every generated function, without line numbers: independent of the install path, and
     # the canonical solver spec (D-016 as amended by D-075; a model with no field or ODE has
     # none and keeps its fingerprint)

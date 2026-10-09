@@ -141,9 +141,12 @@ exact and ignore it.
   `sol.stats.connectivity_deferred`. The counter is `nothing` for a model without `Global`,
   and always 0 on the host algorithms and without a window.
 - The window search uses a fixed-size stack (an `MVector` of the box size) and allocates
-  nothing, so it runs on a device. Keep windows small in 3D: the box has (2W + 1)³ sites.
-- Without a window the checkerboard search is exact. It runs over a scratch array, one
-  copy at a time.
+  nothing, so it runs on a device. Each thread holds `CAP` `Int32`s of stack and two bit
+  sets of `CAP` bits, `CAP` being the box's site count (at most (2W + 1)^d): about
+  4.25·CAP bytes per thread, so ≈ 1 KB at W = 7 in 2D but ≈ 14 KB at W = 7 in 3D. Large
+  windows cost registers and private memory on a GPU; keep them small in 3D.
+- Without a window the checkerboard search is exact, on the CPU and on a device alike: it
+  runs over a scratch array one copy at a time (a serial kernel on a device).
 
 **Launches.** A `Global` veto adds one launch per colour on the checkerboard: 4 per MCS in
 2D with `Moore(1)` copies. Cell-scope `pieces` add another one per colour (below). Models

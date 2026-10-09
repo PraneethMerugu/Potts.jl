@@ -178,6 +178,25 @@ _edge_energies(c::CompiledPottsSystem) =
 # `CorePotts.ShellRead`
 const _SHELL_KERNELS = (:local_rule, :arc_or_pair, :simple_point, :euler_change, :local_components, :ring_arcs,
     :ring_cells, :ring_medium)
+# what each CorePotts shell-reading call is, as the model names it (`_shell_quantities`)
+const _SHELL_QUANTITY = Dict(:local_rule => "Local", :arc_or_pair => "ArcOrPair", :simple_point => "Simple",
+    :euler_change => "euler", :local_components => "local_components", :ring_arcs => "ring_arcs",
+    :ring_cells => "ring_cells", :ring_medium => "ring_medium", :shell_pieces => "pieces(…, shell(…))",
+    :global_keeps => "Global", :global_gains => "Global", :global_defer => "Global",
+    :pieces_after! => "pieces/largest_piece", :pieces_defer => "pieces/largest_piece")
+"""The model-facing names of the shell-based quantities the expressions `exs` read, sorted."""
+function _shell_quantities(exs)
+    acc = Set{String}()
+    walk(x) = x isa Expr ? (_shell_quantity!(acc, x); foreach(walk, x.args)) : nothing
+    foreach(walk, exs)
+    return sort!(collect(acc))
+end
+function _shell_quantity!(acc, x::Expr)
+    x.head === :call && x.args[1] isa Expr && x.args[1].head === :. && x.args[1].args[1] === :CorePotts || return
+    q = x.args[1].args[2]
+    q isa QuoteNode && haskey(_SHELL_QUANTITY, q.value) && push!(acc, _SHELL_QUANTITY[q.value])
+    return
+end
 _is_shell_call(x) = x isa Expr && x.head === :call && length(x.args) >= 4 && x.args[1] isa Expr &&
                     x.args[1].head === :. && x.args[1].args[1] === :CorePotts &&
                     x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.σ)
