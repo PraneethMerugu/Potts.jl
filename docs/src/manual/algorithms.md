@@ -16,10 +16,11 @@ acceptance law and the problem's proposal neighbourhood (see [Problems, solvers 
 solutions](@ref manual-problems)).
 
 `CheckerboardCPM` spaces its colours by the model's footprint, the distance a copy reads
-from its target, and refuses a model whose copy step reads farther: through the contact
-relation, or through a relation that the energies (edge energies included), drives,
-constraints, `@on_copy` updates or temperature read. A relation read only at the MCS
-boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
+from its target. The footprint covers what drives, constraints, `@on_copy` updates and the
+temperature read, so a wider read there widens the spacing; an energy that reads a relation
+beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it wherever the fold
+is read, since its counts are kept up to date on every copy. Any other relation read only at
+the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
 `@observed` quantities) does not count, whatever its radius.
 
 ## `BoundarySiteCPM`
