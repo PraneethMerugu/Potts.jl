@@ -321,7 +321,7 @@ p60aw_pinned() = (
 const P60AW_FINGERPRINTS = Dict{Symbol, UInt64}(
     :GranerGlazier => 0x04a4528dcdf3fcb8,
     :WortelAct => 0xce4f1cec820b20fe,  # re-pinned under D-124
-    :WortelActConnected => 0x993142c5fb9c8f2f,  # re-pinned under D-124
+    :WortelActConnected => 0x7f27099ea6f348a3,  # re-pinned under D-124; re-pinned under P6.3g (D-193): fingerprint only
     :P60awWork => 0x9e008b0ce3f6cd31,
     :P60awNoIntegral => 0x8d4940ecc79e4f5a,
 )

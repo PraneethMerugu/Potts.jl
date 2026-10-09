@@ -779,8 +779,8 @@ const P63G_ALIASES = [
         end)
         getfield(@__MODULE__, name)
     end
-    codes = map(p63g_code, Ms)
-    fps = map(p63g_fp, Ms)
+    codes = map(M -> Base.invokelatest(p63g_code, M), Ms)
+    fps = map(M -> Base.invokelatest(p63g_fp, M), Ms)
     @test all(==(codes[1]), codes)
     @test all(==(fps[1]), fps)
 end

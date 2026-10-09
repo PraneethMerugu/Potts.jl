@@ -35,8 +35,10 @@
 #    keeps cells whole where E₀ = 0 (negative control) does not.
 # 4. `Global(; window = nothing)` is a reserved DSL name (placeholder until P6.9): it
 #    constructs (`window` is `nothing` or a positive integer, else `ArgumentError`), and a
-#    model that uses `components(old; scope = Global())` is an `ArgumentError` naming
+#    model that uses `!connected(old; rule = Global())` is an `ArgumentError` naming
 #    `Global` when it is built (macro, `mtkcompile` or `PottsProblem`), on every algorithm.
+#    (Re-frozen under D-189 ruling 6: `components(old; scope = Global()) > 1` is gone, with
+#    no alias; its meaning, "old is in more than one piece", is now `!connected(old; rule = …)`.)
 #    Control: the same model with `local_components` builds.
 # 5. `PottsProblem(sys, op, tspan; track = (:ΔH,))` accumulates Σ ΔH over the ACCEPTED
 #    (committed) copies of every sweep into `sol.stats.accepted_ΔH::Float64`; ΔH is the
@@ -505,7 +507,7 @@ end
                 @kinds medium A
                 @lattice Lattice((10, 10); neighborhood = Moore(1))
                 @energy cells => (volume - 9)^2
-                @drive copy => 100.0 * (components(old; scope = Global()) > 1)
+                @drive copy => 100.0 * !connected(old; rule = Global())
                 @sweep Metropolis(; temperature = 1.0)
             end
             let σ = zeros(Int32, 10, 10)
