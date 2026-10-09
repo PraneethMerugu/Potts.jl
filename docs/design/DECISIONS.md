@@ -3845,3 +3845,14 @@ session.
     - `p6_0at_relation_fingerprint.jl` (`a1964317…`): the cell energies read the static `q` map through `volume`.
     - `p6_0ax_gather_scan.jl` (`9a4dc06b…`): the energy and edge folds read `q`. Two fingerprint pins were re-recorded on the base, "at energy Moore(1)(40)" 0xfc8f…→0x674d… and "edge far=Moore(1)" 0xef5c…→0xe970…; the hand values are unchanged.
     - `p6_0ba_boundary_only_reach.jl` (`a559af4a…`): the copy-step edge fixtures read `0.1·distance·count(q[n] == a/b …)`. ΔH still reads `ctx.far` beyond the declared `Footprint(read = 1)`, so the reach refusal stays. That refusal is conservative, since no copy writes what is read. Base results are identical to D-208.
+- **Widened after review (2026-10-09; coordinator).** The P6.0ca review found the same defect on routes outside gather bodies. Each gives a silently wrong ΔH on the oracle; the worst error is 1.0. These are refused too, with the same D-209 message:
+  1. **A σ-dependent gather anchor.** Example: `far(owner[40] + 39)`; the anchor must be static.
+  2. **σ read at an explicit site outside any gather in a `cells` or `edges` term.** Examples: `owner[40] == id`, `y[owner[40]]`, `kind[…]`.
+  3. **The same reads in a `contacts` term.** `owner[i]`/`kind[i]` with an explicit index are refused instead of hitting "cannot index `owner′`". The bare pair names `owner`, `owner′`, `kind`, `kind′` stay allowed.
+  4. **Indexed copy-varying cell builtins or on-copy cell variables in cell terms.** Examples: `volume[id]`, `surface[id]`, `y[id]` with `@on_copy y[new]`. These crash today at `PottsProblem` with an internal "cannot index …" error. They get a clear `ArgumentError` that suggests the bare form, which is correct and passes the oracle.
+  
+  Follow-ups, not in this item:
+  - over-refusal of a bare on-copy pair value inside a contact gather;
+  - message cosmetics (`(t)` suffixes, vector names);
+  - kind names in `show`/`@extend` output;
+  - doc wording on what a fold may read.
