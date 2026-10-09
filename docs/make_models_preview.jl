@@ -1,4 +1,4 @@
-# Build only the Models section, for checking it quickly:
+# Build only the model pages of the Paper models section, for checking them quickly:
 #     julia --project=docs docs/make_models_preview.jl [page ...]
 # e.g. `… make_models_preview.jl merks` builds the index and the Merks page only.
 # Output: docs/build/models-preview/ (open models/index.html there). Pretty URLs as in
@@ -19,6 +19,6 @@ makedocs(;
         size_threshold = nothing, size_threshold_warn = nothing),
     checkdocs = :none,
     pagesonly = true,
-    # the links to the Published models section point outside this preview
+    # the links to the status and reproduction pages point outside this preview
     warnonly = [:cross_references],
     pages = ["Models" => ["models/index.md"; model_pages]])

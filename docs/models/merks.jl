@@ -7,7 +7,7 @@
 # a network forms only when the cells are elongated. PottsModels ships their model, with
 # the paper's parameter set, border and connectivity rule, as `Merks2006`, and the 2008
 # contact-inhibited model as `Merks2008`; this page is about them. The full reproduction,
-# target by target, is reproduction 01 (*Vasculogenesis*, in the Published models section).
+# target by target, is reproduction 01, which takes this page's place in the published docs.
 # The second half of the page builds a simpler variant, `MerksVasculogenesis`, step by step.
 #
 # **What you will learn**

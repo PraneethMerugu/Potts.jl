@@ -1,11 +1,16 @@
-# Renders the Models section: every Literate script `docs/models/<name>.jl` becomes
+# Renders the model pages of the "Paper models" section: every Literate script `docs/models/<name>.jl` becomes
 # `docs/src/models/<name>.md` (generated, gitignored), executed later by Documenter.
 #
 #     include(joinpath(@__DIR__, "models", "render.jl"))     # from docs/make.jl
 #     model_pages = render_models()     # ["models/graner_glazier.md", …], relative to docs/src
-#     pages = [..., "Models" => ["models/index.md"; model_pages], ...]
+#     pages = [..., "Paper models" => [...; model_pages], ...]
 #
-# `docs/src/models/index.md` is hand-written and committed. Each script builds one model,
+# When the reproduction pages are built (`POTTS_DOCS_PUBLISHED=true`), a model whose paper has
+# a reproduction page is not rendered; `render_model_stub` writes a short page at its old URL
+# that links to the reproduction page (D-185).
+#
+# `docs/src/models/index.md` (hand-written, committed) is a short page at the old URL of the
+# former Models section, linking to the pages. Each script builds one model,
 # whose finished `@potts_model` lives in `docs/models/src/<name>_model.jl`; that file is
 # also included by lib/PottsModels/test/tutorial_models.jl, which checks that it compiles to
 # the same problem as the shipped constructor. Two placeholders in the scripts read it:
@@ -104,4 +109,27 @@ function render_models(; outdir = joinpath(dirname(MODELS_DIR), "src", "models")
         push!(pages, joinpath("models", name * ".md"))
     end
     return pages
+end
+
+"""
+    render_model_stub(name, target, title; id = nothing, outdir = docs/src/models) -> String
+
+Write `docs/src/models/<name>.md` as a short page that links to `target` (a page path
+relative to `docs/src`, e.g. `"published/01_merks.md"`), for a Models page whose content
+moved to its paper's page (D-185). Its URL, `models/<name>/`, keeps working. `id` is the
+page's `@id` (normally `nothing`: the moved page carries `model-<name>`). The stub has no
+`@docs` block. Returns the stub's path relative to `docs/src`.
+"""
+function render_model_stub(name, target, title; id = nothing,
+                           outdir = joinpath(dirname(MODELS_DIR), "src", "models"))
+    heading = id === nothing ? "# $title (moved)" : "# [$title (moved)](@id $id)"
+    write(joinpath(outdir, name * ".md"), """
+    $heading
+
+    !!! note "This page has moved"
+        This model is now documented on its paper's page, **[$title]($(relpath(target, "models")))**,
+        which builds the model, runs it and compares it with the paper. All paper models are
+        listed on [Paper models: status](../status.md).
+    """)
+    return joinpath("models", name * ".md")
 end
