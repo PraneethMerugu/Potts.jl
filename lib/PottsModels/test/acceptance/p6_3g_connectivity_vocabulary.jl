@@ -701,11 +701,9 @@ end
     # no penalty in @drive: the error names @constraint
     e = p63g_try(:P63gErrNoPenalty, :(@drive connectivity(A)))
     @test e isa ArgumentError && occursin("@constraint", p63g_msg(e))
-    # Global() is not available until P6.9, in the helper and in connected
-    e = p63g_try(:P63gErrGlobal, :(@constraint connectivity(A; rule = Global())))
-    @test e isa ArgumentError && occursin("Global", p63g_msg(e))
-    e = p63g_try(:P63gErrGlobalC, :(@constraint connected(old; rule = Global()) | (old == 0)))
-    @test e isa ArgumentError && occursin("Global", p63g_msg(e))
+    # Global() builds since P6.9a (re-frozen), in the helper and in connected
+    @test p63g_try(:P63gErrGlobal, :(@constraint connectivity(A; rule = Global()))) === nothing
+    @test p63g_try(:P63gErrGlobalC, :(@constraint connected(old; rule = Global()) | (old == 0))) === nothing
     # an unknown rule symbol (unchanged)
     @test p63g_try(:P63gErrRule, :(@constraint connectivity(A; rule = :nearby))) isa ArgumentError
     # pieces over a relation other than shell (no custom shells in v1, ruling 8)

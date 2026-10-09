@@ -541,7 +541,8 @@ end
 p69a_sources(geom) = (p69a_shell(geom)...,
     (ntuple(k -> k == a ? s : 0, geom === :cubic ? 3 : 2) for a in 1:(geom === :cubic ? 3 : 2) for s in (-2, 2))...)
 
-const P69A_ENUM_DIMS = Dict(:square => (7, 7), :hex => (8, 7), :cubic => (5, 5, 4))
+# the models' lattices (P69A_GEOMS): the enumerations run on the same dims
+const P69A_ENUM_DIMS = Dict(:square => (10, 10), :hex => (10, 10), :cubic => (6, 6, 6))
 
 @testset "P6.9a: Global's decisions = brute force ($geom, $(p69a_bc(periodic)))" for ((geom, periodic), _) in P69A_GEOMS
     M = p69a_model("P69aBits", geom, periodic)
@@ -874,7 +875,7 @@ end
     @test bad == 0
     @test length(seen) >= 3                               # pieces vary (non-vacuous)
     # the tracked values feed the energies: ΔH stays exact on the evolved state (drift)
-    n, nE, nD, nnz, Hok = p69a_check_dh(prob, integ.state, geom; periodic, step = 4)
+    n, nE, nD, nnz, Hok = p69a_check_dh(prob, integ.state, geom; periodic, step = 1)   # every copy
     @test n >= 40 && nE == n && nD == n && Hok
 end
 
@@ -904,7 +905,7 @@ end
 @testset "P6.9a: Bauer 2009 / Jafari continuity: a reconnecting copy is rewarded by −α" begin
     # A is a bar with a one-site gap; filling the gap joins its two pieces: ΔH = −300 plus
     # the other terms, which the brute force adds
-    σ = zeros(Int32, 9, 9); σ[5, 2:4] .= 1; σ[5, 6:8] .= 1; σ[1, 1] = 2; σ[9, 9] = 3
+    σ = zeros(Int32, 10, 10); σ[5, 2:4] .= 1; σ[5, 6:8] .= 1; σ[1, 1] = 2; σ[10, 10] = 3
     prob = PottsProblem(P69aCellSquareClosed(; name = :b), [ownership => σ, kind => P69A_KINDS], (0, 1))
     x, y = (5, 5), (5, 4)
     prop = CorePotts.Proposal(CorePotts.linear_index(prob.lattice, x), CorePotts.linear_index(prob.lattice, y), x, 1, σ[x...], σ[y...])
