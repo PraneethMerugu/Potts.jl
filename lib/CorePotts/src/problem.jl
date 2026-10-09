@@ -452,24 +452,37 @@ function _run_entry!(integ::PottsIntegrator, phases::Tuple)
     return nothing
 end
 function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
+    # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope `mcs`,
+    # D-188): n − 1 during the n-th MCS, as the phases' `mcs`
+    ctx = sweep_ctx(integ.ctx, integ.t)
     if integ.alg isa SequentialCPM
-        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
             integ.law, integ.key, integ.t, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     elseif integ.alg isa BoundarySiteCPM
-        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, integ.ctx,
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
             integ.law, integ.key, integ.t, integ.cache, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
-            integ.p, integ.ctx, integ.law, integ.key, integ.t)
+            integ.p, ctx, integ.law, integ.key, integ.t)
     end
     return nothing
 end
+
+"""
+    sweep_ctx(ctx, mcs)
+
+The run context of the copy sweep of MCS `mcs + 1`: `ctx` with `mcs`, the number of
+completed MCS, which the copy functions (`delta_H`, `constraint`, `temperature`, `bias`,
+`commit!`) may read as `ctx.mcs`.
+"""
+sweep_ctx(ctx::NamedTuple, mcs::Integer) = merge(ctx, (; mcs = Int(mcs)))
+
 function _run_entry!(integ::PottsIntegrator, ::LifecyclePhase)
     integ.f.lifecycle === nothing || _step_lifecycle!(integ, integ.lcache.device)
     return nothing
