@@ -3676,3 +3676,17 @@ session.
   - After its record lands, the rename is one change (P6.0bk2): the 04 and 15 frozen tests, plus any others, are re-frozen with `BoundarySiteCPM()` → `SequentialCPM(; skip_interior = true)`.
   - **Code-identity check.** The rename must be code-identical: same RNG draws, the same σ on the SMOKE tiers, and the same verdicts. Equivalence in law was already shown under D-177, so no re-runs are expected.
 - **Existing records stay valid.** Their provenance names BoundarySiteCPM as a historical fact. Each record README gains one line saying it is now `SequentialCPM(; skip_interior = true)`.
+
+## D-199 Ergonomics items (2026-10-09; maintainer asked "how ergonomic is our library so far" and approved filing the assessment's list; relayed by the "models and publications" session; checked by the coordinator)
+
+- **Assessment.** The library is very good for Julia/SciML users and good for CC3D/Morpheus modellers. It is only fair for biologists new to coding, and the items target that group. The assessment comes from rereading the docs, not from a user study.
+- **Checked against the repository.**
+  - `capacity = 256` in the OpenVT minimal run: confirmed.
+  - "About a minute" for a first run, and "3200 of our MCS are 200 of the paper's": both confirmed in getting_started.
+  - `pottsplot` takes a frame only: confirmed.
+  - `attempts` (P6.4b) and `@terminate` (P6.4c) were already planned.
+  - Two corrections to the proposal:
+    - `count_contacts` is symbolic-only (`src/contact_folds.jl`), so E8 needs an `@observed` or a new helper for use after a run.
+    - `coming_from.md` already maps the CC3D Connectivity plugin, so E9 adds the D-191 version note and the patterns still missing.
+- **Items.** Filed as ROADMAP P6.E1–P6.E10.
+- **Constraints.** API additions keep the old forms. None changes a frozen verdict unless the maintainer rules otherwise.

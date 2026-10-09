@@ -636,6 +636,52 @@ Full runs are offline (D-146).
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
+### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
+
+Every API change here keeps the old form working, and none changes a frozen verdict unless the maintainer rules otherwise. Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
+
+- [ ] **P6.E1** Named kind tables and symbolic kinds.
+  - Write `J[dark, light] = 11`, symmetric unless declared otherwise, alongside the positional matrix.
+  - Results can be read as kind symbols or as a categorical (`sol[:kind]` today returns integers in `@kinds` order, with the medium first).
+  - Build errors for a table of the wrong size and for a forgotten medium.
+- [ ] **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
+- [ ] **P6.E3** `capacity`.
+  - Size it automatically, or let it grow, for growing populations (the OpenVT minimal run needs `capacity = 256` today).
+  - At minimum, on overflow, say "raise capacity to ≥ N" with N.
+- [ ] **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
+- [ ] **P6.E5** Plot shortcuts: `pottsplot(sol, i)` and `pottsplot(sol)`, alongside `pottsplot(renderframe(…))`.
+- [ ] **P6.E6** Time to first run for a fresh user-written model.
+  - Measure it on the PC. getting_started says "about a minute".
+  - Update the sentence.
+  - If it is still about 60 s, scope precompile or workload changes for un-shipped models.
+- [ ] **P6.E7** Error-message audit.
+  - Write the ~10 most common beginner mistakes:
+    - a wrong kind name;
+    - a J of the wrong size;
+    - a forgotten medium;
+    - a misspelt section;
+    - Float64 on Metal;
+    - capacity overflow;
+    - an unknown copy-scope name;
+    - a parameter not in `@parameters`;
+    - `remake` with a wrong key;
+    - a missing `@named`.
+  - Record what each prints.
+  - Fix every unclear message so it names the offending item and suggests the fix.
+  - Add the cases to a (non-frozen) test.
+- [ ] **P6.E8** Getting started around built-in observables.
+  - Replace the hand-written `mixed_contacts` loop.
+  - `count_contacts` is symbolic-only, so either declare it as an `@observed` in the model or add a public helper for use after a run (decide in the item).
+  - Show an "everyday observables" set: contact fractions, cluster counts, MSD/displacement, volumes by kind.
+- [ ] **P6.E9** `coming_from.md`.
+  - Add the lab's common CC3D patterns that are still missing (mitosis steppable and others).
+  - Add the D-191 note to the Connectivity row: Penalty honoured in 4.3.1–4.6.0, a hard-coded 64 from 4.7.0, the hard form as the T → 0 limit.
+- [ ] **P6.E10** Docs polish.
+  - A home page led by a strip of 4–6 videos (before the MTK term table).
+  - Physical units (h, µm) next to MCS results on the paper pages.
+  - A FAQ "how fast vs CC3D" with our own labelled numbers only, no head-to-head claim (D-154).
+  - A "Start here" reading path through the manual.
+
 ### Step 5 — Fortuna (14a/14b), 3D
 
 - [x] (merge, 2026-09-30; D-066) **P6.5a0** Liveness survey (D-065 Q6): CompuCell3D, Morpheus and Artistoo death,
