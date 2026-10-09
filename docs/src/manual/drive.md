@@ -17,8 +17,9 @@ written in the **copy scope**:
 | `position[target][k]`, `position[source][k]` | component `k` of a site's position (lattice coordinates times the `spacing`) |
 | `mcs` | the number of completed MCS: `n − 1` during the `n`-th MCS, as in `@before_mcs` |
 
-`direction`, `position[s][k]` and `mcs` are also read by constraints (`@constraint
-direction[1]^2 + direction[2]^2 <= 1.5` forbids diagonal copies) and on-copy updates.
+`direction`, `position[s][k]` and `mcs` are read everywhere in the copy scope: drives,
+constraints (`@constraint direction[1]^2 + direction[2]^2 <= 1.5` forbids diagonal copies),
+on-copy updates and a copy-scope `@sweep` temperature.
 `direction` is a function of the two sites alone, not of the proposal neighbourhood, and
 reads no state; on a hexagonal lattice it is the embedded offset ``(q + r/2, r√3/2)``. It
 is not available in energies: the offset belongs to the copy, not to the state, so a term

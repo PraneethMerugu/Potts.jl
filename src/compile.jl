@@ -835,7 +835,8 @@ function _check_copy_integral(x, what; when = "every copy attempt")
     return nothing
 end
 
-"""Axes of `centroid`/`displacement` must be lattice axes; `centroid` has no ΔH in energies."""
+"""Axes of `centroid`/`displacement` and of the copy-scope `direction[k]` and `position[s][k]`
+(D-188) must be literal lattice axes; `centroid` has no ΔH in energies."""
 function _check_geometry(x, N; energy = false)
     _walk(x) do y
         iscall(y) || return

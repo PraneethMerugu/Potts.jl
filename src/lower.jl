@@ -432,7 +432,8 @@ function _lower_at(args, env)
         end
         if i.name === :direction
             haskey(env.bind, :direction) || error("`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
-                                                  "copy's source→target offset, read in drives and constraints")
+                                                  "copy's source→target offset, read in drives, constraints, on-copy updates and " *
+                                                  "the copy-scope @sweep temperature")
             return :($(env.bind[:direction])[$j])
         end
         if i.name === :kind
