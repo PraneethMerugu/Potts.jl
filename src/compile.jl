@@ -205,9 +205,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     site_terms = Any[]
     edge_terms = Tuple{Symbol, Any}[]
     relationships, edge_vars, edge_rel = _relationships(sys)
+    copy_written = _copy_written_site_vars(sys)
     for e in getfield(sys, :energies)
         d = e.domain
         _located(sys, e) do
+        d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_gathers_static(e.expr, copy_written)
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
@@ -608,6 +610,86 @@ function _check_static(x, what)
     return nothing
 end
 
+# A gather in a cell, edge or contact energy must read only what no copy changes (D-209).
+# ΔH evaluates such terms for the copy's own cell(s) or pairs, so a gather body or filter
+# that reads σ at the gathered sites (`owner[n]`, `kind[n]`, `x[owner[n]]`) or a site
+# variable a copy writes would be in `total_energy` but missing from ΔH.
+
+# site and field variables a copy writes: by an `@on_copy` update, or cleared on a change of
+# ownership
+function _copy_written_site_vars(sys::PottsSystem)
+    out = Set{Symbol}()
+    for x in getfield(sys, :variables)
+        i = info(x)
+        i !== nothing && i.role in (:site, :field) && get(i.options, :clear_on_ownership_change, false) === true &&
+            push!(out, i.name)
+    end
+    for u in getfield(sys, :updates)
+        u.phase === :on_copy || continue
+        lhs = _unwrap(u.eq.lhs)
+        (iscall(lhs) && operation(lhs) === at) || continue
+        i = info(arguments(lhs)[1])
+        i !== nothing && i.role in (:site, :field) && push!(out, i.name)
+    end
+    return out
+end
+
+# `owner[…]` or `kind[…]`: σ at a site
+_is_sigma_at(y) = iscall(y) && operation(y) === at && (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
+_reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
+
+# The first read in `x` that a copy changes, as written (outermost `x[owner[n]]` first), or
+# `nothing`.
+function _copy_varying_read(x, copy_written)
+    hit = Ref{Any}(nothing)
+    _walk(x) do y
+        hit[] === nothing || return
+        if _is_sigma_at(y) || (iscall(y) && operation(y) === at && _reads_sigma(arguments(y)[2]))
+            hit[] = y                                     # `x[owner[n]]`, `owner[n]`, `kind[n]`
+        elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
+            hit[] = y                                     # `J[kind[n], …]`
+        else
+            i = info(y)
+            i !== nothing && i.role in (:site, :field) && i.name in copy_written && (hit[] = y)
+        end
+    end
+    hit[] === nothing && return nothing
+    i = info(hit[])
+    s = i !== nothing && i.role in (:site, :field) ? string(i.name) : _indexed_string(hit[])
+    s = replace(s, r"\bn_\d+\b" => "n")                    # the gather's bound site, as authored
+    why = i !== nothing && i.role in (:site, :field) ?
+          " (a site variable written by `@on_copy` or cleared on a change of ownership)" : ""
+    return s, why
+end
+
+# `x[i]`, `J[i, j]` as authored (not `Potts.at(x, i)`)
+function _indexed_string(x)
+    if iscall(x) && (operation(x) === at || operation(x) === at2)
+        a = arguments(x)
+        return string(_indexed_string(a[1]), "[", join(map(_indexed_string, a[2:end]), ", "), "]")
+    end
+    return string(x)
+end
+
+function _check_gathers_static(E, copy_written)
+    _walk(E) do y
+        (iscall(y) && operation(y) === gather) || return
+        _, _, body, cond = arguments(y)
+        r = something(_copy_varying_read(body, copy_written), _copy_varying_read(cond, copy_written), Some(nothing))
+        r === nothing && return
+        s, why = r
+        throw(ArgumentError(
+            "a gather in this energy reads `$s`$why, which a copy changes; ΔH evaluates the term only where the " *
+            "copy acts (its two cells, their links, the pairs at the target), so a change in the gathered value " *
+            "would be missing from it. A gather in a cell, edge or " *
+            "contact energy may read static values only: a site variable no copy writes (a static field), a " *
+            "parameter, a constant, `id`, or the edge ends `a`, `b` compared with static values. To act on the " *
+            "neighbourhood's ownership, use a `@drive` (it reads `owner`, `kind` at the copy), or keep the " *
+            "neighbourhood in a site variable updated at MCS boundaries"))
+    end
+    return nothing
+end
+
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
 # bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[site′]`), so
 # that mirroring (owner ↔ owner′, site ↔ site′) sees them.
@@ -726,18 +808,19 @@ function _located(f, sys::PottsSystem, x)
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x))$loc"))
+        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x, getfield(sys, :kinds)))$loc"))
     end
 end
 
 # descriptions are built only when reporting (printing symbolic expressions is slow)
-_describe(e::EnergyTerm) = "@energy $(_domain_string(e.domain)) => $(e.expr)"
+_describe(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
 _describe(d::Drive) = "@drive copy => $(d.expr)"
 _describe(c::Constraint) = "@constraint $(c.expr)"
 _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
-_describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string(d.every)) when = $(d.when)"
+_describe(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
+_describe(x, ::Any) = _describe(x)
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
 _describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"

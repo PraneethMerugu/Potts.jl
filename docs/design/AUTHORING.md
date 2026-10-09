@@ -199,7 +199,9 @@ expression may refer to:
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
 | `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, kind class, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
-| `model` | once | model-scoped variables |
+| `clusters(kinds…)` | every compartment cluster whose root cell is of those kinds (§12.7a) | `cluster_volume`, `cluster_surface`, `kind`, `id` |
+
+There is no `model` energy domain (earlier drafts listed one; D-209).
 
 Examples:
 
@@ -241,6 +243,18 @@ built by `@potts_model`, `@extend` or programmatically (D-061).
 end
 ```
 
+Gathers in energies (D-209). A fold over a relation around a site (`sum(q[n] for n in
+far(s))`) in a `cells`, `edges` or `contacts` term may read only values no copy changes: site
+and field variables that no `@on_copy` update writes and that are not
+`clear_on_ownership_change` (static fields, or values updated at MCS boundaries),
+parameters, constants, `id`, and `a`, `b` compared with such values. Copy-varying factors
+outside the gather are fine (`volume * sum(q[n] …)`, `distance * count(q[n] == a …)`). ΔH
+evaluates these terms only where the copy acts, so a body or filter that reads `owner[n]`,
+`kind[n]`, `x[owner[n]]` (including `volume[owner[n]]`) or a copy-written site variable would
+change `H` without entering ΔH; `mtkcompile` refuses it with an `ArgumentError` naming the
+statement. Use a static field or parameter instead, or a `@drive` (§5), which reads
+ownership at the copy.
+
 Library one-liners expand into the same pairs and remain available for discoverability:
 
 ```julia
@@ -264,8 +278,11 @@ Chemotaxis(c; strength = μ)                           # a @drive, see §5
 6. CSE across all terms; parameters marked structural become literals.
 7. Select trackers: only quantities that appear in some term are maintained.
 8. **Self-verification:** because the user wrote `H`, the compiler also generates
-   `total_energy(sys)`. The test suite checks `ΔH == H(after) − H(before)` on random
-   flips of every model automatically. No hand-written oracle is needed.
+   `total_energy(sys)`. Checking `ΔH == H(after) − H(before)` is a test helper, not an
+   automatic compiler check: it runs on random flips of the models listed in the
+   PottsModels test suite (`selfcheck`) and in the ΔH oracle tests of the acceptance files
+   (e.g. P6.0ca's static gathers). A new model or a new energy form gets the check only
+   when a test calls it (D-209).
    - **A dead cell leaves `H`** (D-066 item 4, D-083): `total_energy` sums cell terms
      over alive cells (`volume > 0`), cluster terms over roots of clusters with an alive
      member, and edge terms over links with both ends alive; free slots add nothing.
