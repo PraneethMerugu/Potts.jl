@@ -74,7 +74,7 @@
 #     comes with `CellIdentityEncoding` or `CellTypeEncoding`.
 # (g) G-derived content (D-147, D-168). Figures and small statistics only: every cited record
 #     has a `provenance.toml` (40-hex commit, an item P6.15*, a clean tree, a runner inside
-#     the record directory that exists), only .tsv/.toml/.md/.jl/.png/.svg files, none over
+#     the record directory that exists), only .tsv/.csv/.toml/.md/.jl/.png/.svg files, none over
 #     10 MB, and no consortium file names (closeup, cell_data_, relaxation_exact, Fig1_).
 #     Every file under `docs/src/assets/openvt_monolayer/` is byte-identical to a file of a
 #     `data/15/` record, or is listed in that directory's `provenance.toml` as
@@ -133,7 +133,7 @@ const P615I_VIDEOS = [
 ]
 const P615I_SUPERSEDED = ["reproductions-2026-10-07-openvt-f5", "reproductions-2026-10-07-openvt-f5-cells"]
 const P615I_VIDEO_EXT = (".mp4", ".webm", ".mov", ".mkv", ".gif")
-const P615I_RECORD_EXT = (".tsv", ".toml", ".md", ".jl", ".png", ".svg")
+const P615I_RECORD_EXT = (".tsv", ".csv", ".toml", ".md", ".jl", ".png", ".svg")
 const P615I_G_NAMES = [r"closeup"i, r"cell_data_"i, r"relaxation_exact"i, r"^Fig1_"]
 
 const P615I_FORBIDDEN = [

@@ -1,0 +1,22 @@
+target	paper	ours	band	result
+V1 t̄ at β = γ = 0 (cycles)	13.57 (Table 1 caption); TST plateau 13.77, Artistoo 13.856	14.945	[12.213, 14.927]	FAIL
+V2.1.1x β threshold at 1.1× (M's nearest rule on point means)	lattice spread [0.687, 0.704]; TST 0.7037, Artistoo 0.698182	0.625	[0.667, 0.724]	FAIL
+V2.2x β threshold at 2.0× (M's nearest rule on point means)	lattice spread [0.936, 0.943]; TST 0.9361, Artistoo 0.937665	0.9375	[0.916, 0.963]	PASS
+V2.5x β threshold at 5.0× (M's nearest rule on point means)	lattice spread [0.9867, 0.9916]; TST 0.9867, Artistoo 0.987636	0.9875	[0.9817, 0.9966]	PASS
+V2.10x β threshold at 10.0× (M's nearest rule on point means)	lattice spread [1.006, 1.011]; TST 1.006, Artistoo 1.005947	1.007	[1.001, 1.016]	PASS
+V2.20x β threshold at 20.0× (M's nearest rule on point means)	lattice spread [1.02, 1.024]; TST 1.02, Artistoo 1.020946	1.0212	[1.015, 1.029]	PASS
+V2b.0.8727 t̄(β = 0.8727) / reference	Artistoo 18.59 cycles	0.99711	[0.75, 1.25]	PASS
+V2b.0.9 t̄(β = 0.9) / reference	TST 20.4 cycles	1.0129	[0.75, 1.25]	PASS
+V2b.0.9334 t̄(β = 0.9334) / reference	Artistoo 25.59 cycles	1.0071	[0.75, 1.25]	PASS
+V2b.0.95 t̄(β = 0.95) / reference	TST 32.11 cycles	0.97126	[0.75, 1.25]	PASS
+V2b.1.0 t̄(β = 1.0) / reference	TST 105.76 cycles	0.96157	[0.75, 1.25]	PASS
+V3.1.1x γ threshold at 1.1× (bracket over γ > 0)	— (the lattice γ → 0⁺ jump)	—	—	PASS
+V3.2x γ threshold at 2.0× (bracket over γ > 0)	— (the lattice γ → 0⁺ jump)	—	—	PASS
+V3.5x γ threshold at 5.0× (M's nearest rule on point means)	lattice spread [0.076, 0.12]; TST 0.12, Artistoo 0.07562	0.1625	[0.026, 0.17]	PASS
+V3.10x γ threshold at 10.0× (M's nearest rule on point means)	lattice spread [0.45, 0.5]; TST 0.5, Artistoo 0.450193	0.5375	[0.4, 0.55]	PASS
+V3.20x γ threshold at 20.0× (M's nearest rule on point means)	lattice spread [0.715, 0.76]; TST 0.75, Artistoo 0.715045	0.7625	[0.665, 0.81]	PASS
+V3b t̄ at γ = 1e-4 (cycles)	TST 61.37 (γ = 1e-4), Artistoo 63.09 (γ = 0.0195)	58.755	[61.0, 70.0]	FAIL
+F7.1 min inhibited fraction, replicate 1 at the T1 γ thresholds	TST 0.96101, 0.9784, 0.99	0.9623	≥ 0.9	PASS
+NC1 V3b rule on γ = 0 (the β = 0 point)	β = γ = 0 against the V3b band	14.945	[61.0, 70.0] (control: must FAIL)	FAIL
+NC2 V2b rule at a β offset of 0.05	t̄(0.95)/TST 20.40 and t̄(1.0)/TST 32.11 (β offset 0.05)	(1.5288, 3.1671)	both in [0.75, 1.25] (control: must FAIL)	FAIL
+NC3 V1 rule on γ = 1e-4	γ = 1e-4 against the V1 band	58.755	[12.213, 14.927] (control: must FAIL)	FAIL
