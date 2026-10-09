@@ -201,7 +201,7 @@ function main(args; baseline = BASELINE)
     tc = BenchMachine.seed_type_cache!()
     algs = Pair{String, Any}["sequential" => (SequentialCPM(), nothing, Float64),
         "checkerboard" => (CheckerboardCPM(), nothing, Float64),
-        "boundary" => (BoundarySiteCPM(), nothing, Float64)]          # D-177
+        "boundary" => (SequentialCPM(; skip_interior = true), nothing, Float64)]  # D-177, D-198
     "--no-cpu" in args && empty!(algs)
     isempty(DEVICE) || push!(algs, DEVICE => (CheckerboardCPM(), device_backend(), Float32))
     table = isfile(baseline) ? TOML.parsefile(baseline) : Dict{String, Any}()

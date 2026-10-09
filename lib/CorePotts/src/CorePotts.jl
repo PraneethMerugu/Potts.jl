@@ -45,7 +45,7 @@ export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!, cluster_claims
 export FieldStep, FieldClamp, laplacian, gradient, owner_kind, stable_substeps
-export Metropolis, Barker, SequentialCPM, BoundarySiteCPM, CheckerboardCPM
+export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them

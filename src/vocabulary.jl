@@ -693,12 +693,12 @@ first at a fraction of the cost; so a refused copy whose ΔH is not finite fails
 `window` (a positive number of sites, or `nothing`) is used by `CheckerboardCPM` only: the
 losing cell's search stays inside the index-space box of radius `window` round the target
 (minimum image on periodic axes), and a copy whose touching pieces all leave the box is
-refused and counted in `stats.connectivity_deferred`. `SequentialCPM` and `BoundarySiteCPM`
-are exact and ignore it. `window = nothing` is exact everywhere: on the CPU a host flood, on a
-device a serial kernel (one work item over the deferred list, one copy at a time). Each
-work item of the windowed search holds an `MVector` stack of `CAP` `Int32`s and two bit sets
-of `CAP` bits, `CAP` = the box's site count (≤ (2·window + 1)^d): ≈ 4.25·CAP bytes per
-thread (≈ 1 KB at window 7 in 2D, ≈ 14 KB at window 7 in 3D), so keep windows small in 3D.
+refused and counted in `stats.connectivity_deferred`. `SequentialCPM` (with or without
+`skip_interior`) is exact and ignores it. `window = nothing` is exact everywhere: on the CPU
+a host flood, on a device a serial kernel (one work item over the deferred list, one copy at
+a time). Each work item of the windowed search holds an `MVector` stack of `CAP` `Int32`s
+and two bit sets of `CAP` bits, `CAP` = the box's site count (≤ (2·window + 1)^d):
+≈ 4.25·CAP bytes per thread (≈ 1 KB at window 7 in 2D, ≈ 14 KB at window 7 in 3D), so keep windows small in 3D.
 `adjacency` is `:face` (4 in 2D, 6 hex, 6 in 3D) or `:full` (8, 26; on hex `:full` is `:face`).
 """
 struct Global

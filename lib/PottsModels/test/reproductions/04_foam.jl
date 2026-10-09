@@ -324,7 +324,7 @@ end
 const P64R_SHEAR_READY = p64r_build_shear()
 P64R_SHEAR_READY || @info "04 foam: P6.4a1 (`direction`) is not on this tree; the shear rows are gated (@test_broken)"
 
-const P64R_ALG = BoundarySiteCPM()
+const P64R_ALG = SequentialCPM(; skip_interior = true)
 const P64R_TEMPLATES = Dict{Tuple{Bool, Tuple{Int, Int}}, Any}()
 
 p64r_brick(L) = Int32[(r = (y - 1) ÷ P64R_BRICK; r * (L[1] ÷ P64R_BRICK) + mod(x - 1 - (isodd(r) ? P64R_BRICK ÷ 2 : 0), L[1]) ÷ P64R_BRICK + 1)

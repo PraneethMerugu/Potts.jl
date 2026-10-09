@@ -80,18 +80,25 @@ const AB_START_DISTURBANCES = ab_disturbances()
 include(joinpath(@__DIR__, "gate.jl"))
 using Statistics: median
 
-# `boundary` (D-177): BoundarySiteCPM, on checkouts that have it (an older side has no such
-# name; there the variant is an error when named, and nothing otherwise)
+# `boundary` (D-177, D-198): `SequentialCPM(; skip_interior = true)`, or the former
+# `BoundarySiteCPM()` on a checkout from before D-198 (an older side has neither; there the
+# variant is an error when named, and nothing otherwise)
+ab_boundary_alg() =
+    try
+        SequentialCPM(; skip_interior = true)
+    catch
+        isdefined(Main, :BoundarySiteCPM) ? Main.BoundarySiteCPM() : nothing
+    end
 const AB_ALGS = Dict("sequential" => (SequentialCPM(), false),
     "checkerboard" => (CheckerboardCPM(), false),
-    "boundary" => (isdefined(Main, :BoundarySiteCPM) ? Main.BoundarySiteCPM() : nothing, false),
+    "boundary" => (ab_boundary_alg(), false),
     "metal" => (CheckerboardCPM(), true), "rocm" => (CheckerboardCPM(), true))
 
 function ab_variant(v)
     haskey(AB_ALGS, v) ||
         error("unknown variant $(repr(v)); one of $(join(sort(collect(keys(AB_ALGS))), ", "))")
     alg, dev = AB_ALGS[v]
-    alg === nothing && error("variant $v: this checkout has no BoundarySiteCPM")
+    alg === nothing && error("variant $v: this checkout has neither `skip_interior` nor BoundarySiteCPM")
     dev && v != DEVICE && error("variant $v needs the $v backend loaded")
     return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
 end

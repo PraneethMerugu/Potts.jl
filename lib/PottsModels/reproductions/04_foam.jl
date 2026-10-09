@@ -87,7 +87,8 @@ nothing #hide
 #
 # The paper's ordered foam (p.5823): 256 bricks of 16² in common bond, a short anneal at
 # T = 3, then relaxation at T = 0. Proposals are made at wall sites only
-# (`BoundarySiteCPM`), to a uniform neighbour among the 20 (deviation DV1).
+# (`SequentialCPM(; skip_interior = true)`), to a uniform neighbour among the 20 (deviation
+# DV1).
 
 brick(L) = Int32[(r = (y - 1) ÷ 16; r * (L[1] ÷ 16) + mod(x - 1 - (isodd(r) ? 8 : 0), L[1]) ÷ 16 + 1)
                  for x in 1:L[1], y in 1:L[2]]
@@ -96,7 +97,7 @@ L = (256, 256)
 nb = Int(maximum(σ0))
 u0 = [ownership => σ0, kind => fill(:bubble, nb), :A => fill(256.0, nb)]
 prob = PottsProblem(ShearedFoam(; name = :foam), u0, (0, 10); seed = 1)
-alg = BoundarySiteCPM()
+alg = SequentialCPM(; skip_interior = true)
 annealed = solve(remake(prob; p = [:T => 3.0]), alg).u[end]                       # 10 MCS at T = 3
 relaxed = solve(remake(prob; u0 = [ownership => Array(annealed.σ), kind => fill(:bubble, nb), :A => fill(256.0, nb)],
     tspan = (0, 1000)), alg).u[end]                                                 # 1000 MCS at T → 0⁺
@@ -327,7 +328,7 @@ Markdown.parse(join([ #hide
     "|---|---|---|---|---|", #hide
     ("| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
      for r in rec_rows("deviations.tsv"))..., #hide
-    "| DV1 proposal law and time scale τ | a uniform neighbour among the 20, at wall sites (`BoundarySiteCPM`); like neighbours are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbours: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbour, every pick counted as a trial (p.5822) | the paper's unlike-neighbour proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
+    "| DV1 proposal law and time scale τ | a uniform neighbour among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbours are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbours: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbour, every pick counted as a trial (p.5822) | the paper's unlike-neighbour proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
     "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
     "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
     "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
@@ -461,7 +462,7 @@ Markdown.parse("Record `$(only(rec_dirs))`, written by the frozen test's FULL ti
 Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
                "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
                "bulk shear $(round(1e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
-               "T1 detection (256², `BoundarySiteCPM`). Seeds: the foams use the frozen test's smoke seeds " *
+               "T1 detection (256², `SequentialCPM(; skip_interior = true)`). Seeds: the foams use the frozen test's smoke seeds " *
                "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
                "its first try). The ordered bulk shear uses 9 400 021, the frozen shear check's seed, " *
                "here for 3000 MCS instead of its 500, and 9 400 023–24 the disordered bulk and the " *

@@ -576,7 +576,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Section 4: exactness after random copy sequences of real integrators
 
-const P63J_ALGS = [("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", CheckerboardCPM()), ("BoundarySiteCPM", BoundarySiteCPM())]
+const P63J_ALGS = [("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", CheckerboardCPM()), ("BoundarySiteCPM", SequentialCPM(; skip_interior = true))]
 
 @testset "P6.3j: tracked χ = oracle after every MCS ($geom, $(periodic ? "Periodic" : "Closed"))" for ((geom, periodic), (_, _, dims)) in P63J_GEOMS
     adjs = p63j_adjs(geom)

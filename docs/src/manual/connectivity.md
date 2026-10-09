@@ -129,8 +129,8 @@ test fails. One consequence: a refused copy whose ΔH is not finite now fails th
 (`retcode = Failure`), where a constraint evaluated first would have skipped it. The search
 floods the cell from one touching site and stops when it has reached the others.
 
-**`window`** is used by `CheckerboardCPM` only. `SequentialCPM` and `BoundarySiteCPM` are
-exact and ignore it.
+**`window`** is used by `CheckerboardCPM` only. `SequentialCPM`, with or without
+`skip_interior`, is exact and ignores it.
 
 - On the checkerboard, an accepted copy whose shell test fails is put on a list. A deferred
   kernel searches each listed copy inside the box `|Δ| ≤ window` round the target, in index

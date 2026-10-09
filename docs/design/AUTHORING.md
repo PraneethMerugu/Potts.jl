@@ -1239,7 +1239,7 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 | Topic | Rule |
 |---|---|
 | Neighbor order | `NeighborOrder(k)` cumulative distance shells |
-| Proposals | `SequentialCPM`: a uniform **mobile target** site, then a uniform **offset** from the proposal relation gives the **source**; an off-lattice, frozen or same-owner source consumes the attempt, and one MCS is `N_mobile` attempts. `BoundarySiteCPM`: the same law, null picks skipped exactly. `CheckerboardCPM`: every site is a target once per MCS (colours in random order; frozen targets are null), with the same uniform source offset |
+| Proposals | `SequentialCPM`: a uniform **mobile target** site, then a uniform **offset** from the proposal relation gives the **source**; an off-lattice, frozen or same-owner source consumes the attempt, and one MCS is `N_mobile` attempts. `SequentialCPM(; skip_interior = true)`: the same law, with the interior (null) picks skipped exactly. `CheckerboardCPM`: every site is a target once per MCS (colours in random order; frozen targets are null), with the same uniform source offset |
 | Contact H | unordered pairs counted once |
 | Surface | unlike-neighbour pairs within the surface relation, no lattice factor |
 | Acceptance | `ΔH ≤ offset` → accept, else `exp(-(ΔH - offset)/T)`; T ≤ 0 tie → ½ |

@@ -448,7 +448,7 @@ const P64A1_ALGS = [
     ("SequentialCPM(VonNeumann(1))", SequentialCPM(; proposal = VonNeumann(1))),
     ("SequentialCPM(NeighborOrder(4))", SequentialCPM(; proposal = NeighborOrder(4))),
     ("CheckerboardCPM(Moore(1))", CheckerboardCPM(; proposal = Moore(1))),
-    ("BoundarySiteCPM(Moore(1))", BoundarySiteCPM(; proposal = Moore(1))),
+    ("BoundarySiteCPM(Moore(1))", SequentialCPM(; skip_interior = true, proposal = Moore(1))),
 ]
 const P64A1_DRIVES = [
     ("(a) reversal at mcs = K", Pair{Symbol, Float64}[]),
