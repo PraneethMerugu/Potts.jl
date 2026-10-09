@@ -3636,3 +3636,20 @@ session.
   - p6_3g: its alias testsets call through `Base.invokelatest`, to fix Julia 1.12 world age. Nothing else changes.
 - **Unchanged.** Merks2006/2008 (reproduction 01), p6_0v3's Merks digests and p6_0bm. No FULL record uses the legacy `MerksVasculogenesis`, so no FULL re-run is needed under D-154.
 - **Follow-up.** The default-build model-page video `paper_runs/merks_vasculogenesis` was rendered with the old rule. Re-render it once P6.3g lands (P6.3g-v).
+
+## D-197 P6.9a: Global connectivity test frozen (2026-10-09; coordinator, from the P6.9a test author; under D-075, D-189, D-193)
+
+- **Frozen test.** `acceptance/p6_9a_global_connectivity.jl` (commit 520302de, sha256 `704a7d54485bb0b97744e6c32b964f82e7822c6b6545adfb76d13ea0d10c3003`), 18 testset templates.
+- **Readings.**
+  1. Both cells use "does not increase the number of pieces". For `new`, this means the target x is adjacent to `new`.
+  2. `window` applies to CheckerboardCPM only. SequentialCPM is exact: it ignores the window and its counter stays at 0.
+  3. The window is an index-space box of radius W, using the minimum image.
+  4. `stats.connectivity_deferred` counts copies that passed the acceptance draw but overflow the window. It is `nothing` when the model has no Global rule.
+  5. A Global-refused copy with a non-finite ΔH fails the run.
+  6. Cell-scope `pieces` and `largest_piece` take no window and are exact. Energies see exact after-values.
+  7. Not pinned:
+     - the penalty form with a window;
+     - `window = nothing` on a device;
+     - BoundarySiteCPM. It should behave like SequentialCPM, being equal in law; if not supported, it must give a build error that names it.
+- **Test environment.** AllocCheck joins the PottsModels test environment.
+- **Re-freezes forced at implementation.** p6_3a's "Global() is a reserved placeholder" check, and the error checks in p6_3g at lines 704–708. Both go through a test author.
