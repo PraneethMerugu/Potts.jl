@@ -121,13 +121,14 @@ deviations = ["No provisional default planned: C4 was resolved from the CompuCel
 spec = "15"
 name = "OpenVT monolayer benchmark (growing monolayer with contact inhibition)"
 status = "partial"
-status_note = "Figures 1–5 and 8, Tables S1 and S5 rendered; Figure 6, Table 1 and Figure 7 pending (P6.15g FULL sweep, no record yet)"
+status_note = "Every figure and table of the benchmark has a FULL record (Figures 1–8, Tables 1, S1, S5); open: the submission package (P6.15j, not yet submitted) and Q10"
 data = "15"
 models_page = "model-openvt"
 published = "15_openvt_monolayer"
 deviations = [
     "V4.2, V4.3 and V4.5 FAIL (Figure 5: the rim cells' free-surface fraction is too high; a few young daughters are squeezed). Leading candidate: division on actual area (C13).",
-    "V1: 15.17 cycles to 10⁴ cells against 13.57 (11–12 % slow beyond 10³ cells); judged with the pending sweeps, never marked PASS.",
-    "Figure 6, Table 1, Figure 7 (V1–V3b): pending, the FULL sweep has no record yet (D-174).",
+    "V1 FAIL (Table 1): 14.945 cycles to 10⁴ cells uninhibited, 0.12 % above the band's upper edge 14.927 (+10.1 % on 13.57). Leading candidate: division on actual area (C13, our open question list Q20).",
+    "V2.1.1x FAIL (Figure 6): β threshold 0.625 at 1.1× against 0.667–0.724; it follows from V1, since the 1.1× target falls on our flat low-β plateau.",
+    "V3b FAIL (Table 1): 58.755 cycles at γ = 10⁻⁴ against [61, 70]; cause unverified (C13 weaker here).",
     "C1–C17: readings taken where the manuscript and the consortium's other sources differ (the page's differences table).",
 ]
