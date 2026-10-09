@@ -546,3 +546,8 @@ decision = "D-202"
 path = "reproductions/04_foam_kb_scan.jl"
 sha256 = "dc6de6bcf838173521af39db92cf0476d3ea25b963ee61465d43ba5a2b5d969c"
 decision = "D-205"
+
+[[file]]
+path = "acceptance/p6_0ba_boundary_only_reach.jl"
+sha256 = "1ce9e28511f5c42ab32bec4fd3d6f2679f436bb54fb5adbc4ccb4a880a951896"
+decision = "D-208"
