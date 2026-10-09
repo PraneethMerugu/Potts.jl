@@ -3690,3 +3690,23 @@ session.
     - `coming_from.md` already maps the CC3D Connectivity plugin, so E9 adds the D-191 version note and the patterns still missing.
 - **Items.** Filed as ROADMAP P6.E1–P6.E10.
 - **Constraints.** API additions keep the old forms. None changes a frozen verdict unless the maintainer rules otherwise.
+
+## D-200 Findings from the proposal-law research: paper over code (2026-10-09; maintainer approved the spec owner's list, relayed by the "models and publications" session; `docs/design/research/proposal-law-clues.md`)
+
+- **Standing rule (maintainer).** "We trust the paper over codebases, but use both for research. If the OpenVT manuscript is accurate, choose it over TST."
+- **Proposal law ruled out.** The proposal law does not explain V-C12, V-PRE5/7 or OpenVT V1/V3b/V4.x. The proposal laws of all four OpenVT frameworks are equivalent per MCS to ours. There is no sensitivity study on the proposal law.
+
+1. **Merks V-C12: reference time.**
+   - Fig 6E measures displacement from MCS 0, before relaxation. We measure from MCS 100.
+   - The check runs on the PC from the stored FULL snapshots, with no new dynamics.
+   - If the ratio moves toward [1.5, 2.5], V-C12's frozen definition changes to the paper's axis (MCS 0 → ≈ 19,800), through a test author, and the row is re-judged.
+2. **Merks attempts per MCS (coordinator's call).** The paper says N = 200² = 40 000 attempts. We follow TST's 198² mobile sites, a 2 % difference in time scale.
+   - **Now:** a deviation row on page 01. It states the 2 % time scale and that the paper wins.
+   - **Next 01 FULL re-run:** use the paper's N through `attempts` (P6.E2, fractional attempts) once that lands. A FULL re-run is not worth it for this alone.
+3. **Sorting V-PRE4 wording.** The paper's total is twice-counted Moore bonds, on boundaries about 10 % smoother after its T = 0 anneal (Moore counted twice ≈ 74k against 66.85k). This is not "not simply double counting".
+4. **Sorting V-PRE5 suspected cause.** "Stochastic late coalescence; paper n = 1; light:dark share unstated". Sources: Durand 2021, Holm et al. 1991 and Franke 2022. The row reports "k of 22 replicates reach ≥ 0.90 single-cluster share at 10⁴" from existing data.
+5. **OpenVT V1, V3b and V4.x suspected cause.** Where we differ from TST: "TST departs from the manuscript: divides on target area". `openvt_reference.jl` follows the manuscript.
+   - The page notes that CC3D, Morpheus and Artistoo each depart from Table S1 in places.
+   - Q23 on our open question list: the released TST stops at max_cell_count = 1000, so which build produced its curves beyond 10³?
+
+- **Later, not now.** Durand & Guesnet 2016's connectivity-preserving CPM is probably expressible with `connectivity(…; rule = Global())`. It is an extended-library candidate after the paper.
