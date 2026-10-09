@@ -43,7 +43,26 @@
 # refusal (the forms compile; contacts and `volume[owner[n]]` then fail at `PottsProblem` with
 # an ErrorException; the `@on_copy` site variable is an ArgumentError at `mtkcompile` with
 # the D-045 wording, located at the `@on_copy` statement, so only its type check passes).
-# Sections 0, 2, 3 and 4 pass. The frozen files re-frozen with this item (p6_0at, p6_0ax, p6_0ba) replace their
+# Sections 0, 2, 3 and 4 pass.
+#
+# Widened after review (D-209, "Widened after review"; sections 5 and 6, added after the
+# implementation 24f38d98/7f20f89b). The same wrong ΔH arises outside gather bodies, so these
+# are refused too, with the same message requirements (`a copy changes`, `in @energy <domain>`):
+#  1. a σ-dependent gather anchor, cells and edges: `far(owner[40] + 39)`,
+#     `Moore(1)(owner[40] + 39)`, and the bare `far(owner[40])`;
+#  2. σ at an explicit site outside any gather: cells `owner[40] == id`, `y[owner[40]]`
+#     (y = [1, 5]), `kind[40] == A`; edges `owner[40] == a`, `y[owner[40]]`;
+#  3. contacts with an explicit index: `owner[40] == 1`, `kind[40] == A`;
+#  4. indexed copy-varying builtins and on-copy cell variables in cell terms: `volume[id]`,
+#     `volume[1]`, `surface[id]` (inside and outside a gather), `y[id]` with `@on_copy y[new]`
+#     (outside and inside a gather). These messages must also name the bare form, in
+#     backticks (`volume`, `surface`, `y`).
+# Controls (section 6, accepted, ΔH oracle exact over 3000 attempts): contact terms reading
+# the bare pair names `owner`, `owner′`, `kind`, `kind′`; `y[id]` with y static (outside and
+# inside a gather) and with y written `@after_mcs`.
+# On 6b06747c (implementation in): sections 0–4 and 6 pass (160 + 24); section 5 fails 69 of
+# 92, every failure the missing widened refusal. Most forms compile; `kind[40]` in cells and
+# contacts is already an ArgumentError ("`kind[…]` needs a site …") without the D-209 wording. The frozen files re-frozen with this item (p6_0at, p6_0ax, p6_0ba) replace their
 # refused fixtures with the static forms of section 2.
 using Potts: CorePotts
 using Random: Xoshiro
@@ -110,11 +129,59 @@ const P60CA_ACCEPTED = [
         :(@energy edges(bond) => 0.1 * distance * (count(q[n] == a for n in far(40)) + count(q[n] == b for n in far(40))))], :far),
 ]
 
+# Widened after review (D-209 "Widened after review"): σ read outside gather bodies.
+# label => (@relations body or nothing, statements, domain as printed, bare form the message
+# suggests or nothing). These fixtures start with y = [1, 5] (cell variable, from the
+# operating point).
+const P60CA_ONCOPY_Y = :(@on_copy y[new] ~ y[new] + 1.0)
+const P60CA_WIDE = [
+    # 1. a σ-dependent gather anchor (the body is static)
+    "anchor cells far(owner[40] + 39)" => (P60CA_FAR, [p60ca_cells(:(sum(q[n] for n in far(owner[40] + 39))))], "cells", nothing),
+    "anchor cells Moore(1)(owner[40] + 39)" => (nothing, [p60ca_cells(:(sum(q[n] for n in Moore(1)(owner[40] + 39))))], "cells", nothing),
+    "anchor cells far(owner[40])" => (P60CA_FAR, [p60ca_cells(:(sum(q[n] for n in far(owner[40]))))], "cells", nothing),
+    "anchor edges far(owner[40] + 39)" => (P60CA_FAR, [P60CA_BOND,
+        :(@energy edges(bond) => 0.1 * sum(q[n] for n in far(owner[40] + 39)))], "edges(bond)", nothing),
+    "anchor edges Moore(1)(owner[40] + 39)" => (nothing, [P60CA_BOND,
+        :(@energy edges(bond) => 0.1 * sum(q[n] for n in Moore(1)(owner[40] + 39)))], "edges(bond)", nothing),
+    "anchor edges far(owner[40])" => (P60CA_FAR, [P60CA_BOND,
+        :(@energy edges(bond) => 0.1 * sum(q[n] for n in far(owner[40])))], "edges(bond)", nothing),
+    # 2. σ at an explicit site, outside any gather
+    "explicit cells owner[40] == id" => (nothing, [p60ca_cells(:(owner[40] == id))], "cells", nothing),
+    "explicit cells y[owner[40]]" => (nothing, [p60ca_cells(:(y[owner[40]]))], "cells", nothing),
+    "explicit cells kind[40] == A" => (nothing, [p60ca_cells(:(kind[40] == A))], "cells", nothing),
+    "explicit edges owner[40] == a" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * (owner[40] == a))], "edges(bond)", nothing),
+    "explicit edges y[owner[40]]" => (nothing, [P60CA_BOND, :(@energy edges(bond) => 0.1 * y[owner[40]])], "edges(bond)", nothing),
+    # 3. contacts with an explicit index
+    "explicit contacts owner[40] == 1" => (nothing, [:(@energy contacts => 0.1 * (owner[40] == 1))], "contacts", nothing),
+    "explicit contacts kind[40] == A" => (nothing, [:(@energy contacts => 0.1 * (kind[40] == A))], "contacts", nothing),
+    # 4. indexed copy-varying builtins and on-copy cell variables in cell terms
+    "indexed volume[id], outside a gather" => (P60CA_FAR, [p60ca_cells(:(0.1 * volume[id] * sum(q[n] for n in far(40))))], "cells", "volume"),
+    "indexed volume[id], inside a gather" => (P60CA_FAR, [p60ca_cells(:(sum(0.1 * volume[id] * q[n] for n in far(40))))], "cells", "volume"),
+    "indexed volume[1], outside a gather" => (nothing, [p60ca_cells(:(0.01 * volume[1]))], "cells", "volume"),
+    "indexed volume[1], inside a gather" => (nothing, [p60ca_cells(:(0.01 * sum(volume[1] * q[n] for n in Moore(1)(40))))], "cells", "volume"),
+    "indexed surface[id], outside a gather" => (nothing, [p60ca_cells(:(0.1 * surface[id]))], "cells", "surface"),
+    "indexed surface[id], inside a gather" => (P60CA_FAR, [p60ca_cells(:(sum(0.1 * surface[id] * q[n] for n in far(40))))], "cells", "surface"),
+    "indexed y[id], y written @on_copy y[new]" => (nothing, [P60CA_ONCOPY_Y, p60ca_cells(:(volume * y[id]))], "cells", "y"),
+    "indexed y[id] in a gather, y written @on_copy y[new]" => (P60CA_FAR, [P60CA_ONCOPY_Y,
+        p60ca_cells(:(sum(y[id] * q[n] for n in far(40))))], "cells", "y"),
+]
+# controls of the widening: accepted, ΔH exact. label => (@relations body or nothing, statements, nothing)
+const P60CA_WIDE_OK = [
+    "control contacts bare owner, owner′, kind, kind′" => (nothing,
+        [:(@energy contacts => 0.1 * ((owner == 1) + (owner′ == 1)) + 0.2 * (kind == kind′) + 0.3 * (kind′ == A))], nothing),
+    "control y[id], y static" => (nothing, [p60ca_cells(:(volume * y[id]))], nothing),
+    "control y[id] in a gather, y static" => (P60CA_FAR, [p60ca_cells(:(volume * sum(y[id] * q[n] for n in far(40))))], nothing),
+    "control y[id], y written @after_mcs" => (nothing, [:(@after_mcs y ~ y + 1.0), p60ca_cells(:(volume * y[id]))], nothing),
+]
+const P60CA_Y15 = Set(first.([P60CA_WIDE; P60CA_WIDE_OK]))
+
 const P60CA_MODELS = Dict{String, Any}()
 const P60CA_DOMAIN = Dict{String, String}()
 const P60CA_READS = Dict{String, Any}()
-for (i, (label, fx)) in enumerate([P60CA_REFUSED; P60CA_ACCEPTED])
+const P60CA_BARE = Dict{String, Any}()
+for (i, (label, fx)) in enumerate([P60CA_REFUSED; P60CA_ACCEPTED; P60CA_WIDE; P60CA_WIDE_OK])
     rel, body, extra = fx
+    length(fx) == 4 && (P60CA_BARE[label] = fx[4])
     name = Symbol(:P60caGather, i)
     ln = LineNumberNode(@__LINE__, Symbol(@__FILE__))
     relx = rel === nothing ? nothing : Expr(:macrocall, Symbol("@relations"), ln, rel)
@@ -138,7 +205,7 @@ function p60ca_sigma()
     return σ
 end
 p60ca_op(label) = Any[ownership => p60ca_sigma(), kind => [:A, :A], :q => Float64.(p60ca_sigma()),
-    (occursin("edges", label) ? [:bond => [(1, 2)]] : [])...]
+    (occursin("edges", label) ? [:bond => [(1, 2)]] : [])..., (label in P60CA_Y15 ? [:y => [1.0, 5.0]] : [])...]
 p60ca_system(label) = Base.invokelatest(P60CA_MODELS[label]; name = :g)
 p60ca_problem(label; tspan = (0, 3), seed = 1) = PottsProblem(p60ca_system(label), p60ca_op(label), tspan; seed, capacity = 16)
 
@@ -307,6 +374,50 @@ end
             @test got == d
             got == d || @info "P6.0ca: digest $name = $got"
             @test p60ca_digest(prob) == got                      # deterministic
+        end
+    end
+end
+
+# ---------------------------------------------------------------------------------------
+# 5. Widened after review: σ outside gather bodies (anchors, explicit sites, contacts with an
+#    explicit index, indexed copy-varying cell quantities). Same message requirements; the
+#    indexed forms also name the bare form (`volume`, `surface`, `y`, in backticks).
+
+@testset "P6.0ca: σ read outside a gather body is refused at mtkcompile" begin
+    for (label, _) in P60CA_WIDE
+        @testset "$label" begin
+            dom = P60CA_DOMAIN[label]
+            bare = P60CA_BARE[label]
+            @test p60ca_system(label) isa Potts.PottsSystem          # the model is built; the refusal is the compiler's
+            e = p60ca_compile_error(label)
+            @test e isa ArgumentError
+            ok = p60ca_is_refusal(e, dom)
+            @test ok
+            ok || @info "P6.0ca: `$label` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
+            bare === nothing || @test e isa ArgumentError && occursin("`$bare`", e.msg)
+            e2 = try
+                p60ca_problem(label)
+                nothing
+            catch err
+                err
+            end
+            @test p60ca_is_refusal(e2, dom)
+        end
+    end
+end
+
+@testset "P6.0ca: controls of the widening are accepted and their ΔH is exact" begin
+    for (label, _) in P60CA_WIDE_OK
+        @testset "$label" begin
+            @test p60ca_compile_error(label) === nothing
+            prob = p60ca_problem(label)
+            @test prob.u0.cell.y[1:2] == [1.0, 5.0]
+            r = p60ca_oracle(prob)
+            @test r.n == 3000
+            @test r.acc >= 100
+            @test r.bad == 0
+            @test r.worst <= 1e-9
+            @info "P6.0ca: `$label` oracle $r"
         end
     end
 end
