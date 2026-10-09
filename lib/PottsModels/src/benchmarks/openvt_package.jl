@@ -77,7 +77,7 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     for k in keys(_OPENVT_PKG_ITEMS)
         haskey(recs, k) || throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15"))
     end
-    o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1]))
+    o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1]), _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
     bulkdir = _openvt_pkg_bulk(bulk, o1)
     try
         _openvt_pkg_build(out, recs, o1, bulkdir)
@@ -138,8 +138,20 @@ end
 
 # ── records and small I/O helpers ───────────────────────────────────────────────────────────
 
+# the path with symbolic links resolved (through its nearest existing ancestor), so that a link
+# into a checkout counts as inside it
+function _openvt_pkg_real(path::AbstractString)
+    d, rest = abspath(path), String[]
+    while !ispath(d)
+        pushfirst!(rest, basename(d))
+        dirname(d) == d && break
+        d = dirname(d)
+    end
+    return joinpath(ispath(d) ? realpath(d) : d, rest...)
+end
+
 function _openvt_pkg_in_git(path::AbstractString)
-    d = path
+    d = _openvt_pkg_real(path)
     while true
         ispath(joinpath(d, ".git")) && return true
         p = dirname(d)
@@ -364,7 +376,13 @@ end
 _openvt_pkg_sha(path) = bytes2hex(open(sha256, path))
 
 # the P6.15j record's manifests: O1 members by case (in member order), archives, O2 files
-function _openvt_pkg_o1(rec)
+# the case (b) runs of the P6.15e record: k => seed
+function _openvt_pkg_o2_runs(rec)
+    _, rows = _openvt_pkg_tsv(joinpath(rec, "runs.tsv"))
+    return Dict(parse(Int, r["k"]) => parse(Int, r["seed"]) for r in rows if r["case"] == "b")
+end
+
+function _openvt_pkg_o1(rec, o2runs)
     need(f) = (p = joinpath(rec, f); isfile(p) ? _openvt_pkg_tsv(p)[2] :
                                      throw(ArgumentError("openvt_submission_package: the P6.15j record has no $f")))
     members = Dict{String, Vector{Any}}()
@@ -377,10 +395,15 @@ function _openvt_pkg_o1(rec)
     foreach(v -> sort!(v; by = e -> e.file), values(members))
     archives = sort(need("archives.tsv"); by = r -> r["case"])
     o2 = sort(need("o2_manifest.tsv"); by = r -> parse(Int, r["k"]))
-    (isempty(archives) || isempty(o2) || sort([r["case"] for r in archives]) != sort(collect(keys(members)))) &&
-        throw(ArgumentError("openvt_submission_package: the P6.15j record's manifests are incomplete " *
-                            "(archives.tsv must list one archive per case of o1_manifest.tsv; o2_manifest.tsv must not be empty)"))
-    return (; members, archives, o2, cases = sort(collect(keys(members))))
+    ok = !isempty(archives) && sort([r["case"] for r in archives]) == sort(collect(keys(members))) &&
+         all(r -> r["archive"] == _openvt_pkg_o1_zip(r["case"]) && parse(Int, r["members"]) == length(members[r["case"]]),
+             archives) &&
+         [parse(Int, r["k"]) for r in o2] == sort(collect(keys(o2runs))) &&
+         all(r -> r["file"] == "Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_$(r["k"]).csv", o2)
+    ok || throw(ArgumentError("openvt_submission_package: the P6.15j record's manifests are incomplete: archives.tsv " *
+                              "must list one archive per case of o1_manifest.tsv with its member count, and " *
+                              "o2_manifest.tsv one file per case (b) run of the P6.15e record"))
+    return (; members, archives, o2, o2runs, cases = sort(collect(keys(members))))
 end
 
 # the bulk directory, checked against the record's manifests before anything is written
@@ -837,11 +860,15 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     o1cases = join(("($c)" for c in o1.cases), ", ")
     a3cases = join(("($c)" for c in o1.cases if c in _OPENVT_PKG_A3 || c in _OPENVT_PKG_A3_SWEEPS), ", ")
     nfiles = sum(length, values(o1.members))
+    # the case (b) seeds of the Figure 5 runs, as `seed = <offset> + k` when they are consecutive
+    offs = unique(s - k for (k, s) in o1.o2runs)
+    o2seed = length(offs) == 1 ? "seed $(only(offs)) + k" :
+             "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the P6.15e `runs.tsv`"
     print(io, """
     | `Monolayer/Potts.jl_centroids_<case>.zip` | O1 per-cell time series of cases $(o1cases): one file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/centroids/<case>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells) |
     | `Monolayer/Potts.jl_centroids_manifest.csv` | every O1 file: its archive, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |
     | `Monolayer/metrics/<case>/inhibition_s<seed>.csv` | A3 for cases $(a3cases): the share of each inhibition code among the cells of every O1 save of the run | `MCS`, `t` (cycles), `f0`, `f1`, `f2`, `f3` (fractions of cells with i = 0, 1, 2, 3) |
-    | `Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` | Figure 5 snapshots at 1000 cells, case (b), run k (seed 15000 + k) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
+    | `Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` | Figure 5 snapshots at 1000 cells, case (b), run k ($(o2seed)) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
     | `Monolayer/Potts.jl_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table 1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
     | `Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv` | Figure 7 final snapshots; β = 0 in every panel (M's Figure 7), so the name carries γ only | `x_pos`, `y_pos` (R, from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
 

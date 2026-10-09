@@ -17,16 +17,26 @@
 #   `Potts.jl_centroids_<case>.zip` per case (members `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv`,
 #   sorted, no directory entries, no extra attributes), and the 100 O2 files
 #   `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` of case (b);
-# - into the staging directory `OPENVT_O1_STAGE` (default `<bulk>/o1-stage`, must be empty or
-#   absent): the loose O1 files the archives are made from (delete it afterwards);
+# - into the staging directory `OPENVT_O1_STAGE` (default `<bulk>-o1-stage`, next to the bulk
+#   directory, outside git, empty or absent): the loose O1 files the archives are made from and
+#   the O2 files until they pass their checks. It is deleted when the run succeeds and kept
+#   when a check fails.
 # - into this directory: runs.tsv, o1_manifest.tsv, archives.tsv, o2_manifest.tsv and
 #   provenance.toml. README.md is written by hand.
 #
 # O2 (case (b) at 1000 cells): with `F5_O2_DIR` set to the P6.15e runner's output directory,
-# its files are copied (from `F5_O2_DIR` or its `Potts.jl_5T_MonolayerGrowth_1000_Data/`); they
-# are kept only if every one has the F5 record's cell count and the same x, y as this re-run's
-# stop file of that seed. Otherwise (or without `F5_O2_DIR`) they are written from the re-run's
-# stop states with `openvt_snapshot` and `write_openvt(…, :O2, …)`. `provenance.toml` says which.
+# its files are copied (from `F5_O2_DIR` or its `Potts.jl_5T_MonolayerGrowth_1000_Data/`, which
+# must not be the bulk directory's O2 directory) into the staging directory; they are kept only
+# if every one equals this re-run's stop state in all five columns. Otherwise (or without
+# `F5_O2_DIR`) they are written from the re-run's stop states with `openvt_snapshot` and
+# `write_openvt(…, :O2, …)`. Either way each file must have the F5 record's cell count and f = 0
+# count and the same x, y as the staged O1 stop file of its seed before it replaces the bulk
+# directory's O2 files. `provenance.toml` says which source was used.
+#
+# Archives are deterministic: every staged O1 file gets the mtime 1980-01-01 00:00 UTC and zip
+# runs with TZ=UTC, so the same O1 files always give the same zip bytes. An existing bulk zip
+# whose sha256 differs from this directory's archives.tsv is not overwritten unless
+# `OPENVT_O1_OVERWRITE=true`.
 #
 # Needs Info-ZIP `zip` and `unzip` on PATH. From the repository root:
 #
@@ -136,12 +146,22 @@ function run_job(case, k; tmax = nothing)
     diff = series_diff(r.series, want)
     fr = PottsModels.openvt_frame(r.u; β = c.beta, γ = c.gamma)
     return (; case = c.case, k, seed, r.retcode, mcs = Int(r.mcs), N = r.series.N[end], saves = length(r.series.t), wall,
-        diff, n = fr.n, x = fr.x, y = fr.y, o2 = case === :b ? PottsModels.openvt_snapshot(r.u) : nothing)
+        diff, n = fr.n, o2 = case === :b ? PottsModels.openvt_snapshot(r.u) : nothing)
 end
 
 const BULK = abspath(get(ENV, "OPENVT_PACKAGE_BULK", ""))
+# the path with symbolic links resolved (through its nearest existing ancestor)
+function real(path)
+    d, rest = abspath(path), String[]
+    while !ispath(d)
+        pushfirst!(rest, basename(d))
+        dirname(d) == d && break
+        d = dirname(d)
+    end
+    return joinpath(ispath(d) ? realpath(d) : d, rest...)
+end
 function in_git(path)
-    d = abspath(path)
+    d = real(path)
     while true
         ispath(joinpath(d, ".git")) && return true
         p = dirname(d)
@@ -165,10 +185,25 @@ end
     error("run_o1: set OPENVT_PACKAGE_BULK to a directory outside git")
 in_git(BULK) && error("run_o1: the bulk directory $(BULK) is inside a git checkout")
 mkpath(BULK)
-STAGE[] = abspath(get(ENV, "OPENVT_O1_STAGE", joinpath(BULK, "o1-stage")))
+STAGE[] = abspath(get(ENV, "OPENVT_O1_STAGE", rstrip(BULK, '/') * "-o1-stage"))
 (isdir(STAGE[]) && !isempty(readdir(STAGE[]))) && error("run_o1: the staging directory $(STAGE[]) is not empty")
 in_git(STAGE[]) && error("run_o1: the staging directory $(STAGE[]) is inside a git checkout")
+startswith(real(STAGE[]) * "/", real(BULK) * "/") &&
+    error("run_o1: the staging directory $(STAGE[]) must not be inside the bulk directory")
 mkpath(STAGE[])
+
+# the archives pinned by this directory's archives.tsv, if any: an existing bulk zip that
+# differs from them is not replaced without OPENVT_O1_OVERWRITE=true (checked before the runs)
+const OVERWRITE = get(ENV, "OPENVT_O1_OVERWRITE", "false") == "true"
+const PINNED = isfile(joinpath(DIR, "archives.tsv")) ?
+               Dict(x["archive"] => x["sha256"] for x in p615f_tsv(joinpath(DIR, "archives.tsv")) if haskey(x, "sha256")) :
+               Dict{String, String}()
+sha(path) = bytes2hex(open(sha256, path))
+function check_overwrite(z)
+    (OVERWRITE || !isfile(z) || !haskey(PINNED, basename(z)) || sha(z) == PINNED[basename(z)]) && return nothing
+    error("run_o1: $(z) differs from the archives.tsv pin; set OPENVT_O1_OVERWRITE=true to replace it")
+end
+foreach(c -> check_overwrite(joinpath(BULK, "Potts.jl_centroids_$(c).zip")), CASE_ORDER)
 
 # compile both lattices (results discarded, outside the staging directory)
 let s = STAGE[]
@@ -205,38 +240,48 @@ isempty(bad) || error("run_o1: the re-run does not reproduce the P6.15f record (
 # ---- O2 (case (b) at 1000 cells) -----------------------------------------------------------------------
 const O2HEAD = "Potts.jl_5T_MonolayerGrowth_1000_Data"
 const O2DIR = joinpath(BULK, O2HEAD)
+const O2STAGE = joinpath(STAGE[], "o2")
 o2name(k) = "cell_data_no_inhibition_$(k).csv"
 resb = Dict(r.k => r for r in res if r.case == "b")
 runs5 = Dict(parse(Int, x["k"]) => x for x in RUNS5 if x["case"] == "b")
-# an O2 file agrees with the F5 record (cell count, f = 0 count) and with this re-run's stop (x, y)
+sort(collect(keys(resb))) == sort(collect(keys(runs5))) || error("run_o1: the case (b) runs differ from the F5 record's")
+# the staged O1 file of run k of case (b) at its stop
+o1_stop(k) = read_openvt(joinpath(STAGE[], "centroids", "b", openvt_filename(:O1; case = "b", resb[k].seed, mcs = resb[k].mcs)),
+    :O1)
+# an O2 file agrees with the F5 record (cell count, f = 0 count) and with the staged O1 stop file (x, y)
 function o2_ok(path, k)
-    o = read_openvt(path, :O2)
-    r, r5 = resb[k], runs5[k]
-    return length(o.x) == parse(Int, r5["N"]) == length(r.x) && count(==(0.0), o.f) == parse(Int, r5["n_f0"]) &&
-           o.x == r.x && o.y == r.y
+    o, s, r5 = read_openvt(path, :O2), o1_stop(k), runs5[k]
+    return length(o.x) == parse(Int, r5["N"]) == length(s.x) && count(==(0.0), o.f) == parse(Int, r5["n_f0"]) &&
+           o.x == s.x && o.y == s.y
 end
-o2_source = "re-run stop states (openvt_snapshot, write_openvt :O2)"
-rm(O2DIR; recursive = true, force = true)
-mkpath(O2DIR)
+# a P6.15e file equals this re-run's stop state in all five columns
+o2_same(path, k) = (o = read_openvt(path, :O2); all(getfield(o, c) == getfield(resb[k].o2, c) for c in (:x, :y, :r, :f, :a)))
+
+# the source is resolved before anything in the bulk directory is touched
 f5dir = get(ENV, "F5_O2_DIR", "")
-if !isempty(f5dir)
-    src = isfile(joinpath(f5dir, o2name(1))) ? f5dir : joinpath(f5dir, O2HEAD)
-    if all(k -> isfile(joinpath(src, o2name(k))), keys(resb)) && all(k -> o2_ok(joinpath(src, o2name(k)), k), keys(resb))
-        foreach(k -> cp(joinpath(src, o2name(k)), joinpath(O2DIR, o2name(k))), keys(resb))
-        o2_source = "the P6.15e runner's files (F5_O2_DIR), checked against this re-run"
-    else
-        @warn "F5_O2_DIR files missing or not equal to the re-run; writing O2 from the re-run" src
-    end
+src = isempty(f5dir) ? "" : (isfile(joinpath(f5dir, o2name(1))) ? f5dir : joinpath(f5dir, O2HEAD))
+if !isempty(src)
+    rs, ro = real(src) * "/", real(O2DIR) * "/"
+    (startswith(rs, ro) || startswith(ro, rs)) &&
+        error("run_o1: F5_O2_DIR ($(src)) overlaps the bulk directory's O2 directory $(O2DIR)")
 end
-if !isfile(joinpath(O2DIR, o2name(1)))
-    for (k, r) in resb
-        write_openvt(joinpath(O2DIR, o2name(k)), :O2, r.o2)
-    end
+mkpath(O2STAGE)
+o2_source = "re-run stop states (openvt_snapshot, write_openvt :O2)"
+if !isempty(src) && all(k -> isfile(joinpath(src, o2name(k))), keys(resb)) &&
+   all(k -> o2_same(joinpath(src, o2name(k)), k), keys(resb))
+    foreach(k -> cp(joinpath(src, o2name(k)), joinpath(O2STAGE, o2name(k))), keys(resb))
+    o2_source = "the P6.15e runner's files (F5_O2_DIR), equal to this re-run's stop states"
+else
+    isempty(src) || @warn "F5_O2_DIR files missing or not equal to the re-run; writing O2 from the re-run" src
+    foreach(((k, r),) -> write_openvt(joinpath(O2STAGE, o2name(k)), :O2, r.o2), resb)
 end
-all(k -> o2_ok(joinpath(O2DIR, o2name(k)), k), keys(resb)) || error("run_o1: the O2 files fail their checks")
+all(k -> o2_ok(joinpath(O2STAGE, o2name(k)), k), keys(resb)) ||
+    error("run_o1: the O2 files fail their checks (kept in $(O2STAGE))")
+# only now replace the bulk directory's O2 files
+rm(O2DIR; recursive = true, force = true)
+mv(O2STAGE, O2DIR)
 
 # ---- manifests, archives ----------------------------------------------------------------------------
-sha(path) = bytes2hex(open(sha256, path))
 # rows, code counts and sha256 of one O1 file
 function o1_scan(path)
     buf = read(path)
@@ -275,9 +320,12 @@ const CASES = sort(unique(first.(o1)))
 zipname(case) = "Potts.jl_centroids_$(case).zip"
 for case in CASES
     z = joinpath(BULK, zipname(case))
+    check_overwrite(z)
     rm(z; force = true)
-    sh = "find centroids/$case -type f | LC_ALL=C sort | zip -X -D -9 -q -@ " * Base.shell_escape(z)
-    run(Cmd(`sh -c $sh`; dir = STAGE[]))
+    # a fixed mtime (the zip epoch, 1980-01-01 00:00 UTC) and TZ=UTC: the same files give the same bytes
+    sh = "find centroids/$case -type f -exec touch -t 198001010000.00 {} + && " *
+         "find centroids/$case -type f | LC_ALL=C sort | zip -X -D -9 -q -@ " * Base.shell_escape(z)
+    run(setenv(Cmd(`sh -c $sh`; dir = STAGE[]), merge(ENV, Dict("TZ" => "UTC"))))
     members = [e[4] for e in o1 if e[1] == case]
     readlines(`unzip -Z1 $z`) == members || error("run_o1: $(zipname(case)): members differ from the manifest")
 end
@@ -296,7 +344,7 @@ tsv(joinpath(DIR, "archives.tsv"), ("case", "archive", "members", "bytes", "sha2
     [(c, zipname(c), count(e -> e[1] == c, o1), filesize(joinpath(BULK, zipname(c))), sha(joinpath(BULK, zipname(c))))
      for c in CASES])
 tsv(joinpath(DIR, "o2_manifest.tsv"), ("k", "file", "rows", "bytes", "sha256"),
-    [(k, "$(O2HEAD)/$(o2name(k))", length(resb[k].x), filesize(joinpath(O2DIR, o2name(k))), sha(joinpath(O2DIR, o2name(k))))
+    [(k, "$(O2HEAD)/$(o2name(k))", length(resb[k].o2.x), filesize(joinpath(O2DIR, o2name(k))), sha(joinpath(O2DIR, o2name(k))))
      for k in sort(collect(keys(resb)))])
 
 finished = now()
@@ -323,4 +371,5 @@ open(joinpath(DIR, "provenance.toml"), "w") do io
             "item" => "P6.15j", "decisions" => ["D-146", "D-204", "D-206"]);
         sorted = true)
 end
+rm(STAGE[]; recursive = true)
 @info "done" wall_s = Dates.value(finished - started) / 1000 sim_s files = length(o1) zips = [zipname(c) for c in CASES]
