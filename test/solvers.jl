@@ -599,8 +599,10 @@ function solver_deep_relation(k)
         Core.eval(@__MODULE__, quote
             @potts_model $nm begin
                 @kinds medium A
+                @variables q(site) = 0.0
                 @lattice Lattice((12, 12))
-                @energy cells => (volume - 9.0)^2 + 0.1 * count(owner[n] == id for n in $R(40))
+                # a static-value gather (D-209 refuses `owner[n]` in an energy gather)
+                @energy cells => (volume - 9.0)^2 + 0.1 * volume * sum(q[n] for n in $R(40))
                 @sweep Metropolis(; temperature = 1.0)
             end
         end)

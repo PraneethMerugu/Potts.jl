@@ -34,6 +34,17 @@
 # gathers of the generated code). Models whose gathers were all already scanned keep their
 # fingerprints, as do named relations at the new sites and every published model.
 #
+# Amended under D-209 (P6.0ca). The cell and edge energy fixtures originally folded
+# `count(owner[n] == who for n in R(site))`, a σ-dependent gather that D-209 refuses at
+# `mtkcompile` (its ΔH was wrong). They now fold `count(q[n] == who for n in R(site))`, with
+# `q` the initial owner map set from the operating point (a static site value; every
+# fixture's operating point carries it). On the initial state, and on every state of the
+# vetoed fixtures, the value is the old count, so every energy below is unchanged; the
+# numbering question (which spec gets which `gatherN`) is the same. Division, link, observed
+# and drive gathers keep `owner[n]` (boundary and copy-step reads D-209 allows). The two
+# pinned fixtures whose energy changed form ("at energy Moore(1)(40)", "edge far=Moore(1)")
+# are re-pinned with values recorded on 487fda85; no other pin moves.
+#
 # Fixtures. 12×12 periodic, Moore(1) lattice neighbourhood, two 3×3 cells of kind A,
 # `(volume - 9)^2`, Metropolis T = 2 (the P6.0at template). "Static" fixtures add
 # `@constraint source < 0`, which vetoes every copy, so the state changes only through
@@ -73,6 +84,10 @@ const P60AX_LAYOUTS = Dict(
 """A fold counting the sites of `who` in relation `r` (an inline spec call or a name) around `site`."""
 p60ax_g(r, who = :id; site = 40) = :(count(owner[n] == $who for n in $r($site)))
 p60ax_pair(r; site = 40) = :($(p60ax_g(r, :a; site)) + $(p60ax_g(r, :b; site)))
+# the same folds over the static site value `q` (the initial owner map, from the operating
+# point): the energy form allowed under D-209 (P6.0ca); every energy fixture uses it
+p60ax_s(r, who = :id; site = 40) = :(count(q[n] == $who for n in $r($site)))
+p60ax_spair(r; site = 40) = :($(p60ax_s(r, :a; site)) + $(p60ax_s(r, :b; site)))
 const P60AX_STATIC = :(@constraint source < 0)
 const P60AX_BOND = :(@relationship bond(cell, cell) capacity = 1)
 
@@ -82,12 +97,12 @@ p60ax_divrule(r) = [P60AX_STATIC,
     :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(p60ax_g(r, 2; site = 29)))]
 p60ax_link(r; site = 40) = [P60AX_BOND, P60AX_STATIC, :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(r; site)) >= 24))]
 p60ax_unlink(r) = [P60AX_BOND, P60AX_STATIC, :(@unlink bond when = mcs * $(p60ax_pair(r)) >= 24)]
-p60ax_edge(r) = [P60AX_BOND, P60AX_STATIC, :(@energy edges(bond) => 0.1 * $(p60ax_pair(r)))]
+p60ax_edge(r) = [P60AX_BOND, P60AX_STATIC, :(@energy edges(bond) => 0.1 * $(p60ax_spair(r)))]
 p60ax_obs(r) = [:(@observed o(cell) ~ $(p60ax_g(r)))]
 # dynamic (no veto): the same sites under copies, for the inline/named equivalence
 p60ax_dyn_div(r) = [:(@divide cells(A) when = (y == 0.0) & ($(p60ax_g(r)) >= 3), y => mcs + 1.0 + $(p60ax_g(r, 2; site = 29)))]
 p60ax_dyn_link(r) = [P60AX_BOND, :(@link bond when = new_contact(a, b) && ($(p60ax_pair(r)) >= 5)),
-    :(@unlink bond when = $(p60ax_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(p60ax_pair(r)))]
+    :(@unlink bond when = $(p60ax_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(p60ax_spair(r)))]
 
 # label => (layout, @relations body or nothing, statements after the volume energy)
 const P60AX_FIXTURES = [
@@ -126,17 +141,17 @@ const P60AX_FIXTURES = [
     "obs Moore(1)" => (:p60at, nothing, p60ax_obs(:(Moore(1)))),
     "obs Moore(2)" => (:p60at, nothing, p60ax_obs(:(Moore(2)))),
     "obs far=Moore(1)" => (:p60at, :(far = Moore(1)), p60ax_obs(:far)),
-    "energy Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_g(:(Moore(1)))))]),
+    "energy Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1)))))]),
     "energy Moore(1) + obs VonNeumann(1)" => (:p60at, nothing,
-        [:(@energy cells => 0.1 * $(p60ax_g(:(Moore(1))))), p60ax_obs(:(VonNeumann(1)))...]),
-    "energy Moore(1) + obs Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_g(:(Moore(1))))), p60ax_obs(:(Moore(1)))...]),
+        [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1))))), p60ax_obs(:(VonNeumann(1)))...]),
+    "energy Moore(1) + obs Moore(1)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1))))), p60ax_obs(:(Moore(1)))...]),
     # several sites, several specs
-    "all apart" => (:apart, nothing, [P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_g(:(Moore(2))))),
+    "all apart" => (:apart, nothing, [P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(2))))),
         :(@divide cells(A) when = (y == 0.0) & (mcs * $(p60ax_g(:(Ball(2.0)))) >= 12),
             y => mcs + 1.0 + 100 * $(p60ax_g(:(VonNeumann(1)), 2; site = 29)))]),
-    "all touch" => (:touch, nothing, [P60AX_BOND, P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_g(:(Moore(1))))),
+    "all touch" => (:touch, nothing, [P60AX_BOND, P60AX_STATIC, :(@energy cells => 0.01 * $(p60ax_s(:(Moore(1))))),
         :(@link bond when = new_contact(a, b) && (mcs * $(p60ax_pair(:(Ball(3.0)))) >= 24)),
-        :(@energy edges(bond) => 0.1 * $(p60ax_pair(:(Moore(2)))))]),
+        :(@energy edges(bond) => 0.1 * $(p60ax_spair(:(Moore(2)))))]),
     # dynamic: inline and named twins
     "dyn div Ball(2.0)" => (:p60at, nothing, p60ax_dyn_div(:(Ball(2.0)))),
     "dyn div far=Ball(2.0)" => (:p60at, :(far = Ball(2.0)), p60ax_dyn_div(:far)),
@@ -145,7 +160,7 @@ const P60AX_FIXTURES = [
     "dyn link Moore(1)" => (:touch, nothing, p60ax_dyn_link(:(Moore(1)))),
     "dyn link far=Moore(1)" => (:touch, :(far = Moore(1)), p60ax_dyn_link(:far)),
     # P6.0at fixtures whose gathers were already scanned (pins)
-    "at energy Moore(1)(40)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_g(:(Moore(1)))))]),
+    "at energy Moore(1)(40)" => (:p60at, nothing, [:(@energy cells => 0.1 * $(p60ax_s(:(Moore(1)))))]),
     "at drive Moore(2)/Moore(1)" => (:p60at, nothing,
         [:(@drive copy => 0.1 * (count(owner[n] == 1 for n in Moore(2)(source)) - count(owner[n] == 1 for n in Moore(1)(target))))]),
     "at ode Moore(2)(40)" => (:p60at, nothing, [:(@equations D(y) ~ 0.1 * $(p60ax_g(:(Moore(2)))) - 0.1y)]),
@@ -177,7 +192,8 @@ function p60ax_sigma(lk::Symbol)
     σ[r2...] .= 2
     return σ
 end
-p60ax_op(lk; links = false) = Any[ownership => p60ax_sigma(lk), kind => [:A, :A], (links ? [:bond => [(1, 2)]] : [])...]
+p60ax_op(lk; links = false) = Any[ownership => p60ax_sigma(lk), kind => [:A, :A], :q => Float64.(p60ax_sigma(lk)),   # q: P6.0ca
+    (links ? [:bond => [(1, 2)]] : [])...]
 
 """The problem of fixture `label` (a build error propagates: it is the defect)."""
 p60ax_problem(label; T = Float64, tspan = (0, 16), seed = 1, links = false) =
@@ -530,7 +546,7 @@ p60ax_pinned() = (
 const P60AX_FINGERPRINTS = Dict{String, UInt64}(
     "sq" => 0x4f162b777e9799ab,
     "obs Moore(1)" => 0x4f162b777e9799ab,
-    "at energy Moore(1)(40)" => 0xfc8fdefc7a8009e2,
+    "at energy Moore(1)(40)" => 0x674ddaef1ce7b141,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xfc8fdefc7a8009e2)
     "at drive Moore(2)/Moore(1)" => 0x31e49234ba0e48d6,
     "at ode Moore(2)(40)" => 0x98d4f6f27d29142c,
     "at update Moore(1)(40)" => 0xc9e3fc7178508f76,
@@ -539,7 +555,7 @@ const P60AX_FINGERPRINTS = Dict{String, UInt64}(
     "divrule far=Moore(1)" => 0xb72c5fc2a24ed15c,
     "link far=Ball(2.0)" => 0x83e53d1a3a10bb5e,
     "unlink far=Ball(2.0)" => 0x32e5b92a9482fa19,
-    "edge far=Moore(1)" => 0xef5c912facf5e094,
+    "edge far=Moore(1)" => 0xe97095c64a5b8680,   # re-pinned under D-209 (P6.0ca): static-value fold (was 0xef5c912facf5e094)
     "P60ahAt RK4" => 0x52fad8cebbee12ed,
     "P60ahAt ExplicitEuler" => 0xe41e0c4a682a9697,
     "GranerGlazier" => 0x04a4528dcdf3fcb8,
