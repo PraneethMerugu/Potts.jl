@@ -3535,6 +3535,10 @@ session.
   - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
   - CC3D ≥ 4.7.0 → `penalty = 64`;
   - the hard form is the T → 0 limit.
+- **Maintainer ruling, 2026-10-09 (relayed by the "models and publications" session): "no".**
+  - We do not reproduce the (0,0,0) quirk.
+  - P6.2f (merge 556ce1da) carries the page 10 deviations row and the sentence on penalty and version (CC3D ≥ 4.7.0 ignores `<Penalty>` and uses 64).
+  - The page row does not name a CC3D version for the quirk, because the source reads the same in every version checked.
 
 ## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
 
@@ -3653,3 +3657,56 @@ session.
      - BoundarySiteCPM. It should behave like SequentialCPM, being equal in law; if not supported, it must give a build error that names it.
 - **Test environment.** AllocCheck joins the PottsModels test environment.
 - **Re-freezes forced at implementation.** p6_3a's "Global() is a reserved placeholder" check, and the error checks in p6_3g at lines 704–708. Both go through a test author.
+
+## D-198 BoundarySiteCPM becomes a solver option, `skip_interior`; amends D-177 (2026-10-09; maintainer ruling relayed by the "models and publications" session: "i think we should completely clear out BoundarySiteCPM(). i like skip_interior as well". Consistent with the earlier instruction "make boundarysite a seperate algorithm than sequential, or atleast an option")
+
+- **Why.** BoundarySiteCPM is an exact execution strategy: equal in distribution to SequentialCPM, with the skipped interior picks counted exactly. That makes it a solver choice, not model content.
+  1. **Removed completely, with no alias.** `BoundarySiteCPM` comes out of exports, docs, algorithm tables and tests.
+  2. **`SequentialCPM(; skip_interior = true)`** has the semantics BoundarySiteCPM has today:
+     - it draws only sites that can propose a non-null copy;
+     - it accounts exactly for the skipped picks;
+     - the attempt count per MCS and the MCS time are unchanged.
+     
+     The default, `false`, compiles to today's SequentialCPM loop, and the gate is unchanged.
+  3. **`CheckerboardCPM(; skip_interior = true)`** is the same option on the checkerboard. This is GE3 / P6.0bk, which folds in under this name: one concept, one keyword.
+  4. **The skip composes with any proposal law.** For `UnlikeNeighbor` (P6.4b), the interior is "no unlike neighbour in the relation".
+  5. **The planned `BoundarySite(rel)` proposal law is dropped** from P6.4b and api-synthesis §2.12. A boundary-only law with different time counting waits until a paper needs one; none of the 15 specs does.
+- **Sequencing.**
+  - The running foam FULL run (04_foam.jl `P64R_ALG`, D-190) is not touched.
+  - After its record lands, the rename is one change (P6.0bk2): the 04 and 15 frozen tests, plus any others, are re-frozen with `BoundarySiteCPM()` → `SequentialCPM(; skip_interior = true)`.
+  - **Code-identity check.** The rename must be code-identical: same RNG draws, the same σ on the SMOKE tiers, and the same verdicts. Equivalence in law was already shown under D-177, so no re-runs are expected.
+- **Existing records stay valid.** Their provenance names BoundarySiteCPM as a historical fact. Each record README gains one line saying it is now `SequentialCPM(; skip_interior = true)`.
+
+## D-199 Ergonomics items (2026-10-09; maintainer asked "how ergonomic is our library so far" and approved filing the assessment's list; relayed by the "models and publications" session; checked by the coordinator)
+
+- **Assessment.** The library is very good for Julia/SciML users and good for CC3D/Morpheus modellers. It is only fair for biologists new to coding, and the items target that group. The assessment comes from rereading the docs, not from a user study.
+- **Checked against the repository.**
+  - `capacity = 256` in the OpenVT minimal run: confirmed.
+  - "About a minute" for a first run, and "3200 of our MCS are 200 of the paper's": both confirmed in getting_started.
+  - `pottsplot` takes a frame only: confirmed.
+  - `attempts` (P6.4b) and `@terminate` (P6.4c) were already planned.
+  - Two corrections to the proposal:
+    - `count_contacts` is symbolic-only (`src/contact_folds.jl`), so E8 needs an `@observed` or a new helper for use after a run.
+    - `coming_from.md` already maps the CC3D Connectivity plugin, so E9 adds the D-191 version note and the patterns still missing.
+- **Items.** Filed as ROADMAP P6.E1–P6.E10.
+- **Constraints.** API additions keep the old forms. None changes a frozen verdict unless the maintainer rules otherwise.
+
+## D-200 Findings from the proposal-law research: paper over code (2026-10-09; maintainer approved the spec owner's list, relayed by the "models and publications" session; `docs/design/research/proposal-law-clues.md`)
+
+- **Standing rule (maintainer).** "We trust the paper over codebases, but use both for research. If the OpenVT manuscript is accurate, choose it over TST."
+- **Proposal law ruled out.** The proposal law does not explain V-C12, V-PRE5/7 or OpenVT V1/V3b/V4.x. The proposal laws of all four OpenVT frameworks are equivalent per MCS to ours. There is no sensitivity study on the proposal law.
+
+1. **Merks V-C12: reference time.**
+   - Fig 6E measures displacement from MCS 0, before relaxation. We measure from MCS 100.
+   - The check runs on the PC from the stored FULL snapshots, with no new dynamics.
+   - If the ratio moves toward [1.5, 2.5], V-C12's frozen definition changes to the paper's axis (MCS 0 → ≈ 19,800), through a test author, and the row is re-judged.
+2. **Merks attempts per MCS (coordinator's call).** The paper says N = 200² = 40 000 attempts. We follow TST's 198² mobile sites, a 2 % difference in time scale.
+   - **Now:** a deviation row on page 01. It states the 2 % time scale and that the paper wins.
+   - **Next 01 FULL re-run:** use the paper's N through `attempts` (P6.E2, fractional attempts) once that lands. A FULL re-run is not worth it for this alone.
+3. **Sorting V-PRE4 wording.** The paper's total is twice-counted Moore bonds, on boundaries about 10 % smoother after its T = 0 anneal (Moore counted twice ≈ 74k against 66.85k). This is not "not simply double counting".
+4. **Sorting V-PRE5 suspected cause.** "Stochastic late coalescence; paper n = 1; light:dark share unstated". Sources: Durand 2021, Holm et al. 1991 and Franke 2022. The row reports "k of 22 replicates reach ≥ 0.90 single-cluster share at 10⁴" from existing data.
+5. **OpenVT V1, V3b and V4.x suspected cause.** Where we differ from TST: "TST departs from the manuscript: divides on target area". `openvt_reference.jl` follows the manuscript.
+   - The page notes that CC3D, Morpheus and Artistoo each depart from Table S1 in places.
+   - Q23 on our open question list: the released TST stops at max_cell_count = 1000, so which build produced its curves beyond 10³?
+
+- **Later, not now.** Durand & Guesnet 2016's connectivity-preserving CPM is probably expressible with `connectivity(…; rule = Global())`. It is an extended-library candidate after the paper.

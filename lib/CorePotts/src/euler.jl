@@ -15,7 +15,7 @@
 # no table, no float.
 
 # Square shell, bit k-1 ↔ offset k: round the box from (−1, −1).
-const _EULER_RING2 = ((-1, -1), (-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1))
+const _EULER_RING2 = _SQUARE_RING
 const _EULER_FACE4 = UInt32(0b10101010)
 # corner | face | face: x and the trio make one 2×2 block
 const _EULER_TRIOS2 = (UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000), UInt32(0b11100000))
@@ -51,18 +51,6 @@ end
                                _count_has(m, _EULER_OCTANTS)
 @inline _euler_d26(m::UInt32) = -_euler_d6(~m & _EULER_ALL26)              # 3D: χ(X) = χ(Xᶜ)
 
-# membership masks of `a` and `b` on a shell of owners
-@inline function _shell_masks(owners::NTuple{K}, a, b) where {K}
-    ma = UInt32(0)
-    mb = UInt32(0)
-    for k in 1:K
-        o = owners[k]
-        ma |= UInt32(o == a) << (k - 1)
-        mb |= UInt32(o == b) << (k - 1)
-    end
-    return ma, mb
-end
-
 """
     euler_change(σ, ctx, prop, Val(adjacency)) -> (δold::Int32, δnew::Int32)
 
@@ -74,19 +62,21 @@ periodic axis of length 1 the shell wraps onto the target and the change is wron
 [`recompute_euler`](@ref), which every problem reading `euler` calls when it is built,
 rejects such a lattice. The medium's side is zero.
 """
-@inline euler_change(σ, ctx, prop::Proposal, adj::Val) = _euler_change(ctx.lattice, σ, prop, adj)
+@inline euler_change(σ, ctx, prop::Proposal, adj::Val) = _euler_change(ctx.lattice, read_shell(σ, ctx, prop), prop, adj)
 
-@inline function _euler_change(lat::Lattice{2, M, Hexagonal}, σ, prop::Proposal{2}, ::Val) where {M}
-    mo, mn = _shell_masks(_owners(lat, σ, prop.x, _HEX_RING), prop.old, prop.new)
+# the masks come from the shared shell read (`shell.jl`): ring order (`_EULER_RING2`) on the
+# square lattice, `_HEX_RING` (= `_HEX_SHELL`) on the hexagonal one, `_CUBIC_SHELL` in 3D
+@inline function _euler_change(lat::Lattice{2, M, Hexagonal}, s::ShellRead, prop::Proposal{2}, ::Val) where {M}
+    mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     return _euler_sides(prop, _euler_dhex(mo), _euler_dhex(mn))
 end
-@inline function _euler_change(lat::Lattice{2}, σ, prop::Proposal{2}, ::Val{A}) where {A}
-    mo, mn = _shell_masks(_owners(lat, σ, prop.x, _EULER_RING2), prop.old, prop.new)
+@inline function _euler_change(lat::Lattice{2}, s::ShellRead, prop::Proposal{2}, ::Val{A}) where {A}
+    mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     A === :full && return _euler_sides(prop, _euler_d8(mo), _euler_d8(mn))
     return _euler_sides(prop, _euler_d4(mo), _euler_d4(mn))
 end
-@inline function _euler_change(lat::Lattice{3}, σ, prop::Proposal{3}, ::Val{A}) where {A}
-    mo, mn = _shell_masks(_owners(lat, σ, prop.x, _CUBIC_SHELL), prop.old, prop.new)
+@inline function _euler_change(lat::Lattice{3}, s::ShellRead, prop::Proposal{3}, ::Val{A}) where {A}
+    mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     A === :full && return _euler_sides(prop, _euler_d26(mo), _euler_d26(mn))
     return _euler_sides(prop, _euler_d6(mo), _euler_d6(mn))
 end

@@ -341,7 +341,8 @@ Every item's acceptance also includes the standing checks:
   - K2: S-a, one replica per work-item, for tiny lattices.
   - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
   - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
-- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.)
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.) **Folded (D-198):** this is `CheckerboardCPM(; skip_interior = true)`, done together with P6.0bk2.
+- [ ] **P6.0bk2** (D-198; after the foam FULL record lands) Remove `BoundarySiteCPM` with no alias, and add `SequentialCPM(; skip_interior = true)` with the same code path. Re-freeze 04, 15 and any other frozen tests that name BoundarySiteCPM, through a test author. Code-identity check: same RNG draws, σ and SMOKE verdicts. Add one line to each affected record README. Then `CheckerboardCPM(; skip_interior = true)` (P6.0bk).
   - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
   - Report the pinned speedup on the PC, naming machine and backend.
 - [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
@@ -569,7 +570,7 @@ Full runs are offline (D-146).
   - **Re-freezes.** Every re-freeze forced by rulings 3, 6 and 10 goes through a test author: the legacy `MerksVasculogenesis` `rule = :local` and the full-shell pins.
   - **Akeeb.** Its frozen record test plus an A/B shows no change.
   - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
-- [ ] **P6.3h** (D-189; after P6.3g) Shell kernels.
+- [x] (merge, 2026-10-09; PC A/B pending with mb12) **P6.3h** (D-189; after P6.3g) Shell kernels.
 - [ ] **P6.3g-v** (D-196) Re-render the default-build model-page video `paper_runs/merks_vasculogenesis` under the new `Local()` rule (legacy MerksVasculogenesis dynamics changed); on the PC.
   - One shell read per generated function, a 2D run-count kernel for `Local()`, and a table-driven 3D flood fill with no div/rem in the loop.
   - *Accept:* oracles unchanged; A/B ≤ 1.00 within the controls' spread (D-171); zero warm allocations; Metal and ROCm equal the CPU.
@@ -620,7 +621,7 @@ Full runs are offline (D-146).
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
 - [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
-- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
+- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, ~~`BoundarySite`~~ dropped by D-198);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
   - Accept: the enumeration oracle for `MetropolisHastings()`.
@@ -634,6 +635,52 @@ Full runs are offline (D-146).
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
+
+### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
+
+Every API change here keeps the old form working, and none changes a frozen verdict unless the maintainer rules otherwise. Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
+
+- [ ] **P6.E1** Named kind tables and symbolic kinds.
+  - Write `J[dark, light] = 11`, symmetric unless declared otherwise, alongside the positional matrix.
+  - Results can be read as kind symbols or as a categorical (`sol[:kind]` today returns integers in `@kinds` order, with the medium first).
+  - Build errors for a table of the wrong size and for a forgotten medium.
+- [ ] **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
+- [ ] **P6.E3** `capacity`.
+  - Size it automatically, or let it grow, for growing populations (the OpenVT minimal run needs `capacity = 256` today).
+  - At minimum, on overflow, say "raise capacity to ≥ N" with N.
+- [ ] **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
+- [ ] **P6.E5** Plot shortcuts: `pottsplot(sol, i)` and `pottsplot(sol)`, alongside `pottsplot(renderframe(…))`.
+- [ ] **P6.E6** Time to first run for a fresh user-written model.
+  - Measure it on the PC. getting_started says "about a minute".
+  - Update the sentence.
+  - If it is still about 60 s, scope precompile or workload changes for un-shipped models.
+- [ ] **P6.E7** Error-message audit.
+  - Write the ~10 most common beginner mistakes:
+    - a wrong kind name;
+    - a J of the wrong size;
+    - a forgotten medium;
+    - a misspelt section;
+    - Float64 on Metal;
+    - capacity overflow;
+    - an unknown copy-scope name;
+    - a parameter not in `@parameters`;
+    - `remake` with a wrong key;
+    - a missing `@named`.
+  - Record what each prints.
+  - Fix every unclear message so it names the offending item and suggests the fix.
+  - Add the cases to a (non-frozen) test.
+- [ ] **P6.E8** Getting started around built-in observables.
+  - Replace the hand-written `mixed_contacts` loop.
+  - `count_contacts` is symbolic-only, so either declare it as an `@observed` in the model or add a public helper for use after a run (decide in the item).
+  - Show an "everyday observables" set: contact fractions, cluster counts, MSD/displacement, volumes by kind.
+- [ ] **P6.E9** `coming_from.md`.
+  - Add the lab's common CC3D patterns that are still missing (mitosis steppable and others).
+  - Add the D-191 note to the Connectivity row: Penalty honoured in 4.3.1–4.6.0, a hard-coded 64 from 4.7.0, the hard form as the T → 0 limit.
+- [ ] **P6.E10** Docs polish.
+  - A home page led by a strip of 4–6 videos (before the MTK term table).
+  - Physical units (h, µm) next to MCS results on the paper pages.
+  - A FAQ "how fast vs CC3D" with our own labelled numbers only, no head-to-head claim (D-154).
+  - A "Start here" reading path through the manual.
 
 ### Step 5 — Fortuna (14a/14b), 3D
 
