@@ -70,7 +70,7 @@ data = "09"
 models_page = "model-graner-glazier"
 published = "09_cell_sorting"
 deviations = [
-    "V-PRE5 FAIL: largest dark cluster 0.815 of the dark cells at 10⁴ MCS, against ≥ 0.90 (late coarsening is slower; cause not found, D-151).",
+    "V-PRE5 FAIL: largest dark cluster 0.815 of the dark cells at 10⁴ MCS, against ≥ 0.90 (suspected: stochastic late coalescence; paper n = 1; light:dark share unstated; D-151).",
     "V-PRE7 FAIL: at T = 80 only 0.076 of the cells are gone at 500 MCS, against > 0.5 (D-166).",
     "Parked: V-PRE6, the ⟨n⟩ part of V-PRE16, and V-PRE17 (the neighbour rule is not stated).",
 ]
@@ -126,9 +126,9 @@ data = "15"
 models_page = "model-openvt"
 published = "15_openvt_monolayer"
 deviations = [
-    "V4.2, V4.3 and V4.5 FAIL (Figure 5: the rim cells' free-surface fraction is too high; a few young daughters are squeezed). Leading candidate: division on actual area (C13).",
-    "V1 FAIL (Table 1): 14.945 cycles to 10⁴ cells uninhibited, 0.12 % above the band's upper edge 14.927 (+10.1 % on 13.57). Leading candidate: division on actual area (C13, our open question list Q20).",
+    "V4.2, V4.3 and V4.5 FAIL (Figure 5: the rim cells' free-surface fraction is too high; a few young daughters are squeezed). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow the manuscript's actual area (C13).",
+    "V1 FAIL (Table 1): 14.945 cycles to 10⁴ cells uninhibited, 0.12 % above the band's upper edge 14.927 (+10.1 % on 13.57). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow the manuscript's actual area (C13, our open question list Q20).",
     "V2.1.1x FAIL (Figure 6): β threshold 0.625 at 1.1× against 0.667–0.724; it follows from V1, since the 1.1× target falls on our flat low-β plateau.",
-    "V3b FAIL (Table 1): 58.755 cycles at γ = 10⁻⁴ against [61, 70]; cause unverified (C13 weaker here).",
+    "V3b FAIL (Table 1): 58.755 cycles at γ = 10⁻⁴ against [61, 70]; cause unverified; candidate as for V1, TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow the manuscript's actual area (C13; a weaker fit here).",
     "C1–C17: readings taken where the manuscript and the consortium's other sources differ (the page's differences table).",
 ]
