@@ -1,0 +1,35 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+10	9	main	CI128	D	0.2	1e-13 m^2/s	C at 5000 MCS	0.199	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.01	
+10	9	main	CI128	D	0.3	1e-13 m^2/s	C at 5000 MCS	0.232	1	NA	not read	0.013	0.01	
+10	9	main	CI128	D	0.5	1e-13 m^2/s	C at 5000 MCS	0.308	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	0.75	1e-13 m^2/s	C at 5000 MCS	0.355	1	NA	not read	0.013	0.005	
+10	9	main	CI128	D	1.0	1e-13 m^2/s	C at 5000 MCS	0.394	1	0.05	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	1.5	1e-13 m^2/s	C at 5000 MCS	0.462	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	2.0	1e-13 m^2/s	C at 5000 MCS	0.51	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.013	0.015	the two CI curves cross near 2.0–2.3
+10	9	main	CI128	D	2.5	1e-13 m^2/s	C at 5000 MCS	0.615	1	0.045	grey dotted SD curve, read at this x (±0.01)	0.013	0.01	
+10	9	main	CI128	D	3.0	1e-13 m^2/s	C at 5000 MCS	0.743	1	0.05	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	3.5	1e-13 m^2/s	C at 5000 MCS	0.821	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	4.0	1e-13 m^2/s	C at 5000 MCS	0.887	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	4.5	1e-13 m^2/s	C at 5000 MCS	0.908	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI128	D	5.0	1e-13 m^2/s	C at 5000 MCS	0.907	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	read at 4.95
+10	9	main	CI1024	D	0.2	1e-13 m^2/s	C at 5000 MCS	0.3	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.013	0.01	
+10	9	main	CI1024	D	0.3	1e-13 m^2/s	C at 5000 MCS	0.319	1	NA	not read	0.013	0.005	
+10	9	main	CI1024	D	0.5	1e-13 m^2/s	C at 5000 MCS	0.378	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	0.75	1e-13 m^2/s	C at 5000 MCS	0.43	1	NA	not read	0.013	0.005	
+10	9	main	CI1024	D	1.0	1e-13 m^2/s	C at 5000 MCS	0.465	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	1.5	1e-13 m^2/s	C at 5000 MCS	0.495	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	2.0	1e-13 m^2/s	C at 5000 MCS	0.522	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.013	0.01	the two CI curves cross near 2.0–2.3
+10	9	main	CI1024	D	2.5	1e-13 m^2/s	C at 5000 MCS	0.556	1	NA	not read	0.013	0.005	
+10	9	main	CI1024	D	3.0	1e-13 m^2/s	C at 5000 MCS	0.583	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	3.5	1e-13 m^2/s	C at 5000 MCS	0.607	1	NA	not read	0.013	0.005	
+10	9	main	CI1024	D	4.0	1e-13 m^2/s	C at 5000 MCS	0.633	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	4.5	1e-13 m^2/s	C at 5000 MCS	0.66	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	CI1024	D	5.0	1e-13 m^2/s	C at 5000 MCS	0.683	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	read at 4.95
+10	9	main	noCI128	D	0.5	1e-13 m^2/s	C at 5000 MCS	0.833	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.013	0.01	
+10	9	main	noCI128	D	0.75	1e-13 m^2/s	C at 5000 MCS	0.896	1	NA	not read	0.013	0.005	
+10	9	main	noCI128	D	1.0	1e-13 m^2/s	C at 5000 MCS	0.92	1	0.015	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	noCI128	D	1.5	1e-13 m^2/s	C at 5000 MCS	0.946	1	NA	not read	0.013	0.005	
+10	9	main	noCI128	D	2.0	1e-13 m^2/s	C at 5000 MCS	0.953	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	noCI128	D	3.0	1e-13 m^2/s	C at 5000 MCS	0.961	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	noCI128	D	4.0	1e-13 m^2/s	C at 5000 MCS	0.963	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	
+10	9	main	noCI128	D	5.0	1e-13 m^2/s	C at 5000 MCS	0.963	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.013	0.005	read at 4.95

@@ -1,0 +1,30 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+9	8	main	CI	s	0.00	1/concentration	C at 5000 MCS	0.378	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.001	0.008	extrapolated to the axis from 0.003
+9	8	main	CI	s	0.01	1/concentration	C at 5000 MCS	0.392	1	NA	not read	0.001	0.005	
+9	8	main	CI	s	0.02	1/concentration	C at 5000 MCS	0.402	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.03	1/concentration	C at 5000 MCS	0.374	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.04	1/concentration	C at 5000 MCS	0.393	1	NA	not read	0.001	0.005	
+9	8	main	CI	s	0.05	1/concentration	C at 5000 MCS	0.404	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.06	1/concentration	C at 5000 MCS	0.42	1	NA	not read	0.001	0.005	
+9	8	main	CI	s	0.07	1/concentration	C at 5000 MCS	0.418	1	0.05	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.08	1/concentration	C at 5000 MCS	0.443	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.001	0.01	
+9	8	main	CI	s	0.09	1/concentration	C at 5000 MCS	0.517	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.001	0.015	
+9	8	main	CI	s	0.10	1/concentration	C at 5000 MCS	0.576	1	0.1	grey dotted SD curve, read at this x (±0.01)	0.001	0.015	
+9	8	main	CI	s	0.11	1/concentration	C at 5000 MCS	0.717	1	0.1	grey dotted SD curve, read at this x (±0.01)	0.001	0.02	
+9	8	main	CI	s	0.12	1/concentration	C at 5000 MCS	0.856	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.001	0.02	
+9	8	main	CI	s	0.13	1/concentration	C at 5000 MCS	0.905	1	0.035	grey dotted SD curve, read at this x (±0.01)	0.001	0.01	
+9	8	main	CI	s	0.14	1/concentration	C at 5000 MCS	0.93	1	NA	not read	0.001	0.005	
+9	8	main	CI	s	0.15	1/concentration	C at 5000 MCS	0.938	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.17	1/concentration	C at 5000 MCS	0.944	1	NA	not read	0.001	0.005	
+9	8	main	CI	s	0.20	1/concentration	C at 5000 MCS	0.952	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	CI	s	0.25	1/concentration	C at 5000 MCS	0.958	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.008	read at 0.245
+9	8	main	noCI	s	0.00	1/concentration	C at 5000 MCS	0.92	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	noCI	s	0.02	1/concentration	C at 5000 MCS	0.93	1	NA	not read	0.001	0.005	
+9	8	main	noCI	s	0.03	1/concentration	C at 5000 MCS	0.933	1	NA	not read	0.001	0.005	
+9	8	main	noCI	s	0.05	1/concentration	C at 5000 MCS	0.946	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	noCI	s	0.07	1/concentration	C at 5000 MCS	0.952	1	NA	not read	0.001	0.005	
+9	8	main	noCI	s	0.10	1/concentration	C at 5000 MCS	0.959	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	noCI	s	0.12	1/concentration	C at 5000 MCS	0.964	1	NA	not read	0.001	0.005	
+9	8	main	noCI	s	0.15	1/concentration	C at 5000 MCS	0.963	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	noCI	s	0.20	1/concentration	C at 5000 MCS	0.967	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.005	
+9	8	main	noCI	s	0.25	1/concentration	C at 5000 MCS	0.964	1	0.01	grey dotted SD curve, read at this x (±0.01)	0.001	0.008	read at 0.245
