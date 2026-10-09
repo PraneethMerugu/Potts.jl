@@ -4118,3 +4118,78 @@ end
     @test M.getmetadata(extend(NsCell(; name = :b), a), NsKey, nothing) == 2
     @test M.getmetadata(extend(b, a), NsKey, nothing) == 3 && M.getmetadata(extend(a, b), NsKey, nothing) == 2
 end
+
+# P6.4a1 (D-188): the copy scope reads `direction[k]`, `position[s][k]` and `mcs`.
+# The acceptance file pins the values on the host hook and the kernel path; here: the
+# `mcs` convention read back through an on-copy write, and the diagnostics.
+@potts_model CopyClock begin
+    @kinds medium A
+    @parameters w = 0.0
+    @variables m(site) = -1.0
+    @lattice Lattice((16, 16); boundary = (Periodic(), Closed()))
+    @energy begin
+        cells(A) => (volume - 20.0)^2
+        contacts => 2.0 * (kind != kind′)
+    end
+    @drive copy => w * mcs * direction[1] * position[source][2]
+    @on_copy m[target] ~ mcs
+    @sweep Metropolis(; temperature = 6.0)
+end
+
+function _copyclock_problem(n)
+    σ = zeros(Int32, 16, 16)
+    σ[3:7, 3:7] .= 1
+    σ[10:14, 9:13] .= 2
+    return PottsProblem(CopyClock(; name = :clock), [ownership => σ, kind => [:A, :A]], (0, n); seed = 3)
+end
+
+@testset "P6.4a1: copy-scope `mcs` is the number of completed MCS (on-copy readback)" begin
+    for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)),
+            BoundarySiteCPM(; proposal = Moore(1)))
+        sol = solve(_copyclock_problem(3), alg; saveat = 1)
+        ms = [Set(filter(>=(0), u.site.m)) for u in sol.u]
+        @test isempty(ms[1])                                     # before the run: never written
+        # after MCS n, the values written are 0, …, n − 1 (each MCS accepts copies here)
+        @test ms[2] == Set([0.0]) && ms[3] ⊆ Set([0.0, 1.0]) && 1.0 in ms[3]
+        @test maximum(ms[4]) == 2.0                              # MCS 3 writes 2, never 3
+    end
+    # outside a run (the host hook) `mcs` is 0
+    prob = _copyclock_problem(3)
+    lat = prob.lattice
+    t, s = (8, 5), (7, 5)
+    prop = Potts.CorePotts.Proposal(Potts.CorePotts.linear_index(lat, t), Potts.CorePotts.linear_index(lat, s), t, 1,
+        prob.u0.σ[t...], prob.u0.σ[s...])
+    @test prob.f.delta_H(prob.u0, prob.p, prop, Potts._host_ctx(prob)) == energy_change(prob, prob.u0, prop)
+end
+
+@testset "P6.4a1: copy-scope `direction` and `position[s][k]` diagnostics" begin
+    function build(stmt; lattice = :(Lattice((8, 8))))
+        ex = :(@potts_model DirBad begin
+            @kinds medium A
+            @variables u(site) = 0.0
+            @lattice $lattice
+            @energy cells(A) => (volume - 10.0)^2
+            $stmt
+            @sweep Metropolis(; temperature = 1.0)
+        end)
+        try
+            mtkcompile(Base.invokelatest(Core.eval(@__MODULE__, ex); name = :bad))
+            return ""
+        catch e
+            return sprint(showerror, e isa LoadError ? e.error : e)
+        end
+    end
+    @test occursin("write its component `direction[k]`", build(:(@drive copy => direction)))
+    @test occursin("axis of the 2D lattice", build(:(@drive copy => direction[3])))
+    @test occursin("axis of the 2D lattice", build(:(@drive copy => direction[0])))
+    @test occursin("axis of the 2D lattice", build(:(@drive copy => position[target][3])))
+    @test occursin("is a vector", build(:(@drive copy => position[target])))
+    @test occursin("needs a site", build(:(@drive copy => position[1])))
+    @test occursin("`direction` is not available", build(:(@energy cells(A) => direction[1])))
+    @test occursin("`Pre(x, k)` needs the MCS clock", build(:(@drive copy => Pre(u[target], 2))))
+    @test occursin("has the name of a built-in", build(:(@parameters direction = 1.0)))
+    # negative control: the forms of the acceptance file build
+    @test build(:(@drive copy => direction[1] * position[target][2] + mcs)) == ""
+    @test build(:(@constraint direction[1]^2 + direction[2]^2 <= 1.5)) == ""
+    @test build(:(@drive copy => direction[2]); lattice = :(Lattice((8, 8); geometry = Potts.CorePotts.Hexagonal()))) == ""
+end

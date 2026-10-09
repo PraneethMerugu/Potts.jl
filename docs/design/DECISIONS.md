@@ -3520,3 +3520,40 @@ session.
 - **Shear gating (accepted).** The shear rows are gated on P6.4a1. Until it lands, the record tier is `@test_broken`; once it lands, the record tier fails until a FULL record exists. P6.4a1 is reviewed and merges first, so in practice the gate is open.
 - **FULL cost.** About 4 ms per MCS on the Mac, so about 150 CPU-h, or 6–8 h on the PC. It runs on the PC (D-157) after the page implementation, outside benchmark windows.
 - **Early signal.** V18 (< 0.5) reached 0.50–0.77 at β = 0.05 in reduced runs. A FAIL is reported under D-154, not tuned away.
+
+## D-191 CC3D connectivity source check, P6.3k (2026-10-08; "models and publications" session, read-only source reading; `docs/design/research/cc3d-connectivity-source-check.md`)
+
+- **`<Penalty>` by version.** The value is honoured in CC3D 4.3.1 and 4.6.0. From 4.7.0 on it is ignored, and a hard-coded 64 is returned. Akeeb's 2D XMLs therefore ran with ΔH += 1e5, which is a veto at T = 10. The audit's "soft 64" holds only for ≥ 4.7.0.
+- **`changeEnergy` logic.** The logic is otherwise identical in every version read:
+  - it returns 0 when the old cell is medium;
+  - **rule 1 (gain):** the new cell, medium included, must own a face neighbour of the target;
+  - **rule 2:** the old cell must form exactly one arc on the clockwise 8-ring;
+  - in 3D the plugin throws.
+- **Effect on Akeeb.** Under VonNeumann(1) proposals, rule 1 is vacuous and the full ring cannot be reached, so D-189 rulings 3 and 10 do not change Akeeb.
+- **Source artefact.** Off-lattice ring positions are left at (0,0,0), so at a closed edge CC3D reads the owner of pixel (0,0,0). We do not reproduce this; we read off-lattice positions as nothing. Page 10 gets a deviations row (effect unmeasured), and the P6.3g mapping table lists it as a source artefact, not as a rule option. Whether to reproduce it is the maintainer's call; it is not reproduced unless the maintainer asks.
+- **For P6.3g.** `Local(; gain = true)` tests exactly CC3D rule 1: face adjacency, with medium allowed as the new cell. The defaults of `Local()` then equal CC3D rules 1 and 2. In the mapping table:
+  - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
+  - CC3D ≥ 4.7.0 → `penalty = 64`;
+  - the hard form is the T → 0 limit.
+
+## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
+
+- **Design.** One `Int32` per cell for each adjacency that the model reads, wired like `surface`.
+  - A copy changes only the losing and gaining cells.
+  - Δχ comes from each cell's mask on the 8-, 6- or 26-site shell, using popcounts and bit masks; there is no lookup table.
+  - `:full` reuses the `:face` formula on the complemented mask, with the sign flipped in 3D.
+  - A model that never names `euler` gets no code.
+  - A check script verified the local Δχ against full recounts in 2D, hex and 3D, on closed and periodic lattices, under both adjacencies.
+- **Open questions.** I took the note's recommendation on each.
+  1. **`holes = pieces − euler`** comes with P6.9, because it needs cell-scope `pieces`. v1 ships `euler(c; adjacency)` only.
+  2. **A cell that wraps a torus** reports its true torus χ. For example, a wrapping band reads as one hole. This is documented.
+  3. **3D in v1** ships `euler` only. Tunnels and cavities are derived later, once `pieces` exists.
+  4. **`adjacency = :full` on hex** is a build error. Hex has a single adjacency, so `:full` would only suggest a difference that does not exist.
+  5. **Tracking.** `euler` is tracked whenever the model reads it, whether in an energy or only as an observable.
+  6. **Cluster-scope χ** is not in v1.
+- **Accept criteria (P6.3j).**
+  - Enumeration oracles: brute-force χ from flood fills of the cell and its complement, compared with the tracked value after random copy sequences. They cover 2D, hex and 3D, both adjacencies, and closed and periodic boundaries.
+  - Negative controls.
+  - An A/B showing zero cost when unused (D-171).
+  - Zero warm allocations.
+  - The device path works with no Float64.

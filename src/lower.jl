@@ -142,7 +142,7 @@ function lower(x, env::LowerEnv)
         return :(Potts._cellval(st.cell.$(_integral_name(args[1])), $(env.bind[:__cell])))
     end
     if op === history_lag
-        haskey(env.bind, :mcs) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
+        (haskey(env.bind, :mcs) && env.mode !== :proposal) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
         _walk(args[1]) do y
             i = info(y)
             i !== nothing && i.role === :cell &&
@@ -198,6 +198,10 @@ function _lower_named(x, i::Info, env::LowerEnv)
     r === :param && return :(p.$(i.name))
     r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, kind′]`")
     if r === :builtin || r === :delta
+        r === :builtin && i.name === :direction &&
+            error("`direction` is a vector: write its component `direction[k]` (k = 1, …, N)")
+        r === :builtin && i.name === :position && env.mode === :proposal &&
+            error("`position` in $(_MODE_NAMES[env.mode]) needs a site: write `position[target][k]` or `position[source][k]`")
         key = r === :delta ? Symbol(:δ, i.name) : i.name
         haskey(env.bind, key) || error("`$(i.name)` is not available in $(_MODE_NAMES[env.mode])")
         return env.bind[key]
@@ -329,6 +333,34 @@ spacing (on a square lattice with unit spacing, the coordinates themselves).
     return haskey(ctx, :spacing) ? map((x, h) -> x * T(h), e, ctx.spacing) : e
 end
 
+"""
+Source→target offset of a copy (P6.4a1, D-188): the coordinate difference of `t` and `s`,
+the minimum image along periodic axes (a plain difference along closed ones), embedded and
+scaled as `_position`. A function of the two sites alone; the tie |d| = L/2 keeps `d`.
+"""
+@inline function _direction(::Type{T}, ctx, s, t) where {T}
+    lat = ctx.lattice
+    d = map(_min_image, CorePotts.coordinates(lat, t), CorePotts.coordinates(lat, s), lat.dims, lat.periodic)
+    e = CorePotts.embed(lat, map(T, d))
+    return haskey(ctx, :spacing) ? map((x, h) -> x * T(h), e, ctx.spacing) : e
+end
+@inline function _min_image(a::Int, b::Int, L::Int, periodic::Bool)
+    v = a - b
+    periodic || return v
+    return 2v > L ? v - L : 2v < -L ? v + L : v
+end
+
+"""The number of completed MCS during a sweep (the sweep's `ctx.mcs`, P6.4a1); 0 outside one
+(the host hook)."""
+@inline _copy_mcs(ctx) = haskey(ctx, :mcs) ? ctx.mcs : 0
+
+# whether `x` is `at(position, s)`: the position of site `s` (indexed again by an axis)
+function _is_site_position(x)
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === at) || return false
+    i = info(arguments(x)[1])
+    return i !== nothing && i.role === :builtin && i.name === :position
+end
+
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""
 @inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]
 """Kind of cell `c` (`0` for the medium)."""
@@ -367,6 +399,11 @@ function _lower_at(args, env)
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
     iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
+    # `position[s][k]` (P6.4a1): component `k` of site `s`'s position
+    if _is_site_position(x)
+        length(args) == 2 || error("`position[s][k]` takes one axis")
+        return :(Potts._position($(env.T), ctx, $(lower(arguments(x)[2], env)))[$(lower(args[2], env))])
+    end
     i = info(x)
     i === nothing && error("cannot index `$(_standin_var(x))`")
     idx = map(a -> lower(a, env), args[2:end])
@@ -385,8 +422,19 @@ function _lower_at(args, env)
     elseif i.role === :builtin
         i.name === :owner && return :(@inbounds st.σ[$j])
         if i.name === :position
-            haskey(env.bind, :position) || error("`position` is not available in $(_MODE_NAMES[env.mode])")
+            s === :site && error("`position[$(args[2])]` is a vector: write its component `position[$(args[2])][k]`")
+            if !haskey(env.bind, :position)
+                env.mode === :proposal && error("`position` in $(_MODE_NAMES[env.mode]) needs a site: " *
+                                                "write `position[target][k]` or `position[source][k]`")
+                error("`position` is not available in $(_MODE_NAMES[env.mode])")
+            end
             return :($(env.bind[:position])[$j])
+        end
+        if i.name === :direction
+            haskey(env.bind, :direction) || error("`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
+                                                  "copy's source→target offset, read in drives, constraints, on-copy updates and " *
+                                                  "the copy-scope @sweep temperature")
+            return :($(env.bind[:direction])[$j])
         end
         if i.name === :kind
             s === :site && return :(CorePotts.owner_kind(st, $j))

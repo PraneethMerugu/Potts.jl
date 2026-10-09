@@ -13,7 +13,21 @@ written in the **copy scope**:
 | `owner[s]`, `volume[owner[s]]` | the owner of a site, its volume |
 | `displacement(c, k)` | how far the copy would move cell `c`'s centroid along axis `k` (`c` is `new` or `old`) |
 | `local_components`, `ring_arcs`, `ring_cells`, `ring_medium` | connectivity of the losing cell around the target: its pieces on the target's neighbour shell (8 sites in square 2D, 6 hexagonal, 26 in 3D), the cells and the medium sites there ([Constraints](@ref manual-constraint)) |
-| `mcs` | the current MCS |
+| `direction[k]` | component `k` of the copy's offset ``x_\text{target} − x_\text{source}``: the minimum image along periodic axes, the plain difference along closed ones, in the units of `position` |
+| `position[target][k]`, `position[source][k]` | component `k` of a site's position (lattice coordinates times the `spacing`) |
+| `mcs` | the number of completed MCS: `n − 1` during the `n`-th MCS, as in `@before_mcs` |
+
+`direction`, `position[s][k]` and `mcs` are read everywhere in the copy scope: drives,
+constraints (`@constraint direction[1]^2 + direction[2]^2 <= 1.5` forbids diagonal copies),
+on-copy updates and a copy-scope `@sweep` temperature.
+`direction` is a function of the two sites alone, not of the proposal neighbourhood, and
+reads no state; on a hexagonal lattice it is the embedded offset ``(q + r/2, r√3/2)``. It
+is not available in energies: the offset belongs to the copy, not to the state, so a term
+that reads it is a drive. The shear field ``γ(y, t)·(x_i − x_j)`` of Jiang et al. (1999),
+with ``i`` the target and ``j`` the source, is
+`copy => γ0 * sin(ω * mcs) * (position[target][2] - y0) * direction[1]`; across a periodic
+x seam `direction[1]` is the short way round. Outside a run (`prob.f.delta_H` called by
+hand) `mcs` is 0.
 
 A drive is added with weight 1: a negative value favours the copy. A drive can stand for a
 soft constraint, e.g. the `E₀` connectivity threshold of Merks et al.:

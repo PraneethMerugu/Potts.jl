@@ -28,7 +28,7 @@ label(γ, mcs) = "γ=$(γ == 0 ? "0" : string(γ)), T=$(round(mcs / 775; digits 
 
 mm = 72 / 25.4
 s = 2.2
-fig = Figure(; size = (5 * 40mm * s, 46mm * s), fontsize = 8 * s, backgroundcolor = :white)
+fig = Figure(; size = (5 * 40mm * s, 52mm * s), fontsize = 8 * s, backgroundcolor = :white)
 for (j, (γ, mcs, f)) in enumerate(panels)
     o = read_openvt(joinpath(DIR, "f7", f), :O5)
     ax = Axis(fig[1, j]; aspect = 1, title = label(γ, mcs), titlesize = 8 * s, backgroundcolor = :white)
@@ -42,10 +42,12 @@ for (j, (γ, mcs, f)) in enumerate(panels)
             strokewidth = 0.25, strokecolor = :black)
     end
     limits!(ax, cx - ext, cx + ext, cy - ext, cy + ext)
-    text!(ax, 0.02, 0.02; space = :relative, fontsize = 6.5 * s, color = (:black, 0.7),
-        text = "N = $(length(o.x_pos)), inhibited $(round(100 * sum(o.inhibited) / length(o.inhibited); digits = 1)) %")
+    # the panel's statistics in their own row below the axes, clear of the colony
+    Label(fig[2, j], "N = $(length(o.x_pos)), inhibited $(round(100 * sum(o.inhibited) / length(o.inhibited); digits = 1)) %";
+        fontsize = 6.5 * s, color = (:black, 0.7), tellwidth = false, padding = (0, 0, 0, 4 * s))
 end
-Legend(fig[2, 1:5], [MarkerElement(; marker = :circle, color = c, strokewidth = 0.5, strokecolor = :black, markersize = 8 * s)
+rowgap!(fig.layout, 1, 6 * s)
+Legend(fig[3, 1:5], [MarkerElement(; marker = :circle, color = c, strokewidth = 0.5, strokecolor = :black, markersize = 8 * s)
                      for c in (blue, orange)],
     ["growing (i = 0)", "inhibited (i > 0)"]; orientation = :horizontal, framevisible = false, labelsize = 7 * s)
 save(joinpath(DIR, "fig7.png"), fig; px_per_unit = 1)
