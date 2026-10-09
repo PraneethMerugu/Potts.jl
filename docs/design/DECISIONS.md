@@ -3535,6 +3535,10 @@ session.
   - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
   - CC3D ≥ 4.7.0 → `penalty = 64`;
   - the hard form is the T → 0 limit.
+- **Maintainer ruling, 2026-10-09 (relayed by the "models and publications" session): "no".**
+  - We do not reproduce the (0,0,0) quirk.
+  - P6.2f (merge 556ce1da) carries the page 10 deviations row and the sentence on penalty and version (CC3D ≥ 4.7.0 ignores `<Penalty>` and uses 64).
+  - The page row does not name a CC3D version for the quirk, because the source reads the same in every version checked.
 
 ## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
 
