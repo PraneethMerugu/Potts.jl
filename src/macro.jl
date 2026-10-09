@@ -71,13 +71,17 @@ const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, 
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction)
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
+# DSL names added after published models used them as structural parameters (P6.3g:
+# `WortelAct(; connected)`): a structural parameter may take one of these names, and then it
+# shadows the DSL name in its model (which cannot use that helper)
+const _SHADOWABLE_DSL_NAMES = (:connected, :shell, :pieces, :distinct, :Local, :ArcOrPair, :Simple)
 # The link endpoints `a`, `b` are reserved globally (D-075 Q8): no declaration (kind,
 # parameter, variable, observed quantity, relation, relationship, component) may take their
 # name, so nothing an edge term or link rule reads is shadowed (`_check_reserved_names`
 # applies the same rule to a programmatic `PottsSystem`).
 """Record a declared name; reject built-in names and a second declaration of a name."""
 function _declare!(parts::_Parts, k::Symbol, what::String)
-    k in _reserved_names() && throw(ArgumentError(
+    k in _reserved_names() && !(what == "structural parameter" && k in _SHADOWABLE_DSL_NAMES) && throw(ArgumentError(
         "$what `$k` has the name of a built-in (`$k` means something else in @potts_model); choose another name"))
     k in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, k)))
     # `#…` names are the constructor's hidden locals (`_kw_local`)
@@ -86,6 +90,9 @@ function _declare!(parts::_Parts, k::Symbol, what::String)
     parts.declared[k] = what
     return k
 end
+
+# the DSL names bound in a model body: all but those its structural parameters shadow
+_dsl_bound(parts) = [k for k in keys(DSL) if !any(p -> first(p) === k, parts.structural)]
 
 function _potts_model(name::Symbol, body::Expr, mod)
     body.head === :block || throw(ArgumentError("@potts_model $name expects a begin … end block"))
@@ -128,7 +135,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         t = $P.t
         D = $P._D
         Pre = $P._pre
-        $(Expr(:(=), Expr(:tuple, Expr(:parameters, keys(DSL)...)), :($P.DSL)))
+        $(Expr(:(=), Expr(:tuple, Expr(:parameters, _dsl_bound(parts)...)), :($P.DSL)))
         __kinds = Symbol[]
         __frozen = Int[]
         __classes = $P.KindClass[]
@@ -721,6 +728,12 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && length(ex.args) == 3 && _isparams(ex.args[2]) && ex.args[3] isa Expr && ex.args[3].head === :generator
+        return _rewrite_gather(ex.args[1], ex.args[3], ex.args[2])      # `pieces(n for n in … ; adjacency)`
+    elseif h === :call && ex.args[1] === :pieces && _relation_call(ex.args[end])
+        # `pieces(c, R(s); …)`: `R(s)` is a relation at a site, checked by `pieces` (only `shell`)
+        r = ex.args[end]
+        return Expr(:call, map(rewrite, ex.args[1:(end - 1)])..., :($P._around($(rewrite(r.args[1])), $(rewrite(r.args[2])))))
     elseif h === :call && _rng_callee(ex.args[1]) !== nothing
         return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
     elseif h === :call && ex.args[1] === :rand && any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])
@@ -764,10 +777,14 @@ end
 _has_endbegin(x) = x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
                    (x isa AbstractVector && any(_has_endbegin, x))
 
-function _rewrite_gather(fold, gen)
+_isparams(e) = e isa Expr && e.head === :parameters
+_relation_call(e) = e isa Expr && e.head === :call && length(e.args) == 2 && !_isparams(e.args[2])
+
+function _rewrite_gather(fold, gen, params = nothing)
     P = :(Potts)
     body = gen.args[1]
-    plain = Expr(:call, fold, Expr(:generator, map(rewrite, gen.args)...))
+    kws = params === nothing ? () : (Expr(:parameters, map(rewrite, params.args)...),)
+    plain = Expr(:call, fold, kws..., Expr(:generator, map(rewrite, gen.args)...))
     # several iterators (`for i in 1:2, j in 1:3`): ordinary Julia (A-40)
     length(gen.args) > 2 && return plain
     spec = gen.args[2]
@@ -783,8 +800,8 @@ function _rewrite_gather(fold, gen)
     # `R(s)` may be a relation at a site (a gather), `cells(k)`, or an ordinary call; other
     # iterators may be a population (`sites`, `cells(a, b)`): decided at run time
     (iter isa Expr && iter.head === :call && length(iter.args) == 2) ||
-        return :($P._fold_iter($fold, $n -> $(rewrite(body)), $(rewrite(iter)), $condf))
-    return :($P._fold_or_gather($fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
+        return :($P._fold_iter($(kws...), $fold, $n -> $(rewrite(body)), $(rewrite(iter)), $condf))
+    return :($P._fold_or_gather($(kws...), $fold, $n -> $(rewrite(body)), $(rewrite(iter.args[1])),
         $(rewrite(iter.args[2])), $condf))
 end
 

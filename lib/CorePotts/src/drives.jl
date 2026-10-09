@@ -144,8 +144,9 @@ const _CUBIC_SHELL = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 i
 @inline _ring_owners(lat::Lattice{3}, σ, x) = _owners(lat, σ, x, _CUBIC_SHELL)
 @inline _owners(lat, σ, x, ring::NTuple{K}) where {K} = ntuple(Val(K)) do k
     inside, y = shift(lat, x, map(Int32, ring[k]))
-    # an out-of-domain site reads −1: neither the medium (0) nor a cell (> 0)
-    inside ? @inbounds(σ[linear_index(lat, y)]) : -one(eltype(σ))
+    # an out-of-domain site reads −1 (an `Int32`, whatever σ's eltype: an unsigned σ would
+    # wrap it to a cell id): neither the medium (0) nor a cell (> 0)
+    inside ? Int32(@inbounds(σ[linear_index(lat, y)])) : Int32(-1)
 end
 
 @inline function _count_medium(owners::NTuple{K}) where {K}

@@ -380,6 +380,8 @@ function _constraint_expr(c::CompiledPottsSystem, T)
             push!(tests, lower(k.expr, env))
         elseif k.kind === :connectivity          # evaluated only for a losing cell of `kinds`
             push!(tests, :(old == 0 || !$(_kindtest(:k_old, k.kinds)) || $(lower(k.expr, env))))
+            # a rule that tests the gaining cell too (`Simple()`), against the same kinds
+            k.gain === nothing || push!(tests, :(new == 0 || !$(_kindtest(:k_new, k.kinds)) || $(lower(k.gain, env))))
         elseif k.kind === :no_extinction
             push!(tests, :(CorePotts.forbid_extinction(st.cell.volume, prop)))
         end
