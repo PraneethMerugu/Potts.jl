@@ -729,7 +729,7 @@ merges (phase-end checkpoint).
   - R2 `Fibres`;
   - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
     `solvers = [V => …]` for the steady/implicit field. Gate: B2.
-- [ ] **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
+- [x] (merge, 2026-10-09; D-197, D-201; PC A/B pending) **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
 - **P6.9** Bauer 2009: (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
   - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
     - a deferred kernel over the compacted list of local-test failures, with an
