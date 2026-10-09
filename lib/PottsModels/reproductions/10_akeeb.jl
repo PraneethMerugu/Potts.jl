@@ -833,8 +833,8 @@ prov(file) = Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m
 pp, ps = prov("provenance.toml"), prov("sweep_provenance.toml")
 tally = Dict(k => count(r -> r["result"] == k, rec_page) for k in unique(r["result"] for r in rec_page))
 Markdown.parse("""
-- **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"]), host `$(pp["hostname"])`), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts (tally of the page as run, before V-A6 was un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation; the deviations table).
-- **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"]), host `$(ps["hostname"])`), CPU backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = 0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the record's README).
+- **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"])), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts (tally of the page as run, before V-A6 was un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation; the deviations table).
+- **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"])), CPU backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = 0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the record's README).
 """)
 
 # Fig. 5B side by side: the phenotype fractions of the authors' dataset A (Fig. 5B values,

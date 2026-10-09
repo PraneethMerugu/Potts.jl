@@ -65,7 +65,10 @@ const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluste
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
 const _CONTACT_BUILTINS = (:kind, :kind′, :owner, :owner′, :weight, :site′)   # `site′`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
-const _PROPOSAL_BUILTINS = (:source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells, :ring_medium)
+# `direction`, `position[s][k]` and `mcs` (P6.4a1, D-188): the copy's source→target offset,
+# a site's position, and the number of completed MCS
+const _PROPOSAL_BUILTINS = (:source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells, :ring_medium,
+    :direction, :position, :mcs)
 const _EDGE_BUILTINS = (:a, :b, :distance)
 const _LINK_BUILTINS = (:a, :b, :distance, :mcs)
 
@@ -832,7 +835,8 @@ function _check_copy_integral(x, what; when = "every copy attempt")
     return nothing
 end
 
-"""Axes of `centroid`/`displacement` must be lattice axes; `centroid` has no ΔH in energies."""
+"""Axes of `centroid`/`displacement` and of the copy-scope `direction[k]` and `position[s][k]`
+(D-188) must be literal lattice axes; `centroid` has no ΔH in energies."""
 function _check_geometry(x, N; energy = false)
     _walk(x) do y
         iscall(y) || return
@@ -840,6 +844,17 @@ function _check_geometry(x, N; energy = false)
         if op === cell_integral
             energy && throw(ArgumentError("`integral` is not available in energies (it is refreshed once per MCS, " *
                                           "so it has no ΔH); write the site term in the energy instead"))
+            return
+        end
+        if op === at                     # `direction[k]`, `position[s][k]` (D-188): an axis
+            a = _unwrap(arguments(y)[1])
+            ai = info(a)
+            name = ai !== nothing && ai.role === :builtin && ai.name === :direction ? "direction[k]" :
+                   _is_site_position(a) ? "position[s][k]" : nothing
+            name === nothing && return
+            k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2]))
+            (k isa Real && isinteger(k) && 1 <= k <= N) ||
+                throw(ArgumentError("`$name`: the axis `k` is a literal axis of the $(N)D lattice (1 to $N); got `$k`"))
             return
         end
         (op === cell_centroid || op === copy_displacement) || return

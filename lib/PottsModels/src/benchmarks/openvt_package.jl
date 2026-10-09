@@ -104,7 +104,7 @@ function _openvt_pkg_build(out, recs)
     mkpath(joinpath(res, "provenance"))
     for k in _openvt_pkg_keys(recs)
         p = copy(prov[k])
-        delete!(p, "hostname")
+        delete!(p, "hostname"); delete!(p, "work")
         _openvt_pkg_write(joinpath(res, "provenance", recs[k] * ".toml"), sprint(io -> TOML.print(io, p; sorted = true)))
     end
     _openvt_pkg_relaxation(joinpath(res, "Relaxation"), rec(:calib), meta[:calib])

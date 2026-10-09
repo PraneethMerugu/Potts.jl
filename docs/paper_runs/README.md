@@ -34,7 +34,7 @@ solve, record and sidecar code. The re-encode step uses Makie's bundled ffmpeg (
 Cells are drawn without outlines (D-156): one categorical colour per cell (D-172), or per
 phenotype where the paper reads the run by kind (cell sorting, leaders and followers). The wall times below are rough figures from the first runs on
 a shared 8-core Apple Silicon machine; each sidecar records the producing machine (`cpu`, `machine`,
-`hostname`, `threads`) and its measured times. The 2026-10-07 renders ran on the maintainer's PC
+`threads`) and its measured times. The 2026-10-07 renders ran on the maintainer's PC
 (AMD Ryzen AI Max+ 395, CPU backend, one thread):
 
 | Script | Wall time (approx.) |

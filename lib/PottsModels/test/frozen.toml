@@ -349,8 +349,8 @@ decision = "D-167"
 
 [[file]]
 path = "../reproductions/10_akeeb.jl"
-sha256 = "1f6813376e3ad0fc25c57f012a3680e703e6f31d8ff6cc0f23c904ce4d227e8a"
-decision = "D-163"
+sha256 = "4e4a3fe8b6ffed9e853ab636f82090b2c2a8e37c7d5497bd2bf9aaa43223860d"
+decision = "D-195"
 
 [[file]]
 path = "reproductions/15_openvt_calibration.jl"
@@ -433,6 +433,11 @@ sha256 = "da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d"
 decision = "D-173"
 
 [[file]]
+path = "reproductions/15_openvt_sweeps.jl"
+sha256 = "474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41"
+decision = "D-174"
+
+[[file]]
 path = "acceptance/p6_0bs_mtk_claims.jl"
 sha256 = "a7029706215ef4559ee098531bfcd12e312dd6b5a25d3356f9e1714f0487f856"
 decision = "D-176"
@@ -444,7 +449,7 @@ decision = "D-175"
 
 [[file]]
 path = "reproductions/15_openvt_page.jl"
-sha256 = "3a689a873e893bfd215f7c802c75961b03bf61f3746ca53b4e526d6f50478d10"
+sha256 = "135c9c7f0b109c483dacae82c8c4ee7b625e63997181c12a83c2dbcf366e926a"
 decision = "D-178"
 
 [[file]]
@@ -466,3 +471,13 @@ decision = "D-180"
 path = "reproductions/01_merks_page.jl"
 sha256 = "4aa092f91aa1949f1e66995ce2d1b6bcad0d72744717f103af9ea52ab5a6b337"
 decision = "D-184"
+
+[[file]]
+path = "acceptance/p6_4b2_foam_analysis.jl"
+sha256 = "2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044"
+decision = "D-187"
+
+[[file]]
+path = "acceptance/p6_4a1_copy_direction.jl"
+sha256 = "ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296"
+decision = "D-188"

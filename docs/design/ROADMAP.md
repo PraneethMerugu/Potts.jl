@@ -283,7 +283,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0ac** AUTHORING §12.9 wording: proposals draw a uniform mobile target, then a uniform source offset (topology audit §1); add Morpheus `boundaryLengthScaling` and CC3D's hex `surfaceMF` to the pair-counting notes.
 - [x] (merge, 2026-10-02; D-100) **P6.0ad** `Barker(; offset)` silently drops the offset: `_acceptance` (`src/problem.jl:194`) returns `CorePotts.Barker()` and `sweep_spec` accepts an offset for `:barker` without error (found by the docs author, 2026-10-01). Either carry the offset into Barker (`1/(1 + e^{(ΔH − δ)/T})`) or reject it at model build with a clear error.
   - Accept: a test that a Barker offset either changes acceptance as specified or raises at build.
-- [ ] **P6.0ae** `:arc_or_pair` at a closed edge: TST counts its frame (σ = −1) as a distinct cell on the ring, ours treats out-of-domain sites as neither medium nor a cell (D-099 review). Decide with the Merks 2008 / Act ports whether to count out-of-domain sites as a cell in `ring_cells` (re-freezing `p6_0aa_arc_or_pair_medium.jl`'s edge testset) or keep and document the difference; also make the `ring_*` sentinel independent of σ's eltype.
+- [ ] **P6.0ae** `:arc_or_pair` at a closed edge: TST counts its frame (σ = −1) as a distinct cell on the ring, ours treats out-of-domain sites as neither medium nor a cell (D-099 review). Decide with the Merks 2008 / Act ports whether to count out-of-domain sites as a cell in `ring_cells` (re-freezing `p6_0aa_arc_or_pair_medium.jl`'s edge testset) or keep and document the difference; also make the `ring_*` sentinel independent of σ's eltype. **Ruled (D-189, ruling 5):** closed edges count as a cell inside `ArcOrPair()` only; the raw folds keep "out of domain is nothing"; lands with P6.3g.
 - [x] (merge, 2026-10-03; D-108) **P6.0af** P6.0v3 follow-ups (review notes, D-101): a CorePotts test for a device lifecycle whose later stage fails after the fused `before` ran (`before_ran = true` handover; checked by injection only); `generated_code` should show the fused lifecycle; audit X4 typed literals in generated code (changes fingerprints, so batch it with another fingerprint change).
 - [x] (merge, 2026-10-03; D-104, D-105) **P6.0ag** (high: a Metal compile failure) Every fixed-step ODE system is expanded in place, not called through the per-cell `rhs` closure (D-103 review). Today any non-inlined rate without a gather — a Hill gene circuit, an `ifelse` chain, a long sum, a model ODE with population folds — allocates 128–640 B per MCS on the CPU and does not compile on Metal (`jl_new_opaque_closure_jlcall`). Fix: `_ode_expand(odes) = true` (or drop the closure), re-record the fingerprints `p6_0x_gather_ode_alloc.jl` pins under a new decision (D-060 style).
   - Accept: zero warm bytes and Metal compilation, bitwise equal to the CPU Float32 run, for the Hill, `ifelse`, long-sum and model-fold shapes (`/tmp/p60x_rev/` has them); values bitwise unchanged on the CPU; a non-frozen gather-ODE case in `test/gpu.jl`.
@@ -559,6 +559,26 @@ Full runs are offline (D-146).
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
   - Add digitised 01b Figs 5, 7–10, 12 and 13 as targets through the M7 continuous-χ superset, with inferred parameters flagged. The model side is ready: `χcc`, `merks2008_sprout(; divisions = 8)` on 502², and `track = (:ΔH,)`.
   - Run the FULL tier on the PC, with D-146 records; the FULL run decides V-C3's low plateau.
+- [ ] **P6.3g** (D-189) Connectivity vocabulary, surface (research/connectivity-vocabulary.md §8, §14; rulings §13.1).
+  - **Rule values.** `Local(; gain = true, adjacency = :face)`, `ArcOrPair()`, `Simple(; adjacency)` (2D square and hex, 3D cubic) and `connected(c; rule)`.
+  - **Helper.** `connectivity(…; rule, penalty)`: the veto form in `@constraint`, the penalty form in `@drive`; misuse is a build error.
+  - **Folds.** The `shell` relation, the `pieces` fold (renamed from `components` with no alias; `p6_3a` and every reference are renamed in the same change) and the `distinct` fold. The old names other than `components` stay as aliases.
+  - **Docs.** One docs page with the mapping table (provenance lives there, not in the names).
+  - **Ruling 10.** `Local()` refuses a full shell of the losing cell, as CC3D does.
+  - *Accept:* the enumeration oracles (§12) pass, including gain and both adjacencies; aliases lower byte-identically; each build error is tested.
+  - **Re-freezes.** Every re-freeze forced by rulings 3, 6 and 10 goes through a test author: the legacy `MerksVasculogenesis` `rule = :local` and the full-shell pins.
+  - **Akeeb.** Its frozen record test plus an A/B shows no change.
+  - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
+- [ ] **P6.3h** (D-189; after P6.3g) Shell kernels.
+  - One shell read per generated function, a 2D run-count kernel for `Local()`, and a table-driven 3D flood fill with no div/rem in the loop.
+  - *Accept:* oracles unchanged; A/B ≤ 1.00 within the controls' spread (D-171); zero warm allocations; Metal and ROCm equal the CPU.
+- [ ] **P6.3i** (D-189; may fold into P6.3g) Gain-side and hole negative controls (§12) on `Moore(1)` and `NeighborOrder(2)` proposals.
+- [ ] **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
+  - Exact local χ updates per copy from the 2×2 (2D) and 2×2×2 (3D) configurations.
+  - Design note first.
+  - *Accept:* enumeration oracles on small lattices; an A/B showing zero cost for models that do not use it.
+- [x] (2026-10-08; D-191) **P6.3k** (D-189, ruling 11) Check the CC3D 4.3.1 source (connectivity plugins; Akeeb's Penalty 1e5 against the current source's soft 64) before any "exactly CC3D" claim.
+- [ ] **P6.2f** (D-191) Page 10 (Akeeb) text from the CC3D source check: one sentence that the 2D XMLs ran with Penalty 1e5 (honoured in 4.3.1/4.6.0, a veto at T = 10) while CC3D ≥ 4.7.0 returns a hard-coded 64; a deviations row for the (0,0,0) off-lattice ring read at the closed bottom edge (we read off-lattice as nothing; suspected small, bottom-wall cells only, unmeasured). Through a test author if page 10's frozen test pins the deviations rows.
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
@@ -578,7 +598,7 @@ Full runs are offline (D-146).
   - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
 - [x] (merge 2026-10-07, D-168; V4 fails V4.2, V4.3, V4.5 as D-154 deviations; consortium TST_5T and Morpheus_5T pass 7/7 under the frozen rules) **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
 - [x] (merge 2026-10-08, D-173; all rows pass, controls fail; V1 warning for P6.15g) **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
-- [ ] (D-174: test frozen; FULL run unparked 2026-10-08, BoundarySiteCPM 2.83× on case (a)) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [x] (merge, 2026-10-08; D-174, D-178 amendment: FULL sweeps record af1d4c19, 160 runs, 15 of 18 pass; V1, V2.1.1x, V3b FAIL under D-154, C13/Q20 leading candidate) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
 - [x] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
 - [x] **P6.15i** Docs page "OpenVT monolayer benchmark":
   - every figure in M's layout;
@@ -588,8 +608,8 @@ Full runs are offline (D-146).
 
 ### Step 4 — Foam
 
-- [ ] **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
-- [ ] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain.
+- [x] (merge, 2026-10-08; D-188) **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
+- [x] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain. Merged 482e163a (D-187; power_spectrum on FFTW). For P6.4r: drop empty ids before topology_distribution; consider a log-binned spectral fit if α lands at the band edges.
 - [ ] **P6.4r** (D-186; foam streams 3–5) Reproduction 04 (Jiang et al. 1999): frozen test from spec §5.2 V1–V20; the no-shear page; FULL shear runs once P6.4a1 lands.
 - [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
   - D-075: **R17** initialization, as the `at_init` host phase: `A(cell) = volume`,
@@ -661,7 +681,7 @@ merges (phase-end checkpoint).
   - R2 `Fibres`;
   - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
     `solvers = [V => …]` for the steady/implicit field. Gate: B2.
-- **P6.9** Bauer 2009:
+- **P6.9** Bauer 2009: (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
   - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
     - a deferred kernel over the compacted list of local-test failures, with an
       `MVector` stack and an AllocCheck proof on the CPU path;

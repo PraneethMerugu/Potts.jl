@@ -3260,6 +3260,8 @@ session.
   - **Backends.** A non-CPU backend is an `ArgumentError`.
   - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
 
+- **Amendment (2026-10-08, P6.15g).** Section (g) also allows `.csv` in a cited record (`P615I_RECORD_EXT`). The P6.15g sweeps record must hold the O3 `.csv` files and `f7/*.csv` under its own record tier. Re-frozen at commit c40d2725, sha256 `135c9c7f0b109c483dacae82c8c4ee7b625e63997181c12a83c2dbcf366e926a`. Nothing else changed. Sections (c) and (d) go green when the page renders the sweeps record.
+
 ## D-179 P6.0bw: the library's device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm (2026-10-08; coordinator, from the P6.0bw test author; under D-157, D-158, D-171)
 
 - **Measured (PC, ROCm, AMDGPU 2.8.0, CPU 12 under exclusive.sh).**
@@ -3471,3 +3473,148 @@ session.
 - **Corrections.**
   - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
   - The drive docs wrongly list `mcs`; the implementer fixes them.
+
+## D-189 Connectivity vocabulary: a compositional connectivity layer and 12 maintainer rulings (2026-10-08; maintainer rulings relayed by the "models and publications" session; research doc `docs/design/research/connectivity-vocabulary.md`)
+
+- **Design** (doc §8). Connectivity is expressed with these pieces:
+  - the rule values `Local()`, `ArcOrPair()`, `Simple()` and `Global(; window)`;
+  - one helper, `connectivity(kinds…; rule, penalty)`: the veto form in `@constraint`, the penalty form in `@drive`, and a build error on misuse. Merks' E₀ becomes `@drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)`;
+  - the composable Boolean `connected(c; rule)`;
+  - the `shell` relation, the `pieces` fold and the `distinct` fold. `distinct` replaces `ring_cells`.
+  
+  Literature coverage (doc §5): of 33 connectivity forms, 9 are expressible exactly today, 6 approximately and 18 not at all. With this layer it is 20 / 11 / 2, and ruling 12 closes one of the two remaining gaps.
+- **Rulings** (doc §13.1):
+  1. **Names.** Mechanism names only. Provenance lives in the docs' mapping table.
+  2. **One helper in two statements.** Misuse is a build error.
+  3. **Gain test.** `Local(; gain)` checks the gaining cell, and it is **on by default**.
+  4. **Adjacency.** `adjacency = :face | :full` on `Local()`, `Simple()`, `Global()` and `pieces`. The default is `:face`.
+  5. **Closed edges (P6.0ae).** They count as a cell inside `ArcOrPair()` only. The raw folds keep "out of domain is nothing". Re-freeze `p6_0aa`'s edge testset.
+  6. **Rename.** `components` → `pieces`, with **no alias**. `p6_3a` and every reference are renamed in the same change.
+  7. **Out of domain in `Simple()`.** Out-of-domain sites are background.
+  8. **Shells.** No custom shells in v1. Windows exist only inside `Global(; window)`.
+  9. **`largest_piece`.** Comes with P6.9.
+  10. **Full shell.** `Local()` refuses a full shell of the losing cell, as CC3D does.
+  11. **CC3D claims.** Check the CC3D 4.3.1 source before claiming any behaviour is "exactly CC3D".
+  12. **Euler tracker.** A cell-scope Euler-characteristic tracker is added now.
+- **Consequences.** Rulings 3 and 10 change `Local()`'s dynamics wherever proposals reach past the face neighbours, or wherever a full shell is reachable.
+  - **Akeeb.** It uses von Neumann proposals, so no change is expected. P6.3g confirms this with the frozen record test and an A/B.
+  - **Re-freezes.** Pins of the legacy `MerksVasculogenesis` `rule = :local` and of full-shell acceptance are re-frozen through a test author.
+  - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
+  - **Stop rule.** A major slowdown stops the work for a question to the maintainer (standing rule). The rule values are plain structs, so no MTK friction is expected.
+- **Items.** P6.3g (surface), P6.3h (shell kernels), P6.3i (negative controls), P6.3j (Euler tracker) and P6.3k (CC3D source check). Also P6.0ae (ruled) and an amendment to P6.9. They are scheduled alongside the foam streams (D-186).
+
+## D-190 P6.4r: reproduction 04 (foam, Jiang et al. 1999) test frozen (2026-10-08; coordinator, from the repro 04 test author; under D-186)
+
+- **Frozen test.** `reproductions/04_foam.jl` (commit 27890d50, sha256 `b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d`). Rows V1–V20 are pre-registered with the bands of spec 04 §5.2.
+- **Tiers.**
+  - V1 (interior hexagon share ≥ 0.95), V1b (μ2(n) ∈ [0.3, 0.6]), PREP and V19 run on SMOKE (2 foams) and FULL (10).
+  - V2–V20 run on FULL with 5 replicates, plus the record tier.
+- **Negative controls.** C-V1, C-V1b (counting the wall as a side gives 0.109; periodic y gives 0), C-V9, C-V12, C-V16 and C-V18, plus two in the SMOKE shear check.
+- **Calibrations.** These are pre-registered and are not tuned against the results.
+  - **A-1 (κ).** Set in two stages: a J = 3 grid fixes κ from γ₀/J ≈ 1.9, and the V5 scan then runs in paper units.
+  - **A-2 (wall).** Closed y with no wall cells. The brick wall then gives μ2(n) = 7/16, the paper's 0.437.
+  - **A-5 (time scale, new).** τ = 1/ū ≈ 3.45, because our MCS runs about 3.4× slower than the paper's with a uniform neighbour. Every shear time is in paper MCS. τ is listed as a deviation (DV1).
+  - **A-8 (preparation).** Anneal at T = 3 for 10 MCS, then relax at T = 0 for 1000 MCS. Coarsen at Γ = 0 and T = 3 until μ2(n) reaches its target, then relax.
+  - **A-14.** The two low-μ2(a) foams run on 320².
+  - **A-15 (T1 counting).** `:t1`.
+- **Shear gating (accepted).** The shear rows are gated on P6.4a1. Until it lands, the record tier is `@test_broken`; once it lands, the record tier fails until a FULL record exists. P6.4a1 is reviewed and merges first, so in practice the gate is open.
+- **FULL cost.** About 4 ms per MCS on the Mac, so about 150 CPU-h, or 6–8 h on the PC. It runs on the PC (D-157) after the page implementation, outside benchmark windows.
+- **Early signal.** V18 (< 0.5) reached 0.50–0.77 at β = 0.05 in reduced runs. A FAIL is reported under D-154, not tuned away.
+
+## D-191 CC3D connectivity source check, P6.3k (2026-10-08; "models and publications" session, read-only source reading; `docs/design/research/cc3d-connectivity-source-check.md`)
+
+- **`<Penalty>` by version.** The value is honoured in CC3D 4.3.1 and 4.6.0. From 4.7.0 on it is ignored, and a hard-coded 64 is returned. Akeeb's 2D XMLs therefore ran with ΔH += 1e5, which is a veto at T = 10. The audit's "soft 64" holds only for ≥ 4.7.0.
+- **`changeEnergy` logic.** The logic is otherwise identical in every version read:
+  - it returns 0 when the old cell is medium;
+  - **rule 1 (gain):** the new cell, medium included, must own a face neighbour of the target;
+  - **rule 2:** the old cell must form exactly one arc on the clockwise 8-ring;
+  - in 3D the plugin throws.
+- **Effect on Akeeb.** Under VonNeumann(1) proposals, rule 1 is vacuous and the full ring cannot be reached, so D-189 rulings 3 and 10 do not change Akeeb.
+- **Source artefact.** Off-lattice ring positions are left at (0,0,0), so at a closed edge CC3D reads the owner of pixel (0,0,0). We do not reproduce this; we read off-lattice positions as nothing. Page 10 gets a deviations row (effect unmeasured), and the P6.3g mapping table lists it as a source artefact, not as a rule option. Whether to reproduce it is the maintainer's call; it is not reproduced unless the maintainer asks.
+- **For P6.3g.** `Local(; gain = true)` tests exactly CC3D rule 1: face adjacency, with medium allowed as the new cell. The defaults of `Local()` then equal CC3D rules 1 and 2. In the mapping table:
+  - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
+  - CC3D ≥ 4.7.0 → `penalty = 64`;
+  - the hard form is the T → 0 limit.
+
+## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
+
+- **Design.** One `Int32` per cell for each adjacency that the model reads, wired like `surface`.
+  - A copy changes only the losing and gaining cells.
+  - Δχ comes from each cell's mask on the 8-, 6- or 26-site shell, using popcounts and bit masks; there is no lookup table.
+  - `:full` reuses the `:face` formula on the complemented mask, with the sign flipped in 3D.
+  - A model that never names `euler` gets no code.
+  - A check script verified the local Δχ against full recounts in 2D, hex and 3D, on closed and periodic lattices, under both adjacencies.
+- **Open questions.** I took the note's recommendation on each.
+  1. **`holes = pieces − euler`** comes with P6.9, because it needs cell-scope `pieces`. v1 ships `euler(c; adjacency)` only.
+  2. **A cell that wraps a torus** reports its true torus χ. For example, a wrapping band reads as one hole. This is documented.
+  3. **3D in v1** ships `euler` only. Tunnels and cavities are derived later, once `pieces` exists.
+  4. **`adjacency = :full` on hex** is accepted and equals `:face`, because hex has a single, self-dual adjacency. This is amended to match P6.3g (D-193); the first ruling here was a build error.
+  5. **Tracking.** `euler` is tracked whenever the model reads it, whether in an energy or only as an observable.
+  6. **Cluster-scope χ** is not in v1.
+- **Accept criteria (P6.3j).**
+  - Enumeration oracles: brute-force χ from flood fills of the cell and its complement, compared with the tracked value after random copy sequences. They cover 2D, hex and 3D, both adjacencies, and closed and periodic boundaries.
+  - Negative controls.
+  - An A/B showing zero cost when unused (D-171).
+  - Zero warm allocations.
+  - The device path works with no Float64.
+
+## D-193 P6.3g: connectivity vocabulary test frozen (2026-10-08; coordinator, from the P6.3g test author; under D-189, D-191)
+
+- **Frozen test.** `acceptance/p6_3g_connectivity_vocabulary.jl` (commit 37ffd8d5, sha256 `30f2c67e783ecf2d8c8c295550f6654e9a2c44312e7c6165b6590b5c91b2444b`). The P6.3i gain-side and hole controls are folded in, on Moore(1), NeighborOrder(2) and NeighborOrder(3).
+- **What it covers.**
+  - Rule values and options.
+  - `components` is gone.
+  - Enumeration oracles for the 7 rules, the folds, `connected` and the old-name values, on square, hex and cubic lattices, periodic and closed. The oracle agrees with CorePotts on 1764 states and with a global 2D oracle on 6000 of 6000.
+  - Ruling 10 in 2D, hex and 3D.
+  - D-191's CC3D rules 1 and 2 as the `Local()` defaults.
+  - The ArcOrPair frame at a closed edge.
+  - Build errors, each with a control.
+  - The penalty form.
+  - Byte-identical aliases.
+  - Akeeb invariance.
+- **Readings fixed by the test.**
+  - A full shell means every position is in the domain and owned by `old`, so a full shell never occurs at a wall.
+  - Under `:full`, gain means any shell site.
+  - On hex, `:full` equals `:face`.
+  - `connected(new)` under Local and ArcOrPair is not pinned.
+  - The aliases are defined as: `ring_cells` ≡ `distinct(owner[n] for n in shell(target) if owner[n] != 0)`, and `ring_medium` ≡ `count(owner[n] == 0 for n in shell(target))`.
+- **Re-freezes this forces.** These go through test authors, and the implementer lists the exact set.
+  - The fingerprint pins of MerksVasculogenesis, AkeebInvasion and WortelAct: p6_0x, 0ag, 0ah, 0p, 0t, 0aq, 0ar, 0as, 0au, 0at, 0av, 0ax, 0aw, 0c2 and 0g.
+  - p6_3a's Global testset (`components` → `pieces`).
+  - p6_0aa's edge testset (P6.0ae).
+  - p6_0m (e), where diagonal sources now hit the gain test.
+  - Possibly p6_0v3 (the Merks digests) and p6_0bm.
+  
+  A fingerprint change with no change in dynamics is re-pinned. A change in dynamics on any FULL record is re-run on the PC and reported under D-154. Akeeb must show no change in dynamics (its frozen record test plus an A/B).
+
+## D-194 P6.3j: Euler-tracker test frozen (2026-10-08; coordinator, from the P6.3j test author; under D-189 ruling 12, D-192)
+
+- **Frozen test.** `acceptance/p6_3j_euler_tracker.jl` (commit 71260377, sha256 `0529f43e9676c8c3899945b63c766a3e1c09f278c58b2da72a143709efc09d5b`).
+- **Surface.**
+  - Cell scope: `euler` and `euler(; adjacency = :face | :full)`.
+  - Copy scope: `euler[c]` and `euler(c; adjacency)`. The medium reads 0. A bare `euler` in a drive raises an ArgumentError.
+  - Storage: Int32 columns `cell.euler` and `cell.euler_full`. On hex, `:full` equals `:face` (D-192 Q4, amended); whether it gets a column of its own is not pinned.
+- **Pinned.**
+  - Oracle recounts against flood fill, with 4 negative controls.
+  - Tracked χ equals the oracle after every MCS, on Sequential, Checkerboard and BoundarySite, for models that read it in an energy and for observed-only models, and across divisions.
+  - A torus band reads χ = 0.
+  - ΔH equals the brute-force value in Float64 and Float32.
+  - Build errors.
+  - Six fingerprints of models that do not use `euler` stay unchanged (recorded on 2b128db5).
+  - Zero warm allocations.
+  - A device row.
+
+## D-195 Privacy fixes (D-183): page 10 host name, sweeps record work path; and a ruling for P6.3g on structural parameters that shadow DSL names (2026-10-09; coordinator)
+
+- **Page 10 leaked the PC's host name.** Its provenance lines printed `host <hostname>` on the published page, and the deploy scan missed it.
+  - The host is removed from both lines of `reproductions/10_akeeb.jl`. Nothing else changes.
+  - The page is re-frozen: sha256 `4e4a3fe8b6ffed9e853ab636f82090b2c2a8e37c7d5497bd2bf9aaa43223860d`, replacing D-163's.
+  - The deploy scan now also rejects `nucbox`, and `praneeth` outside the repository URL.
+- **The P6.15g sweeps record leaked a local path.** Its `provenance.toml` had a `work` key holding a local path.
+  - The key is dropped from the record.
+  - `openvt_submission_package` now drops `work` as well as `hostname`. This fixes `15_openvt_package.jl` (10).
+  - The runner is left as it is, because its hash is pinned in the record. Future runners must not record local paths.
+- **Ruling for P6.3g: structural parameters may shadow DSL names.** A structural parameter may shadow the new DSL names (`connected`, `shell`, `pieces`, `distinct`, `Local`, `ArcOrPair`, `Simple`) inside its model.
+  - Example: WortelAct's existing `connected` structural parameter.
+  - Renaming it instead would force about 12 more re-freezes, for no gain to users.
+  - The docs page notes the shadowing.
