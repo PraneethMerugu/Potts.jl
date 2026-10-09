@@ -3260,6 +3260,8 @@ session.
   - **Backends.** A non-CPU backend is an `ArgumentError`.
   - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
 
+- **Amendment (2026-10-08, P6.15g).** Section (g) also allows `.csv` in a cited record (`P615I_RECORD_EXT`). The P6.15g sweeps record must hold the O3 `.csv` files and `f7/*.csv` under its own record tier. Re-frozen at commit c40d2725, sha256 `135c9c7f0b109c483dacae82c8c4ee7b625e63997181c12a83c2dbcf366e926a`. Nothing else changed. Sections (c) and (d) go green when the page renders the sweeps record.
+
 ## D-179 P6.0bw: the library's device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm (2026-10-08; coordinator, from the P6.0bw test author; under D-157, D-158, D-171)
 
 - **Measured (PC, ROCm, AMDGPU 2.8.0, CPU 12 under exclusive.sh).**
@@ -3443,3 +3445,78 @@ session.
   5. **Shear runs.** V2–V20 run as FULL on the PC once stream 1 lands.
 - **Proposal law.** Until P6.4b's `UnlikeNeighbor` lands, the proposal is `BoundarySiteCPM` with a uniform neighbour. This is a labelled deviation; the targets avoid absolute MCS (A-5).
 - **Not blockers.** P6.4c (events) and P6.4d (Tiling, T1 counts as library) are conveniences only.
+
+## D-187 P6.4b2: foam analysis functions, test frozen (2026-10-08; coordinator, from the P6.4b2 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4b2_foam_analysis.jl` (commit 1457cc6c, sha256 `2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044`).
+- **Surface** (public in `PottsModels.Analysis`, spec 04 §2.8): `stored_energy` (Eq. 8), `side_counts`, `contact_changes`, `t1_events(prev, next; unit = :t1 | :pairs | :bubbles)`, `topology_distribution`, `central_moment`, `topology_moments`, `power_spectrum` (Eq. 9), `spectral_exponent`, `mean_t1` (N̄) and `yield_strain`.
+- **Readings.** Spec questions go to the spec owner.
+  - **Stored energy (φ).** Each unordered pair is counted once; the factor 2 cancels in φ/φ(0).
+  - **Walls.** The closed y wall is not a side. With that reading the 256² brick wall gives μ2(n) = 7/16 = 0.4375, matching Fig. 11(c)'s 0.437, against 0.109 if the wall counted. This supports V1b.
+  - **A-15 counting units.** One T1 counts 1 under `:t1`, 2 under `:pairs` and 4 under `:bubbles`.
+  - **Periodogram.** |X|²/L, without the f = 0 bin.
+  - **Yield.** The first T1 avalanche, as the paper defines it. Converting it to strain is the caller's job (A-9).
+  - **μ2(a) unit.** It is a P6.4r calibration; areas stay in sites.
+
+## D-188 P6.4a1: copy scope gains `direction`, test frozen (2026-10-08; coordinator, from the P6.4a1 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4a1_copy_direction.jl` (commit e4b85503, sha256 `ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296`).
+- **Surface.** The copy scope gains three entries, each computed from (source, target) alone:
+  - `direction[k]`: x_target − x_source in `position` units. It uses the minimum image on periodic axes and the plain difference on closed axes.
+  - `mcs`: n − 1 during MCS n.
+  - `position[target|source][k]`.
+- **Hexagonal lattices.** Either an `ArgumentError` that names `direction`, or correct values.
+- **Algorithms.** Results match the hand-written reference bitwise on Sequential, Checkerboard and BoundarySite, on Float32 and on the device. Warm allocations are zero.
+- **Foam shear.** The foam shear is a drive.
+- **Deferred.** `Metropolis(tie)` is deferred: T = 1e-6 gives the A-6 T→0⁺ limit.
+- **Not a blocker.** The shear can already be written today with px/py site variables, an `ifelse` minimum image and a model-level G set in `@before_mcs`. The test uses that form as its reference. So `direction` is a convenience, and P6.4r is not blocked on it.
+- **Corrections.**
+  - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
+  - The drive docs wrongly list `mcs`; the implementer fixes them.
+
+## D-189 Connectivity vocabulary: a compositional connectivity layer and 12 maintainer rulings (2026-10-08; maintainer rulings relayed by the "models and publications" session; research doc `docs/design/research/connectivity-vocabulary.md`)
+
+- **Design** (doc §8). Connectivity is expressed with these pieces:
+  - the rule values `Local()`, `ArcOrPair()`, `Simple()` and `Global(; window)`;
+  - one helper, `connectivity(kinds…; rule, penalty)`: the veto form in `@constraint`, the penalty form in `@drive`, and a build error on misuse. Merks' E₀ becomes `@drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)`;
+  - the composable Boolean `connected(c; rule)`;
+  - the `shell` relation, the `pieces` fold and the `distinct` fold. `distinct` replaces `ring_cells`.
+  
+  Literature coverage (doc §5): of 33 connectivity forms, 9 are expressible exactly today, 6 approximately and 18 not at all. With this layer it is 20 / 11 / 2, and ruling 12 closes one of the two remaining gaps.
+- **Rulings** (doc §13.1):
+  1. **Names.** Mechanism names only. Provenance lives in the docs' mapping table.
+  2. **One helper in two statements.** Misuse is a build error.
+  3. **Gain test.** `Local(; gain)` checks the gaining cell, and it is **on by default**.
+  4. **Adjacency.** `adjacency = :face | :full` on `Local()`, `Simple()`, `Global()` and `pieces`. The default is `:face`.
+  5. **Closed edges (P6.0ae).** They count as a cell inside `ArcOrPair()` only. The raw folds keep "out of domain is nothing". Re-freeze `p6_0aa`'s edge testset.
+  6. **Rename.** `components` → `pieces`, with **no alias**. `p6_3a` and every reference are renamed in the same change.
+  7. **Out of domain in `Simple()`.** Out-of-domain sites are background.
+  8. **Shells.** No custom shells in v1. Windows exist only inside `Global(; window)`.
+  9. **`largest_piece`.** Comes with P6.9.
+  10. **Full shell.** `Local()` refuses a full shell of the losing cell, as CC3D does.
+  11. **CC3D claims.** Check the CC3D 4.3.1 source before claiming any behaviour is "exactly CC3D".
+  12. **Euler tracker.** A cell-scope Euler-characteristic tracker is added now.
+- **Consequences.** Rulings 3 and 10 change `Local()`'s dynamics wherever proposals reach past the face neighbours, or wherever a full shell is reachable.
+  - **Akeeb.** It uses von Neumann proposals, so no change is expected. P6.3g confirms this with the frozen record test and an A/B.
+  - **Re-freezes.** Pins of the legacy `MerksVasculogenesis` `rule = :local` and of full-shell acceptance are re-frozen through a test author.
+  - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
+  - **Stop rule.** A major slowdown stops the work for a question to the maintainer (standing rule). The rule values are plain structs, so no MTK friction is expected.
+- **Items.** P6.3g (surface), P6.3h (shell kernels), P6.3i (negative controls), P6.3j (Euler tracker) and P6.3k (CC3D source check). Also P6.0ae (ruled) and an amendment to P6.9. They are scheduled alongside the foam streams (D-186).
+
+## D-190 P6.4r: reproduction 04 (foam, Jiang et al. 1999) test frozen (2026-10-08; coordinator, from the repro 04 test author; under D-186)
+
+- **Frozen test.** `reproductions/04_foam.jl` (commit 27890d50, sha256 `b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d`). Rows V1–V20 are pre-registered with the bands of spec 04 §5.2.
+- **Tiers.**
+  - V1 (interior hexagon share ≥ 0.95), V1b (μ2(n) ∈ [0.3, 0.6]), PREP and V19 run on SMOKE (2 foams) and FULL (10).
+  - V2–V20 run on FULL with 5 replicates, plus the record tier.
+- **Negative controls.** C-V1, C-V1b (counting the wall as a side gives 0.109; periodic y gives 0), C-V9, C-V12, C-V16 and C-V18, plus two in the SMOKE shear check.
+- **Calibrations.** These are pre-registered and are not tuned against the results.
+  - **A-1 (κ).** Set in two stages: a J = 3 grid fixes κ from γ₀/J ≈ 1.9, and the V5 scan then runs in paper units.
+  - **A-2 (wall).** Closed y with no wall cells. The brick wall then gives μ2(n) = 7/16, the paper's 0.437.
+  - **A-5 (time scale, new).** τ = 1/ū ≈ 3.45, because our MCS runs about 3.4× slower than the paper's with a uniform neighbour. Every shear time is in paper MCS. τ is listed as a deviation (DV1).
+  - **A-8 (preparation).** Anneal at T = 3 for 10 MCS, then relax at T = 0 for 1000 MCS. Coarsen at Γ = 0 and T = 3 until μ2(n) reaches its target, then relax.
+  - **A-14.** The two low-μ2(a) foams run on 320².
+  - **A-15 (T1 counting).** `:t1`.
+- **Shear gating (accepted).** The shear rows are gated on P6.4a1. Until it lands, the record tier is `@test_broken`; once it lands, the record tier fails until a FULL record exists. P6.4a1 is reviewed and merges first, so in practice the gate is open.
+- **FULL cost.** About 4 ms per MCS on the Mac, so about 150 CPU-h, or 6–8 h on the PC. It runs on the PC (D-157) after the page implementation, outside benchmark windows.
+- **Early signal.** V18 (< 0.5) reached 0.50–0.77 at β = 0.05 in reduced runs. A FAIL is reported under D-154, not tuned away.
