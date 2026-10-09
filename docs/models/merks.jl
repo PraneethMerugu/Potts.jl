@@ -102,7 +102,7 @@
 #     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
 #                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
 #     # rule = :soft: the authors' connectivity penalty
-#     @drive copy => E₀ * ((kind[old] == endothelial) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
+#     @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
 #     @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)
 #     @boundary c begin
 #         sites(kind == border) => Dirichlet(0.0)
@@ -187,7 +187,7 @@ nothing #hide
 # variant because it builds in fewer ingredients. It is **not** the paper's model. Its
 # deviations from the paper:
 #
-# - connectivity is a hard veto (`rule = :local`), not the soft ``E_0`` penalty;
+# - connectivity is a hard veto (`Local()`), not the soft ``E_0`` penalty;
 # - no frozen border: the closed lattice walls cost nothing (paper: ``J(c, B) = 100``);
 # - the field has a zero-flux boundary (the authors' code holds ``c = 0`` on the border);
 # - the field is stepped after the sweep, not before it, and is clipped at 0;
@@ -273,8 +273,8 @@ nothing #hide
 #
 # A constraint vetoes copies. The paper penalises copies that would split a cell
 # (an energy threshold above 2000, p. 49); here such copies are forbidden outright. The
-# `:local` rule decides from the 8 neighbours of the target site whether the losing cell
-# stays in one piece.
+# default rule, `Local()`, decides from the 8 neighbours of the target site whether the
+# losing cell stays in one piece (see [Connectivity](@ref manual-connectivity)).
 #
 # ### Step 9: the sweep
 #

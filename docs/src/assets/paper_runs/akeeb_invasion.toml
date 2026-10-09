@@ -7,7 +7,6 @@ deviations = "Dynamics seed differs from the authors' unseeded CC3D run. Reprodu
 framerate = 24
 frames = 235
 git_commit = "cda818379"
-hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "akeeb_state(; lattice = (500, 300), pp = 0.5) (default layout seed 0x5cd2609, seeding = :authors)"
 julia = "1.12.6"
 lattice = [500, 300]

@@ -13,7 +13,8 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006):
 - `∂c/∂t = D∇²c + α δ_cell − ε c (1 − δ_cell)` (Eq. 6): cells secrete, the chemoattractant
   decays only in the matrix. The field is advanced by explicit Euler, clipped at zero.
 - Cells stay connected: a copy may not split a cell (a hard veto for the paper's
-  connectivity penalty; the CompuCell3D one-arc rule).
+  connectivity penalty; `Local()`, the CompuCell3D rule: one arc of the losing cell on the
+  8-ring, no full ring, and the gaining cell owns a face neighbour of the target).
 
 Defaults are the 2006 parameter set in lattice units (2 µm/px, 30 s/MCS):
 `T = 50`, `χ = 1000`, `J_cc = 40`, `J_cM = 20`, `D = 0.75` (10⁻¹³ m²/s),
@@ -72,7 +73,7 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
         @drive copy => -χ * (c[target] - c[source])
     end
     @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
-    @constraint connectivity(endothelial; rule = :local)
+    @constraint connectivity(endothelial)
     @sweep Metropolis(; temperature = T)
 end
 
@@ -227,9 +228,9 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
                    (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
     if _merks_choice(rule, (:soft, :hard), "Merks2006", :rule) === :soft
-        @drive copy => E₀ * ((kind[old] == endothelial) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
+        @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
     else
-        @constraint connectivity(endothelial; rule = :arc_or_pair)
+        @constraint connectivity(endothelial; rule = ArcOrPair())
     end
     @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)
     @boundary c begin

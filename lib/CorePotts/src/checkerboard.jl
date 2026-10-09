@@ -147,7 +147,7 @@ end
     end
 end
 
-struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2}
+struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2, CO}
     prio::P
     source::S
     claims::NTuple{2, C}
@@ -165,6 +165,9 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2}
     idbits::Int
     propose!::K1
     commit!::K2
+    # whole-cell connectivity (P6.9a): `nothing`, or the lists, counter and kernels of
+    # `ConnBuffers`; without it the colour loop is exactly the one above
+    conn::CO
 end
 
 # Dedicated kernels for the hot path (`@Const` marks read-only buffers for the device).
@@ -203,7 +206,8 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))),
         has_reads(f) ? (zeros_u32(max(ncell, 1)), zeros_u32(max(ncell, 1))) : (nothing, nothing),
         zeros_u32(1), _track_buffers(backend, f.track, maxsites, nsites(lat)), Vector{Color{N}}(cs), [_groupsize(backend, ncolorsites(c)) for c in cs],
-        collect(1:length(cs)), Ref(1), idbits, _kernels(backend, f.track)...)
+        collect(1:length(cs)), Ref(1), idbits, _kernels(backend, f.track)...,
+        _conn_buffers(backend, f.connectivity, maxsites))
 end
 
 _track_buffers(backend, ::Nothing, maxsites, n) = nothing
@@ -239,7 +243,11 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
             color, cache.idbits), cache.track)
         cargs = _with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n),
             cache.track)
-        if g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
+        if cache.conn !== nothing           # whole-cell connectivity (a type-level branch)
+            _conn_color!(cache.conn, g, n, (cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law,
+                key, mcs, color, cache.idbits, cache.track), (st, claim, next_claim, wclaim, next_wclaim, cache.prio,
+                cache.source, f, p, ctx, color, ncell, n, cache.track))
+        elseif g >= n                   # CPU, one workgroup: plain loops (see `_launch`)
             for j in 1:n
                 propose_body!(j, pargs...)
             end
@@ -256,7 +264,7 @@ function checkerboard_mcs!(st, cache::CheckerboardCache, f::F, p, ctx, law::L,
     # the next color's buffer was cleared by the last commit; with an odd number of colors
     # that is not buffer 1, so the parity persists across MCS
     cache.buffer[] = buf
-    return length(order) * 2
+    return length(order) * _conn_launches(cache.conn)
 end
 
 function _color_order!(order, key::RNGKey, mcs::Integer)
@@ -268,4 +276,239 @@ function _color_order!(order, key::RNGKey, mcs::Integer)
         order[i], order[j] = order[j], order[i]
     end
     return order
+end
+
+# ---------------------------------------------------------------------------------------
+# Whole-cell connectivity on the checkerboard (P6.9a, D-075 Q6)
+#
+# Per colour, between the propose and commit kernels:
+#  - the copies that need the exact floods (`f.defer`: cell-scope `pieces`, an inline
+#    `Global` without window) are listed by the propose kernel and run in list order by one
+#    work item over the flood scratch (`serial_conn_kernel!`; a host loop on the CPU). They
+#    read only cells no other copy of the colour writes (the claims), so σ is as at propose;
+#  - the accepted copies whose `Global` local test fails are compacted into a list (an
+#    atomic counter) instead of claiming. The deferred kernel searches each one (in its
+#    window: an `MVector` stack and visited bits, no allocation), raises its claims if it
+#    passes, so the commit is unchanged, and counts a refusal for want of window in
+#    `deferred` (read into `stats.connectivity_deferred` at host read points). A veto
+#    without window searches exactly over the flood scratch: the list then runs in order
+#    on one work item (`global_serial_kernel!`).
+# The commit kernel resets both counters. Extra launches per colour: one per list the model
+# has (`_conn_launches`), so 4 per MCS in 2D (4 colours) for a `Global` veto.
+
+struct ConnBuffers{G, K1, K2, K3, K4, K5}
+    gl::G               # (; glist, gcount, slist, scount, deferred)
+    host::Bool          # the CPU backend: the lists run as host loops
+    post::Bool          # the model has a `Global` veto (the deferred list)
+    exact::Bool         # some veto has no window: the deferred list runs serially
+    defer::Bool         # the model defers copies to the serial floods (the serial list)
+    propose!::K1
+    serial!::K2
+    global!::K3
+    global_serial!::K4
+    commit!::K5
+end
+
+_conn_buffers(backend, ::Nothing, maxsites) = nothing
+function _conn_buffers(backend, h::ConnectivityHooks, maxsites)
+    z(T, n) = KernelAbstractions.zeros(backend, T, n)
+    gl = (; glist = z(Int32, maxsites), gcount = z(UInt32, 1), slist = z(Int32, maxsites), scount = z(UInt32, 1),
+        deferred = z(UInt32, 1))
+    return ConnBuffers(gl, backend isa KernelAbstractions.CPU, h.post !== nothing, h.exact_veto, h.defer !== nothing,
+        propose_conn_kernel!(backend), serial_conn_kernel!(backend), global_conn_kernel!(backend),
+        global_serial_kernel!(backend), commit_conn_kernel!(backend))
+end
+
+_conn_launches(::Nothing) = 2
+_conn_launches(c::ConnBuffers) = 2 + c.post + c.defer
+
+# the claims of an accepted copy (as `propose_body!`)
+@inline function _raise_claims!(claim, wclaim, st, f, p, prop, ctx, won)
+    a, b = prop.old, prop.new
+    _claim!(claim, a, won)
+    _claim!(claim, b, won)
+    writes = f.claims(st, p, prop, ctx)
+    for c in writes
+        _claim!(claim, Int32(c), won)
+    end
+    if has_reads(f)
+        _claim!(wclaim, a, won)
+        _claim!(wclaim, b, won)
+        for c in writes
+            _claim!(wclaim, Int32(c), won)
+        end
+        for c in f.reads(st, p, prop, ctx)
+            _claim!(claim, Int32(c), won)
+        end
+    end
+    return nothing
+end
+
+# append colour index `j` to a list (each j at most once per colour: count ≤ maxsites = length)
+@inline function _push_list!(list, count, j)
+    i = Atomix.@atomic count[1] += UInt32(1)        # count has one entry
+    @inbounds list[i] = Int32(j)
+    return nothing
+end
+
+# `propose_body!` with the connectivity hooks: `SERIAL = false` in the propose kernel (copies
+# that need the floods are listed, the veto runs its local test and lists undecided copies),
+# `true` in the serial kernel (the floods run, the veto decides at once)
+@inline function propose_conn_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key,
+        mcs, color, idbits, tk, gl, ::Val{SERIAL}) where {SERIAL}
+    lat = ctx.lattice
+    x = color_site(color, j)
+    t = linear_index(lat, x)
+    rd, ra, rp, _ = draw(key, mcs, t, STREAM_PROPOSAL)
+    dir = bounded(rd, length(ctx.proposal)) + 1
+    inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
+    won = UInt32(0)
+    s = 0
+    if inside && is_mobile(ctx.mobility, t) && is_mobile(ctx.mobility, linear_index(lat, y))
+        s = linear_index(lat, y)
+        a = @inbounds st.σ[t]
+        b = @inbounds st.σ[s]
+        if a != b
+            prop = Proposal(t, s, x, dir, a, b)
+            if !SERIAL && has_defer(f) && _defer(f)(st, p, prop, ctx)
+                _push_list!(gl.slist, gl.scount, j)                     # the serial kernel runs it
+            elseif f.constraint(st, p, prop, ctx)
+                dH0 = f.delta_H(st, p, prop, ctx)
+                temperature = f.temperature(st, p, prop, ctx)
+                T = typeof(temperature)
+                dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
+                if !isfinite(dH)
+                    @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
+                elseif accept(law, T(dH), temperature, uniform(T, ra))
+                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # as `propose_body!`
+                    code = has_post(f) ? _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal()) : GLOBAL_PASS
+                    if code == GLOBAL_PASS || (code == GLOBAL_WINDOW && !SERIAL)
+                        # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
+                        tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
+                        if code == GLOBAL_PASS
+                            _raise_claims!(claim, wclaim, st, f, p, prop, ctx, won)
+                        else
+                            _push_list!(gl.glist, gl.gcount, j)           # the deferred kernel decides
+                        end
+                    else
+                        code == GLOBAL_WINDOW && Atomix.@atomic gl.deferred[1] += UInt32(1)
+                        won = UInt32(0)
+                    end
+                end
+            end
+        end
+    end
+    @inbounds prio[j] = won
+    @inbounds source[j] = s
+end
+
+# the deferred `Global` search of list entry `i` (its copy was accepted with priority prio[j])
+@inline function global_deferred_body!(i, prio, source, claim, wclaim, st, f, p, ctx, color, gl)
+    j = Int(@inbounds gl.glist[i])                   # i ≤ gcount ≤ maxsites
+    won = @inbounds prio[j]
+    lat = ctx.lattice
+    x = color_site(color, j)
+    t = linear_index(lat, x)
+    s = @inbounds source[j]
+    prop = Proposal(t, s, x, 0, @inbounds(st.σ[t]), @inbounds(st.σ[s]))
+    code = _post(f)(st, p, prop, ctx, GlobalSearch())
+    if code == GLOBAL_PASS
+        _raise_claims!(claim, wclaim, st, f, p, prop, ctx, won)
+    else
+        code == GLOBAL_WINDOW && Atomix.@atomic gl.deferred[1] += UInt32(1)
+        @inbounds prio[j] = UInt32(0)
+    end
+    return nothing
+end
+
+@kernel function propose_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl)
+    j = @index(Global, Linear)
+    propose_conn_body!(j, prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl, Val(false))
+end
+# one work item: the listed copies in list order, over the flood scratch
+@kernel function serial_conn_kernel!(prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk, gl)
+    _ = @index(Global, Linear)
+    for i in 1:Int(@inbounds gl.scount[1])
+        propose_conn_body!(Int(@inbounds gl.slist[i]), prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs,
+            color, idbits, tk, gl, Val(true))
+    end
+end
+@kernel function global_conn_kernel!(prio, @Const(source), claim, wclaim, st, f, p, ctx, color, gl)
+    i = @index(Global, Linear)
+    if i <= Int(@inbounds gl.gcount[1])
+        global_deferred_body!(i, prio, source, claim, wclaim, st, f, p, ctx, color, gl)
+    end
+end
+# one work item: the deferred list in order (a veto without window: the exact search)
+@kernel function global_serial_kernel!(prio, @Const(source), claim, wclaim, st, f, p, ctx, color, gl)
+    _ = @index(Global, Linear)
+    for i in 1:Int(@inbounds gl.gcount[1])
+        global_deferred_body!(i, prio, source, claim, wclaim, st, f, p, ctx, color, gl)
+    end
+end
+@kernel function commit_conn_kernel!(st, claim, next_claim, wclaim, next_wclaim, @Const(prio), @Const(source), f, p, ctx,
+        color, nclear, nthreads, tk, gl)
+    j = @index(Global, Linear)
+    commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
+    if j == 1                                        # the lists were consumed: empty them
+        @inbounds gl.gcount[1] = UInt32(0)
+        @inbounds gl.scount[1] = UInt32(0)
+    end
+end
+
+# One colour with the connectivity hooks: propose, the serial list, the deferred list, commit.
+function _conn_color!(c::ConnBuffers, g, n, pargs, cargs)
+    gl = c.gl
+    prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk = pargs
+    if g >= n
+        for j in 1:n
+            propose_conn_body!(j, pargs..., gl, Val(false))
+        end
+    else
+        c.propose!(pargs..., gl; ndrange = n, workgroupsize = g == 0 ? nothing : g)
+    end
+    if c.defer
+        if c.host
+            for i in 1:Int(gl.scount[1])
+                propose_conn_body!(Int(gl.slist[i]), pargs..., gl, Val(true))
+            end
+        else
+            c.serial!(pargs..., gl; ndrange = 1, workgroupsize = 1)
+        end
+    end
+    if c.post
+        if c.host
+            for i in 1:Int(gl.gcount[1])
+                global_deferred_body!(i, prio, source, claim, wclaim, st, f, p, ctx, color, gl)
+            end
+        elseif c.exact
+            c.global_serial!(prio, source, claim, wclaim, st, f, p, ctx, color, gl; ndrange = 1, workgroupsize = 1)
+        else
+            c.global!(prio, source, claim, wclaim, st, f, p, ctx, color, gl; ndrange = n)
+        end
+    end
+    if g >= n
+        for j in 1:n
+            commit_body!(j, cargs...)
+        end
+        gl.gcount[1] = UInt32(0)
+        gl.scount[1] = UInt32(0)
+    else
+        c.commit!(cargs..., gl; ndrange = n, workgroupsize = g == 0 ? nothing : g)
+    end
+    return nothing
+end
+
+# Read point of the deferred-refusal counter: added into `stats.connectivity_deferred` and
+# zeroed (one counted copy on a device).
+_fold_deferred!(integ) = _fold_deferred!(integ.stats, integ.cache)
+_fold_deferred!(stats, cache) = nothing
+_fold_deferred!(stats, cache::CheckerboardCache) = _fold_deferred!(stats, cache.conn)
+_fold_deferred!(stats, ::Nothing) = nothing
+function _fold_deferred!(stats, c::ConnBuffers)
+    d = c.gl.deferred
+    h = _ondevice(d) ? _to_host(stats, d) : d
+    stats.connectivity_deferred === nothing || (stats.connectivity_deferred += Int(h[1]))
+    fill!(d, UInt32(0))
+    return nothing
 end

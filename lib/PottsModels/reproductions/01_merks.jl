@@ -26,8 +26,9 @@
 # Every result comes from the committed full run
 # `lib/PottsModels/reproductions/data/01/full-2026-10-08/`. It covers 590 runs at the papers'
 # lattice sizes and replicate counts, at commit `3f1c441a`, on an AMD Ryzen AI Max+ 395 (CPU
-# backend, 12 threads). The page reads the record and does not rerun it. **36 of the 37
-# pre-registered checks pass. V-C12, the displacement ratio, fails.**
+# backend, 12 threads). The page reads the record and does not rerun it. **All 37
+# pre-registered checks pass.** V-C12, the displacement ratio, is read from MCS 0 as in the
+# paper's figure (D-200), from the record's stored snapshots without new runs.
 
 using Potts, PottsModels
 using MakiePotts, CairoMakie
@@ -266,10 +267,10 @@ let
     end
     errorbars!(ax, 1:4, m(p9), sd(p9); color = ours, whiskerwidth = 6)
     scatter!(ax, 1:4, m(p9); color = ours)
-    ## V-C12, 01b Fig. 6E: mean displacement over 160 h (the failing check)
-    rep = filter(r -> r["row"] == "V-C12", record_tsv("replicates.tsv"))
-    dmu(ci) = 2 .* [parse(Float64, r["displacement_sites"]) for r in rep if r["CI"] == ci]   # 2 µm per site
-    ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E (FAIL)", ylabel = "displacement (µm)", xticks = (1:2, ["CI", "no CI"]),
+    ## V-C12, 01b Fig. 6E: mean displacement from MCS 0 to code MCS 19 300 (D-200)
+    rep = record_tsv("vc12_mcs0.tsv")
+    dmu(ci) = 2 .* [parse(Float64, r["displacement_sites_0"]) for r in rep if r["CI"] == ci]   # 2 µm per site
+    ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E", ylabel = "displacement from MCS 0 (µm)", xticks = (1:2, ["CI", "no CI"]),
         limits = ((0.4, 2.6), (0, 100)))
     for (k, y) in ((1, 85.0), (2, 42.0))
         paperband!(ax, k - 0.3, k + 0.3, y - 1.5, y + 1.5)
@@ -301,8 +302,9 @@ end
 
 # The 2006 runs reproduce the claim of 01a: elongated cells make a network (V-E1, V-E5)
 # and adhesion is not needed for it (V-E6). The 2008 sweeps follow the papers' curves within
-# tolerance at every read point. Only V-C12 misses: the contact-inhibited sprout moves
-# 1.26 × as far as the uninhibited one, where the paper has about 2.
+# tolerance at every read point. In V-C12 the contact-inhibited cells move 82.8 µm from
+# where they started and the uninhibited ones 41.1 µm, a ratio of 2.02, where the paper has
+# about 85 and 42 µm.
 #
 # ### The full-run videos
 #
@@ -337,9 +339,131 @@ let n = length(record_verdicts)
 end
 
 # V-C3 was the at-risk row before the full run (D-153). Its low plateau now passes at
-# 0.377. V-C12 fails: the paper does not define its displacement or say whether its 160 h
-# include the relaxation, and our framed lattice bounds the sprout. The question is on our
-# open question list. Every check is in the Details.
+# 0.377. V-C12 measures each cell's centroid displacement from MCS 0, the start before the
+# 100 relaxation MCS, to code MCS 19 300, as 01b Fig. 6E does: its curves start at 0 and
+# jump within the first hour. That jump is the relaxation. The fragments of the initial
+# cluster inflate to the target area and push outwards, about 26 µm in the first 100 MCS in
+# both arms. Measured from MCS 0 the jump adds to the inhibited cells' outward sprouting and
+# is largely undone by the uninhibited cluster's contraction. Our first reading started at
+# MCS 100, after the jump, and gave 68.1 against 54.0 µm, a ratio of 1.26 that failed the
+# band [1.5, 2.5]. D-200 moved the frozen definition to the paper's origin; the band is
+# unchanged. The record's snapshots hold MCS 0, 100 and 19 300 only, so the end stays at
+# 19 300, where the paper's axis runs to about 19 800 (D-200). Every check is in the
+# Details.
+#
+# ### 01b figures against the digitised curves
+#
+# D-202 pre-registers 133 points read off 01b Figs. 5, 7–10 and 12, Fig. 13's Σ ΔH, and
+# 16 shape rows (the files, reading method and uncertainty are in
+# `test/reproductions/data/01b/`). Each colour is one curve. Open markers on a dashed line
+# are the paper's digitised values, with its ± 1 SD where the figure draws one. Filled
+# markers on a solid line are ours, the mean ± sd of the replicates in the record
+# `data/01/full-01b-*` (10 per point; 100 per arm in Figs. 12 and 13). A curve passes when at
+# most max(1, ⌊0.1 n⌋) of its n points fall outside the paper's band.
+
+const RECORD_01B = let d = joinpath(pkgdir(PottsModels), "reproductions", "data", "01")
+    r = filter(n -> startswith(n, "full-01b-") && isdir(joinpath(d, n)), readdir(d))
+    isempty(r) ? nothing : joinpath(d, only(r))
+end
+function tsv01b(path)
+    lines = filter(!isempty, readlines(path))
+    head = split(lines[1], '\t')
+    return [Dict(String(h) => String(v) for (h, v) in zip(head, split(l, '\t'; keepempty = true))) for l in lines[2:end]]
+end
+const DIGI_01B = joinpath(pkgdir(PottsModels), "test", "reproductions", "data", "01b")
+b01_verdicts = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "verdicts.tsv"))
+b01_causes = (RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))) ? Dict{String, String}[] :
+             tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+b01_rows = filter(v -> !startswith(v["check"], "point ") && v["control"] == "false", b01_verdicts)
+b01_ctls = filter(v -> v["control"] == "true", b01_verdicts)
+mdcell(s) = replace(s, "|" => "\\|")
+function b01_deviation_row(v)
+    c = findfirst(d -> d["row"] == v["row"] && d["check"] == v["check"], b01_causes)
+    cause = c === nothing ? "not yet diagnosed" : b01_causes[c]["suspected_cause"]
+    status = c === nothing ? "not an author question" : b01_causes[c]["author_question"]
+    return "| 01b $(v["row"]) $(v["check"]) (FAIL) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | $cause | $status |"
+end
+b01_deviation_rows = [b01_deviation_row(v) for v in b01_rows if v["result"] == "FAIL"]
+if RECORD_01B === nothing
+    Markdown.parse("**Provisional.** The 01b record (1330 runs, D-202) has not landed yet, so the panels show " *
+                   "the paper's digitised curves alone and no 01b verdict is claimed.")
+else
+    p01b = TOML.parsefile(joinpath(RECORD_01B, "provenance.toml"))
+    Markdown.parse("**$(count(v -> v["result"] == "PASS", b01_rows)) of $(length(b01_rows)) 01b rows pass**, and " *
+                   "$(count(v -> v["result"] == "FAIL", b01_ctls)) of $(length(b01_ctls)) negative controls fail as " *
+                   "required. Record `$(basename(RECORD_01B))`: commit `$(p01b["commit"][1:8])`, $(p01b["cpu"]) " *
+                   "($(p01b["threads"]) threads), $(p01b["jobs"]) runs. Every 01b check is in the Details.")
+end
+
+let
+    curvecolor = Dict(zip(["CI", "noCI", "CI1024", "noCI128", "ER50", "ER200", "EO200"], Makie.wong_colors()))
+    curvecolor["CI128"] = curvecolor["CI"]
+    curvecolor["noCI128"] = curvecolor["noCI"]
+    curvecolor["EO200"] = Makie.wong_colors()[4]          # yellow is too faint on white
+    curvename = Dict("CI" => "CI", "noCI" => "no CI", "CI128" => "CI, 128 cells", "CI1024" => "CI, 1024 cells",
+        "noCI128" => "no CI, 128 cells", "ER50" => "ext.-retr., T = 50", "ER200" => "ext.-retr., T = 200",
+        "EO200" => "ext.-only, T = 200")
+    num(s) = parse(Float64, s)
+    sweeps = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "sweeps.tsv"))
+    series = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "series.tsv"))
+    function paper!(ax, file, curve; scale = 1.0)
+        rows = sort(filter(r -> r["curve"] == curve, tsv01b(joinpath(DIGI_01B, file))); by = r -> num(r["x"]))
+        x, y, c = num.(getindex.(rows, "x")), scale .* num.(getindex.(rows, "y")), curvecolor[curve]
+        sd = filter(r -> r["sd"] != "NA", rows)
+        isempty(sd) || errorbars!(ax, num.(getindex.(sd, "x")), num.(getindex.(sd, "y")), num.(getindex.(sd, "sd"));
+            color = (c, 0.5), whiskerwidth = 4)
+        lines!(ax, x, y; color = c, linestyle = :dash)
+        scatter!(ax, x, y; color = :white, strokecolor = c, strokewidth = 1.5, markersize = 8, label = curvename[curve])
+    end
+    function ours!(ax, fig, curve)
+        rows = filter(r -> r["fig"] == fig && r["curve"] == curve, sweeps)
+        isempty(rows) && return
+        xs = sort(unique(num.(getindex.(rows, "x"))))
+        C = [num.(getindex.(filter(r -> num(r["x"]) == x, rows), "C_N")) for x in xs]
+        c = curvecolor[curve]
+        errorbars!(ax, xs, mean.(C), std.(C); color = c, whiskerwidth = 4)
+        scatterlines!(ax, xs, mean.(C); color = c, markersize = 7)
+    end
+    function ours_t!(ax, arm, col; scale = 1.0)
+        rows = filter(r -> r["arm"] == arm, series)
+        isempty(rows) && return
+        ts = sort(unique(num.(getindex.(rows, "t"))))
+        v = [scale .* num.(getindex.(filter(r -> num(r["t"]) == t, rows), col)) for t in ts]
+        band!(ax, ts, mean.(v) .- std.(v), mean.(v) .+ std.(v); color = (curvecolor[arm], 0.2))
+        lines!(ax, ts, mean.(v); color = curvecolor[arm], linewidth = 2)
+    end
+    fig = Figure(; size = (1200, 680))
+    panels = [("F5", "fig05.tsv", ["CI"], "χcc / χcM", "Fig. 5 · 10⁴ MCS"),
+        ("F7", "fig07.tsv", ["CI", "noCI"], "J(c,c)", "Fig. 7"),
+        ("F8", "fig08.tsv", ["CI", "noCI"], "χ(c,M)", "Fig. 8"),
+        ("F9", "fig09.tsv", ["CI", "noCI"], "s", "Fig. 9"),
+        ("F10", "fig10.tsv", ["CI128", "CI1024", "noCI128"], "D (10⁻¹³ m²/s)", "Fig. 10")]
+    for (k, (f, file, curves, xl, title)) in enumerate(panels)
+        ax = Axis(fig[(k - 1) ÷ 4 + 1, (k - 1) % 4 + 1]; title = "01b $title", xlabel = xl,
+            ylabel = k in (1, 5) ? "compactness C at N" : "", limits = (nothing, (0, 1.05)))
+        for c in curves
+            paper!(ax, file, c)
+            ours!(ax, f, c)
+        end
+        length(curves) > 1 && axislegend(ax; position = f in ("F8",) ? :rt : :rb, labelsize = 10, framevisible = false)
+    end
+    ax12 = Axis(fig[2, 2]; title = "01b Fig. 12", xlabel = "code MCS", ylabel = "C", limits = (nothing, (0.3, 1.05)))
+    ax13 = Axis(fig[2, 3]; title = "01b Fig. 13", xlabel = "code MCS", ylabel = "Σ ΔH (10⁸)")
+    for arm in ("ER50", "ER200", "EO200")
+        paper!(ax12, "fig12.tsv", arm)
+        ours_t!(ax12, arm, "C")
+        paper!(ax13, "fig13.tsv", arm)
+        ours_t!(ax13, arm, "dH"; scale = 1e-8)
+    end
+    axislegend(ax12; position = :rt, labelsize = 10, framevisible = false)
+    Legend(fig[2, 4], [MarkerElement(; marker = :circle, color = :white, strokecolor = :black, strokewidth = 1.5),
+            [LineElement(; color = :black), MarkerElement(; marker = :circle, color = :black)]],
+        ["paper (digitised) ± its SD", "ours, mean ± sd"]; framevisible = false, tellwidth = false)
+    fig
+end
+
+# Seven inferred set-ups (I1–I7 in D-202) stand in for what 01b does not state; each is a
+# provisional row of the deviations table below.
 #
 # ### Deviations
 #
@@ -371,14 +495,22 @@ Markdown.parse("""
 | χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labelled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = 200² = 40 000 (01b Methods) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts` (ROADMAP P6.E2), not a re-run for this alone (D-200 item 2) | not an author question |
 | Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
 | Copy proposal | random source, random target among its neighbours | source among the neighbours of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
 | PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
 | PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not yet on our open question list) |
 | PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not yet on our open question list) |
-| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq(4)) |
-$(join(full_deviation_rows, "\n"))
+| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); Figs. 10, 12 and 13 enter through the 01b digitised targets on inferred set-ups (I1, I2 below; D-202) | $(aq(4)) |
+| 01b I1: Figs. 12–13 start (provisional) | 256 cells, 71 Eden rounds, 8 divisions, on 502² | 256 cells (caption); no file | unstated set-up (D-202 I1; spec D-2) | $(aq(4)) |
+| 01b I2: Fig. 10 1024-cell start (provisional) | 1024 cells, 141 rounds, 10 divisions, on 402² | "400×400-pixel lattices"; no file | unstated set-up (D-202 I2; spec A-10) | $(aq(4)) |
+| 01b I3: replicates in Figs. 7–10 (provisional) | n = 10 per point | not stated (Fig. 5 states 10) | unstated (D-202 I3) | $(aq(4)) |
+| 01b I4: "no contact inhibition" (provisional) | χcc = χcM | the files' `vecadherinknockout` | the text does not define it (D-202 I4) | $(aq(4)) |
+| 01b I5: Fig. 13 H − H₀ (provisional) | Float Σ ΔH of accepted copies, chemotaxis included; sign, order and magnitude within √10 pinned | integer-truncated terms in the files | ΔH arithmetic (D-202 I5; D-050 M9) | $(aq(3)) |
+| 01b I6: time axis (provisional) | includes the 100 relaxation MCS | not stated | as the 2008 time origin row (D-202 I6) | $(aq(2)) |
+| 01b I7: Fig. 10 legend (provisional) | the flatter solid curve read as 1024 cells | the legend and the caption disagree | a figure inconsistency (D-202 I7) | $(aq(4)) |
+$(join([full_deviation_rows; b01_deviation_rows], "\n"))
 """)
 
 # ## 4. Details
@@ -468,8 +600,10 @@ Markdown.parse("""
 # substeps of 2 s. One of our MCS is one copy attempt per mobile site, the frozen frame
 # excluded: (500 − 2)² = 248 004 attempts on the 2006 lattice (1-site frame) and
 # (202 − 4)² = 39 204 on the 2008 one (2-site frame). That is exactly TST's
-# (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices, so the
-# attempt count is not a deviation (D-153 review correction).
+# (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices. The
+# 2008 paper states N = 200² = 40 000 attempts per MCS (01b Methods), 2 % more than ours. The
+# paper is the target, so this is a row of the deviations table (D-200 item 2), and the next
+# full run uses the paper's N.
 #
 # **Clocks (D-156).** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
 # use the time from the end of relaxation as their primary axis; the code's MCS counter
@@ -508,7 +642,7 @@ Markdown.parse("""
 # | V-C9 C vs T, both modes | 01b Fig. 11 | ext-only > 0.85 and ext-retr < 0.5 at T = 50; both < 0.3 at T = 800 | SMOKE+FULL | READY |
 # | V-C10 C(t), 256 cells on 500² | 01b Fig. 12 | — | — | **PARKED** (no Fig. 12 set-up, inferred only: D-2) |
 # | V-C11 cumulative ΔH | 01b Fig. 13 | — | — | **PARKED** (Fig. 12 set-up; bookkeeping D-17) |
-# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | ratio in [1.5, 2.5] | FULL | READY |
+# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | from MCS 0 to code MCS 19 300 (D-200; was MCS 100): ratio in [1.5, 2.5] | FULL | READY |
 #
 # The reduced (SMOKE) forms: V-E1 on the density-matched 200² at 12 h, one seed; V-C2 and
 # V-C9 at 1000 MCS, one seed, with margins of 0.2; V-E10 over 1000 MCS (one elongated,
@@ -694,8 +828,8 @@ full = if FULL
                                       (compactness(r[5000]), compactness(r[5100]))), 1:10)
                for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
                                                  (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (r = run08(seed, [100, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),
-        zip([(mean(I[1] for I in findall(==(c), r[100])), mean(I[2] for I in findall(==(c), r[100]))) for c in 2:129],
+    disp(seed; p) = (r = run08(seed, [0, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),            # from MCS 0 (D-200)
+        zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
             [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))
     vc1 = (; ci = tmap(i -> network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5),
@@ -905,7 +1039,7 @@ if FULL
     addrow!("V-C9 T = 800", "break-up", "ext-only $(fmt(c9(800.0, :extension_only))); ext-retr $(fmt(c9(800.0, :extension_retraction)))",
         "both < 0.3", "FULL", c9(800.0, :extension_only) < 0.3 && c9(800.0, :extension_retraction) < 0.3)
     ratio12 = mean(full.vc12.ci) / mean(full.vc12.no)
-    addrow!("V-C12 displacement CI / no CI over 160 h", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
+    addrow!("V-C12 displacement CI / no CI, MCS 0 to 19 300", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
         "$(fmt(2mean(full.vc12.ci))) / $(fmt(2mean(full.vc12.no))) µm = $(fmt(ratio12))", "[1.5, 2.5]", "FULL", 1.5 <= ratio12 <= 2.5)
     addrow!("V-C1 1000 cells, CI", "network (01b Fig. 2D)", "$(count(isnetwork, full.vc1.ci))/5 networks", "≥ 4/5", "FULL", count(isnetwork, full.vc1.ci) >= 4)
     addrow!("V-C1 1000 cells, no CI", "islands (01b Fig. 2C)", "shares $(join(fmt.(getproperty.(full.vc1.no, :share)), ", "))",
@@ -937,7 +1071,10 @@ Markdown.parse(full_verdicts_md)
 
 Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) (" *
                "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
-               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`.")
+               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
+               "on $(record_prov["vc12_mcs0"]["date"]) ($(record_prov["vc12_mcs0"]["decision"])) from the stored snapshots, " *
+               "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
+               "the amended frozen test's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
 
 # The 2008 sweep means at both clocks (`points.tsv`; D-153 M6). The binding reading is the
 # code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:
@@ -968,6 +1105,18 @@ end
 failing = [["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in rows if r.result == "FAIL"];
            ["- $(v["row"]) $(v["check"]) (full run): ours $(v["ours"]), tolerance $(v["rule"])." for v in record_verdicts if v["result"] == "FAIL"]]
 Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
+
+# ### 01b: every check
+#
+# Every row and negative control of the frozen 01b test (D-202), as the record's
+# `verdicts.tsv` gives them; the frozen record tier recomputes each from `sweeps.tsv` and
+# `series.tsv`. Controls must fail.
+
+Markdown.parse(RECORD_01B === nothing ? "No 01b record yet (provisional; see §3)." :
+               "| Row | Check | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
+               join(["| $(v["row"]) | $(v["check"]) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | " *
+                     (v["control"] == "true" ? "$(v["result"]) (control; must fail)" : v["result"]) * " |"
+                     for v in b01_verdicts], "\n"))
 
 # ### Open questions for the authors
 #
@@ -1011,6 +1160,8 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156; ROADMAP P6.3f |
 # | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one colour per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172; ROADMAP P6.3f |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
+# | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
+# | 2026-10-09 | The 01b digitised targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitised curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | D-202 |
 #
 # ```@raw html
 # </details>

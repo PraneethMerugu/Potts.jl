@@ -374,7 +374,7 @@ const P60AR_FINGERPRINTS = Dict{String, UInt64}(
     "cube" => 0x42f8b19ae169b688,
     "sq Float32" => 0x70e73072398309e0,
     "SingleDivisionFixture" => 0x13a4ddc2bb677287,
-    "AkeebInvasion" => 0x8d33bd0bb1eddd1c,
+    "AkeebInvasion" => 0xc0529959e030d017,   # re-pinned under P6.3g (D-193): fingerprint only
 )
 
 # `proposal = Moore(1)`: the old pins (P6.0p, 4e81e1eb) must move; the new values are

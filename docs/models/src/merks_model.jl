@@ -44,7 +44,7 @@
     #> equation
     @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
     #> constraint
-    @constraint connectivity(endothelial; rule = :local)
+    @constraint connectivity(endothelial)
     #> sweep
     @sweep Metropolis(; temperature = T)
 end

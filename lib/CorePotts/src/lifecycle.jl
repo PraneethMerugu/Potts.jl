@@ -459,7 +459,7 @@ end
     rebuild_trackers!(st, ctx, backend)
 
 Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`, `surface`
-(over `ctx.surface`, if both exist), moments (`anchor`, `m1`, `m2`), the cluster
+(over `ctx.surface`, if both exist), `euler` and `euler_full`, the `pieces` columns, moments (`anchor`, `m1`, `m2`), the cluster
 trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
 `ctx.contact_counts` (`ContactCounts`). Host-side; used at
 lifecycle events and after host edits of `σ`.
@@ -481,6 +481,8 @@ function _rebuild_trackers!(stats, st, ctx, backend)
     if haskey(st.cell, :surface) && haskey(ctx, :surface)
         _copy!(stats, st.cell.surface, _recompute_surface(eltype(st.cell.surface), σ, lat, ctx.surface, cap))
     end
+    _rebuild_euler!(stats, st, σ, lat, cap)
+    _rebuild_pieces!(stats, st, σ, lat, cap)
     if haskey(st.cell, :m1)
         m = init_moments(σ, lat, cap)
         _copy!(stats, st.cell.anchor, m.anchor); _copy!(stats, st.cell.m1, m.m1); _copy!(stats, st.cell.m2, m.m2)

@@ -147,10 +147,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
             constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
             phases = _phases_parts(c, T, values, spec), lifecycle = _lifecycle(c, T),
-            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)))
+            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)),
+            connectivity = _connectivity_hooks(c, T))
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
+    # a shell-based quantity on a periodic axis of length 1 reads the target as its own
+    # neighbour: refused on the host, at build, by the one CorePotts check
+    foreach(q -> CorePotts.check_shell_lattice(hctx.lattice, q), _shell_quantities(generated))
     # every generated function, without line numbers: independent of the install path, and
     # the canonical solver spec (D-016 as amended by D-075; a model with no field or ODE has
     # none and keeps its fingerprint)
@@ -220,7 +224,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec),
-        track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}())
+        track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}(), fns.connectivity)
 end
 
 # The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
@@ -624,6 +628,15 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if c.uses_surface
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
+    # Euler characteristics (P6.3j, D-192): Int32 columns, one per adjacency the model reads
+    c.uses_euler && push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))
+    c.uses_euler_full && push!(cell, :euler_full => CorePotts.recompute_euler(σ, lat, Val(:full), ncell))
+    # cell-scope pieces (P6.9a): Int32 columns, a (pieces, largest piece) pair per adjacency read
+    for (full, P, L) in ((false, :pieces, :largest_piece), (true, :pieces_full, :largest_piece_full))
+        (full ? c.uses_pieces_full : c.uses_pieces) || continue
+        pc, lc = CorePotts.recompute_pieces(σ, lat, Val(full), ncell)
+        push!(cell, P => pc, L => lc)
+    end
     append!(cell, _contact_count_columns(c, σ, kinds, lat, ncell))          # contact folds (D-150)
     _has_bounded_draw(sys) && push!(model, CorePotts.MODEL_STATUS => zeros(UInt32, 1))
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))
@@ -715,8 +728,10 @@ function _kind_index(sys::PottsSystem, k::Symbol)
     return j - 1
 end
 
+# with the flood scratch of a model with whole-cell connectivity (P6.9a), exact (`GlobalExact`)
 _host_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations...,
-    (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...)
+    (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+    CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...)
 
 """
     energy_change(prob, u, prop)

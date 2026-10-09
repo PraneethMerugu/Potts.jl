@@ -133,6 +133,20 @@ end
 # fixed rule (D-074) and the defect, on the oracle's piece count
 p60m_rule(σ, x, old, hex) = old == 0 || p60m_pieces(σ, x, old, hex) == 1
 p60m_buggy(σ, x, old, hex) = old == 0 || p60m_pieces(σ, x, old, hex) <= 1
+# the full `Local()` default (re-frozen under D-189 rulings 3 and 10, D-191 CC3D rules 1 and
+# 2): the exactly-one rule, plus (ruling 10) a full ring of `old` (every ring site in the
+# domain and owned by `old`) is refused, plus (ruling 3) the gaining owner `new` (the medium
+# included) must own a face neighbour of x (square: the 4 face sites; hex: all 6 ring sites)
+function p60m_local(σ, x, old, new, hex)
+    old == 0 && return true
+    offs = hex ? P60M_HEX : P60M_MOORE
+    n1, n2 = size(σ)
+    ring = [(x[1] + o[1], x[2] + o[2]) for o in offs]
+    inside(y) = 1 <= y[1] <= n1 && 1 <= y[2] <= n2
+    all(y -> inside(y) && σ[y...] == old, ring) && return false          # full ring
+    p60m_pieces(σ, x, old, hex) == 1 || return false
+    return any(o -> (hex || abs(o[1]) + abs(o[2]) == 1) && inside(x .+ o) && σ[(x .+ o)...] == new, offs)
+end
 
 @testset "P6.0m: connectivity(k) rejects zero components ($label)" for (label, geo, nb, hex) in
                                                                        (("square", CorePotts.Square(), Moore(1), false),
@@ -166,7 +180,9 @@ p60m_buggy(σ, x, old, hex) = old == 0 || p60m_pieces(σ, x, old, hex) <= 1
     @test p60m_pieces(σ, (6, 4), 1, hex) == 1
     @test p60m_allows(prob, prob.u0, prop)           # still accepted
     # (e) oracle emulation over every proposal of a scattered state: the constraint equals
-    #     the exactly-one rule; the sample contains copies where the defect differs.
+    #     the exactly-one rule with `Local()`'s gain test and full-ring refusal (re-frozen
+    #     under D-189 rulings 3 and 10: on the square lattice diagonal Moore sources now meet
+    #     the gain test); the sample contains copies where the defect differs.
     σ = zeros(Int32, 12, 12)
     for i in 1:12, j in 1:12
         σ[i, j] = Int32(mod(i * 7 + j * 13 + i * j, 5) < 2 ? 1 + mod(i + j, 3) : 0)
@@ -178,7 +194,7 @@ p60m_buggy(σ, x, old, hex) = old == 0 || p60m_pieces(σ, x, old, hex) <= 1
         y = (i + o[1], j + o[2])
         σ[i, j] == σ[y...] && continue
         push!(got, p60m_allows(prob, prob.u0, p60m_prop(prob.lattice, σ, (i, j), y)))
-        push!(want, p60m_rule(σ, (i, j), σ[i, j], hex))
+        push!(want, p60m_local(σ, (i, j), σ[i, j], σ[y...], hex))
         differs += p60m_rule(σ, (i, j), σ[i, j], hex) != p60m_buggy(σ, (i, j), σ[i, j], hex)
     end
     @test differs > 0                                 # negative control: the sample can tell

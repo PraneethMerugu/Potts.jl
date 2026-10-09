@@ -1,0 +1,31 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+13	10	main	ER50	t	500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-0.161	1e8 energy units	NA	not read	12	0.03	ER50 and ER200 overlap up to ~1100 MCS
+13	10	main	ER50	t	1000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-0.654	1e8 energy units	NA	not read	12	0.05	overlap
+13	10	main	ER50	t	1500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-1.2	1e8 energy units	NA	not read	12	0.05	
+13	10	main	ER50	t	2000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-1.535	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	2500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-1.835	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	3000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.133	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	3500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.409	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	4000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.679	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	4500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.943	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER50	t	5000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-3.2	1e8 energy units	NA	not read	12	0.04	read at 4950 and extended by the local slope
+13	10	main	ER200	t	500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-0.161	1e8 energy units	NA	not read	12	0.03	ER50 and ER200 overlap up to ~1100 MCS
+13	10	main	ER200	t	1000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-0.654	1e8 energy units	NA	not read	12	0.05	overlap
+13	10	main	ER200	t	1500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-1.4	1e8 energy units	NA	not read	12	0.05	
+13	10	main	ER200	t	2000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-1.91	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	2500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.324	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	3000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-2.696	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	3500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-3.049	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	4000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-3.393	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	4500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-3.72	1e8 energy units	NA	not read	12	0.03	
+13	10	main	ER200	t	5000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-4.03	1e8 energy units	NA	not read	12	0.04	read at 4950 and extended by the local slope
+13	10	main	EO200	t	500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	-0.022	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	1000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.033	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	1500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.077	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	2000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.145	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	2500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.265	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	3000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.432	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	3500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.607	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	4000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.792	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	4500	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	0.991	1e8 energy units	NA	not read	12	0.03	
+13	10	main	EO200	t	5000	MCS (loop counter)	H - H0 (cumulative accepted Delta H)	1.19	1e8 energy units	NA	not read	12	0.04	read at 4950 and extended by the local slope

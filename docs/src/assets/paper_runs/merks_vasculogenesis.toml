@@ -8,7 +8,6 @@ field_solver = "ExplicitEuler(substeps = 15)"
 framerate = 24
 frames = 241
 git_commit = "cda818379"
-hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "layout(merks2006_layout(; lattice = (500, 500), seed = 1), (500, 500)): 282 square 10×10 cells in the central 333×333, one-site frozen border"
 julia = "1.12.6"
 lattice = [500, 500]

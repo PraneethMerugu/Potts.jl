@@ -118,7 +118,6 @@ run_info(name; wall, rec, mp4) = Dict{String, Any}(
     "backend" => "CPU",
     "cpu" => strip(Sys.cpu_info()[1].model),
     "machine" => Sys.MACHINE,
-    "hostname" => gethostname(),
     "threads" => Threads.nthreads(),
     "solve_wall_s" => round(wall; digits = 1),
     "record_wall_s" => round(rec; digits = 1),
@@ -138,5 +137,5 @@ function write_sidecar(name, info)
 end
 
 """The caption's provenance clause: machine, backend, threads and commit of this render."""
-rendered_on() = "Rendered on $(strip(Sys.cpu_info()[1].model)) ($(gethostname())), CPU backend, " *
+rendered_on() = "Rendered on $(strip(Sys.cpu_info()[1].model)), CPU backend, " *
                 "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), commit $(git_commit())."

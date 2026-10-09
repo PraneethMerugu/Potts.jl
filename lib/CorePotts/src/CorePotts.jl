@@ -14,6 +14,7 @@ using KernelAbstractions: KernelAbstractions, @kernel, @index, @Const, @localmem
 using SciMLBase: SciMLBase, remake, reinit!, u_modified!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Serialization: Serialization
+using StaticArrays: MVector
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball, Stencil,
@@ -22,6 +23,8 @@ export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball
 export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
+export euler_change, commit_euler!, recompute_euler
+export recompute_pieces
 export ContactCount, ContactCounts, commit_contact_count!, recompute_contact_count
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, major_length, major_length_after, min_image
@@ -53,7 +56,10 @@ export read_piff, write_piff
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
 public coordinates, shift, linear_index, draw, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
-    TrackDeltaH, track_eltype, GhostFace
+    TrackDeltaH, track_eltype, GhostFace,
+    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
+    ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
+    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx
 
 include("rng.jl")
 include("lattice.jl")
@@ -65,6 +71,9 @@ include("contact_counts.jl")
 include("transfers.jl")
 include("fields.jl")
 include("drives.jl")
+include("shell.jl")
+include("euler.jl")
+include("pieces.jl")
 include("spatial.jl")
 include("relationships.jl")
 include("compartments.jl")

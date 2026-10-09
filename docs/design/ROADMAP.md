@@ -283,7 +283,7 @@ Every item's acceptance also includes the standing checks:
 - [ ] **P6.0ac** AUTHORING §12.9 wording: proposals draw a uniform mobile target, then a uniform source offset (topology audit §1); add Morpheus `boundaryLengthScaling` and CC3D's hex `surfaceMF` to the pair-counting notes.
 - [x] (merge, 2026-10-02; D-100) **P6.0ad** `Barker(; offset)` silently drops the offset: `_acceptance` (`src/problem.jl:194`) returns `CorePotts.Barker()` and `sweep_spec` accepts an offset for `:barker` without error (found by the docs author, 2026-10-01). Either carry the offset into Barker (`1/(1 + e^{(ΔH − δ)/T})`) or reject it at model build with a clear error.
   - Accept: a test that a Barker offset either changes acceptance as specified or raises at build.
-- [ ] **P6.0ae** `:arc_or_pair` at a closed edge: TST counts its frame (σ = −1) as a distinct cell on the ring, ours treats out-of-domain sites as neither medium nor a cell (D-099 review). Decide with the Merks 2008 / Act ports whether to count out-of-domain sites as a cell in `ring_cells` (re-freezing `p6_0aa_arc_or_pair_medium.jl`'s edge testset) or keep and document the difference; also make the `ring_*` sentinel independent of σ's eltype. **Ruled (D-189, ruling 5):** closed edges count as a cell inside `ArcOrPair()` only; the raw folds keep "out of domain is nothing"; lands with P6.3g.
+- [x] (with P6.3g, D-196) **P6.0ae** `:arc_or_pair` at a closed edge: TST counts its frame (σ = −1) as a distinct cell on the ring, ours treats out-of-domain sites as neither medium nor a cell (D-099 review). Decide with the Merks 2008 / Act ports whether to count out-of-domain sites as a cell in `ring_cells` (re-freezing `p6_0aa_arc_or_pair_medium.jl`'s edge testset) or keep and document the difference; also make the `ring_*` sentinel independent of σ's eltype. **Ruled (D-189, ruling 5):** closed edges count as a cell inside `ArcOrPair()` only; the raw folds keep "out of domain is nothing"; lands with P6.3g.
 - [x] (merge, 2026-10-03; D-108) **P6.0af** P6.0v3 follow-ups (review notes, D-101): a CorePotts test for a device lifecycle whose later stage fails after the fused `before` ran (`before_ran = true` handover; checked by injection only); `generated_code` should show the fused lifecycle; audit X4 typed literals in generated code (changes fingerprints, so batch it with another fingerprint change).
 - [x] (merge, 2026-10-03; D-104, D-105) **P6.0ag** (high: a Metal compile failure) Every fixed-step ODE system is expanded in place, not called through the per-cell `rhs` closure (D-103 review). Today any non-inlined rate without a gather — a Hill gene circuit, an `ifelse` chain, a long sum, a model ODE with population folds — allocates 128–640 B per MCS on the CPU and does not compile on Metal (`jl_new_opaque_closure_jlcall`). Fix: `_ode_expand(odes) = true` (or drop the closure), re-record the fingerprints `p6_0x_gather_ode_alloc.jl` pins under a new decision (D-060 style).
   - Accept: zero warm bytes and Metal compilation, bitwise equal to the CPU Float32 run, for the Hill, `ifelse`, long-sum and model-fold shapes (`/tmp/p60x_rev/` has them); values bitwise unchanged on the CPU; a non-frozen gather-ODE case in `test/gpu.jl`.
@@ -341,7 +341,8 @@ Every item's acceptance also includes the standing checks:
   - K2: S-a, one replica per work-item, for tiny lattices.
   - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
   - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
-- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.)
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.) **Folded (D-198):** this is `CheckerboardCPM(; skip_interior = true)`, done together with P6.0bk2.
+- [ ] **P6.0bk2** (D-198; after the foam FULL record lands) Remove `BoundarySiteCPM` with no alias, and add `SequentialCPM(; skip_interior = true)` with the same code path. Re-freeze 04, 15 and any other frozen tests that name BoundarySiteCPM, through a test author. Code-identity check: same RNG draws, σ and SMOKE verdicts. Add one line to each affected record README. Then `CheckerboardCPM(; skip_interior = true)` (P6.0bk).
   - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
   - Report the pinned speedup on the PC, naming machine and backend.
 - [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
@@ -553,13 +554,13 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
-- [ ] (FULL record and page merged 2026-10-08, D-184: 36/37 pass, V-C12 FAIL; 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+- [ ] (FULL record and page merged 2026-10-08, D-184; V-C12 re-defined to the MCS-0 reference 2026-10-09, D-200: 37/37 pass; 01b figure targets and video clock overlays open; the attempts row is now required by D-200 item 2, superseding "drop the Attempts per MCS row") **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
   - Remove the cell outlines (page lines ~179, 203, 234).
   - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
   - Add digitised 01b Figs 5, 7–10, 12 and 13 as targets through the M7 continuous-χ superset, with inferred parameters flagged. The model side is ready: `χcc`, `merks2008_sprout(; divisions = 8)` on 502², and `track = (:ΔH,)`.
   - Run the FULL tier on the PC, with D-146 records; the FULL run decides V-C3's low plateau.
-- [ ] **P6.3g** (D-189) Connectivity vocabulary, surface (research/connectivity-vocabulary.md §8, §14; rulings §13.1).
+- [x] (merge, 2026-10-09; D-193, D-195, D-196) **P6.3g** (D-189) Connectivity vocabulary, surface (research/connectivity-vocabulary.md §8, §14; rulings §13.1).
   - **Rule values.** `Local(; gain = true, adjacency = :face)`, `ArcOrPair()`, `Simple(; adjacency)` (2D square and hex, 3D cubic) and `connected(c; rule)`.
   - **Helper.** `connectivity(…; rule, penalty)`: the veto form in `@constraint`, the penalty form in `@drive`; misuse is a build error.
   - **Folds.** The `shell` relation, the `pieces` fold (renamed from `components` with no alias; `p6_3a` and every reference are renamed in the same change) and the `distinct` fold. The old names other than `components` stay as aliases.
@@ -569,16 +570,17 @@ Full runs are offline (D-146).
   - **Re-freezes.** Every re-freeze forced by rulings 3, 6 and 10 goes through a test author: the legacy `MerksVasculogenesis` `rule = :local` and the full-shell pins.
   - **Akeeb.** Its frozen record test plus an A/B shows no change.
   - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
-- [ ] **P6.3h** (D-189; after P6.3g) Shell kernels.
+- [x] (merge, 2026-10-09; PC A/B pending with mb12) **P6.3h** (D-189; after P6.3g) Shell kernels.
+- [ ] **P6.3g-v** (D-196) Re-render the default-build model-page video `paper_runs/merks_vasculogenesis` under the new `Local()` rule (legacy MerksVasculogenesis dynamics changed); on the PC.
   - One shell read per generated function, a 2D run-count kernel for `Local()`, and a table-driven 3D flood fill with no div/rem in the loop.
   - *Accept:* oracles unchanged; A/B ≤ 1.00 within the controls' spread (D-171); zero warm allocations; Metal and ROCm equal the CPU.
 - [ ] **P6.3i** (D-189; may fold into P6.3g) Gain-side and hole negative controls (§12) on `Moore(1)` and `NeighborOrder(2)` proposals.
-- [ ] **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
+- [x] (merge, 2026-10-09; D-192, D-194; a67f16da) **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
   - Exact local χ updates per copy from the 2×2 (2D) and 2×2×2 (3D) configurations.
   - Design note first.
   - *Accept:* enumeration oracles on small lattices; an A/B showing zero cost for models that do not use it.
 - [x] (2026-10-08; D-191) **P6.3k** (D-189, ruling 11) Check the CC3D 4.3.1 source (connectivity plugins; Akeeb's Penalty 1e5 against the current source's soft 64) before any "exactly CC3D" claim.
-- [ ] **P6.2f** (D-191) Page 10 (Akeeb) text from the CC3D source check: one sentence that the 2D XMLs ran with Penalty 1e5 (honoured in 4.3.1/4.6.0, a veto at T = 10) while CC3D ≥ 4.7.0 returns a hard-coded 64; a deviations row for the (0,0,0) off-lattice ring read at the closed bottom edge (we read off-lattice as nothing; suspected small, bottom-wall cells only, unmeasured). Through a test author if page 10's frozen test pins the deviations rows.
+- [x] (merge, 2026-10-09; D-191) **P6.2f** (D-191) Page 10 (Akeeb) text from the CC3D source check: one sentence that the 2D XMLs ran with Penalty 1e5 (honoured in 4.3.1/4.6.0, a veto at T = 10) while CC3D ≥ 4.7.0 returns a hard-coded 64; a deviations row for the (0,0,0) off-lattice ring read at the closed bottom edge (we read off-lattice as nothing; suspected small, bottom-wall cells only, unmeasured). Through a test author if page 10's frozen test pins the deviations rows.
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
@@ -619,7 +621,7 @@ Full runs are offline (D-146).
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
 - [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
-- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
+- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, ~~`BoundarySite`~~ dropped by D-198);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
   - Accept: the enumeration oracle for `MetropolisHastings()`.
@@ -633,6 +635,52 @@ Full runs are offline (D-146).
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
+
+### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
+
+Every API change here keeps the old form working, and none changes a frozen verdict unless the maintainer rules otherwise. Priority: E1, E3, E7 and E8 first, then E2 and E4, then the rest.
+
+- [ ] **P6.E1** Named kind tables and symbolic kinds.
+  - Write `J[dark, light] = 11`, symmetric unless declared otherwise, alongside the positional matrix.
+  - Results can be read as kind symbols or as a categorical (`sol[:kind]` today returns integers in `@kinds` order, with the medium first).
+  - Build errors for a table of the wrong size and for a forgotten medium.
+- [ ] **P6.E2** `attempts = k` (D-051 item 2), pulled forward from P6.4b: run in the paper's MCS (Graner–Glazier `attempts = 16`), then simplify getting_started's "3200 of our MCS are 200 of the paper's".
+- [ ] **P6.E3** `capacity`.
+  - Size it automatically, or let it grow, for growing populations (the OpenVT minimal run needs `capacity = 256` today).
+  - At minimum, on overflow, say "raise capacity to ≥ N" with N.
+- [ ] **P6.E4** `@terminate` / a `stop =` keyword (P6.4c) for cell count, edge reached and time, replacing the `CallbackSet(edge_guard, stop_at_cells)` boilerplate.
+- [ ] **P6.E5** Plot shortcuts: `pottsplot(sol, i)` and `pottsplot(sol)`, alongside `pottsplot(renderframe(…))`.
+- [ ] **P6.E6** Time to first run for a fresh user-written model.
+  - Measure it on the PC. getting_started says "about a minute".
+  - Update the sentence.
+  - If it is still about 60 s, scope precompile or workload changes for un-shipped models.
+- [ ] **P6.E7** Error-message audit.
+  - Write the ~10 most common beginner mistakes:
+    - a wrong kind name;
+    - a J of the wrong size;
+    - a forgotten medium;
+    - a misspelt section;
+    - Float64 on Metal;
+    - capacity overflow;
+    - an unknown copy-scope name;
+    - a parameter not in `@parameters`;
+    - `remake` with a wrong key;
+    - a missing `@named`.
+  - Record what each prints.
+  - Fix every unclear message so it names the offending item and suggests the fix.
+  - Add the cases to a (non-frozen) test.
+- [ ] **P6.E8** Getting started around built-in observables.
+  - Replace the hand-written `mixed_contacts` loop.
+  - `count_contacts` is symbolic-only, so either declare it as an `@observed` in the model or add a public helper for use after a run (decide in the item).
+  - Show an "everyday observables" set: contact fractions, cluster counts, MSD/displacement, volumes by kind.
+- [ ] **P6.E9** `coming_from.md`.
+  - Add the lab's common CC3D patterns that are still missing (mitosis steppable and others).
+  - Add the D-191 note to the Connectivity row: Penalty honoured in 4.3.1–4.6.0, a hard-coded 64 from 4.7.0, the hard form as the T → 0 limit.
+- [ ] **P6.E10** Docs polish.
+  - A home page led by a strip of 4–6 videos (before the MTK term table).
+  - Physical units (h, µm) next to MCS results on the paper pages.
+  - A FAQ "how fast vs CC3D" with our own labelled numbers only, no head-to-head claim (D-154).
+  - A "Start here" reading path through the manual.
 
 ### Step 5 — Fortuna (14a/14b), 3D
 
@@ -681,6 +729,7 @@ merges (phase-end checkpoint).
   - R2 `Fibres`;
   - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
     `solvers = [V => …]` for the steady/implicit field. Gate: B2.
+- [x] (merge, 2026-10-09; D-197, D-201; PC A/B pending) **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
 - **P6.9** Bauer 2009: (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
   - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
     - a deferred kernel over the compacted list of local-test failures, with an

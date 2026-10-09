@@ -175,6 +175,7 @@ These names are always available where they make sense:
 | `volume`, `surface` | sites of the cell; bonds to other owners | cell |
 | `kind`, `id`, `generation` | kind, number and generation of the cell | cell |
 | `major_length` | length of the cell's long axis | cell, energies |
+| `euler`, `euler(; adjacency = :full)` | Euler characteristic of the cell (see [below](@ref "Euler characteristic")) | cell; `euler[c]`, `euler(c; adjacency)` in drives |
 | `centroid(k)` | coordinate `k` of the centroid | cell (not energies) |
 | `integral(x)` | sum of the site expression `x` over the cell's sites | cell (not energies, drives, constraints or on-copy updates) |
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
@@ -185,3 +186,40 @@ These names are always available where they make sense:
 | `a`, `b`, `distance` | the two cells of a link, their centroid distance | edges, link rules |
 | `mcs`, `time` | the number of completed MCS, and the time (`mcs × mcs_duration`) | updates, equations, rules (`mcs`: also drives, constraints, on-copy) |
 | `cluster`, `cluster_volume`, `cluster_surface` | compartments (see [Energy](@ref manual-energy)) | cell |
+
+### Euler characteristic
+
+`euler` is the Euler characteristic χ of the cell's sites, exact after every copy, like
+`volume` and `surface`. In 2D it is pieces minus holes: a disc reads 1, a ring 0, two
+separate pieces 2. In 3D it is pieces minus tunnels plus cavities: a solid ring reads 0 and
+a hollow ball 2.
+
+```julia
+@energy begin
+    cells(epithelium) => λ_hole * (1 - euler)          # a penalty per hole of a one-piece cell
+    cells(cyst) => λ * (euler(; adjacency = :full) - 2)^2
+end
+@drive copy => μ * euler[old]                          # before-values in copy scope; the medium reads 0
+@observed χ(cell) ~ euler
+```
+
+The `adjacency` keyword says which sites are connected:
+
+- `:face`, the default: sites sharing an edge (2D) or a face (3D). The holes are read with full adjacency.
+- `:full`: sites sharing any corner. The holes are read with face adjacency.
+
+So four sites round an empty centre, touching only at corners, read `euler = 4` (four
+pieces) and `euler(; adjacency = :full) = 0` (one ring). A hexagonal lattice has one
+adjacency, and both forms give the same value.
+
+On a periodic axis χ is that of the cell on the torus. A cell that wraps round the axis
+counts the cycle as a hole: a band round a periodic 2D lattice reads 0, as does a rod
+through a periodic 3D axis. Out-of-domain sites are background, so a pocket against a
+closed wall is not a hole. A periodic axis must have length 2 or more: on a periodic axis
+of length 1 the target's neighbours wrap onto the target itself, so building a problem that
+reads `euler` on such a lattice is an error (make the axis closed, or longer).
+
+A model that reads `euler` anywhere, an observable included, tracks one `Int32` column per
+adjacency it reads (`u.cell.euler`, `u.cell.euler_full`). The column costs a read of the
+target's 8, 6 or 26 neighbours per accepted copy and per ΔH. A model that never names
+`euler` has no column and no code.

@@ -374,7 +374,7 @@ p60ah_published() = (
 )
 const P60AH_FINGERPRINTS = Dict{Symbol, UInt64}(
     :GranerGlazier => 0x04a4528dcdf3fcb8,   # re-pinned under D-122
-    :MerksVasculogenesis => 0x984e2ad5906fc999,   # re-pinned under D-122
+    :MerksVasculogenesis => 0xe51b575884b86e8d,   # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
     :P60ahAt_RK4 => 0x52fad8cebbee12ed,   # re-pinned under D-124
     :P60ahAt_Euler => 0xe41e0c4a682a9697,   # re-pinned under D-124
 )
