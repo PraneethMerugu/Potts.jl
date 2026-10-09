@@ -10,7 +10,6 @@ final_mcs = 11446
 framerate = 24
 frames = 295
 git_commit = "cda818379"
-hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "openvt_reference_state(; lattice = (1400, 1400)): one disc of area A*(0) at the centre"
 julia = "1.12.6"
 lattice = [1400, 1400]
