@@ -3586,3 +3586,20 @@ session.
   - Possibly p6_0v3 (the Merks digests) and p6_0bm.
   
   A fingerprint change with no change in dynamics is re-pinned. A change in dynamics on any FULL record is re-run on the PC and reported under D-154. Akeeb must show no change in dynamics (its frozen record test plus an A/B).
+
+## D-194 P6.3j: Euler-tracker test frozen (2026-10-08; coordinator, from the P6.3j test author; under D-189 ruling 12, D-192)
+
+- **Frozen test.** `acceptance/p6_3j_euler_tracker.jl` (commit 71260377, sha256 `0529f43e9676c8c3899945b63c766a3e1c09f278c58b2da72a143709efc09d5b`).
+- **Surface.**
+  - Cell scope: `euler` and `euler(; adjacency = :face | :full)`.
+  - Copy scope: `euler[c]` and `euler(c; adjacency)`. The medium reads 0. A bare `euler` in a drive raises an ArgumentError.
+  - Storage: Int32 columns `cell.euler` and `cell.euler_full`. On hex, `:full` equals `:face` (D-192 Q4, amended); whether it gets a column of its own is not pinned.
+- **Pinned.**
+  - Oracle recounts against flood fill, with 4 negative controls.
+  - Tracked χ equals the oracle after every MCS, on Sequential, Checkerboard and BoundarySite, for models that read it in an energy and for observed-only models, and across divisions.
+  - A torus band reads χ = 0.
+  - ΔH equals the brute-force value in Float64 and Float32.
+  - Build errors.
+  - Six fingerprints of models that do not use `euler` stay unchanged (recorded on 2b128db5).
+  - Zero warm allocations.
+  - A device row.
