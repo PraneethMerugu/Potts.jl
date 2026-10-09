@@ -55,7 +55,7 @@ export read_piff, write_piff
 # checks qualified accesses against this list).
 public coordinates, shift, linear_index, draw, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
     TrackDeltaH, track_eltype, GhostFace,
-    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point
+    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell
 
 include("rng.jl")
 include("lattice.jl")
@@ -67,8 +67,8 @@ include("contact_counts.jl")
 include("transfers.jl")
 include("fields.jl")
 include("drives.jl")
-include("euler.jl")
 include("shell.jl")
+include("euler.jl")
 include("spatial.jl")
 include("relationships.jl")
 include("compartments.jl")

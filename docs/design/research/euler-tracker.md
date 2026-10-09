@@ -228,10 +228,10 @@ Two further forms complete the surface:
   `(δe_old, δe_new) = CorePotts.euler_change(st.σ, ctx, prop, Val(:face))` (and `Val(:full)`).
   Bind `:δeuler => :δe_old` or `:δe_new` per side in `_cell_env`'s `extra`. The pattern is that of `δsurface`. ΔH is then `E(euler + δ) − E(euler)` for `old` and `new`, which is exact.
 - **Commit (`_commit_expr`).** Emit `uses_euler && CorePotts.commit_surface!`-style
-  `commit_euler!(st.cell.euler, prop, CorePotts.euler_change(…))`. It is recomputed in commit as `surface_change` is, at the cost of one more shell evaluation. Sharing it with ΔH is a P6.3h optimisation.
+  `commit_euler!(st.cell.euler, prop, CorePotts.euler_change(…))`. It is recomputed in commit as `surface_change` is, at the cost of one more shell evaluation. Sharing it with ΔH is a P6.3h optimisation. *P6.3h:* declined. The checkerboard commits in a separate launch from ΔH, so sharing would need a per-copy buffer; the recompute costs about 10 ns (2D) or 37 ns (3D) per accepted copy after P6.3h's kernels.
   - No atomics are needed. Only `old` and `new` change, and the checkerboard write-claims both (`checkerboard.jl:50-54`).
   - A concurrent copy at a shell site y can change `old` or `new` membership only by claiming one of them. So `m_old` and `m_new` are stable, and the window sets of two committed copies are disjoint. This holds even with no footprint argument.
-- **Shell read.** The kernel reads its owners through P6.3h's single `shell_owners` binding when that exists. Before P6.3h it reads the box itself. Only the masks `m_old` and `m_new` are derived; the medium is never masked.
+- **Shell read.** The kernel takes σ or a `CorePotts.ShellRead`; since P6.3h a generated function with two or more shell kernels binds one `read_shell` and passes it to each. Only the masks `m_old` and `m_new` are derived; the medium is never masked.
 - **Initial state (`problem.jl:624` pattern).** Emit `push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))`.
 - **Lifecycle.**
   - **Host.** `_rebuild_trackers!` gains `haskey(st.cell, :euler)`, which recomputes from σ.

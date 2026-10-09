@@ -161,6 +161,31 @@ _edge_energies(c::CompiledPottsSystem) =
     [(r.name, sum(E for (q, E) in c.edge_terms if q === r.name)) for r in c.relationships
      if any(t -> first(t) === r.name, c.edge_terms)]
 
+# ---------------------------------------------------------------------------------------
+# One shell read per generated function (P6.3h, connectivity doc §9.2)
+
+# CorePotts kernels that read the target's shell from their first argument, σ or a
+# `CorePotts.ShellRead`
+const _SHELL_KERNELS = (:local_rule, :arc_or_pair, :simple_point, :euler_change, :local_components, :ring_arcs,
+    :ring_cells, :ring_medium)
+_is_shell_call(x) = x isa Expr && x.head === :call && length(x.args) >= 4 && x.args[1] isa Expr &&
+                    x.args[1].head === :. && x.args[1].args[1] === :CorePotts &&
+                    x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.σ)
+_count_shell_calls(x) = x isa Expr ? Int(_is_shell_call(x)) + sum(_count_shell_calls, x.args; init = 0) : 0
+_on_shell(x) = x isa Expr ? (_is_shell_call(x) ? Expr(:call, x.args[1], :shell_read, map(_on_shell, x.args[3:end])...) :
+                             Expr(x.head, map(_on_shell, x.args)...)) : x
+
+"""
+`f` with every shell kernel reading one `CorePotts.read_shell` bound at its top, when two
+or more kernels read the shell; otherwise `f` unchanged (a single read is already one
+read, and the generated code of models with no or one shell kernel stays as it was).
+"""
+function _share_shell(f::Expr)
+    args, body = f.args
+    _count_shell_calls(body) >= 2 || return f
+    return Expr(:->, args, Expr(:block, :(shell_read = CorePotts.read_shell(st.σ, ctx, prop)), _on_shell(body)))
+end
+
 _kindtest(k, kinds) = isempty(kinds) ? true : foldl((a, b) -> :($a || $b), [:($k == $x) for x in kinds])
 
 const _PROP_LOCALS = quote
@@ -255,7 +280,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     end
     drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
     push!(body, :(return $T(dH)))
-    return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
+    return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, body...))))
 end
 
 _group_terms(terms) = (g = Dict{Vector{Int}, Any}(); foreach(((k, E),) -> (g[k] = haskey(g, k) ? g[k] + E : E), terms); g)
@@ -348,7 +373,8 @@ function _commit_expr(c::CompiledPottsSystem, T)
     push!(body, :(CorePotts.commit_volume!(st, p, prop, ctx)))
     append!(body, _contact_count_commits(c))            # contact folds (D-150; none: no code)
     c.uses_surface && push!(body, :(CorePotts.commit_surface!(st.cell.surface, prop, δs)))
-    # TODO(P6.3h): reuse ΔH's `euler_change` here instead of a second shell read per accepted copy
+    # recomputed, as `surface_change` is: the checkerboard commits in a separate launch from
+    # ΔH, so reusing ΔH's value would need a per-copy buffer (P6.3h declined it)
     c.uses_euler && push!(body, :(CorePotts.commit_euler!(st.cell.euler, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:face)))))
     c.uses_euler_full && push!(body,
         :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:full)))))
@@ -366,7 +392,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     end
     append!(body, writes)
     push!(body, :(return nothing))
-    return :((st, p, prop, ctx) -> $(Expr(:block, body...)))
+    return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, body...))))
 end
 
 # Write `v` into the target of an on-copy update `x[i] ~ …` (a cell index may be the
@@ -401,7 +427,7 @@ function _constraint_expr(c::CompiledPottsSystem, T)
         end
     end
     test = foldl((a, b) -> :($a && $b), tests)
-    return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, :(return $test))))
+    return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, :(return $test)))))
 end
 
 # The copy temperature: a copy-scope expression, or a cell-scope one evaluated for the
@@ -419,8 +445,8 @@ function _temperature_expr(c::CompiledPottsSystem, T)
             return $T($(sw.combine)($tn, $to))
         end)))
     end
-    return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS,
-        :(return $T($(lower(sw.temperature, _proposal_env(T, rn))))))))
+    return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS,
+        :(return $T($(lower(sw.temperature, _proposal_env(T, rn)))))))))
 end
 
 # ---------------------------------------------------------------------------------------
