@@ -334,8 +334,8 @@ decision = "D-138"
 
 [[file]]
 path = "acceptance/p6_3a_topology_track.jl"
-sha256 = "56b58f9f3a50e33a8e4aad70c16ca6d471582120efd5f64c893bf05578e3bf8b"
-decision = "D-196"
+sha256 = "72fbfbec929200b4bb65f997291082932e50a9cc108ac873964623dff015e158"
+decision = "D-197"
 
 [[file]]
 path = "acceptance/p6_3c_eden_splits.jl"
@@ -484,8 +484,8 @@ decision = "D-194"
 
 [[file]]
 path = "acceptance/p6_3g_connectivity_vocabulary.jl"
-sha256 = "2de0661343b976dbb2a9e0b0ae7d561210fcdbd400cf1ad770388176427d6fa8"
-decision = "D-196"
+sha256 = "c612214e3b29457bb1a8501aa1d886ff2ee98815814b8e86614756cecfa2aadb"
+decision = "D-197"
 
 [[file]]
 path = "acceptance/p6_4a1_copy_direction.jl"
@@ -494,5 +494,5 @@ decision = "D-188"
 
 [[file]]
 path = "acceptance/p6_9a_global_connectivity.jl"
-sha256 = "704a7d54485bb0b97744e6c32b964f82e7822c6b6545adfb76d13ea0d10c3003"
+sha256 = "fb3366113fb8732ee96cd70755131977eb3a3e90250241e5706081be39e4a40f"
 decision = "D-197"
