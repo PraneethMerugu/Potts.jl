@@ -3789,3 +3789,17 @@ session.
   - O1 data are compressed per case and kept out of git.
   - Nothing is uploaded to the consortium repository until the maintainer says so. Write access (Q11) is Dr Jiang's to raise.
   - The maintainer is asked before any upload over about 100 MB.
+
+## D-207 P6.0bk2: tests for `SequentialCPM(; skip_interior = true)` frozen (2026-10-09; coordinator, from the rename test author; implements D-198)
+
+- **New test.** `acceptance/p6_0bk2_skip_interior.jl`, commit 06eda5d4, sha256 `cdb1ee5d…`.
+  - Recorded on cfdf8477: hashes for 10 short runs, each run under `BoundarySiteCPM`, `SequentialCPM` and `CheckerboardCPM`. Cases are 2D, 3D, frozen mask, divisions, foam with `NeighborOrder(4)`, Moore and VonNeumann overrides, and Barker acceptance.
+  - `skip_interior = true` must reproduce these hashes. Two IR hashes of `sequential_mcs!` are pinned (Julia 1.12.6 only), so the default path is unchanged.
+  - On `CheckerboardCPM`, `skip_interior` must either leave the trajectory bitwise unchanged or raise an `ArgumentError` ("not yet implemented").
+- **Re-frozen, rename only.** `BoundarySiteCPM(…)` becomes `SequentialCPM(; skip_interior = true, …)`; no assertion changed. Files:
+  - `p6_4b1_boundary_site.jl`, which now also asserts that `BoundarySiteCPM` is neither defined nor exported;
+  - `p6_3j_euler_tracker.jl`;
+  - `p6_4a1_copy_direction.jl`;
+  - `reproductions/04_foam.jl`;
+  - `reproductions/15_openvt_sweeps.jl`.
+- **Still open.** D-198 item 3 (P6.0bk).
