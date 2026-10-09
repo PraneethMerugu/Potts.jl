@@ -496,3 +496,43 @@ decision = "D-188"
 path = "acceptance/p6_9a_global_connectivity.jl"
 sha256 = "fb3366113fb8732ee96cd70755131977eb3a3e90250241e5706081be39e4a40f"
 decision = "D-197"
+
+[[file]]
+path = "reproductions/01_merks_01b.jl"
+sha256 = "62b60427670520d3d15597b0f3f51f109af0487fb85efbe2e5271fd01820f5fa"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig05.tsv"
+sha256 = "8c6dabd43061d7942930246ebf25cd16e1de75317be221e93aa4c8819760a47d"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig07.tsv"
+sha256 = "3d1d7a971ec1446aac0da098c48c6c3b700c404358c0717c17e9e37b74da28e8"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig08.tsv"
+sha256 = "d07af74f4713558e007c88ae154f9f51f069aec899e9a80d3bea082a90025a7c"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig09.tsv"
+sha256 = "1cd9423e60c87cfdd3b682acde3b1a5230457a1af370015b91842b6922ea1683"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig10.tsv"
+sha256 = "895934bb6cf89e562a8c9a38db9fb7049d30ef25ef66bb37b801059eb8f1997c"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig12.tsv"
+sha256 = "68884b21fffeb7ba3faaa1e4d15f8f6c1b538f2f66414c4d8042ab45fda8a44b"
+decision = "D-202"
+
+[[file]]
+path = "reproductions/data/01b/fig13.tsv"
+sha256 = "02a843bd35149499e99915e7e2c2788cf01e76723c4b871b5b63f2e26cce2496"
+decision = "D-202"
