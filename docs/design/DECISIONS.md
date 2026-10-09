@@ -3520,3 +3520,18 @@ session.
 - **Shear gating (accepted).** The shear rows are gated on P6.4a1. Until it lands, the record tier is `@test_broken`; once it lands, the record tier fails until a FULL record exists. P6.4a1 is reviewed and merges first, so in practice the gate is open.
 - **FULL cost.** About 4 ms per MCS on the Mac, so about 150 CPU-h, or 6–8 h on the PC. It runs on the PC (D-157) after the page implementation, outside benchmark windows.
 - **Early signal.** V18 (< 0.5) reached 0.50–0.77 at β = 0.05 in reduced runs. A FAIL is reported under D-154, not tuned away.
+
+## D-191 CC3D connectivity source check, P6.3k (2026-10-08; "models and publications" session, read-only source reading; `docs/design/research/cc3d-connectivity-source-check.md`)
+
+- **`<Penalty>` by version.** The value is honoured in CC3D 4.3.1 and 4.6.0. From 4.7.0 on it is ignored, and a hard-coded 64 is returned. Akeeb's 2D XMLs therefore ran with ΔH += 1e5, which is a veto at T = 10. The audit's "soft 64" holds only for ≥ 4.7.0.
+- **`changeEnergy` logic.** The logic is otherwise identical in every version read:
+  - it returns 0 when the old cell is medium;
+  - **rule 1 (gain):** the new cell, medium included, must own a face neighbour of the target;
+  - **rule 2:** the old cell must form exactly one arc on the clockwise 8-ring;
+  - in 3D the plugin throws.
+- **Effect on Akeeb.** Under VonNeumann(1) proposals, rule 1 is vacuous and the full ring cannot be reached, so D-189 rulings 3 and 10 do not change Akeeb.
+- **Source artefact.** Off-lattice ring positions are left at (0,0,0), so at a closed edge CC3D reads the owner of pixel (0,0,0). We do not reproduce this; we read off-lattice positions as nothing. Page 10 gets a deviations row (effect unmeasured), and the P6.3g mapping table lists it as a source artefact, not as a rule option. Whether to reproduce it is the maintainer's call; it is not reproduced unless the maintainer asks.
+- **For P6.3g.** `Local(; gain = true)` tests exactly CC3D rule 1: face adjacency, with medium allowed as the new cell. The defaults of `Local()` then equal CC3D rules 1 and 2. In the mapping table:
+  - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
+  - CC3D ≥ 4.7.0 → `penalty = 64`;
+  - the hard form is the T → 0 limit.
