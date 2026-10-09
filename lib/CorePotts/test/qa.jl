@@ -10,7 +10,7 @@ using JET, AllocCheck
     @test_opt target_modules = (CorePotts,) step!(integ)
     @test isempty(check_allocs(CorePotts.sequential_mcs!, typeof.(args)))
 
-    # BoundarySiteCPM (D-177): the sweep, with the boundary set's upkeep
+    # SequentialCPM(; skip_interior = true) (D-177, D-198): the sweep, with the boundary set's upkeep
     binteg = init(prob, SequentialCPM(; skip_interior = true); save_start = false)
     bargs = (binteg.state, binteg.kf, binteg.p, binteg.ctx, binteg.law, binteg.key, 0, binteg.cache)
     @test_opt target_modules = (CorePotts,) CorePotts.boundary_site_mcs!(bargs...)

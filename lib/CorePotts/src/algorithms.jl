@@ -61,7 +61,7 @@ abstract type CPMAlgorithm <: SciMLBase.AbstractSciMLAlgorithm end
 SciMLBase.isdiscrete(::CPMAlgorithm) = true
 
 """
-    SequentialCPM(; acceptance = nothing, proposal = nothing)
+    SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
 
 Random-site sequential dynamics on the host: one MCS is `N` copy attempts with
 replacement over the mobile (not frozen) lattice sites, so `N` is the number of mobile
@@ -69,42 +69,47 @@ sites, which can change during a run when the frozen mask follows the state. The
 fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
 the problem's copy neighbourhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
+
+`skip_interior = true` draws only boundary sites (D-177, D-198): mobile sites with a mobile
+proposal neighbour of another owner. Every other pick would propose a copy of its own owner
+(a null move), so the run of such picks between two boundary picks is drawn at once,
+geometric in the boundary fraction. One MCS is still `N` attempts over all mobile sites
+(`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after every
+MCS is the same as with `skip_interior = false`; the random stream differs, so results are
+equal in distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one
+O(N) pass comparing the state with the boundary set's shadow copy (a few percent of the
+sweep at typical cover, more on nearly empty lattices).
 """
-Base.@kwdef struct SequentialCPM{A, R} <: CPMAlgorithm
-    acceptance::A = nothing
-    proposal::R = nothing
+struct SequentialCPM{A, R, S} <: CPMAlgorithm
+    acceptance::A
+    proposal::R
+    skip_interior::Bool
+    # `S === skip_interior`: the option is part of the type, so the sweep is chosen at
+    # compile time and the default compiles to the plain sequential loop
+    function SequentialCPM(acceptance::A, proposal::R, skip_interior::Bool) where {A, R}
+        return new{A, R, skip_interior}(acceptance, proposal, skip_interior)
+    end
 end
+SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior::Bool = false) =
+    SequentialCPM(acceptance, proposal, skip_interior)
 
 """
-    BoundarySiteCPM(; acceptance = nothing, proposal = nothing)
-
-`SequentialCPM`'s dynamics, drawing only boundary sites (D-177): a mobile site with a mobile
-proposal neighbour of another owner. Every other pick of `SequentialCPM` proposes a copy of
-its own owner (a null move), so the run of such picks between two boundary picks is drawn
-at once, geometric in the boundary fraction. One MCS is still `N` attempts over all mobile
-sites (`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after
-every MCS is `SequentialCPM`'s; the random stream differs, so results are equal in
-distribution, not bitwise. Fast on mostly-medium lattices; each MCS also pays one O(N)
-pass comparing the state with the boundary set's shadow copy (a few percent of the sweep at
-typical cover, more on nearly empty lattices). Host only (CPU): a non-CPU `backend` raises
-an `ArgumentError`. The keywords and their defaults are `SequentialCPM`'s: `nothing` means
-the model's acceptance law and the problem's proposal neighbourhood.
-"""
-Base.@kwdef struct BoundarySiteCPM{A, R} <: CPMAlgorithm
-    acceptance::A = nothing
-    proposal::R = nothing
-end
-
-"""
-    CheckerboardCPM(; acceptance = nothing, proposal = nothing)
+    CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
 
 Parallel dynamics on CPU or GPU (KernelAbstractions). Sites are colored so that same-color
 targets lie outside each other's read/write footprints; each MCS visits every site once in
 a random color order. Accepted proposals claim their cells with a unique priority and
 commit only if they win every claim, so each cell changes at most once per color.
 `acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
+`skip_interior = true` is not yet implemented on the checkerboard (P6.0bk): `init` and
+`solve` raise an `ArgumentError`.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing
     proposal::R = nothing
+    skip_interior::Bool = false
 end
+
+# The boundary-site sweep (`SequentialCPM(; skip_interior = true)`), known from the type.
+_skips_interior(::CPMAlgorithm) = false
+_skips_interior(::SequentialCPM{A, R, S}) where {A, R, S} = S

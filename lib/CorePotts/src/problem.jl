@@ -207,8 +207,8 @@ Base.@kwdef mutable struct PottsStats
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
     accepted_ΔH::Union{Nothing, Float64} = nothing
     # copies the `Global` veto refused only for want of window (P6.9a, D-197): `nothing` for
-    # a model without `Global`, else an `Int` (always 0 on SequentialCPM, BoundarySiteCPM and
-    # without a window); under `CheckerboardCPM` brought up to date at the host read points
+    # a model without `Global`, else an `Int` (always 0 on SequentialCPM, with or without
+    # `skip_interior`, and without a window); under `CheckerboardCPM` brought up to date at the host read points
     connectivity_deferred::Union{Nothing, Int} = nothing
 end
 
@@ -297,8 +297,9 @@ end
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
-    alg isa BoundarySiteCPM && !(backend isa CPU) &&
-        throw(ArgumentError("BoundarySiteCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
+    alg isa CheckerboardCPM && alg.skip_interior && throw(ArgumentError(
+        "CheckerboardCPM(; skip_interior = true) is not yet implemented (P6.0bk); use " *
+        "SequentialCPM(; skip_interior = true) on the CPU, or CheckerboardCPM() with skip_interior = false"))
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
     saveat isa Number && (saveat = (t0 + Int(saveat)):Int(saveat):t1)
@@ -317,7 +318,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     p = _to_backend(backend, prob.p)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, ncells(prob.u0), relation(_proposal(alg, prob), lat)) :
-            alg isa BoundarySiteCPM ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
+            _skips_interior(alg) ? BoundaryCache(state.σ, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
     key = RNGKey(prob.seed, prob.replica, prob.repeat)
     lcache = prob.f.lifecycle === nothing ? nothing :
              LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f))
@@ -465,15 +466,15 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope `mcs`,
     # D-188): n − 1 during the n-th MCS, as the phases' `mcs`
     ctx = sweep_ctx(integ.ctx, integ.t)
-    if integ.alg isa SequentialCPM
-        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.f.track)
+    if _skips_interior(integ.alg)
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
-    elseif integ.alg isa BoundarySiteCPM
-        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+    elseif integ.alg isa SequentialCPM
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.f.track)
         integ.stats.accepted = max(integ.stats.accepted, 0) + acc
         tracked === nothing || (integ.stats.accepted_ΔH += tracked)
         status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
@@ -566,7 +567,7 @@ end
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
 # is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
-# Nothing without a track or under `SequentialCPM` / `BoundarySiteCPM`, which add into the
+# Nothing without a track or under `SequentialCPM` (with or without `skip_interior`), which adds into the
 # stats every step.
 _fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
 _fold_track!(stats, ::Nothing) = nothing

@@ -291,8 +291,8 @@ const RAW_TRANSFER_ALLOW = Dict(
     # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`;
     # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted)
     "lib/CorePotts/src/problem.jl" => 3,
-    # `BoundarySiteCPM`'s shadow copies of σ and the frozen mask (120, 125): host arrays only,
-    # the algorithm is CPU-only (D-177)
+    # the boundary set's shadow copies of σ and the frozen mask (120, 125) under
+    # `SequentialCPM(; skip_interior = true)`: host arrays only, the algorithm is CPU-only (D-177)
     "lib/CorePotts/src/boundary_site.jl" => 2,
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
     # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since

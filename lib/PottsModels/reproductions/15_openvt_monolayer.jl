@@ -253,8 +253,9 @@ record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 8: seven panels for 
 # inhibited cells orange. Rings: the Potts.jl thresholds; diamonds and crosses: TST's and
 # Artistoo's Table 1 values. Record `data/15/sweeps-2026-10-08/` (ROADMAP P6.15g), commit
 # `41fb2ba6`, AMD Ryzen AI Max+ 395 PC, 12 threads, 160 runs (6 capped at 20×) in 68.7
-# core-hours, on `BoundarySiteCPM` (equal in law to `SequentialCPM`, D-177); figures
-# `fig6.png` and `fig7.png`, thresholds `table1.tsv`.
+# core-hours, with `SequentialCPM(; skip_interior = true)` (equal in law to
+# `SequentialCPM()`, D-177, D-198); figures `fig6.png` and `fig7.png`, thresholds
+# `table1.tsv`.
 
 sweeps = tsv("sweeps-2026-10-08", "verdicts.tsv") #hide
 record("sweeps-2026-10-08"; commit = "41fb2ba6") #hide
@@ -409,7 +410,8 @@ end
 #   `edge_guard(5; terminate = true)` stopping a run that comes within 5 sites of the edge.
 #   No run did.
 # - Every run uses `SequentialCPM(; proposal = Moore(1))` and saves every 39 MCS
-#   (≈ 1/20 cycle) and at the stop. The sweeps use `BoundarySiteCPM`, equal in law (D-177).
+#   (≈ 1/20 cycle) and at the stop. The sweeps add `skip_interior = true`, equal in law
+#   (D-177, D-198).
 # - The calibration follows the CPM frameworks: 5-site-high periodic strip, CD = 10 px, both
 #   chain ends free, 100 replicates per λ, a 100-MCS burn-in.
 #
@@ -577,7 +579,7 @@ Markdown.parse(s5)
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked; on our open question list as Q20 |
 # | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, coloured count glyphs | no outlines on this schematic (D-156) | not an author question |
 # | F5 distance bins and origin | 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R), from the initial cell's centre | legend 0–7, …, 31–39; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
-# | F6, T1, F7 set-up | `BoundarySiteCPM` (equal in law to `SequentialCPM`, D-177); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds by M's nearest rule on 6-run bracket ends | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
+# | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds by M's nearest rule on 6-run bracket ends | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
 # | F7 drawing | each cell a filled disc of its radius at its centroid, growing blue and inhibited orange in M's colours, no strokes; a second row of lattice stills with one colour per cell | M's Figure 7 rows | M's form from our O5 files; the lattice stills are information | not an author question |
 # | F8 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |
 # | Domain | closed 400², 1400² or 1800² lattice with a 5-site edge guard; no run came closer than 33 sites (171 in the sweeps) | unbounded plane | a finite lattice the colony never reaches is equivalent | not an author question |

@@ -360,10 +360,10 @@ CorePotts.frozen_reads(::KindsBadReads) = (:nonexistent,)
     end
 end
 
-# P6.4b1 review: BoundarySiteCPM's skip constant log(1 - n/N) is keyed on both n = |B| and
+# P6.4b1 review: the skip constant of `SequentialCPM(; skip_interior = true)` log(1 - n/N) is keyed on both n = |B| and
 # the mobile count N. Removing a frozen cell embedded in medium frees its sites (N grows by
 # 36) and leaves |B| unchanged; the constant must follow N.
-@testset "BoundarySiteCPM: the skip constant follows a mask change that keeps |B| (P6.4b1)" begin
+@testset "skip_interior: the skip constant follows a mask change that keeps |B| (P6.4b1)" begin
     integ = init(fk_problem(), SequentialCPM(; skip_interior = true); save_start = false)
     step!(integ)
     B = integ.cache
