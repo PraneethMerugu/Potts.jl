@@ -647,6 +647,8 @@ locally in general; Fortuna et al. do not enforce it (spec 14 §4).
 
 ### 9.1 Kernels
 
+*As built (P6.3h):* the 2D square and hex kernels are ring run counts (corners filled for 8-adjacency; no 256-entry table); the 3D flood is whole-mask dilation in a 27-bit 3×3×3 box (shifts by 1, 3, 9; no table, no div/rem); the shell read wraps each axis once. A generated function with two or more shell kernels (rules, `euler_change`, the `ring_*` built-ins) binds one `CorePotts.read_shell`; with one or none its code is unchanged. The lowered `pieces`/`distinct` gathers over `shell(target)` still read σ themselves.
+
 - **2D square shell.** Read the 8 owners once into an `NTuple{8, Int32}`; build an 8-bit
   mask per predicate. Pieces = runs = `count_ones(m & ~bitrotate(m, 1))` (1 if m = 0xff).
   This replaces the 3×3 flood fill that `rule = :local` runs today in 2D (§2.1).

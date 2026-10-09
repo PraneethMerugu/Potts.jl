@@ -137,11 +137,13 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
   custom callable must also define [`track_eltype`](@ref)`(track)` (the scalar type of its
   values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
   that type; `SequentialCPM` adds into a `Float64` and does not need it.
+- `connectivity` → `nothing` (the default), or the [`ConnectivityHooks`](@ref) of a model
+  with whole-cell connectivity (`Global`, cell-scope `pieces`; P6.9a)
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 """
-struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK}
+struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK, CO}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -156,20 +158,26 @@ struct CPMFunction{DH, CM, CN, CL, RD, TT, BI, PH, LC, AC, SYS, TK}
     fingerprint::UInt64
     sys::SYS
     track::TK
+    connectivity::CO
 end
 
 function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
         claims = no_claims, reads = no_claims, temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
-        sys = nothing, track = nothing)
+        sys = nothing, track = nothing, connectivity = nothing)
     return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
-        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track)
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity)
 end
+# the positional form before P6.9a: no whole-cell connectivity
+CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+    acceptance, footprint::Footprint, fingerprint, sys, track) =
+    CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
+        acceptance, footprint, UInt64(fingerprint), sys, track, nothing)
 # the positional form without `track` (before D-140): untracked
 CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
     acceptance, footprint::Footprint, fingerprint, sys) =
     CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
-        acceptance, footprint, UInt64(fingerprint), sys, nothing)
+        acceptance, footprint, UInt64(fingerprint), sys, nothing, nothing)
 
 """
     TrackDeltaH{T}()
@@ -197,7 +205,7 @@ track_eltype(track) = throw(ArgumentError(
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
 fields (`phases`, `sys`), so it is isbits whenever the functions are.
 """
-struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
+struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI, PO, DF}
     delta_H::DH
     commit!::CM
     constraint::CN
@@ -205,11 +213,28 @@ struct DeviceFunctions{DH, CM, CN, CL, RD, TT, BI}
     reads::RD
     temperature::TT
     bias::BI
+    post::PO            # the `Global` veto after the draw (`ConnectivityHooks`), or `nothing`
+    defer::DF           # copies the checkerboard runs serially, or `nothing`
 end
+DeviceFunctions(delta_H, commit!, constraint, claims, reads, temperature, bias) =
+    DeviceFunctions(delta_H, commit!, constraint, claims, reads, temperature, bias, nothing, nothing)
 # The track (D-140) is not part of it: the checkerboard carries it with its buffers and
-# `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields.
+# `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields
+# (`post` and `defer` are `nothing`, zero-size, without whole-cell connectivity).
 device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias)
+    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.claims, f.reads, f.temperature, f.bias,
+        _hook(f.connectivity, :post), _hook(f.connectivity, :defer))
+_hook(::Nothing, name) = nothing
+_hook(h, name) = getfield(h, name)
+# the hooks of `DeviceFunctions` (or of a `CPMFunction` passed directly)
+@inline _post(f) = f.post
+@inline _post(f::CPMFunction) = _hook(f.connectivity, :post)
+@inline _defer(f) = f.defer
+@inline _defer(f::CPMFunction) = _hook(f.connectivity, :defer)
+"""Whether `f` has a post-acceptance veto (`Global`; a type-level constant)."""
+@inline has_post(f) = !(_post(f) isa Nothing)
+"""Whether `f` defers some copies to the serial floods (a type-level constant)."""
+@inline has_defer(f) = !(_defer(f) isa Nothing)
 
 @inline always(st, p, prop, ctx) = true
 @inline no_claims(st, p, prop, ctx) = ()

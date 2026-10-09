@@ -1,0 +1,46 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+12	10	main	ER50	t	100	MCS (loop counter, includes the 100 relaxation MCS)	C	0.962	1	NA	not read	9	0.005	
+12	10	main	ER50	t	250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.939	1	NA	not read	9	0.005	
+12	10	main	ER50	t	500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.862	1	NA	not read	9	0.01	
+12	10	main	ER50	t	600	MCS (loop counter, includes the 100 relaxation MCS)	C	0.797	1	NA	not read	9	0.01	
+12	10	main	ER50	t	750	MCS (loop counter, includes the 100 relaxation MCS)	C	0.718	1	NA	not read	9	0.01	
+12	10	main	ER50	t	1000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.601	1	0.03	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.005	
+12	10	main	ER50	t	1250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.548	1	NA	not read	9	0.005	
+12	10	main	ER50	t	1500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.517	1	NA	not read	9	0.005	
+12	10	main	ER50	t	2000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.483	1	NA	not read	9	0.005	
+12	10	main	ER50	t	2500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.46	1	NA	not read	9	0.005	
+12	10	main	ER50	t	3000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.443	1	NA	not read	9	0.005	
+12	10	main	ER50	t	3500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.429	1	NA	not read	9	0.005	
+12	10	main	ER50	t	4000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.416	1	NA	not read	9	0.005	
+12	10	main	ER50	t	4500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.405	1	NA	not read	9	0.005	
+12	10	main	ER50	t	5000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.397	1	0.025	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.005	read at 4950 and extended by the local slope
+12	10	main	ER200	t	100	MCS (loop counter, includes the 100 relaxation MCS)	C	0.92	1	NA	not read	9	0.005	overlaps EO200
+12	10	main	ER200	t	250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.888	1	NA	not read	9	0.005	
+12	10	main	ER200	t	500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.818	1	NA	not read	9	0.01	
+12	10	main	ER200	t	600	MCS (loop counter, includes the 100 relaxation MCS)	C	0.788	1	NA	not read	9	0.01	
+12	10	main	ER200	t	750	MCS (loop counter, includes the 100 relaxation MCS)	C	0.739	1	NA	not read	9	0.01	
+12	10	main	ER200	t	1000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.66	1	0.03	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.01	dash gap; interpolated from 950 and 1050
+12	10	main	ER200	t	1250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.604	1	NA	not read	9	0.005	
+12	10	main	ER200	t	1500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.566	1	NA	not read	9	0.005	
+12	10	main	ER200	t	2000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.524	1	NA	not read	9	0.005	
+12	10	main	ER200	t	2500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.499	1	NA	not read	9	0.005	
+12	10	main	ER200	t	3000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.48	1	NA	not read	9	0.005	
+12	10	main	ER200	t	3500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.462	1	NA	not read	9	0.005	
+12	10	main	ER200	t	4000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.449	1	NA	not read	9	0.005	
+12	10	main	ER200	t	4500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.438	1	NA	not read	9	0.005	
+12	10	main	ER200	t	5000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.429	1	0.02	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.008	read at 4950 and extended by the local slope
+12	10	main	EO200	t	100	MCS (loop counter, includes the 100 relaxation MCS)	C	0.92	1	NA	not read	9	0.005	overlaps ER200
+12	10	main	EO200	t	250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.903	1	NA	not read	9	0.01	
+12	10	main	EO200	t	500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.874	1	NA	not read	9	0.01	
+12	10	main	EO200	t	600	MCS (loop counter, includes the 100 relaxation MCS)	C	0.861	1	NA	not read	9	0.005	
+12	10	main	EO200	t	750	MCS (loop counter, includes the 100 relaxation MCS)	C	0.838	1	NA	not read	9	0.005	
+12	10	main	EO200	t	1000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.789	1	0.03	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.005	
+12	10	main	EO200	t	1250	MCS (loop counter, includes the 100 relaxation MCS)	C	0.732	1	NA	not read	9	0.005	
+12	10	main	EO200	t	1500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.68	1	NA	not read	9	0.005	
+12	10	main	EO200	t	2000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.601	1	NA	not read	9	0.005	
+12	10	main	EO200	t	2500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.562	1	NA	not read	9	0.005	
+12	10	main	EO200	t	3000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.536	1	NA	not read	9	0.005	
+12	10	main	EO200	t	3500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.519	1	NA	not read	9	0.005	
+12	10	main	EO200	t	4000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.504	1	NA	not read	9	0.005	
+12	10	main	EO200	t	4500	MCS (loop counter, includes the 100 relaxation MCS)	C	0.491	1	NA	not read	9	0.005	
+12	10	main	EO200	t	5000	MCS (loop counter, includes the 100 relaxation MCS)	C	0.481	1	0.025	grey dotted SD curve (one SD over 100 simulations), read at this t (±0.01)	9	0.005	read at 4950 and extended by the local slope

@@ -31,7 +31,8 @@ hand) `mcs` is 0.
 
 A drive is added with weight 1: a negative value favours the copy. A drive can stand for a
 soft constraint, e.g. the `E₀` connectivity threshold of Merks et al.:
-`copy => E₀ * ((kind[old] == A) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))`.
+`@drive connectivity(A; rule = ArcOrPair(), penalty = E₀)` (see
+[Connectivity](@ref manual-connectivity)).
 
 `PottsProblem(…; track = (:ΔH,))` sums the ΔH of every committed copy, energy plus drives
 (without the acceptance law's offset), into `sol.stats.accepted_ΔH`. When the drives are

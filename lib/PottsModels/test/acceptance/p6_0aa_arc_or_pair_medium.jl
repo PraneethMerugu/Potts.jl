@@ -127,10 +127,12 @@ end
     # σ (Closed 12×12): cell 1 along the top edge row 1, cols 3:9; cell 2 below it, rows 2:4,
     # cols 3:9; medium elsewhere. Target (1,6), source (2,6).
     # Ring of (1,6): (0,5)=OUT (1,5)=1 (2,5)=2 (2,6)=2 (2,7)=2 (1,7)=1 (0,7)=OUT (0,6)=OUT
-    #   arcs 2 (1 at positions 2 and 6), cells 2, medium 0 (the three OUT sites are not
-    #   medium) → ACCEPT, like the pure two-cell ring. (Counting OUT as medium would refuse.)
+    #   arcs 2 (1 at positions 2 and 6), medium 0 (the three OUT sites are not medium).
+    #   Re-frozen under D-189 ruling 5 (P6.0ae): inside `ArcOrPair()` the Closed frame counts
+    #   as a cell, as TST's σ = −1 frame does, so cells 3 (1, 2, frame) → the pair clause
+    #   fails → REFUSE. (Before P6.0ae the frame was nothing: cells 2 → ACCEPT.)
     σ = zeros(Int32, 12, 12); σ[1, 3:9] .= 1; σ[2:4, 3:9] .= 2
-    @test p60aa_model_allows(P60aaClosed, σ, (1, 6), (2, 6))
+    @test !p60aa_model_allows(P60aaClosed, σ, (1, 6), (2, 6))
 
     # the same edge junction with one real medium site, (2,7) = 0:
     # Ring: OUT 1 2 2 0 1 OUT OUT → arcs 2, cells 2, medium 1 → current ACCEPT, fixed REFUSE.

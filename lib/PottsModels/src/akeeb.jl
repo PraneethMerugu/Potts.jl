@@ -5,7 +5,9 @@ Leader/follower collective invasion with proliferation (Akeeb, Marcus & Jiang, P
 Comput. Biol. 22, e1014747, 2026), checked against the authors' CompuCell3D source:
 
 - **Kinds.** Leaders and followers, both kept connected (CompuCell3D's `Connectivity`
-  plugin: the losing cell's sites in the 8-ring must form one arc) and never extinct.
+  plugin, `Local()`: the losing cell's sites in the 8-ring must form one arc and the gaining
+  cell must own a face neighbour of the target; with `VonNeumann(1)` copies the second
+  always holds) and never extinct.
 - **Energies.** A per-cell target volume, and adhesion
   `J = [0 2 10; 2 16 J_LF; 10 J_LF 5]` (medium, leader, follower).
 - **Migration cue.** A static field `cue = y − 1`. A copy whose source or target cell is a
@@ -59,7 +61,7 @@ the authors' metric code does.
         contacts => J[kind, kind′]
     end
     @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
-    @constraint connectivity(leader, follower)   # one arc in the 8-ring: CC3D's Connectivity plugin
+    @constraint connectivity(leader, follower)   # `Local()`: CC3D's Connectivity plugin (D-191)
     @constraint no_extinction
     @after_mcs begin
         V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))

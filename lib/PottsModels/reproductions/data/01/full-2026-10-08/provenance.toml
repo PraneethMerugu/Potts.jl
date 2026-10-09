@@ -25,3 +25,21 @@ item = "P6.3f"
 rebuild_commit = "4f3a210ed5094a730cdee066a066731dddf69451"
 page = "lib/PottsModels/reproductions/01_merks.jl"
 launches = ["launch 2026-10-08T15:06:45-04:00 3f1c441a03b0fe3f396c275e82ec753da93935b8 praneeth-NucBox-EVO-X2", "launch 2026-10-08T18:45:29-04:00 4f3a210ed5094a730cdee066a066731dddf69451 praneeth-NucBox-EVO-X2"]
+
+# D-200 item 1 (2026-10-09): V-C12 re-read from MCS 0, the frozen test's amended definition.
+# No new dynamics: `vc12_mcs0.jl` read the stored σ snapshots of the 20 V-C12 jobs (MCS 0,
+# 100 and 19 300, written by launch 1) at `commit`, with the frozen test's own observables
+# at that commit. `displacement_sites_100` equals `displacement_sites` in replicates.tsv
+# exactly; `displacement_sites_0` is the amended V-C12 observable.
+[vc12_mcs0]
+decision = "D-200"
+date = "2026-10-09"
+script = "lib/PottsModels/reproductions/data/01/full-2026-10-08/vc12_mcs0.jl"
+output = "lib/PottsModels/reproductions/data/01/full-2026-10-08/vc12_mcs0.tsv"
+commit = "4f3a210ed5094a730cdee066a066731dddf69451"
+dirty = false
+seeds = "CI 12001–12010; no CI (χcc = 500) 12101–12110"
+snapshot_times = [0, 100, 19300]
+new_dynamics = false
+julia = "1.12.6"
+frozen_test_sha256 = "cf9a6b8b301089ddd95bfb2d7a2578e47754f58e85017b213d3f83f4dfbb514f"

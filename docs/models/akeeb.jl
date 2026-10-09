@@ -105,7 +105,8 @@ using Potts, PottsModels
 #
 # `connectivity(leader, follower)` forbids copies that would split a leader or a
 # follower: the cell losing the target site must keep its neighbours of that site in one
-# arc (CompuCell3D's `Connectivity` plugin, used by the authors). `no_extinction` forbids
+# arc (CompuCell3D's `Connectivity` plugin, used by the authors; the default rule
+# `Local()`, see [Connectivity](@ref manual-connectivity)). `no_extinction` forbids
 # copies that take a cell's last site.
 #
 # ## Step 8: growth and clocks

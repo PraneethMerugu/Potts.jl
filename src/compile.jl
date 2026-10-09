@@ -28,6 +28,9 @@ struct CompiledPottsSystem
     uses_surface::Bool
     uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
     uses_cluster_surface::Bool
+    uses_euler::Bool                                  # `euler` (face adjacency), P6.3j
+    uses_euler_full::Bool                             # `euler(; adjacency = :full)` (not on hex)
+    euler_full_column::Symbol                         # the column it reads: `:euler` on hex (D-192 Q4)
     cluster_division::Bool
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
@@ -54,11 +57,19 @@ struct CompiledPottsSystem
     # the cell and model `@initialization_equations` (`initialization_system`, initialization.jl),
     # by scope; run when a problem is built, never read by codegen
     initialization::Dict{Symbol, Any}
+    # cell-scope `pieces`/`largest_piece` (P6.9a): the face and full trackers read; on a
+    # hexagonal lattice `:full` reads the `:face` columns (one adjacency, D-193)
+    uses_pieces::Bool
+    uses_pieces_full::Bool
+    pieces_hex::Bool
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
-const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length)
+const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
+    :pieces, :pieces_full, :largest_piece, :largest_piece_full)
+# the cell-scope pieces trackers (P6.9a): the face pair, the full pair
+const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_full)
 # cell updates, division rules (cluster trackers change with copies of other members, so
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
@@ -96,10 +107,10 @@ function _bare_builtins(x, out = Set{Symbol}())
     return out
 end
 
-const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
+const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES...)
 
 # names a user can write (`site′` only arises from `x′`)
-_visible(names) = filter(!=(:site′), collect(names))
+_visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
 
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
@@ -400,6 +411,20 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
+    uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
+    uses_euler_full = any(x -> _uses_builtin(x, :euler_full), scanned)
+    # hex has one self-dual adjacency: `:full` reads the `:face` column and its shell (D-192 Q4)
+    hex = core_lattice(getfield(sys, :lattice)).geometry isa CP.Hexagonal
+    euler_full_column = hex ? :euler : :euler_full
+    if hex && uses_euler_full
+        uses_euler, uses_euler_full = true, false
+    end
+    # cell-scope pieces (P6.9a): one tracker pair per adjacency read; hex has one adjacency
+    uses_pieces = any(x -> _uses_builtin(x, :pieces) || _uses_builtin(x, :largest_piece), scanned)
+    uses_pieces_full = any(x -> _uses_builtin(x, :pieces_full) || _uses_builtin(x, :largest_piece_full), scanned)
+    if hex && uses_pieces_full
+        uses_pieces, uses_pieces_full = true, false
+    end
     uses_clusters = cluster_division || uses_cluster_surface ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
@@ -408,7 +433,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     # gather relations numbered in `scanned` order and, within one, by content (D-107)
     for x in scanned
         specs = unique!(Any[ni.options.relation for (ni, _) in _gathers(x)
-                            if !(ni.options.relation isa RelationRef) && !haskey(gather_names, ni.options.relation)])
+                            if !(ni.options.relation isa Union{RelationRef, ShellRelation}) && !haskey(gather_names, ni.options.relation)])
         ckeys = map(r -> _canonical_checked(() -> "the relation `$(_key_string(r))`", r), specs)   # D-130
         for spec in specs[sortperm(ckeys)]
             gather_names[spec] = Symbol(:gather, length(gather_names) + 1)
@@ -432,7 +457,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             (u.eq.rhs for u in oncopy)..., (u.eq.lhs for u in oncopy)..., getfield(sys, :sweep).temperature]
         for (ni, anchor) in _gathers(x)
             spec = ni.options.relation
-            r = rad(spec isa RelationRef ? getfield(sys, :relations)[spec.name] : spec)
+            r = spec isa ShellRelation ? 1 : rad(spec isa RelationRef ? getfield(sys, :relations)[spec.name] : spec)
             if _uses_builtin(anchor, :source)
                 source_read = max(source_read, r)
             else
@@ -484,11 +509,12 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         getfield(sys, :constraints), updates, fields, cell_odes, model_odes, getfield(sys, :divisions), relationships, edge_terms, edge_vars,
-        getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
+        getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler, uses_euler_full,
+        euler_full_column, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers, authored, ode_systems, initialization)
+        contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex)
 end
 
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
@@ -576,7 +602,7 @@ _all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(getfield(
 # Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
 # derived only for cell terms.
 function _check_static(x, what)
-    for n in (:volume, :surface, :cluster_volume, :cluster_surface)
+    for n in (:volume, :surface, :cluster_volume, :cluster_surface, :euler, :euler_full, _PIECES_NAMES...)
         _uses_builtin(x, n) && throw(ArgumentError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
     end
     return nothing
@@ -659,7 +685,11 @@ end
 function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
     sub = Dict{Any, Any}(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
-        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR, after...)
+        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR,
+        _unwrap(B.euler) => B.euler + DEULER, _unwrap(B.euler_full) => B.euler_full + DEULER_FULL,
+        # not deltas: the exact after-values of the copy (P6.9a)
+        _unwrap(B.pieces) => DPIECES, _unwrap(B.largest_piece) => DLARGEST,
+        _unwrap(B.pieces_full) => DPIECES_FULL, _unwrap(B.largest_piece_full) => DLARGEST_FULL, after...)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
     # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
     # metadata of scoped variables `x(t)` inside them: expand over placeholders instead

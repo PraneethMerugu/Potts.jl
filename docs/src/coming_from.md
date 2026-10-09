@@ -29,7 +29,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `<Plugin Name="Surface">` | `cells(k) => λₛ * (surface - S₀)^2` |
 | `<Plugin Name="Contact">` `Energy Type1 Type2` | `contacts => J[kind, kind′]` with `J[kind, kind]` |
 | `<Plugin Name="ContactInternal">`, compartments | `contacts => ifelse(cluster[owner] == cluster[owner′], Jint, J[kind, kind′])`, `cluster =>` in the operating point |
-| `<Plugin Name="Connectivity">` | `@constraint connectivity(k)` |
+| `<Plugin Name="Connectivity">` | `@constraint connectivity(k)`, or the penalty form `@drive connectivity(k; penalty = P)` ([Connectivity](@ref manual-connectivity)) |
 | `<Plugin Name="LengthConstraint">` (2D) | `cells(k) => λL * (major_length - L)^2` |
 | `<Plugin Name="Chemotaxis">` `Lambda`, `SaturationCoef` | `@drive Chemotaxis(c; strength = λ, response = saturating(s), kinds = (k,))` |
 | `ChemotactTowards` (only into medium) | `Chemotaxis(c; strength = λ, when = old == 0)` |
@@ -87,7 +87,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `Protrusion` (Act model) | a site variable with `@on_copy`, `@after_mcs` and a geometric-mean drive (see [Drives](@ref manual-drive) and `WortelAct`) |
 | `Haptotaxis` | `@drive copy => -μ * (a[target] - a[source])` for a site variable `a` |
 | `CellDivision Condition, division-plane` | `@divide cells(k) when = …, along = …` |
-| `ConnectivityConstraint` | `@constraint connectivity(k)` |
+| `ConnectivityConstraint` | `@constraint connectivity(k; rule = Simple())` ([Connectivity](@ref manual-connectivity)) |
 | `FreezeMotion` | a `[frozen]` kind, or a constraint on `kind[old]` |
 | `MechanicalLink` | `@relationship` with `edges(…)`, `@link`, `@unlink` |
 | `InitRectangle`, `InitCircle` (random) | `Tiling`, `Scattered`, `InsertUntil` |

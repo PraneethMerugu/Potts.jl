@@ -1,2 +1,1 @@
 row	check	suspected_cause	author_question
-V-C12	displacement ratio CI / no CI (MCS 100 to 19 300)	Ours: CI 68.1 ± 5.9 µm, no CI 54.0 ± 1.9 µm (n = 10 each) against the paper's ≈ 85 and ≈ 42 µm. The paper does not define its displacement (net centroid displacement, as ours, or path length; per cell or per cluster) nor say whether the 160 h include the 100 relaxation MCS (A-19). On the framed 202² lattice the contact-inhibited sprout reaches the frame, which bounds net displacement. Not diagnosed further.	not asked (on our open question list: README §5, Merks item 3)

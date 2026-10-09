@@ -3535,6 +3535,10 @@ session.
   - CC3D 4.3.1–4.6.0 → `@drive connectivity(k; rule = Local(), penalty = P)`;
   - CC3D ≥ 4.7.0 → `penalty = 64`;
   - the hard form is the T → 0 limit.
+- **Maintainer ruling, 2026-10-09 (relayed by the "models and publications" session): "no".**
+  - We do not reproduce the (0,0,0) quirk.
+  - P6.2f (merge 556ce1da) carries the page 10 deviations row and the sentence on penalty and version (CC3D ≥ 4.7.0 ignores `<Penalty>` and uses 64).
+  - The page row does not name a CC3D version for the quirk, because the source reads the same in every version checked.
 
 ## D-192 P6.3j: the Euler-characteristic tracker design (2026-10-08; coordinator, from the P6.3j design note `docs/design/research/euler-tracker.md`; under D-189 ruling 12)
 
@@ -3618,3 +3622,189 @@ session.
   - Example: WortelAct's existing `connected` structural parameter.
   - Renaming it instead would force about 12 more re-freezes, for no gain to users.
   - The docs page notes the shadowing.
+
+## D-196 P6.3g re-freezes (2026-10-09; coordinator, from the P6.3g re-freeze test author, commit 6d2dfd03; under D-189, D-193, D-195)
+
+- **Scope.** Twenty frozen acceptance files are re-frozen, for P6.3g alone.
+- **Fingerprint-only changes.** The models' dynamics are unchanged. The check was a same-seed σ hash on Sequential and Checkerboard with Moore(1) proposals, 3 seeds each, matching base 2299d21d.
+  - AkeebInvasion (both pins)
+  - WortelAct with `connected`
+  - p6_0g's `P60G_X_PIN`
+- **Dynamics change.** The legacy `MerksVasculogenesis` (`rule = :local`) changes σ on every algorithm, because the gain test and the full-shell refusal now apply to Moore(1) copies (D-189 rulings 3 and 10). Its pins in these files are updated, each with a comment citing D-189 rulings 3 and 10:
+  - p6_0ag, 0ah, 0aq, 0as, 0at, 0au, 0av, 0ax, 0c2, 0g, 0o (4 pins), 0p, 0t and 0x.
+- **Fingerprint-only re-freezes:** p6_0ar and p6_0aw.
+- **Behaviour changes.**
+  - p6_0aa: the closed-edge frame is now refused (ruling 5, P6.0ae).
+  - p6_0m (e): the oracle gains the gain test and full-ring refusal (D-191 rules 1 and 2).
+  - p6_3a: `components(old; scope = Global())` becomes `!connected(old; rule = Global())` (ruling 6).
+  - p6_3g: its alias testsets call through `Base.invokelatest`, to fix Julia 1.12 world age. Nothing else changes.
+- **Unchanged.** Merks2006/2008 (reproduction 01), p6_0v3's Merks digests and p6_0bm. No FULL record uses the legacy `MerksVasculogenesis`, so no FULL re-run is needed under D-154.
+- **Follow-up.** The default-build model-page video `paper_runs/merks_vasculogenesis` was rendered with the old rule. Re-render it once P6.3g lands (P6.3g-v).
+
+## D-197 P6.9a: Global connectivity test frozen (2026-10-09; coordinator, from the P6.9a test author; under D-075, D-189, D-193)
+
+- **Frozen test.** `acceptance/p6_9a_global_connectivity.jl` (commit 520302de, sha256 `704a7d54485bb0b97744e6c32b964f82e7822c6b6545adfb76d13ea0d10c3003`), 18 testset templates.
+- **Readings.**
+  1. Both cells use "does not increase the number of pieces". For `new`, this means the target x is adjacent to `new`.
+  2. `window` applies to CheckerboardCPM only. SequentialCPM is exact: it ignores the window and its counter stays at 0.
+  3. The window is an index-space box of radius W, using the minimum image.
+  4. `stats.connectivity_deferred` counts copies that passed the acceptance draw but overflow the window. It is `nothing` when the model has no Global rule.
+  5. A Global-refused copy with a non-finite ΔH fails the run.
+  6. Cell-scope `pieces` and `largest_piece` take no window and are exact. Energies see exact after-values.
+  7. Not pinned:
+     - the penalty form with a window;
+     - `window = nothing` on a device;
+     - BoundarySiteCPM. It should behave like SequentialCPM, being equal in law; if not supported, it must give a build error that names it.
+- **Test environment.** AllocCheck joins the PottsModels test environment.
+- **Re-freezes forced at implementation.** p6_3a's "Global() is a reserved placeholder" check, and the error checks in p6_3g at lines 704–708. Both go through a test author.
+
+## D-198 BoundarySiteCPM becomes a solver option, `skip_interior`; amends D-177 (2026-10-09; maintainer ruling relayed by the "models and publications" session: "i think we should completely clear out BoundarySiteCPM(). i like skip_interior as well". Consistent with the earlier instruction "make boundarysite a seperate algorithm than sequential, or atleast an option")
+
+- **Why.** BoundarySiteCPM is an exact execution strategy: equal in distribution to SequentialCPM, with the skipped interior picks counted exactly. That makes it a solver choice, not model content.
+  1. **Removed completely, with no alias.** `BoundarySiteCPM` comes out of exports, docs, algorithm tables and tests.
+  2. **`SequentialCPM(; skip_interior = true)`** has the semantics BoundarySiteCPM has today:
+     - it draws only sites that can propose a non-null copy;
+     - it accounts exactly for the skipped picks;
+     - the attempt count per MCS and the MCS time are unchanged.
+     
+     The default, `false`, compiles to today's SequentialCPM loop, and the gate is unchanged.
+  3. **`CheckerboardCPM(; skip_interior = true)`** is the same option on the checkerboard. This is GE3 / P6.0bk, which folds in under this name: one concept, one keyword.
+  4. **The skip composes with any proposal law.** For `UnlikeNeighbor` (P6.4b), the interior is "no unlike neighbour in the relation".
+  5. **The planned `BoundarySite(rel)` proposal law is dropped** from P6.4b and api-synthesis §2.12. A boundary-only law with different time counting waits until a paper needs one; none of the 15 specs does.
+- **Sequencing.**
+  - The running foam FULL run (04_foam.jl `P64R_ALG`, D-190) is not touched.
+  - After its record lands, the rename is one change (P6.0bk2): the 04 and 15 frozen tests, plus any others, are re-frozen with `BoundarySiteCPM()` → `SequentialCPM(; skip_interior = true)`.
+  - **Code-identity check.** The rename must be code-identical: same RNG draws, the same σ on the SMOKE tiers, and the same verdicts. Equivalence in law was already shown under D-177, so no re-runs are expected.
+- **Existing records stay valid.** Their provenance names BoundarySiteCPM as a historical fact. Each record README gains one line saying it is now `SequentialCPM(; skip_interior = true)`.
+
+## D-199 Ergonomics items (2026-10-09; maintainer asked "how ergonomic is our library so far" and approved filing the assessment's list; relayed by the "models and publications" session; checked by the coordinator)
+
+- **Assessment.** The library is very good for Julia/SciML users and good for CC3D/Morpheus modellers. It is only fair for biologists new to coding, and the items target that group. The assessment comes from rereading the docs, not from a user study.
+- **Checked against the repository.**
+  - `capacity = 256` in the OpenVT minimal run: confirmed.
+  - "About a minute" for a first run, and "3200 of our MCS are 200 of the paper's": both confirmed in getting_started.
+  - `pottsplot` takes a frame only: confirmed.
+  - `attempts` (P6.4b) and `@terminate` (P6.4c) were already planned.
+  - Two corrections to the proposal:
+    - `count_contacts` is symbolic-only (`src/contact_folds.jl`), so E8 needs an `@observed` or a new helper for use after a run.
+    - `coming_from.md` already maps the CC3D Connectivity plugin, so E9 adds the D-191 version note and the patterns still missing.
+- **Items.** Filed as ROADMAP P6.E1–P6.E10.
+- **Constraints.** API additions keep the old forms. None changes a frozen verdict unless the maintainer rules otherwise.
+
+## D-200 Findings from the proposal-law research: paper over code (2026-10-09; maintainer approved the spec owner's list, relayed by the "models and publications" session; `docs/design/research/proposal-law-clues.md`)
+
+- **Standing rule (maintainer).** "We trust the paper over codebases, but use both for research. If the OpenVT manuscript is accurate, choose it over TST."
+- **Proposal law ruled out.** The proposal law does not explain V-C12, V-PRE5/7 or OpenVT V1/V3b/V4.x. The proposal laws of all four OpenVT frameworks are equivalent per MCS to ours. There is no sensitivity study on the proposal law.
+
+1. **Merks V-C12: reference time.**
+   - Fig 6E measures displacement from MCS 0, before relaxation. We measure from MCS 100.
+   - The check runs on the PC from the stored FULL snapshots, with no new dynamics.
+   - If the ratio moves toward [1.5, 2.5], V-C12's frozen definition changes to the paper's axis (MCS 0 → ≈ 19,800), through a test author, and the row is re-judged.
+2. **Merks attempts per MCS (coordinator's call).** The paper says N = 200² = 40 000 attempts. We follow TST's 198² mobile sites, a 2 % difference in time scale.
+   - **Now:** a deviation row on page 01. It states the 2 % time scale and that the paper wins.
+   - **Next 01 FULL re-run:** use the paper's N through `attempts` (P6.E2, fractional attempts) once that lands. A FULL re-run is not worth it for this alone.
+3. **Sorting V-PRE4 wording.** The paper's total is twice-counted Moore bonds, on boundaries about 10 % smoother after its T = 0 anneal (Moore counted twice ≈ 74k against 66.85k). This is not "not simply double counting".
+4. **Sorting V-PRE5 suspected cause.** "Stochastic late coalescence; paper n = 1; light:dark share unstated". Sources: Durand 2021, Holm et al. 1991 and Franke 2022. The row reports "k of 22 replicates reach ≥ 0.90 single-cluster share at 10⁴" from existing data.
+5. **OpenVT V1, V3b and V4.x suspected cause.** Where we differ from TST: "TST departs from the manuscript: divides on target area". `openvt_reference.jl` follows the manuscript.
+   - The page notes that CC3D, Morpheus and Artistoo each depart from Table S1 in places.
+   - Q23 on our open question list: the released TST stops at max_cell_count = 1000, so which build produced its curves beyond 10³?
+
+- **Later, not now.** Durand & Guesnet 2016's connectivity-preserving CPM is probably expressible with `connectivity(…; rule = Global())`. It is an extended-library candidate after the paper.
+- **Result for item 1 (2026-10-09).** Measured from MCS 0 → 19 300, V-C12 = 2.017 (bootstrap 95 % 1.91–2.13). CI is 82.8 ± 6.8 µm against the paper's 85; no-CI is 41.1 ± 1.8 µm against 42. The MCS-100 control reproduces 1.2605.
+  - The frozen definition now starts at MCS 0. The band is unchanged.
+  - The record gains `vc12_mcs0.tsv`, computed from the stored snapshots with no new dynamics.
+  - The page test now requires the attempts-per-MCS deviation row (item 2).
+  - Reproduction 01 is now 37 of 37.
+  - Re-frozen: `reproductions/01_merks.jl` cf9a6b8b, `reproductions/01_merks_page.jl` fe3be096, and page `01_merks.jl` c11c5b92.
+
+## D-201 Shell-based quantities reject a periodic axis of length 1 (2026-10-09; coordinator, from the P6.3j and P6.9a reviews)
+
+- **The problem.** On a periodic axis of length 1, the shell's ±1 offsets wrap back onto the target site. Local and Global connectivity then count the target as its own neighbour, which lets copies through that split a cell. The same wrap gives wrong values for `pieces`, `largest_piece` and `euler`.
+  - The P6.9a review found a concrete case: on 5×5×1 with a periodic third axis, a copy that splits a cell passes the local test.
+- **The rule.** Building a problem raises an ArgumentError on the host when both of these hold:
+  - the model reads any shell-based quantity: Local, ArcOrPair, Simple, Global, `connected`, `pieces`, `largest_piece`, `local_components`, `ring_*` or `euler`;
+  - the lattice has a periodic axis of length 1.
+  
+  The message names the quantity and the axis, and suggests a 2D lattice or a Closed axis. There is one check, shared by all of these; it generalises P6.3j's check for `euler`.
+- **Axes of length 2.** These are sound: random copy runs show no drift, and the lattice's offset-alias check already guards them.
+
+## D-202 P6.3f: digitised targets from Merks 2008 (01b), test frozen (2026-10-09; coordinator, from the P6.3f 01b test author; under D-153–D-156, D-200)
+
+- **Frozen files.**
+  - The test: `reproductions/01_merks_01b.jl` (commit 72c7fc01, sha256 `62b60427…`).
+  - Digitised data: `reproductions/data/01b/fig{05,07,08,09,10,12,13}.tsv`, plus a provenance README covering figure, page, method and uncertainty. All frozen.
+  - The rows live in a new file because the page test pins `01_merks.jl` to the D-200 amendment.
+- **Point rows.** 133 points across 13 curves. A curve passes when at most max(1, ⌊0.1n⌋) points fall outside paper ± band. The band is the wider of the paper's SD and our digitisation error.
+- **Shape rows.**
+  - F5.mid, F7.gap and F7.rise.
+  - F8.dropCI and F8.dropNoCI.
+  - F9.mid and F10.size.
+  - F12.order and F12.rate.
+  - F13: sign and order, with each arm's Σ ΔH within a factor √10 of the paper's.
+- **Negative controls.** Seven, each of which must fail.
+- **Inferred parameters (provisional under D-154; each becomes a deviations row).**
+  - I1: the Fig 12 and 13 start is 256 cells after 71 division rounds, on 502².
+  - I2: the Fig 10 start is 1024 cells after 141 rounds, on 402².
+  - I3: n = 10 for Figs 7–10.
+  - I4: "no CI" means χcc = χcM.
+  - I5: Fig 13's quantity is the Float sum of accepted ΔH, chemotaxis included.
+  - I6: the time axis includes the 100 relaxation MCS.
+  - I7: Fig 10's legend contradicts its caption, so the flatter solid curve is read as the 1024-cell one.
+- **Not pinned.**
+  - Fig 13 magnitudes beyond √10, because we have no integer ΔH truncation.
+  - Fig 12 before 100 MCS.
+  - Fig 10 at very low D.
+  - Fig 5 at r = 0 and 1.
+  - Insets.
+  - Figs 6 and 11.
+- **Record.** `full-01b-*` is pending. Its FULL run is 1330 jobs, about 103 thread-hours (about 4.3 h at 24 threads), and it runs on the PC after the foam FULL. A runner implementer goes first.
+
+## D-203 Foam: a pre-registered scan of a separate bulk scale κ_b (2026-10-09; maintainer ruling "Calibrate scan first", relayed by the 04 spec owner; under D-154, D-156, D-190)
+
+- **What stays.**
+  - The F1 displacement form.
+  - The boundary κ = 2.497.
+  - Strain-rate control is ruled out, because the paper gives γ in units of force (04b p.5822).
+- **What changes.** The bulk Eq 7 term gets its own scale: γ = κ_b·β·y·G(t). κ_b is not stated in the paper (A-1) and is calibrated under D-156.
+- **Pre-registered scan.** The protocol is frozen before anything runs.
+  - (a) Ordered foam, β ∈ {1e-4, 1e-3, 5e-3, 0.01, 0.05}, a κ_b grid and a few seeds. Measured: first-T1 MCS, in paper MCS through τ.
+  - (b) Fit target, from §3.2: β = 0.01 gives ≈ 4300 MCS and β = 0.05 gives ≈ 420 MCS, which is ε_y ≈ c·β·t with c ≈ 0.020–0.026.
+  - (c) Consistency check: T1s occur at β ≤ 0.001, so Fig 9's N̄ > 0.
+  - (d) Decision rule:
+    - If one κ_b meets (b) within §3.2's ≈ 25 % calibration limit and satisfies (c), it becomes a D-entry. The test is then re-frozen and the 200 bulk jobs re-run.
+    - Otherwise stop. The Eq 2 form is in question, the record stays provisional, and the question goes to Dr Jiang as the F1 hard gate.
+- **V18.** It keeps its frozen window unless the paper defines that window by strain.
+- **Running and reporting.** The scan runs on free PC cores after the first record lands. The scan table goes to the spec owner first.
+
+## D-204 OpenVT submission package completed for the consortium repository and the manuscript (2026-10-09; maintainer: "yes, and make sure we finally have the submission package for the rveltz repo and manuscript", relayed by the spec owner; "rveltz" read as R. Vetter's consortium repository; under D-146, D-180, D-181)
+
+- **Data: P6.15j's pending items become required.**
+  - (a) A per-cell O1 recorder, writing `x,y,i,n` per save with spec 15 §3.1 names. Cases a, b, e and f are re-run on the PC from their recorded seeds. Each run's stop MCS and N must match `runs.tsv`, which shows the record was reproduced.
+  - (b) O2 for case (b), regenerated from the re-run if `F5_O2_DIR` is gone.
+  - (c) A3 shares over time (i = 0…3), derived from O1, for cases a and e, and for c and d where O1 exists.
+  - (d) The package README gains the MIT line (D-181).
+  - (e) The package test is re-frozen with every pending item required. The package is built outside git.
+- **Manuscript.** The spec owner drafts `docs/design/research/openvt-manuscript-section.md`, and the coordinator checks its facts against the records.
+- **Limits.**
+  - O1 data are compressed per case and kept out of git.
+  - Nothing is uploaded to the consortium repository until the maintainer says so. Write access (Q11) is Dr Jiang's to raise.
+  - The maintainer is asked before any upload over about 100 MB.
+
+## D-205 P6.4r-kb: κ_b scan protocol frozen (2026-10-09; coordinator, from the κ_b scan test author; implements D-203)
+
+- **Frozen test.** `reproductions/04_foam_kb_scan.jl`, commit 830f72fb, sha256 `dc6de6bc…`.
+- **Grid.** κ_b = 2.497·2^(i/2) for i = −8…14: 23 values, from 0.156 to 319.6.
+  - i = 0 is D-190's setting and serves as a harness check: the medians there must land within ±25 % of the D-190 record's 455 and 40.
+  - The bounds come from the D-190 record.
+  - The √2 step is finer than the ±25 % window.
+- **Seeds.** Ordered foams 1–3, 3 replicates each. τ is taken over foams 1–5, as in D-190. Every κ_b uses the same seeds.
+- **Run caps.** 2^16 paper MCS for β ≤ 1e-3 and 2^14 above it. A run that never yields records −1.
+- **Targets.** 4300 and 420 MCS, each within ±25 %. The 25 % is spec §3.2's "limits of this calibration".
+- **Consistency check.** T1s at β = 1e-3 in at least 2 of 3 seeds. β = 1e-4 is recorded but does not gate.
+- **Decision rule.**
+  1. If exactly one grid value meets both targets and the consistency check, it is chosen.
+  2. Otherwise, interpolate log–log on the median curves to get κ̂ for each target, and take their geometric mean. Both targets must hold there, and the consistency check must hold at the grid value just below it.
+  3. If neither applies, the rule returns `nothing`: stop, and take the question to the F1 gate.
+- **No model change.** κ_b is applied by the harness. The Eq 7 term reads only β, so no model change is needed.
+- **PC cost.** 345 jobs, about 2–3 h on 24 threads. The scan runs after the 01b FULL, and its table goes to the spec owner first.
+- **Prediction.** From the D-190 record, a pinning cliff is likely, so the rule may well return `nothing`.

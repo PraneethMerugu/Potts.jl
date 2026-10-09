@@ -183,7 +183,7 @@ _integral_operand(x) = first(_integral_hoist(x))
 function _integral_hoistable(pop)
     _has_op(pop, random_uniform) && return false
     rn = Dict{Any, Symbol}(ni.options.relation => :__gather for (ni, _) in _gathers(pop)
-                           if !(ni.options.relation isa RelationRef))
+                           if !(ni.options.relation isa Union{RelationRef, ShellRelation}))
     return _hoistable(pop, rn)
 end
 

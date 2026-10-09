@@ -34,9 +34,11 @@
 #    SequentialCPM and CheckerboardCPM in 3D. Sibling: soft (E₀) connectivity on a 3D lattice
 #    keeps cells whole where E₀ = 0 (negative control) does not.
 # 4. `Global(; window = nothing)` is a reserved DSL name (placeholder until P6.9): it
-#    constructs (`window` is `nothing` or a positive integer, else `ArgumentError`), and a
-#    model that uses `components(old; scope = Global())` is an `ArgumentError` naming
-#    `Global` when it is built (macro, `mtkcompile` or `PottsProblem`), on every algorithm.
+#    constructs (`window` is `nothing` or a positive integer, else `ArgumentError`). A
+#    model that uses `!connected(old; rule = Global())` was an `ArgumentError` until P6.9;
+#    re-frozen for P6.9a: it now builds and runs on every algorithm.
+#    (Re-frozen under D-189 ruling 6: `components(old; scope = Global()) > 1` is gone, with
+#    no alias; its meaning, "old is in more than one piece", is now `!connected(old; rule = …)`.)
 #    Control: the same model with `local_components` builds.
 # 5. `PottsProblem(sys, op, tspan; track = (:ΔH,))` accumulates Σ ΔH over the ACCEPTED
 #    (committed) copies of every sweep into `sol.stats.accepted_ΔH::Float64`; ΔH is the
@@ -492,7 +494,7 @@ function p63a_build_error(body::Expr)
     return nothing
 end
 
-@testset "P6.3a: Global() is a reserved placeholder" begin
+@testset "P6.3a: Global() is a DSL name that builds (P6.9a)" begin
     @test :Global in keys(Potts.DSL)
     G = Potts.DSL.Global
     @test G().window === nothing
@@ -505,7 +507,7 @@ end
                 @kinds medium A
                 @lattice Lattice((10, 10); neighborhood = Moore(1))
                 @energy cells => (volume - 9)^2
-                @drive copy => 100.0 * (components(old; scope = Global()) > 1)
+                @drive copy => 100.0 * !connected(old; rule = Global())
                 @sweep Metropolis(; temperature = 1.0)
             end
             let σ = zeros(Int32, 10, 10)
@@ -513,8 +515,9 @@ end
                 solve(PottsProblem($name(; name = :g), [ownership => σ, kind => [:A]], (0, 1)), $alg)
             end
         end)
-        @test e isa ArgumentError
-        @test e isa ArgumentError && occursin("Global", sprint(showerror, e))
+        # re-frozen for P6.9a: `Global()` is now a rule value and builds and runs (it was an
+        # ArgumentError placeholder until P6.9)
+        @test e === nothing
     end
     # control: the local value in the same place builds and runs
     e = p63a_build_error(quote

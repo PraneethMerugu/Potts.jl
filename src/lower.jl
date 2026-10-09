@@ -125,6 +125,7 @@ function lower(x, env::LowerEnv)
     args = arguments(x)
     (op === at || op === at2) && return _lower_at(args, env)
     op === gather && return _lower_gather(args, env)
+    op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
     if op === cell_centroid
@@ -448,6 +449,14 @@ function _lower_at(args, env)
         end
         i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        if i.name in (:euler, :euler_full)
+            s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
+            return :($(env.T)(Potts._cellval(st.cell.$(_euler_column(i.name)), $j)))
+        end
+        if i.name in _PIECES_NAMES
+            s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
+            return :($(env.T)(Potts._cellval(st.cell.$(_pieces_column(i.name)), $j)))
+        end
         if i.name === :cluster
             s === :site && error("`cluster[…]` needs a cell; write `cluster[owner[s]]`")
             return :(CorePotts.cluster_of(st.cell, $j))
@@ -469,6 +478,9 @@ function _lower_population(args, env)
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+            :euler => :($T(@inbounds st.cell.euler[$nsym])),
+            :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
+            (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
             :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
             :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
             :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))))
@@ -539,8 +551,15 @@ function _lower_gather(args, env)
         error("a gather is anchored at a site: use `site` (the current site), `source` or `target`, not `position`")
     ni = info(n)
     spec = ni.options.relation
-    rel = spec isa RelationRef ? spec.name : env.relname[spec]
     T = env.T
+    # the target's shell (`shell(s)`, P6.3g) is a fixed offset table of the lattice, not a
+    # context relation
+    if spec isa ShellRelation
+        len, offs = :(length(CorePotts.shell_offsets(ctx.lattice))), :(CorePotts.shell_offsets(ctx.lattice))
+    else
+        rel = spec isa RelationRef ? spec.name : env.relname[spec]
+        len, offs = :(length(ctx.$rel)), :(ctx.$rel.offsets)
+    end
     nsym = Symbol(nameof(_unwrap(n)))
     # names derived from the (unique) bound variable: deterministic, so rebuilding a problem
     # yields the same generated function and never recompiles
@@ -567,13 +586,31 @@ function _lower_gather(args, env)
         false, :($acc |= $v), acc
     elseif op === :all
         true, :($acc &= $v), acc
+    elseif op === :pieces             # a mask of the shell positions, then their pieces
+        :(UInt32(0)), :($acc |= UInt32(1) << ($k - 1)), :(CorePotts.shell_pieces(ctx.lattice, $acc, $(ni.options.full)))
+    elseif op === :distinct           # counted at its first occurrence: no earlier site gives it
+        nothing, nothing, acc
     end
     condc = lower(cond, env)
     bodyc = lower(body, env)
+    if op === :distinct
+        k2, y2, in2, dup = map(p -> Symbol(p, :_, nsym), (:k2, :y2, :in2, :dup))
+        init = :(Int32(0))
+        step = quote
+            $dup = false
+            for $k2 in 1:($k - 1)
+                $in2, $y2 = CorePotts.shift(ctx.lattice, $x0, @inbounds $offs[$k2])
+                $in2 && ($dup |= let $nsym = CorePotts.linear_index(ctx.lattice, $y2)
+                    $condc && ($bodyc == $v)
+                end)
+            end
+            $acc += Int32(!$dup)
+        end
+    end
     return quote
         let $x0 = CorePotts.coordinates(ctx.lattice, $(lower(anchor, env))), $acc = $init, $cnt = 0, $flag = false
-            for $k in 1:length(ctx.$rel)
-                $ins, $y = CorePotts.shift(ctx.lattice, $x0, @inbounds ctx.$rel.offsets[$k])
+            for $k in 1:$len
+                $ins, $y = CorePotts.shift(ctx.lattice, $x0, @inbounds $offs[$k])
                 if $ins
                     $nsym = CorePotts.linear_index(ctx.lattice, $y)
                     if $condc
@@ -586,6 +623,30 @@ function _lower_gather(args, env)
             $fin
         end
     end
+end
+
+# `connected(c; rule)` (P6.3g): the rule's CorePotts kernel on the copy, for `old` or `new`
+function _lower_connected(args, env)
+    env.mode === :proposal || error("`connected(…)` and `connectivity(…)` read a copy: use them in @constraint or @drive")
+    who = isequal(_unwrap(args[1]), _unwrap(B.old)) ? :old : :new
+    code = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+    g = _global_rule(code)
+    g === nothing || return _lower_global(who, g)
+    code <= 3 && return :(CorePotts.local_rule(st.σ, ctx, prop, $(isodd(code)), $(code >= 2)))
+    code == 4 && return :(CorePotts.arc_or_pair(st.σ, ctx, prop))
+    return :(CorePotts.simple_point(st.σ, ctx, prop, $who, $(code == 6)))
+end
+
+# `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
+# window on the checkerboard (an undecided copy reads `false`); the gaining side is local
+_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.σ, ctx, prop, $(_global_adj(g)))) :
+                        :(CorePotts.global_keeps(st.σ, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+# `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
+_global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
+function _global_vals(g)
+    W = g.window
+    cap = W === nothing ? 0 : prod(n -> min(n, 2W + 1), _LATTICE_DIMS[])
+    return (_global_adj(g), :(Val($W)), :(Val($cap)))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -623,3 +684,6 @@ function _gathers(x)
 end
 
 _has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
+# whether `x` reads `connected(…; rule = Global(…))` (P6.9a)
+_reads_global(x) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === _connected &&
+    _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x); found[])

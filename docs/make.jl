@@ -25,9 +25,11 @@ const WITH_PUBLISHED = get(ENV, "POTTS_DOCS_PUBLISHED", "false") == "true"
 # One page per paper, in the order of the status page: the reproduction page's stem, the
 # model page it replaces (`docs/models/<name>.jl`, `@id model-<name>`), and its title in
 # the navigation. A reproduction script not listed here is added after these, under its
-# own heading.
+# own heading. A paper with no model page (no `docs/models/<name>.jl`) gets no short page at
+# `models/<name>/`, and appears only in the published build.
 const PAPER_PAGES = [
     ("01_merks", "merks", "Vasculogenesis (Merks et al. 2006, 2008)"),
+    ("04_foam", "foam", "Foam rheology (Jiang et al. 1999)"),            # no model page (`docs/models/foam.jl`)
     ("09_cell_sorting", "graner_glazier", "Cell sorting (Graner & Glazier 1992)"),
     ("10_akeeb", "akeeb", "Leader–follower invasion (Akeeb, Marcus & Jiang 2026)"),
     ("15_openvt_monolayer", "openvt", "Growing monolayer (OpenVT benchmark)"),
@@ -84,7 +86,12 @@ paper_pages = Any[]
 let built = Set(basename.(published))
     rendered = String[]
     for (stem, name, title) in PAPER_PAGES
-        if stem * ".md" in built
+        has_model_page = isfile(joinpath(@__DIR__, "models", name * ".jl"))
+        if stem * ".md" in built && !has_model_page
+            push!(paper_pages, title => joinpath("published", stem * ".md"))
+        elseif !has_model_page
+            continue
+        elseif stem * ".md" in built
             render_model_stub(name, joinpath("published", stem * ".md"), title;
                 id = stem in has_model_id ? nothing : _model_id(name))
             push!(paper_pages, title => joinpath("published", stem * ".md"))
@@ -166,6 +173,7 @@ manual = [
     "manual/energy.md",
     "manual/drive.md",
     "manual/constraint.md",
+    "manual/connectivity.md",
     "manual/updates.md",
     "manual/equations.md",
     "manual/lifecycle.md",
