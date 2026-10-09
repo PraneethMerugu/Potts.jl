@@ -53,7 +53,7 @@
 # | V-C5 | C vs χ(c,M) at 5000 MCS (Fig. 8) | ±0.1: CI 0.9 / 0.35 / 0.2 at χcM 0 / 500 / 5000; no CI 0.95 / 0.7 at 0 / 5000 | — | 5 points × 10 |
 # | V-C7 | C vs s at 5000 MCS (Fig. 9) | CI: midpoint in s ∈ [0.07, 0.15]; no CI: \|C − 0.95\| ≤ 0.1 at s 0, 0.1, 0.25 | — | 11 points × 10 |
 # | V-C9 | C vs T at 5000 MCS (Fig. 11) | ext-only C(T = 50) > 0.85; ext-retr C(T = 50) < 0.5; both < 0.3 at T = 800 | 1000 MCS, 1 seed: ext-only − ext-retr > 0.2 at T = 50 | 4 × 10 runs |
-# | V-C12 | displacement CI ≈ 85 µm vs no CI ≈ 42 µm over 160 h (Fig. 6E) | O5 from MCS 100 to 19 300: ratio CI/no CI in [1.5, 2.5] | — | 2 × 10 runs |
+# | V-C12 | displacement CI ≈ 85 µm vs no CI ≈ 42 µm over 160 h (Fig. 6E) | O5 from MCS 0 to 19 300: ratio CI/no CI in [1.5, 2.5] | — | 2 × 10 runs |
 # | M6 time | — | every 2008 binding value also at N + 100 MCS | — | reported |
 #
 # PARKED (D-153; not run, listed on the page): V-E2, V-E3, V-E4 (lacunae and branch points
@@ -380,7 +380,10 @@ if P63D_FULLREPRO
     end
 
     @testset "01 FULL: V-C12 (displacement over 160 h, CI vs no CI)" begin
-        D(seed; p) = (r = p63d_run08(seed, [100, 19_300]; p); p63d_displacement(r[100], r[19_300]))
+        # D-200 item 1: displacement from MCS 0, the start before the 100 relaxation MCS, as
+        # 01b Fig. 6E measures it ("from original positions": both curves start at 0 at t = 0
+        # and jump within ≈ 1 h). Was MCS 100 (D-153). End time and band unchanged.
+        D(seed; p) = (r = p63d_run08(seed, [0, 19_300]; p); p63d_displacement(r[0], r[19_300]))
         ci = p63d_tmap(i -> D(12_000 + i; p = Pair[]), 1:10)
         no = p63d_tmap(i -> D(12_100 + i; p = [:χcc => 500.0]), 1:10)
         @test 1.5 <= mean(ci) / mean(no) <= 2.5

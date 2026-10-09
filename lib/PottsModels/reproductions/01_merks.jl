@@ -26,8 +26,9 @@
 # Every result comes from the committed full run
 # `lib/PottsModels/reproductions/data/01/full-2026-10-08/`. It covers 590 runs at the papers'
 # lattice sizes and replicate counts, at commit `3f1c441a`, on an AMD Ryzen AI Max+ 395 (CPU
-# backend, 12 threads). The page reads the record and does not rerun it. **36 of the 37
-# pre-registered checks pass. V-C12, the displacement ratio, fails.**
+# backend, 12 threads). The page reads the record and does not rerun it. **All 37
+# pre-registered checks pass.** V-C12, the displacement ratio, is read from MCS 0 as in the
+# paper's figure (D-200), from the record's stored snapshots without new runs.
 
 using Potts, PottsModels
 using MakiePotts, CairoMakie
@@ -266,10 +267,10 @@ let
     end
     errorbars!(ax, 1:4, m(p9), sd(p9); color = ours, whiskerwidth = 6)
     scatter!(ax, 1:4, m(p9); color = ours)
-    ## V-C12, 01b Fig. 6E: mean displacement over 160 h (the failing check)
-    rep = filter(r -> r["row"] == "V-C12", record_tsv("replicates.tsv"))
-    dmu(ci) = 2 .* [parse(Float64, r["displacement_sites"]) for r in rep if r["CI"] == ci]   # 2 µm per site
-    ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E (FAIL)", ylabel = "displacement (µm)", xticks = (1:2, ["CI", "no CI"]),
+    ## V-C12, 01b Fig. 6E: mean displacement from MCS 0 to code MCS 19 300 (D-200)
+    rep = record_tsv("vc12_mcs0.tsv")
+    dmu(ci) = 2 .* [parse(Float64, r["displacement_sites_0"]) for r in rep if r["CI"] == ci]   # 2 µm per site
+    ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E", ylabel = "displacement from MCS 0 (µm)", xticks = (1:2, ["CI", "no CI"]),
         limits = ((0.4, 2.6), (0, 100)))
     for (k, y) in ((1, 85.0), (2, 42.0))
         paperband!(ax, k - 0.3, k + 0.3, y - 1.5, y + 1.5)
@@ -301,8 +302,9 @@ end
 
 # The 2006 runs reproduce the claim of 01a: elongated cells make a network (V-E1, V-E5)
 # and adhesion is not needed for it (V-E6). The 2008 sweeps follow the papers' curves within
-# tolerance at every read point. Only V-C12 misses: the contact-inhibited sprout moves
-# 1.26 × as far as the uninhibited one, where the paper has about 2.
+# tolerance at every read point. In V-C12 the contact-inhibited cells move 82.8 µm from
+# where they started and the uninhibited ones 41.1 µm, a ratio of 2.02, where the paper has
+# about 85 and 42 µm.
 #
 # ### The full-run videos
 #
@@ -337,9 +339,17 @@ let n = length(record_verdicts)
 end
 
 # V-C3 was the at-risk row before the full run (D-153). Its low plateau now passes at
-# 0.377. V-C12 fails: the paper does not define its displacement or say whether its 160 h
-# include the relaxation, and our framed lattice bounds the sprout. The question is on our
-# open question list. Every check is in the Details.
+# 0.377. V-C12 measures each cell's centroid displacement from MCS 0, the start before the
+# 100 relaxation MCS, to code MCS 19 300, as 01b Fig. 6E does: its curves start at 0 and
+# jump within the first hour. That jump is the relaxation. The fragments of the initial
+# cluster inflate to the target area and push outwards, about 26 µm in the first 100 MCS in
+# both arms. Measured from MCS 0 the jump adds to the inhibited cells' outward sprouting and
+# is largely undone by the uninhibited cluster's contraction. Our first reading started at
+# MCS 100, after the jump, and gave 68.1 against 54.0 µm, a ratio of 1.26 that failed the
+# band [1.5, 2.5]. D-200 moved the frozen definition to the paper's origin; the band is
+# unchanged. The record's snapshots hold MCS 0, 100 and 19 300 only, so the end stays at
+# 19 300, where the paper's axis runs to about 19 800 (D-200). Every check is in the
+# Details.
 #
 # ### Deviations
 #
@@ -371,6 +381,7 @@ Markdown.parse("""
 | χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labelled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = 200² = 40 000 (01b Methods) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts` (ROADMAP P6.E2), not a re-run for this alone (D-200 item 2) | not an author question |
 | Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
 | Copy proposal | random source, random target among its neighbours | source among the neighbours of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
@@ -468,8 +479,10 @@ Markdown.parse("""
 # substeps of 2 s. One of our MCS is one copy attempt per mobile site, the frozen frame
 # excluded: (500 − 2)² = 248 004 attempts on the 2006 lattice (1-site frame) and
 # (202 − 4)² = 39 204 on the 2008 one (2-site frame). That is exactly TST's
-# (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices, so the
-# attempt count is not a deviation (D-153 review correction).
+# (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices. The
+# 2008 paper states N = 200² = 40 000 attempts per MCS (01b Methods), 2 % more than ours. The
+# paper is the target, so this is a row of the deviations table (D-200 item 2), and the next
+# full run uses the paper's N.
 #
 # **Clocks (D-156).** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
 # use the time from the end of relaxation as their primary axis; the code's MCS counter
@@ -508,7 +521,7 @@ Markdown.parse("""
 # | V-C9 C vs T, both modes | 01b Fig. 11 | ext-only > 0.85 and ext-retr < 0.5 at T = 50; both < 0.3 at T = 800 | SMOKE+FULL | READY |
 # | V-C10 C(t), 256 cells on 500² | 01b Fig. 12 | — | — | **PARKED** (no Fig. 12 set-up, inferred only: D-2) |
 # | V-C11 cumulative ΔH | 01b Fig. 13 | — | — | **PARKED** (Fig. 12 set-up; bookkeeping D-17) |
-# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | ratio in [1.5, 2.5] | FULL | READY |
+# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | from MCS 0 to code MCS 19 300 (D-200; was MCS 100): ratio in [1.5, 2.5] | FULL | READY |
 #
 # The reduced (SMOKE) forms: V-E1 on the density-matched 200² at 12 h, one seed; V-C2 and
 # V-C9 at 1000 MCS, one seed, with margins of 0.2; V-E10 over 1000 MCS (one elongated,
@@ -694,8 +707,8 @@ full = if FULL
                                       (compactness(r[5000]), compactness(r[5100]))), 1:10)
                for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
                                                  (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (r = run08(seed, [100, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),
-        zip([(mean(I[1] for I in findall(==(c), r[100])), mean(I[2] for I in findall(==(c), r[100]))) for c in 2:129],
+    disp(seed; p) = (r = run08(seed, [0, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),            # from MCS 0 (D-200)
+        zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
             [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))
     vc1 = (; ci = tmap(i -> network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5),
@@ -905,7 +918,7 @@ if FULL
     addrow!("V-C9 T = 800", "break-up", "ext-only $(fmt(c9(800.0, :extension_only))); ext-retr $(fmt(c9(800.0, :extension_retraction)))",
         "both < 0.3", "FULL", c9(800.0, :extension_only) < 0.3 && c9(800.0, :extension_retraction) < 0.3)
     ratio12 = mean(full.vc12.ci) / mean(full.vc12.no)
-    addrow!("V-C12 displacement CI / no CI over 160 h", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
+    addrow!("V-C12 displacement CI / no CI, MCS 0 to 19 300", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
         "$(fmt(2mean(full.vc12.ci))) / $(fmt(2mean(full.vc12.no))) µm = $(fmt(ratio12))", "[1.5, 2.5]", "FULL", 1.5 <= ratio12 <= 2.5)
     addrow!("V-C1 1000 cells, CI", "network (01b Fig. 2D)", "$(count(isnetwork, full.vc1.ci))/5 networks", "≥ 4/5", "FULL", count(isnetwork, full.vc1.ci) >= 4)
     addrow!("V-C1 1000 cells, no CI", "islands (01b Fig. 2C)", "shares $(join(fmt.(getproperty.(full.vc1.no, :share)), ", "))",
@@ -937,7 +950,10 @@ Markdown.parse(full_verdicts_md)
 
 Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) (" *
                "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
-               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`.")
+               "the frozen test's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
+               "on $(record_prov["vc12_mcs0"]["date"]) ($(record_prov["vc12_mcs0"]["decision"])) from the stored snapshots, " *
+               "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
+               "the amended frozen test's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
 
 # The 2008 sweep means at both clocks (`points.tsv`; D-153 M6). The binding reading is the
 # code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:
@@ -1011,6 +1027,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156; ROADMAP P6.3f |
 # | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one colour per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172; ROADMAP P6.3f |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
+# | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
 #
 # ```@raw html
 # </details>

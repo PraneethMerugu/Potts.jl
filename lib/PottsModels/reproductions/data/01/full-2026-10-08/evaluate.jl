@@ -139,12 +139,16 @@ add!("V-C9", "extension-retraction, T = 50: mean C", f3(m9(50.0, "extension_retr
     "sprouts (01b Fig. 11)")
 e8, r8 = m9(800.0, "extension_only"), m9(800.0, "extension_retraction")
 add!("V-C9", "both modes, T = 800: mean C (ext-only; ext-retr)", "$(f3(e8)); $(f3(r8))", "< 0.3 both", e8 < 0.3 && r8 < 0.3, "break-up (01b Fig. 11)")
-# V-C12
-ci12 = [num(r, "displacement_sites") for r in sel("V-C12"; CI = true)]
-no12 = [num(r, "displacement_sites") for r in sel("V-C12"; CI = false)]
+# V-C12 (D-200 item 1: from MCS 0, read from vc12_mcs0.tsv beside this script; it was MCS 100,
+# the `displacement_sites` column)
+v12 = let ls = filter(!isempty, readlines(joinpath(@__DIR__, "vc12_mcs0.tsv"))), h = split(ls[1], '\t')
+    [Dict(String(a) => String(b) for (a, b) in zip(h, split(l, '\t'))) for l in ls[2:end]]
+end
+ci12 = [parse(Float64, r["displacement_sites_0"]) for r in v12 if r["CI"] == "true"]
+no12 = [parse(Float64, r["displacement_sites_0"]) for r in v12 if r["CI"] == "false"]
 @assert length(ci12) == 10 && length(no12) == 10
 q = mean(ci12) / mean(no12)
-add!("V-C12", "displacement ratio CI / no CI (MCS 100 to 19 300)", f3(q), "in [1.5, 2.5]", 1.5 <= q <= 2.5, "85 / 42 µm ≈ 2.0 (01b Fig. 6E)")
+add!("V-C12", "displacement ratio CI / no CI (MCS 0 to 19 300)", f3(q), "in [1.5, 2.5]", 1.5 <= q <= 2.5, "85 / 42 µm ≈ 2.0 (01b Fig. 6E)")
 # V-C1
 c1 = sel("V-C1"; CI = true); n1 = sel("V-C1"; CI = false)
 @assert length(c1) == 5 && length(n1) == 5
