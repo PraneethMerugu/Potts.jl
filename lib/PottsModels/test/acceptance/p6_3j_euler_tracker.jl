@@ -12,7 +12,8 @@
 #        `euler(c; adjacency = :face | :full)` with `c` in {old, new}; the medium reads 0
 #        (as `volume[c]`). A bare `euler` in a drive is an `ArgumentError` (as `volume`).
 #     The state carries one `Int32` column per adjacency the model reads (D-192):
-#     `cell.euler` (`:face`) and `cell.euler_full` (`:full`), tracked whenever the model
+#     `cell.euler` (`:face`) and `cell.euler_full` (`:full`; square and cubic only), tracked
+#     whenever the model
 #     reads `euler`, in an energy, a drive or only in `@observed` (D-192 Q5). The observed
 #     values equal the columns.
 #  2. What χ is (note §1.1, the Rosenfeld pairing). The cell X under the named adjacency,
@@ -40,10 +41,13 @@
 #     difference of the energy computed from oracle χ, for every copy of random states;
 #     `total_energy` equals the brute-force energy; `commit!` leaves the columns equal to
 #     the oracle. Float64 and Float32.
-#  6. Build errors: `adjacency = :full` on a hexagonal lattice (D-192 Q4), in an energy, a
-#     drive or `@observed`, is an `ArgumentError` naming the hexagonal lattice; an unknown
-#     adjacency is an `ArgumentError` listing `:face` and `:full`; a bare `euler` in a drive
-#     is an `ArgumentError`. Controls: `:face` (explicit or default) on hex builds.
+#  6. Hex `:full` (D-192 Q4 as amended by the coordinator, consistent with the frozen P6.3g
+#     test): hex has a single, self-dual adjacency, so `adjacency = :full` on a hexagonal
+#     lattice is ACCEPTED and means `:face`. It builds in an energy, a drive and `@observed`,
+#     and its values (observables, energies, drives) equal the `:face` ones. Whether it has
+#     a column of its own is not pinned. Build errors: an unknown adjacency is an
+#     `ArgumentError` listing `:face` and `:full`; a bare `euler` in a drive is an
+#     `ArgumentError`.
 #  7. Negative controls (they test the test): a test-side incremental tracker built from the
 #     note's closed forms passes the same oracle harness on every geometry, and each mutant
 #     is caught: a wrong sign (gaining side; and the 3D duality sign), the wrong adjacency
@@ -438,9 +442,9 @@ for ((geom, periodic), (lat, prop, _)) in P63J_GEOMS
     V0 = P63J_V0[geom]
     hex = geom === :hex
     # tracked through energies (A: `:face`, B: `:full`), read back through `@observed`
-    energyB = hex ? :(ε * euler(; adjacency = :face)) : :(ε * euler(; adjacency = :full))
+    energyB = :(ε * euler(; adjacency = :full))           # hex: the same as `:face` (Q4)
     obs = Expr(:macrocall, Symbol("@observed"), LineNumberNode(@__LINE__, Symbol(@__FILE__)),
-        hex ? :(χ4(cell) ~ euler) : Expr(:block, :(χ4(cell) ~ euler), :(χ8(cell) ~ euler(; adjacency = :full))))
+        Expr(:block, :(χ4(cell) ~ euler), :(χ8(cell) ~ euler(; adjacency = :full))))
     @eval @potts_model $(p63j_name("P63jTrack", geom, periodic)) begin
         @kinds medium A B
         @parameters ε = 0.0078125
@@ -524,12 +528,12 @@ end
         prob = p63j_problem(p63j_model(prefix, geom, periodic), σ)
         u = prob.u0
         @test haskey(u.cell, :euler) && eltype(u.cell.euler) == Int32
-        @test haskey(u.cell, :euler_full) == (geom !== :hex)
-        geom === :hex || @test eltype(u.cell.euler_full) == Int32
+        geom === :hex || @test haskey(u.cell, :euler_full) && eltype(u.cell.euler_full) == Int32
         bad, checks, seen = p63j_compare(u, geom, adjs; periodic)
         @test bad == 0 && checks == 4 * length(adjs)
         @test getu(prob, :χ4)(prob) == u.cell.euler
-        geom === :hex || @test getu(prob, :χ8)(prob) == u.cell.euler_full
+        # hex: `:full` reads the `:face` value (Q4)
+        @test getu(prob, :χ8)(prob) == (geom === :hex ? u.cell.euler : u.cell.euler_full)
     end
 end
 
@@ -551,8 +555,11 @@ end
     # hex: a 7-site hexagon 1, a 6-ring 0
     σ = zeros(Int32, 10, 10); σ[3, 3] = 1; foreach(o -> σ[(3, 3) .+ o...] = 1, P63J_HEX)
     foreach(o -> σ[(7, 6) .+ o...] = 2, P63J_HEX)
-    @test p63j_problem(P63jTrackHexClosed, σ).u0.cell.euler == [1, 0]
-    @test p63j_problem(P63jTrackHexPeriodic, σ).u0.cell.euler == [1, 0]
+    for M in (P63jTrackHexClosed, P63jTrackHexPeriodic)
+        prob = p63j_problem(M, σ)
+        @test prob.u0.cell.euler == [1, 0]
+        @test getu(prob, :χ8)(prob) == [1, 0]                # hex `:full` == `:face` (Q4)
+    end
     # cubic closed: a solid ring 0/0, a hollow cube 2/2, two edge-diagonal voxels 2/1
     σ = zeros(Int32, 6, 6, 6)
     σ[1:3, 1:3, 1] .= 1; σ[2, 2, 1] = 0
@@ -585,7 +592,7 @@ const P63J_ALGS = [("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", Check
             b, k, s = p63j_compare(integ.state, geom, adjs; periodic)
             bad += b; checks += k; union!(seen, s)
             obs_ok &= integ[:χ4] == integ.state.cell.euler
-            geom === :hex || (obs_ok &= integ[:χ8] == integ.state.cell.euler_full)
+            obs_ok &= integ[:χ8] == (geom === :hex ? integ.state.cell.euler : integ.state.cell.euler_full)
         end
         @test bad == 0
         @test checks >= 15 * 2 * length(adjs)
@@ -640,10 +647,10 @@ p63j_dh_lattice(geom, periodic) =
 
 for ((geom, periodic), (_, prop, _)) in P63J_GEOMS
     hex = geom === :hex
-    full = hex ? :face : :full
+    full = :full                                          # hex: the same as `:face` (Q4)
     lat = p63j_dh_lattice(geom, periodic)
     drive = geom === :square ? :(ν * euler(old; adjacency = :full) + ρ * euler[new]) :
-            geom === :hex ? :(ν * euler(old; adjacency = :face) + ρ * euler[new]) :
+            geom === :hex ? :(ν * euler(old; adjacency = :full) + ρ * euler(new; adjacency = :face)) :
             :(ν * euler(new; adjacency = :face) + ρ * euler(old; adjacency = :full))
     @eval @potts_model $(p63j_name("P63jDH", geom, periodic)) begin
         @kinds medium A B
@@ -667,7 +674,7 @@ end
 """The drive's terms: (adjacency, side, weight) per geometry (the medium reads 0)."""
 p63j_drive_terms(geom) =
     geom === :square ? ((:full, :old, 0.25), (:face, :new, 0.125)) :
-    geom === :hex ? ((:face, :old, 0.25), (:face, :new, 0.125)) :
+    geom === :hex ? ((:face, :old, 0.25), (:face, :new, 0.125)) :     # hex `:full` == `:face`
     ((:face, :new, 0.25), (:full, :old, 0.125))
 
 """Brute-force energy: Σ_A 3(1 − χ_face)² + Σ_B ½ χ_full (hex: χ_face), kinds A, B, A."""
@@ -777,17 +784,13 @@ end
     sqlat = :(Lattice((10, 10)))
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
     msg(e) = sprint(showerror, e)
-    # `adjacency = :full` on hex: an ArgumentError naming the hexagonal lattice (D-192 Q4)
-    for line in (:(@energy cells => euler(; adjacency = :full)),
+    # `:face` (explicit or default) and `:full` (Q4 amended: the same as `:face`) build on
+    # hex, in an energy, a drive and `@observed`; `:full` builds on square
+    for line in (:(@energy cells => euler(; adjacency = :face)), :(@energy cells => euler),
+                 :(@drive copy => euler(old; adjacency = :face)), :(@observed q(cell) ~ euler),
+                 :(@energy cells => euler(; adjacency = :full)),
                  :(@drive copy => euler(old; adjacency = :full)),
                  :(@observed q(cell) ~ euler(; adjacency = :full)))
-        e = p63j_build(p63j_build_case(hexlat, line), σ)
-        @test e isa ArgumentError
-        @test e isa ArgumentError && occursin(r"hex"i, msg(e)) && occursin("full", msg(e))
-    end
-    # controls: `:face`, explicit or default, builds on hex; `:full` builds on square
-    for line in (:(@energy cells => euler(; adjacency = :face)), :(@energy cells => euler),
-                 :(@drive copy => euler(old; adjacency = :face)), :(@observed q(cell) ~ euler))
         @test p63j_build(p63j_build_case(hexlat, line), σ) === nothing
     end
     @test p63j_build(p63j_build_case(sqlat, :(@energy cells => euler(; adjacency = :full))), σ) === nothing
