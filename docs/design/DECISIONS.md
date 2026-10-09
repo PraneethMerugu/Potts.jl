@@ -3790,6 +3790,25 @@ session.
   - Nothing is uploaded to the consortium repository until the maintainer says so. Write access (Q11) is Dr Jiang's to raise.
   - The maintainer is asked before any upload over about 100 MB.
 
+## D-205 P6.4r-kb: κ_b scan protocol frozen (2026-10-09; coordinator, from the κ_b scan test author; implements D-203)
+
+- **Frozen test.** `reproductions/04_foam_kb_scan.jl`, commit 830f72fb, sha256 `dc6de6bc…`.
+- **Grid.** κ_b = 2.497·2^(i/2) for i = −8…14: 23 values, from 0.156 to 319.6.
+  - i = 0 is D-190's setting and serves as a harness check: the medians there must land within ±25 % of the D-190 record's 455 and 40.
+  - The bounds come from the D-190 record.
+  - The √2 step is finer than the ±25 % window.
+- **Seeds.** Ordered foams 1–3, 3 replicates each. τ is taken over foams 1–5, as in D-190. Every κ_b uses the same seeds.
+- **Run caps.** 2^16 paper MCS for β ≤ 1e-3 and 2^14 above it. A run that never yields records −1.
+- **Targets.** 4300 and 420 MCS, each within ±25 %. The 25 % is spec §3.2's "limits of this calibration".
+- **Consistency check.** T1s at β = 1e-3 in at least 2 of 3 seeds. β = 1e-4 is recorded but does not gate.
+- **Decision rule.**
+  1. If exactly one grid value meets both targets and the consistency check, it is chosen.
+  2. Otherwise, interpolate log–log on the median curves to get κ̂ for each target, and take their geometric mean. Both targets must hold there, and the consistency check must hold at the grid value just below it.
+  3. If neither applies, the rule returns `nothing`: stop, and take the question to the F1 gate.
+- **No model change.** κ_b is applied by the harness. The Eq 7 term reads only β, so no model change is needed.
+- **PC cost.** 345 jobs, about 2–3 h on 24 threads. The scan runs after the 01b FULL, and its table goes to the spec owner first.
+- **Prediction.** From the D-190 record, a pinning cliff is likely, so the rule may well return `nothing`.
+
 ## D-207 P6.0bk2: tests for `SequentialCPM(; skip_interior = true)` frozen (2026-10-09; coordinator, from the rename test author; implements D-198)
 
 - **New test.** `acceptance/p6_0bk2_skip_interior.jl`, commit 06eda5d4, sha256 `cdb1ee5d…`.
