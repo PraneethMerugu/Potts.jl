@@ -47,16 +47,23 @@
 # The Potts deliverable `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`,
 # where `frame` is a 2D MakiePotts render frame (in use: `renderframe(sol)` of the final state
 # of case (a), D-175):
-# - the panel: one Axis holding one `pottsplot` with `encoding = CellIdentityEncoding()`, the
-#   automatic identity palette (D-172), medium white, `boundaries = false`, and no line plots
-#   or stroked polygons in its scene (D-156). It shows a window × window block of the
-#   frame's sites, unchanged (same owners, same cell identities and generations), centred on
-#   the colony rim along the 45° diagonal from the colony centroid (the "top-right quadrant
-#   crop" of spec §4.0.2 F1). 64 sites ≈ 8 cell diameters (2R = 7.98 px), what the TST
-#   closeup shows;
+# - the panel (re-frozen under D-185, which amends D-156/D-172/D-175 for the consortium
+#   figures): one Axis holding one `pottsplot` that colours each cell by its area with
+#   `coolwarm` (a cell `ChannelEncoding`), scaled to the min–max of the areas of the cells in
+#   the panel, on a white medium. The areas are those of the whole frame (or the `areas`
+#   keyword), so a cell cut by the window keeps its full area. Thin black boundaries are
+#   drawn along exactly the pixel edges between unlike ids (cell–cell and cell–medium) inside
+#   the block, each once, with no gaps and no other line or stroked polygon. It shows a
+#   window × window block of the frame's sites, unchanged (same owners, same cell
+#   identities and generations), centred on the colony rim along the 45° diagonal from the
+#   colony centroid (the "top-right quadrant crop" of spec §4.0.2 F1). 64 sites ≈ 8 cell
+#   diameters (2R = 7.98 px), what the TST closeup shows;
 # - the banner: a `Makie.Box` filled with RGB(8,29,88) (Q18 proposal, spec §4.0.2), as wide
 #   as the panel, 5/45 of the panel high, 1/45 of the panel above it; a `Makie.Label`
 #   "Potts.jl" in white bold centred on it. The panel is square.
+#
+# The colour-scale limits (the panel's own min–max) are a provisional reading (D-185): the
+# consortium does not state its closeups' limits.
 #
 # Tiers: one, always, light (CairoMakie load plus small figures; no simulation). The
 # detector controls build figures with MakiePotts directly, so a broken detector cannot pass
@@ -403,6 +410,42 @@ function p615h_bbox(b)
     return (; x = Float64(minimum(r)[1]), y = Float64(minimum(r)[2]), w = Float64(Makie.widths(r)[1]), h = Float64(Makie.widths(r)[2]))
 end
 
+# the pixel edges between unlike owners of a block `w` whose site (i, j) spans
+# [ox + i − 1, ox + i] × [oy + j − 1, oy + j]: the set of (endpoint, endpoint), rounded
+function p615h_edge_oracle(w, (ox, oy))
+    E = Set{NTuple{2, NTuple{2, Int}}}()
+    W1, W2 = size(w)
+    for j in 1:W2, i in 1:(W1 - 1)
+        w[i, j] == w[i + 1, j] || push!(E, ((ox + i, oy + j - 1), (ox + i, oy + j)))
+    end
+    for j in 1:(W2 - 1), i in 1:W1
+        w[i, j] == w[i, j + 1] || push!(E, ((ox + i - 1, oy + j), (ox + i, oy + j)))
+    end
+    return E
+end
+# the panel's line segments as the same kind of set (one unit edge each), plus a count of the
+# segments that are not one black unit lattice edge
+function p615h_edge_marks(scene)
+    E = NTuple{2, NTuple{2, Int}}[]
+    other = 0
+    for (a, b, col) in p615h_segments(scene)
+        ra = round.(Int, a); rb = round.(Int, b)
+        ok = col !== nothing && p615h_close(col, Makie.RGBf(0, 0, 0)) && all(abs.(a .- ra) .< 1e-3) &&
+             all(abs.(b .- rb) .< 1e-3) && sum(abs.(ra .- rb)) == 1
+        ok ? push!(E, ra < rb ? (ra, rb) : (rb, ra)) : (other += 1)
+    end
+    return E, other
+end
+# line widths of the visible line plots under a scene
+p615h_linewidths(scene) = [Float64(maximum(p.linewidth[])) for p in p615h_plots(scene) if p isa Makie.Lines || p isa Makie.LineSegments]
+
+# the panel's heatmap values (NaN off cells), as the pottsplot draws them
+function p615h_values(ax)
+    hm = [p for p in p615h_plots(ax.scene) if p isa Makie.Heatmap]
+    length(hm) == 1 || return nothing
+    return Float64.(only(hm)[3][])
+end
+
 # ---------------------------------------------------------------------------------------------
 # (a) G1: the F5 analysis count equals the drawn count and the hand count
 # ---------------------------------------------------------------------------------------------
@@ -485,17 +528,30 @@ end
         ax = p615h_panel(fig)
         @test ax !== nothing
         pp = only(p615h_pottsplots(ax.scene))
-        # colours and encoding (D-172, D-156; white medium as in M's closeups)
-        @test pp.encoding[] isa CellIdentityEncoding
-        @test pp.category_palette[] === Makie.automatic
+        # colours (D-185): cell area on coolwarm, the panel's own min–max; white medium
+        @test pp.encoding[] isa ChannelEncoding
+        @test string(pp.colormap[]) == "coolwarm"
         @test p615h_close(pp.medium_color[], Makie.RGBf(1, 1, 1))
-        @test pp.boundaries[] === false
-        @test p615h_outlines(ax, σ, 0; markers = false) == 0
         # the crop: an unchanged W × W block on the 45° rim
         w, fr, _ = p615h_visible(ax)
         @test size(w) == (W, W)
         off = p615h_find(σ, w)
         @test off !== nothing
+        vals = p615h_values(ax)
+        @test vals !== nothing && size(vals) == size(w)
+        if off !== nothing && vals !== nothing
+            full = Dict(id => count(==(id), σ) for id in unique(filter(>(0), vec(w))))
+            @test all(I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == full[w[I]], CartesianIndices(w))
+            # cells cut by the window keep their full-state area (the fixture has some)
+            @test any(id -> count(==(id), w) < full[id], keys(full))
+            @test all(Float64.(pp.colorrange[]) .== Float64.(extrema(values(full))))
+            # boundaries (D-185): thin black, exactly the unlike-id pixel edges, each once
+            E, other = p615h_edge_marks(ax.scene)
+            @test other == 0
+            @test length(E) == length(unique(E)) && Set(E) == p615h_edge_oracle(w, off)
+            @test !isempty(E) && all(<=(1.5), p615h_linewidths(ax.scene))
+            @test p615h_stroked(ax.scene, frame_geometry(fr)) == 0
+        end
         if off !== nothing
             centre = off .+ (W + 1) / 2
             v = centre .- c
@@ -525,6 +581,17 @@ end
             @test occursin("bold", lowercase(string(lab.font[])))
         end
     end
+    # `areas` overrides the frame's site counts, and the scale follows (bare panel, no banner)
+    fig = PottsModels.openvt_f1_figure(frame; areas = Dict(id => 3 * count(==(id), σ) + 1 for id in unique(filter(>(0), vec(σ)))),
+        banner = false)
+    ax = p615h_panel(fig)
+    @test ax !== nothing
+    @test isempty([b for b in fig.content if b isa Makie.Box])
+    w, _, _ = p615h_visible(ax)
+    vals = p615h_values(ax)
+    @test all(I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == 3 * count(==(w[I]), σ) + 1, CartesianIndices(w))
+    pp = only(p615h_pottsplots(ax.scene))
+    @test all(Float64.(pp.colorrange[]) .== extrema(3 * count(==(id), σ) + 1.0 for id in unique(filter(>(0), vec(w)))))
 end
 
 # ---------------------------------------------------------------------------------------------
@@ -575,6 +642,19 @@ end
     @test p615h_outlines(p615h_control_figure(σ; outline_lines = true)[2], σ, 1; markers = true) > 0
     # marks decoded against the wrong cell are flagged, not counted
     @test p615h_marks(ax.scene, geom, σ, 2).bad > 0
+    # F1 (D-185): the edge decoder sees a missing edge (a gap), an extra segment, and a grey line
+    σf = p615h_fig4()
+    Ef = p615h_edge_oracle(σf, (0, 0))
+    gapfig = Makie.Figure(); gax = Makie.Axis(gapfig[1, 1])
+    segs = collect(Ef)
+    Makie.linesegments!(gax, [Makie.Point2f(p) for e in segs[2:end] for p in e]; color = :black)
+    E, other = p615h_edge_marks(gax.scene)
+    @test other == 0 && Set(E) != Ef && length(E) == length(Ef) - 1
+    Makie.linesegments!(gax, [Makie.Point2f(0.5, 0.5), Makie.Point2f(2.5, 0.5)]; color = :black)
+    @test p615h_edge_marks(gax.scene)[2] == 1
+    greyfig = Makie.Figure(); grax = Makie.Axis(greyfig[1, 1])
+    Makie.linesegments!(grax, [Makie.Point2f(p) for e in segs for p in e]; color = :gray70)
+    @test p615h_edge_marks(grax.scene)[2] == length(Ef)
     # the snapshot of a configuration without any medium contact has f = 0 and no magenta marks
     σ3 = copy(σ); σ3[σ3 .== 0] .= 4
     @test PottsModels.openvt_snapshot(p615h_state(σ3)).f[1] == 0.0 && isempty(p615h_pairs(σ3, 1).med)

@@ -544,10 +544,12 @@ const _OPENVT_PKG_RECORD_ROWS = Dict(
 function _openvt_pkg_figure_rows(facts)
     w = facts.window
     rows = Tuple[
-        ("F1 panel colours", "per-cell identity colours (one categorical colour per cell), white medium, no outlines",
-            "the other frameworks' panels colour cells by a blue-to-red variable (most likely cell area) with grey boundaries",
-            "a stylistic choice: per-cell colours, never outlines (D-156, D-175)",
-            "not asked; on our open question list as Q10 (the colour variable) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed)"),
+        ("F1 panel colours", "cells coloured by area with coolwarm, scaled to the panel's own cell-area min–max " *
+                             "(areas from the full state); thin black pixel-edge boundaries; white medium",
+            "the CompuCell3D, TST and Artistoo close-ups colour cells blue to red by area (coolwarm) with thin boundaries; " *
+            "the limits of their colour scales are not stated",
+            "the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading",
+            "not asked; on our open question list as Q10 (the colour variable and its limits) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed)"),
         ("F1 window", @sprintf("a %d × %d-site block (about %.0f cell diameters 2R) centred on the colony rim", w, w, w / (2 * facts.R)),
             "45 × 45 mm close-ups; the window size is not stated",
             "estimated from the TST close-up; the other panels show more colony than medium", "not an author question"),
@@ -769,10 +771,12 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, present)
 
     ## Colours
 
-    `closeup.png` colours each cell with its own categorical colour (Potts.jl's
-    `CellIdentityEncoding`) on a white medium, with no cell outlines, rather than by area as
-    the other frameworks' panels do; the banner colour proposed for Potts.jl is RGB(8, 29, 88).
-    See the F1 row below.
+    `closeup.png` follows the other frameworks' close-ups: each cell is coloured by its area
+    (from the full state, so cells cut by the window keep their full area) with the `coolwarm`
+    colour map, scaled to the min–max of the cell areas in the panel, on a white medium, with
+    thin black boundaries along the pixel edges between unlike cells. The scale limits are our
+    provisional reading. The banner colour proposed for Potts.jl is RGB(8, 29, 88). See the F1
+    row below.
 
     ## Deviations from the manuscript
 
