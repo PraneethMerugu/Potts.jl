@@ -232,6 +232,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :remake_function,
     :remake_parameters,
     :remake_state,
+    :copy_step_relations, # the copy-step relations Potts reports for the checkerboard reach (D-208)
     :set_parameter,       # parameter-update hook Potts extends
     :set_parameters,      # its batched form (`setp(integ, [x, y])` as one change, D-112)
     :parameter_setter,    # `setp` with several parameters on a model description (one change)

@@ -20,7 +20,11 @@ struct PottsModelInfo{C, E, DE, X}
     ctx::X               # host context (lattice, relations) for observed quantities
     cache::Dict{Any, Any}    # compiled observed functions, by expression
     solvers::SolverSpec
+    copy_relations::Vector{Symbol}   # the relations the copy step reads (D-208)
 end
+
+# CheckerboardCPM's preflight reach (D-208): only the relations the copy-step functions read
+CorePotts.copy_step_relations(mi::PottsModelInfo) = mi.copy_relations
 
 """
     generated_code(sys; T = Float64, field_solver, ode_solver, solvers)
@@ -143,12 +147,23 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     sys = c.sys
     fns, generated = _recording() do
         _with_faces(c) do
+        # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
+        log = _GENERATED[]
+        i0 = length(log)
         ce = _constraint_expr(c, T)
-        (; delta_H = _rgf(_delta_H_expr(c, T)), commit! = _rgf(_commit_expr(c, T)),
-            constraint = ce === nothing ? CorePotts.always : _rgf(ce), temperature = _rgf(_temperature_expr(c, T)),
-            phases = _phases_parts(c, T, values, spec), lifecycle = _lifecycle(c, T),
-            total = _rgf(_total_energy_expr(c, T)), delta_E = _rgf(_delta_H_expr(c, T; drives = false)),
-            connectivity = _connectivity_hooks(c, T))
+        delta_H = _rgf(_delta_H_expr(c, T))
+        commit! = _rgf(_commit_expr(c, T))
+        constraint = ce === nothing ? CorePotts.always : _rgf(ce)
+        temperature = _rgf(_temperature_expr(c, T))
+        i1 = length(log)
+        phases = _phases_parts(c, T, values, spec)
+        lifecycle = _lifecycle(c, T)
+        total = _rgf(_total_energy_expr(c, T))
+        delta_E = _rgf(_delta_H_expr(c, T; drives = false))
+        i2 = length(log)
+        connectivity = _connectivity_hooks(c, T)
+        copy_step = [log[(i0 + 1):i1]; log[(i2 + 1):end]]
+        (; delta_H, commit!, constraint, temperature, phases, lifecycle, total, delta_E, connectivity, copy_step)
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
@@ -220,10 +235,20 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     # tracked one
     isempty(track) || push!(cad, "track=$(repr(track))")
     isempty(cad) || (h = hash(join(cad, ";"), h))
+    # the relations the copy step reads (D-208): those the copy-step functions (ΔH with its
+    # edge energies and drives, commit!, constraint, temperature, connectivity hooks) read as
+    # `ctx.<name>`, and every run-context entry that is not a gather relation (the contact
+    # relation, `contact_counts`). A relation read only at the MCS boundary (lifecycle, link
+    # rules, boundary updates, ODEs, observed) is not among them. The declared footprint is
+    # unchanged; CheckerboardCPM's preflight measures reach over these only.
+    copy_used = Set{Symbol}()
+    foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
+    copy_relations = Symbol[k for k in keys(hctx)
+                            if k ∉ (:lattice, :spacing) && (k in copy_used || !haskey(c.relations, k))]
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims = _claims(c), reads = _reads(c), phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
-        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec),
+        sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations),
         track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}(), fns.connectivity)
 end
 

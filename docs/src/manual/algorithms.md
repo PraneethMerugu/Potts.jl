@@ -15,6 +15,13 @@ All three take `acceptance` and `proposal` keywords, which default to the model'
 acceptance law and the problem's proposal neighbourhood (see [Problems, solvers and
 solutions](@ref manual-problems)).
 
+`CheckerboardCPM` spaces its colours by the model's footprint, the distance a copy reads
+from its target, and refuses a model whose copy step reads farther: through the contact
+relation, or through a relation that the energies (edge energies included), drives,
+constraints, `@on_copy` updates or temperature read. A relation read only at the MCS
+boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
+`@observed` quantities) does not count, whatever its radius.
+
 ## `BoundarySiteCPM`
 
 ### What it does
