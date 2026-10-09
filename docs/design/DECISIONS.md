@@ -3716,3 +3716,14 @@ session.
   - The page test now requires the attempts-per-MCS deviation row (item 2).
   - Reproduction 01 is now 37 of 37.
   - Re-frozen: `reproductions/01_merks.jl` cf9a6b8b, `reproductions/01_merks_page.jl` fe3be096, and page `01_merks.jl` c11c5b92.
+
+## D-201 Shell-based quantities reject a periodic axis of length 1 (2026-10-09; coordinator, from the P6.3j and P6.9a reviews)
+
+- **The problem.** On a periodic axis of length 1, the shell's ±1 offsets wrap back onto the target site. Local and Global connectivity then count the target as its own neighbour, which lets copies through that split a cell. The same wrap gives wrong values for `pieces`, `largest_piece` and `euler`.
+  - The P6.9a review found a concrete case: on 5×5×1 with a periodic third axis, a copy that splits a cell passes the local test.
+- **The rule.** Building a problem raises an ArgumentError on the host when both of these hold:
+  - the model reads any shell-based quantity: Local, ArcOrPair, Simple, Global, `connected`, `pieces`, `largest_piece`, `local_components`, `ring_*` or `euler`;
+  - the lattice has a periodic axis of length 1.
+  
+  The message names the quantity and the axis, and suggests a 2D lattice or a Closed axis. There is one check, shared by all of these; it generalises P6.3j's check for `euler`.
+- **Axes of length 2.** These are sound: random copy runs show no drift, and the lattice's offset-alias check already guards them.
