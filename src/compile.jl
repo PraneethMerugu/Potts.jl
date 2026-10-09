@@ -683,7 +683,7 @@ function _check_gathers_static(E, copy_written)
             "copy acts (its two cells, their links, the pairs at the target), so a change in the gathered value " *
             "would be missing from it. A gather in a cell, edge or " *
             "contact energy may read static values only: a site variable no copy writes (a static field), a " *
-            "parameter, a constant, `id`, or the edge ends `a`, `b` compared with static values. To act on the " *
+            "parameter, a constant, `id`, or the edge ends `a`, `b` compared with static values. To respond to the " *
             "neighbourhood's ownership, use a `@drive` (it reads `owner`, `kind` at the copy), or keep the " *
             "neighbourhood in a site variable updated at MCS boundaries"))
     end
