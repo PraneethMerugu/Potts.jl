@@ -3789,3 +3789,24 @@ session.
   - O1 data are compressed per case and kept out of git.
   - Nothing is uploaded to the consortium repository until the maintainer says so. Write access (Q11) is Dr Jiang's to raise.
   - The maintainer is asked before any upload over about 100 MB.
+
+## D-206 P6.15j: OpenVT package test re-frozen with every pending item required (2026-10-09; coordinator, from the package test author; implements D-204, amends D-180)
+
+- **Frozen test.** `reproductions/15_openvt_package.jl`, commit 324cec82, sha256 `bb120203…`. Header-only manifest templates are in `test/reproductions/data/15j/`.
+- **O1.** One zip per case, `Potts.jl_centroids_<case>.zip`, plus a package manifest. A new git-pinned record (`item = "P6.15j"`) holds `o1_manifest.tsv`, `archives.tsv`, `o2_manifest.tsv` and `runs.tsv`. These must agree save by save with the F3/F8 record.
+  - Each member is hashed and scanned.
+  - Spot members get their metrics recomputed and their neighbour histograms checked.
+  - The case (b) stop x, y must equal its O2 file.
+- **Also required.**
+  - O2 sha256s.
+  - A3 for cases a and e (c and d if they are in O1).
+  - O3/O5 copied byte for byte from the sweeps record.
+  - An MIT line in both READMEs (D-181).
+- **Bulk directory.** The bulk files sit outside git, in `OPENVT_PACKAGE_BULK`. The build refuses a directory that is missing, inside git, or holds the wrong bytes.
+- **Spec over consortium convention.** The test follows the spec where the consortium's existing submissions differ:
+  - column names x, y, i, n (they use g);
+  - the seed in the file name (they use directories);
+  - loose O2 files (TST zips them).
+  
+  These differences go to the spec owner with the package. They are not changed here.
+- **Size.** About 320 MB zipped at full precision (a ≈ 90, e ≈ 115, b ≈ 65, f ≈ 50, O2 ≈ 8 MB). That is above D-204's 100 MB ask-first limit, so building is allowed but uploading is not. Nothing goes to the consortium repository until the maintainer says so, and then only after asking about the size.
