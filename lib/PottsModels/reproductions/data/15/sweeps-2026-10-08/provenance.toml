@@ -7,7 +7,6 @@ cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 seeds = "β: 160 000 000 + 100 q + k; γ: 170 000 000 + 100 q + k"
 dry = false
 finished = "2026-10-08T22:42:52.392"
-work = "/home/praneeth/potts-ci/p6-15g-run"
 test_sha256 = "474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41"
 hostname = "praneeth-NucBox-EVO-X2"
 affinity = "taskset -c 6-11,22-27"

@@ -3603,3 +3603,18 @@ session.
   - Six fingerprints of models that do not use `euler` stay unchanged (recorded on 2b128db5).
   - Zero warm allocations.
   - A device row.
+
+## D-195 Privacy fixes (D-183): page 10 host name, sweeps record work path; and a ruling for P6.3g on structural parameters that shadow DSL names (2026-10-09; coordinator)
+
+- **Page 10 leaked the PC's host name.** Its provenance lines printed `host <hostname>` on the published page, and the deploy scan missed it.
+  - The host is removed from both lines of `reproductions/10_akeeb.jl`. Nothing else changes.
+  - The page is re-frozen: sha256 `4e4a3fe8b6ffed9e853ab636f82090b2c2a8e37c7d5497bd2bf9aaa43223860d`, replacing D-163's.
+  - The deploy scan now also rejects `nucbox`, and `praneeth` outside the repository URL.
+- **The P6.15g sweeps record leaked a local path.** Its `provenance.toml` had a `work` key holding a local path.
+  - The key is dropped from the record.
+  - `openvt_submission_package` now drops `work` as well as `hostname`. This fixes `15_openvt_package.jl` (10).
+  - The runner is left as it is, because its hash is pinned in the record. Future runners must not record local paths.
+- **Ruling for P6.3g: structural parameters may shadow DSL names.** A structural parameter may shadow the new DSL names (`connected`, `shell`, `pieces`, `distinct`, `Local`, `ArcOrPair`, `Simple`) inside its model.
+  - Example: WortelAct's existing `connected` structural parameter.
+  - Renaming it instead would force about 12 more re-freezes, for no gain to users.
+  - The docs page notes the shadowing.
