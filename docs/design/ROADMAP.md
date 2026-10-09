@@ -341,7 +341,8 @@ Every item's acceptance also includes the standing checks:
   - K2: S-a, one replica per work-item, for tiny lattices.
   - K3: a CPU-only census of S-b's mean conflict-free commit window on OpenVT growth.
   - Accept: a table of measured ns/site·MCS per case, naming machine and backend, against 24-thread `EnsembleThreads` (pinned, D-157). GE1/2/4–8 then need a maintainer ruling. A device `SequentialCPM` would amend D-009; moving a frozen reproduction to checkerboard means a deviation row and re-run targets. S-b and device stop conditions fall under D-156's stop-and-ask rule.
-- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.)
+- [ ] **P6.0bk** (GE3; approved by the maintainer) An exact null-region skip in both algorithms, CPU first: proposals whose whole neighbourhood is medium are skipped without changing the trajectory. (Relation to P6.4b1, D-177: P6.0bk keeps the trajectory itself; `BoundarySiteCPM` skips every interior pick, not only medium ones, and matches `SequentialCPM` only in distribution. If P6.4b1 lands first, check whether P6.0bk is still worth doing.) **Folded (D-198):** this is `CheckerboardCPM(; skip_interior = true)`, done together with P6.0bk2.
+- [ ] **P6.0bk2** (D-198; after the foam FULL record lands) Remove `BoundarySiteCPM` with no alias, and add `SequentialCPM(; skip_interior = true)` with the same code path. Re-freeze 04, 15 and any other frozen tests that name BoundarySiteCPM, through a test author. Code-identity check: same RNG draws, σ and SMOKE verdicts. Add one line to each affected record README. Then `CheckerboardCPM(; skip_interior = true)` (P6.0bk).
   - Accept: bit-identical trajectories with and without the skip on every gate case and one OpenVT growth case. Requires the per-attempt counter-RNG keying to stay unchanged; check this first.
   - Report the pinned speedup on the PC, naming machine and backend.
 - [ ] **P6.0bl** (P6.3d review) Are CheckerboardCPM's kinetics statistically equivalent to SequentialCPM's? On every Merks model they differ measurably. Eight seeds at 400 MCS: `MerksVasculogenesis` 100² H is +4140 ± 790 under checkerboard; Merks2008 sprout compactness is 0.821 (sequential) vs 0.869 (checkerboard).
@@ -620,7 +621,7 @@ Full runs are offline (D-146).
   - D-075: Akeeb `cue`/`clock` become expression defaults from `Potts.init.<var>`
     streams. They get their own `papers.jl` re-baseline.
 - [x] **P6.4b1** (D-177; user ruling 2026-10-08; priority: P6.15g waits on it) `BoundarySiteCPM`: a separate sweep algorithm that draws only boundary sites and accounts the skipped interior (null) picks exactly, so it is statistically identical to `SequentialCPM`. `SequentialCPM` is unchanged. CPU first; incremental boundary set under copies, divisions and deaths.
-- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, `BoundarySite`);
+- [ ] **P6.4b** R10: `ProposalLaw` (`UniformNeighbor`, `UnlikeNeighbor`, ~~`BoundarySite`~~ dropped by D-198);
   all-site attempt counting; fractional attempts per MCS at zero cost when unused (D-051
   item 2). Hastings acceptance (D-052).
   - Accept: the enumeration oracle for `MetropolisHastings()`.
