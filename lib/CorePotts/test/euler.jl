@@ -106,6 +106,32 @@ eu_bad(cell, σ, lat) = (n = length(cell.kind);
             Proposal(1, 1, x, 1, Int32(0), Int32(0)), Val(adj)) == (Int32(0), Int32(0))
     end
 
+    @testset "a periodic axis of length 1 is rejected (the shell would wrap onto the target)" begin
+        # review repro: on (4, 4, 1) periodic the per-copy change reads the target through
+        # the wrapped axis, (0, 1) before the write and (0, -1) after, against a recount of 0
+        for (lat, ax) in ((Lattice((4, 4, 1)), 3), (Lattice((1, 4)), 1),
+                          (Lattice((4, 1); geometry = Hexagonal()), 2))
+            σ = zeros(Int32, lat.dims)
+            err = try
+                recompute_euler(σ, lat, Val(:face), 1); nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError
+            @test occursin("euler", sprint(showerror, err)) && occursin("axis $ax", sprint(showerror, err))
+        end
+        # a closed axis of length 1 and a periodic axis of length 2 are fine (the recount and
+        # the per-copy change agree)
+        lat = Lattice((4, 4, 1); boundary = (Periodic(), Periodic(), Closed()))
+        σ = zeros(Int32, 4, 4, 1); σ[2, 2, 1] = 1
+        @test recompute_euler(σ, lat, Val(:face), 1) == Int32[1]
+        lat = Lattice((5, 2))
+        σ = zeros(Int32, 5, 2); σ[1:3, 1] .= 1
+        x = (2, 2); i = linear_index(lat, x)
+        δ = euler_change(σ, (; lattice = lat), Proposal(i, i, x, 1, Int32(0), Int32(1)), Val(:face))
+        σ1 = copy(σ); σ1[x...] = 1
+        @test recompute_euler(σ1, lat, Val(:face), 1)[1] - recompute_euler(σ, lat, Val(:face), 1)[1] == δ[2]
+    end
     @testset "recompute_euler: reference shapes, torus, domain" begin
         lat = Lattice((12, 12); boundary = Closed())
         σ = zeros(Int32, 12, 12)

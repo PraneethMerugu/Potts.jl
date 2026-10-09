@@ -68,8 +68,11 @@ end
 
 Exact change of the Euler characteristics of the old and new cells under `adjacency`
 (`:face` or `:full`; hexagonal lattices have one self-dual adjacency) when `prop`'s target
-changes owner. Reads the target's neighbour shell; the target itself is not read, so the
-result is the same before and after the ownership write. The medium's side is zero.
+changes owner. Reads the target's neighbour shell, which excludes the target on every axis
+of length ≥ 2, so the result is the same before and after the ownership write. On a
+periodic axis of length 1 the shell wraps onto the target and the change is wrong:
+[`recompute_euler`](@ref), which every problem reading `euler` calls when it is built,
+rejects such a lattice. The medium's side is zero.
 """
 @inline euler_change(σ, ctx, prop::Proposal, adj::Val) = _euler_change(ctx.lattice, σ, prop, adj)
 
@@ -93,6 +96,7 @@ end
 
 """Apply `δ = euler_change(…)` to an Euler tracker (the old and new cells only)."""
 @inline function commit_euler!(euler, prop, δ)
+    # bounds: a nonzero owner is a cell id in 1:capacity, the tracker's length (as `commit_surface!`)
     prop.old != 0 && @inbounds(euler[prop.old] += δ[1])
     prop.new != 0 && @inbounds(euler[prop.new] += δ[2])
     return nothing
@@ -121,12 +125,12 @@ end
     inside = all(ntuple(d -> lat.periodic[d] || 1 <= j[d] <= lat.dims[d], Val(N)))
     w = ntuple(d -> lat.periodic[d] ? mod1(j[d], lat.dims[d]) : clamp(j[d], 1, lat.dims[d]), Val(N))
     inside || return -one(eltype(σ))
-    i = linear_index(lat, w)
+    i = linear_index(lat, w)           # w is wrapped or clamped into the lattice: i in 1:nsites
     _euler_in_domain(lat.mask, i) || return -one(eltype(σ))
-    return @inbounds σ[i]
+    return @inbounds σ[i]              # σ and the domain mask have the lattice's size
 end
 @inline _euler_in_domain(::Nothing, i) = true
-@inline _euler_in_domain(m, i) = @inbounds m[i]
+@inline _euler_in_domain(m, i) = @inbounds m[i]   # i in 1:nsites (`_euler_owner`)
 
 @inline _euler_add!(col, c, s) = (c > 0 && (Atomix.@atomic col[c] += s); nothing)
 
@@ -201,14 +205,26 @@ end
     recompute_euler(σ, lattice, Val(adjacency), ncell) -> Vector{Int32}
 
 Euler characteristics of cells `1:ncell` under `adjacency` (`:face` or `:full`), from
-scratch (initialization, lifecycle events, host edits of σ).
+scratch (initialization, lifecycle events, host edits of σ). Throws an `ArgumentError` on
+a periodic axis of length 1, where the per-copy change is not local
+([`euler_change`](@ref)): the check runs here, on the host, when a problem is built.
 """
 function recompute_euler(σ, lat::Lattice, adj::Val, ncell::Integer)
+    _check_euler_lattice(lat)
     χ = zeros(Int32, ncell)
     for a in 1:_euler_anchors(lat)
         _euler_window!(χ, σ, lat, a, adj)
     end
     return χ
+end
+
+function _check_euler_lattice(lat::Lattice{N}) where {N}
+    for d in 1:N
+        lat.periodic[d] && lat.dims[d] == 1 && throw(ArgumentError(
+            "`euler` needs every periodic axis to have length ≥ 2: axis $d is periodic with length 1, " *
+            "so the target's neighbour shell wraps onto the target itself; make axis $d closed or longer"))
+    end
+    return nothing
 end
 
 # the Euler columns present in a cell state: `(face, full)`, each a column or `nothing`;
@@ -227,7 +243,7 @@ end
 
 # device rebuild (`lifecycle_device.jl`): zero every slot, then sum the windows
 @inline _ezero!(::Nothing, c) = nothing
-@inline _ezero!(col, c) = (@inbounds col[c] = Int32(0); nothing)
+@inline _ezero!(col, c) = (@inbounds col[c] = Int32(0); nothing)   # c in 1:capacity (the launch range)
 @inline function _deuler_zero_body!(c, dv, par, cols)
     _on(dv, par) || return nothing
     _ezero!(cols[1], c)

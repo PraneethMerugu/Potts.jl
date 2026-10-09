@@ -215,7 +215,9 @@ adjacency, and both forms give the same value.
 On a periodic axis χ is that of the cell on the torus. A cell that wraps round the axis
 counts the cycle as a hole: a band round a periodic 2D lattice reads 0, as does a rod
 through a periodic 3D axis. Out-of-domain sites are background, so a pocket against a
-closed wall is not a hole.
+closed wall is not a hole. A periodic axis must have length 2 or more: on a periodic axis
+of length 1 the target's neighbours wrap onto the target itself, so building a problem that
+reads `euler` on such a lattice is an error (make the axis closed, or longer).
 
 A model that reads `euler` anywhere, an observable included, tracks one `Int32` column per
 adjacency it reads (`u.cell.euler`, `u.cell.euler_full`). The column costs a read of the

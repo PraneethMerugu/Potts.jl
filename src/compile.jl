@@ -29,7 +29,8 @@ struct CompiledPottsSystem
     uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
     uses_cluster_surface::Bool
     uses_euler::Bool                                  # `euler` (face adjacency), P6.3j
-    uses_euler_full::Bool                             # `euler(; adjacency = :full)`
+    uses_euler_full::Bool                             # `euler(; adjacency = :full)` (not on hex)
+    euler_full_column::Symbol                         # the column it reads: `:euler` on hex (D-192 Q4)
     cluster_division::Bool
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
@@ -404,6 +405,12 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
     uses_euler_full = any(x -> _uses_builtin(x, :euler_full), scanned)
+    # hex has one self-dual adjacency: `:full` reads the `:face` column and its shell (D-192 Q4)
+    hex = core_lattice(getfield(sys, :lattice)).geometry isa CP.Hexagonal
+    euler_full_column = hex ? :euler : :euler_full
+    if hex && uses_euler_full
+        uses_euler, uses_euler_full = true, false
+    end
     uses_clusters = cluster_division || uses_cluster_surface ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
@@ -489,7 +496,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         getfield(sys, :constraints), updates, fields, cell_odes, model_odes, getfield(sys, :divisions), relationships, edge_terms, edge_vars,
         getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler, uses_euler_full,
-        cluster_division,
+        euler_full_column, cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
