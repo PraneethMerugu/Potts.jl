@@ -9,7 +9,6 @@ frame_spacing = "log"
 framerate = 24
 frames = 238
 git_commit = "c1f16e8be"
-hostname = "praneeth-NucBox-EVO-X2"
 initial_state = "graner_glazier_aggregate(1000; seed = 1, margin = 60), relaxed as one type (J_ll = 2, J_lM = 8, T = 5, λ = 1, V₀ = 40) for 6400 MCS (400 paper MCS), seed 1; then the aggregate's kinds"
 julia = "1.12.6"
 lattice = [347, 347]
