@@ -351,6 +351,120 @@ end
 # 19 300, where the paper's axis runs to about 19 800 (D-200). Every check is in the
 # Details.
 #
+# ### 01b figures against the digitised curves
+#
+# D-202 pre-registers 133 points read off 01b Figs. 5, 7–10 and 12, Fig. 13's Σ ΔH, and
+# 16 shape rows (the files, reading method and uncertainty are in
+# `test/reproductions/data/01b/`). Each colour is one curve. Open markers on a dashed line
+# are the paper's digitised values, with its ± 1 SD where the figure draws one. Filled
+# markers on a solid line are ours, the mean ± sd of the replicates in the record
+# `data/01/full-01b-*` (10 per point; 100 per arm in Figs. 12 and 13). A curve passes when at
+# most max(1, ⌊0.1 n⌋) of its n points fall outside the paper's band.
+
+const RECORD_01B = let d = joinpath(pkgdir(PottsModels), "reproductions", "data", "01")
+    r = filter(n -> startswith(n, "full-01b-") && isdir(joinpath(d, n)), readdir(d))
+    isempty(r) ? nothing : joinpath(d, only(r))
+end
+function tsv01b(path)
+    lines = filter(!isempty, readlines(path))
+    head = split(lines[1], '\t')
+    return [Dict(String(h) => String(v) for (h, v) in zip(head, split(l, '\t'; keepempty = true))) for l in lines[2:end]]
+end
+const DIGI_01B = joinpath(pkgdir(PottsModels), "test", "reproductions", "data", "01b")
+b01_verdicts = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "verdicts.tsv"))
+b01_causes = (RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))) ? Dict{String, String}[] :
+             tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+b01_rows = filter(v -> !startswith(v["check"], "point ") && v["control"] == "false", b01_verdicts)
+b01_ctls = filter(v -> v["control"] == "true", b01_verdicts)
+mdcell(s) = replace(s, "|" => "\\|")
+function b01_deviation_row(v)
+    c = findfirst(d -> d["row"] == v["row"] && d["check"] == v["check"], b01_causes)
+    cause = c === nothing ? "not yet diagnosed" : b01_causes[c]["suspected_cause"]
+    status = c === nothing ? "not an author question" : b01_causes[c]["author_question"]
+    return "| 01b $(v["row"]) $(v["check"]) (FAIL) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | $cause | $status |"
+end
+b01_deviation_rows = [b01_deviation_row(v) for v in b01_rows if v["result"] == "FAIL"]
+if RECORD_01B === nothing
+    Markdown.parse("**Provisional.** The 01b record (1330 runs, D-202) has not landed yet, so the panels show " *
+                   "the paper's digitised curves alone and no 01b verdict is claimed.")
+else
+    p01b = TOML.parsefile(joinpath(RECORD_01B, "provenance.toml"))
+    Markdown.parse("**$(count(v -> v["result"] == "PASS", b01_rows)) of $(length(b01_rows)) 01b rows pass**, and " *
+                   "$(count(v -> v["result"] == "FAIL", b01_ctls)) of $(length(b01_ctls)) negative controls fail as " *
+                   "required. Record `$(basename(RECORD_01B))`: commit `$(p01b["commit"][1:8])`, $(p01b["cpu"]) " *
+                   "($(p01b["threads"]) threads), $(p01b["jobs"]) runs. Every 01b check is in the Details.")
+end
+
+let
+    curvecolor = Dict(zip(["CI", "noCI", "CI1024", "noCI128", "ER50", "ER200", "EO200"], Makie.wong_colors()))
+    curvecolor["CI128"] = curvecolor["CI"]
+    curvecolor["noCI128"] = curvecolor["noCI"]
+    curvecolor["EO200"] = Makie.wong_colors()[4]          # yellow is too faint on white
+    curvename = Dict("CI" => "CI", "noCI" => "no CI", "CI128" => "CI, 128 cells", "CI1024" => "CI, 1024 cells",
+        "noCI128" => "no CI, 128 cells", "ER50" => "ext.-retr., T = 50", "ER200" => "ext.-retr., T = 200",
+        "EO200" => "ext.-only, T = 200")
+    num(s) = parse(Float64, s)
+    sweeps = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "sweeps.tsv"))
+    series = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "series.tsv"))
+    function paper!(ax, file, curve; scale = 1.0)
+        rows = sort(filter(r -> r["curve"] == curve, tsv01b(joinpath(DIGI_01B, file))); by = r -> num(r["x"]))
+        x, y, c = num.(getindex.(rows, "x")), scale .* num.(getindex.(rows, "y")), curvecolor[curve]
+        sd = filter(r -> r["sd"] != "NA", rows)
+        isempty(sd) || errorbars!(ax, num.(getindex.(sd, "x")), num.(getindex.(sd, "y")), num.(getindex.(sd, "sd"));
+            color = (c, 0.5), whiskerwidth = 4)
+        lines!(ax, x, y; color = c, linestyle = :dash)
+        scatter!(ax, x, y; color = :white, strokecolor = c, strokewidth = 1.5, markersize = 8, label = curvename[curve])
+    end
+    function ours!(ax, fig, curve)
+        rows = filter(r -> r["fig"] == fig && r["curve"] == curve, sweeps)
+        isempty(rows) && return
+        xs = sort(unique(num.(getindex.(rows, "x"))))
+        C = [num.(getindex.(filter(r -> num(r["x"]) == x, rows), "C_N")) for x in xs]
+        c = curvecolor[curve]
+        errorbars!(ax, xs, mean.(C), std.(C); color = c, whiskerwidth = 4)
+        scatterlines!(ax, xs, mean.(C); color = c, markersize = 7)
+    end
+    function ours_t!(ax, arm, col; scale = 1.0)
+        rows = filter(r -> r["arm"] == arm, series)
+        isempty(rows) && return
+        ts = sort(unique(num.(getindex.(rows, "t"))))
+        v = [scale .* num.(getindex.(filter(r -> num(r["t"]) == t, rows), col)) for t in ts]
+        band!(ax, ts, mean.(v) .- std.(v), mean.(v) .+ std.(v); color = (curvecolor[arm], 0.2))
+        lines!(ax, ts, mean.(v); color = curvecolor[arm], linewidth = 2)
+    end
+    fig = Figure(; size = (1200, 680))
+    panels = [("F5", "fig05.tsv", ["CI"], "χcc / χcM", "Fig. 5 · 10⁴ MCS"),
+        ("F7", "fig07.tsv", ["CI", "noCI"], "J(c,c)", "Fig. 7"),
+        ("F8", "fig08.tsv", ["CI", "noCI"], "χ(c,M)", "Fig. 8"),
+        ("F9", "fig09.tsv", ["CI", "noCI"], "s", "Fig. 9"),
+        ("F10", "fig10.tsv", ["CI128", "CI1024", "noCI128"], "D (10⁻¹³ m²/s)", "Fig. 10")]
+    for (k, (f, file, curves, xl, title)) in enumerate(panels)
+        ax = Axis(fig[(k - 1) ÷ 4 + 1, (k - 1) % 4 + 1]; title = "01b $title", xlabel = xl,
+            ylabel = k in (1, 5) ? "compactness C at N" : "", limits = (nothing, (0, 1.05)))
+        for c in curves
+            paper!(ax, file, c)
+            ours!(ax, f, c)
+        end
+        length(curves) > 1 && axislegend(ax; position = f in ("F8",) ? :rt : :rb, labelsize = 10, framevisible = false)
+    end
+    ax12 = Axis(fig[2, 2]; title = "01b Fig. 12", xlabel = "code MCS", ylabel = "C", limits = (nothing, (0.3, 1.05)))
+    ax13 = Axis(fig[2, 3]; title = "01b Fig. 13", xlabel = "code MCS", ylabel = "Σ ΔH (10⁸)")
+    for arm in ("ER50", "ER200", "EO200")
+        paper!(ax12, "fig12.tsv", arm)
+        ours_t!(ax12, arm, "C")
+        paper!(ax13, "fig13.tsv", arm)
+        ours_t!(ax13, arm, "dH"; scale = 1e-8)
+    end
+    axislegend(ax12; position = :rt, labelsize = 10, framevisible = false)
+    Legend(fig[2, 4], [MarkerElement(; marker = :circle, color = :white, strokecolor = :black, strokewidth = 1.5),
+            [LineElement(; color = :black), MarkerElement(; marker = :circle, color = :black)]],
+        ["paper (digitised) ± its SD", "ours, mean ± sd"]; framevisible = false, tellwidth = false)
+    fig
+end
+
+# Seven inferred set-ups (I1–I7 in D-202) stand in for what 01b does not state; each is a
+# provisional row of the deviations table below.
+#
 # ### Deviations
 #
 # The table has one row per failed, parked or provisional target, and one per difference
@@ -388,8 +502,15 @@ Markdown.parse("""
 | PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
 | PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not yet on our open question list) |
 | PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not yet on our open question list) |
-| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); the targets through the continuous-χ superset are ROADMAP P6.3f | $(aq(4)) |
-$(join(full_deviation_rows, "\n"))
+| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); Figs. 10, 12 and 13 enter through the 01b digitised targets on inferred set-ups (I1, I2 below; D-202) | $(aq(4)) |
+| 01b I1: Figs. 12–13 start (provisional) | 256 cells, 71 Eden rounds, 8 divisions, on 502² | 256 cells (caption); no file | unstated set-up (D-202 I1; spec D-2) | $(aq(4)) |
+| 01b I2: Fig. 10 1024-cell start (provisional) | 1024 cells, 141 rounds, 10 divisions, on 402² | "400×400-pixel lattices"; no file | unstated set-up (D-202 I2; spec A-10) | $(aq(4)) |
+| 01b I3: replicates in Figs. 7–10 (provisional) | n = 10 per point | not stated (Fig. 5 states 10) | unstated (D-202 I3) | $(aq(4)) |
+| 01b I4: "no contact inhibition" (provisional) | χcc = χcM | the files' `vecadherinknockout` | the text does not define it (D-202 I4) | $(aq(4)) |
+| 01b I5: Fig. 13 H − H₀ (provisional) | Float Σ ΔH of accepted copies, chemotaxis included; sign, order and magnitude within √10 pinned | integer-truncated terms in the files | ΔH arithmetic (D-202 I5; D-050 M9) | $(aq(3)) |
+| 01b I6: time axis (provisional) | includes the 100 relaxation MCS | not stated | as the 2008 time origin row (D-202 I6) | $(aq(2)) |
+| 01b I7: Fig. 10 legend (provisional) | the flatter solid curve read as 1024 cells | the legend and the caption disagree | a figure inconsistency (D-202 I7) | $(aq(4)) |
+$(join([full_deviation_rows; b01_deviation_rows], "\n"))
 """)
 
 # ## 4. Details
@@ -985,6 +1106,18 @@ failing = [["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in rows i
            ["- $(v["row"]) $(v["check"]) (full run): ours $(v["ours"]), tolerance $(v["rule"])." for v in record_verdicts if v["result"] == "FAIL"]]
 Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
 
+# ### 01b: every check
+#
+# Every row and negative control of the frozen 01b test (D-202), as the record's
+# `verdicts.tsv` gives them; the frozen record tier recomputes each from `sweeps.tsv` and
+# `series.tsv`. Controls must fail.
+
+Markdown.parse(RECORD_01B === nothing ? "No 01b record yet (provisional; see §3)." :
+               "| Row | Check | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
+               join(["| $(v["row"]) | $(v["check"]) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | " *
+                     (v["control"] == "true" ? "$(v["result"]) (control; must fail)" : v["result"]) * " |"
+                     for v in b01_verdicts], "\n"))
+
 # ### Open questions for the authors
 #
 # The questions on our open question list (model-specs README §5), blocking ones first:
@@ -1028,6 +1161,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one colour per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172; ROADMAP P6.3f |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
 # | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
+# | 2026-10-09 | The 01b digitised targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitised curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | D-202 |
 #
 # ```@raw html
 # </details>
