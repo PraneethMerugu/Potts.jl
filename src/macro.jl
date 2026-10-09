@@ -69,9 +69,12 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
-    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler)
-# `euler_full` is the column of `euler(; adjacency = :full)`: reserved, not bound
-_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full])
+    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler,
+    :largest_piece)
+# `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
+# forms: reserved, not bound
+_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
+    :largest_piece_full])
 # DSL names added after published models used them as structural parameters (P6.3g:
 # `WortelAct(; connected)`): a structural parameter may take one of these names, and then it
 # shadows the DSL name in its model (which cannot use that helper)
@@ -566,7 +569,7 @@ function _section!(parts, sec, args, ln = nothing)
             k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
             _declare!(parts, k, "observed quantity")
             push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
-                _located_push(:__observed, :($P.ObservedEq($k, $(rewrite(l.args[3])))), ln))
+                _located_push(:__observed, :($P.ObservedEq($k, $(_rewrite_arg(l.args[3])))), ln))
         end
     elseif sec === Symbol("@relationship")
         decl = args[1]
@@ -731,6 +734,8 @@ function rewrite(ex)
         return _rewrite_gather(ex.args[1], ex.args[2])
     elseif h === :call && ex.args[1] === :euler
         return Expr(:call, :($P._euler), map(rewrite, ex.args[2:end])...)   # `euler(c; adjacency)`
+    elseif h === :call && ex.args[1] === :largest_piece
+        return Expr(:call, :($P._largest_piece), map(rewrite, ex.args[2:end])...)   # `largest_piece(c; adjacency)`
     elseif h === :call && length(ex.args) == 3 && _isparams(ex.args[2]) && ex.args[3] isa Expr && ex.args[3].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[3], ex.args[2])      # `pieces(n for n in … ; adjacency)`
     elseif h === :call && ex.args[1] === :pieces && _relation_call(ex.args[end])
@@ -743,9 +748,13 @@ function rewrite(ex)
         return _rewrite_rng(ex, :rand)            # `rand(; x = 1)`: named like the other forms
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
+    elseif h === :call
+        # a bare `pieces` argument is the cell-scope built-in (P6.9a); a call keeps its head
+        return Expr(h, rewrite(ex.args[1]), map(_rewrite_arg, ex.args[2:end])...)
     end
-    return Expr(h, map(rewrite, ex.args)...)
+    return Expr(h, map(_rewrite_arg, ex.args)...)
 end
+_rewrite_arg(a) = a === :pieces ? :(Potts._bare_pieces(pieces)) : rewrite(a)
 _isblock(e) = e isa Expr && e.head === :block
 
 # an RNG call in a model body: `Potts._rng_call(:name, args…; kws…)`, which keeps `rand()`

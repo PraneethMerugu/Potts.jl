@@ -36,7 +36,8 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
     :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
-    :ring_cells, :ring_medium, :direction, :euler, :euler_full)
+    :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full, :largest_piece,
+    :largest_piece_full)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -49,6 +50,11 @@ const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, 
 const DMAJOR = _tag(_sym(:δmajor_length), Info(:delta, :major_length, nothing, (;)))
 const DEULER = _tag(_sym(:δeuler), Info(:delta, :euler, nothing, (;)))
 const DEULER_FULL = _tag(_sym(:δeuler_full), Info(:delta, :euler_full, nothing, (;)))
+# not deltas: a cell's pieces and largest piece after the copy (P6.9a)
+const DPIECES = _tag(_sym(:δpieces), Info(:delta, :pieces, nothing, (;)))
+const DLARGEST = _tag(_sym(:δlargest_piece), Info(:delta, :largest_piece, nothing, (;)))
+const DPIECES_FULL = _tag(_sym(:δpieces_full), Info(:delta, :pieces_full, nothing, (;)))
+const DLARGEST_FULL = _tag(_sym(:δlargest_piece_full), Info(:delta, :largest_piece_full, nothing, (;)))
 
 # `euler(; adjacency)` and `euler(c; adjacency)` (P6.3j, D-192): `@potts_model` rewrites a
 # call of `euler` to this. Each adjacency is its own built-in (one tracker column each);
@@ -63,6 +69,22 @@ _euler(; adjacency = :face) = _euler_builtin(adjacency)
 _euler(c; adjacency = :face) = _index(_euler_builtin(adjacency), c)
 _euler(args...; kwargs...) = throw(ArgumentError(
     "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"))
+
+# Cell-scope `pieces` and `largest_piece` (P6.9a, D-189 ruling 9): the number of connected
+# components of a cell's sites and the site count of the largest, under `:face` (the bare
+# names) or `:full` adjacency, exact trackers like `euler`. `pieces(c, shell(target))` stays
+# the shell fold (`_Pieces`); `@potts_model` rewrites a bare `pieces` to `_bare_pieces(pieces)`
+# and a call of `largest_piece` to `_largest_piece`.
+function _pieces_builtin(name, adjacency)
+    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(ArgumentError(
+        "`$name(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"))
+    name === :pieces && return adjacency === :face ? B.pieces : B.pieces_full
+    return adjacency === :face ? B.largest_piece : B.largest_piece_full
+end
+_largest_piece(; adjacency = :face) = _pieces_builtin(:largest_piece, adjacency)
+_largest_piece(c; adjacency = :face) = _index(_pieces_builtin(:largest_piece, adjacency), c)
+_largest_piece(args...; kwargs...) = throw(ArgumentError(
+    "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"))
 
 # ---------------------------------------------------------------------------------------
 # Declarations
@@ -657,9 +679,23 @@ end
 """
     Global(; window = nothing, adjacency = :face)
 
-Connectivity of the whole cell, not of the target's shell (CompuCell3D's
-`ConnectivityGlobal`). `window` is `nothing` or a positive number of sites (the device
-search window). A reserved value: using it in a model is an `ArgumentError` until P6.9.
+Connectivity of the whole cell, not of the target's shell (CompuCell3D's `ConnectivityGlobal`
+without its hole heuristic; Bauer et al. 2009). Cell `c` stays connected through a copy when
+it is the medium or the copy does not increase its number of pieces (connected components of
+its sites under `adjacency`): an already fragmented cell stays movable, and the last site may
+be taken. Both cells are tested: the losing cell must not split, the gaining cell must gain
+a site adjacent to it.
+
+The veto `@constraint connectivity(k…; rule = Global())` is evaluated after the acceptance
+draw (local test, ΔH, draw, then the search), which gives the trajectory of evaluating it
+first at a fraction of the cost; so a refused copy whose ΔH is not finite fails the run.
+
+`window` (a positive number of sites, or `nothing`) is used by `CheckerboardCPM` only: the
+losing cell's search stays inside the index-space box of radius `window` round the target
+(minimum image on periodic axes), and a copy whose touching pieces all leave the box is
+refused and counted in `stats.connectivity_deferred`. `SequentialCPM` and `BoundarySiteCPM`
+are exact and ignore it; `window = nothing` is exact on the CPU (a device needs a window).
+`adjacency` is `:face` (4 in 2D, 6 hex, 6 in 3D) or `:full` (8, 26; on hex `:full` is `:face`).
 """
 struct Global
     window::Union{Nothing, Int}
@@ -682,15 +718,20 @@ function _rule(who, r)
     r === :arc_or_pair && return ArcOrPair()
     r isa Symbol && throw(ArgumentError("$who: unknown rule `:$r` (one of `Local()`, `ArcOrPair()`, `Simple()`; " *
                                         "the symbols $(join(repr.(_CONNECTIVITY_RULES), ", ")) are aliases)"))
-    r isa Global && throw(ArgumentError("$who: `Global()` (connectivity of the whole cell) is not available yet " *
-                                        "(P6.9); the local rules `Local()`, `ArcOrPair()` and `Simple()` read the target's shell"))
-    r isa Union{Local, ArcOrPair, Simple} || throw(ArgumentError("$who: `rule` must be `Local()`, `ArcOrPair()` or `Simple()`, got $(repr(r))"))
+    r isa Union{Local, ArcOrPair, Simple, Global} ||
+        throw(ArgumentError("$who: `rule` must be `Local()`, `ArcOrPair()`, `Simple()` or `Global()`, got $(repr(r))"))
     return r
 end
-# the rule as a constant of the generated code: Local 0–3 (gain + 2 full), ArcOrPair 4, Simple 5–6
+# the rule as a constant of the generated code: Local 0–3 (gain + 2 full), ArcOrPair 4, Simple
+# 5–6, Global 7 + full + 2 window (window `nothing` is 0)
 _rule_code(r::Local) = Int(r.gain) + 2 * Int(r.adjacency === :full)
 _rule_code(::ArcOrPair) = 4
 _rule_code(r::Simple) = 5 + Int(r.adjacency === :full)
+_rule_code(r::Global) = 7 + Int(r.adjacency === :full) + 2 * something(r.window, 0)
+"""The `Global` rule of rule code `code` (`_rule_code`), or `nothing` for a local rule."""
+_global_rule(code::Integer) = code < 7 ? nothing :
+                              Global(; window = (code - 7) ÷ 2 == 0 ? nothing : (code - 7) ÷ 2, adjacency = isodd(code - 7) ? :full : :face)
+Base.show(io::IO, r::Global) = print(io, "Global(; window = ", repr(r.window), ", adjacency = ", repr(r.adjacency), ")")
 
 """`_connected(c, code)`: rule `code` (`_rule_code`) holds for cell `c` (`old` or `new`)."""
 function _connected end
@@ -715,13 +756,15 @@ when `c` is the medium. Compose it like any condition:
     @drive copy => λ * !connected(old; rule = Simple())
 
 `Local()` and `ArcOrPair()` test only the losing cell (`Local`'s gain test is part of it), so
-`connected(new; …)` takes `Simple()`. `Global()` waits for P6.9.
+`connected(new; …)` takes `Simple()` or `Global()`. Under `Global()`, `connected` is exact on
+the host algorithms; on `CheckerboardCPM` a rule with a window searches inside it, and an
+undecided copy reads `false`.
 """
 function connected(c; rule = Local())
     r = _rule("connected", rule)
     who = _which_cell("connected", c)
-    who === :new && !(r isa Simple) && throw(ArgumentError(
-        "connected(new; rule = $r): only `Simple()` tests the gaining cell; `Local()` and `ArcOrPair()` " *
+    who === :new && !(r isa Union{Simple, Global}) && throw(ArgumentError(
+        "connected(new; rule = $r): only `Simple()` and `Global()` test the gaining cell; `Local()` and `ArcOrPair()` " *
         "test the losing cell, `connected(old; …)`"))
     return Symbolics.wrap(_connected(who === :old ? B.old : B.new, _rule_code(r)))
 end
@@ -748,23 +791,24 @@ Connectivity for cells of `kinds` (every kind if none; kind classes work too), i
 statements:
 
 - `@constraint connectivity(k…; rule)`, the veto: a copy is refused when the losing cell is
-  of `kinds` and `connected(old; rule)` fails; under `Simple()` also when the gaining cell is
-  of `kinds` and `connected(new; rule)` fails (each cell against the kind filter);
+  of `kinds` and `connected(old; rule)` fails; under `Simple()` and `Global()` also when the
+  gaining cell is of `kinds` and `connected(new; rule)` fails (each cell against the kind
+  filter); the `Global` veto is evaluated after the acceptance draw;
 - `@drive connectivity(k…; rule, penalty)`, the penalty: every copy the veto would refuse
   is charged `penalty` (a number or a parameter), ΔH += penalty · [refused]. TST's
   `conn_diss` and Merks' E₀ are `@drive connectivity(k; rule = ArcOrPair(), penalty = E₀)`.
 
-`rule` is `Local()` (the default; CompuCell3D's `Connectivity`), `ArcOrPair()` (TST) or
-`Simple()` (no splits, no holes); the symbols `:local` and `:arc_or_pair` are aliases of the
-first two. A `penalty` in `@constraint`, or none in `@drive`, is an `ArgumentError`, as is
-`Global()` until P6.9. See the "Connectivity" manual page for the rules and the mapping from
-other frameworks.
+`rule` is `Local()` (the default; CompuCell3D's `Connectivity`), `ArcOrPair()` (TST),
+`Simple()` (no splits, no holes) or `Global(; window, adjacency)` (the whole cell; CompuCell3D's
+`ConnectivityGlobal`); the symbols `:local` and `:arc_or_pair` are aliases of the first two.
+A `penalty` in `@constraint`, or none in `@drive`, is an `ArgumentError`. See the
+"Connectivity" manual page for the rules and the mapping from other frameworks.
 """
 function connectivity(kinds::_KindArg...; rule = Local(), penalty = nothing)
     r = _rule("connectivity", rule)
     ks = _flat_kinds(kinds)
     code = _rule_code(r)
-    c = Constraint(:connectivity, ks, _connected(B.old, code), r isa Simple ? _connected(B.new, code) : nothing)
+    c = Constraint(:connectivity, ks, _connected(B.old, code), r isa Union{Simple, Global} ? _connected(B.new, code) : nothing)
     penalty === nothing && return c
     return ConnectivityPenalty(penalty * _refused(c))
 end
@@ -806,12 +850,20 @@ Base.show(io::IO, ::ShellRelation) = print(io, "shell")
 """
     pieces(c, shell(target); adjacency = :face)
     pieces(n for n in shell(target) if cond(n); adjacency = :face)
+    pieces, pieces(; adjacency = :face)              # cell scope
+    pieces[c], pieces(c; adjacency = :face)          # copy scope, c ∈ {old, new}
 
-The number of pieces (connected components) of the shell sites owned by `c` (any cell
-expression; `0` for the medium), or of the shell sites where `cond` holds; two sites are
-joined when they are face neighbours (`:face`) or any neighbours (`:full`). `pieces(old,
-shell(target))` is the old `ring_arcs`/`local_components` for a cell. Only `shell` is a
-relation for `pieces` (no custom shells in v1).
+The shell fold: the number of pieces (connected components) of the shell sites owned by `c`
+(any cell expression; `0` for the medium), or of the shell sites where `cond` holds; two
+sites are joined when they are face neighbours (`:face`) or any neighbours (`:full`).
+`pieces(old, shell(target))` is the old `ring_arcs`/`local_components` for a cell. Only
+`shell` is a relation for `pieces` (no custom shells in v1).
+
+The cell built-in (P6.9a): the number of connected components of the cell's sites under
+`adjacency` (0 for a dead cell), an exact tracker. In cell energies (`@energy cells(k) => α *
+(pieces > 1)`) the copy sees its exact after-value; in a drive or constraint `pieces[old]`,
+`pieces(new; adjacency)` read the value before the copy (the medium reads 0). See also
+`largest_piece`.
 """
 struct _Pieces end
 Base.nameof(::_Pieces) = :pieces
@@ -822,8 +874,17 @@ function (f::_Pieces)(c, a::Around; adjacency = :face)
     _shell_anchor(a.anchor)
     return _gather(f, n -> n, a, n -> _index(B.owner, n) == c; adjacency)
 end
-(::_Pieces)(args...; kws...) = throw(ArgumentError("pieces: write `pieces(c, shell(target))` or " *
-                                                   "`pieces(n for n in shell(target) if cond)`"))
+# the cell-scope built-in (P6.9a): `pieces(; adjacency)`, `pieces(c; adjacency)`, `pieces[c]`
+(::_Pieces)(; adjacency = :face) = _pieces_builtin(:pieces, adjacency)
+(::_Pieces)(c; adjacency = :face) = _index(_pieces_builtin(:pieces, adjacency), c)
+_index(::_Pieces, i) = _index(B.pieces, i)
+"""A bare `pieces` in a model body: the cell-scope built-in (a structural parameter named
+`pieces` shadows it and is returned as is)."""
+_bare_pieces(::_Pieces) = B.pieces
+_bare_pieces(x) = x
+(::_Pieces)(args...; kws...) = throw(ArgumentError("pieces: write `pieces(c, shell(target))`, " *
+                                                   "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
+                                                   "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"))
 _not_shell() = throw(ArgumentError("pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
                                    "no other relation is a shell in v1"))
 
