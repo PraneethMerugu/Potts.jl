@@ -15,6 +15,7 @@
 #              the CPU path's rules do: not yet updated)
 #   surface    (sites)   the surface change of each parent and daughter (only the moved sites)
 #   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed from σ
+#   euler      (cells, then grid vertices) the Euler columns (`euler.jl`), zeroed and summed from σ
 #   finalize   (cells)   volume and moments of parents and daughters, removed cells' trackers
 #   clusters   re-root clusters whose root died; cluster volume (cells) and surface (sites)
 #   mask       (sites + one item) the P6.0d frozen-mask refresh and its counts, when the mask
@@ -66,7 +67,7 @@ const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
 const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :cluster,
-    :cluster_volume, :cluster_surface)
+    :cluster_volume, :cluster_surface, :euler, :euler_full)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
 function _device_scratch(backend, N::Int, cap::Int)
@@ -763,7 +764,7 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
-        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)))
+        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell))
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
         D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -911,6 +912,11 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         _stage!(mode, _dcount_body!, backend, n, (dv, par, st.σ, st.cell.kind, opt.cc, opt.ccols, lat))
         launches += 2
     end
+    if opt.eul !== nothing         # Euler columns: zeroed, then summed from σ (`euler.jl`)
+        _stage!(mode, _deuler_zero_body!, backend, cap, (dv, par, opt.eul))
+        _stage!(mode, _deuler_body!, backend, _euler_anchors(lat), (dv, par, st.σ, opt.eul, lat))
+        launches += 2
+    end
     _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat))
     launches += 1
     if _has_clusters(st)
@@ -1007,11 +1013,13 @@ end
     ts = @index(Local, Linear)
     _each_if!(_dsurface_body!, ts, length(st.σ), opt.surf, (dv, par, st.σ, opt.surf, opt.rel, ctx.lattice))
     _each_if!(_dcount_zero_body!, ts, length(buf.events), opt.cc, (dv, par, opt.ccols))
+    _each_if!(_deuler_zero_body!, ts, length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
     _each_on!(_dfinalize_body!, tz, length(buf.events),
         (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice))
     _each_if!(_dcount_body!, tz, length(st.σ), opt.cc, (dv, par, st.σ, st.cell.kind, opt.cc, opt.ccols, ctx.lattice))
+    _each_if!(_deuler_body!, tz, _euler_anchors(ctx.lattice), opt.eul, (dv, par, st.σ, opt.eul, ctx.lattice))
     @synchronize
     tk = @index(Local, Linear)
     _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))

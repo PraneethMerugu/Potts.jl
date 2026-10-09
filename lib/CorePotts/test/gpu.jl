@@ -639,6 +639,13 @@ end
         sol = solve!(integ)
         @test sol.stats.attempts == (S + 1) * (900 - 36) + (30 - S - 1) * 900
         @test sol.u[end].cell.volume[1:2] == [count(==(c), sol.u[end].σ) for c in 1:2]
+        # the Euler columns through divisions (euler.jl's fixture): zeroed and summed from σ
+        ep = remake(eu_problem(); p = merge(gg_params(Float32), (; V0 = 30.0f0, T = 8.0f0)))
+        integ = init(ep, CheckerboardCPM(); backend, saveat = 1)
+        @test integ.lcache.device.fused! === nothing
+        sol = solve!(integ)
+        @test sol.stats.lifecycle.divisions >= 2
+        @test sum(u -> eu_bad(map(Array, u.cell), Array(u.σ), ep.lattice), sol.u) == 0
     finally
         CorePotts.FUSE_SITES[] = fuse
     end

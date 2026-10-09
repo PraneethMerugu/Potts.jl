@@ -22,6 +22,7 @@ export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, Ball
 export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
+export euler_change, commit_euler!, recompute_euler
 export ContactCount, ContactCounts, commit_contact_count!, recompute_contact_count
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, shape, major_length, major_length_after, min_image
@@ -65,6 +66,7 @@ include("contact_counts.jl")
 include("transfers.jl")
 include("fields.jl")
 include("drives.jl")
+include("euler.jl")
 include("spatial.jl")
 include("relationships.jl")
 include("compartments.jl")
