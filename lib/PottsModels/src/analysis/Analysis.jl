@@ -24,6 +24,7 @@ Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
 """
 module Analysis
 
+using FFTW: rfft
 using Potts: Closed, Lattice, NeighborOrder, Periodic, VonNeumann, contact_graph, neighbors, relation
 
 export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trapz, cell_graph, reachable,

@@ -269,13 +269,13 @@ Nyquist frequency 0.5, as the axes of Figs. 8 and 10. The f = 0 bin is left out,
 constant offset does not change `S`. No window is applied (the paper's low-f ringing in
 Fig. 8 is the raw periodogram's). Fewer than two samples is an `ArgumentError`.
 
-The transform is an O(L log L) FFT (radix 2, Bluestein's algorithm for other lengths).
+The transform is FFTW's real-input FFT, O(L log L) for any length.
 """
 function power_spectrum(x::AbstractVector{<:Real}; dt::Real = 1)
     L = length(x)
     L >= 2 || throw(ArgumentError("power_spectrum: need at least 2 samples, got $L"))
     dt > 0 || throw(ArgumentError("power_spectrum: dt must be positive, got $dt"))
-    X = _dft(ComplexF64.(x))
+    X = rfft(Float64.(x))                     # X[k + 1] = Σ_t x_t e^{−2πi k t / L}, k = 0:L÷2
     K = L ÷ 2
     S = [abs2(X[k + 1]) / L for k in 1:K]
     f = [k / (L * dt) for k in 1:K]
@@ -312,66 +312,6 @@ function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real};
         suu += u * u
     end
     return -suv / suu
-end
-
-# The discrete Fourier transform X_k = Σ_t x_t e^{−2πi k t / L} (k, t = 0:L−1).
-function _dft(x::Vector{ComplexF64})
-    L = length(x)
-    ispow2(L) && return _fft2!(x)
-    # Bluestein: X_k = c_k Σ_t (x_t c_t) conj(c_{k−t}) with the chirp c_t = e^{−iπ t²/L}
-    # (t² taken mod 2L so the angle stays exact), a circular convolution of length M ≥ 2L − 1
-    M = nextpow(2, 2L - 1)
-    c = [cispi(-mod(t * t, 2L) / L) for t in 0:(L - 1)]
-    a = zeros(ComplexF64, M)
-    b = zeros(ComplexF64, M)
-    for t in 1:L
-        a[t] = x[t] * c[t]
-        b[t] = conj(c[t])
-    end
-    for t in 2:L
-        b[M - t + 2] = conj(c[t])
-    end
-    _fft2!(a)
-    _fft2!(b)
-    a .*= b
-    _ifft2!(a)
-    return [c[k] * a[k] for k in 1:L]
-end
-
-# In-place iterative radix-2 FFT (sign −1, length a power of 2).
-function _fft2!(a::Vector{ComplexF64})
-    n = length(a)
-    j = 0
-    for i in 0:(n - 1)                        # bit-reversal permutation
-        i < j && ((a[i + 1], a[j + 1]) = (a[j + 1], a[i + 1]))
-        m = n >> 1
-        while m >= 1 && (j & m) != 0
-            j ⊻= m
-            m >>= 1
-        end
-        j |= m
-    end
-    len = 2
-    while len <= n
-        h = len >> 1
-        for k in 0:(h - 1)
-            w = cispi(-2k / len)              # each twiddle computed directly (no recurrence drift)
-            for s in 0:len:(n - 1)
-                u = a[s + k + 1]
-                v = a[s + k + h + 1] * w
-                a[s + k + 1] = u + v
-                a[s + k + h + 1] = u - v
-            end
-        end
-        len <<= 1
-    end
-    return a
-end
-function _ifft2!(a::Vector{ComplexF64})
-    a .= conj.(a)
-    _fft2!(a)
-    a .= conj.(a) ./ length(a)
-    return a
 end
 
 # ---------------------------------------------------------------------------------------
