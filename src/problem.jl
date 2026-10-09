@@ -624,6 +624,9 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if c.uses_surface
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(c.relations[:surface], lat), ncell; T))
     end
+    # Euler characteristics (P6.3j, D-192): Int32 columns, one per adjacency the model reads
+    c.uses_euler && push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))
+    c.uses_euler_full && push!(cell, :euler_full => CorePotts.recompute_euler(σ, lat, Val(:full), ncell))
     append!(cell, _contact_count_columns(c, σ, kinds, lat, ncell))          # contact folds (D-150)
     _has_bounded_draw(sys) && push!(model, CorePotts.MODEL_STATUS => zeros(UInt32, 1))
     c.needs_moments && append!(cell, pairs(CorePotts.init_moments(σ, lat, ncell)))

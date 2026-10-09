@@ -28,6 +28,8 @@ struct CompiledPottsSystem
     uses_surface::Bool
     uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
     uses_cluster_surface::Bool
+    uses_euler::Bool                                  # `euler` (face adjacency), P6.3j
+    uses_euler_full::Bool                             # `euler(; adjacency = :full)`
     cluster_division::Bool
     needs_moments::Bool
     relations::Dict{Symbol, Any}                      # ctx relation name → spec (excl. contact)
@@ -58,7 +60,7 @@ end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
-const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length)
+const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full)
 # cell updates, division rules (cluster trackers change with copies of other members, so
 # they are readable here but not in cell energies)
 const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluster_surface)
@@ -96,10 +98,10 @@ function _bare_builtins(x, out = Set{Symbol}())
     return out
 end
 
-const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster)
+const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full)
 
 # names a user can write (`site′` only arises from `x′`)
-_visible(names) = filter(!=(:site′), collect(names))
+_visible(names) = filter(n -> !(n in (:site′, :euler_full)), collect(names))
 
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
@@ -400,6 +402,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
+    uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
+    uses_euler_full = any(x -> _uses_builtin(x, :euler_full), scanned)
     uses_clusters = cluster_division || uses_cluster_surface ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
@@ -484,7 +488,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
         getfield(sys, :constraints), updates, fields, cell_odes, model_odes, getfield(sys, :divisions), relationships, edge_terms, edge_vars,
-        getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, cluster_division,
+        getfield(sys, :link_rules), uses_surface, uses_clusters, uses_cluster_surface, uses_euler, uses_euler_full,
+        cluster_division,
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
@@ -576,7 +581,7 @@ _all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(getfield(
 # Quantities a copy changes cannot appear in contact, site or edge terms: their deltas are
 # derived only for cell terms.
 function _check_static(x, what)
-    for n in (:volume, :surface, :cluster_volume, :cluster_surface)
+    for n in (:volume, :surface, :cluster_volume, :cluster_surface, :euler, :euler_full)
         _uses_builtin(x, n) && throw(ArgumentError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
     end
     return nothing
@@ -659,7 +664,8 @@ end
 function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
     sub = Dict{Any, Any}(_unwrap(B.volume) => B.volume + dv, _unwrap(B.surface) => B.surface + DSURFACE,
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
-        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR, after...)
+        _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR,
+        _unwrap(B.euler) => B.euler + DEULER, _unwrap(B.euler_full) => B.euler_full + DEULER_FULL, after...)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
     # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
     # metadata of scoped variables `x(t)` inside them: expand over placeholders instead
