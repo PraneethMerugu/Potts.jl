@@ -2,7 +2,7 @@
 # Frozen (AUTONOMY §7.3; under D-146, D-153–D-156, D-161, D-172, D-183; layout re-frozen under D-185). The page is the Literate
 # script `lib/PottsModels/reproductions/01_merks.jl`. This file reads the page source, the
 # committed record and the frozen 01 test; it runs no simulation. The frozen 01 test
-# (`test/reproductions/01_merks.jl`, D-153) is not edited: its FULL tier's rules are
+# (`test/reproductions/01_merks.jl`, D-153; V-C12 amended by D-200) is not edited here: its FULL tier's rules are
 # re-applied here, verbatim in substance, to the committed per-replicate record.
 #
 # The record (D-146) is `lib/PottsModels/reproductions/data/01/full-2026-10-08/`:
@@ -71,7 +71,7 @@
 #     connectivity E₀, 2006 seeding, 2008 time origin, 01b Fig. 2 set-up, Field scheme,
 #     ΔH arithmetic, χ(c,c), Parameter sets, 2008 seeding, Border, Copy proposal,
 #     Compactness; and PARKED rows covering V-E2, V-E3, V-E4, V-E7, V-E8, V-E9, V-C6, V-C8,
-#     V-C10 and V-C11. No row is about attempts per MCS; no row says "pending" or "at risk".
+#     V-C10 and V-C11. One row is about attempts per MCS (D-200 item 2); no row says "pending" or "at risk".
 #     Each static row's last cell starts with "not an author question", "not asked" or the
 #     page's `$(aq(` helper, whose text starts "not asked" and names "open question list".
 #     The rows of `full_deviation_rows` end with "not an author question" or "not asked".
@@ -95,9 +95,25 @@
 #     appears before the Details section; the page has no contact wording ("Contact:",
 #     "contact us", "e-mail").
 #
+# Amended under D-200 (2026-10-09). Item 1: the frozen test's V-C12 now measures displacement
+# from MCS 0 (01b Fig. 6E), not MCS 100. The record gains `vc12_mcs0.tsv` (one row per V-C12
+# job: `key`, `row`, `seed`, `CI`, `displacement_sites_0`, `displacement_sites_100`), read
+# from the stored snapshots with no new dynamics by `vc12_mcs0.jl`, and a `[vc12_mcs0]` table
+# in `provenance.toml` (decision "D-200", `new_dynamics = false`, its own 40-hex `commit`, an
+# existing `script` in the record, no `hostname` or `work` key, and the amended frozen test's
+# `frozen_test_sha256`). So: in (a) the launch's `frozen_test_sha256` stays the D-153 freeze
+# (`cc52d26c…`) and the amendment's equals frozen.toml's entry and the file now; in (b)
+# `vc12_mcs0.tsv` covers the 20 V-C12 jobs once each, with `displacement_sites_100` equal to
+# `replicates.tsv`'s `displacement_sites` exactly, and `displacement_sites_0` joins those rows;
+# in (c) a V-C12 snapshot also recomputes `displacement_sites_0` from σ at MCS 0; in (d)
+# V-C12's check is "displacement ratio CI / no CI (MCS 0 to 19 300)" on
+# `displacement_sites_0`. Item 2: (g) now requires a deviations row on attempts per MCS (the
+# paper's N = 200² = 40 000 against our 39 204, a 2 % time scale, the paper the target).
+#
 # Negative controls (D-048): the recomputed rules flip on perturbed copies of the record
 # (V-C3 low plateau moved into and out of its band, a V-C1 network flag flipped); the job
 # check rejects a missing and a duplicated seed; the snapshot oracle rejects an edited value;
+# V-C12 fails when read on the old MCS-100 axis; an edited `displacement_sites_100` is caught;
 # the frozen observables are checked on a hand-built square (C = 100/81).
 using Test, TOML, SHA, Serialization, Markdown
 using Statistics: mean
@@ -260,6 +276,8 @@ function p63f_job_problems(R)
         row == "V-E10" && tryparse(Float64, get(r, "anisotropy", "")) === nothing && push!(probs, "$row seed $seed: anisotropy")
         row == "V-C12" && tryparse(Float64, get(r, "displacement_sites", "")) === nothing &&
             push!(probs, "$row seed $seed: displacement_sites")
+        row == "V-C12" && tryparse(Float64, get(r, "displacement_sites_0", "")) === nothing &&
+            push!(probs, "$row seed $seed: displacement_sites_0 (vc12_mcs0.tsv, D-200)")
     end
     return probs
 end
@@ -361,10 +379,10 @@ function p63f_verdicts(R)
         m9(50.0, "extension_retraction") < 0.5)
     e8, r8 = m9(800.0, "extension_only"), m9(800.0, "extension_retraction")
     add!("V-C9", "both modes, T = 800: mean C (ext-only; ext-retr)", "$(p63f_f(e8)); $(p63f_f(r8))", "< 0.3 both", e8 < 0.3 && r8 < 0.3)
-    # V-C12
-    ci12 = mean(r -> p63f_num(r, "displacement_sites"), sel("V-C12"; CI = true))
-    no12 = mean(r -> p63f_num(r, "displacement_sites"), sel("V-C12"; CI = false))
-    add!("V-C12", "displacement ratio CI / no CI (MCS 100 to 19 300)", p63f_f(ci12 / no12), "in [1.5, 2.5]", 1.5 <= ci12 / no12 <= 2.5)
+    # V-C12 (D-200 item 1: from MCS 0, as 01b Fig. 6E; was MCS 100)
+    ci12 = mean(r -> p63f_num(r, "displacement_sites_0"), sel("V-C12"; CI = true))
+    no12 = mean(r -> p63f_num(r, "displacement_sites_0"), sel("V-C12"; CI = false))
+    add!("V-C12", "displacement ratio CI / no CI (MCS 0 to 19 300)", p63f_f(ci12 / no12), "in [1.5, 2.5]", 1.5 <= ci12 / no12 <= 2.5)
     # V-C1
     k1 = count(r -> p63f_flag(r, "network_10000"), sel("V-C1"; CI = true))
     add!("V-C1", "CI: networks at 10⁴ MCS", "$k1/5", ">= 4/5", k1 >= 4)
@@ -424,6 +442,8 @@ function p63f_snapshot_problems(F, snapfile, row)
     if get(row, "row", "") == "V-C12"
         d = p63f_fz(F, :p63d_displacement, res[100], res[19_300])
         tryparse(Float64, get(row, "displacement_sites", "")) == d || push!(probs, "$(basename(snapfile)): displacement_sites")
+        d0 = haskey(res, 0) ? p63f_fz(F, :p63d_displacement, res[0], res[19_300]) : nothing
+        tryparse(Float64, get(row, "displacement_sites_0", "")) == d0 || push!(probs, "$(basename(snapfile)): displacement_sites_0")
     end
     return probs
 end
@@ -492,7 +512,34 @@ end
 
 # =============================================================================================
 const P63F_PROV = isfile(joinpath(P63F_REC, "provenance.toml")) ? TOML.parsefile(joinpath(P63F_REC, "provenance.toml")) : Dict{String, Any}()
-const P63F_R = p63f_tsv(joinpath(P63F_REC, "replicates.tsv"))
+const P63F_R0 = p63f_tsv(joinpath(P63F_REC, "replicates.tsv"))
+const P63F_VC12 = p63f_tsv(joinpath(P63F_REC, "vc12_mcs0.tsv"))
+"""Problems with `vc12_mcs0.tsv` against the replicate rows (D-200; empty when they match)."""
+function p63f_vc12_problems(R, V)
+    probs = String[]
+    jobs = [r for r in R if get(r, "row", "") == "V-C12"]
+    length(V) == length(jobs) == 20 || push!(probs, "$(length(V)) vc12_mcs0 rows for $(length(jobs)) V-C12 jobs, want 20")
+    allunique(get(v, "key", "") for v in V) || push!(probs, "duplicate key in vc12_mcs0.tsv")
+    byk = Dict(get(r, "key", "") => r for r in jobs)
+    for v in V
+        r = get(byk, get(v, "key", ""), nothing)
+        r === nothing && (push!(probs, "vc12_mcs0 key $(get(v, "key", "")) is not a V-C12 job"); continue)
+        for c in ("row", "seed", "CI")
+            get(v, c, "") == get(r, c, "") || push!(probs, "$(v["key"]): $c")
+        end
+        a, b = tryparse(Float64, get(v, "displacement_sites_100", "")), tryparse(Float64, get(r, "displacement_sites", ""))
+        (a !== nothing && a == b) || push!(probs, "$(v["key"]): displacement_sites_100 differs from replicates.tsv")
+        tryparse(Float64, get(v, "displacement_sites_0", "")) === nothing && push!(probs, "$(v["key"]): displacement_sites_0")
+    end
+    return probs
+end
+"""The replicate rows with each V-C12 row's `displacement_sites_0` joined from `vc12_mcs0.tsv`."""
+function p63f_with_vc12(R, V)
+    byk = Dict(get(v, "key", "") => v for v in V)
+    return [get(r, "row", "") == "V-C12" && haskey(byk, get(r, "key", "")) && haskey(byk[r["key"]], "displacement_sites_0") ?
+            merge(r, Dict("displacement_sites_0" => byk[r["key"]]["displacement_sites_0"])) : r for r in R]
+end
+const P63F_R = p63f_with_vc12(P63F_R0, P63F_VC12)
 
 @testset "P6.3f (a) the FULL record and its provenance" begin
     @test isdir(P63F_REC)
@@ -504,9 +551,19 @@ const P63F_R = p63f_tsv(joinpath(P63F_REC, "replicates.tsv"))
     frozen = isfile(P63F_FROZEN_TOML) ? TOML.parsefile(P63F_FROZEN_TOML)["file"] : Any[]
     entry = findfirst(f -> f["path"] == "reproductions/01_merks.jl", frozen)
     @test entry !== nothing
+    # the launch ran the D-153 freeze; the D-200 amendment (V-C12 from MCS 0) is the file now
+    @test get(prov, "frozen_test_sha256", "") == "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
+    amend = get(prov, "vc12_mcs0", Dict{String, Any}())
     if entry !== nothing
-        @test get(prov, "frozen_test_sha256", "") == frozen[entry]["sha256"] == p63f_sha(P63F_FROZEN)
+        @test get(amend, "frozen_test_sha256", "") == frozen[entry]["sha256"] == p63f_sha(P63F_FROZEN)
     end
+    @test get(amend, "decision", "") == "D-200"
+    @test get(amend, "new_dynamics", true) === false
+    @test get(amend, "dirty", true) === false
+    @test occursin(r"^[0-9a-f]{40}$", string(get(amend, "commit", "")))
+    ascript = string(get(amend, "script", ""))
+    @test startswith(ascript, "lib/PottsModels/reproductions/data/01/$P63F_RECNAME/") && isfile(joinpath(P63F_ROOT, ascript))
+    @test !haskey(amend, "hostname") && !haskey(amend, "work")             # D-183, D-195
     for k in ("hostname", "cpu", "julia")
         @test !isempty(string(get(prov, k, "")))
     end
@@ -523,6 +580,8 @@ const P63F_R = p63f_tsv(joinpath(P63F_REC, "replicates.tsv"))
     shallow = git("rev-parse", "--is-shallow-repository")
     if shallow == "false" && length(commit) == 40
         @test success(Cmd(`git merge-base --is-ancestor $commit HEAD`; dir = P63F_ROOT))
+        acommit = string(get(amend, "commit", ""))
+        length(acommit) == 40 && @test success(Cmd(`git merge-base --is-ancestor $acommit HEAD`; dir = P63F_ROOT))
     else
         @info "P6.3f: git unavailable or shallow clone; the producing-commit ancestry check is skipped"
     end
@@ -548,6 +607,18 @@ end
     if length(P63F_R) >= 2
         @test !isempty(p63f_job_problems(P63F_R[2:end]))
         @test !isempty(p63f_job_problems([P63F_R[1:(end - 1)]; [P63F_R[1]]]))
+    end
+    # D-200: the MCS-0 table is tied to the record's V-C12 jobs
+    @test p63f_tsv_header(joinpath(P63F_REC, "vc12_mcs0.tsv"))[1:6] ==
+          ["key", "row", "seed", "CI", "displacement_sites_0", "displacement_sites_100"]
+    vprobs = p63f_vc12_problems(P63F_R0, P63F_VC12)
+    isempty(vprobs) || @info "P6.3f: vc12_mcs0.tsv problems" vprobs
+    @test isempty(vprobs)
+    if !isempty(P63F_VC12)
+        bad = [k == 1 ? merge(v, Dict("displacement_sites_100" => string(parse(Float64, v["displacement_sites_100"]) + 1e-9))) : v
+               for (k, v) in enumerate(P63F_VC12)]
+        @test !isempty(p63f_vc12_problems(P63F_R0, bad))
+        @test !isempty(p63f_vc12_problems(P63F_R0, P63F_VC12[2:end]))
     end
 end
 
@@ -613,6 +684,10 @@ const P63F_V = isempty(p63f_job_problems(P63F_R)) ? p63f_verdicts(P63F_R) : noth
         vlow(R) = only(filter(v -> v.check == "low plateau (ratio 0–0.4)", p63f_verdicts(R))).result
         @test vlow(lowpass(P63F_R, 0.35)) == "PASS"
         @test vlow(lowpass(P63F_R, 0.55)) == "FAIL"
+        # V-C12 on the old MCS-100 axis fails (D-184's 1.26), on the paper's MCS-0 axis it does not
+        old12 = [r["row"] == "V-C12" ? merge(r, Dict("displacement_sites_0" => r["displacement_sites"])) : r for r in P63F_R]
+        v12(R) = only(filter(v -> v.row == "V-C12", p63f_verdicts(R)))
+        @test v12(old12).result == "FAIL" && v12(old12).ours == "1.26"
         flip = [r["row"] == "V-C1" && r["CI"] == "true" ? merge(r, Dict("network_10000" => "false")) : r for r in P63F_R]
         @test only(filter(v -> v.check == "CI: networks at 10⁴ MCS", p63f_verdicts(flip))).result == "FAIL"
     end
@@ -740,7 +815,13 @@ end
         ok || @info "P6.3f: parked target without a row: $id"
         @test ok
     end
-    @test !has(r"attempts"i)
+    # D-200 item 2: attempts per MCS is a deviation (the paper's N = 200² is the target)
+    att = filter(r -> occursin(r"attempts"i, r[1]), body)
+    @test length(att) == 1
+    if length(att) == 1
+        t = join(att[1], "|")
+        @test occursin("39 204", t) && occursin("40 000", t) && occursin("2 %", t) && occursin("D-200", t)
+    end
     @test !any(r -> occursin(r"pending|at risk"i, join(r, "|")), body)
     for r in body
         s = last(r)
