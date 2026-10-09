@@ -62,7 +62,21 @@
 # inside a gather) and with y written `@after_mcs`.
 # On 6b06747c (implementation in): sections 0–4 and 6 pass (160 + 24); section 5 fails 69 of
 # 92, every failure the missing widened refusal. Most forms compile; `kind[40]` in cells and
-# contacts is already an ArgumentError ("`kind[…]` needs a site …") without the D-209 wording. The frozen files re-frozen with this item (p6_0at, p6_0ax, p6_0ba) replace their
+# contacts is already an ArgumentError ("`kind[…]` needs a site …") without the D-209 wording.
+#
+# Second review round (D-209 "Second review round"; sections 7 and 8, after bbb8b096).
+# Refused, same message requirements: an explicit-site read of a copy-written site variable
+# outside any fold — `act[40]` in contacts with `@on_copy act[target] ~ act[target] + 1.0`,
+# and `tag[40]` for `tag(site) = 0.0, [clear_on_ownership_change = true]` in contacts, cells
+# and `edges(bond)`, with tag = 1 in the operating point so an accepted form shows the wrong
+# ΔH. `kind[id]` is refused with a message containing "bare" (fragment not required: kind
+# does not change with a copy). Accepted with an exact ΔH oracle: population folds over a
+# bound variable (D-041) — `sum(volume[c] for c in cells)`, `sum((owner[s] == 1) * 1.0 for s
+# in sites)`, `sum(y[c] for c in cells)` with `@on_copy` writing y — and the bare pair read
+# `act + act′` of an on-copy site variable in a contact term.
+# On a6239bad: sections 0–6 pass (276); section 7 fails 13 of 18 (the four site fixtures
+# compile; `kind[id]` is an ArgumentError without "bare"); section 8 fails 3 of 8 (the three
+# population folds are refused by the whole-term walk; the contact pair control passes). The frozen files re-frozen with this item (p6_0at, p6_0ax, p6_0ba) replace their
 # refused fixtures with the static forms of section 2.
 using Potts: CorePotts
 using Random: Xoshiro
@@ -175,11 +189,38 @@ const P60CA_WIDE_OK = [
 ]
 const P60CA_Y15 = Set(first.([P60CA_WIDE; P60CA_WIDE_OK]))
 
+# Second review round (D-209 "Second review round"): an explicit-site read of a copy-written
+# site variable, outside any fold, in every domain. `tag` defaults to 0 and starts at 1 (from
+# the operating point), so a clear on ownership change moves the energy.
+const P60CA_ACT = [:(@variables act(site) = 0.0), :(@on_copy act[target] ~ act[target] + 1.0)]
+const P60CA_TAG = :(@variables tag(site) = 0.0, [clear_on_ownership_change = true])
+const P60CA_SITE = [
+    "site contacts act[40], act written @on_copy" => (nothing, [P60CA_ACT..., :(@energy contacts => 0.1 * act[40])], "contacts", nothing),
+    "site contacts tag[40], clear_on_ownership_change" => (nothing, [P60CA_TAG, :(@energy contacts => 0.1 * tag[40])], "contacts", nothing),
+    "site cells tag[40], clear_on_ownership_change" => (nothing, [P60CA_TAG, p60ca_cells(:(tag[40]))], "cells", nothing),
+    "site edges(bond) tag[40], clear_on_ownership_change" => (nothing, [P60CA_BOND, P60CA_TAG,
+        :(@energy edges(bond) => 0.1 * tag[40])], "edges(bond)", nothing),
+]
+# `kind[id]`: refused with a hint to read it bare (not a copy-changed read; no fragment required)
+const P60CA_KIND_ID = ["indexed kind[id] == A" => (nothing, [p60ca_cells(:(kind[id] == A))], "cells", nothing)]
+# controls: accepted, ΔH exact. Population folds over a bound variable (D-041), and the bare
+# pair read of an on-copy site variable in a contact term.
+const P60CA_POP_OK = [
+    "control population sum(volume[c] for c in cells)" => (nothing, [p60ca_cells(:(0.01 * sum(volume[c] for c in cells)))], nothing),
+    "control population sum((owner[s] == 1) * 1.0 for s in sites)" => (nothing,
+        [p60ca_cells(:(0.1 * sum((owner[s] == 1) * 1.0 for s in sites)))], nothing),
+    "control population sum(y[c] for c in cells), y written @on_copy" => (nothing, [P60CA_ONCOPY_Y,
+        p60ca_cells(:(sum(y[c] for c in cells)))], nothing),
+    "control contacts bare act, act′, act written @on_copy" => (nothing, [P60CA_ACT...,
+        :(@energy contacts => 0.1 * (act + act′))], nothing),
+]
+const P60CA_TAG1 = Set(first.(P60CA_SITE))
+
 const P60CA_MODELS = Dict{String, Any}()
 const P60CA_DOMAIN = Dict{String, String}()
 const P60CA_READS = Dict{String, Any}()
 const P60CA_BARE = Dict{String, Any}()
-for (i, (label, fx)) in enumerate([P60CA_REFUSED; P60CA_ACCEPTED; P60CA_WIDE; P60CA_WIDE_OK])
+for (i, (label, fx)) in enumerate([P60CA_REFUSED; P60CA_ACCEPTED; P60CA_WIDE; P60CA_WIDE_OK; P60CA_SITE; P60CA_KIND_ID; P60CA_POP_OK])
     rel, body, extra = fx
     length(fx) == 4 && (P60CA_BARE[label] = fx[4])
     name = Symbol(:P60caGather, i)
@@ -205,7 +246,8 @@ function p60ca_sigma()
     return σ
 end
 p60ca_op(label) = Any[ownership => p60ca_sigma(), kind => [:A, :A], :q => Float64.(p60ca_sigma()),
-    (occursin("edges", label) ? [:bond => [(1, 2)]] : [])..., (label in P60CA_Y15 ? [:y => [1.0, 5.0]] : [])...]
+    (occursin("edges", label) ? [:bond => [(1, 2)]] : [])..., (label in P60CA_Y15 ? [:y => [1.0, 5.0]] : [])...,
+    (label in P60CA_TAG1 ? [:tag => fill(1.0, 12, 12)] : [])...]
 p60ca_system(label) = Base.invokelatest(P60CA_MODELS[label]; name = :g)
 p60ca_problem(label; tspan = (0, 3), seed = 1) = PottsProblem(p60ca_system(label), p60ca_op(label), tspan; seed, capacity = 16)
 
@@ -418,6 +460,55 @@ end
             @test r.bad == 0
             @test r.worst <= 1e-9
             @info "P6.0ca: `$label` oracle $r"
+        end
+    end
+end
+
+# ---------------------------------------------------------------------------------------
+# 7. Second review round: explicit-site reads of a copy-written site variable are refused;
+#    population folds over a bound variable and bare contact pair reads stay accepted.
+
+@testset "P6.0ca: an explicit-site read of a copy-written site variable is refused" begin
+    for (label, _) in P60CA_SITE
+        @testset "$label" begin
+            dom = P60CA_DOMAIN[label]
+            @test p60ca_system(label) isa Potts.PottsSystem
+            e = p60ca_compile_error(label)
+            @test e isa ArgumentError
+            ok = p60ca_is_refusal(e, dom)
+            @test ok
+            ok || @info "P6.0ca: `$label` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
+            e2 = try
+                p60ca_problem(label)
+                nothing
+            catch err
+                err
+            end
+            @test p60ca_is_refusal(e2, dom)
+        end
+    end
+    @testset "indexed kind[id]: refused, with a hint to read it bare" begin
+        e = p60ca_compile_error("indexed kind[id] == A")
+        @test e isa ArgumentError
+        @test e isa ArgumentError && occursin("bare", e.msg) && occursin("in @energy cells", e.msg)
+        e isa ArgumentError || @info "P6.0ca: `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
+    end
+end
+
+@testset "P6.0ca: population folds and bare contact pair reads are accepted, ΔH exact" begin
+    for (label, _) in P60CA_POP_OK
+        @testset "$label" begin
+            e = p60ca_compile_error(label)
+            @test e === nothing
+            e === nothing || @info "P6.0ca: `$label` at mtkcompile: $(sprint(showerror, e))"
+            if e === nothing
+                r = p60ca_oracle(p60ca_problem(label))
+                @test r.n == 3000
+                @test r.acc >= 100
+                @test r.bad == 0
+                @test r.worst <= 1e-9
+                @info "P6.0ca: `$label` oracle $r"
+            end
         end
     end
 end
