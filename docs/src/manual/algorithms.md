@@ -7,22 +7,25 @@ to the kinetics.
 
 | Algorithm | Backends | Dynamics | Use it for |
 |---|---|---|---|
-| `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn site: the classic CPM | the reference dynamics, against which the reproductions are defined |
+| `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn mobile target site: the classic CPM | the reference dynamics, against which the reproductions are defined |
 | `BoundarySiteCPM()` | CPU | `SequentialCPM`'s dynamics, drawing only boundary sites; equal in distribution to `SequentialCPM` | the same runs, faster, when most of the lattice is medium or cell interior |
-| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once | GPUs and large lattices; its kinetics differ from `SequentialCPM`'s |
+| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics differ from `SequentialCPM`'s |
 
 All three take `acceptance` and `proposal` keywords, which default to the model's
 acceptance law and the problem's proposal neighbourhood (see [Problems, solvers and
-solutions](@ref manual-problems)).
+solutions](@ref manual-problems)). In all three, the source of a copy is a uniformly drawn
+neighbour of the target in the proposal neighbourhood; they differ in how targets are
+chosen.
 
 ## `BoundarySiteCPM`
 
 ### What it does
 
 `SequentialCPM` makes `N` copy attempts per MCS, where `N` is the number of mobile sites.
-Each attempt picks a target site uniformly and one of its proposal neighbours. When every
-proposal neighbour of the picked site belongs to the same owner as the site (the inside of
-a cell, or open medium), the attempt can only copy that owner onto itself: a null move,
+Each attempt picks a mobile target site uniformly, then one of its proposal neighbours
+uniformly as the source. A source that is off the lattice, frozen or of the same owner
+ends the attempt, which still counts. When every proposal neighbour of the picked site
+belongs to the same owner as the site (the inside of a cell, or open medium), the attempt can only copy that owner onto itself: a null move,
 which changes nothing. On a lattice that is mostly medium, almost every attempt is null.
 
 `BoundarySiteCPM` keeps the set of **boundary sites**: mobile sites with at least one
