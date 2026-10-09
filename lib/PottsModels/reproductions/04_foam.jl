@@ -22,18 +22,18 @@
 #    provenance.
 #
 # !!! warning "Provisional"
-#     No full run of this reproduction exists yet. The full run (V1–V20 with 5 replicates
-#     each, about 150 CPU-hours) is offline work; until its record is committed under
-#     `lib/PottsModels/reproductions/data/04/`, the results below are **smoke-scale**: the
-#     no-shear rows on 2 ordered foams and 1 disordered foam at the paper's size, a short
-#     shear check, and short videos. The shear amplitudes in the videos are model units,
-#     because the γ scale κ is calibrated by the full run.
+#     The full run (V1–V20, 5 replicates each, 10 ordered and 30 disordered foams) is
+#     recorded, and the verdicts below come from it: 18 of the 42 pre-registered rows and all
+#     4 negative controls pass, 24 rows fail. About 9 of the failures come from one finding
+#     that is **under review**: the provisional shear drive pins the foam at low shear rates
+#     (see "Pinning at low shear rate" below). The others are listed with their suspected
+#     causes in the deviations table. The result is shipped as provisional.
 
 using Potts, PottsModels
 using PottsModels.Analysis: stored_energy, side_counts, topology_moments, cell_graph, t1_events
 using CairoMakie
 using Statistics: mean, median
-using Markdown
+using Markdown, TOML
 using Random: Xoshiro
 CairoMakie.activate!(type = "png")
 nothing #hide
@@ -111,7 +111,7 @@ lat = Lattice(L; boundary = (Periodic(), Closed()))
 # ## 3. Results
 #
 # ```@raw html
-# <details><summary>Code: the helpers, the smoke-scale runs and the record (if any) used below</summary>
+# <details><summary>Code: the helpers, the short runs behind the videos, and the full-run record used below</summary>
 # ```
 
 ## one problem per lattice size, remade per run (compiling a problem is the costly part)
@@ -125,17 +125,7 @@ function foam_problem(σ, A, tend; seed, p...)
     pp = Pair{Symbol, Float64}[:ytop => L[2], :ymid => (L[2] + 1) / 2, (k => Float64(v) for (k, v) in p)...]
     return remake(base; u0 = [ownership => σ, kind => fill(:bubble, length(A)), :A => A], p = pp, tspan = (0, tend), seed)
 end
-## interior bubbles (not touching y = 1 or y = L_y) with n = 6, over interior bubbles
-function hexfrac(σ)
-    n = side_counts(σ, foam_lat(size(σ)))
-    edge = Set(σ[:, [1, end]])
-    live = Set(σ)
-    int = [b for b in live if !(b in edge)]
-    return count(b -> b <= length(n) && n[b] == 6, int) / length(int)
-end
 mu2n(σ) = topology_moments(σ, foam_lat(size(σ))).mu2_n
-area_frac(σ, A; J = 3.0) = (a = [count(==(b), σ) for b in eachindex(A)];
-    Ea = sum((a[b] - A[b])^2 for b in eachindex(A) if a[b] > 0); Ea / (Ea + J * stored_energy(σ, foam_lat(size(σ)))))
 """Run `prob` for `tend` MCS, keeping σ every `every` MCS (and at the start) for the video."""
 function frames!(integ, tend, every; each = (m, σ) -> nothing)
     F = [copy(Array(integ.u.σ))]
@@ -147,7 +137,7 @@ function frames!(integ, tend, every; each = (m, σ) -> nothing)
     return F
 end
 
-## smoke-scale foams, as the frozen test's SMOKE tier makes them (same seeds): 2 ordered, and
+## short runs for the videos, with the frozen test's SMOKE seeds: 2 ordered foams, and
 ## 1 disordered (μ2(n) → 0.81) coarsened from its own ordered foam
 function ordered(seed; video = false)
     A = fill(256.0, nb)
@@ -178,10 +168,8 @@ function disordered(o, target, seed)
 end
 t_ord = @elapsed foams = [ordered(9_400_000 + k; video = k == 1) for k in 1:2]
 d081 = disordered(ordered(9_400_010), 0.81, 9_400_010)            # the frozen test's first d081 try
-smoke = [(; hex = hexfrac(f.σ), mu2 = mu2n(f.σ), af = area_frac(f.σ, f.A), nbub = length(unique(f.σ))) for f in foams]
-dis = (; hex = hexfrac(d081.σ), mu2 = mu2n(d081.σ), af = area_frac(d081.σ, d081.A), nbub = length(unique(d081.σ)))
 
-## a short bulk shear (model β, κ not yet calibrated) on the ordered and the disordered foam:
+## a short bulk shear (model β) on the ordered and the disordered foam:
 ## φ̂ every 10 MCS, T1 events per MCS (VonNeumann(1) contacts, one T1 = 1), frames every 30 MCS
 function sheared(f, βm, tend, seed; γ0 = 0.0)
     integ = init(foam_problem(f.σ, f.A, tend; seed, β = βm, bulk = βm > 0 ? 1.0 : 0.0, γ0), alg)
@@ -201,17 +189,20 @@ end
 const SHEAR_MCS = 3000
 sh_ord = sheared(foams[1], 0.05, SHEAR_MCS, 9_400_021)
 sh_dis = sheared(d081, 0.05, SHEAR_MCS, 9_400_023)
-sh_nul = sheared(foams[1], 0.0, 500, 9_400_022)                 # control: no shear, no T1
 ## steady boundary shear (Eq. 6) at model γ0 = 24, the largest the frozen test's feasibility
-## probe tried without a T1 under periodic shear (κ not yet calibrated)
+## probe tried without a T1 under periodic shear
 const Γ0_MODEL = 24.0
 sh_bnd = sheared(foams[1], 0.0, SHEAR_MCS, 9_400_024; γ0 = Γ0_MODEL)
 
-## the full-run record, if one has been committed
+## the full-run record (the one directory data/04/full-*, as the frozen test reads it)
 rec_root = joinpath(pkgdir(PottsModels), "reproductions", "data", "04")
-rec_dirs = isdir(rec_root) ? filter(d -> startswith(d, "full-") && isdir(joinpath(rec_root, d)), readdir(rec_root)) : String[]
-rec_dir = length(rec_dirs) == 1 ? joinpath(rec_root, only(rec_dirs)) : nothing
+rec_dirs = filter(d -> startswith(d, "full-") && isdir(joinpath(rec_root, d)), readdir(rec_root))
+rec_dir = joinpath(rec_root, only(rec_dirs))
 rec_rows(file) = (l = split.(readlines(joinpath(rec_dir, file)), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]])
+rec_prov = TOML.parsefile(joinpath(rec_dir, "provenance.toml"))
+rec_cal = only(rec_rows("calibration.tsv"))
+κ = parse(Float64, rec_cal["kappa"])
+τ_rec = parse(Float64, rec_cal["tau"])
 nothing #hide
 
 ## videos: one fixed colour per bubble id, no outlines (a bubble keeps its colour while others vanish)
@@ -242,7 +233,8 @@ nothing #hide
 #
 # ### The runs, as videos
 #
-# Each bubble keeps one colour, without outlines. Left: the ordered foam forming from the
+# These are short runs made on this page with the full run's protocol; the verdicts below
+# come from the full run. Each bubble keeps one colour, without outlines. Left: the ordered foam forming from the
 # brick wall (10 MCS at T = 3, then 1000 MCS at T → 0⁺, every 10 MCS). Right: that foam
 # coarsening at Γ = 0, T = 3 until μ2(n) reaches 0.81, the paper's first disordered foam
 # (Figs. 6, 8(b), 11); the frozen protocol then resets each bubble's target area and
@@ -255,8 +247,8 @@ nothing #hide
 #
 # Bulk shear (Eq. 7) at model β = 0.05 for 3000 MCS, every 30 MCS: the ordered foam (left)
 # and the disordered one (right). The top moves +x and the bottom −x, as the arrows of the
-# paper's Figs. 4(a) and 5(a). The rate is in model units: the full run calibrates the
-# factor κ between model and paper γ, and the time scale τ (Details).
+# paper's Figs. 4(a) and 5(a). With the full run's κ = 2.50, model β = 0.05 is paper
+# β ≈ 0.02; time is in our MCS (one paper MCS is τ = 3.45 of ours, Details).
 #
 # ```@raw html
 # <figure><video src="../04_foam_bulk_ordered.mp4" controls loop muted playsinline width="400"></video>
@@ -264,9 +256,9 @@ nothing #hide
 # ```
 #
 # Steady boundary shear (Eq. 6, the paper's Figs. 2 and 6) on the ordered foam at model
-# γ0 = 24 for 3000 MCS, every 30 MCS: only the rows y = 1 and y = L_y are driven. The paper's
-# γ0 = 7 (DV5) becomes κ × 7 in the full run, which also runs the disordered foam (V9); both
-# are pending the full run.
+# γ0 = 24 (paper γ0 ≈ 9.6 with κ = 2.50) for 3000 MCS, every 30 MCS: only the rows y = 1 and
+# y = L_y are driven. The full run uses the paper's γ0 = 7 (DV5), model γ0 = κ × 7, on the
+# ordered (V2) and the disordered foam (V9).
 #
 # ```@raw html
 # <figure><video src="../04_foam_boundary_ordered.mp4" controls loop muted playsinline width="400"></video></figure>
@@ -291,43 +283,35 @@ end #hide
 # ### Verdicts at a glance
 #
 # The rows are pre-registered in the frozen test (`test/reproductions/04_foam.jl`, D-190),
-# with the paper's acceptance bands. Smoke-scale values below come from this page's runs
-# (2 ordered foams, 1 disordered); the full run judges 10 ordered foams, 30 disordered ones
-# and every shear row on 5 replicates.
+# with the paper's acceptance bands, and judged on the full run: 10 ordered foams, 30
+# disordered ones and every shear row on 5 replicates. The frozen test recomputes every
+# value below from the committed record.
 
 fmt(x; d = 3) = string(round(x; digits = d)) #hide
-pf(ok) = ok ? "PASS" : "**FAIL**" #hide
-checks = [all(s -> s.hex >= 0.95, smoke), all(s -> 0.3 <= s.mu2 <= 0.6, smoke), all(s -> s.af < 5e-3, smoke), #hide
-    abs(dis.mu2 - 0.81) <= 0.3, dis.hex < 0.95, sum(sh_nul.t1) == 0] #hide
-if rec_dir === nothing #hide
-    Markdown.parse(join([ #hide
-        "**Smoke scale: $(count(checks)) of $(length(checks)) checks pass. V2–V20: pending the full run.**", #hide
-        "", #hide
-        "| Row | Target (paper) | Band | Ours (smoke scale) | Result |", #hide
-        "|---|---|---|---|---|", #hide
-        "| V1 | relaxed ordered foam all-hexagonal (p.5823, Fig. 2(a)) | interior n = 6 share ≥ 0.95, every foam | $(join(fmt.(getfield.(smoke, :hex)), ", ")) (2 foams) | $(pf(checks[1])) (smoke) |", #hide
-        "| V1b | μ2(n) of the ordered foam ≈ 0.437 (Fig. 11(c)) | [0.3, 0.6], every foam | $(join(fmt.(getfield.(smoke, :mu2); d = 4), ", ")) | $(pf(checks[2])) (smoke) |", #hide
-        "| V19 | area energy ≈ 10⁻³ of the total at T = 0 (p.5823) | < 5 × 10⁻³ | $(join(fmt.(getfield.(smoke, :af); d = 6), ", ")) | $(pf(checks[3])) (smoke) |", #hide
-        "| PREP | disordered foams reach their μ2(n) | \\|μ2(n) − 0.81\\| ≤ 0.3 | $(fmt(dis.mu2; d = 4)) after $(d081.stop) MCS of coarsening, $(dis.nbub) bubbles | $(pf(checks[4])) (smoke, 1 of 30 foams) |", #hide
-        "| C-V1 | control: V1's measure rejects a disordered foam | hexagon share < 0.95 | $(fmt(dis.hex)) | $(pf(checks[5])) (smoke) |", #hide
-        "| C-S2 | control: no shear, no T1 at T → 0⁺ | 0 T1 in 500 MCS | $(sum(sh_nul.t1)) | $(pf(checks[6])) (smoke) |", #hide
-        "| V2–V20 | boundary shear, loops, J and T sweeps, (J, γ0) boundaries, bulk shear localisation, spectra, N̄(β), yield strain, μ2(n) rise, no system-wide avalanches | Details | under bulk shear at model β = 0.05: $(fmt(sum(sh_ord.t1); d = 1)) T1 events (ordered) and $(fmt(sum(sh_dis.t1); d = 1)) (disordered) in $(SHEAR_MCS) MCS | pending the full run |", #hide
-    ], "\n")) #hide
-else #hide
-    V = rec_rows("verdicts.tsv") #hide
-    np, nf = count(r -> r["result"] == "PASS", V), count(r -> r["result"] == "FAIL", V) #hide
-    Markdown.parse("**Full run `data/04/$(only(rec_dirs))`: $np PASS, $nf FAIL.**\n\n" * #hide
-                   "| Row | Kind | Ours | Band | Result |\n|---|---|---|---|---|\n" * #hide
-                   join(["| $(r["id"]) | $(r["kind"]) | $(replace(r["value"], "|" => "\\|")) | $(replace(r["band"], "|" => "\\|")) | " * #hide
-                         (r["result"] == "FAIL" ? "**FAIL**" : r["result"]) * " |" for r in V], "\n")) #hide
-end #hide
+cellesc(x) = replace(x, "|" => "\\|", "_" => "\\_") #hide
+V = rec_rows("verdicts.tsv") #hide
+rows, ctrl = filter(r -> r["kind"] == "row", V), filter(r -> r["kind"] == "control", V) #hide
+npass(rs) = count(r -> r["result"] == "PASS", rs) #hide
+short(v) = (w = replace(v, r"-?\d+\.\d+(e-?\d+)?" => m -> string(round(parse(Float64, m); sigdigits = 3))); #hide
+    length(w) > 90 ? "per-run values (in the record's verdicts table)" : cellesc(w)) #hide
+Markdown.parse(join([ #hide
+    "**Full run: $(npass(rows)) of $(length(rows)) rows pass, $(npass(ctrl)) of $(length(ctrl)) negative controls pass, " * #hide
+    "$(count(r -> r["result"] == "FAIL", V)) rows fail.** Calibrations: κ = $(fmt(κ; d = 2)) (model γ per paper γ), " * #hide
+    "τ = $(fmt(τ_rec; d = 2)) of our MCS per paper MCS.", #hide
+    "", #hide
+    "| Row | Ours | Band | Result |", #hide
+    "|---|---|---|---|", #hide
+    ("| $(r["id"]) | $(short(r["value"])) | $(cellesc(r["band"])) | " * #hide
+     (r["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for r in [rows; ctrl])..., #hide
+], "\n")) #hide
 
 # ### Deviations
 #
-# One row per difference from the paper and per provisional target (D-154). The columns are
-# our value, the paper's value, the suspected cause and the status of the question to the
-# authors: "not an author question", "not asked" (the question is on our open question
-# list; spec 04 §7 names it), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩".
+# One row per failed target and per labelled difference from the paper (D-154). The
+# columns are our value, the paper's value, the suspected cause and the status of the
+# question to the authors: "not an author question", "not asked" (the question is on our
+# open question list; spec 04 §7 names it), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩".
+# The failed rows come first, from the full run.
 
 τ_brick = let σ = brick(L), s = 0.0, nbd = 0 #hide
     offs = [(a, b) for a in -2:2 for b in -2:2 if 0 < a^2 + b^2 <= 5] #hide
@@ -341,8 +325,9 @@ NA(a) = "not asked (on our open question list: spec 04 §7 $a)" #hide
 Markdown.parse(join([ #hide
     "| Item | Ours | Paper | Suspected cause | Author question |", #hide
     "|---|---|---|---|---|", #hide
-    "| V2–V20 (**provisional**) | not run yet: smoke-scale checks only (above) | Figs. 2–11 | the full run (about 150 CPU-hours) is offline work; this page cites its record once it is committed | not an author question |", #hide
-    "| DV1 proposal law and time scale τ | a uniform neighbour among the 20, at wall sites (`BoundarySiteCPM`); like neighbours are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbours: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measures it on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbour, every pick counted as a trial (p.5822) | the paper's unlike-neighbour proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
+    ("| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
+     for r in rec_rows("deviations.tsv"))..., #hide
+    "| DV1 proposal law and time scale τ | a uniform neighbour among the 20, at wall sites (`BoundarySiteCPM`); like neighbours are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbours: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbour, every pick counted as a trial (p.5822) | the paper's unlike-neighbour proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
     "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
     "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
     "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
@@ -350,6 +335,27 @@ Markdown.parse(join([ #hide
     "| Wall type (A-2) | closed y edges without wall cells; a wall is not a side: μ2(n) = 7/16 = 0.4375 on the brick wall | 0.437 (Fig. 11(c)); the wall type is not stated | the reading that matches the paper's baseline (0.109 if the wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
     "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) | the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
 ], "\n")) #hide
+
+# ### Pinning at low shear rate (under review)
+#
+# About 9 of the failed rows (V11a, V11c, V12 at β = 0.001, V14a, V14b, V15a, V15c, V15d
+# and part of V13a) share one cause. In the shear form we use (DV3), each copy gets a
+# bias γ·(x_target − x_source). At the paper's lowest rate, β = 0.001, the model rate is
+# κ × 0.001 ≈ 0.0025, and the largest bias a copy can get anywhere in the foam is about
+# 0.64. In a relaxed foam at T → 0⁺ the energy barriers are whole numbers (the wall and
+# area terms change in integer steps), larger than that bias, so the copies that would
+# let bubbles swap neighbours are never accepted. The foam is pinned: no T1 event occurs. The full run has no T1 events at
+# β ≤ 0.001 in any foam, and none in the ordered foam at β = 0.005 either. Its yield
+# measure β·t_first is 0.105 for the ordered foam, against about 48 in the paper.
+#
+# The paper's foams flow at these rates, which suggests the threshold comes from our
+# reading of the shear term rather than from the foam. That reading is provisional, and the finding is under
+# review; the rows it affects are listed as failures, not tuned away.
+#
+# The other failures are listed in the table with their suspected causes. Two of them
+# concern the measurement rather than the foam: V18's fixed 100 paper-MCS window is
+# saturated in steady flow at β ≥ 0.02, and V14c compares foams on 256² and 320² without
+# rescaling N̄ for the lattice size.
 
 # ## 4. Details
 #
@@ -441,20 +447,30 @@ Markdown.parse(join([ #hide
 # committed as `lib/PottsModels/reproductions/data/04/full-<date>/`; the frozen test then
 # recomputes every row from it.
 #
-# ### Provenance of the smoke-scale results
+# ### Provenance of the full run
+
+Markdown.parse("Record `$(only(rec_dirs))`, written by the frozen test's FULL tier at commit " * #hide
+               "$(first(rec_prov["commit"], 8)) (clean tree), Julia $(rec_prov["julia"]), $(rec_prov["threads"]) threads " * #hide
+               "on an AMD Ryzen AI Max+ 395 CPU; wall time $(round(rec_prov["wall_s_this_launch"] / 3600; digits = 1)) h " * #hide
+               "($(rec_prov["started"][1:16]) to $(rec_prov["finished"][1:16])). Jobs: " * #hide
+               join(["$(v) $(k)" for (k, v) in sort(collect(rec_prov["jobs"]))], ", ") * ". " * #hide
+               "The run used `BoundarySiteCPM()`, now `SequentialCPM(; skip_interior = true)` (D-198, same semantics).") #hide
+
+# ### Provenance of the page's own runs (videos)
 
 Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
                "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
                "bulk shear $(round(1e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
                "T1 detection (256², `BoundarySiteCPM`). Seeds: the foams use the frozen test's smoke seeds " *
                "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
-               "its first try). The shear runs use 9 400 021 and 9 400 022, the frozen shear check's seeds, " *
-               "here for 3000 MCS instead of its 500, and 9 400 023–24 for the disordered bulk and the " *
+               "its first try). The ordered bulk shear uses 9 400 021, the frozen shear check's seed, " *
+               "here for 3000 MCS instead of its 500, and 9 400 023–24 the disordered bulk and the " *
                "boundary run; the frozen test does not pin these.")
 
 # | Date | Change | Reason |
 # |---|---|---|
 # | 2026-10-08 | First version, provisional: the model, the ordered and disordered foams, smoke-scale verdicts, a short bulk shear, videos, the deviations table and the full-run command | P6.4r; D-186, D-190 |
+# | 2026-10-09 | The full-run record replaces the smoke-scale verdicts: verdict table, deviations from the record, the pinning finding (under review); the videos stay | P6.4r; D-154, D-190 |
 #
 # ```@raw html
 # </details>
