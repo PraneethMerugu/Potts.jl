@@ -54,10 +54,13 @@ Notes:
   is not local, or not an energy. Use a drive with `displacement(c, k)` for centroid-based
   motility.
 - A fold over a relation inside an energy (`volume * sum(q[n] for n in far(40))`) may read
-  only values a copy does not change: static site variables, parameters, constants, `id`.
-  Potts computes ``\Delta H`` only where the copy acts, so `owner[n]`, `kind[n]` or
-  `volume[owner[n]]` in such a fold is refused at `mtkcompile`; use a `@drive` to react to
-  the ownership around the copy.
+  only values a copy does not change: static site variables, parameters, constants, `id`;
+  the bare cell quantities (`volume`, cell variables) and, in contact terms, `owner`,
+  `owner′`, `kind`, `kind′` are fine outside it. Its anchor must be static. Potts computes
+  ``\Delta H`` only where the copy acts, so `owner[n]`, `kind[n]`, `volume[owner[n]]`, σ at
+  an explicit site (`owner[40]`) or an indexed `volume[id]` is refused at `mtkcompile`;
+  read the cell's own quantities bare, and use a `@drive` to react to the ownership around
+  the copy.
 - The library forms `Volume(kinds…; target, strength)`, `Surface(kinds…; target,
   strength)` and `Adhesion(J)` expand to the terms above.
 

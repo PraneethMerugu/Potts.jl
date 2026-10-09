@@ -243,17 +243,28 @@ built by `@potts_model`, `@extend` or programmatically (D-061).
 end
 ```
 
-Gathers in energies (D-209). A fold over a relation around a site (`sum(q[n] for n in
-far(s))`) in a `cells`, `edges` or `contacts` term may read only values no copy changes: site
-and field variables that no `@on_copy` update writes and that are not
-`clear_on_ownership_change` (static fields, or values updated at MCS boundaries),
-parameters, constants, `id`, and `a`, `b` compared with such values. Copy-varying factors
-outside the gather are fine (`volume * sum(q[n] …)`, `distance * count(q[n] == a …)`). ΔH
-evaluates these terms only where the copy acts, so a body or filter that reads `owner[n]`,
-`kind[n]`, `x[owner[n]]` (including `volume[owner[n]]`) or a copy-written site variable would
-change `H` without entering ΔH; `mtkcompile` refuses it with an `ArgumentError` naming the
-statement. Use a static field or parameter instead, or a `@drive` (§5), which reads
-ownership at the copy.
+Copy-varying reads in energies (D-209). ΔH evaluates a cell term for the copy's two cells
+(with their own bare `volume`, `surface`, …, and cell variables, substituted), an edge term on
+their links, and a contact term on the pairs at the target. So:
+
+- A fold over a relation around a site (`sum(q[n] for n in far(s))`) in a `cells`, `edges`
+  or `contacts` term may read, in its body and filter, only values no copy changes: site and
+  field variables that no `@on_copy` update writes and that are not
+  `clear_on_ownership_change` (static fields, or values updated at MCS boundaries),
+  parameters, constants, `id`, and `a`, `b` compared with such values. The bare cell
+  quantities (`volume`, `y`) and, in a contact term, the pair names `owner`, `owner′`,
+  `kind`, `kind′` are fine, as are copy-varying factors outside the fold
+  (`volume * sum(q[n] …)`, `distance * count(q[n] == a …)`). The fold's anchor must be
+  static (a site number or a static expression, not `owner[40] + 39`).
+- σ at an explicit site is refused anywhere in these terms: `owner[i]`, `kind[i]`,
+  `x[owner[i]]` (including `volume[owner[i]]`), in a fold or outside one.
+- In a cell term, indexed copy-varying cell quantities are refused: `volume[·]`,
+  `surface[·]`, and `y[·]` for a cell variable an `@on_copy` update writes; read them bare.
+  `y[id]` of a static or `@after_mcs`-written `y` is fine.
+
+Each is an `ArgumentError` at `mtkcompile` ("… which a copy changes") naming the statement.
+Use a static field or parameter instead, or a `@drive` (§5), which reads ownership at the
+copy.
 
 Library one-liners expand into the same pairs and remain available for discoverability:
 
@@ -281,7 +292,7 @@ Chemotaxis(c; strength = μ)                           # a @drive, see §5
    `total_energy(sys)`. Checking `ΔH == H(after) − H(before)` is a test helper, not an
    automatic compiler check: it runs on random flips of the models listed in the
    PottsModels test suite (`selfcheck`) and in the ΔH oracle tests of the acceptance files
-   (e.g. P6.0ca's static gathers). A new model or a new energy form gets the check only
+   (e.g. P6.0ca's static gathers and controls). A new model or a new energy form gets the check only
    when a test calls it (D-209).
    - **A dead cell leaves `H`** (D-066 item 4, D-083): `total_energy` sums cell terms
      over alive cells (`volume > 0`), cluster terms over roots of clusters with an alive
