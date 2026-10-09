@@ -52,7 +52,10 @@ jobs:
       - name: Potts
         run: GROUP=Potts $PIN julia --project=test test/runtests.jl
       - name: PottsModels
-        run: GROUP=PottsModels $PIN julia -t 4 --project=test test/runtests.jl
+        # OPENVT_PACKAGE_BULK: the OpenVT package's bulk inputs (the O1 archives and O2 files,
+        # ~320 MB, outside git; D-204, D-206), kept on the runner under its home directory. The
+        # package test (reproductions/15_openvt_package.jl) is red without them, by design.
+        run: OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" GROUP=PottsModels $PIN julia -t 4 --project=test test/runtests.jl
       - name: MakiePotts
         run: GROUP=MakiePotts $PIN julia --project=test test/runtests.jl
       - name: GPU group (ROCm)
