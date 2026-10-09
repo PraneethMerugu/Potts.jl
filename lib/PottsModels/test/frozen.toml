@@ -491,3 +491,8 @@ decision = "D-196"
 path = "acceptance/p6_4a1_copy_direction.jl"
 sha256 = "ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296"
 decision = "D-188"
+
+[[file]]
+path = "acceptance/p6_9a_global_connectivity.jl"
+sha256 = "704a7d54485bb0b97744e6c32b964f82e7822c6b6545adfb76d13ea0d10c3003"
+decision = "D-197"
