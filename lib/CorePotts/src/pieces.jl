@@ -527,14 +527,18 @@ function recompute_pieces(σ, lat::Lattice, adj::Val, ncell::Integer)
     return P, L
 end
 
-# host rebuild of the pieces columns (`_rebuild_trackers!`)
+# host rebuild of the pieces columns (`_rebuild_trackers!`); `haskey` on the cell NamedTuple
+# folds at compile time, so each branch is type-stable (as `_rebuild_euler!`)
 function _rebuild_pieces!(stats, st, σ, lat, cap)
-    for (p, l, full) in ((:pieces, :largest_piece, false), (
-        :pieces_full, :largest_piece_full, true))
-        haskey(st.cell, p) || continue
-        P, L = recompute_pieces(σ, lat, Val(full), cap)
-        _copy!(stats, getfield(st.cell, p), P)
-        _copy!(stats, getfield(st.cell, l), L)
+    if haskey(st.cell, :pieces)
+        P, L = recompute_pieces(σ, lat, Val(false), cap)
+        _copy!(stats, st.cell.pieces, P)
+        _copy!(stats, st.cell.largest_piece, L)
+    end
+    if haskey(st.cell, :pieces_full)
+        P, L = recompute_pieces(σ, lat, Val(true), cap)
+        _copy!(stats, st.cell.pieces_full, P)
+        _copy!(stats, st.cell.largest_piece_full, L)
     end
     return nothing
 end
