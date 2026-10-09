@@ -1,0 +1,133 @@
+# The "Paper models: status" page (docs/status/render.jl) reads this file. One [[model]] per
+# paper model, in the paper list's order (spec numbers), then OpenVT.
+#
+# - `status` is "done", "partial" or "not started"; `status_note` qualifies it.
+# - `data` is the model's directory under lib/PottsModels/reproductions/data/. Its PASS /
+#   FAIL / PARKED counts are computed from the committed verdict TSVs at docs build time.
+# - `models_page` is the @id of the model's page (`docs/models/<name>.jl`); `published` is
+#   the stem of its reproduction page in lib/PottsModels/reproductions/. When the
+#   reproduction pages are built (POTTS_DOCS_PUBLISHED=true) the row links the reproduction
+#   page, which replaces the model page in the "Paper models" section; otherwise the model page.
+# - `deviations`: the open deviations, one line each, as on the model's deviations table.
+#   Edit these lines when a page's deviations table changes.
+
+[[model]]
+spec = "01"
+name = "Vasculogenesis and sprouting (Merks et al. 2006, 2008)"
+status = "partial"
+status_note = "FULL record 2026-10-08 (590 jobs, PC, CPU); the 01b digitised figure targets are open (P6.3f)"
+data = "01"
+models_page = "model-merks"
+published = "01_merks"
+deviations = [
+    "V-C12 FAIL: CI/no-CI displacement ratio 1.26 against [1.5, 2.5] (68 vs 54 µm; paper about 85 vs 42); measure and time origin unstated.",
+    "Provisional default: 2006 target length L = 50 px (the text) rather than 60 px (the parameter files).",
+    "Provisional default: V-E5/V-E6 read at 48 h, the last time shown in the paper.",
+    "Ten targets parked: V-E2–V-E4, V-E7–V-E9, V-C6, V-C8, V-C10, V-C11 (pipeline or set-up not published).",
+]
+
+[[model]]
+spec = "04"
+name = "2D foam rheology (Jiang et al. 1999)"
+status = "not started"
+status_note = "Step 4, P6.4a–P6.4e"
+deviations = ["Planned provisional default F1: the displacement form of the shear, γ₀ calibrated by γ₀/J ≈ 1.9."]
+
+[[model]]
+spec = "05"
+name = "ECM topography in angiogenesis (Bauer, Jackson & Jiang 2009)"
+status = "not started"
+status_note = "Steps 6–12, P6.9"
+deviations = ["Planned provisional default B2: pixel size 0.55 µm/px."]
+
+[[model]]
+spec = "06"
+name = "3D multiscale avascular tumour (Jiang et al. 2005)"
+status = "not started"
+status_note = "Steps 6–12, P6.11"
+deviations = ["Planned provisional default J3: Rb → E2F inhibitory; T, α, θ, γ_P and the lattice calibrated."]
+
+[[model]]
+spec = "07"
+name = "Sprouting angiogenesis (Bauer, Jackson & Jiang 2007)"
+status = "not started"
+status_note = "Steps 6–12, P6.8"
+deviations = ["Planned provisional default B2: pixel size 0.55 µm/px; recruitment and degradation calibrated."]
+
+[[model]]
+spec = "08"
+name = "Flux balance analysis with a CPM (Graudenzi, Maspero & Damiani 2020, FBCA)"
+status = "not started"
+status_note = "Steps 6–12, P6.12"
+deviations = ["X5 settled from the published supplementary table, flagged; 08a reproduced, 08b calibrated."]
+
+[[model]]
+spec = "09"
+name = "Cell sorting (Graner & Glazier 1992)"
+status = "partial"
+status_note = "FULL records frozen; V-PRE8–V-PRE12, V-PRE14 and V-PRE15 not yet run"
+data = "09"
+models_page = "model-graner-glazier"
+published = "09_cell_sorting"
+deviations = [
+    "V-PRE5 FAIL: largest dark cluster 0.815 of the dark cells at 10⁴ MCS, against ≥ 0.90 (late coarsening is slower; cause not found, D-151).",
+    "V-PRE7 FAIL: at T = 80 only 0.076 of the cells are gone at 500 MCS, against > 0.5 (D-166).",
+    "Parked: V-PRE6, the ⟨n⟩ part of V-PRE16, and V-PRE17 (the neighbour rule is not stated).",
+]
+
+[[model]]
+spec = "10"
+name = "Leader–follower tumour invasion (Akeeb, Marcus & Jiang 2026)"
+status = "done"
+status_note = "FULL record and full sweep frozen"
+data = "10"
+models_page = "model-akeeb"
+published = "10_akeeb"
+deviations = [
+    "V-A2 FAIL at P6 (invasive and infiltrative area): 2642 ± 392 against 2155 ± 261.",
+    "V-A6 phenotype fractions pass with a provisional classifier (area equality, identified from the released data).",
+    "Parked: V-A8 in the paper's form (it binds on the released cluster tables instead) and V-A9 leader speed (no definition or data).",
+]
+
+[[model]]
+spec = "11"
+name = "2D multiscale: Boolean network / cell / ECM-PDE (Jafari Nivlouei et al. 2021; Andasari et al. 2012 as an ODE conformance test)"
+status = "not started"
+status_note = "Steps 6–12, P6.10"
+deviations = ["Planned provisional defaults N1–N3: a clamp, per-cell uptake, χ calibrated; hypoxia, necrosis, Wnt and division calibrated."]
+
+[[model]]
+spec = "12"
+name = "Convergent extension (Zajac, Jones & Glazier 2000, 2003)"
+status = "not started"
+status_note = "Steps 6–12, P6.7"
+deviations = ["A reconstruction: T and α calibrated (Z2)."]
+
+[[model]]
+spec = "13"
+name = "Myxobacteria (Starruß et al. 2007)"
+status = "not started"
+status_note = "Steps 6–12, P6.6"
+deviations = ["Planned provisional default Y1: the unit vector. Sequential first, then checkerboard validated statistically (Y2)."]
+
+[[model]]
+spec = "14"
+name = "Cell nucleus and migration (Fortuna et al. 2020; 14a, 14b, 14c)"
+status = "not started"
+status_note = "Step 5, P6.5a–P6.5d; 14c in P6.7b"
+deviations = ["No provisional default planned: C4 was resolved from the CompuCell3D source (D-155)."]
+
+[[model]]
+spec = "15"
+name = "OpenVT monolayer benchmark (growing monolayer with contact inhibition)"
+status = "partial"
+status_note = "Figures 1–5 and 8, Tables S1 and S5 rendered; Figure 6, Table 1 and Figure 7 pending (P6.15g FULL sweep, no record yet)"
+data = "15"
+models_page = "model-openvt"
+published = "15_openvt_monolayer"
+deviations = [
+    "V4.2, V4.3 and V4.5 FAIL (Figure 5: the rim cells' free-surface fraction is too high; a few young daughters are squeezed). Leading candidate: division on actual area (C13).",
+    "V1: 15.17 cycles to 10⁴ cells against 13.57 (11–12 % slow beyond 10³ cells); judged with the pending sweeps, never marked PASS.",
+    "Figure 6, Table 1, Figure 7 (V1–V3b): pending, the FULL sweep has no record yet (D-174).",
+    "C1–C17: readings taken where the manuscript and the consortium's other sources differ (the page's differences table).",
+]

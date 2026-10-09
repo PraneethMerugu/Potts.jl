@@ -270,6 +270,6 @@ clusters, and the clusters grow by collecting more cells.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.
 
-**See also:** the published vasculogenesis model [`MerksVasculogenesis`](@ref model-merks), in which endothelial cells secrete a chemoattractant and form networks.
+**See also:** the published vasculogenesis model [`Merks2006`](@ref model-merks), in which endothelial cells secrete a chemoattractant and form networks.
 
 Next, [Tutorial 3](@ref tutorial-growth) makes cells grow, divide and die.

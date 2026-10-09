@@ -227,9 +227,9 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 # | Time unit | 1 MCS = 16 copy attempts per site (PRL p. 2014) | 1 MCS = 1 attempt per site; times above are converted to paper MCS |
 # | Run length | to ``10^4`` paper MCS | 100 paper MCS on this page, to keep the docs build short |
 # | Cells | about 1000 | 200 on this page (1000 in the paper run above) |
-# | Starting aggregate | relaxed as one kind for 400 paper MCS before the kinds are assigned (PRE §II D3) | Voronoi cells of mean area 40, not relaxed |
+# | Starting aggregate | relaxed as one kind for 400 paper MCS before the kinds are assigned (PRE §II D3) | Voronoi cells of mean area 40, not relaxed, on this page; the paper run above is relaxed by the PRE recipe |
 # | Boundary | not stated | periodic, with a 10-site medium margin on this short run (60 in the paper run and by default in `graner_glazier_aggregate`) |
-# | Measurement | on a copy annealed for 2 paper MCS at ``T = 0`` (PRE p. 2134) | on the raw states |
+# | Measurement | on a copy annealed for 2 paper MCS at ``T = 0`` (PRE p. 2134) | on the raw states on this page; the paper run's frames are annealed copies, as the PRE displays them |
 # | Target area per kind | one value, except the cavity run (PRE Fig. 28) | one `V₀`; a per-kind table `V₀[kind]` gives the cavity run's targets |
 #
 # Every energy, parameter, neighbourhood and the temperature are the paper's.
@@ -258,4 +258,4 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 #
 # A full reproduction page, which runs `GranerGlazier` against the papers' figures (the
 # sorting time course, the engulfment end state, partial sorting and a negative control),
-# is in preparation.
+# is reproduction 09, which takes this page's place in the published docs.

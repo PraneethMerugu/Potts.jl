@@ -4,7 +4,8 @@ This is the record pre-registered by D-175. The frozen test is `lib/PottsModels/
 
 - **Figure functions.** `PottsModels.openvt_f4_figure(σ, c)` and `PottsModels.openvt_f1_figure(frame; window = 64)` are public and documented in PottsModels.
   - Their methods live in the `PottsModelsMakieExt` extension, whose weak dependencies are Makie and MakiePotts. Without those two, PottsModels loads no Makie code.
-  - No cell outlines are drawn anywhere (D-156). Each panel is one `pottsplot` with `boundaries = false`. F4 adds only full-length lattice lines (a white site grid) and the pair dashes.
+  - F4 draws no cell outlines (D-156): one `pottsplot` with `boundaries = false`, plus only full-length lattice lines (a white site grid) and the pair dashes.
+  - F1 follows the other frameworks' close-ups (D-185, which amends D-156, D-172 and D-175 for the consortium figures): cells coloured by area with `coolwarm`, scaled to the panel's own cell-area min–max, and thin black boundaries along the pixel edges between unlike ids (`PottsModels.openvt_colony_panel!`).
 
 ## F4: M Fig 4, lattice panel (`G:results/free_surface.tex:31-110`)
 
@@ -38,18 +39,24 @@ This is the record pre-registered by D-175. The frozen test is `lib/PottsModels/
   - It holds 41 cells and 1792 medium sites.
   - The script checks that the plotted block equals the state's ownership.
 - **Banner.** RGB(8,29,88) (the Q18 proposal), 5/45 of the panel high and 1/45 of the panel above it, with "Potts.jl" in white bold.
-- **Colours.** Per cell identity with the automatic palette (D-172) on a white medium.
-  - This is the coordinator's D-175 ruling and a stylistic deviation: other frameworks' panels colour by area, blue to red (Q10).
+- **Colours (D-185).** Each cell is coloured by its area with `coolwarm`, scaled to the min–max of the areas of the panel's 41 cells (30–116 sites), on a white medium, with thin black pixel-edge boundaries between unlike ids, as in the CompuCell3D, TST and Artistoo closeups (Spearman(area, red−blue) 0.995, 1.000 and 0.825). The areas are those of the full state, not of the window: 17 of the 41 cells are cut by the window.
+  - The scale limits (the panel's own min–max) are our provisional reading; the consortium does not state its closeups' limits (Q10).
+  - The first version (D-175) coloured cells per identity without outlines; that ruling is superseded for this figure.
   - The 64-site window (about 8 cell diameters) is an estimate from the TST closeup.
+- **Full-state areas (D-185).** `window.tsv` holds only the block, so `run_f1_areas.jl` reran the same state on the PC (commit `234cb9a2`, one thread, `taskset -c 0-5,16-21`, `MemoryMax=32G`, 513 s). It stopped `Terminated` at MCS 11600 with N = 10001 again, its block equals `window.tsv` site for site (owners and generations), and it wrote `window_cells.tsv` (id, generation, full-state area, A\*, the O5 `inhibited` flag, sites outside the window) with its provenance in `window_cells.toml`.
 
 | File | Contents |
 |---|---|
-| `fig1.png` | the Potts.jl panel and banner, 45 mm at 10 px/mm, saved at 2× |
-| `fig1_colony.png` | the whole 10⁴-cell colony at the stop, same colours, with the panel's block shaded (an unstroked translucent square). For orientation only |
+| `fig1.png` | the Potts.jl panel and banner, 45 mm at 10 px/mm, saved at 2×; rendered by `plot_f1.jl` with `openvt_f1_figure(block; areas)` from `window.tsv` and `window_cells.tsv` |
+| `fig1_panel.png` | the bare Potts.jl panel (no banner): the same 64×64 block, colours and scale as `fig1.png`, `openvt_f1_figure(block; banner = false, areas)`. The submission package (P6.15j) ships it as `results/Potts.jl/closeup.png` (D-180 amendment) |
+| `fig1_colony.png` | the whole 10⁴-cell colony at the stop in the same style (area on `coolwarm`, here scaled to the whole colony's min–max), with the panel's block shaded (an unstroked translucent square); rendered by `plot_f1.jl` from the state `run_f1_areas.jl` serializes (outside git). For orientation only |
 | `window.tsv` | the panel's block: lattice site (x, y), owner id (0 = medium) and generation, 64² rows |
+| `window_cells.tsv`, `window_cells.toml` | the block's 41 cells with their full-state area, A\*, `inhibited` flag and sites outside the window; the rerun's provenance (`run_f1_areas.jl`) |
 | `meta.toml`, `provenance.toml` | case, seed, stop MCS and N, the record's values and the match, the window; commit, hashes of the test, protocol test, record, runner and extension, Manifest hash, machine, timing |
 | `run_f1.jl` | the runner (PC). `F1_STATE` optionally serializes the full render frame outside git |
 | `compose_f1.jl` | opt-in: with `OPENVT_MONOLAYER_REPO` set to a G clone (54f375f), M Fig 1's ten closeups and banners (colours from `colors.tex`) with the Potts.jl panel after Artistoo. The panel is rebuilt from `window.tsv`. The output goes to `OPENVT_F1_OUT` and is **not committed** |
+| `run_f1_areas.jl` | the full-state areas rerun (PC, D-185); `F1_STATE` optionally serializes the state outside git |
+| `plot_f1.jl` | renders `fig1.png` and `fig1_panel.png` from `window.tsv` and `window_cells.tsv` (Mac, seconds), and `fig1_colony.png` when `F1_STATE` is set (it first checks the state against `window.tsv`) |
 | `plot_f4.jl` | the F4 renderer (Mac) |
 
 No G file and no G image entered git. The composite was rendered once on the PC, in `~/potts-ci/p6-15h-impl-out/compose/`, for review only.

@@ -6,11 +6,11 @@ a video for the docs:
 
 | Script | Model | Paper run |
 |---|---|---|
-| `graner_glazier.jl` | `GranerGlazier` | Graner & Glazier (1992, 1993): ~1000-cell aggregate, 10⁴ paper MCS (160 000 MCS) |
+| `graner_glazier.jl` | `GranerGlazier` | Graner & Glazier (1992, 1993): reproduction 09's 1000-cell FULL aggregate, relaxed 400 paper MCS as one type (PRE §II D3), 10⁴ paper MCS (160 000 MCS); frames annealed at T = 0 for display |
 | `wortel_act.jl` | `WortelAct` | Niculescu et al. (2015): one amoeboid cell, 200×200 torus, 30 000 MCS; cell and Act field |
-| `openvt_monolayer.jl` | `OpenVTGrowingMonolayer` | OpenVT monolayer benchmark: one cell grown to 10⁴ cells |
-| `akeeb_invasion.jl` | `AkeebInvasion` | Akeeb, Marcus & Jiang (2026): multimodal sample (J_LF = 2, μ = 24, PP = 0.5), 500×300, 701 MCS |
-| `merks_vasculogenesis.jl` | `MerksVasculogenesis` | Merks et al. (2006): 282 cells on 500×500, 6000 MCS (50 h) |
+| `openvt_monolayer.jl` | `OpenVTReferenceMonolayer` | OpenVT monolayer manuscript (Table S1), case (b) of reproduction 15: one cell grown to 10⁴ cells on 1400² |
+| `akeeb_invasion.jl` | `AkeebInvasion` | Akeeb, Marcus & Jiang (2026): multimodal sample (J_LF = 2, default μ = 24, PP = 0.5), 500×300, 701 MCS |
+| `merks_vasculogenesis.jl` | `Merks2006` | Merks et al. (2006): 282 cells on 500×500 (`merks2006_layout`), 6000 MCS (50 h) |
 
 Each script writes two files to `docs/src/assets/paper_runs/`, and both are committed:
 
@@ -28,9 +28,11 @@ julia --project=docs docs/paper_runs/graner_glazier.jl
 ```
 
 The run is deterministic for a given seed, commit and Julia version. All runs use the CPU
-`SequentialCPM` with the model's declared proposal neighbourhood. `common.jl` holds the shared
+`SequentialCPM` with the model's declared proposal neighbourhood. Captions name the
+constructor, parameters, machine, backend and commit (`rendered_on()` in `common.jl`). `common.jl` holds the shared
 solve, record and sidecar code. The re-encode step uses Makie's bundled ffmpeg (`FFMPEG_jll`).
-Cells are drawn without outlines (D-156). The wall times below are rough figures from the first runs on
+Cells are drawn without outlines (D-156): one categorical colour per cell (D-172), or per
+phenotype where the paper reads the run by kind (cell sorting, leaders and followers). The wall times below are rough figures from the first runs on
 a shared 8-core Apple Silicon machine; each sidecar records the producing machine (`cpu`, `machine`,
 `hostname`, `threads`) and its measured times. The 2026-10-07 renders ran on the maintainer's PC
 (AMD Ryzen AI Max+ 395, CPU backend, one thread):

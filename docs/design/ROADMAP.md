@@ -320,7 +320,7 @@ Every item's acceptance also includes the standing checks:
   - **Expanded (D-157).** The backend is an argument of `gate.jl` and `ab.jl`. `baseline.toml` is keyed by machine and backend, and absolute baselines are informational.
   - `ab.jl` seeds the type cache equally on both sides, runs a same-commit control, and interleaves base and candidate by default. On the PC it pins to one logical CPU on reserved cores 12–15.
   - Accept on the PC: a pinned same-commit control within ±1% on every CPU and ROCm case. A pinned Akeeb pair read 1.001 / 1.001 on 2026-10-06.
-- [ ] **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
+- [x] (closed 2026-10-08, D-182: symptom gone, nothing recompiles) **P6.0bc** Cache compiled `HostKernel`s per model and backend (P6.3b review, D-145). The Metal OpenVT A/B read 1.07–1.115 until both sides' global Tuple type cache was seeded equally; then it read 0.996, against 1.001 for the same-commit control. Kernel compilation interns per-model Tuple types, so the steady-state speed depends on how many unrelated types a session has created.
   - Look up compiled kernels by (generated-function ids, backend, workgroup) instead of recompiling them per integrator.
   - Accept: the unseeded and seeded Metal OpenVT A/B agree within ±2%, and a second `init` on the same problem compiles no kernel.
 - [x] (merge, 2026-10-07; D-157) **P6.0bg** (D-157) A backend-neutral device harness for Metal and ROCm.
@@ -376,7 +376,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge 2026-10-07, D-169) **P6.0bv** (D-164) `mtkcompile` of an edge-scope `@after_mcs` fails with an opaque `KeyError: :edge`. Support edge-scope MCS updates, or refuse them with a clear `ArgumentError` naming the construct; then extend the P6.0bp test to the compiled form. Small–Medium (D-169: supported, `distance` and the edge environment made available to edge updates).
 - [x] (merge 2026-10-07, D-172) **P6.0by** (D-172; from the P6.15e review, AUDIT A-80) MakiePotts per-cell colours: hash the identity key well so neighbouring ids get clearly different colours; regenerate the OpenVT docs figures and the F5 per-cell videos. Small.
 - [ ] **P6.0bz** (from P6.0bb, D-171) Find the per-checkout timing offset. Two checkouts of one commit differ by up to 1.0 % CPU and 2.3 % ROCm (Merks 100², Wortel) after pinning and seeding; is it the per-path precompile cache or the code layout? Shrinking it tightens the A/B margin. Low priority.
-- [ ] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
+- [x] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
   - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
   - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.
   - Gate it with the paired A/B on ROCm.
@@ -553,7 +553,7 @@ Goal (user, 2026-10-05): put Potts.jl in the OpenVT monolayer lineup.
 
 Full runs are offline (D-146).
 
-- [ ] (page parts merged 2026-10-07, D-161; FULL run, 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
+- [ ] (FULL record and page merged 2026-10-08, D-184: 36/37 pass, V-C12 FAIL; 01b figure targets and video clock overlays open) **P6.3f** (D-153–D-156; after P6.3d merges) Re-freeze reproduction 01's page and test through a test author.
   - Remove the cell outlines (page lines ~179, 203, 234).
   - Add the four-column deviations table, seeded from D-153 Applied's rows. Drop the wrong "Attempts per MCS" row (CorePotts already matches TST's interior-site count) and fix §2 Units.
   - Make the relaxation-end time the primary axis, with the code-MCS offset noted.
@@ -584,10 +584,13 @@ Full runs are offline (D-146).
   - every figure in M's layout;
   - a differences table, which is spec 15 §1.1 plus the deviations;
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
-- [ ] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
+- [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
 
 ### Step 4 — Foam
 
+- [ ] **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
+- [x] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain. Merged 482e163a (D-187; power_spectrum on FFTW). For P6.4r: drop empty ids before topology_distribution; consider a log-binned spectral fit if α lands at the band edges.
+- [ ] **P6.4r** (D-186; foam streams 3–5) Reproduction 04 (Jiang et al. 1999): frozen test from spec §5.2 V1–V20; the no-shear page; FULL shear runs once P6.4a1 lands.
 - [ ] **P6.4a** R1: copy-scope `direction`, `time`, `mcs`; `Metropolis(tie)`.
   - D-075: **R17** initialization, as the `at_init` host phase: `A(cell) = volume`,
     `remake(u0 = sol[end])`, and `at_init` re-run on `remake(p = …)`.

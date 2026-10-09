@@ -73,7 +73,8 @@ Private = false
 ## PottsModels
 
 Published models as `@potts_model` constructors, and their initial states. The model
-constructors and their state functions are documented on their [Models](@ref models) pages.
+constructors and their state functions are documented on their pages in
+[Paper models](@ref paper-status); those that no page documents are listed here.
 
 ```@autodocs
 Modules = [PottsModels]

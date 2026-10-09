@@ -33,6 +33,8 @@ The operating point is a vector of pairs:
 
 `proposal` overrides the model's proposal neighbourhood for this solve.
 
+Which one to use, and what `BoundarySiteCPM` does exactly, is on [Choosing an algorithm](@ref manual-algorithms).
+
 ## `solve`, `init` and the integrator
 
 ```@example problems

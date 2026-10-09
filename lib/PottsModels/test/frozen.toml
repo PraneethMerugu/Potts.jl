@@ -39,7 +39,7 @@ decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
-sha256 = "96f28a3388b9bab2f58184ca4cffb343eded8c7fd95fb328133baf69ca29cd91"
+sha256 = "a42e49182f53a0ebb72def7ba99cf08b6877660344698b3d2ba3f1cecf45c532"
 decision = "D-166"
 
 [[file]]
@@ -349,7 +349,7 @@ decision = "D-167"
 
 [[file]]
 path = "../reproductions/10_akeeb.jl"
-sha256 = "e12ccbba4e268985d2c191670bde462290b9d7d1db6435cb6d404c529723b46d"
+sha256 = "1f6813376e3ad0fc25c57f012a3680e703e6f31d8ff6cc0f23c904ce4d227e8a"
 decision = "D-163"
 
 [[file]]
@@ -384,7 +384,7 @@ decision = "D-153"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "c1f716ae1487779dc6fea97bd586fe9ac251e8010e18775c63fa0d60a41d72b7"
+sha256 = "b1e0f0179df5d752413b54c13663ed12ddea95b7ca244d1acfa46518e89b56c1"
 decision = "D-161"
 
 [[file]]
@@ -444,15 +444,35 @@ decision = "D-176"
 
 [[file]]
 path = "reproductions/15_openvt_f1_f4.jl"
-sha256 = "a562c4497a638b9db1af290a653c5791275e0c6276d36521cf1598e3118bd9bb"
+sha256 = "dc168156999af1d58fea3b3040fa3daf9d9df975a6bab7490f29372e7fb7ccca"
 decision = "D-175"
 
 [[file]]
 path = "reproductions/15_openvt_page.jl"
-sha256 = "8cbcb84a28bd213837e89aa10c8ed69f2bdcdc45c57cdf341fce3392f871d2a4"
+sha256 = "3a689a873e893bfd215f7c802c75961b03bf61f3746ca53b4e526d6f50478d10"
 decision = "D-178"
 
 [[file]]
 path = "acceptance/p6_4b1_boundary_site.jl"
 sha256 = "3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf"
 decision = "D-177"
+
+[[file]]
+path = "acceptance/p6_0bw_rocm_wait.jl"
+sha256 = "7d464db54decea554bdfa11e5fb5a20b3e6a40ed1452a83836c955de074eca24"
+decision = "D-179"
+
+[[file]]
+path = "reproductions/15_openvt_package.jl"
+sha256 = "126fdb1e296df0020d1a8dcb677f19a9c6ad499c7299861f870e414fe1e5925f"
+decision = "D-180"
+
+[[file]]
+path = "reproductions/01_merks_page.jl"
+sha256 = "4aa092f91aa1949f1e66995ce2d1b6bcad0d72744717f103af9ea52ab5a6b337"
+decision = "D-184"
+
+[[file]]
+path = "acceptance/p6_4b2_foam_analysis.jl"
+sha256 = "2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044"
+decision = "D-187"

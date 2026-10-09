@@ -3295,3 +3295,179 @@ session.
   - The switch is made before any FULL run, so no data informed it.
 - **Cost.** The FULL estimate drops from about 125 to about 45 core-hours (2.83× on case (a)).
 - **Re-frozen file.** `test/reproductions/15_openvt_sweeps.jl`, sha256 `474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41`. The only changes are `P615G_ALG` and its protocol comment.
+
+**D-179 result (2026-10-08).**
+- **Frozen test.** It passes on CPU, Metal and ROCm, including the hostcall control on single-threaded Julia. (P) has at most 1 of 300 reads over 1 ms, against 176–180 before. Median reads are 111–199 µs.
+- **Gate.** The ROCm A/B passes: 0.996 and 1.009 against a margin of 1.042.
+- **Timeout.** It is 600 s by default (`CorePotts.DEVICE_WAIT_TIMEOUT`), the implementer's choice.
+- **Review.** The stream is now drained before each device→host copy as well. An async copy into pageable memory may block inside HIP with no yield or timeout, which deadlocks a hostcall kernel on one thread.
+- **Environment.** The ROCm code is an AMDGPU package extension of CorePotts. An existing local Manifest needs one `Pkg.resolve()` to pick it up; CI resolves fresh.
+
+## D-180 Reproduction 15, P6.15j: the OpenVT submission package test frozen (2026-10-08; coordinator, from the P6.15j test author; under D-146, D-154, D-168, D-173–D-175, D-178)
+
+- **Frozen test.** `test/reproductions/15_openvt_package.jl` (commit 1bb3ba3d, sha256 `0df9ec8774c72067a7a30a67997e8fef3d4a36f8897164420a7888a126edbb85`).
+- **Generator.** `PottsModels.openvt_submission_package(outdir) -> outdir` builds `implementations/Potts.jl/` and `results/Potts.jl/` from the `data/15` records. The output directory must be outside git and empty; otherwise it raises `ArgumentError`.
+- **Required files.** Each must equal the records:
+  - the TST-style O4 relaxation CSVs (λ = 2 runs and the λ scan);
+  - `table_S5.csv`, with its MSEs recomputed by the test;
+  - per-run `measurements_s<seed>.csv` (`MCS,t,N,r,A,C,w,g`) for cases a, b, e and f, plus the replicate means the schema asks for;
+  - `neighbors_<case>.csv`;
+  - `closeup.png`, which is fig1.png;
+  - the provenance without the hostname;
+  - parameters, model sources, runners and READMEs.
+- **Present or pending.** O1, O2, A3, O3 and O5 are either present and checked, or listed under "Pending". O3 and O5 (the D-174 sweeps) become required once a P6.15g record exists.
+- **README.** It carries the D-154 deviations: C1–C17, V4.2/4.3/4.5 FAIL, and V1 (15.17 against 13.57, C13). It also states the per-cell colour choice (D-175) and the closed lattice.
+- **Guards.**
+  - An allowlist keeps G data and stray files out.
+  - There is a scan for private and contact wording.
+  - Two builds must be byte-identical.
+- **Submission.** Submitting the package to the consortium stays the maintainer's call. Nothing is sent.
+
+**D-180 amendment (2026-10-08, coordinator, from the P6.15j review).**
+- **Bare closeup.** `closeup.png` is now the bare Potts.jl panel, `fig1_panel.png`, which is added (not named "closeup", which D-178 bans in record names) to the F1 record and rendered from its `window.tsv` without the banner. The consortium's closeups have no banner because the .tex adds one; the banner-carrying `fig1.png` would have shown it twice.
+- **Re-frozen file.** `15_openvt_package.jl`, sha256 `3749800b464995fd8281aa362e92bc01996f2c86356471d520a610a5c71f018a`. Only the closeup line and its comment change.
+- **Excluded scripts.** The package leaves out the record scripts that need a local consortium clone (`*_on_g.jl`, `compose_f1.jl`). They hold paths to G files, and they are of no use to the consortium.
+
+**D-180 result (2026-10-08).**
+- **Tests.** The generator passes the frozen package test (11/11). The page test and the F1/F4 test still pass.
+- **Review fixes.**
+  - Scripts that need a consortium clone are left out of the package.
+  - Reruns are described as reproducible in distribution, not bit for bit.
+  - The README's facts are read from the records, not hard-coded.
+  - There is no duplicate V1 row.
+- **Not adopted (both would need re-freezes; revisit if the consortium asks).**
+  - O5 file names keep the frozen pattern `Potts.jl_gamma_<γ>_<MCS>MCS.csv`. β is 0 and stated in the README, rather than TST's `beta_<b>_gamma_<g>`.
+  - The backend is a column of the README's records table, not a provenance field.
+- **Licence.** The repository has no LICENSE. The package states none until the maintainer chooses one.
+
+## D-181 Licence: MIT (2026-10-08; user)
+
+- **Ruling.** Potts.jl and its `lib/` packages are MIT-licensed, the SciML and Julia norm.
+- **Files.** A `LICENSE` file sits at the repository root, with a copy in every `lib/<pkg>/` so that each package can be registered on its own.
+- **Copyright line.** "Praneeth Merugu and contributors".
+- **Follow-up.** The OpenVT submission package (D-180) should state the licence in its README. That is a small change to the generator, checked against the frozen package test's README rules.
+
+## D-182 P6.0bc closed: the D-145 kernel-cache symptom no longer occurs (2026-10-08; coordinator, from the P6.0bc test author's measurement)
+
+- **Measured on 8938d07a.**
+  - **Compilation.** A second `init`, `remake`+`init`, `remake`+`solve`, or an ensemble trajectory compiles no kernel. On OpenVT monolayer 48² the first init spends 983 ms (CPU) and 16.3 s (Metal) in the compiler; every later one spends 0 ms.
+  - **Tuple-cache seeding in-process.** No timing effect (1.001 and 0.985).
+  - **Metal A/B** (Mac, `openvt_monolayer_100`, 8 rounds, D-171 controls, base = candidate). Both modes pass, with exit 0:
+
+    | Ratio | Seeded | Unseeded |
+    |---|---|---|
+    | candidate/base | 0.992 | 1.009 |
+
+    The difference of 0.017 is inside the ±2 % accept. D-145 saw 1.07–1.115.
+  - **Single-run spread.** 53 against 87 ns/site in both modes. That is the GPU's power state, not the type cache.
+- **Ruling.** Nothing to build, so the item is closed.
+- **Test not merged.** The drafted test (96525c71 on `feat/p6-0bc`) pins counters that would guard nothing today, so it is not merged. If the symptom returns, its fresh-process bitwise check and env-gated seeded/unseeded A/B are the starting point.
+
+## D-183 Public pages do not name local reference files (2026-10-08; coordinator, before the first public deploy of the published models)
+
+- **Problem.** The source notes of reproduction pages 01, 09 and 10 named local `docs/references/…` paths of the copyrighted PDFs and codebases we keep, which are gitignored and never committed. The published docs would have shown these. The P6.15i rule (D-178) already bans this on the OpenVT page.
+- **Change.**
+  - The PDF lines now read "Read in the version of record", keeping the DOI links.
+  - The codebase and dataset path mentions are dropped.
+- **Re-freeze.** Only these comment lines change. The three page files are re-frozen with their new sha256 in frozen.toml; their tests do not read these lines.
+- **Rule.** Future public pages name sources by DOI or public URL, never by local path.
+
+## D-184 P6.3f: reproduction 01's page shows the FULL record; the page test is re-frozen (2026-10-08; coordinator, from the P6.3f test author; under D-146, D-153–D-156, D-161, D-172, D-183)
+
+- **Frozen test.** `test/reproductions/01_merks_page.jl` (commit 5307d504, sha256 `b8e101646de5b28909be70e75067580777c892ba130fc90d3cb45768640a2428`).
+- **Page.** The page renders the FULL record `data/01/full-2026-10-08/` in one self-contained "FULL record (P6.3f)" chunk that runs no simulation. The test reads only files.
+- **Provenance.** The item is P6.3f. The launch commit is clean and an ancestor of HEAD. The frozen 01 test's sha256 is `cc52d26c…`.
+- **Jobs.** All 590 pre-registered jobs appear exactly once each, with their parameters, keyed by (row, seed, CI). The frozen test reuses seeds 7601–7910 across V-C7's CI and no-CI arms, hence the CI field in the key.
+- **Snapshot oracle.** At least one 2006 job and one 2008 job have their observables recomputed bitwise, using the frozen test's own definitions.
+- **Checks.**
+  - 37 checks are recomputed from `replicates.tsv` by the frozen FULL rules. They must match exactly in `verdicts.tsv` and in the page's table.
+  - V-C3's plateau check is split into its low and high halves.
+  - `points.tsv` holds N and N+100.
+- **Deviations.**
+  - Every failing check gets a deviations row: FAIL, our value, the cause, and the question status.
+  - D-161's rows, the provisional L 50/60 and 48 h rows, and the PARKED rows (V-E2–4, E7–9, C6, C8, C10, C11) are kept.
+- **Videos.**
+  - They are listed in `videos.toml`, with per-cell `CellIdentityEncoding` and `boundaries = false`, and their final state matches the record.
+  - They are linked from a dated pre-release, `reproductions-2026-10-08-merks`.
+  - There are no outlines and no `docs/references`.
+- **Negative controls.** Perturbed plateau values, perturbed network values, a missing or duplicate seed, and an edited snapshot value.
+- **Opt-in checks.** `P63F_SNAPSHOTS` (all snapshots) and `POTTS_DOCS_BUILD`.
+
+**D-184 result (2026-10-08).**
+- **The run.** The FULL record `data/01/full-2026-10-08` covers 590 jobs. It ran on the PC (CPU, 12 threads) in 3 h 37 min, about 39 thread-hours.
+- **Verdicts.** 36 of 37 rows pass under the frozen D-153 rules.
+  - V-C3's low plateau passes: 0.377 against 0.35 ± 0.07, so the at-risk row is gone.
+  - **V-C12 fails.** The CI/no-CI displacement ratio is 1.26 against the band [1.5, 2.5]: 68.1 against 54.0 µm, where the paper has about 85 against 42. It is a deviation row. The displacement measure and time origin are unstated in the paper, and the frame bounds the sprout. It is on our open question list.
+- **Page test.** It passes 365/365.
+- **Videos.** They are on the pre-release `reproductions-2026-10-08-merks`.
+- **Runner.** A sort bug in the observe step meant every job had to be rebuilt from its σ snapshots after the run. No data was lost.
+- **Still open in P6.3f.** The 01b digitised figure targets (Figs 5, 7–10, 12, 13; 12 and 13 need new runs) and the video clock overlays.
+
+## D-185 OpenVT consortium figures follow the other frameworks' style; paper-model pages are rewritten and merged into one section (2026-10-08; user rulings, confirmed in the coordinator session)
+
+- **Consortium figures (amends D-156 and D-172 for these figures only).** This covers F1's Potts.jl panel and closeup, the F7 and F8 snapshots, and everything in the submission package (D-180).
+  - **F1 colour.** Cells are coloured by area with `coolwarm`, scaled to the panel's own cell-area min–max, on the case (a) 10⁴-cell run.
+    - The evidence: CC3D, TST and Artistoo closeups are coolwarm by area. Spearman(area, red−blue) is 0.995, 1.000 and 0.825 respectively.
+    - The scale limits are our provisional reading of an open question. The differences table and D-175's F1 notes label them so.
+  - **States.** Figures coloured by state show growing vs dormant from the per-cell `inhibited` flag, in the paper's colours (spec 15 §4.0.2).
+  - **Outlines.** Thin black cell boundaries are drawn, as every framework panel draws them. They are pixel-edge boundaries between unlike ids, with no gaps.
+  - **Everything else unchanged.** Docs videos, other models and the OpenVT docs videos keep per-cell colours and no outlines.
+- **Page rewrite.** Each paper-model page reads in this order:
+  1. a short intro;
+  2. the `@potts_model` code that builds the model, with brief comments;
+  3. a minimal run;
+  4. results against the paper: the key figures, the paper-run video, a compact verdict summary and the four-column deviations table;
+  5. a collapsed "Details" section: protocol, full verdict lists, the differences table and provenance.
+
+  Verdict code is unchanged. Pages 01, 09, 10 and 15 are re-frozen for layout only.
+- **One section.** "Models" and "Published models" merge into one "Paper models" section with one page per paper, the status page first.
+  - Wortel Act stays as a model page marked "not a reproduction".
+  - Old URLs keep working through stub pages that link to the new ones.
+
+**D-175 / D-185 amendment (2026-10-08).**
+- **Colour.** The F1 panel colours cells by full-state area on `coolwarm`, scaled to the panel's own cell-area min–max.
+- **Outlines.** Thin black pixel-edge boundaries are drawn.
+- **Scale limits.** These are a provisional reading of our open question list; the consortium does not state its closeups' limits.
+- **Areas.** Full-state areas come from a deterministic rerun of case (a) run 1 (`window_cells.tsv`). It matched `window.tsv` site for site; 17 of the 41 window cells are cut by the window.
+- **State colours** (from TST's 10k snapshots): growing RGB(44,123,182) and inhibited RGB(253,174,97).
+- **F8.** It has no snapshot panels, so nothing to restyle.
+- **Re-frozen tests.** `15_openvt_page.jl`, `15_openvt_f1_f4.jl` and `15_openvt_package.jl` (layout, prose and figure style only); pages 01, 09 and 10 also re-frozen for the D-185 layout.
+
+## D-186 Reproduction 04 (foam, Jiang et al. 1999) is built in parallel streams (2026-10-08; user ruling "work on the foam model in full parallel"; plan in spec 04 §8)
+
+- **Streams.** Only stream 5 waits on stream 1.
+  1. **Engine.** P6.4a copy-scope `direction` (and `time`, `mcs`, `Metropolis(tie)` as ROADMAP lists them), through an engine test author and then an implementer. It is the one engine blocker: the shear form γ(y_i, t)·(x_i − x_j), minimum image in x, needs the copy direction.
+  2. **Foam analysis functions** in PottsModels (spec 04 §2.8), tested on hand-built states: φ, neighbour lists and n, per-MCS T1 detection with a configurable counting unit (A-15), ρ(n), μ2(n), μ2(a), the Eq. 9 spectra, N̄ and the yield strain.
+  3. **Frozen test.** The reproduction 04 test comes from spec §5.2 V1–V20. The A-1, A-2, A-8 and A-15 choices are pre-registered as calibrations (D-155, D-156).
+  4. **No-shear page.** Brick wall → anneal → T = 0 relax → V1/V1b, plus coarsening.
+  5. **Shear runs.** V2–V20 run as FULL on the PC once stream 1 lands.
+- **Proposal law.** Until P6.4b's `UnlikeNeighbor` lands, the proposal is `BoundarySiteCPM` with a uniform neighbour. This is a labelled deviation; the targets avoid absolute MCS (A-5).
+- **Not blockers.** P6.4c (events) and P6.4d (Tiling, T1 counts as library) are conveniences only.
+
+## D-187 P6.4b2: foam analysis functions, test frozen (2026-10-08; coordinator, from the P6.4b2 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4b2_foam_analysis.jl` (commit 1457cc6c, sha256 `2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044`).
+- **Surface** (public in `PottsModels.Analysis`, spec 04 §2.8): `stored_energy` (Eq. 8), `side_counts`, `contact_changes`, `t1_events(prev, next; unit = :t1 | :pairs | :bubbles)`, `topology_distribution`, `central_moment`, `topology_moments`, `power_spectrum` (Eq. 9), `spectral_exponent`, `mean_t1` (N̄) and `yield_strain`.
+- **Readings.** Spec questions go to the spec owner.
+  - **Stored energy (φ).** Each unordered pair is counted once; the factor 2 cancels in φ/φ(0).
+  - **Walls.** The closed y wall is not a side. With that reading the 256² brick wall gives μ2(n) = 7/16 = 0.4375, matching Fig. 11(c)'s 0.437, against 0.109 if the wall counted. This supports V1b.
+  - **A-15 counting units.** One T1 counts 1 under `:t1`, 2 under `:pairs` and 4 under `:bubbles`.
+  - **Periodogram.** |X|²/L, without the f = 0 bin.
+  - **Yield.** The first T1 avalanche, as the paper defines it. Converting it to strain is the caller's job (A-9).
+  - **μ2(a) unit.** It is a P6.4r calibration; areas stay in sites.
+
+## D-188 P6.4a1: copy scope gains `direction`, test frozen (2026-10-08; coordinator, from the P6.4a1 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4a1_copy_direction.jl` (commit e4b85503, sha256 `ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296`).
+- **Surface.** The copy scope gains three entries, each computed from (source, target) alone:
+  - `direction[k]`: x_target − x_source in `position` units. It uses the minimum image on periodic axes and the plain difference on closed axes.
+  - `mcs`: n − 1 during MCS n.
+  - `position[target|source][k]`.
+- **Hexagonal lattices.** Either an `ArgumentError` that names `direction`, or correct values.
+- **Algorithms.** Results match the hand-written reference bitwise on Sequential, Checkerboard and BoundarySite, on Float32 and on the device. Warm allocations are zero.
+- **Foam shear.** The foam shear is a drive.
+- **Deferred.** `Metropolis(tie)` is deferred: T = 1e-6 gives the A-6 T→0⁺ limit.
+- **Not a blocker.** The shear can already be written today with px/py site variables, an `ifelse` minimum image and a model-level G set in `@before_mcs`. The test uses that form as its reference. So `direction` is a convenience, and P6.4r is not blocked on it.
+- **Corrections.**
+  - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
+  - The drive docs wrongly list `mcs`; the implementer fixes them.

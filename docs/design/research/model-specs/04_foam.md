@@ -473,3 +473,36 @@ Uncertainty: ±5% in the linear panel; ±0.15 decade in the inset. Observations:
   - (i) 04b p.5827 says the ordered yield strain "remains almost the same" from β = 0.01 (Fig. 4) to 0.05 (Fig. 5), but Fig. 11(a) gives 1.11 → 0.43. The first-T1 times (≈ 4300 vs ≈ 420 MCS) agree with Fig. 11(a).
   - (ii) Fig. 11(a) at β = 0.001 has the more disordered foam (μ2(n) = 1.65, ε ≈ 1.05) yielding later than μ2(n) = 0.81 (ε ≈ 0.51). This contradicts "decreases drastically to zero as disorder increases" (04b p.5830) at the lowest rate; it holds at β ≥ 0.005.
   - V15 therefore asserts disorder monotonicity only at β ≥ 0.01.
+
+---
+
+## 8. Build plan against the current API (2026-10-08, spec owner; for the coordinator)
+
+The maintainer ruled that foam proceeds **in full parallel** (2026-10-08). This section maps
+each paper element to what exists on `monorepo` today. It has not been tested: the test
+author confirms each row.
+
+| Paper element | Available today | Gap / item |
+|---|---|---|
+| 256², periodic x, non-periodic y | `Lattice((256, 256); boundary = (Periodic(), Closed()))` | The wall type is A-2: calibrate on V1b |
+| 4th-nearest contacts, J = 3 | `NeighborOrder(4)` (20 neighbours) with the contact term | — |
+| Γ(a − A)², Γ = 1 | the volume term | — |
+| Dry foam (no medium) | the initial ownership array passed directly; no medium sites | — |
+| Brick wall, 16² in common bond | the ownership array built by hand in the page | `Tiling` (P6.4d) is a convenience, not a blocker |
+| T = 0, with ΔH′ = 0 accepted (A-6 recommendation) | `Metropolis(; temperature = ε)` with ε ≪ min ΔH (e.g. 1e-6) gives the T → 0⁺ limit: ties accepted, uphill rejected. Our T ≤ 0 accepts ties with ½ (CC3D), which is not the recommendation | `Metropolis(tie)` (P6.4a) makes it explicit |
+| γ(y, t): Eq. 6 boundary rows, Eq. 7 bulk from the mid-plane, G(t) = 1 or sin(ωt) | `position` (target) and `mcs` are readable in the copy scope | — |
+| **Shear term, displacement form (A-1): γ(y_i, t)·(x_i − x_j), minimum image in x** | **No**: the copy scope has the target's `position` but neither the source's position nor the copy direction | **P6.4a copy-scope `direction`** (or source `position`). It is the only engine blocker |
+| Proposal: wall sites only, to an unlike neighbour | `BoundarySiteCPM` (wall sites only, equal in law to `SequentialCPM`), with a uniform neighbour among 20 | `UnlikeNeighbor` (P6.4b). Until then this is a labelled deviation: given an unlike draw the move is the same, but the per-site update rates differ. Timing targets already avoid absolute MCS (A-5) |
+| Anneal, then T = 0 relax, then coarsen (Γ = 0) to a μ2(n) target, then reset A_n and relax | successive `solve`s with `remake` of T, Γ, A_n; the μ2(n) stop via a callback | — |
+| Observables §2.8 | analysis code, not engine code: φ (pair count over the interaction shell), per-bubble neighbour lists (VonNeumann(1) default), n, T1 detection per MCS with a configurable counting unit (A-15), ρ(n), μ2(n), μ2(a), spectra (Eq. 9, cycles/MCS), N̄, first-T1-avalanche yield | New `PottsModels` analysis functions; T1 detection runs online (a per-MCS callback) to avoid saving every frame |
+
+**Parallel work streams (none waits on another except where noted):**
+1. P6.4a, copy-scope `direction`: an engine item with its own test author.
+2. Foam analysis functions (§2.8), tested on hand-built states (a hexagonal tiling has n = 6; a scripted neighbour swap gives exactly one T1).
+3. The reproduction 04 frozen test from §5.2 V1–V20, with the A-1/A-2/A-8/A-15 calibrations pre-registered as calibrations.
+4. A no-shear model page (brick wall → anneal → T = 0 relax → V1/V1b; coarsening to a μ2(n) target). It needs no P6.4a, so it can start now.
+5. Shear runs (V2–V20) once 1 lands: FULL on the PC.
+
+**Cost (estimate, not measured):** NeighborOrder(4) on 256² is about 5 ms/MCS on one PC core
+(AMD Ryzen AI Max+ 395, CPU). A 10⁵-MCS run takes about 10 min; the V1–V20 set is a few hundred
+runs, a few hours on 24 threads.
