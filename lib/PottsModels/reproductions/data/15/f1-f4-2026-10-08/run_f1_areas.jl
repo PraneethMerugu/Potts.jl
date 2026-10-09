@@ -9,12 +9,12 @@
 # block must equal `window.tsv` (owners and generations) site for site; otherwise the script
 # stops before writing anything.
 #
-#     taskset -c 0-5,16-21 julia -t 1 --project=lib/PottsModels/test \
+#     [F1_STATE=<path>] taskset -c 0-5,16-21 julia -t 1 --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/run_f1_areas.jl
 using Potts, PottsModels, Test
 using Potts: CorePotts
 using Statistics: mean
-using Dates, TOML, SHA
+using Dates, TOML, SHA, Serialization
 
 const started = now()
 const DIR = @__DIR__
@@ -69,6 +69,10 @@ end
 gens_match = all(w -> w[3] == 0 || gen[w[3]] == w[4], win)
 gens_match || @warn "the state's generations differ from window.tsv's render-frame generations; window.tsv's are kept"
 ids = sort!(unique(o for (_, _, o, _) in win if o > 0))
+# F1_STATE (optional): the full state's ownership, areas and generations, serialized outside git
+# (for the whole-colony orientation figure)
+state = get(ENV, "F1_STATE", "")
+isempty(state) || serialize(state, (; mcs, σ, volume, A_star = Array(A_star), generation = gen))
 # the inhibited flag (O5) from the O1 code at the case's thresholds
 fr = PottsModels.openvt_frame(u; β = CASE.beta, γ = CASE.gamma)
 live = findall(>(0), volume)
