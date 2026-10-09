@@ -4145,7 +4145,7 @@ end
 
 @testset "P6.4a1: copy-scope `mcs` is the number of completed MCS (on-copy readback)" begin
     for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)),
-            BoundarySiteCPM(; proposal = Moore(1)))
+            SequentialCPM(; skip_interior = true, proposal = Moore(1)))
         sol = solve(_copyclock_problem(3), alg; saveat = 1)
         ms = [Set(filter(>=(0), u.site.m)) for u in sol.u]
         @test isempty(ms[1])                                     # before the run: never written

@@ -434,8 +434,8 @@ decision = "D-173"
 
 [[file]]
 path = "reproductions/15_openvt_sweeps.jl"
-sha256 = "474c10c113705b09704faf945e4b8b1976693e4a5ee901a42dff963ff855de41"
-decision = "D-174"
+sha256 = "2a89db9f95b2add22de678a34aeba432f8f40a8d1566ccc8f5947871148bb667"
+decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_0bs_mtk_claims.jl"
@@ -454,8 +454,8 @@ decision = "D-178"
 
 [[file]]
 path = "acceptance/p6_4b1_boundary_site.jl"
-sha256 = "3a7b524b099fc117c5dce316465555b9b4e57c4af5d04873eaf5114f1973eabf"
-decision = "D-177"
+sha256 = "8cd330590c67355513f896ffcf5fb7bc911a5afa69b05741c67ff2083773bf1e"
+decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_0bw_rocm_wait.jl"
@@ -474,8 +474,8 @@ decision = "D-200"
 
 [[file]]
 path = "reproductions/04_foam.jl"
-sha256 = "b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d"
-decision = "D-190"
+sha256 = "0fcf4eb5f56d4f44b8b7859e63ef4f9ed6a1a7a32e82d4614544a5c858ee0e67"
+decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_4b2_foam_analysis.jl"
@@ -484,8 +484,8 @@ decision = "D-187"
 
 [[file]]
 path = "acceptance/p6_3j_euler_tracker.jl"
-sha256 = "0529f43e9676c8c3899945b63c766a3e1c09f278c58b2da72a143709efc09d5b"
-decision = "D-194"
+sha256 = "488b98587f8cff3bbb04e088ca1f93f8e6ba7b63efc916fa3df1006aa9fce6a2"
+decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_3g_connectivity_vocabulary.jl"
@@ -494,8 +494,8 @@ decision = "D-197"
 
 [[file]]
 path = "acceptance/p6_4a1_copy_direction.jl"
-sha256 = "ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296"
-decision = "D-188"
+sha256 = "a61dd290c76bce65b9ed4b74552ce81b7261e929136b3e7e3434a38d0a181000"
+decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_9a_global_connectivity.jl"
@@ -541,6 +541,11 @@ decision = "D-202"
 path = "reproductions/data/01b/fig13.tsv"
 sha256 = "02a843bd35149499e99915e7e2c2788cf01e76723c4b871b5b63f2e26cce2496"
 decision = "D-202"
+
+[[file]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+sha256 = "cdb1ee5d9b491eff5f22ebedab55706c10b6efb2eb8ecd6c38bae32e1cab110a"
+decision = "D-207"
 
 [[file]]
 path = "reproductions/04_foam_kb_scan.jl"

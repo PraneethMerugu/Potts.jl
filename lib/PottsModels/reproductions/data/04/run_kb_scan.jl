@@ -257,7 +257,7 @@ open(joinpath(OUT, "provenance.toml"), "w") do io
             "foam_seeds" => [r["seed"] for (_, r) in FOAMS]),
         "jobs" => Dict("foams" => P64KB_TAU_FOAMS, "runs" => length(rows)),
         "tau" => τ, "kappa_d190" => P64KB_KAPPA_D190,
-        "algorithm" => "BoundarySiteCPM(), proposals NeighborOrder(4) (DV1)",
+        "algorithm" => "SequentialCPM(; skip_interior = true), proposals NeighborOrder(4) (DV1)",
         "result" => Dict("kappa_b" => A.kappa_b === nothing ? "nothing" : A.kappa_b, "path" => string(A.path),
             "reason" => string(A.reason), "khat" => A.khat, "P" => A.P)))
 end

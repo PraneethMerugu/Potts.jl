@@ -3808,3 +3808,17 @@ session.
 - **No model change.** κ_b is applied by the harness. The Eq 7 term reads only β, so no model change is needed.
 - **PC cost.** 345 jobs, about 2–3 h on 24 threads. The scan runs after the 01b FULL, and its table goes to the spec owner first.
 - **Prediction.** From the D-190 record, a pinning cliff is likely, so the rule may well return `nothing`.
+
+## D-207 P6.0bk2: tests for `SequentialCPM(; skip_interior = true)` frozen (2026-10-09; coordinator, from the rename test author; implements D-198)
+
+- **New test.** `acceptance/p6_0bk2_skip_interior.jl`, commit 06eda5d4, sha256 `cdb1ee5d…`.
+  - Recorded on cfdf8477: hashes for 10 short runs, each run under `BoundarySiteCPM`, `SequentialCPM` and `CheckerboardCPM`. Cases are 2D, 3D, frozen mask, divisions, foam with `NeighborOrder(4)`, Moore and VonNeumann overrides, and Barker acceptance.
+  - `skip_interior = true` must reproduce these hashes. Two IR hashes of `sequential_mcs!` are pinned (Julia 1.12.6 only), so the default path is unchanged.
+  - On `CheckerboardCPM`, `skip_interior` must either leave the trajectory bitwise unchanged or raise an `ArgumentError` ("not yet implemented").
+- **Re-frozen, rename only.** `BoundarySiteCPM(…)` becomes `SequentialCPM(; skip_interior = true, …)`; no assertion changed. Files:
+  - `p6_4b1_boundary_site.jl`, which now also asserts that `BoundarySiteCPM` is neither defined nor exported;
+  - `p6_3j_euler_tracker.jl`;
+  - `p6_4a1_copy_direction.jl`;
+  - `reproductions/04_foam.jl`;
+  - `reproductions/15_openvt_sweeps.jl`.
+- **Still open.** D-198 item 3 (P6.0bk).

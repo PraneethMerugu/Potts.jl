@@ -120,7 +120,7 @@ end
 
 const BUILD_ORDER = [
     ("In flight (offline FULL runs on the PC)", [
-        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `BoundarySiteCPM` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
+        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
         ("P6.3f", "Merks: the FULL run and the digitised 01b figure targets."),
     ]),
     ("Step 4: foam", [

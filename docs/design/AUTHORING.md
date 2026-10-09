@@ -1239,9 +1239,9 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 | Topic | Rule |
 |---|---|
 | Neighbor order | `NeighborOrder(k)` cumulative distance shells |
-| Proposals | uniform source site, uniform target within the proposal relation; same-cell and frozen picks consume an attempt |
+| Proposals | `SequentialCPM`: a uniform **mobile target** site, then a uniform **offset** from the proposal relation gives the **source**; an off-lattice, frozen or same-owner source consumes the attempt, and one MCS is `N_mobile` attempts. `SequentialCPM(; skip_interior = true)`: the same law, with the interior (null) picks skipped exactly. `CheckerboardCPM`: every site is a target once per MCS (colours in random order; frozen targets are null), with the same uniform source offset |
 | Contact H | unordered pairs counted once |
-| Surface | unlike-neighbour pairs within the surface relation (lattice factor 1 on square) |
+| Surface | unlike-neighbour pairs within the surface relation, no lattice factor |
 | Acceptance | `ΔH ≤ offset` → accept, else `exp(-(ΔH - offset)/T)`; T ≤ 0 tie → ½ |
 | Temperature | per-cell ≥ per-kind ≥ global precedence; `combine` default `min` |
 | External potential | `H = Σ λ⃗·x_COM`; positive component pushes toward negative coordinates |
@@ -1249,6 +1249,26 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 | Uptake | subtract `max_amount` if `c > max_amount`, else `relative·c` (CompuCell3D `Uptake`) |
 | Division | parent side randomized by default; neighbours share a face (no corner-only contact) |
 | Morpheus yield | `offset = -yield` |
+
+**Pair-counting notes (topology audit §2.4, §7).** Potts counts each unordered
+unlike-owner pair once and applies no lattice factor, to contacts or to `surface`.
+- **CC3D, Artistoo, TST, Chaste** also count each pair once in contact ΔH, so their `J`
+  maps 1:1 to `contacts => J` at the same relation (CC3D `NeighborOrder(k)` ↔ ours).
+- **Morpheus `boundaryLengthScaling`.** Morpheus counts once but divides by a
+  lattice- and order-specific constant (Magno, Grieneisen & Marée 2015), so `J` and
+  `surface` are per node length. The default is `norm` since Morpheus 2.3, with
+  `optimal` picking the neighbour order. Square orders 1–4: 1.273, 3.074, 5.620, 11.31
+  (`research/morpheus-gaps.md` §2; read by a delegated reader, not re-read). Port with
+  `J_Potts = J_Morpheus / norm` and scale surface targets and λ to match. The hex and
+  cubic tables are **unverified** here, and so is the exact place the division is
+  applied (interaction_energy.cpp ~L371-432, delegated read).
+- **CC3D hex `surfaceMF`.** CC3D's SurfaceTracker multiplies the order-1 unlike count by
+  `lmf.surfaceMF`, which is 1 on the square lattice and not 1 on hex. Divide a CC3D hex
+  surface target by it (and scale its λ) when porting. Its hex value, and whether
+  CC3D applies a hex factor to contact energies too, are **unverified** (no CC3D source
+  in the repo; `research/cc3d-connectivity-source-check.md` does not cover it).
+- `per_length = true` (§12.1) is the planned Potts form of the Morpheus normalisation;
+  it is not implemented yet.
 
 ### 12.10 Deliberately skipped
 
