@@ -570,11 +570,11 @@ Full runs are offline (D-146).
   - **Re-freezes.** Every re-freeze forced by rulings 3, 6 and 10 goes through a test author: the legacy `MerksVasculogenesis` `rule = :local` and the full-shell pins.
   - **Akeeb.** Its frozen record test plus an A/B shows no change.
   - **FULL records.** Any FULL record whose dynamics change is re-run on the PC and reported under D-154.
-- [x] (merge, 2026-10-09; PC A/B pending with mb12) **P6.3h** (D-189; after P6.3g) Shell kernels.
+- [x] (merge, 2026-10-09; A/B passed with mb13/mb14) **P6.3h** (D-189; after P6.3g) Shell kernels.
 - [ ] **P6.3g-v** (D-196) Re-render the default-build model-page video `paper_runs/merks_vasculogenesis` under the new `Local()` rule (legacy MerksVasculogenesis dynamics changed); on the PC.
   - One shell read per generated function, a 2D run-count kernel for `Local()`, and a table-driven 3D flood fill with no div/rem in the loop.
   - *Accept:* oracles unchanged; A/B ≤ 1.00 within the controls' spread (D-171); zero warm allocations; Metal and ROCm equal the CPU.
-- [ ] **P6.3i** (D-189; may fold into P6.3g) Gain-side and hole negative controls (§12) on `Moore(1)` and `NeighborOrder(2)` proposals.
+- [x] (folded into P6.3g, D-193; merged 2026-10-09) **P6.3i** (D-189) Gain-side and hole negative controls (§12) on `Moore(1)` and `NeighborOrder(2)` proposals.
 - [x] (merge, 2026-10-09; D-192, D-194; a67f16da) **P6.3j** (D-189, ruling 12) Cell-scope Euler-characteristic tracker (holes, and 3D tunnels) as an observable or energy.
   - Exact local χ updates per copy from the 2×2 (2D) and 2×2×2 (3D) configurations.
   - Design note first.

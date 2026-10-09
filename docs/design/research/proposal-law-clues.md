@@ -120,7 +120,7 @@ and not enough info to determine it", and asked for research before any sensitiv
 
 | Framework | Departure | Bears on |
 |---|---|---|
-| TST | divides on **target** area (`openvt-monolayer-type1-tst.cpp:169`); integer-truncated ΔH (`ca.cpp:620–631`); `max_cell_count = 1000` hard exit; periodic 1601² | V1 (TST divides sooner in crowded tissue, where A < A*), V3b, V4.5 |
+| TST | divides on **target** area (TST `OpenVT` branch, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, `src/models/openvt-monolayer-type1-tst.cpp:169`; whether this commit produced the consortium's results/TST is Q23(b)); integer-truncated ΔH (`ca.cpp:620–631`); `max_cell_count = 1000` hard exit; periodic 1601² | V1 (TST divides sooner in crowded tissue, where A < A*), V3b, V4.5 |
 | CC3D | contact energy at NeighborOrder 4 (20 sites); λ = 10, A* = 25; threshold not redrawn at division; Connectivity penalty 10⁵ | rim shape (V4.2/V4.3), V4.5 |
 | Morpheus | J_cM = 20; λ = 20; daughters' A0 = their actual area; σ_X passed as 0.16 | rim shape, V4.5 |
 | Artistoo | J_cM = 20; λ = 20, A* = 25; von Neumann free fraction | rim free surface (V4.2/V4.3) |
