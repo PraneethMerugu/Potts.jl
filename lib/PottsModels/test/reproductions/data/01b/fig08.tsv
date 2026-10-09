@@ -1,0 +1,29 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+8	8	main	CI	chi_cM	0	energy per concentration	C at 5000 MCS	0.915	1	0.015	grey dotted SD curve, read at this x (±0.01)	10	0.01	chi_cM = 0: the two arms are the same model
+8	8	main	CI	chi_cM	200	energy per concentration	C at 5000 MCS	0.549	1	0.05	grey dotted SD curve, read at this x (±0.01)	10	0.02	
+8	8	main	CI	chi_cM	300	energy per concentration	C at 5000 MCS	0.492	1	NA	not read	10	0.01	
+8	8	main	CI	chi_cM	400	energy per concentration	C at 5000 MCS	0.437	1	NA	not read	10	0.01	
+8	8	main	CI	chi_cM	500	energy per concentration	C at 5000 MCS	0.396	1	0.04	grey dotted SD curve, read at this x (±0.01)	10	0.01	
+8	8	main	CI	chi_cM	750	energy per concentration	C at 5000 MCS	0.333	1	NA	not read	10	0.01	
+8	8	main	CI	chi_cM	1000	energy per concentration	C at 5000 MCS	0.305	1	0.03	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	CI	chi_cM	1500	energy per concentration	C at 5000 MCS	0.26	1	NA	not read	10	0.005	
+8	8	main	CI	chi_cM	2000	energy per concentration	C at 5000 MCS	0.23	1	0.02	grey dotted SD curve, read at this x (±0.01)	10	0.01	
+8	8	main	CI	chi_cM	2500	energy per concentration	C at 5000 MCS	0.221	1	NA	not read	10	0.005	
+8	8	main	CI	chi_cM	3000	energy per concentration	C at 5000 MCS	0.207	1	0.015	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	CI	chi_cM	3500	energy per concentration	C at 5000 MCS	0.206	1	NA	not read	10	0.005	
+8	8	main	CI	chi_cM	4000	energy per concentration	C at 5000 MCS	0.197	1	0.02	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	CI	chi_cM	4500	energy per concentration	C at 5000 MCS	0.181	1	NA	not read	10	0.005	
+8	8	main	CI	chi_cM	5000	energy per concentration	C at 5000 MCS	0.19	1	0.02	grey dotted SD curve, read at this x (±0.01)	10	0.01	read at 4950
+8	8	main	noCI	chi_cM	0	energy per concentration	C at 5000 MCS	0.915	1	0.015	grey dotted SD curve, read at this x (±0.01)	10	0.01	chi_cM = 0: the two arms are the same model
+8	8	main	noCI	chi_cM	250	energy per concentration	C at 5000 MCS	0.945	1	0.01	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	noCI	chi_cM	500	energy per concentration	C at 5000 MCS	0.921	1	0.015	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	noCI	chi_cM	750	energy per concentration	C at 5000 MCS	0.896	1	NA	not read	10	0.005	
+8	8	main	noCI	chi_cM	1000	energy per concentration	C at 5000 MCS	0.864	1	0.025	grey dotted SD curve, read at this x (±0.01)	10	0.005	
+8	8	main	noCI	chi_cM	1500	energy per concentration	C at 5000 MCS	0.828	1	NA	not read	10	0.01	
+8	8	main	noCI	chi_cM	2000	energy per concentration	C at 5000 MCS	0.811	1	0.04	grey dotted SD curve, read at this x (±0.01)	10	0.01	
+8	8	main	noCI	chi_cM	2500	energy per concentration	C at 5000 MCS	0.797	1	NA	not read	10	0.01	
+8	8	main	noCI	chi_cM	3000	energy per concentration	C at 5000 MCS	0.759	1	0.05	grey dotted SD curve, read at this x (±0.01)	10	0.01	
+8	8	main	noCI	chi_cM	3500	energy per concentration	C at 5000 MCS	0.744	1	NA	not read	10	0.01	
+8	8	main	noCI	chi_cM	4000	energy per concentration	C at 5000 MCS	0.71	1	0.06	grey dotted SD curve, read at this x (±0.01)	10	0.01	
+8	8	main	noCI	chi_cM	4500	energy per concentration	C at 5000 MCS	0.712	1	NA	not read	10	0.015	
+8	8	main	noCI	chi_cM	5000	energy per concentration	C at 5000 MCS	0.675	1	0.07	grey dotted SD curve, read at this x (±0.01)	10	0.015	read at 4950

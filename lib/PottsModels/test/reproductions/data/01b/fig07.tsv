@@ -1,0 +1,41 @@
+figure	page	panel	curve	x_name	x	x_unit	y_name	y	y_unit	sd	sd_source	unc_x	unc_y	note
+7	8	main	CI	J_cc	1	energy	C at 5000 MCS	0.283	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	2	energy	C at 5000 MCS	0.275	1	0.05	grey dotted SD curve, read at this x (±0.01)	0.2	0.01	
+7	8	main	CI	J_cc	3	energy	C at 5000 MCS	0.264	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	4	energy	C at 5000 MCS	0.29	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	5	energy	C at 5000 MCS	0.276	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	6	energy	C at 5000 MCS	0.275	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	8	energy	C at 5000 MCS	0.266	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	10	energy	C at 5000 MCS	0.3	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.2	0.02	
+7	8	main	CI	J_cc	12	energy	C at 5000 MCS	0.28	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	15	energy	C at 5000 MCS	0.266	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	20	energy	C at 5000 MCS	0.291	1	0.035	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	CI	J_cc	25	energy	C at 5000 MCS	0.299	1	NA	not read	0.2	0.005	
+7	8	main	CI	J_cc	30	energy	C at 5000 MCS	0.308	1	0.035	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	CI	J_cc	35	energy	C at 5000 MCS	0.346	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	40	energy	C at 5000 MCS	0.401	1	0.055	grey dotted SD curve, read at this x (±0.01)	0.2	0.01	
+7	8	main	CI	J_cc	45	energy	C at 5000 MCS	0.439	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	50	energy	C at 5000 MCS	0.486	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.2	0.01	
+7	8	main	CI	J_cc	55	energy	C at 5000 MCS	0.525	1	NA	not read	0.2	0.01	
+7	8	main	CI	J_cc	60	energy	C at 5000 MCS	0.573	1	0.04	grey dotted SD curve, read at this x (±0.01)	0.2	0.01	
+7	8	main	CI	J_cc	65	energy	C at 5000 MCS	0.636	1	NA	not read	0.2	0.015	
+7	8	main	CI	J_cc	70	energy	C at 5000 MCS	0.731	1	0.045	grey dotted SD curve, read at this x (±0.01)	0.2	0.02	
+7	8	main	CI	J_cc	75	energy	C at 5000 MCS	0.837	1	NA	not read	0.2	0.015	
+7	8	main	CI	J_cc	80	energy	C at 5000 MCS	0.85	1	0.025	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	curve ends at J_cc = 79–80
+7	8	main	noCI	J_cc	1	energy	C at 5000 MCS	0.307	1	NA	not read	0.2	0.015	
+7	8	main	noCI	J_cc	2	energy	C at 5000 MCS	0.327	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.2	0.015	
+7	8	main	noCI	J_cc	3	energy	C at 5000 MCS	0.361	1	NA	not read	0.2	0.015	
+7	8	main	noCI	J_cc	4	energy	C at 5000 MCS	0.373	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.2	0.015	
+7	8	main	noCI	J_cc	5	energy	C at 5000 MCS	0.423	1	NA	not read	0.2	0.02	
+7	8	main	noCI	J_cc	6	energy	C at 5000 MCS	0.46	1	0.06	grey dotted SD curve, read at this x (±0.01)	0.2	0.02	
+7	8	main	noCI	J_cc	8	energy	C at 5000 MCS	0.575	1	0.1	grey dotted SD curve, read at this x (±0.01)	0.2	0.02	
+7	8	main	noCI	J_cc	10	energy	C at 5000 MCS	0.735	1	0.07	grey dotted SD curve, read at this x (±0.01)	0.2	0.03	
+7	8	main	noCI	J_cc	12	energy	C at 5000 MCS	0.831	1	NA	not read	0.2	0.01	
+7	8	main	noCI	J_cc	15	energy	C at 5000 MCS	0.826	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	noCI	J_cc	20	energy	C at 5000 MCS	0.836	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	noCI	J_cc	30	energy	C at 5000 MCS	0.835	1	NA	not read	0.2	0.005	
+7	8	main	noCI	J_cc	40	energy	C at 5000 MCS	0.829	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	noCI	J_cc	50	energy	C at 5000 MCS	0.821	1	NA	not read	0.2	0.005	
+7	8	main	noCI	J_cc	60	energy	C at 5000 MCS	0.816	1	0.02	grey dotted SD curve, read at this x (±0.01)	0.2	0.005	
+7	8	main	noCI	J_cc	70	energy	C at 5000 MCS	0.814	1	NA	not read	0.2	0.005	
+7	8	main	noCI	J_cc	80	energy	C at 5000 MCS	0.8	1	0.03	grey dotted SD curve, read at this x (±0.01)	0.2	0.01	read at 79
