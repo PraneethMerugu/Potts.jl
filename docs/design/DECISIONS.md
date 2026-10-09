@@ -3260,6 +3260,8 @@ session.
   - **Backends.** A non-CPU backend is an `ArgumentError`.
   - **Gate.** Add a `boundary` row to gate.jl and ab_one.jl.
 
+- **Amendment (2026-10-08, P6.15g).** Section (g) also allows `.csv` in a cited record (`P615I_RECORD_EXT`). The P6.15g sweeps record must hold the O3 `.csv` files and `f7/*.csv` under its own record tier. Re-frozen at commit c40d2725, sha256 `135c9c7f0b109c483dacae82c8c4ee7b625e63997181c12a83c2dbcf366e926a`. Nothing else changed. Sections (c) and (d) go green when the page renders the sweeps record.
+
 ## D-179 P6.0bw: the library's device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm (2026-10-08; coordinator, from the P6.0bw test author; under D-157, D-158, D-171)
 
 - **Measured (PC, ROCm, AMDGPU 2.8.0, CPU 12 under exclusive.sh).**
