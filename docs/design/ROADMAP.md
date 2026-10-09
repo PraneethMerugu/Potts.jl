@@ -598,7 +598,7 @@ Full runs are offline (D-146).
   - Accept: byte-identical `metrics.csv` on the consortium parameter-plane set, against a `-ffp-contract=off` reference build (spec 15 D11). No `fma`, `muladd` or `@fastmath` in the geometry kernels.
 - [x] (merge 2026-10-07, D-168; V4 fails V4.2, V4.3, V4.5 as D-154 deviations; consortium TST_5T and Morpheus_5T pass 7/7 under the frozen rules) **P6.15e** F5: 100 runs of 1000 cells, case (b). Target V4, with a negative control.
 - [x] (merge 2026-10-08, D-173; all rows pass, controls fail; V1 warning for P6.15g) **P6.15f** F3 (deterministic case (f) and stochastic case (b)) and F8 (V5), overlaid on the consortium data.
-- [ ] (D-174: test frozen; FULL run unparked 2026-10-08, BoundarySiteCPM 2.83× on case (a)) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
+- [x] (merge, 2026-10-08; D-174, D-178 amendment: FULL sweeps record af1d4c19, 160 runs, 15 of 18 pass; V1, V2.1.1x, V3b FAIL under D-154, C13/Q20 leading candidate) **P6.15g** Profile throughput first (G9; `BoundarySite` is P6.4b), then the sweeps for F6, T1 and F7 (spec 15 §4.3). Targets V1, V2, V2b, V3 and V3b; runs past 20× are capped.
 - [x] **P6.15h** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic, with a unit test that G1 equals the drawn count).
 - [x] **P6.15i** Docs page "OpenVT monolayer benchmark":
   - every figure in M's layout;
