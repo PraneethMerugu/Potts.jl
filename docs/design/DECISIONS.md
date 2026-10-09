@@ -3822,3 +3822,17 @@ session.
   - `reproductions/04_foam.jl`;
   - `reproductions/15_openvt_sweeps.jl`.
 - **Still open.** D-198 item 3 (P6.0bk).
+
+## D-208 P6.0ba: boundary-only reach test frozen (2026-10-09; coordinator, from the P6.0ba test author)
+
+- **Frozen test.** `acceptance/p6_0ba_boundary_only_reach.jl`, commit be48776f, sha256 `1ce9e285…`. On the base: 121 pass, 23 fail. Every failure is the intended reach refusal, in testset 1.
+- **The rule.** `CheckerboardCPM`'s preflight measures reach only over the relations the copy step reads: generated ΔH, commit, constraint and temperature, including edge energies. Relations that only boundary rules read do not count. Boundary rules are:
+  - division `when` and its state rules;
+  - `@link`/`@unlink` `when`;
+  - `@before_mcs`/`@after_mcs`;
+  - cell ODEs;
+  - `@observed`.
+- **Unchanged.** The compiler's declared `Footprint` stays as it is. A constraint or drive reading `Ball(2.0)` around `target` already declares read = 2 and is accepted; it is kept as a control. A hand-built `CPMFunction` keeps today's behaviour, which counts every relation.
+- **Pinned.** Three Checkerboard trajectories, as bitwise digests recorded on the base.
+- **Not pinned.** A declared relation that nothing reads. The fix will accept it; today it is refused.
+- **Side finding, separate item.** A cell energy that gathers at a fixed site (`count(owner[n] == id for n in far(40))`) appeared in `total_energy` but not in the generated ΔH. Under investigation.

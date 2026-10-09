@@ -632,3 +632,45 @@ end
     cyc[] = cyc
     @test solver_err(() -> Potts._symkey(cyc)) isa ArgumentError
 end
+
+# D-208: CheckerboardCPM's reach counts only the relations the generated copy-step functions
+# read, and only while the problem runs those functions. A `CPMFunction` keeping the model's
+# `sys` but swapping in a function of its own may read any relation: every one counts.
+@potts_model ReachBoundaryFar begin
+    @kinds medium A
+    @variables z(cell) = 0.0
+    @lattice Lattice((12, 12))
+    @relations far = Ball(2.0)
+    @energy cells => (volume - 9.0)^2
+    @after_mcs z ~ count(owner[n] == id for n in far(40))
+    @sweep Metropolis(; temperature = 2.0)
+end
+
+@testset "D-208: copy-step relations follow the functions, not only the model" begin
+    σ = zeros(Int32, 12, 12)
+    σ[2:4, 2:4] .= 1
+    σ[6:8, 2:4] .= 2
+    prob = PottsProblem(ReachBoundaryFar(; name = :rb), [ownership => σ, kind => [:A, :A]], (0, 3); seed = 1, capacity = 8)
+    f = prob.f
+    @test f.footprint.read == 1
+    @test Potts.CorePotts.radius(prob.relations.far) == 2
+    @test !(:far in Potts.CorePotts.copy_step_relations(f.sys, f))       # read only after the MCS
+    @test Symbol(solve(prob, CheckerboardCPM()).retcode) === :Success
+    # `anneal` (zero temperature around the generated one) keeps the generated reads
+    @test Potts.anneal(prob; mcs = 2, alg = CheckerboardCPM()) isa Potts.CorePotts.CPMState
+    # a bias reading `far` (reach 2) against footprint 1: refused, not raced
+    farbias = (st, p, prop, ctx) -> length(ctx.far) < 0
+    biased = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads, f.temperature,
+        bias = farbias, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+    @test Potts.CorePotts.copy_step_relations(f.sys, biased) === nothing
+    @test_throws ArgumentError solve(remake(prob; f = biased), CheckerboardCPM())
+    @test Symbol(solve(remake(prob; f = biased), SequentialCPM()).retcode) === :Success
+    # a swapped ΔH (or temperature) likewise
+    dH = (st, p, prop, ctx) -> f.delta_H(st, p, prop, ctx) + 0.0 * length(ctx.far)
+    swapped = Potts.CorePotts.CPMFunction(dH; f.commit!, f.constraint, f.claims, f.reads, f.temperature,
+        f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+    @test_throws ArgumentError solve(remake(prob; f = swapped), CheckerboardCPM())
+    Tswap = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.claims, f.reads,
+        temperature = (st, p, prop, ctx) -> 2.0, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+    @test Potts.CorePotts.copy_step_relations(f.sys, Tswap) === nothing
+end

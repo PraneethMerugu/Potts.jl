@@ -19,6 +19,14 @@ solutions](@ref manual-problems)). Both also take `skip_interior`, which default
 an `ArgumentError`. In both algorithms the source of a copy is a uniformly drawn neighbour
 of the target in the proposal neighbourhood; they differ in how targets are chosen.
 
+`CheckerboardCPM` spaces its colours by the model's footprint, the distance a copy reads
+from its target. The footprint covers what drives, constraints, `@on_copy` updates and the
+temperature read, so a wider read there widens the spacing; an energy that reads a relation
+beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it wherever the fold
+is read, since its counts are kept up to date on every copy. Any other relation read only at
+the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
+`@observed` quantities) does not count, whatever its radius.
+
 ## Skipping the interior: `skip_interior = true`
 
 ### What it does

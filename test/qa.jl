@@ -227,11 +227,13 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :has_origin,          # a contact fold's relation must exclude the origin (D-150)
     :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
     :no_claims,           # the no-claim-set default
+    :no_bias,             # the no-bias default (`copy_step_relations` checks for it, D-208)
     :no_divide_rule,      # the no-division default
     :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
     :remake_function,
     :remake_parameters,
     :remake_state,
+    :copy_step_relations, # the copy-step relations Potts reports for the checkerboard reach (D-208)
     :set_parameter,       # parameter-update hook Potts extends
     :set_parameters,      # its batched form (`setp(integ, [x, y])` as one change, D-112)
     :parameter_setter,    # `setp` with several parameters on a model description (one change)

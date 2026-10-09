@@ -364,9 +364,24 @@ SciMLBase.derivative_discontinuity!(::PottsIntegrator, ::Bool) = nothing
 SciMLBase.u_modified!(integ::PottsIntegrator, modified::Bool) = (modified && refresh_frozen!(integ); nothing)
 
 """
+    copy_step_relations(sys, f::CPMFunction) -> collection of Symbols or nothing
+
+The names of the problem's relations that the copy-step functions of `f` read (`delta_H`,
+`commit!`, `constraint`, `claims`, `reads`, `temperature`, `bias`, `track`, the connectivity
+hooks), for the model described by `sys` (`f.sys`). `nothing`, the default (a hand-built
+`CPMFunction`), means every relation. A symbolic layer that knows the reads of the functions
+it generated extends it (Potts, D-208), and must return `nothing` when `f` carries a
+function it did not generate (one swapped in by `remake(prob; f = …)`), since that one may
+read any relation. `CheckerboardCPM`'s preflight measures reach over these only.
+"""
+copy_step_relations(sys, f) = nothing
+
+"""
 Reject combinations the algorithm cannot execute correctly. The checkerboard stride comes
 from the model's declared footprint, so the declared read radius must cover everything
-the kernels read: the proposal source and the contact neighborhood.
+the copy step reads: the proposal source, the contact neighborhood and the relations the
+copy-step functions read (`copy_step_relations`; every relation by default). A
+relation read only at the MCS boundary (phases, lifecycle) does not count.
 """
 function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
     prob.f.lifecycle === nothing || haskey(prob.u0.cell, :m1) ||
@@ -381,14 +396,19 @@ function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
     end
     _check_connectivity(prob, alg, ctx)
     alg isa CheckerboardCPM || return nothing
-    need = max(radius(ctx.contact), maximum(radius, values(prob.relations); init = 0))
+    need = max(radius(ctx.contact), _copy_reach(prob.relations, copy_step_relations(prob.f.sys, prob.f)))
     have = first(reach(prob.f.footprint, ctx.proposal))
     have >= need || throw(ArgumentError(
         "CheckerboardCPM: the model declares Footprint(read = $have) but its proposal, " *
-        "contact and named relations reach distance $need; pass `footprint = Footprint(read = $need)` " *
+        "contact and copy-step relations reach distance $need; pass `footprint = Footprint(read = $need)` " *
         "to CPMFunction"))
     return nothing
 end
+
+# the largest radius of the relations the copy step reads (all of them for `nothing`)
+_copy_reach(relations, ::Nothing) = maximum(radius, values(relations); init = 0)
+_copy_reach(relations, names) =
+    maximum(k -> k in names ? radius(getfield(relations, k)) : 0, keys(relations); init = 0)
 
 """
 Host snapshot of the current state: independent of the live state on every backend
