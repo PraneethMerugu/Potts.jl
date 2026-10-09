@@ -3758,3 +3758,34 @@ session.
   - Insets.
   - Figs 6 and 11.
 - **Record.** `full-01b-*` is pending. Its FULL run is 1330 jobs, about 103 thread-hours (about 4.3 h at 24 threads), and it runs on the PC after the foam FULL. A runner implementer goes first.
+
+## D-203 Foam: a pre-registered scan of a separate bulk scale κ_b (2026-10-09; maintainer ruling "Calibrate scan first", relayed by the 04 spec owner; under D-154, D-156, D-190)
+
+- **What stays.**
+  - The F1 displacement form.
+  - The boundary κ = 2.497.
+  - Strain-rate control is ruled out, because the paper gives γ in units of force (04b p.5822).
+- **What changes.** The bulk Eq 7 term gets its own scale: γ = κ_b·β·y·G(t). κ_b is not stated in the paper (A-1) and is calibrated under D-156.
+- **Pre-registered scan.** The protocol is frozen before anything runs.
+  - (a) Ordered foam, β ∈ {1e-4, 1e-3, 5e-3, 0.01, 0.05}, a κ_b grid and a few seeds. Measured: first-T1 MCS, in paper MCS through τ.
+  - (b) Fit target, from §3.2: β = 0.01 gives ≈ 4300 MCS and β = 0.05 gives ≈ 420 MCS, which is ε_y ≈ c·β·t with c ≈ 0.020–0.026.
+  - (c) Consistency check: T1s occur at β ≤ 0.001, so Fig 9's N̄ > 0.
+  - (d) Decision rule:
+    - If one κ_b meets (b) within §3.2's ≈ 25 % calibration limit and satisfies (c), it becomes a D-entry. The test is then re-frozen and the 200 bulk jobs re-run.
+    - Otherwise stop. The Eq 2 form is in question, the record stays provisional, and the question goes to Dr Jiang as the F1 hard gate.
+- **V18.** It keeps its frozen window unless the paper defines that window by strain.
+- **Running and reporting.** The scan runs on free PC cores after the first record lands. The scan table goes to the spec owner first.
+
+## D-204 OpenVT submission package completed for the consortium repository and the manuscript (2026-10-09; maintainer: "yes, and make sure we finally have the submission package for the rveltz repo and manuscript", relayed by the spec owner; "rveltz" read as R. Vetter's consortium repository; under D-146, D-180, D-181)
+
+- **Data: P6.15j's pending items become required.**
+  - (a) A per-cell O1 recorder, writing `x,y,i,n` per save with spec 15 §3.1 names. Cases a, b, e and f are re-run on the PC from their recorded seeds. Each run's stop MCS and N must match `runs.tsv`, which shows the record was reproduced.
+  - (b) O2 for case (b), regenerated from the re-run if `F5_O2_DIR` is gone.
+  - (c) A3 shares over time (i = 0…3), derived from O1, for cases a and e, and for c and d where O1 exists.
+  - (d) The package README gains the MIT line (D-181).
+  - (e) The package test is re-frozen with every pending item required. The package is built outside git.
+- **Manuscript.** The spec owner drafts `docs/design/research/openvt-manuscript-section.md`, and the coordinator checks its facts against the records.
+- **Limits.**
+  - O1 data are compressed per case and kept out of git.
+  - Nothing is uploaded to the consortium repository until the maintainer says so. Write access (Q11) is Dr Jiang's to raise.
+  - The maintainer is asked before any upload over about 100 MB.

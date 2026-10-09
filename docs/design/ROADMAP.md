@@ -607,6 +607,7 @@ Full runs are offline (D-146).
   - a differences table, which is spec 15 §1.1 plus the deviations;
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
 - [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
+  - (D-204) Complete the submission package: O1 recorder + PC re-run of cases a, b, e, f (stop MCS and N must match runs.tsv); O2 for (b); A3 shares from O1; MIT line; pending items become required; re-freeze the package test; build outside git; no upload to G until the maintainer says so.
 
 ### Step 4 — Foam
 
@@ -634,6 +635,7 @@ Full runs are offline (D-146).
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
+- [ ] **P6.4r-kb** (D-203) Pre-registered κ_b scan on the ordered foam (test author freezes the protocol; PC free cores); decision rule (d); then re-freeze + re-run of 200 bulk jobs, or stop and go to the F1 gate.
 - [ ] **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
 ### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
