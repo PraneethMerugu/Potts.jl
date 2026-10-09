@@ -60,6 +60,10 @@ end                                     # an out-of-domain site reads -1 (neithe
 arcs(σ, x, a, periodic) = (own = ring_owners(σ, x, periodic); n = count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8);
     n == 0 && all(==(a), own) ? 1 : n)
 one_arc(σ, x, a, periodic) = arcs(σ, x, a, periodic) == 1
+# `Local()` (D-191, CC3D rules 1 and 2): one arc, not a full ring, and the gaining cell `n`
+# (the medium included) owns a face neighbour of the target
+cc3d_local(σ, x, a, n, periodic) = one_arc(σ, x, a, periodic) && !all(==(a), ring_owners(σ, x, periodic)) &&
+                                   any(k -> isodd(k) ? false : ring_owners(σ, x, periodic)[k] == n, 1:8)
 ring_rule(σ, x, a, periodic) = arcs(σ, x, a, periodic) <= 1 ||
                                (length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
                                 !any(==(0), ring_owners(σ, x, periodic)))
@@ -329,7 +333,7 @@ end
         isapprox(drive(ci, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(((u, prop, ctx),) -> prob.f.constraint(u, p, prop, ctx) ==
-                                   (prop.old == 0 || one_arc(u.σ, prop.x, prop.old, (false, false))), props)
+                                   (prop.old == 0 || cc3d_local(u.σ, prop.x, prop.old, prop.new, (false, false))), props)
     # the energy change is that of J adhesion, the area and the length constraint, with the
     # cell length recomputed from σ (Eq. 5)
     @test all(props) do (u, prop, ctx)
@@ -563,7 +567,7 @@ end
         isapprox(drive(prob, u, prop, ctx), want; atol = 1e-9)
     end
     @test all(props) do (u, prop, ctx)
-        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && one_arc(u.σ, prop.x, prop.old, (true, false)))
+        want = prop.old == 0 || (u.cell.volume[prop.old] > 1 && cc3d_local(u.σ, prop.x, prop.old, prop.new, (true, false)))
         prob.f.constraint(u, p, prop, ctx) == want
     end
     # after each MCS: running clocks tick, target volumes grow by `rate` below V_max; no
