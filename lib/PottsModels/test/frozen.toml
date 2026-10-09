@@ -379,13 +379,13 @@ decision = "D-153"
 
 [[file]]
 path = "reproductions/01_merks.jl"
-sha256 = "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
-decision = "D-153"
+sha256 = "cf9a6b8b301089ddd95bfb2d7a2578e47754f58e85017b213d3f83f4dfbb514f"
+decision = "D-200"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "b1e0f0179df5d752413b54c13663ed12ddea95b7ca244d1acfa46518e89b56c1"
-decision = "D-161"
+sha256 = "c11c5b924092a20208d220fde9fb9e656ab3a0616d44b7189b6c320fd323e39e"
+decision = "D-200"
 
 [[file]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
@@ -469,8 +469,8 @@ decision = "D-180"
 
 [[file]]
 path = "reproductions/01_merks_page.jl"
-sha256 = "4aa092f91aa1949f1e66995ce2d1b6bcad0d72744717f103af9ea52ab5a6b337"
-decision = "D-184"
+sha256 = "fe3be09685e71d121daa24a8193ac969d5c6d8c458169732af4c446a01c190a4"
+decision = "D-200"
 
 [[file]]
 path = "acceptance/p6_4b2_foam_analysis.jl"

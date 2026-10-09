@@ -3710,3 +3710,9 @@ session.
    - Q23 on our open question list: the released TST stops at max_cell_count = 1000, so which build produced its curves beyond 10³?
 
 - **Later, not now.** Durand & Guesnet 2016's connectivity-preserving CPM is probably expressible with `connectivity(…; rule = Global())`. It is an extended-library candidate after the paper.
+- **Result for item 1 (2026-10-09).** Measured from MCS 0 → 19 300, V-C12 = 2.017 (bootstrap 95 % 1.91–2.13). CI is 82.8 ± 6.8 µm against the paper's 85; no-CI is 41.1 ± 1.8 µm against 42. The MCS-100 control reproduces 1.2605.
+  - The frozen definition now starts at MCS 0. The band is unchanged.
+  - The record gains `vc12_mcs0.tsv`, computed from the stored snapshots with no new dynamics.
+  - The page test now requires the attempts-per-MCS deviation row (item 2).
+  - Reproduction 01 is now 37 of 37.
+  - Re-frozen: `reproductions/01_merks.jl` cf9a6b8b, `reproductions/01_merks_page.jl` fe3be096, and page `01_merks.jl` c11c5b92.
