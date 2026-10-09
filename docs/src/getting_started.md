@@ -117,7 +117,7 @@ with a higher temperature.
 
 !!! note "This model ships with Potts"
     `PottsModels` contains this model as `GranerGlazier`, with its documentation and a
-    [model page](@ref model-graner-glazier) that follows the paper. Writing it out here shows how a
+    [paper page](@ref model-graner-glazier) that follows the paper. Writing it out here shows how a
     model is built; `@named sorting = GranerGlazier()` gives the same model.
 
 ## Step 3: the initial state

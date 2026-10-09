@@ -14,7 +14,7 @@ algorithm = "SequentialCPM(; proposal = Moore(1))"
 cycles = 14.96774193548387
 beta = 0.0
 figure = "OpenVT M Fig 1, Potts.jl panel and banner (PottsModels.openvt_f1_figure, window = 64)"
-closeup = "fig1_panel.png: the bare panel (openvt_f1_figure(block; banner = false)) from window.tsv by plot_f1_bare.jl; P6.15j closeup.png (D-180 amendment)"
+closeup = "fig1_panel.png: the bare panel (openvt_f1_figure(block; banner = false, areas)) from window.tsv and window_cells.tsv by plot_f1.jl, in the D-185 style; P6.15j closeup.png (D-180 amendment)"
 matches_record = true
 stop_cells = 10000
 run = 1

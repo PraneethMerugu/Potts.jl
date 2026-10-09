@@ -7,8 +7,8 @@
 # manuscript (*Reference Model for the Simulation of a Growing Tissue Monolayer with Contact
 # Inhibition*, in preparation) fixes the parameters every framework uses in its Table S1.
 # PottsModels ships that model as `OpenVTReferenceMonolayer`, and this page is about it. The
-# full benchmark, figure by figure, is reproduction 15 (*OpenVT monolayer benchmark*, in the
-# Published models section).
+# full benchmark, figure by figure, is reproduction 15 (*OpenVT monolayer benchmark*), which
+# takes this page's place in the published docs.
 #
 # **What you will learn**
 #

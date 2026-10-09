@@ -22,7 +22,7 @@ This is the model with the parameters of the benchmark's Artistoo implementation
 the shipped constructor `OpenVTGrowingMonolayer`); only the lattice is smaller (benchmark:
 400×400; here: 80×80) and the run shorter. This tutorial uses that 2024 set as a lighter
 teaching example; the benchmark's reference model is `OpenVTReferenceMonolayer` (the
-manuscript's Table S1, [Models](@ref model-openvt)).
+manuscript's Table S1, [Paper models](@ref model-openvt)).
 
 ```@example growth
 @potts_model GrowingMonolayer begin
@@ -204,7 +204,7 @@ The benchmark's reference model, `OpenVTReferenceMonolayer` (Table S1), from one
 Main.paper_run("openvt_monolayer", "../../") # hide
 ```
 
-**See also:** [the OpenVT model page](@ref model-openvt) for `OpenVTReferenceMonolayer` and, as a
-variant, the step-by-step construction of `OpenVTGrowingMonolayer`.
+**See also:** [the OpenVT benchmark page](@ref model-openvt) for `OpenVTReferenceMonolayer`, the
+benchmark's reference model.
 
 Next, [Tutorial 4](@ref tutorial-layouts) builds initial states from layouts.

@@ -1,51 +1,21 @@
-# # Reproducing Graner & Glazier (1992): cell sorting by differential adhesion
+# # Graner & Glazier (1992): cell sorting by differential adhesion
 #
-# !!! note "Draft prose"
-#     (prose: draft) The text on this page is a placeholder written with the code; a
-#     separate pass will revise it. Every number about our runs is computed on this page
-#     when the docs are built. Values quoted from the papers carry a citation.
+# Mix two kinds of embryonic cells and they sort out: one kind gathers into a core and the
+# other wraps around it. Graner and Glazier showed with a cellular Potts model that
+# differential adhesion alone is enough. From a random mixture of dark and light cells, the
+# heterotypic boundary shrinks roughly logarithmically in time, and the light cells end up
+# enveloping the dark ones (PRL Fig. 2; PRE Figs. 12–13).
 #
-# !!! warning "Reduced run"
-#     The docs build runs a reduced ensemble (`POTTS_FULL_REPRODUCTION` unset), so the
-#     tables below are a smoke check, not validation. The full run
-#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length, and
-#     replaces the small aggregate of `graner_glazier_state` with a paper-size one of 1000
-#     cells per replicate (`graner_glazier_aggregate(1000; seed = replicate)`), so the
-#     differences that come from aggregate size (deviations table) can be tested there. The
-#     committed full-run record is `lib/PottsModels/reproductions/data/09/full-2026-10-05/`
-#     (P6.1f, D-144: verdicts, time series, provenance), with the late-coarsening pass in
-#     `data/09/p6-1g-2026-10-06/` (D-151). The full run's replicate-1 video is the release
-#     asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4).
-#     The temperature-regime record (V-PRE7) is `data/09/vpre7-2026-10-07/`; its video of
-#     replicate 1 at the eight temperatures is the release asset
-#     [`09_cell_sorting_vpre7-2026-10-07_temperatures.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-vpre7/09_cell_sorting_vpre7-2026-10-07_temperatures.mp4).
-#
-# ## 1. Paper and sources
-#
-# - F. Graner, J.A. Glazier, "Simulation of Biological Cell Sorting Using a Two-Dimensional
-#   Extended Potts Model", *Phys. Rev. Lett.* **69**, 2013 (1992).
+# - F. Graner, J.A. Glazier, *Phys. Rev. Lett.* **69**, 2013 (1992),
 #   doi:[10.1103/PhysRevLett.69.2013](https://doi.org/10.1103/PhysRevLett.69.2013).
-#   Read in the version of record (OCR text layer; equations read from the page images).
-# - J.A. Glazier, F. Graner, "Simulation of the differential adhesion driven rearrangement
-#   of biological cells", *Phys. Rev. E* **47**, 2128 (1993).
+# - J.A. Glazier, F. Graner, *Phys. Rev. E* **47**, 2128 (1993),
 #   doi:[10.1103/PhysRevE.47.2128](https://doi.org/10.1103/PhysRevE.47.2128).
-#   Read in the version of record. It gives the initial-condition recipe (§II D3), the measurement
-#   protocol (§II D1) and the full sorting run (§III B, Fig. 13).
-# - Erratum status: the spec records no erratum for either paper. We have not checked the
-#   APS erratum listings.
-# - Released code: none.
-# - Spec: `docs/design/research/model-specs/09_cell_sorting.md` (§2.1, §3.1, §8.4, §8.5,
-#   and the pre-registration audit §9). The Osborne et al. (2017) Potts benchmark in the
-#   same spec is retired: cell sorting is reproduced from Graner–Glazier only (D-156).
-# - Reproducibility grade: **B**. Energies, λ, T, the time unit and the initial-state
-#   recipe are stated. Lattice size, boundary conditions and the type fraction are not
-#   (spec §8.4).
 #
-# The papers show that differential adhesion alone sorts a random mixture of two cell
-# types. With the sorting hierarchy of PRL Eq. (3), heterotypic boundary shrinks roughly
-# logarithmically in time, and the light cells end up enveloping the dark ones. This page
-# reproduces that time course (PRL Fig. 2; PRE Fig. 13), the engulfment end state, and two
-# contrasting runs: partial sorting (PRE §III E) and symmetric contacts (no sorting).
+# This page builds the model, runs it, and compares runs at the papers' size (1000 cells, to
+# 2×10⁴ paper MCS) with the papers: the sorting time course (PRL Fig. 2; PRE Fig. 13), the
+# engulfment end state, the temperature regimes (PRE Fig. 15), and two contrasting runs:
+# partial sorting (PRE §III E) and symmetric contacts (no sorting). The protocol, every
+# verdict and the provenance are in the collapsed Details section at the end.
 
 using Potts, PottsModels
 using MakiePotts, CairoMakie
@@ -57,26 +27,78 @@ CairoMakie.activate!(type = "png")
 const FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true"
 const SEED = 1                          # base seed of every ensemble on this page
 
-# ## 2. The model, term by term
+# ## The model
 #
-# PRL Eq. (2), p.2014 (also PRE Eq. (2), p.2129):
+# PRL Eq. (2): a contact energy ``J`` for every pair of neighbouring sites in different
+# cells, and an area constraint on every cell (the medium is exempt):
 #
 # ```math
 # H = \sum_{\langle i, j\rangle} J(\tau(\sigma_i), \tau(\sigma_j))\,(1 - \delta_{\sigma_i\sigma_j})
 #   + \lambda \sum_\sigma (a_\sigma - A_{\tau(\sigma)})^2\,\theta(A_{\tau(\sigma)})
 # ```
 #
-# | Paper | `GranerGlazier` statement |
-# |---|---|
-# | contact term over the next-nearest-neighbour (8) set (PRL p.2014; PRE p.2129) | `contacts => J[kind, kind′]` on `Lattice(...; neighborhood = Moore(1))` |
-# | area term, medium exempt through ``\theta(A_M < 0)`` (PRE p.2130) | `cells(dark, light) => λ * (volume - V₀)^2` |
-# | copy from "one of the eight neighboring sites" (PRE p.2130) | `@relations proposal = Moore(1)` |
-# | Metropolis at temperature T, Eq. (3) (PRE p.2130) | `@sweep Metropolis(; temperature = T)` |
+# As a `@potts_model`, with the papers' values:
+
+@potts_model CellSorting begin
+    @structural_parameters begin
+        lattice = (72, 72)                            # sites; the papers do not state theirs
+    end
+    @kinds medium dark light                          # the first kind is the medium
+    @parameters begin
+        λ = 1.0                                       # area-constraint strength (PRL p.2014)
+        V₀ = 40.0                                     # target area A (PRE p.2130)
+        T = 10.0                                      # temperature (PRL p.2014)
+        J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]  # medium, dark, light (PRL p.2015)
+    end
+    @lattice Lattice(lattice; boundary = Periodic(), neighborhood = Moore(1))  # 8 contact neighbours
+    @relations proposal = Moore(1)                    # copy from one of the 8 neighbours (PRE p.2130)
+    @energy begin
+        cells(dark, light) => λ * (volume - V₀)^2     # area term; the medium is exempt
+        contacts => J[kind, kind′]                    # contact term over unlike neighbouring sites
+    end
+    @sweep Metropolis(; temperature = T)              # Metropolis acceptance at T (PRE Eq. (3))
+end
+nothing #hide
+
+# The contact energies obey the sorting hierarchy of PRL Eq. (3),
+# ``J_{dd} < (J_{dd} + J_{ll})/2 < J_{dl} < J_{ll} < J_{dM} = J_{lM}``, so the kinds
+# separate and the light cells engulf the dark ones. PottsModels ships this model as
+# `GranerGlazier`, which the rest of the page uses. The two give the same run from the same
+# start and seed:
+
+σ_demo, k_demo = graner_glazier_state()
+run_of(model) = ownership(solve(PottsProblem(model, [ownership => σ_demo, kind => k_demo], (0, 160); seed = 1),
+    SequentialCPM(); saveat = 160).u[end])
+run_of(CellSorting(; name = :cs)) == run_of(GranerGlazier(; name = :gg_shipped))
+
+# ## A minimal run
 #
-# The starts: the reduced build shares the 64-cell `graner_glazier_state` between its
-# replicates; the full build gives replicate i its own paper-size aggregate
-# `graner_glazier_aggregate(1000; seed = i, margin = MARGIN)`, so the kind assignments are independent (spec
-# §9.0). The published constructor carries the rest:
+# A start, a problem and a solve. `graner_glazier_state()` is the PRE §II D3 start: 64
+# cells on 72 × 72, the kinds mixed at random. One paper MCS is 16 of our MCS (PRL p.2014),
+# so this runs to 200 paper MCS. Cells are coloured by kind and the medium is dark grey.
+
+u0_demo = [ownership => σ_demo, kind => k_demo]
+demo = solve(PottsProblem(GranerGlazier(; name = :demo), u0_demo, (0, 16 * 200); seed = 1),
+    SequentialCPM(; proposal = Moore(1)); saveat = 16 .* [0, 10, 200])
+fig_demo = Figure(size = (720, 260))
+for (j, t) in enumerate((0, 10, 200))
+    ax_j = Axis(fig_demo[1, j]; title = "$t paper MCS", aspect = DataAspect())
+    hidedecorations!(ax_j)
+    pottsplot!(ax_j, renderframe(demo; index = j); encoding = CellTypeEncoding())
+end
+fig_demo
+
+# ## Results
+#
+# The figures and verdicts in this section come from the committed full-size records, run
+# offline at the papers' size: 10 replicates of 1000 cells to 2×10⁴ paper MCS
+# (`data/09/full-2026-10-05/`), and 10 replicates per temperature for PRE Fig. 15
+# (`data/09/vpre7-2026-10-07/`). The docs build also runs a reduced ensemble, shown under
+# Details.
+#
+# ```@raw html
+# <details><summary>Code: the fixture, the records and the papers' values used below</summary>
+# ```
 
 n = FULL ? 10 : 4                       # replicates (spec §9.0: 4 smoke, 10 full)
 σ_state, k_state = graner_glazier_state()
@@ -90,24 +112,6 @@ prob0 = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 1); seed = SEED)
 J = getp(prob0, :J)(prob0)
 par(name) = getp(prob0, name)(prob0)
 ncells, ndark, nlight = length(k0), count(==(1), k0), count(==(2), k0)
-Markdown.parse("""
-| Symbol | Value | Units | Meaning | Source | Status |
-|---|---|---|---|---|---|
-| J(d,d) | $(J[2, 2]) | energy | dark–dark contact | PRL p.2015 | stated |
-| J(d,l) | $(J[2, 3]) | energy | dark–light contact | PRL p.2015 | stated |
-| J(l,l) | $(J[3, 3]) | energy | light–light contact | PRL p.2015 | stated |
-| J(d,M) = J(l,M) | $(J[1, 2]) | energy | cell–medium contact | PRL p.2015 | stated |
-| λ | $(par(:λ)) | energy / site² | area-constraint strength | PRL p.2014 | stated |
-| A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | stated (PRE) |
-| T | $(par(:T)) | energy (k = 1) | temperature | PRL p.2014 | stated |
-| lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice (unstated) |
-| cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") | derived |
-""")
-
-# **Units.** Lengths are lattice sites. One of our MCS is N copy attempts, N the number
-# of lattice sites (medium included). The paper's MCS is 16N attempts (PRL p.2014), so
-# one paper MCS is 16 of ours. All times on this page are paper MCS. The full build runs
-# to 2×10⁴ paper MCS (spec §9.0).
 
 const PAPER_MCS = 16
 const T_FULL = 20_000
@@ -129,9 +133,7 @@ sd_voronoi = mean(std(cell_areas(s...)) for s in voronoi_starts)
 sd_relaxed = std(cell_areas(σ_state, k_state))
 nothing #hide
 
-# ## 3. Deviations
-
-## the same start embedded in a lattice twice as wide (the periodic-boundary variant run of §5)
+## the same start embedded in a lattice twice as wide (the periodic-boundary variant run under Details)
 function padded(σ)
     P = zeros(eltype(σ), 2 .* size(σ))
     o = size(σ) .÷ 2
@@ -141,14 +143,6 @@ end
 dims_pad = join(2 .* size(σ0), " × ")
 nothing #hide
 
-# One row per failed, parked or provisional target and per difference from the papers
-# (D-154). The columns are our value, the paper's value, the suspected cause and the status
-# of the question to the authors: "not an author question", "not asked" (the question is on
-# our open question list, model-specs README §5 and §6 below), "asked on ⟨date⟩" or
-# "answered → ⟨D-entry⟩". There is no released code for either paper. Our values for the
-# late-coarsening row are read from the committed full-run records (D-146): P6.1f
-# (`data/09/full-2026-10-05/`) and the P6.1g coarsening pass (`data/09/p6-1g-2026-10-06/`).
-
 rec_dir = joinpath(pkgdir(PottsModels), "reproductions", "data", "09")
 rec_rows(file) = (l = split.(readlines(file), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]])
 rec_10k = [parse(Float64, r["largest_dark_cluster"])
@@ -157,8 +151,8 @@ rec_pooled = last(split(read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt")
 rec_share = match(r"largest@10⁴: mean ([0-9.]+) ± ([0-9.]+)", rec_pooled)
 rec_fdl = match(r"F_dl@10⁴: mean ([0-9.]+) ± ([0-9.]+); min ([0-9.]+); ≤ 0.050: (\d+)", rec_pooled)
 rec_k = match(r"pooled: k = (\d+)", read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt"), String))[1]
-const AQ = "not asked (on our open question list: README §5, Glazier item 5; §6 below)"
-## the V-PRE7 full-size record (D-146; §5 "Temperature regimes")
+const AQ = "not asked (on our open question list: README §5, Glazier item 5; Open questions under Details)"
+## the V-PRE7 full-size record (D-146; Details, "Temperature regimes")
 vpre7_dir = joinpath(rec_dir, "vpre7-2026-10-07")
 vpre7 = rec_rows(joinpath(vpre7_dir, "timeseries.tsv"))
 vnum(r, key) = parse(Float64, r[key])
@@ -190,17 +184,17 @@ v7_mono40 = vpre7_t[findfirst(t -> vm(dM_of, 40.0, t) < 0.003, vpre7_t)]
 vdiag = rec_rows(joinpath(vpre7_dir, "diagnostic_timeseries.tsv"))
 vd(f, T, t) = mean(f(r) for r in vdiag if vnum(r, "T") == T && vnum(r, "paper_mcs") == t)
 r3(x) = round(x; digits = 3)
-Markdown.parse("""
+deviations_md = """
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
 | V-PRE5 one dark cluster @ 10⁴ (**FAIL**; target: ensemble-mean largest share ≥ 0.90; open deviation "late-stage coarsening") | largest dark-cluster share $(round(mean(rec_10k); digits = 3)) ± $(round(std(rec_10k) / sqrt(length(rec_10k)); digits = 3)) (SE, n = $(length(rec_10k)), P6.1f); $(rec_share[1]) ± $(rec_share[2]) (SE) pooled over $rec_k runs (P6.1g); heterotypic at 10⁴ $(rec_fdl[1]) ± $(rec_fdl[2]), minimum $(rec_fdl[3]), ≤ 0.050 in $(rec_fdl[4]) of $rec_k | one dark cluster from ≈ 5000 (PRE Fig. 12(g), p.2140, one run); heterotypic 0.050 (PRE), 0.040 (PRL) at 10⁴ | slower late coarsening, cause not found. Temperature is a sensitivity, not an identified cause (T ≥ 14 merges every run by 2×10⁴ but leaves heterotypic at 10⁴ unchanged; the paper states T = 10). Excluded: the periodic image, the start relaxation, the reading time, the type fraction, the cell-size difference, the aggregate size and the seed set (spec §9.5; D-151) | $AQ |
-| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500; ROADMAP P6.1h) | $(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The other three V-PRE7 rows pass, but T = 40 does not match the paper's picture: our heterotypic fraction keeps falling ($(r3(vm(dl_of, 40.0, 1000))) at 10³, $(r3(vm(dl_of, 40.0, 10_000))) at 10⁴; T = 10 also clears that row's 0.07 bar, minimum $(r3(v7_f10))), and our light monolayer is late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer forms by ≈ 50 and heterotypic plateaus near 0.1 | our cells disappear too slowly. The contact temperature scale matches at T = 2 and T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells still survive (309 of 500 at 500). The pattern is consistent with an unstated convention for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record (`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked (proposed for our open question list; §6 below) |
+| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500; ROADMAP P6.1h) | $(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The other three V-PRE7 rows pass, but T = 40 does not match the paper's picture: our heterotypic fraction keeps falling ($(r3(vm(dl_of, 40.0, 1000))) at 10³, $(r3(vm(dl_of, 40.0, 10_000))) at 10⁴; T = 10 also clears that row's 0.07 bar, minimum $(r3(v7_f10))), and our light monolayer is late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer forms by ≈ 50 and heterotypic plateaus near 0.1 | our cells disappear too slowly. The contact temperature scale matches at T = 2 and T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells still survive (309 of 500 at 500). The pattern is consistent with an unstated convention for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record (`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked (proposed for our open question list; Open questions under Details) |
 | V-PRE6, V-PRE16 ⟨n⟩ part, V-PRE17 (**PARKED**) | not run | bulk ⟨n⟩ and μ₂ against T (PRE Table II); the generator's ⟨n⟩ plateau (PRE Figs. 4–5); bulk ⟨n⟩ after 2 annealing MCS (PRE Fig. 2) | the rule that makes two cells neighbours when counting n (Tables I–III) is not stated (spec §8.4, §9.1) | $AQ |
-| V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. 25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in the table of §5 | not an author question |
+| V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. 25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in the pre-registered table under Details | not an author question |
 | Time unit | 1 MCS = N attempts; paper t = our $(PAPER_MCS)t | 1 MCS = 16N attempts (PRL p.2014) | a convention only (INTERNALS F8). Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) | not an author question |
 | Aggregate size | $(n_state) cells on $(dims_state) (`graner_glazier_state`) in the reduced build; $(FULL ? "this run uses" : "the full run uses") `graner_glazier_aggregate(1000)`, one per replicate | ≈ 1000 cells (PRE p.2129) | cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation | not an author question |
 | Log-law window | also reported over 4–512 (an extra row, not a replacement) | 5–4000 paper MCS (spec §9.1 V-PRE1) | the window of `test/papers.jl`, which ends before our small aggregate levels off | not an author question |
-| Boundary conditions and lattice size | periodic, $(join(size(σ0), " × "))$(FULL ? ", medium margin $MARGIN sites" : ""); variant: the `lattice` keyword | unstated | unstated in the papers. The aggregate stays clear of its image: no replicate has a save without an all-medium row and column (isolation guard, §5), and the same starts embedded in a $(dims_pad) lattice give the same bond counts to 10³ (variant run in §5). The first full run (P6.1d) used a margin of 10, chosen by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now $MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) | $AQ |
+| Boundary conditions and lattice size | periodic, $(join(size(σ0), " × "))$(FULL ? ", medium margin $MARGIN sites" : ""); variant: the `lattice` keyword | unstated | unstated in the papers. The aggregate stays clear of its image: no replicate has a save without an all-medium row and column (isolation guard, under Details), and the same starts embedded in a $(dims_pad) lattice give the same bond counts to 10³ (variant run under Details). The first full run (P6.1d) used a margin of 10, chosen by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now $MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) | $AQ |
 | Type fraction | $(FULL ? "equal numbers, randomly placed (`graner_glazier_aggregate`, one draw per replicate)" : "probability ½ per cell (recorded in `data/graner/provenance.toml`)") ($ndark dark / $nlight light) | unstated (spec §8.4) | an assumption; PRE's t = 1 fractions match a dark share of 0.50 (D-151) | $AQ |
 | Initial state | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the PRE recipe with $ncells cells (D-049 F-2; `data/graner/generate.jl`); variant `graner_glazier_aggregate(n)`") | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | $(FULL ? "paper size. " : "")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree at 1, 10 and 100 paper MCS (D-063; P6.1b2 review), and so does the V-PRE4 boundary drop (spec §9.1 V-PRE4) | not an author question |
 | T = 0 annealing | on a copy, $(2PAPER_MCS) of our MCS, the run's J | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | none: matches the paper (spec §8.4 A-GG4, resolved) | not an author question |
@@ -209,9 +203,233 @@ Markdown.parse("""
 | Two published runs (paper-internal) | the sorting targets use the envelope of both runs, widened by 0.03 (spec §9.1) | PRL Fig. 2 and PRE Fig. 13 use the same parameters but differ: dark–dark at 10 MCS, dd crossing time, light–medium plateau (spec §9.2) | a single paper curve ± 0.05 would fail a model that reproduces the other run (spec §8.5 "Supersession") | $AQ |
 | Monolayer time (paper-internal) | read as the two runs; the target is dark–medium < 0.003 by 10³ (V-PRE3 (a)), which both runs meet | light monolayer "after 300 MCS" (PRL p.2015) against "After 600 MCS" (PRE p.2140) | the two published runs differ (spec §8.4, §9.1 V-PRE3 (a)) | $AQ |
 | Annealing temperature in PRE Fig. 23 (paper-internal) | T = 0 for the partial-sorting copy too | caption: "two MCS of T = 10 annealing"; the protocol is T = 0 (PRE p.2134) | read as a typo (spec §8.2; §9.1 V-PRE13) | not an author question |
+"""
+nothing #hide
+
+paper_t = [1, 10, 100, 1000, 10_000]
+## PRE Fig. 13(c) and PRL Fig. 2(a), 400-dpi reads (spec §8.5 V-PRE1); NaN: off-scale (> 0.5)
+paper_pre = Dict(:dl => [0.43, 0.36, 0.245, 0.136, 0.05], :dd => [0.28, 0.30, 0.39, 0.44, 0.485],
+    :ll => [0.23, 0.255, 0.31, 0.36, 0.40])
+paper_prl = Dict(:dl => [0.40, 0.333, 0.206, 0.122, 0.04], :dd => [0.33, 0.375, 0.416, 0.489, NaN],
+    :ll => [0.22, 0.238, 0.289, 0.328, 0.362])
+const READ_ERR = 0.005             # 400-dpi read-off (spec §9.0)
+const ENVELOPE_MARGIN = 0.03       # spec §9.1 V-PRE1
+const DD_OFFSCALE_HI = 0.55        # spec §9.1: dd at 10⁴ widened to 0.55, the PRL value being off-scale
+function envelope(key, j)
+    a, b = paper_pre[key][j], paper_prl[key][j]
+    isnan(b) && return (a - ENVELOPE_MARGIN, DD_OFFSCALE_HI)
+    return (min(a, b) - ENVELOPE_MARGIN, max(a, b) + ENVELOPE_MARGIN)
+end
+colors = Makie.wong_colors()
+names5 = ("heterotypic", "dark–dark", "light–light", "dark–medium", "light–medium")
+
+## the full-size record's time course (mean ± SD over its replicates) against the papers
+full_dir = joinpath(rec_dir, "full-2026-10-05")
+rec_series = rec_rows(joinpath(full_dir, "timeseries.tsv"))
+rec_t = sort(unique(parse.(Int, getindex.(rec_series, "paper_mcs"))))
+rec_at(key, t) = [parse(Float64, r["F_" * string(key)]) for r in rec_series if r["paper_mcs"] == string(t)]
+rec_n = length(rec_at(:dl, 1))
+fig_record = Figure(size = (820, 440))
+ax_rec = Axis(fig_record[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "fraction of boundary",
+    title = "1000 cells, n = $rec_n (full-size record)")
+for (c, key) in zip(1:5, (:dl, :dd, :ll, :dM, :lM))
+    μ, sd = [mean(rec_at(key, t)) for t in rec_t], [std(rec_at(key, t)) for t in rec_t]
+    band!(ax_rec, rec_t, μ .- sd, μ .+ sd; color = (colors[c], 0.25))
+    lines!(ax_rec, rec_t, μ; color = colors[c])
+    haskey(paper_pre, key) || continue
+    js = 2:length(paper_t)
+    rangebars!(ax_rec, paper_t[js] .* 1.08, first.(envelope.(key, js)), last.(envelope.(key, js));
+        color = (:gray, 0.6), whiskerwidth = 6)
+    for (vals, marker) in ((paper_pre[key], :diamond), (paper_prl[key], :utriangle))
+        ok = .!isnan.(vals)
+        errorbars!(ax_rec, paper_t[ok], vals[ok], fill(READ_ERR, count(ok)); color = colors[c])
+        scatter!(ax_rec, paper_t[ok], vals[ok]; color = colors[c], marker)
+    end
+end
+Legend(fig_record[1, 2],
+    [[LineElement(; color = colors[c]) for c in 1:5]; MarkerElement(; marker = :diamond, color = :black);
+     MarkerElement(; marker = :utriangle, color = :black); LineElement(; color = :gray)],
+    [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false)
+
+fig7 = Figure(size = (900, 400))
+ax7 = Axis(fig7[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic fraction")
+ax7g = Axis(fig7[1, 2]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "share of cells gone")
+tcolors = Makie.resample_cmap(:viridis, length(vpre7_T))
+for (c, T) in enumerate(vpre7_T)
+    y, e = [vm(dl_of, T, t) for t in vpre7_t], [vse(dl_of, T, t) for t in vpre7_t]
+    band!(ax7, vpre7_t, y .- e, y .+ e; color = (tcolors[c], 0.25))
+    lines!(ax7, vpre7_t, y; color = tcolors[c], label = "T = $(Int(T))")
+    lines!(ax7g, vpre7_t, [vm(vgone, T, t) for t in vpre7_t]; color = tcolors[c])
+end
+lines!(ax7, [1000, 10_000], [0.07, 0.07]; color = :black, linestyle = :dot)
+scatter!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; color = :black, marker = :diamond)
+text!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; text = ["T = 2", "T = 10–20", "T = 40"],
+    align = (:right, :bottom), offset = (-6, 4), fontsize = 11)
+scatter!(ax7g, [500], [0.5]; color = :black, marker = :xcross, markersize = 12)
+axislegend(ax7; position = :lb, framevisible = false, nbanks = 2)
+
+## the verdicts of the full-size records, as written by the runs (D-146)
+pipe(s) = replace(s, r"(?<!\\)\|" => "\\|", r"(?<!\\)_" => "\\_")   # escape table pipes and underscores
+rec_verdicts = [[(; target = r["target"], paper = r["paper"], ours = r["ours"], tol = r["tolerance"],
+                     class = r["class"], result = r["result"]) for r in rec_rows(joinpath(full_dir, "verdicts.tsv"))];
+                [(; target = "V-PRE7 " * r["criterion"], paper = "PRE Fig. 15", ours = r["ours"], tol = r["rule"],
+                     class = "FULL (record)", result = r["result"]) for r in rec_rows(joinpath(vpre7_dir, "verdicts.tsv"))]]
+rec_bind = filter(r -> r.result in ("PASS", "FAIL"), rec_verdicts)
+rec_fail = filter(r -> r.result == "FAIL", rec_bind)
+headline = ("V-PRE1 heterotypic @ 10000", "V-PRE1 log law, 5–4000", "V-PRE2 dark–dark crosses heterotypic",
+    "V-PRE2 light–light crosses heterotypic, after dark–dark", "V-PRE3 (a) dark–medium < 0.003",
+    "V-PRE3 (c) plateau level, size-free R", "V-PRE4 total length drop D",
+    "V-PRE13 (a) partial sorting: dark–medium @ 10³", "V-GG6 light cells smaller than dark @ 10³",
+    "NC1 symmetric contacts @ 10³", "V-PRE7 order at 10³")
+summary_md = """
+**$(count(r -> r.result == "PASS", rec_bind)) of $(length(rec_bind)) binding rows pass; $(length(rec_fail)) fail:**
+$(join([r.target for r in rec_fail], "; ")). $(length(rec_verdicts) - length(rec_bind)) more rows are reported
+without a verdict. Headline rows and every failure (all rows are under Details):
+
+| Target | Paper | Ours (full-size record) | Rule | Result |
+|---|---|---|---|---|
+""" * join(["| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | **$(r.result)** |"
+            for r in rec_verdicts if r.target in headline || r.result == "FAIL"], "\n")
+nothing #hide
+
+# ```@raw html
+# </details>
+# ```
+#
+# ### Sorting against the papers
+#
+# Boundary fractions of the full-size record (mean ± SD over its replicates), against PRE
+# Fig. 13(c) (diamonds) and PRL Fig. 2(a) (triangles), read from 400-dpi renders (± 0.005,
+# drawn as bars). Grey bars are the V-PRE1 pass bands: the envelope of the two published
+# runs widened by 0.03.
+
+fig_record #hide
+
+# Heterotypic fraction against time at each temperature (left; the dotted line is the T = 40
+# bar of 0.07 over [10³, 10⁴]), and the share of cells gone (right; the cross marks the
+# T = 80 bar, half the cells by 500). The paper's points are the values of PRE p.2144 and
+# Fig. 15(a, b), read at 110 dpi (spec §9.1): T = 2 ≈ 0.3 at 3×10³, T = 10–20 ≈ 0.05 at 10⁴,
+# T = 40 ≈ 0.1 on its plateau. The paper's T = 80 curve reaches 0 by ≈ 100.
+
+fig7 #hide
+
+# ### The full run as a video
+#
+# Replicate 1 of the full-size record: 1000 cells, 100 log-spaced frames to 2×10⁴ paper MCS,
+# one colour per kind, no cell outlines. Compare PRL Fig. 1 and PRE Fig. 12: small same-kind
+# clusters, merging clusters by 100, light cells at the surface, and coarsening dark domains.
+#
+# ```@raw html
+# <video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4" controls autoplay loop muted playsinline width="480"></video>
+# ```
+#
+# Release assets: [the full run's replicate 1](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4)
+# and [the eight temperatures of PRE Fig. 15](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-vpre7/09_cell_sorting_vpre7-2026-10-07_temperatures.mp4).
+#
+# ### Verdicts
+
+Markdown.parse(summary_md) #hide
+
+# ### Deviations
+#
+# One row per failed, parked or provisional target and per difference from the papers
+# (D-154). The columns are our value, the paper's value, the suspected cause and the status
+# of the question to the authors: "not an author question", "not asked" (the question is on
+# our open question list, model-specs README §5, and Open questions under Details), "asked on ⟨date⟩" or
+# "answered → ⟨D-entry⟩". There is no released code for either paper. Our values for the
+# late-coarsening row are read from the committed full-run records (D-146): P6.1f
+# (`data/09/full-2026-10-05/`) and the P6.1g coarsening pass (`data/09/p6-1g-2026-10-06/`).
+
+Markdown.parse(deviations_md) #hide
+
+# ## Details
+#
+# ```@raw html
+# <details><summary>Protocol, full verdict lists and provenance</summary>
+# ```
+#
+# ### Sources
+#
+# - F. Graner, J.A. Glazier, "Simulation of Biological Cell Sorting Using a Two-Dimensional
+#   Extended Potts Model", *Phys. Rev. Lett.* **69**, 2013 (1992).
+#   doi:[10.1103/PhysRevLett.69.2013](https://doi.org/10.1103/PhysRevLett.69.2013).
+#   Read in the version of record (OCR text layer; equations read from the page images).
+# - J.A. Glazier, F. Graner, "Simulation of the differential adhesion driven rearrangement
+#   of biological cells", *Phys. Rev. E* **47**, 2128 (1993).
+#   doi:[10.1103/PhysRevE.47.2128](https://doi.org/10.1103/PhysRevE.47.2128).
+#   Read in the version of record. It gives the initial-condition recipe (§II D3), the measurement
+#   protocol (§II D1) and the full sorting run (§III B, Fig. 13).
+# - Erratum status: the spec records no erratum for either paper. We have not checked the
+#   APS erratum listings.
+# - Released code: none.
+# - Spec: `docs/design/research/model-specs/09_cell_sorting.md` (§2.1, §3.1, §8.4, §8.5,
+#   and the pre-registration audit §9). The Osborne et al. (2017) Potts benchmark in the
+#   same spec is retired: cell sorting is reproduced from Graner–Glazier only (D-156).
+# - Reproducibility grade: **B**. Energies, λ, T, the time unit and the initial-state
+#   recipe are stated. Lattice size, boundary conditions and the type fraction are not
+#   (spec §8.4).
+#
+# ### Builds
+#
+# Every number about our runs is computed on this page when the docs are built, or read
+# from a committed record. Values quoted from the papers carry a citation.
+#
+# !!! warning "Reduced run"
+#     The docs build runs a reduced ensemble (`POTTS_FULL_REPRODUCTION` unset), so the
+#     tables below are a smoke check, not validation. The full run
+#     (`POTTS_FULL_REPRODUCTION=true`) raises the replicate count and the run length, and
+#     replaces the small aggregate of `graner_glazier_state` with a paper-size one of 1000
+#     cells per replicate (`graner_glazier_aggregate(1000; seed = replicate)`), so the
+#     differences that come from aggregate size (deviations table) can be tested there. The
+#     committed full-run record is `lib/PottsModels/reproductions/data/09/full-2026-10-05/`
+#     (P6.1f, D-144: verdicts, time series, provenance), with the late-coarsening pass in
+#     `data/09/p6-1g-2026-10-06/` (D-151). The full run's replicate-1 video is the release
+#     asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4).
+#     The temperature-regime record (V-PRE7) is `data/09/vpre7-2026-10-07/`; its video of
+#     replicate 1 at the eight temperatures is the release asset
+#     [`09_cell_sorting_vpre7-2026-10-07_temperatures.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-vpre7/09_cell_sorting_vpre7-2026-10-07_temperatures.mp4).
+#
+# ### The model, term by term
+#
+# PRL Eq. (2), p.2014 (also PRE Eq. (2), p.2129):
+#
+# ```math
+# H = \sum_{\langle i, j\rangle} J(\tau(\sigma_i), \tau(\sigma_j))\,(1 - \delta_{\sigma_i\sigma_j})
+#   + \lambda \sum_\sigma (a_\sigma - A_{\tau(\sigma)})^2\,\theta(A_{\tau(\sigma)})
+# ```
+#
+# | Paper | `GranerGlazier` statement |
+# |---|---|
+# | contact term over the next-nearest-neighbour (8) set (PRL p.2014; PRE p.2129) | `contacts => J[kind, kind′]` on `Lattice(...; neighborhood = Moore(1))` |
+# | area term, medium exempt through ``\theta(A_M < 0)`` (PRE p.2130) | `cells(dark, light) => λ * (volume - V₀)^2` |
+# | copy from "one of the eight neighboring sites" (PRE p.2130) | `@relations proposal = Moore(1)` |
+# | Metropolis at temperature T, Eq. (3) (PRE p.2130) | `@sweep Metropolis(; temperature = T)` |
+#
+# The starts: the reduced build shares the 64-cell `graner_glazier_state` between its
+# replicates; the full build gives replicate i its own paper-size aggregate
+# `graner_glazier_aggregate(1000; seed = i, margin = MARGIN)`, so the kind assignments are independent (spec
+# §9.0). The fixture code is under Results.
+
+Markdown.parse("""
+| Symbol | Value | Units | Meaning | Source | Status |
+|---|---|---|---|---|---|
+| J(d,d) | $(J[2, 2]) | energy | dark–dark contact | PRL p.2015 | stated |
+| J(d,l) | $(J[2, 3]) | energy | dark–light contact | PRL p.2015 | stated |
+| J(l,l) | $(J[3, 3]) | energy | light–light contact | PRL p.2015 | stated |
+| J(d,M) = J(l,M) | $(J[1, 2]) | energy | cell–medium contact | PRL p.2015 | stated |
+| λ | $(par(:λ)) | energy / site² | area-constraint strength | PRL p.2014 | stated |
+| A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | stated (PRE) |
+| T | $(par(:T)) | energy (k = 1) | temperature | PRL p.2014 | stated |
+| lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice (unstated) |
+| cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") | derived |
 """)
 
-# ## 4. Build and run
+# **Units.** Lengths are lattice sites. One of our MCS is N copy attempts, N the number
+# of lattice sites (medium included). The paper's MCS is 16N attempts (PRL p.2014), so
+# one paper MCS is 16 of ours. All times on this page are paper MCS. The full build runs
+# to 2×10⁴ paper MCS (spec §9.0).
+
+# ### Build and run
 #
 # One replicate to 10³ paper MCS, sequential CPU solver, timed after a warm-up solve. Every
 # timing on this page names the machine and backend that produced it.
@@ -247,7 +465,7 @@ Markdown.parse("Paper size ($(length(big_start[2])) cells on $(join(size(big_sta
 prob_partial = remake(prob; p = [:J => [0 16 16; 16 2 14; 16 14 11], :T => 5.0])
 nothing #hide
 
-# ### Measurement (PRE §II D1)
+# #### Measurement (PRE §II D1)
 #
 # Fractional boundary length is the number of mismatched Moore bonds between two kinds,
 # divided by all mismatched bonds (medium included). It is measured on a copy annealed for
@@ -327,9 +545,9 @@ function dark_clusters(σ, k)
 end
 nothing #hide
 
-# ## 5. Validation
+# ### Validation
 #
-# ### Pre-registered targets
+# #### Pre-registered targets
 #
 # The targets are copied from spec §9.1, which folds V-GG1–V-GG4 into V-PRE1–V-PRE3 as a
 # second paper run. Verdict classes (spec §9.0): **SMOKE+FULL** rows are size-free and
@@ -386,9 +604,9 @@ Markdown.parse("This table was last changed in commit " *
                (page_frozen ? "It is frozen (`lib/PottsModels/test/frozen.toml`)." :
                 "It is not frozen yet: the pre-registration commit is pending and must precede the first full run."))
 
-# ### Ensemble
+# #### Ensemble
 
-## replicate i starts from `starts[i]` (§2); the reduced run's starts are all the same state
+## replicate i starts from `starts[i]` (fixture code under Results); the reduced run's starts are all the same state
 kinds_of(i) = starts[i][2]
 from_start(q, ctx) = FULL ? remake(q; u0 = [ownership => starts[ctx.sim_id][1], kind => starts[ctx.sim_id][2]]) : q
 ts = [1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320,
@@ -439,22 +657,7 @@ times; the plot shows all $(length(ts))):
 # (spec §9.1). No digitised data file exists yet (`reproductions/data/09/paper/` is
 # pending).
 
-paper_t = [1, 10, 100, 1000, 10_000]
-## PRE Fig. 13(c) and PRL Fig. 2(a), 400-dpi reads (spec §8.5 V-PRE1); NaN: off-scale (> 0.5)
-paper_pre = Dict(:dl => [0.43, 0.36, 0.245, 0.136, 0.05], :dd => [0.28, 0.30, 0.39, 0.44, 0.485],
-    :ll => [0.23, 0.255, 0.31, 0.36, 0.40])
-paper_prl = Dict(:dl => [0.40, 0.333, 0.206, 0.122, 0.04], :dd => [0.33, 0.375, 0.416, 0.489, NaN],
-    :ll => [0.22, 0.238, 0.289, 0.328, 0.362])
-const READ_ERR = 0.005             # 400-dpi read-off (spec §9.0)
-const ENVELOPE_MARGIN = 0.03       # spec §9.1 V-PRE1
-const DD_OFFSCALE_HI = 0.55        # spec §9.1: dd at 10⁴ widened to 0.55, the PRL value being off-scale
-function envelope(key, j)
-    a, b = paper_pre[key][j], paper_prl[key][j]
-    isnan(b) && return (a - ENVELOPE_MARGIN, DD_OFFSCALE_HI)
-    return (min(a, b) - ENVELOPE_MARGIN, max(a, b) + ENVELOPE_MARGIN)
-end
-colors = Makie.wong_colors()
-names5 = ("heterotypic", "dark–dark", "light–light", "dark–medium", "light–medium")
+
 fig = Figure(size = (820, 440))
 ax = Axis(fig[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "fraction of boundary")
 for (c, key) in zip(1:5, keys5)
@@ -498,7 +701,7 @@ record_potts("09_cell_sorting_replicate1.mp4", video; framerate = 12, title = ""
 # asset [`09_cell_sorting_full-2026-10-05_replicate1.mp4`](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07/09_cell_sorting_full-2026-10-05_replicate1.mp4).
 # The video draws no cell outlines (D-156).
 
-# ### Contrasting regimes and negative control
+# #### Contrasting regimes and negative control
 #
 # Engulfment (default J) against partial sorting (PRE §III E: J(d,l) = 14, J(l,l) = 11,
 # T = 5) and against symmetric contacts (NC1), where sorting has no driving force. The
@@ -529,9 +732,9 @@ At $t_end paper MCS, n = $n each:
 |---|---|---|---|---|
 """ * join(["| $r | $o | $(e) | $(fmt(dm)) | $(fmt(h)) |" for (r, o, (e, dm, h)) in rows], "\n"))
 
-# ### Variant run: periodic boundaries
+# #### Variant run: periodic boundaries
 #
-# The boundary-conditions row of §3 claims that the aggregate does not feel its periodic
+# The boundary-conditions row of the deviations table claims that the aggregate does not feel its periodic
 # image. The same starts, embedded in the middle of a lattice twice as wide, are run to 10³
 # paper MCS and their annealed bond counts compared with the main ensemble (spec §8.5 made
 # this check for the 64-cell start). The test is a two-sample t test on each of the 9
@@ -595,7 +798,7 @@ Bond counts (mean ± SD, n = $n each), $(join(size(σ0), " × ")) against $dims_
 Periodic boundaries harmless for sorting at this size (class FULL): **$(result(all(pad_oks), "FULL"))**.
 """)
 
-# ### Temperature regimes (V-PRE7, PRE Fig. 15)
+# #### Temperature regimes (V-PRE7, PRE Fig. 15)
 #
 # PRE Fig. 15 (p.2143) repeats the sorting run at T = 0, 2, 5, 10, 15, 20, 40 and 80, all
 # else unchanged. The text (p.2144) reads it as regimes: T = 0 freezes; T = 2 sorts very
@@ -603,7 +806,7 @@ Periodic boundaries harmless for sorting at this size (class FULL): **$(result(a
 # 15 and 20 reach heterotypic ≈ 0.05 by 10⁴; T = 40 forms the light monolayer by ≈ 50 but
 # its heterotypic fraction plateaus near 0.1; at T = 80 the cells disappear and the
 # heterotypic fraction falls to 0 by ≈ 100. The row is an independent check of our
-# temperature scale, which the late-coarsening pass (P6.1g) found to matter (§3).
+# temperature scale, which the late-coarsening pass (P6.1g) found to matter (deviations table).
 #
 # The verdicts come from the committed full-size record (D-146),
 # `data/09/vpre7-2026-10-07/`. It holds 10 replicates per temperature, run offline on a
@@ -625,32 +828,10 @@ share of cells gone (mean):
             " | $(fmt(vm(vgone, T, 500))) | $(fmt(vm(vgone, T, 10_000))) |" for T in vpre7_T], "\n") * """
 
 
-The isolation guard (§5) $(v7_guard ? "held at every save of every run" : "failed in at least one run; see `timeseries.tsv`").
+The isolation guard (pass/fail table) $(v7_guard ? "held at every save of every run" : "failed in at least one run; see `timeseries.tsv`").
 """)
 
-# Heterotypic fraction against time at each temperature (left; the dotted line is the T = 40
-# bar of 0.07 over [10³, 10⁴]), and the share of cells gone (right; the cross marks the
-# T = 80 bar, half the cells by 500). The paper's points are the values of PRE p.2144 and
-# Fig. 15(a, b), read at 110 dpi (spec §9.1): T = 2 ≈ 0.3 at 3×10³, T = 10–20 ≈ 0.05 at 10⁴,
-# T = 40 ≈ 0.1 on its plateau. The paper's T = 80 curve reaches 0 by ≈ 100.
-
-fig7 = Figure(size = (900, 400))
-ax7 = Axis(fig7[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic fraction")
-ax7g = Axis(fig7[1, 2]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "share of cells gone")
-tcolors = Makie.resample_cmap(:viridis, length(vpre7_T))
-for (c, T) in enumerate(vpre7_T)
-    y, e = [vm(dl_of, T, t) for t in vpre7_t], [vse(dl_of, T, t) for t in vpre7_t]
-    band!(ax7, vpre7_t, y .- e, y .+ e; color = (tcolors[c], 0.25))
-    lines!(ax7, vpre7_t, y; color = tcolors[c], label = "T = $(Int(T))")
-    lines!(ax7g, vpre7_t, [vm(vgone, T, t) for t in vpre7_t]; color = tcolors[c])
-end
-lines!(ax7, [1000, 10_000], [0.07, 0.07]; color = :black, linestyle = :dot)
-scatter!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; color = :black, marker = :diamond)
-text!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; text = ["T = 2", "T = 10–20", "T = 40"],
-    align = (:right, :bottom), offset = (-6, 4), fontsize = 11)
-scatter!(ax7g, [500], [0.5]; color = :black, marker = :xcross, markersize = 12)
-axislegend(ax7; position = :lb, framevisible = false, nbanks = 2)
-fig7
+# The figure of these temperature regimes is under Results.
 
 # Replicate 1 of the record at the eight temperatures (1000 cells, 100 log-spaced frames to
 # 10⁴ paper MCS; no cell outlines, D-156) is the release asset
@@ -686,7 +867,7 @@ else
     Markdown.parse("The full build reads V-PRE7 from the committed record only.")
 end
 
-# ### Pass/fail table
+# #### Pass/fail table
 #
 # Verdicts are taken at the paper's nominal times: our sampler and the paper's spend the
 # same attempts per site per paper MCS (spec §8.5), so there is no time tolerance. To show
@@ -847,7 +1028,7 @@ else
         "FULL", nothing)
 end
 
-## V-PRE7: temperature regimes, read from the committed full-size record (§5 "Temperature
+## V-PRE7: temperature regimes, read from the committed full-size record (Details, "Temperature
 ## regimes"), so these rows carry their verdict in both builds
 v7class = "FULL (record)"
 addrecord!(target, paper, ours, tol, ok) = push!(targets, (; target, paper, ours, tol, class = v7class, ok,
@@ -859,7 +1040,7 @@ addrecord!("V-PRE7 order at 10³", "slower sorting at lower T: T = 2 ≈ 0.3 at 
     v7_o[1] > v7_o[2] > v7_o[3])
 addrecord!("V-PRE7 T = 40 above 0.07", "monolayer by ≈ 50, heterotypic plateau ≈ 0.1 (PRE Fig. 15(a), p.2144)",
     "minimum over [10³, 10⁴] $(fmt(minimum(v7_f40))) (at $(vpre7_late[argmin(v7_f40)])); no plateau, still falling from " *
-    "$(fmt(vm(dl_of, 40.0, 1000))) at 10³; monolayer late (dark–medium < 0.003 first at $v7_mono40); see §3",
+    "$(fmt(vm(dl_of, 40.0, 1000))) at 10³; monolayer late (dark–medium < 0.003 first at $v7_mono40); see Deviations",
     "> 0.07 at every save in [10³, 10⁴]", minimum(v7_f40) > 0.07)
 addrecord!("V-PRE7 T = 80 disintegration", "all cells disappear; heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144)",
     "share of cells gone at 500: $(fmt(v7_g80))", "> 0.5", v7_g80 > 0.5)
@@ -1002,7 +1183,21 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
                "Rows that fail or fall out of band: $(join([r.target for r in failing], "; ")).\n\n" * #hide
                join(["- " * l for l in diag_lines], "\n")) #hide
 
-# ## 6. Known limitations and open questions for the authors
+# #### Full-size records: every verdict
+#
+# The rows of the committed records as the runs wrote them: P6.1f for every row but V-PRE7,
+# and the V-PRE7 record. The summary under Results is read from these.
+
+Markdown.parse("""
+P6.1f: `data/09/full-2026-10-05/`, n = $rec_n, 1000 cells, to 2×10⁴ paper MCS, page commit
+`$(first(TOML.parsefile(joinpath(full_dir, "provenance.toml"))["commit"], 8))`. V-PRE7: `data/09/vpre7-2026-10-07/`.
+
+| Target | Paper | Ours | Rule | Class | Result |
+|---|---|---|---|---|---|
+""" * join(["| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | $(r.class) | $(r.result) |"
+            for r in rec_verdicts], "\n"))
+
+# ### Open questions for the authors
 #
 # Questions for J.A. Glazier and F. Graner (spec §8.4, §9; model-specs README §5):
 #
@@ -1010,7 +1205,7 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 #   so, how do they differ (start, seed, protocol)? They disagree by more than a
 #   1000-cell run-to-run spread would explain (spec §9.2). The answer decides whether the
 #   V-PRE1 and V-PRE2 bands stay the two-run envelope or narrow to one run, and replaces
-#   the "two published runs" row of §3.
+#   the "two published runs" row of the deviations table.
 # - The lattice size of the PRE runs. With the boundary conditions it fixes the medium gap
 #   around the aggregate, which matters for runs in which cells detach. The answer
 #   replaces the lattice entry of the aggregate-size row.
@@ -1029,17 +1224,15 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 #   with a heterotypic fraction near 0.05 at 10⁴? How many runs were made, and how was the
 #   shown one chosen? In our replicates two or three large dark domains often persist past
 #   10⁴ (spec §9.5). The answer decides whether V-PRE5's one-cluster clause records a model
-#   difference or one fast run, and replaces the late-coarsening row of §3.
+#   difference or one fast run, and replaces the late-coarsening row of the deviations table.
 # - How was the area ΔH charged at a copy, and was there any rule for a cell's last site?
 #   At the stated T = 80 our cells survive (under a tenth are gone by 500 MCS, only light
 #   ones), and at T = 40 our light monolayer forms late. The answer replaces the V-PRE7
-#   row of §3 and decides the deviation expected in V-PRE8 (λ = 0.1).
+#   row of the deviations table and decides the deviation expected in V-PRE8 (λ = 0.1).
 #
-# We would welcome corrections, the original input files, or a joint check of these
-# results. Contact: the PottsModels maintainer. Answers are recorded as a new row in the
-# deviations table and a dated changelog entry below.
+# Answers are recorded as a new row in the deviations table and a dated changelog entry below.
 #
-# ## 7. How to cite
+# ### How to cite
 #
 # Cite Graner & Glazier (1992) and Glazier & Graner (1993) first, then PottsModels at the
 # version and commit of this build:
@@ -1062,3 +1255,8 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-05 | V-PRE5's one-cluster clause failed in the second full run (P6.1f) and is kept as frozen; late-stage coarsening is recorded as an open deviation, with a question to the authors | spec 09 §9.5; D-151 |
 # | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the P6.1g outcome in the V-PRE5 row; the Osborne rows V-OS1–V-OS5 retired; timings name machine and backend; cells drawn without outlines; the full-run record and video linked. No target, tolerance or verdict changed | D-154, D-156; ROADMAP P6.0bd, P6.0bf |
 # | 2026-10-07 | V-PRE7 (temperature regimes, PRE Fig. 15) added: verdicts read from a committed full-size record of 10 paired replicates per T; T = 0, the order at 10³ and T = 40 pass, T = 80 fails and is a deviations row (cells disappear too slowly; the T = 40 monolayer is late); a smoke scan in the reduced build. The T = 0 annealed copy drops the kinds of vanished top-labelled cells. No other target, tolerance or verdict changed | spec 09 §9.1 V-PRE7; ROADMAP P6.1h |
+# | 2026-10-08 | Page reordered: intro, the model as a `@potts_model`, a minimal run, results from the full-size records (figures against the papers, the full-run video, a verdict summary, the deviations table), and a collapsed Details section with the protocol, every verdict and the provenance. The contact sentence of the open questions is dropped. No target, tolerance, rule or verdict changed | D-185 |
+
+# ```@raw html
+# </details>
+# ```

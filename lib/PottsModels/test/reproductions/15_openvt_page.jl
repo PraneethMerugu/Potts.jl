@@ -6,13 +6,26 @@
 # reads the page source and the committed records only; it runs no simulation.
 #
 # What the page must carry (spec 15 §4.0 inventory and §1.1; D-146, D-154, D-156, D-161,
-# D-168, D-172–D-175):
+# D-168, D-172–D-175, D-185). Re-frozen under D-185 for the page layout only: the order of
+# (b), where the deviations and videos sit ((d), (e)), the pending wording and the F1 colour
+# row; no verdict rule, band or record-value check changed.
 #
 # (a) Title. The first Markdown heading is the H1 "OpenVT monolayer benchmark".
-# (b) Every item of M, in M's order: Figure 1, Figure 2, Figure 3, Figure 4, Figure 5,
-#     Figure 6, Table 1, Figure 7, Figure 8, then the supplement's Table S1 and Table S5.
-#     Each has its own Markdown heading whose first label is "Figure N" (or "Fig. N") or
-#     "Table N"; its section runs to the next heading of the same or a higher level.
+# (b) The D-185 order. Four level-2 headings, in this order: the model ("model"), a minimal
+#     run ("minimal"), "Results" and "Details". The model section holds a ```julia listing of
+#     `@potts_model OpenVTReferenceMonolayer`; every code line of it (comments and blank
+#     lines dropped, whitespace trimmed) is a line of the model's source
+#     `lib/PottsModels/src/openvt_reference.jl`, in the source's order, and the listing has
+#     every `@`-macro line of the source (condensed, not paraphrased). The minimal-run
+#     section runs code (a non-comment line calls `solve(`). Inside Results, level-3
+#     headings in this order: Figure 2; Figure 5; Figure 1; Figures 3 and 8; Figures 6 and
+#     7 with Table 1; the videos ("video"); the verdict summary ("verdict"); "Deviations".
+#     Details opens a raw-HTML `<details>` before its first level-3 heading and closes it
+#     (`</details>`) after its last line, and holds level-3 headings for Figure 4, Table S1,
+#     Table S5 and "Differences", and a protocol ("protocol") and provenance ("provenance")
+#     heading. Every item of M (Figure 1–8, Table 1, Tables S1 and S5) has a heading that
+#     names it ("Figure N", "Figures N and M", "Table N", …); its section runs to the next
+#     heading of the same or a higher level.
 # (c) Each item is either RENDERED from a merged record or PENDING:
 #     - an item's records are the directories of `reproductions/data/15/` whose
 #       `provenance.toml` has its ROADMAP item: F1, F4 P6.15h; F2, S5 P6.15b; F3, F8 P6.15f;
@@ -25,14 +38,15 @@
 #       record). It does not say "pending". The record figures follow M's layout (their
 #       READMEs and frozen tests pin it), so naming the file pins the layout;
 #     - PENDING is allowed only for the P6.15g items while no P6.15g record is merged
-#       (D-174: test frozen, FULL run parked for P6.4b1). The section then says literally
-#       "pending: FULL run parked (D-174)" and shows no image. When a P6.15g record lands,
-#       the same items must be RENDERED, with no edit to this file.
-# (d) Differences (D-154). A level-2 heading containing "Differences". Every Markdown table
-#     in that section (rows are lines, after an optional Literate "# ", that start and end
-#     with "|") has a header with "Ours", a paper column ("Paper", "Manuscript" or "M"),
-#     "cause" and "Author question". The rows must include, keyed by their first cell:
-#     - every C# of spec 15 §1.1 (parsed from the spec; at least C1–C17);
+#       (D-174). The section then says "pending: FULL run <state> (D-174)" (e.g. "parked" or
+#       "in progress") and shows no image. When a P6.15g record lands, the same items must
+#       be RENDERED, with no edit to this file.
+# (d) Deviations and differences (D-154). The level-3 "Deviations" heading of Results and
+#     the level-3 "Differences" heading of Details. Every Markdown table in those sections
+#     (rows are lines, after an optional Literate "# ", that start and end with "|") has a
+#     header with "Ours", a paper column ("Paper", "Manuscript" or "M"), "cause" and
+#     "Author question". The Deviations table (the four-column table of failed and
+#     provisional targets) must include, keyed by their first cell:
 #     - every row of every `data/15/*/deviations.tsv`, with the first decimal number of
 #       its "ours" column and, when the target says FAIL, the word FAIL;
 #     - every FAIL row of every `data/15/*/verdicts.tsv` that is not a negative control
@@ -42,8 +56,9 @@
 #       D-173), opening beyond 10³ cells, traced to division on actual area against TST's
 #       target area (C13). The row names 15.17, 13.57, a percentage of 11–12 %, 10³ (or
 #       1000), "actual area", "target area" and C13, and does not say PASS;
-#     - F1: the panel is coloured per cell identity, not by area (D-175).
-#     Every row's last cell (the author-question status) starts with "not an author
+#     - F1: the panel's colour scale, coolwarm by area with provisional limits (D-185).
+#     The rows of both tables together include every C# of spec 15 §1.1 (parsed from the
+#     spec; at least C1–C17). Every row's last cell (the author-question status) starts with "not an author
 #     question", "not asked" or "resolved"; a row that names a question (Q#) also says "our
 #     open question list".
 # (e) Videos (D-146, D-168, D-172, D-173). No video is committed: no .mp4, .webm, .mov,
@@ -52,8 +67,8 @@
 #     (`https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-…/`), not
 #     a superseded release (area colours `reproductions-2026-10-07-openvt-f5`, or the
 #     pre-D-172 palette `reproductions-2026-10-07-openvt-f5-cells`), and is a per-cell render
-#     ("cells" in the file name). The six current assets are named: the two F5 videos in the
-#     Figure 5 section, the four F3/F8 videos in the Figure 1, 3 or 8 sections.
+#     ("cells" in the file name). The six current assets are named in the Results' videos
+#     section.
 # (f) Stills (D-156, D-172). The page code draws no outlines (no `boundaries = true`, no
 #     `pottsboundaries`), uses no `ChannelEncoding` (area heat maps), and any `pottsplot`
 #     comes with `CellIdentityEncoding` or `CellTypeEncoding`.
@@ -74,7 +89,7 @@
 #     contacted", "contacted the", "answered by", "personal communication", "letter to/from",
 #     "submitted to").
 # (i) Docs. The page parses as Julia; `docs/make.jl` puts it in the navigation (by name, or
-#     through the reproductions loop and the "Published models" section). Opt-in
+#     through the reproductions loop and the "Published models" or "Paper models" section). Opt-in
 #     (`POTTS_DOCS_BUILD=true`): the standing docs suite runs,
 #     `POTTS_DOCS_PUBLISHED=true julia --project=docs docs/make.jl`, and the built page
 #     exists, has the title and every release URL, and each image it embeds is in the build.
@@ -87,7 +102,8 @@ const P615I_ASSETS = joinpath(P615I_ROOT, "docs", "src", "assets", "openvt_monol
 const P615I_SPEC = joinpath(P615I_ROOT, "docs", "design", "research", "model-specs", "15_openvt_monolayer.md")
 const P615I_MAKE = joinpath(P615I_ROOT, "docs", "make.jl")
 const P615I_TITLE = "OpenVT monolayer benchmark"
-const P615I_PENDING = "pending: FULL run parked (D-174)"
+const P615I_PENDING = r"pending: FULL run [a-z ]+ \(D-174\)"
+const P615I_MODEL_SRC = joinpath(P615I_ROOT, "lib", "PottsModels", "src", "openvt_reference.jl")
 const P615I_RELEASES = "https://github.com/PraneethMerugu/Potts.jl/releases/download/"
 
 # (label kind, label, ROADMAP item or nothing, fixed artefact or nothing), in M's order
@@ -146,12 +162,18 @@ function p615i_headings(lines)
 end
 const P615I_HEADS = p615i_headings(P615I_LINES)
 
-# the first label of a heading: ("F", "5"), ("T", "S5") or nothing
-function p615i_label(text)
-    m = match(r"\b(Figure|Fig\.?|Table)\s*(S?\d+)\b", text)
-    m === nothing && return nothing
-    return (startswith(m[1], "T") ? "T" : "F", String(m[2]))
+# every label a heading names: [("F", "3"), ("F", "8")] for "Figures 3 and 8", ("T", "S5"), …
+function p615i_labels(text)
+    out = Tuple{String, String}[]
+    for m in eachmatch(r"\b(Figures?|Figs?\.?|Tables?)\s*((?:S?\d+)(?:\s*(?:,|and|&)\s*S?\d+)*)", text)
+        k = startswith(m[1], "T") ? "T" : "F"
+        for n in eachmatch(r"S?\d+", m[2])
+            push!(out, (k, String(n.match)))
+        end
+    end
+    return out
 end
+p615i_label(text) = (l = p615i_labels(text); isempty(l) ? nothing : first(l))
 p615i_key(kind, n) = kind === :figure ? ("F", n) : ("T", n)
 
 # the section of heading k: its lines up to the next heading of the same or a higher level
@@ -166,7 +188,7 @@ end
 function p615i_item_heads()
     found = Dict{String, Tuple{Int, Int}}()
     for (id, kind, n, _, _) in P615I_ITEMS
-        k = findfirst(h -> p615i_label(h[3]) == p615i_key(kind, n), P615I_HEADS)
+        k = findfirst(h -> p615i_key(kind, n) in p615i_labels(h[3]), P615I_HEADS)
         k === nothing || (found[id] = (k, P615I_HEADS[k][1]))
     end
     return found
@@ -236,17 +258,22 @@ function p615i_tables(sec)
 end
 p615i_issep(row) = all(c -> occursin(r"^:?-{3,}:?$", c), row)
 
-function p615i_differences()
-    k = findfirst(h -> h[2] == 2 && occursin(r"differences"i, h[3]), P615I_HEADS)
+function p615i_table_section(re)
+    k = findfirst(h -> h[2] == 3 && occursin(re, h[3]), P615I_HEADS)
     k === nothing && return ("", Vector{Vector{Vector{String}}}())
     sec = p615i_section(P615I_LINES, P615I_HEADS, k)
     return (sec, p615i_tables(sec))
 end
-const P615I_DIFF_SEC, P615I_DIFF_TABLES = p615i_differences()
-const P615I_DIFF_ROWS = [row for t in P615I_DIFF_TABLES for row in t[3:end] if length(t) >= 3 && !p615i_issep(row)]
+p615i_rows(tables) = [row for t in tables for row in t[3:end] if length(t) >= 3 && !p615i_issep(row)]
+const P615I_DEV_SEC, P615I_DEV_TABLES = p615i_table_section(r"deviations"i)
+const P615I_DIFFS_SEC, P615I_DIFFS_TABLES = p615i_table_section(r"differences"i)
+const P615I_DIFF_SEC = P615I_DEV_SEC * "\n" * P615I_DIFFS_SEC
+const P615I_DIFF_TABLES = [P615I_DEV_TABLES; P615I_DIFFS_TABLES]
+const P615I_DEV_ROWS = p615i_rows(P615I_DEV_TABLES)
+const P615I_DIFF_ROWS = p615i_rows(P615I_DIFF_TABLES)
 
 p615i_idre(id) = Regex("(?<![A-Za-z0-9.])" * replace(id, "." => "\\.") * "(?![0-9.])")
-p615i_rows_for(id) = filter(r -> !isempty(r) && occursin(p615i_idre(id), r[1]), P615I_DIFF_ROWS)
+p615i_rows_for(id; rows = P615I_DIFF_ROWS) = filter(r -> !isempty(r) && occursin(p615i_idre(id), r[1]), rows)
 p615i_rowtext(r) = join(r, " | ")
 
 function p615i_tsv(path)
@@ -313,14 +340,69 @@ const P615I_CITED = filter(r -> occursin(r["dir"], P615I_SRC), P615I_RECORDS)
     @test !isempty(P615I_HEADS) && P615I_HEADS[1][2] == 1 && startswith(P615I_HEADS[1][3], P615I_TITLE)
 end
 
-@testset "P6.15i (b) every item of M, in M's order" begin
+@testset "P6.15i (b) the D-185 order: model, minimal run, results, details" begin
+    h2 = [(k, h) for (k, h) in enumerate(P615I_HEADS) if h[2] == 2]
+    find2(re) = findfirst(((k, h),) -> occursin(re, h[3]), h2)
+    im, ir, ires, idet = find2(r"model"i), find2(r"minimal"i), find2(r"^(\d+\.\s*)?Results"i), find2(r"^(\d+\.\s*)?Details"i)
+    @test all(!isnothing, (im, ir, ires, idet)) && im < ir < ires < idet
+    if all(!isnothing, (im, ir, ires, idet))
+        sec(i) = p615i_section(P615I_LINES, P615I_HEADS, h2[i][1])
+        # the model: the actual @potts_model source, condensed
+        msec = sec(im)
+        m = match(r"```julia\n(.*?@potts_model OpenVTReferenceMonolayer.*?)```"s, replace(msec, r"(?m)^# ?" => ""))
+        @test m !== nothing
+        src = isfile(P615I_MODEL_SRC) ? read(P615I_MODEL_SRC, String) : ""
+        a = findfirst("@potts_model OpenVTReferenceMonolayer", src)
+        @test a !== nothing
+        if m !== nothing && a !== nothing
+            body = src[first(a):first(findnext(r"(?m)^end\b", src, first(a)))+2]
+            strip_line(l) = strip(replace(l, r"\s+#.*$" => ""))
+            srclines = [strip_line(l) for l in split(body, '\n') if !isempty(strip_line(l)) && !startswith(strip(l), "#")]
+            listing = [strip_line(l) for l in split(m[1], '\n') if !isempty(strip_line(l)) && !startswith(strip(l), "#")]
+            # the listing is a subsequence of the source's lines (greedy match, in order)
+            j = 0
+            missing_lines = String[]
+            for l in listing
+                k = findnext(==(l), srclines, j + 1)
+                k === nothing ? push!(missing_lines, l) : (j = k)
+            end
+            ok = isempty(missing_lines)
+            ok || @info "P6.15i: model listing lines not in the source, or out of order" missing_lines
+            @test ok
+            @test all(l -> l in listing, filter(l -> startswith(l, "@"), srclines))
+        end
+        # the minimal run runs code
+        @test any(l -> !startswith(l, "#") && occursin("solve(", l), split(sec(ir), '\n'))
+        # Results: the items in the D-185 order
+        rk, dk = h2[ires][1], h2[idet][1]
+        nextk(k) = (j = findnext(h -> h[2] <= 2, P615I_HEADS, k + 1); j === nothing ? length(P615I_HEADS) + 1 : j)
+        h3(lo, hi) = [(k, P615I_HEADS[k][3]) for k in (lo + 1):(hi - 1) if P615I_HEADS[k][2] == 3]
+        res3 = h3(rk, nextk(rk))
+        pick(list, f) = findfirst(((k, t),) -> f(t), list)
+        has(t, ids...) = all(id -> id in p615i_labels(t), ids)
+        order = [pick(res3, t -> has(t, ("F", "2"))), pick(res3, t -> has(t, ("F", "5"))), pick(res3, t -> has(t, ("F", "1"))),
+            pick(res3, t -> has(t, ("F", "3"), ("F", "8"))), pick(res3, t -> has(t, ("F", "6"), ("F", "7"), ("T", "1"))),
+            pick(res3, t -> occursin(r"video"i, t)), pick(res3, t -> occursin(r"verdict"i, t)), pick(res3, t -> occursin(r"deviation"i, t))]
+        @test all(!isnothing, order) && issorted(something.(order, 0); lt = <)
+        # Details: collapsed, with the rest
+        det3 = h3(dk, nextk(dk))
+        for f in (t -> has(t, ("F", "4")), t -> has(t, ("T", "S1")), t -> has(t, ("T", "S5")), t -> occursin(r"differences"i, t),
+            t -> occursin(r"protocol"i, t), t -> occursin(r"provenance"i, t))
+            @test pick(det3, f) !== nothing
+        end
+        dsec = p615i_section(P615I_LINES, P615I_HEADS, dk)
+        o = findfirst("<details>", dsec)
+        c = findlast("</details>", dsec)
+        first3 = isempty(det3) ? nothing : findfirst("# ### " * det3[1][2], dsec)
+        @test o !== nothing && c !== nothing && first3 !== nothing && first(o) < first(first3)
+        @test c !== nothing && isempty(strip(replace(dsec[(last(c) + 1):end], r"(?m)^#\s*```\s*$" => "", r"(?m)^#\s*$" => "")))
+    end
+    # every item of M is named by a heading
     for (id, _, _, _, _) in P615I_ITEMS
         has = haskey(P615I_ITEM_HEADS, id)
         has || @info "P6.15i: no heading for $id"
         @test has
     end
-    lines = [P615I_ITEM_HEADS[id][2] for (id, _, _, _, _) in P615I_ITEMS if haskey(P615I_ITEM_HEADS, id)]
-    @test length(lines) == length(P615I_ITEMS) && issorted(lines; lt = <) && allunique(lines)
 end
 
 @testset "P6.15i (c) each item rendered from its record, or pending (D-174)" begin
@@ -347,9 +429,8 @@ end
     end
 end
 
-@testset "P6.15i (d) differences table: spec 15 §1.1 and every deviation (D-154)" begin
-    @test !isempty(P615I_DIFF_SEC)
-    @test !isempty(P615I_DIFF_TABLES)
+@testset "P6.15i (d) deviations and differences tables: spec 15 §1.1 and every deviation (D-154)" begin
+    @test !isempty(P615I_DEV_TABLES) && !isempty(P615I_DIFFS_TABLES)
     for t in P615I_DIFF_TABLES
         h = lowercase(join(t[1], " | "))
         @test length(t) >= 3 && p615i_issep(t[2])
@@ -370,7 +451,7 @@ end
     @test length(devs) >= 3
     for (r, d) in devs
         id = String(first(split(d["target"])))
-        rows = p615i_rows_for(id)
+        rows = p615i_rows_for(id; rows = P615I_DEV_ROWS)
         num = match(r"\d+\.\d+", get(d, "ours", ""))
         ok = any(rows) do row
             t = p615i_rowtext(row)
@@ -394,19 +475,20 @@ end
     end
     @test Set(["V4.2", "V4.3", "V4.5"]) ⊆ Set(fails)
     for id in unique(fails)
-        ok = any(row -> occursin("FAIL", p615i_rowtext(row)), p615i_rows_for(id))
+        ok = any(row -> occursin("FAIL", p615i_rowtext(row)), p615i_rows_for(id; rows = P615I_DEV_ROWS))
         ok || @info "P6.15i: failing target $id is not a FAIL row"
         @test ok
     end
     # V1: slow growth beyond 10³ cells, actual against target area (D-173)
-    v1 = p615i_rowtext.(p615i_rows_for("V1"))
+    v1 = p615i_rowtext.(p615i_rows_for("V1"; rows = P615I_DEV_ROWS))
     @test any(v1) do t
         occursin("15.17", t) && occursin("13.57", t) && occursin(r"1[12](\.\d)?\s?%", t) &&
             occursin(r"10³|10\^3|1000", t) && occursin(r"actual area"i, t) && occursin(r"target area"i, t) &&
             occursin(p615i_idre("C13"), t) && !occursin("PASS", t)
     end
-    # F1: per-cell colours, not area (D-175)
-    @test any(t -> occursin(r"identity|per-cell|per cell"i, t) && occursin(r"area"i, t), p615i_rowtext.(p615i_rows_for("F1")))
+    # F1: coolwarm by area, the scale limits provisional (D-185)
+    @test any(t -> occursin(r"coolwarm"i, t) && occursin(r"area"i, t) && occursin(r"provisional"i, t),
+        p615i_rowtext.(p615i_rows_for("F1"; rows = P615I_DEV_ROWS)))
     # author-question status
     for row in P615I_DIFF_ROWS
         s = lowercase(last(row))
@@ -418,11 +500,13 @@ end
 end
 
 @testset "P6.15i (e) videos are release assets, per cell, current" begin
-    sec(id) = p615i_item_section(id)
-    for (tag, name, ids) in P615I_VIDEOS
+    kv = findfirst(h -> h[2] == 3 && occursin(r"video"i, h[3]), P615I_HEADS)
+    @test kv !== nothing
+    vsec = kv === nothing ? "" : p615i_section(P615I_LINES, P615I_HEADS, kv)
+    for (tag, name, _) in P615I_VIDEOS
         url = P615I_RELEASES * tag * "/" * name
-        ok = any(id -> occursin(url, sec(id)), ids)
-        ok || @info "P6.15i: $name is not linked in $(join(ids, "/"))"
+        ok = occursin(url, vsec)
+        ok || @info "P6.15i: $name is not linked in the videos section"
         @test ok
     end
     mp4 = [m.match for m in eachmatch(r"[^\s\"'()<>\[\]`]*\.mp4", P615I_SRC)]
@@ -511,7 +595,7 @@ end
     make = isfile(P615I_MAKE) ? read(P615I_MAKE, String) : ""
     by_name = occursin("15_openvt_monolayer", make)
     by_loop = occursin(r"readdir\(REPRODUCTIONS\)", make) && occursin("Literate.markdown(joinpath(REPRODUCTIONS", make) &&
-              occursin("\"Published models\"", make)
+              (occursin("\"Published models\"", make) || occursin("\"Paper models\"", make))
     @test by_name || by_loop
     @test dirname(P615I_PAGE) == joinpath(P615I_ROOT, "lib", "PottsModels", "reproductions") && isfile(P615I_PAGE)
     if get(ENV, "POTTS_DOCS_BUILD", "false") == "true"

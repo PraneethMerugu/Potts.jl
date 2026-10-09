@@ -131,6 +131,6 @@ The full run of the sorting model, as long as in the paper:
 Main.paper_run("graner_glazier", "../../") # hide
 ```
 
-**See also:** the model page [`GranerGlazier`](@ref model-graner-glazier), which builds this model step by step.
+**See also:** the paper page of [`GranerGlazier`](@ref model-graner-glazier), which builds this model and compares it with the paper.
 
 Next, [Tutorial 8](@ref tutorial-gpu) runs models on a GPU.

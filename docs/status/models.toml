@@ -4,10 +4,10 @@
 # - `status` is "done", "partial" or "not started"; `status_note` qualifies it.
 # - `data` is the model's directory under lib/PottsModels/reproductions/data/. Its PASS /
 #   FAIL / PARKED counts are computed from the committed verdict TSVs at docs build time.
-# - `models_page` is the @id of the model's Models page; `published` is the stem of its
-#   reproduction page in lib/PottsModels/reproductions/. When that section is built
-#   (POTTS_DOCS_PUBLISHED=true) the row links the reproduction page only; otherwise the
-#   Models page.
+# - `models_page` is the @id of the model's page (`docs/models/<name>.jl`); `published` is
+#   the stem of its reproduction page in lib/PottsModels/reproductions/. When the
+#   reproduction pages are built (POTTS_DOCS_PUBLISHED=true) the row links the reproduction
+#   page, which replaces the model page in the "Paper models" section; otherwise the model page.
 # - `deviations`: the open deviations, one line each, as on the model's deviations table.
 #   Edit these lines when a page's deviations table changes.
 

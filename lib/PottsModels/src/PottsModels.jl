@@ -63,25 +63,50 @@ Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 function openvt_f4_figure end
 
 """
-    PottsModels.openvt_f1_figure(frame; window = 64, banner = true) -> Makie.Figure
+    PottsModels.openvt_f1_figure(frame; window = 64, banner = true, areas = nothing) -> Makie.Figure
 
 The Potts.jl panel of the OpenVT monolayer benchmark's Fig 1 ("Overview of participating
-frameworks"; `G:results/introduction.tex`, D-175). `frame` is a 2D MakiePotts render frame
-of a colony, e.g. `renderframe(u)` of the first state of case (a) with 10⁴ cells.
+frameworks"; `G:results/introduction.tex`, D-175, D-185). `frame` is a 2D MakiePotts render
+frame of a colony, e.g. `renderframe(u)` of the first state of case (a) with 10⁴ cells.
 
-The panel is a square axis holding one `pottsplot` of an unchanged `window × window` block
-of `frame` (same owners, same cell identities and generations), centred on the colony rim
-along the 45° diagonal from the colony centroid (colony lower left, medium upper right),
-coloured per cell identity with the automatic palette (D-172) on a white medium, with no
-cell outlines (D-156). Above it, 1/45 of the panel high apart, is the 5/45-high banner in the
-proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white bold; `banner = false` leaves
-it out and gives the bare panel (the consortium's `closeup.png`). The 64-site default,
-about 8 cell diameters, is an estimate of what the TST closeup shows.
+The panel is a square axis showing an unchanged `window × window` block of `frame` (same
+owners, same cell identities and generations), centred on the colony rim along the 45°
+diagonal from the colony centroid (colony lower left, medium upper right), in the style of
+the other frameworks' closeups ([`openvt_colony_panel!`](@ref PottsModels.openvt_colony_panel!)
+with `colour = :area`): each cell coloured by its area with `coolwarm`, scaled to the min–max
+of the areas of the cells in the panel, a white medium and thin black pixel-edge boundaries
+between unlike ids. The areas are the cells' site counts in the whole `frame`, so a cell cut
+by the window keeps its full area; `areas` (cell id => area) supplies them instead, e.g. for a
+block stored without the rest of the lattice. Above the panel, 1/45 of the panel high apart,
+is the 5/45-high banner in the proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white
+bold; `banner = false` leaves it out and gives the bare panel (the consortium's
+`closeup.png`). The 64-site default, about 8 cell diameters, is an estimate of what the TST
+closeup shows.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """
 function openvt_f1_figure end
-public openvt_f4_figure, openvt_f1_figure
+
+"""
+    PottsModels.openvt_colony_panel!(ax, frame; colour = :area, areas = nothing,
+        inhibited = nothing, colorrange = nothing, linewidth = 0.75) -> PottsPlot
+
+Draw a 2D MakiePotts render frame into the Makie axis `ax` in the style of the OpenVT
+consortium's colony figures (D-185; spec 15 §4.0.2): one `pottsplot` on a white medium and
+thin black boundaries along every pixel edge between unlike ids (cell–cell and
+cell–medium), drawn as one `linesegments` plot with square caps so the outline has no gaps.
+
+- `colour = :area`: each cell coloured by its area with `coolwarm`. `areas` (cell id =>
+  area) defaults to the cells' site counts in `frame`; `colorrange` defaults to the min–max
+  of the areas of the cells in `frame`.
+- `colour = :state`: growing and inhibited cells from `inhibited` (cell id => `true`/`1` for
+  inhibited), in the colours of M's Fig 7: growing RGB(44,123,182), inhibited
+  RGB(253,174,97).
+
+Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
+"""
+function openvt_colony_panel! end
+public openvt_f4_figure, openvt_f1_figure, openvt_colony_panel!
 
 include("benchmarks/openvt_analysis.jl")
 include("benchmarks/openvt_package.jl")

@@ -3402,3 +3402,72 @@ session.
 - **Videos.** They are on the pre-release `reproductions-2026-10-08-merks`.
 - **Runner.** A sort bug in the observe step meant every job had to be rebuilt from its σ snapshots after the run. No data was lost.
 - **Still open in P6.3f.** The 01b digitised figure targets (Figs 5, 7–10, 12, 13; 12 and 13 need new runs) and the video clock overlays.
+
+## D-185 OpenVT consortium figures follow the other frameworks' style; paper-model pages are rewritten and merged into one section (2026-10-08; user rulings, confirmed in the coordinator session)
+
+- **Consortium figures (amends D-156 and D-172 for these figures only).** This covers F1's Potts.jl panel and closeup, the F7 and F8 snapshots, and everything in the submission package (D-180).
+  - **F1 colour.** Cells are coloured by area with `coolwarm`, scaled to the panel's own cell-area min–max, on the case (a) 10⁴-cell run.
+    - The evidence: CC3D, TST and Artistoo closeups are coolwarm by area. Spearman(area, red−blue) is 0.995, 1.000 and 0.825 respectively.
+    - The scale limits are our provisional reading of an open question. The differences table and D-175's F1 notes label them so.
+  - **States.** Figures coloured by state show growing vs dormant from the per-cell `inhibited` flag, in the paper's colours (spec 15 §4.0.2).
+  - **Outlines.** Thin black cell boundaries are drawn, as every framework panel draws them. They are pixel-edge boundaries between unlike ids, with no gaps.
+  - **Everything else unchanged.** Docs videos, other models and the OpenVT docs videos keep per-cell colours and no outlines.
+- **Page rewrite.** Each paper-model page reads in this order:
+  1. a short intro;
+  2. the `@potts_model` code that builds the model, with brief comments;
+  3. a minimal run;
+  4. results against the paper: the key figures, the paper-run video, a compact verdict summary and the four-column deviations table;
+  5. a collapsed "Details" section: protocol, full verdict lists, the differences table and provenance.
+
+  Verdict code is unchanged. Pages 01, 09, 10 and 15 are re-frozen for layout only.
+- **One section.** "Models" and "Published models" merge into one "Paper models" section with one page per paper, the status page first.
+  - Wortel Act stays as a model page marked "not a reproduction".
+  - Old URLs keep working through stub pages that link to the new ones.
+
+**D-175 / D-185 amendment (2026-10-08).**
+- **Colour.** The F1 panel colours cells by full-state area on `coolwarm`, scaled to the panel's own cell-area min–max.
+- **Outlines.** Thin black pixel-edge boundaries are drawn.
+- **Scale limits.** These are a provisional reading of our open question list; the consortium does not state its closeups' limits.
+- **Areas.** Full-state areas come from a deterministic rerun of case (a) run 1 (`window_cells.tsv`). It matched `window.tsv` site for site; 17 of the 41 window cells are cut by the window.
+- **State colours** (from TST's 10k snapshots): growing RGB(44,123,182) and inhibited RGB(253,174,97).
+- **F8.** It has no snapshot panels, so nothing to restyle.
+- **Re-frozen tests.** `15_openvt_page.jl`, `15_openvt_f1_f4.jl` and `15_openvt_package.jl` (layout, prose and figure style only); pages 01, 09 and 10 also re-frozen for the D-185 layout.
+
+## D-186 Reproduction 04 (foam, Jiang et al. 1999) is built in parallel streams (2026-10-08; user ruling "work on the foam model in full parallel"; plan in spec 04 §8)
+
+- **Streams.** Only stream 5 waits on stream 1.
+  1. **Engine.** P6.4a copy-scope `direction` (and `time`, `mcs`, `Metropolis(tie)` as ROADMAP lists them), through an engine test author and then an implementer. It is the one engine blocker: the shear form γ(y_i, t)·(x_i − x_j), minimum image in x, needs the copy direction.
+  2. **Foam analysis functions** in PottsModels (spec 04 §2.8), tested on hand-built states: φ, neighbour lists and n, per-MCS T1 detection with a configurable counting unit (A-15), ρ(n), μ2(n), μ2(a), the Eq. 9 spectra, N̄ and the yield strain.
+  3. **Frozen test.** The reproduction 04 test comes from spec §5.2 V1–V20. The A-1, A-2, A-8 and A-15 choices are pre-registered as calibrations (D-155, D-156).
+  4. **No-shear page.** Brick wall → anneal → T = 0 relax → V1/V1b, plus coarsening.
+  5. **Shear runs.** V2–V20 run as FULL on the PC once stream 1 lands.
+- **Proposal law.** Until P6.4b's `UnlikeNeighbor` lands, the proposal is `BoundarySiteCPM` with a uniform neighbour. This is a labelled deviation; the targets avoid absolute MCS (A-5).
+- **Not blockers.** P6.4c (events) and P6.4d (Tiling, T1 counts as library) are conveniences only.
+
+## D-187 P6.4b2: foam analysis functions, test frozen (2026-10-08; coordinator, from the P6.4b2 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4b2_foam_analysis.jl` (commit 1457cc6c, sha256 `2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044`).
+- **Surface** (public in `PottsModels.Analysis`, spec 04 §2.8): `stored_energy` (Eq. 8), `side_counts`, `contact_changes`, `t1_events(prev, next; unit = :t1 | :pairs | :bubbles)`, `topology_distribution`, `central_moment`, `topology_moments`, `power_spectrum` (Eq. 9), `spectral_exponent`, `mean_t1` (N̄) and `yield_strain`.
+- **Readings.** Spec questions go to the spec owner.
+  - **Stored energy (φ).** Each unordered pair is counted once; the factor 2 cancels in φ/φ(0).
+  - **Walls.** The closed y wall is not a side. With that reading the 256² brick wall gives μ2(n) = 7/16 = 0.4375, matching Fig. 11(c)'s 0.437, against 0.109 if the wall counted. This supports V1b.
+  - **A-15 counting units.** One T1 counts 1 under `:t1`, 2 under `:pairs` and 4 under `:bubbles`.
+  - **Periodogram.** |X|²/L, without the f = 0 bin.
+  - **Yield.** The first T1 avalanche, as the paper defines it. Converting it to strain is the caller's job (A-9).
+  - **μ2(a) unit.** It is a P6.4r calibration; areas stay in sites.
+
+## D-188 P6.4a1: copy scope gains `direction`, test frozen (2026-10-08; coordinator, from the P6.4a1 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4a1_copy_direction.jl` (commit e4b85503, sha256 `ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296`).
+- **Surface.** The copy scope gains three entries, each computed from (source, target) alone:
+  - `direction[k]`: x_target − x_source in `position` units. It uses the minimum image on periodic axes and the plain difference on closed axes.
+  - `mcs`: n − 1 during MCS n.
+  - `position[target|source][k]`.
+- **Hexagonal lattices.** Either an `ArgumentError` that names `direction`, or correct values.
+- **Algorithms.** Results match the hand-written reference bitwise on Sequential, Checkerboard and BoundarySite, on Float32 and on the device. Warm allocations are zero.
+- **Foam shear.** The foam shear is a drive.
+- **Deferred.** `Metropolis(tie)` is deferred: T = 1e-6 gives the A-6 T→0⁺ limit.
+- **Not a blocker.** The shear can already be written today with px/py site variables, an `ifelse` minimum image and a model-level G set in `@before_mcs`. The test uses that form as its reference. So `direction` is a convenience, and P6.4r is not blocked on it.
+- **Corrections.**
+  - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
+  - The drive docs wrongly list `mcs`; the implementer fixes them.

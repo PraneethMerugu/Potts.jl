@@ -1,5 +1,5 @@
 # P6.3f (ROADMAP Phase 6, step 3): the reproduction 01 page renders the FULL record.
-# Frozen (AUTONOMY §7.3; under D-146, D-153–D-156, D-161, D-172, D-183). The page is the Literate
+# Frozen (AUTONOMY §7.3; under D-146, D-153–D-156, D-161, D-172, D-183; layout re-frozen under D-185). The page is the Literate
 # script `lib/PottsModels/reproductions/01_merks.jl`. This file reads the page source, the
 # committed record and the frozen 01 test; it runs no simulation. The frozen 01 test
 # (`test/reproductions/01_merks.jl`, D-153) is not edited: its FULL tier's rules are
@@ -42,10 +42,16 @@
 #     `https://github.com/PraneethMerugu/Potts.jl/releases/download/<tag>/<file>`, and every
 #     `01_merks_full` video URL on the page is one of them.
 #
-# The page:
+# The page (D-185 layout): an intro before `# ## 1.`; §1 the model code, §2 a minimal run,
+# §3 the results (key figures, the FULL videos, a verdict summary and, as the subsection
+# headed `# ### … Deviations`, the deviations table); §4 a collapsed "Details" section
+# (`<details>` … `</details>`) to the end of the page, with the protocol, every verdict and
+# the provenance. "The deviations section" below runs from its `# ###` heading to the next
+# `# ##`/`# ###` heading; "the Details section" from `# ## 4.` to the end.
 #
 # (f) FULL record chunk. Exactly one code chunk delimited by the lines
-#     `## FULL record (P6.3f): begin` and `## FULL record (P6.3f): end`, before §3. It names
+#     `## FULL record (P6.3f): begin` and `## FULL record (P6.3f): end`, before the
+#     deviations section. It names
 #     the record directory and runs no simulation (no `solve(`, `PottsProblem`, `run06`,
 #     `run08`, `walk(`). Evaluated alone in a fresh module (with PottsModels, TOML, Markdown
 #     and Statistics loaded) it defines
@@ -53,13 +59,13 @@
 #       Result: for every check of (d) a row whose Target starts with "<row> <check>", whose
 #       Ours is the check's `ours`, whose Class is "FULL record" and whose Result is the
 #       recomputed PASS or FAIL;
-#     - `full_deviation_rows::Vector{String}`, Markdown rows of the §3 deviations table (D-154):
+#     - `full_deviation_rows::Vector{String}`, Markdown rows of the deviations table (D-154):
 #       for every FAIL check, a row whose first cell names the row id and "FAIL" (for a
 #       failing V-C3 low plateau: "V-C3 low plateau" and "FAIL") and whose Ours cell
 #       contains the check's `ours`, with a non-empty cause.
-#     Outside the chunk, `full_verdicts_md` is shown in §5 and `full_deviation_rows` is
-#     spliced into the §3 deviations table. The page names `points.tsv` (the N + 100 reading).
-# (g) Deviations table (D-154, D-155, D-161). The §3 table's header has Ours, Paper, cause
+#     Outside the chunk, `full_verdicts_md` is shown in the Details section and
+#     `full_deviation_rows` is spliced into the deviations section's table. The page names `points.tsv` (the N + 100 reading).
+# (g) Deviations table (D-154, D-155, D-161). The deviations section's table header has Ours, Paper, cause
 #     and Author question. Its static rows keep D-161's items: 2006 target length L
 #     (provisional, 50 and 60 px), V-E5/V-E6 classification time (provisional, 48 h), 2006
 #     connectivity E₀, 2006 seeding, 2008 time origin, 01b Fig. 2 set-up, Field scheme,
@@ -83,6 +89,11 @@
 # (j) Docs. The page parses; `docs/make.jl` renders every reproductions script. Opt-in
 #     (`POTTS_DOCS_BUILD=true`): the docs build succeeds and the built page has every
 #     check's ours and result and every video URL.
+# (k) Layout (D-185). The headings `# ## 1.` to `# ## 4.` appear once each, in order, the
+#     fourth naming "Details"; the deviations section lies inside §3; the Details section
+#     opens a `<details>` element and closes it; every `01_merks_full` video URL first
+#     appears before the Details section; the page has no contact wording ("Contact:",
+#     "contact us", "e-mail").
 #
 # Negative controls (D-048): the recomputed rules flip on perturbed copies of the record
 # (V-C3 low plateau moved into and out of its band, a V-C1 network flag flipped); the job
@@ -424,11 +435,19 @@ const P63F_SRC = p63f_read(P63F_PAGE)
 const P63F_LINES = split(P63F_SRC, '\n')
 p63f_heading_line(re) = findfirst(l -> occursin(re, l), P63F_LINES)
 const P63F_H1 = p63f_heading_line(r"^# ## 1\.")
+const P63F_H2 = p63f_heading_line(r"^# ## 2\.")
 const P63F_H3 = p63f_heading_line(r"^# ## 3\.")
 const P63F_H4 = p63f_heading_line(r"^# ## 4\.")
-const P63F_H5 = p63f_heading_line(r"^# ## 5\.")
-const P63F_H6 = p63f_heading_line(r"^# ## 6\.")
+# D-185 layout: the deviations section (a `# ###` subsection of §3, to the next heading) and
+# the Details section (§4, to the end of the page)
+const P63F_HDEV = p63f_heading_line(r"^# ### .*[Dd]eviations")
+const P63F_HDEV_END = P63F_HDEV === nothing ? nothing :
+                      let k = findfirst(l -> occursin(r"^# ###? ", l), P63F_LINES[(P63F_HDEV + 1):end])
+    k === nothing ? length(P63F_LINES) + 1 : P63F_HDEV + k
+end
 p63f_lines(a, b) = (a === nothing || b === nothing) ? "" : join(P63F_LINES[a:(b - 1)], '\n')
+const P63F_DEV = p63f_lines(P63F_HDEV, P63F_HDEV_END)
+const P63F_DETAILS = p63f_lines(P63F_H4, length(P63F_LINES) + 1)
 const P63F_BEGINS = findall(l -> strip(l) == P63F_BEGIN, P63F_LINES)
 const P63F_ENDS = findall(l -> strip(l) == P63F_END, P63F_LINES)
 const P63F_CHUNK = (length(P63F_BEGINS) == 1 && length(P63F_ENDS) == 1 && P63F_BEGINS[1] < P63F_ENDS[1]) ?
@@ -650,7 +669,7 @@ end
 
 @testset "P6.3f (f) the page renders the record (its FULL record chunk)" begin
     @test length(P63F_BEGINS) == 1 && length(P63F_ENDS) == 1 && !isempty(P63F_CHUNK)
-    @test P63F_H3 !== nothing && !isempty(P63F_BEGINS) && P63F_BEGINS[1] < P63F_H3
+    @test P63F_HDEV !== nothing && !isempty(P63F_BEGINS) && P63F_BEGINS[1] < P63F_HDEV
     @test occursin(P63F_RECNAME, P63F_CHUNK)
     @test !occursin(r"\bsolve\(|PottsProblem|\brun0[68]\(|\bwalk\(", P63F_CHUNK)
     @test P63F_CHUNK_OUT !== nothing
@@ -691,15 +710,13 @@ end
         end
     end
     # shown on the page
-    s3, s5 = p63f_lines(P63F_H3, P63F_H4), p63f_lines(P63F_H5, P63F_H6)
-    @test occursin("full_deviation_rows", s3)
-    @test occursin("full_verdicts_md", s5) && occursin("Markdown.parse", s5)
+    @test occursin("full_deviation_rows", P63F_DEV)
+    @test occursin("full_verdicts_md", P63F_DETAILS) && occursin("Markdown.parse", P63F_DETAILS)
     @test occursin("points.tsv", P63F_SRC)
 end
 
 @testset "P6.3f (g) deviations table: D-161 rows, provisional defaults, parked targets" begin
-    s3 = p63f_lines(P63F_H3, P63F_H4)
-    rows = p63f_md_rows(s3)
+    rows = p63f_md_rows(P63F_DEV)
     @test !isempty(rows)
     isempty(rows) && (rows = [String[""]])
     h = lowercase(join(rows[1], " | "))
@@ -813,5 +830,27 @@ end
         end
     else
         @info "P6.3f: POTTS_DOCS_BUILD not set; the Documenter build is skipped"
+    end
+end
+
+@testset "P6.3f (k) layout (D-185): intro, model, minimal run, results, collapsed Details" begin
+    hs = [P63F_H1, P63F_H2, P63F_H3, P63F_H4]
+    @test all(!isnothing, hs)
+    all(!isnothing, hs) && @test issorted(hs) && allunique(hs)
+    for k in 1:4
+        @test count(l -> startswith(l, "# ## $(k)."), P63F_LINES) == 1
+    end
+    @test P63F_H4 !== nothing && occursin("Details", P63F_LINES[P63F_H4])
+    @test P63F_HDEV !== nothing && P63F_H3 !== nothing && P63F_H4 !== nothing &&
+          P63F_H3 < P63F_HDEV && P63F_HDEV_END <= P63F_H4
+    @test occursin("<details>", P63F_DETAILS) && occursin("</details>", P63F_DETAILS)
+    o, c = findfirst("<details>", P63F_DETAILS), findlast("</details>", P63F_DETAILS)
+    @test o !== nothing && c !== nothing && first(o) < first(c)
+    before = P63F_H4 === nothing ? "" : p63f_lines(1, P63F_H4)
+    for v in P63F_VIDEOS
+        @test occursin(P63F_RELEASES * string(get(v, "tag", "")) * "/" * string(get(v, "file", "")), before)
+    end
+    for re in (r"\bContact:"i, r"contact us"i, r"\be-?mail\b"i)
+        @test !occursin(re, P63F_SRC)
     end
 end

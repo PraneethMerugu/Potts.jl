@@ -8,8 +8,8 @@
 # the framework colour (`G:results/colors.tex`), the name in bold white (black for
 # TinyDEM), each image drawn into the square as `\includegraphics[width=\w, height=\w]`
 # does. The Potts.jl panel (banner RGB(8,29,88), Q18 proposal) joins the lattice frameworks
-# after Artistoo; its block is rebuilt from window.tsv (owners and generations; the
-# identity colours depend only on them, D-172), so no rerun is needed.
+# after Artistoo; its block is rebuilt from window.tsv and window_cells.tsv (the cells'
+# full-state areas), in the consortium style (D-185), so no rerun is needed.
 #
 #     OPENVT_MONOLAYER_REPO=~/openvt/monolayergrowth julia --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/compose_f1.jl
@@ -52,6 +52,8 @@ for r in rows
 end
 cells = [RenderCellMetadata(RenderCellIdentity(id, gens[id]), 1) for id in sort!(collect(keys(gens)))]
 block = PottsRenderFrame(0, owners, cells; geometry = RenderGeometry((W, W); origin = (x0, y0)))
+crows = [split(l, '\t') for l in readlines(joinpath(DIR, "window_cells.tsv"))]
+areas = Dict(parse(Int, r[1]) => parse(Int, r[3]) for r in crows[2:end])    # id, generation, area, …
 
 mm = 10                                    # px per mm
 w, xs_mm, bh, ysb = 45, 4, 5, 1
@@ -65,7 +67,7 @@ for (k, (name, path, colour, labelcolour)) in enumerate(PANELS)
     ax = Axis(gl[2, 1]; width = w * mm, height = w * mm, spinewidth = 0.5)
     hidedecorations!(ax)
     if path === nothing
-        pottsplot!(ax, block; encoding = CellIdentityEncoding(), medium_color = :white, boundaries = false)
+        PottsModels.openvt_colony_panel!(ax, block; colour = :area, areas)
         limits!(ax, x0, x0 + W, y0, y0 + W)
     else
         img = Makie.FileIO.load(joinpath(G, "results", path))

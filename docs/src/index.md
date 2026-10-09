@@ -112,8 +112,9 @@ Main.paper_run("graner_glazier", "") # hide
 - **Using ModelingToolkit already?** [Relation to ModelingToolkit](@ref modelingtoolkit)
   says which parts of a model are ModelingToolkit systems and which are Potts' own.
 - **Coming from CompuCell3D or Morpheus?** See the [translation tables](@ref coming-from).
-- **Want a published model?** The [Models](@ref models) section builds five published
-  models step by step, each with a video of a full paper-scale run.
+- **Want a published model?** The [Paper models](@ref paper-status) section has one page
+  per paper: it builds the model, shows a video of a full paper-scale run and compares the
+  results with the paper. Its first page gives the status of every paper model.
 
 ## Citing
 

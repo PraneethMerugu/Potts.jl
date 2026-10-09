@@ -1,21 +1,29 @@
-# The OpenVT monolayer figure functions (D-175): `PottsModels.openvt_f4_figure` (M Fig 4,
-# the free-surface schematic) and `PottsModels.openvt_f1_figure` (M Fig 1, the Potts.jl
-# panel and banner). Loaded with Makie and MakiePotts. No cell outlines anywhere (D-156):
-# both panels are one `pottsplot` with `boundaries = false`; F4 adds only full-length
-# lattice lines (a white site grid) and the pair dashes.
+# The OpenVT monolayer figure functions: `PottsModels.openvt_f4_figure` (M Fig 4, the
+# free-surface schematic; D-175), `PottsModels.openvt_f1_figure` (M Fig 1, the Potts.jl panel
+# and banner) and `PottsModels.openvt_colony_panel!` (the consortium style for colony
+# snapshots, D-185). Loaded with Makie and MakiePotts. F4 is one `pottsplot` with
+# `boundaries = false`, plus full-length lattice lines and the pair dashes (D-156). The
+# consortium figures (F1, F7 and F8 snapshots) follow the other frameworks' panels (D-185):
+# cells coloured by area (`coolwarm`, the panel's own min–max) or by state (growing or
+# inhibited), with thin black pixel-edge boundaries between unlike ids.
 module PottsModelsMakieExt
 
 using PottsModels: PottsModels
 using Makie: Makie
-using MakiePotts: MakiePotts, CellIdentityEncoding, CellSite, MediumSite, PottsRenderFrame, RenderCellIdentity,
-    RenderCellMetadata, RenderGeometry, RenderOwner, cell_metadata, frame_geometry, frame_mcs, frame_size,
-    owner_at, pottsplot!
+using MakiePotts: MakiePotts, CellChannelKey, CellIdentityEncoding, CellSite, ChannelEncoding, MediumSite,
+    PottsRenderFrame, RenderCellIdentity, RenderCellMetadata, RenderChannel, RenderGeometry, RenderOwner,
+    cell_metadata, frame_geometry, frame_mcs, frame_size, owner_at, pottsplot!
 
 _rgb(r, g, b) = Makie.RGBf(r / 255, g / 255, b / 255)
 const MEDIUM_PAIR = _rgb(231, 41, 138)       # free_surface.tex `m`
 const CELL_PAIR = _rgb(255, 192, 0)          # free_surface.tex `c`
 const MEDIUM_F4 = _rgb(236, 236, 236)        # free_surface.tex `ma!10`
 const POTTS_COLOUR = _rgb(8, 29, 88)         # spec §4.0.2, Q18 proposal
+# growing and inhibited cells in M's Fig 7 (the TST row, G:results/TST/TST_10k_snapshots.pdf,
+# ColorBrewer RdYlBu): blue for growing cells, orange for (type 2) inhibited ones; spec §4.0.2 F7
+const GROWING = _rgb(44, 123, 182)
+const INHIBITED = _rgb(253, 174, 97)
+const OUTLINE_WIDTH = 0.75                   # px at the figure's own scale: a thin line
 # free_surface.tex's cell fills `ca!60`, `cb!60`, `cc!60`, `cd!60` (60 % colour on white) for
 # cells i, i−1, i+1, i+2 (ids 1–4); a configuration with more cells takes the automatic palette
 _tint(r, g, b; p = 0.6) = Makie.RGBf((p .* (r, g, b) ./ 255 .+ (1 - p))...)
@@ -96,9 +104,88 @@ function PottsModels.openvt_f4_figure(σ::AbstractMatrix{<:Integer}, c::Integer)
     return fig
 end
 
-# ---- F1 ---------------------------------------------------------------------------------
+# ---- consortium style (D-185) ------------------------------------------------------------
 
 _owner_id(frame, I) = (o = owner_at(frame, I); o.kind === CellSite ? Int(o.id) : 0)
+
+# the pixel edges between sites of unlike owners (cell–cell and cell–medium), as segment
+# end points in data coordinates: every such edge once, nothing else
+function _edges(frame)
+    g = frame_geometry(frame)
+    nx, ny = frame_size(frame)
+    dx, dy = g.spacing
+    ox, oy = g.origin
+    pts = Makie.Point2f[]
+    for j in 1:ny, i in 1:(nx - 1)
+        owner_at(frame, CartesianIndex(i, j)) == owner_at(frame, CartesianIndex(i + 1, j)) && continue
+        x = ox + i * dx
+        push!(pts, Makie.Point2f(x, oy + (j - 1) * dy), Makie.Point2f(x, oy + j * dy))
+    end
+    for j in 1:(ny - 1), i in 1:nx
+        owner_at(frame, CartesianIndex(i, j)) == owner_at(frame, CartesianIndex(i, j + 1)) && continue
+        y = oy + j * dy
+        push!(pts, Makie.Point2f(ox + (i - 1) * dx, y), Makie.Point2f(ox + i * dx, y))
+    end
+    return pts
+end
+
+# the frame with one cell channel added (same owners, cells, geometry and MCS)
+function _with_channel(frame, name, values::AbstractDict)
+    ids = Set{Int}()
+    for I in CartesianIndices(frame_size(frame))
+        o = owner_at(frame, I)
+        o.kind === CellSite && push!(ids, Int(o.id))
+    end
+    cells = RenderCellMetadata[cell_metadata(frame, RenderOwner(CellSite, id)) for id in sort!(collect(ids))]
+    owners = [owner_at(frame, I) for I in CartesianIndices(frame_size(frame))]
+    vals = Dict{RenderCellIdentity, Float64}()
+    for c in cells
+        id = Int(c.identity.id)
+        haskey(values, id) || throw(ArgumentError("openvt_colony_panel!: no $name for cell $id"))
+        vals[c.identity] = Float64(values[id])
+    end
+    key = CellChannelKey(name, Float64)
+    return PottsRenderFrame(frame_mcs(frame), owners, cells; geometry = frame_geometry(frame),
+        channels = (RenderChannel(key, vals; label = string(name)),)), key, vals
+end
+
+# every cell's site count in a frame (its area when the frame is the whole lattice)
+function _site_counts(frame)
+    n = Dict{Int, Int}()
+    for I in CartesianIndices(frame_size(frame))
+        id = _owner_id(frame, I)
+        id > 0 && (n[id] = get(n, id, 0) + 1)
+    end
+    return n
+end
+
+function PottsModels.openvt_colony_panel!(ax, frame; colour::Symbol = :area, areas = nothing, inhibited = nothing,
+        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH)
+    length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_colony_panel!: a 2D frame is required"))
+    if colour === :area
+        a = areas === nothing ? _site_counts(frame) : areas
+        fr, key, vals = _with_channel(frame, :area, a)
+        if colorrange === nothing
+            isempty(vals) && throw(ArgumentError("openvt_colony_panel!: the frame holds no cell"))
+            lo, hi = extrema(values(vals))
+            colorrange = lo == hi ? (lo - 0.5, hi + 0.5) : (lo, hi)
+        end
+        pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "cell area"), colormap = :coolwarm,
+            colorrange, medium_color = :white, boundaries = false)
+    elseif colour === :state
+        inhibited === nothing && throw(ArgumentError("openvt_colony_panel!: colour = :state needs `inhibited`"))
+        fr, key, _ = _with_channel(frame, :inhibited, Dict(id => (v == true || v == 1) ? 1.0 : 0.0 for (id, v) in inhibited))
+        pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "inhibited"),
+            colormap = Makie.cgrad([GROWING, INHIBITED], 2; categorical = true), colorrange = (0.0, 1.0),
+            medium_color = :white, boundaries = false)
+    else
+        throw(ArgumentError("openvt_colony_panel!: colour is :area or :state, got :$colour"))
+    end
+    Makie.linesegments!(ax, _edges(fr); color = :black, linewidth, linecap = :square)
+    return pp
+end
+
+# ---- F1 ---------------------------------------------------------------------------------
 
 # the window × window block (offsets) centred where the 45° ray from the colony centroid
 # leaves the colony (the last cell site on it)
@@ -135,9 +222,11 @@ function _crop(frame, off, window)
     return PottsRenderFrame(frame_mcs(frame), owners, cells; geometry)
 end
 
-function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool = true)
+function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool = true, areas = nothing)
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_f1_figure: a 2D frame is required"))
     window > 0 || throw(ArgumentError("openvt_f1_figure: window must be positive"))
+    # areas from the whole frame, so cells cut by the window keep their full area
+    a = areas === nothing ? _site_counts(frame) : areas
     crop = _crop(frame, _rim_window(frame, window), window)
     g = frame_geometry(crop)
     # M's layout in mm (introduction.tex): a 45 mm panel, a 5 mm banner 1 mm above it; 10 px/mm
@@ -152,7 +241,7 @@ function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool 
     ax = Makie.Axis(fig[banner ? 2 : 1, 1]; width = P, height = P, backgroundcolor = :white)
     Makie.hidedecorations!(ax)
     Makie.hidespines!(ax)
-    pottsplot!(ax, crop; encoding = CellIdentityEncoding(), medium_color = :white, boundaries = false)
+    PottsModels.openvt_colony_panel!(ax, crop; colour = :area, areas = a)
     Makie.limits!(ax, g.origin[1], g.origin[1] + window * g.spacing[1], g.origin[2], g.origin[2] + window * g.spacing[2])
     banner && Makie.rowgap!(fig.layout, 1, P / 45)
     return fig

@@ -13,7 +13,7 @@
 # TST_time_to_10k_vs_{beta,gamma}.csv, final_snapshot_data/TST_beta_<b>_gamma_<g>_<MCS>MCS.csv,
 # TST_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv), G:results/<FW>/closeup.png
 # and G:implementations/<FW>/ (model files, runner scripts, a README). Decisions: D-146, D-154,
-# D-168, D-173, D-174 (+ amendment), D-175, D-178.
+# D-168, D-173, D-174 (+ amendment), D-175, D-178, D-185.
 #
 # ---------------------------------------------------------------------------------------------
 # The generator (pinned)
@@ -47,7 +47,8 @@
 #                        record's <name>.jl
 # results/Potts.jl/
 #   README.md            units, seeds, a Deviations table (D-154), the readings C1–C17, the
-#                        per-cell colour choice (D-175), a "Pending" section (see below)
+#                        closeup's colours (D-185: area on coolwarm, provisional scale limits),
+#                        a "Pending" section (see below)
 #   closeup.png          byte-identical to the P6.15h record's fig1_panel.png, the bare Potts.jl
 #                        panel without the banner, which the .tex adds (G:results/<FW>/closeup.png)
 #   provenance/<record>.toml
@@ -105,7 +106,8 @@
 #   ("Paper", "Manuscript" or "M"), "cause" and "Author question"; rows (keyed by first cell):
 #   every C# of spec §1.1; every row of every data/15/*/deviations.tsv (its first decimal number
 #   and FAIL when the target says FAIL); every non-control FAIL verdict (with FAIL); V1 (15.17,
-#   13.57, C13, "actual area", "target area", not PASS); the F1 per-cell colour row (D-175);
+#   13.57, C13, "actual area", "target area", not PASS); the F1 colour row (D-185: area on
+#   coolwarm, the scale limits marked provisional);
 #   the boundary row (a closed lattice with an edge guard instead of the schema's unbounded
 #   plane). Last cell starts with "not an author question", "not asked" or "resolved"; a row
 #   naming Q# says "our open question list".
@@ -703,16 +705,17 @@ end
         end
     end
     @test has("V1"; must = ["15.17", "13.57", "C13", "actual area", "target area"], mustnot = ["PASS"])
-    i = findfirst(r -> any(c -> occursin(r"per[- ]cell"i, c), r) && any(c -> occursin(r"area"i, c), r), rows)
-    @test i !== nothing                                         # F1 colour row (D-175)
+    i = findfirst(r -> occursin(r"^F1"i, r[1]) && any(c -> occursin(r"coolwarm"i, c), r) && any(c -> occursin(r"area"i, c), r) &&
+                       any(c -> occursin(r"provisional"i, c), r), rows)
+    @test i !== nothing                                         # F1 colour row (D-185)
     @test findfirst(r -> any(c -> occursin(r"closed"i, c), r) && any(c -> occursin(r"edge[_ ]guard"i, c), r) &&
                          any(c -> occursin(r"unbounded"i, c), r), rows) !== nothing
     for r in rows
         @test occursin(r"^(not an author question|not asked|resolved)"i, r[end])
         any(c -> occursin(r"\bQ\d+\b", c), r) && @test any(c -> occursin("our open question list", c), r)
     end
-    # per-cell colour choice stated in the prose too
-    @test occursin(r"CellIdentityEncoding", readme)
+    # the closeup's colours stated in the prose too (D-185)
+    @test occursin(r"coolwarm", readme) && occursin(r"provisional"i, readme)
     # units and seeds
     @test occursin("775", readme) && occursin("156", readme)
     @test occursin(r"cell radi"i, readme) && occursin(r"CD = 10 px"i, readme)
