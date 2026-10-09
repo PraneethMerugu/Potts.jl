@@ -579,7 +579,7 @@ Full runs are offline (D-146).
   - Design note first.
   - *Accept:* enumeration oracles on small lattices; an A/B showing zero cost for models that do not use it.
 - [x] (2026-10-08; D-191) **P6.3k** (D-189, ruling 11) Check the CC3D 4.3.1 source (connectivity plugins; Akeeb's Penalty 1e5 against the current source's soft 64) before any "exactly CC3D" claim.
-- [ ] **P6.2f** (D-191) Page 10 (Akeeb) text from the CC3D source check: one sentence that the 2D XMLs ran with Penalty 1e5 (honoured in 4.3.1/4.6.0, a veto at T = 10) while CC3D ≥ 4.7.0 returns a hard-coded 64; a deviations row for the (0,0,0) off-lattice ring read at the closed bottom edge (we read off-lattice as nothing; suspected small, bottom-wall cells only, unmeasured). Through a test author if page 10's frozen test pins the deviations rows.
+- [x] (merge, 2026-10-09; D-191) **P6.2f** (D-191) Page 10 (Akeeb) text from the CC3D source check: one sentence that the 2D XMLs ran with Penalty 1e5 (honoured in 4.3.1/4.6.0, a veto at T = 10) while CC3D ≥ 4.7.0 returns a hard-coded 64; a deviations row for the (0,0,0) off-lattice ring read at the closed bottom edge (we read off-lattice as nothing; suspected small, bottom-wall cells only, unmeasured). Through a test author if page 10's frozen test pins the deviations rows.
 - [x] (2026-10-05; D-147) **P6.15a** Spec 15 (`research/model-specs/15_openvt_monolayer.md`).
   - Written by the peer session "Potts.jl models and publications".
   - Verified as v3 against M, G at 54f375f and TSTgh at 7ae1636. The verification log is in the spec.
