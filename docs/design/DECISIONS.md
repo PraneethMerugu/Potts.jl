@@ -3432,3 +3432,14 @@ session.
 - **State colours** (from TST's 10k snapshots): growing RGB(44,123,182) and inhibited RGB(253,174,97).
 - **F8.** It has no snapshot panels, so nothing to restyle.
 - **Re-frozen tests.** `15_openvt_page.jl`, `15_openvt_f1_f4.jl` and `15_openvt_package.jl` (layout, prose and figure style only); pages 01, 09 and 10 also re-frozen for the D-185 layout.
+
+## D-186 Reproduction 04 (foam, Jiang et al. 1999) is built in parallel streams (2026-10-08; user ruling "work on the foam model in full parallel"; plan in spec 04 §8)
+
+- **Streams.** Only stream 5 waits on stream 1.
+  1. **Engine.** P6.4a copy-scope `direction` (and `time`, `mcs`, `Metropolis(tie)` as ROADMAP lists them), through an engine test author and then an implementer. It is the one engine blocker: the shear form γ(y_i, t)·(x_i − x_j), minimum image in x, needs the copy direction.
+  2. **Foam analysis functions** in PottsModels (spec 04 §2.8), tested on hand-built states: φ, neighbour lists and n, per-MCS T1 detection with a configurable counting unit (A-15), ρ(n), μ2(n), μ2(a), the Eq. 9 spectra, N̄ and the yield strain.
+  3. **Frozen test.** The reproduction 04 test comes from spec §5.2 V1–V20. The A-1, A-2, A-8 and A-15 choices are pre-registered as calibrations (D-155, D-156).
+  4. **No-shear page.** Brick wall → anneal → T = 0 relax → V1/V1b, plus coarsening.
+  5. **Shear runs.** V2–V20 run as FULL on the PC once stream 1 lands.
+- **Proposal law.** Until P6.4b's `UnlikeNeighbor` lands, the proposal is `BoundarySiteCPM` with a uniform neighbour. This is a labelled deviation; the targets avoid absolute MCS (A-5).
+- **Not blockers.** P6.4c (events) and P6.4d (Tiling, T1 counts as library) are conveniences only.
