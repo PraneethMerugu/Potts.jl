@@ -103,8 +103,10 @@ relaxed = solve(remake(prob; u0 = [ownership => Array(annealed.σ), kind => fill
 lat = Lattice(L; boundary = (Periodic(), Closed()))
 (hexagons = count(==(6), side_counts(Array(relaxed.σ), lat)), μ2_n = topology_moments(Array(relaxed.σ), lat).mu2_n)
 
-# `side_counts` gives each bubble's number of sides n; the 16 + 16 bubbles on the two walls
-# have 5 sides, every other one 6, so μ2(n) = 7/16 = 0.4375 (the paper's Fig. 11(c): 0.437).
+# `side_counts` gives each bubble's number of sides n. The closed wall is not a side (A-2),
+# so the 16 + 16 bubbles on the two walls have 4 sides and every other one 6: μ2(n) =
+# 32 × 2² / 256 = 7/16 = 0.4375 (the paper's Fig. 11(c): 0.437). Counting the wall as a side
+# would give the wall bubbles 5 sides and μ2(n) = 0.109.
 #
 # ## 3. Results
 #
@@ -145,7 +147,8 @@ function frames!(integ, tend, every; each = (m, σ) -> nothing)
     return F
 end
 
-## smoke-scale foams: 2 ordered (the frozen test's SMOKE seeds) and 1 disordered, μ2(n) → 0.81
+## smoke-scale foams, as the frozen test's SMOKE tier makes them (same seeds): 2 ordered, and
+## 1 disordered (μ2(n) → 0.81) coarsened from its own ordered foam
 function ordered(seed; video = false)
     A = fill(256.0, nb)
     i1 = init(foam_problem(brick(L), A, 10; seed, T = 3.0), alg)
@@ -174,14 +177,14 @@ function disordered(o, target, seed)
     return (; σ = Array(relaxed.σ), A, stop = m, frames = F, trace)
 end
 t_ord = @elapsed foams = [ordered(9_400_000 + k; video = k == 1) for k in 1:2]
-d081 = disordered(foams[1], 0.81, 9_400_011)
+d081 = disordered(ordered(9_400_010), 0.81, 9_400_010)            # the frozen test's first d081 try
 smoke = [(; hex = hexfrac(f.σ), mu2 = mu2n(f.σ), af = area_frac(f.σ, f.A), nbub = length(unique(f.σ))) for f in foams]
 dis = (; hex = hexfrac(d081.σ), mu2 = mu2n(d081.σ), af = area_frac(d081.σ, d081.A), nbub = length(unique(d081.σ)))
 
 ## a short bulk shear (model β, κ not yet calibrated) on the ordered and the disordered foam:
 ## φ̂ every 10 MCS, T1 events per MCS (VonNeumann(1) contacts, one T1 = 1), frames every 30 MCS
-function sheared(f, βm, tend, seed)
-    integ = init(foam_problem(f.σ, f.A, tend; seed, β = βm, bulk = 1.0), alg)
+function sheared(f, βm, tend, seed; γ0 = 0.0)
+    integ = init(foam_problem(f.σ, f.A, tend; seed, β = βm, bulk = βm > 0 ? 1.0 : 0.0, γ0), alg)
     fl = foam_lat(size(f.σ))
     φ0 = stored_energy(f.σ, fl)
     g = Ref(cell_graph(f.σ, fl))
@@ -199,6 +202,10 @@ const SHEAR_MCS = 3000
 sh_ord = sheared(foams[1], 0.05, SHEAR_MCS, 9_400_021)
 sh_dis = sheared(d081, 0.05, SHEAR_MCS, 9_400_023)
 sh_nul = sheared(foams[1], 0.0, 500, 9_400_022)                 # control: no shear, no T1
+## steady boundary shear (Eq. 6) at model γ0 = 24, the largest the frozen test's feasibility
+## probe tried without a T1 under periodic shear (κ not yet calibrated)
+const Γ0_MODEL = 24.0
+sh_bnd = sheared(foams[1], 0.0, SHEAR_MCS, 9_400_024; γ0 = Γ0_MODEL)
 
 ## the full-run record, if one has been committed
 rec_root = joinpath(pkgdir(PottsModels), "reproductions", "data", "04")
@@ -226,6 +233,7 @@ foam_video("04_foam_ordered.mp4", foams[1].frames; title = "brick wall → annea
 foam_video("04_foam_coarsening.mp4", d081.frames; title = "coarsening to μ2(n) = 0.81 (Γ = 0, T = 3)")
 foam_video("04_foam_bulk_ordered.mp4", sh_ord.frames; title = "ordered foam, bulk shear")
 foam_video("04_foam_bulk_d081.mp4", sh_dis.frames; title = "disordered foam (μ2(n) ≈ 0.8), bulk shear")
+foam_video("04_foam_boundary_ordered.mp4", sh_bnd.frames; title = "ordered foam, steady boundary shear")
 nothing #hide
 
 # ```@raw html
@@ -253,6 +261,15 @@ nothing #hide
 # ```@raw html
 # <figure><video src="../04_foam_bulk_ordered.mp4" controls loop muted playsinline width="400"></video>
 # <video src="../04_foam_bulk_d081.mp4" controls loop muted playsinline width="400"></video></figure>
+# ```
+#
+# Steady boundary shear (Eq. 6, the paper's Figs. 2 and 6) on the ordered foam at model
+# γ0 = 24 for 3000 MCS, every 30 MCS: only the rows y = 1 and y = L_y are driven. The paper's
+# γ0 = 7 (DV5) becomes κ × 7 in the full run, which also runs the disordered foam (V9); both
+# are pending the full run.
+#
+# ```@raw html
+# <figure><video src="../04_foam_boundary_ordered.mp4" controls loop muted playsinline width="400"></video></figure>
 # ```
 
 let f = Figure(size = (900, 300)) #hide
@@ -429,8 +446,11 @@ Markdown.parse(join([ #hide
 Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
                "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
                "bulk shear $(round(1e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
-               "T1 detection (256², `BoundarySiteCPM`). Seeds: ordered foams 9 400 001–2, disordered 9 400 011, " *
-               "shear 9 400 021–23 (the frozen test's smoke seeds).")
+               "T1 detection (256², `BoundarySiteCPM`). Seeds: the foams use the frozen test's smoke seeds " *
+               "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
+               "its first try). The shear runs use 9 400 021 and 9 400 022, the frozen shear check's seeds, " *
+               "here for 3000 MCS instead of its 500, and 9 400 023–24 for the disordered bulk and the " *
+               "boundary run; the frozen test does not pin these.")
 
 # | Date | Change | Reason |
 # |---|---|---|
