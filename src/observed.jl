@@ -36,7 +36,7 @@ function _observed_scope(x)
     for n in _bare_builtins(x)
         n in (:owner, :position, :site) && return :site
         n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface, :major_length,
-            :euler, :euler_full) &&
+            :euler, :euler_full, :pieces, :pieces_full, :largest_piece, :largest_piece_full) &&
             (scope = :cell)
     end
     return scope

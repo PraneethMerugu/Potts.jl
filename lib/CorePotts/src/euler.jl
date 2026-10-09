@@ -200,21 +200,12 @@ a periodic axis of length 1, where the per-copy change is not local
 ([`euler_change`](@ref)): the check runs here, on the host, when a problem is built.
 """
 function recompute_euler(σ, lat::Lattice, adj::Val, ncell::Integer)
-    _check_euler_lattice(lat)
+    check_shell_lattice(lat, "euler")
     χ = zeros(Int32, ncell)
     for a in 1:_euler_anchors(lat)
         _euler_window!(χ, σ, lat, a, adj)
     end
     return χ
-end
-
-function _check_euler_lattice(lat::Lattice{N}) where {N}
-    for d in 1:N
-        lat.periodic[d] && lat.dims[d] == 1 && throw(ArgumentError(
-            "`euler` needs every periodic axis to have length ≥ 2: axis $d is periodic with length 1, " *
-            "so the target's neighbour shell wraps onto the target itself; make axis $d closed or longer"))
-    end
-    return nothing
 end
 
 # the Euler columns present in a cell state: `(face, full)`, each a column or `nothing`;

@@ -69,6 +69,7 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key =
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
         :major_length => :(CorePotts.major_length($T, st.cell, ctx.lattice, $c)),
         :euler => :($T(@inbounds st.cell.euler[$c])), :euler_full => :($T(@inbounds st.cell.$(_EULER_FULL[])[$c])),
+        (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$c])) for n in _PIECES_NAMES)...,
         :cluster => :(CorePotts.cluster_of(st.cell, $c)),
         :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $c)))),
         :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $c))),
@@ -107,12 +108,21 @@ end
 # folds), unless its env binds `:__bc` itself
 const _FACES = Base.ScopedValues.ScopedValue{Any}(nothing)
 _with_faces(f, c::CompiledPottsSystem) =
-    Base.ScopedValues.with(f, _FACES => _face_bcs(c), _EULER_FULL => c.euler_full_column)
+    Base.ScopedValues.with(f, _FACES => _face_bcs(c), _EULER_FULL => c.euler_full_column, _PIECES_HEX => c.pieces_hex,
+        _LATTICE_DIMS => Tuple(getfield(c.sys, :lattice).dims))
 
 # The column `euler(; adjacency = :full)` reads in the model being generated: `:euler` on a
 # hexagonal lattice (one self-dual adjacency, D-192 Q4), else `:euler_full`
 const _EULER_FULL = Base.ScopedValues.ScopedValue{Symbol}(:euler_full)
 _euler_column(name::Symbol) = name === :euler_full ? _EULER_FULL[] : name
+
+# P6.9a: the model being generated is on a hexagonal lattice (`pieces(; adjacency = :full)`
+# reads the `:face` columns, `Global(; adjacency = :full)` is `:face`), and its lattice size
+# (the window's box capacity)
+const _PIECES_HEX = Base.ScopedValues.ScopedValue{Bool}(false)
+const _LATTICE_DIMS = Base.ScopedValues.ScopedValue{Tuple}(())
+_pieces_column(name::Symbol) = !_PIECES_HEX[] ? name : name === :pieces_full ? :pieces :
+                               name === :largest_piece_full ? :largest_piece : name
 
 # The masked clamp of field `name` (D-145): `(st, p, ctx, key, mcs, i, v) -> v′`, `v` replaced
 # by each `sites(pred) => Dirichlet(value)` whose `pred` holds at `i` (a later entry wins), or
@@ -168,6 +178,25 @@ _edge_energies(c::CompiledPottsSystem) =
 # `CorePotts.ShellRead`
 const _SHELL_KERNELS = (:local_rule, :arc_or_pair, :simple_point, :euler_change, :local_components, :ring_arcs,
     :ring_cells, :ring_medium)
+# what each CorePotts shell-reading call is, as the model names it (`_shell_quantities`)
+const _SHELL_QUANTITY = Dict(:local_rule => "Local", :arc_or_pair => "ArcOrPair", :simple_point => "Simple",
+    :euler_change => "euler", :local_components => "local_components", :ring_arcs => "ring_arcs",
+    :ring_cells => "ring_cells", :ring_medium => "ring_medium", :shell_pieces => "pieces(…, shell(…))",
+    :global_keeps => "Global", :global_gains => "Global", :global_defer => "Global",
+    :pieces_after! => "pieces/largest_piece", :pieces_defer => "pieces/largest_piece")
+"""The model-facing names of the shell-based quantities the expressions `exs` read, sorted."""
+function _shell_quantities(exs)
+    acc = Set{String}()
+    walk(x) = x isa Expr ? (_shell_quantity!(acc, x); foreach(walk, x.args)) : nothing
+    foreach(walk, exs)
+    return sort!(collect(acc))
+end
+function _shell_quantity!(acc, x::Expr)
+    x.head === :call && x.args[1] isa Expr && x.args[1].head === :. && x.args[1].args[1] === :CorePotts || return
+    q = x.args[1].args[2]
+    q isa QuoteNode && haskey(_SHELL_QUANTITY, q.value) && push!(acc, _SHELL_QUANTITY[q.value])
+    return
+end
 _is_shell_call(x) = x isa Expr && x.head === :call && length(x.args) >= 4 && x.args[1] isa Expr &&
                     x.args[1].head === :. && x.args[1].args[1] === :CorePotts &&
                     x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.σ)
@@ -248,6 +277,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     # Euler characteristics (P6.3j): exact Int32 changes of the two cells, from the shell
     c.uses_euler && push!(body, :((δe_old, δe_new) = CorePotts.euler_change(st.σ, ctx, prop, Val(:face))))
     c.uses_euler_full && push!(body, :((δf_old, δf_new) = CorePotts.euler_change(st.σ, ctx, prop, Val(:full))))
+    # cell-scope pieces (P6.9a): the exact after-values of both cells, kept for the commit
+    append!(body, _pieces_prelude(c))
     # cell terms, grouped by kind filter
     groups = Dict{Vector{Int}, Any}()
     for (kinds, E) in c.cell_terms
@@ -259,7 +290,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             ΔE = _cell_delta(E, dv; after = after[side])
             _nops(ΔE) == 0 && isequal(_unwrap(ΔE), 0) && continue
             env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, :δeuler => :($T($δe)), :δeuler_full => :($T($(c.uses_euler_full ? δf : δe))),
-                :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)), oc_binds...))
+                :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)),
+                _pieces_binds(c, T, side)..., oc_binds...))
             push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
@@ -284,6 +316,32 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
 end
 
 _group_terms(terms) = (g = Dict{Vector{Int}, Any}(); foreach(((k, E),) -> (g[k] = haskey(g, k) ? g[k] + E : E), terms); g)
+
+# Cell-scope pieces (P6.9a): one `pieces_after!` per adjacency read, slot 1 for the first.
+# Nothing for a model that reads neither (its code is unchanged).
+function _pieces_slots(c::CompiledPottsSystem)
+    fulls = Bool[f for (u, f) in ((c.uses_pieces, false), (c.uses_pieces_full, true)) if u]
+    return [(full, slot) for (slot, full) in enumerate(fulls)]
+end
+function _pieces_prelude(c::CompiledPottsSystem)
+    out = Any[]
+    for (full, slot) in _pieces_slots(c)
+        P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
+        vars = full ? (:pf_old, :lf_old, :pf_new, :lf_new) : (:pa_old, :la_old, :pa_new, :la_new)
+        push!(out, :($(Expr(:tuple, vars...)) = CorePotts.pieces_after!(st.σ, ctx, prop, st.cell.$P, st.cell.$L,
+            st.cell.volume, Val($full), $slot)))
+    end
+    return out
+end
+# the after-values a cell term reads, for side `side` (`:full` on hex is the face pair)
+function _pieces_binds(c::CompiledPottsSystem, T, side)
+    (c.uses_pieces || c.uses_pieces_full) || return ()
+    o = side === :old
+    face = o ? (:pa_old, :la_old) : (:pa_new, :la_new)
+    full = c.uses_pieces_full ? (o ? (:pf_old, :lf_old) : (:pf_new, :lf_new)) : face
+    return (:δpieces => :($T($(face[1]))), :δlargest_piece => :($T($(face[2]))),
+        :δpieces_full => :($T($(full[1]))), :δlargest_piece_full => :($T($(full[2]))))
+end
 
 # Cluster terms: the target moves from the cluster of `old` to that of `new` (nothing
 # changes when both are the same cluster).
@@ -364,6 +422,8 @@ function _commit_expr(c::CompiledPottsSystem, T)
     body = Any[_PROP_LOCALS]
     vals = Any[]; writes = Any[]
     for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
+        # the commit may run in parallel (checkerboard): no whole-cell search there (P6.9a)
+        _reads_global(u.eq.rhs) && throw(ArgumentError("@on_copy: `connected(…; rule = Global())` reads the whole cell; use it in @constraint or @drive"))
         v = Symbol(:v_, j)
         push!(vals, :($v = $(lower(u.eq.rhs, env))))
         push!(writes, _write(_unwrap(u.eq.lhs), v, env))
@@ -378,6 +438,10 @@ function _commit_expr(c::CompiledPottsSystem, T)
     c.uses_euler && push!(body, :(CorePotts.commit_euler!(st.cell.euler, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:face)))))
     c.uses_euler_full && push!(body,
         :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:full)))))
+    for (full, slot) in _pieces_slots(c)            # the after-values ΔH stored (P6.9a)
+        P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
+        push!(body, :(CorePotts.commit_pieces!(st.cell.$P, st.cell.$L, prop, ctx, $slot)))
+    end
     c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx.lattice, prop)))
     c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
         CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
@@ -412,10 +476,11 @@ function _write(lhs, v, env)
 end
 
 function _constraint_expr(c::CompiledPottsSystem, T)
-    isempty(c.constraints) && return nothing
+    cons = filter(!_is_global_veto, c.constraints)    # the `Global` veto runs after the draw (`_post_expr`)
+    isempty(cons) && return nothing
     env = _proposal_env(T, c.gather_names)
     tests = Any[]
-    for k in c.constraints
+    for k in cons
         if k.kind === :expr
             push!(tests, lower(k.expr, env))
         elseif k.kind === :connectivity          # evaluated only for a losing cell of `kinds`
@@ -428,6 +493,81 @@ function _constraint_expr(c::CompiledPottsSystem, T)
     end
     test = foldl((a, b) -> :($a && $b), tests)
     return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, :(return $test)))))
+end
+
+# ---------------------------------------------------------------------------------------
+# Whole-cell connectivity (P6.9a): the `Global` veto after the acceptance draw, and the copies
+# the checkerboard runs serially (exact floods)
+
+# the rule code of a connectivity constraint (`_connected(old, code)`), or `nothing`
+_connectivity_code(k::Constraint) =
+    k.kind === :connectivity ? Int(SymbolicUtils.unwrap_const(_unwrap(arguments(_unwrap(k.expr))[2]))) : nothing
+_is_global_veto(k::Constraint) = (code = _connectivity_code(k); code !== nothing && code >= 7)
+
+# `Global` rules read inline (drives, `:expr` constraints, a copy-scope temperature):
+# `(who, rule)` for each
+function _inline_globals(c::CompiledPottsSystem)
+    out = Tuple{Symbol, Global}[]
+    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., getfield(c.sys, :sweep).temperature]
+    for x in xs
+        x === nothing && continue
+        _walk(x) do y
+            (iscall(y) && operation(y) === _connected) || return
+            a = arguments(y)
+            g = _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(a[2]))))
+            g === nothing || push!(out, (isequal(_unwrap(a[1]), _unwrap(B.old)) ? :old : :new, g))
+        end
+    end
+    return out
+end
+
+"""The `post` hook: `(st, p, prop, ctx, stage) -> Int32` (0 pass, 1 for want of window, 2
+refused) over every `Global` veto, each cell against its kind filter; `nothing` without one."""
+function _post_expr(c::CompiledPottsSystem, T)
+    vetoes = filter(_is_global_veto, c.constraints)
+    isempty(vetoes) && return nothing
+    body = Any[_PROP_LOCALS, :(code = Int32(0))]
+    for k in vetoes                                      # the gaining side first: local and exact
+        g = _global_rule(_connectivity_code(k))
+        push!(body, :(new != 0 && $(_kindtest(:k_new, k.kinds)) && !CorePotts.global_gains(st.σ, ctx, prop, $(_global_adj(g))) &&
+                      return Int32(2)))
+    end
+    for k in vetoes
+        g = _global_rule(_connectivity_code(k))
+        push!(body, :(old != 0 && $(_kindtest(:k_old, k.kinds)) &&
+                      (code = max(code, CorePotts.global_keeps(st.σ, ctx, prop, $(_global_vals(g)...), stage)))))
+    end
+    push!(body, :(return code))
+    return :((st, p, prop, ctx, stage) -> $(Expr(:block, body...)))
+end
+
+"""The `defer` hook: `(st, p, prop, ctx) -> Bool`, whether the copy needs the exact floods
+(cell-scope pieces off their fast path, an inline `Global` of `old` without window whose local
+test fails); `nothing` when the model has neither."""
+function _defer_expr(c::CompiledPottsSystem, T)
+    tests = Any[]
+    for (full, _) in _pieces_slots(c)
+        P = full ? :pieces_full : :pieces
+        push!(tests, :(CorePotts.pieces_defer(st.σ, ctx, prop, st.cell.$P, st.cell.volume, Val($full))))
+    end
+    for (who, g) in unique(_inline_globals(c))
+        who === :old && g.window === nothing && push!(tests, :(CorePotts.global_defer(st.σ, ctx, prop, $(_global_adj(g)))))
+    end
+    isempty(tests) && return nothing
+    return :((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, :(return $(foldl((a, b) -> :($a || $b), tests))))))
+end
+
+"""The model's `CorePotts.ConnectivityHooks`, or `nothing` (no `Global`, no cell-scope pieces)."""
+function _connectivity_hooks(c::CompiledPottsSystem, T)
+    vetoes = filter(_is_global_veto, c.constraints)
+    inline = _inline_globals(c)
+    slots = length(_pieces_slots(c))
+    isempty(vetoes) && isempty(inline) && slots == 0 && return nothing
+    pe = _post_expr(c, T)
+    de = _defer_expr(c, T)
+    return CorePotts.ConnectivityHooks(; post = pe === nothing ? nothing : _rgf(pe), defer = de === nothing ? nothing : _rgf(de),
+        uses_global = !isempty(vetoes) || !isempty(inline),
+        exact_veto = any(k -> _global_rule(_connectivity_code(k)).window === nothing, vetoes), after_slots = slots)
 end
 
 # The copy temperature: a copy-scope expression, or a cell-scope one evaluated for the

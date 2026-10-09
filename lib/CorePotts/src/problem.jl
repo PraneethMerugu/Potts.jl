@@ -206,6 +206,10 @@ Base.@kwdef mutable struct PottsStats
     # `nothing` without a track. Exact after every step under `SequentialCPM`; under
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
     accepted_ΔH::Union{Nothing, Float64} = nothing
+    # copies the `Global` veto refused only for want of window (P6.9a, D-197): `nothing` for
+    # a model without `Global`, else an `Int` (always 0 on SequentialCPM, BoundarySiteCPM and
+    # without a window); under `CheckerboardCPM` brought up to date at the host read points
+    connectivity_deferred::Union{Nothing, Int} = nothing
 end
 
 """
@@ -258,7 +262,9 @@ function Base.merge(a::PottsStats, b::PottsStats)
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l,
-        accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH)
+        accepted_ΔH = (a.accepted_ΔH === nothing || b.accepted_ΔH === nothing) ? nothing : a.accepted_ΔH + b.accepted_ΔH,
+        connectivity_deferred = (a.connectivity_deferred === nothing || b.connectivity_deferred === nothing) ? nothing :
+                                a.connectivity_deferred + b.connectivity_deferred)
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -302,6 +308,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
+    # whole-cell connectivity (P6.9a): the flood scratch and the evaluation mode; nothing otherwise
+    ctx = merge(ctx, connectivity_ctx(backend, prob.f, lat, alg isa CheckerboardCPM ? GlobalBoard() : GlobalExact()))
     _preflight(prob, alg, ctx)
     _check_frozen_hooks(prob.f.sys)
     _custom_frozen(prob.f.sys) && _frozen_reads(prob.f.sys, prob.u0)
@@ -368,6 +376,7 @@ function _preflight(prob::PottsProblem, alg::CPMAlgorithm, ctx)
             "the $name relation is not symmetric (each offset needs its negation with the same " *
             "weight); an asymmetric relation gives a ΔH that is not an energy difference"))
     end
+    _check_connectivity(prob, alg, ctx)
     alg isa CheckerboardCPM || return nothing
     need = max(radius(ctx.contact), maximum(radius, values(prob.relations); init = 0))
     have = first(reach(prob.f.footprint, ctx.proposal))
@@ -388,6 +397,7 @@ function current_state(integ::PottsIntegrator)
     _sync!(integ.stats, integ.backend)
     _fold_lifecycle!(integ)
     _fold_track!(integ)
+    _fold_deferred!(integ)
     return _snapshot(integ.stats, integ.backend, integ.state)
 end
 
@@ -537,8 +547,22 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
     return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3))
 end
 
-# Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`.
-_initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 0.0)
+# Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`;
+# `connectivity_deferred` is 0 when the model uses `Global`, else `nothing`.
+_initial_stats(f) = PottsStats(; accepted_ΔH = f.track === nothing ? nothing : 0.0,
+    connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
+
+# Whole-cell connectivity on a device (P6.9a): a device lifecycle does not maintain the
+# `pieces` columns.
+function _check_connectivity(prob, alg, ctx)
+    h = prob.f.connectivity
+    h === nothing && return nothing
+    _ondevice(ctx.flood.mark) || return nothing
+    h.after_slots > 0 && prob.f.lifecycle !== nothing && throw(ArgumentError(
+        "cell-scope `pieces`/`largest_piece` with a lifecycle run on the host only (CPU backend): the device " *
+        "lifecycle does not rebuild them"))
+    return nothing
+end
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
 # is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
@@ -642,6 +666,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     end
     _flush_counts!(integ)                           # exact `stats` at the end (D-089)
     _fold_track!(integ)
+    _fold_deferred!(integ)
     _check_status!(integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success
@@ -706,6 +731,7 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.refreshes = src.refreshes
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
     dst.accepted_ΔH = src.accepted_ΔH
+    dst.connectivity_deferred = src.connectivity_deferred
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end

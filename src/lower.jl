@@ -453,6 +453,10 @@ function _lower_at(args, env)
             s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
             return :($(env.T)(Potts._cellval(st.cell.$(_euler_column(i.name)), $j)))
         end
+        if i.name in _PIECES_NAMES
+            s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
+            return :($(env.T)(Potts._cellval(st.cell.$(_pieces_column(i.name)), $j)))
+        end
         if i.name === :cluster
             s === :site && error("`cluster[…]` needs a cell; write `cluster[owner[s]]`")
             return :(CorePotts.cluster_of(st.cell, $j))
@@ -476,6 +480,7 @@ function _lower_population(args, env)
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
             :euler => :($T(@inbounds st.cell.euler[$nsym])),
             :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
+            (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
             :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
             :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
             :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))))
@@ -625,9 +630,23 @@ function _lower_connected(args, env)
     env.mode === :proposal || error("`connected(…)` and `connectivity(…)` read a copy: use them in @constraint or @drive")
     who = isequal(_unwrap(args[1]), _unwrap(B.old)) ? :old : :new
     code = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
+    g = _global_rule(code)
+    g === nothing || return _lower_global(who, g)
     code <= 3 && return :(CorePotts.local_rule(st.σ, ctx, prop, $(isodd(code)), $(code >= 2)))
     code == 4 && return :(CorePotts.arc_or_pair(st.σ, ctx, prop))
     return :(CorePotts.simple_point(st.σ, ctx, prop, $who, $(code == 6)))
+end
+
+# `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
+# window on the checkerboard (an undecided copy reads `false`); the gaining side is local
+_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.σ, ctx, prop, $(_global_adj(g)))) :
+                        :(CorePotts.global_keeps(st.σ, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+# `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
+_global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
+function _global_vals(g)
+    W = g.window
+    cap = W === nothing ? 0 : prod(n -> min(n, 2W + 1), _LATTICE_DIMS[])
+    return (_global_adj(g), :(Val($W)), :(Val($cap)))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -665,3 +684,6 @@ function _gathers(x)
 end
 
 _has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
+# whether `x` reads `connected(…; rule = Global(…))` (P6.9a)
+_reads_global(x) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === _connected &&
+    _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x); found[])

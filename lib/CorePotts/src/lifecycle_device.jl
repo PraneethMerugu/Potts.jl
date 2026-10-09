@@ -67,7 +67,7 @@ const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
 const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :cluster,
-    :cluster_volume, :cluster_surface, :euler, :euler_full)
+    :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
 function _device_scratch(backend, N::Int, cap::Int)
