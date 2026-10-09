@@ -466,3 +466,8 @@ decision = "D-180"
 path = "reproductions/01_merks_page.jl"
 sha256 = "4aa092f91aa1949f1e66995ce2d1b6bcad0d72744717f103af9ea52ab5a6b337"
 decision = "D-184"
+
+[[file]]
+path = "acceptance/p6_4a1_copy_direction.jl"
+sha256 = "ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296"
+decision = "D-188"
