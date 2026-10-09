@@ -3727,3 +3727,34 @@ session.
   
   The message names the quantity and the axis, and suggests a 2D lattice or a Closed axis. There is one check, shared by all of these; it generalises P6.3j's check for `euler`.
 - **Axes of length 2.** These are sound: random copy runs show no drift, and the lattice's offset-alias check already guards them.
+
+## D-202 P6.3f: digitised targets from Merks 2008 (01b), test frozen (2026-10-09; coordinator, from the P6.3f 01b test author; under D-153–D-156, D-200)
+
+- **Frozen files.**
+  - The test: `reproductions/01_merks_01b.jl` (commit 72c7fc01, sha256 `62b60427…`).
+  - Digitised data: `reproductions/data/01b/fig{05,07,08,09,10,12,13}.tsv`, plus a provenance README covering figure, page, method and uncertainty. All frozen.
+  - The rows live in a new file because the page test pins `01_merks.jl` to the D-200 amendment.
+- **Point rows.** 133 points across 13 curves. A curve passes when at most max(1, ⌊0.1n⌋) points fall outside paper ± band. The band is the wider of the paper's SD and our digitisation error.
+- **Shape rows.**
+  - F5.mid, F7.gap and F7.rise.
+  - F8.dropCI and F8.dropNoCI.
+  - F9.mid and F10.size.
+  - F12.order and F12.rate.
+  - F13: sign and order, with each arm's Σ ΔH within a factor √10 of the paper's.
+- **Negative controls.** Seven, each of which must fail.
+- **Inferred parameters (provisional under D-154; each becomes a deviations row).**
+  - I1: the Fig 12 and 13 start is 256 cells after 71 division rounds, on 502².
+  - I2: the Fig 10 start is 1024 cells after 141 rounds, on 402².
+  - I3: n = 10 for Figs 7–10.
+  - I4: "no CI" means χcc = χcM.
+  - I5: Fig 13's quantity is the Float sum of accepted ΔH, chemotaxis included.
+  - I6: the time axis includes the 100 relaxation MCS.
+  - I7: Fig 10's legend contradicts its caption, so the flatter solid curve is read as the 1024-cell one.
+- **Not pinned.**
+  - Fig 13 magnitudes beyond √10, because we have no integer ΔH truncation.
+  - Fig 12 before 100 MCS.
+  - Fig 10 at very low D.
+  - Fig 5 at r = 0 and 1.
+  - Insets.
+  - Figs 6 and 11.
+- **Record.** `full-01b-*` is pending. Its FULL run is 1330 jobs, about 103 thread-hours (about 4.3 h at 24 threads), and it runs on the PC after the foam FULL. A runner implementer goes first.
