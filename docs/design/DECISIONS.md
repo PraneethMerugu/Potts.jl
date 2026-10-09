@@ -3455,3 +3455,19 @@ session.
   - **Periodogram.** |X|²/L, without the f = 0 bin.
   - **Yield.** The first T1 avalanche, as the paper defines it. Converting it to strain is the caller's job (A-9).
   - **μ2(a) unit.** It is a P6.4r calibration; areas stay in sites.
+
+## D-188 P6.4a1: copy scope gains `direction`, test frozen (2026-10-08; coordinator, from the P6.4a1 test author; under D-186)
+
+- **Frozen test.** `acceptance/p6_4a1_copy_direction.jl` (commit e4b85503, sha256 `ea3d4cada564a9939dac4589f2bc6e1a7c67f55cdfe6846cb85365f478e4c296`).
+- **Surface.** The copy scope gains three entries, each computed from (source, target) alone:
+  - `direction[k]`: x_target − x_source in `position` units. It uses the minimum image on periodic axes and the plain difference on closed axes.
+  - `mcs`: n − 1 during MCS n.
+  - `position[target|source][k]`.
+- **Hexagonal lattices.** Either an `ArgumentError` that names `direction`, or correct values.
+- **Algorithms.** Results match the hand-written reference bitwise on Sequential, Checkerboard and BoundarySite, on Float32 and on the device. Warm allocations are zero.
+- **Foam shear.** The foam shear is a drive.
+- **Deferred.** `Metropolis(tie)` is deferred: T = 1e-6 gives the A-6 T→0⁺ limit.
+- **Not a blocker.** The shear can already be written today with px/py site variables, an `ifelse` minimum image and a model-level G set in `@before_mcs`. The test uses that form as its reference. So `direction` is a convenience, and P6.4r is not blocked on it.
+- **Corrections.**
+  - Spec 04 §8 says that `mcs` and `position` are available in drives. Both are rejected today.
+  - The drive docs wrongly list `mcs`; the implementer fixes them.
