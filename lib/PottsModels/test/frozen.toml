@@ -473,6 +473,11 @@ sha256 = "fe3be09685e71d121daa24a8193ac969d5c6d8c458169732af4c446a01c190a4"
 decision = "D-200"
 
 [[file]]
+path = "reproductions/04_foam.jl"
+sha256 = "b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d"
+decision = "D-190"
+
+[[file]]
 path = "acceptance/p6_4b2_foam_analysis.jl"
 sha256 = "2820a76fa9462dbaa5475f3adace7d84b5e719fe654f9721303d64baff739044"
 decision = "D-187"
