@@ -3856,3 +3856,4 @@ session.
   - message cosmetics (`(t)` suffixes, vector names);
   - kind names in `show`/`@extend` output;
   - doc wording on what a fold may read.
+- **Re-frozen for the widening.** Commit 174bc91e, sha256 `eab48311…`. New section 5 has 21 refused fixtures; on the implementation head they give 69 reds. New section 6 holds the controls, whose ΔH oracles are exact. The original 160 checks are unchanged. `kind[40]` in cells and contacts must carry the D-209 wording; today it raises the older "needs a site" message.
