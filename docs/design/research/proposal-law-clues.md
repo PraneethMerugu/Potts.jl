@@ -87,6 +87,7 @@ and not enough info to determine it", and asked for research before any sensitiv
     by the no-CI contraction.
   - We measure from MCS 100 (`01_merks.jl:383`). That predicts our CI value low (68 vs 85) and
     our no-CI value high (54 vs 42), which is the observed direction of both misses.
+- **Result (2026-10-09, D-200; stored FULL snapshots, no new dynamics).** From MCS 0: CI 82.8 ± 6.8 µm, no-CI 41.1 ± 1.8 µm, ratio 2.017 (95 % 1.91–2.13), against the paper's ≈ 85 / 42. The MCS-100 control reproduced 1.26 exactly. **Hypothesis confirmed**, and V-C12 is redefined to the MCS-0 reference.
 - **Caveat.** The A–D trajectories start at MCS 100, so the paper is internally ambiguous. The
   6E curve shape favours MCS 0.
 - **Check, no new dynamics needed.** Rebuild σ(0) from `layout(merks2008_sprout(; seed), (202, 202))`
