@@ -36,9 +36,27 @@ The adjacency offsets of a cell's sites: face (`Val(false)`) or full (`Val(true)
 @inline _adjacency_offsets(::Lattice{3}, ::Val{false}) = _FACE3
 @inline _adjacency_offsets(::Lattice{3}, ::Val{true}) = _CUBE_SHELL
 
-# shell positions adjacent to x, and the shell adjacency, under `full`
-@inline _touch_bits(t, ::Val{F}) where {F} = F ? t.all : t.xface
-@inline _shell_adjacency(t, ::Val{F}) where {F} = F ? t.full : t.face
+# the shell positions adjacent to x under the adjacency, in shell (`shell_offsets`) order
+const _SQUARE_XFACE = _bits(_SQUARE_SHELL, o -> sum(abs, o) == 1)
+@inline _touch_bits(::Lattice{2, M, Hexagonal}, ::Val{F}) where {M, F} = _RING_ALL6
+@inline _touch_bits(::Lattice{2, M, Square}, ::Val{F}) where {M, F} = F ? _RING_ALL8 :
+                                                                      _SQUARE_XFACE
+@inline _touch_bits(::Lattice{3}, ::Val{F}) where {F} = F ? _CUBE_TABLES.all :
+                                                        _CUBE_TABLES.xface
+
+# the shell pieces of the mask `m` (shell order) that meet its touches `touch`, with the
+# shell kernels (P6.3h): runs of the ring in 2D, dilation in the 3×3×3 box in 3D
+@inline _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F} = _touched_pieces(
+    _ring_bits(lat), m, touch, F)
+@inline function _touched_pieces(r::Val{:ring8}, m::UInt32, touch::UInt32, full::Bool)
+    mr = _to_ring8(m)
+    # full: every position of m is a touch; face: the runs holding a face neighbour
+    return full ? _pieces(mr, true, r, nothing) : _runs8_touching(mr)
+end
+@inline _touched_pieces(r::Val{:ring6}, m::UInt32, touch::UInt32, full::Bool) = _pieces(
+    m, full, r, nothing)                     # every hex position is a touch
+@inline _touched_pieces(::Val{:box}, m::UInt32, touch::UInt32, full::Bool) = _components27(
+    m, full, touch)
 
 """
 Evaluation of `Global` for the search: exact everywhere (`GlobalExact`, host algorithms)
@@ -196,10 +214,9 @@ end
 
 # the shell data of the losing side: (owners mask of `old`, touches, local test holds)
 @inline function _losing_shell(σ, lat, x, c, adj::Val)
-    t = _shell_tables(lat)
     m = shell_mask(shell_owners(lat, σ, x), c)
-    touch = m & _touch_bits(t, adj)
-    ok = touch == 0 || _components(m, _shell_adjacency(t, adj), touch) <= 1
+    touch = m & _touch_bits(lat, adj)
+    ok = touch == 0 || _touched_pieces(lat, m, touch, adj) <= 1
     return m, touch, ok
 end
 
@@ -348,8 +365,8 @@ pieces, i.e. x is adjacent to `new` under the adjacency.
 @inline function global_gains(σ, ctx, prop::Proposal, adj::Val)
     prop.new == 0 && return true
     lat = ctx.lattice
-    return (shell_mask(shell_owners(lat, σ, prop.x), prop.new) &
-            _touch_bits(_shell_tables(lat), adj)) != 0
+    return (shell_mask(read_shell(σ, ctx, prop).owners, prop.new) &
+            _touch_bits(lat, adj)) != 0
 end
 
 """
@@ -418,8 +435,7 @@ end
     p0 = Int(@inbounds P[b])
     l0 = Int(@inbounds L[b])
     lat = ctx.lattice
-    touch = shell_mask(shell_owners(lat, σ, prop.x), b) &
-            _touch_bits(_shell_tables(lat), adj)
+    touch = shell_mask(read_shell(σ, ctx, prop).owners, b) & _touch_bits(lat, adj)
     touch == 0 && return Int32(p0 + 1), Int32(max(l0, 1))
     p0 == 1 && return Int32(1), Int32(v + 1)
     fl = ctx.flood
@@ -468,19 +484,17 @@ Whether `pieces_after!` needs the floods for this copy (the checkerboard defers 
 """
 @inline function pieces_defer(σ, ctx, prop::Proposal, P, V, adj::Val)
     lat = ctx.lattice
-    owners = shell_owners(lat, σ, prop.x)
-    t = _shell_tables(lat)
+    owners = read_shell(σ, ctx, prop).owners
     if prop.old != 0
         a = prop.old
         m = shell_mask(owners, a)
-        touch = m & _touch_bits(t, adj)
+        touch = m & _touch_bits(lat, adj)
         fast = @inbounds(V[a]) == 1 || touch == 0 ||
-               (@inbounds(P[a]) == 1 &&
-                _components(m, _shell_adjacency(t, adj), touch) <= 1)
+               (@inbounds(P[a]) == 1 && _touched_pieces(lat, m, touch, adj) <= 1)
         fast || return true
     end
     if prop.new != 0
-        touch = shell_mask(owners, prop.new) & _touch_bits(t, adj)
+        touch = shell_mask(owners, prop.new) & _touch_bits(lat, adj)
         (touch == 0 || @inbounds(P[prop.new]) == 1) || return true
     end
     return false
