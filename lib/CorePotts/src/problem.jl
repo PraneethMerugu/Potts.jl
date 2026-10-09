@@ -208,7 +208,8 @@ Base.@kwdef mutable struct PottsStats
     accepted_ΔH::Union{Nothing, Float64} = nothing
     # copies the `Global` veto refused only for want of window (P6.9a, D-197): `nothing` for
     # a model without `Global`, else an `Int` (always 0 on SequentialCPM, with or without
-    # `skip_interior`, and without a window); under `CheckerboardCPM` brought up to date at the host read points
+    # `skip_interior`, and without a window); under `CheckerboardCPM` brought up to date at
+    # the host read points
     connectivity_deferred::Union{Nothing, Int} = nothing
 end
 
@@ -299,7 +300,8 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
     alg isa CheckerboardCPM && alg.skip_interior && throw(ArgumentError(
         "CheckerboardCPM(; skip_interior = true) is not yet implemented (P6.0bk); use " *
-        "SequentialCPM(; skip_interior = true) on the CPU, or CheckerboardCPM() with skip_interior = false"))
+        "SequentialCPM(; skip_interior = true) on the CPU, or CheckerboardCPM() with " *
+        "skip_interior = false"))
     t0, t1 = prob.tspan
     # SciML convention: a number means "every Δ MCS" from t0 (t0 itself is `save_start`)
     saveat isa Number && (saveat = (t0 + Int(saveat)):Int(saveat):t1)
@@ -567,8 +569,8 @@ end
 
 # Read point of the checkerboard track (D-140, the D-089 pattern): the per-site accumulator
 # is reduced into `stats.accepted_ΔH` (Float64; one counted copy on a device) and zeroed.
-# Nothing without a track or under `SequentialCPM` (with or without `skip_interior`), which adds into the
-# stats every step.
+# Nothing without a track or under `SequentialCPM` (with or without `skip_interior`),
+# which adds into the stats every step.
 _fold_track!(integ) = _fold_track!(integ.stats, integ.cache)
 _fold_track!(stats, ::Nothing) = nothing
 _fold_track!(stats, ::BoundaryCache) = nothing

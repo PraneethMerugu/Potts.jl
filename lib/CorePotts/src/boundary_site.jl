@@ -1,5 +1,5 @@
-# Boundary-site dynamics on the host (`SequentialCPM(; skip_interior = true)`, D-177, D-198): `SequentialCPM`'s chain with
-# the null picks outside the boundary set skipped exactly.
+# Boundary-site dynamics (`SequentialCPM(; skip_interior = true)`, D-177, D-198): the
+# sequential chain on the host with the null picks outside the boundary set skipped exactly.
 #
 # The boundary set B is the set of mobile sites t with an offset o of the proposal such that
 # s = t + o is on the lattice, mobile, and σ[s] ≠ σ[t]. A `SequentialCPM` attempt whose
@@ -173,11 +173,13 @@ end
     _boundary_sites(integ)
 
 The integrator's current boundary set (linear site indices, any order, each once), brought
-up to date with its state. For tests; `integ.alg` must be `SequentialCPM(; skip_interior = true)`.
+up to date with its state. For tests; `integ.alg` must be
+`SequentialCPM(; skip_interior = true)`.
 """
 function _boundary_sites(integ)
     B = integ.cache
-    B isa BoundaryCache || throw(ArgumentError("_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"))
+    B isa BoundaryCache || throw(ArgumentError(
+        "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"))
     _sync_boundary!(B, integ.state.σ, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
     return view(B.list, 1:B.n)
 end

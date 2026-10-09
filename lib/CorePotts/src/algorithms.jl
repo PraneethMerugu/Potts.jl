@@ -93,6 +93,19 @@ end
 SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior::Bool = false) =
     SequentialCPM(acceptance, proposal, skip_interior)
 
+# Printed as the keyword call that rebuilds it (the type parameter `S` is not a keyword);
+# keywords at their defaults are left out.
+function Base.show(io::IO, a::SequentialCPM)
+    print(io, "SequentialCPM(")
+    kw = String[]
+    a.acceptance === nothing || push!(kw, "acceptance = " * repr(a.acceptance; context = io))
+    a.proposal === nothing || push!(kw, "proposal = " * repr(a.proposal; context = io))
+    a.skip_interior && push!(kw, "skip_interior = true")
+    isempty(kw) || print(io, "; ", join(kw, ", "))
+    print(io, ")")
+    return nothing
+end
+
 """
     CheckerboardCPM(; acceptance = nothing, proposal = nothing, skip_interior = false)
 

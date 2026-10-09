@@ -75,8 +75,9 @@ foam reproduction run this way (D-174, D-190).
   measurably (eight seeds at 400 MCS: compactness of the 2008 sprout 0.821 sequential
   against 0.869 checkerboard). `skip_interior = true` is equivalent to `SequentialCPM()`
   by construction, so it does not share that question.
-- General proposal laws with a Hastings correction, and a GPU form, are later work
-  (ROADMAP P6.4b).
+- **CPU only for now.** `CheckerboardCPM(; skip_interior = true)`, the GPU form, is later
+  work (ROADMAP P6.0bk); until then it raises an `ArgumentError`. General proposal laws
+  with a Hastings correction are also later work (ROADMAP P6.4b).
 
 ### Example
 
@@ -108,9 +109,9 @@ bnd = solve(prob, SequentialCPM(; skip_interior = true))
 ### Measured evidence
 
 The acceptance test is `lib/PottsModels/test/acceptance/p6_4b1_boundary_site.jl` (frozen,
-D-177). It passes at both tiers (SMOKE: 369 checks; FULL on the PC: 106 checks, every
-``|z| \le 2.4``). Each check is held to a false-failure probability of at most 10⁻³ and
-has a negative control.
+D-177). It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
+106 checks, every ``|z| \le 2.4``). Each check is held to a false-failure probability of
+at most 10⁻³ and has a negative control.
 
 - **Exact law.** On a 2 × 4 lattice with two cells (6050 states), an independent oracle
   computes `SequentialCPM`'s exact stationary law and its exact laws after one and two
