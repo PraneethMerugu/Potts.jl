@@ -3402,3 +3402,24 @@ session.
 - **Videos.** They are on the pre-release `reproductions-2026-10-08-merks`.
 - **Runner.** A sort bug in the observe step meant every job had to be rebuilt from its σ snapshots after the run. No data was lost.
 - **Still open in P6.3f.** The 01b digitised figure targets (Figs 5, 7–10, 12, 13; 12 and 13 need new runs) and the video clock overlays.
+
+## D-185 OpenVT consortium figures follow the other frameworks' style; paper-model pages are rewritten and merged into one section (2026-10-08; user rulings, confirmed in the coordinator session)
+
+- **Consortium figures (amends D-156 and D-172 for these figures only).** This covers F1's Potts.jl panel and closeup, the F7 and F8 snapshots, and everything in the submission package (D-180).
+  - **F1 colour.** Cells are coloured by area with `coolwarm`, scaled to the panel's own cell-area min–max, on the case (a) 10⁴-cell run.
+    - The evidence: CC3D, TST and Artistoo closeups are coolwarm by area. Spearman(area, red−blue) is 0.995, 1.000 and 0.825 respectively.
+    - The scale limits are our provisional reading of an open question. The differences table and D-175's F1 notes label them so.
+  - **States.** Figures coloured by state show growing vs dormant from the per-cell `inhibited` flag, in the paper's colours (spec 15 §4.0.2).
+  - **Outlines.** Thin black cell boundaries are drawn, as every framework panel draws them. They are pixel-edge boundaries between unlike ids, with no gaps.
+  - **Everything else unchanged.** Docs videos, other models and the OpenVT docs videos keep per-cell colours and no outlines.
+- **Page rewrite.** Each paper-model page reads in this order:
+  1. a short intro;
+  2. the `@potts_model` code that builds the model, with brief comments;
+  3. a minimal run;
+  4. results against the paper: the key figures, the paper-run video, a compact verdict summary and the four-column deviations table;
+  5. a collapsed "Details" section: protocol, full verdict lists, the differences table and provenance.
+
+  Verdict code is unchanged. Pages 01, 09, 10 and 15 are re-frozen for layout only.
+- **One section.** "Models" and "Published models" merge into one "Paper models" section with one page per paper, the status page first.
+  - Wortel Act stays as a model page marked "not a reproduction".
+  - Old URLs keep working through stub pages that link to the new ones.
