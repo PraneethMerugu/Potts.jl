@@ -3423,3 +3423,12 @@ session.
 - **One section.** "Models" and "Published models" merge into one "Paper models" section with one page per paper, the status page first.
   - Wortel Act stays as a model page marked "not a reproduction".
   - Old URLs keep working through stub pages that link to the new ones.
+
+**D-175 / D-185 amendment (2026-10-08).**
+- **Colour.** The F1 panel colours cells by full-state area on `coolwarm`, scaled to the panel's own cell-area min–max.
+- **Outlines.** Thin black pixel-edge boundaries are drawn.
+- **Scale limits.** These are a provisional reading of our open question list; the consortium does not state its closeups' limits.
+- **Areas.** Full-state areas come from a deterministic rerun of case (a) run 1 (`window_cells.tsv`). It matched `window.tsv` site for site; 17 of the 41 window cells are cut by the window.
+- **State colours** (from TST's 10k snapshots): growing RGB(44,123,182) and inhibited RGB(253,174,97).
+- **F8.** It has no snapshot panels, so nothing to restyle.
+- **Re-frozen tests.** `15_openvt_page.jl`, `15_openvt_f1_f4.jl` and `15_openvt_package.jl` (layout, prose and figure style only); pages 01, 09 and 10 also re-frozen for the D-185 layout.
