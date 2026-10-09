@@ -69,8 +69,9 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 # Names the constructor binds itself: a declaration of one would be silently rebound.
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
-    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction)
-_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name])
+    :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler)
+# `euler_full` is the column of `euler(; adjacency = :full)`: reserved, not bound
+_reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full])
 # The link endpoints `a`, `b` are reserved globally (D-075 Q8): no declaration (kind,
 # parameter, variable, observed quantity, relation, relationship, component) may take their
 # name, so nothing an edge term or link rule reads is shadowed (`_check_reserved_names`
@@ -695,7 +696,7 @@ end
     rewrite(ex)
 
 Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
-→ `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, and `fold(body for n in R(s) if cond)` → a relation gather.
+→ `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, `euler(…)` → `_euler(…)`, and `fold(body for n in R(s) if cond)` → a relation gather.
 """
 function rewrite(ex)
     ex isa Expr || return ex
@@ -721,6 +722,8 @@ function rewrite(ex)
         return Expr(:call, :($P._intdiv), rewrite(ex.args[2]), rewrite(ex.args[3]))
     elseif h === :call && length(ex.args) == 2 && ex.args[2] isa Expr && ex.args[2].head === :generator
         return _rewrite_gather(ex.args[1], ex.args[2])
+    elseif h === :call && ex.args[1] === :euler
+        return Expr(:call, :($P._euler), map(rewrite, ex.args[2:end])...)   # `euler(c; adjacency)`
     elseif h === :call && _rng_callee(ex.args[1]) !== nothing
         return _rewrite_rng(ex)                   # `Base.rand(…)`, `randexp(…)`, … (D-150)
     elseif h === :call && ex.args[1] === :rand && any(a -> a isa Expr && a.head in (:parameters, :kw), ex.args[2:end])

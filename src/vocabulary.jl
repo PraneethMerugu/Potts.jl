@@ -36,7 +36,7 @@ _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation,
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
     :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
-    :ring_cells, :ring_medium, :direction)
+    :ring_cells, :ring_medium, :direction, :euler, :euler_full)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -47,6 +47,22 @@ const DSURFACE = _tag(_sym(:δsurface), Info(:delta, :surface, nothing, (;)))
 const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, nothing, (;)))
 # not a delta: the cell's major length after the copy (not additive)
 const DMAJOR = _tag(_sym(:δmajor_length), Info(:delta, :major_length, nothing, (;)))
+const DEULER = _tag(_sym(:δeuler), Info(:delta, :euler, nothing, (;)))
+const DEULER_FULL = _tag(_sym(:δeuler_full), Info(:delta, :euler_full, nothing, (;)))
+
+# `euler(; adjacency)` and `euler(c; adjacency)` (P6.3j, D-192): `@potts_model` rewrites a
+# call of `euler` to this. Each adjacency is its own built-in (one tracker column each);
+# `:face` is the bare `euler`. On a hexagonal lattice the two are the same (D-192 Q4).
+const _EULER_ADJACENCIES = (:face, :full)
+function _euler_builtin(adjacency)
+    adjacency isa Symbol && adjacency in _EULER_ADJACENCIES || throw(ArgumentError(
+        "`euler(; adjacency = $(repr(adjacency)))`: the adjacency is `:face` (the default) or `:full`"))
+    return adjacency === :face ? B.euler : B.euler_full
+end
+_euler(; adjacency = :face) = _euler_builtin(adjacency)
+_euler(c; adjacency = :face) = _index(_euler_builtin(adjacency), c)
+_euler(args...; kwargs...) = throw(ArgumentError(
+    "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"))
 
 # ---------------------------------------------------------------------------------------
 # Declarations

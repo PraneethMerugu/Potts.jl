@@ -68,6 +68,7 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key =
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
         :major_length => :(CorePotts.major_length($T, st.cell, ctx.lattice, $c)),
+        :euler => :($T(@inbounds st.cell.euler[$c])), :euler_full => :($T(@inbounds st.cell.$(_EULER_FULL[])[$c])),
         :cluster => :(CorePotts.cluster_of(st.cell, $c)),
         :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $c)))),
         :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $c))),
@@ -105,7 +106,13 @@ end
 # it is lowered (the field step, site updates, site energies, drives, constraints, `@observed`,
 # folds), unless its env binds `:__bc` itself
 const _FACES = Base.ScopedValues.ScopedValue{Any}(nothing)
-_with_faces(f, c::CompiledPottsSystem) = Base.ScopedValues.with(f, _FACES => _face_bcs(c))
+_with_faces(f, c::CompiledPottsSystem) =
+    Base.ScopedValues.with(f, _FACES => _face_bcs(c), _EULER_FULL => c.euler_full_column)
+
+# The column `euler(; adjacency = :full)` reads in the model being generated: `:euler` on a
+# hexagonal lattice (one self-dual adjacency, D-192 Q4), else `:euler_full`
+const _EULER_FULL = Base.ScopedValues.ScopedValue{Symbol}(:euler_full)
+_euler_column(name::Symbol) = name === :euler_full ? _EULER_FULL[] : name
 
 # The masked clamp of field `name` (D-145): `(st, p, ctx, key, mcs, i, v) -> v′`, `v` replaced
 # by each `sites(pred) => Dirichlet(value)` whose `pred` holds at `i` (a later entry wins), or
@@ -213,17 +220,20 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if c.uses_surface && !fused_surface
         push!(body, :((δs_old, δs_new) = CorePotts.surface_change(st.σ, ctx, prop; T = eltype(st.cell.surface))))
     end
+    # Euler characteristics (P6.3j): exact Int32 changes of the two cells, from the shell
+    c.uses_euler && push!(body, :((δe_old, δe_new) = CorePotts.euler_change(st.σ, ctx, prop, Val(:face))))
+    c.uses_euler_full && push!(body, :((δf_old, δf_new) = CorePotts.euler_change(st.σ, ctx, prop, Val(:full))))
     # cell terms, grouped by kind filter
     groups = Dict{Vector{Int}, Any}()
     for (kinds, E) in c.cell_terms
         groups[kinds] = haskey(groups, kinds) ? groups[kinds] + E : E
     end
-    for (side, dv, k, δs) in ((:old, -1, :k_old, :δs_old), (:new, +1, :k_new, :δs_new))
+    for (side, dv, k, δs, δe, δf) in ((:old, -1, :k_old, :δs_old, :δe_old, :δf_old), (:new, +1, :k_new, :δs_new, :δe_new, :δf_new))
         terms = Any[]
         for (kinds, E) in _sorted(groups)
             ΔE = _cell_delta(E, dv; after = after[side])
             _nops(ΔE) == 0 && isequal(_unwrap(ΔE), 0) && continue
-            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs,
+            env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, :δeuler => :($T($δe)), :δeuler_full => :($T($(c.uses_euler_full ? δf : δe))),
                 :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)), oc_binds...))
             push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
         end
@@ -338,6 +348,10 @@ function _commit_expr(c::CompiledPottsSystem, T)
     push!(body, :(CorePotts.commit_volume!(st, p, prop, ctx)))
     append!(body, _contact_count_commits(c))            # contact folds (D-150; none: no code)
     c.uses_surface && push!(body, :(CorePotts.commit_surface!(st.cell.surface, prop, δs)))
+    # TODO(P6.3h): reuse ΔH's `euler_change` here instead of a second shell read per accepted copy
+    c.uses_euler && push!(body, :(CorePotts.commit_euler!(st.cell.euler, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:face)))))
+    c.uses_euler_full && push!(body,
+        :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.σ, ctx, prop, Val(:full)))))
     c.needs_moments && push!(body, :(CorePotts.commit_moments!(st.cell, ctx.lattice, prop)))
     c.uses_cluster_surface && push!(body, :(CorePotts.commit_cluster_surface!(st.cell, prop,
         CorePotts.cluster_surface_change(st.σ, st.cell, ctx, prop; T = eltype(st.cell.cluster_surface)))))
