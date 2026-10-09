@@ -651,6 +651,45 @@ end
     end
 end
 
+# Whole-cell connectivity on the device (P6.9a, `pieces.jl`): the windowed veto (the parallel
+# deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
+# (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
+# both cells: the gaining one locally, the losing one by the search
+p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+    CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.σ, ctx, prop, Val(false))
+p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
+    40.0f0 * (CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
+
+@testset "whole-cell connectivity on the device (P6.9a)" begin
+    backend = PottsDevices.device_backend()
+    σ, kinds = blocks((32, 32), 5)
+    lat = Lattice((32, 32))
+    p = merge(gg_params(Float32), (; V0 = 25.0f0, T = 12.0f0))
+    H = CorePotts.ConnectivityHooks
+    for (f, splits) in ((CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = H(; post = p69_post_window, uses_global = true)), false),
+            (CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = H(; post = p69_post_exact, uses_global = true,
+                exact_veto = true)), false),
+            (CPMFunction(p69_penalty_dH; temperature = gg_temperature, connectivity = H(; defer = p69_defer, uses_global = true)), true))
+        prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 8), p)
+        integ = init(prob, CheckerboardCPM(; proposal = Moore(1)); backend, save_start = false, save_end = false)
+        prev = first(recompute_pieces(σ, lat, Val(false), length(kinds)))
+        up = 0
+        for _ in 1:8
+            step!(integ)
+            now = first(recompute_pieces(Array(integ.state.σ), lat, Val(false), length(kinds)))
+            up += count(now .> prev)
+            prev = now
+        end
+        @test integ.retcode == ReturnCode.Default
+        splits || @test up == 0                       # the veto: no cell's pieces increase
+        @test current_state(integ).cell.volume == [count(==(c), Array(integ.state.σ)) for c in eachindex(kinds)]
+        @test integ.stats.connectivity_deferred isa Int
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
 # D-157); the scan lives with the monorepo's shared test helpers
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
