@@ -417,10 +417,13 @@ The file name the OpenVT benchmark expects for `format` (spec 15 §3.1):
 - `openvt_filename(:O3; parameter)`, `parameter` `:beta` or `:gamma`:
   `"Potts.jl_time_to_10k_vs_<parameter>.csv"`;
 - `openvt_filename(:O5; gamma, mcs)`: `"Potts.jl_gamma_<gamma>_<mcs>MCS.csv"`, with `gamma`
-  as `string` writes it.
+  as `string` writes it (the Fig 7 colonies, β = 0);
+- `openvt_filename(:O5; beta, mcs)`: `"Potts.jl_beta_<beta>_<mcs>MCS.csv"`, with `beta` as
+  `string` writes it (the Fig 8 colonies, γ = 0; D-211).
 
 O4 and O6 have no fixed names. Another format or an O3 `parameter` other than `:beta` and
-`:gamma` is an `ArgumentError`.
+`:gamma` is an `ArgumentError`, and so is an O5 call with both or neither of `gamma` and
+`beta`.
 """
 function openvt_filename(format::Symbol; kw...)
     if format === :O1
@@ -432,7 +435,10 @@ function openvt_filename(format::Symbol; kw...)
         p in (:beta, :gamma) || throw(ArgumentError("openvt_filename: O3 parameter must be :beta or :gamma, got $p"))
         return string("Potts.jl_time_to_10k_vs_", p, ".csv")
     elseif format === :O5
-        return string("Potts.jl_gamma_", kw[:gamma], "_", kw[:mcs], "MCS.csv")
+        (haskey(kw, :gamma) ⊻ haskey(kw, :beta)) ||
+            throw(ArgumentError("openvt_filename: O5 takes exactly one of `gamma` and `beta`"))
+        p = haskey(kw, :gamma) ? :gamma : :beta
+        return string("Potts.jl_", p, "_", kw[p], "_", kw[:mcs], "MCS.csv")
     end
     throw(ArgumentError("openvt_filename: no file name for format $format; use :O1, :O2, :O3 or :O5"))
 end
