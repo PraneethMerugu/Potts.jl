@@ -93,6 +93,7 @@ end
 
 # ---- zip a staged tree deterministically --------------------------------------------------
 function zip_tree!(stage, z)
+    rm(z; force = true)                        # a part file left by an interrupted run
     sh = "find . -type f -exec touch -t 198001010000.00 {} + && " *
          "find . -type f | sed 's|^\\./||' | LC_ALL=C sort | zip -X -D -9 -q -@ " * Base.shell_escape(z)
     run(setenv(Cmd(`sh -c $sh`; dir = stage), merge(ENV, Dict("TZ" => "UTC", "LC_ALL" => "C"))))
@@ -119,64 +120,71 @@ arows = String[]
 for case in CASES
     rows = filter(r -> r["case"] == case, MAN)
     unz, stage = mktempdir(), mktempdir()
-    run(`unzip -q $(joinpath(BULK, raw_zip(case))) -d $unz`)
-    members = String[]
-    for r in rows
-        buf = read(joinpath(unz, split(r["file"], '/')...))
-        bytes2hex(sha256(buf)) == r["sha256"] || error("post_o1: $(r["file"]) differs from the P6.15j manifest")
-        ls = split(String(copy(buf)), '\n')
-        (isempty(last(ls)) && !any(l -> occursin('\r', l), ls)) || error("post_o1: $(r["file"]): unexpected line ends")
-        pop!(ls)
-        ls[1] == "x,y,i,n" || error("post_o1: $(r["file"]): header $(ls[1])")
-        length(ls) - 1 == parse(Int, r["rows"]) || error("post_o1: $(r["file"]): row count")
-        io = IOBuffer()
-        print(io, "x,y,i,n,g\n")
-        for l in @view ls[2:end]
-            f = split(l, ',')
-            (length(f) == 4 && f[3] in ("0", "1", "2", "3")) || error("post_o1: $(r["file"]): row $l")
-            print(io, l, f[3] == "0" ? ",1\n" : ",0\n")
+    try
+        run(`unzip -q $(joinpath(BULK, raw_zip(case))) -d $unz`)
+        members = String[]
+        for r in rows
+            buf = read(joinpath(unz, split(r["file"], '/')...))
+            bytes2hex(sha256(buf)) == r["sha256"] || error("post_o1: $(r["file"]) differs from the P6.15j manifest")
+            ls = split(String(copy(buf)), '\n')
+            (isempty(last(ls)) && !any(l -> occursin('\r', l), ls)) || error("post_o1: $(r["file"]): unexpected line ends")
+            pop!(ls)
+            ls[1] == "x,y,i,n" || error("post_o1: $(r["file"]): header $(ls[1])")
+            length(ls) - 1 == parse(Int, r["rows"]) || error("post_o1: $(r["file"]): row count")
+            io = IOBuffer()
+            print(io, "x,y,i,n,g\n")
+            for l in @view ls[2:end]
+                f = split(l, ',')
+                (length(f) == 4 && f[3] in ("0", "1", "2", "3")) || error("post_o1: $(r["file"]): row $l")
+                print(io, l, f[3] == "0" ? ",1\n" : ",0\n")
+            end
+            out = take!(io)
+            length(out) == length(buf) + 2 * (parse(Int, r["rows"]) + 1) || error("post_o1: $(r["file"]): size")
+            rel = "$(STEM[case])/s$(r["seed"])/$(basename(r["file"]))"
+            mkpath(dirname(joinpath(stage, rel)))
+            write(joinpath(stage, rel), out)
+            push!(members, rel)
+            push!(o1rows, join((case, r["seed"], r["mcs"], rel, r["rows"], string(length(out)),
+                r["i0"], r["i1"], r["i2"], r["i3"], bytes2hex(sha256(out))), '\t'))
         end
-        out = take!(io)
-        length(out) == length(buf) + 2 * (parse(Int, r["rows"]) + 1) || error("post_o1: $(r["file"]): size")
-        rel = "$(STEM[case])/s$(r["seed"])/$(basename(r["file"]))"
-        mkpath(dirname(joinpath(stage, rel)))
-        write(joinpath(stage, rel), out)
-        push!(members, rel)
-        push!(o1rows, join((case, r["seed"], r["mcs"], rel, r["rows"], string(length(out)),
-            r["i0"], r["i1"], r["i2"], r["i3"], bytes2hex(sha256(out))), '\t'))
+        sort!(members)
+        name = STEM[case] * ".zip"
+        tmp = zip_tree!(stage, joinpath(BULK, "." * name * ".part"))
+        readlines(`unzip -Z1 $tmp`) == members || error("post_o1: $name: members differ from the manifest")
+        success(`unzip -tq $tmp`) || error("post_o1: $name fails unzip -t")
+        z = place!(tmp, name)
+        push!(arows, join((case, name, string(length(members)), string(filesize(z)), sha(z)), '\t'))
+    finally
+        rm(unz; recursive = true, force = true)
+        rm(stage; recursive = true, force = true)
     end
-    sort!(members)
-    name = STEM[case] * ".zip"
-    tmp = zip_tree!(stage, joinpath(BULK, "." * name * ".part"))
-    readlines(`unzip -Z1 $tmp`) == members || error("post_o1: $name: members differ from the manifest")
-    success(`unzip -tq $tmp`) || error("post_o1: $name fails unzip -t")
-    z = place!(tmp, name)
-    push!(arows, join((case, name, string(length(members)), string(filesize(z)), sha(z)), '\t'))
-    rm(unz; recursive = true)
-    rm(stage; recursive = true)
-    @info "post_o1: case $case" name members = length(members) bytes = filesize(z)
+    @info "post_o1: case $case" name = STEM[case] * ".zip" members = count(r -> r["case"] == case, MAN)
 end
 
 # ---- O2: k = 0…99, one zip with its folder ------------------------------------------------
 o2rows = String[]
-stage = mktempdir()
-mkpath(joinpath(stage, O2_DIR))
-o2members = String[]
-for r in O2M
-    k = parse(Int, r["k"]) - 1
-    rel = "$(O2_DIR)/cell_data_no_inhibition_$(k).csv"
-    cp(joinpath(BULK, split(r["file"], '/')...), joinpath(stage, rel))
-    push!(o2members, rel)
-    push!(o2rows, join((string(k), rel, r["rows"], r["bytes"], r["sha256"]), '\t'))
-end
-sort!(o2members)
 const O2_ZIP = O2_DIR * ".zip"
-tmp = zip_tree!(stage, joinpath(BULK, "." * O2_ZIP * ".part"))
-readlines(`unzip -Z1 $tmp`) == o2members || error("post_o1: $O2_ZIP: members differ")
-success(`unzip -tq $tmp`) || error("post_o1: $O2_ZIP fails unzip -t")
-z2 = place!(tmp, O2_ZIP)
-push!(arows, join(("O2", O2_ZIP, string(length(o2members)), string(filesize(z2)), sha(z2)), '\t'))
-rm(stage; recursive = true)
+z2 = let stage = mktempdir()
+    try
+        mkpath(joinpath(stage, O2_DIR))
+        o2members = String[]
+        for r in O2M
+            k = parse(Int, r["k"]) - 1
+            rel = "$(O2_DIR)/cell_data_no_inhibition_$(k).csv"
+            cp(joinpath(BULK, split(r["file"], '/')...), joinpath(stage, rel))
+            push!(o2members, rel)
+            push!(o2rows, join((string(k), rel, r["rows"], r["bytes"], r["sha256"]), '\t'))
+        end
+        sort!(o2members)
+        tmp = zip_tree!(stage, joinpath(BULK, "." * O2_ZIP * ".part"))
+        readlines(`unzip -Z1 $tmp`) == o2members || error("post_o1: $O2_ZIP: members differ")
+        success(`unzip -tq $tmp`) || error("post_o1: $O2_ZIP fails unzip -t")
+        place!(tmp, O2_ZIP)
+    finally
+        rm(stage; recursive = true, force = true)
+    end
+end
+push!(arows, join(("O2", O2_ZIP, string(length(O2M)), string(filesize(z2)), sha(z2)), '\t'))
 
 # ---- the record --------------------------------------------------------------------------
 sort!(o1rows; by = l -> split(l, '\t')[4])
