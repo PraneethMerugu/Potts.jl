@@ -48,6 +48,54 @@ using SciMLBase: ContinuousCallback
     end
 end
 
+# P6.15m m3: a CallbackSet of two differently typed DiscreteCallbacks with `saveat` segfaulted
+# on the host CheckerboardCPM path (GC heap corruption, found in a later `_save!`). The
+# integrator looped `for cb in integ.callbacks`, which carries a `Union` of the callback types
+# (closures and a BitVector next to bits fields), and Julia 1.12's optimized code for that
+# loop corrupted the heap; it depends on the heap layout, so the crash itself reproduces only
+# in a full model run (the OpenVT chain test in PottsModels). Here: the callback paths hold
+# no such `Union`, and every hook of every callback still runs, in order.
+@testset "CallbackSet of differently typed callbacks with saveat" begin
+    σ, kinds = blocks((30, 30), 5)
+    prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((30, 30)), (0, 12), gg_params(); seed = 5)
+    is_cb_union(T) = T isa Union && all(x -> x <: DiscreteCallback, Base.uniontypes(T))
+    cb_unions(f, types) = count(is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
+        only(code_typed(f, types; optimize = true)).first.ssavaluetypes)
+    @testset "$(nameof(typeof(alg)))" for alg in (CheckerboardCPM(; proposal = Moore(1)), SequentialCPM(; proposal = Moore(1)))
+        calls = Tuple{Symbol, Int}[]
+        snap = Ref(0)
+        mark = DiscreteCallback((u, t, integ) -> t == 4, integ -> (snap[] = integ.stats.mcs; nothing);
+            save_positions = (false, false), initialize = (c, u, t, i) -> push!(calls, (:init, 1)),
+            finalize = (c, u, t, i) -> push!(calls, (:final, 1)))
+        heat = DiscreteCallback((u, t, integ) -> t == 4, integ -> (integ.ps[:T] = 2 * integ.ps[:T]; nothing);
+            initialize = (c, u, t, i) -> push!(calls, (:init, 2)), finalize = (c, u, t, i) -> push!(calls, (:final, 2)))
+        integ = init(prob, alg; saveat = 0:12, callback = CallbackSet(mark, heat))
+        T = typeof(integ)
+        @test typeof(integ.callbacks) === Tuple{typeof(mark), typeof(heat)}       # two distinct types
+        @test cb_unions(CorePotts._apply_callbacks!, (T,)) == 0
+        @test cb_unions(CorePotts.CommonSolve.step!, (T,)) == 0
+        @test cb_unions(CorePotts.CommonSolve.solve!, (T,)) == 0
+        sol = solve!(integ)
+        @test sol.t == 0:12 && length(sol.u) == 13
+        @test snap[] == 4 && sol.prob.p.T == gg_params().T && integ.p.T == 2 * gg_params().T
+        @test calls == [(:init, 1), (:init, 2), (:final, 1), (:final, 2)]
+        # stress: many solves with saves, then a full collection (the crash surfaced in GC)
+        for s in 1:20
+            r = solve(remake(prob; seed = s), alg; saveat = 0:12, callback = CallbackSet(mark, heat))
+            @test length(r.u) == 13
+        end
+        GC.gc(true)
+        @test true
+    end
+    # negative control: a plain `for` loop over the same tuple does carry the Union
+    loop(cbs) = (for cb in cbs
+        cb.condition(nothing, 0, nothing)
+    end; nothing)
+    m = DiscreteCallback((u, t, i) -> t == 1, i -> nothing; save_positions = (false, false))
+    h = DiscreteCallback((u, t, i) -> t == 2, i -> nothing)
+    @test cb_unions(loop, (Tuple{typeof(m), typeof(h)},)) > 0
+end
+
 # D-116: a problem without a model whose parameter object is a NamedTuple has its fields as
 # parameter names; `remake_buffer` (and `setp_oop`, which calls it) returns a new NamedTuple.
 @testset "remake_buffer on a NamedTuple parameter object" begin
