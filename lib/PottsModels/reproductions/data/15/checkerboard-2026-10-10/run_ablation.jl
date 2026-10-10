@@ -150,6 +150,7 @@ end
 
 # ---- collect --------------------------------------------------------------------------------------
 function ab_collect()
+    dirty0 = cb_dirty()  # before this step rewrites its own tracked outputs
     runs = p615m_tsv(cb_part("ablation_runs_part.tsv"))
     mets = p615m_tsv(cb_part("ablation_metrics_part.tsv"))
     c64 = TOML.parsefile(cb_part("ablation_c64.toml"))
@@ -232,7 +233,7 @@ function ab_collect()
         "runner" => relpath(@__FILE__, CB_ROOT), "runner_sha256" => bytes2hex(open(sha256, @__FILE__)),
         "commit" => c64["commit"], "dirty_tracked" => c64["dirty_tracked"] || any(s -> s["dirty_tracked"] == "true", sess),
         "commits" => join(unique([c64["commit"]; [s["commit"] for s in sess]]), ", "),
-        "collect_commit" => cb_git("rev-parse", "HEAD"), "collect_dirty_tracked" => cb_dirty(),
+        "collect_commit" => cb_git("rev-parse", "HEAD"), "collect_dirty_tracked" => dirty0,
         "device" => join(unique([c64["device"]; [s["device"] for s in sess]]), "; "),
         "host_planner_fallback" => any(r -> r["planner"] != "device", runs),
         "arms" => "stock: $(colours_of("stock")) colours on the chain, $(mono_of("stock")) on the monolayer, cycle $(only(unique(r["cycle"] for r in runs if r["arm"] == "stock"))); c64: $(colours_of("c64")) on the chain, $(mono_of("c64")) on the monolayer, cycle $(c64["cycle_mcs"]) = 5 T_c64",
