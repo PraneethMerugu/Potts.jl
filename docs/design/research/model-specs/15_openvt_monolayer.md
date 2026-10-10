@@ -127,6 +127,11 @@ An unexplained difference is chased as a bug. Characterisation describes the ent
 - **F2/S5:** its own chain calibration (11 and 11+10), a T(λ) row in Table S5, and its own legend and inset line. The calibration must be repeated, because T in MCS is a property of the update algorithm.
 - **F3, F5, F6/T1, F7, F8, F9:** its own row, curve or legend entry, with insets where the figure has them (F2 b/d/e). Its own Table 1 row.
 - **Time unit (D-220).** The entry runs on its own calibrated T and converts every time-dependent parameter by it, as M does (C1/C16: α = A₀/(5T)). If T_cb(λ = 2) differs significantly from 156 MCS, then **cycle = 5·T_cb and α = A₀/(5·T_cb) px per MCS**. Otherwise 775 MCS and α = 50/775. The record states which and why. The algorithm is unchanged.
+  - **Calibration geometry (D-224).** T_cb is calibrated under the **same colour count as production (4)**: the claim thinning, and so the commit fraction, depends on the colour count.
+    - The chain runs on §4.2 variant P1b: 150 × 7, the 5 chain rows plus 2 frozen border rows, closed in y. At stride 2 there are no singleton tail colours.
+    - The sequential T is re-measured on the same geometry.
+    - The runner asserts that the calibration and production colour counts are equal, and the record states the count.
+    - The first m3 calibration (6 colours on the 5-row periodic chain, T_cb = 174) is superseded.
 
 **Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
 - that the same `@potts_model` runs unchanged under `CheckerboardCPM`;
