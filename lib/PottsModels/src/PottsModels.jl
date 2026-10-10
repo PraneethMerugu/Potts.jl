@@ -113,7 +113,7 @@ public openvt_f4_figure, openvt_f1_figure, openvt_colony_panel!
 
 include("benchmarks/openvt_analysis.jl")
 include("benchmarks/openvt_package.jl")
-public openvt_submission_package
+public openvt_submission_package, openvt_spread_compare, openvt_spread_table
 
 # Precompile the models (D-047; in this file because the guardrails build every other src
 # file from `using Potts` alone): every constructor and its `mtkcompile`, and for the published
