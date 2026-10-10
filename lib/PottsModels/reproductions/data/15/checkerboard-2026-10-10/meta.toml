@@ -1,0 +1,60 @@
+model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = 50/870 px/MCS (this entry's cycle; D-220)"
+boundary = "closed"
+saves = "MCS 0, every 39 MCS and the stopping MCS; per save N and openvt_metrics r, A, C, w, g (R units)"
+o1 = "the O1 frame (openvt_frame) of the stop state: mean and sample sd of n, share of n == 6, share of i == 0"
+status = "provisional"
+framework = "Potts.jl (checkerboard)"
+edge_guard = "edge_guard(5; terminate = true)"
+crit = "two-sided Student t at α = 1e-3/103, ν = min(n_ref, n_alt) − 1 (D-218): 4.6642 (b, f, calibration), 8.8595 (a)"
+stop = "stop_at_cells(n): end of the first MCS with ≥ n live cells"
+algorithm = "CheckerboardCPM(; proposal = Moore(1))"
+initial = "openvt_reference_state: one disc of radius √(A₀/π) at the lattice centre"
+reference_calibration = "calibration-2026-10-05"
+reference_record = "f3-f8-2026-10-08"
+every_mcs = 39
+item = "P6.15m"
+algorithm_reference = "SequentialCPM(; proposal = Moore(1))"
+
+[time]
+T_lambda2_sd = 15.031293955604687
+protocol = "P6.15b 11-chain: 150 × 5 periodic, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, openvt_release(100), w₁₁ every MCS to 1085 MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run"
+T_lambda2_run_mean = 172.86
+T_runs = 100
+beyond = true
+alpha_text = "50/870"
+seeds = "214200001–214200100"
+z = 8.25205523432106
+T_seq = 156
+crit = 4.6641695621474355
+alpha = 0.05747126436781609
+T_seq_run_mean = 156.09
+T_lambda2 = 174
+cycle_reason = "T(λ = 2) = 174 MCS under CheckerboardCPM against the sequential 156 MCS: significant (Welch z = 8.25, |z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 870 MCS and α = A₀/(5 T) = 50/870 px/MCS (D-220)"
+cycle_mcs = 870
+
+[cases.f]
+cells = 1000
+sigma_X = 0.0
+lattice = 400
+seeds = "214100201–214100300"
+gamma = 0.0
+runs = 100
+beta = 0.0
+
+[cases.b]
+cells = 1000
+sigma_X = 0.4
+lattice = 400
+seeds = "214100001–214100100"
+gamma = 0.0
+runs = 100
+beta = 0.0
+
+[cases.a]
+cells = 10000
+sigma_X = 0.4
+lattice = 1400
+seeds = "214100701–214100710"
+gamma = 0.0
+runs = 10
+beta = 0.0
