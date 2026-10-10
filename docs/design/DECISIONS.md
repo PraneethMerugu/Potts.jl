@@ -4150,3 +4150,12 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The m4 frozen test (D-222), which pins 174/870, is re-frozen with the values from the record. Its test author keeps the values parameterised from the record.
   - m5 sweeps wait for this.
 - **Answer to the gate if it fails.** If the 4-colour T_cb still does not close the (a)/(b)/(f) gaps, then M's chain calibration cannot absorb claim thinning for this model. That is the characterisation result, and it is reported as such.
+
+## D-225 P6.15m: the checkerboard is left out of the OpenVT submission and kept in our docs (2026-10-10; maintainer: "ok we can leave checkerboard out of the submission, but keep it in the docs"; closes the D-223 gate; amends D-214, D-222)
+
+- **The submission is sequential only.** "Potts.jl" is the one entry. The package, the email split, EMAIL.md and the bulk files stay as merged in P6.15l, with no `entries` switch and no checkerboard parts. Q27 (colour, two entries) is withdrawn and never raised. m5 (the gate sweeps) is cancelled. No checkerboard O1 replay is made.
+- **Kept in our docs.**
+  - The checkerboard characterisation stays as a section of page 15 and in the Potts.jl paper material: the calibration at the production colour count (D-224), the comparison table, the deviations with causes (D-220/D-221), and the ΔH brute-force evidence.
+  - The CheckerboardCPM manual note (P6.15m-doc) stays.
+  - The record is finished under D-224, since the docs should show the correctly calibrated result.
+- **m4 is re-scoped to page 15 only.** The D-222 test is re-frozen through its test author: the package/`entries`/split/EMAIL/O1cb parts are removed, and the page-15 section and figure parts are kept, with values read from the record.
