@@ -24,19 +24,29 @@ const _OPENVT_PKG_O3 = ("Potts.jl_time_to_10k_vs_beta.csv", "Potts.jl_time_to_10
 _openvt_pkg_o1_zip(case) = "Potts.jl_centroids_$(case).zip"
 # the O5 names of spec §3.1 and the P6.15g record (`string(γ)`, e.g. 0.0, 0.12, 1.0e-4)
 const _OPENVT_PKG_O5 = r"^Potts\.jl_gamma_\d+\.\d+(?:e-?\d+)?_\d+MCS\.csv$"
+# the Figure 8 colonies of the P6.15k record (D-211 R2; `openvt_filename(:O5; beta, mcs)`)
+const _OPENVT_PKG_O5_BETA = r"^Potts\.jl_beta_\d+\.\d+(?:e-?\d+)?_\d+MCS\.csv$"
+# M's shared Figure 5 distance-bin edges (9 Oct 2026 draft; D-211 R4), in R
+const _OPENVT_PKG_F5_EDGES = (0.0, 18.6, 37.2, 55.8, 74.4, 93.0)
 # scripts that need a local clone of the consortium repository stay out of the package
 const _OPENVT_PKG_NEEDS_G = "OPENVT_MONOLAYER_REPO"
 
 # ROADMAP item => what its record carries (P6.15i convention: `provenance.toml`'s `item`)
 const _OPENVT_PKG_ITEMS = (calib = "P6.15b", f5 = "P6.15e", f3f8 = "P6.15f", f1f4 = "P6.15h", sweeps = "P6.15g",
-    o1 = "P6.15j")
-const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8 = "Figures 3 and 8",
+    o1 = "P6.15j", f8beta = "P6.15k")
+const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8 = "Figures 3 and 9",
     f1f4 = "Figures 1 and 4", sweeps = "Figure 6, Table 1, Figure 7",
-    o1 = "O1 per-cell time series (cases a, b, e, f re-run), O2 files")
+    o1 = "O1 per-cell time series (cases a, b, e, f re-run), O2 files",
+    f8beta = "Figure 8 (the colonies at the T1 β values, area inhibition)")
+# records a draft build may do without (`allow_pending = true`): the P6.15k β colonies run on
+# the PC after the rest is merged; a draft leaves out Figure 8 and its O5 files and says
+# "Figure 8: pending". The default build requires them, so a build for upload is complete.
+const _OPENVT_PKG_LATER = (:f8beta,)
 
 """
     PottsModels.openvt_submission_package(outdir::AbstractString;
-                                          bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing)) -> outdir
+                                          bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing),
+                                          allow_pending::Bool = false) -> outdir
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
 repository's layout (spec 15 §4.0.1): `outdir/implementations/Potts.jl/` (the
@@ -51,7 +61,12 @@ manifest, the O2 Figure 5 files, and the O3 and O5 sweep files.
 Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
 (D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
 the newest directory (by name) whose `provenance.toml` names its ROADMAP item. Every record
-(P6.15b, e, f, g, h and j) is required.
+(P6.15b, e, f, g, h, j and k) is required. `allow_pending = true` (default `false`) allows a draft build without
+the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5 files are left out and
+the results README says "Figure 8: pending". Never upload a draft build.
+
+`results/Potts.jl/figures/` holds byte copies of the records' renders of M's Figures 5
+(`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
 
 `bulk` is a directory outside git holding `Potts.jl_centroids_<case>.zip` for each case of
 the P6.15j record and `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`; each
@@ -64,7 +79,8 @@ directory; `bulk` must be given, be a directory outside git and hold the pinned 
 otherwise this is an `ArgumentError`, raised before anything is written. A build that fails
 part-way removes what it wrote, so the same `outdir` can be used again.
 """
-function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing))
+function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing),
+        allow_pending::Bool = false)
     out = abspath(outdir)
     _openvt_pkg_in_git(out) &&
         throw(ArgumentError("openvt_submission_package: $outdir is inside a git checkout; build the package outside git"))
@@ -75,7 +91,9 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     end
     recs = _openvt_pkg_records()
     for k in keys(_OPENVT_PKG_ITEMS)
-        haskey(recs, k) || throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15"))
+        haskey(recs, k) || (allow_pending && k in _OPENVT_PKG_LATER) ||
+            throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15" *
+                                (k in _OPENVT_PKG_LATER ? " (pass allow_pending = true for a draft build without it)" : "")))
     end
     o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1]), _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
     bulkdir = _openvt_pkg_bulk(bulk, o1)
@@ -132,6 +150,7 @@ function _openvt_pkg_build(out, recs, o1, bulk)
     _openvt_pkg_monolayer(joinpath(res, "Monolayer"), rec(:f3f8), facts.cycle)
     _openvt_pkg_bulk_items(joinpath(res, "Monolayer"), o1, bulk, facts.cycle)
     _openvt_pkg_sweeps(joinpath(res, "Monolayer"), rec(:sweeps))
+    _openvt_pkg_figures(res, recs)
     _openvt_pkg_write(joinpath(res, "README.md"), _openvt_pkg_results_readme(recs, prov, meta, facts, o1))
     return nothing
 end
@@ -461,6 +480,24 @@ function _openvt_pkg_sweeps(dir, sw)
     return nothing
 end
 
+# M's Figures 5, 7 and 8 (D-211): byte copies of the records' renders, and the Figure 8
+# colonies (O5) of the P6.15k record
+function _openvt_pkg_figures(res, recs)
+    mkpath(joinpath(res, "figures"))
+    for (k, f, name) in ((:f5, "fig5_shared.png", "fig5.png"), (:sweeps, "fig7_grid.png", "fig7.png"),
+        (:f8beta, "fig8_grid.png", "fig8.png"))
+        haskey(recs, k) || continue
+        src = joinpath(_OPENVT_PKG_DATA, recs[k], f)
+        isfile(src) || throw(ArgumentError("openvt_submission_package: the $(_OPENVT_PKG_ITEMS[k]) record has no $f"))
+        cp(src, joinpath(res, "figures", name))
+    end
+    if haskey(recs, :f8beta)
+        _openvt_pkg_copyall(joinpath(_OPENVT_PKG_DATA, recs[:f8beta], "f8"), joinpath(res, "Monolayer", "final_snapshot_data"),
+            _OPENVT_PKG_O5_BETA) || throw(ArgumentError("openvt_submission_package: the P6.15k record has no f8/ snapshots"))
+    end
+    return nothing
+end
+
 function _openvt_pkg_copyall(src, dst, re)
     isdir(src) || return false
     fs = sort(filter(f -> occursin(re, f) && isfile(joinpath(src, f)), readdir(src)))
@@ -592,7 +629,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
 
     The O1 runner (`scripts/$(recs[:o1])/$(basename(prov[:o1]["runner"]))`) also needs
     `OPENVT_PACKAGE_BULK`, a directory outside git: it writes the O1 archives and the O2 files
-    there, checks every run against the Figure 3/8 record save by save, and commits only their
+    there, checks every run against the Figure 3/9 record save by save, and commits only their
     manifests (names, row counts, sizes, sha256) to the record.
 
     ## Rebuild this package
@@ -689,10 +726,12 @@ function _openvt_pkg_figure_rows(facts)
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
             "a black outline of cell i, names, coloured count glyphs", "no outlines (D-156)", "not an author question"),
         ("F5 distance bins and origin",
-            "5 equal bins from 0 to 1.05 times the furthest distance, from the initial cell's centre",
-            "legend 0–7, …, 31–39; the notebook uses 7 bins from the pooled centroid",
+            "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional: " *
+            "M's unit is unstated and appears to be about 0.5 R); the F5 record's verdict " *
+            "figure keeps 5 equal bins from 0 to 1.05 times the furthest distance; distances from the initial cell's centre",
+            "one set of edges for all rows; how they were derived is not stated; the notebook uses 7 bins from the pooled centroid",
             "M's figure and text taken over its notebook (C11, C12)", "not asked; on our open question list as Q15"),
-        ("F8 consortium curves", "only final values compared with the draft's CompuCell3D and Morpheus curves (converted from px to R)",
+        ("F9 consortium curves", "only final values compared with the draft's CompuCell3D and Morpheus curves (converted from px to R)",
             "lengths in R, time in cycles", "the draft curves are earlier β = 0.8 runs in each framework's own cycle length",
             "not asked; on our open question list as Q7 and Q14"),
         ("Domain", "closed $lat lattice with a $(facts.guard)-site edge guard (edge_guard)$gap",
@@ -712,7 +751,7 @@ const _OPENVT_PKG_C_ROWS = [
         "the four CPM implementations all do this", "not an author question"),
     ("C3 truncation of X", "X redrawn while X ≤ 0", "silent; the schema redraws",
         "P(X ≤ 0) is about 3 × 10⁻⁷, so it never fires", "not an author question"),
-    ("C4 replicates", "100 runs for Figures 2 and 5, 10 or more per Figure 3/8 case", "100 for Figure 5; the schema's floor is 10",
+    ("C4 replicates", "100 runs for Figures 2 and 5, 10 or more per Figure 3/9 case", "100 for Figure 5; the schema's floor is 10",
         "M where it states a number", "not an author question"),
     ("C5 sensitivity analysis", "not done", "not in M's analysis list (only in the schema)", "M's list taken as complete",
         "not an author question"),
@@ -723,9 +762,10 @@ const _OPENVT_PKG_C_ROWS = [
     ("C8 output columns", "x, y, i, n, with g = (i == 0) derived for the analysis",
         "x, y, i, n (the analysis code reads x, y, g, n)", "M for submitted files", "not an author question"),
     ("C9 type 1 inequality", "a ≥ β", "a ≥ β (the schema has a > β)", "M, as Morpheus, TST and Artistoo", "not an author question"),
-    ("C10 Figure 8 length units", "R", "R; the draft figure's lattice curves are in px", "M",
+    ("C10 Figure 9 length units", "R", "R; the draft figure's lattice curves are in px", "M",
         "not asked; on our open question list as Q14"),
-    ("C11 Figure 5 distance bins", "5 equal bins", "5 bins in the legend; 7 in the notebook", "M's figure",
+    ("C11 Figure 5 distance bins", "M's shared edges (0, 18.6, …, 93) in figures/fig5.png, binned in R (provisional); 5 equal bins in the verdict figure",
+        "5 shared bins in the legend; 7 per-framework bins in the notebook", "M's figure",
         "not asked; on our open question list as Q15"),
     ("C12 Figure 5 distance origin", "the initial cell's centre (the lattice centre)",
         "the initial cell's centre; the notebook uses the pooled centroid", "M's text",
@@ -794,13 +834,70 @@ function _openvt_pkg_v1_row(recs, meta)
     ta = meta[:f3f8]["stats"]["a"]["t_stop"]
     te = meta[:f3f8]["stats"]["e"]["t_stop"]
     judged = haskey(recs, :sweeps) ? "judged in the sweeps record `$(recs[:sweeps])`" : "judged with the sweeps"
-    return _openvt_pkg_row("V1 time to 10⁴ cells, uninhibited (measured in the Figure 3/8 record; $judged)",
+    return _openvt_pkg_row("V1 time to 10⁴ cells, uninhibited (measured in the Figure 3/9 record; $judged)",
         @sprintf("%.2f cycles (case (a), %d runs, %.2f–%.2f); %d of %d runs above the band; case (e) at β = 0.8: %.2f",
             ta, length(ca), first(ca), last(ca), count(>(hi), ca), length(ca), te),
         "13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15",
         @sprintf("about %.1f %% slow. The gap opens beyond 10³ cells, past the Figure 3 window. ", 100 * (ta / 13.57 - 1)) *
         "Leading candidate: division on actual area (M, C13) against TST's division on target area, as for V4",
         "not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value)")
+end
+
+# the "Figures" section of the results README (D-211): M's Figures 5, 7 and 8, their colours,
+# the shared Figure 5 bins and each drawn colony's C/C_circle from the records' grid tables
+function _openvt_pkg_figures_section(recs)
+    io = IOBuffer()
+    e = join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")
+    f8 = haskey(recs, :f8beta)
+    print(io, """
+
+    ## Figures
+
+    Our rows of M's Figures 5$(f8 ? ", 7 (γ) and 8 (β)" : " and 7") (9 Oct 2026 draft), byte copies of the renders in the
+    records (`plot_f5_shared.jl`, `plot_f7_grid.jl`$(f8 ? ", `plot_f8_grid.jl`" : "") in `implementations/Potts.jl/scripts/`):
+
+    - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance-bin edges
+      $e (record `$(recs[:f5])`), binned in R from the lattice centre; M's axis appears to be ≈ 2× ours (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data); asked.
+      The unit comparison is provisional: M's unit is unstated and on our open question list.
+    - `figures/fig7.png`: Figure 7, one colony at 10⁴ cells per Table 1 multiple at our γ thresholds
+      (β = 0); 1.1× and 2× are empty (no γ threshold there); cells yellow (no inhibition) or teal
+      (surface-inhibited) (record `$(recs[:sweeps])`).
+    """)
+    f8 || print(io, """
+    - Figure 8: pending (the colonies at the T1 β values, area inhibition; their record is not merged yet).
+    """)
+    f8 && print(io, """
+    - `figures/fig8.png`: Figure 8, one colony at 10⁴ cells at each of our Table 1 β thresholds (γ = 0),
+      replayed from the sweeps seeds; cells yellow (no inhibition) or red (area-inhibited, a < β)
+      (record `$(recs[:f8beta])`).
+    """)
+    print(io, """
+
+    In the colony grids (Figure 7 for γ$(f8 ? ", Figure 8 for β" : "")) the black line is the tissue outline: the
+    concave hull of the cell centroids as `metrics.cpp` computes it (concaveman, concavity 1.5, lengthThreshold 0). Each colony's
+    C/C_circle (the outline's perimeter over that of a circle of the same area, `metrics.cpp`'s
+    first roughness):
+
+    | Figure | Multiple | Threshold | N | C/C_circle |
+    |---|---|---|---|---|
+    """)
+    for (k, fig, sym) in ((:sweeps, "Figure 7 (γ)", "γ"), (:f8beta, "Figure 8 (β)", "β"))
+        haskey(recs, k) || continue
+        n = k === :sweeps ? 7 : 8
+        p = joinpath(_OPENVT_PKG_DATA, recs[k], "fig$(n)_grid.tsv")
+        isfile(p) || throw(ArgumentError("openvt_submission_package: the $(_OPENVT_PKG_ITEMS[k]) record has no fig$(n)_grid.tsv"))
+        _, rows = _openvt_pkg_tsv(p)
+        for r in rows
+            print(io, "| ", fig, " | ", replace(r["multiple"], "x" => "×"), " | ", sym, " = ", r["value"], " | ", r["N"], " | ",
+                @sprintf("%.2f", _openvt_pkg_f(r["C_rel"])), " |\n")
+        end
+    end
+    print(io, """
+
+    The panels carry no number. M's panels show a centred label whose quantity is unstated in M;
+    it is on our open question list, and C/C_circle above is metrics.cpp's measure, not M's label.
+    """)
+    return String(take!(io))
 end
 
 _openvt_pkg_sweep_row(recs) =
@@ -853,7 +950,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     | `Relaxation/11+10cells/width.csv`, `inner_width.csv` | 11+10-cell chain: total and inner (11-cell) width, λ = 2, T(2) with no refit | as above (`Mean inner width (CD)`, `STD inner width (CD)`) |
     | `Relaxation/lambda_scan/11cells_lambda<λ>_width.csv` | 11-cell chain width for λ = $(join(_OPENVT_PKG_LAMBDAS, ", ")) (Table S5's runs) | as above |
     | `Relaxation/table_S5.csv` | Table S5: T(λ) (first crossing of 90 % of the plateau by the mean width) and the MSE against the spring–dashpot reference on t ≥ 0 | `lambda` (1), `T (MCS)`, `MSE` (CD²) |
-    | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | per run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` (cells), `r` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius spread), `g` (fraction of growing cells) |
+    | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | Figure 9 (metrics): per run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` (cells), `r` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius spread), `g` (fraction of growing cells) |
     | `Monolayer/metrics/measurements_<case>_mean.csv` | the arithmetic mean over the case's runs (schema "Data Collection") at the saves every run reached; NaN values skipped | as above, plus `runs` (count) |
     | `Monolayer/metrics/neighbors_<case>.csv` | final neighbour-number histogram pooled over the case's runs | `n` (neighbours), `p` (% of cells) |
     """)
@@ -871,11 +968,18 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     | `Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` | Figure 5 snapshots at 1000 cells, case (b), run k ($(o2seed)) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
     | `Monolayer/Potts.jl_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table 1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
     | `Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv` | Figure 7 final snapshots; β = 0 in every panel (M's Figure 7), so the name carries γ only | `x_pos`, `y_pos` (R, from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
-
-    The O1 files of cases $(o1cases) come from a re-run of the Figure 3/8 runs from their
-    recorded seeds (record `$(recs[:o1])`): every save's MCS, cell count and metrics equal the
-    Figure 3/8 record's, and the run stops at the same MCS with the same cell count.
     """)
+    haskey(recs, :f8beta) && print(io, """
+    | `Monolayer/final_snapshot_data/Potts.jl_beta_<β>_<MCS>MCS.csv` | Figure 8 final snapshots at the T1 β values; γ = 0 in every panel, so the name carries β only; `inhibited` is area inhibition (a < β) | as above |
+    """)
+    print(io, """
+    | `figures/fig5.png`, `figures/fig7.png`$(haskey(recs, :f8beta) ? ", `figures/fig8.png`" : "") | M's Figures 5, 7$(haskey(recs, :f8beta) ? " and 8 (β)" : ""): our rows, see Figures below | PNG |
+
+    The O1 files of cases $(o1cases) come from a re-run of the Figure 3/9 runs from their
+    recorded seeds (record `$(recs[:o1])`): every save's MCS, cell count and metrics equal the
+    Figure 3/9 record's, and the run stops at the same MCS with the same cell count.
+    """)
+    print(io, _openvt_pkg_figures_section(recs))
     print(io, """
 
     ## Cases and seeds

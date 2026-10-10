@@ -9,6 +9,11 @@
 # D-168, D-172–D-175, D-185). Re-frozen under D-185 for the page layout only: the order of
 # (b), where the deviations and videos sit ((d), (e)), the pending wording and the F1 colour
 # row; no verdict rule, band or record-value check changed.
+# Re-frozen under D-211 (P6.15k; the 9 Oct 2026 draft is M) for the figure numbering and the
+# record artefacts only: M's metrics figure is now Figure 9 (the P6.15f record's `fig8.png`,
+# record names unchanged), M's new Figure 8 is the β colony grid (P6.15k record, pending
+# until its PC run lands), Figure 7 shows the grid render `fig7_grid.png` and Figure 5 the
+# shared-bin render `fig5_shared.png`. The R1–R4 content checks are in `15_openvt_d211.jl`.
 #
 # (a) Title. The first Markdown heading is the H1 "OpenVT monolayer benchmark".
 # (b) The D-185 order. Four level-2 headings, in this order: the model ("model"), a minimal
@@ -18,29 +23,33 @@
 #     `lib/PottsModels/src/openvt_reference.jl`, in the source's order, and the listing has
 #     every `@`-macro line of the source (condensed, not paraphrased). The minimal-run
 #     section runs code (a non-comment line calls `solve(`). Inside Results, level-3
-#     headings in this order: Figure 2; Figure 5; Figure 1; Figures 3 and 8; Figures 6 and
-#     7 with Table 1; the videos ("video"); the verdict summary ("verdict"); "Deviations".
+#     headings in this order: Figure 2; Figure 5; Figure 1; Figures 3 and 9; Figures 6 and
+#     7 with Table 1; Figure 8 (its own heading after that one, or named in it); the videos
+#     ("video"); the verdict summary ("verdict"); "Deviations".
 #     Details opens a raw-HTML `<details>` before its first level-3 heading and closes it
 #     (`</details>`) after its last line, and holds level-3 headings for Figure 4, Table S1,
 #     Table S5 and "Differences", and a protocol ("protocol") and provenance ("provenance")
-#     heading. Every item of M (Figure 1–8, Table 1, Tables S1 and S5) has a heading that
+#     heading. Every item of M (Figure 1–9, Table 1, Tables S1 and S5) has a heading that
 #     names it ("Figure N", "Figures N and M", "Table N", …); its section runs to the next
 #     heading of the same or a higher level.
 # (c) Each item is either RENDERED from a merged record or PENDING:
 #     - an item's records are the directories of `reproductions/data/15/` whose
-#       `provenance.toml` has its ROADMAP item: F1, F4 P6.15h; F2, S5 P6.15b; F3, F8 P6.15f;
-#       F5 P6.15e; F6, T1, F7 P6.15g. Table S1 is the parameter table and has no record;
+#       `provenance.toml` has its ROADMAP item: F1, F4 P6.15h; F2, S5 P6.15b; F3, F9 P6.15f;
+#       F5 P6.15e; F6, T1, F7 P6.15g; F8 P6.15k. Table S1 is the parameter table and has no
+#       record;
 #     - RENDERED: the section names a record directory, the first 8 characters of its
 #       commit, and its machine (the cpu up to " w/", or the hostname; case-insensitive),
 #       all as literal text; and it shows the record's figure (the file name, which must
-#       exist: F1 fig1.png, F2 fig2_bde.png, F3 fig3.png, F4 fig4.png, F5 fig5.png,
-#       F8 fig8.png; for the tables and the P6.15g items any .png, .svg or .tsv of the
+#       exist: F1 fig1.png, F2 fig2_bde.png, F3 fig3.png, F4 fig4.png, F5 fig5_shared.png,
+#       F7 fig7_grid.png, F8 fig8_grid.png, F9 fig8.png; for the tables and F6 any .png, .svg
+#       or .tsv of the
 #       record). It does not say "pending". The record figures follow M's layout (their
 #       READMEs and frozen tests pin it), so naming the file pins the layout;
 #     - PENDING is allowed only for the P6.15g items while no P6.15g record is merged
-#       (D-174). The section then says "pending: FULL run <state> (D-174)" (e.g. "parked" or
-#       "in progress") and shows no image. When a P6.15g record lands, the same items must
-#       be RENDERED, with no edit to this file.
+#       (D-174), and for F8 while no P6.15k record is merged (D-211). The section then says
+#       "pending: FULL run <state> (D-174)" (or "(D-211)"; <state> e.g. "parked" or "in
+#       progress") and shows no image. When the record lands, the same items must be
+#       RENDERED, with no edit to this file.
 # (d) Deviations and differences (D-154). The level-3 "Deviations" heading of Results and
 #     the level-3 "Differences" heading of Details. Every Markdown table in those sections
 #     (rows are lines, after an optional Literate "# ", that start and end with "|") has a
@@ -102,7 +111,7 @@ const P615I_ASSETS = joinpath(P615I_ROOT, "docs", "src", "assets", "openvt_monol
 const P615I_SPEC = joinpath(P615I_ROOT, "docs", "design", "research", "model-specs", "15_openvt_monolayer.md")
 const P615I_MAKE = joinpath(P615I_ROOT, "docs", "make.jl")
 const P615I_TITLE = "OpenVT monolayer benchmark"
-const P615I_PENDING = r"pending: FULL run [a-z ]+ \(D-174\)"
+const P615I_PENDING = r"pending: FULL run [a-z ]+ \(D-(174|211)\)"
 const P615I_MODEL_SRC = joinpath(P615I_ROOT, "lib", "PottsModels", "src", "openvt_reference.jl")
 const P615I_RELEASES = "https://github.com/PraneethMerugu/Potts.jl/releases/download/"
 
@@ -112,24 +121,25 @@ const P615I_ITEMS = [
     ("F2", :figure, "2", "P6.15b", "fig2_bde.png"),
     ("F3", :figure, "3", "P6.15f", "fig3.png"),
     ("F4", :figure, "4", "P6.15h", "fig4.png"),
-    ("F5", :figure, "5", "P6.15e", "fig5.png"),
+    ("F5", :figure, "5", "P6.15e", "fig5_shared.png"),
     ("F6", :figure, "6", "P6.15g", nothing),
     ("T1", :table, "1", "P6.15g", nothing),
-    ("F7", :figure, "7", "P6.15g", nothing),
-    ("F8", :figure, "8", "P6.15f", "fig8.png"),
+    ("F7", :figure, "7", "P6.15g", "fig7_grid.png"),
+    ("F8", :figure, "8", "P6.15k", "fig8_grid.png"),
+    ("F9", :figure, "9", "P6.15f", "fig8.png"),
     ("S1", :table, "S1", nothing, nothing),
     ("S5", :table, "S5", "P6.15b", nothing),
 ]
-const P615I_PARKED_ITEM = "P6.15g"
+const P615I_PARKED_ITEMS = ("P6.15g", "P6.15k")
 
 # the six current per-cell videos (gh release view, 2026-10-08), by the sections they belong to
 const P615I_VIDEOS = [
     ("reproductions-2026-10-07-openvt-f5-cells-v2", "15_openvt_f5_b_run1_seed15001_cells_v2.mp4", ("F5",)),
     ("reproductions-2026-10-07-openvt-f5-cells-v2", "15_openvt_f5_control_gamma1e-4_run1_seed15501_cells_v2.mp4", ("F5",)),
-    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_a_run1_seed15701_cells.mp4", ("F1", "F3", "F8")),
-    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_b_run1_seed15001_cells.mp4", ("F1", "F3", "F8")),
-    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_e_beta0.8_run1_seed15801_cells.mp4", ("F1", "F3", "F8")),
-    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_f_sigmaX0_run1_seed15201_cells.mp4", ("F1", "F3", "F8")),
+    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_a_run1_seed15701_cells.mp4", ("F1", "F3", "F9")),
+    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_b_run1_seed15001_cells.mp4", ("F1", "F3", "F9")),
+    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_e_beta0.8_run1_seed15801_cells.mp4", ("F1", "F3", "F9")),
+    ("reproductions-2026-10-08-openvt-f3f8", "15_openvt_f3f8_f_sigmaX0_run1_seed15201_cells.mp4", ("F1", "F3", "F9")),
 ]
 const P615I_SUPERSEDED = ["reproductions-2026-10-07-openvt-f5", "reproductions-2026-10-07-openvt-f5-cells"]
 const P615I_VIDEO_EXT = (".mp4", ".webm", ".mov", ".mkv", ".gif")
@@ -381,9 +391,12 @@ end
         pick(list, f) = findfirst(((k, t),) -> f(t), list)
         has(t, ids...) = all(id -> id in p615i_labels(t), ids)
         order = [pick(res3, t -> has(t, ("F", "2"))), pick(res3, t -> has(t, ("F", "5"))), pick(res3, t -> has(t, ("F", "1"))),
-            pick(res3, t -> has(t, ("F", "3"), ("F", "8"))), pick(res3, t -> has(t, ("F", "6"), ("F", "7"), ("T", "1"))),
+            pick(res3, t -> has(t, ("F", "3"), ("F", "9"))), pick(res3, t -> has(t, ("F", "6"), ("F", "7"), ("T", "1"))),
             pick(res3, t -> occursin(r"video"i, t)), pick(res3, t -> occursin(r"verdict"i, t)), pick(res3, t -> occursin(r"deviation"i, t))]
         @test all(!isnothing, order) && issorted(something.(order, 0); lt = <)
+        # D-211: M's Figure 8 (the β grid) after Figures 6 and 7, before the videos
+        f8 = pick(res3, t -> has(t, ("F", "8")))
+        @test f8 !== nothing && all(!isnothing, order) && order[5] <= f8 < order[6]
         # Details: collapsed, with the rest
         det3 = h3(dk, nextk(dk))
         for f in (t -> has(t, ("F", "4")), t -> has(t, ("T", "S1")), t -> has(t, ("T", "S5")), t -> occursin(r"differences"i, t),
@@ -416,8 +429,8 @@ end
         if item === nothing
             @test !isempty(sec) && !occursin(r"pending"i, sec)
         elseif isempty(recs)
-            # only the parked sweeps may be pending
-            @test item == P615I_PARKED_ITEM
+            # only the parked sweeps (D-174) and the β grid (D-211) may be pending
+            @test item in P615I_PARKED_ITEMS
             @test occursin(P615I_PENDING, sec)
             @test !occursin(r"\.(png|svg)\b"i, sec)
         else

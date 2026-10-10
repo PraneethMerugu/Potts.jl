@@ -160,7 +160,7 @@ function _site_counts(frame)
 end
 
 function PottsModels.openvt_colony_panel!(ax, frame; colour::Symbol = :area, areas = nothing, inhibited = nothing,
-        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH)
+        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colours = (GROWING, INHIBITED))
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_colony_panel!: a 2D frame is required"))
     if colour === :area
         a = areas === nothing ? _site_counts(frame) : areas
@@ -176,7 +176,7 @@ function PottsModels.openvt_colony_panel!(ax, frame; colour::Symbol = :area, are
         inhibited === nothing && throw(ArgumentError("openvt_colony_panel!: colour = :state needs `inhibited`"))
         fr, key, _ = _with_channel(frame, :inhibited, Dict(id => (v == true || v == 1) ? 1.0 : 0.0 for (id, v) in inhibited))
         pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "inhibited"),
-            colormap = Makie.cgrad([GROWING, INHIBITED], 2; categorical = true), colorrange = (0.0, 1.0),
+            colormap = Makie.cgrad([Makie.to_color(state_colours[1]), Makie.to_color(state_colours[2])], 2; categorical = true), colorrange = (0.0, 1.0),
             medium_color = :white, boundaries = false)
     else
         throw(ArgumentError("openvt_colony_panel!: colour is :area or :state, got :$colour"))

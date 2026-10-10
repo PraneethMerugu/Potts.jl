@@ -90,7 +90,8 @@ function openvt_f1_figure end
 
 """
     PottsModels.openvt_colony_panel!(ax, frame; colour = :area, areas = nothing,
-        inhibited = nothing, colorrange = nothing, linewidth = 0.75) -> PottsPlot
+        inhibited = nothing, colorrange = nothing, linewidth = 0.75,
+        state_colours = (growing, inhibited)) -> PottsPlot
 
 Draw a 2D MakiePotts render frame into the Makie axis `ax` in the style of the OpenVT
 consortium's colony figures (D-185; spec 15 §4.0.2): one `pottsplot` on a white medium and
@@ -101,8 +102,9 @@ cell–medium), drawn as one `linesegments` plot with square caps so the outline
   area) defaults to the cells' site counts in `frame`; `colorrange` defaults to the min–max
   of the areas of the cells in `frame`.
 - `colour = :state`: growing and inhibited cells from `inhibited` (cell id => `true`/`1` for
-  inhibited), in the colours of M's Fig 7: growing RGB(44,123,182), inhibited
-  RGB(253,174,97).
+  inhibited), by default in the colours of M's 2 Oct Fig 7: growing RGB(44,123,182),
+  inhibited RGB(253,174,97); `state_colours = (growing, inhibited)` sets others (the 9 Oct
+  draft's grids use yellow and teal or red).
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """

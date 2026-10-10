@@ -1,0 +1,21 @@
+commit = "97c326bfdc55a1ed49bf92e16e4b62bd622fdff4"
+commit_date = "2026-10-09"
+cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+cpu_s_runs = 3436.9
+decisions = ["D-146", "D-157", "D-211", "D-212"]
+dirty_tracked = false
+finished = "2026-10-09T23:11:42.322"
+item = "P6.15k"
+julia = "1.12.6"
+machine = "x86_64-linux-gnu"
+manifest_sha256 = "3a267d7eabe2758c16e5c350234d2c0281edf14108a3f99b522f9f6920130288"
+runner = "lib/PottsModels/reproductions/data/15/f8beta-2026-10-09/run_f8beta.jl"
+runner_sha256 = "ea0faf18fea747b3a649d12344bd2641c9831d17ad800dcc9fae70df7729dcdf"
+runs = 5
+seeds = "160 000 000 + 100 q + 1 (q = β × 10⁴)"
+started = "2026-10-09T22:47:32.840"
+sweeps_test_sha256 = "2a89db9f95b2add22de678a34aeba432f8f40a8d1566ccc8f5947871148bb667"
+test = "lib/PottsModels/test/reproductions/15_openvt_d211.jl"
+test_sha256 = "6755ce98661a77ce556670f70e2acd672efc757b2a28e2ea7fd9b9824619db5d"
+threads = 5
+wall_s = 1449.5

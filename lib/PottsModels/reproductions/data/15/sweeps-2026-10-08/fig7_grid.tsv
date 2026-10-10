@@ -1,0 +1,4 @@
+multiple	parameter	value	file	N	inhibited	B	C_rel
+5x	gamma	0.1625	f7/Potts.jl_gamma_0.1625_52907MCS.csv	10000	9623	422	1.3821469936188517
+10x	gamma	0.5375	f7/Potts.jl_gamma_0.5375_108081MCS.csv	10000	9796	574	1.9057093499064177
+20x	gamma	0.7625	f7/Potts.jl_gamma_0.7625_201438MCS.csv	10001	9871	658	2.2190105558266704
