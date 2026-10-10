@@ -1277,7 +1277,7 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             |---|---|---|---|
             """)
             foreach(f -> print(io, "| `", f, "` | ", sz[f], " | `", sha[f], "` | ", _openvt_pkg_release_url(tag, f), " |\n"), bf)
-            print(io, readme[last(k):end])
+            print(io, "\n", readme[(first(k) + 1):end])
             write(rp, String(take!(io)))
             _openvt_pkg_zip(stage, joinpath(out, "core.zip"))
             _openvt_pkg_write(joinpath(out, "EMAIL.md"), _openvt_pkg_email(recs, o1, bf, sha, sz, tag))
