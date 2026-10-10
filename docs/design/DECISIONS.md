@@ -4069,3 +4069,20 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Bug-chase.** In a final record, "under investigation" anywhere in a cause fails. Cause parentheticals may only be `(D-NNN)`.
 - **Pinned references.** The sequential references are `f3-f8-2026-10-08` and `calibration-2026-10-05`. The test checks the latest "final" checkerboard record, or else the latest.
 - **Page test (g) rules mirrored.** The commit, `dirty_tracked = false`, a runner inside the record with its sha256, the test and manifest sha256s, and the allowed file kinds, each ≤ 10 MB.
+
+## D-220 P6.15m: the checkerboard's extra crushing is claim-conflict thinning, not a bug; the entry runs on its own calibrated T (2026-10-10; coordinator, from the P6.15m investigation; amends D-214)
+
+- **Finding.** Under `CheckerboardCPM` (4 colours here, Moore(1), stride 2), each cell changes at most once per colour, by the D-008 claim rule. Only about 27% of accepted copies commit. Case (a) at 5k cells: 5,534 of 20,243 accepted per MCS, against 20,126 committed in sequential. So copies advance about 3.6× slower per MCS, while A* growth and division stay on the MCS clock. Colonies are therefore more compressed (A*−V ≈ 56 against ≈ 30 at 5k cells) and lose about 4,100 cells against about 865, and they reach 10⁴ cells about 15% later.
+- **Not a bug.** ΔH matched brute force on 16,605 committed copies (max 3.3e-12, 0 mismatches). The volume trackers equal recounts, and no claim was violated.
+- **Ablations.**
+  - More colours: 9 → 16 → 64 colours bring the loss down to the sequential level.
+  - Slower sequential: sequential with 0.3·N attempts per MCS reproduces the stock checkerboard (3,747 lost, stop at 13,577).
+  - What remains at 64 colours (≈ 570 against ≈ 860) is the update-order class, in the other direction.
+- **Cause wording** (corrects D-214 and spec 15 §1.3).
+  - The class is **thinning of conflicting accepted copies (D-008 claims)**. D-051's Bernoulli thinning is for fractional `attempts`, which is compiled out here.
+  - "Colour-lagged totals" contributes nothing to this model: volumes update at commit, and the claims keep ΔH exact.
+- **Ruling: the entry runs on its own calibrated time unit, with time-dependent parameters converted by it.**
+  - M defines time in units of the mechanical T and the growth rate per T (C1, C16: α = π/5 R²/T = A₀/(5T)). Every framework calibrates its own T on the chains (§4.2).
+  - The checkerboard entry therefore runs the F2 chain calibration first. If T_cb(λ = 2) differs significantly from 156 MCS (D-218 rule), the cycle is 5·T_cb and α = A₀/(5·T_cb) per MCS. Otherwise both stay at 775 and 50/775.
+  - The record states T_cb, the cycle and α.
+  - This is the manuscript's own time mapping, not a tuning: the algorithm is unchanged (stock 4 colours, no extra sweeps). Differences that remain after the time mapping are characterised under D-218.
