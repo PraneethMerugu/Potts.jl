@@ -4056,3 +4056,16 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 **API.** Two new `public` names in PottsModels: `openvt_spread_compare(ref, alt; z = 4.42)` and `openvt_spread_table(ref::AbstractDict, alt; z)`.
 
 **Tokens.** "Potts.jl (checkerboard)" and `Potts.jl_checkerboard` are constants at the top of the file.
+
+## D-218 P6.15m m1 re-frozen after adversarial review (2026-10-10; coordinator, from the m1 reviewer and test author; amends D-216)
+
+`15_openvt_checkerboard.jl` is re-frozen (e0a99aff…). The implementation fix 430a9192 makes a constant sample's mean exactly its value.
+
+- **Interpolated reads.** `L@τ`, `r@τ` and `A@τ` are interpolated linearly in t between the saves around τ. The end metrics (`r_stop`, `A_stop`, `C_rel_end`, `w_end`, `g_end`) are interpolated where log₂N crosses log₂(0.95 cells). Without this, the save grid alone could flag a row: a 39-MCS phase shift gave |z| up to 14.9. New controls: the phase-shifted and finer grids, synthetic and on the real seeds, flag nothing.
+- **Rule.** A row is beyond the spread when |z| > crit(ν), the two-sided Student-t quantile at α = 1e-3/103, with ν = min(n_ref, n_alt) − 1. That gives 4.66 for 100 seeds and 8.86 for 10. It supersedes D-216's 4.42. `comparison.tsv`'s `beyond` column uses these values.
+- **Cases and metrics.** The cases are exactly a, b and f, with 34 metrics each: D-216's 33 plus `lost` = divisions + 1 − live at the stop. That makes 102 rows plus the T(λ = 2) row. Case (a) is required because the GPU probe found about 5× more crushed cells under CheckerboardCPM in case (a): about 4,000–4,300 lost against 824 for seed 15701.
+- **New record files.** `runs.tsv` gains `divisions` and `live` columns. `reference_runs.tsv` is a CPU SequentialCPM replay of every P6.15f seed of a, b and f, whose stop MCS and N must equal P6.15f's. m3 therefore includes this replay on the PC.
+- **Time scale.** T_lambda2 must lie within 2·sd/√n of the mean of `calibration.tsv`'s λ = 2 crossings.
+- **Bug-chase.** In a final record, "under investigation" anywhere in a cause fails. Cause parentheticals may only be `(D-NNN)`.
+- **Pinned references.** The sequential references are `f3-f8-2026-10-08` and `calibration-2026-10-05`. The test checks the latest "final" checkerboard record, or else the latest.
+- **Page test (g) rules mirrored.** The commit, `dirty_tracked = false`, a runner inside the record with its sha256, the test and manifest sha256s, and the allowed file kinds, each ≤ 10 MB.
