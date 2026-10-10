@@ -2,7 +2,7 @@ model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20,
 boundary = "closed"
 saves = "MCS 0, every 39 MCS and the stopping MCS; per save N and openvt_metrics r, A, C, w, g (R units)"
 o1 = "the O1 frame (openvt_frame) of the stop state: mean and sample sd of n, share of n == 6, share of i == 0"
-status = "provisional"
+status = "final"
 framework = "Potts.jl (checkerboard)"
 edge_guard = "edge_guard(5; terminate = true)"
 crit = "two-sided Student t at α = 1e-3/103, ν = min(n_ref, n_alt) − 1 (D-218): 4.6642 (b, f, calibration), 8.8595 (a)"
