@@ -4217,3 +4217,13 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - EMAIL.md carries no compiler heads-up.
   - The READMEs keep one neutral provenance line: our measurements were produced with metrics.cpp built with GCC 13 on Linux.
 - **Standing rule.** We do not raise questions or suggestions about how other frameworks run their benchmarks. Their departures are recorded in our deviation tables only where they bear on comparing against us. Our bar is faithfulness to M.
+
+## D-227 P6.15m final review rulings (2026-10-10; coordinator, from the final adversarial review; under D-221, D-224, D-226)
+
+1. **Case (a)'s remainder is underpowered.** Case (a) had n = 10 per arm (crit 8.86), and its c64 remainders (lost z −3.09, t_stop z −4.55) would be beyond the spread at higher n. Case (a) is where D-220 saw an update-order remainder. **Ruling:** re-run (a) at n = 30 per arm, both stock and c64, with fresh seeds, then relabel by the D-221 rule. For (b) and (f), the page and the deviation text state the detection limit: a remainder is "not resolved" below about 4.66·se, not "absent".
+2. **c64 colour mismatch, disclosed.** The c64 arm calibrates on a 98-colour chain but runs 64 colours on the monolayer. This doesn't affect the thinning attribution (contrast z 4.95–137). It does confound the remainder on time metrics (a T_c64 bias of about 3.5 MCS would explain the t_stop(a) remainder). The page and the record state "98 on the chain, 64 on the monolayer" and this caveat.
+   - **Wording fix:** T = 219 is the net of thinning and update order on the chain. T_c64 = 127 < 156 shows a sweep-order speed-up.
+3. **"Not a bug" scope.** The page says the ΔH check ran on the CPU colour loop the GPU kernels share, and that GPU equivalence rests on the chain replays matching the GPU runs.
+4. **`cb_check` coverage.** It extends to every checkerboard number outside the section: the Fig 2 caption, the 1095-MCS cycle mentions and the Table S5 line. It also checks the deviation table's row count.
+5. **Provenance.** `[ablation]` records the runner sha256 per stage, and `[dH_check]` records check_dH.jl's sha256.
+6. **Colour guard.** The colour assertion reads the cache's own colours, not `colors(lattice, 2)`.
