@@ -15,7 +15,7 @@
 spec = "01"
 name = "Vasculogenesis and sprouting (Merks et al. 2006, 2008)"
 status = "partial"
-status_note = "FULL record 2026-10-08 (590 jobs, PC, CPU): 37/37 checks pass (V-C12 read from MCS 0, D-200); the 01b digitised figure targets are open (P6.3f)"
+status_note = "FULL record 2026-10-08 (590 jobs, PC, CPU): 37/37 checks pass (V-C12 read from MCS 0, D-200). 01b digitised-figure record 2026-10-09 (1330 jobs, PC, CPU; provisional, D-154): 27 of 29 rows pass and 7 of 7 negative controls fail as required; F7.noCI and F7.gap fail"
 data = "01"
 models_page = "model-merks"
 published = "01_merks"
@@ -24,6 +24,8 @@ deviations = [
     "Provisional default: 2006 target length L = 50 px (the text) rather than 60 px (the parameter files).",
     "Provisional default: V-E5/V-E6 read at 48 h, the last time shown in the paper.",
     "Ten targets parked: V-E2–V-E4, V-E7–V-E9, V-C6, V-C8, V-C10, V-C11 (pipeline or set-up not published).",
+    "01b F7.noCI and F7.gap (under review): our Fig 7 no-CI plateau is ≈ 0.92 against the paper's ≈ 0.83 (6 of 10 points outside; gap 0.616 against [0.49, 0.60]). The paper's own Figs 8 and 9 give 0.921 and 0.920 at the same default point, where Fig 7 gives 0.829; ours is 0.918–0.923 in all three.",
+    "Provisional defaults: the inferred 01b set-ups I1–I7 (D-202): the 256- and 1024-cell starts, n = 10 for Figs 7–10, no CI as χcc = χcM, Fig 13 as Float Σ ΔH, the time axis including the relaxation, and the Fig 10 legend reading.",
 ]
 
 [[model]]
