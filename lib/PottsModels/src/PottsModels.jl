@@ -17,6 +17,7 @@ using DelimitedFiles: readdlm
 using Printf: @sprintf
 using PrecompileTools: PrecompileTools
 using SciMLBase: ReturnCode
+using SHA: sha256
 using TOML: TOML
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,

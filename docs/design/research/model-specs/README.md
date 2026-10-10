@@ -521,6 +521,12 @@ model's list.
 3. The analysis scripts for compactness and H − H₀ (01 §7.9 D-17, D-18; A-14); morphometry code (A-18).
 4. Parameter files for 01b Figs 3, 5, 7–10, 12–13, and the code for the continuous χ(c,c)/χ(c,M) sweep (D-2, D-3; A-20).
 5. The enclosing lattice for Fig 2 (A-9) and the Fig 10/12 lattices (A-10).
+6. **[B]** Fig 7 against Figs 8–9 (added 2026-10-09, from the 01b FULL record 4fa7f520).
+   - At the shared default point (J_cc = 40, χ(c,M) = 500, s = 0), the no-CI compactness reads 0.829 in Fig 7 but 0.921 and 0.920 in Figs 8 and 9.
+   - What differed in Fig 7's no-CI runs: the no-CI definition (χ(c,c) = χ(c,M), or the `vecadherinknockout` flag), the initial state, the read-out time, or the averaging?
+   - We match Figs 8–9 (0.918–0.923). So Fig 7's no-CI arm and its CI–no-CI gap fail (F7.noCI, F7.gap). Its CI arm passes.
+   - Item 4's Fig 7 parameter file would likely answer it.
+7. Fig 6E: whether displacement "from original positions" is measured from MCS 0, before relaxation (adopted, D-200: ratio 2.017), or from the end of relaxation, as Figs 6A–D suggest (proposal-law-clues.md §3). This is a confirmation, not a blocker.
 
 ### Rita de Almeida, Gilberto Thomas, Pedro Dal-Castel
 

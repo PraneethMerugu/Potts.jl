@@ -14,7 +14,8 @@
 #   (`info: …`, `reported`) is information;
 # - a negative-control row (case `control`, or a band saying "control: must FAIL") is not a
 #   verdict on the model; the records table shows how many control rows fail, of how many;
-# - a summary row ("… (all rows)") restates other rows and is not counted;
+# - a summary row ("… (all rows)") restates other rows and is not counted, nor is a per-point
+#   line (`check` "point …") that its curve's row judges;
 # - a PARKED row is superseded, and not counted, when another record of the same model has a
 #   PASS or FAIL row for the same target id (its first word, e.g. `V-A6`).
 using TOML: TOML
@@ -29,10 +30,11 @@ function _read_tsv(path)
     return head, [Dict(zip(head, String.(split(l, '\t')))) for l in lines[2:end]]
 end
 
-_is_control(r) = get(r, "case", "") == "control" ||
+_is_control(r) = get(r, "case", "") == "control" || get(r, "control", "") == "true" ||
                  any(v -> occursin("control: must FAIL", v), values(r))
 _target(r) = get(r, "target", get(r, "criterion", ""))
-_is_summary(r) = occursin("(all rows)", _target(r))
+# a per-point line (`check` "point …", 01b) is judged inside its curve's row
+_is_summary(r) = occursin("(all rows)", _target(r)) || startswith(get(r, "check", ""), "point ")
 _target_id(r) = first(split(_target(r) * " "))
 
 # one record directory: its verdict rows, tagged with the file they came from
@@ -120,7 +122,7 @@ end
 
 const BUILD_ORDER = [
     ("In flight (offline FULL runs on the PC)", [
-        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `BoundarySiteCPM` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
+        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
         ("P6.3f", "Merks: the FULL run and the digitised 01b figure targets."),
     ]),
     ("Step 4: foam", [
@@ -239,7 +241,8 @@ function render_status(; published::Bool = false)
     - A negative-control row (a deliberately broken model or parameter set that the target
       must reject) is not a verdict on the model and is not counted. The records table shows
       how many control rows fail; the frozen tests decide which control rows must fail.
-    - A summary row ("… (all rows)") repeats other rows and is not counted.
+    - A summary row ("… (all rows)") repeats other rows and is not counted. Nor is a
+      per-point line (`check` "point …"): its curve's row is the verdict.
     - A PARKED row is "superseded" when another record of the same model measures the same
       target (the same id, such as `V-A6`) with a PASS or FAIL; it is not counted as PARKED.
     - Targets that are parked or not yet run on a page, but have no row in a record, are not

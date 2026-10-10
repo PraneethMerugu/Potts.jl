@@ -2,6 +2,8 @@
 
 This is the offline record required by D-146. It was pre-registered by D-174, and its amendment switched the sweep to `BoundarySiteCPM` (D-177).
 
+`BoundarySiteCPM` is now `SequentialCPM(; skip_interior = true)` (D-198), with the same semantics; the provenance names it as run.
+
 - **Run.** `run_sweeps.jl` at commit `41fb2ba6` on the PC (praneeth-NucBox-EVO-X2, AMD Ryzen AI Max+ 395, Julia 1.12.6).
   - **Threads.** 12 threads, pinned to `taskset -c 6-11,22-27`, under `systemd-run --user --scope -p MemoryMax=40G`. That is the coordinator's core plan for the night, which shares the PC with a Merks FULL run on 0–5 and 16–21. Cores 12–15 were left free.
   - **Time.** The run started at 15:53 and finished at 22:42, a wall time of 24,548 s (6.8 h). The 160 runs took 247,487 CPU-s (68.7 core-hours).

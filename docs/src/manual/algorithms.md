@@ -1,31 +1,44 @@
 # [Choosing an algorithm](@id manual-algorithms)
 
-`solve(prob, alg)` takes one of three sweep algorithms. All three sample the same model:
-the same energy, constraints, acceptance law and proposal neighbourhood. They differ in
-the order in which copy attempts are made, in where they run, and in what that order does
-to the kinetics.
+`solve(prob, alg)` takes one of two sweep algorithms, `SequentialCPM` and
+`CheckerboardCPM`. `SequentialCPM` has a faster option, `skip_interior = true`. All of them
+sample the same model: the same energy, constraints, acceptance law and proposal
+neighbourhood. They differ in the order in which copy attempts are made, in where they run,
+and in what that order does to the kinetics.
 
 | Algorithm | Backends | Dynamics | Use it for |
 |---|---|---|---|
-| `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn site: the classic CPM | the reference dynamics, against which the reproductions are defined |
-| `BoundarySiteCPM()` | CPU | `SequentialCPM`'s dynamics, drawing only boundary sites; equal in distribution to `SequentialCPM` | the same runs, faster, when most of the lattice is medium or cell interior |
-| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once | GPUs and large lattices; its kinetics differ from `SequentialCPM`'s |
+| `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn mobile target site: the classic CPM | the reference dynamics, against which the reproductions are defined |
+| `SequentialCPM(; skip_interior = true)` | CPU | the same dynamics, drawing only boundary sites and skipping the interior picks exactly; equal in distribution to `SequentialCPM()` | the same runs, faster, when most of the lattice is medium or cell interior |
+| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics differ from `SequentialCPM`'s |
 
-All three take `acceptance` and `proposal` keywords, which default to the model's
+Both take `acceptance` and `proposal` keywords, which default to the model's
 acceptance law and the problem's proposal neighbourhood (see [Problems, solvers and
-solutions](@ref manual-problems)).
+solutions](@ref manual-problems)). Both also take `skip_interior`, which defaults to
+`false`. On `CheckerboardCPM`, `skip_interior = true` is not available yet: `solve` raises
+an `ArgumentError`. In both algorithms the source of a copy is a uniformly drawn neighbour
+of the target in the proposal neighbourhood; they differ in how targets are chosen.
 
-## `BoundarySiteCPM`
+`CheckerboardCPM` spaces its colours by the model's footprint, the distance a copy reads
+from its target. The footprint covers what drives, constraints, `@on_copy` updates and the
+temperature read, so a wider read there widens the spacing; an energy that reads a relation
+beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it wherever the fold
+is read, since its counts are kept up to date on every copy. Any other relation read only at
+the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
+`@observed` quantities) does not count, whatever its radius.
+
+## Skipping the interior: `skip_interior = true`
 
 ### What it does
 
 `SequentialCPM` makes `N` copy attempts per MCS, where `N` is the number of mobile sites.
-Each attempt picks a target site uniformly and one of its proposal neighbours. When every
-proposal neighbour of the picked site belongs to the same owner as the site (the inside of
-a cell, or open medium), the attempt can only copy that owner onto itself: a null move,
-which changes nothing. On a lattice that is mostly medium, almost every attempt is null.
+Each attempt picks a mobile target site uniformly, then one of its proposal neighbours
+uniformly as the source. A source that is off the lattice, frozen or of the same owner
+ends the attempt, which still counts. When every proposal neighbour of the picked site
+belongs to the same owner as the site (the inside of a cell, or open medium), the attempt
+can only copy that owner onto itself: a null move, which changes nothing. On a lattice that is mostly medium, almost every attempt is null.
 
-`BoundarySiteCPM` keeps the set of **boundary sites**: mobile sites with at least one
+With `skip_interior = true`, `SequentialCPM` keeps the set of **boundary sites**: mobile sites with at least one
 mobile proposal neighbour of another owner (frozen and off-lattice neighbours do not count).
 It draws only from that set. The interior picks it does not make are accounted exactly:
 between two boundary picks, the number of skipped picks is drawn at once from its exact
@@ -43,20 +56,20 @@ rebuilt after lifecycle events, `reinit!`, `u_modified!` and a checkpoint restor
 ### Equal in distribution, not bitwise
 
 The sequence of non-null attempts has the same law as `SequentialCPM`'s, but it is drawn
-from a different random stream: `SequentialCPM` spends one draw on each null pick, and
-`BoundarySiteCPM` does not make those draws. With the same `seed`, the two algorithms give
-different trajectories with the same statistics. Each algorithm is still deterministic on
+from a different random stream: `SequentialCPM()` spends one draw on each null pick, and
+`skip_interior = true` does not make those draws. With the same `seed`, the two settings give
+different trajectories with the same statistics. Each setting is still deterministic on
 its own: the same problem, seed and algorithm give the same run (D-158). Continuing from a
 checkpoint is equal in law to an uninterrupted run, not bitwise identical (D-177).
 
 ### When to use it
 
-Use it wherever you would use `SequentialCPM` and much of the lattice is medium or cell
+Use it wherever you would use `SequentialCPM()` and much of the lattice is medium or cell
 interior: a colony growing from one cell, such as the OpenVT monolayer, a few cells
 migrating on a large lattice, or a dilute aggregate. The fewer boundary sites, the larger
-the speed-up. A frozen reproduction defined on `SequentialCPM` can switch to it without
-changing its targets, since the two are equal in law; the OpenVT threshold sweeps did so
-before their full run (D-174).
+the speed-up. A reproduction defined on `SequentialCPM()` can switch to it without
+changing its targets, since the two are equal in law; the OpenVT threshold sweeps and the
+foam reproduction run this way (D-174, D-190).
 
 ### Limits
 
@@ -70,14 +83,15 @@ before their full run (D-174).
   colour, which is a different dynamics. Whether its kinetics are statistically equivalent
   to `SequentialCPM`'s is open (ROADMAP P6.0bl): on the Merks models they differ
   measurably (eight seeds at 400 MCS: compactness of the 2008 sprout 0.821 sequential
-  against 0.869 checkerboard). `BoundarySiteCPM` is equivalent to `SequentialCPM` by
-  construction, so it does not share that question.
-- General proposal laws with a Hastings correction, and a GPU form, are later work
-  (ROADMAP P6.4b).
+  against 0.869 checkerboard). `skip_interior = true` is equivalent to `SequentialCPM()`
+  by construction, so it does not share that question.
+- **CPU only for now.** `CheckerboardCPM(; skip_interior = true)`, the GPU form, is later
+  work (ROADMAP P6.0bk); until then it raises an `ArgumentError`. General proposal laws
+  with a Hastings correction are also later work (ROADMAP P6.4b).
 
 ### Example
 
-A few cells on a mostly-medium lattice, run under both algorithms. The attempt counts
+A few cells on a mostly-medium lattice, run with and without the option. The attempt counts
 agree exactly; the accepted counts are random, with the same expected value.
 
 ```@example boundary
@@ -97,7 +111,7 @@ op = layout(Tiling((5, 5); region = (21:40, 21:40), spacing = 5, kinds = [:cell]
 prob = PottsProblem(dilute, op, (0, 20); seed = 1)
 
 seq = solve(prob, SequentialCPM())
-bnd = solve(prob, BoundarySiteCPM())
+bnd = solve(prob, SequentialCPM(; skip_interior = true))
 (; sequential = (seq.stats.attempts, seq.stats.accepted),
    boundary = (bnd.stats.attempts, bnd.stats.accepted))
 ```
@@ -105,13 +119,13 @@ bnd = solve(prob, BoundarySiteCPM())
 ### Measured evidence
 
 The acceptance test is `lib/PottsModels/test/acceptance/p6_4b1_boundary_site.jl` (frozen,
-D-177). It passes at both tiers (SMOKE: 369 checks; FULL on the PC: 106 checks, every
-``|z| \le 2.4``). Each check is held to a false-failure probability of at most 10⁻³ and
-has a negative control.
+D-177). It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
+106 checks, every ``|z| \le 2.4``). Each check is held to a false-failure probability of
+at most 10⁻³ and has a negative control.
 
 - **Exact law.** On a 2 × 4 lattice with two cells (6050 states), an independent oracle
   computes `SequentialCPM`'s exact stationary law and its exact laws after one and two
-  MCS. `BoundarySiteCPM`'s states follow all three (χ² z-scores below 3.72), with
+  MCS. The states under `skip_interior = true` follow all three (χ² z-scores below 3.72), with
   `SequentialCPM` as the positive control of the oracle.
 - **Time equivalence.** On 60² with four cells (2.8 % cover), accepted copies in MCS 1
   (mean and variance), accepted copies over MCS 1–10 and the mean squared centroid
@@ -121,14 +135,14 @@ has a negative control.
   ``|z| \le 3.89``).
 - **Boundary set.** It equals a from-scratch recompute after every step, division,
   removal, `reinit!` and direct state write.
-- **`SequentialCPM` unchanged.** Two bitwise records of `SequentialCPM` runs still match,
+- **`SequentialCPM()` unchanged.** Two bitwise records of `SequentialCPM()` runs still match,
   and its performance A/B passes (worst candidate/base 1.010 against a margin of 1.032).
 
-Speed-ups over `SequentialCPM` (D-177):
+Speed-ups over `SequentialCPM()` (D-177):
 
 | Case | Speed-up | Machine and backend |
 |---|---|---|
 | 400², 169 cells of 7 × 7 (5 % cover) | 4.40× | PC (AMD Ryzen AI Max+ 395), CPU, single thread, pinned |
 | OpenVT case (a), 1400², one cell to 10⁴ cells | 2.83× (178 s against 504 s) | PC (AMD Ryzen AI Max+ 395), CPU, one run each |
 
-The docstring: [`BoundarySiteCPM`](@ref).
+The docstring: [`SequentialCPM`](@ref).

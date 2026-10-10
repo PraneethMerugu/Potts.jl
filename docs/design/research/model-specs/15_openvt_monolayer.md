@@ -26,7 +26,7 @@ against running code or an author statement.
 
 | Prefix | Source | On disk |
 |---|---|---|
-| **M** | OpenVT consortium, "Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition", manuscript draft dated 2 October 2026, 12 pp. (correspondence R. Vetter). Unpublished draft: its figure captions are still "DETAILED DESCRIPTION HERE" and §4.1.1–4.1.4 are empty | `docs/references/15_OpenVT2026_monolayer-manuscript-draft-2026-10-02.pdf` (gitignored) |
+| **M** | OpenVT consortium, "Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition". **Target since 2026-10-09: the draft dated 9 October 2026, 14 pp.** (`docs/references/15_OpenVT2026_monolayer-manuscript-draft-2026-10-09.pdf`, gitignored); the changes are listed in §1.2. Before that: the draft dated 2 October 2026, 12 pp. (correspondence R. Vetter). Unpublished draft: its figure captions are still "DETAILED DESCRIPTION HERE" and §4.1.1–4.1.4 are empty | `docs/references/15_OpenVT2026_monolayer-manuscript-draft-2026-10-02.pdf` (gitignored) |
 | **G** | Consortium repo `gitlab.com/rvet/monolayergrowth` (public read), HEAD **54f375f** (merge, R. Vetter, 2026-09-21; 409 commits). Holds `schema/README.md`, `implementations/<FW>/`, `results/<FW>/`, the figure `.tex` sources, `results/postprocessing/` (metrics.cpp, concaveman, run_metrics.sh, notebook) and `literature/`. **Most `implementations/` files are older than M** (last touched 2025-03 to 2025-12; §2.5). One LFS object is not fetched (`results/CompuCell3D/Monolayer/CC3D_5T_MonolayerGrowth_1000_Data_Deterministic.zip` is a 133-byte pointer to a 78.7 MB object); its Stochastic twin was deleted in fac8434 | scratch clone only, never in the monorepo |
 | **TSTgh** | `github.com/sbr-shakibi/Tissue-Simulation-Toolkit`, branch `OpenVT`, commit 7ae1636 (2026-06-16). G's TST README points here (`G:implementations/Tissue-Simulation-Toolkit/README.md:8`). It is the **only CPM source that implements Table S1** | scratch clone only |
 | **E** | R. Vetter, e-mail "OpenVT: Monolayer model specification, manuscript & git", 12 Oct 2024. It is the older baseline: deterministic division at exactly 2A₀ and β = 0.8 / γ = 0.5 cases. **M supersedes it.** | `github.com/OpenVT/reference_models` `monolayer/summary-Oct-12-2024.md` |
@@ -58,6 +58,42 @@ It is **not** the M schema; see §5.
 | C15 | Termination | M: end of the first step with N ≥ 10⁴ (M p.2); CC3D stops at 10 200 (`…Steppables.py:39`); Morpheus freezes motion at N ≥ 10⁴ (`…V11.xml:415-417`) | **M** |
 | C16 | Growth rate | Table S1 α = 6.452·10⁻² px/MCS = 50/775 (M p.11); TST α = 0.06493506 = 50/770, "T = 154" (`TSTgh:openvt/monolayer-type1.par:25-26`) | **M** |
 | C17 | Morpheus σ of X | M σ = 0.4; Morpheus V11 `Stdev_X = 0.4^2` (`…V11.xml:463`) passed as the SD to `rand_norm` (`:323`), i.e. σ = 0.16 [unverified: Morpheus `rand_norm(mean, sd)` semantics] | **M** (σ = 0.4) |
+
+## 1.2 Manuscript revision of 9 October 2026 (target from 2026-10-09; maintainer: "make this the new target manuscript")
+
+Comparison method: the text of both drafts was diffed, and pages 1–4 were compared as rendered images.
+
+**Unchanged.**
+- **Text.** Pages 1–4 are identical apart from the date, so Figs 1–4, §2 (schema, Eqs 1–9) and the protocols are unchanged. The §4.1 CPM text (Eqs 10–12) is unchanged too. It still has both division statements (ms:97, and "Ai(t) ≥ µi,Amax"), so Q25(a) stands.
+- **Tables.** Tables S1–S5 are unchanged, including the S1 parameters and the S5 values 290/155/110/75.
+- **CPM subsections and code.** §4.1.1–4.1.4 are still empty, and Code Availability is still "TODO".
+- **Fig 6.** Its series, axes and legend are unchanged in the text layer.
+- **Page numbers.** Citations "M p.1–5" still hold. Later items moved: Fig 5 is on p.6, Figs 7 and 8 on p.10–11, the metrics figure on p.12, Table S1 on p.13 and Table S5 on p.14.
+
+**Changed.**
+
+| # | Item | 2 Oct draft | 9 Oct draft | Consequence for Potts |
+|---|---|---|---|---|
+| R1 | **Fig 7** "Monolayer of 10K cells: β = 0, varying γ thresholds" | one row per framework, five panels at that framework's T1 γ values, labelled "γ = …, T = …" (§4.0.2 F7) | a **grid**: one row per framework (CC3D, TST, Artistoo, Chaste VM, PolyHoop, PhysiCell, Chaste OS, TinyDEM) × columns **1.1×, 2×, 5×, 10×, 20×**, one colony per cell at the T1 γ of that multiple; **empty where T1 is "—"** (all four lattice/vertex rows at 1.1× and 2×). Cells are coloured **yellow = no inhibition, teal = surface-inhibited**; a black **concave-hull** line; a centred numeric label (1.37–3.45, rising with roughness). Title "Tissue Snapshots with Surface Inhibition" | Potts row: columns 5×/10×/20× at γ = 0.1625/0.5375/0.7625, with 1.1×/2× empty (our T1 is "—" there, as for CC3D/TST/Artistoo). Our O5 files (`sweeps-2026-10-08/f7/`) already hold these three colonies. **The label quantity is not stated** (R5) |
+| R2 | **Fig 8 (new)** "Monolayer of 10K cells: γ = 0, varying β thresholds" | did not exist | the same grid for **β** at the T1 β values; cells coloured **yellow = no inhibition, red = area-inhibited**; concave hull; the same label. Title "Tissue Snapshots with Area Inhibition" | **New deliverable.** Potts row at β = 0.625/0.9375/0.9875/1.007/1.0212 (our T1 row). These colonies are **not** in our records (O5 was written for the γ panels only), so they need runs, replayed from the sweep seeds or new seeds at those β |
+| R3 | **Metrics figure** | Fig 8 | **Fig 9**, content unchanged (panels a–g, caption still "DETAILED DESCRIPTION HERE") | Our record and page labels "F8" refer to M's Fig 9 from now on. Rename on the page; record names stay |
+| R4 | **Fig 5** "100 runs of 1000 cells" | rows TST, Artistoo, PolyHoop, PhysiCell, Chaste (OS), TinyDEM; per-framework distance bins (0–7 … 31–39 radii) | rows **+ CompuCell3D, CHASTE (VM), CHASTE (VT)**; **one shared set of distance bins for all rows: 0–18, 18–37, 37–55, 55–74, 74–93 "radii"**, shown in a single legend | Our Fig 5 row should use the shared bin edges (0, 18.6, 37.2, 55.8, 74.4, 93), so it is comparable. The V4 rules are unaffected: they judge distributions, not display bins. **How the shared edges were derived is not in G** (R5) |
+| R5 | Scripts for R1, R2 and R4 | — | **not in G** (G HEAD 14fa42c, 2026-10-06, has only CC3D `Fig7_Snapshot_to_10k.zip` and a snapshot PDF). G's notebook still bins per framework (`1.05·max distance`, 7 bins) | Ask: the Fig 7/8 label quantity (most likely C/C_circle of the concave hull; check against `metrics.cpp` on our O5 colonies before asking), the concave-hull parameters, and the shared Fig 5 bin edges and distance origin |
+| R6 | **Table 1** | Chaste (VM) row "?" | Chaste (VM) row filled (β: 0.70140, 0.878550, 0.925650, 0.971540, 0.986860; γ: —, —, 0.006630, 0.31318, 0.33465) | None for Potts; CC3D/TST/Artistoo values unchanged, so our frozen T1 bands stand |
+
+**R5 result (2026-10-09, D-211).** The Fig 7/8 label is **not** a metrics.cpp quantity of the G colonies.
+- **What was run.** The consortium's unmodified `metrics.cpp` (concaveman, concavity 1.5) on the CC3D `Fig7_Snapshot_to_10k.zip` colonies and on TST's `final_snapshot_data`.
+- **Candidates tested.** C/C_circle, C/(2πR), the inverse, the convex hull, compactness, concavity 1.0–2.0, lengthThreshold 2–5, and disc-point hulls. None reproduces the printed labels within 0.01. For example, CC3D γ gives 1.37/1.78/2.22 against the printed 1.68/2.14/2.89.
+- **Not a mix-up.** No row or column reassignment fits. Near-round β colonies print ≈ 1.4–1.7 against C/C_circle 1.10–1.26, and the label/C_circle ratio varies (1.02–1.39).
+- **Rendering rule.** Potts panels carry **no centre label** until Q26 is answered. Each Potts colony's C/C_circle (metrics.cpp roughness 1, named as such) is given under the figure, and the page states that M's label quantity is unstated and has been asked.
+
+**Requirements added to §4 by this revision:**
+- F7 in the new grid layout (R1);
+- the new F8 β grid (R2) and its runs;
+- the metrics figure relabelled Fig 9 (R3);
+- the Fig 5 row on shared bins (R4).
+
+The figure colours follow M (yellow/teal/red per inhibition state). The concave-hull line is a tissue outline drawn by M, not a cell outline, so the no-outline rule does not apply to it; the consortium-figure exception (D-185) covers it anyway.
 
 ## 2. Model schema (M §2.1, p.2; Table S1 p.11)
 
@@ -526,7 +562,13 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q12** The Morpheus files behind the M data are not in G: the "J10, N100" relaxation (T = 155/154), the 1T/5T/10T "major2" 1000-cell runs, and the Table S1 growth XML. The same holds for the CC3D and Artistoo versions that produced the Table 1 rows.
 - **Q13** Fig 3: which framework, and how many runs? Is "deterministic" X ≡ 2 (TST data say yes)? No script in G.
 - **Q14** Fig 8: confirm that lengths will be in R and time in 775-MCS cycles for all frameworks (currently px and legacy cycles; D3, D4).
-- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it.
+- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it. **Update 2026-10-09 (the 9 Oct draft, §1.2 R4):** M now shows one shared set of bins for all rows (0–18 … 74–93 "radii"). On those edges, measured in R from the lattice centre, our case (b) row puts 27/72/1/0 % in the first four bins, while M's TST row reads ≈ 5/20/50/25 %, and our TST-equivalent colonies reach only ≈ 42 R. So M's "radii" are probably not R (≈ R/2.2?), or not measured from our origin. Ask for the unit and origin together with Q26. **Cross-check (2026-10-09, G 14fa42c, read-only).** We binned G's TST 1000-cell data on M's shared edges four ways:
+  - in R, from the lattice centre or the pooled mean (≈ 30/70/0/0/0 %);
+  - in px, from the pooled mean (≈ 55 % lands beyond 93);
+  - the notebook's method (per-file raw units, per-framework `linspace(0, 1.05·max, 8)`);
+  - and px / 2.1–2.2 (≈ 8/26/40/25/0 %, the closest).
+
+  **None reproduces M's TST row (≈ 5/20/50/25 %).** The implied unit is ≈ 2.0–2.2 TST px ≈ 0.5 R, i.e. "radii" may be diameters or px/2. Morpheus_5T in its native R gives 29/70/1/0/0, like ours. G does not define the shared edges, and its notebook loads the plain TST set (identical to 1T, not 5T). **Ask:** (a) M Fig 5's distance unit (R, 2R, px or px/2) and origin; (b) which TST set feeds it (1T or 5T); (c) how the shared edges are chosen. **Potts meanwhile:** the shared-bin row is rendered in R, labelled provisional, with one sentence noting that M's axis appears to be ≈ 2× ours.
 - **Q16** Artistoo `Time to 10k (MCS)` units (D9).
 - **Q17** Is 13.57 × 5T pooled over frameworks or PhysiCell's γ = 0 value?
 - **Q18** The colour for Potts.jl in `colors.tex` (proposal 8,29,88).
@@ -536,6 +578,8 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q22** `metrics.cpp` boundary (D12, D13): its Graham order is undefined for points collinear with p₀, and its R-tree search can miss candidates next to near-parallel edges, so a few frames depend on the standard library and the tree layout (Artistoo frame 1656 with a stable sort; TST β = 1.006 final snapshot). Would the consortium accept the corrected hull (exact orientation, unpruned candidate search) as the reference, or pin the build (libc++, `-ffp-contract=off`) as the definition?
 - **Q23** Fig 5 / V4 (P6.15e): which TST implementation detail differs from Potts' Table S1 model? TST_5T alone, with the same pair-count f and σ_X = 0.4, passes every V4 row (mean nonzero f 0.288), while Potts' rim cells are shifted up (0.346; peak 0.425 against 0.295). Leading candidate: division on target area (C13, Q20). Also asked: the exact Moore-pair loop TST uses for f_i (spec §2.4 records a skipped offset only for n_i, which could not plausibly explain a 20 % shift), the timing of growth vs division within an MCS (§2.5), and any rule acting on very small cells.
 - **Q24** Fig 5 / V4 (P6.15e): do the CPM implementations suppress or remove crushed cells (a connectivity check, a minimum volume, extrusion)? Potts shows rare squeezed young daughters at the 1000-cell stop (30 of 10⁵ cells with a < 0.42, A\* 23–43), where the pooled data have none.
+- **Q25** (2026-10-09; proposal-law-clues.md §4) (a) Which division trigger is normative: actual A ≥ X·A\*(0) (M p.2) or A ≥ µA_max (§4.1)? (b) Which TST build produced the beyond-10³ curves, given the released model exits at `max_cell_count = 1000`? (c) Are the frameworks' departures from Table S1 intended (CC3D λ = 10, A\* = 25, contact order 4; Morpheus/Artistoo J_cM = 20, λ = 20; TST integer ΔH)?
+- **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G.
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
 

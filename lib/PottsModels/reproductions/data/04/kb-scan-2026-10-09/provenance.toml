@@ -1,0 +1,35 @@
+protocol = "D-205"
+frozen_test = "lib/PottsModels/test/reproductions/04_foam_kb_scan.jl"
+wall_s_this_launch = 5294.2
+tau = 3.4472094822805346
+kappa_d190 = 2.4967980904210996
+threads = 24
+decision = "D-203"
+dirty = false
+frozen_sha256 = "dc6de6bcf838173521af39db92cf0476d3ea25b963ee61465d43ba5a2b5d969c"
+finished = "2026-10-09T19:05:36.451"
+algorithm = "BoundarySiteCPM(), proposals NeighborOrder(4) (DV1)"
+started = "2026-10-09T17:37:22.211"
+machine = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S (x86_64-linux-gnu), CPU, 32 hardware threads"
+julia = "1.12.6"
+runner = "lib/PottsModels/reproductions/data/04/run_kb_scan.jl"
+commit = "8b5d8afd3cdccf472345bf14b394b43d8c235408"
+item = "P6.4r κ_b"
+frozen_d190_sha256 = "b043d3e297ee13e8e718de8a48fb395f8bd5ec7cb5942bea7de36bcb9f1a784d"
+commit_date = "2026-10-09"
+
+[jobs]
+foams = 5
+runs = 345
+
+[seeds]
+run = "p64kb_seed(j, k) = p64r_run_seed(13, j, k) = 5_000_000 + 1_000_000·13 + 10j + k"
+foam = "p64r_prep_seed(:ordered, k, try) (D-190)"
+foam_seeds = [4000100, 4000200, 4000300, 4000400, 4000500]
+
+[result]
+kappa_b = "nothing"
+P = []
+khat = []
+reason = "pinning_cliff"
+path = "interp"

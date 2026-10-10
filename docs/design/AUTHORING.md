@@ -199,7 +199,9 @@ expression may refer to:
 | `sites` | every lattice site | `owner`, `kind`, `position`, any `x(site)`, fields `c` at the site |
 | `contacts` / `contacts(relation)` | every **unordered** neighbouring pair `{s, s′}` with `owner[s] ≠ owner[s′]`, counted once (CompuCell3D convention) | `kind`, `kind′`, `owner`, `owner′`, `weight`; any site or field variable as `x` (its value at `s`) and `x′` (at `s′`), read where the term is evaluated (see below); and **cell state of both owners** `y[owner]`, `y[owner′]` (makes the term non-local: its cells join the checkerboard claim set) |
 | `edges(relationship)` | every edge of that relationship | `a`, `b` (cells; reserved: no declaration (kind, kind class, parameter, variable, observed, relation, relationship, component) may be named `a` or `b`, D-075 Q8, D-076), `distance`, that relationship's edge variables |
-| `model` | once | model-scoped variables |
+| `clusters(kinds…)` | every compartment cluster whose root cell is of those kinds (§12.7a) | `cluster_volume`, `cluster_surface`, `kind`, `id` |
+
+There is no `model` energy domain (earlier drafts listed one; D-209).
 
 Examples:
 
@@ -241,6 +243,36 @@ built by `@potts_model`, `@extend` or programmatically (D-061).
 end
 ```
 
+Copy-varying reads in energies (D-209). ΔH evaluates a cell term for the copy's two cells
+(with their own bare `volume`, `surface`, …, and cell variables, substituted), an edge term on
+their links, and a contact term on the pairs at the target. So:
+
+- A fold over a relation around a site (`sum(q[n] for n in far(s))`) in a `cells`, `edges`
+  or `contacts` term may read, in its body and filter, only values no copy changes: site and
+  field variables that no `@on_copy` update writes and that are not
+  `clear_on_ownership_change` (static fields, or values updated at MCS boundaries),
+  parameters, constants, `id`, and `a`, `b` compared with such values. The bare cell
+  quantities (`volume`, `y`) and, in a contact term, the pair names `owner`, `owner′`,
+  `kind`, `kind′` are fine, as are copy-varying factors outside the fold
+  (`volume * sum(q[n] …)`, `distance * count(q[n] == a …)`). The fold's anchor must be
+  static (a site number or a static expression, not `owner[40] + 39`).
+- σ at an explicit site is refused anywhere in these terms: `owner[i]`, `kind[i]`,
+  `x[owner[i]]` (including `volume[owner[i]]`), in a fold or outside one.
+- In a cell term, indexed copy-varying cell quantities are refused: `volume[·]`,
+  `surface[·]`, the indexed `euler`/`euler_full` and `pieces` family (`pieces`,
+  `largest_piece` and their `:full` forms), `kind[id]`, and `y[·]` for a cell variable an
+  `@on_copy` update writes; read them bare. `y[id]` of a static or `@after_mcs`-written `y`
+  is fine.
+- An explicit-site read (`act[40]`) of a site or field variable that an `@on_copy` update
+  writes or that is `clear_on_ownership_change` is refused in every domain; a contact
+  term's bare `act`, `act′` read the pair and stay allowed.
+- Population folds (`for c in cells`, `for s in sites`) are exempt: reads at their bound
+  variable (`volume[c]`, `owner[s]`, an on-copy `y[c]`) are exact (D-041).
+
+Each is an `ArgumentError` at `mtkcompile` ("… which a copy changes") naming the statement.
+Use a static field or parameter instead, or a `@drive` (§5), which reads ownership at the
+copy.
+
 Library one-liners expand into the same pairs and remain available for discoverability:
 
 ```julia
@@ -264,8 +296,11 @@ Chemotaxis(c; strength = μ)                           # a @drive, see §5
 6. CSE across all terms; parameters marked structural become literals.
 7. Select trackers: only quantities that appear in some term are maintained.
 8. **Self-verification:** because the user wrote `H`, the compiler also generates
-   `total_energy(sys)`. The test suite checks `ΔH == H(after) − H(before)` on random
-   flips of every model automatically. No hand-written oracle is needed.
+   `total_energy(sys)`. Checking `ΔH == H(after) − H(before)` is a test helper, not an
+   automatic compiler check: it runs on random flips of the models listed in the
+   PottsModels test suite (`selfcheck`) and in the ΔH oracle tests of the acceptance files
+   (e.g. P6.0ca's static gathers and controls). A new model or a new energy form gets the check only
+   when a test calls it (D-209).
    - **A dead cell leaves `H`** (D-066 item 4, D-083): `total_energy` sums cell terms
      over alive cells (`volume > 0`), cluster terms over roots of clusters with an alive
      member, and edge terms over links with both ends alive; free slots add nothing.
@@ -1239,9 +1274,9 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 | Topic | Rule |
 |---|---|
 | Neighbor order | `NeighborOrder(k)` cumulative distance shells |
-| Proposals | uniform source site, uniform target within the proposal relation; same-cell and frozen picks consume an attempt |
+| Proposals | `SequentialCPM`: a uniform **mobile target** site, then a uniform **offset** from the proposal relation gives the **source**; an off-lattice, frozen or same-owner source consumes the attempt, and one MCS is `N_mobile` attempts. `SequentialCPM(; skip_interior = true)`: the same law, with the interior (null) picks skipped exactly. `CheckerboardCPM`: every site is a target once per MCS (colours in random order; frozen targets are null), with the same uniform source offset |
 | Contact H | unordered pairs counted once |
-| Surface | unlike-neighbour pairs within the surface relation (lattice factor 1 on square) |
+| Surface | unlike-neighbour pairs within the surface relation, no lattice factor |
 | Acceptance | `ΔH ≤ offset` → accept, else `exp(-(ΔH - offset)/T)`; T ≤ 0 tie → ½ |
 | Temperature | per-cell ≥ per-kind ≥ global precedence; `combine` default `min` |
 | External potential | `H = Σ λ⃗·x_COM`; positive component pushes toward negative coordinates |
@@ -1249,6 +1284,26 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
 | Uptake | subtract `max_amount` if `c > max_amount`, else `relative·c` (CompuCell3D `Uptake`) |
 | Division | parent side randomized by default; neighbours share a face (no corner-only contact) |
 | Morpheus yield | `offset = -yield` |
+
+**Pair-counting notes (topology audit §2.4, §7).** Potts counts each unordered
+unlike-owner pair once and applies no lattice factor, to contacts or to `surface`.
+- **CC3D, Artistoo, TST, Chaste** also count each pair once in contact ΔH, so their `J`
+  maps 1:1 to `contacts => J` at the same relation (CC3D `NeighborOrder(k)` ↔ ours).
+- **Morpheus `boundaryLengthScaling`.** Morpheus counts once but divides by a
+  lattice- and order-specific constant (Magno, Grieneisen & Marée 2015), so `J` and
+  `surface` are per node length. The default is `norm` since Morpheus 2.3, with
+  `optimal` picking the neighbour order. Square orders 1–4: 1.273, 3.074, 5.620, 11.31
+  (`research/morpheus-gaps.md` §2; read by a delegated reader, not re-read). Port with
+  `J_Potts = J_Morpheus / norm` and scale surface targets and λ to match. The hex and
+  cubic tables are **unverified** here, and so is the exact place the division is
+  applied (interaction_energy.cpp ~L371-432, delegated read).
+- **CC3D hex `surfaceMF`.** CC3D's SurfaceTracker multiplies the order-1 unlike count by
+  `lmf.surfaceMF`, which is 1 on the square lattice and not 1 on hex. Divide a CC3D hex
+  surface target by it (and scale its λ) when porting. Its hex value, and whether
+  CC3D applies a hex factor to contact energies too, are **unverified** (no CC3D source
+  in the repo; `research/cc3d-connectivity-source-check.md` does not cover it).
+- `per_length = true` (§12.1) is the planned Potts form of the Morpheus normalisation;
+  it is not implemented yet.
 
 ### 12.10 Deliberately skipped
 

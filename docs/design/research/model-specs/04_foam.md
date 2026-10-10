@@ -442,6 +442,18 @@ Uncertainty: ±5% in the linear panel; ±0.15 decade in the inset. Observations:
   - Fig. 3(c) shows regime boundaries that are **straight lines through the origin in (J, γ0)**, with elastic onset at γ0 ≈ J. This points to a **position-independent per-flip bias of order γ0**, comparable to J.
   - **Recommended implementation (a documented deviation, not paper fact):** a copy of σ_j into site i adds ΔH_shear = γ(y_i, t)·(x_i − x_j), using the minimum-image displacement. The sign is chosen so that the top boundary moves +x (§2.2).
   - Calibrate the γ0 scale against V3 and V5 (transition γ0/J ≈ 1.9) rather than from the equation. Asking the authors would still settle it.
+  - **Bulk-scale scan (2026-10-09, D-203/D-205; record `data/04/kb-scan-2026-10-09/`).** Under the displacement form, no single bulk scale κ_b fits the paper.
+    - **The scan.** 23 values of κ_b, from 0.156 to 319.6; β ∈ {1e-4, 1e-3, 5e-3, 0.01, 0.05}; ordered foams 1–3; 345 jobs.
+    - **First T1 behaves as a sharp depinning threshold in κ_b·β.** At β = 0.01, κ_b = 1.248 never yields and κ_b = 1.766 yields at 1691 MCS. So the §3.2 target of ≈ 4300 MCS sits inside the cliff.
+    - **β = 0.05 → ≈ 420 MCS** needs κ_b ≈ 0.5. There, β ≤ 0.01 never yields.
+    - **T1s at β = 1e-3** (Fig. 9) need κ_b ≳ 14–20, which drives β = 0.05 to yield in 1–3 MCS.
+    - **What does match.** Where both β = 0.01 and β = 0.05 yield, the ratio t(0.01)/t(0.05) is 11.6 at κ_b = 2.497 against the paper's 10.2.
+    - **Reading.** At T = 0, any position-independent per-flip bias competes against integer J barriers, so it depins at a threshold. The paper's smooth β-dependence, with T1s down to β = 10⁻⁴, needs either:
+      (a) a per-flip bias whose size varies by site or grows with position, as the literal x_i form does; or
+      (b) a finite temperature in the bulk-shear runs, which turns sub-threshold driving into thermally activated creep.
+
+      (a) conflicts with the Fig. 3(c) γ0/J scaling for boundary shear, so the two shear modes may not share one implemented form.
+    - **Status.** The 04 record stays provisional. F1 goes to the first author with these specifics (PI sheet F1).
 - **A-2 y-boundary type — STILL OPEN.** The snapshots show straight edges and truncated boundary bubbles; the type is not stated. It affects V1b (μ2(n) baseline ≈ 0.44).
 - **A-3 y origin for bulk shear — RESOLVED (04b p.5830; Figs. 4a, 5a, 7a).**
   - y is measured from the mid-plane: "the zero strain is in the middle of the foam", and the arrow profiles are antisymmetric.

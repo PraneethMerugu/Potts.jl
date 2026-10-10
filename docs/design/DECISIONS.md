@@ -3808,3 +3808,133 @@ session.
 - **No model change.** κ_b is applied by the harness. The Eq 7 term reads only β, so no model change is needed.
 - **PC cost.** 345 jobs, about 2–3 h on 24 threads. The scan runs after the 01b FULL, and its table goes to the spec owner first.
 - **Prediction.** From the D-190 record, a pinning cliff is likely, so the rule may well return `nothing`.
+
+## D-206 P6.15j: OpenVT package test re-frozen with every pending item required (2026-10-09; coordinator, from the package test author; implements D-204, amends D-180)
+
+- **Frozen test.** `reproductions/15_openvt_package.jl`, commit 324cec82, sha256 `bb120203…`. Header-only manifest templates are in `test/reproductions/data/15j/`.
+- **O1.** One zip per case, `Potts.jl_centroids_<case>.zip`, plus a package manifest. A new git-pinned record (`item = "P6.15j"`) holds `o1_manifest.tsv`, `archives.tsv`, `o2_manifest.tsv` and `runs.tsv`. These must agree save by save with the F3/F8 record.
+  - Each member is hashed and scanned.
+  - Spot members get their metrics recomputed and their neighbour histograms checked.
+  - The case (b) stop x, y must equal its O2 file.
+- **Also required.**
+  - O2 sha256s.
+  - A3 for cases a and e (c and d if they are in O1).
+  - O3/O5 copied byte for byte from the sweeps record.
+  - An MIT line in both READMEs (D-181).
+- **Bulk directory.** The bulk files sit outside git, in `OPENVT_PACKAGE_BULK`. The build refuses a directory that is missing, inside git, or holds the wrong bytes.
+- **Spec over consortium convention.** The test follows the spec where the consortium's existing submissions differ:
+  - column names x, y, i, n (they use g);
+  - the seed in the file name (they use directories);
+  - loose O2 files (TST zips them).
+  
+  These differences go to the spec owner with the package. They are not changed here.
+- **Size.** About 320 MB zipped at full precision (a ≈ 90, e ≈ 115, b ≈ 65, f ≈ 50, O2 ≈ 8 MB). That is above D-204's 100 MB ask-first limit, so building is allowed but uploading is not. Nothing goes to the consortium repository until the maintainer says so, and then only after asking about the size.
+
+## D-207 P6.0bk2: tests for `SequentialCPM(; skip_interior = true)` frozen (2026-10-09; coordinator, from the rename test author; implements D-198)
+
+- **New test.** `acceptance/p6_0bk2_skip_interior.jl`, commit 06eda5d4, sha256 `cdb1ee5d…`.
+  - Recorded on cfdf8477: hashes for 10 short runs, each run under `BoundarySiteCPM`, `SequentialCPM` and `CheckerboardCPM`. Cases are 2D, 3D, frozen mask, divisions, foam with `NeighborOrder(4)`, Moore and VonNeumann overrides, and Barker acceptance.
+  - `skip_interior = true` must reproduce these hashes. Two IR hashes of `sequential_mcs!` are pinned (Julia 1.12.6 only), so the default path is unchanged.
+  - On `CheckerboardCPM`, `skip_interior` must either leave the trajectory bitwise unchanged or raise an `ArgumentError` ("not yet implemented").
+- **Re-frozen, rename only.** `BoundarySiteCPM(…)` becomes `SequentialCPM(; skip_interior = true, …)`; no assertion changed. Files:
+  - `p6_4b1_boundary_site.jl`, which now also asserts that `BoundarySiteCPM` is neither defined nor exported;
+  - `p6_3j_euler_tracker.jl`;
+  - `p6_4a1_copy_direction.jl`;
+  - `reproductions/04_foam.jl`;
+  - `reproductions/15_openvt_sweeps.jl`.
+- **Still open.** D-198 item 3 (P6.0bk).
+
+## D-208 P6.0ba: boundary-only reach test frozen (2026-10-09; coordinator, from the P6.0ba test author)
+
+- **Frozen test.** `acceptance/p6_0ba_boundary_only_reach.jl`, commit be48776f, sha256 `1ce9e285…`. On the base: 121 pass, 23 fail. Every failure is the intended reach refusal, in testset 1.
+- **The rule.** `CheckerboardCPM`'s preflight measures reach only over the relations the copy step reads: generated ΔH, commit, constraint and temperature, including edge energies. Relations that only boundary rules read do not count. Boundary rules are:
+  - division `when` and its state rules;
+  - `@link`/`@unlink` `when`;
+  - `@before_mcs`/`@after_mcs`;
+  - cell ODEs;
+  - `@observed`.
+- **Unchanged.** The compiler's declared `Footprint` stays as it is. A constraint or drive reading `Ball(2.0)` around `target` already declares read = 2 and is accepted; it is kept as a control. A hand-built `CPMFunction` keeps today's behaviour, which counts every relation.
+- **Pinned.** Three Checkerboard trajectories, as bitwise digests recorded on the base.
+- **Not pinned.** A declared relation that nothing reads. The fix will accept it; today it is refused.
+- **Side finding, separate item.** A cell energy that gathers at a fixed site (`count(owner[n] == id for n in far(40))`) appeared in `total_energy` but not in the generated ΔH. Under investigation.
+
+## D-209 P6.0ca: a σ-dependent gather in a cell or edge energy is refused at `mtkcompile` (2026-10-09; coordinator, from a diagnosis prompted by the P6.0ba test author; follows D-150, D-041)
+
+- **The defect.** A gather in a `cells(…)` or `edges(…)` energy whose body reads something a copy changes appears in `total_energy` but not in the generated ΔH. The kernel's ΔH therefore differs from the true energy change, and Metropolis samples the wrong distribution. Example: `@energy cells => 0.1 * count(owner[n] == id for n in far(40))`.
+  - Gather bodies that read something a copy changes: `owner[n]`, `kind[n]`, `x[owner[n]]`, or a site variable written on copy.
+  - Measured: on a 12² oracle chain, all 78 targets inside `Ball(2.0)(40)` gave a wrong ΔH (off by 0.1). 45 of 387 accepted copies had a wrong ΔH.
+- **Root cause.**
+  - The `CellDomain` branch accepts gathers with no check (src/compile.jl:211–215), and the `EdgeDomain` branch runs only `_check_static`.
+  - `_cell_delta` cancels the gather, because the gather is unchanged in its substitution (src/compile.jl:685–693).
+  - Cell terms are evaluated only for `old`/`new` (src/codegen.jl:283–298).
+- **Ruling.** Such gathers are refused at `mtkcompile` with an `ArgumentError` that names the statement, as D-150 does for the cell-scope contact fold and as sites and clusters already do. Gathers whose body reads only static site or field values stay allowed. The accidental contact-scope error "cannot index `owner′`" becomes the same clear refusal.
+- **Exposure.** No shipped model, reproduction or docs page uses the form. The P6.0at fingerprint fixtures and P6.0ba's copy-step edge fixtures do use it, so they are re-frozen through the P6.0ca test author.
+- **Self-check gap.** AUTHORING §4's "generated `total_energy` self-check" is a test helper that runs on listed models only. The refused forms, and a static-field gather, get a ΔH oracle test. AUTHORING §4's wording is corrected to say this.
+- **Later, optional.** An exact local ΔH for the self-comparing form (`owner[n] == id`): a guarded `target ∈ R(s0)` block, with each side's term evaluated jointly with the volume delta. A global recompute is rejected (O(N) per copy).
+- **Separate rough edges, not in this item.**
+  - A fixed-site anchor given as a parameter (a Float64 parameter gives a `MethodError` in `coordinates`; `::Int` parameter syntax fails at macro expansion).
+  - AUTHORING §4 lists a `model` energy domain that does not exist.
+- **Freeze (P6.0ca test author, commit 7df0cc95).**
+  - **New test:** `acceptance/p6_0ca_gather_energy.jl`, sha256 `83cce600…`. A refusal is an `ArgumentError` containing "a copy changes" and "in @energy <domain>", checked at `mtkcompile` and at `PottsProblem`. It covers 26 refused forms, 6 accepted static gathers, each with a ΔH oracle (0 mismatches over 3000 attempts), the GranerGlazier oracle, and GranerGlazier/OpenVT fingerprint and trajectory pins. On the base: 83 pass, 77 fail, and every fail is the missing refusal.
+  - **Re-frozen, with fixtures moved to valid forms that keep each test's intent:**
+    - `p6_0at_relation_fingerprint.jl` (`a1964317…`): the cell energies read the static `q` map through `volume`.
+    - `p6_0ax_gather_scan.jl` (`9a4dc06b…`): the energy and edge folds read `q`. Two fingerprint pins were re-recorded on the base, "at energy Moore(1)(40)" 0xfc8f…→0x674d… and "edge far=Moore(1)" 0xef5c…→0xe970…; the hand values are unchanged.
+    - `p6_0ba_boundary_only_reach.jl` (`a559af4a…`): the copy-step edge fixtures read `0.1·distance·count(q[n] == a/b …)`. ΔH still reads `ctx.far` beyond the declared `Footprint(read = 1)`, so the reach refusal stays. That refusal is conservative, since no copy writes what is read. Base results are identical to D-208.
+- **Widened after review (2026-10-09; coordinator).** The P6.0ca review found the same defect on routes outside gather bodies. Each gives a silently wrong ΔH on the oracle; the worst error is 1.0. These are refused too, with the same D-209 message:
+  1. **A σ-dependent gather anchor.** Example: `far(owner[40] + 39)`; the anchor must be static.
+  2. **σ read at an explicit site outside any gather in a `cells` or `edges` term.** Examples: `owner[40] == id`, `y[owner[40]]`, `kind[…]`.
+  3. **The same reads in a `contacts` term.** `owner[i]`/`kind[i]` with an explicit index are refused instead of hitting "cannot index `owner′`". The bare pair names `owner`, `owner′`, `kind`, `kind′` stay allowed.
+  4. **Indexed copy-varying cell builtins or on-copy cell variables in cell terms.** Examples: `volume[id]`, `surface[id]`, `y[id]` with `@on_copy y[new]`. These crash today at `PottsProblem` with an internal "cannot index …" error. They get a clear `ArgumentError` that suggests the bare form, which is correct and passes the oracle.
+  
+  Follow-ups, not in this item:
+  - over-refusal of a bare on-copy pair value inside a contact gather;
+  - message cosmetics (`(t)` suffixes, vector names);
+  - kind names in `show`/`@extend` output;
+  - doc wording on what a fold may read.
+- **Re-frozen for the widening.** Commit 174bc91e, sha256 `eab48311…`. New section 5 has 21 refused fixtures; on the implementation head they give 69 reds. New section 6 holds the controls, whose ΔH oracles are exact. The original 160 checks are unchanged. `kind[40]` in cells and contacts must carry the D-209 wording; today it raises the older "needs a site" message.
+- **Second review round (2026-10-09; coordinator).**
+  - **Also refused.** An explicit-site read of a copy-written site variable, outside any fold, in every domain. Examples: `act[40]` where `@on_copy` writes `act`, and `tag[40]` for a `clear_on_ownership_change` variable. On the oracle this was accepted with a silently wrong ΔH: 69 mismatches, worst error 9.3 (in contacts). The bare `x`/`x′` pair reads in contact terms stay allowed.
+  - **Kept allowed.** The bound variable of a population fold (`for c in cells`, `for s in sites`). `sum(volume[c] for c in cells)`, `sum((owner[s] == 1) for s in sites)` and an on-copy `y[c]` were exact before (0 mismatches) and the whole-term walk had refused them. They are exempt again, as D-041 makes them exact.
+  - **Cosmetics.** `kind[id]` gets the "read it bare" hint. AUTHORING names the indexed `euler`/`pieces` family. energy.md says the bare quantities are fine inside a fold too.
+  - **Re-frozen.** Commit 9dc7da51, sha256 `7ff52c90…`, 302 checks. New section 7 has the refusals and section 8 the population-fold and bare-pair controls. On a6239bad: 286 pass, 16 fail, all in sections 7–8.
+
+## D-210 Foam κ_b scan: no single bulk scale fits; D-203 (d) "stop" (2026-10-09; spec owner confirmed the coordinator's reading; under D-203, D-205)
+
+- **Result.** The pre-registered decision rule returned no κ_b, with the reason `pinning_cliff`. The record is `reproductions/data/04/kb-scan-2026-10-09/`; its README holds the table.
+  - The harness check holds: at κ_b = 2.497 the result is 451 / 39, against 455 / 40 in the D-190 record.
+  - At β = 0.01, t_first jumps from no yield to 1691 between κ_b = 1.248 and 1.766, so the target of about 4300 is unreachable.
+  - The β = 0.05 target is met near κ_b ≈ 0.5, but there β = 0.01 never yields.
+  - T1s at β = 10⁻³ need κ_b ≳ 14.
+- **What follows.**
+  - The Eq 2 form under bulk shear is in question, and the 04 record stays provisional.
+  - The pinning-explained deviation rows (V11a, V11c, V12, V13a, V14a, V14b, V15a, V15c, V15d) now give that cause, with the author question marked "asked (F1)".
+  - F1 on our open question list is sharpened.
+- **Interpretation** (spec 04 §7 A-1, spec owner). At T = 0, a position-independent per-flip bias competes against integer J barriers, so it must depin at a threshold. The paper's smooth β-dependence down to 10⁻⁴ therefore needs one of two things:
+  - a site-varying bias, as the literal γ·x_i form gives; this conflicts with Fig 3c's γ0/J scaling;
+  - or a finite T in the bulk runs.
+  
+  The boundary-shear and bulk-shear modes may not have shared one form.
+- **No further foam runs until F1 is answered.** In particular, no finite-T or literal-x_i variant is tried on our own.
+
+## D-211 OpenVT: the 9 Oct 2026 manuscript draft is the new target (2026-10-09; maintainer: "this is the latest openvt paper. lets see if theres anything thats changed make this the new target manuscript", relayed by the spec owner; under D-146, D-185, D-204)
+
+- **Target.** The 9 Oct 2026 draft (14 pp) replaces the earlier manuscript as M. The PDF stays local and is never committed. Spec 15 §1.2 records the full delta.
+- **Unchanged** (text diff and rendered pp. 1–4):
+  - Figs 1–4, Fig 6, the §2 schema and protocol, Eqs 10–12, Tables S1–S5.
+  - The empty §4.1.1–4.1.4, and Code Availability TODO.
+  - The two division statements, so Q25(a) stands.
+  - No model or parameter changes, so every frozen record stands.
+- **New work.** Adopt only what holds up.
+  - **R1.** Fig 7 becomes a grid of colonies, framework × γ multiple (1.1×–20×):
+    - each colony at 10⁴ cells, coloured yellow (no inhibition) or teal (surface-inhibited);
+    - a black concave-hull tissue outline (a tissue outline, not a cell outline; D-185);
+    - a centred numeric label.
+    
+    The Potts row is 5×/10×/20× from `sweeps-2026-10-08/f7/` (O5), so it is a render only.
+  - **R2.** A new Fig 8 is the same grid for β (yellow, or red for area-inhibited), with the Potts row at β = 0.625, 0.9375, 0.9875, 1.007 and 1.0212. These colonies are in no record, so they need five runs to 10⁴ cells with an O5 writer on the PC. Replay the sweep's seeds at those β if the bracket runs allow it; otherwise use new pre-registered seeds.
+  - **R3.** The metrics figure is relabelled Fig 8 → Fig 9 on the page and in the package README. Record names stay.
+  - **R4.** Fig 5 uses shared distance bins with edges 0, 18.6, 37.2, 55.8, 74.4 and 93. Our row is re-rendered on them; the V4 verdicts are unaffected.
+  - **R5.** The quantity behind the Fig 7/8 labels is unstated. Before rendering, test whether it is the concave hull's C/C_circle: run metrics.cpp's hull on G's CC3D Fig 7 colonies and compare with the printed 1.68, 2.14 and 2.89. Use it only if it matches. Otherwise the label goes on our open question list (Q26). Raw G files never enter git.
+  - **R6.** Table 1 adds a Chaste VM row. Our T1 bands stand.
+- **Package.** The D-204 package's required figures gain R1, R2 and R4. That re-freezes the package test through a test author.
+- **Correction (2026-10-09).** The label question is Q26, not Q24 (Q24 is crushed cells). The division-trigger question is Q25, not Q23 (Q23 is the TST detail). Spec 15 §7 now lists both.
