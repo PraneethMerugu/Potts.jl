@@ -3957,3 +3957,113 @@ session.
 - **R4.** The F5 record gets a re-render on the shared edges 0/18.6/37.2/55.8/74.4/93. Its verdict files must stay byte-identical, so V4 is unchanged. Summed over distance bins, the counts must equal `hist.tsv`.
 - **Labels (Q26; first written Q24, corrected in D-211).** M's label quantity is unknown: no candidate matched (R5). The panels carry no number. Each Potts colony's C/C_circle (metrics.cpp roughness 1) is shown to two decimals in the caption or a table, with a note that M's quantity is unstated and on our open question list. Our values for Fig 7 are 1.38, 1.91 and 2.22.
 - **Package.** `figures/fig5.png`, `fig7.png` and `fig8.png`, the β O5 files, and the P6.15k record become required.
+
+## D-213 OpenVT: maintainer rulings on Q25, Q26/Q15 and Q11 (2026-10-10; maintainer: "q25: paper holds provenance over the tst implementation. current division trigger is good. q26&15: see if an agent can decipher this. q11: we just need to make our data easy enough to email to rveltz later on", relayed by the spec owner; under D-146, D-204, D-211)
+
+- **Q25 is closed and not asked.**
+  - Division stays at actual A ≥ X·A*(0), as M says. The other frameworks' departures from Table S1 are their own.
+  - Page 15 and the package README say "M is followed (actual area); the released TST model divides on target area", with no question attached.
+  - The deviation rows keep their reading and are marked "not asked (maintainer ruling: M over TST)".
+- **Q26 (the Fig 7/8 label) and Q15 (the Fig 5 unit) stay open.** The spec owner is running a read-only analysis on the consortium data to reverse-engineer both. Nothing changes unless it finds an exact match.
+- **Q11 is replaced.** No repository write access is needed. The package must be easy to email to R. Vetter later:
+  - **(a)** a core zip of ≤ 20 MB: READMEs, parameters, model source, O3/O4/O5, the per-run metrics and neighbours, A3, Table S5, Table 1, figure PNGs, provenance and manifest;
+  - **(b)** the bulk O1 per-cell series (and O2 if large) as one zip per case, attached to a public GitHub pre-release of Potts.jl, each under 2 GB. The core README links them by URL and sha256;
+  - **(c)** a plain-text cover note, EMAIL.md, listing what is attached and what is linked, the units (R; a cycle is 775 MCS), the open questions Q15 and Q26, and the deviations. The maintainer pastes it; nothing is sent by us;
+  - **(d)** a generator option, `split = :email`, that writes `core.zip` and `bulk/` deterministically and reports both sizes, with size assertions added to the package test through a test author.
+  - Creating or uploading the release asset needs the maintainer's OK at that moment.
+
+## D-214 OpenVT: "Potts.jl (checkerboard)" as a separate framework entry (2026-10-10; maintainer: "i think we should commit to the \"Potts.jl (checkerboard)\" seperate entry, but still do the statistical checks. quite frankly, none of these platforms are statistically perfect, but they do have understanding of their deviations."; under D-008, D-051, D-146, D-211, D-213)
+
+- **Two Potts.jl entries.** The OpenVT submission carries two entries:
+  - "Potts.jl", produced by `SequentialCPM`. This is today's data and is unchanged.
+  - "Potts.jl (checkerboard)", produced by `CheckerboardCPM`.
+
+  Each entry has its own framework token, colour, legend line, F1 panel, "Implementation in …" subsection and results folder. Both entries use the same model source, the same parameters and the same MCS clock, with distinct seed ranges. The folder-safe form of the token follows the conformance audit's naming rules.
+- **The statistical checks characterise; they do not gate.** No platform is statistically perfect, but each understands its deviations.
+  - The checks compare the F3–F8 metrics and the O1 summaries under the two algorithms, across seeds, for cases (b) and (f) first.
+  - Each difference beyond the seed spread is a deviation row with a cause: update order, colour-lagged totals (D-029), claim widening or Bernoulli thinning (D-051). These rows go in the entry's deviations table, in the same form as the TST/M rows.
+  - A difference with no understood cause is investigated as a possible bug before the full runs.
+- **Compute: the GPU** (maintainer, same day: "oh and definitely do it on gpu"). The checkerboard entry runs on the PC's GPU (ROCm/AMDGPU), since that is the backend `CheckerboardCPM` exists for (D-008). If the model cannot launch there or falls back to the host planner, that is a blocker to fix, not a reason to switch to CPU. The characterisation compares GPU checkerboard against CPU sequential.
+- **Packaging.** P6.15l stays sequential-only, but its generator takes the framework token as a parameter so that the second entry drops in. The email package (D-213) gains the second entry once P6.15m lands.
+- **Open question Q27.** The colour for "Potts.jl (checkerboard)". The spec owner proposes a colour in the lattice family, next to the Q18 colour.
+- **Unchanged.** Telling the consortium remains Dr Jiang's. Nothing goes to G until the maintainer says so.
+- **Spec additions** (spec owner, same day; spec 15 §1.3, §4.0.2, §7 Q27):
+  - **Its own time scale.** The checkerboard entry gets its own F2/Table S5 chain calibration, because T in MCS is a property of the update algorithm. If T(λ = 2) differs significantly from 156 MCS, its own 5T is the cycle; otherwise 775 MCS is kept. The record states which was used and why.
+  - **Placement.** Each "Potts.jl" slot in the Lattice block gets a "Potts.jl (checkerboard)" slot directly after it.
+  - **Folder token.** The proposed folder and file token is `Potts.jl-checkerboard`, for `results/Potts.jl-checkerboard/{Relaxation,Monolayer}/`. It is subject to the conformance audit's naming ruling.
+  - **Q27.** The proposed colour is RGB 0,109,44, which is ΔE ≥ 48 from every colors.tex entry. The fallback is 8,29,88 with dashed lines and a hatched banner. Q27 also asks whether the consortium accepts two entries from one framework (precedent: Chaste OS log/quad).
+
+## D-215 OpenVT package conforms to G's scripts where the manuscript is silent (2026-10-10; coordinator, from the conformance audit; maintainer: "we should make sure our data is in the correct form for a submission with manuscript and their repo"; under D-146, D-206, D-211, D-213, D-214)
+
+The audit read the 9 Oct manuscript and G at 14fa42c, and ran G's own postprocessing scripts unchanged on a package we built. The manuscript fixes only the O1 content: a headed CSV per time point, one row per cell, with `x,y` in R, `i` in 0–3 and `n`. Everything else follows G, because G's scripts hard-code it. Each change below was reproduced against G's scripts. Folded into P6.15l, which is re-frozen through its test author:
+
+1. **O1 columns `x,y,i,n,g`.** `g = (i == 0)`. The manuscript's columns are kept, and `g` is appended because `metrics.cpp:101-130` exits with "Missing column g." This replaces D-206's "spec over convention" for this item. The existing files are rewritten in post-processing; no re-run is needed. With `g` added, G's unmodified `run()` matched our measurements on 257 of 257 rows (rel. 4.8e-6).
+2. **Measurement header `R`, not `r`.** It becomes `MCS,t,N,R,A,C,w,g`, because `metrics.tex` reads `y=R`.
+3. **O2.** `k = 0…99`, because the Fig 5 notebook uses `range(0,100)` for any head not in its TST/Artistoo/Morpheus branch. It is zipped as `<token>_5T_MonolayerGrowth_1000_Data.zip` with the folder inside, as every precedent is.
+4. **O5 names give both parameters:** `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv`, following TST and CC3D.
+5. **O1 archives.**
+   - Zip names are descriptive: b → `<token>_No_CI_stochastic.zip`, f → `<token>_No_CI_deterministic.zip`, e → `<token>_beta0.8_gamma0.0.zip`, and a gets a descriptive name chosen by the test author.
+   - Inside each zip, files sit in `<stem>/s<seed>/` directories, and the seed stays in the file names.
+6. **Table 1.** `Monolayer/<token>_table1.csv` is added to core, as D-213 already listed.
+7. **Email split.**
+   - Measured core without changes is 19.43 MB. The O2 zip and the O1 manifest CSV move to the bulk side, and the test asserts core ≤ 20 MB.
+   - core.zip unpacks at G's root (`implementations/<token>/`, `results/<token>/`). The bulk zips are dropped into `results/<token>/Monolayer/` and left zipped.
+8. **README/EMAIL notes.**
+   - `run_metrics.sh` uses `seq 0 10000`, so it drops files with MCS > 10 000; our precomputed measurements are complete.
+   - The 114 MB zip will probably need LFS on G's side.
+   - Lengths are in R, and the origin is the lattice centre; G's scripts are translation-invariant.
+   - Only R is shipped, no px.
+9. **Framework token** (amends D-214). The audit's tests: a space breaks `run_metrics.sh` (unquoted expansions); a dot works everywhere. G's precedent is Chaste: `Chaste_OS_Log` folders, with "Chaste (OS logarithmic)" only in legends.
+   - Folder and file token: `Potts.jl_checkerboard`. This supersedes the spec's `Potts.jl-checkerboard`.
+   - Legend and banner text: "Potts.jl (checkerboard)".
+   - Colour keys: `PottsJL` and `PottsJLcheckerboard`.
+   - The checkerboard implementation folder holds a README and its runner, and points to the shared model in `implementations/Potts.jl/src`.
+   - Every G script hard-codes its framework list, so each entry needs one line added on their side whatever we call it. This goes in EMAIL.md.
+
+Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the implementation folder and the units. The optional O2 header and zero neighbour rows are not adopted.
+
+## D-217 P6.15l: tests frozen for the email split, G conformance and the Q25 wording (2026-10-10; coordinator, from the P6.15l test author; implements D-213, D-215)
+
+- **New test:** `reproductions/15_openvt_d213.jl` (de05b7a5…).
+- **Re-frozen:** `reproductions/15_openvt_package.jl` (04f892a0…; supersedes the D-212 hash). Its D-215 amendments are listed in its header block.
+
+**Email split.** The call is `openvt_submission_package(out; split = :email, release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)`.
+- **Output.** It writes exactly `core.zip` (≤ 20,000,000 B), `bulk/` and `EMAIL.md`, and returns `core_bytes` and `bulk_bytes`.
+- **bulk/.** Flat: the O1 zips per case, the O2 zip and the O1 manifest CSV, so cases + 2 files, each < 2,000,000,000 B, as byte copies of the unsplit build.
+- **core.zip.** Holds every other file exactly once, under `implementations/<token>/` and `results/<token>/`. Its README links each bulk file by name, sha256 and its release-download URL for `release_tag`. Changing the tag changes only the README and `EMAIL.md`.
+- **Determinism and refusals.** Builds are deterministic. A non-empty outdir, a missing bulk directory or any other `split` raises `ArgumentError`. The unsplit default is unchanged.
+- **`EMAIL.md`.** Plain text with:
+  - what is attached and what is linked;
+  - the units (R; a cycle is 775 MCS);
+  - Q15 and Q26 (never Q25);
+  - the FAIL row ids;
+  - the D-215 item 8 notes.
+
+  It contains no addresses, names, hosts, local paths or "sent"/contact wording.
+- **Prototype sizes** (from the test author's stub): core.zip 13,451,156 B; bulk/ 338,214,282 B in 6 files, the largest the 115 MB case (e) O1 zip.
+
+**G conformance (D-215).**
+- O1 `x,y,i,n,g` with g == (i == 0).
+- Measurement headers use `R`.
+- O2 is one zip, `<token>_5T_MonolayerGrowth_1000_Data.zip`, with k = 0…99 (member k = F5 run k + 1).
+- O5 names: `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv`.
+- O1 zip stems: (b) `_No_CI_stochastic`, (f) `_No_CI_deterministic`, (e) `_beta0.8_gamma0.0`, (a) `_beta0.0_gamma0.0`. Members sit at `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`.
+- Table 1 is a CSV, `<token>_table1.csv`.
+- The token comes from one constant.
+
+**Post-processing record.** A new `data/15/o1g-<date>/` (item P6.15l, source o1-2026-10-09) holds the rewritten O1 and O2 manifests and `archives.tsv`. The O1 bytes grow by exactly 2·(rows + 1). There is no re-run. The old P6.15j record's checks are unchanged.
+
+**Q25 wording.** The sentence "M is followed (actual area); the released TST model divides on target area" appears with no question next to it. "Q25" appears nowhere. The division-trigger rows (V1, V3b, V4.2, V4.3, V4.5, C13) have status "not asked (maintainer ruling: M over TST)".
+
+**Q19, Q20 and Q21 closed (re-freeze, same day).** The spec owner closed Q19, Q20 and Q21 as not asked under D-213 (spec 15 §7 at da81b245); Q25 was closed earlier. `15_openvt_d213.jl` is re-frozen (b4ac5a91…):
+- **Banned.** Any "Q19", "Q20", "Q21" or "Q25" outside dated change-log rows fails the test.
+- **TST rows** keep the status "not asked (maintainer ruling: M over TST)".
+- **Other rows** that cited Q20 or Q21 (V2.1.1x, F3.4, C17) need "not asked (M over the framework's code)" or the TST prefix.
+- **Still allowed:** Q15, Q17, Q23, Q24 and Q26, each followed by "our open question list".
+
+## D-219 OpenVT: Q28 dropped; faithfulness to M is the bar (2026-10-10; maintainer: "we have no control over how the other frameworks conduct their benchmarks, but we can be sure that weve done a good job so far being faithful to the manuscript. thats all i need. q28 is pointless"; amends D-215)
+
+- **Q28 is withdrawn.** It asked which compiler the consortium's metrics.cpp numbers came from.
+  - EMAIL.md carries no compiler heads-up.
+  - The READMEs keep one neutral provenance line: our measurements were produced with metrics.cpp built with GCC 13 on Linux.
+- **Standing rule.** We do not raise questions or suggestions about how other frameworks run their benchmarks. Their departures are recorded in our deviation tables only where they bear on comparing against us. Our bar is faithfulness to M.
