@@ -3992,3 +3992,32 @@ session.
   - **Placement.** Each "Potts.jl" slot in the Lattice block gets a "Potts.jl (checkerboard)" slot directly after it.
   - **Folder token.** The proposed folder and file token is `Potts.jl-checkerboard`, for `results/Potts.jl-checkerboard/{Relaxation,Monolayer}/`. It is subject to the conformance audit's naming ruling.
   - **Q27.** The proposed colour is RGB 0,109,44, which is ΔE ≥ 48 from every colors.tex entry. The fallback is 8,29,88 with dashed lines and a hatched banner. Q27 also asks whether the consortium accepts two entries from one framework (precedent: Chaste OS log/quad).
+
+## D-215 OpenVT package conforms to G's scripts where the manuscript is silent (2026-10-10; coordinator, from the conformance audit; maintainer: "we should make sure our data is in the correct form for a submission with manuscript and their repo"; under D-146, D-206, D-211, D-213, D-214)
+
+The audit read the 9 Oct manuscript and G at 14fa42c, and ran G's own postprocessing scripts unchanged on a package we built. The manuscript fixes only the O1 content: a headed CSV per time point, one row per cell, with `x,y` in R, `i` in 0–3 and `n`. Everything else follows G, because G's scripts hard-code it. Each change below was reproduced against G's scripts. Folded into P6.15l, which is re-frozen through its test author:
+
+1. **O1 columns `x,y,i,n,g`.** `g = (i == 0)`. The manuscript's columns are kept, and `g` is appended because `metrics.cpp:101-130` exits with "Missing column g." This replaces D-206's "spec over convention" for this item. The existing files are rewritten in post-processing; no re-run is needed. With `g` added, G's unmodified `run()` matched our measurements on 257 of 257 rows (rel. 4.8e-6).
+2. **Measurement header `R`, not `r`.** It becomes `MCS,t,N,R,A,C,w,g`, because `metrics.tex` reads `y=R`.
+3. **O2.** `k = 0…99`, because the Fig 5 notebook uses `range(0,100)` for any head not in its TST/Artistoo/Morpheus branch. It is zipped as `<token>_5T_MonolayerGrowth_1000_Data.zip` with the folder inside, as every precedent is.
+4. **O5 names give both parameters:** `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv`, following TST and CC3D.
+5. **O1 archives.**
+   - Zip names are descriptive: b → `<token>_No_CI_stochastic.zip`, f → `<token>_No_CI_deterministic.zip`, e → `<token>_beta0.8_gamma0.0.zip`, and a gets a descriptive name chosen by the test author.
+   - Inside each zip, files sit in `<stem>/s<seed>/` directories, and the seed stays in the file names.
+6. **Table 1.** `Monolayer/<token>_table1.csv` is added to core, as D-213 already listed.
+7. **Email split.**
+   - Measured core without changes is 19.43 MB. The O2 zip and the O1 manifest CSV move to the bulk side, and the test asserts core ≤ 20 MB.
+   - core.zip unpacks at G's root (`implementations/<token>/`, `results/<token>/`). The bulk zips are dropped into `results/<token>/Monolayer/` and left zipped.
+8. **README/EMAIL notes.**
+   - `run_metrics.sh` uses `seq 0 10000`, so it drops files with MCS > 10 000; our precomputed measurements are complete.
+   - The 114 MB zip will probably need LFS on G's side.
+   - Lengths are in R, and the origin is the lattice centre; G's scripts are translation-invariant.
+   - Only R is shipped, no px.
+9. **Framework token** (amends D-214). The audit's tests: a space breaks `run_metrics.sh` (unquoted expansions); a dot works everywhere. G's precedent is Chaste: `Chaste_OS_Log` folders, with "Chaste (OS logarithmic)" only in legends.
+   - Folder and file token: `Potts.jl_checkerboard`. This supersedes the spec's `Potts.jl-checkerboard`.
+   - Legend and banner text: "Potts.jl (checkerboard)".
+   - Colour keys: `PottsJL` and `PottsJLcheckerboard`.
+   - The checkerboard implementation folder holds a README and its runner, and points to the shared model in `implementations/Potts.jl/src`.
+   - Every G script hard-codes its framework list, so each entry needs one line added on their side whatever we call it. This goes in EMAIL.md.
+
+Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the implementation folder and the units. The optional O2 header and zero neighbour rows are not adopted.

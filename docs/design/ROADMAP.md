@@ -617,13 +617,13 @@ Full runs are offline (D-146).
   - R4: Fig 5 row re-rendered on the shared distance bins (0, 18.6, 37.2, 55.8, 74.4, 93).
   - R2: new Fig 8 β grid; five runs to 10⁴ cells at β = 0.625/0.9375/0.9875/1.007/1.0212 with an O5 writer, on the PC.
   - Package (D-204): R1, R2 and R4 become required figures; re-freeze the package test through a test author.
-- [ ] **P6.15l** (D-213) Email-ready OpenVT package: `split = :email` → core.zip (≤ 20 MB) + bulk/ (one zip per case for a public pre-release, < 2 GB each) + EMAIL.md cover note; size assertions in the package test. Also the Q25 wording (M over TST; no open question).
+- [ ] **P6.15l** (D-213) Email-ready OpenVT package: `split = :email` → core.zip (≤ 20 MB) + bulk/ (one zip per case for a public pre-release, < 2 GB each) + EMAIL.md cover note; size assertions in the package test. Also the Q25 wording (M over TST; no open question). D-215: G conformance (O1 `g`, header `R`, O2 0…99 zipped, O5 both parameters, descriptive O1 zips with seed dirs, Table 1 in core, O2 + O1 manifest on the bulk side, README/EMAIL notes).
 
 ### Step 4 — Foam
 
 - [ ] **P6.15m** (D-214) "Potts.jl (checkerboard)" as a second OpenVT entry, from `CheckerboardCPM` with the same model, parameters and clock.
   - [ ] m1. Characterisation tests (test author): GPU checkerboard vs CPU sequential F3–F8 and O1 summaries over seeds, cases (b) and (f) first. Each difference beyond the seed spread is a deviation row with a cause; an unexplained one is investigated as a bug.
-  - [ ] m2. Generator and package: framework token as a parameter (`Potts.jl`, `Potts.jl (checkerboard)`; folder form per the conformance audit), its own seed ranges, results folder and provenance algorithm field.
+  - [ ] m2. Generator and package: framework token as a parameter (`Potts.jl`, `Potts.jl (checkerboard)`; `Potts.jl_checkerboard`, D-215), its own seed ranges, results folder and provenance algorithm field.
   - [ ] m3. Full runs on the PC's GPU (ROCm; required by D-214), with a record under `data/15/`, including its own F2/S5 chain calibration (T(λ = 2); cycle 5T if it differs significantly from 156 MCS, else 775).
   - [ ] m4. Figures, page 15 and the package carry both entries; colour Q27; deviations table for the checkerboard entry.
 - [x] (merge, 2026-10-08; D-188) **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
