@@ -658,7 +658,6 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
   - **Ruled out:** concaveman over concavity 0.3–5 and length threshold 0–4, with variants; shapely/GEOS ratio 0–0.15; alpha shapes at 1/α = 1.5–10; and a 300+ formula search.
   - **Still to ask:** the hull library, its parameters and the script for the Fig 7/8 labels.
 - **Q27** (2026-10-10, D-214) The colour for "Potts.jl (checkerboard)" in `colors.tex`: proposal 0,109,44 (§1.3). Also, does the consortium accept two entries from one framework (sequential CPU, checkerboard GPU), as Chaste OS has log/quad?
-- **Q28** (2026-10-10, P6.15l review) **G-side note.** `metrics.cpp`'s concave hull is compiler-dependent on lattice-derived centroids. On the same Potts O1 file, C = 415.6 with GCC 13 on Linux (equal to our precomputed value), 613.5 with Apple clang and 454.9 with Homebrew g++-15; w differs too. A PhysiCell frame is stable across all three, so lattice frameworks (CC3D, Morpheus, TST, Artistoo, Potts) are probably all affected. This ties to D12–D13. Our measurements equal a GCC-on-Linux build, as the package README and EMAIL.md state. **Ask:** which compiler and flags produced the consortium's `measurements_*.csv` and Fig 9? Consider pinning one (e.g. GCC with `-ffp-contract=off`) for every framework's Category 2 numbers.
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
 
