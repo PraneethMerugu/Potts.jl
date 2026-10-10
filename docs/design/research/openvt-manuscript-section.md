@@ -19,27 +19,15 @@ lattice, copy neighbourhood, energy terms, growth rules and division rule. A sym
 built on ModelingToolkit compiles the declaration into specialised update kernels. The same
 declaration runs on CPU and GPU backends. All results reported here were computed on CPU.
 
-Potts.jl differs from established CPM implementations in where the model lives.
-- **The model is compiled, not configured.** Elsewhere a model is typically configured, through
-  XML, scripts or plugins, on top of a fixed simulation engine. In Potts.jl the model itself is
-  the program: the `@potts_model` declaration is a symbolic system, built on ModelingToolkit and
-  Symbolics. The package analyses that system and generates code specialised to it: energy
-  terms, constraints, growth laws, division rules and coupled fields. There is no
-  model-specific code in the engine, and no general-purpose interpreter at run time.
-- **Algorithm and hardware are separate from the model.** The same declaration runs unchanged
-  under different update algorithms (random-site sequential, or parallel checkerboard), and on
-  CPU or GPU through KernelAbstractions.
-- **It joins the SciML ecosystem.** Potts.jl implements the SciML interface (problem, `init`,
-  `solve`, `remake`, callbacks and `EnsembleProblem`), so CPM studies compose with the
-  ecosystem's tooling for ensembles, parameter sweeps and analysis.
-- **Every run is reproducible from its seed.** Each random number is addressed by seed, Monte Carlo
-  step, lattice site or cell, and purpose, rather than drawn from a sequential stream. A run is
-  therefore reproducible from its seed, and can be checkpointed and resumed without storing
-  generator state. This is how every submitted run here can be regenerated from its recorded
-  seed.
-- **Its published models are tested against their papers.** The package ships a library of
-  published CPM models whose reproductions are checked against their papers by pre-registered
-  tests. This benchmark is one of them.
+In Potts.jl, every component of a Cellular Potts model (Hamiltonian terms, constraints, per-cell
+dynamics, growth laws and division rules) is written directly as a symbolic expression in the
+model declaration, built on ModelingToolkit and Symbolics. A new energy term or rule therefore
+needs no plugin or extension code: the package analyses the declared system and compiles it into
+simulation code specialised to that model, so a novel term is as easy to write, and as fast to
+run, as a built-in one. The same declaration runs unchanged under sequential or parallel
+checkerboard update schemes, on CPU or GPU, and implements the SciML interface; and because every
+random number is addressed by seed, Monte Carlo step and lattice site or cell, any simulation can
+be regenerated from its seed.
 
 The monolayer reference model is a direct transcription of the schema and Table S1
 (`lib/PottsModels/src/openvt_reference.jl`):
