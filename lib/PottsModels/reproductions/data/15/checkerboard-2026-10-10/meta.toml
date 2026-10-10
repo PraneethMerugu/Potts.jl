@@ -7,6 +7,7 @@ framework = "Potts.jl (checkerboard)"
 edge_guard = "edge_guard(5; terminate = true)"
 crit = "two-sided Student t at α = 1e-3/103, ν = min(n_ref, n_alt) − 1 (D-218): 4.6642 (b, f, calibration), 8.8595 (a)"
 stop = "stop_at_cells(n): end of the first MCS with ≥ n live cells"
+scope = "characterisation of CheckerboardCPM against SequentialCPM on the OpenVT monolayer (D-225: not part of the OpenVT submission; no O1 per-cell output or package files)"
 algorithm = "CheckerboardCPM(; proposal = Moore(1))"
 initial = "openvt_reference_state: one disc of radius √(A₀/π) at the lattice centre"
 reference_calibration = "calibration-2026-10-05"
@@ -17,32 +18,59 @@ algorithm_reference = "SequentialCPM(; proposal = Moore(1))"
 
 [time]
 colours = "4 colours on the P1b calibration chain and 4 on the monolayer (D-224)"
-T_lambda2_sd = 17.029015642055587
-T_seq_p1b = 156
-alpha_text = "50/1095"
-crit = 4.6641695621474355
-chain_commit_fraction = 0.6429254563053388
-T_seq_p1b_run_mean = 155.34
-cycle_reason = "T(λ = 2) = 219 MCS under CheckerboardCPM on the P1b chain (150 × 7, frozen border rows, 4 colours as on the monolayer; D-224) against the sequential 156 MCS on the same chain (Welch z = 26.71) and the sequential record's 156 MCS on P1 (z = 27.64): significant (|z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 1095 MCS and α = A₀/(5 T) = 50/1095 px/MCS (D-220, D-224)"
-z_seq_p1b_vs_P1 = -0.36572235354641597
-cycle_mcs = 1095
 z_p1b = 26.709110788300503
+T_lambda2_sd = 17.029015642055587
 protocol = "spec 15 §4.2 variant P1b (D-224): 11-chain on 150 × 7, rows 2–6 between two frozen border rows (J = 100 against medium and cells), periodic x, closed y, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, release A_c := A, w₁₁ over rows 2–6 every MCS to 1085 MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run"
 T_lambda2_run_mean = 216.45
 T_seq_p1b_sd = 15.280686959014439
 colours_monolayer = 4
+T_seq_p1b = 156
 T_runs = 100
 beyond_seq_p1b_vs_P1 = false
 beyond = true
+alpha_text = "50/1095"
 seeds = "214600001–214600100 (CheckerboardCPM), 214700001–214700100 (SequentialCPM, calibration_sequential_p1b.tsv)"
 z = 27.63579260926894
 T_seq = 156
+crit = 4.6641695621474355
 alpha = 0.045662100456621
+chain_commit_fraction = 0.6429254563053388
 T_seq_run_mean = 156.09
 beyond_p1b = true
+T_seq_p1b_run_mean = 155.34
 colours_chain = 4
-T_lambda2 = 219
+cycle_reason = "T(λ = 2) = 219 MCS under CheckerboardCPM on the P1b chain (150 × 7, frozen border rows, 4 colours as on the monolayer; D-224) against the sequential 156 MCS on the same chain (Welch z = 26.71) and the sequential record's 156 MCS on P1 (z = 27.64): significant (|z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 1095 MCS and α = A₀/(5 T) = 50/1095 px/MCS (D-220, D-224)"
 crit_p1b = 4.6641695621474355
+z_seq_p1b_vs_P1 = -0.36572235354641597
+cycle_mcs = 1095
+T_lambda2 = 219
+
+[dH_check]
+killing_copies = 0
+commit_fraction = 0.2778290612176576
+thinning_mcs = 20
+sequential_accepted_per_mcs = 20237.15
+copies = 17029
+live_at_start = 5000
+committed_per_mcs = 5643.25
+lattice = 1400
+alpha_text = "50/1095"
+case = "a"
+algorithm = "CheckerboardCPM(; proposal = Moore(1)), CPU one thread (the plain-loop colour path)"
+max_abs_error = 3.183231456205249e-12
+tracker_mismatching_cells = 0
+accepted_per_mcs = 20311.95
+mismatches = 0
+tracker_checks = 12
+runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/check_dH.jl"
+commit = "0a2ac57c0570fa2a2092124696082f34604c134b"
+source = "re-run at this record's calibration (D-226); D-220's investigation found 16605 copies, 0 mismatches at α = 50/775"
+seed = 214990001
+claim_violations = 0
+dirty_tracked = false
+sampled_full_H = 1
+cycle_mcs = 1095
+check_mcs = 3
 
 [cases.f]
 cells = 1000

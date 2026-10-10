@@ -40,7 +40,8 @@ algorithm_reference = "SequentialCPM(; proposal = Moore(1)) on the CPU (the P6.1
 
 [ablation]
 decisions = ["D-220", "D-221", "D-224"]
-runner_sha256 = "4039b8d39dcae835eac0662b9dec5e99593ef485f034e6c220f932696aa38e09"
+collect_dirty_tracked = false
+runner_sha256 = "3f06a41d67d0c94478b4a816eb1a182733029d51c45e282332ddf4be41c20d15"
 chain_replays_equal_gpu = true
 chain_committed_equal_changed_sites = true
 chain = "spec 15 §4.2 variant P1b (D-224) for both arms"
@@ -56,8 +57,9 @@ cycle_c64 = 635
 T_c64_sd = 12.05375166879297
 chain_commit_fraction_burnin_stock = 0.6892405100327109
 chain_commit_fraction_burnin_c64 = 0.9996562512744921
-T_c64_run_mean = 126.0
+collect_commit = "6cec0035ffc4193156a8a48aab50bd6eadb03180"
 runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_ablation.jl"
+T_c64_run_mean = 126.0
 T_c64 = 127
 commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
 dirty_tracked = false
