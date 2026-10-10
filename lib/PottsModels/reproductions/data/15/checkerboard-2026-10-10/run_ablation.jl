@@ -15,7 +15,11 @@
 # runner's counting colour loop (`cb_count_patch!`, `cb_count_runs`); each replay must equal its
 # GPU run (crossing, committed copies = sites changed per MCS).
 # Seeds: c64 calibration 214 900 000 + i; monolayer 214 950 000 + 1000 arm + 100 case + k (arm
-# 1 stock, 2 c64; case 1 b, 2 f, 3 a); 20 runs of (b) and (f), 10 of (a) per arm. The run,
+# 1 stock, 2 c64; case 1 b, 2 f, 3 a); 20 runs of (b) and (f), 10 of (a) per arm (stage "n20").
+# Power stage (stage "power", after the m3 review): 100 runs of (b) and (f) per arm, fresh seeds
+# 215 100 000 + 10 000 arm + 1000 case + k (disjoint from every seed above). When the power
+# parts exist, collect REPLACES the n20 runs of (b) and (f) with them (no pooling); (a) keeps its
+# 10 n20 runs per arm. The run,
 # recorder and metrics are the main runner's (`run_checkerboard.jl`, included) and the frozen
 # test's; the sequential arm is the record's.
 #
@@ -23,6 +27,8 @@
 #     P615M_OUT=<dir> taskset -c 4 julia -t 1 --project=lib/PottsModels/test …/run_ablation.jl count c64    # CPU
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run stock   # GPU
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run c64     # GPU
+#     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl power stock # GPU, power stage
+#     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl power c64   # GPU, power stage
 #     P615M_OUT=<dir> julia --project=lib/PottsModels/test …/run_ablation.jl collect
 #
 # collect writes, into this directory: ablation.tsv (one row per case and metric, with the contrast
@@ -37,6 +43,10 @@ const AB_ARMS = Dict("stock" => (; id = 1, extra = 0), "c64" => (; id = 2, extra
 const AB_CASES = (; b = (; id = 1, runs = 20), f = (; id = 2, runs = 20), a = (; id = 3, runs = 10))
 ab_seed(arm, c, k) = 214_950_000 + 1000AB_ARMS[arm].id + 100AB_CASES[c].id + k
 ab_cal_seed(i) = 214_900_000 + i
+const AB_POWER = (; b = (; id = 1, runs = 100), f = (; id = 2, runs = 100))
+ab_power_seed(arm, c, k) = 215_100_000 + 10_000AB_ARMS[arm].id + 1000AB_POWER[c].id + k
+ab_power_part(name) = cb_part(replace(name, ".tsv" => "_power.tsv"))
+ab_has_power() = isfile(ab_power_part("ablation_runs_part.tsv"))
 const AB_RUNS_HEADER = ("arm", "colours", "cycle", "case", "k", "seed", "retcode", "mcs", "N", "divisions", "live", "planner", "form", "wall_s")
 
 function ab_patch!(arm)
@@ -113,7 +123,10 @@ function ab_count(arm)
 end
 
 # ---- the monolayer arms (GPU) ------------------------------------------------------------------
-function ab_run(arm)
+function ab_run(arm; power = false)
+    part = power ? ab_power_part : cb_part
+    cases = power ? AB_POWER : AB_CASES
+    seedf = power ? ab_power_seed : ab_seed
     ab_patch!(arm)
     mkpath(CB_OUT)
     if arm == "stock"
@@ -124,14 +137,14 @@ function ab_run(arm)
     α = A0 / cycle
     backend = cb_backend()
     ncol = ab_colours(cb_problem(400), arm)
-    rp = cb_header!(cb_part("ablation_runs_part.tsv"), AB_RUNS_HEADER)
-    mp = cb_header!(cb_part("ablation_metrics_part.tsv"), ("arm", "case", "seed", "metric", "value"))
+    rp = cb_header!(part("ablation_runs_part.tsv"), AB_RUNS_HEADER)
+    mp = cb_header!(part("ablation_metrics_part.tsv"), ("arm", "case", "seed", "metric", "value"))
     for L in (400, 1400)
         Base.invokelatest(cb_run, cb_problem(L), 1, merge(P615F_CASES.b, (; L)); cycle, α, cells = 2, tmax = 50, backend)
     end
-    for c in keys(AB_CASES), k in 1:AB_CASES[c].runs
+    for c in keys(cases), k in 1:cases[c].runs
         cc = P615F_CASES[c]
-        seed = ab_seed(arm, c, k)
+        seed = seedf(arm, c, k)
         wall = @elapsed r = Base.invokelatest(cb_run, cb_problem(cc.L), seed, cc; cycle, α, backend)
         s = p615m_series([x.mcs for x in r.rec], [x.N for x in r.rec], [x.r for x in r.rec], [x.A for x in r.rec],
             [x.C for x in r.rec], [x.w for x in r.rec], [x.g for x in r.rec]; cycle)
@@ -143,7 +156,7 @@ function ab_run(arm)
                 r.form, round(wall; digits = 2)), '\t')), rp, "a")
         @info "ablation run" arm ncol cycle c k seed r.mcs r.planner lost = m["lost"] wall = round(wall; digits = 1)
     end
-    log = cb_header!(cb_part("ablation_sessions.tsv"), ("arm", "finished", "commit", "dirty_tracked", "device"))
+    log = cb_header!(part("ablation_sessions.tsv"), ("arm", "finished", "commit", "dirty_tracked", "device"))
     env = cb_env()
     open(io -> println(io, join((arm, now(), env["commit"], env["dirty_tracked"], cb_device()), '\t')), log, "a")
 end
@@ -155,6 +168,15 @@ function ab_collect()
     mets = p615m_tsv(cb_part("ablation_metrics_part.tsv"))
     c64 = TOML.parsefile(cb_part("ablation_c64.toml"))
     sess = p615m_tsv(cb_part("ablation_sessions.tsv"))
+    power = ab_has_power()
+    ncase = Dict(string(c) => AB_CASES[c].runs for c in keys(AB_CASES))
+    if power   # replace the n20 runs of (b) and (f) by the power stage's (no pooling)
+        pc = string.(keys(AB_POWER))
+        runs = [[r for r in runs if !(r["case"] in pc)]; p615m_tsv(ab_power_part("ablation_runs_part.tsv"))]
+        mets = [[r for r in mets if !(r["case"] in pc)]; p615m_tsv(ab_power_part("ablation_metrics_part.tsv"))]
+        sess = [sess; p615m_tsv(ab_power_part("ablation_sessions.tsv"))]
+        foreach(c -> ncase[string(c)] = AB_POWER[c].runs, keys(AB_POWER))
+    end
     c64chain = p615m_tsv(cb_part("ablation_calibration.tsv"))
     length(c64chain) == CAL_N || error("ablation collect: c64 chain counts incomplete")
     stockchain = [merge(r, Dict("arm" => "stock", "colours" => "4")) for r in p615m_tsv(joinpath(CB_DIR, "calibration.tsv"))]
@@ -183,7 +205,7 @@ function ab_collect()
         end
         for k in P615M_ALL
             st, cs = p615m_vals(vals[("stock", c, k)]), p615m_vals(vals[("c64", c, k)])
-            n = AB_CASES[Symbol(c)].runs
+            n = ncase[c]
             (length(st) == n && length(cs) == n) || error("ablation collect: $c $k has $(length(st)), $(length(cs)) runs")
             zr = p615m_crit(length(ref[k]), n)
             zc = p615m_crit(n, n)
@@ -243,7 +265,10 @@ function ab_collect()
         "chain_commit_fraction_burnin_stock" => fracb("stock"), "chain_commit_fraction_burnin_c64" => fracb("c64"),
         "chain_replays_equal_gpu" => true, "chain_committed_equal_changed_sites" => true,
         "chain" => "spec 15 §4.2 variant P1b (D-224) for both arms",
-        "seeds" => "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k",
+        "seeds" => "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k (stage n20)" *
+                   (power ? "; power stage (b), (f): 215 100 000 + 10 000 arm + 1000 case + k" : ""),
+        "runs_per_arm" => join(("$c $(ncase[c])" for c in string.(keys(AB_CASES))), ", "),
+        "power_stage" => power ? "replaces the n20 runs of (b) and (f) (no pooling); (a) keeps its 10 n20 runs" : "none",
         "decisions" => ["D-220", "D-221", "D-224"])
     open(io -> TOML.print(io, prov), pp, "w")
     mp = joinpath(CB_DIR, "meta.toml")
@@ -257,9 +282,10 @@ function ab_collect()
 end
 
 function ab_main(args)
-    isempty(args) && error("run_ablation.jl calibrate | count <arm> | run <arm> | collect")
+    isempty(args) && error("run_ablation.jl calibrate | count <arm> | run <arm> | power <arm> | collect")
     m = args[1]
     m == "calibrate" ? ab_calibrate() : m == "count" ? ab_count(args[2]) : m == "run" ? ab_run(args[2]) :
+    m == "power" ? ab_run(args[2]; power = true) :
     m == "collect" ? ab_collect() : error("run_ablation.jl: bad mode $m")
     return nothing
 end
