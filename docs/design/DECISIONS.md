@@ -4159,3 +4159,15 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The CheckerboardCPM manual note (P6.15m-doc) stays.
   - The record is finished under D-224, since the docs should show the correctly calibrated result.
 - **m4 is re-scoped to page 15 only.** The D-222 test is re-frozen through its test author: the package/`entries`/split/EMAIL/O1cb parts are removed, and the page-15 section and figure parts are kept, with values read from the record.
+
+## D-226 P6.15m m4 re-frozen to page-15 scope (2026-10-10; coordinator, from the m4 test author; implements D-225, supersedes D-222)
+
+- **Test files.** `reproductions/15_openvt_checkerboard_page.jl` (8499f953…) replaces `15_openvt_entries.jl`, which is removed together with its frozen.toml entry.
+- **What it pins.**
+  - **The page section.** A "Potts.jl (checkerboard)" characterisation section on page 15, after Deviations, stating that it is not part of the submission.
+    - Every number comes from the latest final checkerboard record: T_lambda2, T_seq, T_seq_p1b, z, z_p1b, cycle, α, colours_chain == colours_monolayer, "N of 102" and the deviations.
+    - It carries the cause text (thinning, claim, D-008, D-220, "not a bug") and the ΔH brute-force evidence.
+    - Figure slots fig2, fig3 and fig9 sit directly after the Potts.jl ones, each rendered by a `plot_*.jl` script in the record.
+    - It contains no submission wording, tokens, colour, Q27 or Q28.
+  - **The submission package is untouched.** PottsModels defines no `OPENVT_CHECKERBOARD_TOKEN`, no `OPENVT_ENTRIES` and no `entries` keyword, and the default and email builds contain nothing about the checkerboard.
+- **ΔH figures go into the record.** The runner writes `meta [dH_check] copies/mismatches`, which the test pins once present, so the 16,605 / 0 figures are read from the record like every other number.

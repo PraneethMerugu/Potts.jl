@@ -573,6 +573,6 @@ sha256 = "e0a99aff07974a24903d3de54f7d6b58171eb44d773ee71cb255f0f854c34b61"
 decision = "D-218"
 
 [[file]]
-path = "reproductions/15_openvt_entries.jl"
-sha256 = "5f4b8fc2750ff4f683af006fc539a0696d1f1531b471ecd7e6ad07eb0ad170ed"
-decision = "D-222"
+path = "reproductions/15_openvt_checkerboard_page.jl"
+sha256 = "8499f9535f28fd1a80a9d1babfbd6279f0980a1ad13a89f45b4abcff7647fc57"
+decision = "D-226"
