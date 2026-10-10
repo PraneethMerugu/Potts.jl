@@ -67,7 +67,7 @@ _openvt_pkg_o5_name(beta, gamma, mcs) = "$(_OPENVT_PKG_FW)_beta_$(beta)_gamma_$(
 # M's shared Figure 5 distance-bin edges (9 Oct 2026 draft; D-211 R4), in R
 const _OPENVT_PKG_F5_EDGES = (0.0, 18.6, 37.2, 55.8, 74.4, 93.0)
 # what the decipher pass found about M's Figure 5 unit (spec 15 §7 Q15, 2026-10-10)
-const _OPENVT_PKG_F5_UNIT = "M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows); asked"
+const _OPENVT_PKG_F5_UNIT = "M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows); the unit and origin are Q15 on our open question list"
 # scripts that need a local clone of the consortium repository stay out of the package
 const _OPENVT_PKG_NEEDS_G = "OPENVT_MONOLAYER_REPO"
 
@@ -977,7 +977,7 @@ function _openvt_pkg_figures_section(recs)
 
     - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance-bin edges
       $e (record `$(recs[:f5])`), binned in R from the lattice centre. $(_OPENVT_PKG_F5_UNIT).
-      Our row stays in R and is provisional: M's unit is unstated and on our open question list.
+      Our row stays in R and is provisional.
     - `figures/fig7.png`: Figure 7, one colony at 10⁴ cells per Table 1 multiple at our γ thresholds
       (β = 0); 1.1× and 2× are empty (no γ threshold there); cells yellow (no inhibition) or teal
       (surface-inhibited) (record `$(recs[:sweeps])`).
@@ -1033,6 +1033,9 @@ function _openvt_pkg_backend(meta)
     return isempty(a) ? "CPU" : "CPU, `$a`"
 end
 
+# the compiler note of the results README (spec 15 §7 Q28); EMAIL.md words it as a heads-up
+const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements equal metrics.cpp built with GCC 13 on Linux; other compilers can change C and w for lattice-derived centroids (concave-hull near-ties)."
+
 # D-215 (8): what the consortium's scripts need to know (results README and EMAIL.md)
 function _openvt_pkg_note_lines(o1)
     big = maximum(r -> parse(Int, r["bytes"]), o1.archives)
@@ -1040,7 +1043,8 @@ function _openvt_pkg_note_lines(o1)
         "`run_metrics.sh` loops over `seq 0 10000`, so it skips the files with MCS above 10000; our precomputed measurements in `Monolayer/metrics/` are complete (every save to the stop).",
         "The largest O1 zip is $(round(Int, big / 1e6)) MB, so it may need Git LFS on the consortium repository's side.",
         "Lengths are in R, the cell radius, with the origin at the lattice centre; the consortium's scripts are translation-invariant, so no shift is needed.",
-        "Only R is shipped: no file has lengths in px.",
+        "Only R is shipped in the result files: no Monolayer file has lengths in px (parameters.csv gives the px values of A0, R and CD).",
+        _OPENVT_PKG_COMPILER_NOTE,
         "Each framework list hard-coded in the consortium's scripts (`run_metrics.sh`, the Figure 5 notebook, `colors.tex` and the figure .tex files) needs one line added for this entry, under the folder name `$(_OPENVT_PKG_FW)`.",
         "The O1 zips, the O2 zip and the O1 manifest go into `results/$(_OPENVT_PKG_FW)/Monolayer/` and stay zipped there.",
     ]
@@ -1259,8 +1263,10 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             # the core's results README: the bulk files by name, sha256 and download URL
             rp = joinpath(stage, "results", _OPENVT_PKG_FW, "README.md")
             io = IOBuffer()
-            print(io, read(rp, String), """
-
+            readme = read(rp, String)
+            k = findlast("\n## Licence\n", readme)
+            k === nothing && error("openvt_submission_package: the results README has no Licence section")
+            print(io, readme[1:first(k)], """
             ## Bulk files
 
             The files below are not in this zip. They are attached to the Potts.jl pre-release
@@ -1271,6 +1277,7 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             |---|---|---|---|
             """)
             foreach(f -> print(io, "| `", f, "` | ", sz[f], " | `", sha[f], "` | ", _openvt_pkg_release_url(tag, f), " |\n"), bf)
+            print(io, readme[last(k):end])
             write(rp, String(take!(io)))
             _openvt_pkg_zip(stage, joinpath(out, "core.zip"))
             _openvt_pkg_write(joinpath(out, "EMAIL.md"), _openvt_pkg_email(recs, o1, bf, sha, sz, tag))
@@ -1315,7 +1322,8 @@ function _openvt_pkg_email(recs, o1, bf, sha, sz, tag)
     print(io, """
 
     Units: lengths are in R, the cell radius sqrt(A*(0)/pi), with the origin at the lattice
-    centre; time is in cell cycles, one cycle = 775 MCS (5T); the MCS stamp is in every file.
+    centre; time is in cell cycles, one cycle = 775 MCS (5T); the MCS is in each O1 and O5
+    file name and in the first column of the measurement files.
 
     Open questions on our list: Q15, the distance unit and origin of the Figure 5 axis (it is
     consistent with distance in units of R/2; our row is binned in R). Q26, the quantity behind the
@@ -1324,15 +1332,24 @@ function _openvt_pkg_email(recs, o1, bf, sha, sz, tag)
 
     Deviations: $(_openvt_pkg_join(fails)) fail their pre-registered bands. The
     results README has one row per deviation with our value, the manuscript's and the
-    suspected cause. Division
-    follows the manuscript: a cell divides when its actual area reaches X times A*(0). The
-    released TST model divides on target area instead, which is the leading candidate for the
-    V1 and V4 rows.
+    suspected cause. Division follows the manuscript: a cell divides when its actual area
+    reaches X times A*(0). The released TST model divides on target area instead, which is the
+    leading candidate for the V1 and V4 rows.
 
     Notes for the consortium scripts:
 
     """)
-    foreach(l -> print(io, "- ", replace(l, '`' => ""), "\n"), _openvt_pkg_note_lines(o1))
+    foreach(l -> print(io, "- ", replace(l, '`' => ""), "\n"), filter(!=(_OPENVT_PKG_COMPILER_NOTE), _openvt_pkg_note_lines(o1)))
+    print(io, """
+
+    A heads-up on metrics.cpp: its concave hull gives compiler-dependent C and w on centroids
+    from a lattice, so the other lattice frameworks are probably affected as well. On one of
+    our O1 files, GCC 13 on Linux gives C = 415.6, Apple clang 613.5 and Homebrew g++-15 454.9;
+    w differs too, while a PhysiCell frame is the same under all three. Our precomputed values
+    equal the GCC 13 build on Linux. Pinning one compiler for everyone's Category 2 numbers
+    (for example GCC with -ffp-contract=off) would remove the dependence. Which compiler and
+    flags produced the consortium's measurements is Q28 on our open question list.
+    """)
     print(io, """
 
     Everything is built by PottsModels.openvt_submission_package from the run records committed
