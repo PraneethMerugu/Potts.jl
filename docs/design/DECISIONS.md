@@ -4055,4 +4055,8 @@ Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the 
 
 **Q25 wording.** The sentence "M is followed (actual area); the released TST model divides on target area" appears with no question next to it. "Q25" appears nowhere. The division-trigger rows (V1, V3b, V4.2, V4.3, V4.5, C13) have status "not asked (maintainer ruling: M over TST)".
 
-**Q20 stays listed as open for now.** Spec §7 still lists it, so the tests allow it in status cells. The spec owner is asked whether D-213 closes Q20 too; if it does, a small re-freeze removes it.
+**Q19, Q20 and Q21 closed (re-freeze, same day).** The spec owner closed Q19, Q20 and Q21 as not asked under D-213 (spec 15 §7 at da81b245); Q25 was closed earlier. `15_openvt_d213.jl` is re-frozen (b4ac5a91…):
+- **Banned.** Any "Q19", "Q20", "Q21" or "Q25" outside dated change-log rows fails the test.
+- **TST rows** keep the status "not asked (maintainer ruling: M over TST)".
+- **Other rows** that cited Q20 or Q21 (V2.1.1x, F3.4, C17) need "not asked (M over the framework's code)" or the TST prefix.
+- **Still allowed:** Q15, Q17, Q23, Q24 and Q26, each followed by "our open question list".
