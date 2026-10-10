@@ -124,7 +124,7 @@ for case in CASES
     for r in rows
         buf = read(joinpath(unz, split(r["file"], '/')...))
         bytes2hex(sha256(buf)) == r["sha256"] || error("post_o1: $(r["file"]) differs from the P6.15j manifest")
-        ls = split(String(buf), '\n')
+        ls = split(String(copy(buf)), '\n')
         (isempty(last(ls)) && !any(l -> occursin('\r', l), ls)) || error("post_o1: $(r["file"]): unexpected line ends")
         pop!(ls)
         ls[1] == "x,y,i,n" || error("post_o1: $(r["file"]): header $(ls[1])")
