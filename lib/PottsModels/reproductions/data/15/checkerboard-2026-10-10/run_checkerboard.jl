@@ -1,4 +1,4 @@
-# P6.15m m3 (ROADMAP; D-214, D-216, D-218, D-220): the characterisation record of the OpenVT
+# P6.15m m3 (ROADMAP; D-214, D-216, D-218, D-220, D-221, D-224): the characterisation record of the OpenVT
 # entry "Potts.jl (checkerboard)", `CheckerboardCPM(; proposal = Moore(1))` on the PC's GPU
 # (ROCm), against the CPU `SequentialCPM` entry "Potts.jl". The schema is the frozen test's
 # `lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl`; its `p615m_*` rules (per-seed
@@ -9,19 +9,27 @@
 #
 # Steps (one host process for the GPU steps, as D-214 asks):
 #
-#  1. calibrate  The F2 / Table S5 11-chain calibration at λ = 2 (P6.15b protocol: 150 × 5
-#                periodic strip, 11 cells compressed to A_c = 25 for a 100-MCS burn-in,
-#                `openvt_release(100)`, w₁₁ every MCS, T = the first MCS with mean w₁₁ ≥ 9 CD,
-#                per-run crossings the same per run) under CheckerboardCPM on the GPU, 100
-#                runs, seeds 214 200 000 + i. Writes calibration.tsv, timeseries_11chain.tsv
-#                and <out>/calibration.toml: T_λ2, its sd, the Welch z against the sequential
-#                record's λ = 2 crossings (calibration-2026-10-05) at crit(99), and so the
-#                cycle and α (D-220: significant ⇒ cycle = 5·T_λ2, α = A₀/(5·T_λ2); else 775
-#                and 50/775).
+#  1. The F2 / Table S5 11-chain calibration at λ = 2 on spec 15 §4.2 variant P1b (D-224: TST's
+#     150 × 7 chain with two frozen border rows, closed in y, so that CheckerboardCPM's stride 2
+#     gives the monolayers' 4 colours; P1's 150 × 5 periodic strip gives 6), P6.15b protocol
+#     otherwise (11 cells compressed to A_c = 25 for a 100-MCS burn-in, the release, w₁₁ every
+#     MCS, T = the first MCS with mean w₁₁ ≥ 9 CD, per-run crossings the same per run):
+#     calibrate      CheckerboardCPM on the GPU, 100 runs, seeds 214 600 000 + i; asserts
+#                    chain colours == monolayer colours == 4; committed copies per run from the
+#                    sites changed per MCS.
+#     calibrate_seq  SequentialCPM on the CPU (threads), 100 runs, seeds 214 700 000 + i, with
+#                    its accepted copies: calibration_sequential_p1b.tsv.
+#     count          the GPU runs replayed on the CPU (one thread) with a counting colour loop,
+#                    for the accepted copies; the replay must equal the GPU run.
+#     timescale      calibration.tsv (crossings and copy counts) and <out>/calibration.toml:
+#                    the Welch z against the sequential P1b crossings (D-224, like with like)
+#                    and against the pinned sequential record (P1, 156 MCS; the frozen test's
+#                    statistic), which must agree; significant ⇒ cycle = 5·T, α = A₀/(5·T),
+#                    else 775 and 50/775 (D-220).
 #  2. runs       Cases (a) 10, (b) 100 and (f) 100 runs of the P6.15f protocol (the frozen
 #                F3/F8 test's problem, recorder, save cadence 39 MCS, stop at `cells`, edge
 #                guard) under CheckerboardCPM on the GPU, with the cycle and α of step 1;
-#                seeds 214 100 000 + k (b), 214 100 200 + k (f), 214 100 700 + k (a). Per
+#                seeds 214 800 000 + k (b), 214 800 200 + k (f), 214 800 700 + k (a). Per
 #                run: the device planner's form (read from the integrator; no host fallback),
 #                divisions, live cells, the series and the O1 summary of the stop state.
 #                Appends to <out>/runs_part.tsv, ts_part.tsv, o1_part.tsv (resumable).
@@ -38,6 +46,9 @@
 #     P615M_OUT=<dir> systemd-run --user --scope -q -p MemoryMax=24G taskset -c 0-3 \
 #         julia -t 4 --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl calibrate
+#     P615M_OUT=<dir> taskset -c 4-11 julia -t 8 … run_checkerboard.jl calibrate_seq
+#     P615M_OUT=<dir> taskset -c 4 julia -t 1 … run_checkerboard.jl count
+#     P615M_OUT=<dir> julia … run_checkerboard.jl timescale
 #     … run_checkerboard.jl runs
 #     OPENVT_PACKAGE_BULK=<dir> P615M_OUT=<dir> julia --project=lib/PottsModels/test … run_checkerboard.jl collect
 #     julia --project=lib/PottsModels/test … run_checkerboard.jl status
@@ -64,14 +75,16 @@ end
 const CB_ALG = CheckerboardCPM(; proposal = Moore(1))
 const CB_ALG_STR = "CheckerboardCPM(; proposal = Moore(1))"
 const CB_REF_ALG_STR = "SequentialCPM(; proposal = Moore(1))"
+const CB_REF_ALG = SequentialCPM(; proposal = Moore(1))
 const CB_EVERY = P615F_EVERY                         # 39 MCS, the P6.15f save cadence
 const CB_CASES = (:a, :b, :f)
-const CB_SEED = Dict(:b => k -> 214_100_000 + k, :f => k -> 214_100_200 + k, :a => k -> 214_100_700 + k)
+const CB_SEED = Dict(:b => k -> 214_800_000 + k, :f => k -> 214_800_200 + k, :a => k -> 214_800_700 + k)
 cb_case(c::Symbol) = merge(P615F_CASES[c], (; seed = CB_SEED[c]))
 # calibration (P6.15b protocol, λ = 2)
 const CAL_LAMBDA = 2
 const CAL_N = 100
-cal_seed(i) = 214_200_000 + i
+cal_seed(i) = 214_600_000 + i            # CheckerboardCPM, P1b chain (GPU)
+cal_seq_seed(i) = 214_700_000 + i        # SequentialCPM, P1b chain (CPU)
 const CAL_BURNIN = 100
 const CAL_CD = 10
 const CAL_LEVEL = 9.0
@@ -92,73 +105,279 @@ function cb_env()
         "affinity" => get(ENV, "POTTS_AFFINITY", ""))
 end
 
-# ---- step 1: the chain calibration ------------------------------------------------------------------
+# ---- step 1: the chain calibration on spec 15 §4.2 variant P1b (D-224) -----------------------------
+# TST's chain geometry: 150 × 7, the 5 chain rows of P1 (rows 2–6) between two frozen border
+# rows (rows 1 and 7, one `wall[frozen]` cell each), periodic in x and closed in y. Stride 2
+# then gives 4 colours, the monolayers' count (P1's 150 × 5 periodic strip gives 6). The
+# border contact energy is J = 100 against medium and cells alike (TST's border J), so the
+# border is a neutral hard wall. Everything else is P6.15b's protocol (P2–P8): the 11-chain,
+# λ = 2, the 100-MCS burn-in at A_c = 25, the release, w₁₁ over the chain rows every MCS.
+@potts_model OpenVTChainP1b begin
+    @structural_parameters begin
+        lattice = (150, 7)
+    end
+    @kinds medium compressed relaxed wall[frozen]
+    @parameters begin
+        λ = 2.0
+        T = 20.0
+        A = 50.0
+        A_c = 25.0
+        J[kind, kind] = [0.0 10.0 10.0 100.0; 10.0 20.0 20.0 100.0; 10.0 20.0 20.0 100.0; 100.0 100.0 100.0 0.0]
+    end
+    @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+    @relations proposal = Moore(1)
+    @energy begin
+        cells(compressed) => λ * (volume - A_c)^2
+        cells(relaxed) => λ * (volume - A)^2
+        contacts => J[kind, kind′]
+    end
+    @sweep Metropolis(; temperature = T)
+end
+# P2's 11-chain (`openvt_chain(11)`, 150 × 5) in rows 2–6, the border cells 12 and 13
+function p1b_state()
+    c = openvt_chain(11)
+    σ = zeros(Int32, 150, 7)
+    σ[:, 2:6] .= c[1].second
+    σ[:, 1] .= 12
+    σ[:, 7] .= 13
+    return [c[1].first => σ, c[2].first => [c[2].second; :wall; :wall]]
+end
+p1b_problem() = PottsProblem(OpenVTChainP1b(; name = :p615m_chain11_p1b, λ = Float64(CAL_LAMBDA)), p1b_state(),
+    (0, CAL_BURNIN + CAL_TMAX); seed = 1)
+p1b_width(u) = (xs = CB_A.chain_centroids(Array(u.σ)[:, 2:6]); (maximum(xs) - minimum(xs)) / CAL_CD)
+p1b_walls_intact(u) = (σ = Array(u.σ); all(==(12), σ[:, 1]) && all(==(13), σ[:, 7]))
+# colours of CheckerboardCPM's stride on a problem's lattice (the stock stride is 2 here)
+cb_colours(prob, stride = 2) = length(Potts.CorePotts.colors(prob.lattice, stride))
+# the release (`openvt_release(CAL_BURNIN)`: A_c := A at the end of the burn-in) with a hook
+# run in the same affect (one DiscreteCallback: a CallbackSet of two with `saveat` corrupts
+# memory on the host path)
+p1b_release(hook) = Potts.DiscreteCallback((u, t, integ) -> t == CAL_BURNIN,
+    integ -> (hook(integ); integ.ps[:A_c] = integ.ps[:A]; nothing))
+# per-run crossings, the mean-curve crossing and the per-MCS changed sites of saved chain runs
+function p1b_reduce(W)
+    t = collect((-CAL_BURNIN):CAL_TMAX)
+    k = t .>= 0
+    Tc = CB_A.crossing_time(t[k], vec(mean(W; dims = 2))[k], CAL_LEVEL)
+    Tc === nothing && error("calibrate: the mean curve does not reach $(CAL_LEVEL) CD in $(CAL_TMAX) MCS")
+    Tr = [CB_A.crossing_time(t[k], W[k, j], CAL_LEVEL) for j in axes(W, 2)]
+    any(isnothing, Tr) && error("calibrate: $(count(isnothing, Tr)) runs do not cross in $(CAL_TMAX) MCS")
+    return Tc, Float64.(Tr), t
+end
+p1b_changed(sol) = (ch = [count(Array(sol.u[k].σ) .!= Array(sol.u[k - 1].σ)) for k in 2:length(sol.u)];
+    (sum(ch[1:CAL_BURNIN]), sum(ch[(CAL_BURNIN + 1):end])))
+const CAL_COUNT_HEADER = ("lambda", "seed", "T_run", "area_compressed_t0", "area_compressed_end", "accepted_burnin",
+    "committed_burnin", "accepted_relax", "committed_relax", "commit_fraction_relax")
+
+# 1a. CheckerboardCPM on the GPU (100 runs): calibration.tsv (accepted counts filled by `count`)
 function cal_main()
     mkpath(CB_OUT)
     started = now()
     backend = cb_backend()
-    sys = OpenVTChain(; name = :p615m_chain11, lattice = (150, 5), λ = Float64(CAL_LAMBDA))
-    prob = PottsProblem(sys, openvt_chain(11), (0, CAL_BURNIN + CAL_TMAX); seed = 1)
+    prob = p1b_problem()
+    ncol, nmono = cb_colours(prob), cb_colours(cb_problem(400))
+    (ncol == nmono == length(Potts.CorePotts.colors(cb_problem(1400).lattice, 2)) == 4) ||
+        error("calibrate: P1b gives $ncol colours, the monolayers $nmono (D-224 requires 4 = 4)")
     saves = 0:(CAL_BURNIN + CAL_TMAX)
-    # compile (result discarded)
     solve(remake(prob; seed = cal_seed(0), tspan = (0, CAL_BURNIN + 20)), CB_ALG; backend, saveat = 0:(CAL_BURNIN + 20),
         callback = openvt_release(CAL_BURNIN))
     W = fill(NaN, length(saves), CAL_N)
     area = fill(NaN, 2, CAL_N)
+    changed = fill(0, 2, CAL_N)
     sim = @elapsed for j in 1:CAL_N
         sol = solve(remake(prob; seed = cal_seed(j)), CB_ALG; backend, saveat = saves, callback = openvt_release(CAL_BURNIN))
         collect(sol.t) == collect(saves) || error("calibrate: saves $(sol.t[1])…$(sol.t[end]) ≠ $(saves)")
-        for (k, u) in enumerate(sol.u)
-            xs = CB_A.chain_centroids(Array(u.σ))
-            W[k, j] = (maximum(xs) - minimum(xs)) / CAL_CD
-        end
+        p1b_walls_intact(sol.u[end]) || error("calibrate: a border row changed")
+        W[:, j] = p1b_width.(sol.u)
         for (r, u) in ((1, sol.u[CAL_BURNIN + 1]), (2, sol.u[end]))
             σ = Array(u.σ)
             area[r, j] = mean(count(==(c), σ) for c in 1:11)
         end
+        # each site is a target once per MCS and only its own copy writes it: committed = changed
+        changed[:, j] .= p1b_changed(sol)
     end
-    any(isnan, W) && error("calibrate: NaN width")
-    t = collect((-CAL_BURNIN):CAL_TMAX)
-    k = t .>= 0
-    wbar = vec(mean(W; dims = 2))
-    Tc = CB_A.crossing_time(t[k], wbar[k], CAL_LEVEL)
-    Tc === nothing && error("calibrate: the mean curve does not reach $(CAL_LEVEL) CD in $(CAL_TMAX) MCS")
-    Truns = [CB_A.crossing_time(t[k], W[k, j], CAL_LEVEL) for j in 1:CAL_N]
-    any(isnothing, Truns) && error("calibrate: $(count(isnothing, Truns)) runs do not cross in $(CAL_TMAX) MCS")
-    Truns = Float64.(Truns)
-    Tseq = [p615m_f64(r["T_run"]) for r in p615m_tsv(CAL_SEQ) if parse(Float64, r["lambda"]) == CAL_LAMBDA]
-    crit = p615m_crit(length(Tseq), length(Truns))
-    cmp = PottsModels.openvt_spread_compare(Tseq, Truns; z = crit)
-    cycle = p615m_cycle(cmp.beyond, Tc)
-    α = A0 / cycle
-    reason = cmp.beyond ?
-             "T(λ = 2) = $Tc MCS under CheckerboardCPM against the sequential $(P615M_T_SEQ) MCS: significant (Welch z = $(round(cmp.z; digits = 2)), |z| > crit(ν = $(min(length(Tseq), length(Truns)) - 1)) = $(round(crit; digits = 2)); D-218 rule), so the cycle is 5 T = $(5Tc) MCS and α = A₀/(5 T) = 50/$(5Tc) px/MCS (D-220)" :
-             "T(λ = 2) = $Tc MCS under CheckerboardCPM against the sequential $(P615M_T_SEQ) MCS: not significant (Welch z = $(round(cmp.z; digits = 2)), |z| ≤ crit(ν = $(min(length(Tseq), length(Truns)) - 1)) = $(round(crit; digits = 2)); D-218 rule), so the sequential cycle 775 MCS and α = 50/775 px/MCS are kept (D-220)"
+    Tc, Truns, t = p1b_reduce(W)
     finished = now()
-    # outputs: calibration.tsv and the mean curve into the record, the time scale into <out>
     r6(x) = round(x; digits = 6)
-    open(joinpath(CB_DIR, "calibration.tsv"), "w") do io
-        println(io, join(("lambda", "seed", "T_run", "area_compressed_t0", "area_compressed_end"), '\t'))
+    open(cb_part("calibration_cb.tsv"), "w") do io
+        println(io, join(("lambda", "seed", "T_run", "area_compressed_t0", "area_compressed_end", "committed_burnin", "committed_relax"), '\t'))
         for j in 1:CAL_N
-            println(io, join((CAL_LAMBDA, cal_seed(j), Int(Truns[j]), r6(area[1, j]), r6(area[2, j])), '\t'))
+            println(io, join((CAL_LAMBDA, cal_seed(j), Int(Truns[j]), r6(area[1, j]), r6(area[2, j]), changed[1, j], changed[2, j]), '\t'))
         end
     end
     open(joinpath(CB_DIR, "timeseries_11chain.tsv"), "w") do io
         println(io, join(("lambda", "t_mcs", "t_over_T", "w11_mean", "w11_sd"), '\t'))
-        s = vec(std(W; dims = 2))
+        wbar, s = vec(mean(W; dims = 2)), vec(std(W; dims = 2))
         for (i, ti) in enumerate(t)
             println(io, join((CAL_LAMBDA, ti, r6(ti / Tc), r6(wbar[i]), r6(s[i])), '\t'))
         end
     end
     d = merge(cb_env(), Dict("T_lambda2" => Tc, "T_lambda2_sd" => std(Truns), "T_lambda2_run_mean" => mean(Truns),
-        "T_runs" => length(Truns), "T_seq_run_mean" => mean(Tseq), "T_seq_runs" => length(Tseq), "z" => cmp.z, "crit" => crit,
-        "beyond" => cmp.beyond, "cycle_mcs" => cycle, "alpha" => α, "alpha_text" => "50/$cycle", "cycle_reason" => reason,
-        "tmax_mcs" => CAL_TMAX, "device" => cb_device(), "started" => string(started), "finished" => string(finished),
+        "T_runs" => length(Truns), "colours_chain" => ncol, "colours_monolayer" => nmono, "tmax_mcs" => CAL_TMAX,
+        "device" => cb_device(), "started" => string(started), "finished" => string(finished),
         "wall_s" => round(Dates.value(finished - started) / 1000; digits = 1), "simulation_s" => round(sim; digits = 1)))
-    open(io -> TOML.print(io, d), joinpath(CB_OUT, "calibration.toml"), "w")
-    @info "calibration" T_lambda2 = Tc sd = std(Truns) run_mean = mean(Truns) seq_mean = mean(Tseq) z = cmp.z crit beyond = cmp.beyond cycle α sim_s = sim
-    println(reason)
+    open(io -> TOML.print(io, d), cb_part("calibration_cb.toml"), "w")
+    @info "checkerboard P1b calibration" T = Tc sd = std(Truns) run_mean = mean(Truns) ncol sim_s = sim
     return d
+end
+
+# 1b. SequentialCPM on the CPU (100 runs, threads): calibration_sequential_p1b.tsv
+function cal_seq_main()
+    mkpath(CB_OUT)
+    started = now()
+    prob = p1b_problem()
+    saves = 0:(CAL_BURNIN + CAL_TMAX)
+    W = fill(NaN, length(saves), CAL_N)
+    acc = fill(0, 2, CAL_N)
+    sim = @elapsed Threads.@threads :greedy for j in 1:CAL_N
+        snap = Ref(0)
+        sol = solve(remake(prob; seed = cal_seq_seed(j)), CB_REF_ALG; saveat = saves,
+            callback = p1b_release(integ -> (snap[] = integ.stats.accepted)))
+        collect(sol.t) == collect(saves) || error("calibrate_seq: saves")
+        p1b_walls_intact(sol.u[end]) || error("calibrate_seq: a border row changed")
+        W[:, j] = p1b_width.(sol.u)
+        acc[1, j], acc[2, j] = snap[], sol.stats.accepted - snap[]
+    end
+    Tc, Truns, _ = p1b_reduce(W)
+    Tseq = [p615m_f64(r["T_run"]) for r in p615m_tsv(CAL_SEQ) if parse(Float64, r["lambda"]) == CAL_LAMBDA]
+    z156 = PottsModels.openvt_spread_compare(Tseq, Truns; z = p615m_crit(length(Tseq), length(Truns)))
+    open(joinpath(CB_DIR, "calibration_sequential_p1b.tsv"), "w") do io
+        println(io, join(("lambda", "seed", "T_run", "accepted_burnin", "accepted_relax"), '\t'))
+        for j in 1:CAL_N
+            println(io, join((CAL_LAMBDA, cal_seq_seed(j), Int(Truns[j]), acc[1, j], acc[2, j]), '\t'))
+        end
+    end
+    finished = now()
+    d = merge(cb_env(), Dict("T_seq_p1b" => Tc, "T_seq_p1b_sd" => std(Truns), "T_seq_p1b_run_mean" => mean(Truns),
+        "T_seq_p1b_runs" => length(Truns), "z_vs_P1" => z156.z, "beyond_vs_P1" => z156.beyond,
+        "started" => string(started), "finished" => string(finished), "simulation_s" => round(sim; digits = 1)))
+    open(io -> TOML.print(io, d), cb_part("calibration_seq.toml"), "w")
+    @info "sequential P1b calibration" T = Tc sd = std(Truns) run_mean = mean(Truns) z_vs_P1_156 = z156.z beyond = z156.beyond
+    return d
+end
+
+# 1c. accepted copies of the GPU checkerboard chain runs: each replayed on the CPU, one thread,
+# through a counting copy of `CorePotts.checkerboard_mcs!`'s plain-loop colour path (accepted =
+# nonzero claim priority after the propose loop; committed = target changed in the commit loop).
+# The replay's crossing and committed counts must equal the GPU run's.
+const CNT_ACC = Ref(0)
+const CNT_COM = Ref(0)
+function cb_count_patch!()
+    @eval Potts.CorePotts function checkerboard_mcs!(st::CPMState{<:Array}, cache::CheckerboardCache, f::F, p, ctx,
+            law::L, key::RNGKey, mcs::Integer) where {F, L}
+        cache.conn === nothing || error("count: connectivity lists are not counted")
+        ncell = length(cache.claims[1])
+        order = _color_order!(cache.order, key, mcs)
+        buf = cache.buffer[]
+        for ci in order
+            color = cache.colors[ci]
+            n = ncolorsites(color)
+            cache.groupsize[ci] >= n || error("count: colour $ci is not one workgroup")
+            claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
+            wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
+            pargs = _with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
+                color, cache.idbits), cache.track)
+            cargs = _with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n),
+                cache.track)
+            for j in 1:n
+                propose_body!(j, pargs...)
+            end
+            targets = [linear_index(ctx.lattice, color_site(color, j)) for j in 1:n if cache.prio[j] != 0]
+            before = st.σ[targets]
+            for j in 1:n
+                commit_body!(j, cargs...)
+            end
+            $CNT_ACC[] += length(targets)
+            $CNT_COM[] += count(st.σ[targets] .!= before)
+            buf = 3 - buf
+        end
+        cache.buffer[] = buf
+        return length(order) * _conn_launches(cache.conn)
+    end
+    return nothing
+end
+# replay `seeds` of `prob` under CheckerboardCPM on the CPU; returns per-seed rows
+function cb_count_runs(prob, seeds)
+    Threads.nthreads() == 1 || error("count: run with one thread (the plain-loop colour path)")
+    rows = NamedTuple[]
+    saves = 0:(CAL_BURNIN + CAL_TMAX)
+    for seed in seeds
+        CNT_ACC[] = 0; CNT_COM[] = 0
+        snap = Ref((0, 0))
+        sol = Base.invokelatest() do
+            solve(remake(prob; seed), CB_ALG; saveat = saves, callback = p1b_release(integ -> (snap[] = (CNT_ACC[], CNT_COM[]))))
+        end
+        tr = CB_A.crossing_time(collect(0:CAL_TMAX), p1b_width.(sol.u)[(CAL_BURNIN + 1):end], CAL_LEVEL)
+        ab, cb = snap[]
+        ch = p1b_changed(sol)
+        push!(rows, (; seed, T_cpu = something(tr, -1), accepted_burnin = ab, committed_burnin = cb,
+            accepted_relax = CNT_ACC[] - ab, committed_relax = CNT_COM[] - cb, changed_burnin = ch[1], changed_relax = ch[2]))
+        @info "count" seed T_cpu = tr fraction = round((CNT_COM[] - cb) / (CNT_ACC[] - ab); digits = 4)
+    end
+    return rows
+end
+function count_main()
+    cb_count_patch!()
+    rows = cb_count_runs(p1b_problem(), [cal_seed(i) for i in 1:CAL_N])
+    open(cb_part("calibration_counts.tsv"), "w") do io
+        h = keys(first(rows))
+        println(io, join(string.(h), '\t'))
+        foreach(r -> println(io, join(values(r), '\t')), rows)
+    end
+end
+
+# 1d. the time scale: calibration.tsv and <out>/calibration.toml
+function timescale_main()
+    cbt = TOML.parsefile(cb_part("calibration_cb.toml"))
+    sq = TOML.parsefile(cb_part("calibration_seq.toml"))
+    cal = p615m_tsv(cb_part("calibration_cb.tsv"))
+    cnt = Dict(parse(Int, r["seed"]) => r for r in p615m_tsv(cb_part("calibration_counts.tsv")))
+    for r in cal
+        c = cnt[parse(Int, r["seed"])]
+        (c["T_cpu"] == r["T_run"] && c["committed_burnin"] == r["committed_burnin"] == c["changed_burnin"] &&
+         c["committed_relax"] == r["committed_relax"] == c["changed_relax"]) ||
+            error("timescale: the CPU count replay of seed $(r["seed"]) is not its GPU run")
+    end
+    open(joinpath(CB_DIR, "calibration.tsv"), "w") do io
+        println(io, join(CAL_COUNT_HEADER, '\t'))
+        for r in cal
+            c = cnt[parse(Int, r["seed"])]
+            f = parse(Int, c["committed_relax"]) / parse(Int, c["accepted_relax"])
+            println(io, join((r["lambda"], r["seed"], r["T_run"], r["area_compressed_t0"], r["area_compressed_end"],
+                c["accepted_burnin"], c["committed_burnin"], c["accepted_relax"], c["committed_relax"], cb_f64(f)), '\t'))
+        end
+    end
+    Tcb = [p615m_f64(r["T_run"]) for r in cal]
+    Tsp = [p615m_f64(r["T_run"]) for r in p615m_tsv(joinpath(CB_DIR, "calibration_sequential_p1b.tsv"))]
+    Tseq = [p615m_f64(r["T_run"]) for r in p615m_tsv(CAL_SEQ) if parse(Float64, r["lambda"]) == CAL_LAMBDA]
+    Tc = cbt["T_lambda2"]
+    # D-224: like with like, the sequential P1b crossings; the frozen test's statistic is
+    # against the pinned sequential record (P1, 156 MCS); both are kept and must agree
+    crit = p615m_crit(length(Tsp), length(Tcb))
+    zl = PottsModels.openvt_spread_compare(Tsp, Tcb; z = crit)
+    zr = PottsModels.openvt_spread_compare(Tseq, Tcb; z = p615m_crit(length(Tseq), length(Tcb)))
+    zl.beyond == zr.beyond || error("timescale: the P1b test ($(zl.z)) and the P1-record test ($(zr.z)) disagree")
+    cycle = p615m_cycle(zl.beyond, Tc)
+    α = A0 / cycle
+    ν = min(length(Tsp), length(Tcb)) - 1
+    verdict = zl.beyond ? "significant" : "not significant"
+    reason = "T(λ = 2) = $Tc MCS under CheckerboardCPM on the P1b chain (150 × 7, frozen border rows, 4 colours as on the monolayer; D-224) against the sequential $(sq["T_seq_p1b"]) MCS on the same chain (Welch z = $(round(zl.z; digits = 2))) and the sequential record's $(P615M_T_SEQ) MCS on P1 (z = $(round(zr.z; digits = 2))): $verdict (|z| " *
+             (zl.beyond ? ">" : "≤") * " crit(ν = $ν) = $(round(crit; digits = 2)); D-218 rule), so " *
+             (zl.beyond ? "the cycle is 5 T = $(5Tc) MCS and α = A₀/(5 T) = 50/$(5Tc) px/MCS (D-220, D-224)" :
+              "the sequential cycle 775 MCS and α = 50/775 px/MCS are kept (D-220, D-224)")
+    acc = sum(parse(Int, cnt[parse(Int, r["seed"])]["accepted_relax"]) for r in cal)
+    com = sum(parse(Int, cnt[parse(Int, r["seed"])]["committed_relax"]) for r in cal)
+    sacc = sum(parse(Int, r["accepted_relax"]) for r in p615m_tsv(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")))
+    d = merge(cbt, Dict("T_seq_run_mean" => mean(Tseq), "T_seq_runs" => length(Tseq), "z" => zr.z, "crit" => p615m_crit(length(Tseq), length(Tcb)),
+        "beyond" => zr.beyond, "z_p1b" => zl.z, "crit_p1b" => crit, "beyond_p1b" => zl.beyond,
+        "T_seq_p1b" => sq["T_seq_p1b"], "T_seq_p1b_sd" => sq["T_seq_p1b_sd"], "T_seq_p1b_run_mean" => sq["T_seq_p1b_run_mean"],
+        "T_seq_p1b_runs" => sq["T_seq_p1b_runs"], "z_seq_p1b_vs_P1" => sq["z_vs_P1"], "beyond_seq_p1b_vs_P1" => sq["beyond_vs_P1"],
+        "seq_p1b_commit" => sq["commit"], "seq_p1b_simulation_s" => sq["simulation_s"],
+        "chain_accepted_relax" => acc, "chain_committed_relax" => com, "chain_commit_fraction" => com / acc,
+        "seq_p1b_accepted_relax" => sacc,
+        "cycle_mcs" => cycle, "alpha" => α, "alpha_text" => "50/$cycle", "cycle_reason" => reason))
+    open(io -> TOML.print(io, d), cb_part("calibration.toml"), "w")
+    @info "time scale" T_cb = Tc T_seq_p1b = sq["T_seq_p1b"] z_p1b = zl.z z_P1 = zr.z cycle α chain_commit_fraction = com / acc
+    println(reason)
 end
 
 # ---- step 2: the monolayer runs ---------------------------------------------------------------------
@@ -384,7 +603,7 @@ function collect_main()
     planners = unique(r["planner"] for r in rp)
     forms = unique(r["form"] for r in rp)
     prov = Dict(
-        "item" => "P6.15m", "decisions" => ["D-008", "D-146", "D-214", "D-216", "D-218", "D-220"],
+        "item" => "P6.15m", "decisions" => ["D-008", "D-146", "D-214", "D-216", "D-218", "D-220", "D-221", "D-224"],
         "framework" => P615M_LABEL, "folder_token" => P615M_FOLDER,
         "algorithm" => CB_ALG_STR * " on the GPU (KernelAbstractions, ROCBackend)",
         "algorithm_reference" => CB_REF_ALG_STR * " on the CPU (the P6.15f record and its replay, reference_runs.tsv)",
@@ -399,7 +618,9 @@ function collect_main()
         "manifest_sha256" => bytes2hex(open(sha256, manifest)),
         "julia" => cal["julia"], "machine" => "x86_64-linux-gnu", "cpu" => cal["cpu"], "threads" => cal["threads"],
         "affinity" => cal["affinity"],
-        "seeds" => "calibration λ = 2: 214200001–214200100; (b) 214100001–214100100; (f) 214100201–214100300; (a) 214100701–214100710",
+        "seeds" => "calibration λ = 2 (P1b): CheckerboardCPM 214600001–214600100, SequentialCPM 214700001–214700100; (b) 214800001–214800100; (f) 214800201–214800300; (a) 214800701–214800710",
+        "colours" => "4 colours on the P1b calibration chain (150 × 7, frozen border rows, closed y) and 4 on the monolayer (stride 2; D-224)",
+        "calibration_chain" => "spec 15 §4.2 variant P1b (D-224)", "calibration_sequential_commit" => cal["seq_p1b_commit"],
         "started" => started, "finished" => finished,
         "wall_s" => round(cal["wall_s"] + sum(parse(Float64, s["wall_s"]) for s in sess); digits = 1),
         "calibration_wall_s" => cal["wall_s"], "calibration_simulation_s" => cal["simulation_s"],
@@ -422,7 +643,7 @@ function write_meta(cal, status)
         "item" => "P6.15m", "status" => status, "reference_record" => P615M_SEQ_REF, "reference_calibration" => P615M_SEQ_CAL,
         "framework" => P615M_LABEL, "algorithm" => CB_ALG_STR, "algorithm_reference" => CB_REF_ALG_STR,
         "every_mcs" => CB_EVERY,
-        "model" => "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = $(cal["alpha_text"]) px/MCS (this entry's cycle; D-220)",
+        "model" => "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = $(cal["alpha_text"]) px/MCS (this entry's cycle; D-220, D-224)",
         "initial" => "openvt_reference_state: one disc of radius √(A₀/π) at the lattice centre",
         "boundary" => "closed", "edge_guard" => "edge_guard(5; terminate = true)",
         "stop" => "stop_at_cells(n): end of the first MCS with ≥ n live cells",
@@ -437,8 +658,14 @@ function write_meta(cal, status)
             "T_lambda2_run_mean" => cal["T_lambda2_run_mean"], "T_seq" => P615M_T_SEQ, "T_seq_run_mean" => cal["T_seq_run_mean"],
             "z" => cal["z"], "crit" => cal["crit"], "beyond" => cal["beyond"], "cycle_mcs" => cal["cycle_mcs"],
             "alpha" => cal["alpha"], "alpha_text" => cal["alpha_text"], "cycle_reason" => cal["cycle_reason"],
-            "protocol" => "P6.15b 11-chain: 150 × 5 periodic, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, openvt_release(100), w₁₁ every MCS to $(cal["tmax_mcs"]) MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run",
-            "seeds" => "$(cal_seed(1))–$(cal_seed(CAL_N))"))
+            "protocol" => "spec 15 §4.2 variant P1b (D-224): 11-chain on 150 × 7, rows 2–6 between two frozen border rows (J = 100 against medium and cells), periodic x, closed y, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, release A_c := A, w₁₁ over rows 2–6 every MCS to $(cal["tmax_mcs"]) MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run",
+            "colours_chain" => cal["colours_chain"], "colours_monolayer" => cal["colours_monolayer"],
+            "colours" => "4 colours on the P1b calibration chain and 4 on the monolayer (D-224)",
+            "z_p1b" => cal["z_p1b"], "crit_p1b" => cal["crit_p1b"], "beyond_p1b" => cal["beyond_p1b"],
+            "T_seq_p1b" => cal["T_seq_p1b"], "T_seq_p1b_sd" => cal["T_seq_p1b_sd"], "T_seq_p1b_run_mean" => cal["T_seq_p1b_run_mean"],
+            "z_seq_p1b_vs_P1" => cal["z_seq_p1b_vs_P1"], "beyond_seq_p1b_vs_P1" => cal["beyond_seq_p1b_vs_P1"],
+            "chain_commit_fraction" => cal["chain_commit_fraction"],
+            "seeds" => "$(cal_seed(1))–$(cal_seed(CAL_N)) (CheckerboardCPM), $(cal_seq_seed(1))–$(cal_seq_seed(CAL_N)) (SequentialCPM, calibration_sequential_p1b.tsv)"))
     open(io -> TOML.print(io, meta), joinpath(CB_DIR, "meta.toml"), "w")
     return meta
 end
@@ -466,8 +693,10 @@ end
 
 function cb_main(args)
     mode = isempty(args) ? "" : args[1]
-    mode == "calibrate" ? cal_main() : mode == "runs" ? runs_main() : mode == "collect" ? collect_main() :
-    mode == "status" ? status_main() : error("run_checkerboard: usage: run_checkerboard.jl calibrate | runs | collect | status")
+    mode == "calibrate" ? cal_main() : mode == "calibrate_seq" ? cal_seq_main() : mode == "count" ? count_main() :
+    mode == "timescale" ? timescale_main() : mode == "runs" ? runs_main() : mode == "collect" ? collect_main() :
+    mode == "status" ? status_main() :
+    error("run_checkerboard: usage: run_checkerboard.jl calibrate | calibrate_seq | count | timescale | runs | collect | status")
     return nothing
 end
 abspath(PROGRAM_FILE) == abspath(@__FILE__) && cb_main(ARGS)

@@ -1,28 +1,25 @@
-# P6.15m m3, supplementary diagnostic (D-220's colour ablation, re-run per D-221): the contrast
-# between the stock colouring and a 64-colour colouring of CheckerboardCPM, each arm at its own
-# calibrated time unit, for every metric of comparison.tsv.
+# P6.15m m3, supplementary diagnostic (D-220's colour ablation, re-run per D-221 and D-224): the
+# contrast between the stock colouring and a 64-colour colouring of CheckerboardCPM, each arm at
+# its own calibrated time unit, for every metric of comparison.tsv.
 #
 # Arms (GPU, ROCm):
-#   stock   CheckerboardCPM(; proposal = Moore(1)): stride 2, 4 colours on the 400² and 1400²
-#           monolayers, 6 on the 150 × 5 periodic chain (5 is not a multiple of 2; D-221). It
-#           runs at the record's cycle (meta.toml [time] cycle_mcs = 5 T_cb) and α = A₀/cycle.
+#   stock   CheckerboardCPM(; proposal = Moore(1)): stride 2, 4 colours on the monolayers and on
+#           the P1b calibration chain (D-224). It runs at the record's cycle (meta.toml [time]
+#           cycle_mcs = 5 T_cb) and α = A₀/cycle; its chain counts are calibration.tsv's.
 #   c64     the same with the colour stride widened by 6 (stride 8: 64 colours on the
 #           monolayers; the read reach of `CorePotts.reach` + 6, redefined in this process only).
-#           Its own chain calibration (P6.15b protocol, λ = 2, 100 runs) gives T_c64; it runs at
-#           cycle 5 T_c64 and α = A₀/(5 T_c64) (D-221 item 1).
-# Chain copy counts (D-221 item 2): every chain run of both arms (the record's stock calibration
-# seeds, the c64 calibration seeds) is replayed on the CPU, one thread, through a counting copy of
-# the plain-loop colour path of `CorePotts.checkerboard_mcs!` for host states (an accepted copy is
-# one with a nonzero claim priority; it committed when its target site changed). Each
-# replay's crossing must equal its GPU run's, so the counts are those runs'.
-# Seeds: c64 calibration 214 500 000 + i; monolayer 214 400 000 + 1000 arm + 100 case + k (arm
+#           Its own P1b chain calibration (the main runner's protocol, λ = 2, 100 runs, its colour
+#           count recorded) gives T_c64; it runs at cycle 5 T_c64 and α = A₀/(5 T_c64).
+# Chain copy counts: the c64 chain runs are replayed on the CPU, one thread, through the main
+# runner's counting colour loop (`cb_count_patch!`, `cb_count_runs`); each replay must equal its
+# GPU run (crossing, committed copies = sites changed per MCS).
+# Seeds: c64 calibration 214 900 000 + i; monolayer 214 950 000 + 1000 arm + 100 case + k (arm
 # 1 stock, 2 c64; case 1 b, 2 f, 3 a); 20 runs of (b) and (f), 10 of (a) per arm. The run,
 # recorder and metrics are the main runner's (`run_checkerboard.jl`, included) and the frozen
 # test's; the sequential arm is the record's.
 #
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl calibrate   # GPU, c64 chain
-#     P615M_OUT=<dir> taskset -c 4 julia -t 1 --project=lib/PottsModels/test …/run_ablation.jl count stock  # CPU
-#     P615M_OUT=<dir> taskset -c 5 julia -t 1 --project=lib/PottsModels/test …/run_ablation.jl count c64    # CPU (after calibrate)
+#     P615M_OUT=<dir> taskset -c 4 julia -t 1 --project=lib/PottsModels/test …/run_ablation.jl count c64    # CPU
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run stock   # GPU
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run c64     # GPU
 #     P615M_OUT=<dir> julia --project=lib/PottsModels/test …/run_ablation.jl collect
@@ -30,15 +27,14 @@
 # collect writes, into this directory: ablation.tsv (one row per case and metric: both arms'
 # means, sds and differences from sequential, their z against sequential, the stock − c64
 # contrast z, the critical values, the entry's diff and z), ablation_metrics.tsv (per seed),
-# ablation_runs.tsv, ablation_calibration.tsv (the c64 chain crossings), ablation_chain.tsv
-# (per chain run: colours, accepted and committed copies, the commit fraction), and the
+# ablation_runs.tsv, ablation_calibration.tsv (the c64 chain crossings and copy counts), and the
 # `[ablation]` block of provenance.toml.
 include(joinpath(@__DIR__, "run_checkerboard.jl"))
 
 const AB_ARMS = Dict("stock" => (; id = 1, extra = 0), "c64" => (; id = 2, extra = 6))
 const AB_CASES = (; b = (; id = 1, runs = 20), f = (; id = 2, runs = 20), a = (; id = 3, runs = 10))
-ab_seed(arm, c, k) = 214_400_000 + 1000AB_ARMS[arm].id + 100AB_CASES[c].id + k
-ab_cal_seed(i) = 214_500_000 + i
+ab_seed(arm, c, k) = 214_950_000 + 1000AB_ARMS[arm].id + 100AB_CASES[c].id + k
+ab_cal_seed(i) = 214_900_000 + i
 const AB_RUNS_HEADER = ("arm", "colours", "cycle", "case", "k", "seed", "retcode", "mcs", "N", "divisions", "live", "planner", "form", "wall_s")
 
 function ab_patch!(arm)
@@ -53,128 +49,64 @@ function ab_patch!(arm)
     return nothing
 end
 ab_colours(prob, arm) = length(Potts.CorePotts.colors(prob.lattice, 2 + AB_ARMS[arm].extra))
-ab_chain_problem() = PottsProblem(OpenVTChain(; name = :p615m_abl_chain11, lattice = (150, 5), λ = Float64(CAL_LAMBDA)),
-    openvt_chain(11), (0, CAL_BURNIN + CAL_TMAX); seed = 1)
-ab_width(u) = (xs = CB_A.chain_centroids(Array(u.σ)); (maximum(xs) - minimum(xs)) / CAL_CD)
 
-# ---- the c64 chain calibration (GPU): the main runner's protocol ------------------------------------
+# ---- the c64 chain calibration (GPU) on P1b: the main runner's protocol -------------------------------
 function ab_calibrate()
     ab_patch!("c64")
     mkpath(CB_OUT)
     started = now()
     backend = cb_backend()
-    prob = ab_chain_problem()
+    prob = p1b_problem()
     saves = 0:(CAL_BURNIN + CAL_TMAX)
     Base.invokelatest() do
         solve(remake(prob; seed = ab_cal_seed(0), tspan = (0, CAL_BURNIN + 20)), CB_ALG; backend,
             saveat = 0:(CAL_BURNIN + 20), callback = openvt_release(CAL_BURNIN))
     end
     W = fill(NaN, length(saves), CAL_N)
+    changed = fill(0, 2, CAL_N)
     sim = @elapsed for j in 1:CAL_N
         sol = Base.invokelatest() do
             solve(remake(prob; seed = ab_cal_seed(j)), CB_ALG; backend, saveat = saves, callback = openvt_release(CAL_BURNIN))
         end
         collect(sol.t) == collect(saves) || error("ablation calibrate: saves")
-        W[:, j] = [ab_width(u) for u in sol.u]
+        p1b_walls_intact(sol.u[end]) || error("ablation calibrate: a border row changed")
+        W[:, j] = p1b_width.(sol.u)
+        changed[:, j] .= p1b_changed(sol)
     end
-    t = collect((-CAL_BURNIN):CAL_TMAX)
-    k = t .>= 0
-    Tc = CB_A.crossing_time(t[k], vec(mean(W; dims = 2))[k], CAL_LEVEL)
-    Tc === nothing && error("ablation calibrate: no mean crossing")
-    Truns = [CB_A.crossing_time(t[k], W[k, j], CAL_LEVEL) for j in 1:CAL_N]
-    any(isnothing, Truns) && error("ablation calibrate: $(count(isnothing, Truns)) runs do not cross")
-    open(cb_part("ablation_calibration.tsv"), "w") do io
-        println(io, join(("arm", "colours", "lambda", "seed", "T_run"), '\t'))
+    Tc, Truns, _ = p1b_reduce(W)
+    ncol = ab_colours(prob, "c64")
+    open(cb_part("ablation_calibration_gpu.tsv"), "w") do io
+        println(io, join(("arm", "colours", "lambda", "seed", "T_run", "committed_burnin", "committed_relax"), '\t'))
         for j in 1:CAL_N
-            println(io, join(("c64", ab_colours(prob, "c64"), CAL_LAMBDA, ab_cal_seed(j), Truns[j]), '\t'))
+            println(io, join(("c64", ncol, CAL_LAMBDA, ab_cal_seed(j), Int(Truns[j]), changed[1, j], changed[2, j]), '\t'))
         end
     end
     finished = now()
-    d = merge(cb_env(), Dict("T_c64" => Tc, "T_c64_sd" => std(Float64.(Truns)), "T_c64_run_mean" => mean(Float64.(Truns)),
-        "colours_chain" => ab_colours(prob, "c64"), "cycle_mcs" => 5Tc, "alpha" => A0 / (5Tc), "device" => cb_device(),
-        "started" => string(started), "finished" => string(finished), "simulation_s" => round(sim; digits = 1)))
+    d = merge(cb_env(), Dict("T_c64" => Tc, "T_c64_sd" => std(Truns), "T_c64_run_mean" => mean(Truns),
+        "colours_chain" => ncol, "colours_monolayer" => ab_colours(cb_problem(400), "c64"), "cycle_mcs" => 5Tc, "alpha" => A0 / (5Tc),
+        "device" => cb_device(), "started" => string(started), "finished" => string(finished), "simulation_s" => round(sim; digits = 1)))
     open(io -> TOML.print(io, d), cb_part("ablation_c64.toml"), "w")
-    @info "c64 chain" T_c64 = Tc sd = d["T_c64_sd"] run_mean = d["T_c64_run_mean"] colours = d["colours_chain"] cycle = 5Tc
+    @info "c64 P1b chain" T_c64 = Tc sd = d["T_c64_sd"] run_mean = d["T_c64_run_mean"] colours = ncol cycle = 5Tc
 end
 
-# ---- chain copy counts (CPU replay, one thread) --------------------------------------------------------
-const AB_ACC = Ref(0)
-const AB_COM = Ref(0)
+# ---- c64 chain copy counts (CPU replay, one thread) ------------------------------------------------
 function ab_count(arm)
-    Threads.nthreads() == 1 || error("ablation count: run with one thread (the plain-loop colour path)")
+    arm == "c64" || error("ablation count: only the c64 chain (the stock chain's counts are calibration.tsv's)")
     ab_patch!(arm)
-    # counting colour loop for host states: `checkerboard_mcs!`'s plain-loop branch (one
-    # workgroup per colour, no connectivity lists) with the unchanged `propose_body!` and
-    # `commit_body!`; per colour, accepted = nonzero claim priorities after the propose loop,
-    # committed = those whose target site changed in the commit loop (a target is proposed
-    # once per colour and only its own copy writes it)
-    @eval Potts.CorePotts function checkerboard_mcs!(st::CPMState{<:Array}, cache::CheckerboardCache, f::F, p, ctx,
-            law::L, key::RNGKey, mcs::Integer) where {F, L}
-        cache.conn === nothing || error("ablation count: connectivity lists are not counted")
-        ncell = length(cache.claims[1])
-        order = _color_order!(cache.order, key, mcs)
-        buf = cache.buffer[]
-        for ci in order
-            color = cache.colors[ci]
-            n = ncolorsites(color)
-            cache.groupsize[ci] >= n || error("ablation count: colour $ci is not one workgroup")
-            claim, next_claim = cache.claims[buf], cache.claims[3 - buf]
-            wclaim, next_wclaim = cache.wclaims[buf], cache.wclaims[3 - buf]
-            pargs = _with_track((cache.prio, cache.source, claim, wclaim, cache.status, st, f, p, ctx, law, key, mcs,
-                color, cache.idbits), cache.track)
-            cargs = _with_track((st, claim, next_claim, wclaim, next_wclaim, cache.prio, cache.source, f, p, ctx, color, ncell, n),
-                cache.track)
-            for j in 1:n
-                propose_body!(j, pargs...)
-            end
-            targets = [linear_index(ctx.lattice, color_site(color, j)) for j in 1:n if cache.prio[j] != 0]
-            before = st.σ[targets]
-            for j in 1:n
-                commit_body!(j, cargs...)
-            end
-            $AB_ACC[] += length(targets)
-            $AB_COM[] += count(st.σ[targets] .!= before)
-            buf = 3 - buf
+    cb_count_patch!()
+    gpu = Dict(parse(Int, r["seed"]) => r for r in p615m_tsv(cb_part("ablation_calibration_gpu.tsv")))
+    rows = cb_count_runs(p1b_problem(), [ab_cal_seed(i) for i in 1:CAL_N])
+    open(cb_part("ablation_calibration.tsv"), "w") do io
+        println(io, join(("arm", "colours", "lambda", "seed", "T_run", "accepted_burnin", "committed_burnin", "accepted_relax",
+            "committed_relax", "commit_fraction_relax"), '\t'))
+        for r in rows
+            g = gpu[r.seed]
+            (string(r.T_cpu) == g["T_run"] && string(r.committed_burnin) == g["committed_burnin"] == string(r.changed_burnin) &&
+             string(r.committed_relax) == g["committed_relax"] == string(r.changed_relax)) ||
+                error("ablation count: the CPU replay of seed $(r.seed) is not its GPU run")
+            println(io, join(("c64", g["colours"], CAL_LAMBDA, r.seed, r.T_cpu, r.accepted_burnin, r.committed_burnin, r.accepted_relax,
+                r.committed_relax, cb_f64(r.committed_relax / r.accepted_relax)), '\t'))
         end
-        cache.buffer[] = buf
-        return length(order) * _conn_launches(cache.conn)
-    end
-    prob = ab_chain_problem()
-    ncol = ab_colours(prob, arm)
-    if arm == "stock"
-        want = Dict(parse(Int, r["seed"]) => parse(Int, r["T_run"]) for r in p615m_tsv(joinpath(CB_DIR, "calibration.tsv")))
-        seeds = [cal_seed(i) for i in 1:CAL_N]
-    else
-        want = Dict(parse(Int, r["seed"]) => parse(Int, r["T_run"]) for r in p615m_tsv(cb_part("ablation_calibration.tsv")))
-        seeds = [ab_cal_seed(i) for i in 1:CAL_N]
-    end
-    out = cb_part("ablation_chain_$arm.tsv")
-    open(io -> println(io, join(("arm", "colours", "seed", "T_run_gpu", "T_run_cpu", "accepted_burnin", "committed_burnin",
-        "accepted_relax", "committed_relax", "commit_fraction_relax", "changed_burnin", "changed_relax"), '\t')), out, "w")
-    saves = 0:(CAL_BURNIN + CAL_TMAX)
-    for seed in seeds
-        AB_ACC[] = 0; AB_COM[] = 0
-        snap = Ref((0, 0))
-        # `openvt_release(CAL_BURNIN)` with the burn-in counts read in the same affect: one
-        # callback, because a CallbackSet of two DiscreteCallbacks with `saveat` on the host
-        # path corrupts memory (segfault; reproduced without any counting code)
-        release = Potts.DiscreteCallback((u, t, integ) -> t == CAL_BURNIN,
-            integ -> (snap[] = (AB_ACC[], AB_COM[]); integ.ps[:A_c] = integ.ps[:A]; nothing))
-        sol = Base.invokelatest() do
-            solve(remake(prob; seed), CB_ALG; saveat = saves, callback = release)
-        end
-        collect(sol.t) == collect(saves) || error("ablation count: saves")
-        w = [ab_width(u) for u in sol.u]
-        tr = CB_A.crossing_time(collect(0:CAL_TMAX), w[(CAL_BURNIN + 1):end], CAL_LEVEL)
-        ab, cbn = snap[]
-        ar, cr = AB_ACC[] - ab, AB_COM[] - cbn
-        # every site is a target exactly once per MCS and only its own copy writes it, so the
-        # committed copies of an MCS are exactly the sites that changed in it
-        ch = [count(sol.u[k].σ .!= sol.u[k - 1].σ) for k in 2:length(sol.u)]
-        chb, chr = sum(ch[1:CAL_BURNIN]), sum(ch[(CAL_BURNIN + 1):end])
-        open(io -> println(io, join((arm, ncol, seed, want[seed], something(tr, -1), ab, cbn, ar, cr, cb_f64(cr / ar), chb, chr), '\t')),
-            out, "a")
-        @info "chain count" arm ncol seed T_gpu = want[seed] T_cpu = tr commit_fraction = round(cr / ar; digits = 4)
     end
 end
 
@@ -221,12 +153,10 @@ function ab_collect()
     mets = p615m_tsv(cb_part("ablation_metrics_part.tsv"))
     c64 = TOML.parsefile(cb_part("ablation_c64.toml"))
     sess = p615m_tsv(cb_part("ablation_sessions.tsv"))
-    chain = [p615m_tsv(cb_part("ablation_chain_$a.tsv")) for a in ("stock", "c64")]
-    chain = [chain[1]; chain[2]]
-    length(chain) == 2CAL_N || error("ablation collect: chain counts incomplete")
-    all(r -> r["T_run_gpu"] == r["T_run_cpu"], chain) || @warn "ablation collect: a CPU chain replay's crossing differs from its GPU run's"
-    all(r -> r["committed_burnin"] == r["changed_burnin"] && r["committed_relax"] == r["changed_relax"], chain) ||
-        error("ablation collect: committed copies differ from changed sites")
+    c64chain = p615m_tsv(cb_part("ablation_calibration.tsv"))
+    length(c64chain) == CAL_N || error("ablation collect: c64 chain counts incomplete")
+    stockchain = [merge(r, Dict("arm" => "stock", "colours" => "4")) for r in p615m_tsv(joinpath(CB_DIR, "calibration.tsv"))]
+    chain = [stockchain; c64chain]
     entry = Dict((r["case"], r["metric"]) => r for r in p615m_tsv(joinpath(CB_DIR, "comparison.tsv")))
     replay = p615m_tsv(joinpath(CB_DIR, "reference_runs.tsv"))
     o1seq = Dict((r["case"], parse(Int, r["seed"])) => r for r in p615m_tsv(joinpath(CB_DIR, "reference_o1.tsv")))
@@ -287,12 +217,6 @@ function ab_collect()
         end
     end
     cp(cb_part("ablation_calibration.tsv"), joinpath(CB_DIR, "ablation_calibration.tsv"); force = true)
-    open(joinpath(CB_DIR, "ablation_chain.tsv"), "w") do io
-        h = ("arm", "colours", "seed", "T_run_gpu", "T_run_cpu", "accepted_burnin", "committed_burnin", "accepted_relax",
-            "committed_relax", "commit_fraction_relax", "changed_burnin", "changed_relax")
-        println(io, join(h, '\t'))
-        foreach(r -> println(io, join((r[x] for x in h), '\t')), chain)
-    end
     frac(a) = (rr = [r for r in chain if r["arm"] == a];
         sum(parse(Int, r["committed_relax"]) for r in rr) / sum(parse(Int, r["accepted_relax"]) for r in rr))
     fracb(a) = (rr = [r for r in chain if r["arm"] == a];
@@ -301,7 +225,6 @@ function ab_collect()
     mono_of(a) = only(unique(r["colours"] for r in runs if r["arm"] == a))
     pp = joinpath(CB_DIR, "provenance.toml")
     prov = TOML.parsefile(pp)
-    prov["colours"] = "6 colours on the 150 × 5 chain, 4 on the monolayer (stride 2; 5 is not a multiple of 2, D-221)"
     prov["ablation"] = Dict(
         "runner" => relpath(@__FILE__, CB_ROOT), "runner_sha256" => bytes2hex(open(sha256, @__FILE__)),
         "commit" => c64["commit"], "dirty_tracked" => c64["dirty_tracked"] || any(s -> s["dirty_tracked"] == "true", sess),
@@ -313,16 +236,13 @@ function ab_collect()
         "cycle_c64" => c64["cycle_mcs"], "alpha_c64" => c64["alpha"],
         "chain_commit_fraction_stock" => frac("stock"), "chain_commit_fraction_c64" => frac("c64"),
         "chain_commit_fraction_burnin_stock" => fracb("stock"), "chain_commit_fraction_burnin_c64" => fracb("c64"),
-        "chain_replays_equal_gpu" => all(r -> r["T_run_gpu"] == r["T_run_cpu"], chain),
-        "chain_committed_equal_changed_sites" => true,
-        "seeds" => "c64 chain 214500001–214500100; monolayer 214 400 000 + 1000 arm + 100 case + k",
-        "decisions" => ["D-220", "D-221"])
+        "chain_replays_equal_gpu" => true, "chain_committed_equal_changed_sites" => true,
+        "chain" => "spec 15 §4.2 variant P1b (D-224) for both arms",
+        "seeds" => "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k",
+        "decisions" => ["D-220", "D-221", "D-224"])
     open(io -> TOML.print(io, prov), pp, "w")
     mp = joinpath(CB_DIR, "meta.toml")
-    meta = TOML.parsefile(mp)
-    meta["colours"] = prov["colours"]
-    open(io -> TOML.print(io, meta), mp, "w")
-    @info "ablation" T_c64 = c64["T_c64"] cycle_c64 = c64["cycle_mcs"] chain_stock = frac("stock") chain_c64 = frac("c64") burnin_stock = fracb("stock") burnin_c64 = fracb("c64") replays_equal = prov["ablation"]["chain_replays_equal_gpu"]
+    @info "ablation" T_c64 = c64["T_c64"] cycle_c64 = c64["cycle_mcs"] chain_stock = frac("stock") chain_c64 = frac("c64") burnin_stock = fracb("stock") burnin_c64 = fracb("c64")
     for r in rows
         r.beyond_entry == "true" && println(rpad(r.case, 2), rpad(r.metric, 11), " entry z ", round(r.z_entry; digits = 2),
             " | stock z ", round(r.z_stock; digits = 2), r.beyond_stock ? "*" : "", " | c64 z ", round(r.z_c64; digits = 2),
