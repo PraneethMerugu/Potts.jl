@@ -3971,3 +3971,19 @@ session.
   - **(c)** a plain-text cover note, EMAIL.md, listing what is attached and what is linked, the units (R; a cycle is 775 MCS), the open questions Q15 and Q26, and the deviations. The maintainer pastes it; nothing is sent by us;
   - **(d)** a generator option, `split = :email`, that writes `core.zip` and `bulk/` deterministically and reports both sizes, with size assertions added to the package test through a test author.
   - Creating or uploading the release asset needs the maintainer's OK at that moment.
+
+## D-214 OpenVT: "Potts.jl (checkerboard)" as a separate framework entry (2026-10-10; maintainer: "i think we should commit to the \"Potts.jl (checkerboard)\" seperate entry, but still do the statistical checks. quite frankly, none of these platforms are statistically perfect, but they do have understanding of their deviations."; under D-008, D-051, D-146, D-211, D-213)
+
+- **Two Potts.jl entries.** The OpenVT submission carries two entries:
+  - "Potts.jl", produced by `SequentialCPM`. This is today's data and is unchanged.
+  - "Potts.jl (checkerboard)", produced by `CheckerboardCPM`.
+
+  Each entry has its own framework token, colour, legend line, F1 panel, "Implementation in …" subsection and results folder. Both entries use the same model source, the same parameters and the same MCS clock, with distinct seed ranges. The folder-safe form of the token follows the conformance audit's naming rules.
+- **The statistical checks characterise; they do not gate.** No platform is statistically perfect, but each understands its deviations.
+  - The checks compare the F3–F8 metrics and the O1 summaries under the two algorithms, across seeds, for cases (b) and (f) first.
+  - Each difference beyond the seed spread is a deviation row with a cause: update order, colour-lagged totals (D-029), claim widening or Bernoulli thinning (D-051). These rows go in the entry's deviations table, in the same form as the TST/M rows.
+  - A difference with no understood cause is investigated as a possible bug before the full runs.
+- **Compute: the GPU** (maintainer, same day: "oh and definitely do it on gpu"). The checkerboard entry runs on the PC's GPU (ROCm/AMDGPU), since that is the backend `CheckerboardCPM` exists for (D-008). If the model cannot launch there or falls back to the host planner, that is a blocker to fix, not a reason to switch to CPU. The characterisation compares GPU checkerboard against CPU sequential.
+- **Packaging.** P6.15l stays sequential-only, but its generator takes the framework token as a parameter so that the second entry drops in. The email package (D-213) gains the second entry once P6.15m lands.
+- **Open question Q27.** The colour for "Potts.jl (checkerboard)". The spec owner proposes a colour in the lattice family, next to the Q18 colour.
+- **Unchanged.** Telling the consortium remains Dr Jiang's. Nothing goes to G until the maintainer says so.
