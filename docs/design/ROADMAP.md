@@ -610,7 +610,7 @@ Full runs are offline (D-146).
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
 - [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
   - (D-204) Complete the submission package: O1 recorder + PC re-run of cases a, b, e, f (stop MCS and N must match runs.tsv); O2 for (b); A3 shares from O1; MIT line; pending items become required; re-freeze the package test; build outside git; no upload to G until the maintainer says so.
-- [ ] **P6.15k** (D-211) Follow the 9 Oct 2026 manuscript draft.
+- [x] (merge 2026-10-10; D-211, D-212) **P6.15k** (D-211) Follow the 9 Oct 2026 manuscript draft.
   - R3: relabel the metrics figure Fig 8 → Fig 9 (page 15, package README).
   - R5: test the Fig 7/8 label quantity (concave-hull C/C_circle?) on G's CC3D Fig 7 colonies against 1.68/2.14/2.89, on the PC; adopt only if it matches, else Q24 on our open question list.
   - R1: Fig 7 colony grid, Potts row 5×/10×/20× from the sweeps record (O5); render only.

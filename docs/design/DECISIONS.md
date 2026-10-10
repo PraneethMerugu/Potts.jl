@@ -3938,3 +3938,22 @@ session.
   - **R6.** Table 1 adds a Chaste VM row. Our T1 bands stand.
 - **Package.** The D-204 package's required figures gain R1, R2 and R4. That re-freezes the package test through a test author.
 - **Correction (2026-10-09).** The label question is Q26, not Q24 (Q24 is crushed cells). The division-trigger question is Q25, not Q23 (Q23 is the TST detail). Spec 15 §7 now lists both.
+
+## D-212 P6.15k: tests for the 9 Oct manuscript frozen (2026-10-09; coordinator, from the P6.15k test author; implements D-211)
+
+- **Frozen tests (commit f920d7db).**
+  - New: `reproductions/15_openvt_d211.jl` (`6755ce98…`).
+  - Re-frozen: `15_openvt_page.jl` (`4b026fc7…`) and `15_openvt_package.jl` (`0703ef1c…`).
+  - Every red on the base is something not yet built. The old checks stay green.
+- **R1 (Fig 7 γ grid).** The Potts row (5×/10×/20×) is drawn from the sweeps record's f7 O5 colonies:
+  - colours: yellow, teal for inhibited, and a black concave hull (concavity 1.5, lengthThreshold 0, centroids);
+  - the renders go into the sweeps record beside its pinned files.
+- **R2 (new Fig 8 β grid).** Five runs replay replicate 1 of the sweeps T1 points at β = 0.625, 0.9375, 0.9875, 1.007 and 1.0212:
+  - seeds 160000000 + 100q + 1, with the sweeps cap of 210335 MCS;
+  - each run must equal its row of the sweeps `runs.tsv` (stop MCS, N, return code);
+  - replay is verified on the Mac: β = 0.625 reproduces MCS 11389, N = 10005, and a γ colony reproduces its O5 bytes exactly;
+  - the new record is `data/15/f8beta-<date>/`, coloured red for inhibited.
+- **R3.** The metrics figure is "Figure 9" on the page and in the package READMEs. Dated change-log rows are exempt.
+- **R4.** The F5 record gets a re-render on the shared edges 0/18.6/37.2/55.8/74.4/93. Its verdict files must stay byte-identical, so V4 is unchanged. Summed over distance bins, the counts must equal `hist.tsv`.
+- **Labels (Q26; first written Q24, corrected in D-211).** M's label quantity is unknown: no candidate matched (R5). The panels carry no number. Each Potts colony's C/C_circle (metrics.cpp roughness 1) is shown to two decimals in the caption or a table, with a note that M's quantity is unstated and on our open question list. Our values for Fig 7 are 1.38, 1.91 and 2.22.
+- **Package.** `figures/fig5.png`, `fig7.png` and `fig8.png`, the β O5 files, and the P6.15k record become required.

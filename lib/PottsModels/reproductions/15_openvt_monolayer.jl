@@ -5,7 +5,7 @@
 # optional contact inhibition of growth. The consortium's manuscript defines the model, the
 # protocols, the analysis and the figures that every framework contributes to: OpenVT
 # consortium, *Reference Model for the Simulation of a Growing Tissue Monolayer with Contact
-# Inhibition*, in preparation (called **M** below). PottsModels ships the model as
+# Inhibition*, in preparation (called **M** below; the 9 Oct 2026 draft, D-211). PottsModels ships the model as
 # `OpenVTReferenceMonolayer`, and this page is Potts.jl's contribution to M's lineup.
 #
 # The page shows, in order:
@@ -13,9 +13,9 @@
 # 1. the model code;
 # 2. a minimal run you can paste;
 # 3. the results against M: the chain calibration (Figure 2), the 1000-cell distributions
-#    (Figure 5), our Figure 1 panel, growth over time (Figures 3 and 8), the inhibition
-#    threshold sweeps (Figures 6 and 7, Table 1), the full-run videos, a verdict summary and
-#    the table of deviations;
+#    (Figure 5), our Figure 1 panel, growth over time (Figures 3 and 9), the inhibition
+#    threshold sweeps and their colonies (Figures 6 and 7, Table 1), the colonies at the β
+#    thresholds (β, Figure 8), the full-run videos, a verdict summary and the deviations;
 # 4. the details, collapsed: protocol, every verdict, the free-surface schematic (Figure 4),
 #    Tables S1 and S5, the differences table and provenance.
 #
@@ -192,9 +192,21 @@ end
 # 15001–15100) and the γ = 10⁻⁴ negative control (seeds 15501–15520). The verdict rules
 # were also run on the consortium's TST and Morpheus data, and both pass all seven rows.
 # Record `data/15/f5-2026-10-07/` (ROADMAP P6.15e), commit `3af81ae8`,
-# AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s; figure `fig5.png`.
+# AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s.
+#
+# M now draws every row on one set of distance bins, edges 0, 18.6, 37.2, 55.8, 74.4 and
+# 93 ("radii"). Our case (b) row on those edges, `fig5_shared.png` (`plot_f5_shared.jl`, from
+# the 100 per-cell files; the counts are in `hist_shared.tsv`), binned in R from the lattice centre; M's axis appears to be ≈ 2× ours (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data); asked.
+# The unit comparison is provisional: M's unit is unstated and on our open question list.
+# Our colonies reach up to 43 R, so the outer two bins are empty:
 
 record("f5-2026-10-07"; commit = "3af81ae8") #hide
+record_figure("f5-2026-10-07", "fig5_shared.png"; alt = "Figure 5: f and a distributions of case (b) on the shared distance bins") #hide
+
+# The verdict figure `fig5.png` keeps each row on its own 5 equal bins, with the
+# consortium's TST row and the control (re-binning moves cells between distance bins only,
+# so no verdict changes):
+
 record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distributions, TST, Potts.jl and the control") #hide
 
 # The bulk agrees (f = 0 share 0.888, a peak 0.865, mean a 0.849, mean f 0.039); the rim
@@ -212,7 +224,7 @@ record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distribution
 # `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
 # PC, one thread; figure `fig1.png`, drawn by `plot_f1.jl` from
 # `window.tsv` and `window_cells.tsv`. The rerun's stop equals case (a) run 1 of the
-# Figure 3/8 record.
+# Figure 3/9 record.
 
 record("f1-f4-2026-10-08"; commit = "c6ca4bc4") #hide
 record_figure("f1-f4-2026-10-08", "fig1.png"; alt = "Potts.jl panel of Figure 1", width = 360) #hide
@@ -221,23 +233,24 @@ record_figure("f1-f4-2026-10-08", "fig1.png"; alt = "Potts.jl panel of Figure 1"
 
 record_figure("f1-f4-2026-10-08", "fig1_colony.png"; alt = "the 10^4-cell colony of case (a), run 1", width = 600) #hide
 
-# ### Figures 3 and 8: growth over time
+# ### Figures 3 and 9: growth over time
 #
 # Figure 3 follows a colony to 10³ cells (N, radius r and area A against time in cycles):
 # case (f), run 1, deterministic X ≡ 2 (blue) and the 100 runs of case (b) (red), with the
-# consortium's TST runs above for comparison. Figure 8's seven panels follow cases (a)
+# consortium's TST runs above for comparison. Figure 9's seven panels follow cases (a)
 # (uninhibited) and (e) (β = 0.8), 10 runs each to 10⁴ cells, with the bulk and
 # boundary-limited growth laws and the CompuCell3D and Morpheus curves of M's draft
 # (earlier β = 0.8 runs in their own cycle lengths, footnoted). Record
 # `data/15/f3-f8-2026-10-08/` (ROADMAP P6.15f), commit `a64ae188`, AMD Ryzen AI Max+ 395 PC,
-# 12 threads, 240 runs in 9.2 core-hours; figures `fig3.png` and `fig8.png`.
+# 12 threads, 240 runs in 9.2 core-hours; figures `fig3.png` and `fig8.png` (M's metrics
+# figure was Figure 8 in the 2 Oct draft; the record keeps its names).
 
 prov_f3f8 = record("f3-f8-2026-10-08"; commit = "a64ae188") #hide
 record_figure("f3-f8-2026-10-08", "fig3.png"; alt = "Figure 3: N, r and A against time, TST and Potts.jl") #hide
 
 #-
 
-record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 8: seven panels for cases (a) and (e)") #hide
+record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 9: seven panels for cases (a) and (e)") #hide
 
 # Every pre-registered row passes and every negative control fails. Case (f) reproduces
 # TST's synchronous doublings and reaches 10³ cells at 9.97 cycles against 10.01; its area
@@ -249,13 +262,12 @@ record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 8: seven panels for 
 # Figure 6 plots the mean time to 10⁴ cells against β (γ = 0, case (c)) and against γ
 # (β = 0, case (d)), with dashed lines at 1.1, 2, 5, 10 and 20 times M's uninhibited time of
 # 13.57 cycles. Table 1 lists the threshold at which each multiple is reached; Figure 7 shows
-# the colony at 10⁴ cells at γ = 0, 10⁻⁴ and the three γ thresholds, growing cells blue and
-# inhibited cells orange. Rings: the Potts.jl thresholds; diamonds and crosses: TST's and
-# Artistoo's Table 1 values. Record `data/15/sweeps-2026-10-08/` (ROADMAP P6.15g), commit
-# `41fb2ba6`, AMD Ryzen AI Max+ 395 PC, 12 threads, 160 runs (6 capped at 20×) in 68.7
-# core-hours, with `SequentialCPM(; skip_interior = true)` (equal in law to
-# `SequentialCPM()`, D-177, D-198); figures `fig6.png` and `fig7.png`, thresholds
-# `table1.tsv`.
+# the colony at 10⁴ cells at each multiple's γ threshold. Rings: the Potts.jl thresholds;
+# diamonds and crosses: TST's and Artistoo's Table 1 values. Record
+# `data/15/sweeps-2026-10-08/` (ROADMAP P6.15g), commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
+# 12 threads, 160 runs (6 capped at 20×) in 68.7 core-hours, with
+# `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198);
+# figures `fig6.png` and `fig7_grid.png`, thresholds `table1.tsv`.
 
 sweeps = tsv("sweeps-2026-10-08", "verdicts.tsv") #hide
 record("sweeps-2026-10-08"; commit = "41fb2ba6") #hide
@@ -284,13 +296,29 @@ end
 # "—", as for every lattice framework: the time jumps from 14.9 to 58.8 cycles between
 # γ = 0 and γ = 10⁻⁴.
 
-record_figure("sweeps-2026-10-08", "fig7.png"; alt = "Figure 7: 10^4-cell colonies at the gamma thresholds, growing and inhibited") #hide
+# **Figure 7** is M's grid "Tissue Snapshots with Surface Inhibition": one colony at 10⁴
+# cells per Table 1 multiple, at that multiple's γ threshold (β = 0). Our row,
+# `fig7_grid.png` (`plot_f7_grid.jl`, a render of the record's O5 files, replicate 1): 1.1×
+# and 2× are empty, as for every lattice framework (our T1 is "—" there); 5×, 10× and 20× are
+# γ = 0.1625, 0.5375 and 0.7625. Cells are yellow (no inhibition) or teal (surface-inhibited),
+# and the black line is the tissue outline: the concave hull of the cell centroids as the
+# consortium's `metrics.cpp` draws it (concaveman, concavity 1.5).
 
-# The same five final states as lattice stills, one colour per cell (`fig7_cells.png`): at
-# high γ growth is confined to cells with free surface, so the rim roughens and the colony
-# becomes porous, as in TST's row of M's Figure 7.
+record_figure("sweeps-2026-10-08", "fig7_grid.png"; alt = "Figure 7: 10^4-cell colonies at the gamma thresholds, yellow and teal, with the concave hull") #hide
 
-record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five Figure 7 colonies, one colour per cell") #hide
+# C/C_circle of each colony (the outline's perimeter over that of a circle of its area,
+# `metrics.cpp`'s first roughness): **1.38** at 5×, **1.91** at 10× and **2.22** at 20×
+# (`fig7_grid.tsv`). At high γ only cells with free surface grow, so the rim roughens and
+# the colony becomes porous, as in the other frameworks' rows.
+#
+# M's panels carry a centred label whose quantity M leaves unstated; it is on
+# our open question list. No candidate we tried matched M's printed labels, so our panels
+# carry no label, and C/C_circle is given here instead, as metrics.cpp's measure, not M's.
+#
+# The same final states (with γ = 0 and 10⁻⁴) as lattice stills, coloured by state
+# (`fig7_cells.png`):
+
+record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colonies as lattice stills, coloured by state") #hide
 
 # **15 of 18 pre-registered rows pass; V1, V2.1.1x and V3b fail** (see Deviations), and all
 # three negative controls fail, as required. Nothing was tuned: no band, rule, seed or
@@ -310,6 +338,26 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five Figure 7 co
 # unverified, and for V3b it is a weaker fit: we are slower than TST at γ = 0 but faster
 # when only the rim grows, which a plain rate offset cannot cause.
 #
+# ### Figure 8: colonies at the β thresholds (area inhibition)
+#
+# M's new Figure 8, "Tissue Snapshots with Area Inhibition", is the same grid for β (γ = 0):
+# one colony at 10⁴ cells at each of our Table 1 β values, 0.625, 0.9375, 0.9875, 1.007 and
+# 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black concave
+# hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these colonies, so
+# each is replayed from its seed: replicate 1 of that T1 point, which stopped at the same MCS
+# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/` (ROADMAP
+# P6.15k), commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
+# `fig8_grid.png` (`plot_f8_grid.jl`).
+
+record("f8beta-2026-10-09"; commit = "97c326bf") #hide
+record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell colonies at the beta thresholds, yellow and red, with the concave hull") #hide
+
+# C/C_circle of each colony (`fig8_grid.tsv`): **1.12** at 1.1×, **1.16** at 2×, **1.18** at
+# 5×, **1.24** at 10× and **1.25** at 20×. The inhibited share rises from 50 % at β = 0.625
+# to 98 % at β = 1.0212; area inhibition leaves the rim nearly as smooth as without
+# inhibition, unlike surface inhibition (Figure 7). As for Figure 7, the panels carry no
+# label: M's label quantity is unstated and on our open question list.
+#
 # ### The full-run videos
 #
 # Run 1 of each case, one frame every 39 MCS to the stop, one colour per cell, no outlines
@@ -318,7 +366,7 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five Figure 7 co
 # ```@raw html
 # <figure><video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-openvt-f3f8/15_openvt_f3f8_a_run1_seed15701_cells.mp4" controls loop muted playsinline width="420"></video>
 # <video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-openvt-f3f8/15_openvt_f3f8_e_beta0.8_run1_seed15801_cells.mp4" controls loop muted playsinline width="420"></video>
-# <figcaption>Figure 8 runs to 10⁴ cells. Left: case (a), β = γ = 0, seed 15701, to MCS 11600 (the Figure 1 state is its last frame). Right: case (e), β = 0.8, seed 15801, to MCS 12550.</figcaption></figure>
+# <figcaption>Figure 9 runs to 10⁴ cells. Left: case (a), β = γ = 0, seed 15701, to MCS 11600 (the Figure 1 state is its last frame). Right: case (e), β = 0.8, seed 15801, to MCS 12550.</figcaption></figure>
 # <figure><video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-openvt-f3f8/15_openvt_f3f8_f_sigmaX0_run1_seed15201_cells.mp4" controls loop muted playsinline width="420"></video>
 # <video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-openvt-f3f8/15_openvt_f3f8_b_run1_seed15001_cells.mp4" controls loop muted playsinline width="420"></video>
 # <figcaption>Figure 3 runs to 10³ cells. Left: case (f), σ_X = 0, seed 15201, to MCS 7714. Right: case (b), seed 15001, to MCS 8154.</figcaption></figure>
@@ -347,7 +395,7 @@ let
     | Figure 2, Table S5 (calibration) | $(tally(calr)) | $(fails(calr)) | — |
     | Figure 3 (cases f, b) | $(tally(f3)) | $(fails(f3)) | $(count(r -> r["result"] == "FAIL", ctl)) of $(length(ctl)) fail, as required |
     | Figure 5 (case b) | $(tally(v4)) | $(fails(v4)) | the γ = 10⁻⁴ control fails V4.4 and V4.6, as required |
-    | Figure 8 (cases a, e) | $(tally(f8)) | $(fails(f8)) | — |
+    | Figure 9 (cases a, e) | $(tally(f8)) | $(fails(f8)) | — |
     | Figures 6, 7 and Table 1 (sweeps, with V1) | $(tally(sw)) | $(fails(sw)) | $(count(r -> r["result"] == "FAIL", swc)) of $(length(swc)) fail, as required |
     """)
 end
@@ -365,10 +413,10 @@ end
 # | V4.2 peak of nonzero f (FAIL) | 0.425 (100 runs, 11,226 cells with f > 0); 0.395–0.435 for smoothing windows of 1–11 bins; mean nonzero f 0.346 | 0.25–0.35 (TST and Morpheus pooled); TST alone 0.295, mean nonzero f 0.288 | leading: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); Potts.jl follows M and divides on actual area (C13). Not the Morpheus f definition or σ_X (C17): TST alone uses our f and σ_X = 0.4 and passes. Ruled out on 20 runs each: the division axis and a connectivity constraint | not asked; on our open question list as Q20 (leading) and Q23 |
 # | V4.3 max f (FAIL) | 0.847; 606 of 11,226 rim cells (5.4 %) above 0.56 | at most 0.56, no cell above (TST max 0.553) | the same upward shift of the rim cells' f as V4.2; causes as for V4.2. Leading: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169) (C13) | not asked; on our open question list as Q20 (leading) and Q23 |
 # | V4.5 range of a (FAIL) | 0.066–1.130; 30 of 100,029 cells below 0.42, all small interior cells born shortly before, 10 of them sister pairs | 0.42–1.09; TST 0.425–1.092 with no cell below 0.42 | squeezed young daughters, cause unresolved. Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169), which changes the daughters' state at birth (C13). A connectivity constraint raises the minimum but not the count | not asked; on our open question list as Q20 (leading) and Q24 |
-# | V1 time to 10⁴ cells, uninhibited, sweeps (FAIL) | 14.945 cycles (β = γ = 0, 10 runs, 14.48–15.31, sd 0.27), 0.12 % above the band's upper edge 14.927, +10.1 % on 13.57; our low-β plateau 14.72–14.77 for β = 0.25–0.6 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.213–14.927; TST plateau 13.77, Artistoo 13.856 | as for the Figure 3/8 measurement below (15.17 cycles with `SequentialCPM` on other seeds; the difference, 0.22 cycles, is about 1.9 standard errors, consistent with D-177). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked; on our open question list as Q20 |
+# | V1 time to 10⁴ cells, uninhibited, sweeps (FAIL) | 14.945 cycles (β = γ = 0, 10 runs, 14.48–15.31, sd 0.27), 0.12 % above the band's upper edge 14.927, +10.1 % on 13.57; our low-β plateau 14.72–14.77 for β = 0.25–0.6 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.213–14.927; TST plateau 13.77, Artistoo 13.856 | as for the Figure 3/9 measurement below (15.17 cycles with `SequentialCPM` on other seeds; the difference, 0.22 cycles, is about 1.9 standard errors, consistent with D-177). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked; on our open question list as Q20 |
 # | V2.1.1x β threshold at 1.1× (FAIL) | 0.625 (bracket 0.625 / 0.6375, 14.831 / 15.120 cycles over 6 runs each); against our own uninhibited time the rule gives 0.80 (information) | lattice spread 0.687–0.704 (TST 0.7037, Artistoo 0.698); band 0.667–0.724 | a consequence of V1, as D-174 anticipated: the 1.1× time 14.927 lies on our flat low-β plateau (14.7–15.1 for β ≤ 0.65), so its first crossing is set by run-to-run noise (sd 0.27 cycles), not by the inhibition curve. The 2×–20× β thresholds pass, within 0.002 of TST | not asked; on our open question list as Q20 |
 # | V3b time to 10⁴ cells at γ = 10⁻⁴ (FAIL) | 58.755 cycles (5 runs, 58.42–59.11, sd 0.25), 3.7 % below the band's lower edge 61; −4.3 % on TST | TST 61.37 (γ = 10⁻⁴, one run), Artistoo 63.09 (γ = 0.0195); band 61–70 | unverified. Only cells with free surface grow here, so this measures rim-limited growth; we are faster than TST here but slower at γ = 0 (V1), which a plain rate offset cannot cause. Candidates: the division rule, where TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169) (C13), which changes rim cell shapes (V4.2 and V4.3 point the same way), and the band, which sits 0.6 % below TST's single run. Every γ threshold passes | not asked; on our open question list as Q20 |
-# | V1 time to 10⁴ cells, uninhibited, Figure 3/8 record | 15.17 cycles (case (a), 10 runs, 14.92–15.49); 9 of 10 runs above the band; case (e) at β = 0.8: 16.26 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15 | about 11.8 % slow. The gap opens beyond 10³ cells (TST takes about 3.4–3.6 cycles from 10³ to 10⁴ cells, we take 4.6–4.8), past the Figure 3 window. Leading candidate, as for V4: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value) |
+# | V1 time to 10⁴ cells, uninhibited, Figure 3/9 record | 15.17 cycles (case (a), 10 runs, 14.92–15.49); 9 of 10 runs above the band; case (e) at β = 0.8: 16.26 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15 | about 11.8 % slow. The gap opens beyond 10³ cells (TST takes about 3.4–3.6 cycles from 10³ to 10⁴ cells, we take 4.6–4.8), past the Figure 3 window. Leading candidate, as for V4: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value) |
 # | F1 panel colour scale (provisional) | cells coloured by area with coolwarm, scaled to the panel's own cell-area min–max (areas from the full state); thin black pixel-edge boundaries; white medium | the CompuCell3D, TST and Artistoo close-ups colour cells blue to red by area (coolwarm) with thin boundaries; the limits of their colour scales are not stated | the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading | not asked; on our open question list as Q10 (the colour variable and its limits) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed) |
 #
 # **Reading the division rows.** Where we differ from TST, the manuscript is the reference
@@ -419,11 +467,11 @@ end
 #
 # | Case | Parameters | Stop | Used in |
 # |---|---|---|---|
-# | (a) | β = γ = 0 (uninhibited) | 10⁴ cells | Figures 1 and 8 |
+# | (a) | β = γ = 0 (uninhibited) | 10⁴ cells | Figures 1 and 9 |
 # | (b) | β = γ = 0, stochastic X | 10³ cells | Figures 3 and 5 |
-# | (c) | β swept, γ = 0 | 10⁴ cells | Figure 6, Table 1 |
+# | (c) | β swept, γ = 0 | 10⁴ cells | Figures 6 and 8 (β), Table 1 |
 # | (d) | γ swept, β = 0 | 10⁴ cells | Figures 6 and 7, Table 1 |
-# | (e) | β = 0.8, γ = 0 | 10⁴ cells | Figure 8 |
+# | (e) | β = 0.8, γ = 0 | 10⁴ cells | Figure 9 |
 # | (f) | β = γ = 0, X ≡ 2 (deterministic) | 10³ cells | Figure 3 |
 #
 # Two negative controls run alongside: γ = 10⁻⁴, which arrests interior cells and must fail
@@ -466,7 +514,7 @@ verdict_table(filter(r -> startswith(r["target"], "F3") && r["case"] in ("f", "b
 
 verdict_table(filter(r -> occursin("must FAIL", r["band"]), f3f8), cols, hdr)
 
-# Figure 8 and V5:
+# Figure 9 and V5:
 
 verdict_table(filter(r -> (startswith(r["target"], "V5.") || startswith(r["target"], "F8.")) &&
                           r["case"] in ("a", "e"), f3f8),
@@ -578,23 +626,24 @@ Markdown.parse(s5)
 # | F3 time axis and framework | t in 775-MCS cycles; TST shown as the comparison row | axis "[T]"; the framework of M's Figure 3 is not named | read as cycles, as the TST data imply | not asked; on our open question list as Q2 (open part) and Q13 |
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked; on our open question list as Q20 |
 # | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, coloured count glyphs | no outlines on this schematic (D-156) | not an author question |
-# | F5 distance bins and origin | 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R), from the initial cell's centre | legend 0–7, …, 31–39; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
+# | F5 distance bins and origin | M's shared edges 0, 18.6, 37.2, 55.8, 74.4, 93 for our row (`fig5_shared.png`), binned in R (provisional: M's unit is unstated and appears to be about 0.5 R); the verdict figure keeps 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R); distances from the initial cell's centre | one set of edges for all rows (0–18, …, 74–93 "radii"); how they were derived is not stated; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
 # | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds by M's nearest rule on 6-run bracket ends | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
-# | F7 drawing | each cell a filled disc of its radius at its centroid, growing blue and inhibited orange in M's colours, no strokes; a second row of lattice stills with one colour per cell | M's Figure 7 rows | M's form from our O5 files; the lattice stills are information | not an author question |
-# | F8 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |
+# | F7, F8 drawing | each cell a filled disc of its radius at its centroid, yellow or teal (Figure 7) / red (Figure 8, β), no strokes; the black concave hull of `metrics.cpp`; one length scale per figure; a row of lattice stills as information | M's grids, one colony per framework and multiple | M's form from our O5 files | not an author question |
+# | F7, F8 panel labels | no number in the panels; each colony's C/C_circle of the concave hull in the caption (1.38, 1.91, 2.22 for Figure 7) | a centred number per panel (1.37–3.45); its quantity is not stated | no candidate we tried matched M's printed values, so we do not guess | not asked; on our open question list |
+# | F9 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |
 # | Domain | closed 400², 1400² or 1800² lattice with a 5-site edge guard; no run came closer than 33 sites (171 in the sweeps) | unbounded plane | a finite lattice the colony never reaches is equivalent | not an author question |
 # | Division axis | random plane | not stated for CPMs (CompuCell3D and Morpheus: random; TST: minor axis) | majority practice; TST's minor axis tested on 20 runs and it does not change V4 | not an author question |
 # | C1 cell-cycle length | one cycle = 5T = 775 MCS | M says the cycle is 5T but also, once, that time is in units of T | M contradicts itself; its tables and the TST data fix 5T | resolved: 5T = 775 MCS from the consortium data (Q2 on our open question list) |
 # | C2 calibration compression | target area halved during a burn-in, both chain ends free | left to each framework | the four CPM implementations all do this | not an author question |
 # | C3 truncation of X | X redrawn while X ≤ 0 | silent; the schema redraws | P(X ≤ 0) is about 3 × 10⁻⁷, so it never fires | not an author question |
-# | C4 replicates | 100 runs for Figures 2 and 5, 10 or more per Figure 3/8 case | 100 for Figure 5; the schema's floor is 10 | M where it states a number | not an author question |
+# | C4 replicates | 100 runs for Figures 2 and 5, 10 or more per Figure 3/9 case | 100 for Figure 5; the schema's floor is 10 | M where it states a number | not an author question |
 # | C5 sensitivity analysis | not done | not in M's analysis list (only in the schema) | M's list taken as complete | not an author question |
 # | C6 literature comparisons | not done | not in M (only in the schema) | M taken over the schema | not an author question |
 # | C7 cell diameter CD | 10 px, the relaxed length of a cell on the 5-px strip | not defined numerically; the schema gives 7.98 px | only 10 px makes the relaxed 11-chain 10 CD wide, as M's Figure 2 requires | not an author question |
 # | C8 output columns | x, y, i, n, with g = (i == 0) derived for the analysis | x, y, i, n (the analysis code reads x, y, g, n) | M for submitted files | not an author question |
 # | C9 type 1 inequality | a ≥ β | a ≥ β (the schema has a > β) | M, as Morpheus, TST and Artistoo | not an author question |
-# | C10 Figure 8 length units | R | R; the draft figure's lattice curves are in px | M | not asked; on our open question list as Q14 |
-# | C11 Figure 5 distance bins | 5 equal bins | 5 bins in the legend; 7 in the notebook | M's figure | not asked; on our open question list as Q15 |
+# | C10 Figure 9 length units | R | R; the draft figure's lattice curves are in px | M | not asked; on our open question list as Q14 |
+# | C11 Figure 5 distance bins | M's shared edges (0, 18.6, …, 93) for our row, binned in R (provisional); 5 equal bins in the verdict figure | 5 shared bins in the legend; 7 per-framework bins in the notebook | M's figure | not asked; on our open question list as Q15 |
 # | C12 Figure 5 distance origin | the initial cell's centre (the lattice centre) | the initial cell's centre; the notebook uses the pooled centroid | M's text | not asked; on our open question list as Q15 |
 # | C13 division trigger | actual area ≥ X A\*(0) | actual area ≥ X A\*(0); TST uses the target area | M, with CompuCell3D and Morpheus. This is the leading candidate for the V4 failures and the slow V1 growth | not asked; on our open question list as Q20 |
 # | C14 daughters' reference area | half the mother's A\* | half the mother's A\* (Morpheus sets it to the daughter's area) | M, with CompuCell3D, TST and Artistoo | not an author question |
@@ -612,10 +661,11 @@ Markdown.parse(s5)
 # | Record | Item | Runner | Machine | Commit |
 # |---|---|---|---|---|
 # | `calibration-2026-10-05` | Figure 2, Table S5 | `run_calibration.jl` | Apple M1 Pro, 4 threads | `30c39601` |
-# | `f5-2026-10-07` | Figure 5 | `run_f5.jl` | AMD Ryzen AI Max+ 395, 12 threads | `3af81ae8` |
-# | `f3-f8-2026-10-08` | Figures 3 and 8 | `run_f3_f8.jl` | AMD Ryzen AI Max+ 395, 12 threads | `a64ae188` |
+# | `f5-2026-10-07` | Figure 5 | `run_f5.jl`, `plot_f5_shared.jl` | AMD Ryzen AI Max+ 395, 12 threads | `3af81ae8` |
+# | `f3-f8-2026-10-08` | Figures 3 and 9 | `run_f3_f8.jl` | AMD Ryzen AI Max+ 395, 12 threads | `a64ae188` |
 # | `f1-f4-2026-10-08` | Figures 1 and 4 | `run_f1.jl`, `run_f1_areas.jl`, `plot_f1.jl`, `plot_f4.jl` | AMD Ryzen AI Max+ 395, 1 thread | `c6ca4bc4` |
-# | `sweeps-2026-10-08` | Figures 6 and 7, Table 1 | `run_sweeps.jl`, `plot_f6.jl`, `plot_f7.jl` | AMD Ryzen AI Max+ 395, 12 threads | `41fb2ba6` |
+# | `sweeps-2026-10-08` | Figures 6 and 7, Table 1 | `run_sweeps.jl`, `plot_f6.jl`, `plot_f7.jl`, `plot_f7_grid.jl` | AMD Ryzen AI Max+ 395, 12 threads | `41fb2ba6` |
+# | `f8beta-2026-10-09` | Figure 8 (β colonies) | `run_f8beta.jl`, `plot_f8_grid.jl` | AMD Ryzen AI Max+ 395, 5 threads | `97c326bf` |
 #
 # The Figure 1 panel's cell areas come from a second deterministic rerun of the same state
 # (`run_f1_areas.jl`, recorded in `window_cells.toml`), which stopped at the same MCS and N
@@ -623,14 +673,14 @@ Markdown.parse(s5)
 # by the records' `video_*.jl` scripts and published in the releases
 # `reproductions-2026-10-07-openvt-f5-cells-v2` and `reproductions-2026-10-08-openvt-f3f8`.
 # The consortium's data are never copied into this repository: the TST and legacy rows of
-# Figures 3, 5 and 8 are drawn from a local clone of the consortium's public repository,
+# Figures 3, 5 and 9 are drawn from a local clone of the consortium's public repository,
 # and only the rendered figures and small summary statistics are committed.
 #
 # **How to cite.** Cite the OpenVT consortium's monolayer reference model first, then
 # PottsModels at the version and commit of the records above:
 
 Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c39601`, " *
-               "`3af81ae8`, `a64ae188`, `c6ca4bc4` and `41fb2ba6`.")
+               "`3af81ae8`, `a64ae188`, `c6ca4bc4`, `41fb2ba6` and `97c326bf`.")
 
 # | Date | Change | Reason |
 # |---|---|---|
@@ -638,6 +688,8 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c3
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (calibration, Figure 5, the Figure 1 panel, Figures 3 and 8, the sweeps in one line, the videos, a verdict summary and the four-column deviations table) and this collapsed Details section with everything else. The Figure 1 panel restyled as the other frameworks' close-ups: cells coloured by area (coolwarm, the panel's own min–max, provisional) with thin black boundaries. No target, band, seed or verdict changed | D-185 |
 # | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | ROADMAP P6.15g; D-174 |
 # | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | D-154 |
+# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
+# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the P6.15k record: five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
 #
 # ```@raw html
 # </details>
