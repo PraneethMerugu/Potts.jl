@@ -621,6 +621,7 @@ Full runs are offline (D-146).
 
 ### Step 4 — Foam
 
+- [ ] **P6.0cc** (D-009 gap, found by the P6.15m GPU probe) `solve(prob; backend = ROCBackend())` without an algorithm gives a bare `MethodError` for `init(::PottsProblem; backend)`; only `init(prob, alg)` exists (`lib/CorePotts/src/problem.jl:279`). Add the promised ArgumentError naming `CheckerboardCPM` on non-CPU backends, with a test.
 - [ ] **P6.15m** (D-214) "Potts.jl (checkerboard)" as a second OpenVT entry, from `CheckerboardCPM` with the same model, parameters and clock.
   - [ ] m1. Characterisation tests (test author): GPU checkerboard vs CPU sequential F3–F8 and O1 summaries over seeds, cases (b) and (f) first. Each difference beyond the seed spread is a deviation row with a cause; an unexplained one is investigated as a bug.
   - [ ] m2. Generator and package: framework token as a parameter (`Potts.jl`, `Potts.jl (checkerboard)`; `Potts.jl_checkerboard`, D-215), its own seed ranges, results folder and provenance algorithm field.
