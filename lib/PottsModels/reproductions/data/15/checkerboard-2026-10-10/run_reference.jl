@@ -26,7 +26,7 @@
 #
 # `include`d (not run as the program) it only defines `ref_job`, `ref_jobs`, `ref_check`,
 # `ref_write` and the loaded P6.15f definitions, for the m3 main runner to call.
-using Potts, PottsModels
+using Potts, PottsModels, Test             # Test: the loaded P6.15f definitions use @test
 using Potts: CorePotts
 using Statistics: mean
 
