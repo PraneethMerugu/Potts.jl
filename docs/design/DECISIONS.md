@@ -4097,3 +4097,29 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 2. **Chain colouring is accepted and disclosed.** On M's 150 × 5 periodic chain, stride 2 gives 6 colours, because 5 is not a multiple of 2. This is the algorithm's own colouring on the calibration geometry, and the protocol is otherwise identical to the sequential calibration, so the result stands. meta, provenance and the deviation text say "6 colours on the chain, 4 on the monolayer". The next chain run records accepted and committed copy counts, so that the chain's commit fraction is measured rather than asserted.
 3. **Wording.** Three rows (a O1.n_mean, b O1.n_mean, f A@5.5) are same-sign but not flagged in the stock ablation arm. Their wording says so.
 4. **Ablation auditability.** The per-seed ablation metrics are committed, and provenance gains an `[ablation]` block with the commit, the runner sha256, the device and the dirty flag.
+
+## D-222 P6.15m m4: tests frozen for both entries in the package, the email split and page 15 (2026-10-10; coordinator, from the m4 test author; under D-214, D-215, D-217, D-219–D-221)
+
+`reproductions/15_openvt_entries.jl` (5f4b8fc2…).
+
+- **API.**
+  - New constants: `OPENVT_CHECKERBOARD_TOKEN = "Potts.jl_checkerboard"` and `OPENVT_ENTRIES`.
+  - `openvt_submission_package(...; entries = (OPENVT_FRAMEWORK_TOKEN,))`. The default is unchanged (sequential only), so the P6.15j/l frozen tests stay valid. The two-entry build is opt-in; making it the default later needs a re-freeze.
+  - Invalid `entries` (the checkerboard alone, unknown tokens, duplicates, an empty list) raise `ArgumentError` before anything is written. The keyword composes with `split = :email`.
+- **O1 is produced for the checkerboard entry.** It is the one output M prescribes, and G's Fig 9 pipeline reads it.
+  - m4 includes a GPU replay on the PC of every checkerboard record seed for cases a, b and f. The replay must match each run's stop MCS and N, and N at every save.
+  - Its output is a new record `data/15/o1cb-<date>/` with three bulk zips named `Potts.jl_checkerboard_{beta0.0_gamma0.0,No_CI_stochastic,No_CI_deterministic}.zip`.
+  - A non-deterministic replay is escalated, not tolerated.
+- **Not produced for the checkerboard entry,** listed in its README: O2/F5, O3/F6/Table 1 (no sweeps), O5/F7–F8, case (e), the 11+10 chain, λ ≠ 2, and the F1 closeup.
+- **Checkerboard package folder.**
+  - `implementations/Potts.jl_checkerboard/` holds the README, parameters.csv (α = 50/870, cycle 870, T = 174, CheckerboardCPM) and the record scripts. It points to `implementations/Potts.jl/src`.
+  - The results are the allowed list in the test: O4 at λ = 2 with its Table S5 row, O6 for a/b/f with t = MCS/870, the neighbour files, A3 for case a, and the O1 zips with the manifest.
+  - The README gives the legend, the colour key `PottsJLcheckerboard` and 0,109,44 (Q27, as a proposal), the time scale, "31 of 102" with the cause text, and the deviations table.
+  - It contains no "?" and no Q19/Q20/Q21/Q25/Q28.
+- **Two-entry email split.** core.zip ≤ 20 MB (prototype 15.8 MB) and 10 bulk files, deterministic. The sequential subtrees are byte-equal to the default build except for its two READMEs. EMAIL.md describes both entries: 870 MCS (T 174 against 156), the cause summary and the deviation count. It contains no "?" and no "compiler" (the mechanical form of D-219).
+- **Page 15.**
+  - A "Potts.jl (checkerboard)" section after Deviations, giving the record, the time scale, "31 of 102", the deviations table and the D-220/D-221 cause text.
+  - Figure slots directly after Potts.jl's: fig2 (calibration), fig3 and fig9. They are rendered by `plot_*.jl` scripts inside the checkerboard record.
+  - It mentions the Table S5 T = 174 row.
+- **Size watch.** `o1cb/o1_manifest.tsv` is about 9.3 MB against the page test's 10 MiB per-file limit.
+- **Branch sync.** feat/p6-15m is merged up to monorepo, to bring in P6.15l, before m4 is implemented.
