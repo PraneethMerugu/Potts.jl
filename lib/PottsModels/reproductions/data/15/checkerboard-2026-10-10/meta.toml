@@ -1,8 +1,8 @@
-model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = 50/870 px/MCS (this entry's cycle; D-220)"
+model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = 50/1095 px/MCS (this entry's cycle; D-220, D-224)"
 boundary = "closed"
 saves = "MCS 0, every 39 MCS and the stopping MCS; per save N and openvt_metrics r, A, C, w, g (R units)"
 o1 = "the O1 frame (openvt_frame) of the stop state: mean and sample sd of n, share of n == 6, share of i == 0"
-status = "final"
+status = "provisional"
 framework = "Potts.jl (checkerboard)"
 edge_guard = "edge_guard(5; terminate = true)"
 crit = "two-sided Student t at α = 1e-3/103, ν = min(n_ref, n_alt) − 1 (D-218): 4.6642 (b, f, calibration), 8.8595 (a)"
@@ -16,27 +16,39 @@ item = "P6.15m"
 algorithm_reference = "SequentialCPM(; proposal = Moore(1))"
 
 [time]
-T_lambda2_sd = 15.031293955604687
-protocol = "P6.15b 11-chain: 150 × 5 periodic, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, openvt_release(100), w₁₁ every MCS to 1085 MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run"
-T_lambda2_run_mean = 172.86
-T_runs = 100
-beyond = true
-alpha_text = "50/870"
-seeds = "214200001–214200100"
-z = 8.25205523432106
-T_seq = 156
+colours = "4 colours on the P1b calibration chain and 4 on the monolayer (D-224)"
+T_lambda2_sd = 17.029015642055587
+T_seq_p1b = 156
+alpha_text = "50/1095"
 crit = 4.6641695621474355
-alpha = 0.05747126436781609
+chain_commit_fraction = 0.6429254563053388
+T_seq_p1b_run_mean = 155.34
+cycle_reason = "T(λ = 2) = 219 MCS under CheckerboardCPM on the P1b chain (150 × 7, frozen border rows, 4 colours as on the monolayer; D-224) against the sequential 156 MCS on the same chain (Welch z = 26.71) and the sequential record's 156 MCS on P1 (z = 27.64): significant (|z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 1095 MCS and α = A₀/(5 T) = 50/1095 px/MCS (D-220, D-224)"
+z_seq_p1b_vs_P1 = -0.36572235354641597
+cycle_mcs = 1095
+z_p1b = 26.709110788300503
+protocol = "spec 15 §4.2 variant P1b (D-224): 11-chain on 150 × 7, rows 2–6 between two frozen border rows (J = 100 against medium and cells), periodic x, closed y, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, release A_c := A, w₁₁ over rows 2–6 every MCS to 1085 MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run"
+T_lambda2_run_mean = 216.45
+T_seq_p1b_sd = 15.280686959014439
+colours_monolayer = 4
+T_runs = 100
+beyond_seq_p1b_vs_P1 = false
+beyond = true
+seeds = "214600001–214600100 (CheckerboardCPM), 214700001–214700100 (SequentialCPM, calibration_sequential_p1b.tsv)"
+z = 27.63579260926894
+T_seq = 156
+alpha = 0.045662100456621
 T_seq_run_mean = 156.09
-T_lambda2 = 174
-cycle_reason = "T(λ = 2) = 174 MCS under CheckerboardCPM against the sequential 156 MCS: significant (Welch z = 8.25, |z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 870 MCS and α = A₀/(5 T) = 50/870 px/MCS (D-220)"
-cycle_mcs = 870
+beyond_p1b = true
+colours_chain = 4
+T_lambda2 = 219
+crit_p1b = 4.6641695621474355
 
 [cases.f]
 cells = 1000
 sigma_X = 0.0
 lattice = 400
-seeds = "214100201–214100300"
+seeds = "214800201–214800300"
 gamma = 0.0
 runs = 100
 beta = 0.0
@@ -45,7 +57,7 @@ beta = 0.0
 cells = 1000
 sigma_X = 0.4
 lattice = 400
-seeds = "214100001–214100100"
+seeds = "214800001–214800100"
 gamma = 0.0
 runs = 100
 beta = 0.0
@@ -54,7 +66,7 @@ beta = 0.0
 cells = 10000
 sigma_X = 0.4
 lattice = 1400
-seeds = "214100701–214100710"
+seeds = "214800701–214800710"
 gamma = 0.0
 runs = 10
 beta = 0.0

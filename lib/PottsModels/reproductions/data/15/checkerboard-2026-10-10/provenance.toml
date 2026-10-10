@@ -1,41 +1,68 @@
-decisions = ["D-008", "D-146", "D-214", "D-216", "D-218", "D-220"]
+colours = "4 colours on the P1b calibration chain (150 × 7, frozen border rows, closed y) and 4 on the monolayer (stride 2; D-224)"
+decisions = ["D-008", "D-146", "D-214", "D-216", "D-218", "D-220", "D-221", "D-224"]
 lifecycle_forms = "staged"
-runner_sha256 = "7a117fca44e7e17849563bd8332efa9374efc5b9ad4bf4a9e587f89f3652d4c5"
+runner_sha256 = "c63b16b2bc2c5cf12ddca650cbd5ea49531ec1d5ea7b51b932effbc8c1cbb696"
 protocol_test_sha256 = "da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d"
 host_planner_fallback = false
 backend = "AMDGPU.ROCBackend() (ROCm, AMDGPU.jl 2.7.0)"
 reference_runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_reference.jl"
-calibration_wall_s = 38.4
+calibration_wall_s = 35.7
 threads = 4
 device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1151))"
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
-seeds = "calibration λ = 2: 214200001–214200100; (b) 214100001–214100100; (f) 214100201–214100300; (a) 214100701–214100710"
-calibration_simulation_s = 20.0
+seeds = "calibration λ = 2 (P1b): CheckerboardCPM 214600001–214600100, SequentialCPM 214700001–214700100; (b) 214800001–214800100; (f) 214800201–214800300; (a) 214800701–214800710"
+calibration_simulation_s = 17.6
 sessions = 1
-wall_s = 939.3
+wall_s = 1142.7
 framework = "Potts.jl (checkerboard)"
-finished = "2026-10-10T03:09:37.509"
+finished = "2026-10-10T13:55:48.259"
 folder_token = "Potts.jl_checkerboard"
 test_sha256 = "e0a99aff07974a24903d3de54f7d6b58171eb44d773ee71cb255f0f854c34b61"
+calibration_sequential_commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
 o1_reference = "the stop frames of o1-2026-10-09's bulk archives (sha256-checked), cached in reference_o1.tsv"
 algorithm = "CheckerboardCPM(; proposal = Moore(1)) on the GPU (KernelAbstractions, ROCBackend)"
 affinity = "taskset -c 0-3"
-runs_simulation_s = 866.1
-started = "2026-10-10T02:53:27.989"
+runs_simulation_s = 1074.7
+started = "2026-10-10T13:35:16.303"
 machine = "x86_64-linux-gnu"
 manifest_sha256 = "3a267d7eabe2758c16e5c350234d2c0281edf14108a3f99b522f9f6920130288"
+calibration_chain = "spec 15 §4.2 variant P1b (D-224)"
 reference_runner_sha256 = "3a025cabdfc138a973b691a11c81a4ab19adaff8f5c020ff12d916958bb56749"
 protocol_test = "lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl"
 runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"
 julia = "1.12.6"
 test = "lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl"
-commit = "d339afaabd43fa39e2ded5e1a674482bd23560a2"
+commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
 item = "P6.15m"
-runs_wall_s = 900.9
+runs_wall_s = 1107.0
 dirty_tracked = false
 algorithm_reference = "SequentialCPM(; proposal = Moore(1)) on the CPU (the P6.15f record and its replay, reference_runs.tsv)"
 
+[ablation]
+decisions = ["D-220", "D-221", "D-224"]
+runner_sha256 = "4039b8d39dcae835eac0662b9dec5e99593ef485f034e6c220f932696aa38e09"
+chain_replays_equal_gpu = true
+chain_committed_equal_changed_sites = true
+chain = "spec 15 §4.2 variant P1b (D-224) for both arms"
+chain_commit_fraction_stock = 0.6429254563053388
+host_planner_fallback = false
+chain_commit_fraction_c64 = 0.9864455151944851
+device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1151))"
+seeds = "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k"
+alpha_c64 = 0.07874015748031496
+commits = "80a6e40f29856899159928f20a4458eccc5a13cf"
+arms = "stock: 4 colours on the chain, 4 on the monolayer, cycle 1095; c64: 98 on the chain, 64 on the monolayer, cycle 635 = 5 T_c64"
+cycle_c64 = 635
+T_c64_sd = 12.05375166879297
+chain_commit_fraction_burnin_stock = 0.6892405100327109
+chain_commit_fraction_burnin_c64 = 0.9996562512744921
+T_c64_run_mean = 126.0
+runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_ablation.jl"
+T_c64 = 127
+commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
+dirty_tracked = false
+
 [runs_gpu_s]
-f = 358.0
-b = 366.6
-a = 141.5
+f = 449.8
+b = 454.6
+a = 170.4
