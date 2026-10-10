@@ -447,8 +447,8 @@ end
 # Algorithm-against-algorithm comparison of per-seed values (P6.15m, D-214, D-216)
 # ---------------------------------------------------------------------------------------------
 
-# sample mean and sd (n − 1) of finite values; a constant sample has sd exactly 0
-_spread_mean(x) = sum(Float64, x) / length(x)
+# sample mean and sd (n − 1) of finite values; a constant sample has its value as mean and sd exactly 0
+_spread_mean(x) = allequal(x) ? Float64(first(x)) : sum(Float64, x) / length(x)
 function _spread_sd(x, m)
     allequal(x) && return 0.0
     return sqrt(sum(v -> abs2(Float64(v) - m), x) / (length(x) - 1))
