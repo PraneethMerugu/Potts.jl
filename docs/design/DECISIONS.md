@@ -3987,3 +3987,8 @@ session.
 - **Packaging.** P6.15l stays sequential-only, but its generator takes the framework token as a parameter so that the second entry drops in. The email package (D-213) gains the second entry once P6.15m lands.
 - **Open question Q27.** The colour for "Potts.jl (checkerboard)". The spec owner proposes a colour in the lattice family, next to the Q18 colour.
 - **Unchanged.** Telling the consortium remains Dr Jiang's. Nothing goes to G until the maintainer says so.
+- **Spec additions** (spec owner, same day; spec 15 §1.3, §4.0.2, §7 Q27):
+  - **Its own time scale.** The checkerboard entry gets its own F2/Table S5 chain calibration, because T in MCS is a property of the update algorithm. If T(λ = 2) differs significantly from 156 MCS, its own 5T is the cycle; otherwise 775 MCS is kept. The record states which was used and why.
+  - **Placement.** Each "Potts.jl" slot in the Lattice block gets a "Potts.jl (checkerboard)" slot directly after it.
+  - **Folder token.** The proposed folder and file token is `Potts.jl-checkerboard`, for `results/Potts.jl-checkerboard/{Relaxation,Monolayer}/`. It is subject to the conformance audit's naming ruling.
+  - **Q27.** The proposed colour is RGB 0,109,44, which is ΔE ≥ 48 from every colors.tex entry. The fallback is 8,29,88 with dashed lines and a hatched banner. Q27 also asks whether the consortium accepts two entries from one framework (precedent: Chaste OS log/quad).

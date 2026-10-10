@@ -115,6 +115,29 @@ That is within 3% of the consortium values. The choice λ = 2 of Table S1 is use
 
 Table S1 lists the simulation parameters. Table S6 gives the Potts.jl-specific settings.
 
+## Implementation in Potts.jl (checkerboard)
+
+The second Potts.jl entry runs the same `OpenVTReferenceMonolayer` declaration, parameters and
+MCS clock under the package's parallel `CheckerboardCPM` algorithm, on a GPU (AMD, ROCm via
+KernelAbstractions).
+- **Colouring.** Lattice sites are coloured so that sites of one colour lie outside each other's
+  read and write neighbourhoods. One MCS visits every site once, colour by colour in a random
+  order.
+- **Within a colour.** All sites propose in parallel, with a uniform Moore source and the
+  Metropolis rule of Eq. (9).
+- **Conflicts.** Accepted copies claim the cells they touch with a random priority, and a copy
+  commits only if it wins all its claims, so every cell changes at most once per colour.
+- **Per-cell areas and contacts** are updated between colours.
+
+The time scale T was calibrated separately on the 1D chains (Table S5 row "Potts.jl
+(checkerboard)") ⟨value to be filled from the checkerboard calibration record⟩. Its seeds are
+disjoint from the sequential entry's.
+
+The differences from the sequential entry come from the update order, from the per-cell totals
+lagging within a colour, and from conflicting copies being dropped. Each difference larger than
+the seed-to-seed spread is listed with its cause in ⟨table to be filled from the
+characterisation record⟩.
+
 ---
 
 ## Table rows

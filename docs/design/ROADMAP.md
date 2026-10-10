@@ -624,7 +624,7 @@ Full runs are offline (D-146).
 - [ ] **P6.15m** (D-214) "Potts.jl (checkerboard)" as a second OpenVT entry, from `CheckerboardCPM` with the same model, parameters and clock.
   - [ ] m1. Characterisation tests (test author): GPU checkerboard vs CPU sequential F3–F8 and O1 summaries over seeds, cases (b) and (f) first. Each difference beyond the seed spread is a deviation row with a cause; an unexplained one is investigated as a bug.
   - [ ] m2. Generator and package: framework token as a parameter (`Potts.jl`, `Potts.jl (checkerboard)`; folder form per the conformance audit), its own seed ranges, results folder and provenance algorithm field.
-  - [ ] m3. Full runs on the PC's GPU (ROCm; required by D-214), with a record under `data/15/`.
+  - [ ] m3. Full runs on the PC's GPU (ROCm; required by D-214), with a record under `data/15/`, including its own F2/S5 chain calibration (T(λ = 2); cycle 5T if it differs significantly from 156 MCS, else 775).
   - [ ] m4. Figures, page 15 and the package carry both entries; colour Q27; deviations table for the checkerboard entry.
 - [x] (merge, 2026-10-08; D-188) **P6.4a1** (D-186; foam stream 1) Copy-scope `direction`: the source→target lattice offset, minimum-image on periodic axes, readable in energies, so γ(y_i, t)·(x_i − x_j) can be written. Also `Metropolis(tie)` if the foam T → 0⁺ protocol needs it.
 - [x] **P6.4b2** (D-186; foam stream 2) Foam analysis functions in PottsModels (spec 04 §2.8): φ, neighbour lists and n, per-MCS T1 detection (A-15 counting unit), ρ(n), μ2(n), μ2(a), Eq. 9 spectra, N̄, yield strain. Merged 482e163a (D-187; power_spectrum on FFTW). For P6.4r: drop empty ids before topology_distribution; consider a log-binned spectral fit if α lands at the band edges.

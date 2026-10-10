@@ -95,6 +95,50 @@ Comparison method: the text of both drafts was diffed, and pages 1–4 were comp
 
 The figure colours follow M (yellow/teal/red per inhibition state). The concave-hull line is a tissue outline drawn by M, not a cell outline, so the no-outline rule does not apply to it; the consortium-figure exception (D-185) covers it anyway.
 
+## 1.3 Second Potts entry: "Potts.jl (checkerboard)" (D-214, maintainer 2026-10-10)
+
+The submission carries **two** Potts rows. They share one model, one parameter set and one MCS clock, and differ only in the update algorithm:
+
+| Entry | Algorithm | Hardware | Seeds |
+|---|---|---|---|
+| **Potts.jl** | `SequentialCPM` (random-site sequential Metropolis; `skip_interior = true` for the long sweeps) | CPU | the existing records |
+| **Potts.jl (checkerboard)** | `CheckerboardCPM` | the PC's GPU (ROCm; maintainer: "definitely do it on gpu") | its own, disjoint from the sequential seeds |
+
+**What the checkerboard entry is** (`lib/CorePotts/src/checkerboard.jl`, `algorithms.jl`):
+- **Colouring.** Sites are coloured by residue class along each axis with stride s = read reach + write reach + 1, so same-colour targets lie outside each other's read/write footprints. On a periodic axis with n mod s ≠ 0, the trailing columns become singleton colours. The OpenVT lattice is closed, so that case does not arise.
+- **One MCS** visits every site once, colour by colour, in a random colour order. Within a colour every site proposes in parallel: a uniform Moore source, the same ΔH and the same Metropolis law.
+- **Conflicts.** Accepted proposals claim every cell they touch with a unique random priority, and commit only if they win every write claim and no higher-priority copy writes a cell they read. So each cell changes at most once per colour, and readers share. A losing proposal is dropped, not retried ("thinning").
+- **Per-cell totals** (area, contact counts) that ΔH reads are updated between colours, not within one ("colour-lagged totals").
+
+**Expected differences from sequential** (the D-214 characterisation list). Each one, if it exceeds the seed spread, becomes a deviation row with its cause:
+1. update order (colour sweep vs random-site sequential);
+2. colour-lagged totals;
+3. claim widening (a commit can block neighbours that sequential would have allowed);
+4. thinning of conflicting accepted proposals.
+
+An unexplained difference is chased as a bug. Characterisation describes the entry; it does not gate it (maintainer: "none of these platforms are statistically perfect, but they do have understanding of their deviations").
+
+**Figures and tables.** Every place that carries "Potts.jl" also carries "Potts.jl (checkerboard)", directly after it in the Lattice block:
+- **F1:** a second 45 mm closeup panel and banner (case (a), 10⁴ cells, its own seed). The colour variable is as for Potts (§4.0.2 F1), and the banner is in the Q27 colour with a white bold label.
+- **F2/S5:** its own chain calibration (11 and 11+10), a T(λ) row in Table S5, and its own legend and inset line. The calibration must be repeated, because T in MCS is a property of the update algorithm.
+- **F3, F5, F6/T1, F7, F8, F9:** its own row, curve or legend entry, with insets where the figure has them (F2 b/d/e). Its own Table 1 row.
+- **Time unit.** The cycle is 5T(λ = 2) **of the checkerboard calibration** if it differs significantly from 156 MCS. Otherwise it is the sequential 775 MCS; record which one and why.
+
+**Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
+- that the same `@potts_model` runs unchanged under `CheckerboardCPM`;
+- the colouring and claim rule above, in two or three sentences;
+- the GPU backend (KernelAbstractions on ROCm);
+- its seeds;
+- the measured differences from the sequential entry, as a short table that points to the deviation rows.
+
+**Results folder:** `results/Potts.jl-checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. It uses the same O1–O5 formats and file names, and the framework token `Potts.jl-checkerboard` in the file stems that carry one. In the email split it gets its own core section and bulk zips.
+
+**Q27, colour:**
+- **Proposal: RGB 0,109,44** (`#006d2c`, Greens-9 step 8).
+- **Rejected:** the unused YlGnBu-9 steps (29,145,192; 34,94,168; 127,205,187; 199,233,180) all lie within CIE76 ΔE 11–19 of Morpheus, CC3D, TST or Artistoo, which is too close.
+- **Distance from the existing colours:** dark green stays in the cool lattice family (the green end of YlGnBu). It is ΔE 48–110 from every `colors.tex` entry and ΔE 93 from Potts.jl's 8,29,88.
+- **Fallback if the consortium prefers one hue per framework family:** 8,29,88 (the Potts.jl colour) with dashed lines and a hatched banner.
+
 ## 2. Model schema (M §2.1, p.2; Table S1 p.11)
 
 ### 2.1 Objects, processes and events
@@ -363,7 +407,7 @@ Colours (`G:results/colors.tex:2-16`), RGB:
 | centre | ChasteOSquad | 253,141,60 |
 | centre | TinyDEM | 254,204,92 |
 
-**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18).
+**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18). **Potts.jl (checkerboard): proposal RGB 0,109,44** (Q27, §1.3).
 Shared style: sans-serif, `scale only axis`, grid very thin black!20, tick length 0.8 mm,
 minor 0.5 mm, legend in "Lattice / Polygonal / Center(oid) models" groups. Recreate with
 CairoMakie at the same mm sizes.
@@ -580,6 +624,7 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q24** Fig 5 / V4 (P6.15e): do the CPM implementations suppress or remove crushed cells (a connectivity check, a minimum volume, extrusion)? Potts shows rare squeezed young daughters at the 1000-cell stop (30 of 10⁵ cells with a < 0.42, A\* 23–43), where the pooled data have none.
 - **Q25** (2026-10-09; proposal-law-clues.md §4) **RESOLVED 2026-10-10 by maintainer ruling, not asked: "paper holds provenance over the tst implementation. current division trigger is good." Potts keeps division at actual A ≥ X·A\*(0); the frameworks' departures are theirs.** (a) Which division trigger is normative: actual A ≥ X·A\*(0) (M p.2) or A ≥ µA_max (§4.1)? (b) Which TST build produced the beyond-10³ curves, given the released model exits at `max_cell_count = 1000`? (c) Are the frameworks' departures from Table S1 intended (CC3D λ = 10, A\* = 25, contact order 4; Morpheus/Artistoo J_cM = 20, λ = 20; TST integer ΔH)?
 - **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G.
+- **Q27** (2026-10-10, D-214) The colour for "Potts.jl (checkerboard)" in `colors.tex`: proposal 0,109,44 (§1.3). Also, does the consortium accept two entries from one framework (sequential CPU, checkerboard GPU), as Chaste OS has log/quad?
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
 
