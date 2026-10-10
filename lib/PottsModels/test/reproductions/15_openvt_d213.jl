@@ -9,8 +9,9 @@
 # Sources: D-213 (Q25 closed: "M is followed (actual area); the released TST model divides on
 # target area", rows marked "not asked (maintainer ruling: M over TST)"; Q11 replaced by
 # (a)–(d)); D-215 (the audit: names, columns, the split's sides, the README/EMAIL notes, the
-# framework token); spec 15 §7 (Q15 and Q26 open, Q25 resolved; Q20, Q23 and Q24 still listed
-# open, so rows may keep naming them); D-180/D-204/D-206 (the package and its bulk
+# framework token); spec 15 §7 at da81b245 (Q15, Q23, Q24 and Q26 open, so rows may keep
+# naming them; Q25 resolved; Q19, Q20 and Q21 CLOSED, not asked, under D-213: "Potts follows
+# M; this framework's departure is recorded, not queried"); D-180/D-204/D-206 (the package and its bulk
 # directory); D-211/D-212 (Figs 5, 7, 8; Q26); D-214 (a second entry later, P6.15m).
 #
 # The framework token <FW> is P615L_FW ("Potts.jl"; D-215 (9): a parameter without spaces,
@@ -100,7 +101,7 @@
 #   B1  the sentence P615L_Q25 = "M is followed (actual area); the released TST model divides
 #       on target area" appears (page and results README; whitespace normalised, `\*` read as
 #       `*`), in a paragraph or table cell with no Q#, no "open question" and no "?";
-#   B2  no "Q25" anywhere;
+#   B2  no "Q25", "Q19", "Q20" or "Q21" anywhere (all closed, not asked; spec 15 §7);
 #   B3  any prose paragraph, and any table cell except a row's last (status) cell, that speaks
 #       of the division trigger (P615L_DIVISION: division/divides on target area, target-area
 #       division, "TST uses/on the target area", "division trigger", C13, max_cell_count —
@@ -108,10 +109,13 @@
 #       renumbered Q25(b)) names no Q#, says no "open question" and asks no "?";
 #   B4  in every table with an "Author question" column, a row whose other cells cite TST's
 #       target-area rule (P615L_TARGET_DIV), and the rows V1, V4.2, V4.3, V4.5 and C13, have
-#       a status starting "not asked (maintainer ruling: M over TST)". Open questions may
-#       follow (Q20, Q23, Q24 are still open in spec 15 §7), with "our open question list".
-#       Those rows keep their reading: page and results README each still have V1, V4.2,
-#       V4.3, V4.5 and C13 rows (the frozen tests pin their values).
+#       a status starting "not asked (maintainer ruling: M over TST)". The other rows that
+#       cited the closed Q20 or Q21 (P615L_FW_KEYS: V2.1.1x and F3.4, Q20; C17, Q21, the
+#       Morpheus σ) have a status starting with that prefix or with "not asked (M over the
+#       framework's code)". Open questions may follow (Q23 and Q24 are still open in spec 15
+#       §7; also Q15, Q26), with "our open question list". Those rows keep their reading:
+#       page and results README each still have V1, V4.2, V4.3, V4.5 and C13 rows (the frozen
+#       tests pin their values).
 # EMAIL.md follows B2 and B3.
 using Test, TOML, SHA, PottsModels
 
@@ -127,6 +131,9 @@ const P615L_ALT_TAG = "p615l-tag-check"
 const P615L_RULING = "not asked (maintainer ruling: M over TST)"
 const P615L_Q25 = "M is followed (actual area); the released TST model divides on target area"
 const P615L_RULED_KEYS = ["V1", "V4.2", "V4.3", "V4.5", "C13"]
+const P615L_RULING_FW = "not asked (M over the framework's code)"
+const P615L_FW_KEYS = ["V2.1.1x", "F3.4", "C17"]               # cited Q20 or Q21 before their closure
+const P615L_CLOSED_Q = r"\bQ(19|20|21|25)\b"                     # closed, not asked (D-213; spec 15 §7)
 const P615L_TARGET_DIV = r"divid\w*\s+on\s+(the\s+)?target[- ]area|division\s+on\s+(the\s+)?target[- ]area|target[- ]area\s+division|TST,?\s+(uses|on)\s+(the\s+)?target[- ]area"i
 const P615L_DIVISION = Regex(P615L_TARGET_DIV.pattern * raw"|division trigger|\bC13\b|max_cell_count", "i")
 const P615L_QUESTION = r"\bQ\d+\b|open question|\?"i
@@ -306,9 +313,11 @@ function p615l_q25_findings(name, text; literate = false, need_sentence = true, 
         isempty(hits) && push!(bad, "$name: B1 sentence missing")
         any(u -> occursin(P615L_QUESTION, u), hits) && push!(bad, "$name: B1 sentence carries a question")
     end
-    # B2
-    (any(u -> occursin(r"\bQ25\b", u), paras) || any(r -> any(c -> occursin(r"\bQ25\b", c), r), rows)) &&
-        push!(bad, "$name: B2 names Q25")
+    # B2 (status cells included)
+    for u in vcat(paras, [c for r in rows for c in r])
+        m = match(P615L_CLOSED_Q, u)
+        m === nothing || push!(bad, "$name: B2 names $(m.match): " * first(u, 100))
+    end
     # B3
     for u in units
         occursin(P615L_DIVISION, u) && occursin(P615L_QUESTION, u) &&
@@ -319,6 +328,9 @@ function p615l_q25_findings(name, text; literate = false, need_sentence = true, 
     for r in srows
         ruled = any(k -> p615l_key(r, k), P615L_RULED_KEYS) || any(c -> occursin(P615L_TARGET_DIV, c), r[1:(end - 1)])
         ruled && !startswith(r[end], P615L_RULING) && push!(bad, "$name: B4 status of $(first(r[1], 40)): $(first(r[end], 60))")
+        fw = !ruled && any(k -> p615l_key(r, k), P615L_FW_KEYS)
+        fw && !(startswith(r[end], P615L_RULING) || startswith(r[end], P615L_RULING_FW)) &&
+            push!(bad, "$name: B4 status of $(first(r[1], 40)): $(first(r[end], 60))")
     end
     if need_rows
         for k in P615L_RULED_KEYS
