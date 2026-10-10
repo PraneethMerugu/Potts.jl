@@ -35,7 +35,7 @@ const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
 """
     PottsModels.OPENVT_BULK_RELEASE_TAG
 
-The tag of the public Potts.jl pre-release that is to hold the bulk files of the split
+The tag of the public Potts.jl release that is to hold the bulk files of the split
 OpenVT package (D-213 (b)); the core README and `EMAIL.md` link each bulk file as
 `https://github.com/PraneethMerugu/Potts.jl/releases/download/<tag>/<file>`. Nothing creates
 the release: the maintainer creates it under this tag (or rebuilds with another
@@ -109,7 +109,7 @@ With `split = :email` it writes the same package, split for sending by mail (D-2
 `outdir/core.zip` (every file except the bulk ones, unpacking at the consortium
 repository's root; its results README links each bulk file by name, sha256 and its
 release-download URL under `release_tag`), `outdir/bulk/` (the O1 zips, the O2 zip and the O1
-manifest, byte copies, to be attached to a public pre-release; nothing here creates one) and
+manifest, byte copies, to be attached to a public release; nothing here creates one) and
 `outdir/EMAIL.md` (a plain-text draft cover note). It returns
 `(; outdir, core_bytes, bulk_bytes, bulk)` with the size of `core.zip`, the summed size of
 `bulk/` and the bulk file sizes. Any other `split` is an `ArgumentError`.
@@ -1269,7 +1269,7 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             print(io, readme[1:first(k)], """
             ## Bulk files
 
-            The files below are not in this zip. They are attached to the Potts.jl pre-release
+            The files below are not in this zip. They are attached to the Potts.jl release
             `$tag`; download them into `results/$(_OPENVT_PKG_FW)/Monolayer/` and leave them zipped.
             Check each against its sha256.
 
@@ -1312,7 +1312,7 @@ function _openvt_pkg_email(recs, o1, bf, sha, sz, tag)
     Figures 5, 7 and 8 as PNGs, the close-up, the provenance of every run record and a README
     with the units, seeds and deviations).
 
-    Linked, too large to attach: one public Potts.jl pre-release, tag
+    Linked, too large to attach: one public Potts.jl release, tag
     $tag
     (each file's sha256 is also in the results README):
     """)
