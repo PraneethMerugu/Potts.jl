@@ -78,9 +78,7 @@ function SciMLBase.reinit!(integ::PottsIntegrator, u0 = integ.prob.u0;
     _reset_cache!(integ.cache, integ)
     integ.stats.launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
-    for cb in integ.callbacks
-        cb.initialize(cb, integ.state, integ.t, integ)
-    end
+    _each_callback(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     integ.save_start && _save!(integ)
     return integ
 end

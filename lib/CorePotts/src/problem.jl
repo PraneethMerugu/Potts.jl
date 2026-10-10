@@ -330,9 +330,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
     integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
-    for cb in integ.callbacks
-        cb.initialize(cb, integ.state, integ.t, integ)
-    end
+    _each_callback(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     save_start && _save!(integ)
     return integ
 end
@@ -351,10 +349,15 @@ function _callbacks(cb::SciMLBase.CallbackSet)
 end
 _callbacks(cb) = throw(ArgumentError("unsupported callback $(typeof(cb)); use DiscreteCallback or CallbackSet"))
 
+# `f(cb)` for each callback of the tuple, each call specialized on its own callback type:
+# `Base.afoldl` unrolls (as `_run_mcs!`). A `for` loop over a CallbackSet of differently typed
+# callbacks carries a `Union` of `DiscreteCallback` types (closures and a BitVector next to
+# bits fields), and Julia 1.12's optimized code for that loop corrupted the GC heap
+# (segfaults in a later `_save!` with `saveat`; P6.15m m3).
+_each_callback(f::F, cbs::Tuple) where {F} = (Base.afoldl((_, cb) -> (f(cb); nothing), nothing, cbs...); nothing)
+
 function _apply_callbacks!(integ::PottsIntegrator)
-    for cb in integ.callbacks
-        cb.condition(integ.state, integ.t, integ) && cb.affect!(integ)
-    end
+    _each_callback(cb -> (cb.condition(integ.state, integ.t, integ) && cb.affect!(integ); nothing), integ.callbacks)
     return nothing
 end
 
@@ -696,9 +699,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     end
     integ.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
         _save!(integ)
-    for cb in integ.callbacks
-        cb.finalize(cb, integ.state, integ.t, integ)
-    end
+    _each_callback(cb -> cb.finalize(cb, integ.state, integ.t, integ), integ.callbacks)
     return PottsSolution(integ)
 end
 
