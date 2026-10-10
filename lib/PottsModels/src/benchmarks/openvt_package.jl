@@ -42,11 +42,11 @@ const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8
 # the PC after the rest is merged; a draft leaves out Figure 8 and its O5 files and says
 # "Figure 8: pending". The default build requires them, so a build for upload is complete.
 const _OPENVT_PKG_LATER = (:f8beta,)
-const _OPENVT_PKG_PENDING_ENV = "OPENVT_PACKAGE_ALLOW_PENDING"
 
 """
     PottsModels.openvt_submission_package(outdir::AbstractString;
-                                          bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing)) -> outdir
+                                          bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing),
+                                          allow_pending::Bool = false) -> outdir
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
 repository's layout (spec 15 §4.0.1): `outdir/implementations/Potts.jl/` (the
@@ -61,8 +61,7 @@ manifest, the O2 Figure 5 files, and the O3 and O5 sweep files.
 Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
 (D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
 the newest directory (by name) whose `provenance.toml` names its ROADMAP item. Every record
-(P6.15b, e, f, g, h, j and k) is required. `allow_pending = true` (default: the environment
-variable `OPENVT_PACKAGE_ALLOW_PENDING` is `"true"`, else `false`) allows a draft build without
+(P6.15b, e, f, g, h, j and k) is required. `allow_pending = true` (default `false`) allows a draft build without
 the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5 files are left out and
 the results README says "Figure 8: pending". Never upload a draft build.
 
@@ -81,7 +80,7 @@ otherwise this is an `ArgumentError`, raised before anything is written. A build
 part-way removes what it wrote, so the same `outdir` can be used again.
 """
 function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing),
-        allow_pending::Bool = get(ENV, _OPENVT_PKG_PENDING_ENV, "false") == "true")
+        allow_pending::Bool = false)
     out = abspath(outdir)
     _openvt_pkg_in_git(out) &&
         throw(ArgumentError("openvt_submission_package: $outdir is inside a git checkout; build the package outside git"))
@@ -854,7 +853,7 @@ function _openvt_pkg_figures_section(recs)
 
     ## Figures
 
-    Our rows of M's Figures 5$(f8 ? ", 7 and 8" : " and 7") (9 Oct 2026 draft), byte copies of the renders in the
+    Our rows of M's Figures 5$(f8 ? ", 7 (γ) and 8 (β)" : " and 7") (9 Oct 2026 draft), byte copies of the renders in the
     records (`plot_f5_shared.jl`, `plot_f7_grid.jl`$(f8 ? ", `plot_f8_grid.jl`" : "") in `implementations/Potts.jl/scripts/`):
 
     - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance-bin edges

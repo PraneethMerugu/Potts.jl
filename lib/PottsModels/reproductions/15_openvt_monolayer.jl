@@ -343,11 +343,20 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colon
 # M's new Figure 8, "Tissue Snapshots with Area Inhibition", is the same grid for β (γ = 0):
 # one colony at 10⁴ cells at each of our Table 1 β values, 0.625, 0.9375, 0.9875, 1.007 and
 # 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black concave
-# hull of `metrics.cpp` (concavity 1.5) and each colony's C/C_circle in the caption. The
-# sweeps record did not keep these colonies, so each is replayed from its seed (replicate 1
-# of that T1 point; ROADMAP P6.15k, `f8beta-2026-10-09/run_f8beta.jl`).
-#
-# pending: FULL run queued (D-211)
+# hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these colonies, so
+# each is replayed from its seed: replicate 1 of that T1 point, which stopped at the same MCS
+# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/` (ROADMAP
+# P6.15k), commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
+# `fig8_grid.png` (`plot_f8_grid.jl`).
+
+record("f8beta-2026-10-09"; commit = "97c326bf") #hide
+record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell colonies at the beta thresholds, yellow and red, with the concave hull") #hide
+
+# C/C_circle of each colony (`fig8_grid.tsv`): **1.12** at 1.1×, **1.16** at 2×, **1.18** at
+# 5×, **1.24** at 10× and **1.25** at 20×. The inhibited share rises from 50 % at β = 0.625
+# to 98 % at β = 1.0212; area inhibition leaves the rim nearly as smooth as without
+# inhibition, unlike surface inhibition (Figure 7). As for Figure 7, the panels carry no
+# label: M's label quantity is unstated and on our open question list.
 #
 # ### The full-run videos
 #
@@ -656,6 +665,7 @@ Markdown.parse(s5)
 # | `f3-f8-2026-10-08` | Figures 3 and 9 | `run_f3_f8.jl` | AMD Ryzen AI Max+ 395, 12 threads | `a64ae188` |
 # | `f1-f4-2026-10-08` | Figures 1 and 4 | `run_f1.jl`, `run_f1_areas.jl`, `plot_f1.jl`, `plot_f4.jl` | AMD Ryzen AI Max+ 395, 1 thread | `c6ca4bc4` |
 # | `sweeps-2026-10-08` | Figures 6 and 7, Table 1 | `run_sweeps.jl`, `plot_f6.jl`, `plot_f7.jl`, `plot_f7_grid.jl` | AMD Ryzen AI Max+ 395, 12 threads | `41fb2ba6` |
+# | `f8beta-2026-10-09` | Figure 8 (β colonies) | `run_f8beta.jl`, `plot_f8_grid.jl` | AMD Ryzen AI Max+ 395, 5 threads | `97c326bf` |
 #
 # The Figure 1 panel's cell areas come from a second deterministic rerun of the same state
 # (`run_f1_areas.jl`, recorded in `window_cells.toml`), which stopped at the same MCS and N
@@ -670,7 +680,7 @@ Markdown.parse(s5)
 # PottsModels at the version and commit of the records above:
 
 Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c39601`, " *
-               "`3af81ae8`, `a64ae188`, `c6ca4bc4` and `41fb2ba6`.")
+               "`3af81ae8`, `a64ae188`, `c6ca4bc4`, `41fb2ba6` and `97c326bf`.")
 
 # | Date | Change | Reason |
 # |---|---|---|
@@ -679,6 +689,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c3
 # | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | ROADMAP P6.15g; D-174 |
 # | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | D-154 |
 # | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
+# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the P6.15k record: five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
 #
 # ```@raw html
 # </details>
