@@ -3957,3 +3957,17 @@ session.
 - **R4.** The F5 record gets a re-render on the shared edges 0/18.6/37.2/55.8/74.4/93. Its verdict files must stay byte-identical, so V4 is unchanged. Summed over distance bins, the counts must equal `hist.tsv`.
 - **Labels (Q26; first written Q24, corrected in D-211).** M's label quantity is unknown: no candidate matched (R5). The panels carry no number. Each Potts colony's C/C_circle (metrics.cpp roughness 1) is shown to two decimals in the caption or a table, with a note that M's quantity is unstated and on our open question list. Our values for Fig 7 are 1.38, 1.91 and 2.22.
 - **Package.** `figures/fig5.png`, `fig7.png` and `fig8.png`, the β O5 files, and the P6.15k record become required.
+
+## D-213 OpenVT: maintainer rulings on Q25, Q26/Q15 and Q11 (2026-10-10; maintainer: "q25: paper holds provenance over the tst implementation. current division trigger is good. q26&15: see if an agent can decipher this. q11: we just need to make our data easy enough to email to rveltz later on", relayed by the spec owner; under D-146, D-204, D-211)
+
+- **Q25 is closed and not asked.**
+  - Division stays at actual A ≥ X·A*(0), as M says. The other frameworks' departures from Table S1 are their own.
+  - Page 15 and the package README say "M is followed (actual area); the released TST model divides on target area", with no question attached.
+  - The deviation rows keep their reading and are marked "not asked (maintainer ruling: M over TST)".
+- **Q26 (the Fig 7/8 label) and Q15 (the Fig 5 unit) stay open.** The spec owner is running a read-only analysis on the consortium data to reverse-engineer both. Nothing changes unless it finds an exact match.
+- **Q11 is replaced.** No repository write access is needed. The package must be easy to email to R. Vetter later:
+  - **(a)** a core zip of ≤ 20 MB: READMEs, parameters, model source, O3/O4/O5, the per-run metrics and neighbours, A3, Table S5, Table 1, figure PNGs, provenance and manifest;
+  - **(b)** the bulk O1 per-cell series (and O2 if large) as one zip per case, attached to a public GitHub pre-release of Potts.jl, each under 2 GB. The core README links them by URL and sha256;
+  - **(c)** a plain-text cover note, EMAIL.md, listing what is attached and what is linked, the units (R; a cycle is 775 MCS), the open questions Q15 and Q26, and the deviations. The maintainer pastes it; nothing is sent by us;
+  - **(d)** a generator option, `split = :email`, that writes `core.zip` and `bulk/` deterministically and reports both sizes, with size assertions added to the package test through a test author.
+  - Creating or uploading the release asset needs the maintainer's OK at that moment.
