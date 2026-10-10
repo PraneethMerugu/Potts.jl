@@ -99,7 +99,7 @@ One cell cycle 5T is therefore 775 MCS.
 - The unbounded plane of the schema is therefore approximated by a lattice the colony never
   reaches.
 
-**Analysis.** The DATA ANALYSIS quantities (Categories 1–3, Figs. 3 and 8) are computed by a
+**Analysis.** The DATA ANALYSIS quantities (Categories 1–3, Figs. 3 and 9) are computed by a
 Julia port of the consortium's `metrics.cpp`. It is checked against `metrics.cpp` built with
 `-ffp-contract=off` on the consortium's own centroid files.
 - **Agreement.** It gives identical results on 53 of 54 frames.
@@ -162,7 +162,7 @@ Notes:
 | X draw | N(2, 0.4²), redrawn if ≤ 0; σ_X = 0 for the deterministic runs |
 | Order within an MCS | X draw, copy sweep, fᵢ update, growth, division |
 | Output cadence | MCS 0, every 39 MCS, and the stop |
-| Replicates | Fig. 2: 100 per λ; Figs. 3 and 5: 100; Fig. 8: 10 per case; Fig. 6: 160 runs across both sweeps |
+| Replicates | Fig. 2: 100 per λ; Figs. 3 and 5: 100; Fig. 9: 10 per case; Fig. 6: 160 runs across both sweeps; Figs. 7 and 8: one colony per threshold |
 
 ---
 

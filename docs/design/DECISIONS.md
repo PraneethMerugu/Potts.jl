@@ -3897,3 +3897,43 @@ session.
   - **Kept allowed.** The bound variable of a population fold (`for c in cells`, `for s in sites`). `sum(volume[c] for c in cells)`, `sum((owner[s] == 1) for s in sites)` and an on-copy `y[c]` were exact before (0 mismatches) and the whole-term walk had refused them. They are exempt again, as D-041 makes them exact.
   - **Cosmetics.** `kind[id]` gets the "read it bare" hint. AUTHORING names the indexed `euler`/`pieces` family. energy.md says the bare quantities are fine inside a fold too.
   - **Re-frozen.** Commit 9dc7da51, sha256 `7ff52c90…`, 302 checks. New section 7 has the refusals and section 8 the population-fold and bare-pair controls. On a6239bad: 286 pass, 16 fail, all in sections 7–8.
+
+## D-210 Foam κ_b scan: no single bulk scale fits; D-203 (d) "stop" (2026-10-09; spec owner confirmed the coordinator's reading; under D-203, D-205)
+
+- **Result.** The pre-registered decision rule returned no κ_b, with the reason `pinning_cliff`. The record is `reproductions/data/04/kb-scan-2026-10-09/`; its README holds the table.
+  - The harness check holds: at κ_b = 2.497 the result is 451 / 39, against 455 / 40 in the D-190 record.
+  - At β = 0.01, t_first jumps from no yield to 1691 between κ_b = 1.248 and 1.766, so the target of about 4300 is unreachable.
+  - The β = 0.05 target is met near κ_b ≈ 0.5, but there β = 0.01 never yields.
+  - T1s at β = 10⁻³ need κ_b ≳ 14.
+- **What follows.**
+  - The Eq 2 form under bulk shear is in question, and the 04 record stays provisional.
+  - The pinning-explained deviation rows (V11a, V11c, V12, V13a, V14a, V14b, V15a, V15c, V15d) now give that cause, with the author question marked "asked (F1)".
+  - F1 on our open question list is sharpened.
+- **Interpretation** (spec 04 §7 A-1, spec owner). At T = 0, a position-independent per-flip bias competes against integer J barriers, so it must depin at a threshold. The paper's smooth β-dependence down to 10⁻⁴ therefore needs one of two things:
+  - a site-varying bias, as the literal γ·x_i form gives; this conflicts with Fig 3c's γ0/J scaling;
+  - or a finite T in the bulk runs.
+  
+  The boundary-shear and bulk-shear modes may not have shared one form.
+- **No further foam runs until F1 is answered.** In particular, no finite-T or literal-x_i variant is tried on our own.
+
+## D-211 OpenVT: the 9 Oct 2026 manuscript draft is the new target (2026-10-09; maintainer: "this is the latest openvt paper. lets see if theres anything thats changed make this the new target manuscript", relayed by the spec owner; under D-146, D-185, D-204)
+
+- **Target.** The 9 Oct 2026 draft (14 pp) replaces the earlier manuscript as M. The PDF stays local and is never committed. Spec 15 §1.2 records the full delta.
+- **Unchanged** (text diff and rendered pp. 1–4):
+  - Figs 1–4, Fig 6, the §2 schema and protocol, Eqs 10–12, Tables S1–S5.
+  - The empty §4.1.1–4.1.4, and Code Availability TODO.
+  - The two division statements, so Q23(a) stands.
+  - No model or parameter changes, so every frozen record stands.
+- **New work.** Adopt only what holds up.
+  - **R1.** Fig 7 becomes a grid of colonies, framework × γ multiple (1.1×–20×):
+    - each colony at 10⁴ cells, coloured yellow (no inhibition) or teal (surface-inhibited);
+    - a black concave-hull tissue outline (a tissue outline, not a cell outline; D-185);
+    - a centred numeric label.
+    
+    The Potts row is 5×/10×/20× from `sweeps-2026-10-08/f7/` (O5), so it is a render only.
+  - **R2.** A new Fig 8 is the same grid for β (yellow, or red for area-inhibited), with the Potts row at β = 0.625, 0.9375, 0.9875, 1.007 and 1.0212. These colonies are in no record, so they need five runs to 10⁴ cells with an O5 writer on the PC. Replay the sweep's seeds at those β if the bracket runs allow it; otherwise use new pre-registered seeds.
+  - **R3.** The metrics figure is relabelled Fig 8 → Fig 9 on the page and in the package README. Record names stay.
+  - **R4.** Fig 5 uses shared distance bins with edges 0, 18.6, 37.2, 55.8, 74.4 and 93. Our row is re-rendered on them; the V4 verdicts are unaffected.
+  - **R5.** The quantity behind the Fig 7/8 labels is unstated. Before rendering, test whether it is the concave hull's C/C_circle: run metrics.cpp's hull on G's CC3D Fig 7 colonies and compare with the printed 1.68, 2.14 and 2.89. Use it only if it matches. Otherwise the label goes on our open question list (Q24). Raw G files never enter git.
+  - **R6.** Table 1 adds a Chaste VM row. Our T1 bands stand.
+- **Package.** The D-204 package's required figures gain R1, R2 and R4. That re-freezes the package test through a test author.

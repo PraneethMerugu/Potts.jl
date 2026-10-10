@@ -378,6 +378,7 @@ Every item's acceptance also includes the standing checks:
 - [x] (merge 2026-10-07, D-172) **P6.0by** (D-172; from the P6.15e review, AUDIT A-80) MakiePotts per-cell colours: hash the identity key well so neighbouring ids get clearly different colours; regenerate the OpenVT docs figures and the F5 per-cell videos. Small.
 - [ ] **P6.0bz** (from P6.0bb, D-171) Find the per-checkout timing offset. Two checkouts of one commit differ by up to 1.0 % CPU and 2.3 % ROCm (Merks 100², Wortel) after pinning and seeding; is it the per-path precompile cache or the code layout? Shrinking it tightens the A/B margin. Low priority.
 - [ ] **P6.0ca** (D-209) Refuse σ-dependent gathers in `cells(…)`/`edges(…)` energies at `mtkcompile` (they were missing from ΔH); clear contact-scope refusal; ΔH oracle tests; re-freeze the P6.0at and P6.0ba fixtures that used the form; correct AUTHORING §4 on the self-check. Optional later: exact local ΔH for the self-comparing form.
+- [ ] **P6.0cb** Status page: record 04 marks its negative controls `kind = control` with PASS meaning "behaved as required" (C-V1, C-V9, C-V12, C-V16), while 01/01b controls must FAIL; `docs/status/render.jl` counts 04's as ordinary PASS rows. Give records one control convention (e.g. a `required` column) and count controls as "N of M as required".
 - [x] **P6.0bw** (from P6.0bb) ROCm synchronize cost in library code. AMDGPU's default `synchronize` spins briefly, then waits on a HIP host callback through Julia's event loop. A benchmarked Graner–Glazier MCS read about 20, 47 or 2500 ns/site depending on which path it took; spinning on `hipStreamQuery` reads a stable 13.7.
   - Measure what every `KernelAbstractions.synchronize` inside `step!` costs on ROCm: host passes, lifecycle readbacks, saves.
   - If it is material, add a backend-neutral wait helper. It must be safe for hostcall kernels: a GC safepoint, a yield and a timeout.
@@ -609,6 +610,13 @@ Full runs are offline (D-146).
   - offline data and provenance under `reproductions/data/15/`, with videos as release assets (D-146).
 - [x] **P6.15j** The submission package in the consortium layout (`implementations/Potts.jl`, `results/Potts.jl`), prepared locally. Submitting it to the consortium is the maintainer's call.
   - (D-204) Complete the submission package: O1 recorder + PC re-run of cases a, b, e, f (stop MCS and N must match runs.tsv); O2 for (b); A3 shares from O1; MIT line; pending items become required; re-freeze the package test; build outside git; no upload to G until the maintainer says so.
+- [ ] **P6.15k** (D-211) Follow the 9 Oct 2026 manuscript draft.
+  - R3: relabel the metrics figure Fig 8 → Fig 9 (page 15, package README).
+  - R5: test the Fig 7/8 label quantity (concave-hull C/C_circle?) on G's CC3D Fig 7 colonies against 1.68/2.14/2.89, on the PC; adopt only if it matches, else Q24 on our open question list.
+  - R1: Fig 7 colony grid, Potts row 5×/10×/20× from the sweeps record (O5); render only.
+  - R4: Fig 5 row re-rendered on the shared distance bins (0, 18.6, 37.2, 55.8, 74.4, 93).
+  - R2: new Fig 8 β grid; five runs to 10⁴ cells at β = 0.625/0.9375/0.9875/1.007/1.0212 with an O5 writer, on the PC.
+  - Package (D-204): R1, R2 and R4 become required figures; re-freeze the package test through a test author.
 
 ### Step 4 — Foam
 
@@ -636,7 +644,7 @@ Full runs are offline (D-146).
   - (D-162) `@discrete_events` (model scope, `t`/`mcs` conditions) and `@terminate` are stored as MTK `SymbolicDiscreteCallback`s from the start, so `ModelingToolkitBase.discrete_events(sys)` lists them. Per-cell, per-site, per-copy and structural rules are never listed as callbacks.
 - [ ] **P6.4d** R2 `BrickWall`; R16 T1 counts, topology moments.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Tiling(stagger, widths, partial = :wrap)` in place of `BrickWall` (04 is periodic in x); amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; confirm 04's layout reproduces exactly; the docs show a brick-wall recipe.
-- [ ] **P6.4r-kb** (D-203) Pre-registered κ_b scan on the ordered foam (test author freezes the protocol; PC free cores); decision rule (d); then re-freeze + re-run of 200 bulk jobs, or stop and go to the F1 gate.
+- [x] (2026-10-09; D-210: no κ_b fits, pinning cliff; stopped for F1) **P6.4r-kb** (D-203) Pre-registered κ_b scan on the ordered foam (test author freezes the protocol; PC free cores); decision rule (d); then re-freeze + re-run of 200 bulk jobs, or stop and go to the F1 gate.
 - [x] (first FULL record merged 2026-10-09, provisional: 18/42 rows, 4/4 controls; κ_b scan under D-203 open) **P6.4e** reproduction 04. **Gate:** F1 (the shear form, γ₀); ships as provisional.
 
 ### Ergonomics (D-199; after the 2026-10-09 meeting, alongside foam and P6.3g/P6.9a)
