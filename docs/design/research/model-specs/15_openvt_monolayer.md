@@ -95,9 +95,14 @@ Comparison method: the text of both drafts was diffed, and pages 1–4 were comp
 
 The figure colours follow M (yellow/teal/red per inhibition state). The concave-hull line is a tissue outline drawn by M, not a cell outline, so the no-outline rule does not apply to it; the consortium-figure exception (D-185) covers it anyway.
 
-## 1.3 Second Potts entry: "Potts.jl (checkerboard)" (D-214, maintainer 2026-10-10)
+## 1.3 Checkerboard characterisation: "Potts.jl (checkerboard)" (D-214; **not submitted, D-225**)
 
-The submission carries **two** Potts rows. They share one model, one parameter set and one MCS clock, and differ only in the update algorithm:
+**Status (D-225, maintainer 2026-10-10): "ok we can leave checkerboard out of the submission, but keep it in the docs".**
+- **The submission is sequential only.** The parts below marked *not submitted (D-225)* were the planned second entry and are kept for reference only.
+- **Kept:** the characterisation (the algorithm, the difference classes and the results), the record under D-224, the page-15 characterisation section, the ΔH evidence and the `CheckerboardCPM` manual note.
+- **Cancelled:** the m5 gate sweeps.
+
+*Not submitted (D-225):* the planned submission carried **two** Potts rows. They share one model, one parameter set and one MCS clock, and differ only in the update algorithm:
 
 | Entry | Algorithm | Hardware | Seeds |
 |---|---|---|---|
@@ -122,7 +127,7 @@ The submission carries **two** Potts rows. They share one model, one parameter s
 
 An unexplained difference is chased as a bug. Characterisation describes the entry; it does not gate it (maintainer: "none of these platforms are statistically perfect, but they do have understanding of their deviations").
 
-**Figures and tables.** Every place that carries "Potts.jl" also carries "Potts.jl (checkerboard)", directly after it in the Lattice block:
+*Not submitted (D-225).* **Figures and tables.** Every place that carries "Potts.jl" also carries "Potts.jl (checkerboard)", directly after it in the Lattice block:
 - **F1:** a second 45 mm closeup panel and banner (case (a), 10⁴ cells, its own seed). The colour variable is as for Potts (§4.0.2 F1), and the banner is in the Q27 colour with a white bold label.
 - **F2/S5:** its own chain calibration (11 and 11+10), a T(λ) row in Table S5, and its own legend and inset line. The calibration must be repeated, because T in MCS is a property of the update algorithm.
 - **F3, F5, F6/T1, F7, F8, F9:** its own row, curve or legend entry, with insets where the figure has them (F2 b/d/e). Its own Table 1 row.
@@ -133,16 +138,16 @@ An unexplained difference is chased as a bug. Characterisation describes the ent
     - The runner asserts that the calibration and production colour counts are equal, and the record states the count.
     - The first m3 calibration (6 colours on the 5-row periodic chain, T_cb = 174) is superseded.
 
-**Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
+*Not submitted (D-225).* **Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
 - that the same `@potts_model` runs unchanged under `CheckerboardCPM`;
 - the colouring and claim rule above, in two or three sentences;
 - the GPU backend (KernelAbstractions on ROCm);
 - its seeds;
 - the measured differences from the sequential entry, as a short table that points to the deviation rows.
 
-**Results folder:** `results/Potts.jl_checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. There is also `implementations/Potts.jl_checkerboard/`, holding a README and a runner that point to `implementations/Potts.jl/src`. It uses the same O1–O5 formats and file names, and the framework token **`Potts.jl_checkerboard`** in the file stems that carry one. The token takes an underscore, not a space or hyphen: a space breaks `run_metrics.sh`, and G's precedent is `Chaste_OS_Log` (D-215). The colour keys are `PottsJL` and `PottsJLcheckerboard`. "Potts.jl (checkerboard)" stays the legend and banner text. In the email split it gets its own core section and bulk zips.
+*Not submitted (D-225).* **Results folder:** `results/Potts.jl_checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. There is also `implementations/Potts.jl_checkerboard/`, holding a README and a runner that point to `implementations/Potts.jl/src`. It uses the same O1–O5 formats and file names, and the framework token **`Potts.jl_checkerboard`** in the file stems that carry one. The token takes an underscore, not a space or hyphen: a space breaks `run_metrics.sh`, and G's precedent is `Chaste_OS_Log` (D-215). The colour keys are `PottsJL` and `PottsJLcheckerboard`. "Potts.jl (checkerboard)" stays the legend and banner text. In the email split it gets its own core section and bulk zips.
 
-**Q27, colour:**
+*Not submitted (D-225).* **Colour (was Q27; withdrawn with the entry):**
 - **Proposal: RGB 0,109,44** (`#006d2c`, Greens-9 step 8).
 - **Rejected:** the unused YlGnBu-9 steps (29,145,192; 34,94,168; 127,205,187; 199,233,180) all lie within CIE76 ΔE 11–19 of Morpheus, CC3D, TST or Artistoo, which is too close.
 - **Distance from the existing colours:** dark green stays in the cool lattice family (the green end of YlGnBu). It is ΔE 48–110 from every `colors.tex` entry and ΔE 93 from Potts.jl's 8,29,88.
@@ -426,7 +431,7 @@ Colours (`G:results/colors.tex:2-16`), RGB:
 | centre | ChasteOSquad | 253,141,60 |
 | centre | TinyDEM | 254,204,92 |
 
-**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18). **Potts.jl (checkerboard): proposal RGB 0,109,44** (Q27, §1.3).
+**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18). (A checkerboard colour, 0,109,44, was proposed and withdrawn with the entry, D-225.)
 Shared style: sans-serif, `scale only axis`, grid very thin black!20, tick length 0.8 mm,
 minor 0.5 mm, legend in "Lattice / Polygonal / Center(oid) models" groups. Recreate with
 CairoMakie at the same mm sizes.
@@ -666,7 +671,6 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
     - Concaveman would need a concavity of ≈ 1.11–1.25 varying per colony. No single setting fits within 0.005, and the roughness is very sensitive (1.4 → 1.9 between concavity 1.15 and 1.0).
   - **Ruled out:** concaveman over concavity 0.3–5 and length threshold 0–4, with variants; shapely/GEOS ratio 0–0.15; alpha shapes at 1/α = 1.5–10; and a 300+ formula search.
   - **Still to ask:** the hull library, its parameters and the script for the Fig 7/8 labels.
-- **Q27** (2026-10-10, D-214) The colour for "Potts.jl (checkerboard)" in `colors.tex`: proposal 0,109,44 (§1.3). Also, does the consortium accept two entries from one framework (sequential CPU, checkerboard GPU), as Chaste OS has log/quad?
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
 
