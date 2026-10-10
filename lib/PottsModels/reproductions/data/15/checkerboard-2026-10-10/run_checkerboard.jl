@@ -18,10 +18,12 @@
 #                    chain colours == monolayer colours == 4; committed copies per run from the
 #                    sites changed per MCS.
 #     calibrate_seq  SequentialCPM on the CPU (threads), 100 runs, seeds 214 700 000 + i, with
-#                    its accepted copies: calibration_sequential_p1b.tsv.
+#                    its accepted copies: <out>/calibration_sequential_p1b.tsv.
+#     (Steps 1a–1d and 2 write only into <out>, so the tracked tree stays clean; collect copies
+#     the calibration tables into the record.)
 #     count          the GPU runs replayed on the CPU (one thread) with a counting colour loop,
 #                    for the accepted copies; the replay must equal the GPU run.
-#     timescale      calibration.tsv (crossings and copy counts) and <out>/calibration.toml:
+#     timescale      <out>/calibration.tsv (crossings and copy counts) and calibration.toml:
 #                    the Welch z against the sequential P1b crossings (D-224, like with like)
 #                    and against the pinned sequential record (P1, 156 MCS; the frozen test's
 #                    statistic), which must agree; significant ⇒ cycle = 5·T, α = A₀/(5·T),
@@ -204,7 +206,7 @@ function cal_main()
             println(io, join((CAL_LAMBDA, cal_seed(j), Int(Truns[j]), r6(area[1, j]), r6(area[2, j]), changed[1, j], changed[2, j]), '\t'))
         end
     end
-    open(joinpath(CB_DIR, "timeseries_11chain.tsv"), "w") do io
+    open(cb_part("timeseries_11chain.tsv"), "w") do io
         println(io, join(("lambda", "t_mcs", "t_over_T", "w11_mean", "w11_sd"), '\t'))
         wbar, s = vec(mean(W; dims = 2)), vec(std(W; dims = 2))
         for (i, ti) in enumerate(t)
@@ -240,7 +242,7 @@ function cal_seq_main()
     Tc, Truns, _ = p1b_reduce(W)
     Tseq = [p615m_f64(r["T_run"]) for r in p615m_tsv(CAL_SEQ) if parse(Float64, r["lambda"]) == CAL_LAMBDA]
     z156 = PottsModels.openvt_spread_compare(Tseq, Truns; z = p615m_crit(length(Tseq), length(Truns)))
-    open(joinpath(CB_DIR, "calibration_sequential_p1b.tsv"), "w") do io
+    open(cb_part("calibration_sequential_p1b.tsv"), "w") do io
         println(io, join(("lambda", "seed", "T_run", "accepted_burnin", "accepted_relax"), '\t'))
         for j in 1:CAL_N
             println(io, join((CAL_LAMBDA, cal_seq_seed(j), Int(Truns[j]), acc[1, j], acc[2, j]), '\t'))
@@ -337,7 +339,7 @@ function timescale_main()
          c["committed_relax"] == r["committed_relax"] == c["changed_relax"]) ||
             error("timescale: the CPU count replay of seed $(r["seed"]) is not its GPU run")
     end
-    open(joinpath(CB_DIR, "calibration.tsv"), "w") do io
+    open(cb_part("calibration.tsv"), "w") do io
         println(io, join(CAL_COUNT_HEADER, '\t'))
         for r in cal
             c = cnt[parse(Int, r["seed"])]
@@ -347,7 +349,7 @@ function timescale_main()
         end
     end
     Tcb = [p615m_f64(r["T_run"]) for r in cal]
-    Tsp = [p615m_f64(r["T_run"]) for r in p615m_tsv(joinpath(CB_DIR, "calibration_sequential_p1b.tsv"))]
+    Tsp = [p615m_f64(r["T_run"]) for r in p615m_tsv(cb_part("calibration_sequential_p1b.tsv"))]
     Tseq = [p615m_f64(r["T_run"]) for r in p615m_tsv(CAL_SEQ) if parse(Float64, r["lambda"]) == CAL_LAMBDA]
     Tc = cbt["T_lambda2"]
     # D-224: like with like, the sequential P1b crossings; the frozen test's statistic is
@@ -366,7 +368,7 @@ function timescale_main()
               "the sequential cycle 775 MCS and α = 50/775 px/MCS are kept (D-220, D-224)")
     acc = sum(parse(Int, cnt[parse(Int, r["seed"])]["accepted_relax"]) for r in cal)
     com = sum(parse(Int, cnt[parse(Int, r["seed"])]["committed_relax"]) for r in cal)
-    sacc = sum(parse(Int, r["accepted_relax"]) for r in p615m_tsv(joinpath(CB_DIR, "calibration_sequential_p1b.tsv")))
+    sacc = sum(parse(Int, r["accepted_relax"]) for r in p615m_tsv(cb_part("calibration_sequential_p1b.tsv")))
     d = merge(cbt, Dict("T_seq_run_mean" => mean(Tseq), "T_seq_runs" => length(Tseq), "z" => zr.z, "crit" => p615m_crit(length(Tseq), length(Tcb)),
         "beyond" => zr.beyond, "z_p1b" => zl.z, "crit_p1b" => crit, "beyond_p1b" => zl.beyond,
         "T_seq_p1b" => sq["T_seq_p1b"], "T_seq_p1b_sd" => sq["T_seq_p1b_sd"], "T_seq_p1b_run_mean" => sq["T_seq_p1b_run_mean"],
@@ -519,6 +521,10 @@ function collect_main()
     end
     order(r) = (r["case"], parse(Int, r["k"]))
     sort!(rp; by = order)
+    # the calibration outputs (written to <out> by steps 1a–1d, so the tree stays clean)
+    for f in ("calibration.tsv", "calibration_sequential_p1b.tsv", "timeseries_11chain.tsv")
+        cp(cb_part(f), joinpath(CB_DIR, f); force = true)
+    end
     # runs.tsv
     open(joinpath(CB_DIR, "runs.tsv"), "w") do io
         println(io, join(("case", "k", "seed", "beta", "gamma", "sigma_X", "lattice", "retcode", "mcs", "N", "divisions", "live",

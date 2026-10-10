@@ -5,7 +5,8 @@
 # Arms (GPU, ROCm):
 #   stock   CheckerboardCPM(; proposal = Moore(1)): stride 2, 4 colours on the monolayers and on
 #           the P1b calibration chain (D-224). It runs at the record's cycle (meta.toml [time]
-#           cycle_mcs = 5 T_cb) and α = A₀/cycle; its chain counts are calibration.tsv's.
+#           cycle_mcs = 5 T_cb, read from the main runner's <out>/calibration.toml, so the same
+#           P615M_OUT is used) and α = A₀/cycle; its chain counts are calibration.tsv's.
 #   c64     the same with the colour stride widened by 6 (stride 8: 64 colours on the
 #           monolayers; the read reach of `CorePotts.reach` + 6, redefined in this process only).
 #           Its own P1b chain calibration (the main runner's protocol, λ = 2, 100 runs, its colour
@@ -115,8 +116,7 @@ function ab_run(arm)
     ab_patch!(arm)
     mkpath(CB_OUT)
     if arm == "stock"
-        tm = TOML.parsefile(joinpath(CB_DIR, "meta.toml"))["time"]
-        cycle = tm["cycle_mcs"]
+        cycle = TOML.parsefile(cb_part("calibration.toml"))["cycle_mcs"]     # the entry's cycle (step 1d)
     else
         cycle = TOML.parsefile(cb_part("ablation_c64.toml"))["cycle_mcs"]
     end
