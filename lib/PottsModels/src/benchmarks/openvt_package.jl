@@ -1033,8 +1033,8 @@ function _openvt_pkg_backend(meta)
     return isempty(a) ? "CPU" : "CPU, `$a`"
 end
 
-# the compiler note of the results README (spec 15 §7 Q28); EMAIL.md words it as a heads-up
-const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements equal metrics.cpp built with GCC 13 on Linux; other compilers can change C and w for lattice-derived centroids (concave-hull near-ties)."
+# a provenance fact about our measurements, for the results README only (D-219)
+const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements were produced with metrics.cpp built with GCC 13 on Linux."
 
 # D-215 (8): what the consortium's scripts need to know (results README and EMAIL.md)
 function _openvt_pkg_note_lines(o1)
@@ -1340,16 +1340,6 @@ function _openvt_pkg_email(recs, o1, bf, sha, sz, tag)
 
     """)
     foreach(l -> print(io, "- ", replace(l, '`' => ""), "\n"), filter(!=(_OPENVT_PKG_COMPILER_NOTE), _openvt_pkg_note_lines(o1)))
-    print(io, """
-
-    A heads-up on metrics.cpp: its concave hull gives compiler-dependent C and w on centroids
-    from a lattice, so the other lattice frameworks are probably affected as well. On one of
-    our O1 files, GCC 13 on Linux gives C = 415.6, Apple clang 613.5 and Homebrew g++-15 454.9;
-    w differs too, while a PhysiCell frame is the same under all three. Our precomputed values
-    equal the GCC 13 build on Linux. Pinning one compiler for everyone's Category 2 numbers
-    (for example GCC with -ffp-contract=off) would remove the dependence. Which compiler and
-    flags produced the consortium's measurements is Q28 on our open question list.
-    """)
     print(io, """
 
     Everything is built by PottsModels.openvt_submission_package from the run records committed
