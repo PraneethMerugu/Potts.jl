@@ -2,6 +2,17 @@
 # prepared locally. Frozen (AUTONOMY §7.3). Submitting it is the maintainer's call; this test
 # never contacts anyone and needs neither the PC nor the consortium clone (G).
 #
+# D-204 amendment (the package completed): every item the first freeze listed as optional or
+# "Pending" is now REQUIRED: O1 (per-cell time series of cases a, b, e, f, re-run from the
+# recorded seeds), O2 (case b), A3 (inhibition shares over time, from O1), O3 and O5 (the
+# P6.15g sweeps record is merged), the MIT line (D-181), and a deterministic build outside
+# git. The O1 files and the O2 files are too large for git (D-168, D-204): they live in a BULK
+# directory outside git, `ENV["OPENVT_PACKAGE_BULK"]`, and git pins their MANIFEST (names, row
+# counts, byte counts, inhibition-code counts, sha256), never their bytes. See "BULK inputs",
+# "The O1 re-run record" and "The O1 recorder" below. On a machine without the bulk directory
+# this test is red by design: a package without its data is not a submission. Reading the
+# archives needs Info-ZIP `unzip` (`unzip -Z1`, `unzip -p`), present on macOS and on the PC.
+#
 # Sources: spec 15 (docs/design/research/model-specs/15_openvt_monolayer.md) §3.1 (O1–O6),
 # §4.0 (inventory), §4.0.1 (submission requirements), §1.1 (C1–C17); G at 54f375f, read on the
 # PC only (nothing copied): G:README.md ("Each framework has a subfolder with its name in the
@@ -13,23 +24,49 @@
 # TST_time_to_10k_vs_{beta,gamma}.csv, final_snapshot_data/TST_beta_<b>_gamma_<g>_<MCS>MCS.csv,
 # TST_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv), G:results/<FW>/closeup.png
 # and G:implementations/<FW>/ (model files, runner scripts, a README). Decisions: D-146, D-154,
-# D-168, D-173, D-174 (+ amendment), D-175, D-178, D-185.
+# D-168, D-173, D-174 (+ amendment), D-175, D-178, D-185; amended under D-181 and D-204.
+#
+# Consortium layout (G at 54f375f, read on the PC; nothing copied), against which the D-204
+# items are pinned where spec 15 agrees:
+# - per-cell time series ship as .zip archives under results/<FW>/Monolayer/ (TST_No_CI_*.zip,
+#   polyhoop noCI/*.zip, Morpheus per-replicate zips, PhysiCell pc_run<k>.zip); spec §4.0.1
+#   says "compressed archives" without a format, so .zip.
+# - their columns differ by framework (TST x_pos,y_pos,radius_i,a_i,f_i; Morpheus "x","y","g",
+#   "n"; PhysiCell x,y,g,n; Artistoo cell_id,x,y,active,neighbors) and metrics.cpp reads x,y,
+#   g,n. The spec (M, C8) says x,y,i,n: followed (disagreement 1).
+# - their file names stamp the time point (Morpheus_timepoint_%05d, cell_data_no_inhibition_
+#   <MCS>, pc_%03d, centroids_neighbors_mcs_<n>), one directory per run; the spec's
+#   potts_<case>_s<seed>_<MCS:06d>.csv carries the seed instead: followed (disagreement 2).
+#   run_metrics.sh's `seq 0 10000` index loop would skip our MCS stamps above 10 000 (a limit
+#   of the script, not of the names).
+# - TST ships the F5 1000-cell files zipped (TST_5T_MonolayerGrowth_1000_Data.zip); the spec
+#   names the loose directory, which the first freeze checks file by file: kept loose
+#   (disagreement 3).
+# - lengths in R and time stamps in MCS with 5T = 775 MCS (TST README, Morpheus README): agree.
 #
 # ---------------------------------------------------------------------------------------------
 # The generator (pinned)
 # ---------------------------------------------------------------------------------------------
-#   PottsModels.openvt_submission_package(outdir::AbstractString) -> outdir
+#   PottsModels.openvt_submission_package(outdir::AbstractString;
+#                                         bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing)) -> outdir
 #
 # builds, under `outdir`, exactly two trees: `implementations/Potts.jl/` and `results/Potts.jl/`,
-# from the merged records under `lib/PottsModels/reproductions/data/15/` (D-146). It runs no
-# simulation. It throws `ArgumentError` when `outdir` is inside this git checkout (the package
-# lives outside git) or exists and is not empty (no stale files). Two calls on the same commit
-# give byte-identical trees (no timestamps, no absolute paths, fixed row order).
+# from the merged records under `lib/PottsModels/reproductions/data/15/` (D-146) and the bulk
+# directory `bulk` (D-204). It runs no simulation. It throws `ArgumentError` when `outdir` is
+# inside this git checkout (the package lives outside git) or exists and is not empty (no stale
+# files), and (D-204) when `bulk` is `nothing`, is not a directory, lies inside a git checkout,
+# or lacks a file of the BULK layout below or holds one whose sha256 differs from the git
+# manifest; a failed build leaves nothing behind (D-180). Two calls on the same commit and the
+# same bulk directory give byte-identical trees (no timestamps, no absolute paths, fixed row
+# order; the archives are copied byte for byte, never re-zipped). This test passes `bulk`
+# through the environment variable only, so that it also runs against the first-freeze
+# generator (which ignores it).
 #
 # Records are found the way the page test (P6.15i) finds them: the directories of `data/15/`
 # whose `provenance.toml` names the ROADMAP item: P6.15b calibration (F2, S5), P6.15e F5,
-# P6.15f F3/F8, P6.15h F1/F4, P6.15g the sweeps (F6, T1, F7; parked, D-174). The newest
-# directory (by name) wins when an item has several.
+# P6.15f F3/F8, P6.15h F1/F4, P6.15g the sweeps (F6, T1, F7; merged, D-174/D-178), and
+# (D-204) P6.15j the O1 re-run record. The newest directory (by name) wins when an item has
+# several.
 #
 # ---------------------------------------------------------------------------------------------
 # REQUIRED files (all derivable from git records; values must equal the records)
@@ -77,28 +114,93 @@
 #       every n with a nonzero count, ascending
 #
 # ---------------------------------------------------------------------------------------------
-# OPTIONAL items: present and checked, or named in the README "Pending" section (never faked)
+# Formerly OPTIONAL items: REQUIRED since D-204 (none may be named in a "Pending" section)
 # ---------------------------------------------------------------------------------------------
 # key  path under results/Potts.jl/                                      columns
-# O1   Monolayer/centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv     x,y,i,n   (schema "Data
-#      Collection"; per-cell files are not in the D-146 records, which keep per-save metrics)
+# O1   Monolayer/Potts.jl_centroids_<case>.zip, case ∈ {a, b, e, f} (plus c, d only if the O1
+#      record has them). A zip whose members are exactly, in this order, the record manifest's
+#      files `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv` (spec §3.1 names; unzipped
+#      in `Monolayer/` they land where the first freeze put loose O1 files). Each member: the
+#      header `x,y,i,n`, one row per live cell. Bytes equal to the bulk archive and to the
+#      record's archives.tsv sha256. Loose O1 files are no longer allowed (allowlist).
+# O1m  Monolayer/Potts.jl_centroids_manifest.csv                        archive,file,rows,bytes,
+#      sha256: the record's o1_manifest.tsv rows in its order (archive = the zip's name)
 # O2   Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k = 1:100
-#                                                                        x,y,r,f,a (F5; D-168
-#      kept them out of git for this package)
-# A3   Monolayer/metrics/<case>/inhibition_s<seed>.csv (cases a, e)      MCS,t,f0,f1,f2,f3
+#                                                                        x,y,r,f,a (F5; checked
+#      against the F5 record as before, and their sha256 against the record's o2_manifest.tsv)
+# A3   Monolayer/metrics/<case>/inhibition_s<seed>.csv                   MCS,t,f0,f1,f2,f3
+#      for every run of cases a and e, and of c and d where O1 has them (spec §4.0 A3); one row
+#      per O1 save in MCS order; t = MCS/775; f_k = (count of cells with i = k)/(cells), the
+#      counts and cells of that save's O1 file (= the manifest's i0…i3 and rows).
 # O3   Monolayer/Potts.jl_time_to_10k_vs_beta.csv, …_vs_gamma.csv        beta|gamma,Time to 10k
-#      (MCS),Time to 10k (5T)   (F6, T1; P6.15g)
+#      (MCS),Time to 10k (5T)   (F6, T1; byte copies of the P6.15g record's files)
 # O5   Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv    x_pos,y_pos,radius_i,
-#      inhibited   (F7; P6.15g; at least 5 files)
-# An absent item's stem (the constant P615J_OPTIONAL) appears in the Pending section; a present
-# item's stem does not. While no P6.15g record is merged, the O3 and O5 entries also say
-# "FULL run parked (D-174)"; once one is merged they must be present (no re-freeze needed;
-# their values against that record are pinned when it lands).
+#      inhibited   (F7; byte copies of the P6.15g record's f7/ files, at least 5)
+# The results README may keep a "Pending" section for other things, but it names none of the
+# items above (their stems are in P615J_REQUIRED) and none of the first freeze's required ones.
+# Both READMEs carry the MIT line (D-181): one line with "MIT", "licence"/"license" and
+# "LICENSE" (the repository's LICENSE file). The copyright holder's name is not written into
+# the package: the privacy scan (10) bans it, and the LICENSE file in the repository carries it.
+#
+# ---------------------------------------------------------------------------------------------
+# BULK inputs (outside git; ENV["OPENVT_PACKAGE_BULK"])
+# ---------------------------------------------------------------------------------------------
+#   <bulk>/Potts.jl_centroids_<case>.zip              one per case of the O1 record
+#   <bulk>/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k = 1:100
+# Nothing else is read from it. Expected volume (rows from the F3/F8 record's timeseries.tsv,
+# about 44 B per O1 row and 20 B zipped with full-precision write_openvt floats, measured on
+# the F5 O2 centroids): (a) 3 030 files, 4.34 M rows, ~190 MB raw, ~90 MB zipped; (e) 3 244,
+# 5.74 M, ~250 MB, ~115 MB; (b) 20 741, 3.13 M, ~140 MB, ~65 MB; (f) 19 956, 2.40 M, ~105 MB,
+# ~50 MB; O2 ~8 MB. About 320 MB zipped in all: D-204's ask-before-upload threshold applies.
+#
+# ---------------------------------------------------------------------------------------------
+# The O1 re-run record (git; D-146 form; provenance.toml `item = "P6.15j"`)
+# ---------------------------------------------------------------------------------------------
+# data/15/<name>/ (e.g. o1-2026-10-10/), small files only, no verdicts.tsv or deviations.tsv:
+#   provenance.toml   item "P6.15j", runner (in this directory), commit, threads, wall times,
+#                     manifest_sha256 (as the other records; the package drops hostname/work)
+#   runs.tsv          case k seed mcs N saves: one row per re-run; for a, b, e, f equal to the
+#                     F3/F8 record's runs.tsv on these columns (D-204: the record reproduced)
+#   o1_manifest.tsv   case seed mcs file rows bytes i0 i1 i2 i3 sha256: one row per O1 file,
+#                     sorted by file; file = the archive member path; rows = data rows
+#                     (header excluded); bytes = file size; i_k = cells with code k; sha256 of
+#                     the file's bytes (lower-case hex)
+#   archives.tsv      case archive members bytes sha256: one row per case,
+#                     archive = Potts.jl_centroids_<case>.zip
+#   o2_manifest.tsv   k file rows bytes sha256: k = 1:100, file =
+#                     Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv
+#   run_o1.jl         the runner
+# Header-only templates of the four TSVs: test/reproductions/data/15j/ (tab-separated, '\n').
+#
+# ---------------------------------------------------------------------------------------------
+# The O1 recorder (what the runner must write, and when; not implemented here)
+# ---------------------------------------------------------------------------------------------
+# - Runs: cases a, b, e, f of the frozen F3/F8 test (`P615F_CASES`, its seeds k ↦ seed, its
+#   lattices, `P615F_ALG` = SequentialCPM(Moore(1)), the closed lattice, edge_guard(5;
+#   terminate = true), stop_at_cells), i.e. `p615f_problem` and `p615f_run` reused, not copied.
+# - When: exactly at the saves `p615f_run` records, by extending its `record(integ)`: MCS 0
+#   (the callback's `initialize`), every MCS with t % 39 == 0, and the stopping MCS (first MCS
+#   with ≥ cells live cells). Same callback, so the O1 stamps are the timeseries.tsv saves by
+#   construction. At each save, after `p615f_row`:
+#     fr = PottsModels.openvt_frame(integ.u; β = c.beta, γ = c.gamma)       # x, y in R, i, n
+#     write_openvt(joinpath(stage, "centroids", case,
+#                  openvt_filename(:O1; case, seed, mcs = Int(integ.t))), :O1, fr)
+#   (`openvt_frame` takes the centroids from `openvt_snapshot`, as `p615f_row` does, so
+#   `openvt_metrics` of the written file equals the record's r, A, C, w, g bit for bit; this
+#   test recomputes them.) After each run, assert its series equals the F3/F8 record's rows.
+# - Then: hash every file into o1_manifest.tsv, write runs.tsv, and zip each case with sorted
+#   members, no directory entries and no extra attributes, from inside the staging directory:
+#     find centroids/<case> -type f | LC_ALL=C sort | zip -X -D -9 -q -@ Potts.jl_centroids_<case>.zip
+#   then archives.tsv. The zips go to the bulk directory; only the small files are committed.
+# - O2: copy the surviving F5 files (the F5 runner's F5_O2_DIR) into the bulk directory; if
+#   they are gone, write them from the case-b re-run's stop state with `openvt_snapshot`
+#   (x, y, r, f, a; `write_openvt(…, :O2, …)`). Either way the F5 checks below must hold and
+#   their x, y must equal the O1 stop file of the same seed (seed 15000 + k).
 #
 # ---------------------------------------------------------------------------------------------
 # Content rules
 # ---------------------------------------------------------------------------------------------
-# - Allowlist: every file under outdir matches a required or optional path; nothing else, so no
+# - Allowlist: every file under outdir matches a required path; nothing else, so no
 #   G file, figure or archive can ride along. Opt-in (OPENVT_MONOLAYER_REPO = a local G clone):
 #   no package file is byte-identical to a G file.
 # - Deviations (D-154; as the page test, D-178): results README has a level-2 heading with
@@ -130,8 +232,23 @@ const P615J_GRID = 39                         # D-173 save cadence
 const P615J_CASES = ["a", "b", "e", "f"]      # spec §4.0.1 cases run by P6.15f (control is ours)
 const P615J_LAMBDAS = [1, 2, 3, 5]            # Table S5
 const P615J_ITEMS = Dict(:calib => "P6.15b", :f5 => "P6.15e", :f3f8 => "P6.15f", :f1f4 => "P6.15h",
-    :sweeps => "P6.15g")
-const P615J_PARKED = "FULL run parked (D-174)"
+    :sweeps => "P6.15g", :o1 => "P6.15j")
+# D-204: the bulk directory (outside git) and the O1 re-run record
+const P615J_BULK_ENV = "OPENVT_PACKAGE_BULK"
+const P615J_BULK = get(ENV, P615J_BULK_ENV, "")
+const P615J_O1_CASES = ["a", "b", "e", "f"]   # re-run from the P6.15f seeds (D-204 a)
+const P615J_A3_CASES = ["a", "e"]             # spec §4.0 A3; c and d too where O1 has them
+const P615J_SWEEP_CASE = Dict("c" => "beta", "d" => "gamma")
+const P615J_O2_DIR = "Potts.jl_5T_MonolayerGrowth_1000_Data"
+const P615J_O1_MANIFEST = "Potts.jl_centroids_manifest.csv"
+p615j_o1_zip(case) = "Potts.jl_centroids_$(case).zip"
+const P615J_O1_MEMBER = r"^centroids/([a-z]+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
+const P615J_H_O1M = ["case", "seed", "mcs", "file", "rows", "bytes", "i0", "i1", "i2", "i3", "sha256"]
+const P615J_H_ARCH = ["case", "archive", "members", "bytes", "sha256"]
+const P615J_H_O2M = ["k", "file", "rows", "bytes", "sha256"]
+const P615J_H_O1RUNS = ["case", "k", "seed", "mcs", "N", "saves"]
+const P615J_H_O1PKG = "archive,file,rows,bytes,sha256"
+const P615J_LICENCE = "MIT"
 
 # headers (G:results/TST/Relaxation/*; spec §3.1 O3–O6)
 const P615J_H_WIDTH = "Normalized time (T),Mean Tissue width (CD),STD Tissue width (CD)"
@@ -155,16 +272,17 @@ const P615J_PARAMS = Dict(
     "T_relax_lambda2_MCS" => 156.0, "R_px" => sqrt(50 / pi), "CD_px" => 10.0)
 const P615J_PARAM_STR = Dict("neighbourhood" => "Moore(1)", "boundary" => "closed")
 
-# optional items: key => (stem in the Pending section, path regex under results/Potts.jl/)
-const P615J_OPTIONAL = [
-    (:O1, "centroids/", r"^Monolayer/centroids/([a-z]+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"),
+# required items (optional in the first freeze): key => (stem that a Pending section must not
+# name, path regex under results/Potts.jl/)
+const P615J_REQUIRED = [
+    (:O1, "centroids", r"^Monolayer/Potts\.jl_centroids_([a-z]+)\.zip$"),
+    (:O1m, "centroids_manifest", r"^Monolayer/Potts\.jl_centroids_manifest\.csv$"),
     (:O2, "Potts.jl_5T_MonolayerGrowth_1000_Data", r"^Monolayer/Potts\.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_(\d+)\.csv$"),
     (:A3, "inhibition_s", r"^Monolayer/metrics/([a-z]+)/inhibition_s(\d+)\.csv$"),
     (:O3b, "Potts.jl_time_to_10k_vs_beta.csv", r"^Monolayer/Potts\.jl_time_to_10k_vs_beta\.csv$"),
     (:O3g, "Potts.jl_time_to_10k_vs_gamma.csv", r"^Monolayer/Potts\.jl_time_to_10k_vs_gamma\.csv$"),
     (:O5, "final_snapshot_data", r"^Monolayer/final_snapshot_data/Potts\.jl_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$"),
 ]
-const P615J_SWEEP_KEYS = (:O3b, :O3g, :O5)
 
 const P615J_FORBIDDEN = [
     # the page test's list (D-178 (h))
@@ -309,21 +427,115 @@ const P615J_OUT = mktempdir()
 const P615J_A = joinpath(P615J_OUT, "a")
 const P615J_B = joinpath(P615J_OUT, "b")
 const P615J_BUILT = Ref(false)
+# the bulk directory reaches the generator through the environment only (see the header)
+p615j_withbulk(f, bulk) = withenv(f, P615J_BULK_ENV => (bulk === nothing || isempty(bulk) ? nothing : bulk))
 function p615j_build()
     P615J_BUILT[] && return true
-    PottsModels.openvt_submission_package(P615J_A)
-    sleep(1.1)                              # a clock tick between the two builds
-    PottsModels.openvt_submission_package(P615J_B)
+    p615j_withbulk(P615J_BULK) do
+        PottsModels.openvt_submission_package(P615J_A)
+        sleep(1.1)                          # a clock tick between the two builds
+        PottsModels.openvt_submission_package(P615J_B)
+    end
     P615J_BUILT[] = true
 end
 p615j_pkg(rel...) = joinpath(P615J_A, rel...)
 p615j_res(rel...) = joinpath(P615J_A, P615J_RES, rel...)
 p615j_impl(rel...) = joinpath(P615J_A, P615J_IMPL, rel...)
 
+# ---- D-204 helpers: git manifests, the bulk directory, zip members ------------------------------
+function p615j_in_git(path)
+    d = abspath(path)
+    while true
+        ispath(joinpath(d, ".git")) && return true
+        p = dirname(d)
+        p == d && return false
+        d = p
+    end
+end
+p615j_hex(s) = occursin(r"^[0-9a-f]{64}$", s)
+p615j_sha(path) = bytes2hex(open(sha256, path))
+p615j_has(rec, f) = isfile(joinpath(rec, f))
+function p615j_tsv_or_empty(path)
+    isfile(path) || return String[], Dict{String, String}[]
+    head, rows = p615j_tsv(path)
+    return String.(head), [Dict(String(k) => String(v) for (k, v) in r) for r in rows]
+end
+# o1_manifest.tsv as (case, seed) => rows sorted by mcs (each a NamedTuple)
+function p615j_o1_manifest(rec)
+    _, rows = p615j_tsv_or_empty(joinpath(rec, "o1_manifest.tsv"))
+    out = Dict{Tuple{String, Int}, Vector{Any}}()
+    for r in rows
+        all(c -> haskey(r, c), P615J_H_O1M) || continue
+        e = (; case = r["case"], seed = parse(Int, r["seed"]), mcs = parse(Int, r["mcs"]), file = r["file"],
+            rows = parse(Int, r["rows"]), bytes = parse(Int, r["bytes"]),
+            i = (parse(Int, r["i0"]), parse(Int, r["i1"]), parse(Int, r["i2"]), parse(Int, r["i3"])), sha = r["sha256"])
+        push!(get!(out, (e.case, e.seed), Any[]), e)
+    end
+    foreach(v -> sort!(v; by = e -> e.mcs), values(out))
+    return out
+end
+p615j_o1_rec() = haskey(P615J_RECS, :o1) ? p615j_rec(:o1) : ""
+p615j_o1_cases(man) = sort(unique(first.(collect(keys(man)))))
+# the manifest rows of one case in member order (by file name)
+p615j_o1_members(man, case) = sort([e for ((c, _), v) in man if c == case for e in v]; by = e -> e.file)
+
+# a bulk directory with every expected name but wrong bytes (for the refusal check)
+function p615j_bogus_bulk(cases)
+    d = mktempdir()
+    foreach(c -> write(joinpath(d, p615j_o1_zip(c)), "not a zip\n"), cases)
+    mkpath(joinpath(d, P615J_O2_DIR))
+    foreach(k -> write(joinpath(d, P615J_O2_DIR, "cell_data_no_inhibition_$(k).csv"), "x,y,r,f,a\n"), 1:100)
+    return d
+end
+
+# the names of a zip's entries, in archive order (Info-ZIP `unzip -Z1`)
+p615j_zip_names(zip) = filter(!isempty, readlines(`unzip -Z1 $zip`))
+
+# one O1 member's bytes: header, data rows, code counts, n ≥ 0 and well-formed rows
+function p615j_o1_scan(buf::Vector{UInt8})
+    nl = findfirst(==(0x0a), buf)
+    nl === nothing && return (; header = "", rows = 0, i = (0, 0, 0, 0), ok = false)
+    header = String(buf[1:(nl - 1)])
+    cnt = zeros(Int, 4)
+    rows, ok, k, n = 0, true, nl + 1, length(buf)
+    comma, zero, nine = UInt8(','), UInt8('0'), UInt8('9')
+    while k <= n
+        j = findnext(==(0x0a), buf, k)
+        j === nothing && (ok = false; break)           # last line without '\n'
+        c1 = findnext(==(comma), buf, k)
+        c2 = c1 === nothing ? nothing : findnext(==(comma), buf, c1 + 1)
+        c3 = c2 === nothing ? nothing : findnext(==(comma), buf, c2 + 1)
+        if c3 === nothing || c3 >= j || c3 != c2 + 2 || !(zero <= buf[c2 + 1] <= zero + 3) || c3 + 1 > j - 1 ||
+           !all(b -> zero <= b <= nine, view(buf, (c3 + 1):(j - 1))) || c1 == k || c2 == c1 + 1
+            ok = false
+        else
+            cnt[buf[c2 + 1] - zero + 1] += 1
+        end
+        rows += 1
+        k = j + 1
+    end
+    return (; header, rows, i = Tuple(cnt), ok)
+end
+function p615j_o1_parse(buf::Vector{UInt8})
+    ls = split(String(copy(buf)), '\n'; keepempty = false)[2:end]
+    f = [split(l, ',') for l in ls]
+    return (; x = [parse(Float64, r[1]) for r in f], y = [parse(Float64, r[2]) for r in f],
+        i = [parse(Int, r[3]) for r in f], n = [parse(Int, r[4]) for r in f])
+end
+
+# the F3/F8 runs.tsv as (case, seed) => row
+function p615j_runs3()
+    _, rows = p615j_tsv(joinpath(p615j_rec(:f3f8), "runs.tsv"))
+    return Dict((String(r["case"]), parse(Int, r["seed"])) => r for r in rows)
+end
+
 @testset "P6.15j (0) records present (D-146)" begin
     for k in (:calib, :f5, :f3f8, :f1f4)
         @test haskey(P615J_RECS, k)
     end
+    # D-204: the sweeps record is merged and the O1 re-run record exists
+    @test haskey(P615J_RECS, :sweeps)
+    @test haskey(P615J_RECS, :o1)
     @test isfile(P615J_SPEC)
     @test length(p615j_spec_cs()) >= 17
 end
@@ -339,6 +551,20 @@ end
     @test !ispath(ingit)
     # no stale files: a non-empty directory is refused
     @test_throws ArgumentError PottsModels.openvt_submission_package(P615J_A)
+    # D-204: the bulk directory is given, outside git, complete and equal to the git manifests;
+    # otherwise the build is refused and leaves nothing behind
+    @test !isempty(P615J_BULK) && isdir(P615J_BULK) && !p615j_in_git(P615J_BULK)
+    for bulk in (nothing, P615J_DATA, mktempdir(), p615j_bogus_bulk(P615J_O1_CASES))
+        out = joinpath(mktempdir(), "pkg")
+        threw = try
+            p615j_withbulk(() -> PottsModels.openvt_submission_package(out), bulk)
+            false
+        catch e
+            e isa ArgumentError
+        end
+        @test threw
+        @test !ispath(out) || isempty(readdir(out))
+    end
 end
 
 @testset "P6.15j (2) deterministic: same bytes twice" begin
@@ -364,7 +590,7 @@ end
     @test occursin("--project=lib/PottsModels/test", readme)
     @test occursin("openvt_submission_package", readme)
     @test occursin(r"julia"i, readme)
-    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps)
+    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1)
         haskey(P615J_RECS, k) || continue
         prov = TOML.parsefile(joinpath(p615j_rec(k), "provenance.toml"))
         runner = basename(prov["runner"])
@@ -504,7 +730,7 @@ end
     @test p615j_build()
     p = p615j_res("closeup.png")
     @test isfile(p) && read(p) == read(joinpath(p615j_rec(:f1f4), "fig1_panel.png"))
-    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps)
+    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1)
         haskey(P615J_RECS, k) || continue
         want = TOML.parsefile(joinpath(p615j_rec(k), "provenance.toml"))
         delete!(want, "hostname")
@@ -515,94 +741,99 @@ end
     @test isdir(pd) && sort(readdir(pd)) == sort([P615J_RECS[k] * ".toml" for k in keys(P615J_RECS)])
 end
 
-# the optional items, present (checked) or pending (named) -----------------------------------------
+# the formerly optional items, all required (D-204) -----------------------------------------------
 function p615j_present(rels, key)
-    re = only(x[3] for x in P615J_OPTIONAL if x[1] == key)
+    re = only(x[3] for x in P615J_REQUIRED if x[1] == key)
     return filter(f -> occursin(re, f), rels)
 end
 
-@testset "P6.15j (7) optional items: present and checked, or listed as pending" begin
+@testset "P6.15j (7) formerly optional items: all present and checked (D-204)" begin
     @test p615j_build()
     rels = p615j_tree(joinpath(P615J_A, P615J_RES))
     readme = isfile(p615j_res("README.md")) ? read(p615j_res("README.md"), String) : ""
     pend = p615j_section(readme, r"Pending"i)
-    @test !isempty(pend)
-    swept = haskey(P615J_RECS, :sweeps)
-    for (key, stem, _) in P615J_OPTIONAL
-        files = p615j_present(rels, key)
-        if isempty(files)
-            @test occursin(stem, pend)
-            if key in P615J_SWEEP_KEYS
-                @test !swept                         # a merged P6.15g record must be packaged
-                @test occursin(P615J_PARKED, pend)
-            end
-        else
-            @test !occursin(stem, pend)
-        end
+    for (key, stem, _) in P615J_REQUIRED
+        @test !isempty(p615j_present(rels, key))
+        @test !occursin(stem, pend)
     end
-    # required items are never "pending"
-    for stem in ("width.csv", "table_S5", "measurements_", "neighbors_", "closeup", "provenance")
+    # required items are never "pending" (a Pending section may remain for other things)
+    for stem in ("width.csv", "table_S5", "measurements_", "neighbors_", "closeup", "provenance",
+                 "O1", "O2", "A3", "O3", "O5", "parked")
         @test !occursin(stem, pend)
     end
 
     ts = p615j_timeseries()
-    # O1: one file per save of every run, N rows each (spot-check: every run's last save, all of run 1)
-    o1 = p615j_present(rels, :O1)
-    if !isempty(o1)
-        stamps = Dict{Tuple{String, Int}, Vector{Int}}()
-        for f in o1
-            m = match(P615J_OPTIONAL[1][3], f)
-            @test m.captures[1] == m.captures[2]
-            push!(get!(stamps, (m.captures[1], parse(Int, m.captures[3])), Int[]), parse(Int, m.captures[4]))
-        end
-        @test Set(keys(stamps)) == Set(keys(ts))
-        for (k, v) in ts
-            @test sort(get(stamps, k, Int[])) == [Int(r[1]) for r in v]
-            seedmin = minimum(s for (c, s) in keys(ts) if c == k[1])
-            for r in (k[2] == seedmin ? v : v[end:end])
-                f = p615j_res("Monolayer", "centroids", k[1], "potts_$(k[1])_s$(k[2])_$(lpad(Int(r[1]), 6, '0')).csv")
-                h, rows = p615j_csv(f)
-                @test h == P615J_H_O1 && length(rows) == Int(r[2])
-                @test all(x -> length(x) == 4 && parse(Int, x[3]) in 0:3 && parse(Int, x[4]) >= 0, rows)
-            end
-        end
-    end
-    # O2: case (b), file k equals runs.tsv row k (N, n_f0, Σf, Σa, max f, min a, max a)
+    rec = p615j_o1_rec()
+    man = isempty(rec) ? Dict{Tuple{String, Int}, Vector{Any}}() : p615j_o1_manifest(rec)
+    o1cases = p615j_o1_cases(man)
+    # O1: one archive per case of the O1 record (their bytes and members: testsets 11 and 12)
+    @test !isempty(o1cases)
+    @test sort([match(P615J_REQUIRED[1][3], f).captures[1] for f in p615j_present(rels, :O1)]) == o1cases
+
+    # O2: case (b), file k equals runs.tsv row k (N, n_f0, Σf, Σa, max f, min a, max a), and its
+    # bytes equal the O2 manifest of the O1 record
     o2 = p615j_present(rels, :O2)
-    if !isempty(o2)
-        _, fr = p615j_tsv(joinpath(p615j_rec(:f5), "runs.tsv"))
-        fb = filter(r -> r["case"] == "b", fr)
-        @test sort([parse(Int, match(P615J_OPTIONAL[2][3], f).captures[1]) for f in o2]) == 1:100
-        for r in fb
-            f = p615j_res("Monolayer", "Potts.jl_5T_MonolayerGrowth_1000_Data", "cell_data_no_inhibition_$(r["k"]).csv")
-            isfile(f) || (@test false; continue)
-            h, rows = p615j_csv(f)
-            @test h == P615J_H_O2
-            fv = [p615j_f(x[4]) for x in rows]
-            av = [p615j_f(x[5]) for x in rows]
-            N = parse(Int, r["N"])
-            @test length(rows) == N
-            @test count(==(0.0), fv) == parse(Int, r["n_f0"])
-            @test abs(sum(fv) - p615j_f(r["sum_f"])) <= 1e-9 * N
-            @test abs(sum(av) - p615j_f(r["sum_a"])) <= 1e-9 * N
-            @test p615j_eq(maximum(fv), p615j_f(r["f_max"]); rtol = 1e-10)
-            @test p615j_eq(minimum(av), p615j_f(r["a_min"]); rtol = 1e-10)
-            @test p615j_eq(maximum(av), p615j_f(r["a_max"]); rtol = 1e-10)
-        end
+    _, fr = p615j_tsv(joinpath(p615j_rec(:f5), "runs.tsv"))
+    fb = filter(r -> r["case"] == "b", fr)
+    _, o2m = isempty(rec) ? (String[], Dict{String, String}[]) : p615j_tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
+    o2row = Dict(r["file"] => r for r in o2m if haskey(r, "file"))
+    @test sort([parse(Int, match(P615J_REQUIRED[3][3], f).captures[1]) for f in o2]) == 1:100
+    for r in fb
+        f = p615j_res("Monolayer", "Potts.jl_5T_MonolayerGrowth_1000_Data", "cell_data_no_inhibition_$(r["k"]).csv")
+        isfile(f) || (@test false; continue)
+        h, rows = p615j_csv(f)
+        @test h == P615J_H_O2
+        fv = [p615j_f(x[4]) for x in rows]
+        av = [p615j_f(x[5]) for x in rows]
+        N = parse(Int, r["N"])
+        @test length(rows) == N
+        @test count(==(0.0), fv) == parse(Int, r["n_f0"])
+        @test abs(sum(fv) - p615j_f(r["sum_f"])) <= 1e-9 * N
+        @test abs(sum(av) - p615j_f(r["sum_a"])) <= 1e-9 * N
+        @test p615j_eq(maximum(fv), p615j_f(r["f_max"]); rtol = 1e-10)
+        @test p615j_eq(minimum(av), p615j_f(r["a_min"]); rtol = 1e-10)
+        @test p615j_eq(maximum(av), p615j_f(r["a_max"]); rtol = 1e-10)
+        m = get(o2row, "$(P615J_O2_DIR)/cell_data_no_inhibition_$(r["k"]).csv", nothing)
+        @test m !== nothing && m["sha256"] == p615j_sha(f) && parse(Int, m["bytes"]) == filesize(f) &&
+              parse(Int, m["rows"]) == length(rows)
     end
-    # A3: inhibition shares sum to 1, on the run's saves (cases a, e)
-    for f in p615j_present(rels, :A3)
-        m = match(P615J_OPTIONAL[3][3], f)
+
+    # A3: shares of the inhibition codes per O1 save, for every run of cases a and e (and of c, d
+    # where O1 has them); f_k = i_k/cells of that save's O1 file; f0 is the record's g
+    a3 = p615j_present(rels, :A3)
+    a3cases = sort(union(P615J_A3_CASES, intersect(o1cases, collect(keys(P615J_SWEEP_CASE)))))
+    want = sort([(c, s) for (c, s) in keys(isempty(man) ? ts : man) if c in a3cases])
+    got = sort([(m.captures[1], parse(Int, m.captures[2])) for f in a3 for m in (match(P615J_REQUIRED[4][3], f),)])
+    @test !isempty(want) && got == want
+    for f in a3
+        m = match(P615J_REQUIRED[4][3], f)
         case, s = m.captures[1], parse(Int, m.captures[2])
-        @test case in ("a", "e") && haskey(ts, (case, s))
+        @test case in a3cases && haskey(man, (case, s))
         h, rows = p615j_csv(p615j_res(f))
         @test h == P615J_H_A3
-        @test [p615j_f(x[1]) for x in rows] == [r[1] for r in get(ts, (case, s), Vector{Float64}[])]
+        case in P615J_CASES &&
+            @test [p615j_f(x[1]) for x in rows] == [r[1] for r in get(ts, (case, s), Vector{Float64}[])]
         @test all(x -> abs(sum(p615j_f.(x[3:6])) - 1) <= 1e-9 && all(>=(0), p615j_f.(x[3:6])), rows)
+        mrows = get(man, (case, s), Any[])
+        ok = length(rows) == length(mrows)
+        for (x, e) in zip(rows, mrows)
+            ok &= length(x) == 6 && p615j_f(x[1]) == e.mcs && p615j_eq(p615j_f(x[2]), e.mcs / P615J_CYCLE) &&
+                  all(p615j_eq(p615j_f(x[2 + k]), e.i[k] / e.rows) for k in 1:4)
+        end
+        @test ok
+        if haskey(ts, (case, s))
+            w = ts[(case, s)]
+            @test length(rows) == length(w) && all(p615j_eq(p615j_f(x[3]), r[7]) for (x, r) in zip(rows, w))
+        end
     end
-    # O3: header, ≥ 5 rows, 5T = MCS / 775 (or both non-finite for capped runs)
+
+    # O3: header, ≥ 5 rows, 5T = MCS / 775 (or both non-finite for capped runs); byte copies of
+    # the P6.15g record's tables
+    sw = haskey(P615J_RECS, :sweeps) ? p615j_rec(:sweeps) : ""
     for (key, par) in ((:O3b, "beta"), (:O3g, "gamma"))
-        for f in p615j_present(rels, key)
+        files = p615j_present(rels, key)
+        @test length(files) == 1
+        for f in files
             h, rows = p615j_csv(p615j_res(f))
             @test h == P615J_H_O3[par]
             @test length(rows) >= 5
@@ -610,15 +841,19 @@ end
                 mcs, t = p615j_f(x[2]), p615j_f(x[3])
                 length(x) == 3 && (isfinite(mcs) ? abs(t - mcs / P615J_CYCLE) <= 0.005 : !isfinite(t))
             end
+            @test !isempty(sw) && read(p615j_res(f)) == read(joinpath(sw, basename(f)))
         end
     end
-    # O5: ≥ 5 snapshots, header, inhibited ∈ {0, 1}
+    # O5: ≥ 5 snapshots, header, inhibited ∈ {0, 1}; byte copies of the record's f7/ files
     o5 = p615j_present(rels, :O5)
-    @test isempty(o5) || length(o5) >= 5
+    @test length(o5) >= 5
+    f7 = isempty(sw) ? String[] : filter(n -> occursin(r"^Potts\.jl_gamma_.+MCS\.csv$", n), readdir(joinpath(sw, "f7")))
+    @test sort(basename.(o5)) == sort(f7)
     for f in o5
         h, rows = p615j_csv(p615j_res(f))
         @test h == P615J_H_O5
         @test !isempty(rows) && all(x -> length(x) == 4 && x[4] in ("0", "1"), rows)
+        @test !isempty(sw) && read(p615j_res(f)) == read(joinpath(sw, "f7", basename(f)))
     end
 end
 
@@ -633,7 +868,7 @@ end
     res_ok(f) = f in res_fixed || occursin(r"^provenance/[^/]+\.toml$", f) ||
                 occursin(r"^Monolayer/metrics/[a-z]+/measurements_s\d+\.csv$", f) ||
                 occursin(r"^Monolayer/metrics/(measurements_[a-z]+_mean|neighbors_[a-z]+)\.csv$", f) ||
-                any(x -> occursin(x[3], f), P615J_OPTIONAL)
+                any(x -> occursin(x[3], f), P615J_REQUIRED)
     stray = String[]
     for f in tree
         if startswith(f, "implementations/Potts.jl/")
@@ -741,4 +976,199 @@ end
         occursin(P615J_ROOT, s) && push!(bad, "$f: checkout path")
     end
     @test isempty(bad)
+end
+
+@testset "P6.15j (11) O1 re-run record: its manifest reproduces the F3/F8 record (D-204 a, b)" begin
+    rec = p615j_o1_rec()
+    @test !isempty(rec)
+    if !isempty(rec)
+        for f in ("provenance.toml", "runs.tsv", "o1_manifest.tsv", "archives.tsv", "o2_manifest.tsv")
+            @test p615j_has(rec, f)
+        end
+        prov = p615j_has(rec, "provenance.toml") ? TOML.parsefile(joinpath(rec, "provenance.toml")) : Dict{String, Any}()
+        @test get(prov, "item", "") == "P6.15j"
+        @test occursin(r"^[0-9a-f]{40}$", get(prov, "commit", ""))
+        @test p615j_has(rec, basename(get(prov, "runner", "-")))
+        @test !haskey(prov, "work")                                  # no local paths (D-195)
+        @test !p615j_has(rec, "verdicts.tsv") && !p615j_has(rec, "deviations.tsv")
+        for (f, h) in (("o1_manifest.tsv", P615J_H_O1M), ("archives.tsv", P615J_H_ARCH), ("o2_manifest.tsv", P615J_H_O2M),
+                       ("runs.tsv", P615J_H_O1RUNS))
+            @test first(p615j_tsv_or_empty(joinpath(rec, f))) == h
+        end
+        man = p615j_o1_manifest(rec)
+        cases = p615j_o1_cases(man)
+        @test issubset(P615J_O1_CASES, cases) && issubset(cases, ["a", "b", "c", "d", "e", "f"])
+        # rows well formed (spec §3.1 names), files unique and sorted
+        _, raw = p615j_tsv_or_empty(joinpath(rec, "o1_manifest.tsv"))
+        files = [r["file"] for r in raw if haskey(r, "file")]
+        @test length(files) == length(raw) && files == sort(files) && allunique(files)
+        ok = true
+        for v in values(man), e in v
+            m = match(P615J_O1_MEMBER, e.file)
+            ok &= m !== nothing && m.captures[1] == e.case && m.captures[2] == e.case &&
+                  parse(Int, m.captures[3]) == e.seed && parse(Int, m.captures[4]) == e.mcs &&
+                  e.rows >= 1 && all(>=(0), e.i) && sum(e.i) == e.rows && e.bytes > ncodeunits(P615J_H_O1) + 1 &&
+                  p615j_hex(e.sha)
+        end
+        @test ok
+        # the F3/F8 record reproduced: every save's MCS and cell count, the growing fraction
+        # (i = 0 share = g), the stop MCS, final N and save count of runs.tsv
+        ts = p615j_timeseries()
+        runs3 = p615j_runs3()
+        meta3 = TOML.parsefile(joinpath(p615j_rec(:f3f8), "meta.toml"))
+        for case in P615J_O1_CASES
+            want = sort([s for (c, s) in keys(runs3) if c == case])
+            @test sort([s for (c, s) in keys(man) if c == case]) == want
+            γ0 = meta3["cases"][case]["gamma"] == 0
+            for s in want
+                v, w, r = get(man, (case, s), Any[]), ts[(case, s)], runs3[(case, s)]
+                @test [e.mcs for e in v] == [Int(x[1]) for x in w]
+                @test [e.rows for e in v] == [Int(x[2]) for x in w]
+                @test length(v) == length(w) && all(p615j_eq(e.i[1] / e.rows, x[7]) for (e, x) in zip(v, w))
+                @test !isempty(v) && last(v).mcs == parse(Int, r["mcs"]) && last(v).rows == parse(Int, r["N"]) &&
+                      length(v) == parse(Int, r["saves"])
+                γ0 && @test all(e -> e.i[3] == 0 && e.i[4] == 0, v)
+            end
+        end
+        # cases c and d only where O1 has them: the sweeps record's stops; saves at 0, every 39 MCS, the stop
+        if any(in(cases), ("c", "d"))
+            inv = Dict(v => k for (k, v) in P615J_SWEEP_CASE)
+            _, swr = p615j_tsv(joinpath(p615j_rec(:sweeps), "runs.tsv"))
+            sweep = Dict((inv[String(r["sweep"])], parse(Int, r["seed"])) => r for r in swr)
+            for ((c, s), v) in man
+                c in ("c", "d") || continue
+                r = get(sweep, (c, s), nothing)
+                @test r !== nothing && last(v).mcs == parse(Int, r["mcs"]) && last(v).rows == parse(Int, r["N"])
+                m = [e.mcs for e in v]
+                @test m[1] == 0 && all(x -> x % P615J_GRID == 0, m[1:(end - 1)]) && all(diff(m) .> 0)
+            end
+        end
+        # runs.tsv: one row per re-run, equal to the F3/F8 record's rows on these columns
+        _, rr = p615j_tsv_or_empty(joinpath(rec, "runs.tsv"))
+        got = Dict((r["case"], parse(Int, r["seed"])) => r for r in rr if haskey(r, "case") && haskey(r, "seed"))
+        @test Set(keys(got)) == Set(keys(man))
+        for ((c, s), r3) in runs3
+            c in P615J_O1_CASES || continue
+            r = get(got, (c, s), nothing)
+            @test r !== nothing && all(get(r, k, "") == String(r3[k]) for k in ("k", "mcs", "N", "saves"))
+        end
+        # archives.tsv: one archive per case, with its member count
+        _, ar = p615j_tsv_or_empty(joinpath(rec, "archives.tsv"))
+        @test sort([get(r, "case", "") for r in ar]) == cases
+        for r in ar
+            @test get(r, "archive", "") == p615j_o1_zip(r["case"]) &&
+                  parse(Int, r["members"]) == length(p615j_o1_members(man, r["case"])) &&
+                  parse(Int, r["bytes"]) > 0 && p615j_hex(r["sha256"])
+        end
+        # o2_manifest.tsv (D-204 b): k = 1:100, the F5 names and cell counts
+        _, o2m = p615j_tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
+        _, fr = p615j_tsv(joinpath(p615j_rec(:f5), "runs.tsv"))
+        nb = Dict(String(r["k"]) => parse(Int, r["N"]) for r in fr if r["case"] == "b")
+        @test sort([parse(Int, get(r, "k", "0")) for r in o2m]) == 1:100
+        for r in o2m
+            @test get(r, "file", "") == "$(P615J_O2_DIR)/cell_data_no_inhibition_$(r["k"]).csv" &&
+                  parse(Int, r["rows"]) == get(nb, r["k"], -1) && parse(Int, r["bytes"]) > 0 && p615j_hex(r["sha256"])
+        end
+    end
+end
+
+@testset "P6.15j (12) O1 archives in the package: bytes and every member equal the manifest (D-204 a)" begin
+    @test p615j_build()
+    rec = p615j_o1_rec()
+    man = isempty(rec) ? Dict{Tuple{String, Int}, Vector{Any}}() : p615j_o1_manifest(rec)
+    cases = p615j_o1_cases(man)
+    @test !isempty(cases)
+    @test Sys.which("unzip") !== nothing
+    # the package's manifest: the record's rows, archive by archive, in member order
+    p = p615j_res("Monolayer", P615J_O1_MANIFEST)
+    @test isfile(p)
+    if isfile(p)
+        h, rows = p615j_csv(p)
+        @test h == P615J_H_O1PKG
+        @test rows == [[p615j_o1_zip(c), e.file, string(e.rows), string(e.bytes), e.sha]
+                       for c in cases for e in p615j_o1_members(man, c)]
+    end
+    _, ar = isempty(rec) ? (String[], Dict{String, String}[]) : p615j_tsv_or_empty(joinpath(rec, "archives.tsv"))
+    arch = Dict(r["case"] => r for r in ar if haskey(r, "case"))
+    ts = p615j_timeseries()
+    _, nbr = p615j_tsv(joinpath(p615j_rec(:f3f8), "neighbors.tsv"))
+    nbh = Dict{Tuple{String, Int}, Dict{Int, Int}}()
+    for r in nbr
+        d = get!(nbh, (String(r["case"]), parse(Int, r["seed"])), Dict{Int, Int}())
+        d[parse(Int, r["n"])] = get(d, parse(Int, r["n"]), 0) + parse(Int, r["count"])
+    end
+    _, fr = p615j_tsv(joinpath(p615j_rec(:f5), "runs.tsv"))
+    o2k = Dict(parse(Int, r["seed"]) => String(r["k"]) for r in fr if r["case"] == "b")
+    for case in cases
+        z = p615j_res("Monolayer", p615j_o1_zip(case))
+        a = get(arch, case, nothing)
+        @test isfile(z) && a !== nothing
+        (isfile(z) && a !== nothing && Sys.which("unzip") !== nothing) || continue
+        # bytes: the record's archive, and the bulk directory's (copied, never re-zipped)
+        @test filesize(z) == parse(Int, a["bytes"]) && p615j_sha(z) == a["sha256"]
+        bz = joinpath(P615J_BULK, p615j_o1_zip(case))
+        @test isfile(bz) && filesize(bz) == filesize(z) && p615j_sha(bz) == a["sha256"]
+        mem = p615j_o1_members(man, case)
+        @test p615j_zip_names(z) == [e.file for e in mem]               # exactly these, in this order
+        # every member: sha256, header x,y,i,n, rows, code counts, n ≥ 0 (byte scan). Spot set
+        # (parsed): every save of the case's first seed and every run's stop: finite x, y; the
+        # record's N, r, A, C, w, g recomputed by openvt_metrics; the stop's neighbour histogram
+        # (neighbors.tsv); for case b, the stop's x, y equal to the O2 file of the same seed
+        seeds = sort(unique(e.seed for e in mem))
+        stop = Dict(s => maximum(e.mcs for e in mem if e.seed == s) for s in seeds)
+        bad = String[]
+        open(`unzip -p $z`) do io
+            for e in mem
+                buf = read(io, e.bytes)
+                length(buf) == e.bytes || (push!(bad, "$(e.file): short"); break)
+                bytes2hex(sha256(buf)) == e.sha || push!(bad, "$(e.file): sha256")
+                sc = p615j_o1_scan(buf)
+                (sc.ok && sc.header == P615J_H_O1 && sc.rows == e.rows && sc.i == e.i) || push!(bad, "$(e.file): content")
+                (e.seed == first(seeds) || e.mcs == stop[e.seed]) || continue
+                o = p615j_o1_parse(buf)
+                (all(isfinite, o.x) && all(isfinite, o.y)) || push!(bad, "$(e.file): non-finite centroid")
+                if haskey(ts, (case, e.seed))
+                    j = findfirst(r -> Int(r[1]) == e.mcs, ts[(case, e.seed)])
+                    if j === nothing
+                        push!(bad, "$(e.file): no timeseries row")
+                    else
+                        w = ts[(case, e.seed)][j]
+                        mt = PottsModels.openvt_metrics(o.x, o.y, Float64.(o.i .== 0))
+                        (length(o.x) == Int(w[2]) && all(p615j_eq(getfield(mt, k), w[c]) for (k, c) in
+                                                         ((:r, 3), (:A, 4), (:C, 5), (:w, 6), (:g, 7)))) ||
+                            push!(bad, "$(e.file): metrics differ from timeseries.tsv")
+                    end
+                end
+                e.mcs == stop[e.seed] || continue
+                if haskey(nbh, (case, e.seed))
+                    hist = Dict{Int, Int}()
+                    foreach(n -> hist[n] = get(hist, n, 0) + 1, o.n)
+                    hist == nbh[(case, e.seed)] || push!(bad, "$(e.file): neighbour histogram differs from neighbors.tsv")
+                end
+                if case == "b"
+                    f = p615j_res("Monolayer", P615J_O2_DIR, "cell_data_no_inhibition_$(get(o2k, e.seed, "0")).csv")
+                    if isfile(f)
+                        _, r2 = p615j_csv(f)
+                        (length(r2) == length(o.x) &&
+                         all(p615j_f(r[1]) == x && p615j_f(r[2]) == y for (r, x, y) in zip(r2, o.x, o.y))) ||
+                            push!(bad, "$(e.file): x, y differ from the O2 file")
+                    else
+                        push!(bad, "$(e.file): no O2 file for seed $(e.seed)")
+                    end
+                end
+            end
+            eof(io) || push!(bad, "$(case): bytes after the last member")
+        end
+        @test isempty(bad)
+        isempty(bad) || @info "P6.15j (12) $(case)" first(bad, 10)
+    end
+end
+
+@testset "P6.15j (13) MIT licence line in both READMEs (D-181, D-204 d)" begin
+    @test p615j_build()
+    for p in (p615j_impl("README.md"), p615j_res("README.md"))
+        txt = isfile(p) ? read(p, String) : ""
+        @test any(l -> occursin(Regex("\\b" * P615J_LICENCE * "\\b"), l) && occursin("LICENSE", l) &&
+                       occursin(P615J_REPO_URL, l), split(txt, '\n'))
+    end
 end

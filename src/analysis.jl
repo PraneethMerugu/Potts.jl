@@ -65,6 +65,8 @@ struct _ZeroTemperature{F}
     temperature::F
 end
 @inline (z::_ZeroTemperature)(st, p, prop, ctx) = zero(z.temperature(st, p, prop, ctx))
+# `anneal` keeps the generated copy-step reads (`copy_step_relations`, D-208)
+_same_temperature(t::_ZeroTemperature, g) = t.temperature === g
 
 """
     Potts.anneal(prob, u = prob.u0; mcs, seed = 0, alg = SequentialCPM())

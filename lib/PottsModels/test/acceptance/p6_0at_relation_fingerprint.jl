@@ -15,6 +15,15 @@
 # and `Weighted(Moore(1), 2)` vs `3` all fingerprint alike pairwise, so a checkpoint loads
 # across them although the energy or the dynamics differ.
 #
+# Amended under D-209 (P6.0ca). The cell-energy fixtures ("… energy …") originally folded
+# `count(owner[n] == id for n in R(40))`, a σ-dependent gather that D-209 refuses at
+# `mtkcompile` (its ΔH was wrong). They now fold the same count over a static site value,
+# `0.1 * volume * count(q[n] == id for n in R(40))`, with `q` the initial owner map set from
+# the operating point (every fixture's operating point carries it; `q` stays a site variable
+# the "update" fixtures overwrite after each MCS). The fold reads the same relation at the
+# same site and is read by the generated ΔH (through `volume`), so it enters the fingerprint
+# as before; energies still differ between the twins. Nothing else changed.
+#
 # Already reflected in the code (pass on the base; pinned so the rule does not lose them):
 #  - the name of a named relation (`contacts(far)` vs `contacts(near)`, same spec) differs,
 #    as renaming anything the generated code reads does;
@@ -60,6 +69,9 @@ const P60AT_LATTICES = Dict(
 # a fold of relation `r` (a name or an inline spec call) around a fixed site: 40 = (4, 4), a
 # corner of cell 1 on the 12×12 lattices; 74 = (2, 2, 2), a corner of cell 1 on the cube
 p60at_count(r, who = :id; site = 40) = :(count(owner[n] == $who for n in $r($site)))
+# the same fold over the static site value `q` (the initial owner map, set from the operating
+# point): the energy form allowed under D-209 (P6.0ca), read by the generated ΔH through `volume`
+p60at_static(r, who = :id; site = 40) = :(count(q[n] == $who for n in $r($site)))
 # copy drive reading relations `rs` at the source and `rt` at the target
 p60at_drive(rs, rt) = :(@drive copy => 0.1 * (count(owner[n] == 1 for n in $rs(source)) - count(owner[n] == 1 for n in $rt(target))))
 
@@ -86,15 +98,15 @@ const P60AT_FIXTURES = [
     "sq contacts far=Weighted(Moore(1), 2) again" => (:sq, :(far = Weighted(Moore(1), o -> 2.0)), [:(@energy contacts(far) => 1.0 * weight)]),
     "sq contacts far=Weighted(Moore(1), 3)" => (:sq, :(far = Weighted(Moore(1), o -> 3.0)), [:(@energy contacts(far) => 1.0 * weight)]),
     # a named fold in a cell energy
-    "sq energy far(40) far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@energy cells => 0.1 * $(p60at_count(:far)))]),
-    "sq energy far(40) far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@energy cells => 0.1 * $(p60at_count(:far)))]),
+    "sq energy far(40) far=Ball(2.0)" => (:sq, :(far = Ball(2.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
+    "sq energy far(40) far=Ball(3.0)" => (:sq, :(far = Ball(3.0)), [:(@energy cells => 0.1 * volume * $(p60at_static(:far)))]),
     # an inline gather in a cell energy
-    "sq energy Moore(1)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Moore(1)))))]),
-    "sq energy Moore(2)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Moore(2)))))]),
-    "sq energy NeighborOrder(2)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(NeighborOrder(2)))))]),
-    "sq energy Stencil(+x,+y)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Stencil([[1, 0], [0, 1]])))))]),
-    "sq energy Stencil(+y,+x)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Stencil([[0, 1], [1, 0]])))))]),
-    "sq energy Stencil(+x,-y)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Stencil([[1, 0], [0, -1]])))))]),
+    "sq energy Moore(1)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Moore(1)))))]),
+    "sq energy Moore(2)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Moore(2)))))]),
+    "sq energy NeighborOrder(2)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(NeighborOrder(2)))))]),
+    "sq energy Stencil(+x,+y)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Stencil([[1, 0], [0, 1]])))))]),
+    "sq energy Stencil(+y,+x)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Stencil([[0, 1], [1, 0]])))))]),
+    "sq energy Stencil(+x,-y)(40)" => (:sq, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Stencil([[1, 0], [0, -1]])))))]),
     # a cell ODE: inline gather and named relation
     "sq ode Moore(1)(40)" => (:sq, nothing, [:(@equations D(y) ~ 0.1 * $(p60at_count(:(Moore(1)))) - 0.1y)]),
     "sq ode Moore(2)(40)" => (:sq, nothing, [:(@equations D(y) ~ 0.1 * $(p60at_count(:(Moore(2)))) - 0.1y)]),
@@ -119,16 +131,16 @@ const P60AT_FIXTURES = [
     "hex contacts far=Hex(3)" => (:hex, :(far = Hex(3)), [:(@energy contacts(far) => 1.0)]),
     "hex contacts far=Hex(1)" => (:hex, :(far = Hex(1)), [:(@energy contacts(far) => 1.0)]),
     "hex contacts far=Moore(1)" => (:hex, :(far = Moore(1)), [:(@energy contacts(far) => 1.0)]),
-    "hex energy Hex(1)(40)" => (:hex, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Hex(1)))))]),
-    "hex energy Hex(2)(40)" => (:hex, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(Hex(2)))))]),
+    "hex energy Hex(1)(40)" => (:hex, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Hex(1)))))]),
+    "hex energy Hex(2)(40)" => (:hex, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(Hex(2)))))]),
     # 3D
     "cube" => (:cube, nothing, []),
     "cube contacts far=Moore(1)" => (:cube, :(far = Moore(1)), [:(@energy contacts(far) => 1.0)]),
     "cube contacts far=NeighborOrder(2)" => (:cube, :(far = NeighborOrder(2)), [:(@energy contacts(far) => 1.0)]),
     "cube contacts far=VonNeumann(1)" => (:cube, :(far = VonNeumann(1)), [:(@energy contacts(far) => 1.0)]),
     "cube contacts far=NeighborOrder(3)" => (:cube, :(far = NeighborOrder(3)), [:(@energy contacts(far) => 1.0)]),
-    "cube energy NeighborOrder(1)(74)" => (:cube, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(NeighborOrder(1)); site = 74)))]),
-    "cube energy NeighborOrder(2)(74)" => (:cube, nothing, [:(@energy cells => 0.1 * $(p60at_count(:(NeighborOrder(2)); site = 74)))]),
+    "cube energy NeighborOrder(1)(74)" => (:cube, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(NeighborOrder(1)); site = 74)))]),
+    "cube energy NeighborOrder(2)(74)" => (:cube, nothing, [:(@energy cells => 0.1 * volume * $(p60at_static(:(NeighborOrder(2)); site = 74)))]),
 ]
 const P60AT_MODELS = Dict{String, Any}()
 const P60AT_LATTICE_OF = Dict{String, Symbol}()
@@ -161,7 +173,7 @@ function p60at_op(lk::Symbol)
         σ[2:4, 2:4] .= 1
         σ[7:9, 7:9] .= 2
     end
-    return [ownership => σ, kind => [:A, :A]]
+    return [ownership => σ, kind => [:A, :A], :q => Float64.(σ)]   # q: static owner labels (P6.0ca)
 end
 
 p60at_problem(label; T = Float64, tspan = (0, 12), seed = 1) =
