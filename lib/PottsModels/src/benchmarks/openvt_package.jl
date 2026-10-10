@@ -41,7 +41,7 @@ OpenVT package (D-213 (b)); the core README and `EMAIL.md` link each bulk file a
 the release: the maintainer creates it under this tag (or rebuilds with another
 `release_tag`).
 """
-const OPENVT_BULK_RELEASE_TAG = "openvt-monolayer-package-2026-10-10"
+const OPENVT_BULK_RELEASE_TAG = "openvt-monolayer-submission-2026-10-10"
 
 # the sweeps record's O3 tables (record names) => the package names (D-215: the token)
 const _OPENVT_PKG_O3 = ("Potts.jl_time_to_10k_vs_beta.csv" => "$(_OPENVT_PKG_FW)_time_to_10k_vs_beta.csv",
