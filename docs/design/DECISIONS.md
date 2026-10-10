@@ -4137,3 +4137,16 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Kept regardless:**
   1. A CheckerboardCPM docs note. One checkerboard MCS is not one sequential MCS: with 4 colours only about 27% of accepted copies commit. Time-dependent parameters (growth rates and similar) therefore need the algorithm's own calibrated T, or more colours. The note cites the D-220 ablations (64 colours; sequential at 0.3·N). This is new item P6.15m-doc.
   2. The ΔH brute-force check (16,605 copies, 0 mismatches) and the exact-tracker evidence are kept in citable form in the checkerboard record, as GPU-correctness evidence for the Potts.jl paper.
+
+## D-224 P6.15m: calibrate the checkerboard T at the production colour count (2026-10-10; spec owner's catch, coordinator ruling; supersedes D-221 item 2)
+
+- **The problem.** D-221 accepted a T_cb measured on the 150 × 5 periodic chain, which has 6 colours (stride 2 on 5 rows), while the monolayer runs with 4. The commit fraction, and with it the copies per MCS, depends on the colour count (D-220: 64 colours restore sequential), so a 6-colour T does not compensate a 4-colour monolayer. The m3 numbers fit this: case (a) still loses about 4,011 cells after the α change, and 174/156 = 1.115 is nowhere near the commit deficit of about 3.6× at 4 colours.
+- **Ruling.** T_cb is calibrated on a chain geometry that gives the production colour count (4). We use spec 15 §4.2 variant P1b, TST's own setup: 150 × 7, the 5 chain rows plus 2 frozen border rows, closed in y.
+  - Closed y at stride 2 gives no singleton tail colours.
+  - The sequential T is re-measured on the same P1b geometry, so that the z test compares like with like.
+  - The calibration record states the colour count. The runner asserts calibration colours == production colours.
+- **Then.**
+  - The m3 cases (a, b, f) and the D-221 ablation are re-run at the new T_cb and α = A₀/(5·T_cb).
+  - The m4 frozen test (D-222), which pins 174/870, is re-frozen with the values from the record. Its test author keeps the values parameterised from the record.
+  - m5 sweeps wait for this.
+- **Answer to the gate if it fails.** If the 4-colour T_cb still does not close the (a)/(b)/(f) gaps, then M's chain calibration cannot absorb claim thinning for this model. That is the characterisation result, and it is reported as such.
