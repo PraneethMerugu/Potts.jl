@@ -3954,5 +3954,5 @@ session.
   - the new record is `data/15/f8beta-<date>/`, coloured red for inhibited.
 - **R3.** The metrics figure is "Figure 9" on the page and in the package READMEs. Dated change-log rows are exempt.
 - **R4.** The F5 record gets a re-render on the shared edges 0/18.6/37.2/55.8/74.4/93. Its verdict files must stay byte-identical, so V4 is unchanged. Summed over distance bins, the counts must equal `hist.tsv`.
-- **Labels (Q24).** M's label quantity is unknown: no candidate matched (R5). The panels carry no number. Each Potts colony's C/C_circle (metrics.cpp roughness 1) is shown to two decimals in the caption or a table, with a note that M's quantity is unstated and on our open question list. Our values for Fig 7 are 1.38, 1.91 and 2.22.
+- **Labels (Q26; first written Q24, corrected in D-211).** M's label quantity is unknown: no candidate matched (R5). The panels carry no number. Each Potts colony's C/C_circle (metrics.cpp roughness 1) is shown to two decimals in the caption or a table, with a note that M's quantity is unstated and on our open question list. Our values for Fig 7 are 1.38, 1.91 and 2.22.
 - **Package.** `figures/fig5.png`, `fig7.png` and `fig8.png`, the β O5 files, and the P6.15k record become required.
