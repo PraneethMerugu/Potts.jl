@@ -48,7 +48,7 @@ It is **not** the M schema; see §5.
 | C5 | Sensitivity analysis (relative condition numbers per framework) | schema only (`G:schema/README.md:81`); absent from M's DATA ANALYSIS list (M p.2–3) and from every figure | **M** (the later, complete list). Not a submission requirement; kept as optional item S-opt1 |
 | C6 | Literature comparisons (Drasdo 2005, Germano 2023, Killeen 2023) | schema only (`G:schema/README.md:71-79`); M has none. `G:results/comparison_experiment.tex` plots Bru 1998 radius data in h/µm, not used in M | **M**. Not required; optional item S-opt2 (needs a physical unit map) |
 | C7 | Cell diameter CD | schema: 1 CD = 2√(A*(0)/π) = 7.98 px (`G:schema/README.md:55`); every CPM: **CD = 10 px** on a 5-px-high strip, i.e. the relaxed length of a 50-px cell (`G:implementations/Morpheus/Relaxation_11cells_Morpheus_V5.xml:10`; `TSTgh:openvt/model-monolayer-11cells.py:70`; CC3D and Artistoo boxes 10 × 5) | **Implementations** for the lattice protocol. M does not define CD numerically, and Fig 2 requires the relaxed w₁₁ to equal **10 CD**, which holds only for CD = relaxed cell length. With 7.98 px the relaxed chain would read 12.5 "CD" |
-| C8 | Output columns | M: `x, y, i, n` with i ∈ {0,1,2,3} (M p.2); `metrics.cpp` requires `x, y, g, n` with g the growing flag 0/1 (`G:results/postprocessing/metrics.cpp:101-130`); CC3D, Morpheus and PhysiCell emit `g` | **M** for submitted files. The Julia metrics port derives g = (i == 0). For a byte-level check against `metrics.cpp`, a converter adds a `g` column to a scratch copy |
+| C8 | Output columns | M: `x, y, i, n` with i ∈ {0,1,2,3} (M p.2); `metrics.cpp` requires `x, y, g, n` with g the growing flag 0/1 (`G:results/postprocessing/metrics.cpp:101-130`); CC3D, Morpheus and PhysiCell emit `g` | **M + G (D-215, replacing D-206's "spec over convention").** Submitted O1 files carry `x,y,i,n,g` with g = (i == 0): M's columns plus G's growing flag, because `metrics.cpp` exits without g. The Julia metrics port reads either |
 | C9 | Type 1 inequality | schema `A/A0 > β` (`G:schema/README.md:33`); M `a_i ≥ β` (M p.2) | **M** (≥). Morpheus V11, TST and Artistoo use ≥; CC3D uses ≥ for type 1 alone and > in its `1_AND_2` branch (`…Steppables.py:114,123`) |
 | C10 | Fig 8 length units | M: lengths in R (M p.3); the draft Fig 8 lattice curves come from centroid files in **px** (`G:results/postprocessing/measurements_compucell3d.csv` r = 270 at N = 10⁴, CC3D A₀ = 25 → 1 R = 2.82 px; Morpheus r = 395 px, 1 R = 3.99 px) | **M**. Potts plots r, a in R. Consortium overlays of these legacy files are divided by R_px (§4.4) |
 | C11 | Fig 5 distance bins | notebook: `number_of_bins = 7`, edges `linspace(0, 1.05·max d, 8)` (`G:results/postprocessing/Monolayer02Plot_dists.ipynb` cell 5); M Fig 5 legend has **5** bins 0–7, 7–15, 15–23, 23–31, 31–39 | **M** (the figure): 5 equal bins from 0 to 1.05·max d, labels `int(edge)` |
@@ -94,6 +94,64 @@ Comparison method: the text of both drafts was diffed, and pages 1–4 were comp
 - the Fig 5 row on shared bins (R4).
 
 The figure colours follow M (yellow/teal/red per inhibition state). The concave-hull line is a tissue outline drawn by M, not a cell outline, so the no-outline rule does not apply to it; the consortium-figure exception (D-185) covers it anyway.
+
+## 1.3 Checkerboard characterisation: "Potts.jl (checkerboard)" (D-214; **not submitted, D-225**)
+
+**Status (D-225, maintainer 2026-10-10): "ok we can leave checkerboard out of the submission, but keep it in the docs".**
+- **The submission is sequential only.** The parts below marked *not submitted (D-225)* were the planned second entry and are kept for reference only.
+- **Kept:** the characterisation (the algorithm, the difference classes and the results), the record under D-224, the page-15 characterisation section, the ΔH evidence and the `CheckerboardCPM` manual note.
+- **Cancelled:** the m5 gate sweeps.
+
+*Not submitted (D-225):* the planned submission carried **two** Potts rows. They share one model, one parameter set and one MCS clock, and differ only in the update algorithm:
+
+| Entry | Algorithm | Hardware | Seeds |
+|---|---|---|---|
+| **Potts.jl** | `SequentialCPM` (random-site sequential Metropolis; `skip_interior = true` for the long sweeps) | CPU | the existing records |
+| **Potts.jl (checkerboard)** | `CheckerboardCPM` | the PC's GPU (ROCm; maintainer: "definitely do it on gpu") | its own, disjoint from the sequential seeds |
+
+**What the checkerboard entry is** (`lib/CorePotts/src/checkerboard.jl`, `algorithms.jl`):
+- **Colouring.** Sites are coloured by residue class along each axis with stride s = read reach + write reach + 1, so same-colour targets lie outside each other's read/write footprints. On a periodic axis with n mod s ≠ 0, the trailing columns become singleton colours. The OpenVT lattice is closed, so that case does not arise.
+- **One MCS** visits every site once, colour by colour, in a random colour order. Within a colour every site proposes in parallel: a uniform Moore source, the same ΔH and the same Metropolis law.
+- **Conflicts.** Accepted proposals claim every cell they touch with a unique random priority, and commit only if they win every write claim and no higher-priority copy writes a cell they read. So each cell changes at most once per colour, and readers share. A losing proposal is dropped, not retried: "thinning of conflicting accepted copies (D-008 claims)". This is not D-051's Bernoulli thinning for fractional attempts, which is compiled out here.
+- **Per-cell totals.** For this model, volumes update at commit, so "colour-lagged totals" contribute nothing (D-220).
+
+**Expected differences from sequential** (the D-214 characterisation list). Each one, if it exceeds the seed spread, becomes a deviation row with its cause:
+1. update order (colour sweep vs random-site sequential);
+2. colour-lagged totals (nil for this model: volumes update at commit, D-220);
+3. claim widening (a commit can block neighbours that sequential would have allowed);
+4. thinning of conflicting accepted copies (D-008 claims).
+
+**Characterisation result (P6.15m, D-220).** Case (a) under the checkerboard loses ≈ 4,100 cells to crushing per run, against ≈ 865 under sequential, and reaches 10⁴ cells ≈ 15 % later. It is not a bug: ΔH equals brute force on 16,605 committed copies, and the volume trackers are exact.
+- **Cause: class 4.** With 4 colours, only ≈ 27 % of accepted copies commit, ≈ 3.6× fewer copies per MCS. Growth of A\* runs on the MCS clock, so colonies are more compressed.
+- **Ablations confirm it.** 64 colours restore the sequential loss, and sequential with 0.3·N attempts per MCS reproduces the checkerboard loss.
+
+An unexplained difference is chased as a bug. Characterisation describes the entry; it does not gate it (maintainer: "none of these platforms are statistically perfect, but they do have understanding of their deviations").
+
+*Not submitted (D-225).* **Figures and tables.** Every place that carries "Potts.jl" also carries "Potts.jl (checkerboard)", directly after it in the Lattice block:
+- **F1:** a second 45 mm closeup panel and banner (case (a), 10⁴ cells, its own seed). The colour variable is as for Potts (§4.0.2 F1), and the banner is in the Q27 colour with a white bold label.
+- **F2/S5:** its own chain calibration (11 and 11+10), a T(λ) row in Table S5, and its own legend and inset line. The calibration must be repeated, because T in MCS is a property of the update algorithm.
+- **F3, F5, F6/T1, F7, F8, F9:** its own row, curve or legend entry, with insets where the figure has them (F2 b/d/e). Its own Table 1 row.
+- **Time unit (D-220).** The entry runs on its own calibrated T and converts every time-dependent parameter by it, as M does (C1/C16: α = A₀/(5T)). If T_cb(λ = 2) differs significantly from 156 MCS, then **cycle = 5·T_cb and α = A₀/(5·T_cb) px per MCS**. Otherwise 775 MCS and α = 50/775. The record states which and why. The algorithm is unchanged.
+  - **Calibration geometry (D-224).** T_cb is calibrated under the **same colour count as production (4)**: the claim thinning, and so the commit fraction, depends on the colour count.
+    - The chain runs on §4.2 variant P1b: 150 × 7, the 5 chain rows plus 2 frozen border rows, closed in y. At stride 2 there are no singleton tail colours.
+    - The sequential T is re-measured on the same geometry.
+    - The runner asserts that the calibration and production colour counts are equal, and the record states the count.
+    - The first m3 calibration (6 colours on the 5-row periodic chain, T_cb = 174) is superseded.
+
+*Not submitted (D-225).* **Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
+- that the same `@potts_model` runs unchanged under `CheckerboardCPM`;
+- the colouring and claim rule above, in two or three sentences;
+- the GPU backend (KernelAbstractions on ROCm);
+- its seeds;
+- the measured differences from the sequential entry, as a short table that points to the deviation rows.
+
+*Not submitted (D-225).* **Results folder:** `results/Potts.jl_checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. There is also `implementations/Potts.jl_checkerboard/`, holding a README and a runner that point to `implementations/Potts.jl/src`. It uses the same O1–O5 formats and file names, and the framework token **`Potts.jl_checkerboard`** in the file stems that carry one. The token takes an underscore, not a space or hyphen: a space breaks `run_metrics.sh`, and G's precedent is `Chaste_OS_Log` (D-215). The colour keys are `PottsJL` and `PottsJLcheckerboard`. "Potts.jl (checkerboard)" stays the legend and banner text. In the email split it gets its own core section and bulk zips.
+
+*Not submitted (D-225).* **Colour (was Q27; withdrawn with the entry):**
+- **Proposal: RGB 0,109,44** (`#006d2c`, Greens-9 step 8).
+- **Rejected:** the unused YlGnBu-9 steps (29,145,192; 34,94,168; 127,205,187; 199,233,180) all lie within CIE76 ΔE 11–19 of Morpheus, CC3D, TST or Artistoo, which is too close.
+- **Distance from the existing colours:** dark green stays in the cool lattice family (the green end of YlGnBu). It is ΔE 48–110 from every `colors.tex` entry and ΔE 93 from Potts.jl's 8,29,88.
+- **Fallback if the consortium prefers one hue per framework family:** 8,29,88 (the Potts.jl colour) with dashed lines and a hatched banner.
 
 ## 2. Model schema (M §2.1, p.2; Table S1 p.11)
 
@@ -186,11 +244,11 @@ came from code not in G (Q12). Morpheus's Fig 1 colour map and arrest code are i
 
 | # | Use | Format (Potts writes) | Precedent |
 |---|---|---|---|
-| O1 | M's DATA COLLECTION time series (F1, F3, F7, F8) | one headed CSV per save, one row per cell: `x,y,i,n`. x, y = centroid in **R**, origin at the lattice centre; i ∈ {0,1,2,3}; n = Moore distinct neighbours. Name `potts_<case>_s<seed>_<MCS:06d>.csv` | M p.2 (C8). Morpheus `Morpheus_timepoint_%05d.csv`, CC3D `cell_centroids_<mcs>.csv` |
-| O2 | F5 snapshot at 1000 cells | `x,y,r,f,a`, comma-separated, x, y, r in R, r = √(A\*/π)/R; one file per run, `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`, k = 1…100 | notebook reader (`Monolayer02Plot_dists.ipynb` cell 1): columns 0–4 = x, y, r, f, a (Morpheus tab-separated with two leading columns; TST has a and f swapped) |
+| O1 | M's DATA COLLECTION time series (F1, F3, F7, F8) | one headed CSV per save, one row per cell: `x,y,i,n,g` (g = (i == 0); C8, D-215). x, y = centroid in **R**, origin at the lattice centre; i ∈ {0,1,2,3}; n = Moore distinct neighbours. Name `potts_<case>_s<seed>_<MCS:06d>.csv`, in per-seed directories inside descriptively named zips per case, e.g. `<token>_No_CI_stochastic.zip` (D-215). The zips and the O1 manifest are on the bulk side of the email split | M p.2 (C8). Morpheus `Morpheus_timepoint_%05d.csv`, CC3D `cell_centroids_<mcs>.csv` |
+| O2 | F5 snapshot at 1000 cells | `x,y,r,f,a`, comma-separated, x, y, r in R, r = √(A\*/π)/R; one file per run, `<token>_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`, **k = 0…99** (D-215), zipped as `<token>_5T_MonolayerGrowth_1000_Data.zip` on the bulk side | notebook reader (`Monolayer02Plot_dists.ipynb` cell 1): columns 0–4 = x, y, r, f, a (Morpheus tab-separated with two leading columns; TST has a and f swapped) |
 | O3 | F6 / T1 sweep table | `Potts.jl_time_to_10k_vs_beta.csv`, `…_vs_gamma.csv` with header `beta,Time to 10k (MCS),Time to 10k (5T)` (resp. `gamma,…`), one row per run (repeated parameter rows for replicates) | `G:results/TST/TST_time_to_10k_vs_beta.csv`, `G:results/Artistoo/Monolayer/time_to_10k_vs_gamma.csv` |
 | O4 | F2 relaxation | `width.csv` per case (11, 11+10 total, 11+10 inner) with `Normalized time (T)`, one column per replicate, `Mean …`, `STD …` | `TSTgh:openvt/model-monolayer-11cells.py:77-103` |
-| O5 | F7 snapshots | `Potts.jl_gamma_<γ>_<MCS>MCS.csv`: `x_pos,y_pos,radius_i,inhibited` in R | `G:results/TST/final_snapshot_data/` |
+| O5 | F7/F8 snapshots | `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv` (both parameters, TST's pattern; D-215): `x_pos,y_pos,radius_i,inhibited` in R | `G:results/TST/final_snapshot_data/` |
 | O6 | Metrics | `t,N,r,A,C,w,g,C_rel,w_rel` per save, t in cycles; `n,p` neighbour histogram (p in %) | `run_metrics.sh:14`, `metrics.cpp:241-249` (D1) |
 
 ### 3.2 `metrics.cpp` — exact pipeline (`G:results/postprocessing/metrics.cpp`)
@@ -345,6 +403,16 @@ Potts contributes to them.
 6. **Reproducibility:** scripts, seeds, and a provenance TOML (commit, Julia version, backend, wall time). One command regenerates each figure from stored data; another reruns the simulations.
 7. **Not required (C5, C6):** sensitivity analysis (S-opt1) and literature comparisons (S-opt2).
 
+**G conformance and the email split (D-215, conformance audit 2026-10-10; decided where M is silent).**
+- **Tokens:** `Potts.jl` and `Potts.jl_checkerboard` (§1.3).
+- **Measurement files** use the header `MCS,t,N,R,A,C,w,g`, with an upper-case `R`, because `metrics.tex` reads `y=R`.
+- **Core zip (≤ 20 MB):** README, parameters, model source, O3, O4, O5, per-run measurements and neighbours, A3, `table_S5.csv`, **Table 1 as a CSV**, figure PNGs and provenance. **EMAIL.md**, the paste-in cover note, sits **beside** core.zip, not inside it (D-217).
+- **Bulk side:** the O1 zips and the O1 manifest, and the O2 zip.
+- **README/EMAIL notes:**
+  - G's `run_metrics.sh` loops `seq 0 10000`, so saves past index 10000 are truncated;
+  - large zips may need LFS in G;
+  - each Potts entry needs a one-line addition to G's hard-coded framework lists (`run_metrics.sh`, the notebook, `colors.tex`, the figure .tex files).
+
 ### 4.0.2 Figure recreation specs (from the .tex sources)
 
 Colours (`G:results/colors.tex:2-16`), RGB:
@@ -363,7 +431,7 @@ Colours (`G:results/colors.tex:2-16`), RGB:
 | centre | ChasteOSquad | 253,141,60 |
 | centre | TinyDEM | 254,204,92 |
 
-**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18).
+**Potts.jl: proposal RGB 8,29,88** (the YlGnBu-9 darkest, in the lattice family; Q18). (A checkerboard colour, 0,109,44, was proposed and withdrawn with the entry, D-225.)
 Shared style: sans-serif, `scale only axis`, grid very thin black!20, tick length 0.8 mm,
 minor 0.5 mm, legend in "Lattice / Polygonal / Center(oid) models" groups. Recreate with
 CairoMakie at the same mm sizes.
@@ -562,24 +630,47 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q12** The Morpheus files behind the M data are not in G: the "J10, N100" relaxation (T = 155/154), the 1T/5T/10T "major2" 1000-cell runs, and the Table S1 growth XML. The same holds for the CC3D and Artistoo versions that produced the Table 1 rows.
 - **Q13** Fig 3: which framework, and how many runs? Is "deterministic" X ≡ 2 (TST data say yes)? No script in G.
 - **Q14** Fig 8: confirm that lengths will be in R and time in 775-MCS cycles for all frameworks (currently px and legacy cycles; D3, D4).
-- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it. **Update 2026-10-09 (the 9 Oct draft, §1.2 R4):** M now shows one shared set of bins for all rows (0–18 … 74–93 "radii"). On those edges, measured in R from the lattice centre, our case (b) row puts 27/72/1/0 % in the first four bins, while M's TST row reads ≈ 5/20/50/25 %, and our TST-equivalent colonies reach only ≈ 42 R. So M's "radii" are probably not R (≈ R/2.2?), or not measured from our origin. Ask for the unit and origin together with Q26. **Cross-check (2026-10-09, G 14fa42c, read-only).** We binned G's TST 1000-cell data on M's shared edges four ways:
+- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it. **Update 2026-10-09 (the 9 Oct draft, §1.2 R4):** M now shows one shared set of bins for all rows (0–18 … 74–93 "radii"). On those edges, measured in R from the lattice centre, our case (b) row puts 27/72/1/0 % in the first four bins, while M's TST row reads ≈ 5/20/50/25 %, and our TST-equivalent colonies reach only ≈ 42 R. So M's "radii" are probably not R (≈ R/2.2?), or not measured from our origin. Ask for the unit and origin together with Q26. **Cross-check (2026-10-09, G 14fa42c, read-only).** We binned G's TST 1000-cell data on M's shared edges four ways: **Decipher pass (2026-10-10; scratch report `decipher/REPORT.md`): PARTIAL.**
+  - **Exact shares.** M Fig 5 is vector graphics, so the exact per-row bin shares were read from the PDF's final stacked-CDF bars. In % for bins 0–18/18–37/37–55/55–74/74–93:
+    - TST 8.7/24.7/37.7/27.9/1.0 (the earlier "≈ 5/20/50/25" was a low-resolution misreading);
+    - Artistoo 9.5/26.9/40.4/22.8/0.5;
+    - CC3D 8.1/24.6/40.9/26.1/0.3;
+    - Chaste VM 6.5/19.0/30.0/36.9/7.6;
+    - Chaste VT 7.4/20.9/31.0/34.3/6.4;
+    - PolyHoop 7.2/21.2/33.4/34.8/3.3;
+    - PhysiCell 8.1/23.0/34.6/31.8/2.7;
+    - Chaste OS 7.8/22.5/34.4/32.6/2.6;
+    - TinyDEM 8.2/23.4/34.4/31.3/2.7.
+  - **The unit.** Fitting every row against G's TST colony shape gives **1.84–2.23 axis units per R** (TST 1.91), with 0.6–2.2 pp rms error. So M's axis is ≈ distance in R × 2 for all rows. That rules out R itself and each framework's raw units.
+  - **The edges.** They fit "0 to 1.05 × the pooled maximum over all frameworks, 5 equal bins" (88.57 ≈ 44 R).
+  - **Why TST is not exact.** No G TST set (plain = 1T, or 5T) reproduces M's TST row exactly: every fixed choice is 2.5–5 pp off, and none puts 1 % of cells beyond 74.4. So M's TST row comes from data not in G.
+  - **Still to ask:**
+    - (a) Is the distance in units of R/2 (i.e. ×2)?
+    - (b) Which TST data set feeds Fig 5?
+    - (c) Are the edges 0 to 1.05 × the pooled maximum?
   - in R, from the lattice centre or the pooled mean (≈ 30/70/0/0/0 %);
   - in px, from the pooled mean (≈ 55 % lands beyond 93);
   - the notebook's method (per-file raw units, per-framework `linspace(0, 1.05·max, 8)`);
   - and px / 2.1–2.2 (≈ 8/26/40/25/0 %, the closest).
 
-  **None reproduces M's TST row (≈ 5/20/50/25 %).** The implied unit is ≈ 2.0–2.2 TST px ≈ 0.5 R, i.e. "radii" may be diameters or px/2. Morpheus_5T in its native R gives 29/70/1/0/0, like ours. G does not define the shared edges, and its notebook loads the plain TST set (identical to 1T, not 5T). **Ask:** (a) M Fig 5's distance unit (R, 2R, px or px/2) and origin; (b) which TST set feeds it (1T or 5T); (c) how the shared edges are chosen. **Potts meanwhile:** the shared-bin row is rendered in R, labelled provisional, with one sentence noting that M's axis appears to be ≈ 2× ours.
+  **None reproduces M's TST row** (read at the time as ≈ 5/20/50/25 %; the exact PDF reading is 8.7/24.7/37.7/27.9/1.0, see the decipher pass below). The implied unit is ≈ 2.0–2.2 TST px ≈ 0.5 R, i.e. "radii" may be diameters or px/2. Morpheus_5T in its native R gives 29/70/1/0/0, like ours. G does not define the shared edges, and its notebook loads the plain TST set (identical to 1T, not 5T). **Ask:** (a) M Fig 5's distance unit (R, 2R, px or px/2) and origin; (b) which TST set feeds it (1T or 5T); (c) how the shared edges are chosen. **Potts meanwhile:** the shared-bin row is rendered in R, labelled provisional, with one sentence noting that M's axis appears to be ≈ 2× ours.
 - **Q16** Artistoo `Time to 10k (MCS)` units (D9).
 - **Q17** Is 13.57 × 5T pooled over frameworks or PhysiCell's γ = 0 value?
 - **Q18** The colour for Potts.jl in `colors.tex` (proposal 8,29,88).
-- **Q19** CC3D 11+10 geometry: the code puts 10 cells on one side, while the data match 5 + 5 (D10).
-- **Q20** TST divides on target area (C13) and draws X untruncated: intended?
-- **Q21** Morpheus `Stdev_X = 0.4^2` (C17): is σ = 0.16 intended?
+- **Q19** CC3D 11+10 geometry: the code puts 10 cells on one side, while the data match 5 + 5 (D10). **CLOSED 2026-10-10, not asked: maintainer ruling (D-213) "paper holds provenance over the tst implementation", and the standing paper-over-code rule. Potts follows M; this framework's departure is recorded, not queried.**
+- **Q20** TST divides on target area (C13) and draws X untruncated: intended? **CLOSED 2026-10-10, not asked: maintainer ruling (D-213) "paper holds provenance over the tst implementation", and the standing paper-over-code rule. Potts follows M; this framework's departure is recorded, not queried.**
+- **Q21** Morpheus `Stdev_X = 0.4^2` (C17): is σ = 0.16 intended? **CLOSED 2026-10-10, not asked: maintainer ruling (D-213) "paper holds provenance over the tst implementation", and the standing paper-over-code rule. Potts follows M; this framework's departure is recorded, not queried.**
 - **Q22** `metrics.cpp` boundary (D12, D13): its Graham order is undefined for points collinear with p₀, and its R-tree search can miss candidates next to near-parallel edges, so a few frames depend on the standard library and the tree layout (Artistoo frame 1656 with a stable sort; TST β = 1.006 final snapshot). Would the consortium accept the corrected hull (exact orientation, unpruned candidate search) as the reference, or pin the build (libc++, `-ffp-contract=off`) as the definition?
 - **Q23** Fig 5 / V4 (P6.15e): which TST implementation detail differs from Potts' Table S1 model? TST_5T alone, with the same pair-count f and σ_X = 0.4, passes every V4 row (mean nonzero f 0.288), while Potts' rim cells are shifted up (0.346; peak 0.425 against 0.295). Leading candidate: division on target area (C13, Q20). Also asked: the exact Moore-pair loop TST uses for f_i (spec §2.4 records a skipped offset only for n_i, which could not plausibly explain a 20 % shift), the timing of growth vs division within an MCS (§2.5), and any rule acting on very small cells.
 - **Q24** Fig 5 / V4 (P6.15e): do the CPM implementations suppress or remove crushed cells (a connectivity check, a minimum volume, extrusion)? Potts shows rare squeezed young daughters at the 1000-cell stop (30 of 10⁵ cells with a < 0.42, A\* 23–43), where the pooled data have none.
-- **Q25** (2026-10-09; proposal-law-clues.md §4) (a) Which division trigger is normative: actual A ≥ X·A\*(0) (M p.2) or A ≥ µA_max (§4.1)? (b) Which TST build produced the beyond-10³ curves, given the released model exits at `max_cell_count = 1000`? (c) Are the frameworks' departures from Table S1 intended (CC3D λ = 10, A\* = 25, contact order 4; Morpheus/Artistoo J_cM = 20, λ = 20; TST integer ΔH)?
-- **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G.
+- **Q25** (2026-10-09; proposal-law-clues.md §4) **RESOLVED 2026-10-10 by maintainer ruling, not asked: "paper holds provenance over the tst implementation. current division trigger is good." Potts keeps division at actual A ≥ X·A\*(0); the frameworks' departures are theirs.** (a) Which division trigger is normative: actual A ≥ X·A\*(0) (M p.2) or A ≥ µA_max (§4.1)? (b) Which TST build produced the beyond-10³ curves, given the released model exits at `max_cell_count = 1000`? (c) Are the frameworks' departures from Table S1 intended (CC3D λ = 10, A\* = 25, contact order 4; Morpheus/Artistoo J_cM = 20, λ = 20; TST integer ΔH)?
+- **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G. **Decipher pass (2026-10-10): PARTIAL.**
+  - **Which data match.** The CC3D colonies in G are the figure's own: `Fig7_Snapshot_to_10k.zip` is the renamed Fig 8 zip, holding all 8 CC3D colonies. TST's `final_snapshot_data` colonies are not the figure's.
+  - **What the label is.** It behaves as the roughness C/(2√(πA)) of the black concave hull drawn in each panel. That hull is much more concave than metrics.cpp's (concavity 1.5), notching into the second and third cell layer, which is why round colonies print ≈ 1.5.
+    - Measured from the figure's images and corrected for line-width bias, it reproduces the 8 CC3D labels to within 0.14 (±0.1 typical), not exactly.
+    - Concaveman would need a concavity of ≈ 1.11–1.25 varying per colony. No single setting fits within 0.005, and the roughness is very sensitive (1.4 → 1.9 between concavity 1.15 and 1.0).
+  - **Ruled out:** concaveman over concavity 0.3–5 and length threshold 0–4, with variants; shapely/GEOS ratio 0–0.15; alpha shapes at 1/α = 1.5–10; and a 300+ formula search.
+  - **Still to ask:** the hull library, its parameters and the script for the Fig 7/8 labels.
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
 
