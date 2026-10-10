@@ -44,6 +44,25 @@
 #   (disagreement 3).
 # - lengths in R and time stamps in MCS with 5T = 775 MCS (TST README, Morpheus README): agree.
 #
+# D-211 amendment (P6.15k; the 9 Oct 2026 draft is M): M's Figures 5, 7 and 8 become REQUIRED
+# package figures, byte copies of their records' renders, with M's new Fig 8 colonies as O5:
+#   figures/fig5.png   the P6.15e record's fig5_shared.png (Fig 5 row on M's shared distance
+#                      bins 0, 18.6, 37.2, 55.8, 74.4, 93; R4)
+#   figures/fig7.png   the P6.15g record's fig7_grid.png (Fig 7 colony grid, γ; R1)
+#   figures/fig8.png   the P6.15k record's fig8_grid.png (new Fig 8 colony grid, β; R2)
+#   Monolayer/final_snapshot_data/Potts.jl_beta_<β>_<MCS>MCS.csv
+#                      O5 of the five Fig 8 colonies, byte copies of the P6.15k record's f8/
+# The P6.15k record (`data/15/f8beta-*`, item "P6.15k") joins the records: its runner goes to
+# scripts/, its provenance to provenance/. The results README gets a level-2 "Figures"
+# section naming the three figures, M's colours (yellow, teal, red) and the shared bin edges,
+# and, in a caption or a table, each drawn colony's C/C_circle from its record's
+# fig<k>_grid.tsv to two decimals, named as metrics.cpp's C/C_circle of the concave hull
+# (concaveman, concavity 1.5); a note that M's panel label quantity is unstated and on our
+# open question list (D-211 R5). R3: in both READMEs the metrics figure is Fig 9; a line that
+# labels Figure 8 is about the β grid (β, beta, area inhibition) or names the old number
+# ("formerly", "2 Oct"), and some line labels Figure 9 with the metrics (O6) files.
+# Specifications of the renders: `15_openvt_d211.jl`.
+#
 # ---------------------------------------------------------------------------------------------
 # The generator (pinned)
 # ---------------------------------------------------------------------------------------------
@@ -218,7 +237,7 @@
 # - Nothing private, nothing implying contact (all text files): the page test's list, plus
 #   the user name (except inside "PraneethMerugu/Potts.jl", the public repository), host names,
 #   absolute paths, the PC's address and "PI".
-using Test, TOML, SHA, PottsModels
+using Test, TOML, SHA, Printf, PottsModels
 
 const P615J_ROOT = normpath(joinpath(@__DIR__, "..", "..", "..", ".."))
 const P615J_DATA = joinpath(P615J_ROOT, "lib", "PottsModels", "reproductions", "data", "15")
@@ -232,7 +251,7 @@ const P615J_GRID = 39                         # D-173 save cadence
 const P615J_CASES = ["a", "b", "e", "f"]      # spec §4.0.1 cases run by P6.15f (control is ours)
 const P615J_LAMBDAS = [1, 2, 3, 5]            # Table S5
 const P615J_ITEMS = Dict(:calib => "P6.15b", :f5 => "P6.15e", :f3f8 => "P6.15f", :f1f4 => "P6.15h",
-    :sweeps => "P6.15g", :o1 => "P6.15j")
+    :sweeps => "P6.15g", :o1 => "P6.15j", :f8beta => "P6.15k")
 # D-204: the bulk directory (outside git) and the O1 re-run record
 const P615J_BULK_ENV = "OPENVT_PACKAGE_BULK"
 const P615J_BULK = get(ENV, P615J_BULK_ENV, "")
@@ -282,6 +301,11 @@ const P615J_REQUIRED = [
     (:O3b, "Potts.jl_time_to_10k_vs_beta.csv", r"^Monolayer/Potts\.jl_time_to_10k_vs_beta\.csv$"),
     (:O3g, "Potts.jl_time_to_10k_vs_gamma.csv", r"^Monolayer/Potts\.jl_time_to_10k_vs_gamma\.csv$"),
     (:O5, "final_snapshot_data", r"^Monolayer/final_snapshot_data/Potts\.jl_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$"),
+    # D-211 (P6.15k): M's Figures 5, 7 and 8, and the Fig 8 colonies
+    (:O5b, "Potts.jl_beta_", r"^Monolayer/final_snapshot_data/Potts\.jl_beta_([0-9.eE+-]+)_(\d+)MCS\.csv$"),
+    (:Fig5, "figures/fig5.png", r"^figures/fig5\.png$"),
+    (:Fig7, "figures/fig7.png", r"^figures/fig7\.png$"),
+    (:Fig8, "figures/fig8.png", r"^figures/fig8\.png$"),
 ]
 
 const P615J_FORBIDDEN = [
@@ -536,6 +560,7 @@ end
     # D-204: the sweeps record is merged and the O1 re-run record exists
     @test haskey(P615J_RECS, :sweeps)
     @test haskey(P615J_RECS, :o1)
+    @test haskey(P615J_RECS, :f8beta)                          # D-211: the Fig 8 β record
     @test isfile(P615J_SPEC)
     @test length(p615j_spec_cs()) >= 17
 end
@@ -590,7 +615,7 @@ end
     @test occursin("--project=lib/PottsModels/test", readme)
     @test occursin("openvt_submission_package", readme)
     @test occursin(r"julia"i, readme)
-    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1)
+    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1, :f8beta)
         haskey(P615J_RECS, k) || continue
         prov = TOML.parsefile(joinpath(p615j_rec(k), "provenance.toml"))
         runner = basename(prov["runner"])
@@ -730,7 +755,7 @@ end
     @test p615j_build()
     p = p615j_res("closeup.png")
     @test isfile(p) && read(p) == read(joinpath(p615j_rec(:f1f4), "fig1_panel.png"))
-    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1)
+    for k in (:calib, :f5, :f3f8, :f1f4, :sweeps, :o1, :f8beta)
         haskey(P615J_RECS, k) || continue
         want = TOML.parsefile(joinpath(p615j_rec(k), "provenance.toml"))
         delete!(want, "hostname")
@@ -1171,4 +1196,66 @@ end
         @test any(l -> occursin(Regex("\\b" * P615J_LICENCE * "\\b"), l) && occursin("LICENSE", l) &&
                        occursin(P615J_REPO_URL, l), split(txt, '\n'))
     end
+end
+
+# ---- D-211 (P6.15k): M's Figures 5, 7 and 8 and the Fig 8 colonies -------------------------------
+# figure labels a line names, "Figure 3/9" and "Figures 3 and 9" included
+function p615j_fig_labels(l)
+    out = String[]
+    for m in eachmatch(r"\b(?:Figures?|Figs?\.?)\s*((?:\d+)(?:\s*(?:,|and|&|/|–)\s*\d+)*)", l)
+        append!(out, [String(n.match) for n in eachmatch(r"\d+", m[1])])
+    end
+    return out
+end
+const P615J_CCIRCLE = r"C\s*/\s*C_?\{?circle\}?|C/C<sub>circle</sub>"
+
+@testset "P6.15j (14) D-211: Figures 5, 7, 8 and the Fig 8 colonies (R1, R2, R4); Fig 9 (R3)" begin
+    @test p615j_build()
+    rels = p615j_tree(joinpath(P615J_A, P615J_RES))
+    # the figures: byte copies of the records' renders
+    for (key, rk, f) in ((:Fig5, :f5, "fig5_shared.png"), (:Fig7, :sweeps, "fig7_grid.png"), (:Fig8, :f8beta, "fig8_grid.png"))
+        files = p615j_present(rels, key)
+        @test length(files) == 1
+        src = haskey(P615J_RECS, rk) ? joinpath(p615j_rec(rk), f) : ""
+        @test isfile(src) && length(files) == 1 && read(p615j_res(only(files))) == read(src)
+    end
+    # the Fig 8 colonies: O5, byte copies of the P6.15k record's f8/ (five)
+    o5b = p615j_present(rels, :O5b)
+    f8 = haskey(P615J_RECS, :f8beta) && isdir(joinpath(p615j_rec(:f8beta), "f8")) ?
+         filter(n -> occursin(r"^Potts\.jl_beta_.+MCS\.csv$", n), readdir(joinpath(p615j_rec(:f8beta), "f8"))) : String[]
+    @test length(o5b) == 5 && sort(basename.(o5b)) == sort(f8)
+    for f in o5b
+        h, rows = p615j_csv(p615j_res(f))
+        @test h == P615J_H_O5 && !isempty(rows) && all(x -> length(x) == 4 && x[4] in ("0", "1"), rows)
+        @test haskey(P615J_RECS, :f8beta) && read(p615j_res(f)) == read(joinpath(p615j_rec(:f8beta), "f8", basename(f)))
+    end
+    # the results README's Figures section
+    readme = isfile(p615j_res("README.md")) ? read(p615j_res("README.md"), String) : ""
+    sec = p615j_section(readme, r"^##\s+Figures\b")
+    @test !isempty(sec)
+    for s in ("figures/fig5.png", "figures/fig7.png", "figures/fig8.png", "metrics.cpp", "18.6", "93")
+        @test occursin(s, sec)
+    end
+    @test occursin(P615J_CCIRCLE, sec) && occursin(r"concave"i, sec) && occursin("1.5", sec)
+    @test occursin(r"yellow"i, sec) && occursin(r"teal"i, sec) && occursin(r"\bred\b"i, sec)
+    for (rk, f) in ((:sweeps, "fig7_grid.tsv"), (:f8beta, "fig8_grid.tsv"))
+        p = haskey(P615J_RECS, rk) ? joinpath(p615j_rec(rk), f) : ""
+        @test isfile(p)
+        isfile(p) || continue
+        _, rows = p615j_tsv(p)
+        @test !isempty(rows)
+        for r in rows
+            @test occursin(@sprintf("%.2f", p615j_f(r["C_rel"])), sec)
+        end
+    end
+    paras = split(sec, r"\n\s*\n")
+    @test any(p -> occursin(r"label"i, p) && occursin(r"unstated|not stated"i, p) && occursin("our open question list", p), paras)
+    # R3: the metrics figure is Fig 9 in both READMEs
+    for p in (p615j_impl("README.md"), p615j_res("README.md"))
+        txt = isfile(p) ? read(p, String) : ""
+        bad = [l for l in split(txt, '\n') if "8" in p615j_fig_labels(l) && !occursin(r"β|beta|area[- ]inhibit|formerly|2 Oct"i, l)]
+        isempty(bad) || @info "P6.15j (14): lines that still call the metrics figure Figure 8" p bad
+        @test isempty(bad)
+    end
+    @test any(l -> "9" in p615j_fig_labels(l) && occursin(r"metrics|measurements"i, l), split(readme, '\n'))
 end
