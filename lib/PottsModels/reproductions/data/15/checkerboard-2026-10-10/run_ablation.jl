@@ -25,7 +25,8 @@
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run c64     # GPU
 #     P615M_OUT=<dir> julia --project=lib/PottsModels/test …/run_ablation.jl collect
 #
-# collect writes, into this directory: ablation.tsv (one row per case and metric: both arms'
+# collect writes, into this directory: ablation.tsv (one row per case and metric, with the contrast
+# arm's monolayer colour count `colours`: both arms'
 # means, sds and differences from sequential, their z against sequential, the stock − c64
 # contrast z, the critical values, the entry's diff and z), ablation_metrics.tsv (per seed),
 # ablation_runs.tsv, ablation_calibration.tsv (the c64 chain crossings and copy counts), and the
@@ -165,6 +166,8 @@ function ab_collect()
     for r in mets
         get!(vals, (r["arm"], r["case"], r["metric"]), Dict{Int, Float64}())[parse(Int, r["seed"])] = p615m_f64(r["value"])
     end
+    # `colours`: the contrast arm's monolayer colour count (64)
+    c64colours = parse(Int, only(unique(r["colours"] for r in runs if r["arm"] == "c64")))
     rows = NamedTuple[]
     for c in string.(keys(AB_CASES))
         P = P615M_CASES[c]
@@ -187,7 +190,7 @@ function ab_collect()
             R = PottsModels.openvt_spread_compare(ref[k], cs; z = zr)
             X = PottsModels.openvt_spread_compare(cs, st; z = zc)            # stock − c64
             e = entry[(c, k)]
-            push!(rows, (; case = c, metric = k, n_ref = S.n_ref, n_arm = n, mean_ref = S.mean_ref, sd_ref = S.sd_ref,
+            push!(rows, (; case = c, metric = k, colours = c64colours, n_ref = S.n_ref, n_arm = n, mean_ref = S.mean_ref, sd_ref = S.sd_ref,
                 mean_stock = S.mean_alt, sd_stock = S.sd_alt, diff_stock = S.diff, z_stock = S.z, beyond_stock = S.beyond,
                 mean_c64 = R.mean_alt, sd_c64 = R.sd_alt, diff_c64 = R.diff, z_c64 = R.z, beyond_c64 = R.beyond, crit_ref = zr,
                 contrast = X.diff, z_contrast = X.z, crit_contrast = zc, beyond_contrast = X.beyond,
@@ -195,7 +198,7 @@ function ab_collect()
                 diff_entry = p615m_f64(e["diff"]), z_entry = p615m_f64(e["z"]), beyond_entry = e["beyond"]))
         end
     end
-    H = (:case, :metric, :n_ref, :n_arm, :mean_ref, :sd_ref, :mean_stock, :sd_stock, :diff_stock, :z_stock, :beyond_stock,
+    H = (:case, :metric, :colours, :n_ref, :n_arm, :mean_ref, :sd_ref, :mean_stock, :sd_stock, :diff_stock, :z_stock, :beyond_stock,
         :mean_c64, :sd_c64, :diff_c64, :z_c64, :beyond_c64, :crit_ref, :contrast, :z_contrast, :crit_contrast, :beyond_contrast,
         :remainder_fraction, :diff_entry, :z_entry, :beyond_entry)
     fmtv(x) = x isa AbstractFloat ? cb_f64(x) : string(x)
@@ -229,6 +232,7 @@ function ab_collect()
         "runner" => relpath(@__FILE__, CB_ROOT), "runner_sha256" => bytes2hex(open(sha256, @__FILE__)),
         "commit" => c64["commit"], "dirty_tracked" => c64["dirty_tracked"] || any(s -> s["dirty_tracked"] == "true", sess),
         "commits" => join(unique([c64["commit"]; [s["commit"] for s in sess]]), ", "),
+        "collect_commit" => cb_git("rev-parse", "HEAD"), "collect_dirty_tracked" => cb_dirty(),
         "device" => join(unique([c64["device"]; [s["device"] for s in sess]]), "; "),
         "host_planner_fallback" => any(r -> r["planner"] != "device", runs),
         "arms" => "stock: $(colours_of("stock")) colours on the chain, $(mono_of("stock")) on the monolayer, cycle $(only(unique(r["cycle"] for r in runs if r["arm"] == "stock"))); c64: $(colours_of("c64")) on the chain, $(mono_of("c64")) on the monolayer, cycle $(c64["cycle_mcs"]) = 5 T_c64",
