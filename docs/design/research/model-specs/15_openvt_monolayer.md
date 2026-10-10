@@ -107,14 +107,18 @@ The submission carries **two** Potts rows. They share one model, one parameter s
 **What the checkerboard entry is** (`lib/CorePotts/src/checkerboard.jl`, `algorithms.jl`):
 - **Colouring.** Sites are coloured by residue class along each axis with stride s = read reach + write reach + 1, so same-colour targets lie outside each other's read/write footprints. On a periodic axis with n mod s ≠ 0, the trailing columns become singleton colours. The OpenVT lattice is closed, so that case does not arise.
 - **One MCS** visits every site once, colour by colour, in a random colour order. Within a colour every site proposes in parallel: a uniform Moore source, the same ΔH and the same Metropolis law.
-- **Conflicts.** Accepted proposals claim every cell they touch with a unique random priority, and commit only if they win every write claim and no higher-priority copy writes a cell they read. So each cell changes at most once per colour, and readers share. A losing proposal is dropped, not retried ("thinning").
-- **Per-cell totals** (area, contact counts) that ΔH reads are updated between colours, not within one ("colour-lagged totals").
+- **Conflicts.** Accepted proposals claim every cell they touch with a unique random priority, and commit only if they win every write claim and no higher-priority copy writes a cell they read. So each cell changes at most once per colour, and readers share. A losing proposal is dropped, not retried: "thinning of conflicting accepted copies (D-008 claims)". This is not D-051's Bernoulli thinning for fractional attempts, which is compiled out here.
+- **Per-cell totals.** For this model, volumes update at commit, so "colour-lagged totals" contribute nothing (D-220).
 
 **Expected differences from sequential** (the D-214 characterisation list). Each one, if it exceeds the seed spread, becomes a deviation row with its cause:
 1. update order (colour sweep vs random-site sequential);
-2. colour-lagged totals;
+2. colour-lagged totals (nil for this model: volumes update at commit, D-220);
 3. claim widening (a commit can block neighbours that sequential would have allowed);
-4. thinning of conflicting accepted proposals.
+4. thinning of conflicting accepted copies (D-008 claims).
+
+**Characterisation result (P6.15m, D-220).** Case (a) under the checkerboard loses ≈ 4,100 cells to crushing per run, against ≈ 865 under sequential, and reaches 10⁴ cells ≈ 15 % later. It is not a bug: ΔH equals brute force on 16,605 committed copies, and the volume trackers are exact.
+- **Cause: class 4.** With 4 colours, only ≈ 27 % of accepted copies commit, ≈ 3.6× fewer copies per MCS. Growth of A\* runs on the MCS clock, so colonies are more compressed.
+- **Ablations confirm it.** 64 colours restore the sequential loss, and sequential with 0.3·N attempts per MCS reproduces the checkerboard loss.
 
 An unexplained difference is chased as a bug. Characterisation describes the entry; it does not gate it (maintainer: "none of these platforms are statistically perfect, but they do have understanding of their deviations").
 
@@ -122,7 +126,7 @@ An unexplained difference is chased as a bug. Characterisation describes the ent
 - **F1:** a second 45 mm closeup panel and banner (case (a), 10⁴ cells, its own seed). The colour variable is as for Potts (§4.0.2 F1), and the banner is in the Q27 colour with a white bold label.
 - **F2/S5:** its own chain calibration (11 and 11+10), a T(λ) row in Table S5, and its own legend and inset line. The calibration must be repeated, because T in MCS is a property of the update algorithm.
 - **F3, F5, F6/T1, F7, F8, F9:** its own row, curve or legend entry, with insets where the figure has them (F2 b/d/e). Its own Table 1 row.
-- **Time unit.** The cycle is 5T(λ = 2) **of the checkerboard calibration** if it differs significantly from 156 MCS. Otherwise it is the sequential 775 MCS; record which one and why.
+- **Time unit (D-220).** The entry runs on its own calibrated T and converts every time-dependent parameter by it, as M does (C1/C16: α = A₀/(5T)). If T_cb(λ = 2) differs significantly from 156 MCS, then **cycle = 5·T_cb and α = A₀/(5·T_cb) px per MCS**. Otherwise 775 MCS and α = 50/775. The record states which and why. The algorithm is unchanged.
 
 **Manuscript text:** a subsection "Implementation in Potts.jl (checkerboard)", placed after "Implementation in Potts.jl" (`../openvt-manuscript-section.md`). It is short, because the model listing is shared. It covers:
 - that the same `@potts_model` runs unchanged under `CheckerboardCPM`;

@@ -128,14 +128,13 @@ KernelAbstractions).
   Metropolis rule of Eq. (9).
 - **Conflicts.** Accepted copies claim the cells they touch with a random priority, and a copy
   commits only if it wins all its claims, so every cell changes at most once per colour.
-- **Per-cell areas and contacts** are updated between colours.
 
 The time scale T was calibrated separately on the 1D chains (Table S5 row "Potts.jl
-(checkerboard)") ⟨value to be filled from the checkerboard calibration record⟩. Its seeds are
+(checkerboard)") ⟨value to be filled from the checkerboard calibration record⟩. Time-dependent parameters are converted by this T, as in the schema: the growth rate is α = A\*(0)/(5T) per MCS. Its seeds are
 disjoint from the sequential entry's.
 
-The differences from the sequential entry come from the update order, from the per-cell totals
-lagging within a colour, and from conflicting copies being dropped. Each difference larger than
+The differences from the sequential entry come from the update order, and from conflicting
+copies being dropped (each cell changes at most once per colour). Each difference larger than
 the seed-to-seed spread is listed with its cause in ⟨table to be filled from the
 characterisation record⟩.
 
