@@ -4060,3 +4060,10 @@ Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the 
 - **TST rows** keep the status "not asked (maintainer ruling: M over TST)".
 - **Other rows** that cited Q20 or Q21 (V2.1.1x, F3.4, C17) need "not asked (M over the framework's code)" or the TST prefix.
 - **Still allowed:** Q15, Q17, Q23, Q24 and Q26, each followed by "our open question list".
+
+## D-219 OpenVT: Q28 dropped; faithfulness to M is the bar (2026-10-10; maintainer: "we have no control over how the other frameworks conduct their benchmarks, but we can be sure that weve done a good job so far being faithful to the manuscript. thats all i need. q28 is pointless"; amends D-215)
+
+- **Q28 is withdrawn.** It asked which compiler the consortium's metrics.cpp numbers came from.
+  - EMAIL.md carries no compiler heads-up.
+  - The READMEs keep one neutral provenance line: our measurements were produced with metrics.cpp built with GCC 13 on Linux.
+- **Standing rule.** We do not raise questions or suggestions about how other frameworks run their benchmarks. Their departures are recorded in our deviation tables only where they bear on comparing against us. Our bar is faithfulness to M.
