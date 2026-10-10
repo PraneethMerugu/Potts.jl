@@ -48,7 +48,7 @@ It is **not** the M schema; see §5.
 | C5 | Sensitivity analysis (relative condition numbers per framework) | schema only (`G:schema/README.md:81`); absent from M's DATA ANALYSIS list (M p.2–3) and from every figure | **M** (the later, complete list). Not a submission requirement; kept as optional item S-opt1 |
 | C6 | Literature comparisons (Drasdo 2005, Germano 2023, Killeen 2023) | schema only (`G:schema/README.md:71-79`); M has none. `G:results/comparison_experiment.tex` plots Bru 1998 radius data in h/µm, not used in M | **M**. Not required; optional item S-opt2 (needs a physical unit map) |
 | C7 | Cell diameter CD | schema: 1 CD = 2√(A*(0)/π) = 7.98 px (`G:schema/README.md:55`); every CPM: **CD = 10 px** on a 5-px-high strip, i.e. the relaxed length of a 50-px cell (`G:implementations/Morpheus/Relaxation_11cells_Morpheus_V5.xml:10`; `TSTgh:openvt/model-monolayer-11cells.py:70`; CC3D and Artistoo boxes 10 × 5) | **Implementations** for the lattice protocol. M does not define CD numerically, and Fig 2 requires the relaxed w₁₁ to equal **10 CD**, which holds only for CD = relaxed cell length. With 7.98 px the relaxed chain would read 12.5 "CD" |
-| C8 | Output columns | M: `x, y, i, n` with i ∈ {0,1,2,3} (M p.2); `metrics.cpp` requires `x, y, g, n` with g the growing flag 0/1 (`G:results/postprocessing/metrics.cpp:101-130`); CC3D, Morpheus and PhysiCell emit `g` | **M** for submitted files. The Julia metrics port derives g = (i == 0). For a byte-level check against `metrics.cpp`, a converter adds a `g` column to a scratch copy |
+| C8 | Output columns | M: `x, y, i, n` with i ∈ {0,1,2,3} (M p.2); `metrics.cpp` requires `x, y, g, n` with g the growing flag 0/1 (`G:results/postprocessing/metrics.cpp:101-130`); CC3D, Morpheus and PhysiCell emit `g` | **M + G (D-215, replacing D-206's "spec over convention").** Submitted O1 files carry `x,y,i,n,g` with g = (i == 0): M's columns plus G's growing flag, because `metrics.cpp` exits without g. The Julia metrics port reads either |
 | C9 | Type 1 inequality | schema `A/A0 > β` (`G:schema/README.md:33`); M `a_i ≥ β` (M p.2) | **M** (≥). Morpheus V11, TST and Artistoo use ≥; CC3D uses ≥ for type 1 alone and > in its `1_AND_2` branch (`…Steppables.py:114,123`) |
 | C10 | Fig 8 length units | M: lengths in R (M p.3); the draft Fig 8 lattice curves come from centroid files in **px** (`G:results/postprocessing/measurements_compucell3d.csv` r = 270 at N = 10⁴, CC3D A₀ = 25 → 1 R = 2.82 px; Morpheus r = 395 px, 1 R = 3.99 px) | **M**. Potts plots r, a in R. Consortium overlays of these legacy files are divided by R_px (§4.4) |
 | C11 | Fig 5 distance bins | notebook: `number_of_bins = 7`, edges `linspace(0, 1.05·max d, 8)` (`G:results/postprocessing/Monolayer02Plot_dists.ipynb` cell 5); M Fig 5 legend has **5** bins 0–7, 7–15, 15–23, 23–31, 31–39 | **M** (the figure): 5 equal bins from 0 to 1.05·max d, labels `int(edge)` |
@@ -131,7 +131,7 @@ An unexplained difference is chased as a bug. Characterisation describes the ent
 - its seeds;
 - the measured differences from the sequential entry, as a short table that points to the deviation rows.
 
-**Results folder:** `results/Potts.jl-checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. It uses the same O1–O5 formats and file names, and the framework token `Potts.jl-checkerboard` in the file stems that carry one. In the email split it gets its own core section and bulk zips.
+**Results folder:** `results/Potts.jl_checkerboard/{Relaxation,Monolayer}/`, next to `results/Potts.jl/`. There is also `implementations/Potts.jl_checkerboard/`, holding a README and a runner that point to `implementations/Potts.jl/src`. It uses the same O1–O5 formats and file names, and the framework token **`Potts.jl_checkerboard`** in the file stems that carry one. The token takes an underscore, not a space or hyphen: a space breaks `run_metrics.sh`, and G's precedent is `Chaste_OS_Log` (D-215). The colour keys are `PottsJL` and `PottsJLcheckerboard`. "Potts.jl (checkerboard)" stays the legend and banner text. In the email split it gets its own core section and bulk zips.
 
 **Q27, colour:**
 - **Proposal: RGB 0,109,44** (`#006d2c`, Greens-9 step 8).
@@ -230,11 +230,11 @@ came from code not in G (Q12). Morpheus's Fig 1 colour map and arrest code are i
 
 | # | Use | Format (Potts writes) | Precedent |
 |---|---|---|---|
-| O1 | M's DATA COLLECTION time series (F1, F3, F7, F8) | one headed CSV per save, one row per cell: `x,y,i,n`. x, y = centroid in **R**, origin at the lattice centre; i ∈ {0,1,2,3}; n = Moore distinct neighbours. Name `potts_<case>_s<seed>_<MCS:06d>.csv` | M p.2 (C8). Morpheus `Morpheus_timepoint_%05d.csv`, CC3D `cell_centroids_<mcs>.csv` |
-| O2 | F5 snapshot at 1000 cells | `x,y,r,f,a`, comma-separated, x, y, r in R, r = √(A\*/π)/R; one file per run, `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`, k = 1…100 | notebook reader (`Monolayer02Plot_dists.ipynb` cell 1): columns 0–4 = x, y, r, f, a (Morpheus tab-separated with two leading columns; TST has a and f swapped) |
+| O1 | M's DATA COLLECTION time series (F1, F3, F7, F8) | one headed CSV per save, one row per cell: `x,y,i,n,g` (g = (i == 0); C8, D-215). x, y = centroid in **R**, origin at the lattice centre; i ∈ {0,1,2,3}; n = Moore distinct neighbours. Name `potts_<case>_s<seed>_<MCS:06d>.csv`, in per-seed directories inside descriptively named zips per case, e.g. `<token>_No_CI_stochastic.zip` (D-215). The zips and the O1 manifest are on the bulk side of the email split | M p.2 (C8). Morpheus `Morpheus_timepoint_%05d.csv`, CC3D `cell_centroids_<mcs>.csv` |
+| O2 | F5 snapshot at 1000 cells | `x,y,r,f,a`, comma-separated, x, y, r in R, r = √(A\*/π)/R; one file per run, `<token>_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`, **k = 0…99** (D-215), zipped as `<token>_5T_MonolayerGrowth_1000_Data.zip` on the bulk side | notebook reader (`Monolayer02Plot_dists.ipynb` cell 1): columns 0–4 = x, y, r, f, a (Morpheus tab-separated with two leading columns; TST has a and f swapped) |
 | O3 | F6 / T1 sweep table | `Potts.jl_time_to_10k_vs_beta.csv`, `…_vs_gamma.csv` with header `beta,Time to 10k (MCS),Time to 10k (5T)` (resp. `gamma,…`), one row per run (repeated parameter rows for replicates) | `G:results/TST/TST_time_to_10k_vs_beta.csv`, `G:results/Artistoo/Monolayer/time_to_10k_vs_gamma.csv` |
 | O4 | F2 relaxation | `width.csv` per case (11, 11+10 total, 11+10 inner) with `Normalized time (T)`, one column per replicate, `Mean …`, `STD …` | `TSTgh:openvt/model-monolayer-11cells.py:77-103` |
-| O5 | F7 snapshots | `Potts.jl_gamma_<γ>_<MCS>MCS.csv`: `x_pos,y_pos,radius_i,inhibited` in R | `G:results/TST/final_snapshot_data/` |
+| O5 | F7/F8 snapshots | `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv` (both parameters, TST's pattern; D-215): `x_pos,y_pos,radius_i,inhibited` in R | `G:results/TST/final_snapshot_data/` |
 | O6 | Metrics | `t,N,r,A,C,w,g,C_rel,w_rel` per save, t in cycles; `n,p` neighbour histogram (p in %) | `run_metrics.sh:14`, `metrics.cpp:241-249` (D1) |
 
 ### 3.2 `metrics.cpp` — exact pipeline (`G:results/postprocessing/metrics.cpp`)
@@ -388,6 +388,16 @@ Potts contributes to them.
 5. **Parameters:** Table S1, plus a Potts parameter table.
 6. **Reproducibility:** scripts, seeds, and a provenance TOML (commit, Julia version, backend, wall time). One command regenerates each figure from stored data; another reruns the simulations.
 7. **Not required (C5, C6):** sensitivity analysis (S-opt1) and literature comparisons (S-opt2).
+
+**G conformance and the email split (D-215, conformance audit 2026-10-10; decided where M is silent).**
+- **Tokens:** `Potts.jl` and `Potts.jl_checkerboard` (§1.3).
+- **Measurement files** use the header `MCS,t,N,R,A,C,w,g`, with an upper-case `R`, because `metrics.tex` reads `y=R`.
+- **Core zip (≤ 20 MB):** README, parameters, model source, O3, O4, O5, per-run measurements and neighbours, A3, `table_S5.csv`, **Table 1 as a CSV**, figure PNGs, provenance and EMAIL.md.
+- **Bulk side:** the O1 zips and the O1 manifest, and the O2 zip.
+- **README/EMAIL notes:**
+  - G's `run_metrics.sh` loops `seq 0 10000`, so saves past index 10000 are truncated;
+  - large zips may need LFS in G;
+  - each Potts entry needs a one-line addition to G's hard-coded framework lists (`run_metrics.sh`, the notebook, `colors.tex`, the figure .tex files).
 
 ### 4.0.2 Figure recreation specs (from the .tex sources)
 
