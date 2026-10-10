@@ -40,8 +40,9 @@ algorithm_reference = "SequentialCPM(; proposal = Moore(1)) on the CPU (the P6.1
 
 [ablation]
 decisions = ["D-220", "D-221", "D-224"]
+power_stage = "replaces the n20 runs of (b) and (f) (no pooling); (a) keeps its 10 n20 runs"
 collect_dirty_tracked = false
-runner_sha256 = "3f06a41d67d0c94478b4a816eb1a182733029d51c45e282332ddf4be41c20d15"
+runner_sha256 = "e8533cd947dcbdd79497917337a74fb30d4f66e0c4e1a6be8c48cea8fee46095"
 chain_replays_equal_gpu = true
 chain_committed_equal_changed_sites = true
 chain = "spec 15 §4.2 variant P1b (D-224) for both arms"
@@ -49,15 +50,16 @@ chain_commit_fraction_stock = 0.6429254563053388
 host_planner_fallback = false
 chain_commit_fraction_c64 = 0.9864455151944851
 device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1151))"
-seeds = "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k"
+seeds = "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k (stage n20); power stage (b), (f): 215 100 000 + 10 000 arm + 1000 case + k"
 alpha_c64 = 0.07874015748031496
-commits = "80a6e40f29856899159928f20a4458eccc5a13cf"
+commits = "80a6e40f29856899159928f20a4458eccc5a13cf, e5c3a54a76b93b6516692cdfdae4c1ca71c96410"
 arms = "stock: 4 colours on the chain, 4 on the monolayer, cycle 1095; c64: 98 on the chain, 64 on the monolayer, cycle 635 = 5 T_c64"
+runs_per_arm = "b 100, f 100, a 10"
 cycle_c64 = 635
 T_c64_sd = 12.05375166879297
 chain_commit_fraction_burnin_stock = 0.6892405100327109
 chain_commit_fraction_burnin_c64 = 0.9996562512744921
-collect_commit = "6cec0035ffc4193156a8a48aab50bd6eadb03180"
+collect_commit = "e5c3a54a76b93b6516692cdfdae4c1ca71c96410"
 runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_ablation.jl"
 T_c64_run_mean = 126.0
 T_c64 = 127

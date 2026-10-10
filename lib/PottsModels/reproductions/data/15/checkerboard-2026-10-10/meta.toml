@@ -2,7 +2,7 @@ model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20,
 boundary = "closed"
 saves = "MCS 0, every 39 MCS and the stopping MCS; per save N and openvt_metrics r, A, C, w, g (R units)"
 o1 = "the O1 frame (openvt_frame) of the stop state: mean and sample sd of n, share of n == 6, share of i == 0"
-status = "provisional"
+status = "final"
 framework = "Potts.jl (checkerboard)"
 edge_guard = "edge_guard(5; terminate = true)"
 crit = "two-sided Student t at α = 1e-3/103, ν = min(n_ref, n_alt) − 1 (D-218): 4.6642 (b, f, calibration), 8.8595 (a)"
@@ -18,7 +18,7 @@ algorithm_reference = "SequentialCPM(; proposal = Moore(1))"
 
 [time]
 colours = "4 colours on the P1b calibration chain and 4 on the monolayer (D-224)"
-z_p1b = 26.709110788300503
+T_lambda2 = 219
 T_lambda2_sd = 17.029015642055587
 protocol = "spec 15 §4.2 variant P1b (D-224): 11-chain on 150 × 7, rows 2–6 between two frozen border rows (J = 100 against medium and cells), periodic x, closed y, Moore(1), λ = 2, burn-in 100 MCS at A_c = 25, release A_c := A, w₁₁ over rows 2–6 every MCS to 1085 MCS after the release; T = first MCS with mean w₁₁ ≥ 9 CD; per-run T the same per run"
 T_lambda2_run_mean = 216.45
@@ -42,8 +42,8 @@ colours_chain = 4
 cycle_reason = "T(λ = 2) = 219 MCS under CheckerboardCPM on the P1b chain (150 × 7, frozen border rows, 4 colours as on the monolayer; D-224) against the sequential 156 MCS on the same chain (Welch z = 26.71) and the sequential record's 156 MCS on P1 (z = 27.64): significant (|z| > crit(ν = 99) = 4.66; D-218 rule), so the cycle is 5 T = 1095 MCS and α = A₀/(5 T) = 50/1095 px/MCS (D-220, D-224)"
 crit_p1b = 4.6641695621474355
 z_seq_p1b_vs_P1 = -0.36572235354641597
+z_p1b = 26.709110788300503
 cycle_mcs = 1095
-T_lambda2 = 219
 
 [dH_check]
 killing_copies = 0
