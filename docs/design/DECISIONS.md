@@ -4086,3 +4086,14 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The checkerboard entry therefore runs the F2 chain calibration first. If T_cb(λ = 2) differs significantly from 156 MCS (D-218 rule), the cycle is 5·T_cb and α = A₀/(5·T_cb) per MCS. Otherwise both stay at 775 and 50/775.
   - The record states T_cb, the cycle and α.
   - This is the manuscript's own time mapping, not a tuning: the algorithm is unchanged (stock 4 colours, no extra sweeps). Differences that remain after the time mapping are characterised under D-218.
+
+## D-221 P6.15m m3 review rulings (2026-10-10; coordinator, from the m3 adversarial review; under D-218, D-220)
+
+1. **Attribution evidence.** The evidence for the "thinning (D-008)" rows is the **direct stock 4-colour vs 64-colour contrast at the same clock** (29 of 31 rows |z| > 5.96), not "64 colours removes it". A row not being flagged at n = 20 does not show the effect is gone. The ablation is re-run so that each arm uses its own calibrated time unit:
+   - the 64-colour arm calibrates its own chain T and runs at 5·T_c64;
+   - the stock arm runs at its record cycle of 870.
+
+   That re-run decides the "+ update order" labels: the opposite-sign 64-colour remainder counts as update order only where it stays beyond the spread at the arm's own T. Otherwise all rows carry the same label. The deviation text states the contrast, the remainder's sign and its size.
+2. **Chain colouring is accepted and disclosed.** On M's 150 × 5 periodic chain, stride 2 gives 6 colours, because 5 is not a multiple of 2. This is the algorithm's own colouring on the calibration geometry, and the protocol is otherwise identical to the sequential calibration, so the result stands. meta, provenance and the deviation text say "6 colours on the chain, 4 on the monolayer". The next chain run records accepted and committed copy counts, so that the chain's commit fraction is measured rather than asserted.
+3. **Wording.** Three rows (a O1.n_mean, b O1.n_mean, f A@5.5) are same-sign but not flagged in the stock ablation arm. Their wording says so.
+4. **Ablation auditability.** The per-seed ablation metrics are committed, and provenance gains an `[ablation]` block with the commit, the runner sha256, the device and the dirty flag.
