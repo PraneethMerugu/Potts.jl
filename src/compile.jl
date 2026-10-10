@@ -205,9 +205,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     site_terms = Any[]
     edge_terms = Tuple{Symbol, Any}[]
     relationships, edge_vars, edge_rel = _relationships(sys)
+    copy_sites, copy_cells = _copy_written_vars(sys)
     for e in getfield(sys, :energies)
         d = e.domain
         _located(sys, e) do
+        d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_copy_reads(e.expr, d, copy_sites, copy_cells)
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
@@ -608,6 +610,135 @@ function _check_static(x, what)
     return nothing
 end
 
+# Cell, edge and contact energies read only what a copy changes in ways ΔH applies (D-209).
+# ΔH evaluates a cell term for the copy's two cells with their own `volume`, `surface`, …
+# substituted, an edge term on their links, and a contact term on the pairs at the target.
+# So σ read anywhere else (`owner[i]`, `kind[i]`, `x[owner[i]]`, in a gather body, filter or
+# anchor, or at an explicit site), an indexed copy-varying cell quantity (`volume[id]`,
+# `y[id]` with `@on_copy y[…]`), or a copy-written site variable in a gather would change
+# `H` without entering ΔH.
+
+# site and field variables a copy writes (by an `@on_copy` update, or cleared on a change of
+# ownership), and cell variables written by an `@on_copy` update
+function _copy_written_vars(sys::PottsSystem)
+    sites, cells = Set{Symbol}(), Set{Symbol}()
+    for x in getfield(sys, :variables)
+        i = info(x)
+        i !== nothing && i.role in (:site, :field) && get(i.options, :clear_on_ownership_change, false) === true &&
+            push!(sites, i.name)
+    end
+    for u in getfield(sys, :updates)
+        u.phase === :on_copy || continue
+        lhs = _unwrap(u.eq.lhs)
+        (iscall(lhs) && operation(lhs) === at) || continue
+        i = info(arguments(lhs)[1])
+        i === nothing && continue
+        i.role in (:site, :field) && push!(sites, i.name)
+        i.role === :cell && push!(cells, i.name)
+    end
+    return sites, cells
+end
+
+# the bound variable of a population fold (`for c in cells`, `for s in sites`): reads at it
+# are exact (D-041), so they are exempt
+_pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
+# `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
+_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) &&
+                  (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
+_reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
+# cell builtins a copy changes, which ΔH substitutes only when read bare
+const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_NAMES...)
+# an explicit site index: not a pair's own site (`x′` is `x[site′]`), not a bound variable
+_explicit_index(i) = (r = info(i); r === nothing || !(r.role in (:bound, :bound_cell, :bound_site) ||
+                                                         (r.role === :builtin && r.name in (:site, :site′))))
+
+# The first read in `x` that a copy changes (outermost first), as (read as written, bare form
+# to suggest or `nothing`), or `nothing`. `sites`: copy-written site variables, refused at any
+# index and bare (`:all`, in fold bodies) or at an explicit index only (`:explicit`), or not
+# checked (`nothing`); `cells`: on-copy cell variables (`nothing`: indexed cell quantities
+# not checked).
+function _copy_varying_read(x, sites, cells; mode = :all)
+    hit = Ref{Any}(nothing)
+    bare = Ref{Any}(nothing)
+    _walk(x) do y
+        hit[] === nothing || return
+        if iscall(y) && operation(y) === at
+            a = arguments(y)
+            i = info(a[1])
+            if _is_sigma_at(y) || _reads_sigma(a[2])
+                hit[] = y                                 # `x[owner[i]]`, `owner[i]`, `kind[i]`
+                # `kind[id]`: the cell's own kind, read bare
+                i.name === :kind && (r = info(a[2]); r !== nothing && r.role === :builtin && r.name === :id) &&
+                    (bare[] = "kind")
+            elseif i !== nothing && sites !== nothing && i.role in (:site, :field) && i.name in sites &&
+                   (mode === :all || _explicit_index(a[2]))
+                hit[] = y                                 # `act[n]`, `act[40]`
+            elseif i !== nothing && cells !== nothing && !_pop_bound(a[2]) &&
+                   ((i.role === :builtin && i.name in _COPY_VARYING_INDEXED) || (i.role === :cell && i.name in cells))
+                hit[] = y                                 # `volume[id]`, `y[id]` with `@on_copy y[…]`
+                bare[] = _authored_name(i)
+            end
+        elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
+            hit[] = y                                     # `J[kind[n], …]`
+        elseif sites !== nothing && mode === :all
+            i = info(y)
+            i !== nothing && i.role in (:site, :field) && i.name in sites && (hit[] = y)
+        end
+    end
+    hit[] === nothing && return nothing
+    return replace(_indexed_string(hit[]), r"\b([a-z])_\d+\b" => s"\1"), bare[]   # bound variables as authored
+end
+
+# a scoped variable or builtin by its authored name: `y`, not `y(t)`; a vector component `v[1]`
+function _authored_name(i)
+    v = get(i.options, :vector, nothing)
+    v === nothing && return string(i.name)
+    k = get(i.options, :index, nothing)
+    return k === nothing ? string(v) : string(v, "[", k, "]")
+end
+
+# `x[i]`, `J[i, j]` as authored (not `Potts.at(x(t), i)`)
+function _indexed_string(x)
+    x = _unwrap(x)
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && (operation(x) === at || operation(x) === at2)
+        a = arguments(x)
+        return string(_indexed_string(a[1]), "[", join(map(_indexed_string, a[2:end]), ", "), "]")
+    end
+    i = info(x)
+    i !== nothing && (i.role in SCOPES || i.role in (:builtin, :parameter, :kindtable)) && return _authored_name(i)
+    return string(x)
+end
+
+function _copy_read_error(s, bare, where)
+    hint = bare === nothing ? "" : " Read the cell's own value bare, as `$bare`: ΔH updates it for the copy's cells."
+    return ArgumentError(
+        "this energy reads `$s`$where, which a copy changes; ΔH evaluates the term only where the copy acts " *
+        "(its two cells with their own `volume`, `surface`, …; their links; the pairs at the target), so the " *
+        "change would be missing from it.$hint A fold over a relation, its anchor and any explicit site in a " *
+        "cell, edge or contact energy may read static values only: a site variable no copy writes (a static " *
+        "field), a parameter, a constant, `id`, or the edge ends `a`, `b` compared with static values. To " *
+        "respond to the ownership around a copy, use a `@drive` (it reads `owner`, `kind` at the copy)")
+end
+
+# D-209: refuse a term of domain `d` that reads something a copy changes beyond what ΔH applies
+function _check_copy_reads(E, d, sites, cells)
+    # σ at an explicit site, anywhere in the term (cell and edge terms have no site of their
+    # own; a contact term's pair is the bare `owner`, `owner′`, `kind`, `kind′`), indexed
+    # copy-varying cell quantities in cell terms, and
+    # copy-written site variables at an explicit site, in every domain (a contact term's bare
+    # `x`, `x′` read the pair and stay allowed)
+    r = _copy_varying_read(E, sites, d isa CellDomain ? cells : nothing; mode = :explicit)
+    r === nothing || throw(_copy_read_error(r..., ""))
+    # gather bodies and filters: also copy-written site variables
+    _walk(E) do y
+        (iscall(y) && operation(y) === gather) || return
+        _, _, body, cond = arguments(y)
+        r = something(_copy_varying_read(body, sites, nothing), _copy_varying_read(cond, sites, nothing), Some(nothing))
+        r === nothing || throw(_copy_read_error(r..., " in a fold over a relation"))
+    end
+    return nothing
+end
+
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
 # bare site variable its value at the pair's first site (`x[site]`; `x′` is `x[site′]`), so
 # that mirroring (owner ↔ owner′, site ↔ site′) sees them.
@@ -726,18 +857,19 @@ function _located(f, sys::PottsSystem, x)
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x))$loc"))
+        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x, getfield(sys, :kinds)))$loc"))
     end
 end
 
 # descriptions are built only when reporting (printing symbolic expressions is slow)
-_describe(e::EnergyTerm) = "@energy $(_domain_string(e.domain)) => $(e.expr)"
+_describe(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
 _describe(d::Drive) = "@drive copy => $(d.expr)"
 _describe(c::Constraint) = "@constraint $(c.expr)"
 _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
-_describe(d::DivideRule) = "@divide $(_domain_string(d.domain))$(_cadence_string(d.every)) when = $(d.when)"
+_describe(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
+_describe(x, ::Any) = _describe(x)
 _describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
 _describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
 _describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"

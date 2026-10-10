@@ -24,6 +24,22 @@
 #    in the copy step but the compiler declares Footprint(read = 1); the preflight refuses.
 #    This must stay refused (named and inline), alone or next to a boundary read of R.
 #
+# Amended under D-209 (P6.0ca). The edge fixtures originally folded `owner[n] == a`/`b`, a
+# σ-dependent gather in an edge energy, which D-209 refuses at `mtkcompile` (its ΔH was
+# wrong), so they could no longer reach the preflight. A copy-step read beyond the declared
+# footprint remains possible with a valid form: a static gather in an edge energy that ΔH
+# reads. The edge fixtures (sections 2 and 3, and the "mixed" ones) now fold
+#   `0.1 * distance * (count(q[n] == a for n in R(40)) + count(q[n] == b for n in R(40)))`,
+# with `q(site)` the initial owner map set from the operating point (declared in those
+# fixtures only). `distance` (centroid distance, 3 on :touch) changes with each copy, so the
+# generated ΔH reads `ctx.R` at a fixed site (measured: `delta_H` reads it on 487fda85; its
+# ΔH is exact against the P6.0ca oracle), while the compiler still declares
+# Footprint(read = 1): the preflight must still refuse it, with the same message. The
+# initial edge energy is 0.1 · 8 · 3 = 2.4 (was 0.8). (Such a read is in fact safe under the
+# checkerboard, since nothing a copy writes is read; refusing it stays the conservative rule
+# of this file, not a correctness requirement. A finer rule is not part of P6.0ba.) Every
+# other fixture, value and digest is unchanged.
+#
 # Rule pinned here: the preflight reach is the largest radius of the contact relation and of
 # the relations the copy-step functions read (ΔH, commit, constraint, temperature,
 # connectivity hooks); a relation read only at the MCS boundary (lifecycle, link rules,
@@ -84,7 +100,11 @@ p60ba_before(r) = [P60BA_STATIC, :(@before_mcs z ~ $(p60ba_g(r)))]
 p60ba_ode(r) = [P60BA_STATIC, :(@equations D(w) ~ $(p60ba_g(r)) - w)]
 p60ba_obs(r) = [P60BA_STATIC, :(@observed o(cell) ~ $(p60ba_g(r)))]
 # copy-step reads
-p60ba_edge(r) = [P60BA_BOND, P60BA_STATIC, :(@energy edges(bond) => 0.1 * $(p60ba_pair(r)))]
+# the edge energy folds the static site value `q` (the initial owner map, from the operating
+# point), the form D-209 allows, times `distance`, so that the generated ΔH reads R (P6.0ca)
+p60ba_spair(r) = :(count(q[n] == a for n in $r(40)) + count(q[n] == b for n in $r(40)))
+const P60BA_Q = :(@variables q(site) = 0.0)
+p60ba_edge(r) = [P60BA_BOND, P60BA_STATIC, P60BA_Q, :(@energy edges(bond) => 0.1 * distance * $(p60ba_spair(r)))]
 p60ba_constraint(r) = [:(@constraint count(owner[n] == new for n in $r(target)) >= 0)]
 p60ba_drive(r) = [:(@drive copy => 0.1 * count(owner[n] == 1 for n in $r(target)))]
 
@@ -172,14 +192,17 @@ function p60ba_sigma(lk::Symbol)
     σ[r2...] .= 2
     return σ
 end
-p60ba_op(lk; links = false) = Any[ownership => p60ba_sigma(lk), kind => [:A, :A], (links ? [:bond => [(1, 2)]] : [])...]
+p60ba_op(lk; links = false, q = false) = Any[ownership => p60ba_sigma(lk), kind => [:A, :A], (links ? [:bond => [(1, 2)]] : [])...,
+    (q ? [:q => Float64.(p60ba_sigma(lk))] : [])...]
+"""Does fixture `label` declare the static site value `q` (the edge-energy fixtures, P6.0ca)?"""
+p60ba_has_q(label) = startswith(label, "edge") || startswith(label, "mixed")
 
 """The problem of fixture `label`, built once per keyword set (a build error propagates: it is
 not this item's defect). `solve` and `init` do not mutate a problem."""
 const P60BA_PROBLEMS = Dict{Any, Any}()
 p60ba_problem(label; tspan = (0, 16), seed = 1, links = false) =
     get!(P60BA_PROBLEMS, (label, tspan, seed, links)) do
-        PottsProblem(Base.invokelatest(P60BA_MODELS[label]; name = :g), p60ba_op(P60BA_LAYOUT_OF[label]; links), tspan;
+        PottsProblem(Base.invokelatest(P60BA_MODELS[label]; name = :g), p60ba_op(P60BA_LAYOUT_OF[label]; links, q = p60ba_has_q(label)), tspan;
             seed, capacity = 16)
     end
 p60ba_solve(label; alg, kw...) = solve(p60ba_problem(label; kw...), alg; saveat = 1)   # every MCS
@@ -357,7 +380,7 @@ end
     for label in ("edge far=Ball(2.0)", "edge Ball(2.0)")
         @testset "$label" begin
             p = p60ba_problem(label; links = true)
-            @test total_energy(p, p.u0) ≈ 0.8                            # the edge energy reads Ball(2.0): 8
+            @test total_energy(p, p.u0) ≈ 2.4                            # the edge energy reads Ball(2.0): 0.1 · 8 · distance 3
             @test_throws ArgumentError solve(p, CheckerboardCPM())
             @test p60ba_is_reach_refusal(p60ba_refusal(label; links = true), 2)
             @test p60ba_is_reach_refusal(p60ba_refusal(label), 2)        # unlinked: still read by ΔH

@@ -3857,3 +3857,43 @@ session.
 - **Pinned.** Three Checkerboard trajectories, as bitwise digests recorded on the base.
 - **Not pinned.** A declared relation that nothing reads. The fix will accept it; today it is refused.
 - **Side finding, separate item.** A cell energy that gathers at a fixed site (`count(owner[n] == id for n in far(40))`) appeared in `total_energy` but not in the generated ΔH. Under investigation.
+
+## D-209 P6.0ca: a σ-dependent gather in a cell or edge energy is refused at `mtkcompile` (2026-10-09; coordinator, from a diagnosis prompted by the P6.0ba test author; follows D-150, D-041)
+
+- **The defect.** A gather in a `cells(…)` or `edges(…)` energy whose body reads something a copy changes appears in `total_energy` but not in the generated ΔH. The kernel's ΔH therefore differs from the true energy change, and Metropolis samples the wrong distribution. Example: `@energy cells => 0.1 * count(owner[n] == id for n in far(40))`.
+  - Gather bodies that read something a copy changes: `owner[n]`, `kind[n]`, `x[owner[n]]`, or a site variable written on copy.
+  - Measured: on a 12² oracle chain, all 78 targets inside `Ball(2.0)(40)` gave a wrong ΔH (off by 0.1). 45 of 387 accepted copies had a wrong ΔH.
+- **Root cause.**
+  - The `CellDomain` branch accepts gathers with no check (src/compile.jl:211–215), and the `EdgeDomain` branch runs only `_check_static`.
+  - `_cell_delta` cancels the gather, because the gather is unchanged in its substitution (src/compile.jl:685–693).
+  - Cell terms are evaluated only for `old`/`new` (src/codegen.jl:283–298).
+- **Ruling.** Such gathers are refused at `mtkcompile` with an `ArgumentError` that names the statement, as D-150 does for the cell-scope contact fold and as sites and clusters already do. Gathers whose body reads only static site or field values stay allowed. The accidental contact-scope error "cannot index `owner′`" becomes the same clear refusal.
+- **Exposure.** No shipped model, reproduction or docs page uses the form. The P6.0at fingerprint fixtures and P6.0ba's copy-step edge fixtures do use it, so they are re-frozen through the P6.0ca test author.
+- **Self-check gap.** AUTHORING §4's "generated `total_energy` self-check" is a test helper that runs on listed models only. The refused forms, and a static-field gather, get a ΔH oracle test. AUTHORING §4's wording is corrected to say this.
+- **Later, optional.** An exact local ΔH for the self-comparing form (`owner[n] == id`): a guarded `target ∈ R(s0)` block, with each side's term evaluated jointly with the volume delta. A global recompute is rejected (O(N) per copy).
+- **Separate rough edges, not in this item.**
+  - A fixed-site anchor given as a parameter (a Float64 parameter gives a `MethodError` in `coordinates`; `::Int` parameter syntax fails at macro expansion).
+  - AUTHORING §4 lists a `model` energy domain that does not exist.
+- **Freeze (P6.0ca test author, commit 7df0cc95).**
+  - **New test:** `acceptance/p6_0ca_gather_energy.jl`, sha256 `83cce600…`. A refusal is an `ArgumentError` containing "a copy changes" and "in @energy <domain>", checked at `mtkcompile` and at `PottsProblem`. It covers 26 refused forms, 6 accepted static gathers, each with a ΔH oracle (0 mismatches over 3000 attempts), the GranerGlazier oracle, and GranerGlazier/OpenVT fingerprint and trajectory pins. On the base: 83 pass, 77 fail, and every fail is the missing refusal.
+  - **Re-frozen, with fixtures moved to valid forms that keep each test's intent:**
+    - `p6_0at_relation_fingerprint.jl` (`a1964317…`): the cell energies read the static `q` map through `volume`.
+    - `p6_0ax_gather_scan.jl` (`9a4dc06b…`): the energy and edge folds read `q`. Two fingerprint pins were re-recorded on the base, "at energy Moore(1)(40)" 0xfc8f…→0x674d… and "edge far=Moore(1)" 0xef5c…→0xe970…; the hand values are unchanged.
+    - `p6_0ba_boundary_only_reach.jl` (`a559af4a…`): the copy-step edge fixtures read `0.1·distance·count(q[n] == a/b …)`. ΔH still reads `ctx.far` beyond the declared `Footprint(read = 1)`, so the reach refusal stays. That refusal is conservative, since no copy writes what is read. Base results are identical to D-208.
+- **Widened after review (2026-10-09; coordinator).** The P6.0ca review found the same defect on routes outside gather bodies. Each gives a silently wrong ΔH on the oracle; the worst error is 1.0. These are refused too, with the same D-209 message:
+  1. **A σ-dependent gather anchor.** Example: `far(owner[40] + 39)`; the anchor must be static.
+  2. **σ read at an explicit site outside any gather in a `cells` or `edges` term.** Examples: `owner[40] == id`, `y[owner[40]]`, `kind[…]`.
+  3. **The same reads in a `contacts` term.** `owner[i]`/`kind[i]` with an explicit index are refused instead of hitting "cannot index `owner′`". The bare pair names `owner`, `owner′`, `kind`, `kind′` stay allowed.
+  4. **Indexed copy-varying cell builtins or on-copy cell variables in cell terms.** Examples: `volume[id]`, `surface[id]`, `y[id]` with `@on_copy y[new]`. These crash today at `PottsProblem` with an internal "cannot index …" error. They get a clear `ArgumentError` that suggests the bare form, which is correct and passes the oracle.
+  
+  Follow-ups, not in this item:
+  - over-refusal of a bare on-copy pair value inside a contact gather;
+  - message cosmetics (`(t)` suffixes, vector names);
+  - kind names in `show`/`@extend` output;
+  - doc wording on what a fold may read.
+- **Re-frozen for the widening.** Commit 174bc91e, sha256 `eab48311…`. New section 5 has 21 refused fixtures; on the implementation head they give 69 reds. New section 6 holds the controls, whose ΔH oracles are exact. The original 160 checks are unchanged. `kind[40]` in cells and contacts must carry the D-209 wording; today it raises the older "needs a site" message.
+- **Second review round (2026-10-09; coordinator).**
+  - **Also refused.** An explicit-site read of a copy-written site variable, outside any fold, in every domain. Examples: `act[40]` where `@on_copy` writes `act`, and `tag[40]` for a `clear_on_ownership_change` variable. On the oracle this was accepted with a silently wrong ΔH: 69 mismatches, worst error 9.3 (in contacts). The bare `x`/`x′` pair reads in contact terms stay allowed.
+  - **Kept allowed.** The bound variable of a population fold (`for c in cells`, `for s in sites`). `sum(volume[c] for c in cells)`, `sum((owner[s] == 1) for s in sites)` and an on-copy `y[c]` were exact before (0 mismatches) and the whole-term walk had refused them. They are exempt again, as D-041 makes them exact.
+  - **Cosmetics.** `kind[id]` gets the "read it bare" hint. AUTHORING names the indexed `euler`/`pieces` family. energy.md says the bare quantities are fine inside a fold too.
+  - **Re-frozen.** Commit 9dc7da51, sha256 `7ff52c90…`, 302 checks. New section 7 has the refusals and section 8 the population-fold and bare-pair controls. On a6239bad: 286 pass, 16 fail, all in sections 7–8.

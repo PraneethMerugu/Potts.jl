@@ -1217,7 +1217,7 @@ const BAD_DRIVE_LINE = @__LINE__() - 3
         sprint(showerror, e)
     end
     m = msg(() -> mtkcompile(BadSiteVar(; name = :bad)))
-    @test occursin("needs a site", m) && occursin("in @energy cells(1) => x", m) &&
+    @test occursin("needs a site", m) && occursin("in @energy cells(A) => x", m) &&
           occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
     m = msg(() -> mtkcompile(BadDrive(; name = :bad)))
     @test occursin("`volume` is not available in a drive", m) && occursin("symbolic.jl:$BAD_DRIVE_LINE", m)
@@ -2071,11 +2071,13 @@ end
 # roles `contact` and `proposal` still build
 @testset "reserved relation names are refused at mtkcompile" begin
     function build(name, spec; read = true)
-        energy = read ? :(@energy cells => 0.1 * count(owner[n] == id for n in $name(40))) :
+        # a static-value gather (D-209 refuses `owner[n]` in an energy gather)
+        energy = read ? :(@energy cells => 0.1 * volume * sum(q[n] for n in $name(40))) :
                  :(@energy cells => (volume - 16)^2)
         m = Core.eval(@__MODULE__, quote
             @potts_model $(gensym(:Reserved)) begin
                 @kinds medium cell
+                @variables q(site) = 0.0
                 @lattice Lattice((12, 12); spacing = (1.0, 1.0))
                 @relations $name = $spec
                 $energy
