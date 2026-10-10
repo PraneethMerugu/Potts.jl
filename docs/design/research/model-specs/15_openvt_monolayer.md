@@ -616,13 +616,30 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q12** The Morpheus files behind the M data are not in G: the "J10, N100" relaxation (T = 155/154), the 1T/5T/10T "major2" 1000-cell runs, and the Table S1 growth XML. The same holds for the CC3D and Artistoo versions that produced the Table 1 rows.
 - **Q13** Fig 3: which framework, and how many runs? Is "deterministic" X ≡ 2 (TST data say yes)? No script in G.
 - **Q14** Fig 8: confirm that lengths will be in R and time in 775-MCS cycles for all frameworks (currently px and legacy cycles; D3, D4).
-- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it. **Update 2026-10-09 (the 9 Oct draft, §1.2 R4):** M now shows one shared set of bins for all rows (0–18 … 74–93 "radii"). On those edges, measured in R from the lattice centre, our case (b) row puts 27/72/1/0 % in the first four bins, while M's TST row reads ≈ 5/20/50/25 %, and our TST-equivalent colonies reach only ≈ 42 R. So M's "radii" are probably not R (≈ R/2.2?), or not measured from our origin. Ask for the unit and origin together with Q26. **Cross-check (2026-10-09, G 14fa42c, read-only).** We binned G's TST 1000-cell data on M's shared edges four ways:
+- **Q15** Fig 5: 5 bins (figure) vs 7 (notebook); distance from the initial cell's centre (text) vs the pooled centroid (code); which framework's legend is shown; and whether stochastic or deterministic 1000-cell data feed it. **Update 2026-10-09 (the 9 Oct draft, §1.2 R4):** M now shows one shared set of bins for all rows (0–18 … 74–93 "radii"). On those edges, measured in R from the lattice centre, our case (b) row puts 27/72/1/0 % in the first four bins, while M's TST row reads ≈ 5/20/50/25 %, and our TST-equivalent colonies reach only ≈ 42 R. So M's "radii" are probably not R (≈ R/2.2?), or not measured from our origin. Ask for the unit and origin together with Q26. **Cross-check (2026-10-09, G 14fa42c, read-only).** We binned G's TST 1000-cell data on M's shared edges four ways: **Decipher pass (2026-10-10; scratch report `decipher/REPORT.md`): PARTIAL.**
+  - **Exact shares.** M Fig 5 is vector graphics, so the exact per-row bin shares were read from the PDF's final stacked-CDF bars. In % for bins 0–18/18–37/37–55/55–74/74–93:
+    - TST 8.7/24.7/37.7/27.9/1.0 (the earlier "≈ 5/20/50/25" was a low-resolution misreading);
+    - Artistoo 9.5/26.9/40.4/22.8/0.5;
+    - CC3D 8.1/24.6/40.9/26.1/0.3;
+    - Chaste VM 6.5/19.0/30.0/36.9/7.6;
+    - Chaste VT 7.4/20.9/31.0/34.3/6.4;
+    - PolyHoop 7.2/21.2/33.4/34.8/3.3;
+    - PhysiCell 8.1/23.0/34.6/31.8/2.7;
+    - Chaste OS 7.8/22.5/34.4/32.6/2.6;
+    - TinyDEM 8.2/23.4/34.4/31.3/2.7.
+  - **The unit.** Fitting every row against G's TST colony shape gives **1.84–2.23 axis units per R** (TST 1.91), with 0.6–2.2 pp rms error. So M's axis is ≈ distance in R × 2 for all rows. That rules out R itself and each framework's raw units.
+  - **The edges.** They fit "0 to 1.05 × the pooled maximum over all frameworks, 5 equal bins" (88.57 ≈ 44 R).
+  - **Why TST is not exact.** No G TST set (plain = 1T, or 5T) reproduces M's TST row exactly: every fixed choice is 2.5–5 pp off, and none puts 1 % of cells beyond 74.4. So M's TST row comes from data not in G.
+  - **Still to ask:**
+    - (a) Is the distance in units of R/2 (i.e. ×2)?
+    - (b) Which TST data set feeds Fig 5?
+    - (c) Are the edges 0 to 1.05 × the pooled maximum?
   - in R, from the lattice centre or the pooled mean (≈ 30/70/0/0/0 %);
   - in px, from the pooled mean (≈ 55 % lands beyond 93);
   - the notebook's method (per-file raw units, per-framework `linspace(0, 1.05·max, 8)`);
   - and px / 2.1–2.2 (≈ 8/26/40/25/0 %, the closest).
 
-  **None reproduces M's TST row (≈ 5/20/50/25 %).** The implied unit is ≈ 2.0–2.2 TST px ≈ 0.5 R, i.e. "radii" may be diameters or px/2. Morpheus_5T in its native R gives 29/70/1/0/0, like ours. G does not define the shared edges, and its notebook loads the plain TST set (identical to 1T, not 5T). **Ask:** (a) M Fig 5's distance unit (R, 2R, px or px/2) and origin; (b) which TST set feeds it (1T or 5T); (c) how the shared edges are chosen. **Potts meanwhile:** the shared-bin row is rendered in R, labelled provisional, with one sentence noting that M's axis appears to be ≈ 2× ours.
+  **None reproduces M's TST row** (read at the time as ≈ 5/20/50/25 %; the exact PDF reading is 8.7/24.7/37.7/27.9/1.0, see the decipher pass below). The implied unit is ≈ 2.0–2.2 TST px ≈ 0.5 R, i.e. "radii" may be diameters or px/2. Morpheus_5T in its native R gives 29/70/1/0/0, like ours. G does not define the shared edges, and its notebook loads the plain TST set (identical to 1T, not 5T). **Ask:** (a) M Fig 5's distance unit (R, 2R, px or px/2) and origin; (b) which TST set feeds it (1T or 5T); (c) how the shared edges are chosen. **Potts meanwhile:** the shared-bin row is rendered in R, labelled provisional, with one sentence noting that M's axis appears to be ≈ 2× ours.
 - **Q16** Artistoo `Time to 10k (MCS)` units (D9).
 - **Q17** Is 13.57 × 5T pooled over frameworks or PhysiCell's γ = 0 value?
 - **Q18** The colour for Potts.jl in `colors.tex` (proposal 8,29,88).
@@ -633,7 +650,13 @@ variable (`OPENVT_MONOLAYER_REPO`). The docs ship only the rendered figures and 
 - **Q23** Fig 5 / V4 (P6.15e): which TST implementation detail differs from Potts' Table S1 model? TST_5T alone, with the same pair-count f and σ_X = 0.4, passes every V4 row (mean nonzero f 0.288), while Potts' rim cells are shifted up (0.346; peak 0.425 against 0.295). Leading candidate: division on target area (C13, Q20). Also asked: the exact Moore-pair loop TST uses for f_i (spec §2.4 records a skipped offset only for n_i, which could not plausibly explain a 20 % shift), the timing of growth vs division within an MCS (§2.5), and any rule acting on very small cells.
 - **Q24** Fig 5 / V4 (P6.15e): do the CPM implementations suppress or remove crushed cells (a connectivity check, a minimum volume, extrusion)? Potts shows rare squeezed young daughters at the 1000-cell stop (30 of 10⁵ cells with a < 0.42, A\* 23–43), where the pooled data have none.
 - **Q25** (2026-10-09; proposal-law-clues.md §4) **RESOLVED 2026-10-10 by maintainer ruling, not asked: "paper holds provenance over the tst implementation. current division trigger is good." Potts keeps division at actual A ≥ X·A\*(0); the frameworks' departures are theirs.** (a) Which division trigger is normative: actual A ≥ X·A\*(0) (M p.2) or A ≥ µA_max (§4.1)? (b) Which TST build produced the beyond-10³ curves, given the released model exits at `max_cell_count = 1000`? (c) Are the frameworks' departures from Table S1 intended (CC3D λ = 10, A\* = 25, contact order 4; Morpheus/Artistoo J_cM = 20, λ = 20; TST integer ΔH)?
-- **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G.
+- **Q26** (2026-10-09, the 9 Oct draft; §1.2 R1/R2/R5, D-211/D-212) Figs 7/8: which quantity is the centre label of each colony, and with which concave-hull parameters? metrics.cpp's C/C_circle and C/(2πR) on G's own CC3D/TST colonies do not reproduce it (§1.2 R5 result). Please push the Fig 5/7/8 scripts to G. **Decipher pass (2026-10-10): PARTIAL.**
+  - **Which data match.** The CC3D colonies in G are the figure's own: `Fig7_Snapshot_to_10k.zip` is the renamed Fig 8 zip, holding all 8 CC3D colonies. TST's `final_snapshot_data` colonies are not the figure's.
+  - **What the label is.** It behaves as the roughness C/(2√(πA)) of the black concave hull drawn in each panel. That hull is much more concave than metrics.cpp's (concavity 1.5), notching into the second and third cell layer, which is why round colonies print ≈ 1.5.
+    - Measured from the figure's images and corrected for line-width bias, it reproduces the 8 CC3D labels to within 0.14 (±0.1 typical), not exactly.
+    - Concaveman would need a concavity of ≈ 1.11–1.25 varying per colony. No single setting fits within 0.005, and the roughness is very sensitive (1.4 → 1.9 between concavity 1.15 and 1.0).
+  - **Ruled out:** concaveman over concavity 0.3–5 and length threshold 0–4, with variants; shapely/GEOS ratio 0–0.15; alpha shapes at 1/α = 1.5–10; and a 300+ formula search.
+  - **Still to ask:** the hull library, its parameters and the script for the Fig 7/8 labels.
 - **Q27** (2026-10-10, D-214) The colour for "Potts.jl (checkerboard)" in `colors.tex`: proposal 0,109,44 (§1.3). Also, does the consortium accept two entries from one framework (sequential CPU, checkerboard GPU), as Chaste OS has log/quad?
 
 ## Verification log (v3, 2026-10-05, coordinator's spec verifier)
