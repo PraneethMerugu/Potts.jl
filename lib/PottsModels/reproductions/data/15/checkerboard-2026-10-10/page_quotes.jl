@@ -29,7 +29,18 @@ function cb_quotes(dir)
         "$(grp(dh["copies"])) committed copies ($(dh["mismatches"]) mismatches",
         "$(pct(dh["commit_fraction"])) of accepted copies commit",
         "$(grp(round(Int, dh["committed_per_mcs"]))) of $(grp(round(Int, dh["accepted_per_mcs"]))) per MCS at $(grp(dh["live_at_start"])) cells",
-        "$nab colours (T = $(ab["T_c64"]) MCS, cycle $(ab["cycle_c64"]) MCS)"]
+        "$nab colours (T = $(ab["T_c64"]) MCS, cycle $(ab["cycle_c64"]) MCS)",
+        "runs per arm: $(ab["runs_per_arm"])",
+        "ablation commits " * join(("`$(first(strip(c), 8))`" for c in split(ab["commits"], ',')), " and ")]
+    devs = cb_tsv(dir, joinpath("entry", "deviations.tsv"))
+    clauses = [String(strip(first(split(d["suspected_cause"], ':')))) for d in devs]
+    abl = Dict((r["case"], r["metric"]) => r for r in cb_tsv(dir, "ablation.tsv"))
+    kc = count(d -> abl[(d["case"], String(first(split(d["target"]))))]["beyond_contrast"] == "true", devs)
+    push!(quotes, "The contrast is beyond the spread for " * (kc == length(devs) ? "every row" : "$kc of $(length(devs)) rows"))
+    for c in unique(clauses)
+        k = count(==(c), clauses)
+        push!(quotes, (k == length(clauses) ? "all $k rows" : "$k of $(length(clauses)) rows") * ": $c")
+    end
     cell(s) = replace(s, "|" => "∣")
     function cause(c)
         parts = [String(strip(first(split(c, ':'))))]
@@ -39,7 +50,7 @@ function cb_quotes(dir)
         r === nothing || push!(parts, "$nab-colour remainder of the $(r[1]) sign, $(r[2]) %")
         return join(parts, "; ")
     end
-    rows = map(cb_tsv(dir, joinpath("entry", "deviations.tsv"))) do d
+    rows = map(devs) do d
         id = String(first(split(d["target"])))
         z = match(r"\|z\| = (\d+\.\d+)", d["target"])
         "| `$id` ($(d["case"]))" * (z === nothing ? "" : ", ∣z∣ = $(z[1])") * " | " *
