@@ -622,7 +622,7 @@ Full runs are offline (D-146).
 ### Step 4 — Foam
 
 - [ ] **P6.15m** (D-214) "Potts.jl (checkerboard)" as a second OpenVT entry, from `CheckerboardCPM` with the same model, parameters and clock.
-  - [ ] m1. Characterisation tests (test author): GPU checkerboard vs CPU sequential F3–F8 and O1 summaries over seeds, cases (b) and (f) first. Each difference beyond the seed spread is a deviation row with a cause; an unexplained one is investigated as a bug.
+  - [x] m1 (frozen, D-216). Characterisation tests (test author): GPU checkerboard vs CPU sequential F3–F8 and O1 summaries over seeds, cases (b) and (f) first. Each difference beyond the seed spread is a deviation row with a cause; an unexplained one is investigated as a bug.
   - [ ] m2. Generator and package: framework token as a parameter (`Potts.jl`, `Potts.jl (checkerboard)`; `Potts.jl_checkerboard`, D-215), its own seed ranges, results folder and provenance algorithm field.
   - [ ] m3. Full runs on the PC's GPU (ROCm; required by D-214), with a record under `data/15/`, including its own F2/S5 chain calibration (T(λ = 2); cycle 5T if it differs significantly from 156 MCS, else 775).
   - [ ] m4. Figures, page 15 and the package carry both entries; colour Q27; deviations table for the checkerboard entry.

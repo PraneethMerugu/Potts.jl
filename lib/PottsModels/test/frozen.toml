@@ -566,3 +566,8 @@ decision = "D-209"
 path = "reproductions/15_openvt_d211.jl"
 sha256 = "6755ce98661a77ce556670f70e2acd672efc757b2a28e2ea7fd9b9824619db5d"
 decision = "D-212"
+
+[[file]]
+path = "reproductions/15_openvt_checkerboard.jl"
+sha256 = "e8117f7bbd51b68a16ef6472458aec91744b513346df5b2380e45bd0ba2e8287"
+decision = "D-216"

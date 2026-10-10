@@ -4021,3 +4021,38 @@ The audit read the 9 Oct manuscript and G at 14fa42c, and ran G's own postproces
    - Every G script hard-codes its framework list, so each entry needs one line added on their side whatever we call it. This goes in EMAIL.md.
 
 Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the implementation folder and the units. The optional O2 header and zero neighbour rows are not adopted.
+
+## D-216 P6.15m m1: checkerboard characterisation tests frozen (2026-10-10; coordinator, from the P6.15m m1 test author; implements D-214, D-215 item 9)
+
+`lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl` (sha256 e8117f7b…). The file has three tiers:
+- rules on synthetic data, which always run;
+- the API, marked `@test_broken` until it exists;
+- the record, marked `@test_skip` until `data/15/checkerboard-<date>/` exists. Checking a record needs no GPU.
+
+**Rule.** Welch z between the GPU checkerboard and the CPU sequential arms. A row is "beyond the spread" when |z| > 4.42: a family false-alarm budget of 1e-3 over at most 100 checks, following P6.4b1's convention. With n = 100 seeds per arm for cases b and f and for the λ = 2 calibration, this detects a shift of about 0.63 seed sd.
+
+**Metrics.** 33 per case:
+- `L@0.5…8.5`
+- `r@` and `A@4.5…8.5`
+- `t_stop`, `r_stop`, `A_stop`
+- `sync@0…3`
+- `C_rel_end`, `w_end`, `g_end`
+- O1.n_mean, n_sd, n6, i0 (range-checked only)
+
+The reference is the existing f3-f8 record; there is no sequential re-run.
+
+**Time scale.** The cycle is 5·T(λ = 2) if the z rule flags T(λ = 2) against the sequential crossings, else 775. The record states the reason, naming 156.
+
+**Causes.** The vocabulary is spec §1.3's four classes ("update order", "colour-lagged totals", "claim widening", "thinning") plus "under investigation". Every flagged row needs a deviation row, and every deviation row must be flagged. A `status = "final"` record may carry no "under investigation" row; this is the bug-chase rule.
+
+**Record layout.**
+- `provenance.toml` with `algorithm` (CheckerboardCPM), `algorithm_reference` (SequentialCPM), `backend` (AMDGPU/ROCm), `device`, and `host_planner_fallback = false`.
+- `runs.tsv` with `planner = "device"` on every run. Its seeds are disjoint from every committed data/15 seed.
+- `meta.toml`, `metrics.tsv`, `comparison.tsv` and `calibration.tsv`.
+- The entry's deviations are in `entry/deviations.tsv`, with no top-level deviations.tsv or verdicts.tsv, so that the sequential entry's page and package tables stay unchanged until m4 decides how both are fed.
+
+**Negative controls.** A shifted metric is flagged alone. Splits of a single law flag nothing, including the real odd and even sequential seeds. A time miscount of 1.1× flags `t_stop`.
+
+**API.** Two new `public` names in PottsModels: `openvt_spread_compare(ref, alt; z = 4.42)` and `openvt_spread_table(ref::AbstractDict, alt; z)`.
+
+**Tokens.** "Potts.jl (checkerboard)" and `Potts.jl_checkerboard` are constants at the top of the file.
