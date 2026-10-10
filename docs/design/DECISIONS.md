@@ -3808,3 +3808,21 @@ session.
 - **No model change.** κ_b is applied by the harness. The Eq 7 term reads only β, so no model change is needed.
 - **PC cost.** 345 jobs, about 2–3 h on 24 threads. The scan runs after the 01b FULL, and its table goes to the spec owner first.
 - **Prediction.** From the D-190 record, a pinning cliff is likely, so the rule may well return `nothing`.
+
+## D-210 Foam κ_b scan: no single bulk scale fits; D-203 (d) "stop" (2026-10-09; spec owner confirmed the coordinator's reading; under D-203, D-205)
+
+- **Result.** The pre-registered decision rule returned no κ_b, with the reason `pinning_cliff`. The record is `reproductions/data/04/kb-scan-2026-10-09/`; its README holds the table.
+  - The harness check holds: at κ_b = 2.497 the result is 451 / 39, against 455 / 40 in the D-190 record.
+  - At β = 0.01, t_first jumps from no yield to 1691 between κ_b = 1.248 and 1.766, so the target of about 4300 is unreachable.
+  - The β = 0.05 target is met near κ_b ≈ 0.5, but there β = 0.01 never yields.
+  - T1s at β = 10⁻³ need κ_b ≳ 14.
+- **What follows.**
+  - The Eq 2 form under bulk shear is in question, and the 04 record stays provisional.
+  - The pinning-explained deviation rows (V11a, V11c, V12, V13a, V14a, V14b, V15a, V15c, V15d) now give that cause, with the author question marked "asked (F1)".
+  - F1 on our open question list is sharpened.
+- **Interpretation** (spec 04 §7 A-1, spec owner). At T = 0, a position-independent per-flip bias competes against integer J barriers, so it must depin at a threshold. The paper's smooth β-dependence down to 10⁻⁴ therefore needs one of two things:
+  - a site-varying bias, as the literal γ·x_i form gives; this conflicts with Fig 3c's γ0/J scaling;
+  - or a finite T in the bulk runs.
+  
+  The boundary-shear and bulk-shear modes may not have shared one form.
+- **No further foam runs until F1 is answered.** In particular, no finite-T or literal-x_i variant is tried on our own.
