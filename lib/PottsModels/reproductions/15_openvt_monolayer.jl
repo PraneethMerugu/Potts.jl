@@ -195,9 +195,10 @@ end
 # AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s.
 #
 # M now draws every row on one set of distance bins, edges 0, 18.6, 37.2, 55.8, 74.4 and
-# 93 R. Our case (b) row on those bins, `fig5_shared.png` (`plot_f5_shared.jl`, from the 100
-# per-cell files; the counts are in `hist_shared.tsv`). Our colonies reach 39 R, so the outer
-# two bins are empty:
+# 93 ("radii"). Our case (b) row on those edges, `fig5_shared.png` (`plot_f5_shared.jl`, from
+# the 100 per-cell files; the counts are in `hist_shared.tsv`), binned in R from the lattice centre; M's axis appears to be ≈ 2× ours (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data); asked.
+# The unit comparison is provisional: M's unit is unstated and on our open question list.
+# Our colonies reach up to 43 R, so the outer two bins are empty:
 
 record("f5-2026-10-07"; commit = "3af81ae8") #hide
 record_figure("f5-2026-10-07", "fig5_shared.png"; alt = "Figure 5: f and a distributions of case (b) on the shared distance bins") #hide
@@ -616,7 +617,7 @@ Markdown.parse(s5)
 # | F3 time axis and framework | t in 775-MCS cycles; TST shown as the comparison row | axis "[T]"; the framework of M's Figure 3 is not named | read as cycles, as the TST data imply | not asked; on our open question list as Q2 (open part) and Q13 |
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked; on our open question list as Q20 |
 # | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, coloured count glyphs | no outlines on this schematic (D-156) | not an author question |
-# | F5 distance bins and origin | M's shared edges 0, 18.6, 37.2, 55.8, 74.4, 93 R for our row (`fig5_shared.png`); the verdict figure keeps 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R); distances from the initial cell's centre | one set of edges for all rows (0–18, …, 74–93 "radii"); how they were derived is not stated; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
+# | F5 distance bins and origin | M's shared edges 0, 18.6, 37.2, 55.8, 74.4, 93 for our row (`fig5_shared.png`), binned in R (provisional: M's unit is unstated and appears to be about 0.5 R); the verdict figure keeps 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R); distances from the initial cell's centre | one set of edges for all rows (0–18, …, 74–93 "radii"); how they were derived is not stated; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
 # | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds by M's nearest rule on 6-run bracket ends | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
 # | F7, F8 drawing | each cell a filled disc of its radius at its centroid, yellow or teal (Figure 7) / red (Figure 8, β), no strokes; the black concave hull of `metrics.cpp`; one length scale per figure; a row of lattice stills as information | M's grids, one colony per framework and multiple | M's form from our O5 files | not an author question |
 # | F7, F8 panel labels | no number in the panels; each colony's C/C_circle of the concave hull in the caption (1.38, 1.91, 2.22 for Figure 7) | a centred number per panel (1.37–3.45); its quantity is not stated | no candidate we tried matched M's printed values, so we do not guess | not asked; on our open question list |
@@ -633,7 +634,7 @@ Markdown.parse(s5)
 # | C8 output columns | x, y, i, n, with g = (i == 0) derived for the analysis | x, y, i, n (the analysis code reads x, y, g, n) | M for submitted files | not an author question |
 # | C9 type 1 inequality | a ≥ β | a ≥ β (the schema has a > β) | M, as Morpheus, TST and Artistoo | not an author question |
 # | C10 Figure 9 length units | R | R; the draft figure's lattice curves are in px | M | not asked; on our open question list as Q14 |
-# | C11 Figure 5 distance bins | M's shared edges (0, 18.6, …, 93 R) for our row; 5 equal bins in the verdict figure | 5 shared bins in the legend; 7 per-framework bins in the notebook | M's figure | not asked; on our open question list as Q15 |
+# | C11 Figure 5 distance bins | M's shared edges (0, 18.6, …, 93) for our row, binned in R (provisional); 5 equal bins in the verdict figure | 5 shared bins in the legend; 7 per-framework bins in the notebook | M's figure | not asked; on our open question list as Q15 |
 # | C12 Figure 5 distance origin | the initial cell's centre (the lattice centre) | the initial cell's centre; the notebook uses the pooled centroid | M's text | not asked; on our open question list as Q15 |
 # | C13 division trigger | actual area ≥ X A\*(0) | actual area ≥ X A\*(0); TST uses the target area | M, with CompuCell3D and Morpheus. This is the leading candidate for the V4 failures and the slow V1 growth | not asked; on our open question list as Q20 |
 # | C14 daughters' reference area | half the mother's A\* | half the mother's A\* (Morpheus sets it to the daughter's area) | M, with CompuCell3D, TST and Artistoo | not an author question |
@@ -677,7 +678,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c3
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (calibration, Figure 5, the Figure 1 panel, Figures 3 and 8, the sweeps in one line, the videos, a verdict summary and the four-column deviations table) and this collapsed Details section with everything else. The Figure 1 panel restyled as the other frameworks' close-ups: cells coloured by area (coolwarm, the panel's own min–max, provisional) with thin black boundaries. No target, band, seed or verdict changed | D-185 |
 # | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | ROADMAP P6.15g; D-174 |
 # | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | D-154 |
-# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance bins (`fig5_shared.png`); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
+# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
 #
 # ```@raw html
 # </details>

@@ -5,9 +5,10 @@
 # record's O5 files `f7/` (replicate 1 at γ = 0.1625, 0.5375, 0.7625, from `table1.tsv` and
 # `runs.tsv`); no run file is touched.
 #
-# Style (M's grid, D-185 consortium figure): each cell a filled disc of radius radius_i at its
-# centroid (R), no strokes, yellow = no inhibition, teal = surface-inhibited (`inhibited` = 1);
-# the tissue outline in black, the concave hull of the centroids as metrics.cpp draws it
+# Style (M's grid, D-185 consortium figure): each cell a filled disc at its centroid, of radius
+# 1.2 radius_i (R) so that the equal-area discs close up and the fills read solid, no strokes;
+# M's sampled colours: yellow = no inhibition, teal = surface-inhibited (`inhibited` = 1);
+# the tissue outline as a thin black line, the concave hull of the centroids as metrics.cpp draws it
 # (concaveman, concavity 1.5, lengthThreshold 0). The outline is a tissue outline, not a cell
 # outline. All colonies share one length scale. The panels carry no number: M's label
 # quantity is unstated (D-211 R5, on our open question list), so each colony's C/C_circle
@@ -27,12 +28,15 @@ const K = 7
 const PARAM = "gamma"
 const TITLE = "Tissue Snapshots with Surface Inhibition"
 const LEGEND = ["No Inhibition", "Surface Inhibition", "Concave Hull"]
-const COLOURS = (none = "#f2cf1d", inhibited = "#1b9e9a", hull = "#000000")   # M: yellow, teal, black
+const COLOURS = (none = "#f7f023", inhibited = "#297d8d", hull = "#000000")   # M: yellow, teal, black (sampled from M)
 const MULTS = [1.1, 2.0, 5.0, 10.0, 20.0]
 const COLS = ["1.1x", "2x", "5x", "10x", "20x"]
 const CONCAVITY = 1.5
 const LENGTH_THRESHOLD = 0.0
-const PANEL_PX = 520
+const PANEL_PX = 520           # layout units per panel; saved at PX_PER_UNIT pixels per unit
+const PX_PER_UNIT = 2
+const DISC = 1.2               # disc radius / radius_i: closes the gaps between the equal-area discs
+const HULL_WIDTH = 0.9         # M's thin outline
 
 function tsv(path)
     ls = filter(!isempty, readlines(path))
@@ -85,7 +89,7 @@ open(joinpath(DIR, "fig$(K)_grid.toml"), "w") do io
         "colours" => Dict(String(k) => v for (k, v) in pairs(COLOURS)),
         "hull" => Dict("method" => "concaveman", "concavity" => CONCAVITY, "length_threshold" => LENGTH_THRESHOLD,
             "points" => "centroids"),
-        "panel_px" => PANEL_PX, "source" => "f7/ (O5), replicate 1 at the T1 values of table1.tsv"); sorted = true)
+        "panel_px" => PANEL_PX * PX_PER_UNIT, "disc_scale" => DISC, "source" => "f7/ (O5), replicate 1 at the T1 values of table1.tsv"); sorted = true)
 end
 
 # one length scale for every colony: the largest half-extent about a colony's centre
@@ -108,20 +112,20 @@ for (j, col) in enumerate(COLS)
     for (flag, c) in ((0, none), (1, inh))
         k = d.o.inhibited .== flag
         any(k) || continue
-        scatter!(ax, d.o.x_pos[k] .- cx, d.o.y_pos[k] .- cy; markersize = 2 .* d.o.radius_i[k], markerspace = :data,
+        scatter!(ax, d.o.x_pos[k] .- cx, d.o.y_pos[k] .- cy; markersize = 2DISC .* d.o.radius_i[k], markerspace = :data,
             color = c, strokewidth = 0)
     end
     hx = [p[1] - cx for p in d.hull]
     hy = [p[2] - cy for p in d.hull]
-    lines!(ax, [hx; hx[1]], [hy; hy[1]]; color = hc, linewidth = 2.5)
+    lines!(ax, [hx; hx[1]], [hy; hy[1]]; color = hc, linewidth = HULL_WIDTH)
 end
 Legend(fig[4, 1:(length(COLS) + 1)],
     [MarkerElement(; marker = :circle, color = none, markersize = 22), MarkerElement(; marker = :circle, color = inh, markersize = 22),
-        LineElement(; color = hc, linewidth = 3)],
+        LineElement(; color = hc, linewidth = 2)],
     LEGEND; orientation = :horizontal, framevisible = false, labelsize = 22)
 colgap!(fig.layout, 8)
 rowgap!(fig.layout, 8)
-save(joinpath(DIR, "fig$(K)_grid.png"), fig; px_per_unit = 1)
+save(joinpath(DIR, "fig$(K)_grid.png"), fig; px_per_unit = PX_PER_UNIT)
 for (col, _, _) in colonies
     println(col, ": N = ", length(data[col].o.x_pos), ", B = ", length(data[col].hull), ", C/C_circle = ", round(data[col].crel; digits = 4))
 end

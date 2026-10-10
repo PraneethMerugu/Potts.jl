@@ -38,10 +38,11 @@ const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8
     f1f4 = "Figures 1 and 4", sweeps = "Figure 6, Table 1, Figure 7",
     o1 = "O1 per-cell time series (cases a, b, e, f re-run), O2 files",
     f8beta = "Figure 8 (the colonies at the T1 β values, area inhibition)")
-# records the build can do without: the P6.15k β colonies run on the PC after the rest is
-# merged; until then the package leaves out Figure 8 and its O5 files (the acceptance test
-# requires them)
+# records a draft build may do without (`allow_pending = true`): the P6.15k β colonies run on
+# the PC after the rest is merged; a draft leaves out Figure 8 and its O5 files and says
+# "Figure 8: pending". The default build requires them, so a build for upload is complete.
 const _OPENVT_PKG_LATER = (:f8beta,)
+const _OPENVT_PKG_PENDING_ENV = "OPENVT_PACKAGE_ALLOW_PENDING"
 
 """
     PottsModels.openvt_submission_package(outdir::AbstractString;
@@ -60,8 +61,10 @@ manifest, the O2 Figure 5 files, and the O3 and O5 sweep files.
 Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
 (D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
 the newest directory (by name) whose `provenance.toml` names its ROADMAP item. Every record
-(P6.15b, e, f, g, h and j) is required; while no P6.15k record (M's Figure 8 colonies, D-211)
-is merged, Figure 8 and its O5 files are left out.
+(P6.15b, e, f, g, h, j and k) is required. `allow_pending = true` (default: the environment
+variable `OPENVT_PACKAGE_ALLOW_PENDING` is `"true"`, else `false`) allows a draft build without
+the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5 files are left out and
+the results README says "Figure 8: pending". Never upload a draft build.
 
 `results/Potts.jl/figures/` holds byte copies of the records' renders of M's Figures 5
 (`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
@@ -77,7 +80,8 @@ directory; `bulk` must be given, be a directory outside git and hold the pinned 
 otherwise this is an `ArgumentError`, raised before anything is written. A build that fails
 part-way removes what it wrote, so the same `outdir` can be used again.
 """
-function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing))
+function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing),
+        allow_pending::Bool = get(ENV, _OPENVT_PKG_PENDING_ENV, "false") == "true")
     out = abspath(outdir)
     _openvt_pkg_in_git(out) &&
         throw(ArgumentError("openvt_submission_package: $outdir is inside a git checkout; build the package outside git"))
@@ -88,7 +92,9 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     end
     recs = _openvt_pkg_records()
     for k in keys(_OPENVT_PKG_ITEMS)
-        haskey(recs, k) || k in _OPENVT_PKG_LATER || throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15"))
+        haskey(recs, k) || (allow_pending && k in _OPENVT_PKG_LATER) ||
+            throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15" *
+                                (k in _OPENVT_PKG_LATER ? " (pass allow_pending = true for a draft build without it)" : "")))
     end
     o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1]), _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
     bulkdir = _openvt_pkg_bulk(bulk, o1)
@@ -721,7 +727,8 @@ function _openvt_pkg_figure_rows(facts)
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
             "a black outline of cell i, names, coloured count glyphs", "no outlines (D-156)", "not an author question"),
         ("F5 distance bins and origin",
-            "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) R for figures/fig5.png; the F5 record's verdict " *
+            "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional: " *
+            "M's unit is unstated and appears to be about 0.5 R); the F5 record's verdict " *
             "figure keeps 5 equal bins from 0 to 1.05 times the furthest distance; distances from the initial cell's centre",
             "one set of edges for all rows; how they were derived is not stated; the notebook uses 7 bins from the pooled centroid",
             "M's figure and text taken over its notebook (C11, C12)", "not asked; on our open question list as Q15"),
@@ -758,7 +765,7 @@ const _OPENVT_PKG_C_ROWS = [
     ("C9 type 1 inequality", "a ≥ β", "a ≥ β (the schema has a > β)", "M, as Morpheus, TST and Artistoo", "not an author question"),
     ("C10 Figure 9 length units", "R", "R; the draft figure's lattice curves are in px", "M",
         "not asked; on our open question list as Q14"),
-    ("C11 Figure 5 distance bins", "M's shared edges (0, 18.6, …, 93 R) in figures/fig5.png; 5 equal bins in the verdict figure",
+    ("C11 Figure 5 distance bins", "M's shared edges (0, 18.6, …, 93) in figures/fig5.png, binned in R (provisional); 5 equal bins in the verdict figure",
         "5 shared bins in the legend; 7 per-framework bins in the notebook", "M's figure",
         "not asked; on our open question list as Q15"),
     ("C12 Figure 5 distance origin", "the initial cell's centre (the lattice centre)",
@@ -850,11 +857,15 @@ function _openvt_pkg_figures_section(recs)
     Our rows of M's Figures 5$(f8 ? ", 7 and 8" : " and 7") (9 Oct 2026 draft), byte copies of the renders in the
     records (`plot_f5_shared.jl`, `plot_f7_grid.jl`$(f8 ? ", `plot_f8_grid.jl`" : "") in `implementations/Potts.jl/scripts/`):
 
-    - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance bins with
-      edges $e R from the initial cell's centre (record `$(recs[:f5])`).
+    - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance-bin edges
+      $e (record `$(recs[:f5])`), binned in R from the lattice centre; M's axis appears to be ≈ 2× ours (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data); asked.
+      The unit comparison is provisional: M's unit is unstated and on our open question list.
     - `figures/fig7.png`: Figure 7, one colony at 10⁴ cells per Table 1 multiple at our γ thresholds
       (β = 0); 1.1× and 2× are empty (no γ threshold there); cells yellow (no inhibition) or teal
       (surface-inhibited) (record `$(recs[:sweeps])`).
+    """)
+    f8 || print(io, """
+    - Figure 8: pending (the colonies at the T1 β values, area inhibition; their record is not merged yet).
     """)
     f8 && print(io, """
     - `figures/fig8.png`: Figure 8, one colony at 10⁴ cells at each of our Table 1 β thresholds (γ = 0),

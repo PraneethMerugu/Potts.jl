@@ -7,7 +7,8 @@
 # fig7.png: M's form, each cell a filled disc of radius radius_i at its centroid (R), with a
 # thin black stroke.
 # fig7_cells.png (when P615G_WORK holds the runner's serialized states): the same five final
-# states as lattice stills (`PottsModels.openvt_colony_panel!(ax, frame; colour = :state)`),
+# states as lattice stills (`PottsModels.openvt_colony_panel!(ax, frame; colour = :state)`;
+# since P6.15k in the 9 Oct draft's yellow and teal),
 # inhibited = inhibition code i > 0 at the panel's β = 0 and γ, white medium, thin black
 # pixel-edge boundaries between unlike ids.
 #     [P615G_OUT=<record dir>] [P615G_WORK=~/potts-ci/p6-15g-run] \
@@ -18,6 +19,9 @@ using Potts, PottsModels, MakiePotts
 const DIR = abspath(expanduser(get(ENV, "P615G_OUT", @__DIR__)))
 const WORK = abspath(expanduser(get(ENV, "P615G_WORK", "")))
 blue, orange = RGBf(44 / 255, 123 / 255, 182 / 255), RGBf(253 / 255, 174 / 255, 97 / 255)   # M Fig 7 (TST row)
+# the lattice stills (fig7_cells.png) in the 9 Oct 2026 draft's grid colours (P6.15k, D-211):
+# yellow = growing, teal = surface-inhibited, sampled from M
+yellow, teal = RGBf(0xf7 / 255, 0xf0 / 255, 0x23 / 255), RGBf(0x29 / 255, 0x7d / 255, 0x8d / 255)
 
 # the panels, in γ order: (γ, MCS, file)
 files = filter(f -> endswith(f, ".csv"), readdir(joinpath(DIR, "f7")))
@@ -75,6 +79,7 @@ if isdir(states)
         live = findall(>(0), Array(u.cell.volume))
         code = PottsModels.openvt_frame(u; β = 0.0, γ).i
         PottsModels.openvt_colony_panel!(ax, frame; colour = :state, inhibited = Dict(c => code[j] > 0 for (j, c) in enumerate(live)),
+            state_colours = (yellow, teal),
             linewidth = 0.2)
         occ = findall(!=(0), σ)
         lo, hi = minimum(occ), maximum(occ)

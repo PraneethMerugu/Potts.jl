@@ -19,13 +19,19 @@
 #
 # Writes into this directory (F8BETA_OUT, default the runner's directory): f8/ (the five O5
 # files, `openvt_filename(:O5; beta, mcs)`), runs.tsv, meta.toml, provenance.toml and
-# README.md, then runs `plot_f8_grid.jl` (fig8_grid.png, fig8_grid.tsv, fig8_hull.tsv,
+# README.md, then runs `plot_f8_grid.jl`. The O5 files and runs.tsv are first written to a
+# temporary staging directory and moved into place (replacing any stale f8/) only after every
+# replay check has passed; on a failure they stay in the staging directory, whose path the
+# error names. The commit and the tracked tree's state are read at the start, and a record run
+# refuses to start on a dirty tracked tree (`dirty_tracked` must be false). Then it runs
+# `plot_f8_grid.jl` (fig8_grid.png, fig8_grid.tsv, fig8_hull.tsv,
 # fig8_grid.toml). Wall time on the PC about 31 min with 5 threads (the 20× run, MCS 203 045,
 # took 1849 s in the sweeps).
 #     julia -t 5 --project=lib/PottsModels/test lib/PottsModels/reproductions/data/15/f8beta-2026-10-09/run_f8beta.jl
 #
 # Check mode (never a record): F8BETA_ONLY=<β,…> runs only those β and requires F8BETA_OUT
-# outside this directory; it writes f8/ and runs.tsv there and checks the replay.
+# outside this directory (compared by real path); it writes f8/ and runs.tsv there and checks
+# the replay.
 using Potts, PottsModels, Test, Printf
 using Statistics: mean
 using Dates, TOML, SHA
@@ -54,12 +60,25 @@ const OUT = abspath(expanduser(get(ENV, "F8BETA_OUT", DIR)))
 const ONLY = let s = strip(get(ENV, "F8BETA_ONLY", ""))
     isempty(s) ? nothing : parse.(Float64, split(s, ','))
 end
-ONLY === nothing || !startswith(OUT, DIR) ||
+mkpath(OUT)
+# is `a` the directory `b` or inside it (real paths, so links and `..` cannot hide it)?
+inside(a, b) = (ra = realpath(a); rb = realpath(b); ra == rb || startswith(ra, rb * "/"))
+ONLY === nothing || !inside(OUT, DIR) ||
     error("F8BETA_ONLY is a check mode: set F8BETA_OUT outside the record directory")
 ONLY === nothing || all(in(P615K_BETA), ONLY) || error("F8BETA_ONLY: β must be among $(P615K_BETA)")
 const BETAS = ONLY === nothing ? P615K_BETA : ONLY
-mkpath(joinpath(OUT, "f8"))
 logline(s) = (println(string(now(), "  ", s)); flush(stdout); nothing)
+
+# the commit and the tracked tree, read before anything runs
+git(args...) = readchomp(Cmd(`git $args`; dir = ROOT))
+const COMMIT = git("rev-parse", "HEAD")
+const COMMIT_DATE = git("log", "-1", "--format=%cs")
+const DIRTY = !isempty(git("status", "--porcelain", "--untracked-files=no"))
+ONLY === nothing && DIRTY &&
+    error("the tracked tree is dirty; a record must run from a clean checkout (commit or restore the changes first)")
+# the staging directory: f8/ and runs.tsv go here until the replay checks pass
+const STAGE = mktempdir(; cleanup = false)
+mkpath(joinpath(STAGE, "f8"))
 
 function edge_gap(σ)
     L1, L2 = size(σ)
@@ -78,7 +97,7 @@ Threads.@threads :greedy for j in sort(eachindex(BETAS); by = j -> -BETAS[j])
     wall = @elapsed r = p615k_job(prob, β)
     o5 = p615k_o5(r)
     name = p615k_o5_name(β, r.mcs)
-    write_openvt(joinpath(OUT, "f8", name), :O5, o5)
+    write_openvt(joinpath(STAGE, "f8", name), :O5, o5)
     res[j] = (; r.seed, r.q, r.k, r.retcode, r.mcs, r.N, r.capped, β, gap = edge_gap(Array(r.u.σ)),
         inhibited = count(==(1), o5.inhibited), wall, name)
     lock(LK) do
@@ -99,15 +118,21 @@ end
 
 # ---- runs.tsv (always; the five runs in multiple order) ---------------------------------------------
 mult(β) = P615K_MULTS[findfirst(==(β), P615K_BETA)]
-open(joinpath(OUT, "runs.tsv"), "w") do io
+open(joinpath(STAGE, "runs.tsv"), "w") do io
     println(io, join(P615K_H_RUNS, '\t'))
     for r in sort(res; by = r -> r.β)
         println(io, join((string(mult(r.β)), string(r.β), r.q, r.k, r.seed, P615K_LATTICE, string(r.retcode), r.mcs, r.N,
             r.capped, r.gap, r.inhibited, round(r.wall; digits = 2)), '\t'))
     end
 end
-isempty(bad) || error("the replay differs from the sweeps record:\n" * join(bad, '\n'))
+isempty(bad) || error("the replay differs from the sweeps record (f8/ and runs.tsv kept in $STAGE):\n" * join(bad, '\n'))
 logline("replay: every run equals its sweeps row")
+# into place: any stale f8/ and runs.tsv are replaced
+rm(joinpath(OUT, "f8"); recursive = true, force = true)
+rm(joinpath(OUT, "runs.tsv"); force = true)
+cp(joinpath(STAGE, "f8"), joinpath(OUT, "f8"))
+cp(joinpath(STAGE, "runs.tsv"), joinpath(OUT, "runs.tsv"))
+rm(STAGE; recursive = true)
 if ONLY !== nothing
     logline("check mode: done (no record written)")
     exit(0)
@@ -130,14 +155,12 @@ open(joinpath(OUT, "meta.toml"), "w") do io
         "seeds" => "160 000 000 + 100 q + 1, q = β × 10⁴ (the sweeps record's replicate 1)",
         "inhibited_shares" => shares, "threads" => Threads.nthreads()); sorted = true)
 end
-git(args...) = readchomp(Cmd(`git $args`; dir = ROOT))
 manifest = joinpath(ROOT, "Manifest.toml")
 sweeps_test = joinpath(ROOT, "lib", "PottsModels", "test", "reproductions", "15_openvt_sweeps.jl")
 open(joinpath(OUT, "provenance.toml"), "w") do io
     TOML.print(io, Dict(
         "item" => "P6.15k", "decisions" => ["D-146", "D-157", "D-211", "D-212"],
-        "commit" => git("rev-parse", "HEAD"), "commit_date" => git("log", "-1", "--format=%cs"),
-        "dirty_tracked" => !isempty(git("status", "--porcelain", "--untracked-files=no")),
+        "commit" => COMMIT, "commit_date" => COMMIT_DATE, "dirty_tracked" => DIRTY,
         "test" => "lib/PottsModels/test/reproductions/15_openvt_d211.jl", "test_sha256" => bytes2hex(open(sha256, TEST)),
         "sweeps_test_sha256" => bytes2hex(open(sha256, sweeps_test)),
         "runner" => relpath(@__FILE__, ROOT), "runner_sha256" => bytes2hex(open(sha256, @__FILE__)),

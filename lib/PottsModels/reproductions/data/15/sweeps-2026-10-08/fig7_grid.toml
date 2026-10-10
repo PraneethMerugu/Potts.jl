@@ -1,17 +1,18 @@
 columns = ["1.1x", "2x", "5x", "10x", "20x"]
+disc_scale = 1.2
 empty = ["1.1x", "2x"]
 legend = ["No Inhibition", "Surface Inhibition", "Concave Hull"]
 measure = "C/C_circle"
 panel_label = "none"
-panel_px = 520
+panel_px = 1040
 parameter = "gamma"
 source = "f7/ (O5), replicate 1 at the T1 values of table1.tsv"
 title = "Tissue Snapshots with Surface Inhibition"
 
 [colours]
 hull = "#000000"
-inhibited = "#1b9e9a"
-none = "#f2cf1d"
+inhibited = "#297d8d"
+none = "#f7f023"
 
 [hull]
 concavity = 1.5

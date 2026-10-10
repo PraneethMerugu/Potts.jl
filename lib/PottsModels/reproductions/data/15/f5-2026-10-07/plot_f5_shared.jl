@@ -13,7 +13,10 @@
 # value bins of width 0.01, floor(100x + 1e-9); distance bin j = min(5, searchsortedlast(edges,
 # d)), so cells beyond 93 R would join bin 5; rows with count > 0) and fig5_shared.png (M's
 # four columns: PDF of f with a log y axis, CDF of f, PDF of a, CDF of a; stacked by distance
-# bin, viridis_r for f and inferno_r for a, inner bin first). Only case (b) has per-cell files;
+# bin, viridis_r for f and inferno_r for a, inner bin first; the a panels on 0–1.0, as M draws
+# them). Distances are binned in R from the lattice centre; M's axis appears to be ≈ 2× ours
+# (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data), so the unit comparison
+# is provisional and on our open question list. Only case (b) has per-cell files;
 # the γ = 10⁻⁴ control kept none, so it stays on its own bins in fig5.png.
 #     OPENVT_PACKAGE_BULK=<bulk dir> julia --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/f5-2026-10-07/plot_f5_shared.jl
@@ -23,7 +26,7 @@ const DIR = @__DIR__
 const BULK = get(ENV, "OPENVT_PACKAGE_BULK", "")
 const O2 = joinpath(BULK, "Potts.jl_5T_MonolayerGrowth_1000_Data")
 isdir(O2) || error("set OPENVT_PACKAGE_BULK to the bulk directory holding Potts.jl_5T_MonolayerGrowth_1000_Data/")
-const EDGES = [0.0, 18.6, 37.2, 55.8, 74.4, 93.0]     # M Fig 5 (9 Oct 2026), "radii"
+const EDGES = [0.0, 18.6, 37.2, 55.8, 74.4, 93.0]     # M Fig 5 (9 Oct 2026), "radii"; applied in R (provisional)
 const NB = length(EDGES) - 1
 const NBINS = 200
 const RUNS = 100
@@ -72,7 +75,7 @@ for (j, (qq, cmap, xl, cum, logy)) in enumerate((("f", :viridis, "Surface Fracti
         xgridcolor = (:black, 0.2), ygridcolor = (:black, 0.2), xgridwidth = 0.4, ygridwidth = 0.4,
         title = j == 1 ? "Potts.jl, case (b): β = γ = 0 ($(RUNS) runs, shared bins)" : "", titlealign = :left,
         titlesize = 8 * s)
-    xlims!(ax, qq == "f" ? (-0.01, 1.01) : (0.3, 1.2))
+    xlims!(ax, qq == "f" ? (-0.01, 1.01) : (0.0, 1.0))
     base = zeros(NBINS)
     handles = Any[]
     for k in 1:NB
@@ -85,7 +88,7 @@ for (j, (qq, cmap, xl, cum, logy)) in enumerate((("f", :viridis, "Surface Fracti
         base = top
     end
     logy && ylims!(ax, 0.8, nothing)
-    j in (2, 4) && Legend(fig[1, 4 + j ÷ 2], handles, labels, "d [R] ($qq)"; framevisible = false, labelsize = 7 * s,
+    j in (2, 4) && Legend(fig[1, 4 + j ÷ 2], handles, labels, "d [R, provisional] ($qq)"; framevisible = false, labelsize = 7 * s,
         titlesize = 7 * s, patchsize = (8, 8), rowgap = 0, tellheight = false)
 end
 save(joinpath(DIR, "fig5_shared.png"), fig; px_per_unit = 1)
