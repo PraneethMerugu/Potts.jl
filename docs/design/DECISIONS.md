@@ -3826,3 +3826,25 @@ session.
   
   The boundary-shear and bulk-shear modes may not have shared one form.
 - **No further foam runs until F1 is answered.** In particular, no finite-T or literal-x_i variant is tried on our own.
+
+## D-211 OpenVT: the 9 Oct 2026 manuscript draft is the new target (2026-10-09; maintainer: "this is the latest openvt paper. lets see if theres anything thats changed make this the new target manuscript", relayed by the spec owner; under D-146, D-185, D-204)
+
+- **Target.** The 9 Oct 2026 draft (14 pp) replaces the earlier manuscript as M. The PDF stays local and is never committed. Spec 15 §1.2 records the full delta.
+- **Unchanged** (text diff and rendered pp. 1–4):
+  - Figs 1–4, Fig 6, the §2 schema and protocol, Eqs 10–12, Tables S1–S5.
+  - The empty §4.1.1–4.1.4, and Code Availability TODO.
+  - The two division statements, so Q23(a) stands.
+  - No model or parameter changes, so every frozen record stands.
+- **New work.** Adopt only what holds up.
+  - **R1.** Fig 7 becomes a grid of colonies, framework × γ multiple (1.1×–20×):
+    - each colony at 10⁴ cells, coloured yellow (no inhibition) or teal (surface-inhibited);
+    - a black concave-hull tissue outline (a tissue outline, not a cell outline; D-185);
+    - a centred numeric label.
+    
+    The Potts row is 5×/10×/20× from `sweeps-2026-10-08/f7/` (O5), so it is a render only.
+  - **R2.** A new Fig 8 is the same grid for β (yellow, or red for area-inhibited), with the Potts row at β = 0.625, 0.9375, 0.9875, 1.007 and 1.0212. These colonies are in no record, so they need five runs to 10⁴ cells with an O5 writer on the PC. Replay the sweep's seeds at those β if the bracket runs allow it; otherwise use new pre-registered seeds.
+  - **R3.** The metrics figure is relabelled Fig 8 → Fig 9 on the page and in the package README. Record names stay.
+  - **R4.** Fig 5 uses shared distance bins with edges 0, 18.6, 37.2, 55.8, 74.4 and 93. Our row is re-rendered on them; the V4 verdicts are unaffected.
+  - **R5.** The quantity behind the Fig 7/8 labels is unstated. Before rendering, test whether it is the concave hull's C/C_circle: run metrics.cpp's hull on G's CC3D Fig 7 colonies and compare with the printed 1.68, 2.14 and 2.89. Use it only if it matches. Otherwise the label goes on our open question list (Q24). Raw G files never enter git.
+  - **R6.** Table 1 adds a Chaste VM row. Our T1 bands stand.
+- **Package.** The D-204 package's required figures gain R1, R2 and R4. That re-freezes the package test through a test author.
