@@ -172,6 +172,6 @@ Notes:
 > Potts.jl is available at https://github.com/PraneethMerugu/Potts.jl under the MIT licence.
 > - The monolayer model is `OpenVTReferenceMonolayer` in `lib/PottsModels/src/openvt_reference.jl`.
 > - The scripts, seeds, per-run data and provenance for every figure are in
->   `lib/PottsModels/reproductions/data/15/` at commit ⟨to be fixed at submission⟩.
+>   `lib/PottsModels/reproductions/data/15/` at commit bc6548fd (release `openvt-monolayer-submission-2026-10-10`, https://github.com/PraneethMerugu/Potts.jl/releases/tag/openvt-monolayer-submission-2026-10-10).
 > - The submitted files are generated from these records by
 >   `PottsModels.openvt_submission_package`.
