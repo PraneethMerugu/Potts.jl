@@ -4021,3 +4021,38 @@ The audit read the 9 Oct manuscript and G at 14fa42c, and ran G's own postproces
    - Every G script hard-codes its framework list, so each entry needs one line added on their side whatever we call it. This goes in EMAIL.md.
 
 Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the implementation folder and the units. The optional O2 header and zero neighbour rows are not adopted.
+
+## D-217 P6.15l: tests frozen for the email split, G conformance and the Q25 wording (2026-10-10; coordinator, from the P6.15l test author; implements D-213, D-215)
+
+- **New test:** `reproductions/15_openvt_d213.jl` (de05b7a5…).
+- **Re-frozen:** `reproductions/15_openvt_package.jl` (04f892a0…; supersedes the D-212 hash). Its D-215 amendments are listed in its header block.
+
+**Email split.** The call is `openvt_submission_package(out; split = :email, release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)`.
+- **Output.** It writes exactly `core.zip` (≤ 20,000,000 B), `bulk/` and `EMAIL.md`, and returns `core_bytes` and `bulk_bytes`.
+- **bulk/.** Flat: the O1 zips per case, the O2 zip and the O1 manifest CSV, so cases + 2 files, each < 2,000,000,000 B, as byte copies of the unsplit build.
+- **core.zip.** Holds every other file exactly once, under `implementations/<token>/` and `results/<token>/`. Its README links each bulk file by name, sha256 and its release-download URL for `release_tag`. Changing the tag changes only the README and `EMAIL.md`.
+- **Determinism and refusals.** Builds are deterministic. A non-empty outdir, a missing bulk directory or any other `split` raises `ArgumentError`. The unsplit default is unchanged.
+- **`EMAIL.md`.** Plain text with:
+  - what is attached and what is linked;
+  - the units (R; a cycle is 775 MCS);
+  - Q15 and Q26 (never Q25);
+  - the FAIL row ids;
+  - the D-215 item 8 notes.
+
+  It contains no addresses, names, hosts, local paths or "sent"/contact wording.
+- **Prototype sizes** (from the test author's stub): core.zip 13,451,156 B; bulk/ 338,214,282 B in 6 files, the largest the 115 MB case (e) O1 zip.
+
+**G conformance (D-215).**
+- O1 `x,y,i,n,g` with g == (i == 0).
+- Measurement headers use `R`.
+- O2 is one zip, `<token>_5T_MonolayerGrowth_1000_Data.zip`, with k = 0…99 (member k = F5 run k + 1).
+- O5 names: `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv`.
+- O1 zip stems: (b) `_No_CI_stochastic`, (f) `_No_CI_deterministic`, (e) `_beta0.8_gamma0.0`, (a) `_beta0.0_gamma0.0`. Members sit at `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`.
+- Table 1 is a CSV, `<token>_table1.csv`.
+- The token comes from one constant.
+
+**Post-processing record.** A new `data/15/o1g-<date>/` (item P6.15l, source o1-2026-10-09) holds the rewritten O1 and O2 manifests and `archives.tsv`. The O1 bytes grow by exactly 2·(rows + 1). There is no re-run. The old P6.15j record's checks are unchanged.
+
+**Q25 wording.** The sentence "M is followed (actual area); the released TST model divides on target area" appears with no question next to it. "Q25" appears nowhere. The division-trigger rows (V1, V3b, V4.2, V4.3, V4.5, C13) have status "not asked (maintainer ruling: M over TST)".
+
+**Q20 stays listed as open for now.** Spec §7 still lists it, so the tests allow it in status cells. The spec owner is asked whether D-213 closes Q20 too; if it does, a small re-freeze removes it.
