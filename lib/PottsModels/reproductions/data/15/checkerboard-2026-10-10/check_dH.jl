@@ -15,20 +15,24 @@
 #
 #     P615M_OUT=<dir> taskset -c 4 julia -t 1 --project=lib/PottsModels/test …/check_dH.jl check 1400 5000 3 20 <seed>
 #     P615M_OUT=<dir> julia --project=lib/PottsModels/test …/check_dH.jl merge     # meta.toml [dH_check]
-using TOML, Dates
+#     julia …/check_dH.jl stamp     # meta.toml [dH_check] runner_sha256 (D-227) without re-merging
+# `runner_sha256` is the sha256 of this script as it stood at the check's commit (`git show`), so
+# it identifies the version that ran even after later edits to this file.
+using TOML, Dates, SHA
 const OUT = get(ENV, "P615M_OUT", joinpath(@__DIR__, "parts"))
 const ROOT = normpath(joinpath(@__DIR__, "..", "..", "..", "..", "..", ".."))
 git(args...) = readchomp(Cmd(`git $args`; dir = ROOT))
-if ARGS[1] == "merge"
-    d = TOML.parsefile(joinpath(OUT, "dH_check.toml"))
+stamp!(d) = (d["runner_sha256"] = bytes2hex(sha256(read(Cmd(`git show $(d["commit"]):$(d["runner"])`; dir = ROOT)))); d)
+if ARGS[1] in ("merge", "stamp")
     p = joinpath(@__DIR__, "meta.toml")
     meta = TOML.parsefile(p)
-    meta["dH_check"] = d
+    d = ARGS[1] == "merge" ? TOML.parsefile(joinpath(OUT, "dH_check.toml")) : meta["dH_check"]
+    meta["dH_check"] = stamp!(d)
     open(io -> TOML.print(io, meta), p, "w")
     println("meta.toml [dH_check]: ", d["copies"], " copies, ", d["mismatches"], " mismatches")
     exit(0)
 end
-ARGS[1] == "check" || error("check_dH.jl: check <L> <target> <ncheck> <nthin> <seed> | merge")
+ARGS[1] == "check" || error("check_dH.jl: check <L> <target> <ncheck> <nthin> <seed> | merge | stamp")
 const CYCLE = TOML.parsefile(joinpath(OUT, "calibration.toml"))["cycle_mcs"]
 const COMMIT, DIRTY = git("rev-parse", "HEAD"), !isempty(git("status", "--porcelain", "--untracked-files=no"))
 using Potts, PottsModels, Printf, Statistics

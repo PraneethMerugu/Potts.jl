@@ -18,8 +18,12 @@
 # 1 stock, 2 c64; case 1 b, 2 f, 3 a); 20 runs of (b) and (f), 10 of (a) per arm (stage "n20").
 # Power stage (stage "power", after the m3 review): 100 runs of (b) and (f) per arm, fresh seeds
 # 215 100 000 + 10 000 arm + 1000 case + k (disjoint from every seed above). When the power
-# parts exist, collect REPLACES the n20 runs of (b) and (f) with them (no pooling); (a) keeps its
-# 10 n20 runs per arm. The run,
+# parts exist, collect REPLACES the n20 runs of (b) and (f) with them (no pooling).
+# Stage "a30" (D-227 item 1): 30 runs of (a) per arm, fresh seeds 215 200 000 + 10 000 arm +
+# 1000 case + k; when its parts exist, collect replaces the 10 n20 runs of (a) with them.
+# Colour counts are read from the integrator cache each arm builds (`cb_colours`, D-227 item 6).
+# Each session records the runner's sha256; provenance gets one per stage (D-227 item 5; for a
+# session logged without it, the sha256 of this file at that session's commit, via `git show`). The run,
 # recorder and metrics are the main runner's (`run_checkerboard.jl`, included) and the frozen
 # test's; the sequential arm is the record's.
 #
@@ -29,6 +33,8 @@
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl run c64     # GPU
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl power stock # GPU, power stage
 #     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl power c64   # GPU, power stage
+#     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl a30 stock   # GPU, stage a30
+#     P615M_OUT=<dir> taskset -c 0-3 julia -t 4 --project=lib/PottsModels/test …/run_ablation.jl a30 c64     # GPU, stage a30
 #     P615M_OUT=<dir> julia --project=lib/PottsModels/test …/run_ablation.jl collect
 #
 # collect writes, into this directory: ablation.tsv (one row per case and metric, with the contrast
@@ -43,14 +49,20 @@ const AB_ARMS = Dict("stock" => (; id = 1, extra = 0), "c64" => (; id = 2, extra
 const AB_CASES = (; b = (; id = 1, runs = 20), f = (; id = 2, runs = 20), a = (; id = 3, runs = 10))
 ab_seed(arm, c, k) = 214_950_000 + 1000AB_ARMS[arm].id + 100AB_CASES[c].id + k
 ab_cal_seed(i) = 214_900_000 + i
-const AB_POWER = (; b = (; id = 1, runs = 100), f = (; id = 2, runs = 100))
-ab_power_seed(arm, c, k) = 215_100_000 + 10_000AB_ARMS[arm].id + 1000AB_POWER[c].id + k
-ab_power_part(name) = cb_part(replace(name, ".tsv" => "_power.tsv"))
-ab_has_power() = isfile(ab_power_part("ablation_runs_part.tsv"))
+# replacement stages: each REPLACES the n20 runs of its cases (no pooling)
+const AB_STAGES = (; power = (; cases = (; b = (; id = 1, runs = 100), f = (; id = 2, runs = 100)), base = 215_100_000),
+    a30 = (; cases = (; a = (; id = 3, runs = 30)), base = 215_200_000))
+ab_stage_seed(stage, arm, c, k) = AB_STAGES[stage].base + 10_000AB_ARMS[arm].id + 1000AB_STAGES[stage].cases[c].id + k
+ab_stage_part(stage, name) = cb_part(replace(name, ".tsv" => "_$(stage).tsv"))
+ab_has_stage(stage) = isfile(ab_stage_part(stage, "ablation_runs_part.tsv"))
+ab_runner_sha() = bytes2hex(open(sha256, @__FILE__))
+ab_sha_at(commit) = bytes2hex(sha256(read(Cmd(`git show $(commit):$(relpath(@__FILE__, CB_ROOT))`; dir = CB_ROOT))))
 const AB_RUNS_HEADER = ("arm", "colours", "cycle", "case", "k", "seed", "retcode", "mcs", "N", "divisions", "live", "planner", "form", "wall_s")
 
+const AB_PATCHED = Ref("stock")
 function ab_patch!(arm)
     extra = AB_ARMS[arm].extra
+    AB_PATCHED[] = arm
     extra == 0 && return nothing
     @eval Potts.CorePotts function reach(fp::Footprint, proposal)
         rp = radius(proposal)
@@ -60,7 +72,8 @@ function ab_patch!(arm)
     end
     return nothing
 end
-ab_colours(prob, arm) = length(Potts.CorePotts.colors(prob.lattice, 2 + AB_ARMS[arm].extra))
+# the colours of the arm's own integrator cache (this process carries the arm's reach)
+ab_colours(prob, arm) = (AB_PATCHED[] == arm || error("ablation: the process carries arm $(AB_PATCHED[]), not $arm"); cb_colours(prob))
 
 # ---- the c64 chain calibration (GPU) on P1b: the main runner's protocol -------------------------------
 function ab_calibrate()
@@ -123,10 +136,10 @@ function ab_count(arm)
 end
 
 # ---- the monolayer arms (GPU) ------------------------------------------------------------------
-function ab_run(arm; power = false)
-    part = power ? ab_power_part : cb_part
-    cases = power ? AB_POWER : AB_CASES
-    seedf = power ? ab_power_seed : ab_seed
+function ab_run(arm; stage = nothing)
+    part = stage === nothing ? cb_part : name -> ab_stage_part(stage, name)
+    cases = stage === nothing ? AB_CASES : AB_STAGES[stage].cases
+    seedf = stage === nothing ? ab_seed : (a, c, k) -> ab_stage_seed(stage, a, c, k)
     ab_patch!(arm)
     mkpath(CB_OUT)
     if arm == "stock"
@@ -156,9 +169,12 @@ function ab_run(arm; power = false)
                 r.form, round(wall; digits = 2)), '\t')), rp, "a")
         @info "ablation run" arm ncol cycle c k seed r.mcs r.planner lost = m["lost"] wall = round(wall; digits = 1)
     end
-    log = cb_header!(part("ablation_sessions.tsv"), ("arm", "finished", "commit", "dirty_tracked", "device"))
+    hdr = stage in (nothing, :power) ? ("arm", "finished", "commit", "dirty_tracked", "device") :
+          ("arm", "finished", "commit", "dirty_tracked", "device", "runner_sha256")
+    log = cb_header!(part("ablation_sessions.tsv"), hdr)
     env = cb_env()
-    open(io -> println(io, join((arm, now(), env["commit"], env["dirty_tracked"], cb_device()), '\t')), log, "a")
+    row = (arm, now(), env["commit"], env["dirty_tracked"], cb_device(), ab_runner_sha())[1:length(hdr)]
+    open(io -> println(io, join(row, '\t')), log, "a")
 end
 
 # ---- collect --------------------------------------------------------------------------------------
@@ -167,16 +183,21 @@ function ab_collect()
     runs = p615m_tsv(cb_part("ablation_runs_part.tsv"))
     mets = p615m_tsv(cb_part("ablation_metrics_part.tsv"))
     c64 = TOML.parsefile(cb_part("ablation_c64.toml"))
-    sess = p615m_tsv(cb_part("ablation_sessions.tsv"))
-    power = ab_has_power()
     ncase = Dict(string(c) => AB_CASES[c].runs for c in keys(AB_CASES))
-    if power   # replace the n20 runs of (b) and (f) by the power stage's (no pooling)
-        pc = string.(keys(AB_POWER))
-        runs = [[r for r in runs if !(r["case"] in pc)]; p615m_tsv(ab_power_part("ablation_runs_part.tsv"))]
-        mets = [[r for r in mets if !(r["case"] in pc)]; p615m_tsv(ab_power_part("ablation_metrics_part.tsv"))]
-        sess = [sess; p615m_tsv(ab_power_part("ablation_sessions.tsv"))]
-        foreach(c -> ncase[string(c)] = AB_POWER[c].runs, keys(AB_POWER))
+    stage_of = Dict(string(c) => "n20" for c in keys(AB_CASES))
+    stsess = Dict("n20" => p615m_tsv(cb_part("ablation_sessions.tsv")))
+    for st in keys(AB_STAGES)   # replace the n20 runs of the stage's cases (no pooling)
+        ab_has_stage(st) || continue
+        pc = string.(keys(AB_STAGES[st].cases))
+        runs = [[r for r in runs if !(r["case"] in pc)]; p615m_tsv(ab_stage_part(st, "ablation_runs_part.tsv"))]
+        mets = [[r for r in mets if !(r["case"] in pc)]; p615m_tsv(ab_stage_part(st, "ablation_metrics_part.tsv"))]
+        stsess[string(st)] = p615m_tsv(ab_stage_part(st, "ablation_sessions.tsv"))
+        foreach(c -> (ncase[string(c)] = AB_STAGES[st].cases[c].runs; stage_of[string(c)] = string(st)), keys(AB_STAGES[st].cases))
     end
+    used = sort(unique(values(stage_of)))
+    sess = reduce(vcat, [stsess[st] for st in used])
+    stage_sha(st) = join(unique(haskey(s, "runner_sha256") ? s["runner_sha256"] : ab_sha_at(s["commit"]) for s in stsess[st]), ", ")
+    stage_cases(st) = join(sort([c for (c, s) in stage_of if s == st]), ", ")
     c64chain = p615m_tsv(cb_part("ablation_calibration.tsv"))
     length(c64chain) == CAL_N || error("ablation collect: c64 chain counts incomplete")
     stockchain = [merge(r, Dict("arm" => "stock", "colours" => "4")) for r in p615m_tsv(joinpath(CB_DIR, "calibration.tsv"))]
@@ -218,12 +239,15 @@ function ab_collect()
                 mean_c64 = R.mean_alt, sd_c64 = R.sd_alt, diff_c64 = R.diff, z_c64 = R.z, beyond_c64 = R.beyond, crit_ref = zr,
                 contrast = X.diff, z_contrast = X.z, crit_contrast = zc, beyond_contrast = X.beyond,
                 remainder_fraction = S.diff == 0 ? NaN : R.diff / S.diff,
+                # the c64 remainder's resolution limit: crit · se of its difference from sequential
+                resolution_c64 = zr * sqrt(S.sd_ref^2 / S.n_ref + R.sd_alt^2 / n),
+                resolution_fraction = S.diff == 0 ? NaN : zr * sqrt(S.sd_ref^2 / S.n_ref + R.sd_alt^2 / n) / abs(S.diff),
                 diff_entry = p615m_f64(e["diff"]), z_entry = p615m_f64(e["z"]), beyond_entry = e["beyond"]))
         end
     end
     H = (:case, :metric, :colours, :n_ref, :n_arm, :mean_ref, :sd_ref, :mean_stock, :sd_stock, :diff_stock, :z_stock, :beyond_stock,
         :mean_c64, :sd_c64, :diff_c64, :z_c64, :beyond_c64, :crit_ref, :contrast, :z_contrast, :crit_contrast, :beyond_contrast,
-        :remainder_fraction, :diff_entry, :z_entry, :beyond_entry)
+        :remainder_fraction, :resolution_c64, :resolution_fraction, :diff_entry, :z_entry, :beyond_entry)
     fmtv(x) = x isa AbstractFloat ? cb_f64(x) : string(x)
     open(joinpath(CB_DIR, "ablation.tsv"), "w") do io
         println(io, join(string.(H), '\t'))
@@ -252,7 +276,7 @@ function ab_collect()
     pp = joinpath(CB_DIR, "provenance.toml")
     prov = TOML.parsefile(pp)
     prov["ablation"] = Dict(
-        "runner" => relpath(@__FILE__, CB_ROOT), "runner_sha256" => bytes2hex(open(sha256, @__FILE__)),
+        "runner" => relpath(@__FILE__, CB_ROOT), "runner_sha256" => ab_runner_sha(),
         "commit" => c64["commit"], "dirty_tracked" => c64["dirty_tracked"] || any(s -> s["dirty_tracked"] == "true", sess),
         "commits" => join(unique([c64["commit"]; [s["commit"] for s in sess]]), ", "),
         "collect_commit" => cb_git("rev-parse", "HEAD"), "collect_dirty_tracked" => dirty0,
@@ -265,10 +289,13 @@ function ab_collect()
         "chain_commit_fraction_burnin_stock" => fracb("stock"), "chain_commit_fraction_burnin_c64" => fracb("c64"),
         "chain_replays_equal_gpu" => true, "chain_committed_equal_changed_sites" => true,
         "chain" => "spec 15 §4.2 variant P1b (D-224) for both arms",
-        "seeds" => "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k (stage n20)" *
-                   (power ? "; power stage (b), (f): 215 100 000 + 10 000 arm + 1000 case + k" : ""),
+        "seeds" => "c64 chain 214900001–214900100; " * join(("stage $st ($(stage_cases(st))): " *
+            (st == "n20" ? "214 950 000 + 1000 arm + 100 case + k" : "$(AB_STAGES[Symbol(st)].base) + 10 000 arm + 1000 case + k") for st in used), "; "),
         "runs_per_arm" => join(("$c $(ncase[c])" for c in string.(keys(AB_CASES))), ", "),
-        "power_stage" => power ? "replaces the n20 runs of (b) and (f) (no pooling); (a) keeps its 10 n20 runs" : "none",
+        "stages" => join(("$st: $(stage_cases(st))" for st in used), "; ") * " (each stage replaces the n20 runs of its cases; no pooling)",
+        "runner_sha256_c64_calibration" => ab_sha_at(c64["commit"]),
+        "runner_sha256_collect" => ab_runner_sha(),
+        ("runner_sha256_" * st => stage_sha(st) for st in used)...,
         "decisions" => ["D-220", "D-221", "D-224"])
     open(io -> TOML.print(io, prov), pp, "w")
     mp = joinpath(CB_DIR, "meta.toml")
@@ -282,10 +309,10 @@ function ab_collect()
 end
 
 function ab_main(args)
-    isempty(args) && error("run_ablation.jl calibrate | count <arm> | run <arm> | power <arm> | collect")
+    isempty(args) && error("run_ablation.jl calibrate | count <arm> | run <arm> | power <arm> | a30 <arm> | collect")
     m = args[1]
     m == "calibrate" ? ab_calibrate() : m == "count" ? ab_count(args[2]) : m == "run" ? ab_run(args[2]) :
-    m == "power" ? ab_run(args[2]; power = true) :
+    m == "power" ? ab_run(args[2]; stage = :power) : m == "a30" ? ab_run(args[2]; stage = :a30) :
     m == "collect" ? ab_collect() : error("run_ablation.jl: bad mode $m")
     return nothing
 end

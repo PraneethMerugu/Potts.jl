@@ -148,8 +148,10 @@ p1b_problem() = PottsProblem(OpenVTChainP1b(; name = :p615m_chain11_p1b, λ = Fl
     (0, CAL_BURNIN + CAL_TMAX); seed = 1)
 p1b_width(u) = (xs = CB_A.chain_centroids(Array(u.σ)[:, 2:6]); (maximum(xs) - minimum(xs)) / CAL_CD)
 p1b_walls_intact(u) = (σ = Array(u.σ); all(==(12), σ[:, 1]) && all(==(13), σ[:, 7]))
-# colours of CheckerboardCPM's stride on a problem's lattice (the stock stride is 2 here)
-cb_colours(prob, stride = 2) = length(Potts.CorePotts.colors(prob.lattice, stride))
+# colours CheckerboardCPM actually sweeps on a problem: read from the integrator cache it builds
+# (`cache.colors`), not recomputed from the lattice (D-227 item 6); `invokelatest` so a reach
+# redefined in this process (run_ablation.jl's c64 arm) is the one the cache sees
+cb_colours(prob) = length(Base.invokelatest(Potts.init, prob, CB_ALG).cache.colors)
 # the release (`openvt_release(CAL_BURNIN)`: A_c := A at the end of the burn-in) with a hook
 # run in the same affect (one DiscreteCallback: a CallbackSet of two with `saveat` corrupts
 # memory on the host path)
@@ -177,7 +179,7 @@ function cal_main()
     backend = cb_backend()
     prob = p1b_problem()
     ncol, nmono = cb_colours(prob), cb_colours(cb_problem(400))
-    (ncol == nmono == length(Potts.CorePotts.colors(cb_problem(1400).lattice, 2)) == 4) ||
+    (ncol == nmono == cb_colours(cb_problem(1400)) == 4) ||
         error("calibrate: P1b gives $ncol colours, the monolayers $nmono (D-224 requires 4 = 4)")
     saves = 0:(CAL_BURNIN + CAL_TMAX)
     solve(remake(prob; seed = cal_seed(0), tspan = (0, CAL_BURNIN + 20)), CB_ALG; backend, saveat = 0:(CAL_BURNIN + 20),
