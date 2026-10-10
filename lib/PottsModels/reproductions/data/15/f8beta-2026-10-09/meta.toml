@@ -1,0 +1,19 @@
+algorithm = "SequentialCPM(; skip_interior = true, proposal = Moore(1))"
+betas = [0.625, 0.9375, 0.9875, 1.007, 1.0212]
+boundary = "closed"
+cap_mcs = 210335
+cells = 10000
+cycle_mcs = 775
+decisions = ["D-146", "D-185", "D-211", "D-212"]
+edge_guard = "edge_guard(5; terminate = true)"
+inhibited_shares = [0.4962518740629685, 0.8757124287571243, 0.9448055194480552, 0.9654034596540346, 0.9794]
+initial = "openvt_reference_state: one disc of radius √(A₀/π) at the lattice centre"
+item = "P6.15k"
+lattice = 1400
+model = "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, α = 50/775, μ_X = 2, σ_X = 0.4, J 20/10), γ = 0, β per run"
+multiples = [1.1, 2.0, 5.0, 10.0, 20.0]
+replay = true
+replay_of = "sweeps-2026-10-08 runs.tsv, sweep beta, k = 1, at the T1 β of table1.tsv"
+seeds = "160 000 000 + 100 q + 1, q = β × 10⁴ (the sweeps record's replicate 1)"
+stop = "stop_at_cells(10000): end of the first MCS with ≥ 10000 live cells, or the cap"
+threads = 5

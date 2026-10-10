@@ -1,0 +1,21 @@
+columns = ["1.1x", "2x", "5x", "10x", "20x"]
+disc_scale = 1.2
+empty = []
+legend = ["No Inhibition", "Area Inhibition", "Concave Hull"]
+measure = "C/C_circle"
+panel_label = "none"
+panel_px = 1040
+parameter = "beta"
+source = "f8/ (O5), replicate 1 of each T1 β point, replayed (runs.tsv)"
+title = "Tissue Snapshots with Area Inhibition"
+
+[colours]
+hull = "#000000"
+inhibited = "#dd6066"
+none = "#f7f023"
+
+[hull]
+concavity = 1.5
+length_threshold = 0.0
+method = "concaveman"
+points = "centroids"
