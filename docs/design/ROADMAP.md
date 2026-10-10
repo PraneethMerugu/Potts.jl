@@ -617,7 +617,7 @@ Full runs are offline (D-146).
   - R4: Fig 5 row re-rendered on the shared distance bins (0, 18.6, 37.2, 55.8, 74.4, 93).
   - R2: new Fig 8 β grid; five runs to 10⁴ cells at β = 0.625/0.9375/0.9875/1.007/1.0212 with an O5 writer, on the PC.
   - Package (D-204): R1, R2 and R4 become required figures; re-freeze the package test through a test author.
-- [ ] **P6.15l** (D-213) Email-ready OpenVT package: `split = :email` → core.zip (≤ 20 MB) + bulk/ (one zip per case for a public pre-release, < 2 GB each) + EMAIL.md cover note; size assertions in the package test. Also the Q25 wording (M over TST; no open question). D-215: G conformance (O1 `g`, header `R`, O2 0…99 zipped, O5 both parameters, descriptive O1 zips with seed dirs, Table 1 in core, O2 + O1 manifest on the bulk side, README/EMAIL notes).
+- [ ] **P6.15l** (D-213; tests frozen D-217) Email-ready OpenVT package: `split = :email` → core.zip (≤ 20 MB) + bulk/ (one zip per case for a public pre-release, < 2 GB each) + EMAIL.md cover note; size assertions in the package test. Also the Q25 wording (M over TST; no open question). D-215: G conformance (O1 `g`, header `R`, O2 0…99 zipped, O5 both parameters, descriptive O1 zips with seed dirs, Table 1 in core, O2 + O1 manifest on the bulk side, README/EMAIL notes).
 
 ### Step 4 — Foam
 

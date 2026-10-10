@@ -20,24 +20,65 @@ const _OPENVT_PKG_LAMBDAS = (1, 2, 3, 5)
 const _OPENVT_PKG_A3 = ("a", "e")
 const _OPENVT_PKG_A3_SWEEPS = ("c", "d")
 const _OPENVT_PKG_BULK_ENV = "OPENVT_PACKAGE_BULK"
-const _OPENVT_PKG_O3 = ("Potts.jl_time_to_10k_vs_beta.csv", "Potts.jl_time_to_10k_vs_gamma.csv")
-_openvt_pkg_o1_zip(case) = "Potts.jl_centroids_$(case).zip"
-# the O5 names of spec §3.1 and the P6.15g record (`string(γ)`, e.g. 0.0, 0.12, 1.0e-4)
-const _OPENVT_PKG_O5 = r"^Potts\.jl_gamma_\d+\.\d+(?:e-?\d+)?_\d+MCS\.csv$"
-# the Figure 8 colonies of the P6.15k record (D-211 R2; `openvt_filename(:O5; beta, mcs)`)
-const _OPENVT_PKG_O5_BETA = r"^Potts\.jl_beta_\d+\.\d+(?:e-?\d+)?_\d+MCS\.csv$"
+
+"""
+    PottsModels.OPENVT_FRAMEWORK_TOKEN
+
+The framework token of the Potts.jl entry in the OpenVT consortium repository (D-215 (9)):
+the folder name under `implementations/` and `results/` and the stem of every file name
+that carries one. No spaces (the consortium's `run_metrics.sh` splits on them). The
+checkerboard entry of D-214 will use `"Potts.jl_checkerboard"`.
+"""
+const OPENVT_FRAMEWORK_TOKEN = "Potts.jl"
+const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
+
+"""
+    PottsModels.OPENVT_BULK_RELEASE_TAG
+
+The tag of the public Potts.jl pre-release that is to hold the bulk files of the split
+OpenVT package (D-213 (b)); the core README and `EMAIL.md` link each bulk file as
+`https://github.com/PraneethMerugu/Potts.jl/releases/download/<tag>/<file>`. Nothing creates
+the release: the maintainer creates it under this tag (or rebuilds with another
+`release_tag`).
+"""
+const OPENVT_BULK_RELEASE_TAG = "openvt-monolayer-package-2026-10-10"
+
+# the sweeps record's O3 tables (record names) => the package names (D-215: the token)
+const _OPENVT_PKG_O3 = ("Potts.jl_time_to_10k_vs_beta.csv" => "$(_OPENVT_PKG_FW)_time_to_10k_vs_beta.csv",
+    "Potts.jl_time_to_10k_vs_gamma.csv" => "$(_OPENVT_PKG_FW)_time_to_10k_vs_gamma.csv")
+# D-215 (5): descriptive O1 zip stems per case, members `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`
+const _OPENVT_PKG_O1_STEM = Dict("a" => "$(_OPENVT_PKG_FW)_beta0.0_gamma0.0", "b" => "$(_OPENVT_PKG_FW)_No_CI_stochastic",
+    "e" => "$(_OPENVT_PKG_FW)_beta0.8_gamma0.0", "f" => "$(_OPENVT_PKG_FW)_No_CI_deterministic")
+_openvt_pkg_o1_zip(case) = _OPENVT_PKG_O1_STEM[case] * ".zip"
+# D-215 (3): the O2 files, zipped with their folder, k = 0…99
+const _OPENVT_PKG_O2_DIR = "$(_OPENVT_PKG_FW)_5T_MonolayerGrowth_1000_Data"
+const _OPENVT_PKG_O2_ZIP = _OPENVT_PKG_O2_DIR * ".zip"
+const _OPENVT_PKG_O1_MANIFEST = "$(_OPENVT_PKG_FW)_centroids_manifest.csv"
+const _OPENVT_PKG_TABLE1 = "$(_OPENVT_PKG_FW)_table1.csv"
+# the bulk side of the split (D-215 (7)): file names in results/<token>/Monolayer/
+_openvt_pkg_isbulk(name) = name in (_OPENVT_PKG_O2_ZIP, _OPENVT_PKG_O1_MANIFEST) || name in (_openvt_pkg_o1_zip(c) for c in keys(_OPENVT_PKG_O1_STEM))
+const _OPENVT_PKG_RELEASES = "https://github.com/PraneethMerugu/Potts.jl/releases/download/"
+# the O5 names of the P6.15g record (`string(γ)`, e.g. 0.0, 0.12, 1.0e-4), β = 0
+const _OPENVT_PKG_O5 = r"^Potts\.jl_gamma_(\d+\.\d+(?:e-?\d+)?)_(\d+)MCS\.csv$"
+# the Figure 8 colonies of the P6.15k record (D-211 R2; `openvt_filename(:O5; beta, mcs)`), γ = 0
+const _OPENVT_PKG_O5_BETA = r"^Potts\.jl_beta_(\d+\.\d+(?:e-?\d+)?)_(\d+)MCS\.csv$"
+# the package name of an O5 colony (D-215 (4)): both parameters, as TST and CC3D name theirs
+_openvt_pkg_o5_name(beta, gamma, mcs) = "$(_OPENVT_PKG_FW)_beta_$(beta)_gamma_$(gamma)_$(mcs)MCS.csv"
 # M's shared Figure 5 distance-bin edges (9 Oct 2026 draft; D-211 R4), in R
 const _OPENVT_PKG_F5_EDGES = (0.0, 18.6, 37.2, 55.8, 74.4, 93.0)
+# what the decipher pass found about M's Figure 5 unit (spec 15 §7 Q15, 2026-10-10)
+const _OPENVT_PKG_F5_UNIT = "M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows); the unit and origin are Q15 on our open question list"
 # scripts that need a local clone of the consortium repository stay out of the package
 const _OPENVT_PKG_NEEDS_G = "OPENVT_MONOLAYER_REPO"
 
 # ROADMAP item => what its record carries (P6.15i convention: `provenance.toml`'s `item`)
 const _OPENVT_PKG_ITEMS = (calib = "P6.15b", f5 = "P6.15e", f3f8 = "P6.15f", f1f4 = "P6.15h", sweeps = "P6.15g",
-    o1 = "P6.15j", f8beta = "P6.15k")
+    o1 = "P6.15j", f8beta = "P6.15k", o1g = "P6.15l")
 const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8 = "Figures 3 and 9",
     f1f4 = "Figures 1 and 4", sweeps = "Figure 6, Table 1, Figure 7",
     o1 = "O1 per-cell time series (cases a, b, e, f re-run), O2 files",
-    f8beta = "Figure 8 (the colonies at the T1 β values, area inhibition)")
+    f8beta = "Figure 8 (the colonies at the T1 β values, area inhibition)",
+    o1g = "O1 and O2 in the consortium scripts' form (column g, descriptive zips, O2 k = 0…99; no re-run)")
 # records a draft build may do without (`allow_pending = true`): the P6.15k β colonies run on
 # the PC after the rest is merged; a draft leaves out Figure 8 and its O5 files and says
 # "Figure 8: pending". The default build requires them, so a build for upload is complete.
@@ -46,41 +87,60 @@ const _OPENVT_PKG_LATER = (:f8beta,)
 """
     PottsModels.openvt_submission_package(outdir::AbstractString;
                                           bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing),
-                                          allow_pending::Bool = false) -> outdir
+                                          allow_pending::Bool = false,
+                                          split = nothing,
+                                          release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
-repository's layout (spec 15 §4.0.1): `outdir/implementations/Potts.jl/` (the
+repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts per D-215). The
+framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`.
+
+With `split = nothing` (the default) it writes `outdir/implementations/<FW>/` (the
 `@potts_model` sources, the record runners, a README on rerunning everything, and
-`parameters.csv`) and `outdir/results/Potts.jl/` (the O4 relaxation widths and Table S5,
-the O6 metrics per run with their replicate means and neighbour histograms, the bare Fig 1
-panel as `closeup.png`, each record's provenance without its host name, and a README with
-the units, seeds and the deviations table), plus the bulk items: the O1 per-cell time series
-as one zip per case with their manifest, the A3 inhibition shares derived from that
-manifest, the O2 Figure 5 files, and the O3 and O5 sweep files.
+`parameters.csv`) and `outdir/results/<FW>/` (the O4 relaxation widths and Table S5, the O6
+metrics per run with their replicate means and neighbour histograms, the bare Fig 1 panel as
+`closeup.png`, each record's provenance without its host name, Table 1 as a CSV, and a README
+with the units, seeds, the notes for the consortium scripts and the deviations table), plus
+the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively named zip per
+case with their manifest, the A3 inhibition shares derived from that manifest, the O2
+Figure 5 zip (k = 0…99), and the O3 and O5 sweep files. It returns `outdir`.
+
+With `split = :email` it writes the same package, split for sending by mail (D-213 (a)–(d)):
+`outdir/core.zip` (every file except the bulk ones, unpacking at the consortium
+repository's root; its results README links each bulk file by name, sha256 and its
+release-download URL under `release_tag`), `outdir/bulk/` (the O1 zips, the O2 zip and the O1
+manifest, byte copies, to be attached to a public pre-release; nothing here creates one) and
+`outdir/EMAIL.md` (a plain-text draft cover note). It returns
+`(; outdir, core_bytes, bulk_bytes, bulk)` with the size of `core.zip`, the summed size of
+`bulk/` and the bulk file sizes. Any other `split` is an `ArgumentError`.
 
 Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
 (D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
 the newest directory (by name) whose `provenance.toml` names its ROADMAP item. Every record
-(P6.15b, e, f, g, h, j and k) is required. `allow_pending = true` (default `false`) allows a draft build without
-the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5 files are left out and
-the results README says "Figure 8: pending". Never upload a draft build.
+(P6.15b, e, f, g, h, j, k and l) is required. `allow_pending = true` (default `false`) allows a
+draft build without the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5
+files are left out and the results README says "Figure 8: pending". Never upload a draft build.
 
-`results/Potts.jl/figures/` holds byte copies of the records' renders of M's Figures 5
+`results/<FW>/figures/` holds byte copies of the records' renders of M's Figures 5
 (`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
 
-`bulk` is a directory outside git holding `Potts.jl_centroids_<case>.zip` for each case of
-the P6.15j record and `Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv`; each
-must have the size and sha256 that the record's `archives.tsv` and `o2_manifest.tsv` pin.
-Nothing else is read from it, and its files are copied byte for byte.
+`bulk` is a directory outside git holding the O1 zips and the O2 zip that the P6.15l
+record's `archives.tsv` names (written by its `post_o1.jl`), each with the size and sha256
+pinned there. Nothing else is read from it, and its files are copied byte for byte.
 
-Two calls on the same commit and bulk directory write byte-identical trees. `outdir` must lie
-outside any git checkout (the package is not committed) and must not exist or be an empty
-directory; `bulk` must be given, be a directory outside git and hold the pinned bytes;
-otherwise this is an `ArgumentError`, raised before anything is written. A build that fails
-part-way removes what it wrote, so the same `outdir` can be used again.
+Two calls on the same commit and bulk directory write byte-identical files (zip time stamps
+are fixed, not read from the clock). `outdir` must lie outside any git checkout (the package
+is not committed) and must not exist or be an empty directory; `bulk` must be given, be a
+directory outside git and hold the pinned bytes; otherwise this is an `ArgumentError`, raised
+before anything is written. A build that fails part-way removes what it wrote, so the same
+`outdir` can be used again.
 """
 function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPENVT_PKG_BULK_ENV, nothing),
-        allow_pending::Bool = false)
+        allow_pending::Bool = false, split = nothing, release_tag::AbstractString = OPENVT_BULK_RELEASE_TAG)
+    split === nothing || split === :email ||
+        throw(ArgumentError("openvt_submission_package: split must be nothing or :email, not $(repr(split))"))
+    occursin(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", release_tag) ||
+        throw(ArgumentError("openvt_submission_package: release_tag $(repr(release_tag)) is not a valid tag"))
     out = abspath(outdir)
     _openvt_pkg_in_git(out) &&
         throw(ArgumentError("openvt_submission_package: $outdir is inside a git checkout; build the package outside git"))
@@ -89,30 +149,37 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
         isdir(out) || throw(ArgumentError("openvt_submission_package: $outdir exists and is not a directory"))
         isempty(readdir(out)) || throw(ArgumentError("openvt_submission_package: $outdir is not empty"))
     end
+    split === :email && return _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, release_tag)
     recs = _openvt_pkg_records()
     for k in keys(_OPENVT_PKG_ITEMS)
         haskey(recs, k) || (allow_pending && k in _OPENVT_PKG_LATER) ||
             throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15" *
                                 (k in _OPENVT_PKG_LATER ? " (pass allow_pending = true for a draft build without it)" : "")))
     end
-    o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1]), _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
+    o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
+        _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
     bulkdir = _openvt_pkg_bulk(bulk, o1)
     try
         _openvt_pkg_build(out, recs, o1, bulkdir)
     catch
-        if existed
-            foreach(f -> rm(joinpath(out, f); recursive = true, force = true), readdir(out))
-        else
-            rm(out; recursive = true, force = true)
-        end
+        _openvt_pkg_clean(out, existed)
         rethrow()
     end
     return outdir
 end
 
+function _openvt_pkg_clean(out, existed)
+    if existed
+        foreach(f -> rm(joinpath(out, f); recursive = true, force = true), readdir(out))
+    else
+        rm(out; recursive = true, force = true)
+    end
+    return nothing
+end
+
 function _openvt_pkg_build(out, recs, o1, bulk)
-    impl = joinpath(out, "implementations", "Potts.jl")
-    res = joinpath(out, "results", "Potts.jl")
+    impl = joinpath(out, "implementations", _OPENVT_PKG_FW)
+    res = joinpath(out, "results", _OPENVT_PKG_FW)
     mkpath(impl)
     mkpath(res)
     rec(k) = joinpath(_OPENVT_PKG_DATA, recs[k])
@@ -150,6 +217,7 @@ function _openvt_pkg_build(out, recs, o1, bulk)
     _openvt_pkg_monolayer(joinpath(res, "Monolayer"), rec(:f3f8), facts.cycle)
     _openvt_pkg_bulk_items(joinpath(res, "Monolayer"), o1, bulk, facts.cycle)
     _openvt_pkg_sweeps(joinpath(res, "Monolayer"), rec(:sweeps))
+    _openvt_pkg_table1(joinpath(res, "Monolayer", _OPENVT_PKG_TABLE1), rec(:sweeps))
     _openvt_pkg_figures(res, recs)
     _openvt_pkg_write(joinpath(res, "README.md"), _openvt_pkg_results_readme(recs, prov, meta, facts, o1))
     return nothing
@@ -359,7 +427,7 @@ function _openvt_pkg_monolayer(dir, rec, cycle)
         seeds = sort([s for (c, s) in keys(ts) if c == case])
         for s in seeds
             rows = [(Int(v[1]), v[1] / cycle, v[2:7]...) for v in ts[(case, s)]]
-            _openvt_pkg_csv(joinpath(dir, "metrics", case, "measurements_s$(s).csv"), "MCS,t,N,r,A,C,w,g", rows)
+            _openvt_pkg_csv(joinpath(dir, "metrics", case, "measurements_s$(s).csv"), "MCS,t,N,R,A,C,w,g", rows)
         end
         # the replicate mean (schema "Data Collection"): MCS on the save grid saved by every run
         grids = [Set(Int(v[1]) for v in ts[(case, s)] if Int(v[1]) % _OPENVT_PKG_GRID == 0) for s in seeds]
@@ -375,7 +443,7 @@ function _openvt_pkg_monolayer(dir, rec, cycle)
             push!(row, length(seeds))
             push!(mrows, Tuple(row))
         end
-        _openvt_pkg_csv(joinpath(dir, "metrics", "measurements_$(case)_mean.csv"), "MCS,t,N,r,A,C,w,g,runs", mrows)
+        _openvt_pkg_csv(joinpath(dir, "metrics", "measurements_$(case)_mean.csv"), "MCS,t,N,R,A,C,w,g,runs", mrows)
         # the pooled final neighbour-number histogram (metrics.cpp's `n,p`, p in %)
         c = Dict{Int, Float64}()
         for r in nb
@@ -401,9 +469,13 @@ function _openvt_pkg_o2_runs(rec)
     return Dict(parse(Int, r["k"]) => parse(Int, r["seed"]) for r in rows if r["case"] == "b")
 end
 
-function _openvt_pkg_o1(rec, o2runs)
+# the P6.15l record (the D-215 post-processing of the P6.15j record `raw`): O1 members by case
+# (in member order), the archives (O1 per case and the O2 zip), the O2 files
+function _openvt_pkg_o1(rec, raw, o2runs)
     need(f) = (p = joinpath(rec, f); isfile(p) ? _openvt_pkg_tsv(p)[2] :
-                                     throw(ArgumentError("openvt_submission_package: the P6.15j record has no $f")))
+                                     throw(ArgumentError("openvt_submission_package: the P6.15l record has no $f")))
+    src = get(TOML.parsefile(joinpath(rec, "provenance.toml")), "source", "")
+    src == raw || throw(ArgumentError("openvt_submission_package: the P6.15l record maps $(repr(src)), not the P6.15j record $raw"))
     members = Dict{String, Vector{Any}}()
     for r in need("o1_manifest.tsv")
         e = (; case = r["case"], seed = parse(Int, r["seed"]), mcs = parse(Int, r["mcs"]), file = r["file"],
@@ -412,43 +484,47 @@ function _openvt_pkg_o1(rec, o2runs)
         push!(get!(members, e.case, Any[]), e)
     end
     foreach(v -> sort!(v; by = e -> e.file), values(members))
-    archives = sort(need("archives.tsv"); by = r -> r["case"])
+    rows = need("archives.tsv")
+    archives = sort(filter(r -> r["case"] != "O2", rows); by = r -> r["case"])
+    o2zip = filter(r -> r["case"] == "O2", rows)
     o2 = sort(need("o2_manifest.tsv"); by = r -> parse(Int, r["k"]))
     ok = !isempty(archives) && sort([r["case"] for r in archives]) == sort(collect(keys(members))) &&
-         all(r -> r["archive"] == _openvt_pkg_o1_zip(r["case"]) && parse(Int, r["members"]) == length(members[r["case"]]),
-             archives) &&
-         [parse(Int, r["k"]) for r in o2] == sort(collect(keys(o2runs))) &&
-         all(r -> r["file"] == "Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_$(r["k"]).csv", o2)
-    ok || throw(ArgumentError("openvt_submission_package: the P6.15j record's manifests are incomplete: archives.tsv " *
-                              "must list one archive per case of o1_manifest.tsv with its member count, and " *
-                              "o2_manifest.tsv one file per case (b) run of the P6.15e record"))
-    return (; members, archives, o2, o2runs, cases = sort(collect(keys(members))))
+         all(r -> haskey(_OPENVT_PKG_O1_STEM, r["case"]) && r["archive"] == _openvt_pkg_o1_zip(r["case"]) &&
+                   parse(Int, r["members"]) == length(members[r["case"]]), archives) &&
+         length(o2zip) == 1 && only(o2zip)["archive"] == _OPENVT_PKG_O2_ZIP &&
+         parse(Int, only(o2zip)["members"]) == length(o2) &&
+         [parse(Int, r["k"]) + 1 for r in o2] == sort(collect(keys(o2runs))) &&
+         all(r -> r["file"] == "$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_$(r["k"]).csv", o2)
+    ok || throw(ArgumentError("openvt_submission_package: the P6.15l record's manifests are incomplete: archives.tsv " *
+                              "must list one zip per case of o1_manifest.tsv with its member count and the O2 zip, " *
+                              "and o2_manifest.tsv one file per case (b) run of the P6.15e record (k = run − 1)"))
+    return (; members, archives, o2zip = only(o2zip), o2, o2runs, cases = sort(collect(keys(members))))
 end
 
 # the bulk directory, checked against the record's manifests before anything is written
 function _openvt_pkg_bulk(bulk, o1)
     (bulk === nothing || isempty(bulk)) &&
         throw(ArgumentError("openvt_submission_package: no bulk directory; pass `bulk` or set $(_OPENVT_PKG_BULK_ENV) " *
-                            "to the directory holding the O1 archives and the O2 files"))
+                            "to the directory holding the O1 zips and the O2 zip"))
     dir = abspath(bulk)
     isdir(dir) || throw(ArgumentError("openvt_submission_package: the bulk directory $bulk does not exist"))
     _openvt_pkg_in_git(dir) &&
         throw(ArgumentError("openvt_submission_package: the bulk directory $bulk is inside a git checkout"))
-    want = [[(r["archive"], r["bytes"], r["sha256"]) for r in o1.archives]; [(r["file"], r["bytes"], r["sha256"]) for r in o1.o2]]
-    for (f, bytes, sha) in want
-        p = joinpath(dir, split(f, '/')...)
-        isfile(p) || throw(ArgumentError("openvt_submission_package: the bulk directory lacks $f"))
-        (string(filesize(p)) == bytes && _openvt_pkg_sha(p) == sha) ||
-            throw(ArgumentError("openvt_submission_package: $f in the bulk directory differs from the P6.15j record's sha256"))
+    for r in [o1.archives; o1.o2zip]
+        f = r["archive"]
+        p = joinpath(dir, f)
+        isfile(p) || throw(ArgumentError("openvt_submission_package: the bulk directory lacks $f (written by the P6.15l record's post_o1.jl)"))
+        (string(filesize(p)) == r["bytes"] && _openvt_pkg_sha(p) == r["sha256"]) ||
+            throw(ArgumentError("openvt_submission_package: $f in the bulk directory differs from the P6.15l record's sha256"))
     end
     return dir
 end
 
 function _openvt_pkg_bulk_items(dir, o1, bulk, cycle)
     mkpath(dir)
-    # O1: the archives, byte for byte, and the package manifest in archive and member order
+    # O1: the zips, byte for byte, and the package manifest in archive and member order
     foreach(r -> cp(joinpath(bulk, r["archive"]), joinpath(dir, r["archive"])), o1.archives)
-    _openvt_pkg_csv(joinpath(dir, "Potts.jl_centroids_manifest.csv"), "archive,file,rows,bytes,sha256",
+    _openvt_pkg_csv(joinpath(dir, _OPENVT_PKG_O1_MANIFEST), "archive,file,rows,bytes,sha256",
         [(_openvt_pkg_o1_zip(c), e.file, string(e.rows), e.bytes, e.sha) for c in o1.cases for e in o1.members[c]])
     # A3: the inhibition-code shares of every O1 save, from the manifest's counts
     for c in o1.cases
@@ -459,25 +535,39 @@ function _openvt_pkg_bulk_items(dir, o1, bulk, cycle)
             _openvt_pkg_csv(joinpath(dir, "metrics", c, "inhibition_s$(s).csv"), "MCS,t,f0,f1,f2,f3", rows)
         end
     end
-    # O2: the Figure 5 files of case (b), byte for byte
-    for r in o1.o2
-        dst = joinpath(dir, split(r["file"], '/')...)
-        mkpath(dirname(dst))
-        cp(joinpath(bulk, split(r["file"], '/')...), dst)
-    end
+    # O2: the Figure 5 zip of case (b), byte for byte
+    cp(joinpath(bulk, o1.o2zip["archive"]), joinpath(dir, o1.o2zip["archive"]))
     return nothing
 end
 
-# O3 and O5: byte copies of the P6.15g sweeps record's tables and its f7/ snapshots
+# O3 and O5: byte copies of the P6.15g sweeps record's tables and its f7/ snapshots (β = 0)
 function _openvt_pkg_sweeps(dir, sw)
     mkpath(dir)
-    for f in _OPENVT_PKG_O3
+    for (f, name) in _OPENVT_PKG_O3
         isfile(joinpath(sw, f)) || throw(ArgumentError("openvt_submission_package: the sweeps record has no $f"))
-        cp(joinpath(sw, f), joinpath(dir, f))
+        cp(joinpath(sw, f), joinpath(dir, name))
     end
-    _openvt_pkg_copyall(joinpath(sw, "f7"), joinpath(dir, "final_snapshot_data"), _OPENVT_PKG_O5) ||
+    _openvt_pkg_copyall(joinpath(sw, "f7"), joinpath(dir, "final_snapshot_data"), _OPENVT_PKG_O5,
+        m -> _openvt_pkg_o5_name("0.0", m[1], m[2])) ||
         throw(ArgumentError("openvt_submission_package: the sweeps record has no f7/ snapshots"))
     return nothing
+end
+
+# Table 1 (D-215 (6)) from the sweeps record's table1.tsv, row for row; "—" is NaN and the
+# bands are split into their two edges
+function _openvt_pkg_table1(path, sw)
+    p = joinpath(sw, "table1.tsv")
+    isfile(p) || throw(ArgumentError("openvt_submission_package: the sweeps record has no table1.tsv"))
+    _, rows = _openvt_pkg_tsv(p)
+    num(x) = (x = strip(x); x in ("", "—") ? "NaN" : x)
+    edges(x) = (m = match(r"^\[\s*([^,\]]+?)\s*,\s*([^\]]+?)\s*\]$", strip(x)); m === nothing ? ("NaN", "NaN") : (m[1], m[2]))
+    io = IOBuffer()
+    print(io, "parameter,multiple,threshold,tau_cycles,interpolated,TST,Artistoo,spread_lo,spread_hi,band_lo,band_hi\n")
+    for r in rows
+        print(io, join((r["parameter"], num(r["multiple"]), num(r["threshold"]), num(r["tau_cycles"]),
+            num(r["interpolated"]), num(r["TST"]), num(r["Artistoo"]), edges(r["spread"])..., edges(r["band"])...), ','), '\n')
+    end
+    return _openvt_pkg_write(path, String(take!(io)))
 end
 
 # M's Figures 5, 7 and 8 (D-211): byte copies of the records' renders, and the Figure 8
@@ -493,17 +583,18 @@ function _openvt_pkg_figures(res, recs)
     end
     if haskey(recs, :f8beta)
         _openvt_pkg_copyall(joinpath(_OPENVT_PKG_DATA, recs[:f8beta], "f8"), joinpath(res, "Monolayer", "final_snapshot_data"),
-            _OPENVT_PKG_O5_BETA) || throw(ArgumentError("openvt_submission_package: the P6.15k record has no f8/ snapshots"))
+            _OPENVT_PKG_O5_BETA, m -> _openvt_pkg_o5_name(m[1], "0.0", m[2])) || throw(ArgumentError("openvt_submission_package: the P6.15k record has no f8/ snapshots"))
     end
     return nothing
 end
 
-function _openvt_pkg_copyall(src, dst, re)
+# copy the files of `src` whose names match `re`, each to `dst/name(match)`
+function _openvt_pkg_copyall(src, dst, re, name::F) where {F}
     isdir(src) || return false
     fs = sort(filter(f -> occursin(re, f) && isfile(joinpath(src, f)), readdir(src)))
     isempty(fs) && return false
     mkpath(dst)
-    foreach(f -> cp(joinpath(src, f), joinpath(dst, f)), fs)
+    foreach(f -> cp(joinpath(src, f), joinpath(dst, name(match(re, f)))), fs)
     return true
 end
 
@@ -528,7 +619,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
 
     The Potts.jl implementation of the OpenVT growing-monolayer benchmark: a cellular Potts
     model (CPM) with the Table S1 parameters, written in the `@potts_model` authoring
-    surface of [Potts.jl]($(_OPENVT_PKG_URL)). Every result under `results/Potts.jl/` was
+    surface of [Potts.jl]($(_OPENVT_PKG_URL)). Every result under `results/$(_OPENVT_PKG_FW)/` was
     produced by the scripts below at the commits listed, and the result files were built from
     the committed run records by `PottsModels.openvt_submission_package`.
 
@@ -605,7 +696,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
         r, p = recs[k], prov[k]
         runner = basename(p["runner"])
         print(io, "| `", r, "` | ", _OPENVT_PKG_FIGURES[k], " | `scripts/", r, "/", runner, "` | `", p["commit"][1:8],
-            "` | ", _openvt_pkg_threads(p), " | ", _openvt_pkg_wall(p), " | `", k === :o1 ? "OPENVT_PACKAGE_BULK=../openvt-bulk " : "",
+            "` | ", _openvt_pkg_threads(p), " | ", _openvt_pkg_wall(p), " | `", k in (:o1, :o1g) ? "OPENVT_PACKAGE_BULK=../openvt-bulk " : "",
             "julia -t ", _openvt_pkg_threads(p),
             " --project=lib/PottsModels/test ", p["runner"], "` |\n")
     end
@@ -625,12 +716,16 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     print(io, """
 
     The wall times above are those of the recorded runs; the exact machine, Julia version
-    and timings of each run are in `results/Potts.jl/provenance/`.
+    and timings of each run are in `results/$(_OPENVT_PKG_FW)/provenance/`.
 
     The O1 runner (`scripts/$(recs[:o1])/$(basename(prov[:o1]["runner"]))`) also needs
     `OPENVT_PACKAGE_BULK`, a directory outside git: it writes the O1 archives and the O2 files
     there, checks every run against the Figure 3/9 record save by save, and commits only their
-    manifests (names, row counts, sizes, sha256) to the record.
+    manifests (names, row counts, sizes, sha256) to the record. The post-processing script
+    (`scripts/$(recs[:o1g])/$(basename(prov[:o1g]["runner"]))`) reads those files from the same
+    directory and writes the files of this package next to them, with no re-run: the O1 files
+    with the column `g` added, in one descriptively named zip per case, and the O2 files
+    renumbered k = 0…99 in one zip. Its record pins their sha256s.
 
     ## Rebuild this package
 
@@ -640,10 +735,12 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     ```
 
     `openvt_submission_package` reads only the committed records, the model defaults and the
-    bulk directory `OPENVT_PACKAGE_BULK` (the O1 archives and the O2 files, too large for git;
-    no simulation). It refuses a target inside a git checkout or a non-empty directory, and a
+    bulk directory `OPENVT_PACKAGE_BULK` (the O1 zips and the O2 zip, too large for git; no
+    simulation). It refuses a target inside a git checkout or a non-empty directory, and a
     bulk directory that is missing, inside a git checkout or whose files differ from the
-    sha256s the O1 record pins. It writes byte-identical trees on every call at the same commit.
+    sha256s the post-processing record pins. It writes byte-identical trees on every call at
+    the same commit. Its `split` option writes the same files as a core zip of at most 20 MB,
+    a flat directory of the large files and a plain-text cover note (see its docstring).
     The acceptance test `lib/PottsModels/test/reproductions/15_openvt_package.jl` checks every
     file against the records.
 
@@ -676,22 +773,44 @@ end
 
 # hand-written rows for the record deviations and failures (keyed by row id); each is used
 # only while it still carries the record's value, else the record's own row is printed
+# the status of a row on the division rule (D-213: M over TST), and of a row on another
+# framework's departure from M (spec 15 §7: closed, not asked)
+const _OPENVT_PKG_RULING_TST = "not asked (maintainer ruling: M over TST)"
+const _OPENVT_PKG_RULING_FW = "not asked (M over the framework's code)"
+# the division rule in one sentence (D-213)
+const _OPENVT_PKG_DIVISION = "M is followed (actual area); the released TST model divides on target area"
 const _OPENVT_PKG_RECORD_ROWS = Dict(
     "V4.2" => ("V4.2 peak of nonzero f (FAIL)",
         "0.425 (100 runs, 11,226 cells with f > 0); 0.395–0.435 for smoothing windows of 1–11 bins; mean nonzero f 0.346",
         "0.25–0.35 (TST and Morpheus pooled); TST alone 0.295, mean nonzero f 0.288",
-        "leading: Potts.jl divides on actual area, TST on target area (C13). Not the Morpheus f definition or σ_X (C17): TST alone uses our f and σ_X = 0.4 and passes. Ruled out on 20 runs each: the division axis and a connectivity constraint",
-        "not asked; on our open question list as Q20 (leading) and Q23"),
+        "leading: the division rule. $(_OPENVT_PKG_DIVISION) (C13). Not the Morpheus f definition or σ_X (C17): TST alone uses our f and σ_X = 0.4 and passes. Ruled out on 20 runs each: the division axis and a connectivity constraint",
+        "$(_OPENVT_PKG_RULING_TST); any other TST detail behind the shift is Q23 on our open question list"),
     "V4.3" => ("V4.3 max f (FAIL)",
         "0.847; 606 of 11,226 rim cells (5.4 %) above 0.56",
         "at most 0.56, no cell above (TST max 0.553)",
-        "the same upward shift of the rim cells' f as V4.2; causes as for V4.2",
-        "not asked; on our open question list as Q20 (leading) and Q23"),
+        "the same upward shift of the rim cells' f as V4.2; causes as for V4.2 (C13)",
+        "$(_OPENVT_PKG_RULING_TST); any other TST detail is Q23 on our open question list"),
     "V4.5" => ("V4.5 range of a (FAIL)",
         "0.066–1.130; 30 of 100,029 cells below 0.42, all small interior cells born shortly before, 10 of them sister pairs",
         "0.42–1.09; TST 0.425–1.092 with no cell below 0.42",
-        "squeezed young daughters, cause unresolved; leading candidate the target-area division (C13). A connectivity constraint raises the minimum but not the count",
-        "not asked; on our open question list as Q20 (leading) and Q24"),
+        "squeezed young daughters, cause unresolved; leading candidate the division rule (C13), which changes the daughters' state at birth. A connectivity constraint raises the minimum but not the count",
+        "$(_OPENVT_PKG_RULING_TST); whether the frameworks remove crushed cells is Q24 on our open question list"),
+    # the sweeps record's rows (its deviations.tsv cites the closed Q20)
+    "V1" => ("V1 time to 10⁴ cells, uninhibited (FAIL)",
+        "14.945 cycles (β = γ = 0, 10 runs, 14.48–15.31, sd 0.27), 0.12 % above the band's upper edge 14.927, +10.1 % on 13.57; our low-β plateau 14.72–14.77 for β = 0.25–0.6. The Figure 3/9 record measures 15.17 cycles (case (a), 10 runs on other seeds); the difference, 0.22 cycles, is about 1.9 standard errors",
+        "13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.213–14.927; TST plateau 13.77, Artistoo 13.856",
+        "the gap opens beyond 10³ cells, past the Figure 3 window. Leading candidate: the division rule. M is followed and we divide on actual area; the released TST model divides on target area (C13)",
+        "$(_OPENVT_PKG_RULING_TST); whether 13.57 is pooled or one framework's value is Q17 on our open question list"),
+    "V2.1.1x" => ("V2.1.1x β threshold at 1.1× (FAIL)",
+        "0.625 (bracket 0.625 / 0.6375, 14.831 / 15.120 cycles over 6 runs each); against our own uninhibited time the rule gives 0.80 (information)",
+        "lattice spread 0.687–0.704 (TST 0.7037, Artistoo 0.698); band 0.667–0.724",
+        "a consequence of V1: the 1.1× time 14.927 cycles lies on our flat low-β plateau (14.7–15.1 for β ≤ 0.65), so its first crossing is set by run-to-run noise (sd 0.27 cycles), not by the inhibition curve. The 2×–20× β thresholds pass, within 0.002 of TST",
+        _OPENVT_PKG_RULING_FW),
+    "V3b" => ("V3b time to 10⁴ cells at γ = 10⁻⁴ (FAIL)",
+        "58.755 cycles (5 runs, 58.42–59.11, sd 0.25), 3.7 % below the band's lower edge 61; −4.3 % on TST",
+        "TST 61.37 (γ = 10⁻⁴, one run), Artistoo 63.09 (γ = 0.0195); band 61–70",
+        "unverified. Only cells with free surface grow here, so this measures rim-limited growth; we are faster than TST here but slower at γ = 0 (V1), which a plain rate offset cannot cause. Candidates: the division rule, where TST divides on target area and M and Potts.jl on actual area (C13), which changes rim cell shapes; and the band, which sits 0.6 % below TST's single run. Every γ threshold passes",
+        _OPENVT_PKG_RULING_TST),
 )
 
 # our figure choices that differ from M, with values from the records
@@ -719,15 +838,15 @@ function _openvt_pkg_figure_rows(facts)
                 100 * facts.f34.ours, facts.f34.band),
             "TST deterministic",
             "division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS",
-            "not asked; on our open question list as Q20"))
+            _OPENVT_PKG_RULING_FW))
     lat = join(("$(l)²" for l in facts.lattices), " or ")
     gap = facts.min_gap === nothing ? "" : "; no run came closer than $(facts.min_gap) sites"
     append!(rows, [
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
             "a black outline of cell i, names, coloured count glyphs", "no outlines (D-156)", "not an author question"),
         ("F5 distance bins and origin",
-            "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional: " *
-            "M's unit is unstated and appears to be about 0.5 R); the F5 record's verdict " *
+            "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional). " *
+            "$(_OPENVT_PKG_F5_UNIT). The F5 record's verdict " *
             "figure keeps 5 equal bins from 0 to 1.05 times the furthest distance; distances from the initial cell's centre",
             "one set of edges for all rows; how they were derived is not stated; the notebook uses 7 bins from the pooled centroid",
             "M's figure and text taken over its notebook (C11, C12)", "not asked; on our open question list as Q15"),
@@ -772,14 +891,14 @@ const _OPENVT_PKG_C_ROWS = [
         "not asked; on our open question list as Q15"),
     ("C13 division trigger", "actual area ≥ X A*(0)", "actual area ≥ X A*(0); TST uses the target area",
         "M, with CompuCell3D and Morpheus. This is the leading candidate for the V4 failures and the slow V1 growth",
-        "not asked; on our open question list as Q20"),
+        _OPENVT_PKG_RULING_TST),
     ("C14 daughters' reference area", "half the mother's A*", "half the mother's A* (Morpheus sets it to the daughter's area)",
         "M, with CompuCell3D, TST and Artistoo", "not an author question"),
     ("C15 termination", "end of the first MCS with at least 10⁴ cells", "the same; CompuCell3D stops at 10,200", "M",
         "not an author question"),
     ("C16 growth rate", "α = 50/775 px/MCS", "6.452 × 10⁻² (Table S1); TST uses 50/770", "M", "not an author question"),
     ("C17 σ of X", "0.4", "0.4; Morpheus passes 0.16 as the standard deviation",
-        "M; it cannot explain V4, since TST uses 0.4 and passes", "not asked; on our open question list as Q21"),
+        "M; it cannot explain V4, since TST uses 0.4 and passes", _OPENVT_PKG_RULING_FW),
 ]
 
 # rows from the records: deviations.tsv rows, then non-control FAIL verdicts without one;
@@ -839,8 +958,8 @@ function _openvt_pkg_v1_row(recs, meta)
             ta, length(ca), first(ca), last(ca), count(>(hi), ca), length(ca), te),
         "13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15",
         @sprintf("about %.1f %% slow. The gap opens beyond 10³ cells, past the Figure 3 window. ", 100 * (ta / 13.57 - 1)) *
-        "Leading candidate: division on actual area (M, C13) against TST's division on target area, as for V4",
-        "not asked; on our open question list as Q20, and Q17 (whether 13.57 is pooled or one framework's value)")
+        "Leading candidate, as for V4: the division rule. M is followed and we divide on actual area; the released TST model divides on target area (C13)",
+        "$(_OPENVT_PKG_RULING_TST); whether 13.57 is pooled or one framework's value is Q17 on our open question list")
 end
 
 # the "Figures" section of the results README (D-211): M's Figures 5, 7 and 8, their colours,
@@ -854,11 +973,11 @@ function _openvt_pkg_figures_section(recs)
     ## Figures
 
     Our rows of M's Figures 5$(f8 ? ", 7 (γ) and 8 (β)" : " and 7") (9 Oct 2026 draft), byte copies of the renders in the
-    records (`plot_f5_shared.jl`, `plot_f7_grid.jl`$(f8 ? ", `plot_f8_grid.jl`" : "") in `implementations/Potts.jl/scripts/`):
+    records (`plot_f5_shared.jl`, `plot_f7_grid.jl`$(f8 ? ", `plot_f8_grid.jl`" : "") in `implementations/$(_OPENVT_PKG_FW)/scripts/`):
 
     - `figures/fig5.png`: Figure 5, case (b), 100 runs at 1000 cells, on M's shared distance-bin edges
-      $e (record `$(recs[:f5])`), binned in R from the lattice centre; M's axis appears to be ≈ 2× ours (its unit is ≈ 0.5 R by a cross-check on the consortium's TST data); asked.
-      The unit comparison is provisional: M's unit is unstated and on our open question list.
+      $e (record `$(recs[:f5])`), binned in R from the lattice centre. $(_OPENVT_PKG_F5_UNIT).
+      Our row stays in R and is provisional.
     - `figures/fig7.png`: Figure 7, one colony at 10⁴ cells per Table 1 multiple at our γ thresholds
       (β = 0); 1.1× and 2× are empty (no γ threshold there); cells yellow (no inhibition) or teal
       (surface-inhibited) (record `$(recs[:sweeps])`).
@@ -914,6 +1033,25 @@ function _openvt_pkg_backend(meta)
     return isempty(a) ? "CPU" : "CPU, `$a`"
 end
 
+# the compiler note of the results README (spec 15 §7 Q28); EMAIL.md words it as a heads-up
+const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements equal metrics.cpp built with GCC 13 on Linux; other compilers can change C and w for lattice-derived centroids (concave-hull near-ties)."
+
+# D-215 (8): what the consortium's scripts need to know (results README and EMAIL.md)
+function _openvt_pkg_note_lines(o1)
+    big = maximum(r -> parse(Int, r["bytes"]), o1.archives)
+    return [
+        "`run_metrics.sh` loops over `seq 0 10000`, so it skips the files with MCS above 10000; our precomputed measurements in `Monolayer/metrics/` are complete (every save to the stop).",
+        "The largest O1 zip is $(round(Int, big / 1e6)) MB, so it may need Git LFS on the consortium repository's side.",
+        "Lengths are in R, the cell radius, with the origin at the lattice centre; the consortium's scripts are translation-invariant, so no shift is needed.",
+        "Only R is shipped in the result files: no Monolayer file has lengths in px (parameters.csv gives the px values of A0, R and CD).",
+        _OPENVT_PKG_COMPILER_NOTE,
+        "Each framework list hard-coded in the consortium's scripts (`run_metrics.sh`, the Figure 5 notebook, `colors.tex` and the figure .tex files) needs one line added for this entry, under the folder name `$(_OPENVT_PKG_FW)`.",
+        "The O1 zips, the O2 zip and the O1 manifest go into `results/$(_OPENVT_PKG_FW)/Monolayer/` and stay zipped there.",
+    ]
+end
+
+_openvt_pkg_notes(o1) = "\n## Notes for the consortium scripts\n\n" * join(("- " * l * "\n" for l in _openvt_pkg_note_lines(o1))) 
+
 function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     d = facts.defaults
     g = _openvt_pkg_g
@@ -924,7 +1062,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     print(io, """
     # Potts.jl results: OpenVT growing monolayer
 
-    Simulation output of the Potts.jl cellular Potts model (`implementations/Potts.jl/`) for
+    Simulation output of the Potts.jl cellular Potts model (`implementations/$(_OPENVT_PKG_FW)/`) for
     the OpenVT growing-monolayer benchmark, in the layout of the benchmark repository. Every
     file was built by `PottsModels.openvt_submission_package` from the committed run records
     listed at the end; the per-record `provenance/*.toml` give the commit, Julia version,
@@ -950,11 +1088,12 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     | `Relaxation/11+10cells/width.csv`, `inner_width.csv` | 11+10-cell chain: total and inner (11-cell) width, λ = 2, T(2) with no refit | as above (`Mean inner width (CD)`, `STD inner width (CD)`) |
     | `Relaxation/lambda_scan/11cells_lambda<λ>_width.csv` | 11-cell chain width for λ = $(join(_OPENVT_PKG_LAMBDAS, ", ")) (Table S5's runs) | as above |
     | `Relaxation/table_S5.csv` | Table S5: T(λ) (first crossing of 90 % of the plateau by the mean width) and the MSE against the spring–dashpot reference on t ≥ 0 | `lambda` (1), `T (MCS)`, `MSE` (CD²) |
-    | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | Figure 9 (metrics): per run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` (cells), `r` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius spread), `g` (fraction of growing cells) |
+    | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | Figure 9 (metrics): per run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` (cells), `R` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius spread), `g` (fraction of growing cells) |
     | `Monolayer/metrics/measurements_<case>_mean.csv` | the arithmetic mean over the case's runs (schema "Data Collection") at the saves every run reached; NaN values skipped | as above, plus `runs` (count) |
     | `Monolayer/metrics/neighbors_<case>.csv` | final neighbour-number histogram pooled over the case's runs | `n` (neighbours), `p` (% of cells) |
     """)
     o1cases = join(("($c)" for c in o1.cases), ", ")
+    o1zips = join(("($c) `$(_openvt_pkg_o1_zip(c))`" for c in o1.cases), ", ")
     a3cases = join(("($c)" for c in o1.cases if c in _OPENVT_PKG_A3 || c in _OPENVT_PKG_A3_SWEEPS), ", ")
     nfiles = sum(length, values(o1.members))
     # the case (b) seeds of the Figure 5 runs, as `seed = <offset> + k` when they are consecutive
@@ -962,23 +1101,26 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     o2seed = length(offs) == 1 ? "seed $(only(offs)) + k" :
              "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the P6.15e `runs.tsv`"
     print(io, """
-    | `Monolayer/Potts.jl_centroids_<case>.zip` | O1 per-cell time series of cases $(o1cases): one file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/centroids/<case>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells) |
-    | `Monolayer/Potts.jl_centroids_manifest.csv` | every O1 file: its archive, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |
+    | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
+    | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |
     | `Monolayer/metrics/<case>/inhibition_s<seed>.csv` | A3 for cases $(a3cases): the share of each inhibition code among the cells of every O1 save of the run | `MCS`, `t` (cycles), `f0`, `f1`, `f2`, `f3` (fractions of cells with i = 0, 1, 2, 3) |
-    | `Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv` | Figure 5 snapshots at 1000 cells, case (b), run k ($(o2seed)) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
-    | `Monolayer/Potts.jl_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table 1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
-    | `Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv` | Figure 7 final snapshots; β = 0 in every panel (M's Figure 7), so the name carries γ only | `x_pos`, `y_pos` (R, from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
+    | `Monolayer/$(_OPENVT_PKG_O2_ZIP)` | Figure 5 snapshots at 1000 cells, case (b): `$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_<k>.csv`, k = 0…$(length(o1.o2) - 1), file k from run k + 1 ($(o2seed)) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
+    | `Monolayer/$(_OPENVT_PKG_FW)_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table 1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
+    | `Monolayer/$(_OPENVT_PKG_TABLE1)` | Table 1: our β and γ thresholds per multiple of the uninhibited time, with the TST and Artistoo values and the spread and band of our pre-registered check (NaN: no threshold) | `parameter`, `multiple` (1), `threshold` (1), `tau_cycles` (cycles), `interpolated` (1), `TST`, `Artistoo`, `spread_lo`, `spread_hi`, `band_lo`, `band_hi` |
+    | `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_0.0_gamma_<γ>_<MCS>MCS.csv` | Figure 7 final snapshots (β = 0, as in M's Figure 7) | `x_pos`, `y_pos` (R, from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
     """)
     haskey(recs, :f8beta) && print(io, """
-    | `Monolayer/final_snapshot_data/Potts.jl_beta_<β>_<MCS>MCS.csv` | Figure 8 final snapshots at the T1 β values; γ = 0 in every panel, so the name carries β only; `inhibited` is area inhibition (a < β) | as above |
+    | `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_<β>_gamma_0.0_<MCS>MCS.csv` | Figure 8 final snapshots at the T1 β values (γ = 0); `inhibited` is area inhibition (a < β) | as above |
     """)
     print(io, """
     | `figures/fig5.png`, `figures/fig7.png`$(haskey(recs, :f8beta) ? ", `figures/fig8.png`" : "") | M's Figures 5, 7$(haskey(recs, :f8beta) ? " and 8 (β)" : ""): our rows, see Figures below | PNG |
 
     The O1 files of cases $(o1cases) come from a re-run of the Figure 3/9 runs from their
     recorded seeds (record `$(recs[:o1])`): every save's MCS, cell count and metrics equal the
-    Figure 3/9 record's, and the run stops at the same MCS with the same cell count.
+    Figure 3/9 record's, and the run stops at the same MCS with the same cell count. The record
+    `$(recs[:o1g])` then added the column `g` and repacked them, with no re-run.
     """)
+    print(io, _openvt_pkg_notes(o1))
     print(io, _openvt_pkg_figures_section(recs))
     print(io, """
 
@@ -1019,8 +1161,13 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     failed or at-risk target. "Ours" is our value or choice, "Manuscript" M's, then the
     suspected cause and the status of the question: "not an author question", "not asked"
     (the question is on our open question list, §7 of `$(_OPENVT_PKG_SPEC)` in
-    $(_OPENVT_PKG_URL)) or "resolved" (settled from the consortium's public data). Row ids V#
-    and F# are our acceptance targets.
+    $(_OPENVT_PKG_URL)) or "resolved" (settled from the consortium's public data). Where
+    another framework's code departs from M, M is the reference and the departure is recorded,
+    not queried: those rows say "$(_OPENVT_PKG_RULING_TST)" or
+    "$(_OPENVT_PKG_RULING_FW)". Row ids V# and F# are our acceptance targets.
+
+    Division: $(_OPENVT_PKG_DIVISION). Potts.jl divides when a cell's actual area reaches
+    X·A*(0), as M states; this is the leading candidate for the V1 and V4 rows below.
 
     | Item | Ours | Manuscript | Suspected cause | Author question |
     |---|---|---|---|---|
@@ -1046,7 +1193,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     print(io, """
 
     The records are in `lib/PottsModels/reproductions/data/15/` of $(_OPENVT_PKG_URL); how to
-    rerun them is in `implementations/Potts.jl/README.md`.
+    rerun them is in `implementations/$(_OPENVT_PKG_FW)/README.md`.
 
     ## Licence
 
@@ -1054,3 +1201,161 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     """)
     return String(take!(io))
 end
+
+# ── the split for sending by mail (D-213 (a)–(d), D-215 (7)) ───────────────────────────────
+
+_openvt_pkg_release_url(tag, f) = _OPENVT_PKG_RELEASES * tag * "/" * f
+
+# the non-control FAIL row ids of the records (as the deviations table lists them)
+function _openvt_pkg_fail_keys(recs)
+    keys_ = String[]
+    for k in _openvt_pkg_keys(recs)
+        p = joinpath(_OPENVT_PKG_DATA, recs[k], "deviations.tsv")
+        isfile(p) && append!(keys_, [_openvt_pkg_key(r["target"]) for r in _openvt_pkg_tsv(p)[2] if occursin("FAIL", r["target"])])
+        p = joinpath(_OPENVT_PKG_DATA, recs[k], "verdicts.tsv")
+        isfile(p) || continue
+        for r in _openvt_pkg_tsv(p)[2]
+            get(r, "result", "") == "FAIL" || continue
+            get(r, "case", "") == "control" && continue
+            occursin(r"must FAIL"i, get(r, "band", "")) && continue
+            occursin("(all rows)", r["target"]) && continue
+            push!(keys_, _openvt_pkg_key(r["target"]))
+        end
+    end
+    return sort(unique(keys_))
+end
+
+# zip a staged tree with fixed time stamps (1980-01-01 00:00 UTC), sorted members, no
+# directory entries and no extra attributes: the same files give the same bytes
+function _openvt_pkg_zip(stage, z)
+    Sys.which("zip") === nothing && throw(ArgumentError("openvt_submission_package: the split needs Info-ZIP `zip` on PATH"))
+    sh = "find . -type f -exec touch -t 198001010000.00 {} + && " *
+         "find . -type f | sed 's|^\\./||' | LC_ALL=C sort | zip -X -D -9 -q -@ " * Base.shell_escape(z)
+    run(setenv(Cmd(`sh -c $sh`; dir = stage), merge(ENV, Dict("TZ" => "UTC", "LC_ALL" => "C"))))
+    return z
+end
+
+function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
+    tmp = mktempdir()
+    try
+        # the unsplit package (its own refusals: records, bulk directory)
+        U = joinpath(tmp, "unsplit")
+        openvt_submission_package(U; bulk, allow_pending)
+        recs = _openvt_pkg_records()
+        o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
+            _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
+        mono = joinpath("results", _OPENVT_PKG_FW, "Monolayer")
+        try
+            mkpath(joinpath(out, "bulk"))
+            stage = joinpath(tmp, "core")
+            for (root, _, fs) in walkdir(U), f in fs
+                rel = relpath(joinpath(root, f), U)
+                if dirname(rel) == mono && _openvt_pkg_isbulk(f)
+                    cp(joinpath(root, f), joinpath(out, "bulk", f))
+                else
+                    mkpath(dirname(joinpath(stage, rel)))
+                    cp(joinpath(root, f), joinpath(stage, rel))
+                end
+            end
+            bf = sort(readdir(joinpath(out, "bulk")))
+            sha = Dict(f => _openvt_pkg_sha(joinpath(out, "bulk", f)) for f in bf)
+            sz = Dict(f => filesize(joinpath(out, "bulk", f)) for f in bf)
+            # the core's results README: the bulk files by name, sha256 and download URL
+            rp = joinpath(stage, "results", _OPENVT_PKG_FW, "README.md")
+            io = IOBuffer()
+            readme = read(rp, String)
+            k = findlast("\n## Licence\n", readme)
+            k === nothing && error("openvt_submission_package: the results README has no Licence section")
+            print(io, readme[1:first(k)], """
+            ## Bulk files
+
+            The files below are not in this zip. They are attached to the Potts.jl pre-release
+            `$tag`; download them into `results/$(_OPENVT_PKG_FW)/Monolayer/` and leave them zipped.
+            Check each against its sha256.
+
+            | File | Bytes | sha256 | URL |
+            |---|---|---|---|
+            """)
+            foreach(f -> print(io, "| `", f, "` | ", sz[f], " | `", sha[f], "` | ", _openvt_pkg_release_url(tag, f), " |\n"), bf)
+            print(io, "\n", readme[(first(k) + 1):end])
+            write(rp, String(take!(io)))
+            _openvt_pkg_zip(stage, joinpath(out, "core.zip"))
+            _openvt_pkg_write(joinpath(out, "EMAIL.md"), _openvt_pkg_email(recs, o1, bf, sha, sz, tag))
+        catch
+            _openvt_pkg_clean(out, existed)
+            rethrow()
+        end
+    finally
+        rm(tmp; recursive = true, force = true)
+    end
+    bf = sort(readdir(joinpath(out, "bulk")))
+    sizes = [f => filesize(joinpath(out, "bulk", f)) for f in bf]
+    core_bytes = filesize(joinpath(out, "core.zip"))
+    bulk_bytes = sum(last, sizes; init = 0)
+    @info "openvt_submission_package: split" core_bytes bulk_bytes bulk = sizes
+    return (; outdir, core_bytes, bulk_bytes, bulk = sizes)
+end
+
+# the plain-text cover note (D-213 (c)): a draft the maintainer pastes; nothing is sent
+function _openvt_pkg_email(recs, o1, bf, sha, sz, tag)
+    mb(b) = @sprintf("%.1f MB", b / 1e6)
+    fails = _openvt_pkg_fail_keys(recs)
+    io = IOBuffer()
+    print(io, """
+    Potts.jl results for the OpenVT growing monolayer benchmark
+
+    Attached: core.zip. It unpacks at the root of the benchmark repository into
+    implementations/$(_OPENVT_PKG_FW)/ (the model source, parameters.csv, the run scripts and a README on
+    rerunning everything) and results/$(_OPENVT_PKG_FW)/ (the relaxation widths and Table S5, the
+    per-run measurements, means and neighbour histograms, the inhibition shares, the time to
+    10k cells for the beta and gamma sweeps, Table 1 as a CSV, the final snapshots, our rows of
+    Figures 5, 7 and 8 as PNGs, the close-up, the provenance of every run record and a README
+    with the units, seeds and deviations).
+
+    Linked, too large to attach: one public Potts.jl pre-release, tag
+    $tag
+    (each file's sha256 is also in the results README):
+    """)
+    for f in bf
+        print(io, "\n", f, " (", mb(sz[f]), ")\n", _openvt_pkg_release_url(tag, f), "\nsha256 ", sha[f], "\n")
+    end
+    print(io, """
+
+    Units: lengths are in R, the cell radius sqrt(A*(0)/pi), with the origin at the lattice
+    centre; time is in cell cycles, one cycle = 775 MCS (5T); the MCS is in each O1 and O5
+    file name and in the first column of the measurement files.
+
+    Open questions on our list: Q15, the distance unit and origin of the Figure 5 axis (it is
+    consistent with distance in units of R/2; our row is binned in R). Q26, the quantity behind the
+    centre labels of Figures 7 and 8 (our panels carry no label; each colony's C/C_circle is
+    in the results README).
+
+    Deviations: $(_openvt_pkg_join(fails)) fail their pre-registered bands. The
+    results README has one row per deviation with our value, the manuscript's and the
+    suspected cause. Division follows the manuscript: a cell divides when its actual area
+    reaches X times A*(0). The released TST model divides on target area instead, which is the
+    leading candidate for the V1 and V4 rows.
+
+    Notes for the consortium scripts:
+
+    """)
+    foreach(l -> print(io, "- ", replace(l, '`' => ""), "\n"), filter(!=(_OPENVT_PKG_COMPILER_NOTE), _openvt_pkg_note_lines(o1)))
+    print(io, """
+
+    A heads-up on metrics.cpp: its concave hull gives compiler-dependent C and w on centroids
+    from a lattice, so the other lattice frameworks are probably affected as well. On one of
+    our O1 files, GCC 13 on Linux gives C = 415.6, Apple clang 613.5 and Homebrew g++-15 454.9;
+    w differs too, while a PhysiCell frame is the same under all three. Our precomputed values
+    equal the GCC 13 build on Linux. Pinning one compiler for everyone's Category 2 numbers
+    (for example GCC with -ffp-contract=off) would remove the dependence. Which compiler and
+    flags produced the consortium's measurements is Q28 on our open question list.
+    """)
+    print(io, """
+
+    Everything is built by PottsModels.openvt_submission_package from the run records committed
+    in $(_OPENVT_PKG_URL) (lib/PottsModels/reproductions/data/15/). Licence: MIT.
+    """)
+    return String(take!(io))
+end
+
+_openvt_pkg_join(v) = length(v) <= 1 ? join(v) : join(v[1:(end - 1)], ", ") * " and " * v[end]
