@@ -4123,3 +4123,17 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - It mentions the Table S5 T = 174 row.
 - **Size watch.** `o1cb/o1_manifest.tsv` is about 9.3 MB against the page test's 10 MiB per-file limit.
 - **Branch sync.** feat/p6-15m is merged up to monorepo, to bring in P6.15l, before m4 is implemented.
+
+## D-223 P6.15m: the checkerboard entry is gated; the maintainer decides inclusion at the end (2026-10-10; maintainer, asked directly: "Gate it, I decide at the end"; relayed position from the spec owner; amends D-214)
+
+- **Gate.** "Potts.jl (checkerboard)" goes into the consortium submission only if the maintainer includes it after seeing the comparison against the consortium's spread on three figures:
+  - Fig 3 (the N, r and A curves);
+  - Fig 6 / Table 1 (the thresholds);
+  - Fig 9 (Categories 1–3).
+
+  Otherwise only the sequential entry ships, and the checkerboard stays a characterisation result in our docs and the Potts.jl paper ("the checkerboard needs its own T, and here is why").
+- **For the gate.** Fig 6 and Table 1 need checkerboard β/γ sweeps at the entry's own T and α (new P6.15m m5, GPU). m4 keeps the two-entry build opt-in (`entries`, D-222), so with the default unchanged the package is byte-identical to today's sequential-only build.
+- **Q27 is raised only if the entry is included.**
+- **Kept regardless:**
+  1. A CheckerboardCPM docs note. One checkerboard MCS is not one sequential MCS: with 4 colours only about 27% of accepted copies commit. Time-dependent parameters (growth rates and similar) therefore need the algorithm's own calibrated T, or more colours. The note cites the D-220 ablations (64 colours; sequential at 0.3·N). This is new item P6.15m-doc.
+  2. The ΔH brute-force check (16,605 copies, 0 mismatches) and the exact-tracker evidence are kept in citable form in the checkerboard record, as GPU-correctness evidence for the Potts.jl paper.
