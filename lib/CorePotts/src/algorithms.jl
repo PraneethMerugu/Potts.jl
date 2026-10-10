@@ -116,6 +116,13 @@ commit only if they win every claim, so each cell changes at most once per color
 `acceptance` and `proposal` default to the model's, as for `SequentialCPM`.
 `skip_interior = true` is not yet implemented on the checkerboard (P6.0bk): `init` and
 `solve` raise an `ArgumentError`.
+
+One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Accepted copies that lose a claim
+are dropped: with Moore(1) proposals in 2D (4 colours), only about 27% of accepted copies
+commit in a crowded monolayer, about 3.6× fewer copies per MCS than `SequentialCPM`. ΔH is
+exact; the difference is one of time scale. Calibrate time-dependent parameters (growth
+rates, schedules) with the algorithm you run, e.g. a relaxation time T on a reference
+geometry. See "Choosing an algorithm" in the manual.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: CPMAlgorithm
     acceptance::A = nothing

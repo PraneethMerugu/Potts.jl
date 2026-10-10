@@ -10,7 +10,7 @@ and in what that order does to the kinetics.
 |---|---|---|---|
 | `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn mobile target site: the classic CPM | the reference dynamics, against which the reproductions are defined |
 | `SequentialCPM(; skip_interior = true)` | CPU | the same dynamics, drawing only boundary sites and skipping the interior picks exactly; equal in distribution to `SequentialCPM()` | the same runs, faster, when most of the lattice is medium or cell interior |
-| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics differ from `SequentialCPM`'s |
+| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics and time scale differ from `SequentialCPM`'s ([Time scale](@ref manual-algorithms-checkerboard-time)) |
 
 Both take `acceptance` and `proposal` keywords, which default to the model's
 acceptance law and the problem's proposal neighbourhood (see [Problems, solvers and
@@ -26,6 +26,29 @@ beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it where
 is read, since its counts are kept up to date on every copy. Any other relation read only at
 the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, cell ODEs,
 `@observed` quantities) does not count, whatever its radius.
+
+## [Time scale of `CheckerboardCPM`](@id manual-algorithms-checkerboard-time)
+
+One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Within a colour, each cell changes
+at most once: an accepted copy claims the cells it touches and commits only if it wins every
+claim. On a crowded lattice many accepted copies lose a claim and are dropped. With Moore(1)
+proposals on a 2D lattice there are 4 colours, and in a confluent growing monolayer (the
+OpenVT reference model) only about 27 % of accepted copies commit: the configuration
+advances by about 3.6× fewer copies per MCS than under `SequentialCPM`.
+
+- **Not an energy error.** ΔH matched a brute-force recompute on 16,605 committed copies,
+  with no mismatch.
+- **A time-scale effect.** With 64 colours the checkerboard's behaviour comes back to the
+  sequential level, and `SequentialCPM` at 0.3·N attempts per MCS reproduces the 4-colour
+  checkerboard.
+- **The colour count depends on the lattice.** Colours are spaced by the footprint stride
+  per axis, so an axis whose length is not a multiple of the stride needs more: on a
+  150 × 5 periodic lattice, stride 2 gives 6 colours rather than 4.
+
+A schedule written in MCS (a growth rate, a cycle length, a stimulus time) therefore runs
+at a different physical pace under each algorithm. **Calibrate time-dependent parameters
+with the algorithm you run**: measure a relaxation time T on a reference geometry under
+that algorithm, and express rates per T rather than per MCS.
 
 ## Skipping the interior: `skip_interior = true`
 

@@ -4171,3 +4171,49 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
     - It contains no submission wording, tokens, colour, Q27 or Q28.
   - **The submission package is untouched.** PottsModels defines no `OPENVT_CHECKERBOARD_TOKEN`, no `OPENVT_ENTRIES` and no `entries` keyword, and the default and email builds contain nothing about the checkerboard.
 - **ΔH figures go into the record.** The runner writes `meta [dH_check] copies/mismatches`, which the test pins once present, so the 16,605 / 0 figures are read from the record like every other number.
+
+## D-217 P6.15l: tests frozen for the email split, G conformance and the Q25 wording (2026-10-10; coordinator, from the P6.15l test author; implements D-213, D-215)
+
+- **New test:** `reproductions/15_openvt_d213.jl` (de05b7a5…).
+- **Re-frozen:** `reproductions/15_openvt_package.jl` (04f892a0…; supersedes the D-212 hash). Its D-215 amendments are listed in its header block.
+
+**Email split.** The call is `openvt_submission_package(out; split = :email, release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)`.
+- **Output.** It writes exactly `core.zip` (≤ 20,000,000 B), `bulk/` and `EMAIL.md`, and returns `core_bytes` and `bulk_bytes`.
+- **bulk/.** Flat: the O1 zips per case, the O2 zip and the O1 manifest CSV, so cases + 2 files, each < 2,000,000,000 B, as byte copies of the unsplit build.
+- **core.zip.** Holds every other file exactly once, under `implementations/<token>/` and `results/<token>/`. Its README links each bulk file by name, sha256 and its release-download URL for `release_tag`. Changing the tag changes only the README and `EMAIL.md`.
+- **Determinism and refusals.** Builds are deterministic. A non-empty outdir, a missing bulk directory or any other `split` raises `ArgumentError`. The unsplit default is unchanged.
+- **`EMAIL.md`.** Plain text with:
+  - what is attached and what is linked;
+  - the units (R; a cycle is 775 MCS);
+  - Q15 and Q26 (never Q25);
+  - the FAIL row ids;
+  - the D-215 item 8 notes.
+
+  It contains no addresses, names, hosts, local paths or "sent"/contact wording.
+- **Prototype sizes** (from the test author's stub): core.zip 13,451,156 B; bulk/ 338,214,282 B in 6 files, the largest the 115 MB case (e) O1 zip.
+
+**G conformance (D-215).**
+- O1 `x,y,i,n,g` with g == (i == 0).
+- Measurement headers use `R`.
+- O2 is one zip, `<token>_5T_MonolayerGrowth_1000_Data.zip`, with k = 0…99 (member k = F5 run k + 1).
+- O5 names: `<token>_beta_<β>_gamma_<γ>_<MCS>MCS.csv`.
+- O1 zip stems: (b) `_No_CI_stochastic`, (f) `_No_CI_deterministic`, (e) `_beta0.8_gamma0.0`, (a) `_beta0.0_gamma0.0`. Members sit at `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`.
+- Table 1 is a CSV, `<token>_table1.csv`.
+- The token comes from one constant.
+
+**Post-processing record.** A new `data/15/o1g-<date>/` (item P6.15l, source o1-2026-10-09) holds the rewritten O1 and O2 manifests and `archives.tsv`. The O1 bytes grow by exactly 2·(rows + 1). There is no re-run. The old P6.15j record's checks are unchanged.
+
+**Q25 wording.** The sentence "M is followed (actual area); the released TST model divides on target area" appears with no question next to it. "Q25" appears nowhere. The division-trigger rows (V1, V3b, V4.2, V4.3, V4.5, C13) have status "not asked (maintainer ruling: M over TST)".
+
+**Q19, Q20 and Q21 closed (re-freeze, same day).** The spec owner closed Q19, Q20 and Q21 as not asked under D-213 (spec 15 §7 at da81b245); Q25 was closed earlier. `15_openvt_d213.jl` is re-frozen (b4ac5a91…):
+- **Banned.** Any "Q19", "Q20", "Q21" or "Q25" outside dated change-log rows fails the test.
+- **TST rows** keep the status "not asked (maintainer ruling: M over TST)".
+- **Other rows** that cited Q20 or Q21 (V2.1.1x, F3.4, C17) need "not asked (M over the framework's code)" or the TST prefix.
+- **Still allowed:** Q15, Q17, Q23, Q24 and Q26, each followed by "our open question list".
+
+## D-219 OpenVT: Q28 dropped; faithfulness to M is the bar (2026-10-10; maintainer: "we have no control over how the other frameworks conduct their benchmarks, but we can be sure that weve done a good job so far being faithful to the manuscript. thats all i need. q28 is pointless"; amends D-215)
+
+- **Q28 is withdrawn.** It asked which compiler the consortium's metrics.cpp numbers came from.
+  - EMAIL.md carries no compiler heads-up.
+  - The READMEs keep one neutral provenance line: our measurements were produced with metrics.cpp built with GCC 13 on Linux.
+- **Standing rule.** We do not raise questions or suggestions about how other frameworks run their benchmarks. Their departures are recorded in our deviation tables only where they bear on comparing against us. Our bar is faithfulness to M.
