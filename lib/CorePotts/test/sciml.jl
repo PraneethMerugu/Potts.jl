@@ -55,10 +55,14 @@ end
 # loop corrupted the heap; it depends on the heap layout, so the crash itself reproduces only
 # in a full model run (the OpenVT chain test in PottsModels). Here: the callback paths hold
 # no such `Union`, and every hook of every callback still runs, in order.
+struct AtMCS{K} end                     # a condition type per MCS: distinct callback types
+(::AtMCS{K})(u, t, integ) where {K} = t == K
+
 @testset "CallbackSet of differently typed callbacks with saveat" begin
     σ, kinds = blocks((30, 30), 5)
     prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((30, 30)), (0, 12), gg_params(); seed = 5)
-    is_cb_union(T) = T isa Union && all(x -> x <: DiscreteCallback, Base.uniontypes(T))
+    # a Union of callback types, or (beyond the union-splitting limit) an abstract one
+    is_cb_union(T) = T !== Union{} && T <: DiscreteCallback && !isconcretetype(T)
     cb_unions(f, types) = count(is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
         only(code_typed(f, types; optimize = true)).first.ssavaluetypes)
     @testset "$(nameof(typeof(alg)))" for alg in (CheckerboardCPM(; proposal = Moore(1)), SequentialCPM(; proposal = Moore(1)))
@@ -94,6 +98,33 @@ end
     m = DiscreteCallback((u, t, i) -> t == 1, i -> nothing; save_positions = (false, false))
     h = DiscreteCallback((u, t, i) -> t == 2, i -> nothing)
     @test cb_unions(loop, (Tuple{typeof(m), typeof(h)},)) > 0
+    # 33 differently typed callbacks: past `Base.afoldl`'s 31 unrolled elements, which would
+    # fall back to a loop carrying an abstract callback type (negative control below)
+    @testset "33 callbacks, $(nameof(typeof(alg)))" for alg in (CheckerboardCPM(; proposal = Moore(1)), SequentialCPM(; proposal = Moore(1)))
+        long = remake(prob; tspan = (0, 40))
+        hits = zeros(Int, 33)
+        cbs = ntuple(k -> DiscreteCallback(AtMCS{k}(), integ -> (hits[k] += 1; nothing)), 33)
+        @test allunique(map(typeof, cbs))
+        integ = init(long, alg; saveat = 0:40, callback = CallbackSet(cbs...))
+        T = typeof(integ)
+        @test cb_unions(CorePotts._apply_callbacks!, (T,)) == 0
+        @test cb_unions(CorePotts.CommonSolve.step!, (T,)) == 0
+        @test cb_unions(CorePotts.CommonSolve.solve!, (T,)) == 0
+        # each callback specialized: a warm check of all 33 allocates nothing (a dynamic call
+        # per callback would box)
+        CorePotts._apply_callbacks!(integ)
+        @test @allocated(CorePotts._apply_callbacks!(integ)) == 0
+        sol = solve!(integ)
+        @test sol.t == 0:40 && hits == ones(Int, 33)
+        GC.gc(true)
+    end
+    # negative control: `Base.afoldl` over the same 33 callbacks goes dynamic and allocates
+    cbs = ntuple(k -> DiscreteCallback(AtMCS{k}(), i -> nothing), 33)
+    folded(t) = (Base.afoldl((_, cb) -> (cb.condition(nothing, 0, nothing); nothing), nothing, t...); nothing)
+    eached(t) = CorePotts._each(cb -> (cb.condition(nothing, 0, nothing); nothing), t)
+    folded(cbs), eached(cbs)
+    @test @allocated(folded(cbs)) > 0
+    @test @allocated(eached(cbs)) == 0
 end
 
 # D-116: a problem without a model whose parameter object is a NamedTuple has its fields as
