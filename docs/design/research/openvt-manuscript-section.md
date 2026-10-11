@@ -19,6 +19,16 @@ lattice, copy neighbourhood, energy terms, growth rules and division rule. A sym
 built on ModelingToolkit compiles the declaration into specialised update kernels. The same
 declaration runs on CPU and GPU backends. All results reported here were computed on CPU.
 
+In Potts.jl, every component of a Cellular Potts model (Hamiltonian terms, constraints, per-cell
+dynamics, growth laws and division rules) is written directly as a symbolic expression in the
+model declaration, built on ModelingToolkit and Symbolics. A new energy term or rule therefore
+needs no plugin or extension code: the package analyses the declared system and compiles it into
+simulation code specialised to that model, so a novel term is as easy to write, and as fast to
+run, as a built-in one. The same declaration runs unchanged under sequential or parallel
+checkerboard update schemes, on CPU or GPU, and implements the SciML interface; and because every
+random number is addressed by seed, Monte Carlo step and lattice site or cell, any simulation can
+be regenerated from its seed.
+
 The monolayer reference model is a direct transcription of the schema and Table S1
 (`lib/PottsModels/src/openvt_reference.jl`):
 
@@ -172,6 +182,6 @@ Notes:
 > Potts.jl is available at https://github.com/PraneethMerugu/Potts.jl under the MIT licence.
 > - The monolayer model is `OpenVTReferenceMonolayer` in `lib/PottsModels/src/openvt_reference.jl`.
 > - The scripts, seeds, per-run data and provenance for every figure are in
->   `lib/PottsModels/reproductions/data/15/` at commit ⟨to be fixed at submission⟩.
+>   `lib/PottsModels/reproductions/data/15/` at commit bc6548fd (release `openvt-monolayer-submission-2026-10-10`, https://github.com/PraneethMerugu/Potts.jl/releases/tag/openvt-monolayer-submission-2026-10-10).
 > - The submitted files are generated from these records by
 >   `PottsModels.openvt_submission_package`.
