@@ -266,7 +266,7 @@ record_figure("checkerboard-2026-10-10", "fig3.png"; alt = "Figure 3: N, r and A
 
 record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 9: seven panels for cases (a) and (e)") #hide
 
-# Potts.jl (checkerboard), case (a) in its own cycles, with the sequential case (a) in grey;
+# Potts.jl (checkerboard), case (a) in its own 1095-MCS cycles, with the sequential case (a) in grey;
 # panel (g) shows each run's share of six-neighbour cells and sd of n at the stop, as the
 # record keeps the O1 summaries rather than the histogram (`fig9.png` of the checkerboard
 # record, `plot_fig9.jl`):
@@ -466,7 +466,7 @@ end
 # the same model, Table S1 parameters and cases (a), (b) and (f), solved with
 # `CheckerboardCPM(; proposal = Moore(1))` on a GPU (ROCm) on its own seeds, and compared
 # metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-10-10/`
-# (ROADMAP P6.15m), commit `80a6e40f`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
+# (ROADMAP P6.15m), commit `7b3181d6`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
 # follow the sequential Figures 2, 3 and 9 above.
 #
 # **Time scale.** M measures time in each framework's own mechanical T and sets the growth
@@ -476,14 +476,18 @@ end
 # 4 colours on the chain and 4 on the monolayer, and 64 % of accepted copies commit on the
 # chain. T(λ = 2) = 219 MCS, against the sequential 156 MCS on the same chain (z = 26.71)
 # and 156 MCS on the sequential record's P1 strip (z = 27.64): beyond the spread (D-218), so
-# the cycle is 5T = 1095 MCS and α = 50/1095 px per MCS.
+# the cycle is 5T = 1095 MCS and α = 50/1095 px per MCS. T = 219 is the net of thinning and
+# update order on the chain: the 64-colour arm below, which barely thins, calibrates to
+# T_c64 = 127 < 156, a speed-up from the sweep order (D-227).
 #
 # **Comparison.** 28 of 102 metrics of cases (a), (b) and (f) lie beyond the seed spread of
 # the sequential runs (D-218), one row each in the table below.
 #
 # **Not a bug.** On case (a) at 5,000 cells, ΔH equals a brute-force recomputation on
 # 17,029 committed copies (0 mismatches), the volume trackers equal recounts and no claim is
-# violated (meta `[dH_check]`; D-220).
+# violated (meta `[dH_check]`; D-220). The check ran on the CPU colour loop, which the GPU
+# kernels share; that the GPU runs match it rests on the chain replays: the calibration runs
+# replayed on the CPU equal the GPU runs (D-227).
 #
 # **Cause.** Under `CheckerboardCPM` (4 colours, stride 2) each cell changes at most once per
 # colour, by the claim rule (D-008): of two conflicting accepted copies only one commits. In
@@ -491,11 +495,26 @@ end
 # while the growth of A\* and division stay on the MCS clock, so volumes trail A\* further:
 # colonies are more compressed, lose more cells and reach the stop count later. This is
 # thinning of conflicting accepted copies (D-008 claims; D-220), a property of the
-# algorithm. Calibrating T absorbs the chain's thinning but not the colony's. The evidence
-# is the direct contrast of the stock 4 colours against 64 colours (T = 127 MCS, cycle
-# 635 MCS), each at its own calibrated T (`ablation.tsv`, runs per arm: b 100, f 100, a 10;
-# ablation commits `80a6e40f` and `e5c3a54a`; D-221): the "4 against 64 colours" z of each
-# row. The contrast is beyond the spread for every row, so all 28 rows: thinning (D-008).
+# algorithm. The own T is fitted to the chain's net speed, not to the colony's thinning.
+#
+# **Evidence.** The direct contrast of the stock 4 colours against 64 colours (T = 127 MCS,
+# cycle 635 MCS), each at its own calibrated T (`ablation.tsv`, runs per arm: b 100, f 100,
+# a 30; ablation commits `80a6e40f`, `d1f6a7a8` and `e5c3a54a`; D-221, D-227): the
+# "4 against 64 colours" z of each row. The contrast is beyond the spread for every row, so
+# all 28 rows: thinning (D-008).
+#
+# **What the 64-colour remainder can and cannot show.** The remainder is the 64-colour arm
+# against the sequential runs; an update-order effect would show there. In this record the
+# 64-colour remainder is beyond the spread in no row, which means "not resolved, not
+# absent": each row gives its detection limit, the smallest remainder the test resolves
+# (crit·se, also as a share of the stock difference). For (b) and (f) a remainder below
+# about 4.66·se is not resolved. For case (a) the limit is set by the 10 sequential seeds of
+# case (a) (crit 8.86), not by the 30 runs per arm, so an update-order remainder in (a),
+# where D-220 saw one, cannot be resolved from this record. The 64-colour arm also
+# calibrates with 98 colours on the chain, 64 on the monolayer, so on the metrics that
+# depend on the time scale (`t_stop` and the values at fixed times, `A@…`, `r@…`) its
+# remainder is confounded by that calibration mismatch; the thinning contrast is far larger
+# and is not affected (D-227).
 #
 # ```@raw html
 # <details><summary>Every metric beyond the spread (click to open)</summary>
@@ -503,40 +522,40 @@ end
 #
 # | Item | Ours (checkerboard) | Potts.jl (sequential) | Suspected cause | Author question |
 # |---|---|---|---|---|
-# | `A_stop` (a), ∣z∣ = 14.19 | 3.4383 (checkerboard mean, 10 seeds, sd 0.0384) | 3.6358 (sequential mean, 10 seeds, sd 0.0215) | thinning (D-008); 4 against 64 colours: z -19.42 (crit 8.86); 64-colour remainder of the opposite sign, 2 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n6` (a), ∣z∣ = 10.02 | 0.3481 (checkerboard mean, 10 seeds, sd 0.0077) | 0.3788 (sequential mean, 10 seeds, sd 0.0058) | thinning (D-008); 4 against 64 colours: z -16.13 (crit 8.86); 64-colour remainder of the opposite sign, 3 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n_sd` (a), ∣z∣ = 16.59 | 1.2135 (checkerboard mean, 10 seeds, sd 0.0190) | 1.0910 (sequential mean, 10 seeds, sd 0.0137) | thinning (D-008); 4 against 64 colours: z +20.91 (crit 8.86); 64-colour remainder of the opposite sign, 7 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `lost` (a), ∣z∣ = 39.23 | 3299.2 (checkerboard mean, 10 seeds, sd 189.5) | 865.0 (sequential mean, 10 seeds, sd 50.8396) | thinning (D-008); 4 against 64 colours: z +68.51 (crit 8.86); 64-colour remainder of the opposite sign, 3 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r_stop` (a), ∣z∣ = 13.73 | 1.0458 (checkerboard mean, 10 seeds, sd 0.0058) | 1.0750 (sequential mean, 10 seeds, sd 0.0033) | thinning (D-008); 4 against 64 colours: z -19.67 (crit 8.86); 64-colour remainder of the opposite sign, 2 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `t_stop` (a), ∣z∣ = 15.88 | 16.5793 (checkerboard mean, 10 seeds, sd 0.1947) | 15.1702 (sequential mean, 10 seeds, sd 0.2020) | thinning (D-008); 4 against 64 colours: z +18.67 (crit 8.86); 64-colour remainder of the opposite sign, 34 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `A_stop` (b), ∣z∣ = 18.89 | 3.7220 (checkerboard mean, 100 seeds, sd 0.0469) | 3.8463 (sequential mean, 100 seeds, sd 0.0462) | thinning (D-008); 4 against 64 colours: z -19.30 (crit 4.66); 64-colour remainder of the opposite sign, 8 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `C_rel_end` (b), ∣z∣ = 9.66 | 1.1063 (checkerboard mean, 100 seeds, sd 0.0197) | 1.1349 (sequential mean, 100 seeds, sd 0.0221) | thinning (D-008); 4 against 64 colours: z -8.88 (crit 4.66); 64-colour remainder of the opposite sign, 2 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n6` (b), ∣z∣ = 12.36 | 0.3642 (checkerboard mean, 100 seeds, sd 0.0170) | 0.3932 (sequential mean, 100 seeds, sd 0.0161) | thinning (D-008); 4 against 64 colours: z -12.84 (crit 4.66); 64-colour remainder of the same sign, 3 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n_sd` (b), ∣z∣ = 17.69 | 1.1608 (checkerboard mean, 100 seeds, sd 0.0243) | 1.1045 (sequential mean, 100 seeds, sd 0.0206) | thinning (D-008); 4 against 64 colours: z +15.97 (crit 4.66); 64-colour remainder of the same sign, 8 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `lost` (b), ∣z∣ = 10.20 | 2.3100 (checkerboard mean, 100 seeds, sd 1.9369) | 0.2400 (sequential mean, 100 seeds, sd 0.6050) | thinning (D-008); 4 against 64 colours: z +10.85 (crit 4.66); 64-colour remainder of the opposite sign, 4 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r_stop` (b), ∣z∣ = 18.86 | 1.0871 (checkerboard mean, 100 seeds, sd 0.0067) | 1.1050 (sequential mean, 100 seeds, sd 0.0067) | thinning (D-008); 4 against 64 colours: z -18.69 (crit 4.66); 64-colour remainder of the opposite sign, 8 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `t_stop` (b), ∣z∣ = 5.97 | 10.5981 (checkerboard mean, 100 seeds, sd 0.2718) | 10.3612 (sequential mean, 100 seeds, sd 0.2893) | thinning (D-008); 4 against 64 colours: z +6.82 (crit 4.66); 64-colour remainder of the opposite sign, 3 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `A@6.5` (f), ∣z∣ = 9.33 | 240.5 (checkerboard mean, 100 seeds, sd 4.2857) | 246.4 (sequential mean, 100 seeds, sd 4.6428) | thinning (D-008); 4 against 64 colours: z -6.57 (crit 4.66); 64-colour remainder of the same sign, 24 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `A@7.5` (f), ∣z∣ = 24.90 | 514.2 (checkerboard mean, 100 seeds, sd 7.1534) | 539.6 (sequential mean, 100 seeds, sd 7.2631) | thinning (D-008); 4 against 64 colours: z -25.23 (crit 4.66); 64-colour remainder of the same sign, 7 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `A@8.5` (f), ∣z∣ = 57.35 | 1023.0 (checkerboard mean, 100 seeds, sd 13.1304) | 1129.9 (sequential mean, 100 seeds, sd 13.2254) | thinning (D-008); 4 against 64 colours: z -53.59 (crit 4.66); 64-colour remainder of the same sign, 4 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `A_stop` (f), ∣z∣ = 65.89 | 3.3371 (checkerboard mean, 100 seeds, sd 0.0248) | 3.1259 (sequential mean, 100 seeds, sd 0.0203) | thinning (D-008); 4 against 64 colours: z +63.52 (crit 4.66); 64-colour remainder of the opposite sign, 0 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `C_rel_end` (f), ∣z∣ = 36.00 | 1.0586 (checkerboard mean, 100 seeds, sd 0.0149) | 1.1623 (sequential mean, 100 seeds, sd 0.0247) | thinning (D-008); 4 against 64 colours: z -40.68 (crit 4.66); 64-colour remainder of the opposite sign, 1 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n_mean` (f), ∣z∣ = 18.90 | 5.8480 (checkerboard mean, 100 seeds, sd 0.0106) | 5.8191 (sequential mean, 100 seeds, sd 0.0111) | thinning (D-008); 4 against 64 colours: z +18.01 (crit 4.66); 64-colour remainder of the opposite sign, 5 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `O1.n_sd` (f), ∣z∣ = 12.66 | 1.0099 (checkerboard mean, 100 seeds, sd 0.0170) | 1.0513 (sequential mean, 100 seeds, sd 0.0280) | thinning (D-008); 4 against 64 colours: z -15.43 (crit 4.66); 64-colour remainder of the opposite sign, 6 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r@4.5` (f), ∣z∣ = 6.95 | 3.8536 (checkerboard mean, 100 seeds, sd 0.1124) | 3.9883 (sequential mean, 100 seeds, sd 0.1578) | thinning (D-008); 4 against 64 colours: z -4.95 (crit 4.66); 64-colour remainder of the same sign, 25 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r@5.5` (f), ∣z∣ = 6.74 | 5.8774 (checkerboard mean, 100 seeds, sd 0.1038) | 5.9818 (sequential mean, 100 seeds, sd 0.1149) | thinning (D-008); 4 against 64 colours: z -6.85 (crit 4.66); 64-colour remainder of the same sign, 6 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r@6.5` (f), ∣z∣ = 12.64 | 8.7728 (checkerboard mean, 100 seeds, sd 0.0871) | 8.9309 (sequential mean, 100 seeds, sd 0.0898) | thinning (D-008); 4 against 64 colours: z -9.17 (crit 4.66); 64-colour remainder of the same sign, 18 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r@7.5` (f), ∣z∣ = 25.59 | 12.7905 (checkerboard mean, 100 seeds, sd 0.0949) | 13.1327 (sequential mean, 100 seeds, sd 0.0941) | thinning (D-008); 4 against 64 colours: z -25.23 (crit 4.66); 64-colour remainder of the same sign, 7 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r@8.5` (f), ∣z∣ = 55.18 | 18.0325 (checkerboard mean, 100 seeds, sd 0.1238) | 18.9562 (sequential mean, 100 seeds, sd 0.1127) | thinning (D-008); 4 against 64 colours: z -51.77 (crit 4.66); 64-colour remainder of the same sign, 4 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `r_stop` (f), ∣z∣ = 64.03 | 1.0299 (checkerboard mean, 100 seeds, sd 0.0039) | 0.9961 (sequential mean, 100 seeds, sd 0.0036) | thinning (D-008); 4 against 64 colours: z +62.10 (crit 4.66); 64-colour remainder of the opposite sign, 0 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `t_stop` (f), ∣z∣ = 126.52 | 10.3881 (checkerboard mean, 100 seeds, sd 0.0225) | 9.9664 (sequential mean, 100 seeds, sd 0.0246) | thinning (D-008); 4 against 64 colours: z +136.95 (crit 4.66); 64-colour remainder of the opposite sign, 0 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
-# | `w_end` (f), ∣z∣ = 10.16 | 0.6828 (checkerboard mean, 100 seeds, sd 0.1643) | 0.9362 (sequential mean, 100 seeds, sd 0.1875) | thinning (D-008); 4 against 64 colours: z -10.00 (crit 4.66); 64-colour remainder of the same sign, 11 % | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A_stop` (a), ∣z∣ = 14.19 | 3.4383 (checkerboard mean, 10 seeds, sd 0.0384) | 3.6358 (sequential mean, 10 seeds, sd 0.0215) | thinning (D-008); 4 against 64 colours: z -23.23 (crit 5.35, n = 30 per arm); 64-colour remainder z +0.11 against sequential (crit 8.86): not resolved, not absent (limit 0.0691, 34 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n6` (a), ∣z∣ = 10.02 | 0.3481 (checkerboard mean, 10 seeds, sd 0.0077) | 0.3788 (sequential mean, 10 seeds, sd 0.0058) | thinning (D-008); 4 against 64 colours: z -17.19 (crit 5.35, n = 30 per arm); 64-colour remainder z +0.98 against sequential (crit 8.86): not resolved, not absent (limit 0.0192, 67 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n_sd` (a), ∣z∣ = 16.59 | 1.2135 (checkerboard mean, 10 seeds, sd 0.0190) | 1.0910 (sequential mean, 10 seeds, sd 0.0137) | thinning (D-008); 4 against 64 colours: z +26.05 (crit 5.35, n = 30 per arm); 64-colour remainder z -1.32 against sequential (crit 8.86): not resolved, not absent (limit 0.041, 37 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `lost` (a), ∣z∣ = 39.23 | 3299.2 (checkerboard mean, 10 seeds, sd 189.5) | 865.0 (sequential mean, 10 seeds, sd 50.8396) | thinning (D-008); 4 against 64 colours: z +81.16 (crit 5.35, n = 30 per arm); 64-colour remainder z -3.42 against sequential (crit 8.86): not resolved, not absent (limit 162.0, 7 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r_stop` (a), ∣z∣ = 13.73 | 1.0458 (checkerboard mean, 10 seeds, sd 0.0058) | 1.0750 (sequential mean, 10 seeds, sd 0.0033) | thinning (D-008); 4 against 64 colours: z -22.84 (crit 5.35, n = 30 per arm); 64-colour remainder z +0.33 against sequential (crit 8.86): not resolved, not absent (limit 0.0106, 36 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `t_stop` (a), ∣z∣ = 15.88 | 16.5793 (checkerboard mean, 10 seeds, sd 0.1947) | 15.1702 (sequential mean, 10 seeds, sd 0.2020) | thinning (D-008); 4 against 64 colours: z +20.43 (crit 5.35, n = 30 per arm); 64-colour remainder z -3.47 against sequential (crit 8.86): not resolved, not absent (limit 0.779, 60 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A_stop` (b), ∣z∣ = 18.89 | 3.7220 (checkerboard mean, 100 seeds, sd 0.0469) | 3.8463 (sequential mean, 100 seeds, sd 0.0462) | thinning (D-008); 4 against 64 colours: z -19.30 (crit 4.66, n = 100 per arm); 64-colour remainder z +1.57 against sequential (crit 4.66): not resolved, not absent (limit 0.0306, 25 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `C_rel_end` (b), ∣z∣ = 9.66 | 1.1063 (checkerboard mean, 100 seeds, sd 0.0197) | 1.1349 (sequential mean, 100 seeds, sd 0.0221) | thinning (D-008); 4 against 64 colours: z -8.88 (crit 4.66, n = 100 per arm); 64-colour remainder z +0.14 against sequential (crit 4.66): not resolved, not absent (limit 0.0149, 56 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n6` (b), ∣z∣ = 12.36 | 0.3642 (checkerboard mean, 100 seeds, sd 0.0170) | 0.3932 (sequential mean, 100 seeds, sd 0.0161) | thinning (D-008); 4 against 64 colours: z -12.84 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.42 against sequential (crit 4.66): not resolved, not absent (limit 0.011, 35 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n_sd` (b), ∣z∣ = 17.69 | 1.1608 (checkerboard mean, 100 seeds, sd 0.0243) | 1.1045 (sequential mean, 100 seeds, sd 0.0206) | thinning (D-008); 4 against 64 colours: z +15.97 (crit 4.66, n = 100 per arm); 64-colour remainder z +1.50 against sequential (crit 4.66): not resolved, not absent (limit 0.0147, 24 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `lost` (b), ∣z∣ = 10.20 | 2.3100 (checkerboard mean, 100 seeds, sd 1.9369) | 0.2400 (sequential mean, 100 seeds, sd 0.6050) | thinning (D-008); 4 against 64 colours: z +10.85 (crit 4.66, n = 100 per arm); 64-colour remainder z -1.23 against sequential (crit 4.66): not resolved, not absent (limit 0.341, 16 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r_stop` (b), ∣z∣ = 18.86 | 1.0871 (checkerboard mean, 100 seeds, sd 0.0067) | 1.1050 (sequential mean, 100 seeds, sd 0.0067) | thinning (D-008); 4 against 64 colours: z -18.69 (crit 4.66, n = 100 per arm); 64-colour remainder z +1.39 against sequential (crit 4.66): not resolved, not absent (limit 0.0045, 26 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `t_stop` (b), ∣z∣ = 5.97 | 10.5981 (checkerboard mean, 100 seeds, sd 0.2718) | 10.3612 (sequential mean, 100 seeds, sd 0.2893) | thinning (D-008); 4 against 64 colours: z +6.82 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.17 against sequential (crit 4.66): not resolved, not absent (limit 0.187, 73 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A@6.5` (f), ∣z∣ = 9.33 | 240.5 (checkerboard mean, 100 seeds, sd 4.2857) | 246.4 (sequential mean, 100 seeds, sd 4.6428) | thinning (D-008); 4 against 64 colours: z -6.57 (crit 4.66, n = 100 per arm); 64-colour remainder z -2.15 against sequential (crit 4.66): not resolved, not absent (limit 3.13, 53 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A@7.5` (f), ∣z∣ = 24.90 | 514.2 (checkerboard mean, 100 seeds, sd 7.1534) | 539.6 (sequential mean, 100 seeds, sd 7.2631) | thinning (D-008); 4 against 64 colours: z -25.23 (crit 4.66, n = 100 per arm); 64-colour remainder z -1.70 against sequential (crit 4.66): not resolved, not absent (limit 4.77, 18 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A@8.5` (f), ∣z∣ = 57.35 | 1023.0 (checkerboard mean, 100 seeds, sd 13.1304) | 1129.9 (sequential mean, 100 seeds, sd 13.2254) | thinning (D-008); 4 against 64 colours: z -53.59 (crit 4.66, n = 100 per arm); 64-colour remainder z -2.28 against sequential (crit 4.66): not resolved, not absent (limit 8.84, 8 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `A_stop` (f), ∣z∣ = 65.89 | 3.3371 (checkerboard mean, 100 seeds, sd 0.0248) | 3.1259 (sequential mean, 100 seeds, sd 0.0203) | thinning (D-008); 4 against 64 colours: z +63.52 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.32 against sequential (crit 4.66): not resolved, not absent (limit 0.0123, 6 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `C_rel_end` (f), ∣z∣ = 36.00 | 1.0586 (checkerboard mean, 100 seeds, sd 0.0149) | 1.1623 (sequential mean, 100 seeds, sd 0.0247) | thinning (D-008); 4 against 64 colours: z -40.68 (crit 4.66, n = 100 per arm); 64-colour remainder z +0.30 against sequential (crit 4.66): not resolved, not absent (limit 0.0159, 15 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n_mean` (f), ∣z∣ = 18.90 | 5.8480 (checkerboard mean, 100 seeds, sd 0.0106) | 5.8191 (sequential mean, 100 seeds, sd 0.0111) | thinning (D-008); 4 against 64 colours: z +18.01 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.92 against sequential (crit 4.66): not resolved, not absent (limit 0.008, 26 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `O1.n_sd` (f), ∣z∣ = 12.66 | 1.0099 (checkerboard mean, 100 seeds, sd 0.0170) | 1.0513 (sequential mean, 100 seeds, sd 0.0280) | thinning (D-008); 4 against 64 colours: z -15.43 (crit 4.66, n = 100 per arm); 64-colour remainder z +0.72 against sequential (crit 4.66): not resolved, not absent (limit 0.0165, 39 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r@4.5` (f), ∣z∣ = 6.95 | 3.8536 (checkerboard mean, 100 seeds, sd 0.1124) | 3.9883 (sequential mean, 100 seeds, sd 0.1578) | thinning (D-008); 4 against 64 colours: z -4.95 (crit 4.66, n = 100 per arm); 64-colour remainder z -1.45 against sequential (crit 4.66): not resolved, not absent (limit 0.0955, 82 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r@5.5` (f), ∣z∣ = 6.74 | 5.8774 (checkerboard mean, 100 seeds, sd 0.1038) | 5.9818 (sequential mean, 100 seeds, sd 0.1149) | thinning (D-008); 4 against 64 colours: z -6.85 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.39 against sequential (crit 4.66): not resolved, not absent (limit 0.0719, 70 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r@6.5` (f), ∣z∣ = 12.64 | 8.7728 (checkerboard mean, 100 seeds, sd 0.0871) | 8.9309 (sequential mean, 100 seeds, sd 0.0898) | thinning (D-008); 4 against 64 colours: z -9.17 (crit 4.66, n = 100 per arm); 64-colour remainder z -2.06 against sequential (crit 4.66): not resolved, not absent (limit 0.059, 41 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r@7.5` (f), ∣z∣ = 25.59 | 12.7905 (checkerboard mean, 100 seeds, sd 0.0949) | 13.1327 (sequential mean, 100 seeds, sd 0.0941) | thinning (D-008); 4 against 64 colours: z -25.23 (crit 4.66, n = 100 per arm); 64-colour remainder z -1.83 against sequential (crit 4.66): not resolved, not absent (limit 0.0619, 18 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r@8.5` (f), ∣z∣ = 55.18 | 18.0325 (checkerboard mean, 100 seeds, sd 0.1238) | 18.9562 (sequential mean, 100 seeds, sd 0.1127) | thinning (D-008); 4 against 64 colours: z -51.77 (crit 4.66, n = 100 per arm); 64-colour remainder z -2.47 against sequential (crit 4.66): not resolved, not absent (limit 0.0751, 8 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `r_stop` (f), ∣z∣ = 64.03 | 1.0299 (checkerboard mean, 100 seeds, sd 0.0039) | 0.9961 (sequential mean, 100 seeds, sd 0.0036) | thinning (D-008); 4 against 64 colours: z +62.10 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.20 against sequential (crit 4.66): not resolved, not absent (limit 0.00216, 6 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `t_stop` (f), ∣z∣ = 126.52 | 10.3881 (checkerboard mean, 100 seeds, sd 0.0225) | 9.9664 (sequential mean, 100 seeds, sd 0.0246) | thinning (D-008); 4 against 64 colours: z +136.95 (crit 4.66, n = 100 per arm); 64-colour remainder z -0.33 against sequential (crit 4.66): not resolved, not absent (limit 0.0146, 3 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
+# | `w_end` (f), ∣z∣ = 10.16 | 0.6828 (checkerboard mean, 100 seeds, sd 0.1643) | 0.9362 (sequential mean, 100 seeds, sd 0.1875) | thinning (D-008); 4 against 64 colours: z -10.00 (crit 4.66, n = 100 per arm); 64-colour remainder z -1.16 against sequential (crit 4.66): not resolved, not absent (limit 0.115, 45 % of the stock difference) | not an author question (a property of CheckerboardCPM, characterised here; D-220, D-225) |
 #
 # ```@raw html
 # </details>
 # ```
 
-record("checkerboard-2026-10-10"; commit = "80a6e40f") #hide
+record("checkerboard-2026-10-10"; commit = "7b3181d6") #hide
 include(joinpath(DATA15, "checkerboard-2026-10-10", "page_quotes.jl")) #hide
 cb_check("checkerboard-2026-10-10", joinpath(pkgdir(PottsModels), "reproductions", "15_openvt_monolayer.jl")) #hide
 nothing #hide
@@ -775,7 +794,7 @@ Markdown.parse(s5)
 # | `f1-f4-2026-10-08` | Figures 1 and 4 | `run_f1.jl`, `run_f1_areas.jl`, `plot_f1.jl`, `plot_f4.jl` | AMD Ryzen AI Max+ 395, 1 thread | `c6ca4bc4` |
 # | `sweeps-2026-10-08` | Figures 6 and 7, Table 1 | `run_sweeps.jl`, `plot_f6.jl`, `plot_f7.jl`, `plot_f7_grid.jl` | AMD Ryzen AI Max+ 395, 12 threads | `41fb2ba6` |
 # | `f8beta-2026-10-09` | Figure 8 (β colonies) | `run_f8beta.jl`, `plot_f8_grid.jl` | AMD Ryzen AI Max+ 395, 5 threads | `97c326bf` |
-# | `checkerboard-2026-10-10` | Potts.jl (checkerboard), a characterisation of `CheckerboardCPM` | `run_checkerboard.jl`, `run_ablation.jl`, `check_dH.jl`, `plot_fig2.jl`, `plot_fig3.jl`, `plot_fig9.jl` | AMD Ryzen AI Max+ 395, 4 threads, and its GPU | `80a6e40f` |
+# | `checkerboard-2026-10-10` | Potts.jl (checkerboard), a characterisation of `CheckerboardCPM` | `run_checkerboard.jl`, `run_ablation.jl`, `check_dH.jl`, `plot_fig2.jl`, `plot_fig3.jl`, `plot_fig9.jl` | AMD Ryzen AI Max+ 395, 4 threads, and its GPU | `7b3181d6` |
 #
 # The Figure 1 panel's cell areas come from a second deterministic rerun of the same state
 # (`run_f1_areas.jl`, recorded in `window_cells.toml`), which stopped at the same MCS and N
