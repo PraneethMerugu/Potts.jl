@@ -1,29 +1,29 @@
 colours = "4 colours on the P1b calibration chain (150 × 7, frozen border rows, closed y) and 4 on the monolayer (stride 2; D-224)"
 decisions = ["D-008", "D-146", "D-214", "D-216", "D-218", "D-220", "D-221", "D-224"]
 lifecycle_forms = "staged"
-runner_sha256 = "c63b16b2bc2c5cf12ddca650cbd5ea49531ec1d5ea7b51b932effbc8c1cbb696"
+runner_sha256 = "a18912c14efcd2b05783b1a5aa8299580fe43959d260104e0e5a5cdf67f5aaa0"
 protocol_test_sha256 = "da7d145fbd71eb8722cf18312033df38cf21009b561fd310a45a55fb17f8b05d"
 host_planner_fallback = false
 backend = "AMDGPU.ROCBackend() (ROCm, AMDGPU.jl 2.7.0)"
 reference_runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_reference.jl"
-calibration_wall_s = 35.7
+calibration_wall_s = 36.2
 threads = 4
 device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1151))"
 cpu = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
 seeds = "calibration λ = 2 (P1b): CheckerboardCPM 214600001–214600100, SequentialCPM 214700001–214700100; (b) 214800001–214800100; (f) 214800201–214800300; (a) 214800701–214800710"
-calibration_simulation_s = 17.6
+calibration_simulation_s = 17.8
 sessions = 1
-wall_s = 1142.7
+wall_s = 1155.2
 framework = "Potts.jl (checkerboard)"
-finished = "2026-10-10T13:55:48.259"
+finished = "2026-10-11T02:35:37.984"
 folder_token = "Potts.jl_checkerboard"
 test_sha256 = "e0a99aff07974a24903d3de54f7d6b58171eb44d773ee71cb255f0f854c34b61"
-calibration_sequential_commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
+calibration_sequential_commit = "7b3181d61a29bc88c1ce68d437adfa015bb6cd78"
 o1_reference = "the stop frames of o1-2026-10-09's bulk archives (sha256-checked), cached in reference_o1.tsv"
 algorithm = "CheckerboardCPM(; proposal = Moore(1)) on the GPU (KernelAbstractions, ROCBackend)"
-affinity = "taskset -c 0-3"
-runs_simulation_s = 1074.7
-started = "2026-10-10T13:35:16.303"
+affinity = ""
+runs_simulation_s = 1087.1
+started = "2026-10-11T02:14:24.174"
 machine = "x86_64-linux-gnu"
 manifest_sha256 = "3a267d7eabe2758c16e5c350234d2c0281edf14108a3f99b522f9f6920130288"
 calibration_chain = "spec 15 §4.2 variant P1b (D-224)"
@@ -32,34 +32,38 @@ protocol_test = "lib/PottsModels/test/reproductions/15_openvt_f3_f8.jl"
 runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"
 julia = "1.12.6"
 test = "lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl"
-commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
+commit = "7b3181d61a29bc88c1ce68d437adfa015bb6cd78"
 item = "P6.15m"
-runs_wall_s = 1107.0
+runs_wall_s = 1119.0
 dirty_tracked = false
 algorithm_reference = "SequentialCPM(; proposal = Moore(1)) on the CPU (the P6.15f record and its replay, reference_runs.tsv)"
 
 [ablation]
 decisions = ["D-220", "D-221", "D-224"]
-power_stage = "replaces the n20 runs of (b) and (f) (no pooling); (a) keeps its 10 n20 runs"
-collect_dirty_tracked = false
-runner_sha256 = "e8533cd947dcbdd79497917337a74fb30d4f66e0c4e1a6be8c48cea8fee46095"
+collect_dirty_tracked = true
+runner_sha256 = "4e7331d15625b7b6d958fc589571e76e47de560635c7e5ba32176b2b472cb5cd"
 chain_replays_equal_gpu = true
 chain_committed_equal_changed_sites = true
 chain = "spec 15 §4.2 variant P1b (D-224) for both arms"
 chain_commit_fraction_stock = 0.6429254563053388
+runner_sha256_c64_calibration = "4039b8d39dcae835eac0662b9dec5e99593ef485f034e6c220f932696aa38e09"
+runner_sha256_collect = "4e7331d15625b7b6d958fc589571e76e47de560635c7e5ba32176b2b472cb5cd"
 host_planner_fallback = false
 chain_commit_fraction_c64 = 0.9864455151944851
+runner_sha256_a30 = "4e7331d15625b7b6d958fc589571e76e47de560635c7e5ba32176b2b472cb5cd"
 device = "AMD Radeon Graphics (HIPDevice(id=1, name=AMD Radeon Graphics, gcn_arch=gfx1151))"
-seeds = "c64 chain 214900001–214900100; monolayer 214 950 000 + 1000 arm + 100 case + k (stage n20); power stage (b), (f): 215 100 000 + 10 000 arm + 1000 case + k"
+seeds = "c64 chain 214900001–214900100; stage a30 (a): 215200000 + 10 000 arm + 1000 case + k; stage power (b, f): 215100000 + 10 000 arm + 1000 case + k"
 alpha_c64 = 0.07874015748031496
-commits = "80a6e40f29856899159928f20a4458eccc5a13cf, e5c3a54a76b93b6516692cdfdae4c1ca71c96410"
+commits = "80a6e40f29856899159928f20a4458eccc5a13cf, d1f6a7a8cdfaa5451b0f41632fa853d3f8e556f3, e5c3a54a76b93b6516692cdfdae4c1ca71c96410"
 arms = "stock: 4 colours on the chain, 4 on the monolayer, cycle 1095; c64: 98 on the chain, 64 on the monolayer, cycle 635 = 5 T_c64"
-runs_per_arm = "b 100, f 100, a 10"
+runs_per_arm = "b 100, f 100, a 30"
 cycle_c64 = 635
 T_c64_sd = 12.05375166879297
+stages = "a30: a; power: b, f (each stage replaces the n20 runs of its cases; no pooling)"
 chain_commit_fraction_burnin_stock = 0.6892405100327109
 chain_commit_fraction_burnin_c64 = 0.9996562512744921
-collect_commit = "e5c3a54a76b93b6516692cdfdae4c1ca71c96410"
+runner_sha256_power = "e8533cd947dcbdd79497917337a74fb30d4f66e0c4e1a6be8c48cea8fee46095"
+collect_commit = "7b3181d61a29bc88c1ce68d437adfa015bb6cd78"
 runner = "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_ablation.jl"
 T_c64_run_mean = 126.0
 T_c64 = 127
@@ -67,6 +71,6 @@ commit = "80a6e40f29856899159928f20a4458eccc5a13cf"
 dirty_tracked = false
 
 [runs_gpu_s]
-f = 449.8
-b = 454.6
-a = 170.4
+f = 458.1
+b = 459.4
+a = 169.6
