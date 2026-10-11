@@ -636,7 +636,11 @@ function collect_main()
         "runs_simulation_s" => round(sum(parse(Float64, s["simulation_s"]) for s in sess); digits = 1),
         "runs_gpu_s" => Dict(c => round(sum(parse(Float64, r["wall_s"]) for r in rp if r["case"] == c); digits = 1) for c in string.(CB_CASES)),
         "sessions" => length(sess), "o1_reference" => "the stop frames of o1-2026-10-09's bulk archives (sha256-checked), cached in reference_o1.tsv")
-    open(io -> TOML.print(io, prov), joinpath(CB_DIR, "provenance.toml"), "w")
+    # keep the blocks later steps own (run_ablation.jl collect writes [ablation])
+    pp = joinpath(CB_DIR, "provenance.toml")
+    old = isfile(pp) ? TOML.parsefile(pp) : Dict{String, Any}()
+    haskey(old, "ablation") && (prov["ablation"] = old["ablation"])
+    open(io -> TOML.print(io, prov), pp, "w")
     nflag = count(t -> t.beyond, cmp)
     @info "collect" cycle nflag rows = length(cmp)
     for t in cmp
@@ -649,6 +653,7 @@ end
 function write_meta(cal, status)
     meta = Dict(
         "item" => "P6.15m", "status" => status, "reference_record" => P615M_SEQ_REF, "reference_calibration" => P615M_SEQ_CAL,
+        "scope" => "characterisation of CheckerboardCPM against SequentialCPM on the OpenVT monolayer (D-225: not part of the OpenVT submission; no O1 per-cell output or package files)",
         "framework" => P615M_LABEL, "algorithm" => CB_ALG_STR, "algorithm_reference" => CB_REF_ALG_STR,
         "every_mcs" => CB_EVERY,
         "model" => "OpenVTReferenceMonolayer (Table S1 defaults: A₀ = 50, λ = 2, T = 20, μ_X = 2, J 20/10), α = $(cal["alpha_text"]) px/MCS (this entry's cycle; D-220, D-224)",
@@ -674,7 +679,11 @@ function write_meta(cal, status)
             "z_seq_p1b_vs_P1" => cal["z_seq_p1b_vs_P1"], "beyond_seq_p1b_vs_P1" => cal["beyond_seq_p1b_vs_P1"],
             "chain_commit_fraction" => cal["chain_commit_fraction"],
             "seeds" => "$(cal_seed(1))–$(cal_seed(CAL_N)) (CheckerboardCPM), $(cal_seq_seed(1))–$(cal_seq_seed(CAL_N)) (SequentialCPM, calibration_sequential_p1b.tsv)"))
-    open(io -> TOML.print(io, meta), joinpath(CB_DIR, "meta.toml"), "w")
+    # keep the block check_dH.jl owns ([dH_check], written by its `merge`)
+    mp = joinpath(CB_DIR, "meta.toml")
+    old = isfile(mp) ? TOML.parsefile(mp) : Dict{String, Any}()
+    haskey(old, "dH_check") && (meta["dH_check"] = old["dH_check"])
+    open(io -> TOML.print(io, meta), mp, "w")
     return meta
 end
 
