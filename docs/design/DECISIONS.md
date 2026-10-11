@@ -4022,6 +4022,156 @@ The audit read the 9 Oct manuscript and G at 14fa42c, and ran G's own postproces
 
 Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the implementation folder and the units. The optional O2 header and zero neighbour rows are not adopted.
 
+## D-216 P6.15m m1: checkerboard characterisation tests frozen (2026-10-10; coordinator, from the P6.15m m1 test author; implements D-214, D-215 item 9)
+
+`lib/PottsModels/test/reproductions/15_openvt_checkerboard.jl` (sha256 e8117f7b…). The file has three tiers:
+- rules on synthetic data, which always run;
+- the API, marked `@test_broken` until it exists;
+- the record, marked `@test_skip` until `data/15/checkerboard-<date>/` exists. Checking a record needs no GPU.
+
+**Rule.** Welch z between the GPU checkerboard and the CPU sequential arms. A row is "beyond the spread" when |z| > 4.42: a family false-alarm budget of 1e-3 over at most 100 checks, following P6.4b1's convention. With n = 100 seeds per arm for cases b and f and for the λ = 2 calibration, this detects a shift of about 0.63 seed sd.
+
+**Metrics.** 33 per case:
+- `L@0.5…8.5`
+- `r@` and `A@4.5…8.5`
+- `t_stop`, `r_stop`, `A_stop`
+- `sync@0…3`
+- `C_rel_end`, `w_end`, `g_end`
+- O1.n_mean, n_sd, n6, i0 (range-checked only)
+
+The reference is the existing f3-f8 record; there is no sequential re-run.
+
+**Time scale.** The cycle is 5·T(λ = 2) if the z rule flags T(λ = 2) against the sequential crossings, else 775. The record states the reason, naming 156.
+
+**Causes.** The vocabulary is spec §1.3's four classes ("update order", "colour-lagged totals", "claim widening", "thinning") plus "under investigation". Every flagged row needs a deviation row, and every deviation row must be flagged. A `status = "final"` record may carry no "under investigation" row; this is the bug-chase rule.
+
+**Record layout.**
+- `provenance.toml` with `algorithm` (CheckerboardCPM), `algorithm_reference` (SequentialCPM), `backend` (AMDGPU/ROCm), `device`, and `host_planner_fallback = false`.
+- `runs.tsv` with `planner = "device"` on every run. Its seeds are disjoint from every committed data/15 seed.
+- `meta.toml`, `metrics.tsv`, `comparison.tsv` and `calibration.tsv`.
+- The entry's deviations are in `entry/deviations.tsv`, with no top-level deviations.tsv or verdicts.tsv, so that the sequential entry's page and package tables stay unchanged until m4 decides how both are fed.
+
+**Negative controls.** A shifted metric is flagged alone. Splits of a single law flag nothing, including the real odd and even sequential seeds. A time miscount of 1.1× flags `t_stop`.
+
+**API.** Two new `public` names in PottsModels: `openvt_spread_compare(ref, alt; z = 4.42)` and `openvt_spread_table(ref::AbstractDict, alt; z)`.
+
+**Tokens.** "Potts.jl (checkerboard)" and `Potts.jl_checkerboard` are constants at the top of the file.
+
+## D-218 P6.15m m1 re-frozen after adversarial review (2026-10-10; coordinator, from the m1 reviewer and test author; amends D-216)
+
+`15_openvt_checkerboard.jl` is re-frozen (e0a99aff…). The implementation fix 430a9192 makes a constant sample's mean exactly its value.
+
+- **Interpolated reads.** `L@τ`, `r@τ` and `A@τ` are interpolated linearly in t between the saves around τ. The end metrics (`r_stop`, `A_stop`, `C_rel_end`, `w_end`, `g_end`) are interpolated where log₂N crosses log₂(0.95 cells). Without this, the save grid alone could flag a row: a 39-MCS phase shift gave |z| up to 14.9. New controls: the phase-shifted and finer grids, synthetic and on the real seeds, flag nothing.
+- **Rule.** A row is beyond the spread when |z| > crit(ν), the two-sided Student-t quantile at α = 1e-3/103, with ν = min(n_ref, n_alt) − 1. That gives 4.66 for 100 seeds and 8.86 for 10. It supersedes D-216's 4.42. `comparison.tsv`'s `beyond` column uses these values.
+- **Cases and metrics.** The cases are exactly a, b and f, with 34 metrics each: D-216's 33 plus `lost` = divisions + 1 − live at the stop. That makes 102 rows plus the T(λ = 2) row. Case (a) is required because the GPU probe found about 5× more crushed cells under CheckerboardCPM in case (a): about 4,000–4,300 lost against 824 for seed 15701.
+- **New record files.** `runs.tsv` gains `divisions` and `live` columns. `reference_runs.tsv` is a CPU SequentialCPM replay of every P6.15f seed of a, b and f, whose stop MCS and N must equal P6.15f's. m3 therefore includes this replay on the PC.
+- **Time scale.** T_lambda2 must lie within 2·sd/√n of the mean of `calibration.tsv`'s λ = 2 crossings.
+- **Bug-chase.** In a final record, "under investigation" anywhere in a cause fails. Cause parentheticals may only be `(D-NNN)`.
+- **Pinned references.** The sequential references are `f3-f8-2026-10-08` and `calibration-2026-10-05`. The test checks the latest "final" checkerboard record, or else the latest.
+- **Page test (g) rules mirrored.** The commit, `dirty_tracked = false`, a runner inside the record with its sha256, the test and manifest sha256s, and the allowed file kinds, each ≤ 10 MB.
+
+## D-220 P6.15m: the checkerboard's extra crushing is claim-conflict thinning, not a bug; the entry runs on its own calibrated T (2026-10-10; coordinator, from the P6.15m investigation; amends D-214)
+
+- **Finding.** Under `CheckerboardCPM` (4 colours here, Moore(1), stride 2), each cell changes at most once per colour, by the D-008 claim rule. Only about 27% of accepted copies commit. Case (a) at 5k cells: 5,534 of 20,243 accepted per MCS, against 20,126 committed in sequential. So copies advance about 3.6× slower per MCS, while A* growth and division stay on the MCS clock. Colonies are therefore more compressed (A*−V ≈ 56 against ≈ 30 at 5k cells) and lose about 4,100 cells against about 865, and they reach 10⁴ cells about 15% later.
+- **Not a bug.** ΔH matched brute force on 16,605 committed copies (max 3.3e-12, 0 mismatches). The volume trackers equal recounts, and no claim was violated.
+- **Ablations.**
+  - More colours: 9 → 16 → 64 colours bring the loss down to the sequential level.
+  - Slower sequential: sequential with 0.3·N attempts per MCS reproduces the stock checkerboard (3,747 lost, stop at 13,577).
+  - What remains at 64 colours (≈ 570 against ≈ 860) is the update-order class, in the other direction.
+- **Cause wording** (corrects D-214 and spec 15 §1.3).
+  - The class is **thinning of conflicting accepted copies (D-008 claims)**. D-051's Bernoulli thinning is for fractional `attempts`, which is compiled out here.
+  - "Colour-lagged totals" contributes nothing to this model: volumes update at commit, and the claims keep ΔH exact.
+- **Ruling: the entry runs on its own calibrated time unit, with time-dependent parameters converted by it.**
+  - M defines time in units of the mechanical T and the growth rate per T (C1, C16: α = π/5 R²/T = A₀/(5T)). Every framework calibrates its own T on the chains (§4.2).
+  - The checkerboard entry therefore runs the F2 chain calibration first. If T_cb(λ = 2) differs significantly from 156 MCS (D-218 rule), the cycle is 5·T_cb and α = A₀/(5·T_cb) per MCS. Otherwise both stay at 775 and 50/775.
+  - The record states T_cb, the cycle and α.
+  - This is the manuscript's own time mapping, not a tuning: the algorithm is unchanged (stock 4 colours, no extra sweeps). Differences that remain after the time mapping are characterised under D-218.
+
+## D-221 P6.15m m3 review rulings (2026-10-10; coordinator, from the m3 adversarial review; under D-218, D-220)
+
+1. **Attribution evidence.** The evidence for the "thinning (D-008)" rows is the **direct stock 4-colour vs 64-colour contrast at the same clock** (29 of 31 rows |z| > 5.96), not "64 colours removes it". A row not being flagged at n = 20 does not show the effect is gone. The ablation is re-run so that each arm uses its own calibrated time unit:
+   - the 64-colour arm calibrates its own chain T and runs at 5·T_c64;
+   - the stock arm runs at its record cycle of 870.
+
+   That re-run decides the "+ update order" labels: the opposite-sign 64-colour remainder counts as update order only where it stays beyond the spread at the arm's own T. Otherwise all rows carry the same label. The deviation text states the contrast, the remainder's sign and its size.
+2. **Chain colouring is accepted and disclosed.** On M's 150 × 5 periodic chain, stride 2 gives 6 colours, because 5 is not a multiple of 2. This is the algorithm's own colouring on the calibration geometry, and the protocol is otherwise identical to the sequential calibration, so the result stands. meta, provenance and the deviation text say "6 colours on the chain, 4 on the monolayer". The next chain run records accepted and committed copy counts, so that the chain's commit fraction is measured rather than asserted.
+3. **Wording.** Three rows (a O1.n_mean, b O1.n_mean, f A@5.5) are same-sign but not flagged in the stock ablation arm. Their wording says so.
+4. **Ablation auditability.** The per-seed ablation metrics are committed, and provenance gains an `[ablation]` block with the commit, the runner sha256, the device and the dirty flag.
+
+## D-222 P6.15m m4: tests frozen for both entries in the package, the email split and page 15 (2026-10-10; coordinator, from the m4 test author; under D-214, D-215, D-217, D-219–D-221)
+
+`reproductions/15_openvt_entries.jl` (5f4b8fc2…).
+
+- **API.**
+  - New constants: `OPENVT_CHECKERBOARD_TOKEN = "Potts.jl_checkerboard"` and `OPENVT_ENTRIES`.
+  - `openvt_submission_package(...; entries = (OPENVT_FRAMEWORK_TOKEN,))`. The default is unchanged (sequential only), so the P6.15j/l frozen tests stay valid. The two-entry build is opt-in; making it the default later needs a re-freeze.
+  - Invalid `entries` (the checkerboard alone, unknown tokens, duplicates, an empty list) raise `ArgumentError` before anything is written. The keyword composes with `split = :email`.
+- **O1 is produced for the checkerboard entry.** It is the one output M prescribes, and G's Fig 9 pipeline reads it.
+  - m4 includes a GPU replay on the PC of every checkerboard record seed for cases a, b and f. The replay must match each run's stop MCS and N, and N at every save.
+  - Its output is a new record `data/15/o1cb-<date>/` with three bulk zips named `Potts.jl_checkerboard_{beta0.0_gamma0.0,No_CI_stochastic,No_CI_deterministic}.zip`.
+  - A non-deterministic replay is escalated, not tolerated.
+- **Not produced for the checkerboard entry,** listed in its README: O2/F5, O3/F6/Table 1 (no sweeps), O5/F7–F8, case (e), the 11+10 chain, λ ≠ 2, and the F1 closeup.
+- **Checkerboard package folder.**
+  - `implementations/Potts.jl_checkerboard/` holds the README, parameters.csv (α = 50/870, cycle 870, T = 174, CheckerboardCPM) and the record scripts. It points to `implementations/Potts.jl/src`.
+  - The results are the allowed list in the test: O4 at λ = 2 with its Table S5 row, O6 for a/b/f with t = MCS/870, the neighbour files, A3 for case a, and the O1 zips with the manifest.
+  - The README gives the legend, the colour key `PottsJLcheckerboard` and 0,109,44 (Q27, as a proposal), the time scale, "31 of 102" with the cause text, and the deviations table.
+  - It contains no "?" and no Q19/Q20/Q21/Q25/Q28.
+- **Two-entry email split.** core.zip ≤ 20 MB (prototype 15.8 MB) and 10 bulk files, deterministic. The sequential subtrees are byte-equal to the default build except for its two READMEs. EMAIL.md describes both entries: 870 MCS (T 174 against 156), the cause summary and the deviation count. It contains no "?" and no "compiler" (the mechanical form of D-219).
+- **Page 15.**
+  - A "Potts.jl (checkerboard)" section after Deviations, giving the record, the time scale, "31 of 102", the deviations table and the D-220/D-221 cause text.
+  - Figure slots directly after Potts.jl's: fig2 (calibration), fig3 and fig9. They are rendered by `plot_*.jl` scripts inside the checkerboard record.
+  - It mentions the Table S5 T = 174 row.
+- **Size watch.** `o1cb/o1_manifest.tsv` is about 9.3 MB against the page test's 10 MiB per-file limit.
+- **Branch sync.** feat/p6-15m is merged up to monorepo, to bring in P6.15l, before m4 is implemented.
+
+## D-223 P6.15m: the checkerboard entry is gated; the maintainer decides inclusion at the end (2026-10-10; maintainer, asked directly: "Gate it, I decide at the end"; relayed position from the spec owner; amends D-214)
+
+- **Gate.** "Potts.jl (checkerboard)" goes into the consortium submission only if the maintainer includes it after seeing the comparison against the consortium's spread on three figures:
+  - Fig 3 (the N, r and A curves);
+  - Fig 6 / Table 1 (the thresholds);
+  - Fig 9 (Categories 1–3).
+
+  Otherwise only the sequential entry ships, and the checkerboard stays a characterisation result in our docs and the Potts.jl paper ("the checkerboard needs its own T, and here is why").
+- **For the gate.** Fig 6 and Table 1 need checkerboard β/γ sweeps at the entry's own T and α (new P6.15m m5, GPU). m4 keeps the two-entry build opt-in (`entries`, D-222), so with the default unchanged the package is byte-identical to today's sequential-only build.
+- **Q27 is raised only if the entry is included.**
+- **Kept regardless:**
+  1. A CheckerboardCPM docs note. One checkerboard MCS is not one sequential MCS: with 4 colours only about 27% of accepted copies commit. Time-dependent parameters (growth rates and similar) therefore need the algorithm's own calibrated T, or more colours. The note cites the D-220 ablations (64 colours; sequential at 0.3·N). This is new item P6.15m-doc.
+  2. The ΔH brute-force check (16,605 copies, 0 mismatches) and the exact-tracker evidence are kept in citable form in the checkerboard record, as GPU-correctness evidence for the Potts.jl paper.
+
+## D-224 P6.15m: calibrate the checkerboard T at the production colour count (2026-10-10; spec owner's catch, coordinator ruling; supersedes D-221 item 2)
+
+- **The problem.** D-221 accepted a T_cb measured on the 150 × 5 periodic chain, which has 6 colours (stride 2 on 5 rows), while the monolayer runs with 4. The commit fraction, and with it the copies per MCS, depends on the colour count (D-220: 64 colours restore sequential), so a 6-colour T does not compensate a 4-colour monolayer. The m3 numbers fit this: case (a) still loses about 4,011 cells after the α change, and 174/156 = 1.115 is nowhere near the commit deficit of about 3.6× at 4 colours.
+- **Ruling.** T_cb is calibrated on a chain geometry that gives the production colour count (4). We use spec 15 §4.2 variant P1b, TST's own setup: 150 × 7, the 5 chain rows plus 2 frozen border rows, closed in y.
+  - Closed y at stride 2 gives no singleton tail colours.
+  - The sequential T is re-measured on the same P1b geometry, so that the z test compares like with like.
+  - The calibration record states the colour count. The runner asserts calibration colours == production colours.
+- **Then.**
+  - The m3 cases (a, b, f) and the D-221 ablation are re-run at the new T_cb and α = A₀/(5·T_cb).
+  - The m4 frozen test (D-222), which pins 174/870, is re-frozen with the values from the record. Its test author keeps the values parameterised from the record.
+  - m5 sweeps wait for this.
+- **Answer to the gate if it fails.** If the 4-colour T_cb still does not close the (a)/(b)/(f) gaps, then M's chain calibration cannot absorb claim thinning for this model. That is the characterisation result, and it is reported as such.
+
+## D-225 P6.15m: the checkerboard is left out of the OpenVT submission and kept in our docs (2026-10-10; maintainer: "ok we can leave checkerboard out of the submission, but keep it in the docs"; closes the D-223 gate; amends D-214, D-222)
+
+- **The submission is sequential only.** "Potts.jl" is the one entry. The package, the email split, EMAIL.md and the bulk files stay as merged in P6.15l, with no `entries` switch and no checkerboard parts. Q27 (colour, two entries) is withdrawn and never raised. m5 (the gate sweeps) is cancelled. No checkerboard O1 replay is made.
+- **Kept in our docs.**
+  - The checkerboard characterisation stays as a section of page 15 and in the Potts.jl paper material: the calibration at the production colour count (D-224), the comparison table, the deviations with causes (D-220/D-221), and the ΔH brute-force evidence.
+  - The CheckerboardCPM manual note (P6.15m-doc) stays.
+  - The record is finished under D-224, since the docs should show the correctly calibrated result.
+- **m4 is re-scoped to page 15 only.** The D-222 test is re-frozen through its test author: the package/`entries`/split/EMAIL/O1cb parts are removed, and the page-15 section and figure parts are kept, with values read from the record.
+
+## D-226 P6.15m m4 re-frozen to page-15 scope (2026-10-10; coordinator, from the m4 test author; implements D-225, supersedes D-222)
+
+- **Test files.** `reproductions/15_openvt_checkerboard_page.jl` (8499f953…) replaces `15_openvt_entries.jl`, which is removed together with its frozen.toml entry.
+- **What it pins.**
+  - **The page section.** A "Potts.jl (checkerboard)" characterisation section on page 15, after Deviations, stating that it is not part of the submission.
+    - Every number comes from the latest final checkerboard record: T_lambda2, T_seq, T_seq_p1b, z, z_p1b, cycle, α, colours_chain == colours_monolayer, "N of 102" and the deviations.
+    - It carries the cause text (thinning, claim, D-008, D-220, "not a bug") and the ΔH brute-force evidence.
+    - Figure slots fig2, fig3 and fig9 sit directly after the Potts.jl ones, each rendered by a `plot_*.jl` script in the record.
+    - It contains no submission wording, tokens, colour, Q27 or Q28.
+  - **The submission package is untouched.** PottsModels defines no `OPENVT_CHECKERBOARD_TOKEN`, no `OPENVT_ENTRIES` and no `entries` keyword, and the default and email builds contain nothing about the checkerboard.
+- **ΔH figures go into the record.** The runner writes `meta [dH_check] copies/mismatches`, which the test pins once present, so the 16,605 / 0 figures are read from the record like every other number.
+
 ## D-217 P6.15l: tests frozen for the email split, G conformance and the Q25 wording (2026-10-10; coordinator, from the P6.15l test author; implements D-213, D-215)
 
 - **New test:** `reproductions/15_openvt_d213.jl` (de05b7a5…).
@@ -4067,3 +4217,13 @@ Already conformant (no change): O3, O4, the O6 neighbours, A3, the closeup, the 
   - EMAIL.md carries no compiler heads-up.
   - The READMEs keep one neutral provenance line: our measurements were produced with metrics.cpp built with GCC 13 on Linux.
 - **Standing rule.** We do not raise questions or suggestions about how other frameworks run their benchmarks. Their departures are recorded in our deviation tables only where they bear on comparing against us. Our bar is faithfulness to M.
+
+## D-227 P6.15m final review rulings (2026-10-10; coordinator, from the final adversarial review; under D-221, D-224, D-226)
+
+1. **Case (a)'s remainder is underpowered.** Case (a) had n = 10 per arm (crit 8.86), and its c64 remainders (lost z −3.09, t_stop z −4.55) would be beyond the spread at higher n. Case (a) is where D-220 saw an update-order remainder. **Ruling:** re-run (a) at n = 30 per arm, both stock and c64, with fresh seeds, then relabel by the D-221 rule. For (b) and (f), the page and the deviation text state the detection limit: a remainder is "not resolved" below about 4.66·se, not "absent".
+2. **c64 colour mismatch, disclosed.** The c64 arm calibrates on a 98-colour chain but runs 64 colours on the monolayer. This doesn't affect the thinning attribution (contrast z 4.95–137). It does confound the remainder on time metrics (a T_c64 bias of about 3.5 MCS would explain the t_stop(a) remainder). The page and the record state "98 on the chain, 64 on the monolayer" and this caveat.
+   - **Wording fix:** T = 219 is the net of thinning and update order on the chain. T_c64 = 127 < 156 shows a sweep-order speed-up.
+3. **"Not a bug" scope.** The page says the ΔH check ran on the CPU colour loop the GPU kernels share, and that GPU equivalence rests on the chain replays matching the GPU runs.
+4. **`cb_check` coverage.** It extends to every checkerboard number outside the section: the Fig 2 caption, the 1095-MCS cycle mentions and the Table S5 line. It also checks the deviation table's row count.
+5. **Provenance.** `[ablation]` records the runner sha256 per stage, and `[dH_check]` records check_dH.jl's sha256.
+6. **Colour guard.** The colour assertion reads the cache's own colours, not `colors(lattice, 2)`.

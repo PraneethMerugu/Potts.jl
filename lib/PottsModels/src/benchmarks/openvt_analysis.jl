@@ -442,3 +442,68 @@ function openvt_filename(format::Symbol; kw...)
     end
     throw(ArgumentError("openvt_filename: no file name for format $format; use :O1, :O2, :O3 or :O5"))
 end
+
+# ---------------------------------------------------------------------------------------------
+# Algorithm-against-algorithm comparison of per-seed values (P6.15m, D-214, D-216)
+# ---------------------------------------------------------------------------------------------
+
+# sample mean and sd (n − 1) of finite values; a constant sample has its value as mean and sd exactly 0
+_spread_mean(x) = allequal(x) ? Float64(first(x)) : sum(Float64, x) / length(x)
+function _spread_sd(x, m)
+    allequal(x) && return 0.0
+    return sqrt(sum(v -> abs2(Float64(v) - m), x) / (length(x) - 1))
+end
+function _spread_check(x, name)
+    length(x) >= 2 || throw(ArgumentError("openvt_spread_compare: `$name` needs at least 2 values, got $(length(x))"))
+    all(isfinite, x) || throw(ArgumentError("openvt_spread_compare: `$name` has a non-finite value"))
+    return nothing
+end
+
+"""
+    PottsModels.openvt_spread_compare(ref, alt; z = 4.42) -> NamedTuple
+
+Whether the per-seed values `alt` of one metric (e.g. `CheckerboardCPM` runs) differ from
+the per-seed values `ref` (e.g. the `SequentialCPM` reference runs) beyond the seed spread,
+by the Welch two-sample z of independent runs (spec 15 §1.3, D-214, D-216):
+
+- `diff = mean(alt) − mean(ref)`, `se = √(sd_ref²/n_ref + sd_alt²/n_alt)` with sample
+  standard deviations (`n − 1`), and the statistic `z = diff / se`;
+- `se == 0` gives `z = 0` when `diff == 0` and `±Inf` (the sign of `diff`) otherwise;
+- `beyond = |z| > z`, where the keyword `z` is the critical value. The default 4.42 is
+  Φ⁻¹(1 − 5·10⁻⁶): a family false-alarm budget of 10⁻³ split over at most 100 two-sided
+  checks, the convention of P6.4b1's ensemble check of `BoundarySiteCPM`.
+
+Returns `(; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z, beyond)`: the
+counts are `Int`, `beyond` a `Bool`, the rest `Float64`. `ref` and `alt` are vectors of
+reals, each with at least 2 values, all finite; anything else is an `ArgumentError`. The
+statistic uses the normal limit, so it is meant for about 100 seeds per arm.
+
+See also [`openvt_spread_table`](@ref PottsModels.openvt_spread_table).
+"""
+function openvt_spread_compare(ref::AbstractVector{<:Real}, alt::AbstractVector{<:Real}; z::Real = 4.42)
+    _spread_check(ref, "ref")
+    _spread_check(alt, "alt")
+    n_ref, n_alt = length(ref), length(alt)
+    mean_ref, mean_alt = _spread_mean(ref), _spread_mean(alt)
+    sd_ref, sd_alt = _spread_sd(ref, mean_ref), _spread_sd(alt, mean_alt)
+    diff = mean_alt - mean_ref
+    se = sqrt(sd_ref^2 / n_ref + sd_alt^2 / n_alt)
+    zs = se == 0 ? (diff == 0 ? 0.0 : copysign(Inf, diff)) : diff / se
+    return (; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z = zs, beyond = abs(zs) > z)
+end
+
+"""
+    PottsModels.openvt_spread_table(ref, alt; z = 4.42) -> Vector{NamedTuple}
+
+[`openvt_spread_compare`](@ref PottsModels.openvt_spread_compare) for every metric of a
+table: `ref` and `alt` map metric ids (`String`) to per-seed values and must have the same
+key set (else `ArgumentError`). One row per metric, sorted by metric id, each
+`merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z))`.
+"""
+function openvt_spread_table(ref::AbstractDict{String, <:AbstractVector}, alt::AbstractDict{String, <:AbstractVector}; z::Real = 4.42)
+    Set(keys(ref)) == Set(keys(alt)) ||
+        throw(ArgumentError("openvt_spread_table: `ref` and `alt` have different metrics: " *
+                            "only in ref $(sort!(collect(setdiff(keys(ref), keys(alt))))), " *
+                            "only in alt $(sort!(collect(setdiff(keys(alt), keys(ref)))))"))
+    return [merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z)) for metric in sort!(collect(keys(ref)))]
+end
