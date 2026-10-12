@@ -237,6 +237,10 @@ function _check_order(mcs)
     end
     all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase}, mcs) || throw(ArgumentError(
         "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase() or LifecyclePhase()"))
+    # `_run_mcs!` folds the order with `Base.afoldl`, which unrolls (one call specialized per
+    # entry) only up to 31 entries
+    length(mcs) <= 31 || throw(ArgumentError("Phases: the MCS order `mcs` has $(length(mcs)) entries; " *
+                                             "at most 31 (group consecutive phases into one tuple)"))
     return nothing
 end
 const NO_PHASES = Phases((), (), (), ())

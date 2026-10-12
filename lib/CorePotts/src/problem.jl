@@ -330,9 +330,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
         prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen), _mobility_scratch(backend, prob, ctx.mobility))
     integ.stats.launches += _run_phases(fresh ? prob.f.phases.at_init : _derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, integ.stats)
-    for cb in integ.callbacks
-        cb.initialize(cb, integ.state, integ.t, integ)
-    end
+    _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     save_start && _save!(integ)
     return integ
 end
@@ -351,10 +349,19 @@ function _callbacks(cb::SciMLBase.CallbackSet)
 end
 _callbacks(cb) = throw(ArgumentError("unsupported callback $(typeof(cb)); use DiscreteCallback or CallbackSet"))
 
+# `f(x)` for each element `x` of the tuple `t`, in order, each call specialized on its own
+# element type, at any length: `ntuple` with `Val(N)` unrolls (Base generates the calls; no
+# recursion here). The closure is `@inline` so that each unrolled call sees its constant
+# index and `t[i]` its concrete type; not inlined, `t[i]` dispatches dynamically and
+# allocates. A `for` loop over a heterogeneous tuple carries a `Union` of the element types,
+# and `Base.afoldl` beyond 31 elements calls itself dynamically. For a CallbackSet of
+# differently typed callbacks (closures and a BitVector next to bits fields), Julia 1.12's
+# optimized code for that loop corrupted the GC heap (segfaults in a later `_save!` with
+# `saveat`; P6.15m m3).
+_each(f::F, t::Tuple{Vararg{Any, N}}) where {F, N} = (ntuple(@inline(i -> (f(t[i]); nothing)), Val(N)); nothing)
+
 function _apply_callbacks!(integ::PottsIntegrator)
-    for cb in integ.callbacks
-        cb.condition(integ.state, integ.t, integ) && cb.affect!(integ)
-    end
+    _each(cb -> (cb.condition(integ.state, integ.t, integ) && cb.affect!(integ); nothing), integ.callbacks)
     return nothing
 end
 
@@ -476,6 +483,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
     return integ
 end
 
+# `Base.afoldl`, not `_each`: the MCS order is compiler-built and short (`Phases` caps it at 31, afoldl's unrolled limit)
 _run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
 
 # One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
@@ -696,9 +704,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     end
     integ.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
         _save!(integ)
-    for cb in integ.callbacks
-        cb.finalize(cb, integ.state, integ.t, integ)
-    end
+    _each(cb -> cb.finalize(cb, integ.state, integ.t, integ), integ.callbacks)
     return PottsSolution(integ)
 end
 

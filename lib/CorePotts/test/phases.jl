@@ -125,6 +125,9 @@ end
     @test Phases((), ph.after_mcs, (), ()).mcs == ph.mcs
     @test_throws ArgumentError Phases(; mcs = ((), LifecyclePhase()))                     # no sweep
     @test_throws ArgumentError Phases(; mcs = (SweepPhase(), SweepPhase(), LifecyclePhase()))
+    # at most 31 entries: `_run_mcs!` folds the order with `Base.afoldl`, unrolled only that far
+    @test Phases(; mcs = (SweepPhase(), LifecyclePhase(), ntuple(_ -> (), 29)...)).mcs isa NTuple{31, Any}
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), LifecyclePhase(), ntuple(_ -> (), 30)...))
     @test_throws ArgumentError Phases(; mcs = (SweepPhase(), LifecyclePhase(), CopyPhase((:site, :u) => (:site, :v))))
 
     # the same phase after the sweep (default) or before it (an explicit order)
