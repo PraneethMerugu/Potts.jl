@@ -471,7 +471,7 @@ function CommonSolve.step!(integ::PottsIntegrator)
         throw(ArgumentError("integrator finished with retcode $(integ.retcode)"))
     attempts = integ.nmobile                        # this sweep's count (a refresh may change it)
     # one fold over the static MCS order (api-synthesis §2.12): phase tuples, the sweep and the
-    # lifecycle in the model's order: `_each` over the tuple (unrolled by Base's `ntuple`, no
+    # lifecycle in the model's order: `Base.afoldl` over the tuple (unrolled by Base, no
     # recursion here; zero allocations, where `sum` and `foldl` with a closure allocated on
     # SequentialCPM)
     _run_mcs!(integ, integ.f.phases.mcs)
@@ -483,7 +483,8 @@ function CommonSolve.step!(integ::PottsIntegrator)
     return integ
 end
 
-_run_mcs!(integ, t::Tuple) = _each(e -> _run_entry!(integ, e), t)
+# `Base.afoldl`, not `_each`: the MCS order is compiler-built and short (`Phases` caps it at 31, afoldl's unrolled limit)
+_run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
 
 # One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple)
