@@ -85,11 +85,13 @@ sz = size(σ)
 occ = findall(>(0), σ)
 c = (mean(I[1] for I in occ), mean(I[2] for I in occ))
 d = (1, 1) ./ sqrt(2)
-t = 0.0
-for τ in 0:0.25:maximum(sz)
-    I = round.(Int, c .+ τ .* d)
-    all(1 .<= I .<= sz) || break
-    σ[I...] > 0 && (t = τ)
+const t = let t = 0.0
+    for τ in 0:0.25:maximum(sz)
+        I = round.(Int, c .+ τ .* d)
+        all(1 .<= I .<= sz) || break
+        σ[I...] > 0 && (t = τ)
+    end
+    t
 end
 offset(s) = Tuple(clamp.(round.(Int, c .+ (t - s) .* d .- (W + 1) / 2), 0, sz .- W))
 offset(0) == OLD_OFF || error("the ray rule gives $(offset(0)) at s = 0, not the D-175 offset $OLD_OFF")
