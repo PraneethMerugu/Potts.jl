@@ -1154,8 +1154,8 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     (from the full state, so cells cut by the window keep their full area) with the `coolwarm`
     colour map, scaled to the min–max of the cell areas in the panel, on a white medium, with
     thin black boundaries along the pixel edges between unlike cells. The lattice fills the
-    image edge to edge inside a thin grey frame. The scale limits are our provisional reading. The banner colour proposed for Potts.jl is RGB(8, 29, 88). See the F1
-    row below.
+    image edge to edge inside a thin grey frame. The scale limits are our provisional
+    reading. The banner colour proposed for Potts.jl is RGB(8, 29, 88). See the F1 row below.
 
     ## Deviations from the manuscript
 
