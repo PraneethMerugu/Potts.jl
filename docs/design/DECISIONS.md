@@ -4227,3 +4227,23 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 4. **`cb_check` coverage.** It extends to every checkerboard number outside the section: the Fig 2 caption, the 1095-MCS cycle mentions and the Table S5 line. It also checks the deviation table's row count.
 5. **Provenance.** `[ablation]` records the runner sha256 per stage, and `[dH_check]` records check_dH.jl's sha256.
 6. **Colour guard.** The colour assertion reads the cache's own colours, not `colors(lattice, 2)`.
+
+## D-228 CorePotts: dispatch callbacks through an unrolled tuple fold (2026-10-11; coordinator, from the fix session and its §7.3 review; found in P6.15m m3)
+
+- **Bug.** On the host path, a CallbackSet of two differently typed DiscreteCallbacks combined with `saveat` corrupted the GC heap under Julia 1.12.6. It crashed in `gc_mark_obj8` during the `_snapshot` deepcopy in `_save!`. The cause was a `for cb in integ.callbacks` loop that carried a Union of the callback types.
+- **Not memory unsafety in our code:**
+  - one callback doing the same work never crashes (200 solves);
+  - `--check-bounds=yes` still crashes;
+  - the host path has no unsafe or pointer code.
+
+  This is a miscompile, not yet reduced to an upstream reproducer.
+- **Fix.** `_each(f, t)` unrolls over a tuple of any length with `ntuple(@inline(i -> …), Val(N))`, with no recursion. It is used at the four callback sites (initialize, the per-MCS check, finalize, reinit!/checkpoint).
+  - `_run_mcs!` stays on `Base.afoldl`. Moving it to `_each` cost +3.7% on graner_glazier_72.
+  - `Phases` now rejects an MCS order of more than 31 entries, afoldl's unroll limit.
+- **Tests.**
+  - 33 distinct callback types with saveat, on both algorithms: no non-concrete callback type in the compiled code, 0 allocations, and each callback fires once. An afoldl negative control does allocate.
+  - The PottsModels m3 reproducer smoke test.
+  - Phases accepts 31 entries and rejects 32.
+- **Checks** (PC, edc70e69):
+  - all suites pass (PottsModels 38207 pass, 0 fail) and gate.jl shows 0 allocations;
+  - the A/B against mb22 on a fresh worktree passes, all cases within 0.996–1.006 (graner_glazier_72 0.9958 / 0.9999).

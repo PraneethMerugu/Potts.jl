@@ -132,6 +132,7 @@ end
 # `const`s, structs and `@potts_model`s are globals as before.
 const POTTSMODELS_TEST_FILES = [
     "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "openvt_analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
+    "callbacks_gc.jl",
     (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
     # paper reproductions (ROADMAP Phase 6 "Acceptance for model reproductions"): the SMOKE
     # tier runs here, the FULL tier under POTTS_FULL_REPRODUCTION=true
