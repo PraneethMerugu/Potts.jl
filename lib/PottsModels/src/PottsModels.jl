@@ -76,13 +76,15 @@ diagonal from the colony centroid (colony lower left, medium upper right), in th
 the other frameworks' closeups ([`openvt_colony_panel!`](@ref PottsModels.openvt_colony_panel!)
 with `colour = :area`): each cell coloured by its area with `coolwarm`, scaled to the min–max
 of the areas of the cells in the panel, a white medium and thin black pixel-edge boundaries
-between unlike ids. The areas are the cells' site counts in the whole `frame`, so a cell cut
+between unlike ids. The lattice fills the panel edge to edge, with no outer margin, inside a
+thin grey frame like the other frameworks' closeups (D-229). The areas are the cells' site counts in the whole `frame`, so a cell cut
 by the window keeps its full area; `areas` (cell id => area) supplies them instead, e.g. for a
 block stored without the rest of the lattice. Above the panel, 1/45 of the panel high apart,
 is the 5/45-high banner in the proposed Potts.jl colour RGB(8,29,88) with "Potts.jl" in white
 bold; `banner = false` leaves it out and gives the bare panel (the consortium's
 `closeup.png`). The 64-site default, about 8 cell diameters, is an estimate of what the TST
-closeup shows.
+closeup shows. The submitted panel (D-229) is a block moved inward along the same ray until it
+is about 70 % tissue; it is passed as `frame` with `window` equal to its size.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """

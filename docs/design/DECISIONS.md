@@ -4247,3 +4247,16 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Checks** (PC, edc70e69):
   - all suites pass (PottsModels 38207 pass, 0 fail) and gate.jl shows 0 allocations;
   - the A/B against mb22 on a fresh worktree passes, all cases within 0.996–1.006 (graner_glazier_72 0.9958 / 0.9999).
+
+## D-229 OpenVT F1: the Potts.jl panel reframed to the other panels' framing (2026-10-12; maintainer, relayed by the peer session "Potts.jl models and publications"; amends D-175 and D-185 for the F1 window and frame; P6.15n)
+
+- **Ruling (maintainer, relayed).** "compare our closeup image with the other frameworks. i feel like our cells dont occupy the image the same way the other ones do", then "yes, update the existing release before i send it". This is the ruling the f1-f4 record README said a change to the D-175 window needed.
+- **Problem.** In the 9 Oct draft composite, the other nine closeups are about 65–75 % tissue, with the rim running from the top edge to the right edge. Ours (the D-175 block at (976, 974), centred where the 45° ray leaves the colony) was 56.3 % tissue (1792 medium sites), with the rim running corner to corner. It also had a white margin of about 20 px and no frame; the others have a thin grey frame.
+- **Window.**
+  - Same size (64 × 64) and same state: case (a) run 1, seed 15701, at MCS 11600 with N = 10001, rerun on the PC by `run_f1_reframe.jl`. The rerun matched the record, and the D-175 block matched site for site.
+  - The centre moves inward along the same ray in 0.5-site steps. The step kept is the one nearest 70 % tissue among those with 65–75 % tissue and the top-to-right rim (top row and right column hold both tissue and medium; left column and bottom row no medium).
+  - Chosen: s = 7 sites, offset **(971, 969)**, **69.7 % tissue**, 53 cells, 1242 medium sites. Every candidate (s = 0…30) is in `window_candidates.tsv`.
+  - The rule is applied in the record, not in `openvt_f1_figure`, whose default stays rim-centred as the frozen test describes. The panel is rendered from the stored block.
+- **Frame.** `openvt_f1_figure` drops the outer white margin, so the lattice fills the image edge to edge, and draws a thin grey frame (1 px at 10 px/mm, RGB(153,153,153)) as Axis spines. Colours and boundaries are unchanged (D-185). The frozen F1/F4 test passes (139/139).
+- **Record.** It is an amendment to `data/15/f1-f4-2026-10-08/` (the D-146 record), so the package keeps one P6.15h record. The D-175 block, its cells and its three figures are kept with the suffix `_d175`.
+- **Package and release.** `core.zip` is rebuilt so that `results/Potts.jl/closeup.png` is the new panel, with the README's F1 rows describing the new window. The bulk assets are unchanged. Replacing the asset on the 12 Oct release needs the maintainer's OK at that moment.
