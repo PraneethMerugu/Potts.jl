@@ -572,6 +572,29 @@ The grids:
 - **In ε_y terms:** below T ≈ J the bias pins; above it, ε_y climbs without bound as β falls. The paper's low-β plateau ("the yield strain remains almost the same", p.5827) appears at no tested T.
 - **Inference, not a ruling:** the paper's bulk shear behaves like an imposed deformation, not a per-copy energy bias. F1 is re-sharpened to ask how the bulk shear was applied. Foam's bulk-shear claims stay provisional. No further Eq 2 screens are planned without new evidence.
 
+### 5.6 T1-neighbourhood check: pre-registered protocol (2026-10-13, spec owner; frozen before any run)
+
+**Authority.** The maintainer approved it: "yes, run the T1 neighbourhood check". It runs in the spec chat on the PC.
+
+**Why.** The paper defines a bubble's sides as "its number of different neighbors" and counts a T1 whenever a neighbour list changes (04b p.5823). It never says which neighbour relation. Its energy (Eq 1) and φ (Eq 8, "sites i, j are neighbors") both use the 4th-order shell of 20 sites. Our T1 detector uses `VonNeumann(1)` (§2.8), a default chosen against `Moore(1)`, not against the interaction shell, so our φ and our T1 counts use different neighbour relations.
+- Under the 20-site shell, two bubbles become neighbours when they come within about 2 sites. A shrinking edge therefore registers a contact change before the topology flips, and an edge that pins just short of flipping can flicker.
+- That would fit three open points at once: T1s at low β where our foam pins; the even-valued bars of Figs 4(b)/5(b) (A-15, one gain plus one loss); and half-integers in the Fig 5 inset.
+- If true, the three Eq 2 screens (§5.4, §5.5, D-205) measured the drive against a stricter observable than the paper's.
+
+**Design.**
+- Model and settings: the frozen D-205 run, i.e. R1 (`P64RShearedFoam`) at T → 0⁺, the 5 ordered foams and τ, β ∈ {10⁻⁴, 10⁻³, 5·10⁻³, 0.01, 0.05}, 3 replicates with the D-205 seeds and caps.
+- Grid: κ_b = κ_D190·2^(i/2), i = −4, −2, 0, 2, 4 (0.62 to 10.0). That is 75 runs.
+- Each run counts T1s per MCS on **the same trajectory** with both detectors, `vn1` = `VonNeumann(1)` and `no4` = `NeighborOrder(4)`. Both use `t1_events(unit = :t1)` and the first-T1 rule `p64kb_settled` (threshold 1, window 100τ). A run stops when both detectors have settled, or at the cap.
+- Recorded per run: t_first and t1_total for each detector, and the first MCS with any contact change for each.
+
+**Reading (fixed before the run).**
+- **Detector is live** if, at settings where `vn1` records no T1 within the cap, `no4` records a first T1 in at least 2 of 3 replicates, in at least 3 (κ_b, β) cells. Then a full D-205-style κ_b scan with `no4` detection is the next screen. It is pre-registered separately, and the T1 neighbour relation becomes an open spec question (§2.8, A-15).
+- **Detector ruled out** if `no4` gives a first T1 in no cell where `vn1` gives none, and the two t_first agree within one check window (100τ our MCS) wherever both yield. Then F1 stands as sharpened in §5.5.
+- **Anything in between** is reported as it is, with no decision.
+- This check is an observable comparison. It does not test a target, and no band or target changes.
+
+**Record.** `data/04/t1-nbhd-check-<date>/`: scan.tsv, provenance.toml, README. The runner is `data/04/run_t1_nbhd_check.jl`, not frozen. It includes the frozen tests unchanged as its gate.
+
 ## 6. Required general features
 
 | ID | Needed? | Use |

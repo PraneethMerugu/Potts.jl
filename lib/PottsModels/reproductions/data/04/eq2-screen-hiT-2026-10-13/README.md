@@ -21,14 +21,14 @@ The run used 24 threads on the PC, from 16:17 to 18:09. The controls show that n
   - The paper's ordered foam yields there at about 4.4–5.5·10⁴ MCS (ε_y = 1.10, Fig 11a).
   - The β = 10⁻³ onset needs κ_b ≈ 0.6 (2 of 3) to 1.25 (3 of 3).
 - **At T = 5, the two targets separate.** κ̂ = 0.10 and 0.18 (ratio 1.7), so `off_target`. Here the response is close to linear: at κ_b = 0.31, β·t_first is nearly the same for β = 5·10⁻³, 0.01 and 0.05. So the paper's drop in ε_y at β = 0.05 is lost.
-- **The shape in yield-strain terms.** ε_y ∝ β·t_first, normalised to β = 0.01:
+- **The shape in yield-strain terms.** ε_y ∝ β·t_first, normalised to β = 0.01. The paper's ordered points are at β = 0.001, 0.005, 0.01, 0.02 and 0.05 (1.13, 1.10, 1.11, 0.80, 0.43); 0.02 is omitted here:
 
   | β | paper (Fig 11a) | R3, T = 3, κ_b = 0.31 | R3, T = 5, κ_b = 0.31 |
   |---|---|---|---|
-  | 10⁻³ | 1.38 | > 2.4 (no yield) | ≈ 2.5 |
-  | 5·10⁻³ | 1.39 | 1.33 | 1.05 |
+  | 10⁻³ | 1.02 | > 2.4 (no yield) | ≈ 2.5 |
+  | 5·10⁻³ | 0.99 | 1.33 | 1.05 |
   | 0.01 | 1 | 1 | 1 |
-  | 0.05 | 0.54 | 0.76 | 0.96 |
+  | 0.05 | 0.39 | 0.76 | 0.96 |
 
   - The paper has a rate-independent plateau at low β and a drop at high β.
   - At T = 3, R3 has the high-β drop, but ε_y keeps climbing as β falls (sub-threshold creep).
