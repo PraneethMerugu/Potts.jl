@@ -39,8 +39,8 @@ decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
-sha256 = "d116d02fc798ccfc999881c8a041d8938a2ac3b9825881221f0c0f2680b90447"
-decision = "D-200"
+sha256 = "b06622ef5f22aee0eee2b3f3e11d004716062c999dd687cf0d347f643666e498"
+decision = "D-239"
 
 [[file]]
 path = "acceptance/p6_2a_akeeb_analysis.jl"
@@ -379,13 +379,13 @@ decision = "D-153"
 
 [[file]]
 path = "reproductions/01_merks.jl"
-sha256 = "cf9a6b8b301089ddd95bfb2d7a2578e47754f58e85017b213d3f83f4dfbb514f"
-decision = "D-200"
+sha256 = "6cb7736304e692f20e67c688bb6203bcdad2597de5e0910d4f1e7189c9bc9a38"
+decision = "D-240"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "8cb40574eab6e93697e1575455496a66d264a5a8b311057962594d74d74a165d"
-decision = "D-202"
+sha256 = "97829e62cad8327cd0cc1bc44af305d9e60ac3fa2b365fc103240d864dafab15"
+decision = "D-240"
 
 [[file]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
@@ -399,8 +399,8 @@ decision = "D-165"
 
 [[file]]
 path = "reproductions/09_cell_sorting.jl"
-sha256 = "626e4f8ab5387af352c6e0147d2cb7d737bc3541271208db2bbe12b5d5257551"
-decision = "D-166"
+sha256 = "b42033ee21d53770a9a59b6ea7d41c0d665ee939768b2369a932b0a74a3d7c83"
+decision = "D-239"
 
 [[file]]
 path = "acceptance/p6_0bp_updates.jl"
@@ -469,8 +469,8 @@ decision = "D-217"
 
 [[file]]
 path = "reproductions/01_merks_page.jl"
-sha256 = "fe3be09685e71d121daa24a8193ac969d5c6d8c458169732af4c446a01c190a4"
-decision = "D-200"
+sha256 = "d8998fa940f062e4025376c6fad08abe1ac7beac5063f69927e3f99497fd5f24"
+decision = "D-240"
 
 [[file]]
 path = "reproductions/04_foam.jl"

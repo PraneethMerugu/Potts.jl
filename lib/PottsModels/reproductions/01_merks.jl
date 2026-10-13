@@ -237,7 +237,7 @@ let
     oursline!(ax, xval.(p3), p3)
     ## V-C4, 01b Fig. 7: compactness against J(c,c), with and without contact inhibition
     ax = Axis(fig[1, 2]; title = "V-C4 · 01b Fig. 7", xlabel = "J(c,c)", limits = (nothing, (0, 1.05)))
-    for (x, y) in ((20, 0.3), (40, 0.3), (80, 0.85), (0, 0.35), (15, 0.83), (20, 0.83), (40, 0.83))
+    for (x, y) in ((20, 0.3), (40, 0.4), (80, 0.85), (0, 0.35), (15, 0.83), (20, 0.83), (40, 0.83))
         paperband!(ax, x - 2, x + 2, y - 0.1, y + 0.1)
     end
     oursline!(ax, xval.(pts("V-C4", isci)), pts("V-C4", isci); label = "CI")
@@ -246,7 +246,7 @@ let
     ## V-C5, 01b Fig. 8: compactness against χ(c,M)
     ax = Axis(fig[1, 3]; title = "V-C5 · 01b Fig. 8", xlabel = "χ(c,M)", xticks = (1:3, ["0", "500", "5000"]),
         limits = ((0.5, 3.5), (0, 1.05)))
-    for (k, y) in ((1, 0.9), (2, 0.35), (3, 0.2), (1, 0.95), (3, 0.7))
+    for (k, y) in ((1, 0.9), (2, 0.4), (3, 0.2), (1, 0.95), (3, 0.7))
         paperband!(ax, k - 0.15, k + 0.15, y - 0.1, y + 0.1)
     end
     oursline!(ax, 1:3, pts("V-C5", isci))
@@ -495,7 +495,7 @@ Markdown.parse("""
 | χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labelled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
-| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = 200² = 40 000 (01b Methods) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts` (ROADMAP P6.E2), not a re-run for this alone (D-200 item 2) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts` (ROADMAP P6.E2), not a re-run for this alone (D-200 item 2) | not an author question |
 | Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
 | Copy proposal | random source, random target among its neighbours | source among the neighbours of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centres | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
@@ -601,8 +601,9 @@ Markdown.parse("""
 # excluded: (500 − 2)² = 248 004 attempts on the 2006 lattice (1-site frame) and
 # (202 − 4)² = 39 204 on the 2008 one (2-site frame). That is exactly TST's
 # (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices. The
-# 2008 paper states N = 200² = 40 000 attempts per MCS (01b Methods), 2 % more than ours. The
-# paper is the target, so this is a row of the deviations table (D-200 item 2), and the next
+# 2008 paper sets N, the attempts per MCS, to the number of lattice sites (01b p.11); its
+# parameter files (Dataset S1) use a 200² lattice, so N = 200² = 40 000, 2 % more than ours.
+# The paper is the target, so this is a row of the deviations table (D-200 item 2), and the next
 # full run uses the paper's N.
 #
 # **Clocks (D-156).** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
@@ -818,7 +819,7 @@ full = if FULL
         (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (40.0, false)]
     vc4 = Dict(pt => tmap(i -> C5(4000 + 100k + i; p = [:J => Jm(pt[1]); pt[2] ? Pair[] : [:χcc => 500.0]]), 1:10)
                for (k, pt) in enumerate(pts4))
-    pts5 = [((0.0, true), 0.9), ((500.0, true), 0.35), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
+    pts5 = [((0.0, true), 0.9), ((500.0, true), 0.4), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
     vc5 = [(pt, want, tmap(i -> C5(5000 + 100k + i; p = [:χcM => pt[1]; pt[2] ? Pair[] : [:χcc => pt[1]]]), 1:10))
            for (k, (pt, want)) in enumerate(pts5)]
     ss = [0.0, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.25]
@@ -1016,8 +1017,8 @@ if FULL
     addrow!("V-C3 at 10⁴ + 100 MCS (time from the end of relaxation)", "—", "plateaus $(fmt(mean(mean.(C10b)[1:5]))) / $(fmt(mean(mean.(C10b)[8:11])))",
         "—", "reported", nothing)
     c4(pt) = mean(first.(full.vc4[pt]))
-    addrow!("V-C4 CI at J_cc = 20, 40, 80", "0.3, 0.3, 0.85 (01b Fig. 7)", join(fmt.(c4.(((20.0, true), (40.0, true), (80.0, true)))), ", "),
-        "± 0.1", "FULL", abs(c4((20.0, true)) - 0.3) <= 0.1 && abs(c4((40.0, true)) - 0.3) <= 0.1 && abs(c4((80.0, true)) - 0.85) <= 0.1)
+    addrow!("V-C4 CI at J_cc = 20, 40, 80", "0.3, 0.4, 0.85 (01b Fig. 7)", join(fmt.(c4.(((20.0, true), (40.0, true), (80.0, true)))), ", "),
+        "± 0.1", "FULL", abs(c4((20.0, true)) - 0.3) <= 0.1 && abs(c4((40.0, true)) - 0.4) <= 0.1 && abs(c4((80.0, true)) - 0.85) <= 0.1)
     addrow!("V-C4 no CI at J_cc = 0, 15, 20, 40", "0.35, 0.83, 0.83, 0.83", join(fmt.(c4.(((0.0, false), (15.0, false), (20.0, false), (40.0, false)))), ", "),
         "± 0.1", "FULL", abs(c4((0.0, false)) - 0.35) <= 0.1 && all(J -> abs(c4((J, false)) - 0.83) <= 0.1, (15.0, 20.0, 40.0)))
     addrow!("V-C4 rise", "monotone", "CI $(fmt(c4((80.0, true)) - c4((0.0, true)))); no CI $(fmt(c4((40.0, false)) - c4((0.0, false))))",
@@ -1162,6 +1163,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
 # | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
 # | 2026-10-09 | The 01b digitised targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitised curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | D-202 |
+# | 2026-10-13 | V-C4's CI target at J(c,c) = 40 is 0.4 (was 0.3) and V-C5's CI target at χ(c,M) = 500 is 0.4 (was 0.35), both ± 0.1. The record's values (0.378 and 0.399) pass as before, re-derived with no new runs. The attempts-per-MCS row now credits N = 200² to the paper's rule (N = the number of lattice sites) on the lattice of its parameter files, not to the paper's text | paper audit: 01b Figs. 7 and 8 at 400 dpi read ≈ 0.40 at both points (digitised 0.401 and 0.396); D-240 |
 #
 # ```@raw html
 # </details>

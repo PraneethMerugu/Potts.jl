@@ -1036,8 +1036,9 @@ function _openvt_pkg_backend(meta)
     return isempty(a) ? "CPU" : "CPU, `$a`"
 end
 
-# a provenance fact about our measurements, for the results README only (D-219)
-const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements were produced with metrics.cpp built with GCC 13 on Linux."
+# a provenance fact about our measurements, for the results README only (D-219; wording
+# corrected after the 2026-10-13 paper audit: the values come from the Julia port)
+const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements were computed by the Julia port of metrics.cpp, checked against metrics.cpp (GCC 13, -ffp-contract=off) on the consortium's frames."
 
 # D-215 (8): what the consortium's scripts need to know (results README and EMAIL.md)
 function _openvt_pkg_note_lines(o1)

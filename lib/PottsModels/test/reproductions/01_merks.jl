@@ -49,12 +49,17 @@
 # | V-C1 | 1000 cells: islands without CI, network with CI at 10⁴ MCS (Fig. 2) | O4 network (CI) in ≥ 4/5; no CI: O2 < 0.5 in ≥ 4/5 | — | 2 × 5 runs, 502² |
 # | V-C2 | sprout with CI, compact without at 10⁴ MCS (Fig. 4) | mean C(CI) < mean C(no CI) − 0.3 | 1000 MCS, 1 seed: C(CI) < C(no CI) − 0.2 | the V-C3 runs at ratio 0 and 1 |
 # | V-C3 | C vs χcc/χcM at 10⁴ MCS (Fig. 5) | low plateau (ratio 0–0.4) 0.35 ± 0.07; high (0.7–1) 0.9 ± 0.07; midpoint in [0.45, 0.65] | — | 11 ratios × 10 |
-# | V-C4 | C vs J(c,c) at 5000 MCS (Fig. 7) | ±0.1: CI 0.3 at J_cc 20 and 40, 0.85 at 80; no CI 0.35 at 0, 0.83 at 15, 20, 40; C rises by > 0.3 from the lowest to the highest J_cc in both | — | 11 points × 10 |
-# | V-C5 | C vs χ(c,M) at 5000 MCS (Fig. 8) | ±0.1: CI 0.9 / 0.35 / 0.2 at χcM 0 / 500 / 5000; no CI 0.95 / 0.7 at 0 / 5000 | — | 5 points × 10 |
+# | V-C4 | C vs J(c,c) at 5000 MCS (Fig. 7) | ±0.1: CI 0.3 at J_cc 20, 0.40 at 40, 0.85 at 80; no CI 0.35 at 0, 0.83 at 15, 20, 40; C rises by > 0.3 from the lowest to the highest J_cc in both | — | 11 points × 10 |
+# | V-C5 | C vs χ(c,M) at 5000 MCS (Fig. 8) | ±0.1: CI 0.9 / 0.40 / 0.2 at χcM 0 / 500 / 5000; no CI 0.95 / 0.7 at 0 / 5000 | — | 5 points × 10 |
 # | V-C7 | C vs s at 5000 MCS (Fig. 9) | CI: midpoint in s ∈ [0.07, 0.15]; no CI: \|C − 0.95\| ≤ 0.1 at s 0, 0.1, 0.25 | — | 11 points × 10 |
 # | V-C9 | C vs T at 5000 MCS (Fig. 11) | ext-only C(T = 50) > 0.85; ext-retr C(T = 50) < 0.5; both < 0.3 at T = 800 | 1000 MCS, 1 seed: ext-only − ext-retr > 0.2 at T = 50 | 4 × 10 runs |
 # | V-C12 | displacement CI ≈ 85 µm vs no CI ≈ 42 µm over 160 h (Fig. 6E) | O5 from MCS 0 to 19 300: ratio CI/no CI in [1.5, 2.5] | — | 2 × 10 runs |
 # | M6 time | — | every 2008 binding value also at N + 100 MCS | — | reported |
+#
+# Re-targeted under D-240 (2026-10-13 paper audit; spec 01 §5): V-C4's CI target at J_cc = 40
+# is 0.40 (was 0.3) and V-C5's CI target at χcM = 500 is 0.40 (was 0.35), both ± 0.1, from
+# 01b Figs. 7 and 8 read at 400 dpi (digitised 0.401 and 0.396). Every other value and every
+# tolerance is unchanged.
 #
 # PARKED (D-153; not run, listed on the page): V-E2, V-E3, V-E4 (lacunae and branch points
 # need the 01a morphometry pipeline, whose pixel scale is unknown: A-18; G12 not built),
@@ -350,11 +355,11 @@ if P63D_FULLREPRO
             (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (40.0, false)]
         m4 = Dict(pt => mean(p63d_tmap(i -> C(4000 + 100k + i; p = [:J => Jm(pt[1]); pt[2] ? Pair[] : [:χcc => 500.0]]), 1:10))
                   for (k, pt) in enumerate(pts4))
-        @test abs(m4[(20.0, true)] - 0.3) <= 0.1 && abs(m4[(40.0, true)] - 0.3) <= 0.1 && abs(m4[(80.0, true)] - 0.85) <= 0.1
+        @test abs(m4[(20.0, true)] - 0.3) <= 0.1 && abs(m4[(40.0, true)] - 0.40) <= 0.1 && abs(m4[(80.0, true)] - 0.85) <= 0.1
         @test abs(m4[(0.0, false)] - 0.35) <= 0.1 && all(J -> abs(m4[(J, false)] - 0.83) <= 0.1, (15.0, 20.0, 40.0))
         @test m4[(80.0, true)] - m4[(0.0, true)] > 0.3 && m4[(40.0, false)] - m4[(0.0, false)] > 0.3
         # V-C5: (χcM, CI?) → paper value
-        pts5 = [((0.0, true), 0.9), ((500.0, true), 0.35), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
+        pts5 = [((0.0, true), 0.9), ((500.0, true), 0.40), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
         for (k, ((χ, ci), want)) in enumerate(pts5)
             got = mean(p63d_tmap(i -> C(5000 + 100k + i; p = [:χcM => χ; ci ? Pair[] : [:χcc => χ]]), 1:10))
             @test abs(got - want) <= 0.1

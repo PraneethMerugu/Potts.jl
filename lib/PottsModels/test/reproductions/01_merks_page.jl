@@ -108,7 +108,15 @@
 # in (c) a V-C12 snapshot also recomputes `displacement_sites_0` from σ at MCS 0; in (d)
 # V-C12's check is "displacement ratio CI / no CI (MCS 0 to 19 300)" on
 # `displacement_sites_0`. Item 2: (g) now requires a deviations row on attempts per MCS (the
-# paper's N = 200² = 40 000 against our 39 204, a 2 % time scale, the paper the target).
+# paper's N = number of lattice sites, 200² = 40 000 on the 200² lattice of the 01b parameter
+# files, against our 39 204, a 2 % time scale, the paper the target).
+#
+# Amended under D-240 (2026-10-13 paper audit). The frozen test re-targets V-C4's CI value
+# at J_cc = 40 to 0.40 (was 0.3) and V-C5's CI value at χcM = 500 to 0.40 (was 0.35), both
+# ± 0.1; (d) re-applies them, and the record's `verdicts.tsv` rows were re-derived from
+# `replicates.tsv` with no new dynamics. In (a) the `[vc12_mcs0]` amendment's
+# `frozen_test_sha256` stays the D-200 file (`cf9a6b8b…`), and frozen.toml's entry is the file
+# now.
 #
 # Negative controls (D-048): the recomputed rules flip on perturbed copies of the record
 # (V-C3 low plateau moved into and out of its band, a V-C1 network flag flipped); the job
@@ -349,8 +357,8 @@ function p63f_verdicts(R)
     # V-C4
     m4(J, ci) = mC(sel("V-C4"; J_cc = J, CI = ci), 5000)
     a = (m4(20.0, true), m4(40.0, true), m4(80.0, true))
-    add!("V-C4", "CI: mean C at J_cc = 20, 40, 80", join(p63f_f.(a), ", "), "0.3, 0.3, 0.85 ± 0.1",
-        abs(a[1] - 0.3) <= 0.1 && abs(a[2] - 0.3) <= 0.1 && abs(a[3] - 0.85) <= 0.1)
+    add!("V-C4", "CI: mean C at J_cc = 20, 40, 80", join(p63f_f.(a), ", "), "0.3, 0.4, 0.85 ± 0.1",
+        abs(a[1] - 0.3) <= 0.1 && abs(a[2] - 0.40) <= 0.1 && abs(a[3] - 0.85) <= 0.1)
     b = (m4(0.0, false), m4(15.0, false), m4(20.0, false), m4(40.0, false))
     add!("V-C4", "no CI: mean C at J_cc = 0, 15, 20, 40", join(p63f_f.(b), ", "), "0.35, 0.83, 0.83, 0.83 ± 0.1",
         abs(b[1] - 0.35) <= 0.1 && all(x -> abs(x - 0.83) <= 0.1, b[2:4]))
@@ -358,7 +366,7 @@ function p63f_verdicts(R)
     add!("V-C4", "rise from the lowest to the highest J_cc (CI; no CI)", "$(p63f_f(rci)); $(p63f_f(rno))", "> 0.3 both",
         rci > 0.3 && rno > 0.3)
     # V-C5
-    for ((χ, ci), want) in [((0.0, true), 0.9), ((500.0, true), 0.35), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
+    for ((χ, ci), want) in [((0.0, true), 0.9), ((500.0, true), 0.40), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
         got = mC(sel("V-C5"; χcM = χ, CI = ci), 5000)
         add!("V-C5", "χcM = $(Int(χ)), $(ci ? "CI" : "no CI"): mean C", p63f_f(got), "$want ± 0.1", abs(got - want) <= 0.1)
     end
@@ -551,11 +559,13 @@ const P63F_R = p63f_with_vc12(P63F_R0, P63F_VC12)
     frozen = isfile(P63F_FROZEN_TOML) ? TOML.parsefile(P63F_FROZEN_TOML)["file"] : Any[]
     entry = findfirst(f -> f["path"] == "reproductions/01_merks.jl", frozen)
     @test entry !== nothing
-    # the launch ran the D-153 freeze; the D-200 amendment (V-C12 from MCS 0) is the file now
+    # the launch ran the D-153 freeze and the D-200 amendment (V-C12 from MCS 0) the D-200
+    # file; D-240 re-targeted V-C4 and V-C5 (no new dynamics), and frozen.toml's entry is the file now
     @test get(prov, "frozen_test_sha256", "") == "cc52d26c4064c39263b05e7d01f66826638adab9db68fb83e495581c98041eb6"
     amend = get(prov, "vc12_mcs0", Dict{String, Any}())
+    @test get(amend, "frozen_test_sha256", "") == "cf9a6b8b301089ddd95bfb2d7a2578e47754f58e85017b213d3f83f4dfbb514f"
     if entry !== nothing
-        @test get(amend, "frozen_test_sha256", "") == frozen[entry]["sha256"] == p63f_sha(P63F_FROZEN)
+        @test frozen[entry]["sha256"] == p63f_sha(P63F_FROZEN)
     end
     @test get(amend, "decision", "") == "D-200"
     @test get(amend, "new_dynamics", true) === false
@@ -815,7 +825,8 @@ end
         ok || @info "P6.3f: parked target without a row: $id"
         @test ok
     end
-    # D-200 item 2: attempts per MCS is a deviation (the paper's N = 200² is the target)
+    # D-200 item 2: attempts per MCS is a deviation (the target is the paper's N = number of
+    # lattice sites, 200² on the lattice of the 01b parameter files)
     att = filter(r -> occursin(r"attempts"i, r[1]), body)
     @test length(att) == 1
     if length(att) == 1
