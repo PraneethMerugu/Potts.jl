@@ -111,7 +111,8 @@ key.k0 ⊻= (entity >> 32) * W1       # high word of the entity; 0 below 2³², 
   renumbers another. Collisions are rejected at compile time. Built-in streams
   (direction, acceptance, priority, color order, initialization) are reserved.
 - Cell-addressed draws include the generation, so a reused id never replays a dead
-  cell's randomness.
+  cell's randomness. This holds for generated cell-scope `rand()` too: its entity is
+  `cell_entity(c, generation[c])`, and a daughter's rule draws use her incremented generation.
 - Nothing depends on thread order or launch order. The same seed reproduces a run on
   a given backend; this is free, and not a published guarantee (D-029).
 - Bounded integer draws use Lemire multiply-shift. Uniforms are grid midpoints in (0,1).
