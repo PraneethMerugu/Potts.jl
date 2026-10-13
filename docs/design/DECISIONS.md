@@ -4284,3 +4284,32 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Scope.** `centroid(c, k)`, `separation` and `minimum_image` (D-075, api-synthesis §6.4) are not in this freeze. They go to P6.5a2 with their own tests.
 - **Re-frozen the same day (sha256 `ec8c6e94…9351`).** Two claim-set assertions in testset 5 had their expected values swapped. With `partner = [2, 1, 0]`, a copy with old = 0 and new = 1 reads `partner[1] = 2`, so the claim is 2, not 1; likewise new = 2 claims 1. The implementer reported this instead of working around it, and the test author's own calibration stub, `reads = (partner[old], partner[new])`, gives the corrected values. Nothing else changed.
 - **Left open (unpinned).** D-066's output mapping to `birth` (SII ids, `cluster`, plots, PIFF), `with_capacity`, a daughter that receives no site, `sibling(k)` with several alive members of kind k, and the raw value of a reference to a dead cell.
+## D-233 `@convert` is a per-MCS independent-decision pass, device-capable (2026-10-13; maintainer-directed; spec 14 §2.5, §9 ruling; paper over code; amends the R8 sketch, P6.5b scope; under D-066, D-089, D-156)
+- **Semantics.** Each candidate site decides independently from the start-of-pass state, with p evaluated once per MCS per cluster. The 14a code's sequential, re-evaluated form is a recorded variant.
+- **Implementation.** Generated KA kernels, one implementation for CPU and GPU, with no host round trip per MCS:
+  - (a) a decide kernel with counter-addressed draws (key, mcs, site, a dedicated conversion stream), counting conversions per cluster with atomics;
+  - (b) allocation for clusters with conversions and no target member: reset dead references first (D-066 item 5(b)), then allocate lowest-first through the device division planner (D-089, lifecycle_device.jl);
+  - (c) a paint kernel through the shared ownership-delta routine in device form, with atomic tracker updates (volume, surface, moments, contacts).
+  - `created` marks the birthing conversion. The block is named so `@extend` can replace it (14c).
+- **Gate.** At most 5 % on non-convert models in the A/B, and zero cost when no `@convert` is declared. Test-first per AUTONOMY §7.
+- **Tests frozen (P6.5b; spec-checked by the spec 14 owner).** `acceptance/p6_5b_convert.jl` (sha256 `09016687…b48c`) and `acceptance/p6_5b_ownership.jl` (`61350592…fe0f`):
+  - **Block form:** `@convert name clusters(k) begin from/to/at/p; transfer(x, from => to, per_site); compound writes end`. Defaults: `from = sibling(k)` of the domain kind, `at` = all of `from`'s sites, `p = 1`. `to = sibling(k)` allocates implicitly on the first conversion (lowest free slot, gen + 1, next birth serial, declared defaults); `| Fresh(k)` is equivalent.
+  - **Decisions:** p per candidate from the start-of-pass state, clamped to [0, 1]; a site converts iff u < p, with the draw address pinned (stream `"Potts.convert.<name>"`, (mcs, site), word 1), so results do not depend on threads or algorithm.
+  - **Bookkeeping:** `transfer` once per entity (target volume conserved), `created` true on exactly one conversion, reference reset before allocation, exact tracker recount and ΔH.
+  - **Schedule:** each pass is a named `@schedule` phase, by default just before `lifecycle`; bad names are an ArgumentError; the fingerprint covers the pass and its placement; `@extend` replaces a pass by name.
+  - **Cost:** a convert-free model keeps its pinned fingerprint; 0 B warm on CPU; on the device 0 syncs, 0 transfers, 0 B per MCS including the allocating MCS (supersedes D-075's round-trip allowance for `@convert`); CPU vs device Float32 bitwise on an exact-binary fixture.
+  - **E1:** kind-conditional expression defaults, evaluated per slot at init and for `@convert`-allocated slots only; division daughters copy the parent (D-066).
+  - **Ownership routine:** priority orders application within a round, the schedule orders rounds; default convert before divide; `clear_on_ownership_change` at every site whose owner changes; `@on_copy` never fires from the lifecycle; remove beats divide.
+  - **A-17:** a member's transition is no longer lost when its cluster divides in the same MCS, via a public `CorePotts.transitioning(EVENT_DIVIDE | EVENT_DIVIDE_CLUSTER)`.
+- **Rulings on the test author's choices (spec owner confirmed).**
+  1. `budget` is deferred to a later row; if needed, the order-free form is a cap by draw rank (lowest u first).
+  2. "remove > convert" holds only within a round: a lifecycle removal after the convert pass can still lose sites to it. Open until `@retire` (P6.4c/P6.11).
+  3. Per-conversion compound writes stay alongside `transfer` (the sum is order-free).
+  4. Implicit allocation for `to = sibling(k)`; `Fresh` kept as a redundant spelling.
+  5. Expression defaults are re-evaluated only at init and for `@convert` slots (D-066).
+  6. A dead `to` referent reads kind-0 defaults; a NaN p converts nothing because `u < NaN` is false (`clamp` keeps NaN). The decision line carries a comment so it is never rewritten as `!(u >= p)`; the E4 debug report counts NaN p per pass.
+  7. Zero round trips per MCS on the device (stricter than D-075).
+  8. The draw address is part of the contract.
+  9. `CorePotts.transitioning` is public; candidates are restricted to `from`'s sites even when `at` selects others; `at` replaces api-synthesis's `sites`.
+- **Left open (unpinned).** `budget`, gate/`when`, order, `Every(n)`, convert-to-medium, and remove > convert across rounds.
+
