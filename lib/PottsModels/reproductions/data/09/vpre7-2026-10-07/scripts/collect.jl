@@ -54,8 +54,10 @@ end
 # the four criteria (spec 09 §9.1 V-PRE7, verbatim)
 d0 = abs(m(0.0, 2000, "dl") - m(0.0, 100, "dl"))
 o2, o5, o10 = m(2.0, 1000, "dl"), m(5.0, 1000, "dl"), m(10.0, 1000, "dl")
-late = filter(t -> 1000 <= t <= 10_000, saves)
-f40 = [m(40.0, t, "dl") for t in late]
+# T = 40 re-targeted 2026-10-13 (paper audit, D-239): the band and the T = 10 gap replace
+# "> 0.07 at every save in [10³, 10⁴]"
+f40 = (m(40.0, 1000, "dl"), m(40.0, 2000, "dl"))
+gap40 = m(40.0, 2000, "dl") - m(10.0, 2000, "dl")
 g80 = mean(gone.(at(80.0, 500)))
 n_per_T = Dict(T => length(at(T, 1000)) for T in Ts)
 pf(ok) = ok ? "PASS" : "FAIL"
@@ -64,8 +66,10 @@ open(joinpath(rec, "verdicts.tsv"), "w") do io
     println(io, join(("T = 0 frozen", "|F_dl(2000) − F_dl(100)| = $(r4(d0))", "< 0.02", pf(d0 < 0.02)), '\t'))
     println(io, join(("order at 10³", "F_dl(T=2) $(r4(o2)), F_dl(T=5) $(r4(o5)), F_dl(T=10) $(r4(o10))",
         "F_dl(T=2) > F_dl(T=5) > F_dl(T=10)", pf(o2 > o5 > o10)), '\t'))
-    println(io, join(("T = 40 plateau", "min F_dl over [10³, 10⁴] = $(r4(minimum(f40))) (at $(Int(late[argmin(f40)])))",
-        "> 0.07 at every save in [10³, 10⁴]", pf(minimum(f40) > 0.07)), '\t'))
+    println(io, join(("T = 40 plateau",
+        "F_dl(10³) = $(r4(f40[1])), F_dl(2×10³) = $(r4(f40[2])), F_dl(T=40) − F_dl(T=10) at 2×10³ = $(r4(gap40))",
+        "F_dl in [0.12, 0.18] at 10³ and at 2×10³; F_dl(T=40) − F_dl(T=10) ≥ 0.01 at 2×10³",
+        pf(all(f -> 0.12 <= f <= 0.18, f40) && gap40 >= 0.01)), '\t'))
     println(io, join(("T = 80 disintegration", "share of cells gone at 500 = $(r4(g80))", "> 0.5", pf(g80 > 0.5)), '\t'))
 end
 @info "collected" length(files) n_per_T

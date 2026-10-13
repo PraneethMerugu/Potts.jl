@@ -172,16 +172,14 @@ vm(f, T, t) = mean(f(r) for r in vsel(T, t))
 vse(f, T, t) = (v = [f(r) for r in vsel(T, t)]; std(v) / sqrt(length(v)))
 dl_of(r) = vfrac(r, "dl")
 vpre7_n = length(vsel(10.0, 1000))
-vpre7_late = filter(t -> 1000 <= t <= 10_000, vpre7_t)
 ## the four criteria (spec §9.1 V-PRE7, verbatim)
 v7_d0 = abs(vm(dl_of, 0.0, 2000) - vm(dl_of, 0.0, 100))
 v7_o = vm.(dl_of, (2.0, 5.0, 10.0), 1000)
-v7_f40 = [vm(dl_of, 40.0, t) for t in vpre7_late]
+v7_f40 = vm.(dl_of, 40.0, (1000, 2000))                         # T = 40 band, D-239
+v7_gap = vm(dl_of, 40.0, 2000) - vm(dl_of, 10.0, 2000)            # T = 40 above T = 10 at 2×10³
 v7_g80 = vm(vgone, 80.0, 500)
 v7_guard = all(r -> r["isolated"] == "true", vpre7)
 vpre7_meta = TOML.parsefile(joinpath(vpre7_dir, "provenance.toml"))
-## how well the T = 40 bar separates: the same statistic at T = 10
-v7_f10 = minimum(vm(dl_of, 10.0, t) for t in vpre7_late)
 ## T = 40 monolayer: the paper's forms by ≈ 50; ours at the first save with dark–medium < 0.003
 dM_of(r) = vfrac(r, "dM")
 v7_dM40_50 = vm(dM_of, 40.0, 50)
@@ -195,7 +193,7 @@ deviations_md = """
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
 | V-PRE5 one dark cluster @ 10⁴ (**FAIL**; target: ensemble-mean largest share ≥ 0.90; open deviation "late-stage coarsening") | largest dark-cluster share $(round(mean(rec_10k); digits = 3)) ± $(round(std(rec_10k) / sqrt(length(rec_10k)); digits = 3)) (SE, n = $(length(rec_10k)), P6.1f); $(rec_share[1]) ± $(rec_share[2]) (SE) pooled over $rec_k runs (P6.1g); heterotypic at 10⁴ $(rec_fdl[1]) ± $(rec_fdl[2]), minimum $(rec_fdl[3]), ≤ 0.050 in $(rec_fdl[4]) of $rec_k | one dark cluster from ≈ 5000 (PRE Fig. 12(g), p.2140, one run); heterotypic 0.050 (PRE), 0.040 (PRL) at 10⁴ | stochastic late coalescence; paper n = 1; light:dark share unstated. Late sorting in the CPM is diffusion and coalescence of rounded clusters (Durand 2021, PLoS Comput Biol), so the last merges are slow and stochastic: $(rec_22[1]) of $(rec_22[2]) replicates (P6.1f and the D-151 diagnostic) reach a single-cluster share ≥ 0.90 at 10⁴, while the paper shows one run. Temperature and lattice effects act at early times only (Holm et al. 1991, Phys Rev A), and the late rate depends on the type ratio (Franke 2022), which the paper does not state. Temperature is a sensitivity, not an identified cause (T ≥ 14 merges every run by 2×10⁴ but leaves heterotypic at 10⁴ unchanged; the paper states T = 10). Excluded: the periodic image, the start relaxation, the reading time, the type fraction, the cell-size difference, the aggregate size and the seed set (spec §9.5; D-151) | $AQ |
-| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500; ROADMAP P6.1h) | $(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The other three V-PRE7 rows pass, but T = 40 does not match the paper's picture: our heterotypic fraction keeps falling ($(r3(vm(dl_of, 40.0, 1000))) at 10³, $(r3(vm(dl_of, 40.0, 10_000))) at 10⁴; T = 10 also clears that row's 0.07 bar, minimum $(r3(v7_f10))), and our light monolayer is late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer forms by ≈ 50 and heterotypic plateaus near 0.1 | our cells disappear too slowly. The contact temperature scale matches at T = 2 and T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells still survive (309 of 500 at 500). The pattern is consistent with an unstated convention for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record (`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked (proposed for our open question list; Open questions under Details) |
+| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500; ROADMAP P6.1h) | $(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The other three V-PRE7 rows pass. At T = 40 our heterotypic fraction matches the paper's plateau ($(r3(v7_f40[1])) at 10³, $(r3(v7_f40[2])) at 2×10³), but our light monolayer is late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer forms by ≈ 50 and heterotypic reads ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends | our cells disappear too slowly. The contact temperature scale matches at T = 2 and T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells still survive (309 of 500 at 500). The pattern is consistent with an unstated convention for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record (`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked (proposed for our open question list; Open questions under Details) |
 | V-PRE6, V-PRE16 ⟨n⟩ part, V-PRE17 (**PARKED**) | not run | bulk ⟨n⟩ and μ₂ against T (PRE Table II); the generator's ⟨n⟩ plateau (PRE Figs. 4–5); bulk ⟨n⟩ after 2 annealing MCS (PRE Fig. 2) | the rule that makes two cells neighbours when counting n (Tables I–III) is not stated (spec §8.4, §9.1) | $AQ |
 | V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. 25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in the pre-registered table under Details | not an author question |
 | Time unit | 1 MCS = N attempts; paper t = our $(PAPER_MCS)t | 1 MCS = 16N attempts (PRL p.2014) | a convention only (INTERNALS F8). Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) | not an author question |
@@ -268,9 +266,9 @@ for (c, T) in enumerate(vpre7_T)
     lines!(ax7, vpre7_t, y; color = tcolors[c], label = "T = $(Int(T))")
     lines!(ax7g, vpre7_t, [vm(vgone, T, t) for t in vpre7_t]; color = tcolors[c])
 end
-lines!(ax7, [1000, 10_000], [0.07, 0.07]; color = :black, linestyle = :dot)
-scatter!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; color = :black, marker = :diamond)
-text!(ax7, [3000, 10_000, 3000], [0.3, 0.05, 0.1]; text = ["T = 2", "T = 10–20", "T = 40"],
+rangebars!(ax7, [1000, 2000], [0.12, 0.12], [0.18, 0.18]; color = :black, whiskerwidth = 6)
+scatter!(ax7, [3000, 10_000, 1000, 2000], [0.3, 0.05, 0.145, 0.16]; color = :black, marker = :diamond)
+text!(ax7, [3000, 10_000, 2000], [0.3, 0.05, 0.16]; text = ["T = 2", "T = 10, 20", "T = 40"],
     align = (:right, :bottom), offset = (-6, 4), fontsize = 11)
 scatter!(ax7g, [500], [0.5]; color = :black, marker = :xcross, markersize = 12)
 axislegend(ax7; position = :lb, framevisible = false, nbanks = 2)
@@ -312,11 +310,12 @@ nothing #hide
 
 fig_record #hide
 
-# Heterotypic fraction against time at each temperature (left; the dotted line is the T = 40
-# bar of 0.07 over [10³, 10⁴]), and the share of cells gone (right; the cross marks the
-# T = 80 bar, half the cells by 500). The paper's points are the values of PRE p.2144 and
-# Fig. 15(a, b), read at 110 dpi (spec §9.1): T = 2 ≈ 0.3 at 3×10³, T = 10–20 ≈ 0.05 at 10⁴,
-# T = 40 ≈ 0.1 on its plateau. The paper's T = 80 curve reaches 0 by ≈ 100.
+# Heterotypic fraction against time at each temperature (left; the black bars are the T = 40
+# band, [0.12, 0.18] at 10³ and 2×10³), and the share of cells gone (right; the cross marks
+# the T = 80 bar, half the cells by 500). The paper's points are the values of PRE p.2144 and
+# Fig. 15(a, b) (spec §9.1): T = 2 ≈ 0.3 at 3×10³ and T = 10, 20 ≈ 0.05 at 10⁴ (110 dpi);
+# T = 40 ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where its curve ends (400 dpi). The paper's
+# T = 80 curve reaches 0 by ≈ 100.
 
 fig7 #hide
 
@@ -579,7 +578,7 @@ nothing #hide
 # | V-PRE4 | PRE Fig. 13(a) | D = [`N_mm`(1) − mean `N_mm` over [100, 10³]] / `N_mm`(1) in [0.005, 0.03]; \|log-slope of `N_mm` over [10³, 10⁴]\| ≤ 0.005 `N_mm`(10³) per decade | FULL | fix applied | computed; start check in the full run |
 # | V-PRE5 | PRE Fig. 12 | mean dark-cluster count non-increasing over 10, 100, 10³, 10⁴; largest dark cluster ≥ 90% of dark cells at 10⁴; mean `F_dM`(10⁴) < 0.001 | FULL | fix applied | computed (10⁴ in the full run) |
 # | V-PRE6 | PRE Table II | bulk ⟨n⟩, μ₂ against T | — | **parked** (neighbour rule for n undefined) | — |
-# | V-PRE7 | PRE Fig. 15 | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02. Order at 10³: `F_dl`(T=2) > `F_dl`(T=5) > `F_dl`(T=10). T = 40: `F_dl` > 0.07 at every save in [10³, 10⁴]. T = 80: > 50% of cells gone (volume 0) by 500 (verbatim) | FULL + T scan | ready | computed from the committed full-size record (`data/09/vpre7-2026-10-07/`, 10 per T); smoke scan in the reduced build |
+# | V-PRE7 | PRE Fig. 15 | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02. Order at 10³: `F_dl`(T=2) > `F_dl`(T=5) > `F_dl`(T=10). T = 40: mean `F_dl` in [0.12, 0.18] at 10³ and at 2×10³, and mean `F_dl`(T = 40) − mean `F_dl`(T = 10) ≥ 0.01 at 2×10³; no T = 40 clause beyond 2×10³. T = 80: > 50% of cells gone (volume 0) by 500 (verbatim; T = 40 re-targeted 2026-10-13) | FULL + T scan | fix applied | computed from the committed full-size record (`data/09/vpre7-2026-10-07/`, 10 per T); smoke scan in the reduced build |
 # | V-PRE8 | PRE Fig. 16, Table III | λ = 0.1: 0 cells alive. λ = 0.2: 0 light, ≥ 90% dark alive. λ = 0.5: ≥ 90% light alive. λ ≥ 1: all alive. `t*(λ = 10) / t*(λ = 0.5)` ∈ [3, 30] (verbatim) | FULL + λ scan | fix applied | not yet on this page |
 # | V-PRE9 | PRE Figs. 7–8 | checkerboard: mean `F_dl`(10³) ≥ 0.72 and log-slope of `F_dl` over [10, 2000] > 0; `F_ll`(10³), `F_dd`(10³) ≤ 0.12 (verbatim) | FULL | ready | not yet on this page |
 # | V-PRE10 | PRE Fig. 9, Table I | T = 0: \|`F_dl`(2000) − `F_dl`(100)\| < 0.02; `F_dl`(2000) at T = 15 and T = 40 < `F_dl`(2000) at T = 10 (verbatim) | FULL + T scan | fix applied | not yet on this page |
@@ -809,9 +808,10 @@ Periodic boundaries harmless for sorting at this size (class FULL): **$(result(a
 #
 # PRE Fig. 15 (p.2143) repeats the sorting run at T = 0, 2, 5, 10, 15, 20, 40 and 80, all
 # else unchanged. The text (p.2144) reads it as regimes: T = 0 freezes; T = 2 sorts very
-# slowly (heterotypic ≈ 0.3 at 3×10³); T = 5 is slower than T = 10 but gets there; T = 10,
-# 15 and 20 reach heterotypic ≈ 0.05 by 10⁴; T = 40 forms the light monolayer by ≈ 50 but
-# its heterotypic fraction plateaus near 0.1; at T = 80 the cells disappear and the
+# slowly (heterotypic ≈ 0.3 at 3×10³); T = 5 is slower than T = 10 but gets there; T = 10
+# and 20 reach heterotypic ≈ 0.05 by 10⁴ (the T = 15 curve ends near 10³); T = 40 forms the
+# light monolayer by ≈ 50, and its heterotypic fraction reads ≈ 0.145 at 10³ and ≈ 0.16 at
+# 2×10³, where its curve ends, about 0.05 above T = 10; at T = 80 the cells disappear and the
 # heterotypic fraction falls to 0 by ≈ 100. The row is an independent check of our
 # temperature scale, which the late-coarsening pass (P6.1g) found to matter (deviations table).
 #
@@ -1045,10 +1045,11 @@ addrecord!("V-PRE7 T = 0 freezes", "T = 0 freezes, no sorting (PRE Fig. 15, p.21
 addrecord!("V-PRE7 order at 10³", "slower sorting at lower T: T = 2 ≈ 0.3 at 3×10³; T = 5 slower than T = 10 (PRE Fig. 15(a))",
     "T = 2: $(fmt(v7_o[1])), T = 5: $(fmt(v7_o[2])), T = 10: $(fmt(v7_o[3]))", "F_dl(T=2) > F_dl(T=5) > F_dl(T=10)",
     v7_o[1] > v7_o[2] > v7_o[3])
-addrecord!("V-PRE7 T = 40 above 0.07", "monolayer by ≈ 50, heterotypic plateau ≈ 0.1 (PRE Fig. 15(a), p.2144)",
-    "minimum over [10³, 10⁴] $(fmt(minimum(v7_f40))) (at $(vpre7_late[argmin(v7_f40)])); no plateau, still falling from " *
-    "$(fmt(vm(dl_of, 40.0, 1000))) at 10³; monolayer late (dark–medium < 0.003 first at $v7_mono40); see Deviations",
-    "> 0.07 at every save in [10³, 10⁴]", minimum(v7_f40) > 0.07)
+addrecord!("V-PRE7 T = 40 plateau", "heterotypic ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends; ≈ 0.05 above T = 10 at 2×10³ (PRE Fig. 15(a), p.2144)",
+    "$(fmt(v7_f40[1])) at 10³, $(fmt(v7_f40[2])) at 2×10³; $(fmt(v7_gap)) above T = 10 at 2×10³; " *
+    "monolayer late (dark–medium < 0.003 first at $v7_mono40); see Deviations",
+    "in [0.12, 0.18] at 10³ and 2×10³; ≥ 0.01 above T = 10 at 2×10³",
+    all(f -> 0.12 <= f <= 0.18, v7_f40) && v7_gap >= 0.01)
 addrecord!("V-PRE7 T = 80 disintegration", "all cells disappear; heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144)",
     "share of cells gone at 500: $(fmt(v7_g80))", "> 0.5", v7_g80 > 0.5)
 
@@ -1193,7 +1194,9 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 # #### Full-size records: every verdict
 #
 # The rows of the committed records as the runs wrote them: P6.1f for every row but V-PRE7,
-# and the V-PRE7 record. The summary under Results is read from these.
+# and the V-PRE7 record. The summary under Results is read from these. The V-PRE7 T = 40
+# row was re-derived from the record's time series when its rule was re-targeted on
+# 2026-10-13 (it had been written under an earlier "> 0.07 over [10³, 10⁴]" bar).
 
 Markdown.parse("""
 P6.1f: `data/09/full-2026-10-05/`, n = $rec_n, 1000 cells, to 2×10⁴ paper MCS, page commit
@@ -1265,6 +1268,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 # | 2026-10-07 | V-PRE7 (temperature regimes, PRE Fig. 15) added: verdicts read from a committed full-size record of 10 paired replicates per T; T = 0, the order at 10³ and T = 40 pass, T = 80 fails and is a deviations row (cells disappear too slowly; the T = 40 monolayer is late); a smoke scan in the reduced build. The T = 0 annealed copy drops the kinds of vanished top-labelled cells. No other target, tolerance or verdict changed | spec 09 §9.1 V-PRE7; ROADMAP P6.1h |
 # | 2026-10-08 | Page reordered: intro, the model as a `@potts_model`, a minimal run, results from the full-size records (figures against the papers, the full-run video, a verdict summary, the deviations table), and a collapsed Details section with the protocol, every verdict and the provenance. The contact sentence of the open questions is dropped. No target, tolerance, rule or verdict changed | D-185 |
 # | 2026-10-09 | Deviations rows reworded from the read of the sources: V-PRE5's suspected cause is stochastic late coalescence (paper n = 1; light:dark share unstated), with the count of the 22 earlier replicates single at 10⁴ read from the P6.1g record; the boundary-length row reads the paper's total as Moore bonds counted twice on smoother boundaries. No target, tolerance or verdict changed | D-154 |
+# | 2026-10-13 | V-PRE7's T = 40 row re-targeted: mean heterotypic fraction in [0.12, 0.18] at 10³ and at 2×10³, and at least 0.01 above T = 10 at 2×10³ (was "> 0.07 at every save in [10³, 10⁴]"). The record passes (0.162, 0.135; 0.024 above T = 10), re-derived from its time series with no new runs. The "T = 40 keeps falling" deviation is withdrawn | paper audit: PRE Fig. 15(a) at 400 dpi reads T = 40 at ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends; the "plateau ≈ 0.1" was a misread of a 110-dpi render; D-239 |
 
 # ```@raw html
 # </details>

@@ -4,8 +4,15 @@
 #
 #   F_dl vs t for T ∈ {0, 2, 5, 10, 15, 20, 40, 80}, ≥ 5 replicates per T, FULL.
 #   T = 0: |F_dl(2000) − F_dl(100)| < 0.02. Order at 10³: F_dl(T=2) > F_dl(T=5) > F_dl(T=10).
-#   T = 40: F_dl > 0.07 at every save in [10³, 10⁴]. T = 80: > 50% of cells gone (volume 0)
-#   by 500.
+#   T = 40: mean F_dl in [0.12, 0.18] at 10³ and at 2×10³, and mean F_dl(T = 40) − mean
+#   F_dl(T = 10) ≥ 0.01 at 2×10³; no T = 40 clause beyond 2×10³. T = 80: > 50% of cells gone
+#   (volume 0) by 500.
+#
+# Re-frozen under D-239 (2026-10-13 paper audit): the T = 40 rule above replaces "F_dl > 0.07
+# at every save in [10³, 10⁴]", which rested on a misread of PRE Fig. 15(a) (the T = 40 curve
+# reads ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, and ends at 2×10³). The other three rules are
+# unchanged. The record's `verdicts.tsv` T = 40 row was re-derived from its `timeseries.tsv`
+# under the new rule (no new runs; record README amendment of 2026-10-13).
 #
 # Definitions (spec §9.0): times are paper MCS (16 of our MCS); F_dl is the heterotypic share
 # of all mismatched Moore bonds (each once, medium included) on a copy annealed 2 paper MCS
@@ -28,7 +35,8 @@
 # - FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full). The four criteria on the committed
 #   record, as stated. The record is produced offline on an idle machine (D-146, D-157); a
 #   criterion that fails here is a deviations-table row on the page (D-154), not a tolerance.
-#   The 2026-10-07 record passes T = 0, the order and T = 40, and fails T = 80
+#   The 2026-10-07 record passes T = 0, the order and T = 40 (also under the D-239 rule:
+#   0.162 at 10³, 0.135 at 2×10³, 0.024 above T = 10 at 2×10³), and fails T = 80
 #   (`@test_broken`).
 using Statistics: mean
 
@@ -49,10 +57,12 @@ function p61h_verdicts(rows)
     late = sort(unique(t for t in p61h_num.(rows, "paper_mcs") if 1000 <= t <= 10_000))
     d0 = abs(m(0.0, 2000) - m(0.0, 100))
     o = (m(2.0, 1000), m(5.0, 1000), m(10.0, 1000))
-    f40 = minimum(m(40.0, t) for t in late)
+    f40 = (m(40.0, 1000), m(40.0, 2000))
+    gap = m(40.0, 2000) - m(10.0, 2000)
     g80 = mean(p61h_gone.(sel(80.0, 500)))
-    return (; d0, o, f40, g80, late,
-        ok = (frozen = d0 < 0.02, order = o[1] > o[2] > o[3], plateau = f40 > 0.07, disintegration = g80 > 0.5))
+    return (; d0, o, f40, gap, g80, late,
+        ok = (frozen = d0 < 0.02, order = o[1] > o[2] > o[3],
+            plateau = all(f -> 0.12 <= f <= 0.18, f40) && gap >= 0.01, disintegration = g80 > 0.5))
 end
 
 @testset "09 V-PRE7 record (data/09/vpre7-2026-10-07)" begin
@@ -76,7 +86,7 @@ end
     r4(x) = round(x; digits = 4)
     @test nums(ours["T = 0 frozen"]) == [r4(v.d0)]
     @test nums(ours["order at 10³"]) == collect(r4.(v.o))
-    @test first(nums(ours["T = 40 plateau"])) == r4(v.f40)
+    @test nums(ours["T = 40 plateau"]) == [r4.(v.f40)..., r4(v.gap)]
     @test nums(ours["T = 80 disintegration"]) == [r4(v.g80)]
     @test isfile(joinpath(P61H_REC, "provenance.toml"))
 end

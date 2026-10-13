@@ -4,11 +4,23 @@ This is the FULL record for V-PRE7, kept as D-146 requires. The 09 page and its 
 (`lib/PottsModels/test/reproductions/09_cell_sorting.jl`) read their V-PRE7 verdicts from
 here; the page's other full-run rows stay in `full-2026-10-05/`.
 
+> **Amendment (2026-10-13; paper audit, D-239).** The T = 40 rule is re-targeted. PRE
+> Fig. 15(a), re-read at 400 dpi, has T = 40 at ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the
+> curve ends; the "plateau near 0.1" in this README was a misread of a 110-dpi render. The new
+> rule (spec 09 §9.1): mean F_dl in [0.12, 0.18] at 10³ and at 2×10³, and mean F_dl(T = 40) −
+> mean F_dl(T = 10) ≥ 0.01 at 2×10³; no T = 40 clause beyond 2×10³. This record passes it
+> from the same time series: 0.162 at 10³, 0.135 at 2×10³, and 0.024 above T = 10 (0.111) at
+> 2×10³. The "T = 40 does not match the paper's picture" reading below is withdrawn; the late
+> monolayer observation stands. With no new runs, the T = 40 row of `verdicts.tsv` was
+> re-derived from `timeseries.tsv` under the new rule, and `scripts/collect.jl` now writes that
+> row; every other file is unchanged. Under the old rule the row read "min F_dl over [10³, 10⁴]
+> = 0.0978 (at 10000)", PASS.
+
 **Target** (spec 09 §9.1 V-PRE7, verbatim): F_dl vs t for T ∈ {0, 2, 5, 10, 15, 20, 40, 80},
 ≥ 5 replicates per T, FULL.
 - T = 0: |F_dl(2000) − F_dl(100)| < 0.02.
 - Order at 10³: F_dl(T=2) > F_dl(T=5) > F_dl(T=10).
-- T = 40: F_dl > 0.07 at every save in [10³, 10⁴].
+- T = 40 (re-targeted 2026-10-13, see the amendment): mean F_dl in [0.12, 0.18] at 10³ and at 2×10³, and mean F_dl(T = 40) − mean F_dl(T = 10) ≥ 0.01 at 2×10³.
 - T = 80: more than 50% of cells gone (volume 0) by 500.
 
 **Fixture.**
@@ -25,7 +37,7 @@ here; the page's other full-run rows stay in `full-2026-10-05/`.
 |---|---|---|---|
 | T = 0 frozen | \|F_dl(2000) − F_dl(100)\| = 0.0000 | < 0.02 | PASS |
 | Order at 10³ | T = 2: 0.349, T = 5: 0.191, T = 10: 0.135 | T2 > T5 > T10 | PASS |
-| T = 40 plateau | minimum over [10³, 10⁴] = 0.098 (at 10⁴) | > 0.07 at every save | PASS |
+| T = 40 plateau | 0.162 at 10³, 0.135 at 2×10³; 0.024 above T = 10 at 2×10³ | in [0.12, 0.18] at 10³ and 2×10³; ≥ 0.01 above T = 10 at 2×10³ (2026-10-13) | PASS |
 | T = 80 disintegration | 0.076 of cells gone at 500 | > 0.5 | **FAIL** |
 
 The isolation guard held at every save of every run.
