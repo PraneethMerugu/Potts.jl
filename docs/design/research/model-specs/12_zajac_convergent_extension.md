@@ -122,7 +122,7 @@ P(ΔE) = e^{−E₁/T} / e^{−E₀/T} for E₁ > E₀, and 1 for E₁ ≤ E₀
 - The authors note this variant "does not have … microscopic reversibility" (p.252).
 - The "nearby" range is **UNSPECIFIED**.
 
-**Sweep.** "the number of pattern modifications attempted in one sweep equal to the number of lattice sites" (p.254).
+**Sweep.** "the number of pattern modifications attempted in one sweep equal to the number of lattice sites" (p.254). Whether non-boundary picks count as attempts is **open**: see P-Z10 (§8b.2) (audit 2026-10-13).
 
 **Axis / coupling update (critical; 12b p.252–253).**
 1. "As an advancing cell gains one lattice site from a retreating neighbor the centroid and orientation (Appendix A) of each changes slightly. It follows that coupling changes at all points where either of the altered domains contacts any adjacent cell, not just at points in the neighborhood of a single modified site."
@@ -188,7 +188,7 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 
 | ID | Target | Source | Type | Proposed acceptance |
 |---|---|---|---|---|
-| V-Z1 | Order of events: elongation first (inset: mean ε ≈ 0.6 → ≈ 0.78 within ≈ 0.1–0.2 kilosweeps, then flat ≈ 0.75–0.8). Alignment rises from ≈ 0.6 to ≈ 0.9 with a large jump near ≈ 450 kilosweeps (stages e–f). Extension rises ≈ 1.5 → ≈ 6 by ≈ 600 kilosweeps, then plateaus (read from plot) | 12b Fig. 5 p.253; text p.253 | Qualitative + plot-read | t(ε reaches 90% of plateau) < t(alignment reaches 0.8) ≤ t(extension reaches 80% of plateau), in ≥ 4/5 runs. Plateau ε ∈ [0.65, 0.85]; final alignment ≥ 0.85; final extension ≥ 3 |
+| V-Z1 | Order of events: elongation first (inset: mean ε ≈ 0.6 → ≈ 0.78 within ≈ 0.1–0.2 kilosweeps, then flat ≈ 0.75–0.8). Alignment rises from ≈ 0.6 to ≈ 0.9 with a large jump at ≈ 340–380 kilosweeps (stages e–f; P-Z7). Extension (√(λ_b/λ_a), P-Z2) starts at ≈ 1.1, steps to ≈ 2 at ≈ 150 kSweeps, creeps to ≈ 2.5, holds ≈ 3.5 at ≈ 400–470 kSweeps, jumps at ≈ 470–490 kSweeps and fluctuates at ≈ 5–7 (≈ 6) thereafter (re-read at 400 dpi; audit 2026-10-13, was "≈ 450" and "≈ 1.5 → ≈ 6 by ≈ 600"). Sweep counting per P-Z10 | 12b Fig. 5 p.253; text p.253 | Qualitative + plot-read | t(ε reaches 90% of plateau) < t(alignment reaches 0.8) ≤ t(extension reaches 80% of plateau), in ≥ 4/5 runs. Plateau ε ∈ [0.65, 0.85]; final alignment ≥ 0.85; final extension ≥ 3 |
 | V-Z2 | Extension direction ⟂ alignment direction | 12b p.253; 12a p.5 | Qualitative | Angle between the tissue long axis (eigvec a of the whole-array tensor) and the alignment director ≥ 70° at the end |
 | V-Z3 | Anisotropy sweep: < 35% little/no extension; 57% two columns; > 65% single column | 12b p.254 | Semi-quantitative (definition of % unspecified) | Monotone increase of final extension with anisotropy; a column count of 2 at an intermediate value and 1 at a high value |
 | V-Z4 | Temperature: ≈ 46% acceptance aligns and extends. ≈ 72% extends but alignment "fluctuating wildly". ≈ 21% aligns but fails to converge | 12b p.255; Fig. 8 p.256 | Qualitative | Reproduce the three regimes when T is tuned to those acceptance rates |
@@ -200,8 +200,8 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 **Metric definitions (for G12).**
 - Elongation: per-cell ε (A.4), averaged over cells (12b p.254).
 - Alignment: largest eigenvalue of A (A.5), with A_xx = (1/N)Σcos²θ_i, A_xy = (1/N)Σcos θ_i sin θ_i, A_yy = (1/N)Σsin²θ_i, where (cos θ_i, sin θ_i) is the normalised long-axis vector a of cell i. Range [1/2, 1] (12b p.258).
-- Extension: λ_b/λ_a of the inertia tensor over all cell sites (12b p.257–258). Note this is a ratio of second moments (≈ the square of a length aspect ratio for an ellipse), although the text calls it the "aspect ratio" (A-Z5).
-- Time: 1 sweep = N_sites attempts = 1 MCS in our convention.
+- Extension: **√(λ_b/λ_a)** of the inertia tensor over all cell sites, a length aspect ratio (P-Z2; audit 2026-10-13). The text gives λ_b/λ_a "as the magnitude" (p.258), a ratio of second moments (≈ the square of a length aspect ratio for an ellipse), but also calls it the "aspect ratio" (p.253, p.257), and Fig. 5h's L/W ≈ 6.5 matches the plotted ≈ 6 only under the √ form (A-Z5, Q-Z2).
+- Time: 1 sweep = N_sites attempts = 1 MCS in our convention. Whether an "attempt" is a boundary attempt (reading A) or any site pick (reading B) is open; P-Z10 (§8b.2) fixes it by a pilot (audit 2026-10-13).
 
 **Lagged-director acceptance test (required before adopting the performance approximation).** Run exact (per-copy axis, segment-averaged) and lagged (per-MCS director) variants with identical parameters, n ≥ 5 seeds each. Accept the lagged variant if:
 - the final extension, alignment and ε ensemble means agree within the larger of 15% or 2 pooled SEM; **and**
@@ -216,14 +216,14 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 | G1 @transition/@create/@retire | No | — |
 | **G2** shape descriptors in energies | **Yes** | Per-cell second-moment tensor (A.1) maintained incrementally. Polar moment I for κ(I − I∘)². Eigen-decomposition for ε (A.4) and long axis a (A.2–A.3) used **inside** ΔE |
 | **G3** contact-scope direction/position + lagged vector cell vars | **Yes (core of the model)** | The contact energy of a link needs the **position of the contact point relative to each cell's COM** and the angle to **each cell's** axis: J = J_ττ′ − (α ε r sin θ)(α′ ε′ r′ sin θ′). Exact per paper: cell vars (COM, axis, ε) are **current** (per copy), and ΔE must include the changes of J on **every contact segment of both cells** (cell-scope non-local ΔE). Performance variant: **lagged** vector cell vars (director, ε, COM snapshot per MCS). Then ΔE is local to the flipped site's links. This is a deviation (§2.2 verdict) |
-| **G14 (new)** cell-pair contact-segment aggregation | **Yes** | The paper's algorithm averages r and θ over each **contact segment** between a cell pair and recomputes the coupling per segment (12b p.252). Requires a maintained per-pair contact list (length + summed contact-point positions) so that J per pair = J_ττ′ − α²εε′ ⟨r sin θ⟩⟨r′ sin θ′⟩ × length. **Justification:** no other G-feature provides per-pair aggregated geometry. It is also the natural way to make the exact (non-lagged) ΔE affordable: O(number of neighbours of the two cells) instead of O(boundary sites) |
+| **G14 (new)** cell-pair contact-segment aggregation | **Yes** | The paper's algorithm averages r and θ over each **contact segment** between a cell pair and recomputes the coupling per segment (12b p.252). Requires a maintained per-pair contact list (length + summed contact-point positions) so that J per pair = (J_ττ′ − α²εε′ ⟨r sin θ⟩⟨r′ sin θ′⟩) × link count (audit 2026-10-13: bracketed; the link count multiplies both terms). **Justification:** no other G-feature provides per-pair aggregated geometry. It is also the natural way to make the exact (non-lagged) ΔE affordable: O(number of neighbours of the two cells) instead of O(boundary sites) |
 | G4 connectivity | No (not mentioned) | Paper relies on positive couplings for compactness (p.254) |
 | G5, G6, G7 | No | No fields or conversion |
 | **G8** pluggable proposal law | **Yes** | Boundary-site-only selection with reassignment to a random nearby domain (12b p.252; non-reversible). Also an acceptance-rate monitor to tune T to ≈ 46% (p.255) |
 | G9 per-cell component protocol | No | — |
 | **G10** cluster-scope quantities | **Yes** | Array-level inertia tensor over all cell sites (extension). Alignment tensor over cells |
 | G11 ordered relationships / angle energies | No (angles are per-contact, covered by G3/G14) | — |
-| **G12** observables library | **Yes** | ε per cell, alignment eigenvalue (A.5), extension λ_b/λ_a, acceptance fraction per sweep |
+| **G12** observables library | **Yes** | ε per cell, alignment eigenvalue (A.5), extension √(λ_b/λ_a) (P-Z2; audit 2026-10-13), acceptance fraction per sweep |
 | **G13** initial layout generators | **Yes** | Roughly square block of weakly elongated, randomly oriented cells inside a wide medium border |
 
 ---
@@ -270,6 +270,8 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
   - Quantisation check: with N = 36 cells of aspect 1.6, aligned across the array, k columns give L/W ≈ 36/(1.6 k²) = 22.5, 5.6, 2.5 and 1.4 for k = 1–4.
   - The Fig. 5 plateaus at about 2–2.5 (100–350 kSweeps) and about 6 (> 480 kSweeps) match k = 3 and k = 2. The final k = 2 agrees with the text ("two, adjacent columns", p.254).
   - The text's "λ_b/λ_a as the magnitude" (p.258) therefore conflicts with the figure. We plot √(λ_b/λ_a) and ask for confirmation (Q-Z2).
+  - Textual support for a length ratio: "the relative width of these two distributions gives the aspect ratio for the cell array, reported as the degree of extension" (p.257). A width is the square root of a second moment (audit 2026-10-13).
+  - **Fig. 5 re-read at 400 dpi (audit 2026-10-13).** The extension curve starts at ≈ 1.1–1.2 (not ≈ 1.5), steps to ≈ 2 at ≈ 150 kSweeps, rises to ≈ 2.5 by ≈ 250–350 kSweeps, holds a plateau at **≈ 3.5 over ≈ 400–470 kSweeps**, then jumps at ≈ 470–490 kSweeps to ≈ 5–7 (mean ≈ 6). The ≈ 3.5 plateau matches no column count (k = 3 gives 2.5, k = 2 gives 5.6), and the start at ≈ 1.1 is above the k = 6 value (≈ 0.6) for a 6 × 6 block of cells aligned across it (the cells start randomly oriented, so the formula does not apply there). This **weakens the quantisation argument** above. The main argument stands: the final value is ≈ 6 under √(λ_b/λ_a), ≈ 40 under λ_b/λ_a, and Fig. 5h measures L/W ≈ 6.5.
 - **P-Z3: cell aspect ratios.**
   - With ε = √(1 − λ_a/λ_b), the second-moment ratio is λ_b/λ_a = (a/b)², so a/b = 1/√(1 − ε²).
   - The plateau ε ≈ 0.78 (Fig. 5 top) gives a/b ≈ 1.60.
@@ -279,27 +281,36 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
   - Under P-Z5 the array (36 × ~400 sites) sits in a ~1.6 × 10⁵-site lattice, so boundary sites are ≲ 5% of the lattice.
   - 46% acceptance over all lattice picks is therefore impossible. The 46%/72%/21% rates (p.255) must be per **attempted boundary modification**, counting downhill auto-accepts (p.255 says so).
   - T is then **defined operationally** as the value giving 46% (validation: 72% and 21%). It is not a free parameter.
+  - This fixes the acceptance denominator only. Whether the sweep counts the same boundary attempts or all site picks is open: P-Z10 (audit 2026-10-13).
 - **P-Z5: cell area A ≈ 250–700 sites; lattice ≈ 400² (estimate).**
   - Fig. 8b (cold, so lattice steps are visible) has a stair pitch of about 3 px/site. Cells are about 68 × 45 px, giving about 23 × 15 sites, roughly 270 sites.
   - The Fig. 6 magnified inset gives about 2–2.5 px/site. Its cells are about 40 × 95 px, giving roughly 500–750 sites (hyper-elongated run).
   - Cost cross-check: "> 72 h at 750 MHz, 14 cycles/op" (p.256) is about 1.4 × 10¹³ ops over about 8.5 × 10⁵ sweeps, about 1.6 × 10⁷ ops per sweep.
     - With ≥ 50–200 ops per attempt this allows ≲ 0.8–3 × 10⁵ sites per sweep. That is consistent with A of a few hundred and a lattice of about 300²–500², and argues against A ≳ 10³.
+    - This cross-check assumes all N_sites attempts per sweep are expensive, i.e. reading A of P-Z10. Under reading B only the ≈ 6 × 10³ boundary attempts are expensive (≈ 3 × 10³ ops each), and the cost no longer bounds the lattice; the size estimate then rests on the figure measurements above alone (audit 2026-10-13).
   - Nominal choice: A∘ = 400 (a/b = 1.6 gives a ≈ 14.3, b ≈ 8.9). The final 2-column array is then about 330 × 60 sites, so a 400 × 400 lattice with a ≥ 35-site medium border.
 - **P-Z6: κ (the shape weight) is fixed by the "equal contributions" rule (p.255), not free.**
   - Choose κ so that, over boundary attempts at the ε plateau, median|ΔE_shape| = median|ΔE_adh| (a factor-of-2 band is acceptable).
   - The ×10 and ÷10 runs become **validation** targets: the more rigid run curtails alignment and extension; the softer run converges but shows curvature (Fig. 7a; p.255).
-- **P-Z7: run length 850 kSweeps; 1 sweep = N_sites attempts (p.254).** Corrected read of Fig. 5: the large alignment jump is at about **340–380 kSweeps**, not ≈ 450 as in V-Z1. Extension jumps about 470–490 kSweeps.
+- **P-Z7: run length 850 kSweeps; 1 sweep = N_sites attempts (p.254; what counts as an attempt is open, P-Z10, audit 2026-10-13).** Corrected read of Fig. 5: the large alignment jump is at about **340–380 kSweeps**, not ≈ 450 as in V-Z1. Extension jumps about 470–490 kSweeps.
 - **P-Z8: exact per-copy axes, not lagged.** This is already argued in §2.2. All screens use the exact segment-averaged ΔE (G14). The lagged variant is tested only afterwards, by the §5 acceptance test.
 - **P-Z9: contact segment = all boundary links of one cell pair (working inference for A-Z4).** In a compact 2-column array each cell pair shares one contiguous contact, so "segment" and "pair" coincide almost everywhere. We average r sin θ (not r and θ separately) and weight by link count. This is confirmed with the authors (Q-Z6) rather than screened, because outcomes are expected to be insensitive to it.
+- **P-Z10 (OPEN): what one "attempt" is, and so what one sweep is (audit 2026-10-13).**
+  - The paper uses one word in three places: "the number of pattern modifications attempted in one sweep equal to the number of lattice sites" (p.254); "roughly 46% acceptance of attempted lattice modifications" (p.255); and "cell simulations only consider sites at a boundary between domains for modification" (p.252). It never says whether a random pick of a non-boundary site counts as an attempt.
+  - Earlier drafts of this spec used the word both ways: P-Z4 takes the acceptance per boundary attempt, the cost basis (§8b.3) assumed only ≈ 6 × 10³ boundary attempts per sweep, and P-Z5's cost cross-check assumed all N_sites attempts per sweep are expensive. Those places now point here.
+  - **Reading A: a sweep is N_sites boundary attempts.** Every attempt is at a boundary site, so the sweep and the acceptance rate share one denominator. Per sweep this is ≈ 1.6 × 10⁵ / 6 × 10³ ≈ **27× more dynamics** than reading B. Cost: ≈ 1.4 × 10¹¹ expensive attempts per 850-kSweep run at 1–5 µs, so **≈ 40–190 core-h per run**. P-Z5's cross-check (≈ 100 ops per attempt) applies as written.
+  - **Reading B: a sweep is N_sites site picks, and only boundary picks are attempted.** Acceptance per pick cannot be 46%, because boundary sites are ≲ 5% of the lattice (P-Z4). So under B the 46%/72%/21% rates must still be per boundary attempt, and the word means a pick on p.254 but a boundary attempt on p.255. Cost: ≈ 6 × 10³ expensive attempts per sweep, **≈ 2–7 core-h per run**. P-Z5's cross-check then gives ≈ 3 × 10³ ops per boundary attempt, which is plausible for the all-segment recompute (G14), so cost does not separate A from B and no longer bounds the lattice size.
+  - **Consequence.** Every Fig. 5 time target (inset ε → 0.75 at ≈ 0.1 kSweeps; alignment jump at 340–380 kSweeps; extension jump at 470–490 kSweeps; the 850-kSweep run) maps to 27× fewer boundary attempts under B than under A. Screen costs in §8b.3 (computed under B) scale ≈ 27× under A.
+  - **Pre-registered pilot (decides it).** With the S-Z1–S-Z4 winners, T tuned to 46% boundary acceptance and κ by P-Z6, run 10 kSweeps under each reading (5 reps each, our clock counting sweeps as A or B defines them). **Target:** Fig. 5 inset, mean ε reaches 0.75 at ≈ 0.1 kSweeps and is flat at 0.75–0.8 by 0.2 kSweeps. **Rule:** pick the reading whose median time to ε = 0.75 lies within a factor of 2 of 0.1 kSweeps in ≥ 4/5 reps. If both or neither pass, use B (cheaper) for the screens, report both, and ask Q-Z3. Cost ≈ 5 × 2 × 10 kSweeps ≈ 1–3 core-h.
 
 ### 8b.3 Pre-registered screens (2D; costs are estimates, to be re-measured on a 10-kSweep pilot)
 
 **Common settings.**
-- **Cost basis.** N = 36, A∘ = 400, lattice 400², and boundary-only proposals. About 6 × 10³ boundary sites means about 5 × 10⁹ expensive attempts per 850-kSweep run, at about 1–5 µs each, so **≈ 2–7 core-h per full run**.
+- **Cost basis.** N = 36, A∘ = 400, lattice 400², and boundary-only proposals. About 6 × 10³ boundary sites means about 5 × 10⁹ expensive attempts per 850-kSweep run, at about 1–5 µs each, so **≈ 2–7 core-h per full run**. This holds under reading B of P-Z10 (only boundary picks are attempted). Under reading A every one of the ≈ 1.6 × 10⁵ attempts per sweep is a boundary attempt, so a full run is **≈ 40–190 core-h** and every screen cost below scales ≈ 27×. The P-Z10 pilot runs first and fixes which applies (audit 2026-10-13).
 - Short screens use the early targets only.
 - All heavy runs go on the FULL-run PC (D-157).
 - **Iteration.** T is re-tuned to 46% boundary acceptance after **every** candidate change (P-Z4), and κ is re-tuned by P-Z6.
-- **Order.** S-Z1 → S-Z2 → S-Z3 → S-Z4 → S-Z5. If S-Z5 changes the winner of an earlier screen, re-run that one once.
+- **Order.** P-Z10 pilot (audit 2026-10-13) → S-Z1 → S-Z2 → S-Z3 → S-Z4 → S-Z5. If S-Z5 changes the winner of an earlier screen, re-run that one once.
 
 | Screen | Candidates | Independent targets (cite) | Decision rule (fixed now) | Reps; cost |
 |---|---|---|---|---|
@@ -307,7 +318,7 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
 | **S-Z2 shape target a/b** | a = b (circular); a/b = 1.6 (P-Z3); a/b = 2.0 | Fig. 5 inset: ε ≈ 0.75 by ≈ 0.1 kSweeps. Fig. 5 top: plateau ε ∈ [0.74, 0.82]. p.255: "roughly the same degree of cell elongation" for either target | Keep every candidate that meets both ε targets in ≥ 4/5 reps. If a/b = 1 and 1.6 both pass (the paper predicts this), use 1.6 for Fig. 5 and keep a = b as a reported robustness run | 5 reps × 3 × 5 kSweeps ≈ 2 core-h |
 | **S-Z3 cohesion J_cm/J_cc** | J_cc = 1 with J_cm ∈ {0.75, 1.0, 1.5, 2.0} (surface tension γ = J_cm − J_cc/2 > 0 throughout) | Fig. 7a/b: curvature or a spurious branch at weak cohesion. p.254: increasing the work of separation fixes it. Fig. 5f–h: a straight array | Choose the **smallest** J_cm with no branch and an end-to-end array bend < 30° at 850 kSweeps in ≥ 4/5 reps. A curved or branched outcome at the next-lower value doubles as the Fig. 7 negative control | 5 reps × 4 × full run ≈ 40–140 core-h (≈ 3–9 h wall on the PC) |
 | **S-Z4 area stiffness λ** | λ ∈ {0.5, 2, 8} × (J_cc/A∘) | "little change in cell volume" (12a p.3); Fig. 5 cells visibly uniform | Pick the smallest λ with std(A)/A∘ ≤ 5% at the plateau | 3 reps × 3 × 5 kSweeps ≈ 1 core-h |
-| **S-Z5 anisotropy definition (A-Z3)** | **D1** coupling-relative: p = α²ε²⟨r sin θ⟩²_side / J_cc. **D2** work-of-adhesion: binding W = 2J_cm − J(r,r′), p = (W_aligned − W_unaligned)/W_aligned. **D3** normalised (CC3D-style): Δ = α ε (r sin θ)/b, J = J_cc(1 − ΔΔ′), p = α² | p.254: p < 35% gives "little or no extension". p = 57% gives 2 columns (Fig. 5h). p > 65% consistently gives 1 column. Fig. 6: negative J (disaster) appears only beyond the single-column regime | For each definition run p ∈ {0.30, 0.57, 0.70}. **Pass** = final √(λ_b/λ_a) < 2.0 at 0.30; ∈ [4, 8] at 0.57; > 12 at 0.70 (k = 1), each in ≥ 4/5 reps, with no negative J at 0.57. The definition passing 3/3 wins. If more than one passes, keep D1 (closest to the wording of Eq. 2) and ask Q-Z4. If none passes, the model stays a "reconstruction" | 5 reps × 3 × 3 × full run ≈ 90–300 core-h (≈ 6–19 h wall) |
+| **S-Z5 anisotropy definition (A-Z3)** | **D1** coupling-relative: p = α²ε²⟨r sin θ⟩²_side / J_cc. **D2** work-of-adhesion: binding W = 2J_cm − J(r,r′), p = (W_aligned − W_unaligned)/W_aligned. **D3** normalised (CC3D-style): Δ = α ε (r sin θ)/b, J = J_cc(1 − ΔΔ′). At a side contact r sin θ ≈ b, so p = α²εε′ ≈ α²ε²_plateau ≈ 0.61 α² at ε ≈ 0.78; the targets p = 0.30, 0.57, 0.70 need α² ≈ 0.49, 0.94, 1.15 (α ≈ 0.70, 0.97, 1.07) (audit 2026-10-13; was "p = α²") | p.254: p < 35% gives "little or no extension". p = 57% gives 2 columns (Fig. 5h). p > 65% consistently gives 1 column. Fig. 6: negative J (disaster) appears only beyond the single-column regime | For each definition run p ∈ {0.30, 0.57, 0.70}. **Pass** = final √(λ_b/λ_a) < 2.0 at 0.30; ∈ [4, 8] at 0.57; > 12 at 0.70 (k = 1), each in ≥ 4/5 reps, with no negative J at 0.57. The definition passing 3/3 wins. If more than one passes, keep D1 (closest to the wording of Eq. 2) and ask Q-Z4. If none passes, the model stays a "reconstruction" | 5 reps × 3 × 3 × full run ≈ 90–300 core-h (≈ 6–19 h wall) |
 | **S-Z6 validation, not a screen** | winning set | V-Z1 (event order; jumps per P-Z7), V-Z2, V-Z4 (72% and 21% acceptance), V-Z5 (α = 0), ×10/÷10 κ (P-Z6) | Pass/fail as already defined in §5 | 5 reps × ~6 conditions ≈ 60–200 core-h |
 
 **Optional cross-check (does not decide anything).**
@@ -318,7 +329,7 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
 
 - **Q-Z1.** From Figs. 5a/5h/8b we count 36 cells (a 6 × 6 block). Correct?
 - **Q-Z2.** Fig. 5's Extension ≈ 6 matches √(λ_b/λ_a) (length ratio), not λ_b/λ_a (p.258). Which was plotted?
-- **Q-Z3.** We read the 46%/72%/21% acceptance as over boundary-site attempts. Correct?
+- **Q-Z3.** We read the 46%/72%/21% acceptance as over boundary-site attempts. Correct? And does a sweep's "number of lattice sites" count boundary attempts only, or all random site picks (P-Z10; we state the pilot's choice)? (audit 2026-10-13)
 - **Q-Z4.** We define 57% anisotropy as α²ε²⟨r sin θ⟩²/J_cc (or the S-Z5 winner). Is that it?
 - **Q-Z5.** Fig. 8b facets suggest neighbour order N (S-Z1 winner) for both energy and "nearby site". Correct?
 - **Q-Z6.** Is a contact "segment" all links of a cell pair, with r sin θ averaged and weighted by link count?

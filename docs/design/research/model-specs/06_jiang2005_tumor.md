@@ -243,11 +243,11 @@ Factor level = (1 + e^{−α((gF − ihF)/initGF − θ)})^{−1}
 ### 3.2 Derived
 | Quantity | Value | Derivation |
 |---|---|---|
-| Voxel edge | ≈2.66 µm | (1.2×10³ µm³ / 64)^{1/3} = 18.75^{1/3} |
-| Voxel volume | 18.75 µm³ | 1200 / 64 |
-| Coarse PDE spacing | ≈10.6 µm | 4 × 2.66 µm |
-| Shedding radius in voxels | ≈113 | 300 µm / 2.66 µm |
-| D_O2 in lattice units | ≈2.5 × 10⁶ voxel²/MCS | 5.94×10⁻² cm²/h × 10⁸ µm²/cm² × 3 h/MCS = 1.78×10⁷ µm²/MCS; ÷ (2.66 µm)² = 7.08 µm² per voxel² gives ≈2.5×10⁶ voxel²/MCS. The O₂ field is therefore effectively quasi-static on the 45 min step, which is why an implicit or fast solver is needed; the paper still integrates it transiently. |
+| Voxel edge (cell-only) | ≈2.66 µm | (1.2×10³ µm³ / 64)^{1/3} = 18.75^{1/3}. This is the paper's cell-only statement (p.5 [3888]). The working value is **Δx_geom ≈ 4.4 µm** (§8b A1), which includes the ECM allowance; the rows below use it (audit 2026-10-13). |
+| Voxel volume | 18.75 µm³ cell-only; ≈85 µm³ working | 1200 / 64; 4.4³ |
+| Coarse PDE spacing | ≈17.6 µm (10.6 µm cell-only) | 4 × 4.4 µm (4 × 2.66 µm) |
+| Shedding radius in voxels | ≈68 (113 cell-only) | 300 µm / 4.4 µm (300 µm / 2.66 µm) |
+| D_O2 in lattice units | ≈9.2 × 10⁵ voxel²/MCS (2.5 × 10⁶ cell-only) | 5.94×10⁻² cm²/h × 10⁸ µm²/cm² × 3 h/MCS = 1.78×10⁷ µm²/MCS; ÷ (4.4 µm)² = 19.4 µm² per voxel² gives ≈9.2×10⁵ voxel²/MCS (÷ 7.08 µm² at 2.66 µm gives 2.5×10⁶). Either way the O₂ field is effectively quasi-static on the 45 min step, which is why an implicit or fast solver is needed; the paper still integrates it transiently. Which Δx the PDE conversion uses is open (§8b A3) and decides f. |
 | Chemical time per MCS | 3 h (4 × 45 min) | Fig 3 |
 | Stoichiometry check | 1.5 × 162 = 243 ≈ 240 (waste, P); 1.5 × 80 = 120 vs 110 (Q) | Table 1 values and the stated 1.5 ratio. **With the erratum (216) the waste value would be 324, not 240.** See §7. |
 | Quiescent/proliferating ratio | O₂ 50/108 = 0.46; glucose 80/162 = 0.49 (80/216 = 0.37 with the erratum) | the stated "approximately equal to half" |
@@ -281,7 +281,9 @@ The erratum does not say whether the published simulations (Figs 5–8) used 162
 change the waste rate (240) or the quiescent glucose rate (80), which were described as derived
 from the glucose rate (§3.2 stoichiometry check; §7.1 item 4).
 
-**Decision (README §4.4 J1, unchanged):** default 162, variant `erratum = true` → 216. The unit
+**Decision (README §4.4 J1; revised audit 2026-10-13):** default 216 (the erratum: "should read
+216 (not 162)"; paper over code), variant `erratum = false` → 162. Note: the stoichiometry still
+favours 162 (1.5 × 162 ≈ 240; Q/P ≈ ½), so 162 stays as the variant (§7.1 item 4; §8b A7). The unit
 correction does not change any number. It settles §7.1 item 8 for the O₂, glucose and waste rates:
 they are rates of concentration change (mM/h) and enter Eq 3 directly as source terms, with no
 per-volume factor. The Appendix necrotic waste secretion "10 mM/h" (06 p.10 [3893]) now has the
@@ -331,10 +333,10 @@ and the published simulation.
 | T3 | Gompertz initial doubling time: sim vs experiment differ by < 1 h, both in 8.6–9.5 h | 06 p.6 [3889] | Quant | Fitted doubling time 8–10.5 h |
 | T4 | Saturation size: the published sim overestimates experiment by ≈2× (cells) and ≈2.5× (volume). Experimental saturation ≈3–4×10⁴ cells, volume ≈3×10⁸ µm³ (read from Fig 5) | 06 p.6 [3889]; Fig 5 | Quant | Within a factor of 3 of experiment (match the published sim within ±50%) |
 | T5 | Cell number at 20 d ≈ 8×10⁴ (sim, Fig 5a, read from figure) | Fig 5a | Quant | ±50% |
-| T6 | Cell-cycle fractions vs time: G1 rises from ≈30–50% to ≈75% (sim ≈78%, read from figure); S falls to ≈20%; G2 ≈ constant (≈5–10%) | Fig 6 p.7 [3890]; p.6 [3889] | Quant | G1 fraction at ≥15 d in 65–85%; S at ≥15 d in 12–28% |
+| T6 | Cell-cycle fractions vs time: G1 rises from ≈30–50% to ≈75% (sim ≈78%, read from figure); S falls to ≈20%; G2 roughly constant in the experiment (≈7–21%, read from figure); the sim G2 falls from ≈16% at 4–5 d to ≈4% by 10 d and stays there (audit 2026-10-13) | Fig 6 p.7 [3890]; p.6 [3889] | Quant | G1 fraction at ≥15 d in 65–85%; S at ≥15 d in 12–28% |
 | T7 | Viable rim vs diameter: after onset, rim ≈ constant at ≈140–150 µm (sim) vs ≈125–160 µm (exp). Necrosis onset near 550–600 µm diameter with an initial rapid necrotic-core expansion (rim ≈275 µm at onset, read from figure) | Fig 7 p.7 [3890]; p.7 text | Quant | Plateau rim 110–180 µm; necrosis-onset diameter 450–700 µm |
 | T8 | Necrotic core grows at ≈ the same rate as the spheroid late in growth | 06 p.7 [3890] | Qual | d(R_N)/d(R) → ≈1 |
-| T9 | Prediction at 0.28 mM O₂ / 16.5 mM glucose with no retuning: growth curves track experiment to ≈15 d; sim saturates early (≈5×10⁴ cells vs experiment rising to ≈2×10⁵ at 24 d), attributed to a lattice-size artefact | Fig 8 p.8 [3891]; p.8 text | Quant+Qual | Match the experiment within a factor of 2 to 15 d. Do **not** try to reproduce the lattice-size artefact; use a larger lattice. |
+| T9 | Prediction at 0.28 mM O₂ / 16.5 mM glucose with no retuning: the volume (Fig 8b) tracks experiment to ≈20 d; only the cell number (Fig 8a) saturates early, falling below experiment from ≈13 d (sim ≈8×10⁴ cells at 20 d vs experiment ≈2.5×10⁵ at 23.5 d, read from figure), attributed to a lattice-size artefact (audit 2026-10-13) | Fig 8 p.8 [3891]; p.8 text | Quant+Qual | Match the experiment within a factor of 2: cell number to 15 d, volume to 20 d. Do **not** try to reproduce the lattice-size artefact; use a larger lattice. |
 | T10 | Predicted GF/IF diffusivities 10⁻⁷ / 10⁻⁶ cm²/h give the best fit | 06 p.8 [3891] vs Table 1 | Qual | Sensitivity sweep should show the fit degrading outside 10⁻⁷–10⁻⁶ |
 | T11 | Adhesion insensitivity: a single J for all pairs gives the same growth | 06 p.6 [3889] | Qual | Growth curves within the ensemble spread |
 | T12 | O₂ profiles consistent with microelectrode measurements (ref 30); no numbers given | 06 p.9 [3892] | Qual | Not usable without ref 30 data |
@@ -464,8 +466,10 @@ committed CSVs before any screen.
 - **A1 Length scale and lattice.** In the all-proliferating phase a cell holds m̄ ≈ 38–48 voxels
   (between V₀ and 2V₀). M3 then gives an effective voxel edge Δx_geom = (3.8 × 10³ / m̄)^{1/3}
   ≈ **4.3–4.6 µm**, not the 2.66 µm of the "4 × 4 × 4 voxels = 1.2 × 10³ µm³" statement
-  (p.5 [3888]). The volume ratio is (4.4/2.66)³ ≈ 4.5. This is the size of the ECM allowance
-  the paper describes (p.5 [3888]), and M2 confirms it independently: 2 d ≈ 10⁵ µm³ is a
+  (p.5 [3888]). The volume ratio is (4.4/2.66)³ ≈ 4.5. We read the difference as the ECM space
+  the paper says it allows for in the unit conversion (p.5 [3888]); this fixes the length scale
+  only, not how (or in which direction) the ECM correction enters the chemistry (A3; audit
+  2026-10-13). M2 confirms the length scale independently: 2 d ≈ 10⁵ µm³ is a
   ≈46 µm cube. **Lattice ≈ 1330/4.4 ≈ 300 voxels per side** (range 290–310); the coarse grid is
   ≈75³. The tutorial reports µm through Δx_geom, and 2.66 µm is the cell-only volume.
 - **A2 Rate law, necrosis trigger, AND/OR.** With the Appendix law
@@ -481,18 +485,33 @@ committed CSVs before any screen.
     555 µm (M6). The constant-rate reading is excluded.
   - So at 0.08/5.5 mM **necrosis is lactate-driven** (> 8 mM). **AND can never fire, so OR is
     pinned** (J4).
-  - The lagged alternative (rates fixed for 45 min from the previous solve) would consume 81 mM
-    of O₂ per step against 0.08 mM supplied. It is excluded, which **pins the J7 scheme**: a
-    converged implicit transient over each 45-min window, with the rates inside the solve. The
-    rates are linear in u, so this is a linear solve.
+  - The paper says "After we calculate chemical concentrations, we adjust the cells' consumption
+    rate according to the changed concentrations" (p.9 [3892]). Lagging the rates over the
+    **whole 45-min window** (rates fixed from the previous solve) would consume 81 mM of O₂ per
+    step against 0.08 mM supplied, so that reading is excluded. Updating the rates at the solver's
+    inner step, or equivalently putting the rates inside the solve, is consistent with the text.
+    This **pins the J7 scheme**: a converged implicit transient over each 45-min window with the
+    rates updated at least every inner step (default: inside the solve; the rates are linear in
+    u, so this is a linear solve) (audit 2026-10-13).
+  - **Clamp a, b ≥ 0 for u < u^T** (audit 2026-10-13). Below threshold the Appendix law turns
+    consumption into production, and the Appendix starts with "no chemical … inside the tumor"
+    (p.10 [3893]), so u < u^T at t = 0. With the clamp there is no sink below u^T, so the
+    steady-state bound u ≥ u^T, and hence the OR pin, still holds. The initial fill happens
+    within the first 45-min solve, before any necrosis check (Fig 3).
 - **A3 Lactate magnitude needs a factor f.** The volume-mean of (a/a₀ + b/b₀)/2 over R = 278 µm is
   ≈ 0.37, so q ≈ 0.37 C₀.
   - Sphere onset: R_c = √(48 D_w/q) = 336 µm for all-P, 499 µm for all-Q, against 278 µm.
   - Planar plateau with a no-flux core: h = √(16 D_w/q) = 196–289 µm, against 145 µm.
   - Both agree on **(q/D)_eff ≈ f × Table with f ≈ 1.8–3.2**.
   - The shape is already right: R_c/h ≈ √3 = 1.73 for uniform production, and Fig 7 gives
-    278/145 = 1.9. f is the "ECM" conversion (J7). The geometric ECM ratios from A1, 2.7 (area)
-    and 4.5 (volume), are zero-parameter candidates.
+    278/145 = 1.9. f is attributed to the "ECM" conversion (J7), but **the direction of the ECM
+    correction is unknown** (audit 2026-10-13). The geometric ratios from A1, 2.7 (area) and 4.5
+    (volume), applied the natural ways (production diluted over the ECM volume; D converted with
+    the 2.66 µm voxel and run at 4.4 µm), *reduce* q/D (f < 1). Only a hindered-diffusion
+    (tortuosity) reading gives f > 1, and it predicts neither number. f is therefore a free
+    parameter, screened in S3.
+  - **Open item, fix before S3:** which Δx the PDE uses (2.66 µm cell-only or 4.4 µm working,
+    §3.2) for converting D and the rates. This choice decides f (audit 2026-10-13).
 - **A4 J3 polarity (logic evaluation).** With the top tier on (the stated initial condition,
   p.4 [3887]) and the deterministic rule:
   - SMAD, P15, P27 and P21 are on, so CycD and CycE are off and **Rb is on**.
@@ -564,7 +583,8 @@ committed CSVs before any screen.
     effect is absorbed by t₀ (06-q8 part 2).
   - γ_Q = 4γ_P (p.6 [3889]).
   - γ_N is operationally pinned: rigid means e^{−(γ_N − ΔJ_max)/T} × ≈10⁷ core-boundary attempts
-    per run ≪ 1, i.e. γ_N ≥ ΔJ_max + 16T. Any larger value is equivalent.
+    per run ≪ 1, i.e. γ_N ≥ ΔJ_max + 20T (e⁻²⁰ × 10⁷ ≈ 0.02; 16T would give ≈1.1; audit
+    2026-10-13). Any larger value is equivalent.
   - Quiescence is irreversible (Fig 3 and the text have no Q → P path).
   - Signs per §3.3.
   - J_QQ: the 7 given J fit an additive form j_P + j_τ′ (j_P = 14, j_Q = 12, j_N = 10,
@@ -588,7 +608,7 @@ committed CSVs before any screen.
 | γ_N (06-q1) | **Pinned** (A12) | γ_N = ΔJ_max + 20T |
 | T, γ_P, neighbourhood (06-q1, §3.3) | **Screen** S1 → S2 | — |
 | α, θ, threshold comparator (06-q1, 06-q3) | **Screen** S2/S4; comparator (x > θ vs F > θ) author-confirm | — |
-| J1 162/216 | **Unidentifiable from Figs 5–7** (A7); weak via S6 | Keep §4 default; non-gating |
+| J1 162/216 | **Unidentifiable from Figs 5–7** (A7); weak via S6 | 216 default (erratum), 162 variant (audit 2026-10-13); non-gating |
 | J1 per-node | **Pinned** (A7) | Intensive per node |
 | J2 | **Pinned** text (A5) | — |
 | J3 polarity + top tier | **Pinned** as drawn (A4); S1 confirms | Proposes reversing the §4 provisional default (coordinator call) |
@@ -628,10 +648,10 @@ committed CSVs before any screen.
 | **S0** | Digitise Figs 4–8 to CSV; time 128³ × 20 MCS | — | — | ≈1 h, Mac |
 | **S1** cell mechanics | γ_P ∈ {1, 2, 3} × T ∈ {5, 10, 20, 40} × neighbourhood order {1, 2, 3}; plus Rb → E2F as drawn vs ⊣, and single J = 20 vs Table J | (i) free-cell volume 32 → 64 in 4 ± 1 MCS (p.4 [3887]); (ii) ≥95 % of cells reach V^T within a cycle; (iii) 8-cell cluster stays compact and round (Fig 4); (iv) polarity: E2F on after G1 in fresh medium (A4); (v) T11 J-insensitivity | 48³, no PDE (chemistry clamped favourable), 8 MCS. Valid: cell-scale quantities, lattice > 4 cell diameters | 36 × 10 runs × ~1 s: minutes, Mac |
 | **S2** early growth | S1 survivors (≤ 6) × θ ∈ {0.5…0.9, 5 values} × α ∈ {5, 20} × D_gf ∈ {10⁻⁷, 10⁻⁶}; semantics (a)+reset vs (b) on the best 3 | N(t) at 1.8–7.8 d and the 16 h doubling (M4); S/G1 alternation phase 2–5 d (M5); G1 ≥ 60 % by 7 d (Fig 6); growth slows at 5–7 d (p.6 [3889]); P layer 1–2 cells (Fig 4, 10 d) | 160³ (≈700 µm), 0–8 d (64 MCS). Valid: interface Dirichlet makes the fields depend only on the tumour while D ≤ 300 µm and the gap is > 10 coarse nodes; GF is not quasi-steady (R²/D ≈ 4–6 d), so the horizon must be real time, not shortened | ≈120 arms × 8 × ~1.5 min ≈ 24 CPU-h, ≈1.5 h wall on the PC |
-| **S3** chemistry scale | **Tier 0:** 1-D radial transient surrogate (composition from Fig 4) for f ∈ {1, 1.6, 2.7, 4.5}, J1 162/216, AND/OR. **Tier 1 (3D):** best f ± neighbour × J1 | Onset D = 555 ± 50 µm and plateau rim 145 ± 20 µm (Fig 7: two targets, one parameter, so overdetermined); core ≈ 150 µm by D ≈ 650 µm; 18-d Q layer ≫ P layer (Fig 4); D(18 d) ≈ 815 µm (M2) | Tier 0: seconds. Tier 1: 224³ (≈990 µm), 0–14 d. Valid while D ≤ 650 µm (gap ≥ 170 µm) | Tier 1: 4 × 8 × ~5 min ≈ 3 CPU-h |
+| **S3** chemistry scale | **Tier 0:** 1-D radial transient surrogate (composition from Fig 4) for f ∈ {1, 1.8, 2.5, 3.2} (spans the A3 window; audit 2026-10-13), J1 162/216, AND/OR. **Tier 1 (3D):** best f ± neighbour × J1 | Onset D = 555 ± 50 µm and plateau rim 145 ± 20 µm (Fig 7: two targets, one parameter, so overdetermined); core ≈ 150 µm by D ≈ 650 µm; 18-d Q layer ≫ P layer (Fig 4); D(18 d) ≈ 815 µm (M2) | Tier 0: seconds. Tier 1: 224³ (≈990 µm), 0–14 d. Valid while D ≤ 650 µm (gap ≥ 170 µm) | Tier 1: 4 × 8 × ~5 min ≈ 3 CPU-h |
 | **S4** late phase | ε ∈ {0, 0.05, 0.1, 0.2, off} × D_if ∈ {10⁻⁷, 10⁻⁶} × necrotic IF {2 %/h, 10 %/h ("0.1" read as /h)} (factorial on the S3 winner) | Fig 6 at ≥15 d: G1 78, S 18, G2 4 % (M5); Q_G1/Q ≥ 0.85 (p.4 [3887]); volume-checkpoint Q a minority (p.9 [3892]); Fig 5a N(15–22 d) | 300³, 22 d | 20 arms × 8 × 15 min ≈ 40 CPU-h, ≈3 h wall |
 | **S5** shedding | at division / per MCS / per iteration (p = 0.2) | Shed rate per area once R > 300 µm against 218 /mm²/h (p.4 [3887]); Fig 5a N and Fig 5b V at 15–22 d (T4/T5) | The rate is read off the S3 runs at no cost; 300³ × 22 d only to confirm | 3 × 8 × 15 min ≈ 6 CPU-h |
-| **S6** Fig 8 | {capped, uncapped} × {interface BC, box BC} at 300³, plus uncapped/interface at 450³ (control) × J1 162/216 on the winner | Fig 8a/b sim tracks experiment to ≈13 d, then saturates early (≈7 × 10⁴ cells at 20 d). If early saturation persists at 450³, it is physics (cap/waste) and not a lattice artefact (A8, A14) | 300³ and 450³, 20 d | ≈(4 × 8 × 15 min) + (8 × 50 min) ≈ 15 CPU-h |
+| **S6** Fig 8 | {capped, uncapped} × {interface BC, box BC} at 300³, plus uncapped/interface at 450³ (control) × J1 162/216 on the winner | Fig 8b (volume) tracks experiment to ≈20 d; Fig 8a (cell number) tracks to ≈13 d, then saturates early (≈8 × 10⁴ cells at 20 d vs ≈2.5 × 10⁵ experimental at 23.5 d) (audit 2026-10-13). If early saturation persists at 450³, it is physics (cap/waste) and not a lattice artefact (A8, A14) | 300³ and 450³, 20 d | ≈(4 × 8 × 15 min) + (8 × 50 min) ≈ 15 CPU-h |
 
 Total ≈ 90 CPU-h, ≈ 1 day wall on the PC. S1 and Tier 0 run on the Mac first and cut the arm
 counts of S2 and S3.
@@ -645,7 +665,8 @@ counts of S2 and S3.
 3. **R1.** N ≈ 25 at 1.76 d needs ≤ 9 h cycles against 12 h nominal. Was the sim time axis shifted
    ≈1 d to align with the experiment?
 4. **J7 / A1.** Figs 4/5 imply ≈4.4 µm per voxel (V/N ≈ 3.8 × 10³ µm³), and Fig 7 needs
-   q/D ≈ 2–3 × Table. Is that the ECM conversion, and was it applied to D or to the rates?
+   q/D ≈ 2–3 × Table. In which direction, and to which quantity (D, the rates, or both), was the
+   ECM correction applied? Which voxel size did the PDE conversion use? (audit 2026-10-13)
 5. **J1.** No figure separates 162 from 216 (onset shifts 4 %). Which did the runs use? (Non-gating.)
 6. **06-q9.** 20 % per MCS matches 218 /mm²/h; at division it gives ≈50. Which was used?
 7. **J6.** Is the Appendix's "0.1 ml/h" the Table's 2 %/h, or 0.1 h⁻¹?
@@ -665,7 +686,7 @@ Questions 6–8 are asked only if S5, S4 or S6 ends "unidentified".
   - α and θ come from S2/S4, against pre-registered figure targets.
   The only semantic residue is the comparator in question 2.
 - **J1** is non-gating: it is unidentifiable from the calibration figures and moves Fig 7 by
-  only ≈4 %. Keep the §4 default and show both in the deviations table.
+  only ≈4 %. Default 216 (erratum), variant 162 (audit 2026-10-13); show both in the deviations table.
 - The remaining reproduction risk is **f (S3)** and **t₀ (R1)**. If Tier 0 shows that no single
   f fits both Fig 7 targets, the lactate-driven reading (A2–A3) fails, and this plan must be
   revisited before any FULL run.

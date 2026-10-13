@@ -171,7 +171,7 @@ Policy: agreement is statistical, over ensembles. Bitwise parity is not expected
 
 | ID | Target | Source | Type | Proposed tolerance |
 |---|---|---|---|---|
-| V1 | **Bent-cell relaxation.** E_curve of an artificially bent 'xanthus' cell (s = 8) decays "almost exponential[ly]" from about 120 E toward a small residual (below about 10 E) within about 5000–6000 MCS. The decay is noisy. | Fig. 2 (p.277, read from figure) | semi-quantitative | A single exponential fit to the ensemble mean has R² ≥ 0.9. The residual at 6000 MCS is below 15% of the initial value. Initial geometry is UNSPECIFIED, so match the trend only. |
+| V1 | **Bent-cell relaxation.** E_curve of an artificially bent 'xanthus' cell (s = 8) decays "almost exponential[ly]" from an initial spike of about 130 E (falling to about 105 E within about 50 MCS; P-S8; audit 2026-10-13) toward a small residual (below about 10 E) within about 5000–6000 MCS. The decay is noisy. | Fig. 2 (p.277, read from figure) | semi-quantitative | A single exponential fit to the ensemble mean has R² ≥ 0.9. The residual at 6000 MCS is below 15% of the initial value. Initial geometry is UNSPECIFIED, so match the trend only. |
 | V2 | **Low T gives incomplete relaxation** | p.277 | qualitative | With kT ≪ 0.8, the plateau of E_curve is higher than at kT = 0.8. |
 | V3 | **Snake-like motion with the head pinned** (ω = 0.5, ξ ≈ 300) | Fig. 3 (p.278) | qualitative | Visual: a sinusoidal body deformation develops within about 1000–2000 MCS. The pinning mechanism is UNSPECIFIED. |
 | V4 | **Single-cell velocity vs κ.** About 1.90–1.91 nodes/100 MCS at κ ≈ 2.5–3.4, falling to about 1.74 at κ ≥ 14. The variation is "minimal" (s scanned; mean of 15 runs ± SD). | Fig. 5a (p.279, read from figure) | quantitative (weak) | Each κ point within ±10% of the digitised value. The curve decreases monotonically for κ ≳ 3.4. |
@@ -263,14 +263,17 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
   - With an s = 12 cell length of about s·D = 41.6 spacings, the panel is about 440 × 310 spacings, about 1.6 × 10⁵ nodes (±40%).
   - With c = 100, s = 12 and A = 12, density ρ = 14,400/N is about 9–10%, and the visual coverage is consistent.
   - Under the convention "c = 100 always" the lattice is N = 100·s·A/ρ = 1.44 × 10⁵. That is screened against the alternative in S-S3.
-- **P-S6: Fig. 8 right (ξ scan) uses 20% density.**
-  - Its Ψ̄(ξ = 300) ≈ 0.63 matches the 20% curve of Fig. 8 left (0.59–0.61 at κ = 6.9 and 10.3). The 30% (0.86–0.89) and 10% (≈ 0.2) curves do not match.
-  - κ cannot be pinned between 6.9 and 10.3 (both give ≈ 0.6). Use s = 8 (Table I), with s = 12 as a check.
+- **P-S6: Fig. 8 right (ξ scan) uses 20% density at κ ≥ 5, or 30% density at κ ≈ 4 (not unique; audit 2026-10-13).**
+  - Its Ψ̄(ξ = 300) ≈ 0.63 matches the 20% curve of Fig. 8 left (0.59–0.61 at κ = 5.15–13.85, including κ = 6.9 and 10.3). The 10% curve (≈ 0.2) does not match.
+  - It also matches the 30% curve on its rising flank: 0.50 at κ = 3.35 and 0.79 at κ = 4.25 interpolate to 0.63 at **κ ≈ 3.8** (between s = 4 and s = 5). The right panel is drawn with a **solid** line, the 30% style of the left panel's legend (20% is dashed), which favours this reading. Only the 30% curve at the xanthus κ (0.86–0.89 at κ = 6.9–10.3) is excluded. Re-read at 600-dpi line art (audit 2026-10-13).
+  - **Screen both** (an add-on arm run with the S-S3 measurement protocol, 5 reps × 7 ξ × 3 settings): 20% at s = 8 (Table I; s = 12 as a check), and 30% at s = 4 and s = 5. Pick the arm whose Ψ̄(ξ) curve over ξ ∈ {25, 100, 200, 300, 600, 1000, 2000} lies inside the published ±1 SD bars at more points; a tie stays open and goes to the authors (Q-S1).
+  - **Tension with P-S4.** P-S4 puts the 'xanthus' single-cell figures at s ≈ 12, while Table I says s = 8. The 30% reading would put the ξ scan at s ≈ 4–5, which is neither. Under the 20% reading κ cannot be pinned between 6.9 and 10.3 (both give ≈ 0.6), so the ξ scan cannot settle s = 8 vs 12 either way.
 - **P-S7: 1 MCS = N_nodes attempts (Graner–Glazier, cited p.274; Morpheus convention).**
   - Time calibration from the Fig. 3 labels: 1050 MCS = 49 s, 2200 MCS = 103 s and 7850 MCS = 368 s, constant at **21.3 MCS/s**.
   - Consistency: 1.8 nodes/100 MCS × 21.3 gives about 0.4 nodes/s. With a cell width of about 0.5 µm ≈ 3.5 nodes, that is about 3–5 µm/min, within the A-motility range. This is supportive only.
 - **P-S8: Fig. 2 initial bend.**
   - Snapshot i is a U with two corners of about 90°. Each 90° corner gives (1/R)² = (2/(D√2))² ≈ 0.167, so 2 corners × 0.167 × ξ = 300 gives E ≈ 100 E, plus the flanking triplets. That is consistent with the plotted E₀ ≈ 130 E.
+  - Fig. 2 re-read (audit 2026-10-13): the trace spikes to ≈ 130 E at t ≈ 0 (peak within the first few tens of MCS; the 150-ppi JPEG cannot resolve the rise) and falls to ≈ 105 E within ≈ 50 MCS, ≈ 60 E by ≈ 400 MCS. V1 now uses the same E₀ ≈ 130 E; the earlier "about 120 E" in V1 was the value a few MCS after the peak.
   - The initial condition is therefore: a straight chain plus two right-angle bends, as close to a symmetric U as the hex lattice allows.
 - **P-S9: same-cell non-adjacent contact pays J_CC.** Implement Eq. 6 as printed (§7 item 12). Confirm only (Q-S5).
 
@@ -293,7 +296,7 @@ Placed after §7 so that no existing section is renumbered. Goal: infer every un
 
 ### 8b.3 Remaining author-only items (phrased as "confirm our inference")
 
-- **Q-S1.** Figs. 2, 4 and 6 show about 12 segments (κ ≈ 10). Was s = 12 used there, rather than Table I's s = 8?
+- **Q-S1.** Figs. 2, 4 and 6 show about 12 segments (κ ≈ 10). Was s = 12 used there, rather than Table I's s = 8? And which density and s does the Fig. 8 right ξ scan use (20% at κ ≥ 5, or 30% at κ ≈ 4; P-S6)? (audit 2026-10-13)
 - **Q-S2.** We read "second-nearest" as hex shells 1 + 2 (12 neighbours) for J. Correct?
 - **Q-S3.** Fig. 6 fits 100 cells at 10% density (about 1.4 × 10⁵ nodes). Was c = 100 fixed for Fig. 8?
 - **Q-S4.** We infer κ = (√3/2)s from the Fig. 5/8 abscissae. Is that your definition?

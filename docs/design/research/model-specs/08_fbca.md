@@ -87,7 +87,7 @@ Page convention: citations use the **printed journal page**. 08a: journal p.75 =
 **Death**
 - Only two mechanisms:
   - (i) deletion at the open lower boundary (08a p.82);
-  - (ii) the SC2-B therapy: from MCS = 2000, each cell of the most abundant type dies with probability 0.5 per MCS (08a p.88).
+  - (ii) the SC2-B therapy: from MCS = 2000, each cell of the most abundant type dies with probability 0.5 per MCS (08a p.88). SC2-B runs start "from the last MCS of randomly selected simulations" of SC2-A (the caption says "presented in Figure 5", evidently meaning the SC2-A runs) and continue to **MCS 4000**; 5 runs are summarised (Fig 5 caption and snapshots at 2000/2005/3000/4000, Fig 6A, 08a p.91) (audit 2026-10-13).
 - No starvation death is described in 08a.
 
 **Update order in 08a:** not given as an algorithm. The text says FBA runs "at each MCS" and the biomass determines A_target, which enters Eq 5. The spec therefore reads FBA → biomass/target update → CPM sweep, but the paper does not state the order (UNSPECIFIED; 08b gives an explicit order, see §2.2).
@@ -135,10 +135,10 @@ Page convention: citations use the **printed journal page**. 08a: journal p.75 =
   [N(l_i)] ← (D/|I|) Σ_{j∈I} [N(l_j)]
 
 - Permeable cells: I = N ∪ l_i. Diffusion ignores the cells, and cells secrete into the sites under themselves (08b p.287).
-- Impermeable cells: I = C_E ∩ (N ∪ l_i), i.e. only empty-space sites. Cells secrete into the sites on their perimeter (08b p.287).
+- Impermeable cells: I = C_E ∩ (N ∪ l_i), i.e. only empty-space sites. Cells secrete into the sites on their perimeter (08b p.287). **C_E is defined contradictorily (audit 2026-10-13):** p.284 says C_E "refers to the lattice sites where nutrients cannot diffuse because they are occupied by impermeable cells", but p.287 says this set "requires to consider only lattice sites belonging to the empty space". We keep the empty-space reading (p.287; it is the only one consistent with "nutrients cannot diffuse in the lattice sites that are occupied by cells", p.287). See §7 item 14.
 - D is "chosen based on the nutrient species". **No values are given** (UNSPECIFIED).
 - Number of averaging sweeps per MCS: UNSPECIFIED. The paper cites Dan et al. 2005 [27] only as motivation.
-- The paper says the sum is weighted "D/|I|". With D ≠ 1 this operator does not conserve mass (see §7).
+- The paper says the sum is weighted "D/|I|". **Corrected (audit 2026-10-13):** the operator is non-conservative in general, **even at D = 1**, whenever |I| varies between sites (the impermeable mask, closed lattice edges): site j then contributes Σ_{i: j∈I_i} D/|I_i| ≠ 1 of its mass. It conserves mass only for D = 1 with a constant |I| (permeable cells on a periodic lattice, synchronous update). D < 1 adds a uniform loss on top (see §7 item 8).
 
 **Impermeable-case bookkeeping (08b p.287)**
 - Nutrient concentrations are updated after each cell's FBA, and the FBA order is randomized "to avoid bias". This is sequential, conservative sharing of a limiting nutrient between neighbouring cells.
@@ -249,13 +249,13 @@ Policy: ensemble or statistical agreement, no bitwise parity. FBA optima can be 
 | V08a-7 | SC1-B: duplication-time distribution has a long right tail | 08a p.89, Fig 3H | qualitative | skewness > 0 and larger than SC1-A |
 | V08a-8 | SC2-A: type 1 dominates in all runs; types 2 and 3 have similar trajectories; biomass distributions similar across types; advantage comes from faster duplication | 08a p.90, Fig 4B–D | qualitative | type 1 majority in ≥ 95% of runs; KS test on biomass distributions not significant |
 | V08a-9 | SC2 LP surface: biomass ratio vs (O2, cell area) per type (Fig 4A) | 08a p.86–87, Fig 4A | quantitative (FBA only) | reproduce trends: type 1 limited at low O2; types 2 and 3 limited at high O2; type 3 also falls with area |
-| V08a-10 | SC2-B: after therapy at 2000 MCS, type 1 is wiped out in a few MCS; type 2 **or** 3 recolonises in about 500 MCS (about 50 h) | 08a p.88, p.90–92, Figs 5–6 | qualitative + timing | recolonisation time within ±50% of 500 MCS; both winners observed across runs |
+| V08a-10 | SC2-B: start from the final (MCS 2000) state of randomly selected SC2-A runs; run to **MCS 4000**; 5 runs (Fig 6A). After therapy at 2000 MCS, type 1 is wiped out in a few MCS; type 2 **or** 3 recolonises in about 500 MCS (about 50 h). (Start state and end time added, audit 2026-10-13) | 08a p.88, p.90–92, Figs 5–6 (Fig 5 caption, Fig 6A p.91) | qualitative + timing | recolonisation time within ±50% of 500 MCS; both winners observed across runs |
 | V08a-11 | SC2-B: type-2 duplication time falls after therapy; type 3 about unchanged | 08a p.92, Fig 6B | qualitative | direction of change |
 | V08b-1 | Closed environment: diauxie. Read by eye from Fig 5A (totals ×10⁵): glucose ≈15.5 → 0 at ≈780 MCS; glutamine ≈7.8 → ≈0 by 1000; lactate 0 until ≈300 MCS, peaks ≈18 at ≈780, then declines as it is consumed. Snapshots at 20/500/780/1000 MCS show red → blue (Fig 4) | 08b p.288–289, Figs 4–5A | semi-quantitative (digitised) | glucose-exhaustion MCS and lactate-peak MCS within ±20%; peak/initial ratios within ±30% (absolute totals depend on the unspecified initial field) |
 | V08b-2 | Closed environment: mean cell area shows **damped oscillations** (≈25–45 sites; period ≈75 MCS by eye) from 4 synchronous cells, relaxing to ≈30–33 by 700–1000 MCS | 08b Fig 5B, p.289 | semi-quantitative (digitised) | period within ±20%; oscillation damped (third peak amplitude < first); late mean in [28, 36] |
 | V08b-3 | Tissue, permeable: "no lactate flux" (purple) cells vanish by MCS 200; producers are more numerous and farther from vessels than consumers | 08b p.292, Fig 7A, C, E, G | qualitative | ordering of counts and mean distances |
 | V08b-4 | Tissue, impermeable: all three lactate phenotypes persist; producers are least abundant; steady state after about 200 MCS; longitudinal geometry more variable than cross-section | 08b p.292, Fig 7B, D, F, H | qualitative | ordering; SD(longitudinal) > SD(cross) |
-| V08b-5 | Diffusion operator only: impermeable cells shade the field and slow diffusion vs permeable (5 static cells) | 08b Fig 3, p.287 | qualitative | unit test of the field operator |
+| V08b-5 | Diffusion operator only: impermeable cells shade the field and slow diffusion vs permeable (5 static cells) | 08b Fig 3, p.287 | qualitative | unit test of the field operator. Must **not** assert mass conservation: Eq 6 as printed is non-conservative whenever \|I\| varies (mask, closed edges), even at D = 1 (audit 2026-10-13); test against the operator as printed |
 
 ---
 
@@ -276,7 +276,7 @@ Policy: ensemble or statistical agreement, no bitwise parity. FBA optima can be 
 | G11 | Not required | — |
 | G12 | Cell counts per type; mean area and biomass per type; duplication-time histogram (needs a per-cell birth time); clone-size distribution; per-cell exchange-flux sign classification (lactate in/out/none with a 0.1 cutoff); distance from cell centroid to nearest source barycentre (08b Fig 7); total field amounts (08b Fig 5A) | — |
 | G13 | Tiled 5×5 square cells filling the lattice with alternating types (08a SC1); random-area cells in horizontal stripes over half the lattice (SC2); a few equal cells (08b closed); random fill (08b tissue); geometric source regions (squares, rectangles) | — |
-| **G14 (new)** | **User-defined discrete field operator.** A per-step stencil update with an arbitrary per-site neighbourhood mask derived from the cell lattice, run at a declared point in the step order. Justification: 08b Eq 6 is not a PDE discretisation (non-conservative D/|I| weight; mask from occupancy), so neither a PDE solver nor G5's SteadyState covers it | Could be satisfied by making G5's stencil pluggable |
+| **G14 (new)** | **User-defined discrete field operator.** A per-step stencil update with an arbitrary per-site neighbourhood mask derived from the cell lattice, run at a declared point in the step order. Justification: 08b Eq 6 is not a PDE discretisation (D/\|I\| weight, non-conservative whenever \|I\| varies, even at D = 1 (audit 2026-10-13); mask from occupancy), so neither a PDE solver nor G5's SteadyState covers it | Could be satisfied by making G5's stencil pluggable |
 | **G15 (new)** | **Explicit step schedule.** An ordered list of per-MCS phases (08b p.282: FBA → biomass → death → CPM → division → diffusion) | Could fold into G9 cadence plus a global schedule. Listed because 08b fixes the order |
 
 ### G9 — per-cell component interface required by FBCA
@@ -312,3 +312,4 @@ Policy: ensemble or statistical agreement, no bitwise parity. FBA optima can be 
 11. **SC2 flux-capped reaction IDs** in HMR CORE, and the four O2 level values and band geometry.
 12. **08b "parameters as in [18]"** (ACRI 2018): λ, k_BT, attempts per MCS, and initial field values for 08b. We need that paper or the authors' code. STILL OPEN: the paper is closed access and has no repository copy (checked 2026-09-30, §1).
 13. **Code or model files:** none are linked. **Model file partly resolved 2026-09-30:** the published HMR core is on disk (`mmc1.xls`, §1), with 274 reactions (272 without the objective and its export) × 252 metabolites, vs the stated 272 × 240. **Decision changed** (specs README §4 X5; changed 2026-09-30 on new evidence; approved by the maintainer 2026-09-30; D-067): the default is the published `mmc1.xls` model, flagged. Previously: blocking until the file was obtained. STILL OPEN for the authors: how 272/240 were counted, then which reactions, metabolites, bounds or biomass terms (if any) changed; and the MATLAB sources.
+14. **NEW, OPEN (audit 2026-10-13). Definition of C_E in 08b Eq 6.** p.284 defines C_E as the sites "occupied by impermeable cells"; p.287 says I = C_E ∩ (N ∪ l_i) uses "only lattice sites belonging to the empty space". We use the empty-space reading (p.287). Confirm with the authors.

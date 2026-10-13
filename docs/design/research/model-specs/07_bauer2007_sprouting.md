@@ -87,7 +87,7 @@ Effective mechanical coupling: "Effective mechanical forces exerted on the ECM b
 | Cell clock and division | "Cell division occurs when a proliferating cell has doubled in size and has gone through one complete cell cycle, which we take to be 18 h". "one daughter cell keeps the cell ID of the parent and the other is assigned its own unique ID". The split geometry is **UNSPECIFIED**. | 07 p.8 [3112] |
 | Death | "endothelial cell death is not considered" | 07 p.8 [3112] |
 | Degradation | Tip cell "is also capable of degrading the matrix fibers, thereby establishing local adhesion gradients". **Rate, product state and site selection are UNSPECIFIED.** On in baseline (+5% speed vs without). | 07 p.8 [3112] |
-| Tissue cells | "roughly the same size as an endothelial cell", "immobile", "more difficult to invade than matrix fibers and interstitial fluid". Number and placement are **UNSPECIFIED** (Fig 2 shows ≈30 squares ≈7–8 µm on a jittered grid, read from figure). | 07 p.6 [3110]; Fig 2 p.5 |
+| Tissue cells | "roughly the same size as an endothelial cell", "immobile", "more difficult to invade than matrix fibers and interstitial fluid". Number and placement are **UNSPECIFIED** in the text. Fig 2 shows 24 squares, ≈9.2 µm sides (16–17 px, ≈276 sites), on a jittered 4 × 6 grid, digitised (§8b Q9; audit 2026-10-13, replacing the earlier "≈30 squares ≈7–8 µm" reading). | 07 p.6 [3110]; Fig 2 p.5 |
 | Deactivation (H1 only) | "If there is insufficient VEGF, a cell will deactivate and become inert." | 07 p.9 [3113] |
 | VEGF-dependent proliferation (H1 only) | "an activated cell additionally decides whether there is enough VEGF present to stimulate proliferation, v_p". v_p is chosen to trigger proliferation ∼48 h after the initial cell starts migrating. | 07 p.9 [3113] |
 
@@ -220,9 +220,17 @@ run length (only snapshot times are given).
 
 The comparisons are statistical over ensembles (the paper uses n = 12), with no bitwise parity.
 
+*(audit 2026-10-13)* **Parameter set for W1–W5: Table 1 with γ_e = 0.7 and γ_t = 0.8.** Figs 3
+and 5 state "Parameters used are given in the parameter table except γe = 0.7 and γt = 0.8"
+(p.9, p.11). W1's 14.2 ± 2.44 µm (SD) and the Table 2 fibres + tissue diameter 14.20 ± 0.70 are
+the same ensemble (0.70 × √12 = 2.42 ≈ 2.44), and Table 2's 6.84 µm/day equals the Fig 5
+8.9 µm point, so Table 2 (W2, W3) is the 0.7/0.8 set as well. Conflict: the Fig 6 caption, whose
+four panels are the Table 2 stromal compositions, says "Parameters are given in Table 1" (no
+exception). The spec follows Figs 3/5 and the √12 arithmetic; see §7.1 item 6.
+
 | ID | Target | Source | Type | Proposed tolerance |
 |---|---|---|---|---|
-| W1 | Sprout diameter 14.2 ± 2.44 µm (mean ± SD), 1–2 cells wide (baseline) | 07 p.9 [3113] | Quant | 11–18 µm |
+| W1 | Sprout diameter 14.2 ± 2.44 µm (mean ± SD), 1–2 cells wide (baseline; γ_e = 0.7, γ_t = 0.8, audit 2026-10-13) | 07 p.9 [3113] | Quant | 11–18 µm |
 | W2 | Table 2 speeds (µm/day, mean ± SD error; n = 12): no fibres/no tissue 5.33 ± 0.075; tissue only 5.41 ± 0.074; fibres only 6.33 ± 0.131; fibres + tissue 6.84 ± 0.131 | Table 2 p.13 [3117] | Quant | Each within ±15%. Ordering fibres+tissue > fibres only > {tissue only ≈ none}. "18–28% increase" with fibres. |
 | W3 | Table 2 diameters (µm): 19.29 ± 0.26; 19.08 ± 0.46; 14.41 ± 0.26; 14.20 ± 0.70 | Table 2 | Quant | ±20%. No-fibre cases ≈ 1.35× wider. |
 | W4 | Proliferating region vs speed (Fig 5, µm/day, read from figure): base ≈7.05; 26.6 µm ≈7.17; 8.9 µm ≈6.85; tip ≈5.64 (derived) | Fig 5 p.11 [3115]; p.11 text | Quant | Tip speed ≥15% below the others. Base ≈ 26.6 µm (no significant difference). Morphology unchanged. |
@@ -358,8 +366,9 @@ costs ≈5 s.
   - **Per site:** β·1 h = 0.06 pg > V_max = 0.035, so every EC site empties in one MCS. In the
     steep run every cell would fall below v_a at once. This contradicts "some cells eventually
     became inactive" (p.10 [3114]).
-  - **Per cell:** 0.06/276 ≈ 2.2 × 10⁻⁴ pg per site per MCS empties a 0.02 pg site in ≈90 MCS
-    (≈4 d). That gives gradual inactivation, and a "very slight effect" in the shallow run
+  - **Per cell:** 0.06/256 ≈ 2.3 × 10⁻⁴ pg per site per MCS empties a 0.02 pg site in ≈85 MCS
+    (≈3.5 d). *(audit 2026-10-13: divisor corrected from 276, the tissue-cell area, to the EC
+    area of 256 sites, §8b Q1.)* That gives gradual inactivation, and a "very slight effect" in the shallow run
     (p.9 [3113]). → **per cell favoured**.
 
 **Q12 — thresholds.**
@@ -367,19 +376,22 @@ costs ≈5 s.
   at x = 23.7 µm (43 px), and v_a = 10⁻⁴ at x = 0.47 µm (all columns except column 0).
 - Starting from COM ≈ 5 µm, the cell must travel ≈19 µm. In the shallow run (≈1.8× faster:
   "same distance" in 9.4 d vs 16.6 d) that takes ≈1.5–2 d, matching "∼48 h" (p.9 [3113]).
-- ΣV over the cell (≈276 × V) or the bound amount min(β, ·) exceeds v_p immediately, which leaves
+- ΣV over the cell (≈256 × V; audit 2026-10-13, EC area, was 276) or the bound amount min(β, ·) exceeds v_p immediately, which leaves
   no delay. Both are rejected.
 - → **compare V at the cell (COM or mean over sites)**.
 
 **Q13 — SD or SEM.** Table 2 gives speeds 5.33 ± 0.075 (1.4 % CV) and diameter 14.20 ± 0.70,
 while W1 is 14.2 ± 2.44 (SD, 17 % CV). As SEM with n = 12, the speed SD would be 0.26 (4.9 %),
-which is plausible. → **Table 2 errors are SEM**. Fig 5 says SD.
+which is plausible. *(audit 2026-10-13)* Direct check: W1 and the Table 2 fibres + tissue
+diameter are the same ensemble (both 14.2 µm, γ_e = 0.7/γ_t = 0.8, n = 12), and
+0.70 × √12 = 2.42 ≈ 2.44 (equivalently 2.44/√12 = 0.704). → **Table 2 errors are SEM**. Fig 5
+says SD.
 
 ### 8b.3 Pre-registered screens (no runs yet; rules fixed now)
 
 **T1 — adhesion order (Q2).**
-- Candidates: orders {1, 2, 3}. Fixed: p, square, Moore-8 proposals, Table 1 values (with the
-  Figs 3/5 γ variants).
+- Candidates: orders {1, 2, 3}. Fixed: p, square, Moore-8 proposals, Table 1 values with
+  γ_e = 0.7 and γ_t = 0.8 for every W1–W5 target (Figs 3/5; audit 2026-10-13, see §5 note).
 - Targets:
   - W1 diameter 11–18 µm;
   - W3 no-fibre/fibre diameter ratio ≈1.35 (±0.15);
@@ -461,7 +473,12 @@ degradation option.
    the immediately-behind cell, but that is an **inference**.
 4. **Units of β.** β is per EC per hour, but B is written per site.
 5. Table 2 column header "mean ± SD error" is ambiguous: SD or SEM? The Fig 5 caption says
-   "standard deviations".
+   "standard deviations". (Arithmetic favours SEM; §8b Q13.)
+6. **Parameter set of Table 2 / Fig 6** *(audit 2026-10-13)*. Figs 3 and 5 use Table 1 "except
+   γe = 0.7 and γt = 0.8". The Fig 6 caption, whose panels are the four Table 2 stromal
+   compositions, says "Parameters are given in Table 1". Since W1 (14.2 ± 2.44, SD) and Table 2
+   (14.20 ± 0.70) are the same ensemble (0.70 × √12 = 2.42), Table 2 is taken as the 0.7/0.8 set
+   and the Fig 6 caption as an omission.
 
 ### 7.2 Conflicts with Bauer 2009
 See spec 05 §7.3 for the full comparison table. Key differences:

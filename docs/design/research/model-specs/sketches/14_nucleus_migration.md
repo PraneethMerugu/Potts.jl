@@ -22,10 +22,13 @@ the roadmap. An untagged line uses syntax that exists today (`src/vocabulary.jl`
 `src/macro.jl`, AUTHORING "implemented"). `[verify]` marks existing syntax that I believe
 works in that position but have not run.
 
-Defaults follow the heuristic in README §4: use the code that produced the figures. So
-J_CL = 10 (C1), the target-based conversion (C2), the PDE (C3 for 14a), the code's initial
-state (C5) and protrusion in both directions (C7). Kind indices: medium 0, substrate 1,
-lid 2, cytoplasm 3, lamellipodium 4, nucleus 5.
+Defaults follow the spec's paper-over-code ruling (14 §9, end; 2026-10-13), which supersedes
+the earlier code defaults: J_CL = 20 (Table 1), the paper conversion p = c·(1 − V₃/(φ_l V))
+evaluated once per MCS, fixed targets from t = 0 with no V_target transfer, V = (4π/3)R³,
+the PDE (C3 for 14a), the code's initial geometry (6³ nucleus, ball tangent at z = 1) with
+the cytoplasm sized to its target, and protrusion in both directions (C7). The code's
+J_CL = 10 and target-based sequential conversion are recorded variants (§5). Kind indices:
+medium 0, substrate 1, lid 2, cytoplasm 3, lamellipodium 4, nucleus 5. (audit 2026-10-13)
 
 ## 1. Sketch
 
@@ -42,7 +45,10 @@ using Potts
     @parameters begin
         T = 100.0                      # T_B (14 §5.1, Table 1; code CellMig3D.py:80)
         λ = 10.0                       # λ_c = λ_l = λ_n (14 §5.1; code Steppables.py:110, 115, 156)
-        φ_F = 0.05                     # lamellipodium fraction (14 §5.1; code CellMig3D.py:45)
+        φ_F = 0.05                     # lamellipodium fraction φ_l (14 §5.1; code CellMig3D.py:45)
+        φ_n = 0.15                     # nucleus fraction (Table 1)
+        R = 15.0                       # V = (4π/3)R³ (14a p.2806; audit 2026-10-13)
+        c_conv = 0.1                   # conversion constant, unstated; calibrate (D-156), start 0.1
         λ_F = 150.0                    # protrusion, 14a sign = −λ_CC3D (14 §2.9.4; code CellMig3D.py:48)
         D_F = 1.0e-4                   # F-actin diffusion (14 §5.1, Table 1)
         k_decay = 0.9                  # (14 §5.1, Table 1)
@@ -50,13 +56,14 @@ using Potts
         # Contact table: pairs of different clusters (CC3D Contact, 14 §2.9.3). Order M S lid C L N
         J[kind, kind] = [1 20 -20 20 40/3 100; 20 1 1 20 20/3 100; -20 1 1 20 40/3 100;
                          20 20 20 40 40 100; 40/3 20/3 40/3 40 40 100; 100 100 100 100 100 100]
-        # Pairs within one cluster (CC3D ContactInternal, 14 §2.9.3). J_CL = 10 (C1; Table 1 gives 20)
+        # Pairs within one cluster (CC3D ContactInternal, 14 §2.9.3). J_CL = 20 (Table 1; ruling
+        # 2026-10-13); the code's 10 is a variant
         Jint[kind, kind] = [0 0 0 0 0 0; 0 0 0 0 0 0; 0 0 0 0 0 0;
-                            0 0 0 0 10 20; 0 0 0 10 0 40; 0 0 0 20 40 0]
+                            0 0 0 0 20 20; 0 0 0 20 0 40; 0 0 0 20 40 0]
     end
     @variables begin
         F(field) = 0.0                 # F-actin, on the whole lattice, unconfined (14 §2.9.2)
-        V_target(cell) = 0.0           # moves between compartments on conversion (14 §2.9.5)
+        V_target(cell) = 0.0           # fixed from t = 0: φ_n V, (1−φ_n−φ_F)V, φ_F V (audit 2026-10-13)
         front_births(model) = 0.0      # D-066 diagnostic: FRONT deaths = births − alive
     end
     @lattice Lattice(lattice; boundary = (Periodic(), Periodic(), Closed()),   # 14 §2.7; z = CC3D default
@@ -78,15 +85,16 @@ using Potts
     @equations D(F) ~ D_F * Δ(F) - k_decay * F +
                       k_source * (kind == lamellipodium) * touches_substrate(site)          # [R5] [verify]
 
-    # Conversion: cytoplasm at the substrate → lamellipodium, after the PDE (14 §2.9.5, §2.9.6; C2)
+    # Conversion: cytoplasm at the substrate → lamellipodium, after the PDE (14 §2.5, §9 ruling)
+    # Paper form (audit 2026-10-13): independent per site, p from the start-of-pass V₃, once per
+    # MCS, clamped at 0. φ_F is the parameter: V_target[to] of an absent FRONT gives 0/0 = NaN,
+    # and u < NaN is false (silently no conversion). No V_target transfer: targets are fixed.
     @convert protrusion clusters(cytoplasm) begin                                          # [R8] [NEW name]
         from  = sibling(cytoplasm); to = sibling(lamellipodium)   # `to` is made on demand (D-066)  # [R6]
         at    = touches_substrate(site)                           # every CYTO site at z = 1
-        order = Shuffled()                                        # sequential, shuffled   # [NEW]
-        p     = 0.1 * (1 - V_target[to] / (φ_F * sum(V_target[m] for m in members(cluster))))  # [R6]
-        V_target[to]   += ifelse(created, 1.5, 1.0)               # FRONT starts at 1.5     # [NEW created]
-        V_target[from] -= ifelse(created, 1.5, 1.0)               # total target conserved
-        front_births   += created
+        p     = max(0, c_conv * (1 - volume[to] / (φ_F * (4π / 3) * R^3)))                 # [R6]
+        V_target[to] = φ_F * (4π / 3) * R^3                       # set on creation only (fixed)
+        front_births += created                                                            # [NEW created]
     end
     if stop_on_detachment
         @terminate Every(50) when = (mcs > 10) &&                                          # [R3]
@@ -107,14 +115,16 @@ end
 
 # --- 14a-code initial state: ball tangent to the substrate, 6³ nucleus, no FRONT (C5, 14 §2.9.1) ---
 @named cell = FortunaCrawling()
-R = 15; L, Lz = 120, 31; V = 4.19R^3                                  # code volume (14 §2.9.7 item 3)
-c = (L ÷ 2 + 1, L ÷ 2 + 1, R + 1)                                    # CC3D (L/2, L/2, int R), 1-based
-op = layout(overlay(Spheres([c]; radius = R, kinds = [:cytoplasm]),  # |r − c| < R          # [R2]
+R = 15; L, Lz = 120, 31; V = (4π / 3) * R^3; φ_F = 0.05             # paper volume (14a p.2806; audit 2026-10-13)
+Vc = (1 - 0.15 - φ_F) * V                                            # cytoplasm target, fixed from t = 0
+r0 = cbrt((Vc + 216) / (4π / 3))                                     # ball holds ≈ Vc cytoplasm + 6³ nucleus seed
+c = (L ÷ 2 + 1, L ÷ 2 + 1, r0 + 1)                                   # tangent: bottoms at z = 1 (0-based)
+op = layout(overlay(Spheres([c]; radius = r0, kinds = [:cytoplasm]), # strict |r − c| < r0, as code  # [R2]
                     Tiling((6, 6, 6); region = map(a -> (a - 3):(a + 2), c), kinds = [:nucleus]),
-                    Plane(:substrate; axis = 3, at = 1),             # overwrites the ball's z = 0 point  # [R2]
+                    Plane(:substrate; axis = 3, at = 1),             # z = 0 plane; the strict ball never reaches it  # [R2]
                     Plane(:lid; axis = 3, at = Lz)), cell)                                    # [R2]
 op = [op; cluster => [1, 1, 3, 4],                                   # ids follow layer order  # [NEW helper wanted]
-      :V_target => [floor(0.85V) + 0.5, floor(0.15V) + 0.5, 0, 0]]   # 12020.5, 2121.5 at R = 15
+      :V_target => [Vc, 0.15V, 0, 0]]                                # fixed targets; no floor(0.85V) start (audit 2026-10-13)
 prob = PottsProblem(mtkcompile(cell), op, (0, 100_001); seed = 1)    # tSim = 100001 (14 §2.9.1)
 sol  = solve(prob, SequentialCPM(); saveat = 0:50:100_001)           # deltaT = 50 (code output cadence)
 ens  = EnsembleProblem(prob; trajectories = 5)                       # Fig 5 replicas; MSD/Fürth fits: R16 docs
@@ -185,12 +195,12 @@ Proposed syntax used above:
 | `@drive … λ_F (F[target] − F[source])`, both directions | 14 §2.4, §2.9.4; C7 | Eq 7; CC379 ChemotaxisPlugin.cpp:434–455, 487–502 |
 | `D(F) ~ …`, `ExplicitEuler(substeps = 1)` | 14 §2.3, §2.9.2 | Eq 6, p.2805; CC379 DiffusionSolverFE_CPU.cpp:835–841, 1204, 316–335 |
 | `touches_substrate` (6 face neighbours) | 14 §2.9.2 | CC379 DiffusableVectorCommon.h:78 |
-| `@convert protrusion` (p, targets, sequential) | 14 §2.9.5; C2 | p.2806; Steppables.py:121–165 |
+| `@convert protrusion` (paper p, fixed targets, per MCS) | 14 §2.5, §9 ruling (audit 2026-10-13) | p.2806; code variant Steppables.py:121–165 |
 | FRONT created on demand, dies when it empties | 14 §2.9.5; D-066 item 7 | Steppables.py:149–159 |
 | `@terminate` on detachment | 14 §2.9.1 row "Detachment stop", §2.9.7 item 17 | Steppables.py:404–411 |
 | `Πx`, `Πy` | 14 §3 (Eq 10), §2.8 | 14b Eq 10–11, p.6, p.11 |
 | initial ball, 6³ nucleus, planes | 14 §2.9.1; C5 | Steppables.py:65–105 |
-| `V_target` initial 12020.5 / 2121.5 | 14 §2.9.1 row "Volume constraint" | CellMig3D.py:45–47, 60; Steppables.py:109–115 |
+| `V_target` fixed: (1−φ_n−φ_F)V, φ_n V, φ_F V; V = (4π/3)R³ | 14 §9 ruling (audit 2026-10-13) | 14a p.2806 (code variant: CellMig3D.py:45–47, 60; Steppables.py:109–115) |
 | `(0, 100_001)`, `saveat = 50` | 14 §2.9.1 | CellMig3D.py:41, 84 |
 | 14c: lattice 59×59×21, `λ_F = 175` | 14 §4.2, §5.2 | SC:22, 32–33 |
 | 14c: `ρ, μ, χ, δ` | 14 §4.2, §5.2; C6 | Eq 7, 14c p.9; SC:45–51 |
@@ -244,7 +254,9 @@ Proposed syntax used above:
    - or drop the implicit gain gate and put it in `when`.
 
    Merks 2008 M7 (`:extension_retraction`) needs the same fix.
-2. **`@convert` needs a precise sequential contract.** R8's "too-narrow shapes" list names
+2. **(Superseded for 14a by the 2026-10-13 ruling: per-MCS independent decisions, fixed
+   targets, no transfer writes; kept for the code variant. audit 2026-10-13)**
+   **`@convert` needs a precise sequential contract.** R8's "too-narrow shapes" list names
    `from`/`to`, a predicate, a probability and a budget. Fortuna also needs these:
    - **Recompute per candidate.** `p` and `gate` are evaluated again before each
      candidate, on the running trackers (volume) and the running cell variables
@@ -338,12 +350,12 @@ Proposed syntax used above:
 
 | Choice | Default (spec) | Variant(s) |
 |---|---|---|
-| J_cyto–lamellipodium | 10, both codes (C1) | 20, Table 1 (`Jint[3,4] = Jint[4,3] = 20`) |
-| Conversion law | code: 0.1·(1 − V₃ᵗ/(φ_F ΣVᵗ)) on targets, sequential, stops once reached (C2) | paper literal: p ∝ (1 − V₃/V₃ᵗ) with V₃ᵗ = φ_l V fixed; constant UNSPECIFIED (14 §2.5) |
+| J_cyto–lamellipodium | 20, Table 1 (ruling 2026-10-13; audit 2026-10-13) | 10, both codes (`Jint[3,4] = Jint[4,3] = 10`) |
+| Conversion law | paper: p = c·(1 − V₃/(φ_l V)), V₃ actual at pass start, per MCS, clamped at 0, fixed targets; c calibrated from 0.1 (ruling 2026-10-13) | code: 0.1·(1 − V₃ᵗ/(φ_F ΣVᵗ)) on targets with 1.5/1.0 transfer, sequential, stops once reached (C2) |
 | Protrusion direction | both extension and retraction (C7, D-067) | Eq 7 extension only (`retraction = false`) |
 | F-actin | PDE, source on FRONT touching SUBS_A (C3; 14 §2.9.2) | 14b Eq 9: source on all lamellipodium sites; 14c binary indicator |
-| Initial state | ball tangent to substrate, 6³ cube nucleus, no FRONT (C5) | 14a-S1: centred sphere with spherical nucleus; 14a Fig 4A "suspended" cell |
-| Cell volume | 4.19 R³, int + 0.5 (code) | (4π/3) R³ (paper) |
+| Initial state | ball tangent at z = 1 (strict <), 6³ cube nucleus, no FRONT, cytoplasm ≈ (1−φ_n−φ_l)V (ruling; audit 2026-10-13) | code ball of radius R; 14a-S1 p.6: centred concentric spheres; 14a Fig 4A "suspended" cell |
+| Cell volume | (4π/3) R³ (paper; audit 2026-10-13) | 4.19 R³, int + 0.5 (code) |
 | Lattice | int(8R) (10R when R ≥ 20 and φ_F ≥ 0.2) | paper range [8R, 14R] |
 | Top lid | frozen SUBS_NA at z = L_z − 1, J(M, lid) = −20 (code) | none (paper is silent) |
 | Extra SUBS_NA secretion | off (14a-code) | on (14a-nH port addition, 14 §2.9.8) |

@@ -54,6 +54,7 @@ l_σ is the length along the longest axis, L_σ the target length and λ_L the s
 
 **01a Eq. (5), p.49 (inertia tensor from site moments):**
 I = [[Σx² − (1/a)(Σx)², −Σxy + (1/a)ΣxΣy], [−Σxy + (1/a)ΣxΣy, Σy² − (1/a)(Σy)²]]
+*(Audit 2026-10-13: 01a Eq. (5) as printed has −Σxᵢyᵢ **−** (1/a)ΣxᵢΣyᵢ in both off-diagonal entries, a typo. The centred cross-moment is −[Σxy − (1/a)ΣxΣy], so the spec uses the correct "+ (1/a)" form, which is also what the released TST code computes (§7.2, cell.h:397-421: I_xy = −Σxy + ΣxΣy/n).)*
 The moments are updated incrementally on each extension or retraction, "without lengthy non-local calculations" (01a p.49).
 
 **01b Eq. (2), p.11:**
@@ -326,8 +327,8 @@ Tolerance policy: ensemble/statistical agreement, no bitwise parity. "Read from 
 | V-C1 | Without CI (χcc = χcM): 1000 cells form isolated round clusters by 10,000 MCS; with CI: a network | 01b Fig. 2 p.4 | Qualitative | Cluster count / connectivity classification |
 | V-C2 | Cluster sprouts with CI; stays compact without CI at 10,000 MCS | 01b Fig. 4 p.6 | Qualitative | C(with CI) < C(without CI) − 0.3 |
 | V-C3 | Compactness vs χcc/χcM at 10,000 MCS: C ≈ 0.35 ± 0.05 for ratio ≲ 0.45; steep rise between ≈ 0.5 and 0.6; C ≈ 0.9 for ratio ≳ 0.6. n = 10 | 01b Fig. 5 p.6 | Quantitative (from plot) | Transition midpoint within 0.45–0.65; plateau levels within ±0.07 |
-| V-C4 | C vs J(c,c) at 5000 MCS. With CI: ≈ 0.3 for J_cc ≲ 40, rising to ≈ 0.85 at 80. Without CI: ≈ 0.35 at 0 → ≈ 0.83 by J_cc ≈ 15, plateau | 01b Fig. 7 p.8 | Quantitative (from plot) | Monotone trends; plateau/low levels within ±0.1 |
-| V-C5 | C vs χ(c,M). With CI: ≈ 0.9 at 0, fast drop to ≈ 0.35 by ~500, ≈ 0.2 at 5000. Without CI: ≈ 0.95 → ≈ 0.7 | 01b Fig. 8 p.8 | Quantitative (from plot) | ±0.1 at χ = 0, 500, 2000, 5000 |
+| V-C4 | C vs J(c,c) at 5000 MCS. With CI: flat ≈ 0.3 (0.27–0.31) for J_cc ≤ 30, then rising: ≈ 0.35 at 35, ≈ 0.40 at 40, ≈ 0.85 at 80. *(Audit 2026-10-13: was "≈ 0.3 for J_cc ≲ 40"; Fig. 7 at 400 dpi and our digitisation ("F7", "CI", 40.0, 0.401) put J_cc = 40 at ≈ 0.40. J = 40 is re-targeted to ≈ 0.40 rather than dropped, because it is a digitised point and marks the onset of the rise.)* Without CI: ≈ 0.35 at 0 → ≈ 0.83 by J_cc ≈ 15, plateau | 01b Fig. 7 p.8 | Quantitative (from plot) | Monotone trends; plateau/low levels within ±0.1 |
+| V-C5 | C vs χ(c,M). With CI: ≈ 0.9 at 0, fast drop to ≈ 0.40 at 500 (≈ 0.35 near 650–700, ≈ 0.30 at 10³), ≈ 0.2 at 5000. *(Audit 2026-10-13: was "≈ 0.35 by ~500"; Fig. 8 at 400 dpi and our digitisation ("F8", "CI", 500.0, 0.396) read ≈ 0.40 at 500.)* Without CI: ≈ 0.95 → ≈ 0.7 | 01b Fig. 8 p.8 | Quantitative (from plot) | ±0.1 at χ = 0, 500, 2000, 5000 |
 | V-C6 | Cord width: two cells at χcM = 500, one cell wide for χcM > 500 | 01b p.8 | Qualitative | Median cord width in cells |
 | V-C7 | C vs s. With CI: ≈ 0.4 for s ≲ 0.08, rising to ≈ 0.95 by s ≈ 0.13. Without CI: ≈ 0.93–0.97 flat | 01b Fig. 9 p.8 | Quantitative (from plot) | Transition in s ∈ [0.07, 0.15] |
 | V-C8 | C vs D. 1024-cell clusters sprout for D > 3×10⁻¹³ (L > 17.3 µm) while 128-cell clusters do not; longer L gives thicker cords | 01b p.8, Fig. 10 p.9 | Semi-quantitative | Qualitative sprout/no-sprout at D = 4×10⁻¹³ for both sizes |

@@ -233,18 +233,18 @@ means a numeric match within the tolerance.
 | V2 | Sprout ≈ one cell diameter wide at 7.8 h; thickness 16.2 ± 2.4 µm | p.6; Table 2 | Quant | 12–21 µm |
 | V3 | EC count in sprout: ≈3 at 2 h, 5–6 at 4 h; 15–20 recruited over the run | p.6 | Quant | 2 h: 2–4; 4 h: 4–7; total recruited 12–23 |
 | V4 | Cell size 15–40 µm | Table 2 | Quant | Cell length within 10–45 µm |
-| V5 | Sprout reaches the right boundary in ≈15.6 h (160 µm) | p.6 | Quant | 12–20 h |
+| V5 | Sprout reaches the right boundary in ≈15.6 h (160 µm) | p.6 | Quant | 12–20 h. *(audit 2026-10-13)* Needs runs beyond the 14 h (840 MCS) standard: stop at first EC contact with the right boundary or at 1200 MCS (20 h), whichever comes first; a run hitting 1200 MCS fails. The 18 h clock (1080 MCS) can complete inside this window, so divisions may start after 1080 MCS; the paper says boundary contact comes "before any cells in the sprout complete their cell cycle" (p.6). |
 | V6 | Speed vs ρ (Fig 2A) at 2, 5, 10, 14 h: maximum at ρ = 0.35 (≈16 µm/h at 2 h; ≈10.2 µm/h at 14 h, read from figure); reduced above 0.6; no speeds reported for ρ < 0.1 or > 0.8 | Fig 2A p.7; p.9 | Quant+Qual | Argmax over the grid {0.1…0.8} in [0.3, 0.4]. Ratio speed(0.35)/speed(0.8) at 14 h > 1.3 (figure: ≈10.2/6.3 ≈ 1.6). |
 | V7 | Branching incidence vs ρ (Fig 2B): "Likely" peak near ρ = 0.2; rare/absent at ρ ≥ 0.4 | Fig 2B p.7; p.9 | Qual (semi-quant) | Branch frequency (Kearney definition: bud ≥10 µm from the main body) highest in [0.15, 0.30] and ≈0 for ρ ≥ 0.4 |
 | V8 | Sprout thickness vs ρ: ρ < 0.15 thin (<1 cell); intermediate 10–15 µm; ρ = 0.7 20–25 µm | p.9; Fig 2B | Quant | ±30% per band |
-| V9 | Morphology panel at 14 h: ρ = 0.05 unstable/elongated; 0.2 branch; 0.25 loop; 0.6 linear; 0.7 wide and slow; 0.975 no invasion | Fig 3 p.8 | Qual | Presence of each phenotype in a majority of replicates |
+| V9 | Morphology panel at 14 h: ρ = 0.05 unstable/elongated; 0.2 branch; 0.25 loop; 0.6 linear; 0.7 wide and slow; 0.975 no invasion (primary reading; Fig 6 conflicts, §7.1 item 9, audit 2026-10-13) | Fig 3 p.8 | Qual | Presence of each phenotype in a majority of replicates |
 | V10 | Alignment (Fig 4): at ρ = 0.4 and 0.6, speed 0° > random ≳ 0&90° > 90°; at ρ = 0.4, 90° ≈5.5 µm/h vs ≈10 µm/h for 0° at 14 h (read from figure); at ρ = 0.2, no strong effect | Fig 4 p.10 | Quant+Qual | Ordering must hold (0° vs 90°) with p < 0.05. 90°/0° speed ratio at ρ = 0.4 and 14 h in 0.4–0.75. |
-| V11 | Patterned cords: cells elongate along cords; recruited counts A 15, B 11, C 3, D 19, E 19; sprout in E ≈2 cells thick | p.11; Fig 5 p.12 | Quant (counts) + Qual | Rank order C < B < A < D ≈ E, each count within ±40% |
-| V12 | Degradation (Fig 6): +≈37% speed at 14 h for ρ = 0.7 and 0.975; ρ = 0.2 slightly slower with degradation; ρ = 0.4 effect only at 0–5 h | p.11; Fig 6 p.13 | Quant | Relative increase at ρ ∈ {0.7, 0.975} in 20–55%. Sign negative at ρ = 0.2. |
-| V13 | ρ = 0.975 + degradation: tunnel forms and a sprout develops (vs full inhibition without) | Fig 7A,B p.14; Fig 3F | Qual | Sprout length > 40 µm with degradation and < 10 µm without |
+| V11 | Patterned cords: cells elongate along cords; recruited counts A 15, B 11, C 3, D 19, E 19; sprout in E ≈2 cells thick. Counts and snapshots are at **12.5 h ≈ 750 MCS** (Fig 5 caption "Snapshots at 12.5 hours"), not 840 MCS (audit 2026-10-13) | p.11; Fig 5 p.12 | Quant (counts) + Qual | Rank order C < B < A < D ≈ E, each count within ±40% |
+| V12 | Degradation (Fig 6): +≈37% speed at 14 h for ρ = 0.7 (Fig 6: ≈7.3 → ≈10.0 µm/h, read from figure); ρ = 0.2 slightly slower with degradation; ρ = 0.4 effect only at 0–5 h. *(audit 2026-10-13)* The paper's +37% at ρ = 0.975 (Fig 6: ≈3.9 → ≈5.3 µm/h) presupposes a no-degradation sprout moving ≈3.9 µm/h, which contradicts the primary reading "completely inhibited" (V9, V13; §7.1 item 9), so ρ = 0.975 is tested by V13, not by a ratio. | p.11; Fig 6 p.13 | Quant | Relative increase at ρ = 0.7 in 20–55%. Sign negative at ρ = 0.2. ρ = 0.975 ratio recorded but not scored (conflict; spec-owner choice pending, §7.1 item 9). |
+| V13 | ρ = 0.975 + degradation: tunnel forms and a sprout develops (vs full inhibition without) | Fig 7A,B p.14 and caption; Fig 3F; p.13 text | Qual | Sprout length > 40 µm with degradation and < 10 µm without. *(audit 2026-10-13: primary reading; under the Fig 6 reading the no-degradation sprout would reach ≈55 µm at 14 h. §7.1 item 9.)* |
 | V14 | ρ = 0.4 + degradation: a branch emerges | Fig 7C p.14 | Qual | Branching in ≥ some replicates (the paper shows one example) |
 | V15 | χ sweep (Fig 8): speed ≈1–2 µm/h for χ ≤ 5.5×10⁵, rising steeply to ≈10–11 µm/h at 1.1–1.5×10⁶; no migration below 10⁴; break-up above 1.6×10⁶ | Fig 8 p.15; Table 3 | Quant+Qual | Sigmoidal shape; midpoint in [7, 10]×10⁵ |
-| V16 | Sensitivity table (Table 3): J_ee < 10 unrealistic shapes; J_ee > 50 cells migrate away; J_em ≤ 46 distorted; J_em = 200 immobile; γ_e = 3 tip detachment; kT < 0.25 dissociation | Table 3 p.15; p.13–14 | Qual | Each qualitative regime reproduced |
+| V16 | Sensitivity table (Table 3): J_ee < 10 unrealistic shapes; J_ee > 50 cells migrate away; J_em ≤ 46 distorted; J_em = 200 immobile; γ_e = 3 tip detachment; mean speed rises with kT over 0.25–11 (Table 3 row "0.25 ≤ kT ≤ 11"; p.15 text). *(audit 2026-10-13)* The Table 3 row "kT < 0.25 Cells dissociate" is **not** a target: the p.15 text says that at lower kT "we would expect cells to break up easily, but in this case, the continuity constraint circumvents this effect", and under the Metropolis rule of §2.2 low kT freezes the lattice rather than dissociating it (§7.1 item 6). | Table 3 p.15; p.13–15 | Qual | Each qualitative regime reproduced; for kT, speed increasing across a grid spanning 0.25–11 with no change in cell shape, recruitment or morphology (p.15) |
 | V17 | VEGF field at 7.8 h: 0 → ≈0.032 pg across x; gradient ≈1–2×10⁻⁴ pg with larger values at the tip and leading edges | Fig 1B,C p.3 | Quant | Boundary values exact (BCs). Max gradient location at the sprout leading edge. |
 | V18 | Cell-cycle clock init (0 vs random) has no effect on speed, morphology or recruitment | p.6 | Qual | Difference not significant |
 
@@ -257,7 +257,7 @@ means a numeric match within the tolerance.
 | G1 @transition/@create/@retire + rand(Bernoulli) | Phenotype switching (inactive → activated at v_a; tip / stalk / proliferating); @create for recruitment of a new EC at the parent-vessel boundary; @create for division (2007 mechanics); random clock init (uniform, not Bernoulli) | 05 p.4–6 |
 | G2 shape descriptors in energies | Not needed in energies. Cell orientation (axis of elongation) is an observable only (→ G12). | 05 p.11 |
 | G3 contact-scope direction/position + lagged vector vars | Chemotaxis term needs the field at both source and target sites and the phenotype of the moving cell: ΔE = χ_σ[V(x) − V(x')] | 05 Eq 1; 07 Eq 3 |
-| G4 generalized connectivity (local/soft/exact-BFS) | **Soft, exact-BFS** penalty α(1 − δ_{a,a'}) per EC. Must be a soft energy (not a hard reject) because kT < 0.25 behaviour depends on it (Table 3). | 05 Eq 1 p.3 |
+| G4 generalized connectivity (local/soft/exact-BFS) | **Soft, exact-BFS** penalty α(1 − δ_{a,a'}) per EC. It must be a soft energy (not a hard reject) because Eq 1 writes it as an energy term with a finite α = 300 that is weighed against "the collective contribution" of the other terms (p.3, p.5), so fragmenting copies stay possible at a Boltzmann cost. *(audit 2026-10-13: the earlier justification, "kT < 0.25 behaviour depends on it", rested on the Table 3 dissociation row, which the p.15 text and the Metropolis rule do not support; §7.1 item 6.)* | 05 Eq 1 p.3 |
 | G5 symbolic field BCs + SteadyState solver + coarse grid | Dirichlet left/right, periodic y. SteadyState solve for t = 0. Transient step per MCS thereafter. | 05 Eq 2 p.3 |
 | G6 conservative per-cell secrete/uptake | B(x, y, V) = min(β, V) on EC sites (2007 form). Needs per-cell or per-site semantics (see §7). | 05 p.3; 07 p.6 |
 | G7 site conversion @convert | Tip-cell matrix degradation: matrix sites converted (product unspecified) at a budget of (0.55 µm)²/min, only where matrix is present. Needs a per-cell rate budget. | 05 p.11 |
@@ -358,11 +358,17 @@ rounded and listed y-first. → **300 × 192 sites; drop B3 from the sheet** (or
   (≤ 3 %) needs an effective decay length ≥ 680 µm, i.e. λ_eff ≤ D/ℓ² ≈ 0.08 h⁻¹ (≥ 8× below
   Table 1). The same holds for 2007 Fig 4a (spec 07 §8b). So the initial profile is effectively
   linear.
-- Per-site uptake min(β, V) at 0.06 pg/h per site is 5× the local decay λV ≈ 0.011 pg/h. Along a
-  16 µm-wide sprout it gives a dip ≈ Qℓ/2D ≈ 3 × 10⁻³ pg (≈18 % of V). That would make Fig 1C red
-  well beyond the sprout rim. Fig 1C stays background-green to the rim, and p.6 says uptake is
-  "small compared to the amount of available VEGF". Per cell (÷256 sites) the dip is ≈0.07 %.
-  → **favours per cell**.
+- Per-site uptake min(β, V) at Q = 0.06 pg/h per site is 5× the local decay λV ≈ 0.011 pg/h.
+  *(audit 2026-10-13: the earlier "dip ≈ Qℓ/2D ≈ 3 × 10⁻³ pg (≈18 % of V)" was dimensionally
+  wrong, Qℓ/2D being a gradient; recomputed.)* Treat a ℓ = 16 µm sprout as a strip sink of
+  strength Qℓ midway across the L = 165.6 µm Dirichlet span, with D = 3.6 × 10⁴ µm²/h. The dip is
+  QℓL/(4D) = 0.06 × 16 × 165.6 / (4 × 3.6 × 10⁴) ≈ 1.1 × 10⁻³ pg, ≈6 % of the mid-domain
+  V ≈ 0.0175 pg. The slope jump across the strip is Qℓ/D ≈ 2.7 × 10⁻⁵ pg/µm ≈ 1.5 × 10⁻⁵ pg per
+  site, ≈13 % of the 1.17 × 10⁻⁴ background step (≈±6 % on either side, a few colour-bar steps
+  against the ≤3 % uniformity). Fig 1C stays background-green to the rim, and p.6 says uptake is
+  "small compared to the amount of available VEGF". Per cell (÷256 sites) the dip is
+  ≈4 × 10⁻⁶ pg (≈0.025 %). → **still favours per cell**, though the margin is smaller than
+  first stated; S2 decides.
 - Fig 1C and 7E also show 1-px rims (deviations ≈ ±0.5–0.9 × 10⁻⁴) and lines at internal EC–EC
   borders. Uniform per-site B cannot make EC–EC lines; per-cell B (β/area differs between cells)
   can. One physical minute of diffusion smooths over √600 ≈ 24 µm, so 1-px rims imply that
@@ -416,8 +422,15 @@ rounded and listed y-first. → **300 × 192 sites; drop B3 from the sheet** (or
 - Integrated green fraction per panel is 0.82–1.0× nominal ρ (rendering thins 2-px bars), and
   0.975 is exact in Fig 7B → **ρ = site fraction**.
 
-**R14.** Table 1 χ = 1.11 × 10⁶ "maximizes" speed and sits on the Fig 8 plateau. A tip at
-1.45χ = 1.61 × 10⁶ would be "pulled apart" if the thresholds were scaled. → **base χ**.
+**R14.** *(audit 2026-10-13: restated; the earlier "χ = 1.11 × 10⁶ sits on the Fig 8 plateau"
+does not hold. Fig 8 reads ≈10.2 µm/h at 11 × 10⁵ vs the ≈11.2 µm/h plateau, which starts at
+≈13 × 10⁵.)* Two grounds remain:
+- With the Table 1 defaults the tip potential is 1.45χ = 1.61 × 10⁶, already above the
+  "χ > 1.6 · 10⁶ → cells are pulled apart" threshold (Table 3). The baseline sprouts are intact
+  (Figs 1, 3), so the threshold cannot refer to the scaled tip value.
+- Fig 8 plots base χ up to 15 × 10⁵ = 1.5 × 10⁶ with speed still rising or flat and no break-up
+  noted; scaled tip values there reach 2.2 × 10⁶.
+→ **base χ**.
 
 **R15.** The PDE is periodic in y (p.3). For cells no statement is made; the sprout never reaches
 y-edges in the figures. Default: periodic y, walls at x. Insensitive by construction.
@@ -432,12 +445,14 @@ y-edges in the figures. Default: periodic y, walls at x. Insensitive by construc
     7C (one number with a bootstrap CI);
   - (b) V2 thickness 16.2 ± 2.4 µm;
   - (c) V1 at 2, 10, 14 h (±25 %);
-  - (d) V4 cell length 15–40 µm;
-  - (e) V16: kT = 0.2 dissociates, kT = 2.5 does not.
-- Rule: reject any candidate failing ≥ 2 of (b)–(e). Among survivors, pick the one closest on
+  - (d) V4 cell length 15–40 µm.
+  - *(audit 2026-10-13: the former target (e), "V16: kT = 0.2 dissociates, kT = 2.5 does not",
+    is dropped. It rested on the Table 3 row the p.15 text contradicts; §7.1 item 6.)*
+- Rule: reject any candidate failing ≥ 2 of (b)–(d) (i.e. at most one of the three quantitative
+  targets may fail). Among survivors, pick the one closest on
   (a). If the top two overlap in their 95 % CIs, the item is unidentified: keep order 2 / BFS 4
   and ask.
-- 10 replicates. Cost ≈ 6 × 10 × 4 s ≈ 4 min, plus 1 min for (e).
+- 10 replicates. Cost ≈ 6 × 10 × 4 s ≈ 4 min.
 
 **S2 — uptake and PDE stepping (R6).**
 - Stage 1 (PDE only, no CPM). Use the sprout masks digitised from Fig 1C and 7E (cells
@@ -460,8 +475,9 @@ y-edges in the figures. Default: periodic y, walls at x. Insensitive by construc
   It starts as stalk with clock 0 (p.6).
 - Fit targets: V3 (3 @ 2 h, 5–6 @ 4 h, 15–20 @ 14 h) and the V1 curve, by summed normalised
   squared error.
-- Holdout, not fitted: Fig 5 counts A 15, B 11, C 3, D 19, E 19 (rank C < B < A < D ≈ E) and
-  Fig 7A ≈17 cells.
+- Holdout, not fitted: Fig 5 counts A 15, B 11, C 3, D 19, E 19 (rank C < B < A < D ≈ E),
+  scored at **750 MCS** (12.5 h, Fig 5 caption; audit 2026-10-13), and Fig 7A ≈17 cells at
+  840 MCS (14 h).
 - Rule: the best fit must pass the holdout rank order. Otherwise report it as unidentified.
 - 9 cells × 10 replicates ≈ 6 min, plus holdout 5 × 10 ≈ 3 min.
 
@@ -473,7 +489,7 @@ y-edges in the figures. Default: periodic y, walls at x. Insensitive by construc
   - tunnel excess area 310 µm² ± 25 %;
   - median dark-cluster area ≤ 1.5 µm² (scattered);
   - tunnel width 15–30 µm;
-  - V12 +20–55 % at ρ = 0.7 and 0.975;
+  - V12 +20–55 % at ρ = 0.7 (ρ = 0.975 not scored by ratio; audit 2026-10-13, §7.1 item 9);
   - V13 tunnel > 40 µm.
 - Rule: pass all. "Front-most" is expected to fail the scatter target.
 - 3 × 4 ρ × 10 ≈ 8 min.
@@ -524,10 +540,26 @@ degradation product.
 6. **kT direction:** p.15 says "Increasing kT decreases the probability that an update adding to
    system energy will be accepted". That contradicts P = e^{−ΔE/kT}, where increasing kT
    *increases* acceptance. The observed effect (faster sprouts with larger kT) is stated anyway.
+   *(audit 2026-10-13)* Table 3 also lists "kT < 0.25 → Cells dissociate", but the p.15 text says
+   that at lower kT "we would expect cells to break up easily, but in this case, the continuity
+   constraint circumvents this effect", i.e. no dissociation is observed. The text inherits the
+   inverted kT reading above; under P = e^{−ΔE/kT} low kT freezes the lattice. Only the
+   text-supported "speed rises with kT over 0.25–11" is used (V16); the dissociation row is not a
+   target (former S1(e) dropped; G4 justification restated).
 7. **Phenotype χ vs break-up threshold:** tip |χ| = 1.61×10⁶ already exceeds the stated "pulled
    apart" threshold 1.6×10⁶. So the threshold must refer to the base χ multiplier. This needs
    confirmation.
 8. **Fig S1 legend** lists χ_tip = 1.55χ, which is written without a minus sign, unlike Table 1.
+9. **ρ = 0.975 without degradation** *(audit 2026-10-13)*. Fig 3F's caption ("complete inhibition
+   of angiogenesis at high matrix density"), the Fig 7 caption ("Without degradation, angiogenesis
+   is inhibited at ρ = 0.975") and the p.13 text ("the initial endothelial cell is unable to
+   penetrate the stroma and angiogenesis is completely inhibited") all say no sprout forms. Fig 6
+   (p.13, zoomed at 200 dpi) instead plots the ρ = 0.975 no-degradation curve (solid blue) at
+   ≈3.9 µm/h at 14 h (≈4.0 from 8 h on), and the p.11 "+37% at ρ = 0.7 and 0.975" is computed
+   against that curve (≈3.9 → ≈5.3 µm/h). The spec takes the three text/caption statements as
+   primary (V9, V13) and records Fig 6 as a conflict: the V12 ρ = 0.975 ratio is not scored.
+   **Flagged for the spec owner** to confirm this choice (alternative: score Fig 6 and drop the
+   V13 "< 10 µm without" bound).
 
 ### 7.2 Underspecified mechanics (blocking exact reproduction)
 - Pixel size and lattice geometry. The degradation rate "(0.55 µm)²" and bundle thickness 1.1 µm
