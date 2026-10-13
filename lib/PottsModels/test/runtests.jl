@@ -177,6 +177,9 @@ POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(P
 # definitions (each top-level `@testset` dropped) of every file that came earlier in the full
 # order and runs in another shard, so a file that uses a helper an earlier file defined
 # (e.g. siblings.jl uses mechanisms.jl's `split_cells`) finds it.
+# shared Base-only helpers that several files use (mechanisms.jl includes it; the frozen
+# papers.jl calls `akeeb_metrics` without including it), loaded once whatever the shard order
+include(joinpath(@__DIR__, "akeeb_metrics.jl"))
 _pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@testset")
 if POTTSMODELS_SHARD[2] > 1
     let mine = Set(POTTSMODELS_SHARD_FILES)

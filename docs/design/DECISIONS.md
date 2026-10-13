@@ -4261,3 +4261,26 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Record.** It is an amendment to `data/15/f1-f4-2026-10-08/` (the D-146 record), so the package keeps one P6.15h record. The D-175 block, its cells and its three figures are kept with the suffix `_d175`.
 - **Package and release.** `core.zip` is rebuilt so that `results/Potts.jl/closeup.png` is the new panel, with the README's F1 rows describing the new window. The bulk assets are unchanged. Replacing the asset on the 12 Oct release needs the maintainer's OK at that moment.
 - **Outcome (2026-10-12).** GitHub refused the asset swap because the 12 Oct release is immutable ("Cannot delete asset from an immutable release"), and nothing on it changed. With the maintainer's OK, the new core (sha256 `c12a756b…b050`, 13,464,338 B) and the same six bulk files (unchanged sha256s) were published as `openvt-monolayer-submission-2026-10-12b` on a961e5a8, marked Latest, with the updated body. The downloaded core's sha256 matches. Releases on this repository are immutable once published, so any change means a new release.
+
+## D-232 CI: device-only GPU step, sharded PottsModels, parallel suites (2026-10-13; coordinator, targets agreed with the spec owner under the maintainer's "CI speed" focus; amends D-157's CI layout)
+
+- **Target.** At most 45 min per push, with no test removed from per-push CI. No scheduled tier: the per-file ranking showed the cost is flat (114 PottsModels files, 35 min, largest 1.6 min), so nothing moved.
+- **(a) Device-only GPU step.** `test/shared/device_only.jl` includes the CorePotts and Potts suites through `include(mapexpr, path)`.
+  - It drops only top-level `@testset`s that name no device symbol (PottsDevices, AMDGPU, Metal, a backend, `on_device`, `device_backend`, …), all of which the CPU steps run in full.
+  - It keeps every definition and every device testset. The device files (`gpu.jl`, `device_ir.jl`, `transfer_counts.jl`, the IR scan, `device_coverage.jl`, and all they include) run unfiltered. Module bodies are left alone.
+  - `POTTS_DEVICE_ONLY=false` restores the old step, and `POTTS_DEVICE_ONLY_LOG` logs each decision.
+  - **Check (PC, ROCm).** The old full GPU step and the device-only step compiled the same kernel sets: 125 CorePotts and 381 Potts signatures, identical after normalising generated names and hashes.
+  - **Effect.** 263 CPU testsets are no longer duplicated in the GPU step, and 232 testset summaries remain (510 before). The IR coverage check still passes.
+- **(b) Parallel suites.** `.github/ci/parallel.sh` runs six processes, each pinned to its own physical-core pair plus its SMT siblings, with no overlap, on 0-11/16-27. 12-15/28-31 stay free for benchmarks.
+  - The processes: PottsModels in three shards (`POTTSMODELS_SHARD=k/3`, -t 4), the GPU step, Potts, and CorePotts then MakiePotts.
+  - Each log is printed in a group with its wall time and exit code, and any failure fails the step.
+  - The workspace and every test project are precompiled once beforehand, so the processes only read the depot cache.
+  - The benchmark-tooling tests (the A/B harness times runs) run alone after the parallel step.
+  - **Shards.** Files are dealt longest-first by `lib/PottsModels/test/shard_weights.toml` (measured per-file times). Shard 1 also runs the model checks and Aqua.
+  - **Shard isolation.** Each shard first loads the definitions (top-level testsets dropped) of every earlier file it does not run, plus the shared `akeeb_metrics.jl`, which restores the single-process globals.
+- **Trials (PC, forward and reverse file order).**
+  - Wall time 22.5 min for the parallel block. The GPU step is the longest at 22 min; the shards take 17 min each, Potts 13.5 and CorePotts+MakiePotts 7.
+  - Two order-dependent failures surfaced and were fixed:
+    - **Guardrail.** With Makie already loaded, the guardrail checks `PottsModelsMakieExt`, which imported non-public `Makie.automatic`; the extension no longer uses it.
+    - **Reverse order.** `papers.jl` relies on `akeeb_metrics` from `mechanisms.jl`, now preloaded.
+  - No other failure in either order.
