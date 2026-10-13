@@ -2127,7 +2127,7 @@ The maintainer approved F-1…F-6 (D-049).
   - Gate: new case `openvt_reference_100`, baseline set from this tree at sequential 19.55, checkerboard 19.20 and Metal 72.03 ns/site. The implementer measured 20.12, 19.60 and 72.08.
   - The gate flagged Akeeb CPU against the stored baseline in both runs. The paired base read +3.0% sequential and +1.1% checkerboard; the base itself read 1.041 against the stored checkerboard value (drift). Akeeb's generated code is identical before and after the merge (diff with line comments stripped).
   - Seeded Metal A/B (candidate / same-commit control): GG 1.001 / 1.011, Merks 0.998 / 1.005, Wortel 1.002 / 0.996, Akeeb 0.997 / 1.000. The OpenVT pair was not run: Metal verification is deferred until all paper models are done (D-157).
-- **Checks on the PC** (`praneeth-NucBox-EVO-X2`, Ryzen AI Max+ 395, CPU; D-156/D-157):
+- **Checks on the PC** (Ryzen AI Max+ 395, CPU; D-156/D-157):
   - Akeeb CPU A/B, paired and pinned to one logical CPU on a reserved core (`taskset -c 12`): sequential 1.001, with a same-commit control of 1.001. Each round reads 38.2–39.4 ns/site.
   - Unpinned under a load of 25: sequential 1.006 and checkerboard 1.005. The unpinned control read 1.729, because SMT sharing makes timings bimodal (≈ 40 vs ≈ 71 ns/site); this is why the core pinning was adopted.
   - So the Mac gate's Akeeb flag was drift.
@@ -2136,7 +2136,7 @@ The maintainer approved F-1…F-6 (D-049).
 
 ## 2026-10-06 — P6.1g: the late-coarsening pass for reproduction 09 (D-151 outcome)
 
-- **Runs.** 192 FULL-size runs on the PC (praneeth-NucBox-EVO-X2, Ryzen AI Max+ 395, CPU), 24 single-threaded processes, 2 h 58 min wall time. The plan and scripts were committed before launch (a09312a6). The isolation guard held at every save, and a re-run of 30 seeds was bit-identical.
+- **Runs.** 192 FULL-size runs on the PC (Ryzen AI Max+ 395, CPU), 24 single-threaded processes, 2 h 58 min wall time. The plan and scripts were committed before launch (a09312a6). The isolation guard held at every save, and a re-run of 30 seeds was bit-identical.
 - **Result.** No candidate clearly explains the gap, so V-PRE5 stays a reported deviation.
   - Time to single is not off (the paper's run sits at about our 40th percentile).
   - Late F_dl is off (0.071 against 0.050), and it comes from runs that are not yet fully sorted.
