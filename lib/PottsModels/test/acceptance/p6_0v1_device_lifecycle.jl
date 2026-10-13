@@ -313,6 +313,8 @@ function p60v1_published(T)
         :Merks2008 => () -> PottsProblem(Merks2008(; name = :m8, lattice = (32, 32)),                    # D-153 re-freeze
             layout(merks2008_denovo(; lattice = (32, 32), n = 12, rounds = 2), (32, 32)), (0, 8); T,
             field_solver = ExplicitEuler(substeps = 15)),
+        :ShearedFoam => () -> PottsProblem(ShearedFoam(; name = :f, lattice = (32, 32)),                 # D-238 re-freeze
+            [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5; :γ0 => 2.0; :T => 1.0], (0, 8); T),
     )
 end
 const P60V1_PUBLISHED = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))

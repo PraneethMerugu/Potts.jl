@@ -144,7 +144,7 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "2aa8b61a2ff6c364e641b938e0e788c6df13c9b3cc64fe4abc66ccfb86f2edcc"
+sha256 = "d58e6b1ab931f218bea5480c77190c2a366d09adf1e625dd3deb8aa7c15ad576"
 decision = "D-157"
 
 [[file]]
