@@ -8,6 +8,7 @@
 | Page | Constructor |
 |:-----|:------------|
 | [Vasculogenesis (Merks et al. 2006, 2008)](@ref model-merks) | `Merks2006`, `Merks2008`; variant `MerksVasculogenesis` |
+| [Foam rheology (Jiang et al. 1999)](@ref model-foam) | `ShearedFoam` |
 | [Cell sorting (Graner & Glazier 1992)](@ref model-graner-glazier) | `GranerGlazier` |
 | [Leader–follower invasion (Akeeb, Marcus & Jiang 2026)](@ref model-akeeb) | `AkeebInvasion` |
 | [Growing monolayer (OpenVT benchmark)](@ref model-openvt) | `OpenVTReferenceMonolayer`; variant `OpenVTGrowingMonolayer` |
