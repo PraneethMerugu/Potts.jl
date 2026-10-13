@@ -4262,6 +4262,21 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Package and release.** `core.zip` is rebuilt so that `results/Potts.jl/closeup.png` is the new panel, with the README's F1 rows describing the new window. The bulk assets are unchanged. Replacing the asset on the 12 Oct release needs the maintainer's OK at that moment.
 - **Outcome (2026-10-12).** GitHub refused the asset swap because the 12 Oct release is immutable ("Cannot delete asset from an immutable release"), and nothing on it changed. With the maintainer's OK, the new core (sha256 `c12a756b…b050`, 13,464,338 B) and the same six bulk files (unchanged sha256s) were published as `openvt-monolayer-submission-2026-10-12b` on a961e5a8, marked Latest, with the updated body. The downloaded core's sha256 matches. Releases on this repository are immutable once published, so any change means a new release.
 
+## D-230 Foam: rulings on the non-F1 failures, the V18 window, and an amendment to the FULL record's deviations (2026-10-13; coordinator, from the 04 spec owner's spec §5.3; under D-154, D-203, D-210)
+
+- **Spec.** `04_foam.md` §5.3, "Rulings on the non-F1 failures", sorts every failing row that isn't F1 itself:
+  - V14c, V7i/ii, V20 and V13b depend on F1.
+  - V3b, V4, V5b, V9 and V7iii are tied to A-1/F1 (the calibration cliff). V9 also depends on A-12.
+  - V6b, V2ii and V10a/V11b are genuine or provisional deviations.
+  The upshot: foam is blocked on F1, and D-210's hold on runs stands. The §5.3 diagnostics (R-kb1, R-kb2, R-v2 and the optional V6b one, about 13 CPU-h) stay held unless the maintainer lifts the hold for them.
+- **V18 (coordinator ruling).** One avalanche is one φ̂ falling leg (zigzag, h = 0.001); the band stays < 0.5.
+  - **Basis.** The paper defines an avalanche by a stress or energy drop, not by a 100-MCS window. It also equates time with strain (04b p.5824), so a strain-based window meets D-203's condition that V18 changes only "if the paper defines that window by strain".
+  - **What gets reported.** The frozen test keeps its pre-registered window verdict. The page reports both verdicts side by side, the φ̂-leg one labelled post hoc.
+  - **Data.** It comes from the post-F1 FULL run. No standalone run is made (about 60 CPU-h).
+- **Record amendment.** The FULL record `data/04/full-2026-10-09/` stays as written, and the frozen test reads its `deviations.tsv`. `deviations_amended.tsv` corrects two rows, and page 04 reads it when present.
+  - **V6b, suspected cause:** "T = 0 loop ≈ 35× flatter than the paper's (V3b effect, A-1); at T = 15 our loop is drive-driven and per-period noise is several times below the paper's". Author question: not an author question. The old cause, "T unscaled while γ scaled by κ", was wrong: leaving T unscaled is the paper's protocol, and V6a and V6c pass with it.
+  - **V14c, suspected cause:** "pinning (F1): N̄ rises with β in every foam; no L-rescale basis in the paper". Author question: asked (F1).
+
 ## D-232 CI: device-only GPU step, sharded PottsModels, parallel suites (2026-10-13; coordinator, targets agreed with the spec owner under the maintainer's "CI speed" focus; amends D-157's CI layout)
 
 - **Target.** At most 45 min per push, with no test removed from per-push CI. No scheduled tier: the per-file ranking showed the cost is flat (114 PottsModels files, 35 min, largest 1.6 min), so nothing moved.

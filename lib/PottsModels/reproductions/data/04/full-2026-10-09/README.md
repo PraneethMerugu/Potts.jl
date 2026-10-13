@@ -17,6 +17,7 @@ The frozen FULL tier of `lib/PottsModels/test/reproductions/04_foam.jl` (D-190, 
 - `provenance.toml`: commit, machine, threads, seeds, wall time, job counts.
 - `verdicts.tsv`: every row as the runner judged it.
 - `deviations.tsv`: one row per FAIL (D-154): id, target, ours, paper, suspected cause, author-question status. Added after the run; the frozen test marks a listed failing row `@test_broken`.
+- `deviations_amended.tsv` (D-230, 2026-10-13): `deviations.tsv` with two rows corrected (V6b and V14c: suspected cause and question status). Page 04 shows it; the frozen test reads the original.
 
 ## Tally
 
