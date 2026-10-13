@@ -22,8 +22,10 @@
 # An ordered foam of 48 bubbles of 16² sites on a 128 × 96 lattice, periodic in x with
 # closed walls in y. It starts as a brick wall (`sheared_foam_state`), is shaken for 10 MCS
 # at T = 3 and relaxed for 300 MCS at T → 0⁺, and is then sheared at the boundary: the top
-# row is pushed +x and the bottom row −x for 4000 MCS. Copies are proposed at wall sites
-# only (`skip_interior = true`), as in the paper.
+# row is pushed +x and the bottom row −x for 4000 MCS. The drive here (γ0 = 36) is stronger
+# than in the paper's runs so that T1 events appear within a short run; the paper's
+# parameters are on the reproduction page. Copies are proposed only at wall sites
+# (`skip_interior = true`), close to the paper's protocol (see the reproduction page).
 
 using Potts, PottsModels
 using MakiePotts, CairoMakie
@@ -40,14 +42,18 @@ sheared = solve(remake(prob; u0 = [ownership => Array(relaxed.σ); start[2:3]], 
     alg; saveat = 0:20:4000)
 nothing #hide
 
-# The run, one colour per bubble:
+# The run, one colour per bubble, the lattice filling the frame:
 
-record_potts("foam/boundary_shear.mp4", sheared; framerate = 20, title = "boundary shear",
-    encoding = CellIdentityEncoding(), plot = (; boundaries = false), figure = (; size = (520, 420)))
+bare = (; limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false, yticksvisible = false,
+    xticklabelsvisible = false, yticklabelsvisible = false, xgridvisible = false, ygridvisible = false,
+    leftspinevisible = false, rightspinevisible = false, topspinevisible = false, bottomspinevisible = false)
+frame = (; size = 4 .* L, figure_padding = 0)
+record_potts("foam/boundary_shear.mp4", sheared; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare)
 nothing #hide
 
 # ```@raw html
-# <video src="boundary_shear.mp4" controls autoplay loop muted playsinline width="520"></video>
+# <video src="boundary_shear.mp4" controls autoplay loop muted playsinline width="512"></video>
 # ```
 #
 # The stored energy (the number of unlike neighbour pairs, relative to the start) rises while
@@ -116,16 +122,18 @@ fig
 #
 # ### Bulk shear
 #
-# The same foam with the whole height sheared (`bulk = 1`), for 1500 MCS:
+# The same foam with the whole height sheared (`bulk = 1`), for 1500 MCS. The drive here
+# (β = 0.2) is stronger than in the paper's runs (β at most 0.05) so that the foam flows
+# within a short run; the paper's parameters are on the reproduction page.
 
 bulk = solve(remake(prob; u0 = [ownership => Array(relaxed.σ); start[2:3]], p = [:β => 0.2, :bulk => 1.0],
         tspan = (0, 1500)), alg; saveat = 0:20:1500)
-record_potts("foam/bulk_shear.mp4", bulk; framerate = 20, title = "bulk shear",
-    encoding = CellIdentityEncoding(), plot = (; boundaries = false), figure = (; size = (520, 420)))
+record_potts("foam/bulk_shear.mp4", bulk; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare)
 nothing #hide
 
 # ```@raw html
-# <video src="bulk_shear.mp4" controls loop muted playsinline width="520"></video>
+# <video src="bulk_shear.mp4" controls loop muted playsinline width="512"></video>
 # ```
 #
 # ### Reference
