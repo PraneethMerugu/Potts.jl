@@ -97,10 +97,15 @@ produces the same type: zero compilation.
 ```
 key     = philox_hash(tag, seed::UInt64, replica::UInt32, repeat::UInt32)   # 2×UInt32
 counter = (mcs::UInt32,
-           entity::UInt32,          # site index, or (cell id << 8 | generation & 0xff)
+           entity % UInt32,         # low word of the 64-bit entity: site index, or (cell id << 8 | generation & 0xff)
            stream::UInt32,          # 32-bit hash of a namespaced operation key
            local::UInt32)           # round(8) | substep(8) | draw(8) | retry(8)
+key.k0 ⊻= (entity >> 32) * W1       # high word of the entity; 0 below 2³², so the key is unchanged there
 ```
+
+- The entity is 64-bit. Its high word is folded into the key, so site indices at or
+  above 2³² and cell ids at or above 2²⁴ never wrap onto smaller entities, and every
+  entity below 2³² draws exactly as a 32-bit entity did.
 
 - `stream` hashes a stable namespaced operation key, so editing one term never
   renumbers another. Collisions are rejected at compile time. Built-in streams
