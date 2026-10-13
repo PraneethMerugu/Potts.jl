@@ -162,7 +162,7 @@ coordinator, each iteration:
    - Changing a tolerance, target, seed count or run length needs a new DECISIONS entry
      that states the measured value and the reason. A test that fails for a scientific
      reason is a science question (§7.5), not a tolerance to relax.
-2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the NucBox PC.
+2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the PC.
    - **CPU.** `julia benchmark/ab.jl <base> <candidate> all cpu`.
    - **ROCm.** Add `... all rocm` when the change touches device code.
    - **Defaults.** Two same-commit controls (`<base>-abctl`, `<candidate>-abctl`) and Tuple-cache seeding. Rounds rotate over 8, pinned to CPU 12, and the harness waits for an idle runner and GPU inside the machine lock. The statistic is paired, with a 95 % bootstrap interval.
