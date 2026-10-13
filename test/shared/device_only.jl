@@ -37,10 +37,11 @@ _log(kind, ex, file) = isempty(DEVICE_ONLY_LOG) ||
     open(io -> println(io, kind, '\t', basename(file), '\t', _testset_name(ex)), DEVICE_ONLY_LOG, "a")
 
 # rewrite `include(x)` (any depth) so that the included file goes through `_device_only_map`
+# (not inside a `module`: its includes run in that module, as before, unfiltered)
 _rewrite(ex) = ex isa Expr ?
     (ex.head === :call && ex.args[1] === :include && length(ex.args) == 2 ?
-        Expr(:call, :include, Expr(:call, :_device_only_map, ex.args[2]), ex.args[2]) :
-        ex.head in (:quote, :macrocall) && _is_testset(ex) ? ex : Expr(ex.head, map(_rewrite, ex.args)...)) : ex
+        Expr(:call, :include, Expr(:call, GlobalRef(Main, :_device_only_map), ex.args[2]), ex.args[2]) :
+        ex.head in (:quote, :module) || _is_testset(ex) ? ex : Expr(ex.head, map(_rewrite, ex.args)...)) : ex
 
 function _device_only_filter(file)
     return function (ex)

@@ -37,7 +37,6 @@
 "acceptance/p6_0bv_edge_after_mcs.jl" = 5.2
 "acceptance/p6_0bw_rocm_wait.jl" = 2.4
 "acceptance/p6_0c2_canonical_followups.jl" = 97.0
-"acceptance/p6_0c2_canonical_followups.jl" = 97.0
 "acceptance/p6_0c_solver_placement.jl" = 23.7
 "acceptance/p6_0ca_gather_energy.jl" = 15.7
 "acceptance/p6_0d_frozen_kind_mask.jl" = 4.3
@@ -104,7 +103,6 @@
 "reproductions/15_openvt_calibration.jl" = 2.8
 "reproductions/15_openvt_checkerboard.jl" = 7.5
 "reproductions/15_openvt_checkerboard_page.jl" = 13.8
-"reproductions/15_openvt_d211.jl" = 95.9
 "reproductions/15_openvt_d211.jl" = 95.9
 "reproductions/15_openvt_d213.jl" = 22.8
 "reproductions/15_openvt_f1_f4.jl" = 26.3
