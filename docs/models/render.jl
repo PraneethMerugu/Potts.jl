@@ -28,7 +28,7 @@
 using Literate: Literate
 using TOML: TOML
 
-const MODEL_PAGES = ["graner_glazier", "merks", "akeeb", "wortel_act", "openvt"]
+const MODEL_PAGES = ["graner_glazier", "merks", "foam", "akeeb", "wortel_act", "openvt"]
 const MODELS_DIR = @__DIR__
 const PAPER_RUNS = joinpath(dirname(MODELS_DIR), "src", "assets", "paper_runs")
 
@@ -75,7 +75,8 @@ function _paper_run(name)
 end
 
 function _expand(content, name)
-    lines = _model_lines(name)
+    # read lazily: a page that shows its shipped constructor has no `<name>_model.jl`
+    lines = occursin(r"^# <<(fragment \S+|model)>>"m, content) ? _model_lines(name) : String[]
     out = String[]
     for line in split(content, '\n')
         m = match(r"^# <<fragment (\S+)>>\s*$", line)

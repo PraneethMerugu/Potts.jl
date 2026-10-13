@@ -46,42 +46,46 @@ nothing #hide
 # γ(y, t)·(x_target − x_source) along x (Eq. 2 in the displacement form, deviation DV3),
 # with γ on the two boundary rows only (Eq. 6, boundary shear) or linear in y about the
 # mid-plane (Eq. 7, bulk shear), steady or sin(ωt).
-
-@potts_model ShearedFoam begin
-    @structural_parameters begin
-        lattice = (256, 256)                       # sites (04b p.5822)
-    end
-    @kinds medium bubble                           # dry foam: no site is medium
-    @parameters begin
-        J = 3.0                                    # wall energy per unlike pair (p.5823)
-        Γ = 1.0                                    # area constraint (p.5823); Γ = 0 coarsens
-        T = 1.0e-6                                 # T → 0⁺ (DV2)
-        γ0 = 0.0                                   # boundary shear amplitude (Eq. 6)
-        β = 0.0                                    # bulk shear rate (Eq. 7)
-        bulk = 0.0                                 # 1: Eq. 7, else Eq. 6
-        periodic = 0.0                             # 1: G = sin(ω mcs), else G = 1
-        ω = 2π / 4000
-        ytop = 256.0                               # the top row, L_y
-        ymid = 128.5                               # the mid-plane, (L_y + 1)/2
-    end
-    @variables begin
-        A(cell) = 256.0                            # target area, 16² (p.5823)
-    end
-    ## x periodic, y closed walls (no wall cells, A-2)
-    @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = NeighborOrder(4))
-    @relations proposal = NeighborOrder(4)
-    @energy begin
-        contacts => J
-        cells(bubble) => Γ * (volume - A)^2
-    end
-    ## γ > 0 biases copies towards −x: the top row moves +x and the bottom −x (Figs. 2, 4, 5)
-    @drive copy => ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
-                   ifelse(bulk > 0.5, -β * (position[target][2] - ymid),
-        γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))) *
-                   direction[1]
-    @sweep Metropolis(; temperature = T)
-end
-nothing #hide
+#
+# The model is the exported `ShearedFoam`, an ordinary `@potts_model` definition in
+# `lib/PottsModels/src/foam.jl` (shown here without its docstring); the page uses it as is.
+#
+# ```julia
+# @potts_model ShearedFoam begin
+#     @structural_parameters begin
+#         lattice = (256, 256)                       # sites (p.5822)
+#     end
+#     @kinds medium bubble                           # dry foam: no site is medium
+#     @parameters begin
+#         J = 3.0                                    # wall energy per unlike pair (p.5823)
+#         Γ = 1.0                                    # area constraint (p.5823); Γ = 0 coarsens
+#         T = 1.0e-6                                 # T → 0⁺ (DV2)
+#         γ0 = 0.0                                   # boundary shear amplitude (Eq. 6)
+#         β = 0.0                                    # bulk shear rate (Eq. 7)
+#         bulk = 0.0                                 # 1: Eq. 7, else Eq. 6
+#         periodic = 0.0                             # 1: G = sin(ω mcs), else G = 1
+#         ω = 2π / 4000
+#         ytop = 256.0                               # the top row, L_y
+#         ymid = 128.5                               # the mid-plane, (L_y + 1)/2
+#     end
+#     @variables begin
+#         A(cell) = 256.0                            # target area, 16² (p.5823)
+#     end
+#     # x periodic, y closed walls (no wall cells, A-2)
+#     @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = NeighborOrder(4))
+#     @relations proposal = NeighborOrder(4)
+#     @energy begin
+#         contacts => J
+#         cells(bubble) => Γ * (volume - A)^2
+#     end
+#     # γ > 0 biases copies towards −x: the top row moves +x and the bottom −x (Figs. 2, 4, 5)
+#     @drive copy => ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
+#                    ifelse(bulk > 0.5, -β * (position[target][2] - ymid),
+#         γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))) *
+#                    direction[1]
+#     @sweep Metropolis(; temperature = T)
+# end
+# ```
 
 # ## 2. A minimal run
 #
@@ -90,12 +94,10 @@ nothing #hide
 # (`SequentialCPM(; skip_interior = true)`), to a uniform neighbour among the 20 (deviation
 # DV1).
 
-brick(L) = Int32[(r = (y - 1) ÷ 16; r * (L[1] ÷ 16) + mod(x - 1 - (isodd(r) ? 8 : 0), L[1]) ÷ 16 + 1)
-                 for x in 1:L[1], y in 1:L[2]]
 L = (256, 256)
-σ0 = brick(L)
-nb = Int(maximum(σ0))
-u0 = [ownership => σ0, kind => fill(:bubble, nb), :A => fill(256.0, nb)]
+u0 = sheared_foam_state(; lattice = L)     # the brick wall: ownership, kinds (all :bubble), A = 16²
+brick(L) = first(sheared_foam_state(; lattice = L)).second
+nb = length(last(u0).second)
 prob = PottsProblem(ShearedFoam(; name = :foam), u0, (0, 10); seed = 1)
 alg = SequentialCPM(; skip_interior = true)
 annealed = solve(remake(prob; p = [:T => 3.0]), alg).u[end]                       # 10 MCS at T = 3
@@ -120,9 +122,8 @@ const PROBS = Dict{Tuple{Int, Int}, Any}()
 foam_lat(L) = Lattice(L; boundary = (Periodic(), Closed()))
 function foam_problem(σ, A, tend; seed, p...)
     L = size(σ)
-    base = get!(() -> PottsProblem(ShearedFoam(; name = :foam, lattice = L),
-            [ownership => brick(L), kind => fill(:bubble, Int(maximum(brick(L)))), :A => fill(256.0, Int(maximum(brick(L))))],
-            (0, 1); seed = 1), PROBS, L)
+    base = get!(() -> PottsProblem(ShearedFoam(; name = :foam, lattice = L), sheared_foam_state(; lattice = L), (0, 1);
+            seed = 1), PROBS, L)
     pp = Pair{Symbol, Float64}[:ytop => L[2], :ymid => (L[2] + 1) / 2, (k => Float64(v) for (k, v) in p)...]
     return remake(base; u0 = [ownership => σ, kind => fill(:bubble, length(A)), :A => A], p = pp, tspan = (0, tend), seed)
 end

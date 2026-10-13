@@ -29,7 +29,7 @@ const WITH_PUBLISHED = get(ENV, "POTTS_DOCS_PUBLISHED", "false") == "true"
 # `models/<name>/`, and appears only in the published build.
 const PAPER_PAGES = [
     ("01_merks", "merks", "Vasculogenesis (Merks et al. 2006, 2008)"),
-    ("04_foam", "foam", "Foam rheology (Jiang et al. 1999)"),            # no model page (`docs/models/foam.jl`)
+    ("04_foam", "foam", "Foam rheology (Jiang et al. 1999)"),
     ("09_cell_sorting", "graner_glazier", "Cell sorting (Graner & Glazier 1992)"),
     ("10_akeeb", "akeeb", "Leader–follower invasion (Akeeb, Marcus & Jiang 2026)"),
     ("15_openvt_monolayer", "openvt", "Growing monolayer (OpenVT benchmark)"),
