@@ -4337,3 +4337,22 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
   They run on the PC once P6.8 and P6.9 exist.
 - **B2** is no longer a gate. It becomes a confirm-question.
+
+## D-236 Foam: the D-210 hold lifted for one pre-registered Eq 2 screen (2026-10-13; maintainer: "yes, lift the hold and run the screen on this chat"; spec 04 §5.4; under D-203, D-205, D-210)
+- **Scope.** One screen, run by the spec chat on PC cores 12-15/28-31, in its own clone at 05ed9bae. The D-210 hold stays for everything else.
+- **Readings.**
+  - R0, literal absolute x: excluded on paper. With the paper's own γ₀ and β, its x-dependent wall tension is far above J.
+  - R1, force on walls (current): already scanned in D-205.
+  - R2, force on bubble centroids: ΔH = −Σ_{new,old} κ_b·β·(Y_c − y_mid)·ΔX_c. A script-local model in `data/04/run_eq2_screen.jl`.
+  - R3, R1 at T ∈ {0.5, 1.5}.
+- **Design and rule.** As D-205: same foams, τ, β, seeds, caps, early stop, and the frozen `p64kb_analyse` applied unchanged per reading. Grids: R2 κ_D190·2^(i/2), i = 0…30; R3 i = −8:2:14.
+- **Stage 2.** Only for a reading that passes: the boundary-shear Fig 3(c) check. R2's boundary analogue gets its own D-entry before any run.
+- **Outcome.**
+  - Pass: provisional Eq 2 form labelled as an inference; the src item goes to the coordinator; bulk FULL rerun.
+  - No pass: the negative result is recorded and F1 stays the only route.
+- **Record.** `data/04/eq2-screen-<date>/`.
+- **Result (2026-10-13).** No reading passes stage 1: the frozen `p64kb_analyse` returns `pinning_cliff` for R2 (465 runs), R3 at T = 0.5 and R3 at T = 1.5 (180 runs each). Record `eq2-screen-2026-10-13`, runner `run_eq2_screen.jl` (sha256 `9405f7b9…`, as in its provenance).
+  - Every reading has a drive threshold, about κ_b·β ≈ 0.01 for R3. Above it, t_first jumps from no yield to ≲ 2000 paper MCS within one κ_b step.
+  - T = 1.5 softens the cliff and gives the paper's t(0.01)/t(0.05) ratio (11 vs 10.2), but both times are about 3.6× too fast.
+  - So a β-proportional per-copy bias pins, whether on walls or on centroids, with T up to J/2. The negative result is recorded and F1 stays the only route (spec 04 §5.4).
+- **Next (open, put to the maintainer by the spec owner).** Under reverse-engineering-first, R3 at higher T (for example T ∈ {3, 5}; the paper sweeps T up to 15 in Fig 3d), about 360 runs or about 3 h on 24 threads. It needs its own D-entry and the maintainer's yes before any run.

@@ -1,0 +1,11 @@
+protocol = "spec 04 §5.4"
+runner_sha256 = "9405f7b9c17a8cc6935191d5076c1d0b6b001d865bda45d5e8c001b026c00c77"
+tau = 3.4472094822805346
+decision_rule = "D-205 p64kb_analyse (frozen)"
+threads = 24
+frozen_sha256 = "dc6de6bcf838173521af39db92cf0476d3ea25b963ee61465d43ba5a2b5d969c"
+finished = "2026-10-13T16:09:38.187"
+started = "2026-10-13T13:28:56.388"
+machine = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+julia = "1.12.6"
+commit = "05ed9baea5970c4e2bbea19728e93d3ed05d56e2"

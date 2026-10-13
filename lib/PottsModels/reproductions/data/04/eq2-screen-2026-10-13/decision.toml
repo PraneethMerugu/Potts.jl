@@ -1,0 +1,20 @@
+["r3_T1.5"]
+kappa_b = "nothing"
+khat = []
+reason = "pinning_cliff"
+path = "interp"
+temperature = 1.5
+
+[r2]
+kappa_b = "nothing"
+khat = []
+reason = "pinning_cliff"
+path = "interp"
+temperature = 1.0e-6
+
+["r3_T0.5"]
+kappa_b = "nothing"
+khat = []
+reason = "pinning_cliff"
+path = "interp"
+temperature = 0.5

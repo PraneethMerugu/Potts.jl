@@ -540,6 +540,11 @@ The grids:
 
 **Record.** `data/04/eq2-screen-<date>/`: one scan.tsv per reading, decision.toml, provenance.toml, README. The runner is `data/04/run_eq2_screen.jl`, not frozen. It re-uses the frozen tests' helpers, includes them unchanged, and defines R2 as a script-local model.
 
+**Result (2026-10-13; record `data/04/eq2-screen-2026-10-13/`).** No reading passes stage 1: `p64kb_analyse` returns `pinning_cliff` for R2, R3 at T = 0.5 and R3 at T = 1.5.
+- Every reading has a drive threshold. It sits at κ_b·β ≈ 0.01 for R3, and t_first jumps from no yield to ≲ 2000 paper MCS within one κ_b step.
+- T = 1.5 softens the cliff and gives the paper's t(0.01)/t(0.05) ratio (11 vs 10.2), but both times are about 3.6× too fast. One κ_b step lower, β = 0.01 never yields.
+- So a β-proportional per-copy bias pins, whether it acts on walls or on centroids, and with T up to J/2. F1 is sharpened accordingly (our open question list), and further variants run only as pre-registered screens (reverse-engineering first). The next candidate is R3 at higher T, since the trend from T = 0.5 to T = 1.5 softens the cliff.
+
 ## 6. Required general features
 
 | ID | Needed? | Use |
