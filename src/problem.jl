@@ -332,7 +332,7 @@ function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
     on = :references in track
     on == haskey(st.model, REF_COUNTS) && return st
     model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
-            Base.structdiff(st.model, NamedTuple{(REF_COUNTS,)})
+            NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
     return CorePotts.CPMState(st.σ, st.cell, st.site, model, st.history)
 end
 
