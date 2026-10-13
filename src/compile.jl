@@ -728,11 +728,12 @@ end
 
 function _copy_read_error(s, bare, where)
     bare === :reference && return ArgumentError(
-        "this energy reads `$s`$where through a reference, which a copy changes; ΔH evaluates the term only for the " *
-        "copy's two cells, so a change of the referent by another copy would be missing from it. Through a " *
-        "reference a cell energy reads only what no copy changes: cell variables no @on_copy update writes, " *
-        "`kind`, `birth`, `alive(ref)`. Read the referent's `volume` in a @drive (copy scope, e.g. " *
-        "`volume[partner[old]]`), where it is the referent's current value")
+        "this energy reads `$s`$where through a reference, which a copy changes during the sweep; ΔH evaluates " *
+        "the term only for the copy's two cells, so a change of the referent by another copy would be missing " *
+        "from it. Through a reference a cell energy reads only what no copy changes: cell variables no @on_copy " *
+        "update writes, `kind`, `birth`, `alive(ref)`. Read it in a `@drive` (evaluated per copy, e.g. " *
+        "`volume[partner[old]]`, the referent's current value) or snapshot it with `@after_mcs` (a cell variable " *
+        "`v ~ $s`, read bare as `v` in the energy)")
     hint = bare === nothing ? "" : " Read the cell's own value bare, as `$bare`: ΔH updates it for the copy's cells."
     return ArgumentError(
         "this energy reads `$s`$where, which a copy changes; ΔH evaluates the term only where the copy acts " *

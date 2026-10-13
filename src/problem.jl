@@ -110,7 +110,12 @@ discretised problem.
 after every step; under `CheckerboardCPM` it is brought up to date at the host read points
 (a save, `integrator.u`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
 in the run; it is hashed into the fingerprint (only when on), and `remake(prob; track)`
-switches it.
+switches it. `track = (:references,)` is the debug mode of cell references (R6): every
+dereference of a dead referent (a nonzero reference to a cell that is not alive, which reads
+as the medium) is counted per term (cell energy group, drive, constraint, temperature,
+update, division), as is every `sibling(k)` scan that found several alive members of kind `k`
+(the lowest `birth` is returned); `solve` reports the counts once, in one warning. Nothing of
+it is compiled into an untracked problem.
 """
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
@@ -132,7 +137,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
         "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
-    st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
+    st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values), c, spec), c, track)
     lat = core_lattice(getfield(sys, :lattice))
     relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
     spacing = getfield(sys, :lattice).spacing === nothing ? nothing : map(T, getfield(sys, :lattice).spacing)
@@ -157,25 +162,29 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 # type `T` and solvers `spec`, as a `CPMFunction` (construction, and `remake` with solvers).
 function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
     sys = c.sys
-    fns, generated = _recording() do
+    # `track = (:references,)` (E4/E5): the dereference counters are compiled in; else nothing is
+    slots = :references in track ? _ref_count_slots(c) : nothing
+    fns, generated = Base.ScopedValues.with(_REF_SLOTS => slots) do
+        _recording() do
         _with_faces(c) do
         # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
         glog = _GENERATED[]
         i0 = length(glog)
-        ce = _constraint_expr(c, T)
+        ce = _with_ref_term(() -> _constraint_expr(c, T), "@constraint")
         delta_H = _rgf(_delta_H_expr(c, T))
         commit! = _rgf(_commit_expr(c, T))
         constraint = ce === nothing ? CorePotts.always : _rgf(ce)
-        temperature = _rgf(_temperature_expr(c, T))
+        temperature = _rgf(_with_ref_term(() -> _temperature_expr(c, T), "@sweep temperature"))
         i1 = length(glog)
         phases = _phases_parts(c, T, values, spec)
-        lifecycle = _lifecycle(c, T)
+        lifecycle = _with_ref_term(() -> _lifecycle(c, T), "@divide")
         total = _rgf(_total_energy_expr(c, T))
         delta_E = _rgf(_delta_H_expr(c, T; drives = false))
         i2 = length(glog)
         connectivity = _connectivity_hooks(c, T)
         copy_step = [glog[(i0 + 1):i1]; glog[(i2 + 1):end]]
         (; delta_H, commit!, constraint, temperature, phases, lifecycle, total, delta_E, connectivity, copy_step)
+        end
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
@@ -264,7 +273,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         claims, reads, phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
-        track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}(), fns.connectivity)
+        track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity)
 end
 
 # The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
@@ -291,18 +300,19 @@ _fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(cor
 # out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob.f), kwargs...)
+        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob), kwargs...)
     isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                                            "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
     c = mi.csys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = _derived_parameters(c, prob.p, Set(info(x).name for x in getfield(c.sys, :parameters)))
-    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track = _track(track)), _ode_layout(prob.u0, c, spec)
+    track = _track(track)
+    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track), _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 
 # `track` (D-140): the quantities a run accumulates into its statistics. Only `:ΔH` (each
 # committed copy's ΔH → `stats.accepted_ΔH`) for now; per-term names wait for R18.
-const _TRACKABLE = (:ΔH,)
+const _TRACKABLE = (:ΔH, :references)
 function _track(track)
     (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(ArgumentError(
         "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"))
@@ -313,6 +323,36 @@ function _track(track)
     return Tuple(track)
 end
 _track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:ΔH,)
+_track_names(prob::CorePotts.PottsProblem) =
+    (_track_names(prob.f)..., (haskey(prob.u0.model, REF_COUNTS) ? (:references,) : ())...)
+
+# The reference counters of a tracked problem (`track = (:references,)`, E4/E5): one `UInt32`
+# per term of `_ref_count_labels`, in `st.model`; removed from a state of an untracked one
+function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
+    on = :references in track
+    on == haskey(st.model, REF_COUNTS) && return st
+    model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
+            NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
+    return CorePotts.CPMState(st.σ, st.cell, st.site, model, st.history)
+end
+
+# After a solve (E4/E5): one warning with the counts of a tracked problem, which are then reset
+function CorePotts.report_run(info::PottsModelInfo, integ)
+    model = integ.state.model
+    haskey(model, REF_COUNTS) || return nothing
+    counts = CorePotts._to_host(integ.stats, getfield(model, REF_COUNTS))
+    any(>(0), counts) || return nothing
+    labels = _ref_count_labels(info.csys)
+    lines = String[]
+    for (j, n) in enumerate(counts)
+        n > 0 || continue
+        push!(lines, labels[j] == _SIBLING_LABEL ? "$(labels[j]): $n time(s)" :
+                     "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)")
+    end
+    @warn "references in $(nameof(info.csys)) (track = (:references,)):\n  " * join(lines, "\n  ")
+    fill!(getfield(model, REF_COUNTS), 0)
+    return nothing
+end
 
 # The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
 # scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
@@ -983,7 +1023,7 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
-    _ode_layout(_birth_layout(u0, info.csys), info.csys, info.solvers)
+    _track_layout(_ode_layout(_birth_layout(u0, info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the

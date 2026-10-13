@@ -130,7 +130,12 @@ function lower(x, env::LowerEnv)
     op === Δ && return _lower_laplacian(args[1], env)
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
-    op === cluster_sibling && return :(Potts._sibling(st.cell, $(lower(args[1], env)), Int32($(lower(args[2], env)))))
+    if op === cluster_sibling
+        cl, k = lower(args[1], env), lower(args[2], env)
+        ctr = _ref_counter(_SIBLING_LABEL)
+        ctr === nothing && return :(Potts._sibling(st.cell, $cl, Int32($k)))
+        return :(Potts._sibling_counted(st.cell, $cl, Int32($k), $(ctr[1]), $(ctr[2])))
+    end
     op === as_ref && return :(Int32($(lower(args[1], env))))
     if op === outer_value
         haskey(env.bind, :__outer) || error("`members(…)` is a fold domain: write `sum(… for m in members(cluster))`")
@@ -457,10 +462,31 @@ end
 # credit reads the readers' referents before the copy, `_vacated_energy_expr`)
 _refst(env) = get(env.bind, :__refst, :st)
 
+# Reference diagnostics (E4, E5; `track = (:references,)`): while a tracked problem's code is
+# generated, `_REF_SLOTS` maps each term label to its slot of the state's counter
+# `st.model[REF_COUNTS]`, and `_REF_TERM` names the term being lowered. Untracked (the
+# default), both are `nothing` and the lowered code is unchanged.
+const REF_COUNTS = Symbol("#ref_counts")
+const _SIBLING_LABEL = "sibling(k) found several alive members of kind k (the lowest birth is used)"
+const _REF_SLOTS = Base.ScopedValues.ScopedValue{Union{Nothing, Dict{String, Int}}}(nothing)
+const _REF_TERM = Base.ScopedValues.ScopedValue{Union{Nothing, String}}(nothing)
+_with_ref_term(f, label) = _REF_SLOTS[] === nothing ? f() : Base.ScopedValues.with(f, _REF_TERM => label)
+# `(counter, slot)` for `label` (default: the term being lowered), or `nothing` (untracked)
+function _ref_counter(label = _REF_TERM[])
+    slots = _REF_SLOTS[]
+    (slots === nothing || label === nothing) && return nothing
+    j = get(slots, label, nothing)
+    j === nothing && return nothing
+    return (Expr(:., :(st.model), QuoteNode(REF_COUNTS)), j)
+end
+
 # `x[ref]` for a quantity `x` (Info `i`) of the referent `ref`
 function _lower_deref(i::Info, ref, env)
     r = lower(ref, env)
     rs = _refst(env)
+    ctr = _refst(env) === :st ? _ref_counter() : nothing
+    # tracked: a dereference of a dead referent (nonzero, not alive) is counted for its term
+    ctr === nothing || (r = :(Potts._count_dead($(ctr[1]), $(ctr[2]), $rs.cell.volume, $r)))
     if i.role === :cell
         return :(Potts._deref($rs.cell.$(i.name), $rs.cell.volume, $r, $(_ref_default(i, env))))
     elseif i.role in (:site, :field)
@@ -508,14 +534,33 @@ end
 @inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)
 @inline _birth_at(cell, c) = c == 0 ? Int32(0) : _birth(cell, c)
 @inline _deref_birth(cell, r) = _alive_slot(cell.volume, r) ? _birth(cell, r) : Int32(0)
-"""The alive member of kind `k` of cluster `cl` (the lowest such slot), or 0."""
-@inline function _sibling(cell, cl, k)
-    cl == 0 && return Int32(0)
-    for m in 1:length(cell.kind)
-        (@inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k) &&
-            return Int32(m)
+"""
+The alive member of kind `k` of cluster `cl`, or 0. With several, the one with the lowest
+`birth` (the oldest; E5); `_sibling_scan` also says whether there were several.
+"""
+@inline _sibling(cell, cl, k) = first(_sibling_scan(cell, cl, k))
+@inline function _sibling_scan(cell, cl, k)
+    best, bb, dup = Int32(0), typemax(Int32), false
+    cl == 0 && return best, dup
+    for m in 1:length(cell.kind)          # m ∈ 1:capacity: every column has that length
+        if @inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k
+            dup |= best != 0
+            b = Int32(_birth(cell, m))
+            b < bb && ((best, bb) = (Int32(m), b))
+        end
     end
-    return Int32(0)
+    return best, dup
+end
+# tracked (E5): counts the scans that found several members
+@inline function _sibling_counted(cell, cl, k, cnt, j)
+    s, dup = _sibling_scan(cell, cl, k)
+    dup && CorePotts._bump!(cnt, j)
+    return s
+end
+# tracked (E4): `r`, counted in slot `j` when it names a dead cell (nonzero and not alive)
+@inline function _count_dead(cnt, j, vol, r)
+    (r != 0 && !_alive_slot(vol, r)) && CorePotts._bump!(cnt, j)
+    return r
 end
 
 # Sort of an index expression: :site or :cell.

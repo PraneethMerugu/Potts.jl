@@ -226,6 +226,9 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
     :has_origin,          # a contact fold's relation must exclude the origin (D-150)
     :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
+    :_bump!,              # atomic diagnostic counter (`track = (:references,)`, P6.5a E4/E5)
+    :_to_host,            # counted host copy of those counters, once per solve (D-085)
+    :report_run,          # once-per-solve report hook Potts extends (P6.5a E4/E5)
     :no_claims,           # the no-claim-set default
     :no_bias,             # the no-bias default (`copy_step_relations` checks for it, D-208)
     :no_divide_rule,      # the no-division default
