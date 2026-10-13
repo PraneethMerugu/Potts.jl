@@ -173,6 +173,21 @@ const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TEST_FIL
 end
 POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
 
+# A shard starts from the globals the single process had: before its files, it loads the
+# definitions (each top-level `@testset` dropped) of every file that came earlier in the full
+# order and runs in another shard, so a file that uses a helper an earlier file defined
+# (e.g. siblings.jl uses mechanisms.jl's `split_cells`) finds it.
+_pm_is_testset(ex) = ex isa Expr && ex.head === :macrocall && ex.args[1] === Symbol("@testset")
+if POTTSMODELS_SHARD[2] > 1
+    let mine = Set(POTTSMODELS_SHARD_FILES)
+        last_mine = maximum(f -> findfirst(==(f), POTTSMODELS_TEST_FILES), POTTSMODELS_SHARD_FILES; init = 0)
+        for f in POTTSMODELS_TEST_FILES[1:last_mine]
+            f in mine && continue
+            include(ex -> _pm_is_testset(ex) ? nothing : ex, joinpath(@__DIR__, f))
+        end
+    end
+end
+
 @testset "PottsModels files" begin
     @testset "$f" for f in POTTSMODELS_SHARD_FILES
         include(joinpath(@__DIR__, f))
