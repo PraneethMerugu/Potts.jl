@@ -258,6 +258,193 @@ The comparisons are statistical over ensembles (the paper uses n = 12), with no 
 
 ---
 
+## 8b. Reverse-engineering plan (2026-10-13, spec owner)
+
+Goal: infer each unstated or conflicting item before asking, so that author questions become
+"we inferred X from Y; please confirm". The lattice evidence is shared with 2009 and is set out
+in full in spec 05 §8b (R1–R2). Figure readings come from the embedded 200 ppi rasters
+(`pdfimages`; Fig 2 is 494 × 316 px for 166 × 106 µm, i.e. 0.336 µm per figure pixel).
+
+**Cost basis (assumed, not measured).** A 300 × 192 lattice at ≈1 ms/MCS (no BFS term). One
+16.6-day run is ≈400 MCS, so ≈0.4 s. Fig 7 (300 × ≈575) takes ≈1.2 s. A 12-replicate condition
+costs ≈5 s.
+
+### 8b.1 Verdict per item
+
+| # | Item (§7 ref) | Status after this plan |
+|---|---|---|
+| Q1 | µm/pixel, lattice, proposal neighbourhood (§7.3 q1) | **Pinned** (shared with 05 §8b R1–R2) |
+| Q2 | Adhesion neighbour order (§7.3 q1) | **Screen T1** |
+| Q3 | 1 MCS = 1 h; run length (§7.3 q2) | **Stated** + digitisation check; confirm only |
+| Q4 | Baseline proliferating cell and rule (§7.1 item 3; q3) | **Partly pinned** (16 px distance band); **screen T4** |
+| Q5 | Tip identity (q3) | Borrow 05 R9; **author-confirm** |
+| Q6 | Degradation rate, product, sites (q4) | **Rate bounded by arithmetic**; **screen T3** |
+| Q7 | Eq 3 x/x′ and gain/loss (q5) | **Screen T5** |
+| Q8 | Copy restriction / stroma (q6) | **Inferred** (substrate overlay, as 05 R7); confirm |
+| Q9 | Tissue cells (q7) | **Pinned by digitisation** (24 squares, 16–17 px) |
+| Q10 | Fibres (q8) | **Digitisation** (angles by Hough on Fig 2; length ≈6 px) |
+| Q11 | PDE stepping, steep-run BC, initial V, β units (§7.1 items 1, 4; q9–q10) | **Physical stepping rejected by arithmetic**; **screen T2** |
+| Q12 | What v_a, v_p compare against | **Pinned by arithmetic** (per-site V at the cell) |
+| Q13 | Table 2 "± SD error" (§7.1 item 5) | **Inferred SEM** by arithmetic; confirm (low) |
+
+### 8b.2 Evidence and arithmetic
+
+**Q1 — lattice.**
+- Figs 3, 4 and 6 use the same 0/82.8/166 and 0/52.9/106 ticks as 2009, so the same
+  300 × 192 lattice at p = 0.5538 µm applies (05 §8b R1).
+- The Fig 5 distances (p.11 [3115]) independently pin p. 8.9 µm and 26.6 µm are 16 px and 48 px
+  only for p ∈ [0.553, 0.555]. At 0.55 they would print as 8.8 and 26.4.
+- The vessel-to-tumour distance "∼165 µm" (p.5 [3109]) is 299 × 0.5538 = 165.6.
+- Fig 7: 318 µm ≈ 575 rows, i.e. three stacked domains.
+- Proposals are Moore-8. The 2nd-shell-only reading splits every cell into sublattices, which the
+  solid cells in the figures rule out (05 §8b R2).
+- Derived sizes: EC of 10 µm diameter = 256 sites; W1 14.2 µm = 26 px; W7 60 µm = 108 px;
+  W8 20 µm = 36 px.
+
+**Q3 — time.**
+- 1 MCS = 1 h is stated (p.8 [3112]).
+- Snapshots: 16.6 d = 398.4 MCS and 9.4 d = 225.6 MCS, so runs of ≈398–400 and ≈225 MCS.
+- Check: tip displacement digitised from Figs 3 and 6, divided by the Table 2 speed, must give
+  ≈16.6 d (±15 %).
+
+**Q4 — proliferation.**
+- Fig 5 uses exact pixel multiples (16 and 48 px = one and three "cell lengths"). The tested
+  variable is therefore a geometric distance d behind the tip, not a rank. "a fixed distance from
+  the tip" (p.14 [3118]) agrees.
+- The baseline is d = 16 px, since Table 2's 6.84 µm/day equals the Fig 5 8.9 µm point (§7.1
+  item 3), and "proliferation occurs only in one cell" (p.15 [3119]).
+- Open: the band width, and how the first stalk cell arises when the run starts with one
+  non-proliferating tip.
+
+**Q6 — degradation.**
+- Option A is the 2009 real-time rate, (0.55 µm)²/min = 60 sites/MCS at 1 h/MCS. Over 400 MCS that
+  is 24,000 sites, more than all the matrix (0.37 × (57,600 − 24 × 276) ≈ 18,900 sites). That
+  cannot give a "small" +5 % effect (p.8 [3112]), so option A is rejected.
+- Option B is the per-MCS reading of the same code, 1 site/MCS. Over 400 MCS that is ≈120 µm², a
+  ≈1 µm × 110 µm trail, consistent with +5 %.
+- The product (fluid) and the scattered site choice are taken from 2009 Fig 7B (05 §8b R8), same
+  lineage.
+
+**Q8 — stroma.**
+- The text bars matrix, tissue and fluid from invading (p.7 [3111]). Yet "backward migration" and
+  "lateral" movement are reported (p.10 [3114]), and these need EC sites to be vacated.
+- This matches the 2009 substrate-overlay reading (05 §8b R7).
+- Check (digitisation, no runs): register Fig 2 (t = 0) with Figs 3 and 4b/4d (same initial
+  stroma, p.9 [3113]). Away from the sprout, fibre and tissue pixels should be identical, which
+  would mean no matrix/fluid/tissue copies.
+
+**Q9 — tissue cells.**
+- Fig 2: 24 filled squares, mean area ≈750 figure-px² = 85 µm², i.e. ≈9.2 µm sides = 16–17 px
+  (≈276 sites). They lie on a jittered 4 × 6 grid. Fig 3 shows the same squares (bbox 28–30 figure
+  px at 0.333 µm/px).
+- This corrects the §2.4 "≈30 squares ≈7–8 µm" reading.
+- Positions can be digitised directly, since the configuration is the same in all runs
+  (p.9 [3113]).
+- One ID each, with A_T = initial area, is implied by "compete for space" (p.6 [3110]).
+
+**Q11 — field. This is the main new finding.**
+- Fig 4a (p.10 [3114]) shows the shallow-run profile as a linear plane from 0 to 0.035. The steady
+  sinh profile would have a 26 % slope change (05 §8b R6).
+- Fig 4c (steep run, no source) still shows the full background plane at 16.6 days, with only a
+  trench along the sprout.
+- With physical D = 3.6 × 10⁴ µm²/h at 1 h/MCS, the slowest mode decays at Dπ²/L² ≈ 13 h⁻¹ (both
+  ends at V = 0), or ≈3 h⁻¹ with a no-flux right end. λ alone e-folds in 1.5 MCS and takes V below
+  v_a in ≈9 MCS. Either way the domain empties within hours.
+- **So the PDE cannot have advanced 1 physical hour per MCS.** Explicit stepping would also need
+  ≈4.7 × 10⁵ substeps per MCS (D = 1.17 × 10⁵ px²/MCS).
+- Inference: one stability-limited step per MCS (or no diffusion/decay between solves) and a
+  linear initial profile. Under this reading the steep-run right-boundary condition (q9) is moot.
+- Uptake granularity:
+  - **Per site:** β·1 h = 0.06 pg > V_max = 0.035, so every EC site empties in one MCS. In the
+    steep run every cell would fall below v_a at once. This contradicts "some cells eventually
+    became inactive" (p.10 [3114]).
+  - **Per cell:** 0.06/276 ≈ 2.2 × 10⁻⁴ pg per site per MCS empties a 0.02 pg site in ≈90 MCS
+    (≈4 d). That gives gradual inactivation, and a "very slight effect" in the shallow run
+    (p.9 [3113]). → **per cell favoured**.
+
+**Q12 — thresholds.**
+- S is in "pg/pixel", and v_a and v_p are in pg. In the linear profile, V per site = v_p = 0.005
+  at x = 23.7 µm (43 px), and v_a = 10⁻⁴ at x = 0.47 µm (all columns except column 0).
+- Starting from COM ≈ 5 µm, the cell must travel ≈19 µm. In the shallow run (≈1.8× faster:
+  "same distance" in 9.4 d vs 16.6 d) that takes ≈1.5–2 d, matching "∼48 h" (p.9 [3113]).
+- ΣV over the cell (≈276 × V) or the bound amount min(β, ·) exceeds v_p immediately, which leaves
+  no delay. Both are rejected.
+- → **compare V at the cell (COM or mean over sites)**.
+
+**Q13 — SD or SEM.** Table 2 gives speeds 5.33 ± 0.075 (1.4 % CV) and diameter 14.20 ± 0.70,
+while W1 is 14.2 ± 2.44 (SD, 17 % CV). As SEM with n = 12, the speed SD would be 0.26 (4.9 %),
+which is plausible. → **Table 2 errors are SEM**. Fig 5 says SD.
+
+### 8b.3 Pre-registered screens (no runs yet; rules fixed now)
+
+**T1 — adhesion order (Q2).**
+- Candidates: orders {1, 2, 3}. Fixed: p, square, Moore-8 proposals, Table 1 values (with the
+  Figs 3/5 γ variants).
+- Targets:
+  - W1 diameter 11–18 µm;
+  - W3 no-fibre/fibre diameter ratio ≈1.35 (±0.15);
+  - W11 trends (smaller J_em → more elongated; larger γ_e → smaller cells);
+  - EC–EC facet fraction at ±45° digitised from Figs 3 and 4b/d.
+- Rule: reject candidates failing ≥ 2 quantitative targets, then rank by facet fraction. If
+  unresolved, keep order 2 and ask (shared with 05 S1).
+- 3 × (1 + 4 perturbations) × 12 replicates ≈ 1 min.
+
+**T2 — field and uptake (Q11).**
+- Candidates: stepping {physical 1 h (negative control); one explicit step/MCS; frozen field with
+  uptake only} × uptake {per site, per cell} × steep BC {V = 0, no-flux}.
+- Targets:
+  - Fig 4c right-edge background ≥ 0.9 S at 16.6 d (no source);
+  - trench confined to the sprout (≤ 2 px outside);
+  - fraction of inactive ECs at 16.6 d in (0, 0.5);
+  - W8 diameter 15–26 µm;
+  - W7 diameter 45–75 µm and equal reach at 9.4 d vs 16.6 d (±20 %);
+  - Q12 v_p onset 36–60 h.
+- Rule: pass all. If several pass, prefer the fewest unstated mechanics and ask with the ranking.
+- 12 cells × 12 replicates × 2 runs ≈ 2 min.
+
+**T3 — degradation rate (Q6).**
+- Candidates: {0, 0.5, 1, 2} sites/MCS, plus 60 as a negative control. Site rule = the 05 S4
+  winner.
+- Target: W6 speed gain of +2–10 %, significant at n = 12 (Welch, α = 0.05).
+- Rule: the smallest rate passing W6. The prediction is 1.
+- ≈30 s.
+
+**T4 — proliferation rule (Q4).**
+- Candidates: {cells with COM in a band [d ± 8 px] behind the tip COM; rank-k along the sprout}
+  × bootstrap {tip divides until the band is occupied; initial bud of 2 cells}.
+- Targets: W4 ordering tip < 16 px < 48 px ≈ base, each within ±15 %; W5 7.7 µm/day exceeds all;
+  Table 2 W2 four stroma speeds.
+- Rule: the candidate passing all wins. Otherwise ask with our best.
+- 4 × 9 conditions × 12 replicates ≈ 3 min.
+
+**T5 — Eq 3 form (Q7).**
+- Candidates: {gaining cell only; gain − loss}.
+- Targets: W11 μ × 10 gives larger elongated cells and pervasive sprouts; μ ÷ 10³ gives round
+  cells and stunted sprouts; W2.
+- Rule: pass both W11 trends and W2 within ±15 %.
+- ≈1 min.
+
+In total ≈10 min on this Mac.
+
+### 8b.4 What remains for the authors (all "confirm our inference")
+
+1. **B2:** shared with 05 §8b.4 item 1 (300 × 192 square lattice at ≈0.554 µm/px, Moore-8
+   proposals; adhesion order?). The Fig 5 16/48 px distances are the 2007 evidence.
+2. **Field:** "Fig 4c keeps the full background profile after 16.6 d without a source, which
+   physical D and λ at 1 h/MCS would drain within hours. How was Eq 1 advanced per MCS? Was β
+   applied per cell?"
+3. **B9:** "Runs of ≈400 MCS? Baseline: one cell in a band 16 px behind the tip; how did the first
+   such cell arise?"
+4. Tip identity and stroma overlay: shared with 05 §8b.4 items 2–3.
+5. Only if the screens are inconclusive: Eq 3 gain/loss (T5), degradation rate (T3).
+6. Low: Table 2 errors are SEM? Code or input deck (q11)?
+
+Dropped as answered by the figures or arithmetic: tissue-cell count, size and placement (Q9),
+threshold quantity (Q12), the q9 boundary condition (moot under Q11), and the "60 sites/MCS"
+degradation option.
+
+---
+
 ## 7. Ambiguities, conflicts, questions
 
 ### 7.1 Internal

@@ -750,7 +750,8 @@ merges (phase-end checkpoint).
   - R10 `UnlikeNeighbor`;
   - R2 `Fibres`;
   - D-075: `uptake` is one host round trip per MCS on Metal (D-035 as amended);
-    `solvers = [V => …]` for the steady/implicit field. Gate: B2.
+    `solvers = [V => …]` for the steady/implicit field.
+  - B2 resolved (D-235): 0.554 µm/px, 300 × 192 square lattice, Moore-8 proposals. Keep the PDE step per MCS and per-site vs per-cell uptake configurable: the 05/07 §8b screen picks between them (2007 Fig 4c rules out a 1 h-per-MCS PDE with real D and λ). Also a fixed tip identity and a matrix/fluid underlay (Fig 7B, 7C).
 - [x] (merge, 2026-10-09; D-197, D-201; PC A/B pending) **P6.9a** (D-189 rulings 4, 8, 9; split from P6.9 on 2026-10-09) `Global(; window, adjacency)` as a rule value ("does not increase" pieces for both cells, evaluated after acceptance, bitwise equal to pre-acceptance); window and conservative-rejection counter; cell-scope `pieces` and `largest_piece` with exact after-values in energies; the D-075 device BFS. Test author first.
 - **P6.9** Bauer 2009: (amended by D-189: `Global(; window, adjacency)` as a rule value with "does not increase" semantics for both cells, evaluated after acceptance; cell-scope `pieces` and `largest_piece`, ruling 9)
   - R4 `Global()` on both algorithms, with the D-075 device BFS (api-synthesis §8.1 Q6):
@@ -763,7 +764,7 @@ merges (phase-end checkpoint).
     - record `exp(−α/T)` for 05 and 11. Where it fails, widen `W` or fall back to
       sequential; that fallback is a D-051 item 5 exception under D-075's time-boxed row;
   - R8 `@create`;
-  - R16 branch and loop detection. Gate: B2.
+  - R16 branch and loop detection. B2 resolved (D-235); the §8b screens (about 45 min, 2D) run on the PC once P6.8 and P6.9 exist.
 - **P6.10** Jafari Nivlouei:
   - R13 tables;
   - Boolean networks as MTK discrete (clocked, `Shift`) components lowered into the

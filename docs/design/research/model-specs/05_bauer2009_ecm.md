@@ -271,6 +271,245 @@ means a numeric match within the tolerance.
 
 ---
 
+## 8b. Reverse-engineering plan (2026-10-13, spec owner)
+
+Goal: infer every unstated or conflicting item ourselves first, so that each author question
+becomes "we inferred X from Y; please confirm". Figure readings below come from the embedded
+rasters (`pdfimages`; Fig 1B/C at 150 ppi, Figs 3 and 7 JPEG). Colours were mapped to the printed
+colour bars and areas were integrated over channel deficits, so they are blur-tolerant but
+approximate. Sibling plan: spec 07 §8b (the same lattice serves both papers).
+
+**Cost basis (assumed, not measured).** A 300 × 192 lattice (57,600 sites, see R1) at ≈1 ms/MCS
+for plain Metropolis and ≈3–5 ms/MCS with the exact-BFS continuity term. One 14 h run is 840 MCS,
+so ≈3–4 s. The PDE step is ≪ 1 ms on this grid. A 10-replicate condition costs ≈40 s on this Mac.
+
+### 8b.1 Verdict per item
+
+| # | Item (§7 ref) | Status after this plan |
+|---|---|---|
+| R1 | µm/pixel, domain in pixels (§7.2; §7.4 q1–q2) | **Pinned by arithmetic**: p ≈ 0.554 µm, 300 × 192 sites |
+| R2 | Square vs hex; proposal neighbourhood (§7.4 q1) | **Pinned** (square, Moore-8) by figures + logic; confirm only |
+| R3 | Adhesion and BFS neighbour order (§7.4 q1) | **Screen S1**; author-confirm if unresolved |
+| R4 | Domain 166 × 106 vs "100 by 160" (§7.1 item 1) | **Pinned** (166 × 106); no question needed |
+| R5 | Table 2 16.0 µm/h vs Fig 1A ≈10 µm/h (§7.1 item 2) | **Pinned by arithmetic** (mean of the plotted points) |
+| R6 | Uptake B per site or per cell; PDE stepping (§7.2; q9) | **Screen S2** (cheap PDE-only stage first) |
+| R7 | Stroma representation; matrix/fluid volumes (§7.2; q7) | **Largely pinned** by Fig 7B + "rear retraction"; confirm |
+| R8 | Degradation rate, product, site choice (§7.2; q6) | **Rate + product pinned** by Fig 7B; site rule via **S4** |
+| R9 | Tip designation (§7.2; q4) | **Partly pinned** (not max-x each MCS, Fig 7C); author-confirm |
+| R10 | Recruitment trigger, new-cell size (§7.2; q5) | **Screen S3** |
+| R11 | EC target area (§3.3) | **Pinned by digitisation** (≈256–310 sites); S3 refines |
+| R12 | χΔV sign/which cell (§2.3; q8) | **Screen S5** |
+| R13 | Fibre bundle length, ρ measure (§2.6; q10) | **Digitised**; confirm only |
+| R14 | Table 3 χ thresholds base vs scaled (§7.1 item 7; q11) | **Pinned by logic** (base χ) |
+| R15 | CPM boundaries (§7.2) | **Screen-free default**; author-confirm (low) |
+
+### 8b.2 Evidence and arithmetic
+
+**R1 — pixel size (five independent lines agree).**
+- Fig 1C (p.3): the background "VEGF gradient" is one uniform colour. Matched to the colour bar it
+  is 1.17 × 10⁻⁴ pg (±3 %). The text says the difference between two adjacent sites is "on the
+  order of 10⁻⁴" (p.5). For a linear profile, that difference is S/(N_x − 1) = 0.035/(N_x − 1),
+  so **N_x − 1 ≈ 299** (range 292–307).
+- Axis ticks 82.8 and 52.9 are half of 165.6 × 105.8 µm. That is (N − 1)·p with N_x − 1 = 299,
+  N_y − 1 = 191 at p = 0.5538. "166 × 106" is these numbers rounded.
+- Feature sizes as integer pixels at p = 0.5538: 1.1 µm bundles = 2 px (1.108), 2.2 µm cords =
+  4 px (2.215), 7.2 µm cords = 13 px (7.199) (p.5, p.11). In 0.3–1.1 µm no other p makes all
+  three integers. p/2 (≈0.277) also does, but it fails Fig 1C (ΔV would be 0.59 × 10⁻⁴).
+- Degradation "∼(0.55 µm)²" each minute (p.11) = one site per MCS (p² = 0.307 µm²).
+- 2007 Fig 5 distances 8.9 and 26.6 µm = 16 and 48 px only for p ∈ [0.553, 0.555] (spec 07 §8b).
+- Smallest isolated fluid specks in Fig 7B (ρ = 0.975) integrate to ≈2 figure-px² ≈ 0.28 µm²,
+  i.e. one site at p ≈ 0.53–0.55. This rejects p ≥ 0.7, where one site would be ≥ 3.5 figure-px².
+- **Result: p = 0.5538 µm (interval 0.5535–0.5542), lattice 300 × 192 sites.** Derived sizes:
+  10 µm disc EC = 256 sites, sprout thickness 16.2 µm = 29 px, ρ = 0.4 of 57,600 ≈ 23,000 matrix
+  sites, and D = 600 µm²/min = 1,956 px²/MCS.
+
+**R2 — lattice type and proposals.**
+- Bundle thickness integrated across horizontal vs vertical bars in Fig 3A–C (n = 76 / 70) gives a
+  ratio of 0.997. A hex lattice with row-quantised bundles predicts 0.87 (row pitch √3/2). Vertical
+  bars render straight, not zig-zag. Jiang-lab lineage is square (spec 04: square lattice,
+  "fourth-nearest-neighbor interaction"). → **square**. Caveat: Euclidean-rasterised bundles on hex
+  would also give ≈1.
+- "Second nearest neighbors" (07 p.7) as the 2nd shell **only** (diagonals) preserves sublattice
+  parity, so each cell would split into two non-communicating checkerboards. The figures show
+  solid cells, so the reading is rejected by logic. In Jiang-lab usage "n-th nearest" means
+  shells 1…n (spec 04 §2.4). → **proposals = Moore-8**. 2009 is silent, so we inherit from 2007.
+
+**R3 — adhesion and BFS order (not pinned).**
+- Weak hint: α is "greater than the collective contribution" of the other terms (p.5). Order-1
+  adhesion gives a maximum per-flip adhesion change of 4 × 76 = 304 ≈ α = 300, while Moore-8 gives
+  608 > α. This hint is too weak to use alone.
+- Cell–cell interfaces in Fig 7A/7C show many ±45° facets. Their frequency depends on the
+  adhesion order, so it can be measured.
+
+**R4 — domain.** The Fig 1 caption, the axes of every panel and "migrate 160 µm and reach the
+domain boundary" (p.6) all give 166 (x) × 106 (y). "100 µm by 160 µm" (p.6) is the same domain,
+rounded and listed y-first. → **300 × 192 sites; drop B3 from the sheet** (or mark it "confirm").
+
+**R5 — speed conflict.**
+- Digitised Fig 1A points at 300 dpi (t = 0.1, 1, 2, 4, 6, 8, 10, 12, 14 h): 44.8, 20.2, 14.9,
+  12.4, 11.0, 10.6, 10.5, 10.2, 10.0 µm/h. Their arithmetic mean is **16.07** = Table 2 "16.0".
+- The 10 h point (10.5) is Table 2's "10.4 ± .2".
+- So "averaged over 14 hours" is the mean of the plotted cumulative speeds, not displacement/14 h.
+  V1 stands. To reproduce Table 2, compute the same statistic. **No question needed.**
+
+**R6 — uptake granularity and PDE stepping.**
+- The Fig 1C background is uniform. A steady sinh profile with √(D/λ) = 235 µm would vary the
+  slope by cosh(165.6/235) = 1.26 (26 %) across x, which is ≥ 10 colour-bar steps. Uniformity
+  (≤ 3 %) needs an effective decay length ≥ 680 µm, i.e. λ_eff ≤ D/ℓ² ≈ 0.08 h⁻¹ (≥ 8× below
+  Table 1). The same holds for 2007 Fig 4a (spec 07 §8b). So the initial profile is effectively
+  linear.
+- Per-site uptake min(β, V) at 0.06 pg/h per site is 5× the local decay λV ≈ 0.011 pg/h. Along a
+  16 µm-wide sprout it gives a dip ≈ Qℓ/2D ≈ 3 × 10⁻³ pg (≈18 % of V). That would make Fig 1C red
+  well beyond the sprout rim. Fig 1C stays background-green to the rim, and p.6 says uptake is
+  "small compared to the amount of available VEGF". Per cell (÷256 sites) the dip is ≈0.07 %.
+  → **favours per cell**.
+- Fig 1C and 7E also show 1-px rims (deviations ≈ ±0.5–0.9 × 10⁻⁴) and lines at internal EC–EC
+  borders. Uniform per-site B cannot make EC–EC lines; per-cell B (β/area differs between cells)
+  can. One physical minute of diffusion smooths over √600 ≈ 24 µm, so 1-px rims imply that
+  uptake is subtracted after the solve, or that the PDE advances far less than 1 min per MCS.
+- Physical stepping needs ≈8,000 explicit substeps per MCS (D = 1,956 px²/MCS), or an implicit
+  solver.
+
+**R7 — stroma representation.**
+- "The cells move on top of the 2D ECM model" (p.5). Fig 7B shows the matrix *under* the sprout
+  after the cells are removed, with the 14 h degradation pattern. A single-layer lattice cannot
+  show that, so a per-site substrate type is remembered under the ECs.
+- Isolated fluid specks persist at 14 h in Fig 3F and 7A/B. If matrix could copy into fluid, a lone
+  fluid site would vanish at ΔE ≈ −8 × 85 at kT = 2.5. So there are no matrix↔fluid copies.
+- "Rear retraction" (p.6) requires vacated EC sites to revert to non-EC. An "EC-only copy source"
+  single layer cannot do that.
+- → **Static substrate field m(x) ∈ {matrix, fluid}. Non-EC sites take their type from m.
+  Degradation flips m.** Matrix/fluid volume terms are then moot or near-constant ("total mass …
+  is conserved", p.13; γ_m and γ_f marked "I"). Open point: whether covered substrate counts toward
+  the collective volumes.
+
+**R8 — degradation.**
+- Fig 7B, background fluid fraction by integrated darkness: 0.025 = 1 − ρ exactly (this
+  validates the method).
+- Excess fluid inside the tunnel ≈ 310 µm² over 840 MCS = 0.37 µm²/min ≈ 1.2 sites/MCS, against
+  the stated ∼(0.55 µm)² = 1 site/MCS.
+- Degraded sites have the fluid colour → **product = fluid** (pinned).
+- They are scattered specks across a ≈22 µm tunnel (median cluster ≈1 µm²), not a contiguous
+  channel. This points to a random matrix site in or next to the tip footprint, not the front-most
+  site.
+
+**R9 — tip.**
+- In Fig 7C the 'T' cell's front is at ≈110 µm, while the lower branch's front cell reaches
+  ≈119 µm. The tip is therefore **not** re-assigned to the max-x cell every MCS.
+- The remaining candidates are a persistent identity (the initial cell) and the "furthest along
+  the sprout path" (the T branch hooks back, so its geodesic length can be larger).
+- One figure cannot separate these two.
+
+**R10/R11 — recruitment and EC size.**
+- Fig 7A has ≈17 cells over 1,617 µm² → mean ≈95 µm² ≈ 310 sites. The 10 µm disc is 256 sites.
+- 15–20 recruited in 840 MCS means one per 42–56 MCS on average. Further targets: 3 cells at 2 h,
+  5–6 at 4 h (p.6), and 16.2 µm = 29 px thickness.
+
+**R12 — χΔV.**
+- 2007 Eq 3 with x = target and μ < 0 favours up-gradient extension (spec 07 §2.3).
+- Unknown: is the term applied to the gaining cell only, or as gain − loss? The two differ at the
+  cell rear (retraction toward higher V is or is not rewarded).
+
+**R13 — fibres.**
+- Horizontal bundles in Fig 3A (ρ = 0.05, few overlaps): integrated length median 3.1 µm
+  (IQR 2.8–3.7) ≈ **6 px** → 2 × 6 px bundles. Angle set as stated (p.9).
+- Integrated green fraction per panel is 0.82–1.0× nominal ρ (rendering thins 2-px bars), and
+  0.975 is exact in Fig 7B → **ρ = site fraction**.
+
+**R14.** Table 1 χ = 1.11 × 10⁶ "maximizes" speed and sits on the Fig 8 plateau. A tip at
+1.45χ = 1.61 × 10⁶ would be "pulled apart" if the thresholds were scaled. → **base χ**.
+
+**R15.** The PDE is periodic in y (p.3). For cells no statement is made; the sprout never reaches
+y-edges in the figures. Default: periodic y, walls at x. Insensitive by construction.
+
+### 8b.3 Pre-registered screens (no runs yet; rules fixed now)
+
+**S1 — adhesion / BFS order (R3).**
+- Fixed: p = 0.5538, square, Moore-8 proposals, Table 1 values (no re-tuning).
+- Candidates: adhesion order {1, 2, 3} × BFS connectivity {4, 8} = 6 cells.
+- Targets:
+  - (a) fraction of EC–EC interface length within ±10° of 45°/135°, digitised from Figs 3B–E, 7A,
+    7C (one number with a bootstrap CI);
+  - (b) V2 thickness 16.2 ± 2.4 µm;
+  - (c) V1 at 2, 10, 14 h (±25 %);
+  - (d) V4 cell length 15–40 µm;
+  - (e) V16: kT = 0.2 dissociates, kT = 2.5 does not.
+- Rule: reject any candidate failing ≥ 2 of (b)–(e). Among survivors, pick the one closest on
+  (a). If the top two overlap in their 95 % CIs, the item is unidentified: keep order 2 / BFS 4
+  and ask.
+- 10 replicates. Cost ≈ 6 × 10 × 4 s ≈ 4 min, plus 1 min for (e).
+
+**S2 — uptake and PDE stepping (R6).**
+- Stage 1 (PDE only, no CPM). Use the sprout masks digitised from Fig 1C and 7E (cells
+  segmented). Candidates: {per site, per cell} × {physical 1 min/MCS implicit; one explicit
+  stability-limited step/MCS; solve then subtract bound} × init {steady with λ, linear}
+  = 12 cells.
+- Targets:
+  - background per-site difference 1.17 × 10⁻⁴ ± 5 % and uniform within 3 % across x;
+  - rim deviations within 0.3–1.2 × 10⁻⁴;
+  - visible EC–EC interior lines (yes/no).
+- Rule: keep candidates that pass all three. Cost: seconds.
+- Stage 2: coupled runs for the survivors (≤ 4) on V1, V3 and V17. 10 replicates each,
+  ≈3 min total.
+- If stage 1 leaves > 1 survivor, the item goes to the authors with our ranking.
+
+**S3 — recruitment (R10/R11).**
+- Triggers: {base cell loses all 4-connected contact with column 0; loses 8-connected contact;
+  base-cell COM > ½ cell diameter from the wall}.
+- New cell: {disc A_T = 256 at the last contact point; disc A_T = 310; 1-site seed grown to A_T}.
+  It starts as stalk with clock 0 (p.6).
+- Fit targets: V3 (3 @ 2 h, 5–6 @ 4 h, 15–20 @ 14 h) and the V1 curve, by summed normalised
+  squared error.
+- Holdout, not fitted: Fig 5 counts A 15, B 11, C 3, D 19, E 19 (rank C < B < A < D ≈ E) and
+  Fig 7A ≈17 cells.
+- Rule: the best fit must pass the holdout rank order. Otherwise report it as unidentified.
+- 9 cells × 10 replicates ≈ 6 min, plus holdout 5 × 10 ≈ 3 min.
+
+**S4 — degradation site rule (R8).**
+- Rate fixed at 1 site/MCS, product fluid.
+- Candidates: {random matrix site Moore-adjacent to the tip; random substrate-matrix site under
+  the tip footprint; front-most adjacent site}.
+- Targets (Fig 7B):
+  - tunnel excess area 310 µm² ± 25 %;
+  - median dark-cluster area ≤ 1.5 µm² (scattered);
+  - tunnel width 15–30 µm;
+  - V12 +20–55 % at ρ = 0.7 and 0.975;
+  - V13 tunnel > 40 µm.
+- Rule: pass all. "Front-most" is expected to fail the scatter target.
+- 3 × 4 ρ × 10 ≈ 8 min.
+
+**S5 — χΔV form (R12).**
+- Candidates: {gaining cell only; gain − loss}.
+- Targets: Fig 8 sigmoid midpoint at base χ ∈ [7, 10] × 10⁵; break-up onset ≈1.6 × 10⁶ ± 20 %;
+  V1.
+- Rule: the candidate passing both Fig 8 targets wins. If both or neither pass, ask.
+- χ grid of 8 points × 2 candidates × 10 replicates ≈ 11 min.
+
+All screens together take ≈35 min on this Mac, so they need not go to the PC (D-157 covers FULL
+runs). Each verdict is recorded in the deviations table. A screen result overrides the
+provisional choice only when its rule passes.
+
+### 8b.4 What remains for the authors (all "confirm our inference")
+
+1. **B2 (shrunk):** "From Fig 1C (adjacent-site ΔV ≈ 1.17 × 10⁻⁴ = S/299), the 82.8/52.9 axis
+   ticks, the 2.2/7.2 µm cords and the 8.9/26.6 µm distances of 2007, we infer a 300 × 192 square
+   lattice at ≈0.554 µm/px, with Moore-8 copy proposals. Correct? Which neighbour order did the
+   adhesion energy and the BFS use?"
+2. Stroma: "Fig 7B suggests a per-site substrate (matrix/fluid) under the cells, with degraded
+   sites becoming fluid. Correct? Did covered substrate count toward the matrix/fluid volumes?"
+3. Tip: "In Fig 7C the T cell is not the front-most. Was the tip a fixed identity (the initial
+   cell)?"
+4. Recruitment: only if S3 is unidentified ("our best fit is trigger X; correct?").
+5. Uptake/PDE: only if S2 leaves > 1 survivor ("Fig 1C implies a linear profile and per-cell
+   uptake; how was Eq 2 stepped per MCS?").
+6. χΔV gain-only vs gain − loss: only if S5 is inconclusive.
+7. Code or parameter file (q12): unchanged.
+
+Dropped as answered by arithmetic: B3 (domain), B4 (Table 2 speed), q11 (χ thresholds), and the
+degradation product.
+
+---
+
 ## 7. Ambiguities, conflicts, questions
 
 ### 7.1 Internal inconsistencies in the 2009 paper

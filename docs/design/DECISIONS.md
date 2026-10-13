@@ -4296,3 +4296,29 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - J1 does not gate (about 4 % on necrosis onset).
 - **Screens.** S1–S6, about 90 CPU-h, run on the PC after the P6.11 build. Each is registered as its own D-entry before it runs. The main risk is S3: one ECM factor f must hit both Fig 7 numbers.
 - **Changed.** The `G1SNetwork` sketch default in api-synthesis, the P6.11 row in ROADMAP, and the (gitignored) open question list.
+
+## D-235 Bauer 2007/2009 B2 resolved by reverse engineering: 0.554 µm/px, 300 × 192 square, Moore-8 (2026-10-13; coordinator, from the specs 05/07 §8b plans; maintainer's reverse-engineering-first direction; replaces the provisional 0.55 µm/px of the 2026-10-06 policy)
+- **Values.** p ≈ 0.554 µm/px on a 300 × 192 square lattice (166 × 106 µm), with Moore-8 copy proposals. Five independent lines of evidence (05/07 §8b):
+  - the Fig 1C background ≈ S/299;
+  - the 82.8/52.9 axis ticks are half the 165.6 × 105.8 µm domain;
+  - the 1.1/2.2/7.2 µm features are 2/4/13 px;
+  - the 2007 Fig 5 distances of 8.9/26.6 µm are 16/48 px only for p ∈ [0.553, 0.555];
+  - horizontal and vertical bundle thicknesses are equal (ratio 0.997).
+
+  Reading "second nearest" as diagonals only would split cells. Table 2's 16.0 µm/h is the mean of the Fig 1A points, so there is no conflict.
+- **P6.8 design consequence.** The 2007 Fig 4c VEGF profile is intact after 16.6 d without a source, which real D and λ at 1 h per MCS would empty within hours. So the PDE advanced far less than 1 h per MCS, and uptake was probably per cell rather than per site. P6.8 keeps both choices configurable. One screen (PDE stepping × uptake; its first, PDE-only stage takes seconds) decides.
+- **Also read from the figures:**
+  - degraded matrix becomes fluid;
+  - a fixed matrix/fluid layer lies under the cells (Fig 7B);
+  - the tip is a fixed identity, not re-picked as the leading cell (Fig 7C);
+  - the 2007 tissue cells are 24 squares of 16–17 px.
+- **Screens.** All 2D, 10–12 replicates each, about 45 min in total, each with a pre-registered rule and its own D-entry before it runs:
+  - adhesion/BFS neighbour order;
+  - PDE stepping × uptake;
+  - recruitment trigger and new-cell size (fitted to the 2 h/4 h/14 h counts, Fig 5 held out);
+  - degradation site choice and the 2007 rate;
+  - the 2007 proliferation rule;
+  - chemotaxis on gain only vs gain − loss.
+
+  They run on the PC once P6.8 and P6.9 exist.
+- **B2** is no longer a gate. It becomes a confirm-question.
