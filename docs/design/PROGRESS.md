@@ -2324,3 +2324,15 @@ The maintainer approved F-1…F-6 (D-049).
 - **Problem.** The other nine closeups are about 65–75 % tissue with the rim running from the top edge to the right edge. Ours was 56.3 % tissue, rim corner to corner, with a white margin and no frame.
 - **Change.** Same size (64 × 64) and same state (case (a) run 1, seed 15701, MCS 11600, N = 10001); the centre moves inward along the same ray. Chosen: offset (971, 969), 69.7 % tissue, 53 cells. `openvt_f1_figure` now fills the image edge to edge with a thin grey frame. The D-175 block is kept with the suffix `_d175`. The frozen F1/F4 test passes (139/139).
 - **Release.** GitHub refused the asset swap because the 12 Oct release is immutable. With the maintainer's OK the rebuilt core (13,464,338 B) and the same six bulk files were published as `openvt-monolayer-submission-2026-10-12b` on a961e5a8, marked Latest. Releases on this repository are immutable, so any change needs a new release.
+
+## 2026-10-13 — P6.0cb: one control convention on the status page
+
+- **Convention.** A verdict row is a control when its `required` column is non-empty: PASS or FAIL, the result the control must show. FAIL means the row applies the model's band to a broken model; PASS means the row states the control's own rule. Ordinary rows leave it empty. The column sits before `result`, because the frozen 04 record tier reads `result` as the last column.
+- **Records migrated mechanically** (column added, no value or verdict changed): 01b (the 7 NC rows, FAIL; its `control` column stays for the frozen page), 04 (C-V1, C-V9, C-V12, C-V16, PASS), 09 FULL (the 3 NC1 rows, PASS) and 10 FULL (the 4 "control:" rows, PASS). The 01b and 04 runners now write the column.
+- **Not migrated.** The 15 records are pinned byte for byte by frozen tests (D-211). `docs/status/render.jl` reads them by their own rule: "control: must FAIL" requires FAIL; a control case's own verdict row requires PASS; the control arm's other rows are information.
+- **Page.** Controls are counted apart as "N of M as required", in the status table and the records table. Rows of `kind` `info` (04) are now information rows. Counts before → after:
+  - 01: 64 PASS / 2 FAIL, 7 of 7 controls failing → 64 / 2, 7 of 7 as required.
+  - 04: 28 / 24 → 18 / 24, 4 of 4, 6 information rows. This now matches the 04 page and models.toml.
+  - 09: 35 / 2 → 32 / 2, 3 of 3. 10: 124 / 2 → 120 / 2, 4 of 4.
+  - 15: 63 / 6, 12 of 15 failing → 62 / 6, 9 of 9 (f5's control arm is 7 information rows; f3-f8's "Controls fail as pre-registered" is a control row).
+- **Test.** `julia --startup-file=no docs/status/test_render.jl`: synthetic rows for every encoding, plus the committed 01, 01b and 04 counts.

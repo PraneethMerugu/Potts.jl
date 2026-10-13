@@ -16,7 +16,7 @@
 # in <out>/full-01b-<date>/:
 #   sweeps.tsv      key, fig, curve, x, seed, C_N, C_N100
 #   series.tsv      key, arm, seed, t, C, dH            (t = 0:50:5100)
-#   verdicts.tsv    row, check, ours, rule, result, control  (the frozen `p63f1b_verdicts`,
+#   verdicts.tsv    row, check, ours, rule, required, result, control  (the frozen `p63f1b_verdicts`,
 #                   applied to the means of the two files above as the record tier reads them)
 #   job_walls.tsv   key, wall_s, finished
 #   provenance.toml item, commit, dirty, frozen_test_sha256, runner_sha256, cpu, threads,
@@ -276,9 +276,12 @@ msweep, mseries = p63f1b_means(p63f1b_tsv(joinpath(REC, "sweeps.tsv")), p63f1b_t
 V = p63f1b_verdicts(msweep, mseries)
 clean(s) = replace(s, r"[\t\n]" => " ")
 open(joinpath(REC, "verdicts.tsv"), "w") do io
-    tsvline(io, "row", "check", "ours", "rule", "result", "control")
+    # `required`: the result a negative control must show (P6.0cb); `control` stays for the
+    # frozen page, which reads it
+    tsvline(io, "row", "check", "ours", "rule", "required", "result", "control")
     for v in V
-        tsvline(io, clean(v.row), clean(v.check), clean(v.ours), clean(v.rule), v.ok ? "PASS" : "FAIL", v.control)
+        tsvline(io, clean(v.row), clean(v.check), clean(v.ours), clean(v.rule), v.control ? "FAIL" : "",
+            v.ok ? "PASS" : "FAIL", v.control)
     end
 end
 launches = filter(!isempty, readlines(joinpath(OUT, "launches.tsv")))[2:end]

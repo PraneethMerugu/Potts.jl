@@ -11,9 +11,14 @@
 #
 # Counting rules (stated on the page):
 # - the `result` column is read; PASS, FAIL and PARKED are counted, every other value
-#   (`info: …`, `reported`) is information;
-# - a negative-control row (case `control`, or a band saying "control: must FAIL") is not a
-#   verdict on the model; the records table shows how many control rows fail, of how many;
+#   (`info: …`, `reported`) is information, as is a row of `kind` `info` (record 04);
+# - a control row is one with a non-empty `required` column: the result (PASS or FAIL) the
+#   control must show (P6.0cb). It is not a verdict on the model; controls are counted apart,
+#   as "N of M as required". Records without the column (the byte-pinned 15 records) are read
+#   by their own convention: a band saying "control: must FAIL" requires FAIL; a `case`
+#   `control` row whose target names the control's own verdict requires PASS; the other rows
+#   of a control arm (judged against the model's bands, with no required outcome) are
+#   information;
 # - a summary row ("… (all rows)") restates other rows and is not counted, nor is a per-point
 #   line (`check` "point …") that its curve's row judges;
 # - a PARKED row is superseded, and not counted, when another record of the same model has a
@@ -30,8 +35,15 @@ function _read_tsv(path)
     return head, [Dict(zip(head, String.(split(l, '\t')))) for l in lines[2:end]]
 end
 
-_is_control(r) = get(r, "case", "") == "control" || get(r, "control", "") == "true" ||
-                 any(v -> occursin("control: must FAIL", v), values(r))
+# the result a control row must show ("PASS" or "FAIL"), "" for an ordinary row, or
+# "none" for a control-arm row with no required outcome (information)
+function _required(r)
+    haskey(r, "required") && return strip(r["required"])
+    # records that predate the column (data/15, whose files are byte-pinned by frozen tests)
+    any(v -> occursin("control: must FAIL", v), values(r)) && return "FAIL"
+    "control" in strip.(split(get(r, "case", ""), ',')) || return ""
+    return occursin(r"control"i, _target(r)) ? "PASS" : "none"
+end
 _target(r) = get(r, "target", get(r, "criterion", ""))
 # a per-point line (`check` "point …", 01b) is judged inside its curve's row
 _is_summary(r) = occursin("(all rows)", _target(r)) || startswith(get(r, "check", ""), "point ")
@@ -52,14 +64,17 @@ function _record_rows(dir)
 end
 
 function _count(rows, all_rows)
-    c = Dict("PASS" => 0, "FAIL" => 0, "PARKED" => 0, "controls" => 0, "controls_failing" => 0,
+    c = Dict("PASS" => 0, "FAIL" => 0, "PARKED" => 0, "controls" => 0, "controls_as_required" => 0,
         "info" => 0, "superseded" => 0)
     for r in rows
         res = strip(get(r, "result", ""))
         _is_summary(r) && continue
-        if _is_control(r)
+        req = _required(r)
+        if req in ("PASS", "FAIL")
             c["controls"] += 1
-            res == "FAIL" && (c["controls_failing"] += 1)
+            res == req && (c["controls_as_required"] += 1)
+        elseif req == "none" || get(r, "kind", "") == "info"
+            c["info"] += 1
         elseif res == "PARKED"
             id = _target_id(r)
             sup = any(o -> o["_file"] != r["_file"] && _target_id(o) == id &&
@@ -154,6 +169,7 @@ const BUILD_ORDER = [
 ]
 
 _cell(s) = replace(String(s), "|" => "∣")
+_controls(c) = c === nothing || c["controls"] == 0 ? "—" : "$(c["controls_as_required"]) of $(c["controls"])"
 
 function render_status(; published::Bool = false)
     models = TOML.parsefile(joinpath(STATUS_DIR, "models.toml"))["model"]
@@ -181,8 +197,8 @@ function render_status(; published::Bool = false)
 
     ## Status
 
-    | # | Model | Status | PASS | FAIL | PARKED | Open deviations | Page |
-    |:--|:------|:-------|-----:|-----:|-------:|:----------------|:-----|""")
+    | # | Model | Status | PASS | FAIL | PARKED | Controls as required | Open deviations | Page |
+    |:--|:------|:-------|-----:|-----:|-------:|---------------------:|:----------------|:-----|""")
     details = IOBuffer()
     for m in models
         nn = m["spec"]
@@ -203,17 +219,17 @@ function render_status(; published::Bool = false)
         elseif haskey(m, "models_page")
             push!(links, "[model page](@ref $(m["models_page"]))")
         end
-        println(io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $devs | ",
+        println(io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $(_controls(counts)) | $devs | ",
                 isempty(links) ? "—" : join(links, ", "), " |")
         isempty(recs) && continue
         println(details, "\n### $nn: $(m["name"])\n")
-        println(details, "| Record | PASS | FAIL | PARKED | Control rows failing | Information rows | Machine and backend | Run time | Commit |")
+        println(details, "| Record | PASS | FAIL | PARKED | Controls as required | Information rows | Machine and backend | Run time | Commit |")
         println(details, "|:--|--:|--:|--:|--:|--:|:--|:--|:--|")
         for r in recs
             c = _count(r.rows, all_rows)
             p = _provenance(r.dir)
             sup = c["superseded"] > 0 ? " (+$(c["superseded"]) superseded)" : ""
-            ctl = c["controls"] == 0 ? "—" : "$(c["controls_failing"]) of $(c["controls"])"
+            ctl = _controls(c)
             println(details, "| `data/$(m["data"])/$(r.name)/` | $(c["PASS"]) | $(c["FAIL"]) | $(c["PARKED"])$sup | ",
                     "$ctl | $(c["info"]) | $(p.machine) | $(p.run) | $(p.commit) |")
         end
@@ -237,10 +253,18 @@ function render_status(; published::Bool = false)
     ## How the counts are made
 
     - Each record's `verdicts*.tsv` is read, and its `result` column counted: PASS, FAIL and
-      PARKED. Every other value (`info: in band`, `reported`) is an information row.
-    - A negative-control row (a deliberately broken model or parameter set that the target
-      must reject) is not a verdict on the model and is not counted. The records table shows
-      how many control rows fail; the frozen tests decide which control rows must fail.
+      PARKED. Every other value (`info: in band`, `reported`) is an information row, as is a
+      row the record marks as information (`kind` `info`).
+    - A control row (a deliberately broken model or parameter set, or a reference arm) is not
+      a verdict on the model and is not counted with the checks. Its `required` column gives
+      the result it must show: FAIL when the row applies the model's target to a broken model
+      (which the target must reject), PASS when the row states the control's own rule. The
+      "Controls as required" columns count the control rows whose result is the required one,
+      "N of M". The frozen tests fix which rows are controls and what each requires.
+    - The OpenVT records predate the `required` column and are pinned byte for byte: there a
+      band saying "control: must FAIL" requires FAIL, a control case's own verdict row requires
+      PASS, and the control case's other rows (the model's bands applied to the control, with
+      no required outcome) are information rows.
     - A summary row ("… (all rows)") repeats other rows and is not counted. Nor is a
       per-point line (`check` "point …"): its curve's row is the verdict.
     - A PARKED row is "superseded" when another record of the same model measures the same

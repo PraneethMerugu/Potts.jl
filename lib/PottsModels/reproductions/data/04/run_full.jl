@@ -284,9 +284,12 @@ REC = joinpath(OUT, "record")
 V = p64r_verdicts(R)
 p64r_write(REC, R)
 open(joinpath(REC, "verdicts.tsv"), "w") do io
-    println(io, "id\tkind\tvalue\tband\tresult")
+    # `required`: the result a negative control must show (P6.0cb); empty for other rows.
+    # It sits before `result`, which the frozen record tier reads as the last column.
+    println(io, "id\tkind\tvalue\tband\trequired\tresult")
     for v in V
-        println(io, join((v.id, v.kind, repr(v.value), v.band, v.ok ? "PASS" : "FAIL"), '\t'))
+        println(io, join((v.id, v.kind, repr(v.value), v.band, v.kind === :control ? "PASS" : "",
+            v.ok ? "PASS" : "FAIL"), '\t'))
     end
 end
 git(args...) = try
