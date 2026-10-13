@@ -565,6 +565,13 @@ The grids:
 
 **Record.** `data/04/eq2-screen-hiT-<date>/`, written by the same runner with `--only r3h`.
 
+**Result (2026-10-13; record `data/04/eq2-screen-hiT-2026-10-13/`).** Neither temperature passes stage 1, and neither is confounded: the β = 0 controls had 0 of 15 yields and 0 T1s at each T.
+- **The cliff is gone at T ≥ J.** t_first falls smoothly with κ_b.
+- **T = 3: `consistency`.** Both targets are met together at κ̂ ≈ 0.26, but β = 10⁻³ has no T1 within 2¹⁶ paper MCS until κ_b ≈ 0.6.
+- **T = 5: `off_target`.** κ̂ = 0.10 and 0.18; the response is near-linear, so ε_y(0.05) ≈ ε_y(0.01).
+- **In ε_y terms:** below T ≈ J the bias pins; above it, ε_y climbs without bound as β falls. The paper's low-β plateau ("the yield strain remains almost the same", p.5827) appears at no tested T.
+- **Inference, not a ruling:** the paper's bulk shear behaves like an imposed deformation, not a per-copy energy bias. F1 is re-sharpened to ask how the bulk shear was applied. Foam's bulk-shear claims stay provisional. No further Eq 2 screens are planned without new evidence.
+
 ## 6. Required general features
 
 | ID | Needed? | Use |

@@ -1,0 +1,27 @@
+["c_T3.0"]
+t1_total = 0.0
+yielded = 0
+runs = 15
+control = "beta_model = 0"
+temperature = 3.0
+
+["c_T5.0"]
+t1_total = 0.0
+yielded = 0
+runs = 15
+control = "beta_model = 0"
+temperature = 5.0
+
+["r3_T3.0"]
+kappa_b = "nothing"
+khat = [0.22072613330194202, 0.3096278681348486]
+reason = "consistency"
+path = "interp"
+temperature = 3.0
+
+["r3_T5.0"]
+kappa_b = "nothing"
+khat = [0.1028226382983037, 0.17607461445230282]
+reason = "off_target"
+path = "interp"
+temperature = 5.0
