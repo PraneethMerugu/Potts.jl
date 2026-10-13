@@ -4261,3 +4261,25 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Record.** It is an amendment to `data/15/f1-f4-2026-10-08/` (the D-146 record), so the package keeps one P6.15h record. The D-175 block, its cells and its three figures are kept with the suffix `_d175`.
 - **Package and release.** `core.zip` is rebuilt so that `results/Potts.jl/closeup.png` is the new panel, with the README's F1 rows describing the new window. The bulk assets are unchanged. Replacing the asset on the 12 Oct release needs the maintainer's OK at that moment.
 - **Outcome (2026-10-12).** GitHub refused the asset swap because the 12 Oct release is immutable ("Cannot delete asset from an immutable release"), and nothing on it changed. With the maintainer's OK, the new core (sha256 `c12a756b…b050`, 13,464,338 B) and the same six bulk files (unchanged sha256s) were published as `openvt-monolayer-submission-2026-10-12b` on a961e5a8, marked Latest, with the updated body. The downloaded core's sha256 matches. Releases on this repository are immutable once published, so any change means a new release.
+
+## D-231 P6.5a tests frozen: R6 cell references, D-066 liveness, claim widening (2026-10-13; coordinator, from the P6.5a test author; under D-058, D-065, D-066, D-075, D-209)
+
+- **Frozen.** `lib/PottsModels/test/acceptance/p6_5a_cell_refs.jl` (sha256 `f621ba92…5d42`). Its header states the API.
+  - **Declaring.** `@variables partner(cell)::CellRef` (a new DSL name), stored as an integer column. Daughters copy it, updates write it, and it compares with `id`.
+  - **Sources.** `sibling(k)`, `sibling(c, k)`, `root(cluster)`, and the fold domains `members(cluster[, k])` over alive members.
+  - **Dereferencing.** `x[ref]`, `kind[ref]`, `volume[ref]`, `birth[ref]`, `alive(ref)`, and chains. A dead referent or 0 reads as the medium (cell variables at their declared defaults).
+  - **Liveness (D-066).** `alive` ≡ volume > 0. `birth` is a serial in `u.cell.birth::Vector{Int32}` that survives checkpoints. A reused slot never gets a dead cell's serial. References to dead cells are reset to 0 in the event MCS's lifecycle plan, before any id is allocated.
+  - **Claims.** Every cell a copy's sweep functions reach through a reference (each hop of a chain) is in `f.reads ∪ f.claims`.
+- **Design choices (the test author's, from precedent; coordinator-confirmed).**
+  1. An `@energy` may read only static values through a reference: cell variables, `kind`, `birth`, `alive`. A copy-varying read (`volume[partner]`) in an energy is refused with D-209's ArgumentError. Drives and constraints may read it.
+  2. ΔH reads referents in the pre-copy state. When a copy kills a referent, the self-check's killing credit adds the change of every alive reader, on top of the dead cell's own energy (D-066 item 5, "exact self-check credits").
+  3. `partner` is a user variable, not a built-in.
+  4. `sibling`, `members` and `root` are pinned in cell scope only. A model that reads references only outside the sweep keeps `has_reads(f) == false`, with no extra claims (D-058).
+- **Statistical protocol (D-065 Q7), pre-registered.**
+  - **Fixture.** Two separated cells with `partner = [2, 1]` and the drive κ(1 ∓ 2(V − V_partner)), κ = 6, T = 24.
+  - **Statistic.** Per replicate, the mean of (V₁ − V₂)² over MCS 50–400.
+  - **Per-push test.** 32 replicates per arm, Welch t, |t| ≤ 3.89 (α = 1e-4) for Checkerboard against Sequential and for a seed-null arm. The stripped-claims negative control must exceed it.
+  - **FULL tier.** Exact claims still leave CheckerboardCPM a −2.4 % ± 0.5 % bias on this fixture, so the FULL tier tests a margin instead: 200 × 1000 MCS, and the 99.9 % interval of the relative difference must lie within ±6 %. Calibration on a hand-installed widening gave [−4.1, −0.8] % against [+14.7, +18.0] % for the control.
+  - **Device.** The checkerboard on the device against the CPU sequential sample.
+- **Scope.** `centroid(c, k)`, `separation` and `minimum_image` (D-075, api-synthesis §6.4) are not in this freeze. They go to P6.5a2 with their own tests.
+- **Left open (unpinned).** D-066's output mapping to `birth` (SII ids, `cluster`, plots, PIFF), `with_capacity`, a daughter that receives no site, `sibling(k)` with several alive members of kind k, and the raw value of a reference to a dead cell.

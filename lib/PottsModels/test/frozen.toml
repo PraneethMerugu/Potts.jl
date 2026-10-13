@@ -581,3 +581,8 @@ decision = "D-226"
 path = "reproductions/15_openvt_d213.jl"
 sha256 = "b4ac5a915e44413d6841e60c3d3916474fac46b27a8f2afd37b5e19c204c610b"
 decision = "D-217"
+
+[[file]]
+path = "acceptance/p6_5a_cell_refs.jl"
+sha256 = "f621ba9228fe4b972c630547502d6cbf14bd6b55f1ddcb84e763cb75b9ce5d42"
+decision = "D-231"
