@@ -34,29 +34,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Julia on PATH
         run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
-      - name: Resolve and instantiate the workspace
+      - name: Resolve, instantiate and precompile the workspace
+        # Precompiled once, before the parallel step, so the parallel processes only read the
+        # shared depot's compile cache (no concurrent precompilation of the same package).
         run: |
           julia --version
           julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+          for p in test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
+            $PIN julia --project=$p -e 'using Pkg; Pkg.precompile()'
+          done
       - name: Frozen acceptance tests are unchanged
         run: $PIN julia --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")'
+      - name: Test suites in parallel (PottsModels ×3, GPU, Potts, CorePotts + MakiePotts)
+        # .github/ci/parallel.sh: one process per disjoint physical-core pair (with its SMT
+        # siblings) on 0-11/16-27; each log is printed in its own group with its wall time and
+        # exit code, and any failure fails this step. OPENVT_PACKAGE_BULK: the OpenVT package's
+        # bulk inputs (the O1 archives and O2 files, ~320 MB, outside git; D-204, D-206), kept on
+        # the runner under its home directory. The package test
+        # (reproductions/15_openvt_package.jl) is red without them, by design.
+        env:
+          POTTS_CI_LOGS: ${{ runner.temp }}/potts-ci-logs
+        run: OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" bash .github/ci/parallel.sh
       - name: Benchmark tooling tests (machine lock, exclusive.sh transition)
+        # after the parallel step, alone on the cores: the A/B harness test times runs
         env:
           TMPDIR: ${{ runner.temp }}
         run: |
           for f in benchmark/test/*.jl; do
             $PIN julia --project=benchmark "$f"
           done
-      - name: CorePotts
-        run: GROUP=CorePotts $PIN julia --project=test test/runtests.jl
-      - name: Potts
-        run: GROUP=Potts $PIN julia --project=test test/runtests.jl
-      - name: PottsModels
-        # OPENVT_PACKAGE_BULK: the OpenVT package's bulk inputs (the O1 archives and O2 files,
-        # ~320 MB, outside git; D-204, D-206), kept on the runner under its home directory. The
-        # package test (reproductions/15_openvt_package.jl) is red without them, by design.
-        run: OPENVT_PACKAGE_BULK="$HOME/potts-ci/openvt-bulk" GROUP=PottsModels $PIN julia -t 4 --project=test test/runtests.jl
-      - name: MakiePotts
-        run: GROUP=MakiePotts $PIN julia --project=test test/runtests.jl
-      - name: GPU group (ROCm)
-        run: GROUP=GPU POTTS_GPU=rocm $PIN julia --project=test test/runtests.jl

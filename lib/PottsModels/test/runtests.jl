@@ -1,6 +1,6 @@
 # PottsModels: every model builds, compiles and runs, and its derived ΔH matches the brute-
 # force energy difference; mechanism tests (mechanisms.jl) check what each model is for.
-using Test, Potts, PottsModels, Aqua
+using Test, Potts, PottsModels, Aqua, TOML
 using Potts: CorePotts
 using Statistics: mean
 # device selection (D-157): the acceptance files' device testsets run here only when
@@ -27,7 +27,18 @@ function selfcheck(prob; n = 200)
     return worst
 end
 
-@testset "PottsModels" begin
+# POTTSMODELS_SHARD = "k/n" (default "1/1", everything): CI runs the files below in n
+# parallel processes (.github/ci/parallel.sh). Files are dealt to shards by longest-first
+# greedy over their measured wall times (shard_weights.toml; a file it does not list weighs
+# its median), so every process computes the same split and every file runs in exactly one
+# shard. Shard 1 also runs the model checks below and Aqua.
+const POTTSMODELS_SHARD = let (k, n) = parse.(Int, split(get(ENV, "POTTSMODELS_SHARD", "1/1"), '/'))
+    1 <= k <= n || throw(ArgumentError("POTTSMODELS_SHARD = $k/$n: need 1 ≤ k ≤ n"))
+    (k, n)
+end
+const POTTSMODELS_FIRST_SHARD = POTTSMODELS_SHARD[1] == 1
+
+POTTSMODELS_FIRST_SHARD && @testset "PottsModels" begin
     σ, kinds = graner_glazier_state()
     @test size(σ) == (72, 72) && length(kinds) == 64 && size(first(graner_glazier_state(2))) == (144, 144)
     two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
@@ -139,11 +150,30 @@ const POTTSMODELS_TEST_FILES = [
     (joinpath("reproductions", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "reproductions")))))...,
 ]
 
+function pottsmodels_shards(files, n)
+    weights = let p = joinpath(@__DIR__, "shard_weights.toml")
+        isfile(p) ? Dict{String, Float64}(k => Float64(v) for (k, v) in TOML.parsefile(p)["seconds"]) : Dict{String, Float64}()
+    end
+    known = [weights[f] for f in files if haskey(weights, f)]
+    fallback = isempty(known) ? 1.0 : sort(known)[cld(length(known), 2)]
+    w(f) = get(weights, f, fallback)
+    load = zeros(n)
+    shard = Dict{String, Int}()
+    for f in sort(files; by = f -> (-w(f), f))                # longest first, ties by name
+        j = argmin(load)
+        shard[f] = j
+        load[j] += w(f)
+    end
+    return [[f for f in files if shard[f] == j] for j in 1:n]
+end
+const POTTSMODELS_SHARD_FILES = pottsmodels_shards(POTTSMODELS_TEST_FILES, POTTSMODELS_SHARD[2])[POTTSMODELS_SHARD[1]]
+POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
+
 @testset "PottsModels files" begin
-    @testset "$f" for f in POTTSMODELS_TEST_FILES
+    @testset "$f" for f in POTTSMODELS_SHARD_FILES
         include(joinpath(@__DIR__, f))
     end
-    @testset "Aqua" begin
+    POTTSMODELS_FIRST_SHARD && @testset "Aqua" begin
         Aqua.test_all(PottsModels; deps_compat = (; check_extras = false))
     end
 end
