@@ -239,3 +239,96 @@ cr_old_layout(st) = CorePotts.CPMState(st.σ, Base.structdiff(st.cell, NamedTupl
     solve!(integ2)
     @test Symbol(integ2.retcode) === :Success
 end
+
+# E4/E5/E8 (ergonomics review): the reference debug mode `track = (:references,)`, the
+# `sibling` rule with several members, and the refusal message naming the alternatives
+
+@potts_model CRSibling begin
+    @kinds medium cyto nucleus
+    @parameters begin
+        V₀[kind] = [0.0, 30.0, 4.0]
+    end
+    @variables begin
+        nuc(cell)::CellRef
+        q(cell) = 5.0
+    end
+    @lattice Lattice((16, 16); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells => 4.0 * (volume - V₀[kind])^2
+        contacts => ifelse(cluster[owner] == cluster[owner′], 0.5, 1.0)
+    end
+    @after_mcs nuc ~ sibling(nucleus)
+    @divide cells(cyto) when = mcs == 100000, along = (1.0, 0.0)
+    @sweep Metropolis(; temperature = 0.01)
+end
+
+@potts_model CRBadVolume begin
+    @kinds medium ka
+    @variables begin
+        partner(cell)::CellRef
+    end
+    @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => (volume - volume[partner])^2
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+function cr_dead_problem(; track = ())
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[3:5, 6:8] .= 2; σ[9, 9] = 3
+    p = PottsProblem(CROnCopy(; name = :rb), [ownership => σ, :partner => [3, 3, 0], :q => [1.0, 2.0, 3.0]],
+        (0, 2); capacity = 4, track)
+    u = deepcopy(p.u0); u.σ[9, 9] = 0; u.cell.volume[3] = 0        # cell 3 is dead: 1 and 2 read it
+    return remake(p; u0 = u)
+end
+
+@testset "track = (:references,) counts dereferences of dead referents (E4)" begin
+    plain = cr_dead_problem()
+    tracked = cr_dead_problem(; track = (:references,))
+    # off: no counters, no counting code, no warning
+    @test !haskey(plain.u0.model, Potts.REF_COUNTS)
+    σ0 = copy(plain.u0.σ); σ0[9, 9] = 3
+    @test plain.f.fingerprint == PottsProblem(CROnCopy(; name = :rb), [ownership => σ0, :partner => [3, 3, 0]],
+        (0, 2); capacity = 4).f.fingerprint
+    @test tracked.f.fingerprint != plain.f.fingerprint
+    @test_logs solve(plain, SequentialCPM())
+    # on: one warning naming the energy term
+    @test haskey(tracked.u0.model, Potts.REF_COUNTS)
+    @test_logs (:warn, r"@energy cells read a dead referent \d+ time") solve(tracked, SequentialCPM())
+    @test_logs (:warn, r"@energy cells read a dead referent") solve(tracked, CheckerboardCPM())
+    # the debug mode changes nothing in the run
+    a = solve(plain, SequentialCPM()).u[end]
+    b = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+        solve(tracked, SequentialCPM()).u[end]
+    end
+    @test a.σ == b.σ
+    # `remake` switches it, and a state of the untracked problem fits the tracked one
+    @test haskey(remake(plain; track = (:references,)).u0.model, Potts.REF_COUNTS)
+    @test !haskey(remake(tracked; track = ()).u0.model, Potts.REF_COUNTS)
+    @test haskey(remake(tracked; u0 = plain.u0).u0.model, Potts.REF_COUNTS)
+end
+
+@testset "sibling(k) with several members: the lowest birth, reported in the debug mode (E5)" begin
+    σ = zeros(Int32, 16, 16); σ[3:9, 3:9] .= 1; σ[4:5, 4:5] .= 2; σ[7:8, 7:8] .= 3
+    mk(track) = PottsProblem(CRSibling(; name = :s), [ownership => σ, kind => [:cyto, :nucleus, :nucleus],
+            cluster => [1, 1, 1]], (0, 1); capacity = 6, track)
+    p = mk(())
+    @test solve(p, SequentialCPM()).u[end].cell.nuc[1] == 2                  # birth = slot: 2 is older
+    u = deepcopy(p.u0); u.cell.birth[1:3] .= Int32[1, 7, 3]                   # now 3 is older
+    @test solve(remake(p; u0 = u), SequentialCPM()).u[end].cell.nuc[1] == 3
+    t = mk((:references,))
+    @test_logs (:warn, r"sibling\(k\) found several alive members") solve(t, SequentialCPM())
+    @test_logs solve(p, SequentialCPM())                                       # untracked: silent
+end
+
+@testset "the D-209 refusal through a reference names the alternatives (E8)" begin
+    err = try
+        PottsProblem(CRBadVolume(; name = :bv), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 1))
+        nothing
+    catch e
+        e
+    end
+    @test err isa Exception
+    msg = sprint(showerror, err)
+    @test occursin("a copy changes", msg)
+    @test occursin("Read it in a `@drive` (evaluated per copy", msg)
+    @test occursin("snapshot it with `@after_mcs`", msg)
+end

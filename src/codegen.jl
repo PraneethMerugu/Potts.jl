@@ -293,7 +293,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, :δeuler => :($T($δe)), :δeuler_full => :($T($(c.uses_euler_full ? δf : δe))),
                 :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)),
                 _pieces_binds(c, T, side)..., oc_binds...))
-            push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
+            push!(terms, :($(_kindtest(k, kinds)) && (dH += $(_with_ref_term(() -> lower(ΔE, env), _term_label(c, kinds))))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
     end
@@ -311,7 +311,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
         push!(body, :(dH += $Eafter - $before))
     end
-    drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
+    drives && c.drive !== nothing &&
+        push!(body, :(dH += $(_with_ref_term(() -> lower(c.drive, _proposal_env(T, rn)), "@drive"))))
     push!(body, :(return $T(dH)))
     return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, body...))))
 end
@@ -403,7 +404,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
         opts = _is_ref_var(x) ? (; reference = true) : (;)
         after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, opts)))
         push!(binds, name => Symbol(:v_oncopy_, j))
-        push!(vals, :($(Symbol(:v_oncopy_, j)) = $(lower(u.eq.rhs, _proposal_env(T, rn)))))
+        push!(vals, :($(Symbol(:v_oncopy_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, _proposal_env(T, rn)), _update_label(u)))))
     end
     return after, binds, vals
 end
@@ -429,7 +430,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
         # the commit may run in parallel (checkerboard): no whole-cell search there (P6.9a)
         _reads_global(u.eq.rhs) && throw(ArgumentError("@on_copy: `connected(…; rule = Global())` reads the whole cell; use it in @constraint or @drive"))
         v = Symbol(:v_, j)
-        push!(vals, :($v = $(lower(u.eq.rhs, env))))
+        push!(vals, :($v = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))))
         push!(writes, _write(_unwrap(u.eq.lhs), v, env))
     end
     append!(body, vals)
@@ -1411,7 +1412,7 @@ function _site_update_phases(c, T, us, every, rn)
     env = _site_env(T, :i, rn; mcs = :mcs, key = :key, bc = _face_bcs(c))
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     buffered = any(in(c.scratch), names)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         dst = buffered ? Symbol(n, :__next) : n
         :(@inbounds st.site.$dst[i] = $(Symbol(:v_, j)))
@@ -1448,7 +1449,7 @@ _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
 
 function _model_update_expr(c, T, us, every, rn)
     env = _model_env(T, rn; key = :key)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.model.$(info(_unwrap(u.eq.lhs)).name)[1] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs) -> $(Expr(:block, gate, vals..., writes..., :(return nothing))))
@@ -1456,7 +1457,7 @@ end
 
 function _cell_update_expr(c, T, us, every, rn)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.cell.$(info(_unwrap(u.eq.lhs)).name)[c] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, gate,
@@ -1482,7 +1483,7 @@ end
 function _edge_update_expr(c, T, r::Symbol, us, every, rn)
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     env = _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         col = :(st.cell.$(Symbol(:link_, n)))
         :(@inbounds ($col[ek, ea] = $(Symbol(:v_, j)); $col[kb, eb] = $(Symbol(:v_, j))))
@@ -1699,6 +1700,28 @@ function _lifecycle(c::CompiledPottsSystem, T)
         cluster_divide! = _division_rules(c, clusterids, T, :(CorePotts.cluster_of(st.cell, parent)), ruled),
         every = g, rules = ruled, release = _release(c))
 end
+
+# Reference diagnostics (E4/E5, `track = (:references,)`): the terms whose dereferences of
+# dead referents are counted, each one slot of `st.model[REF_COUNTS]`, and the slot of
+# `sibling` scans that found several members
+_term_label(c::CompiledPottsSystem, kinds) =
+    isempty(kinds) ? "@energy cells" : "@energy cells($(join((getfield(c.sys, :kinds)[k + 1] for k in kinds), ", ")))"
+function _update_label(u)
+    l = _unwrap(u.eq.lhs)
+    i = info(l)
+    i === nothing && iscall(l) && operation(l) === at && (i = info(arguments(l)[1]))     # `x[new]` on copy
+    return "update of `$(i === nothing ? l : i.name)`"
+end
+function _ref_count_labels(c::CompiledPottsSystem)
+    labels = String[_term_label(c, ks) for (ks, _) in _sorted(_group_terms(c.cell_terms))]
+    append!(labels, ("@drive", "@constraint", "@sweep temperature", "@divide"))
+    for (_, us) in _sorted(c.updates), u in us
+        push!(labels, _update_label(u))
+    end
+    push!(labels, _SIBLING_LABEL)
+    return unique!(labels)
+end
+_ref_count_slots(c::CompiledPottsSystem) = Dict(l => j for (j, l) in enumerate(_ref_count_labels(c)))
 
 # The model's `CellRef` columns, in declaration order (R6)
 _ref_columns(c::CompiledPottsSystem) = Symbol[info(x).name for x in getfield(c.sys, :variables) if _is_ref_var(x)]

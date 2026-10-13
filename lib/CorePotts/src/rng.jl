@@ -142,6 +142,9 @@ negative `σ` gives NaN and `STATUS_DRAW_NEGATIVE_SD`.
 end
 @inline _set_status!(::Nothing, bit) = nothing
 @inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)     # status has 1 entry
+# a diagnostic counter (`Potts`' `track = (:references,)`): entry `j` of `cnt` (j in range by
+# construction) incremented atomically, on the host or the device
+@inline _bump!(cnt, j) = (Atomix.@atomic cnt[j] += one(eltype(cnt)); nothing)
 # the model's status word at a host read point (`_check_status!`); 0 without one
 _model_status(stats, model::NamedTuple) = haskey(model, MODEL_STATUS) ? _readback(stats, getfield(model, MODEL_STATUS)) : UInt32(0)
 _model_status(stats, model) = UInt32(0)
