@@ -70,7 +70,7 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler,
-    :largest_piece)
+    :largest_piece, :birth)
 # `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
 # forms: reserved, not bound
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
@@ -216,6 +216,7 @@ function _prime_targets(parts::_Parts, body::Expr)
         for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
             decl = l isa Expr && l.head === :(=) ? l.args[1] : l
             decl isa Expr && decl.head === :tuple && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell), [guess = g]`
+            decl isa Expr && decl.head === :(::) && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell)::CellRef`
             decl isa Expr && decl.head === :ref && (decl = decl.args[1])
             decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
         end
@@ -470,6 +471,10 @@ function _section!(parts, sec, args, ln = nothing)
                 decl, rhs = decl.args[1], Expr(:tuple, nothing, decl.args[2])
             end
             range = nothing
+            type = nothing
+            if decl isa Expr && decl.head === :(::) && length(decl.args) == 2   # `x(cell)::CellRef` (R6)
+                decl, type = decl.args
+            end
             if decl isa Expr && decl.head === :ref                         # `p(cell)[1:n]`: a vector
                 range = decl.args[2]
                 decl = decl.args[1]
@@ -484,6 +489,10 @@ function _section!(parts, sec, args, ln = nothing)
                             rhs.args[2].head === :vect ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
+            if type !== nothing
+                range === nothing || throw(ArgumentError("variable `$k`: a typed variable (`::$type`) is a scalar, not a vector"))
+                push!(kw, Expr(:kw, :type, type))
+            end
             if range === nothing
                 push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
                     :(push!(__vars, $k)))

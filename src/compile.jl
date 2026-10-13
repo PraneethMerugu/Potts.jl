@@ -67,7 +67,7 @@ end
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
 const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
-    :pieces, :pieces_full, :largest_piece, :largest_piece_full)
+    :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth)
 # the cell-scope pieces trackers (P6.9a): the face pair, the full pair
 const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_full)
 # cell updates, division rules (cluster trackers change with copies of other members, so
@@ -107,7 +107,7 @@ function _bare_builtins(x, out = Set{Symbol}())
     return out
 end
 
-const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES...)
+const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES..., :birth)
 
 # names a user can write (`site′` only arises from `x′`)
 _visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
@@ -210,6 +210,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         d = e.domain
         _located(sys, e) do
         d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_copy_reads(e.expr, d, copy_sites, copy_cells)
+        _check_energy_refs(e.expr, d)
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
@@ -265,11 +266,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     end
     drive = isempty(getfield(sys, :drives)) ? nothing : sum(d -> d.expr, getfield(sys, :drives))
     for d in getfield(sys, :drives)
-        _located(() -> _check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"), sys, d)
+        _located(() -> (_check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"); _check_ref_sources(d.expr, "drives")), sys, d)
     end
     for c in getfield(sys, :constraints)
-        c.kind === :expr && _located(() -> _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint"), sys, c)
+        c.kind === :expr && _located(() -> (_check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint");
+            _check_ref_sources(c.expr, "constraints")), sys, c)
     end
+    _located(() -> _check_ref_sources(getfield(sys, :sweep).temperature, "the @sweep temperature"), sys, getfield(sys, :sweep))
 
     # updates by phase and scope
     updates = Dict{Tuple{Symbol, Symbol}, Vector{Update}}()
@@ -280,6 +283,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             (iscall(lhs) && operation(lhs) === at) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
             u.every == 1 || throw(ArgumentError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
             _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
+            _check_ref_sources(u.eq.rhs, "on-copy updates")
+            _is_ref(arguments(lhs)[2]) && throw(ArgumentError(
+                "@on_copy writes `$(_indexed_string(lhs))` through a reference; an on-copy update writes at the copy's " *
+                "cells or sites (`x[new]`, `x[old]`, `x[target]`)"))
+            _is_ref_var(arguments(lhs)[1]) && _check_ref_value(info(arguments(lhs)[1]).name, u.eq.rhs)
             :proposal
         else
             i = info(lhs)
@@ -295,6 +303,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             else
                 allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
                 _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+                _is_ref_var(lhs) && _check_ref_value(i.name, u.eq.rhs)
             end
             i.role === :field ? :site : i.role
         end
@@ -333,8 +342,15 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
     end
     for d in getfield(sys, :divisions)
-        _located(() -> _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true),
-            sys, d)
+        _located(sys, d) do
+            _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true)
+            for (x, r) in d.rules
+                _is_ref_var(x) || continue
+                r isa Split && throw(ArgumentError("@divide: `$(info(x).name) => Split()` halves a number; " *
+                                                   "`$(info(x).name)` is a reference (a `CellRef`)"))
+                _check_ref_value(info(x).name, r)
+            end
+        end
     end
     # each rule divides by its own domain (P6.0a); a kind is divided by one domain only
     cluster_division = any(d -> d.domain isa ClusterDomain, getfield(sys, :divisions))
@@ -643,7 +659,8 @@ end
 # are exact (D-041), so they are exempt
 _pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
 # `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
-_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) &&
+# (`kind[ref]` reads the referent's kind column, not σ: R6)
+_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
                   (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
@@ -676,7 +693,7 @@ function _copy_varying_read(x, sites, cells; mode = :all)
             elseif i !== nothing && cells !== nothing && !_pop_bound(a[2]) &&
                    ((i.role === :builtin && i.name in _COPY_VARYING_INDEXED) || (i.role === :cell && i.name in cells))
                 hit[] = y                                 # `volume[id]`, `y[id]` with `@on_copy y[…]`
-                bare[] = _authored_name(i)
+                bare[] = _is_ref(a[2]) ? :reference : _authored_name(i)     # `volume[partner]` (R6)
             end
         elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
             hit[] = y                                     # `J[kind[n], …]`
@@ -710,6 +727,12 @@ function _indexed_string(x)
 end
 
 function _copy_read_error(s, bare, where)
+    bare === :reference && return ArgumentError(
+        "this energy reads `$s`$where through a reference, which a copy changes; ΔH evaluates the term only for the " *
+        "copy's two cells, so a change of the referent by another copy would be missing from it. Through a " *
+        "reference a cell energy reads only what no copy changes: cell variables no @on_copy update writes, " *
+        "`kind`, `birth`, `alive(ref)`. Read the referent's `volume` in a @drive (copy scope, e.g. " *
+        "`volume[partner[old]]`), where it is the referent's current value")
     hint = bare === nothing ? "" : " Read the cell's own value bare, as `$bare`: ΔH updates it for the copy's cells."
     return ArgumentError(
         "this energy reads `$s`$where, which a copy changes; ΔH evaluates the term only where the copy acts " *
@@ -737,6 +760,54 @@ function _check_copy_reads(E, d, sites, cells)
         r === nothing || throw(_copy_read_error(r..., " in a fold over a relation"))
     end
     return nothing
+end
+
+# Cell references in energies (R6, D-231): a cell term reads its referents' static values
+# (`_check_copy_reads` refuses the copy-varying ones) and `root(…)`; `sibling` and `members`
+# read every cell of a cluster (refused, `_check_ref_sources`); other domains read none.
+function _check_energy_refs(E, d)
+    d isa CellDomain && return _check_ref_sources(E, "energies")
+    (_reads_refs(E) || _has_op(E, as_ref) || _has_op(E, cluster_sibling) || _has_op(E, outer_value)) &&
+        throw(ArgumentError("this energy reads a cell through a reference; references are read in cell energies " *
+                            "(`cells(…) => …`), drives and constraints, not in $(_domain_string(d)) terms"))
+    return nothing
+end
+
+# `sibling` and `members` scan a whole cluster, so no claim set covers them: they are sources
+# of the cell scope (updates, division conditions and rules, `@observed`), not of the sweep
+function _check_ref_sources(x, what)
+    (_has_op(x, cluster_sibling) || _has_op(x, outer_value)) && throw(ArgumentError(
+        "`sibling(…)` and `members(…)` read every cell of a cluster, which a copy changes; they are available in " *
+        "cell updates, division conditions and rules and @observed, not in $what. Keep the reference in a " *
+        "`CellRef` variable updated between sweeps (`@after_mcs nuc ~ sibling(nucleus)`) and read through it"))
+    return nothing
+end
+
+# A `CellRef` is written with a cell id: a reference, `id`, `old`/`new`, `cluster`, an integer
+# (0: none), or a choice between them
+function _check_ref_value(name, x)
+    _ref_valued(x) || throw(ArgumentError(
+        "`$name` is a reference (a `CellRef`); it is written with a cell: another reference, `sibling(k)`, " *
+        "`root(cluster)`, `id`, `old`, `new`, `cluster`, a cell id or 0, or `ifelse` between them; got `$x`"))
+    return nothing
+end
+function _ref_valued(x)
+    x = _unwrap(x)
+    x isa Integer && !(x isa Bool) && return x >= 0
+    x isa SymbolicUtils.BasicSymbolic || return false
+    SymbolicUtils.isconst(x) && return _ref_valued(SymbolicUtils.unwrap_const(x))
+    _is_ref(x) && return true
+    i = info(x)
+    i !== nothing && return i.role === :builtin && i.name in (:id, :old, :new, :cluster) || i.role === :bound_cell
+    iscall(x) || return false
+    op = operation(x)
+    op isa ModelingToolkitBase.Pre && return _ref_valued(arguments(x)[1])
+    op === ifelse && return _ref_valued(arguments(x)[2]) && _ref_valued(arguments(x)[3])
+    if op === at                                      # `cluster[c]`, `owner[s]`
+        a = info(arguments(x)[1])
+        return a !== nothing && a.role === :builtin && a.name in (:cluster, :owner)
+    end
+    return false
 end
 
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a

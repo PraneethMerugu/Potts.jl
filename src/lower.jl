@@ -128,6 +128,14 @@ function lower(x, env::LowerEnv)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
+    # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
+    op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
+    op === cluster_sibling && return :(Potts._sibling(st.cell, $(lower(args[1], env)), Int32($(lower(args[2], env)))))
+    op === as_ref && return :(Int32($(lower(args[1], env))))
+    if op === outer_value
+        haskey(env.bind, :__outer) || error("`members(…)` is a fold domain: write `sum(… for m in members(cluster))`")
+        return lower(args[1], env.bind[:__outer])
+    end
     if op === cell_centroid
         haskey(env.bind, :__cell) || error("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities")
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
@@ -367,6 +375,110 @@ end
 """Kind of cell `c` (`0` for the medium)."""
 @inline _cellkind(st, c) = c == 0 ? Int32(0) : Int32(@inbounds st.cell.kind[c])
 
+# ---------------------------------------------------------------------------------------
+# Cell references (R6; D-066 item 5, D-231)
+
+"""Whether `x` is a cell variable declared `::CellRef`."""
+_is_ref_var(x) = (i = info(x); i !== nothing && i.role === :cell && get(i.options, :reference, false) === true)
+
+"""
+Whether the cell expression `x` is a reference, read as a referent when it indexes a cell
+quantity: a `::CellRef` variable (bare, or read at a cell, as `partner[old]`, every hop of a
+chain), `sibling(…)` or `root(…)`. Any other cell index (`old`, `owner[s]`, a fold's bound
+cell) is read as it is.
+"""
+function _is_ref(x)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return false
+    _is_ref_var(x) && return true
+    iscall(x) || return false
+    op = operation(x)
+    (op === cluster_sibling || op === as_ref) && return true
+    op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
+    if op === at
+        a = _unwrap(arguments(x)[1])
+        iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
+        return _is_ref_var(a)
+    end
+    return false
+end
+
+"""The references in `x` that index a cell quantity or are tested with `alive` (each hop of a
+chain once), outermost first: the cells a copy's sweep functions read through references."""
+function _ref_reads(x)
+    out = Any[]
+    _walk(x) do y
+        iscall(y) || return
+        op = operation(y)
+        r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
+            op === cell_alive ? arguments(y)[1] : nothing
+        r === nothing || any(z -> isequal(z, r), out) || push!(out, r)
+    end
+    return out
+end
+_reads_refs(x) = !isempty(_ref_reads(x))
+
+# the state referents are read in: `st`, or the state bound as `:__refst` (the killing
+# credit reads the readers' referents before the copy, `_vacated_energy_expr`)
+_refst(env) = get(env.bind, :__refst, :st)
+
+# `x[ref]` for a quantity `x` (Info `i`) of the referent `ref`
+function _lower_deref(i::Info, ref, env)
+    r = lower(ref, env)
+    rs = _refst(env)
+    if i.role === :cell
+        return :(Potts._deref($rs.cell.$(i.name), $rs.cell.volume, $r, $(_ref_default(i, env))))
+    elseif i.role in (:site, :field)
+        error("site variable `$(i.name)` indexed by a reference (a cell); a site variable is read at a site")
+    elseif i.role === :builtin
+        n = i.name
+        n === :kind && return :(Potts._deref_kind($rs.cell, $r))
+        n === :volume && return :($(env.T)(Potts._deref_volume($rs.cell.volume, $r)))
+        n === :birth && return :(Potts._deref_birth($rs.cell, $r))
+        n === :cluster && return :(Potts._deref_cluster($rs.cell, $r))
+        n in (:surface, :generation) &&
+            return :(Potts._deref($rs.cell.$n, $rs.cell.volume, $r, zero(eltype($rs.cell.$n))))
+        if n in (:euler, :euler_full) || n in _PIECES_NAMES
+            col = n in _PIECES_NAMES ? _pieces_column(n) : _euler_column(n)
+            return :($(env.T)(Potts._deref($rs.cell.$col, $rs.cell.volume, $r, zero(eltype($rs.cell.$col)))))
+        end
+        error("`$n[…]` cannot be read through a reference")
+    end
+    error("cannot index `$(i.name)` by a reference")
+end
+
+# the value a dead referent's cell variable reads as: its declared default (0 for a reference)
+function _ref_default(i::Info, env)
+    get(i.options, :reference, false) === true && return :(Int32(0))
+    v = i.default
+    v isa Bool && return env.T(v)
+    v isa Real && return env.T(v)
+    (v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v)) && return :($(env.T)($(lower(v, env))))
+    error("cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
+          "give `$(i.name)` a scalar default (a number or an expression of parameters)")
+end
+
+"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
+@inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
+"""Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
+@inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
+@inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
+@inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
+@inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
+"""`birth` of cell `c` (D-066 item 3): its serial with a lifecycle (`cell.birth`), else its slot."""
+@inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)
+@inline _birth_at(cell, c) = c == 0 ? Int32(0) : _birth(cell, c)
+@inline _deref_birth(cell, r) = _alive_slot(cell.volume, r) ? _birth(cell, r) : Int32(0)
+"""The alive member of kind `k` of cluster `cl` (the lowest such slot), or 0."""
+@inline function _sibling(cell, cl, k)
+    cl == 0 && return Int32(0)
+    for m in 1:length(cell.kind)
+        (@inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k) &&
+            return Int32(m)
+    end
+    return Int32(0)
+end
+
 # Sort of an index expression: :site or :cell.
 function _sort(x)
     x = _unwrap(x)
@@ -407,6 +519,8 @@ function _lower_at(args, env)
     end
     i = info(x)
     i === nothing && error("cannot index `$(_standin_var(x))`")
+    # `x[ref]`: the referent's value, the medium's when it is dead or 0 (D-066 item 5)
+    i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
         return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])
@@ -449,6 +563,10 @@ function _lower_at(args, env)
         end
         i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        if i.name === :birth
+            s === :site && error("`birth[…]` needs a cell (`old`, `new`, a reference), not a site")
+            return :(Potts._birth_at(st.cell, $j))
+        end
         if i.name in (:euler, :euler_full)
             s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
             return :($(env.T)(Potts._cellval(st.cell.$(_euler_column(i.name)), $j)))
@@ -478,6 +596,7 @@ function _lower_population(args, env)
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+            :birth => :(Potts._birth(st.cell, $nsym)),
             :euler => :($T(@inbounds st.cell.euler[$nsym])),
             :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
             (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
@@ -492,6 +611,7 @@ function _lower_population(args, env)
         range = :(1:length(st.σ))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
+    bind[:__outer] = env                 # `members(cluster)`: the enclosing cell's `cluster`
     inner = LowerEnv(T, env.mode, bind, env.relname, env.keys)
     op = ni.options.op
     init, step, fin = if op === :sum
