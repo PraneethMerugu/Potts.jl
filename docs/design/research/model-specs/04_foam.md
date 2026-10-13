@@ -410,7 +410,135 @@ Uncertainty: ±5% in the linear panel; ±0.15 decade in the inset. Observations:
 - absolute time to first T1 in the boundary-shear runs (γ0 for Fig. 2 and Fig. 6 not stated);
 - Fig. 7's φ < 1 (unexplained; see A-16).
 
+### 5.3 Rulings on the non-F1 failures (2026-10-13, spec owner)
+
+Scope: the D-190 record `data/04/full-2026-10-09/` (κ = 2.497, τ = 3.447) and the κ_b scan `data/04/kb-scan-2026-10-09/`. Letters:
+- (A) a measurement-definition fix from the paper text; the band stays unchanged;
+- (B) a protocol fix: our run differs from the paper's protocol;
+- (C) a genuine deviation;
+- (D) depends on F1 after all.
+
+No band moves. **Every run named below is held by D-210 ("no further foam runs until F1 is answered").** Each runs only if the maintainer lifts that hold for it, or else in the post-F1 FULL. Costs use the record's own rate: 1.35 × 10⁸ of our MCS in 34 922 s on 24 threads, so ≈ 6 ms per our MCS per thread. One 2¹⁷-paper-MCS bulk run is 4.5 × 10⁵ of our MCS, ≈ 45 min on one thread.
+
+- **V18, no system-wide avalanches → (A). Re-recording is needed. D-203 must be amended first.**
+  - **What the paper defines.** The paper never defines a time window. It defines an avalanche by the energy drop: "Every cluster of T1 events corresponds to a drastic decrease in the stress" (04b p.5827). It also says avalanches "appears in the sudden decreases of the total elastic energy" (04b p.5827).
+  - **Why the window fails.** At high rate the paper says "the avalanches start to overlap" (04b p.5827). The paper's own Fig. 5(b) shows 2–4 T1s per MCS after yield (§5.1). Over 100 MCS that is ≥ 100 T1s, even if every T1 is counted twice (A-15). At 4 bubbles per T1 among 256 bubbles, a 100-MCS window would very likely pass 0.5 on the paper's own run [estimate]. So the frozen reading cannot falsify the paper's claim. This is the same argument as R7 (V14).
+  - **Corrected measurement.**
+    - Avalanche: one falling leg [peak, trough] of the zigzag filter with h = 0.001 on per-paper-MCS φ̂. The filter and h are already pre-registered for V7/V17.
+    - Size: the number of distinct bubbles in any lost or gained contact (`contact_changes`) between consecutive MCS inside the leg, divided by the live bubbles.
+    - Statistic: the maximum size over every leg of every bulk run (spec, v16) and every steady run (v2, v9). Band < 0.5, unchanged.
+    - C-V18 stays as the control, on a hand-built leg.
+    - Overlapping avalanches merge into one leg. That makes the test harder to pass, not easier.
+  - **Gate.** D-203 keeps the frozen window "unless the paper defines that window by strain". A φ falling leg is a strain interval, because steady-shear "plotting time is equivalent to plotting strain" (04b p.5824). Whether that meets D-203's exception is for the coordinator to rule in a new D-entry; this note does not decide it. Because this definition was written after the frozen reading failed, the frozen-window verdict is still reported even if the D-entry adopts the leg measurement. The two appear side by side on the page, and the change is labelled post hoc.
+  - **Data.** The record keeps only per-window fractions, and set unions cannot be rebuilt from fractions. So the runner must record, per leg, the union of the contact-change sets. Fold this into the post-F1 FULL. A standalone re-record of the V18 sets would be ≈ 60 CPU-h (≈ 3 h on 24 threads); not recommended under D-210.
+- **V6b, T sweep loop/noise → (C). Not (B).**
+  - **Why not (B).** The paper's T is on the J scale, and J is not rescaled. Only the drive is multiplied by κ. Our unscaled T reproduces the paper's thermal wall roughening:
+    - mean φ̂ is 1.000, 1.054, 1.124 and 1.203 against the paper's 1.015, 1.067, 1.142 and 1.225 (V6a passes);
+    - the slope is 0.0136 against 0.014 (V6c).
+    
+    Scaling T by κ would break both. So the cause given in `deviations.tsv` is wrong, and the protocol is the paper's.
+  - **The record shows two separate effects:**
+    - (i) Our T = 0 loop is ≈ 35× flatter than the paper's: ensemble height 5.8 × 10⁻⁴ against ≈ 0.02 in Fig. 3(d). This is the V3b effect (A-1).
+    - (ii) At T = 15 our height (3.5 × 10⁻³) is drive-driven, not hidden: 2100–3100 T1s per cycle. Our per-period noise (1.45 × 10⁻³) is several times below the paper's visible ± 0.005 on a curve that is already a 10-period average.
+  - **Paper text.** The paper only says noise "eventually destroys the hysteresis loop" (04b p.5824). It does not say how φ was sampled per point (a bin mean or an instantaneous sample). So no measurement change is grounded in the paper.
+  - **Optional diagnostic (info only).** J = 3, γ0 = 4, T = 15, block-4 seeds, 5 replicates, 10 periods, logging instantaneous φ̂ every 10 of our MCS beside the bin means. It tells whether (ii) is a sampling effect or genuinely smaller thermal fluctuations. Cost 5 × 1.4 × 10⁵ of our MCS ≈ 1.2 CPU-h.
+- **V14c, N̄ high/low μ2(a) separation → (D).**
+  - The suspected L-rescale has no basis in the paper. N̄ is already per bubble and per unit shear (04b p.5829), so it is intensive.
+  - The 320² lattice (DV4) cannot explain a factor of 10–70. It only raises the wall γ of the low pair by 25 %, which works against the deficit.
+  - The decisive evidence is the β-trend in `bulk.tsv` (v14). Our N̄ **rises** with β in every foam: d095 is 0, 0.014, 0.12, 0.58 for β = 10⁻³, 5 × 10⁻³, 10⁻², 5 × 10⁻². The paper's falls (Fig. 9). Every foam is pinned at β ≤ 10⁻³ and overdriven at 5 × 10⁻².
+  - The paper's separation needs the low-μ2(a) foams to be nearly solid at β ≥ 5 × 10⁻³ while the high-μ2(a) foams flow. That is a question of drive scale against pinning, which is F1.
+  - No diagnostic is recommended.
+- **V7i, V7ii, V20, no sliding plane and the bulk/boundary drop ratio → (D). A cheap discriminating diagnostic exists.**
+  - The paper puts localisation at "small shear rates" and the transition at 1 × 10⁻² < |β| < 5 × 10⁻² (04b p.5824). It ties the transition to β⁻¹ against the relaxation time of ≈ 10 MCS.
+  - At κ_b = 2.497 our ordered β = 0.01 foam yields at ≈ 450 paper MCS. The paper's yields at ≈ 4300 (kb scan). So the effective strain rate is ≈ 10× the paper's, past the transition. The observed mid share of 0.32 is what a uniform spread gives (4 of ≈ 14 interior rows), so the measurement itself is sound (R5).
+  - The paper explains the smaller bulk drops by localisation: bulk shear "induces a more homogeneous distribution of distortion" (04b p.5824). So V7ii and V20 inherit V7i's cause.
+  - **Diagnostic R-kb1 (info only, no verdict).**
+    - Runs: `p64r_bulk` with spectra on ordered foams 1–5 at β = 0.01, κ_b = 1.766. This is the slowest-yielding grid value; it yielded at 1691 MCS in the scan. Use the same spec-block (8) seeds as the record.
+    - Reported: V7i, V7ii/V20 and V7iii.
+    - Reading: localisation at the weaker drive confirms (D). None at the weaker drive moves V7 to (C).
+    - Cost 5 × 4.5 × 10⁵ of our MCS ≈ 3.8 CPU-h (≈ 45 min wall).
+    - Output: a new record `data/04/kb-diag-<date>/`, run on the PC.
+- **V10a, V11b, flattened T1 slope at β = 0.05 → (C), provisional. R-kb2 discriminates.**
+  - **The peak is not the whole cause.** Below the peak, the spectra are already nearly white. Ordered β = 0.05: S ≈ 11 at 10⁻⁴ and 4.3 at 2 × 10⁻³, so α ≈ 0.3. d081 is ≈ 0.15. The prominent peak sits near 5–7 × 10⁻³. Its frequency grows with β (ordered β = 0.02 peaks at ≈ 3.3 × 10⁻³). That fits a bubble-row passing frequency in layered flow: under the linear-in-y per-copy bias, every adjacent row pair slides at the same relative speed, so the T1s add coherently [unverified mechanism].
+  - **What the paper shows instead.** At these rates "shear destroys its symmetry and periodicity" (04b p.5828), with f⁻¹ from ≈ 10⁻⁵ to 10⁻² (Fig. 8a). No fit-range change is grounded in the paper, so the range stays at 10⁻⁴–10⁻².
+  - **Diagnostic R-kb2 (info only).**
+    - Runs: ordered and d081 foams 1–5 at β = 0.05, κ_b = 0.5. This is the scan's match to t_first ≈ 420.
+    - Reported: α over 10⁻⁴–10⁻² and the peak prominence.
+    - Reading: if the peak goes and α enters the band, the row moves to (D). Otherwise it stays (C), a property of the displacement-form flow.
+    - Cost 10 × 4.5 × 10⁵ of our MCS ≈ 7.5 CPU-h. Same record as R-kb1.
+  - **Note.** C-V12 and V10b pass on the same spectra.
+- **V2ii, sawtooth narrow misses → (C). A cheap diagnostic exists.**
+  - **Record.** Recomputed from `steady.tsv`:
+    - k = 1 and 3 pass;
+    - k = 2 fails on CV 0.33 > 0.3;
+    - k = 4 fails on CV 0.32 and a median drop of 0.0050 (just under 0.005);
+    - k = 5 fails on CV 0.40 and a median of 0.0048.
+  - **The failure mode.** Each failing replicate starts regular, with a period of ≈ 1150 MCS. Later its peaks **split**, for example at 3250/3600 and 3350/3950. Each split halves the drops.
+  - **Candidate mechanism.** The top and bottom boundary layers yield independently and drift out of phase. The paper says "all the bubbles touching the moving boundaries undergo almost simultaneous rearrangements" (04b p.5824), and Fig. 2(b) shows single drops.
+  - **Paper window checked.** Restricting to Fig. 2's 0–5000 MCS (A-12) still gives 3/5. That reading is not adopted, and the rule stays.
+  - **Diagnostic R-v2 (info only).** Re-run the 5 V2 runs (block-5 seeds; deterministic, so they reproduce the record), logging φ̂ and T1s separately for the top and bottom halves every 50 MCS. The reading is the lag between top and bottom drops. Cost 5 × 3.4 × 10⁴ of our MCS ≈ 0.3 CPU-h.
+- **V13b, d165 β = 0.005 φ spectrum ≈ f⁻² → (D).**
+  - In this run our T1 density per strain is ≈ 20× below the paper's: N̄ ≈ 0.008 against 0.17 at β = 5 × 10⁻³ (Fig. 9). So φ̂ is dominated by elastic loading ramps between rare T1s. That gives an integrated, f⁻²-like signal. This is the near-pinned regime of F1.
+  - The flowing runs (β ≥ 0.01) already show paper-like low-f decade slopes of ≈ 0.7–1.0.
+  - A side note, not a ruling. `power_spectrum` is a raw rectangular-window periodogram with no detrend. The record's start-to-end drift in φ̂ leaks ∝ f⁻² across the band. Eq. 9 (04b p.5827) specifies no detrending, so no estimator change is grounded in the paper. A one-run detrend check can be added to R-kb1 as info.
+- **V3b, V4, V5b, V7iii, V9: F1/A-1 link, briefly.**
+  - **V3b:** linked to A-1 (the boundary drive form), not to the bulk pinning. Our sub-yield loop is 35× flatter at κ fixed by the first T1. Not separable by measurement; it also drives V6b (i).
+  - **V4 and V5b:** linked to A-1 (the calibration cliff). V5c puts the boundaries for 1, 2 and ≥ 3 T1 per cycle at paper r ≈ 1.93, 2.04 and 2.08 for J = 3; the paper has 1.9, 2.5 and 4.4. That is the same threshold-depinning signature as F1, in boundary form.
+    - V5b also has first-T1 r rising with J (2.04, 1.93, 2.25, 2.63 for J = 1, 3, 5, 10). A possible cause is that Γ = 1 is not scaled with J, which breaks the T = 0 (J, γ) invariance of §3.2 [unverified]. A J ∈ {1, 10} near-threshold check with Γ ∝ J would separate this (≈ 10 CPU-h, info only), but it is not a fix: the paper keeps Γ = 1 for all runs.
+  - **V7iii:** F1. The slip period is set by the bulk scale; the drive is ≈ 10× too fast at κ_b = 2.497. R-kb1 reports it.
+  - **V9:** linked to A-1 and to A-12. Under a threshold drive the disordered foam still needs a finite bias. γ0 for Fig. 6 is unstated (DV5), and raising it would be tuning. Not separable.
+  - **None of the five gets a measurement or protocol fix.**
+
 ---
+
+### 5.4 Eq 2 screen: pre-registered protocol (2026-10-13, spec owner; frozen before any run)
+
+**Authority.** The maintainer lifted the D-210 hold for this screen only: "yes, lift the hold and run the screen on this chat". The spec chat runs it on the PC. D-entry number: next free at landing (coordinator).
+
+**Question.** Is there a reading of Eq 2 under bulk shear (Eq 7) that meets the D-205 targets that our displacement form (R1) misses?
+
+**Readings.**
+- **R0, literal absolute x: excluded on paper, not run.**
+  - Eq 2 as printed, Σ γ(yᵢ)xᵢ(1 − δ), is the wall potential in a uniform force field, plus a wall tension γ·x that varies with x.
+  - With the paper's own values, the tension term dwarfs J = 3:
+    - boundary γ₀ ≈ 2J (Fig 3c), so γ₀·x ≈ 6 × 400 at the far edge;
+    - bulk β = 10⁻³ gives γ = β·y up to 0.26, so γ·x up to ≈ 65.
+  - It also makes the left and right sides of the box differ, and it jumps at the periodic seam. The paper reports neither effect.
+  - So xᵢ cannot have been absolute. Only force-type readings, built from coordinate differences, remain.
+- **R1, force on walls** (current; D-190, D-205). Drive = −β(yᵢ − y_mid)·Δx per copy. Scanned in D-205: `pinning_cliff`.
+- **R2, force on bubbles** (centroid reading).
+  - The paper says "(xᵢ, yᵢ) to the coordinate of spin σᵢ" (04b p.5822). Here that is read as the bubble's coordinate.
+  - Each bubble feels a force F = κ_b·β·(Y_σ − y_mid) along x, with Y_σ its centroid y, through H_ext = −Σ_σ F_σ X_σ.
+  - Per copy, ΔH = −Σ_{c ∈ {new, old}} F_c·ΔX_c. Here ΔX_c is the exact centroid shift, `displacement(c, 1)`, and Y_c is the centroid at the end of the previous MCS, `@after_mcs cy ~ centroid(2)`.
+  - Why it might help: the bias per copy is continuous-valued, scaling with (x_i − X_c)/A_c. R1's bias is quantised in integer Δx and sits on integer J barriers, which is the suspected source of the cliff.
+  - Per unit of κ_b, the per-copy bias is about 2·|x_i − X|/A ≈ 1/15 of R1's: |x_i − X| ≈ 8 on a 16² bubble, and two cells contribute. So the R2 grid is shifted up to cover R1's useful range (κ_b ≈ 0.5–300) times about 15–30, with margin (below).
+- **R3, R1 at low finite T.** The paper: "a finite but low temperature … does not appear to change the results qualitatively" (04b p.5823). T ∈ {0.5, 1.5} (T/J = 1/6, 1/2).
+
+**Design.** Everything is as D-205 unless stated:
+- the 5 ordered foams and τ;
+- β ∈ {10⁻⁴, 10⁻³, 5·10⁻³, 0.01, 0.05};
+- 3 replicates with the same seeds (`p64kb_seed`) and the same caps (`P64KB_CAP`);
+- the same early stop, and the same t_first and T1 measurement (`p64kb_run` logic);
+- `SequentialCPM(; skip_interior = true)`, NeighborOrder(4).
+
+The grids:
+- **R2:** κ_b = κ_D190·2^(i/2), i = 0…30. That is 31 values, 2.50 to 8.2·10⁴, so 465 runs.
+- **R3:** κ_b = κ_D190·2^(i/2), i = −8, −6, …, 14. That is 12 values, the even points of the D-205 grid, at each of the two T values, so 2 × 180 = 360 runs.
+
+**Decision rule.**
+- The frozen `p64kb_analyse` (D-205) is applied unchanged to each table: R2 alone, R3 at T = 0.5, R3 at T = 1.5.
+- A reading **passes stage 1** iff the rule returns a κ_b. That means both targets (β = 0.01 → 4300, β = 0.05 → 420 paper MCS, ±25 %) are met at one κ_b, together with the consistency check (T1s at β = 10⁻³ in ≥ 2 of 3 replicates).
+- **Stage 2** (only for a reading that passes): the boundary-shear check against the D-190 Fig 3(c) rows V3/V5, which R1 passes.
+  - For R3, stage 2 is the D-190 boundary protocol at that T.
+  - For R2, the boundary analogue (F = ±κ·γ₀ on bubbles touching the top or bottom row) is defined and frozen in its own D-entry before any stage-2 run.
+- If two readings pass, both are reported. Neither is adopted over the other without Dr Jiang's answer.
+
+**Outcome handling.**
+- Pass: the reading becomes the provisional Eq 2 form for bulk shear, labelled as our inference on the 04 page. The src change goes to the coordinator as an item, and the bulk FULL is rerun.
+- No pass: F1 stays the only route. The negative result is recorded, like D-210.
+- No band, target or measurement changes after the runs start.
+
+**Record.** `data/04/eq2-screen-<date>/`: one scan.tsv per reading, decision.toml, provenance.toml, README. The runner is `data/04/run_eq2_screen.jl`, not frozen. It re-uses the frozen tests' helpers, includes them unchanged, and defines R2 as a script-local model.
 
 ## 6. Required general features
 
