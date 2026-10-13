@@ -13,10 +13,13 @@ Comput. Biol. 22, e1014747, 2026), checked against the authors' CompuCell3D sour
 - **Migration cue.** A static field `cue = y − 1`. A copy whose source or target cell is a
   leader gains `−μ Δcue`: leaders climb the cue (CompuCell3D's default chemotaxis). The
   default `μ = 24` is the authors' reference sample (`(J_LF, λ, PP) = (2, 24, 0.5)`).
-- **Growth and division.** Followers with a mitotic clock (`clock ≥ 0`) grow their target
-  volume by `rate` per MCS up to `V_max`. They divide when larger than `V_max` and their
-  clock exceeds `clock_min + clock_spread · U(0, 1)`, with a fresh draw every MCS. The
-  division plane is random, the target volume is split, and clocks restart.
+- **Growth and division.** Every cell grows its target volume by its own `rate` per MCS
+  while the target is below `V_max`, whether or not it has a mitotic clock; `akeeb_state`
+  gives every follower `rate = 0.015` and every leader `rate = 0`, so all followers grow
+  and leaders do not. Only followers with a mitotic clock (`clock ≥ 0`) divide: when larger
+  than `V_max` and their clock exceeds `clock_min + clock_spread · U(0, 1)`, with a fresh
+  draw every MCS. The division plane is random, the target volume is split, and clocks
+  restart.
 
 Use `akeeb_state` for the published initial slab.
 
