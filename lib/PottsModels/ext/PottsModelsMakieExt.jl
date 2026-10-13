@@ -82,8 +82,10 @@ function PottsModels.openvt_f4_figure(σ::AbstractMatrix{<:Integer}, c::Integer)
     ax = Makie.Axis(fig[1, 1]; title = "Lattice models", aspect = Makie.DataAspect(), titlefont = :bold,
         titlesize = 18, spinewidth = 1.5)
     Makie.hidedecorations!(ax)
-    palette = ids == 1:length(ids) && length(ids) <= length(TEX_CELLS) ? TEX_CELLS[1:length(ids)] : Makie.automatic
-    pottsplot!(ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, category_palette = palette,
+    # the .tex's palette for its four cells; otherwise pottsplot's own (`Makie.automatic` is not
+    # public, so the keyword is left out rather than passed as `automatic`)
+    palette = ids == 1:length(ids) && length(ids) <= length(TEX_CELLS) ? (; category_palette = TEX_CELLS[1:length(ids)]) : (;)
+    pottsplot!(ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, palette...,
         boundaries = false)
     # the .tex's white site grid: full-length lattice lines only (no partial cell boundaries)
     grid = Makie.Point2f[]
