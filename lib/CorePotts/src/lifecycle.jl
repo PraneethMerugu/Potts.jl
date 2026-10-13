@@ -79,6 +79,18 @@ hand-written):
   only if `before` does not write them). Then the device lifecycle runs `before` and the
   trigger of each cell in one work item, one launch for both; the host
   planner runs `before` as its own launch.
+- `release(st, c)` — the boundary of a model's cell references (D-066 item 5 (a)): run for
+  every cell `c` of an event round before any id is allocated (on a device in the copy stage,
+  before the daughter column copies, while every volume is still the pre-event one), it
+  resets each reference of a live cell `c` whose referent is dead (volume 0) to 0, so no
+  reference aliases the cell that reuses the slot, and daughters copy the reset value. It
+  writes only cell `c`'s own columns and reads `volume`; `nothing` (the default) for a model
+  without references.
+
+Cell serials (D-066 item 3): when `st.cell` has a `birth` column (`Int32`, never copied to a
+daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every daughter
+takes the next serial, in increasing daughter-slot order (the allocation order), and the
+counter advances; a serial is never reused, and a checkpoint keeps the counter.
 
 Both kinds of division can happen in one MCS:
 
@@ -99,7 +111,7 @@ Both kinds of division can happen in one MCS:
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE}
+struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL}
     trigger::TR
     normal::NO
     cluster_normal::CN
@@ -110,11 +122,48 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE}
     every::Int
     rules::RU                   # Val(true): rule-carrying events
     before::BE                  # a cell update fused with the trigger, or `nothing`
+    release::RL                 # the reference reset of an event round, or `nothing`
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
-    rules::Bool = false, before = nothing) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before)
+    rules::Bool = false, before = nothing, release = nothing) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
+        release)
+# the positional form before P6.5a: no references
+Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every::Int, rules::Val, before) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every, rules, before, nothing)
+
+"""
+    NEXT_BIRTH
+
+The `st.model` key of the cell-serial counter (D-066 item 3): a 1-element `Int32` array
+holding the serial the next daughter takes. A model state that has it and a `birth` cell
+column gets serials at every division (`Lifecycle`).
+"""
+const NEXT_BIRTH = Symbol("#next_birth")
+
+# the reference reset of an event round (`Lifecycle.release`), one launch over the cells
+@inline _release_body!(c, release::F, st) where {F} = (release(st, c % Int32); nothing)
+_run_release!(::Nothing, st, backend) = 0
+_run_release!(f::F, st, backend) where {F} = (_launch(_release_body!, backend, ncells(st), (f, st)); 1)
+@inline _release!(::Nothing, st, c) = nothing
+@inline _release!(f::F, st, c) where {F} = (f(st, c % Int32); nothing)
+
+# the serials of this round's daughters `ds` (host path), in increasing slot order
+function _assign_births!(stats, st, ds)
+    (haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH)) || return nothing
+    b = _to_host(stats, st.cell.birth)
+    nb = _to_host(stats, getfield(st.model, NEXT_BIRTH))
+    next = nb[1]
+    for d in sort(ds)
+        b[d] = next
+        next += one(next)
+    end
+    nb[1] = next
+    _copy!(stats, st.cell.birth, b)
+    _copy!(stats, getfield(st.model, NEXT_BIRTH), nb)
+    return nothing
+end
 
 # `before` as its own launch (the host planner; MCS the lifecycle does not check)
 _run_before(::Nothing, st, p, ctx, key, mcs, backend) = 0
@@ -320,6 +369,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     _sync!(pstats, backend)
     _copy!(pstats, cache.host, 1, cache.count, slot, 1)
     cache.host[1] == 0 && return launches, false
+    # D-066 item 5 (a): references to dead cells are reset before any id is allocated
+    launches += _run_release!(lc.release, st, backend)
 
     # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
     events = _to_host(pstats, cache.events)
@@ -407,13 +458,14 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         ds = daughter[parents]
         # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
         map(keys(st.cell), values(st.cell)) do name, a
-            (name in (:volume, :surface, :anchor, :m1, :m2, :generation) || _is_link_data(name)) ||
+            (name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name)) ||
                 _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
             nothing
         end
         gen = _to_host(pstats, st.cell.generation)
         gen[ds] .+= Int32(1)
         _copy!(pstats, st.cell.generation, gen)
+        _assign_births!(pstats, st, ds)
         if has_clusters
             clh = _to_host(pstats, st.cell.cluster)
             for m in parents

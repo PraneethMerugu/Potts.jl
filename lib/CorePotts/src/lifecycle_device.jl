@@ -66,7 +66,7 @@ const _NACC = 7
 const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
-const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :cluster,
+const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
     :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
@@ -296,14 +296,29 @@ end
     ndiv = min(nreq, avail)
     ndiv > 0 && Atomix.@atomic dv.acc[_ACC_DIVISIONS] += ndiv
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
+    @inbounds tot[4] = @inbounds(tot[2]) + ndiv     # free-list entries taken (serials, `_advance_births!`)
     return nothing
 end
+
+# Cell serials (D-066 item 3; `Lifecycle`): the daughter in free-list entry `k + 1` (0-based
+# `k`, the allocation order: slot order) takes serial `next + k`; after the round the counter
+# advances past every entry taken (a division deferred for the moment scratch leaves its
+# serial unused, never reused). `births` is `nothing` without a `birth` column.
+@inline _birth!(::Nothing, d, k) = nothing
+@inline function _birth!(b, d, k)
+    @inbounds b.col[d] = b.next[1] + k % Int32         # `next` has one entry; d is a free slot
+    return nothing
+end
+@inline _advance_births!(::Nothing, t, tot) = nothing
+@inline _advance_births!(b, t, tot) = (t == 1 && (@inbounds b.next[1] += tot[4]); nothing)   # tot has 4 entries
+_births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
+              (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH)) : nothing
 
 # G: daughters and planes. A cell dividing alone takes its slot and its normal; the item of
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
 # cluster plane on the cluster's moments
 @inline function _plan_g!(t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
-        ruled, st, p, ctx, key, mcs, ::Val{CL}) where {NF, CF, CL}
+        ruled, st, p, ctx, key, mcs, ::Val{CL}, births) where {NF, CF, CL}
     _on(dv, par) || return nothing
     lo, hi = _chunk(t, length(events))
     rk = @inbounds(tot[2]) + @inbounds(cnt[t, 3])
@@ -313,6 +328,7 @@ end
             if rk < nfree
                 if _scratch_ok(dv, st.cell, c, Val(ndims(ctx.lattice)))
                     @inbounds daughter[c] = dv.freelist[rk + 1]
+                    _birth!(births, @inbounds(dv.freelist[rk + 1]), rk)
                     n = normal(st, p, ctx, key, mcs, c % Int32)
                     for d in 1:length(n)
                         @inbounds normals[d, c] = n[d]
@@ -325,7 +341,7 @@ end
         end
         # a root (its cluster id is itself) whose cluster divides: members are found by id
         if CL && @inbounds(st.cell.cluster[c]) == c && _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER
-            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs)
+            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs, births)
         end
     end
     return nothing
@@ -368,7 +384,7 @@ end
 @inline Base.getindex(a::_OneColumn, d, c) = @inbounds a.v[d]
 
 @inline function _plan_cluster!(r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
-        mcs) where {CF}
+        mcs, births) where {CF}
     cell = st.cell
     lat = ctx.lattice
     N = ndims(lat)
@@ -408,6 +424,7 @@ end
         em = _event(ruled, @inbounds events[m])
         em == EVENT_REMOVE && continue
         @inbounds daughter[m] = dv.freelist[j + 1]
+        _birth!(births, @inbounds(dv.freelist[j + 1]), j)
         j += Int32(1)
         ev = em == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
         @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
@@ -432,8 +449,9 @@ end
 @inline _with_rule(::Val{true}, ev, raw) = ev | ((raw >> _RULE_SHIFT) << _RULE_SHIFT)
 
 # H: who is whose daughter; statistics; a daughter's surface starts from zero
-@inline function _plan_h!(t, events, daughter, dv, par, ruled, surf)
+@inline function _plan_h!(t, tot, events, daughter, dv, par, ruled, surf, births)
     _on(dv, par) || return nothing
+    _advance_births!(births, t, tot)
     lo, hi = _chunk(t, length(events))
     ntrans = Int32(0)
     nrem = Int32(0)
@@ -455,9 +473,9 @@ end
 # (KA's CPU backend splits the kernel at each `@synchronize` and needs `@index` as its own
 # statement in each part)
 @kernel function _plan_kernel!(events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
-        ruled, st, p, ctx, key, mcs, clusters, surf)
+        ruled, st, p, ctx, key, mcs, clusters, surf, births)
     cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (3,)
+    tot = @localmem Int32 (4,)
     ta = @index(Local, Linear)
     _plan_a!(ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters)
     @synchronize
@@ -478,10 +496,10 @@ end
     @synchronize
     tg = @index(Local, Linear)
     _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
-        clusters)
+        clusters, births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, events, daughter, dv, par, ruled, surf)
+    _plan_h!(th, tot, events, daughter, dv, par, ruled, surf, births)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -551,8 +569,12 @@ end
 end
 
 @inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
-        ::Val{CL}) where {CL}
+        ::Val{CL}, release::RL) where {CL, RL}
     _on(dv, par) || return nothing
+    # D-066 item 5 (a): cell c's references to dead cells reset first (no volume changes in
+    # this stage, so a slot reused this round still reads as dead), and the daughter copies
+    # the reset value; only a live cell's own columns are written (`Lifecycle.release`)
+    _release!(release, st, c)
     d = @inbounds daughter[c]
     if d > 0
         map(a -> _copy_column!(a, c, d), cols)
@@ -758,13 +780,14 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
     fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
-        lc.cluster_divide!)
+        lc.cluster_divide!, lc.release)
     opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
-        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell))
+        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
+        births = _births(st))
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
         D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -895,11 +918,11 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
     _enqueues(mode) && (D.before_ran[] = true)
     _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
-        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf))
+        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
     _stage!(mode, _dpartition_body!, backend, n,
         (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
     _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
-        ruled, CL))
+        ruled, CL, fns.release))
     _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     launches = 5
@@ -968,7 +991,7 @@ end
 
 @kernel function _fused_kernel!(buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs)
     cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (3,)
+    tot = @localmem Int32 (4,)
     t0 = @index(Local, Linear)
     _each!(_dtrigger_body!, t0, length(buf.events),
         (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters))
@@ -993,10 +1016,10 @@ end
     @synchronize
     tg = @index(Local, Linear)
     _plan_g!(tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
-        st, p, ctx, key, mcs, clusters)
+        st, p, ctx, key, mcs, clusters, opt.births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
+    _plan_h!(th, tot, buf.events, buf.daughter, dv, par, ruled, opt.surf, opt.births)
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(_dpartition_body!, tp, length(st.σ),
@@ -1004,7 +1027,7 @@ end
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        st, ruled, clusters))
+        st, ruled, clusters, fns.release))
     @synchronize
     tu = @index(Local, Linear)
     _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
