@@ -991,8 +991,10 @@ CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     (isempty(c.divisions) || haskey(st.cell, :birth)) && return st
     n = length(st.cell.kind)
-    birth = copyto!(similar(st.cell.kind, Int32, n), Int32.(1:n))
-    next = copyto!(similar(st.cell.kind, Int32, 1), Int32[n + 1])
+    # filled where the state lives (a device state stays on the device: no host transfer)
+    birth = similar(st.cell.kind, Int32, n)
+    birth .= Int32(1):Int32(n)
+    next = fill!(similar(st.cell.kind, Int32, 1), Int32(n + 1))
     return CorePotts.CPMState(st.σ, merge(st.cell, (; birth)), st.site,
         merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((next,))), st.history)
 end
