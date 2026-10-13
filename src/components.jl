@@ -68,6 +68,10 @@ function _map_statements(f, sys::PottsSystem; seen = nothing)
     fl(r::LinkRule) = keep(r, LinkRule(r.relationship, r.action, f(r.when), r.every))
     fo(o::ObservedEq) = keep(o, ObservedEq(o.var, f(o.expr)))
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
+    fx(x) = x isa Union{Nothing, Real} ? x : f(x)
+    fcv(v::ConvertSpec) = keep(v, ConvertSpec(v.name, v.domain, f(v.from), f(v.to), v.fresh, fx(v.at), fx(v.p),
+        ConvertTransfer[ConvertTransfer(f(t.var), f(t.from), f(t.to), fx(t.per_site)) for t in v.transfers],
+        Pair{Any, Any}[f(a) => fx(b) for (a, b) in v.writes]))
     fs = getfield(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
     fn(x) = x isa Union{Nothing, Real} ? x : f(x)          # boundary values and masks: numbers stay
@@ -77,7 +81,8 @@ function _map_statements(f, sys::PottsSystem; seen = nothing)
         constraints = map(fc, getfield(sys, :constraints)), updates = map(fu, getfield(sys, :updates)),
         equations = map(fq, getfield(sys, :equations)), divisions = map(fv, getfield(sys, :divisions)),
         link_rules = map(fl, getfield(sys, :link_rules)), observed = map(fo, getfield(sys, :observed)),
-        discrete = map(fb, getfield(sys, :discrete)), boundaries = map(fbd, getfield(sys, :boundaries)), sweep, sources = src)
+        discrete = map(fb, getfield(sys, :discrete)), boundaries = map(fbd, getfield(sys, :boundaries)),
+        converts = map(fcv, getfield(sys, :converts)), sweep, sources = src)
 end
 
 """The model with its components expanded into cell variables, parameters and cell ODEs."""
@@ -200,14 +205,14 @@ function _bind_components(sys::PottsSystem)
     m = _map_statements(sub, PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
         lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
         energies = getfield(sys, :energies), drives = getfield(sys, :drives), constraints = getfield(sys, :constraints), updates = getfield(sys, :updates),
-        equations = rest, divisions = getfield(sys, :divisions), relationships = getfield(sys, :relationships),
+        equations = rest, divisions = getfield(sys, :divisions), converts = getfield(sys, :converts), relationships = getfield(sys, :relationships),
         link_rules = getfield(sys, :link_rules), observed = getfield(sys, :observed), sweep = getfield(sys, :sweep), structural = getfield(sys, :structural),
         boundaries = getfield(sys, :boundaries), sources = getfield(sys, :sources)))
     return PottsSystem(; name = getfield(sys, :name), kinds = getfield(sys, :kinds), frozen_kinds = getfield(sys, :frozen_kinds),
         lattice = getfield(sys, :lattice), parameters = params, variables = vars, relations = getfield(sys, :relations),
         energies = getfield(m, :energies), drives = getfield(m, :drives), constraints = getfield(m, :constraints), updates = getfield(m, :updates), equations = [getfield(m, :equations); odes],
         initialization_eqs = getfield(sys, :initialization_eqs), divisions = getfield(m, :divisions),
-        relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
+        converts = getfield(m, :converts), relationships = getfield(sys, :relationships), link_rules = getfield(m, :link_rules), observed = getfield(m, :observed), discrete = blocks, sweep = getfield(m, :sweep), structural = getfield(sys, :structural),
         boundaries = getfield(m, :boundaries), schedule = getfield(sys, :schedule),
         sources = merge(getfield(sys, :sources), getfield(m, :sources)),
         kind_classes = getfield(sys, :kind_classes), metadata = getfield(sys, :metadata),

@@ -378,6 +378,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
     end
     tick_exprs = Any[x for b in getfield(sys, :discrete) for x in b.next]
+    # site conversion passes (R8, D-233)
+    converts = getfield(sys, :converts)
+    _check_converts(sys)
+    convert_exprs = Any[x for v in converts for x in _convert_exprs(v)]
 
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
@@ -390,7 +394,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         writers[k] = u
     end
     geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
-    needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) ||
+    needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) || !isempty(converts) ||
                     any(geometric, Any[(e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
                         (u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
                         (o.expr for o in getfield(sys, :observed))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
@@ -426,7 +430,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     scanned = Any[all_exprs..., (d.when for d in getfield(sys, :divisions))...,
         (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
         (r.when for r in getfield(sys, :link_rules))..., last.(edge_terms)...,
-        (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...]
+        (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...,
+        convert_exprs...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
@@ -443,7 +448,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     if hex && uses_pieces_full
         uses_pieces, uses_pieces_full = true, false
     end
-    uses_clusters = cluster_division || uses_cluster_surface ||
+    (uses_pieces || uses_pieces_full) && !isempty(converts) && throw(ArgumentError(
+        "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
+        "conversion pass yet; a model with `@convert` cannot read them"))
+    uses_clusters = cluster_division || uses_cluster_surface || any(v -> v.domain isa ClusterDomain, converts) ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = getfield(sys, :lattice).neighborhood)
@@ -522,7 +530,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
-    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
+    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule), _convert_names(sys))
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
@@ -533,6 +541,80 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
         contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex)
+end
+
+# ---------------------------------------------------------------------------------------
+# Site conversion passes (R8, D-233)
+
+_convert_names(sys::PottsSystem) = Symbol[v.name for v in getfield(sys, :converts)]
+
+# the expressions of a pass, as they are evaluated against the state (tracker flags, gathers)
+_convert_exprs(v::ConvertSpec) = Any[v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
+    (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...]
+
+const _CONVERT_SITE_BUILTINS = (_SITE_BUILTINS..., :from, :to)
+
+# Names, scopes and kinds of the `@convert` passes: each pass is a phase of the MCS, so its
+# name is none of the canonical phases and no two passes share one; `from`/`to` are references
+# in the entity's scope; `at`/`p` site expressions (with `from`, `to`); the writes add to a
+# model variable or to a cell variable of a cell (with `created`); no draws (the pass's one
+# draw per site is its own). With frozen kinds, the cells a pass moves sites between are
+# `sibling(k)` of non-frozen kinds (the frozen mask then never changes).
+function _check_converts(sys::PottsSystem)
+    seen = Set{Symbol}()
+    kinds = getfield(sys, :kinds)
+    for v in getfield(sys, :converts)
+        _located(sys, v) do
+            v.name in SCHEDULE_PHASES && throw(ArgumentError(
+                "@convert $(v.name): `$(v.name)` is a phase of the MCS (the phases are $(join(SCHEDULE_PHASES, ", "))); " *
+                "name the pass otherwise"))
+            v.name in seen && throw(ArgumentError("@convert $(v.name): two passes are named `$(v.name)`; name each once"))
+            push!(seen, v.name)
+            for k in v.domain.kinds
+                1 <= k < length(kinds) || throw(ArgumentError("@convert $(v.name): kind number $k is not a cell kind"))
+            end
+            v.fresh == 0 || 1 <= v.fresh < length(kinds) ||
+                throw(ArgumentError("@convert $(v.name): `Fresh($(v.fresh))` is not a cell kind"))
+            for x in _convert_exprs(v)
+                (_has_op(x, random_uniform) || _has_op(x, random_normal) || _has_op(x, random_normal_above)) &&
+                    throw(ArgumentError("@convert $(v.name): `rand()`/`randn()` are not available in a conversion pass " *
+                                        "(each candidate's draw is the pass's own, `u < p`)"))
+            end
+            for (what, r) in (("from", v.from), ("to", v.to))
+                _check_names(r, _CELL_BUILTINS, "`$what` of @convert $(v.name)"; between_copies = true)
+            end
+            v.at isa Bool || _check_names(v.at, _CONVERT_SITE_BUILTINS, "`at` of @convert $(v.name)"; between_copies = true)
+            _check_names(v.p, _CONVERT_SITE_BUILTINS, "`p` of @convert $(v.name)"; between_copies = true)
+            for t in v.transfers
+                _check_names(t.per_site, (_CELL_BUILTINS..., :from, :to), "a transfer of @convert $(v.name)"; between_copies = true)
+                for r in (t.from, t.to)
+                    _is_ref(r) || throw(ArgumentError("@convert $(v.name): a transfer moves between cells, `from => to`; got `$r`"))
+                end
+            end
+            for (lhs, d) in v.writes
+                i = info(lhs)
+                if i !== nothing
+                    i.role === :model || throw(ArgumentError("@convert $(v.name): `$(i.name) += …` writes a model variable; " *
+                                                             "write a cell variable at a cell, `$(i.name)[to] += …`"))
+                else
+                    (iscall(lhs) && operation(lhs) === at && (xi = info(arguments(lhs)[1]); xi !== nothing && xi.role === :cell &&
+                     get(xi.options, :reference, false) !== true)) || throw(ArgumentError(
+                        "@convert $(v.name): a write adds to a model variable (`m += …`) or to a cell variable at a cell " *
+                        "(`x[to] += …`); got `$(_indexed_string(lhs))`"))
+                    _check_names(arguments(lhs)[2], _CONVERT_SITE_BUILTINS, "a write of @convert $(v.name)"; between_copies = true)
+                end
+                _check_names(d, (_CONVERT_SITE_BUILTINS..., :created), "a write of @convert $(v.name)"; between_copies = true)
+            end
+            if !isempty(getfield(sys, :frozen_kinds))
+                fz = getfield(sys, :frozen_kinds)
+                ks = Int[v.fresh, (_implicit_fresh(r) for r in (v.from, v.to))..., v.domain.kinds...]
+                (_implicit_fresh(v.from) > 0 && _implicit_fresh(v.to) > 0 && !any(in(fz), ks)) || throw(ArgumentError(
+                    "@convert $(v.name): with frozen kinds, `from` and `to` are `sibling(k)` of kinds that are not frozen " *
+                    "(a conversion must not change the frozen sites)"))
+            end
+        end
+    end
+    return nothing
 end
 
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
@@ -939,6 +1021,7 @@ _describe(d::Drive) = "@drive copy => $(d.expr)"
 _describe(c::Constraint) = "@constraint $(c.expr)"
 _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
+_describe(v::ConvertSpec, kinds = nothing) = "@convert $(v.name) $(_domain_string(v.domain, kinds))"
 _describe(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(x, ::Any) = _describe(x)

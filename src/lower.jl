@@ -513,8 +513,13 @@ function _ref_default(i::Info, env)
     get(i.options, :reference, false) === true && return :(Int32(0))
     v = i.default
     v isa Bool && return env.T(v)
-    v isa Real && return env.T(v)
+    (v isa Real && !_is_symbolic(v)) && return env.T(v)       # a `Num` is a `Real`
     (v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v)) && return :($(env.T)($(lower(v, env))))
+    # kind-conditional (E1): the default for kind 0, the medium
+    if v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v; kind = true)
+        kenv = LowerEnv(env.T, :cell, Dict{Symbol, Any}(:kind => :(Int32(0))), env.relname)
+        return :($(env.T)($(lower(v, kenv))))
+    end
     error("cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
           "give `$(i.name)` a scalar default (a number or an expression of parameters)")
 end

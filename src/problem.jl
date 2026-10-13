@@ -346,7 +346,7 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     lines = String[]
     for (j, n) in enumerate(counts)
         n > 0 || continue
-        push!(lines, labels[j] == _SIBLING_LABEL ? "$(labels[j]): $n time(s)" :
+        push!(lines, labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)") ? "$(labels[j]): $n time(s)" :
                      "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)")
     end
     @warn "references in $(nameof(info.csys)) (track = (:references,)):\n  " * join(lines, "\n  ")
@@ -723,7 +723,10 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     model = Pair{Symbol, Any}[]
     for x in getfield(sys, :variables)
         i = info(x)
-        v = _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
+        # a kind-conditional default (E1) is evaluated per cell from its kind, below
+        v = i.role === :cell && !haskey(opd, _unwrap(x)) && _kind_default(i.default) ?
+            [_evaluate(_substitute_kind(i.default, k), pvals, "the default of `$(i.name)` for kind $k") for k in kinds] :
+            _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
         if i.role === :site || i.role === :field
             a = v isa AbstractArray ? T.(v) : fill(T(v), getfield(sys, :lattice).dims)
             push!(site, i.name => a)
@@ -801,7 +804,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     end
     # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
     # its daughters from the counter on; without divisions a cell's serial is its slot
-    if !isempty(c.divisions)
+    if _numbers_cells(c)
         push!(cell, :birth => Int32.(1:ncell))
         push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
     end
@@ -809,8 +812,32 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
                   for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
-    cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
-    return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+    cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
+    st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
+    return _convert_layout(st, c)
+end
+
+# Cell serials and spare slots: a model that divides or allocates by `@convert`
+_numbers_cells(c::CompiledPottsSystem) = !isempty(c.divisions) || !isempty(getfield(c.sys, :converts))
+
+# a cell-variable default that reads the built-in `kind` (E1)
+function _kind_default(v)
+    _is_symbolic(v) || return false
+    k = _unwrap(B.kind)
+    return any(u -> isequal(_unwrap(u), k), Symbolics.get_variables(v))
+end
+_substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
+
+# The scratch of `@convert` passes (`CorePotts.convert_scratch`), made where the state lives;
+# a state that has it, or a model without `@convert`, is returned as is
+function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    (isempty(getfield(c.sys, :converts)) || haskey(st.cell, CorePotts.CONVERT_FLAGS)) && return st
+    haskey(st.model, CorePotts.CONVERT_FLAGS) && return st
+    sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ))
+    dev(a) = copyto!(similar(st.σ, eltype(a), size(a)), a)
+    return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
+        merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
+        merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history)
 end
 
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
@@ -1023,13 +1050,13 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
-    _track_layout(_ode_layout(_birth_layout(u0, info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+    _track_layout(_ode_layout(_convert_layout(_birth_layout(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
 # counter continues after the capacity, so no serial is ever reused
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (isempty(c.divisions) || haskey(st.cell, :birth)) && return st
+    (!_numbers_cells(c) || haskey(st.cell, :birth)) && return st
     n = length(st.cell.kind)
     # filled where the state lives (a device state stays on the device: no host transfer)
     birth = similar(st.cell.kind, Int32, n)

@@ -59,7 +59,8 @@ public coordinates, shift, linear_index, draw, uniform, normal, bounded_normal, 
     TrackDeltaH, track_eltype, GhostFace,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
-    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH
+    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH,
+    ConvertPass, convert_scratch, CONVERT_FLAGS
 
 include("rng.jl")
 include("lattice.jl")
@@ -79,6 +80,7 @@ include("relationships.jl")
 include("compartments.jl")
 include("lifecycle.jl")
 include("lifecycle_device.jl")
+include("convert.jl")
 include("trackers.jl")
 include("algorithms.jl")
 include("sequential.jl")

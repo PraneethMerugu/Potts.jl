@@ -19,10 +19,39 @@ const EVENT_DIVIDE = Int32(1)
 const EVENT_REMOVE = Int32(2)
 const EVENT_TRANSITION = Int32(3)
 const EVENT_DIVIDE_CLUSTER = Int32(4)
-# internal: a cluster member that transitions and divides with its cluster in the same MCS
-const _EVENT_DIVIDE_CLUSTER_TRANSITION = Int32(5)
+# A division that also transitions the dividing cell (A-17): the transition bit on
+# `EVENT_DIVIDE` or `EVENT_DIVIDE_CLUSTER` (`transitioning`). The transition is applied
+# before the division: the `kind` hook reads the cell before it divides, the daughter state
+# rules read the new kind, and both halves carry it (R8's priority "transition > divide").
+const _TRANSITIONING = Int32(0x10)
+# a cluster member that transitions and divides with its cluster in the same MCS
+const _EVENT_DIVIDE_CLUSTER_TRANSITION = EVENT_DIVIDE_CLUSTER | _TRANSITIONING
 
-@inline _divides_with_cluster(e) = e == EVENT_DIVIDE_CLUSTER || e == _EVENT_DIVIDE_CLUSTER_TRANSITION
+"""
+    transitioning(event)
+
+The trigger's return value for a cell that both transitions (to `kind(st, p, ctx, key, mcs,
+c)`, as `EVENT_TRANSITION`) and has `event`, `EVENT_DIVIDE` (it divides alone) or
+`EVENT_DIVIDE_CLUSTER` (its cluster divides; the cell is the root). The transition is
+applied first: the `kind` hook sees the cell before the division, the daughter state rules
+see the new kind, and both halves carry it. It composes with `ruled_event`
+(`ruled_event(transitioning(e), i)`). A division that is deferred (no free slot) still
+transitions the cell. `stats.lifecycle.transitions` counts the cell once.
+"""
+@inline function transitioning(event)
+    e = Int32(event)
+    (e == EVENT_DIVIDE || e == EVENT_DIVIDE_CLUSTER) ||
+        throw(ArgumentError("transitioning(event): the event is EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER, got $event"))
+    return e | _TRANSITIONING
+end
+public transitioning
+
+# the event without its transition bit, and whether the cell transitions
+@inline _base_event(e) = e & ~_TRANSITIONING
+@inline _transitions(e) = e == EVENT_TRANSITION || (e & _TRANSITIONING) != Int32(0)
+@inline _divides_with_cluster(e) = _base_event(e) == EVENT_DIVIDE_CLUSTER
+# a planned cell whose division did not happen (deferred, or its cluster's): a transition stays
+@inline _undivided(e) = (e & _TRANSITIONING) != Int32(0) ? EVENT_TRANSITION : EVENT_NONE
 
 # Rule-carrying events (`Lifecycle(…; rules = true)`): the trigger returns
 # `ruled_event(event, i)`, the event in the low byte and the index `i ≥ 1` of the rule that
@@ -86,6 +115,10 @@ hand-written):
   reference aliases the cell that reuses the slot, and daughters copy the reset value. It
   writes only cell `c`'s own columns and reads `volume`; `nothing` (the default) for a model
   without references.
+- `owner_changed(st, i)` — the ownership hook (R8, D-075): run at every site `i` whose owner
+  the lifecycle changes (a removed cell's sites, a daughter's sites), e.g. to reset site
+  variables declared `clear_on_ownership_change`. It writes only site `i`'s own site values.
+  `nothing` (the default): no hook. Copy hooks (`@on_copy`) never run from the lifecycle.
 
 Cell serials (D-066 item 3): when `st.cell` has a `birth` column (`Int32`, never copied to a
 daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every daughter
@@ -111,7 +144,7 @@ Both kinds of division can happen in one MCS:
 
 Division requires the moment trackers (`init_moments`).
 """
-struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL}
+struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     trigger::TR
     normal::NO
     cluster_normal::CN
@@ -123,15 +156,22 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL}
     rules::RU                   # Val(true): rule-carrying events
     before::BE                  # a cell update fused with the trigger, or `nothing`
     release::RL                 # the reference reset of an event round, or `nothing`
+    owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
 end
 Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
-    rules::Bool = false, before = nothing, release = nothing) =
+    rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing) =
     Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
-        release)
-# the positional form before P6.5a: no references
+        release, owner_changed)
+# the positional forms before P6.5a (no references) and P6.5b (no ownership hook)
 Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every::Int, rules::Val, before) =
     Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every, rules, before, nothing)
+Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every::Int, rules::Val, before, release) =
+    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every, rules, before, release, nothing)
+
+# the ownership hook at site `i` (`Lifecycle.owner_changed`)
+@inline _owner_changed!(::Nothing, st, i) = nothing
+@inline _owner_changed!(f::F, st, i) where {F} = (f(st, i); nothing)
 
 """
     NEXT_BIRTH
@@ -258,7 +298,7 @@ end
 end
 
 @inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled)
-    if _event(ruled, @inbounds(events[c])) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
+    if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
             @inbounds normals[d, c] = n[d]
@@ -266,11 +306,12 @@ end
     end
 end
 
-@inline function _partition_body!(i, σ, daughter, normals, bias, removed, cell, lat)
+@inline function _partition_body!(i, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
     c = @inbounds σ[i]
     if c > 0
         if @inbounds(removed[c])
             @inbounds σ[i] = Int32(0)
+            _owner_changed!(hook, st, i)
         elseif @inbounds(daughter[c]) > 0
             N = ndims(lat)
             δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
@@ -281,25 +322,34 @@ end
             for d in 1:N
                 side += T(offset[d]) * @inbounds(normals[d, c])
             end
-            side > 0 && (@inbounds σ[i] = daughter[c])
+            if side > 0
+                @inbounds σ[i] = daughter[c]
+                _owner_changed!(hook, st, i)
+            end
         end
     end
 end
 
+# A transition is applied before the division of the same cell (A-17, R8's "transition >
+# divide"): the `kind` hook reads the cell before the state rules run (its columns are the
+# parent's, the daughter holds their copy), both halves take the new kind, and the daughter
+# state rule reads it.
 @inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
     raw = @inbounds events[c]
     e = _event(ruled, raw)
-    if e == EVENT_TRANSITION
-        @inbounds st.cell.kind[c] = kindf(st, p, ctx, key, mcs, Int32(c))
-    elseif e == EVENT_DIVIDE && @inbounds(daughter[c]) > 0
-        _divide_rule!(ruled, divide!, st, p, ctx, key, mcs, Int32(c), @inbounds(daughter[c]), raw)
-    elseif _divides_with_cluster(e) && @inbounds(daughter[c]) > 0
-        d = @inbounds daughter[c]
-        _divide_rule!(ruled, cluster_divide!, st, p, ctx, key, mcs, Int32(c), d, raw)
-        if e == _EVENT_DIVIDE_CLUSTER_TRANSITION         # both halves take the new kind
-            k = kindf(st, p, ctx, key, mcs, Int32(c))
-            @inbounds st.cell.kind[c] = k
-            @inbounds st.cell.kind[d] = k
+    b = _base_event(e)
+    d = @inbounds daughter[c]
+    divides = d > 0 && (b == EVENT_DIVIDE || b == EVENT_DIVIDE_CLUSTER)
+    if _transitions(e)
+        k = kindf(st, p, ctx, key, mcs, Int32(c))
+        @inbounds st.cell.kind[c] = k
+        divides && (@inbounds st.cell.kind[d] = k)
+    end
+    if divides
+        if b == EVENT_DIVIDE
+            _divide_rule!(ruled, divide!, st, p, ctx, key, mcs, Int32(c), d, raw)
+        else
+            _divide_rule!(ruled, cluster_divide!, st, p, ctx, key, mcs, Int32(c), d, raw)
         end
     end
 end
@@ -376,6 +426,9 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     events = _to_host(pstats, cache.events)
     # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the device
     rule = lc.rules === Val(true) ? (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r) : nothing
+    # `transitioning(e)` (A-17): the transition bit is set apart and re-attached to the planned event
+    tb = (events .& _TRANSITIONING) .!= 0
+    events .&= ~_TRANSITIONING
     volume = _to_host(pstats, st.cell.volume)
     # a dead root still names its cluster while members live: never reuse its id
     held = _has_clusters(st) ? _referenced_clusters(_to_host(pstats, st.cell.cluster), volume) : Set{Int32}()
@@ -394,15 +447,20 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         # pass 1: clusters divide as a unit, in root order; members follow their root and a
         # dividing cluster takes precedence over its members' own events except removal
         for c in 1:cap                                  # only the root's event counts
-            events[c] == EVENT_DIVIDE_CLUSTER && cl[c] != c && (events[c] = EVENT_NONE)
+            if events[c] == EVENT_DIVIDE_CLUSTER && cl[c] != c
+                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE
+                tb[c] = false
+            end
         end
         for c in 1:cap
             events[c] == EVENT_DIVIDE_CLUSTER && cl[c] == c || continue
             ms = filter(m -> events[m] != EVENT_REMOVE, members[Int32(c)])
             if nextfree + length(ms) - 1 <= length(free)
                 for m in ms
-                    events[m] = events[m] == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION :
+                    # a member that transitions transitions first (A-17)
+                    events[m] = events[m] == EVENT_TRANSITION || tb[m] ? _EVENT_DIVIDE_CLUSTER_TRANSITION :
                                 EVENT_DIVIDE_CLUSTER
+                    tb[m] = false
                     rule === nothing || (rule[m] = rule[c])      # members follow the root's rule
                     daughter[m] = free[nextfree]
                     nextfree += 1
@@ -410,7 +468,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
                 push!(roots, Int32(c))
                 stats.divisions += length(ms)
             else
-                events[c] = EVENT_NONE
+                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE      # a deferred division: the transition stays
+                tb[c] = false
                 _defer!(stats, cap)
             end
         end
@@ -432,7 +491,11 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             stats.removals += 1
         end
     end
-    stats.transitions += count(e -> e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION, events)
+    # a cell dividing alone that transitions: the transition before its division, or alone when deferred
+    for c in 1:cap
+        tb[c] && events[c] == EVENT_DIVIDE && (events[c] = daughter[c] > 0 ? EVENT_DIVIDE | _TRANSITIONING : EVENT_TRANSITION)
+    end
+    stats.transitions += count(_transitions, events)
     _copy!(pstats, cache.daughter, daughter)
     _copy!(pstats, cache.removed, removed)
     _copy!(pstats, cache.events, rule === nothing ? events : events .| (rule .<< _RULE_SHIFT))
@@ -442,14 +505,14 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     else
         _cluster_planes!(pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
     end
-    if any(c -> daughter[c] > 0 && events[c] == EVENT_DIVIDE, 1:cap)    # after the host planes
+    if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)    # after the host planes
         _launch(_normal_body!, backend, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
             ctx, key, mcs, lc.rules))
         launches += 1
     end
     n = length(st.σ)
     _launch(_partition_body!, backend, n, (st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
-        st.cell, ctx.lattice))
+        st.cell, ctx.lattice, lc.owner_changed, st))
     launches += 1
 
     # daughters: copy every non-tracker cell quantity from the parent, same kind, new generation
@@ -458,7 +521,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         ds = daughter[parents]
         # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
         map(keys(st.cell), values(st.cell)) do name, a
-            (name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name)) ||
+            (name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name) ||
+             _is_scratch_column(name)) ||
                 _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
             nothing
         end

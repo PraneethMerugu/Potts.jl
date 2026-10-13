@@ -106,7 +106,7 @@ const FUSE_CELLS = Ref(1 << 13)
 
 function DeviceLifecycle(backend, N::Int, cap::Int, st)
     names = keys(st.cell)
-    cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k))
+    cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k))
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
@@ -173,10 +173,10 @@ end
         for c in lo:hi
             raw = @inbounds events[c]
             e = _event(ruled, raw)
-            if e == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
+            if _base_event(e) == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
                 CL || Atomix.@atomic dv.acc[_ACC_NOCLUSTER] += Int32(1)
-                e = EVENT_NONE
-                @inbounds events[c] = EVENT_NONE
+                e = _undivided(e)                          # a transition (`transitioning`) stays
+                @inbounds events[c] = _with_rule(ruled, e, raw)
             end
             @inbounds removed[c] = e == EVENT_REMOVE
             @inbounds daughter[c] = Int32(0)
@@ -204,7 +204,7 @@ end
         @inbounds(st.cell.volume[c]) > 0 || continue
         r = @inbounds st.cell.cluster[c]
         Atomix.@atomic dv.nlive[r] += Int32(1)
-        if _event(ruled, @inbounds events[r]) == EVENT_DIVIDE_CLUSTER &&
+        if _base_event(_event(ruled, @inbounds events[r])) == EVENT_DIVIDE_CLUSTER &&
            _event(ruled, @inbounds events[c]) != EVENT_REMOVE
             Atomix.@atomic dv.nmem[r] += Int32(1)
         end
@@ -218,7 +218,7 @@ end
     if CL && _on(dv, par)
         lo, hi = _chunk(t, length(events))
         for c in lo:hi
-            _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
+            _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
         end
     end
     @inbounds cnt[t, 2] = dem
@@ -239,13 +239,14 @@ end
     else
         next = Int32(0)
         for r in 1:length(events)
-            _event(ruled, @inbounds events[r]) == EVENT_DIVIDE_CLUSTER || continue
+            raw = @inbounds events[r]
+            _base_event(_event(ruled, raw)) == EVENT_DIVIDE_CLUSTER || continue
             n = @inbounds dv.nmem[r]
             if next + n <= nfree
                 @inbounds dv.coff[r] = next
                 next += n
             else
-                @inbounds events[r] = EVENT_NONE
+                @inbounds events[r] = _with_rule(ruled, _undivided(_event(ruled, raw)), raw)    # a transition stays
                 Atomix.@atomic dv.acc[_ACC_DEFERRED] += Int32(1)
             end
         end
@@ -270,13 +271,13 @@ end
                 k += Int32(1)
                 @inbounds dv.freelist[k] = c % Int32
             end
-            if CL && e == EVENT_DIVIDE_CLUSTER && !greedy
+            if CL && _base_event(e) == EVENT_DIVIDE_CLUSTER && !greedy
                 @inbounds dv.coff[c] = off
                 off += @inbounds dv.nmem[c]
             end
-            if e == EVENT_DIVIDE
+            if _base_event(e) == EVENT_DIVIDE
                 # a member of a dividing cluster divides with it, not alone
-                member = CL && _event(ruled, @inbounds events[st.cell.cluster[c]]) == EVENT_DIVIDE_CLUSTER
+                member = CL && _base_event(_event(ruled, @inbounds events[st.cell.cluster[c]])) == EVENT_DIVIDE_CLUSTER
                 if !member
                     @inbounds dv.req[c] = Int32(1)
                     nreq += Int32(1)
@@ -343,7 +344,7 @@ _births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
             rk += Int32(1)
         end
         # a root (its cluster id is itself) whose cluster divides: members are found by id
-        if CL && @inbounds(st.cell.cluster[c]) == c && _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER
+        if CL && @inbounds(st.cell.cluster[c]) == c && _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER
             _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs, births)
         end
     end
@@ -429,7 +430,7 @@ end
         @inbounds daughter[m] = dv.freelist[j + 1]
         _birth!(births, @inbounds(dv.freelist[j + 1]), j)
         j += Int32(1)
-        ev = em == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
+        ev = _transitions(em) ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER     # A-17: it transitions first
         @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
     end
     cellK = merge(cell, (; volume = _OneValue(VK), anchor = _OneColumn(ar), m1 = _OneColumn(m1K), m2 = _OneColumn(m2K)))
@@ -464,7 +465,7 @@ end
             surf === nothing || (@inbounds surf[d] = zero(eltype(surf)))
         end
         e = _event(ruled, @inbounds events[c])
-        (e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION) && (ntrans += Int32(1))
+        _transitions(e) && (ntrans += Int32(1))
         e == EVENT_REMOVE && (nrem += Int32(1))
     end
     ntrans > 0 && Atomix.@atomic dv.acc[_ACC_TRANSITIONS] += ntrans
@@ -509,12 +510,13 @@ end
 # side of its plane go to the daughter, whose volume and moment sums (about the parent's
 # anchor) accumulate in integer scratch
 
-@inline function _dpartition_body!(i, dv, par, σ, daughter, normals, bias, removed, cell, lat)
+@inline function _dpartition_body!(i, dv, par, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
     _on(dv, par) || return nothing
     c = @inbounds σ[i]
     c > 0 || return nothing
     if @inbounds(removed[c])
         @inbounds σ[i] = Int32(0)
+        _owner_changed!(hook, st, i)
     elseif (d = @inbounds daughter[c]) > 0
         N = ndims(lat)
         δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
@@ -527,6 +529,7 @@ end
         end
         if side > 0
             @inbounds σ[i] = d
+            _owner_changed!(hook, st, i)
             Atomix.@atomic dv.dvol[d] += Int32(1)
             # `% Int32`: |δ_k|, |δ_k δ_l| ≤ the parent's m2[k, k] ≤ the scratch limit
             # (`_scratch_ok`), and the sums wrap (exact once complete)
@@ -784,7 +787,7 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
     fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
-        lc.cluster_divide!, lc.release)
+        lc.cluster_divide!, lc.release, lc.owner_changed)
     opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
@@ -925,7 +928,7 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
         fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
     _stage!(mode, _dpartition_body!, backend, n,
-        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st))
     _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
         ruled, CL, fns.release, opt.births))
     _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
@@ -1028,7 +1031,7 @@ end
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(_dpartition_body!, tp, length(st.σ),
-        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice))
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice, fns.owner_changed, st))
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
