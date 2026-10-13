@@ -314,8 +314,11 @@ let t1 = tsv("sweeps-2026-10-08", "table1.tsv")
     Markdown.parse(out)
 end
 
-# Table 1 uses M's rule: the threshold is the sampled point whose mean time is nearest the
-# multiple, on the final bisection bracket (6 runs at each end). Against our own uninhibited
+# Table 1 applies M's rule to our final bracket: the bracket starts as the first pair of
+# adjacent grid points (ascending) whose mean times enclose the multiple, is narrowed by
+# bisection, and the threshold is whichever of its two ends (6 runs each) has the mean time
+# nearer the multiple. It is not the nearest of all sampled points: at β 1.1× this gives
+# 0.625 where the globally nearest sample is 0.65 (no verdict changes). Against our own uninhibited
 # time (14.945 cycles) the same rule gives β = 0.80, 0.95, 0.99, 1.01 and 1.02 and
 # γ = 0.20, 0.60 and 0.75 (information only, in `table1.tsv`). The γ rows at 1.1× and 2× are
 # "—", as for every lattice framework: the time jumps from 14.9 to 58.8 cycles between
@@ -759,7 +762,7 @@ Markdown.parse(s5)
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked (M over the framework's code) |
 # | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, coloured count glyphs | no outlines on this schematic (D-156) | not an author question |
 # | F5 distance bins and origin | M's shared edges 0, 18.6, 37.2, 55.8, 74.4, 93 for our row (`fig5_shared.png`), binned in R (provisional). M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows); the unit and origin are Q15 on our open question list. The verdict figure keeps 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R); distances from the initial cell's centre | one set of edges for all rows (0–18, …, 74–93 "radii"); how they were derived is not stated; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
-# | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds by M's nearest rule on 6-run bracket ends | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
+# | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds: the nearer end (6 runs each) of the bisected first bracketing pair, not the globally nearest sample | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
 # | F7, F8 drawing | each cell a filled disc of its radius at its centroid, yellow or teal (Figure 7) / red (Figure 8, β), no strokes; the black concave hull of `metrics.cpp`; one length scale per figure; a row of lattice stills as information | M's grids, one colony per framework and multiple | M's form from our O5 files | not an author question |
 # | F7, F8 panel labels | no number in the panels; each colony's C/C_circle of the concave hull in the caption (1.38, 1.91, 2.22 for Figure 7) | a centred number per panel (1.37–3.45); its quantity is not stated | no candidate we tried matched M's printed values, so we do not guess | not asked; on our open question list |
 # | F9 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |

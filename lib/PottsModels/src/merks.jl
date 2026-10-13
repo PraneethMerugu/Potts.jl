@@ -8,8 +8,11 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006):
   `l = 4√(λ_max(I)/a)` (Eq. 5, the `major_length` built-in). Elongation is what turns the
   round islands of pure chemotaxis into networks.
 - Chemotaxis `ΔH = −χ (c(target) − c(source))` on every copy (Eq. 2, Savill–Hogeweg form).
-  With `contact_inhibited = true` it acts only on extensions of a cell into the medium (the
-  contact-inhibited model of Merks et al., PLoS Comput. Biol. 4, e1000163, 2008).
+  With `contact_inhibited = true` it acts only on extensions of a cell into the medium: the
+  extension-only variant of Eq. 4 of Merks et al., PLoS Comput. Biol. 4, e1000163, 2008
+  (that paper's Figs. 11–13). It is not that paper's standard contact-inhibited model,
+  which applies chemotaxis to every copy between a cell and the medium, extensions and
+  retractions alike.
 - `∂c/∂t = D∇²c + α δ_cell − ε c (1 − δ_cell)` (Eq. 6): cells secrete, the chemoattractant
   decays only in the matrix. The field is advanced by explicit Euler, clipped at zero.
 - Cells stay connected: a copy may not split a cell (a hard veto for the paper's
@@ -21,8 +24,8 @@ Defaults are the 2006 parameter set in lattice units (2 µm/px, 30 s/MCS):
 `α = ε = 5.4·10⁻³` (1.8·10⁻⁴ s⁻¹), target area `A = 100` with `λ = 50`, and target length
 `L = 50` ("about 100 µm" in the paper text) with `λ_L = 5`, on a 500² lattice with Moore
 contacts and copies. Seed with [`merks_state`](@ref): 282 cells of 10² sites over 333².
-The 2008 contact-inhibited runs used other values (`A = 50` and Dataset S1); pass them as
-keywords with `contact_inhibited = true`.
+The 2008 runs used other values (`A = 50` and Dataset S1); pass them as keywords, with
+`contact_inhibited = true` for the extension-only variant.
 
 Differences from the paper:
 - connectivity is a hard veto, not the soft penalty `E₀ > 2000` on connectivity-breaking

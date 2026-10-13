@@ -135,7 +135,12 @@ DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready
 - `x`, `y`: the centroid in units of `R = √(A₀/π)` from `center`, exactly as
   [`openvt_snapshot`](@ref PottsModels.openvt_snapshot) gives them;
 - `i`: the inhibition code [`openvt_inhibition_code`](@ref) of the snapshot's `a` and `f` at
-  the thresholds `β` (type 1, area) and `γ` (type 2, free surface): 0 growing, 1, 2 or 3;
+  the thresholds `β` (type 1, area) and `γ` (type 2, free surface): 0 growing, 1, 2 or 3.
+  The code is computed on the saved state, after that MCS's growth increment: `a` is
+  `volume / A_star` with the grown `A_star`, while the model decided growth on the
+  pre-growth `volume / Pre(A_star)`. The two differ only for a cell whose target area is
+  within one increment `α` (50/775 px by default) of the β threshold, so the effect is
+  negligible;
 - `n`: the number of distinct other cells (medium and the cell itself excluded) among the
   `Moore(1)` neighbours of the cell's sites (spec §2.4), on the closed lattice (no wrap).
 
