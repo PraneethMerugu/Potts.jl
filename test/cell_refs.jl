@@ -332,3 +332,59 @@ end
     @test occursin("Read it in a `@drive` (evaluated per copy", msg)
     @test occursin("snapshot it with `@after_mcs`", msg)
 end
+
+# The reference reset of an event round on the device (D-066 item 5 (a)): the host planner
+# form launches `Lifecycle.release` as its own kernel (`CorePotts._release_body!`), which the
+# GPU group must compile (device IR coverage, D-157); the device forms run it inside the
+# copies stage. Compared with the CPU Float32 run.
+@potts_model CRRelease begin
+    @kinds medium blob doomed
+    @parameters begin
+        J[kind, kind] = [0 16 16; 16 2 16; 16 16 2]
+    end
+    @variables begin
+        partner(cell)::CellRef
+    end
+    @lattice Lattice((30, 30); boundary = Closed(), neighborhood = Moore(1))
+    @energy begin
+        cells(blob) => (volume - 36.0)^2
+        cells(doomed) => 50.0 * volume^2
+        contacts => J[kind, kind′]
+    end
+    @divide cells(blob) when = mcs == 6, along = (1.0, 0.0)
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+function cr_release_problem()
+    σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[5:10, 18:23] .= 2; σ[25, 15] = 3
+    return PottsProblem(CRRelease(; name = :rel), [ownership => σ, kind => [:blob, :blob, :doomed], :partner => [2, 3, 1]],
+        (0, 8); T = Float32, capacity = 6)
+end
+# after the event: blobs 1, 2 and their two daughters alive (one in the dead cell's slot 3);
+# 1 and its daughter still name 2, 2 and its daughter were reset (2 named the dead cell 3)
+function cr_release_summary(u)
+    v = Array(u.cell.volume); pr = Array(u.cell.partner)
+    alive = findall(>(0), v)
+    return (; nalive = length(alive), slot3 = v[3] > 0, names2 = count(==(2), pr[alive]), names0 = count(==(0), pr[alive]),
+        other = count(r -> r ∉ (0, 2), pr[alive]))
+end
+
+@testset "references are released on the device (host planner form; PottsDevices)" begin
+    if isdefined(Main, :PottsDevices) && PottsDevices.on_device()
+        backend = PottsDevices.device_backend()
+        prob = cr_release_problem()
+        cpu = cr_release_summary(solve(prob, CheckerboardCPM()).u[end])
+        @test cpu == (; nalive = 4, slot3 = true, names2 = 2, names0 = 2, other = 0)
+        integ = init(prob, CheckerboardCPM(); backend)
+        D = integ.lcache.device
+        @test D isa CorePotts.DeviceLifecycle
+        D.form[] = CorePotts._FORM_HOST                 # the host planner: `_run_release!` launches on the device
+        dev = cr_release_summary(solve!(integ).u[end])
+        @test Symbol(integ.retcode) === :Success
+        @test dev == cpu
+        # the device forms (release inside the copies stage) agree
+        @test cr_release_summary(solve(prob, CheckerboardCPM(); backend).u[end]) == cpu
+    else
+        @test_skip "device (POTTS_GPU=metal|rocm)"
+    end
+end
