@@ -76,7 +76,7 @@ function _device_scratch(backend, N::Int, cap::Int)
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(Int32, 3), mask = z(Int64, 3), limit = _SCRATCH_LIMIT[])
+        mcnt = z(Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1), limit = _SCRATCH_LIMIT[])
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -296,7 +296,10 @@ end
     ndiv = min(nreq, avail)
     ndiv > 0 && Atomix.@atomic dv.acc[_ACC_DIVISIONS] += ndiv
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
-    @inbounds tot[4] = @inbounds(tot[2]) + ndiv     # free-list entries taken (serials, `_advance_births!`)
+    # free-list entries taken this round (serials): scratch, committed to the counter after
+    # the partition (`_advance_births!`), so a staged launch that fails in the planner leaves
+    # the state's counter as it was for the host planner
+    @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv
     return nothing
 end
 
@@ -309,8 +312,8 @@ end
     @inbounds b.col[d] = b.next[1] + k % Int32         # `next` has one entry; d is a free slot
     return nothing
 end
-@inline _advance_births!(::Nothing, t, tot) = nothing
-@inline _advance_births!(b, t, tot) = (t == 1 && (@inbounds b.next[1] += tot[4]); nothing)   # tot has 4 entries
+@inline _advance_births!(::Nothing, dv) = nothing
+@inline _advance_births!(b, dv) = (@inbounds b.next[1] += dv.taken[1]; nothing)   # both have one entry
 _births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
               (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH)) : nothing
 
@@ -449,9 +452,8 @@ end
 @inline _with_rule(::Val{true}, ev, raw) = ev | ((raw >> _RULE_SHIFT) << _RULE_SHIFT)
 
 # H: who is whose daughter; statistics; a daughter's surface starts from zero
-@inline function _plan_h!(t, tot, events, daughter, dv, par, ruled, surf, births)
+@inline function _plan_h!(t, tot, events, daughter, dv, par, ruled, surf)
     _on(dv, par) || return nothing
-    _advance_births!(births, t, tot)
     lo, hi = _chunk(t, length(events))
     ntrans = Int32(0)
     nrem = Int32(0)
@@ -475,7 +477,7 @@ end
 @kernel function _plan_kernel!(events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
         ruled, st, p, ctx, key, mcs, clusters, surf, births)
     cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (4,)
+    tot = @localmem Int32 (3,)
     ta = @index(Local, Linear)
     _plan_a!(ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters)
     @synchronize
@@ -499,7 +501,7 @@ end
         clusters, births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, tot, events, daughter, dv, par, ruled, surf, births)
+    _plan_h!(th, tot, events, daughter, dv, par, ruled, surf)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -569,8 +571,10 @@ end
 end
 
 @inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
-        ::Val{CL}, release::RL) where {CL, RL}
+        ::Val{CL}, release::RL, births::BT) where {CL, RL, BT}
     _on(dv, par) || return nothing
+    # the serial counter passes the entries the planner took (the first stage writing state)
+    c == 1 && _advance_births!(births, dv)
     # D-066 item 5 (a): cell c's references to dead cells reset first (no volume changes in
     # this stage, so a slot reused this round still reads as dead), and the daughter copies
     # the reset value; only a live cell's own columns are written (`Lifecycle.release`)
@@ -833,8 +837,9 @@ end
 # The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
 # next form takes over. The staged form's trigger (with `before`) and planner may have run:
 # neither writes σ or a cell column (the planner only writes its scratch, the event buffers,
-# the device counts and the `surface` of the free slots it picks as daughters, which the
-# host planner recomputes from σ with the other trackers at an event), so
+# the device counts and the `surface` and `birth` of the free slots it picks as daughters, which
+# the host planner recomputes from σ with the other trackers at an event, or assigns again from
+# the serial counter that only the copies stage advances), so
 # the host planner takes the MCS from scratch, rerunning the trigger but not `before`
 # (`before_ran[]`), and drops this MCS's device counts (`_drop_device_counts!`)
 function _form_failed!(D, e)
@@ -922,7 +927,7 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     _stage!(mode, _dpartition_body!, backend, n,
         (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
     _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
-        ruled, CL, fns.release))
+        ruled, CL, fns.release, opt.births))
     _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     launches = 5
@@ -991,7 +996,7 @@ end
 
 @kernel function _fused_kernel!(buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs)
     cnt = @localmem Int32 (PLAN_WG, 3)
-    tot = @localmem Int32 (4,)
+    tot = @localmem Int32 (3,)
     t0 = @index(Local, Linear)
     _each!(_dtrigger_body!, t0, length(buf.events),
         (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters))
@@ -1019,7 +1024,7 @@ end
         st, p, ctx, key, mcs, clusters, opt.births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, tot, buf.events, buf.daughter, dv, par, ruled, opt.surf, opt.births)
+    _plan_h!(th, tot, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(_dpartition_body!, tp, length(st.σ),
@@ -1027,7 +1032,7 @@ end
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        st, ruled, clusters, fns.release))
+        st, ruled, clusters, fns.release, opt.births))
     @synchronize
     tu = @index(Local, Linear)
     _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
