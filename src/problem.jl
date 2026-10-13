@@ -258,7 +258,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
     copy_relations = Symbol[k for k in keys(hctx)
                             if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))]
-    claims, reads = _claims(c), _reads(c)
+    claims, reads = _claims(c), _with_faces(() -> _reads(c, T), c)
     copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, claims, reads, fns.temperature, fns.connectivity)
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims, reads, phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
@@ -340,11 +340,47 @@ end
 # (link energies read their centroids; a copy writes only its old/new). Leaving one out
 # would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
 # Relationships used only by link rules are read on the host between sweeps: no claims.
-function _reads(c::CompiledPottsSystem)
+# References (R6, D-231 item 7): every cell the copy-step functions read through a reference,
+# each hop of a chain (`partner[old]`, `partner[partner[old]]`), shared like link partners; a
+# dead or absent referent claims 0 (none).
+function _reads(c::CompiledPottsSystem, T)
     rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
-    isempty(rels) && return CorePotts.no_claims
-    parts = [:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
-    return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
+    parts = Any[:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
+    refs = _ref_read_codes(c, T)
+    isempty(parts) && isempty(refs) && return CorePotts.no_claims
+    isempty(refs) && return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
+    return _rgf(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, Expr(:tuple, parts..., refs...)))))
+end
+
+# the lowered reference indices (Int32) the copy step reads, deduplicated
+function _ref_read_codes(c::CompiledPottsSystem, T)
+    rn = c.gather_names
+    out = Any[]
+    seen = Set{String}()
+    add!(code) = (k = _code_key(code); k in seen || (push!(seen, k); push!(out, :(Int32($code)))))
+    for (kinds, E) in _sorted(_group_terms(c.cell_terms))
+        refs = _ref_reads(E)
+        isempty(refs) && continue
+        for (side, k) in ((:old, :k_old), (:new, :k_new))
+            env = _cell_env(T, side, rn; kind = k)
+            for r in refs
+                add!(:(($side != 0 && $(_kindtest(k, kinds))) ? Int32($(lower(r, env))) : Int32(0)))
+            end
+        end
+    end
+    env = _proposal_env(T, rn)
+    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., getfield(c.sys, :sweep).temperature]
+    for u in get(c.updates, (:on_copy, :proposal), Update[])
+        push!(xs, u.eq.rhs)
+        # a reference the copy writes is read by the energies after it
+        x, _ = arguments(_unwrap(u.eq.lhs))
+        _is_ref_var(x) && add!(lower(u.eq.rhs, env))
+    end
+    for x in xs
+        x === nothing && continue
+        foreach(r -> add!(lower(r, env)), _ref_reads(_unwrap(x)))
+    end
+    return out
 end
 
 # Kind tables are indexed by kind (medium first) along every axis.
@@ -652,7 +688,11 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
         elseif i.role === :cell
             v === nothing && throw(ArgumentError("cell variable `$(i.name)` has no initial value; give it in the operating point"))
-            push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
+            if get(i.options, :reference, false) === true
+                push!(cell, i.name => _ref_column(i.name, v, ncell))
+            else
+                push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
+            end
         elseif i.role === :edge
             continue                                   # link payloads, below
         elseif i.role === :model
@@ -717,12 +757,29 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops, c.discrete_pops))
         push!(model, n => zeros(T, 1))
     end
+    # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
+    # its daughters from the counter on; without divisions a cell's serial is its slot
+    if !isempty(c.divisions)
+        push!(cell, :birth => Int32.(1:ncell))
+        push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
+    end
     sitent, modelnt = NamedTuple(site), NamedTuple(model)
     history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
                   for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
     cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
     return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+end
+
+# A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
+function _ref_column(name, v, ncell)
+    vals = v isa AbstractArray ? vec(v) : fill(v, ncell)
+    length(vals) == ncell || throw(ArgumentError("$(length(vals)) values of reference `$name` for $ncell labelled cells"))
+    for r in vals
+        (r isa Integer || (r isa Real && isinteger(r))) && 0 <= r <= ncell ||
+            throw(ArgumentError("reference `$name` = $r: a reference is 0 (none) or a cell id in 1:$ncell"))
+    end
+    return Int32.(vals)
 end
 
 # The initial value of edge variable `x` on the initial links of relationship `r`: its

@@ -150,7 +150,9 @@ const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :Expli
     :count, :randn,
     # D-189/D-193 (P6.3g): the connectivity vocabulary (rule values, `connected`, the shell
     # folds); `components` is removed with no alias
-    :Local, :ArcOrPair, :Simple, :connected, :shell, :pieces, :distinct]
+    :Local, :ArcOrPair, :Simple, :connected, :shell, :pieces, :distinct,
+    # D-231 (P6.5a): cell references, their liveness test and the cluster navigation
+    :CellRef, :alive, :members, :root, :sibling]
 const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
     :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower])
 

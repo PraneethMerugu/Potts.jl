@@ -67,6 +67,7 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key =
     LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, c)..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
+        :birth => :(Potts._birth(st.cell, $c)),
         :major_length => :(CorePotts.major_length($T, st.cell, ctx.lattice, $c)),
         :euler => :($T(@inbounds st.cell.euler[$c])), :euler_full => :($T(@inbounds st.cell.$(_EULER_FULL[])[$c])),
         (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$c])) for n in _PIECES_NAMES)...,
@@ -877,7 +878,7 @@ function _fuse_before(c::CompiledPottsSystem, T, phases, lc, cand)
     (k > 1 && mcs[k - 1] isa Tuple && !isempty(mcs[k - 1]) && last(mcs[k - 1]) === cand.phase) || return phases, lc
     _reads_own_only(_trigger_expr(c, T).args[2], cand.writes) || return phases, lc     # the body
     fused = CorePotts.Lifecycle(lc.trigger, lc.normal, lc.cluster_normal, lc.kind, lc.divide!, lc.cluster_divide!,
-        lc.rebuild!, lc.every, lc.rules, cand.phase.f!)
+        lc.rebuild!, lc.every, lc.rules, cand.phase.f!, lc.release)
     after = phases.after_mcs
     j = findlast(x -> x === cand.phase, after)
     after = (after[1:(j - 1)]..., after[(j + 1):end]...)
@@ -1005,7 +1006,10 @@ const _CELL_HELPER_READS = Dict{String, Tuple{Vararg{Symbol}}}(
     "CorePotts.centroid_distance" => (:volume, :anchor, :m1), "CorePotts.centroid" => (:volume, :anchor, :m1),
     "CorePotts.centroid_position" => (:volume, :anchor, :m1), "Potts._centroid_axis" => (:volume, :anchor, :m1),
     "Potts._displacement_axis" => (:volume, :anchor, :m1), "CorePotts.major_length" => (:volume, :m1, :m2),
-    "CorePotts.cluster_of" => (:cluster,))
+    "CorePotts.cluster_of" => (:cluster,),
+    # cell references (R6); `Potts._birth` reads the whole cell state (its column is optional)
+    "Potts._deref_kind" => (:volume, :kind), "Potts._deref_cluster" => (:volume, :cluster),
+    "Potts._sibling" => (:volume, :cluster, :kind))
 function _state_reads(exprs; alias::Union{Nothing, Symbol} = nothing)
     σ = Ref(false)
     whole = Ref(false)
@@ -1691,7 +1695,27 @@ function _lifecycle(c::CompiledPottsSystem, T)
         cluster_normal = _division_normal(c.divisions[clusterids], T),
         divide! = _division_rules(c, cellids, T, :parent, ruled),
         cluster_divide! = _division_rules(c, clusterids, T, :(CorePotts.cluster_of(st.cell, parent)), ruled),
-        every = g, rules = ruled)
+        every = g, rules = ruled, release = _release(c))
+end
+
+# The model's `CellRef` columns, in declaration order (R6)
+_ref_columns(c::CompiledPottsSystem) = Symbol[info(x).name for x in getfield(c.sys, :variables) if _is_ref_var(x)]
+
+# D-066 item 5 (a): `Lifecycle.release`, the reset of a live cell's references to dead cells
+# (at every event round, before any id is allocated); `nothing` for a model without references
+function _release(c::CompiledPottsSystem)
+    refs = _ref_columns(c)
+    isempty(refs) && return nothing
+    resets = [quote
+                  r = @inbounds st.cell.$n[c]
+                  (r != 0 && !Potts._alive_slot(st.cell.volume, r)) && (@inbounds st.cell.$n[c] = zero(r))
+              end for n in refs]
+    # c ∈ 1:capacity (the launch range)
+    return _rgf(:((st, c) -> begin
+        @inbounds(st.cell.volume[c]) > 0 || return nothing
+        $(resets...)
+        return nothing
+    end))
 end
 
 # the plane of one domain's divisions (the rules of a domain share it)
@@ -1840,8 +1864,30 @@ end
 function _vacated_energy_expr(c::CompiledPottsSystem, T)
     rn = c.gather_names
     body = Any[:(H = zero($T))]
-    for (kinds, E) in _cell_term_groups(c)
-        push!(body, :($(_kindtest(:(Potts._cellkind(st, c)), kinds)) && (H += $(lower(E, _cell_env(T, :c, rn))))))
+    groups = _cell_term_groups(c)
+    refs = _cell_terms_read_refs(c)
+    # with references (R6): the dead cell's term reads its referents before the copy (`sr`), as ΔH does
+    own = refs ? (:__refst => :sr,) : ()
+    for (kinds, E) in groups
+        push!(body, :($(_kindtest(:(Potts._cellkind(st, c)), kinds)) && (H += $(lower(E, _cell_env(T, :c, rn; extra = own))))))
+    end
+    if refs
+        # every other alive cell m: E_m(its values after; referents before) − E_m(after). ΔH saw
+        # no reader of the dead cell, which now reads the medium in H (D-231 item 2)
+        terms = Any[]
+        for (kinds, E) in groups
+            _reads_refs(E) || continue
+            before = lower(E, _cell_env(T, :m, rn; kind = :km, extra = (:__refst => :sr,)))
+            after = lower(E, _cell_env(T, :m, rn; kind = :km))
+            push!(terms, :($(_kindtest(:km, kinds)) && (H += $before - $after)))
+        end
+        push!(body, quote
+            for m in 1:length(st.cell.kind)
+                (m == c || st.cell.volume[m] == 0) && continue
+                km = Potts._cellkind(st, m)
+                $(terms...)
+            end
+        end)
     end
     cterms = _sorted(_group_terms(c.cluster_terms))
     if !isempty(cterms)
@@ -1852,8 +1898,11 @@ function _vacated_energy_expr(c::CompiledPottsSystem, T)
         end
     end
     push!(body, :(return H))
-    return :((st, p, ctx, c) -> $(Expr(:block, body...)))
+    return refs ? :((st, sr, p, ctx, c) -> $(Expr(:block, body...))) : :((st, p, ctx, c) -> $(Expr(:block, body...)))
 end
+
+# whether a cell term of the model reads through a reference (R6)
+_cell_terms_read_refs(c::CompiledPottsSystem) = any(((_, E),) -> _reads_refs(E), c.cell_terms)
 
 struct _VacatedEnergy end     # `PottsModelInfo.cache` key of the compiled `_vacated_energy_expr`
 
@@ -1864,6 +1913,10 @@ Self-check credit of copy `prop` from state `u` to state `a`: the energy that le
 `H` with the cell the copy kills (`prop.old` owned one site), or zero when it kills none, so
 that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
 credit` for every copy. Internal, host.
+
+With cell terms reading references (R6, D-231 item 2) ΔH reads every referent before the
+copy, so the credit is `E_cell(o, empty state; referents in u)` plus, over every other cell `c`
+alive in `a`, `E_c(c's values in a; referents in u) − E_c(a)`: the readers of the dead cell.
 """
 function _killing_credit(prob, u, prop, a)
     o = prop.old
@@ -1872,5 +1925,6 @@ function _killing_credit(prob, u, prop, a)
     f = lock(_OBSERVED_LOCK) do
         get!(() -> _rgf(_vacated_energy_expr(info.csys, info.T)), info.cache, _VacatedEnergy())
     end
+    _cell_terms_read_refs(info.csys) && return f(a, u, prob.p, _host_ctx(prob), o)
     return f(a, prob.p, _host_ctx(prob), o)
 end
