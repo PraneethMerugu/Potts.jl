@@ -2185,3 +2185,142 @@ The maintainer approved F-1…F-6 (D-049).
   - Every step is pinned to `taskset -c 0-11,16-27`.
 - **Safety.** The repository is public. With the maintainer's approval, fork-PR workflows now need approval for all outside contributors (`all_external_contributors`, set through the API).
 - **Runner.** It had been offline since 2026-08-23. The maintainer installs it as a service (`svc.sh`, needs sudo). Until then the first run waits in the queue.
+
+## 2026-10-07 — MTK-facing API merged: P6.0bm, P6.0bp, P6.0bn, P6.0bv, P6.0bo (D-158–D-170)
+
+- **Ruling that set the scope.** D-159 (maintainer, on P6.0be): the paper says "built on ModelingToolkit", not "fully MTK-native". Every Potts model is an MTK `AbstractSystem`; its ODE, initialization and update parts go through MTK, and the stochastic sweep is compiled by Potts.jl's own generator. D-162 narrowed P6.0bp: no event callbacks yet (they come with P6.4c), and the paper says "update rules".
+- **P6.0bm (D-160, merged 7b025e5e).** `Potts.hamiltonian(sys)`, `Potts.drives(sys)` and the `PottsSweepSpec` metadata payload. The payload never enters generated code or the fingerprint.
+- **P6.0bp (D-164, merged 73a6c178).** `Potts.updates(sys)` returns every update statement with phase, scope, cadence and its `Pre`-form equation. `Every` and `count_contacts` become public.
+- **P6.0bn (D-165, merged af193138).** The model's own cell and model ODEs go through `mtkcompile`; algebraic equations are allowed in `@equations`; `Potts.ode_system(csys, scope)`.
+- **P6.0bv (D-169, merged e590f34e).** Edge-scope MCS updates go through `mtkcompile`.
+- **P6.0bo (D-170, merged 07757b51 on 2026-10-08).** Entity-local initialization through MTK's `InitializationProblem`, with `@initialization_equations` and `Potts.initialization_system(csys, scope)`.
+- **Recorded-value pins (D-158).** The first CI run resolved the workspace fresh and four `Adaptive(Rodas5P())` rows of the frozen P6.0x test failed in the last bit. The rule: our own code stays bitwise, values passing through upstream numerics (integrators, factorizations) are pinned to `rtol = 1e-12`, and same-run comparisons stay bitwise. CI keeps resolving fresh.
+
+## 2026-10-07 — Pages 01, 09 and 10; P6.2d, P6.1h, P6.15e, P6.0by, P6.0bb merged (D-161, D-163, D-166–D-168, D-171, D-172)
+
+- **Pages 01, 09 and 10 re-frozen (D-161, merged abd208bc).** No outlines, four-column deviations tables, text/table/plot/rendering changes only. There are no verdict changes.
+- **P6.2d (D-163, merged c8a0600d).** The Akeeb FULL extras and the `akeeb_phenotype` classifier; page 10 re-frozen.
+- **P6.1h (D-166, merged a02fbef5).** V-PRE7 (temperature regimes) on page 09 from a FULL record, with a new page test.
+- **P6.2e and P6.0bx (D-167, merged d83bd57d).** The P6.2e test recomputes from the FULL record, the Linux `/tmp` problem is fixed, and CI also runs `benchmark/test`.
+- **P6.15e (D-168, merged 51fa25cb).** F5 FULL record: 100 runs of 1000 cells, case (b), and the γ = 10⁻⁴ control. V4 is frozen. V4 fails V4.2, V4.3 and V4.5 as D-154 deviations. The consortium TST_5T and Morpheus_5T data pass 7/7 under the frozen rules.
+- **P6.0by (D-172, merged d55b71cd).** MakiePotts per-cell colours hash the identity key well, so neighbouring ids get clearly different colours. The OpenVT docs figures and the F5 per-cell videos are regenerated.
+- **P6.0bb (D-171, merged f639b661).** The paired A/B with two same-commit controls decides performance, and `gate.jl` is the allocation check.
+
+## 2026-10-08 — OpenVT F3/F8, F6/T1/F7, F1/F4, page and package generator (P6.15f–P6.15j; D-173–D-180)
+
+- **P6.15f (D-173, merged b7379cd7).** F3 (case (f) and case (b)) and F8 / V5 FULL record, overlaid on the consortium data. All rows pass and the controls fail.
+- **P6.15g (D-174, merged af1d4c19).** Sweeps for F6, T1 and F7: FULL record with 160 runs, 15 of 18 rows pass. V1, V2.1.1x and V3b fail as D-154 deviations; C13 / Q20 is the leading candidate. It was unparked once P6.4b1 landed.
+- **P6.15h (D-175, merged 7dd01619).** F1 (the Potts.jl panel and banner) and F4 (the free-surface schematic). G1 equals the drawn count.
+- **P6.15i (D-178, merged e0036efa).** The "OpenVT monolayer benchmark" page and its test.
+- **P6.15j (D-180, merged 7cde6900).** The submission-package generator in the consortium layout, prepared locally.
+- **P6.4b1 (D-177, merged aab9da22).** `BoundarySiteCPM`, a separate sweep algorithm that draws only boundary sites, statistically identical to `SequentialCPM`. D-198 (2026-10-09) later replaces it with `SequentialCPM(; skip_interior = true)`.
+- **P6.0bw (D-179, merged 9b3a5646).** Device waits go through `CorePotts._device_wait`, which spins without allocating on ROCm.
+- **P6.0bs (D-176, merged 170a5d2a).** A frozen test of every MTK claim in the paper and docs, and of their wording; the ModelingToolkit page.
+- **P6.3f, first part (D-184, merged 9403d444).** Reproduction 01 FULL record and page: 36/37 rows pass, V-C12 fails (re-defined on 2026-10-09, see below).
+- **Housekeeping.** MIT licence (D-181). P6.0bc closed because the D-145 kernel-cache symptom no longer occurs (D-182). Public pages do not name local reference files (D-183). OpenVT consortium figures follow the other frameworks' style, and the paper-model pages are rewritten and merged into one "Paper models" section (D-185; pages 01, 09, 10 and 15 merged).
+
+## 2026-10-08 — Foam streams: P6.4b2 and P6.4a1 merged, reproduction 04 test frozen (D-186–D-190)
+
+- **D-186.** Reproduction 04 (foam, Jiang et al. 1999) is built in parallel streams, planned in spec 04 §8.
+- **P6.4b2 (D-187, merged 482e163a).** Foam analysis functions in PottsModels: φ, neighbour lists and n, per-MCS T1 detection, ρ(n), μ2(n), μ2(a), Eq. 9 spectra (power spectrum on FFTW), N̄ and yield strain.
+- **P6.4a1 (D-188, merged 6398151e).** The copy scope gains `direction`, `mcs` and `position`.
+- **P6.4r test (D-190, frozen at 27890d50).** Rows V1–V20 pre-registered with the bands of spec 04 §5.2; negative controls C-V1, C-V1b, C-V9, C-V12, C-V16 and C-V18.
+  - Calibrations are pre-registered: A-1 (κ, in two stages), A-2 (closed y, no wall cells; the brick wall gives μ2(n) = 7/16), A-5 (τ = 1/ū ≈ 3.45, every shear time in paper MCS), A-8 (preparation) and A-15 (T1 counting).
+  - The shear rows were gated on P6.4a1, which merged first.
+
+## 2026-10-08 — Connectivity vocabulary and Euler tracker designed and frozen (D-189, D-191–D-196)
+
+- **D-189.** A compositional connectivity layer, with 12 maintainer rulings.
+- **D-191.** CC3D source check (P6.3k). The maintainer ruled on 2026-10-09 that we do not reproduce CC3D's closed-edge (0,0,0) quirk.
+- **D-192, D-194.** P6.3j design note and frozen test for the Euler-characteristic tracker.
+- **D-193, D-196.** P6.3g test frozen, then re-frozen. D-195 holds privacy fixes (page 10 host name, sweeps record work path) and a ruling on structural parameters that shadow DSL names.
+
+## 2026-10-09 — P6.3g, P6.3h, P6.3i, P6.9a, P6.2f merged; proposal-law findings (D-191, D-193, D-195–D-201)
+
+- **P6.3g.** Connectivity vocabulary merged (D-189, D-191, D-193, D-195, D-196). P6.3i was folded into P6.3g (D-193).
+- **P6.3h.** Shell kernels (D-189 §9) merged; the A/B passed.
+- **P6.9a (D-197, D-201).** Global connectivity, cell-scope pieces and device search merged. D-201: shell-based quantities reject a periodic axis of length 1.
+- **P6.2f.** Page 10 notes CC3D Penalty by version and the closed-edge (0,0,0) ring read (D-191).
+- **D-200.** Findings from the proposal-law research, with the rule that the paper wins over code. Effects:
+  - reproduction 01's V-C12 is measured from the MCS-0 reference (reproduction 01 now 37/37);
+  - the V-PRE4 reading on page 09 (twice-counted Moore bonds), and V-PRE4 / V-PRE5 wording;
+  - the released TST OpenVT model is cited by repository and commit.
+- **D-199.** Ergonomics items P6.E1–P6.E10 filed after the maintainer asked how ergonomic the library is.
+- **D-198, P6.0bk2 (D-207).** `BoundarySiteCPM` becomes `SequentialCPM(; skip_interior = true)`; tests frozen, merged.
+- **P6.0ba (D-208).** `CheckerboardCPM` reach counts only copy-step relations.
+- **P6.0ca (D-209).** A σ-dependent gather in a cell, edge or contact energy is refused at `mtkcompile`. After two review rounds the refusal covers σ anchors, explicit-site reads and indexed copy-varying cell quantities; population folds are exempt.
+
+## 2026-10-09 — P6.3f: reproduction 01b (Merks 2008 digitised targets) FULL record (D-202)
+
+- **Test (D-202).** `01_merks_01b.jl` is frozen at 72c7fc01. It holds 133 digitised points over 13 curves, 16 shape rows and 7 negative controls. The inferred parameters I1–I7 are provisional under D-154 and each becomes a deviations row.
+- **Run.** The FULL runner is `run_full_01b.jl`. 1330 jobs (1030 sweep jobs and 300 series jobs) ran on the PC at commit 784e1548 on 24 threads, about 4.7 h wall time and 113 thread-hours.
+- **Result (merged 4fa7f520).**
+  - 27 of 29 rows pass and 7 of 7 negative controls fail, as required. 126 of 133 points pass.
+  - The two failing rows, F7.noCI and F7.gap, share one cause: our no-CI plateau in Fig 7 is about 0.92 against the paper's about 0.83. The merge message records an F7 no-CI inconsistency in the paper.
+- **Page.** Page 01 gains the 01b digitised-targets section; the page test is re-frozen.
+
+## 2026-10-09 — P6.4r: reproduction 04 (foam) first FULL record (D-190, D-154)
+
+- **Record (merged ed25ee94).** The runner is `data/04/run_full.jl`, at commit 0ca8cdd7. 40 foams, 165 calibration loops, 530 loops, 15 steady runs and 200 bulk runs; 24 threads on the PC, 9.7 h wall time. Shipped as provisional under D-154.
+- **Calibrations.** τ = 3.447 our MCS per paper MCS, r\* = 4.827, κ = 2.497. The run used the `BoundarySiteCPM` algorithm (now `SequentialCPM(; skip_interior = true)`) with `NeighborOrder(4)` proposals.
+- **Tally.** 52 lines in `verdicts.tsv`: 28 PASS and 24 FAIL. The PASS lines are 18 of the 42 pre-registered rows, all 4 negative controls and 6 info lines.
+- **The 24 failures** fall in three groups, each with a row in `deviations.tsv`:
+  - pinning at low β (V11a, V11c, V12 at β = 0.001, V14a, V14b, V15a, V15c, V15d, part of V13a), caused by the displacement-form drive (F1);
+  - window length (V18), where the fixed 100 paper-MCS window saturates in steady flow at β ≥ 0.02;
+  - disagreements under review (V2ii, V3b, V4, V5b, V6b, V7i–iii, V9, V10a, V11b, V13a, V13b, V14c, V20).
+
+## 2026-10-09 — P6.4r-kb: the κ_b scan, a negative result (D-203, D-205, D-210)
+
+- **Pre-registration.** D-203 (maintainer: "Calibrate scan first") gives the bulk Eq 7 term its own scale κ_b, with a decision rule fixed in advance. D-205 freezes the protocol (`04_foam_kb_scan.jl`, commit 830f72fb): 23 values of κ_b = 2.497·2^(i/2) from 0.156 to 319.6, five β values, ordered foams 1–3 with 3 replicates (345 runs), targets of about 4300 paper MCS at β = 0.01 and about 420 at β = 0.05, each within ±25 %.
+- **Result (D-210).** The decision rule returns no κ_b (`pinning_cliff`). The record is `data/04/kb-scan-2026-10-09/`.
+  - The harness check holds: at κ_b = 2.497 the result is 451 / 39, against 455 / 40 in the first record.
+  - At β = 0.01, t_first jumps from no yield at κ_b = 1.248 to 1691 at κ_b = 1.766, so about 4300 is unreachable.
+  - The β = 0.05 target is met near κ_b ≈ 0.5, but β = 0.01 never yields there. T1s at β = 10⁻³ need κ_b ≳ 14.
+- **Consequences.** The Eq 2 form under bulk shear is in question and the 04 record stays provisional. The pinning-explained deviation rows now give that cause, with the author question marked "asked (F1)", and F1 on our open question list is sharpened. No further foam runs until F1 is answered.
+
+## 2026-10-09 — P6.15j: the OpenVT submission package completed, O1 record (D-204, D-206)
+
+- **Scope (D-204).** The maintainer asked for the finished submission package for the consortium repository and the manuscript. P6.15j's pending items became required: a per-cell O1 recorder, O2 for case (b), A3 shares over time, the MIT line in the READMEs, and a re-frozen package test. A manuscript section draft is fact-checked against the records.
+- **O1 record (merged 47ed3e49).** FULL run on the PC, cases a, b, e and f re-run from their recorded seeds; every save equals the F3/F8 record.
+- **Test (D-206).** `15_openvt_package.jl` is re-frozen at 324cec82. Bulk files sit outside git and the build refuses a bad bulk directory.
+
+## 2026-10-09 — P6.15k: following the 9 Oct 2026 OpenVT draft (D-211, D-212)
+
+- **Target (D-211).** The maintainer made the 9 Oct 2026 draft (14 pp) the new target manuscript. Figs 1–4, Fig 6, the schema and protocol, Eqs 10–12 and Tables S1–S5 are unchanged, so every frozen record stands.
+- **Changes.** A Fig 7 colony grid (the Potts row from the sweeps record), a new Fig 8 β grid (five runs to 10⁴ cells at β = 0.625, 0.9375, 0.9875, 1.007 and 1.0212; the five replays equal the sweeps rows), Fig 5 on shared distance bins, and the metrics figure relabelled Fig 8 to Fig 9. Fig 7/8 label and Fig 5 unit are open questions Q26 and Q15 (D-212).
+- **Tests (D-212).** Frozen, then the package default build is complete. Merged 2026-10-10.
+
+## 2026-10-10 — P6.15l: email-ready OpenVT package and G conformance (D-213, D-215, D-217, D-219)
+
+- **Email split (D-213).** The maintainer ruled that Q25 is closed and not asked (M over TST: division stays at actual area), and replaced Q11 (no repository write access needed). `split = :email` writes:
+  - `core.zip` (at most 20 MB): READMEs, parameters, model source, O3/O4/O5, metrics, A3, Table S5, Table 1, figure PNGs, provenance and manifest;
+  - `bulk/`: one zip per case, to be attached to a public pre-release, each under 2 GB;
+  - `EMAIL.md`, a plain-text cover note. The maintainer pastes it and we send nothing.
+- **G conformance (D-215, D-217).** Where the manuscript is silent, the package follows G's scripts: O1 columns `x,y,i,n,g`, measurement header `R`, O2 `k = 0…99` zipped, O5 names with both parameters, descriptive O1 zips with seed directories, Table 1 in core. Measured core was 19.43 MB. Q19, Q20 and Q21 are closed (not asked). Tests frozen in D-217.
+- **D-219.** Q28 (a compiler heads-up) is dropped from EMAIL.md. The bar is faithfulness to M.
+- **Release.** The bulk files were published under the tag `openvt-monolayer-submission-2026-10-10` as a full (not pre-) release, maintainer-approved. The manuscript section's code availability names the submission commit and release. Merged e2e527ba and 45aabf07.
+
+## 2026-10-10 — P6.15m: the checkerboard characterisation, kept in the docs only (D-214, D-216, D-218, D-220–D-227)
+
+- **Plan.** D-214 (maintainer) proposed "Potts.jl (checkerboard)" as a separate OpenVT entry, run on the GPU, with statistical checks that characterise rather than gate. D-216 and D-218 froze and re-froze the m1 characterisation tests.
+- **Finding (D-220).** The checkerboard's extra crushing is claim-conflict thinning (D-008 claims), not a bug.
+  - At 4 colours only about 27 % of accepted copies commit; in case (a) at 5k cells, 5,534 of 20,243 accepted per MCS commit against 20,126 in sequential.
+  - ΔH matched brute force on 16,605 committed copies (max 3.3e-12, no mismatches).
+  - More colours (9, 16, 64) bring the loss to the sequential level.
+- **Calibration (D-221, D-224).** The checkerboard T is calibrated at the production colour count on spec 15 variant P1b (4 colours); the ablation runs each arm at its own T. The cycle on the P1b chain is 1095 MCS.
+- **Decision (D-223, D-225).** The entry was gated for the maintainer's decision. The maintainer then ruled that the checkerboard is left out of the submission and kept in our docs. The submission is sequential only; Q27 is withdrawn, m5 is cancelled, and m4 is re-scoped to page 15 (D-226).
+- **Final review (D-227).** Case (a) re-run at n = 30 per arm; (b) and (f) ablations at n = 100 per arm. The 98-colour chain against 64 colours on the monolayer is disclosed.
+- **Docs.** The `CheckerboardCPM` manual note (P6.15m-doc, D-223) says one checkerboard MCS is not one sequential MCS. P6.0cc is filed: a missing-algorithm `ArgumentError` on GPU backends. Merged 2026-10-11.
+
+## 2026-10-11 — D-228: segfault fix in callback dispatch
+
+- **Bug.** Found in P6.15m m3. On the host path, a `CallbackSet` of two differently typed `DiscreteCallback`s combined with `saveat` corrupted the GC heap under Julia 1.12.6, crashing in the snapshot deepcopy. The cause was a loop over callbacks that carried a Union of the callback types. It is a miscompile, not memory unsafety in our code, and is not yet reduced to an upstream reproducer.
+- **Fix.** `_each(f, t)` unrolls over a tuple of any length and is used at the four callback sites. `_run_mcs!` stays on `Base.afoldl` (moving it cost +3.7 % on graner_glazier_72), and `Phases` now rejects an MCS order of more than 31 entries.
+- **Tests.** 33 distinct callback types with `saveat` on both algorithms: concrete types, 0 allocations, each callback fires once. An `afoldl` negative control does allocate. Merged dc9a1d1d.
+
+## 2026-10-12 — P6.15n: OpenVT F1 panel reframed; release openvt-monolayer-submission-2026-10-12b (D-229)
+
+- **Ruling (maintainer).** The Potts.jl closeup should occupy its image the way the other frameworks' closeups do, and the existing release was to be updated before sending.
+- **Problem.** The other nine closeups are about 65–75 % tissue with the rim running from the top edge to the right edge. Ours was 56.3 % tissue, rim corner to corner, with a white margin and no frame.
+- **Change.** Same size (64 × 64) and same state (case (a) run 1, seed 15701, MCS 11600, N = 10001); the centre moves inward along the same ray. Chosen: offset (971, 969), 69.7 % tissue, 53 cells. `openvt_f1_figure` now fills the image edge to edge with a thin grey frame. The D-175 block is kept with the suffix `_d175`. The frozen F1/F4 test passes (139/139).
+- **Release.** GitHub refused the asset swap because the 12 Oct release is immutable. With the maintainer's OK the rebuilt core (13,464,338 B) and the same six bulk files were published as `openvt-monolayer-submission-2026-10-12b` on a961e5a8, marked Latest. Releases on this repository are immutable, so any change needs a new release.
