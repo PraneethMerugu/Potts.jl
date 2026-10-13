@@ -10,3 +10,4 @@ The frozen FULL tier of `lib/PottsModels/test/reproductions/01_merks.jl` (D-153)
 - `figures.jl` → `sweeps_2008.png`: the 2008 sweeps at both clocks.
 - The run log (`~/potts-ci/p6-3f-run.log`) stays on the PC.
 - 2026-10-09 (D-200 item 1): V-C12 now measures displacement from MCS 0, as 01b Fig. 6E does, instead of MCS 100 (frozen test amended; band unchanged). `vc12_mcs0.jl` re-read the stored V-C12 snapshots with no new dynamics and wrote `vc12_mcs0.tsv`; the ratio is 2.017 (82.8 / 41.1 µm), so V-C12 passes and its deviations row is removed.
+- 2026-10-13 (D-240, paper audit): V-C4's CI target at J_cc = 40 is now 0.4 (was 0.3) and V-C5's CI target at χcM = 500 is now 0.4 (was 0.35), both ± 0.1, from 01b Figs. 7 and 8 re-read at 400 dpi (digitised 0.401 and 0.396). With no new dynamics, the two rows of `verdicts.tsv` were re-derived from `replicates.tsv` with the amended `evaluate.jl` rule: 0.378 and 0.399, both PASS as before, so 37 of 37 still pass.

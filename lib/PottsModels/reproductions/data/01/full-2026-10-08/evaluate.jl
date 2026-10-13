@@ -97,8 +97,9 @@ for (J, ci) in pts4
 end
 m4(J, ci) = mC(sel("V-C4"; J_cc = J, CI = ci), 5000)
 a = (m4(20.0, true), m4(40.0, true), m4(80.0, true))
-add!("V-C4", "CI: mean C at J_cc = 20, 40, 80", join(f3.(a), ", "), "0.3, 0.3, 0.85 ± 0.1",
-    abs(a[1] - 0.3) <= 0.1 && abs(a[2] - 0.3) <= 0.1 && abs(a[3] - 0.85) <= 0.1, "0.3, 0.3, 0.85 (01b Fig. 7)")
+# V-C4 at J_cc = 40 (CI) and V-C5 at χcM = 500 (CI) re-targeted to 0.4 on 2026-10-13 (D-240)
+add!("V-C4", "CI: mean C at J_cc = 20, 40, 80", join(f3.(a), ", "), "0.3, 0.4, 0.85 ± 0.1",
+    abs(a[1] - 0.3) <= 0.1 && abs(a[2] - 0.40) <= 0.1 && abs(a[3] - 0.85) <= 0.1, "0.3, 0.4, 0.85 (01b Fig. 7)")
 b = (m4(0.0, false), m4(15.0, false), m4(20.0, false), m4(40.0, false))
 add!("V-C4", "no CI: mean C at J_cc = 0, 15, 20, 40", join(f3.(b), ", "), "0.35, 0.83, 0.83, 0.83 ± 0.1",
     abs(b[1] - 0.35) <= 0.1 && all(x -> abs(x - 0.83) <= 0.1, b[2:4]), "0.35, 0.83, 0.83, 0.83 (01b Fig. 7)")
@@ -106,7 +107,7 @@ rci, rno = m4(80.0, true) - m4(0.0, true), m4(40.0, false) - m4(0.0, false)
 add!("V-C4", "rise from the lowest to the highest J_cc (CI; no CI)", "$(f3(rci)); $(f3(rno))", "> 0.3 both", rci > 0.3 && rno > 0.3,
     "both rise (01b Fig. 7)")
 # V-C5
-for ((χ, ci), want) in [((0.0, true), 0.9), ((500.0, true), 0.35), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
+for ((χ, ci), want) in [((0.0, true), 0.9), ((500.0, true), 0.40), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
     rs = sel("V-C5"; χcM = χ, CI = ci); @assert length(rs) == 10
     pt!("V-C5", "χcM $χ, CI $ci", rs, 5000)
     got = mC(rs, 5000)
