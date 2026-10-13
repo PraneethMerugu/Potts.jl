@@ -341,8 +341,10 @@ end
 # would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
 # Relationships used only by link rules are read on the host between sweeps: no claims.
 # References (R6, D-231 item 7): every cell the copy-step functions read through a reference,
-# each hop of a chain (`partner[old]`, `partner[partner[old]]`), shared like link partners; a
-# dead or absent referent claims 0 (none).
+# each hop of a chain (`partner[old]`, `partner[partner[old]]`) and both branches of an
+# `ifelse` between references, shared like link partners; a dead referent, 0, or a value out of
+# 1:capacity claims 0 (none: `Potts._ref_claim`, so no claim array is written out of bounds).
+# References read inside population folds are not claimed (a fold reads every cell).
 function _reads(c::CompiledPottsSystem, T)
     rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
     parts = Any[:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
@@ -357,14 +359,14 @@ function _ref_read_codes(c::CompiledPottsSystem, T)
     rn = c.gather_names
     out = Any[]
     seen = Set{String}()
-    add!(code) = (k = _code_key(code); k in seen || (push!(seen, k); push!(out, :(Int32($code)))))
+    add!(code) = (k = _code_key(code); k in seen || (push!(seen, k); push!(out, :(Potts._ref_claim(st.cell.volume, $code)))))
     for (kinds, E) in _sorted(_group_terms(c.cell_terms))
         refs = _ref_reads(E)
         isempty(refs) && continue
         for (side, k) in ((:old, :k_old), (:new, :k_new))
             env = _cell_env(T, side, rn; kind = k)
             for r in refs
-                add!(:(($side != 0 && $(_kindtest(k, kinds))) ? Int32($(lower(r, env))) : Int32(0)))
+                add!(:(($side != 0 && $(_kindtest(k, kinds))) ? $(lower(r, env)) : Int32(0)))
             end
         end
     end
@@ -980,7 +982,20 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
+    _ode_layout(_birth_layout(u0, info.csys), info.csys, info.solvers)
+
+# A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
+# state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
+# counter continues after the capacity, so no serial is ever reused
+function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    (isempty(c.divisions) || haskey(st.cell, :birth)) && return st
+    n = length(st.cell.kind)
+    birth = copyto!(similar(st.cell.kind, Int32, n), Int32.(1:n))
+    next = copyto!(similar(st.cell.kind, Int32, 1), Int32[n + 1])
+    return CorePotts.CPMState(st.σ, merge(st.cell, (; birth)), st.site,
+        merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((next,))), st.history)
+end
 
 # a NamedTuple operating point is the map of its fields (D-115)
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple) =

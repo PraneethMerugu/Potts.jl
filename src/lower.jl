@@ -380,6 +380,9 @@ end
 
 """Whether `x` is a cell variable declared `::CellRef`."""
 _is_ref_var(x) = (i = info(x); i !== nothing && i.role === :cell && get(i.options, :reference, false) === true)
+# a stand-in for a reference's value (the on-copy value ΔH reads, `_oncopy_after`; a
+# previous-value snapshot `x__pre`)
+_is_ref_standin(x) = (i = info(x); i !== nothing && i.role !== :cell && get(i.options, :reference, false) === true)
 
 """
 Whether the cell expression `x` is a reference, read as a referent when it indexes a cell
@@ -391,10 +394,14 @@ function _is_ref(x)
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return false
     _is_ref_var(x) && return true
+    _is_ref_standin(x) && return true
     iscall(x) || return false
     op = operation(x)
     (op === cluster_sibling || op === as_ref) && return true
     op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
+    # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded), whichever
+    # branch is taken (a plain cell index such as `id` reads the same through the guard)
+    op === ifelse && return any(_is_ref, arguments(x)[2:3])
     if op === at
         a = _unwrap(arguments(x)[1])
         iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
@@ -407,16 +414,44 @@ end
 chain once), outermost first: the cells a copy's sweep functions read through references."""
 function _ref_reads(x)
     out = Any[]
-    _walk(x) do y
-        iscall(y) || return
-        op = operation(y)
-        r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
-            op === cell_alive ? arguments(y)[1] : nothing
-        r === nothing || any(z -> isequal(z, r), out) || push!(out, r)
+    _ref_reads!(out, _unwrap(x))
+    return out
+end
+function _ref_reads!(out, y)
+    y isa SymbolicUtils.BasicSymbolic || return out
+    iscall(y) || return out
+    (info(y) !== nothing && info(y).role in SCOPES) && return out
+    op = operation(y)
+    # a population fold reads every cell's referents, as a fold reads every cell (snapshot
+    # or not): no per-copy claim, and its bound cells cannot be lowered outside it
+    op === population && return out
+    r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
+        op === cell_alive ? arguments(y)[1] : nothing
+    r === nothing || _push_ref!(out, r)
+    foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
+    return out
+end
+# `ifelse(c, a, b)`: each reference branch (both are claimed); others once
+function _push_ref!(out, r)
+    r = _unwrap(r)
+    if r isa SymbolicUtils.BasicSymbolic && iscall(r) && operation(r) === ifelse
+        foreach(b -> _is_ref(b) && _push_ref!(out, b), arguments(r)[2:3])
+        return out
     end
+    any(z -> isequal(z, r), out) || push!(out, r)
     return out
 end
 _reads_refs(x) = !isempty(_ref_reads(x))
+# whether `x` reads through a reference anywhere, folds included
+function _mentions_refs(x)
+    found = Ref(false)
+    _walk(x) do y
+        iscall(y) || return
+        op = operation(y)
+        ((op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
+    end
+    return found[]
+end
 
 # the state referents are read in: `st`, or the state bound as `:__refst` (the killing
 # credit reads the readers' referents before the copy, `_vacated_energy_expr`)
@@ -460,12 +495,16 @@ end
 
 """Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
 @inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
+"""The claim of a copy that reads referent `r`: `r` when it is an alive slot, else 0 (none)."""
+@inline _ref_claim(vol, r) = _alive_slot(vol, r) ? Int32(r) : Int32(0)
 """Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
 @inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
 @inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
 @inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
 @inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
 """`birth` of cell `c` (D-066 item 3): its serial with a lifecycle (`cell.birth`), else its slot."""
+# (`c` is a cell slot in 1:capacity: the env's cell, `_birth_at` with c ≠ 0, or a referent
+# `_alive_slot` checked; every column has the capacity's length)
 @inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)
 @inline _birth_at(cell, c) = c == 0 ? Int32(0) : _birth(cell, c)
 @inline _deref_birth(cell, r) = _alive_slot(cell.volume, r) ? _birth(cell, r) : Int32(0)

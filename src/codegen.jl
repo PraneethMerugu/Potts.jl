@@ -398,7 +398,10 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
         side = _oncopy_side(i, idx)
         side === nothing && continue                 # rejected by mtkcompile
         name = Symbol(:__oncopy_, j)
-        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, (;))))
+        # a written reference stays a reference (R6): `q[partner]` with `partner[new]` written reads
+        # the referent through the guarded dereference, as `H` does after the copy
+        opts = _is_ref_var(x) ? (; reference = true) : (;)
+        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, opts)))
         push!(binds, name => Symbol(:v_oncopy_, j))
         push!(vals, :($(Symbol(:v_oncopy_, j)) = $(lower(u.eq.rhs, _proposal_env(T, rn)))))
     end

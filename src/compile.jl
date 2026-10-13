@@ -767,7 +767,7 @@ end
 # read every cell of a cluster (refused, `_check_ref_sources`); other domains read none.
 function _check_energy_refs(E, d)
     d isa CellDomain && return _check_ref_sources(E, "energies")
-    (_reads_refs(E) || _has_op(E, as_ref) || _has_op(E, cluster_sibling) || _has_op(E, outer_value)) &&
+    (_mentions_refs(E) || _has_op(E, as_ref) || _has_op(E, cluster_sibling) || _has_op(E, outer_value)) &&
         throw(ArgumentError("this energy reads a cell through a reference; references are read in cell energies " *
                             "(`cells(…) => …`), drives and constraints, not in $(_domain_string(d)) terms"))
     return nothing
