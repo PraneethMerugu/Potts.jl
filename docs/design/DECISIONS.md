@@ -4312,5 +4312,6 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   7. Zero round trips per MCS on the device (stricter than D-075).
   8. The draw address is part of the contract.
   9. `CorePotts.transitioning` is public; candidates are restricted to `from`'s sites even when `at` selects others; `at` replaces api-synthesis's `sites`.
+- **Re-frozen the same day (`p6_5b_convert.jl`, sha256 `682d9477…347b`; maintainer OK).** Testset 1 checked `isdefined` for `P65bFortuna` and `P65bFortunaFresh`, which the file defines only in section 12, so those two assertions failed for any implementation (the implementer reported it). Both checks moved to section 12's first assertion, after the definitions. Nothing else changed.
 - **Left open (unpinned).** `budget`, gate/`when`, order, `Every(n)`, convert-to-medium, and remove > convert across rounds.
 

@@ -421,7 +421,7 @@ end
 # 1. The fixtures build
 
 @testset "P6.5b convert: the fixtures build" begin
-    for name in (:P65bConvert, :P65bEarly, :P65bReplaced, :P65bFortuna, :P65bFortunaFresh)
+    for name in (:P65bConvert, :P65bEarly, :P65bReplaced)            # the Fortuna fixtures are checked in section 12, after their definition
         @test isdefined(@__MODULE__, name)                       # DEFECT CHECK: `@convert`, `Fresh`, `created` unknown today
     end
     @test isdefined(@__MODULE__, :P65bNoConvert) && isdefined(@__MODULE__, :P65bPlain)   # controls build today
@@ -784,7 +784,7 @@ function p65b_fortuna_problem(name = :P65bFortuna; seed = 1, tspan = (0, 3), T =
 end
 
 @testset "P6.5b convert: the Fortuna-shaped block builds and runs; kind-conditional defaults" begin
-    @test isdefined(@__MODULE__, :P65bFortuna)                   # DEFECT CHECK (E1 defaults, E3 block)
+    @test isdefined(@__MODULE__, :P65bFortuna) && isdefined(@__MODULE__, :P65bFortunaFresh)   # DEFECT CHECK (E1 defaults, E3 block)
     prob = p65b_fortuna_problem()
     u0 = prob.u0
     # E1: the defaults per slot, from the kind, at construction
