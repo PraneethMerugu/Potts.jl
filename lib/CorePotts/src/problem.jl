@@ -295,6 +295,22 @@ function CommonSolve.init(prob::PottsProblem, alg::CPMAlgorithm; backend = CPU()
     return _init(prob, alg, true; backend, saveat, save_start, save_end, callback)
 end
 
+"""
+    init(prob::PottsProblem; backend = CPU(), kwargs...)
+    solve(prob::PottsProblem; backend = CPU(), kwargs...)
+
+Without an algorithm (D-009): `SequentialCPM()` on the CPU. A device backend has no default,
+since `SequentialCPM` is CPU-only. Pass `CheckerboardCPM()` there; anything else throws an
+`ArgumentError` that says so.
+"""
+function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
+    backend isa CPU || throw(ArgumentError("no default algorithm on the $(nameof(typeof(backend))) " *
+        "backend: pass one explicitly, e.g. `solve(prob, CheckerboardCPM(); backend)` " *
+        "(SequentialCPM, the CPU default, runs only on the CPU; D-009)"))
+    return CommonSolve.init(prob, SequentialCPM(); backend, kwargs...)
+end
+CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolve.init(prob; kwargs...))
+
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))

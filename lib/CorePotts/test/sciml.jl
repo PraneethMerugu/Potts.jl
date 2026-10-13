@@ -152,3 +152,20 @@ end
         @test_throws DimensionMismatch SII.remake_buffer(gp, gp.p, [:T], [1.0, 2.0])
     end
 end
+
+# D-009 (P6.0cc): without an algorithm, SequentialCPM() on the CPU; a device backend has no
+# default and says to pass CheckerboardCPM
+struct P60ccDevice <: CorePotts.KernelAbstractions.GPU end
+@testset "default algorithm (D-009)" begin
+    σ, kinds = blocks((20, 20), 5)
+    prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
+    @test solve(prob).u[end].σ == solve(prob, SequentialCPM()).u[end].σ
+    @test init(prob).alg isa SequentialCPM
+    err = try
+        solve(prob; backend = P60ccDevice()); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("CheckerboardCPM", sprint(showerror, err))
+    @test_throws ArgumentError init(prob; backend = P60ccDevice())
+end
