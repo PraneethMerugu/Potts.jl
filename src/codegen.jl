@@ -1006,10 +1006,9 @@ const _CELL_HELPER_READS = Dict{String, Tuple{Vararg{Symbol}}}(
     "CorePotts.centroid_distance" => (:volume, :anchor, :m1), "CorePotts.centroid" => (:volume, :anchor, :m1),
     "CorePotts.centroid_position" => (:volume, :anchor, :m1), "Potts._centroid_axis" => (:volume, :anchor, :m1),
     "Potts._displacement_axis" => (:volume, :anchor, :m1), "CorePotts.major_length" => (:volume, :m1, :m2),
-    "CorePotts.cluster_of" => (:cluster,),
-    # cell references (R6); `Potts._birth` reads the whole cell state (its column is optional)
-    "Potts._deref_kind" => (:volume, :kind), "Potts._deref_cluster" => (:volume, :cluster),
-    "Potts._sibling" => (:volume, :cluster, :kind))
+    "CorePotts.cluster_of" => (:cluster,))
+# (the reference helpers `Potts._deref_*`, `_sibling`, `_birth` are not listed: code calling
+# them reads the whole cell state, conservatively)
 function _state_reads(exprs; alias::Union{Nothing, Symbol} = nothing)
     σ = Ref(false)
     whole = Ref(false)
