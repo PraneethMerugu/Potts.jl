@@ -166,7 +166,11 @@ function pottsmodels_shards(files, n)
     end
     return [[f for f in files if shard[f] == j] for j in 1:n]
 end
-const POTTSMODELS_SHARD_FILES = pottsmodels_shards(POTTSMODELS_TEST_FILES, POTTSMODELS_SHARD[2])[POTTSMODELS_SHARD[1]]
+const POTTSMODELS_SHARD_FILES = let fs = pottsmodels_shards(POTTSMODELS_TEST_FILES, POTTSMODELS_SHARD[2])[POTTSMODELS_SHARD[1]]
+    # POTTSMODELS_SHARD_ORDER = reverse: run the shard's files last to first (a check for
+    # state that one file leaves for a later one)
+    get(ENV, "POTTSMODELS_SHARD_ORDER", "forward") == "reverse" ? reverse(fs) : fs
+end
 POTTSMODELS_SHARD[2] > 1 && @info "PottsModels shard $(POTTSMODELS_SHARD[1])/$(POTTSMODELS_SHARD[2]): $(length(POTTSMODELS_SHARD_FILES)) of $(length(POTTSMODELS_TEST_FILES)) files" POTTSMODELS_SHARD_FILES
 
 @testset "PottsModels files" begin

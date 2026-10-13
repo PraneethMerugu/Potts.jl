@@ -31,7 +31,8 @@ if GROUP == "GPU"
     gpu = PottsDeviceSelect.requested()
     isempty(gpu) && (gpu = Sys.isapple() ? "metal" : "rocm")
     @info "GROUP=GPU on $gpu"
-    irdir = mktempdir()
+    irdir = get(ENV, "POTTS_DEVICE_IR_DIR", "")       # set: keep the scanned IR there (for comparing runs)
+    isempty(irdir) ? (irdir = mktempdir()) : mkpath(irdir)
     env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_DEVICE_IR_DIR" => irdir)
     only = get(ENV, "POTTS_DEVICE_ONLY", "true") == "true"
     suite(project, runner; env) = only ?
