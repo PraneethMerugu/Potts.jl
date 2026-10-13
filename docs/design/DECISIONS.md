@@ -2479,7 +2479,7 @@ session.
   - **Deferred.**
     - The P6.0ae core ring-rule change stays with P6.0ae: frozen `p6_0aa` asserts the current rule. Both Merks models already match TST, because their frame is a real cell that counts in `ring_cells`.
     - The 01b figure targets, the four-column table, the outlines and the clocks go to P6.3f.
-  - **Measured on the PC** (praneeth-NucBox-EVO-X2, CPU, pinned single core).
+  - **Measured on the PC** (CPU, pinned single core).
     - Gate: `merks_100` sequential / checkerboard reads 0.999 / 0.997 against a881ba46.
     - New-case PC numbers: `merks2006_100` 230.03 / 230.34 and `merks2008_202` 233.30 / 236.14 ns/site. These are not yet in `baseline.toml`, which holds Mac rows until P6.0bb keys it by machine.
     - Latency to first MCS: 1.003–1.007.
@@ -2528,14 +2528,14 @@ session.
 
 ## D-156 Paper-run policy, rendering, release uploads and scope (2026-10-06, maintainer; relayed by the peer session "Potts.jl models and publications")
 
-- **Compute (amended the same day).** Offline FULL reproductions and sweeps may run on the maintainer's faster PC over Tailscale (100.107.82.114).
+- **Compute (amended the same day).** Offline FULL reproductions and sweeps may run on the maintainer's faster PC over Tailscale.
   - Runs are launched detached, with replicates spread across the PC's cores. Outputs are copied back to `lib/PottsModels/reproductions/data/NN/` on this Mac.
   - Commits, merges and pushes happen only on this Mac, through the coordinator. Nothing is committed from the PC (D-025).
   - Before a run, the PC is synced to the exact commit being reproduced, with `Pkg.instantiate()` if the Manifest changed. The provenance file records the producing machine: hostname, CPU, thread count, Julia version and commit.
   - Metal runs and the Metal gate stay on this Mac. The PC is CPU-only until a CUDA backend exists, and whether to scope that waits on its GPU being known.
   - Runs use the paper's n and lattice wherever the PC or this Mac makes that feasible. A cut is recorded as a D-154 deviation only when one is still needed.
   - **The machine (read over SSH, 2026-10-06).**
-    - Host and OS: `praneeth@100.107.82.114` (praneeth-NucBox-EVO-X2), Ubuntu 24.04.
+    - Host and OS: the maintainer's PC (reached over Tailscale), Ubuntu 24.04.
     - CPU and memory: AMD Ryzen AI Max+ 395 with 16 cores / 32 threads, 62 GB RAM and 360 GB free disk.
     - GPU: a Radeon 8060S iGPU (gfx1151) with ROCm 7.2.1. There is no NVIDIA GPU, so no CUDA item; an AMDGPU/ROCBackend item is not scoped.
     - Julia 1.12.6 at `~/.juliaup/bin/julia`; it is not on the non-interactive PATH.
@@ -3027,7 +3027,7 @@ session.
 
 ## D-171 P6.0bb: the paired A/B with two same-commit controls decides performance; `gate.jl` is the allocation check (2026-10-07; coordinator, from the P6.0bb implementer; three review rounds; under D-157, D-145, D-090)
 
-- **Ruling.** "The +5 % gate" (D-160, D-164, D-165 and later) means `ab.jl <base> <cand> all cpu` on the NucBox, plus `rocm` when device code changes, with the defaults.
+- **Ruling.** "The +5 % gate" (D-160, D-164, D-165 and later) means `ab.jl <base> <cand> all cpu` on the PC, plus `rocm` when device code changes, with the defaults.
   - `dev` is the largest |ratio − 1| over every case and both same-commit controls; margin = 1.05 − dev.
   - **Exit codes.** Exit 0 (pass) when every candidate/base ≤ margin. Exit 1 when some candidate/base > 1.05. Exit 2 (unreadable) in between. Exit 3 for a disturbed run, which takes precedence over 1. Exit 4 for a harness error.
   - A noisy control cannot loosen the verdict. A control interval that excludes 1 is flagged on its case and enters the verdict only through `dev`.
