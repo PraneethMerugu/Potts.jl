@@ -432,3 +432,240 @@ and the published simulation.
     used?
 12. Is the 2005 code (or the later CompuCell/Bionet reimplementations) available for
     cross-checking?
+
+---
+
+## 8b. Reverse-engineering plan (2026-10-13, spec owner)
+
+**Scope.** For every open item of §3.3, §7 and the PI sheet (J1–J7, 06-q1, 06-q3, 06-q8–q10), plus
+four new items (R1–R4) found while doing this: what the paper already pins by arithmetic, what a
+pre-registered screen can settle, and what is left for the "confirm our inference" letter. This
+spec had no §8, so this section follows §7. Nothing here has been run; costs are estimates.
+
+**Provenance of the numbers.** Figures were taken from the PDF's embedded images (`pdfimages`,
+native 150 ppi): Fig 4 by colour classification of pixels; Fig 5 by marker detection with the
+axes calibrated on the 150-dpi page render. Values are ±5–10 %. Step S0 below turns this into
+committed CSVs before any screen.
+
+### 8b.1 Measurements
+
+| ID | Quantity | Value | Source |
+|---|---|---|---|
+| M1 | Fig 4 panel extent | 248 px = **1330 ± 15 µm** per side (ticks 200…1200 at 2.00 µm per 400-dpi px). The 2-d cell sits at (0.50, 0.48) of the panel, so the panel is the whole lattice ("single tumor cell in the center of the lattice", p.4 [3887]) | Fig 4 p.6 [3889] |
+| M2 | Fig 4 sizes | 2 d: an ≈43 µm square. 10 d: D ≈ 420–440 µm, all-Q interior. 18 d: D ≈ 815 µm, necrotic core ≈ 480 µm across; the Q layer (≈130 µm) separates N from the 1–2-cell P layer everywhere | Fig 4 |
+| M3 | Fig 5 sim volume per cell | V/N ≈ **3.5–4.0 × 10³ µm³** for 2.2–6.5 d (1.9 × 10³ at the first point) | Fig 5a,b p.7 [3890] |
+| M4 | Fig 5a sim early growth | N ≈ 25–28 at 1.76 d; ≈ 210–230 at 3.76 d; ≈ 1150–1260 at 5.85 d. The doubling time is **≈16 h** over 1.8–3.8 d and ≈20 h over 3.8–5.9 d | Fig 5a |
+| M5 | Fig 6 sim, 2–6 d | S: 74, 29, 59, 33, 38 % at 2, 3, 4, 5, 6 d; G2 is 0 % at 2 d. The **period-2 alternation** under daily sampling marks a synchronous population. Late (≥15 d): G1 ≈ 78, S ≈ 18, G2 ≈ 4 % | Fig 6 p.7 [3890] |
+| M6 | Fig 7 sim | Necrosis onset at **D ≈ 555 µm** (rim = R ≈ 278 µm). Core ≈ 150 µm by D ≈ 650 µm. Rim plateau **≈ 140–150 µm**. Last point D ≈ 970 µm | Fig 7 p.7 [3890] |
+| M7 | Cross-figure | Fig 5b V(10 d) and V(18 d) give D ≈ 425–455 and ≈ 780–830 µm, matching M2. Fig 5b V(22 d) ≈ 5 × 10⁸ µm³ gives D ≈ 985 µm, matching Fig 7's last point. Figs 4, 5 and 7 use **one length scale** | Figs 4, 5, 7 |
+
+### 8b.2 Arithmetic: what is already pinned
+
+- **A1 Length scale and lattice.** In the all-proliferating phase a cell holds m̄ ≈ 38–48 voxels
+  (between V₀ and 2V₀). M3 then gives an effective voxel edge Δx_geom = (3.8 × 10³ / m̄)^{1/3}
+  ≈ **4.3–4.6 µm**, not the 2.66 µm of the "4 × 4 × 4 voxels = 1.2 × 10³ µm³" statement
+  (p.5 [3888]). The volume ratio is (4.4/2.66)³ ≈ 4.5. This is the size of the ECM allowance
+  the paper describes (p.5 [3888]), and M2 confirms it independently: 2 d ≈ 10⁵ µm³ is a
+  ≈46 µm cube. **Lattice ≈ 1330/4.4 ≈ 300 voxels per side** (range 290–310); the coarse grid is
+  ≈75³. The tutorial reports µm through Δx_geom, and 2.66 µm is the cell-only volume.
+- **A2 Rate law, necrosis trigger, AND/OR.** With the Appendix law
+  a = a₀(u − u^T)/(u^O − u^T) evaluated inside the solve, consumption is first-order in
+  (u − u^T). By the maximum principle u ≥ u^T in steady state, so **O₂ and glucose can never
+  fall below their necrosis thresholds** (u^T = 0.02 / 0.06 mM: the Appendix points back to the
+  threshold paragraph, p.9 [3892] → p.6 [3889]). This fits the paper's own conclusion that cells
+  "survive even in a very nutrient-deprived environment" (p.8 [3891]).
+  - Penetration lengths: O₂ k′ = 108/0.26 = 415 h⁻¹, so λ = √(D/k′) ≈ 120 µm; surface cells at
+    0.08 mM consume only a/a₀ = 0.23. Glucose: λ ≈ 71 µm (62 µm with 216).
+  - With constant Table rates (zero order), O₂ would reach 0.02 mM at the centre at R = 141 µm
+    and glucose at R = 175 µm (152 µm with 216). That predicts onset at D ≈ 280–350 µm, against
+    555 µm (M6). The constant-rate reading is excluded.
+  - So at 0.08/5.5 mM **necrosis is lactate-driven** (> 8 mM). **AND can never fire, so OR is
+    pinned** (J4).
+  - The lagged alternative (rates fixed for 45 min from the previous solve) would consume 81 mM
+    of O₂ per step against 0.08 mM supplied. It is excluded, which **pins the J7 scheme**: a
+    converged implicit transient over each 45-min window, with the rates inside the solve. The
+    rates are linear in u, so this is a linear solve.
+- **A3 Lactate magnitude needs a factor f.** The volume-mean of (a/a₀ + b/b₀)/2 over R = 278 µm is
+  ≈ 0.37, so q ≈ 0.37 C₀.
+  - Sphere onset: R_c = √(48 D_w/q) = 336 µm for all-P, 499 µm for all-Q, against 278 µm.
+  - Planar plateau with a no-flux core: h = √(16 D_w/q) = 196–289 µm, against 145 µm.
+  - Both agree on **(q/D)_eff ≈ f × Table with f ≈ 1.8–3.2**.
+  - The shape is already right: R_c/h ≈ √3 = 1.73 for uniform production, and Fig 7 gives
+    278/145 = 1.9. f is the "ECM" conversion (J7). The geometric ECM ratios from A1, 2.7 (area)
+    and 4.5 (volume), are zero-parameter candidates.
+- **A4 J3 polarity (logic evaluation).** With the top tier on (the stated initial condition,
+  p.4 [3887]) and the deterministic rule:
+  - SMAD, P15, P27 and P21 are on, so CycD and CycE are off and **Rb is on**.
+  - As drawn (Rb → E2F), **E2F is on and the cell proliferates**. With Rb ⊣ E2F, E2F is off and
+    the first cell arrests in fresh medium.
+  - Only the drawn polarity reproduces Figs 4–5 (P at the rim, growth from one cell). Arrest then
+    comes from the below-threshold randomisation, as intended. The model's "on" is a logical
+    token, not biochemical activity. **The provisional "inhibitory" default (§4 J3) contradicts the
+    paper's own initial condition.**
+  - Top-tier nodes have no inputs, so "all links … stimulatory and … on" is vacuously true: above
+    threshold they are recomputed **on**; daughters inherit the rest. This pins the J3 sub-question.
+- **A5 J2 branch (Fig 4).** Under the literal Fig 3 chart a non-proliferating cell "becomes
+  quiescent" and never dies. The all-Q interior at 10 d could then never turn into the 18-d
+  necrotic core, and N would touch P. Fig 4 shows N wrapped by Q everywhere. **The text branch
+  (P → Q, Q → N) is pinned.**
+- **A6 06-q3 semantics (monotonicity).** The paper says a higher factor level means a higher
+  probability of being on (p.4 [3887]).
+  - (c) "flip with probability F" randomises more at high F, the wrong direction. **Excluded.**
+  - (a) "take the rule output with probability F, else keep" freezes the inherited E2F = on at low
+    F (no arrest) unless non-top nodes are reset each G1. **Viable only with a reset.**
+  - (b) "on with probability F" is monotone with no extra assumption. **Favoured.** Under (b) the
+    network reduces, below threshold, to a Bernoulli(F) gate at the E2F tier.
+  - Checking E2F at all 6 stages instead of once at the end of G1 maps F → F⁶, which a shift in
+    (α, θ) largely absorbs. So E2F timing is non-identifiable but harmless. Keep the tiered
+    reading (Fig 2 caption, six grey levels).
+- **A7 J1 sensitivity.** b₀ enters the necrosis physics only through the glucose profile in
+  b/b₀. Repeating A3 with 216: q falls 7 %, so onset moves to D ≈ 577 µm, a +4 % shift inside the
+  T7 tolerance. **No Fig 5–7 target can discriminate 162 from 216.**
+  - The stoichiometry favours 162: 162 = 1.5 × 108 (and 216 = 2 × 108). With 162, C₀ =
+    240 ≈ 1.5 × 162 and all three Q/P ratios fall in 0.46–0.49; with 216 glucose is the outlier
+    at 0.37.
+  - Fig 8 at 16.5 mM is the only lever; see S6.
+  - Per-node application is **pinned by units**: mM/h is intensive (erratum), so the full rate
+    applies at every coarse node owned by the cell. The GF/IF "%/h/cm³" reads as %/h by the same
+    correction.
+- **A8 Cap (06-q10).** At 0.08/5.5 mM, u ≤ u^O everywhere, so a cap never binds: **irrelevant to
+  Figs 4–7 and to calibration**. Uncapped, Fig 8 has b ≈ 3 b₀ at the surface and about twice the
+  surface lactate production of 0.08/5.5. That matches the authors' explanation of the early
+  saturation: "more accumulation of waste" (p.8 [3891]).
+- **A9 Shedding (06-q9).**
+  - A surface P cell covers ≈ (3.8 × 10³)^{2/3} ≈ 245 µm², so the surface holds ≈ 4.1 × 10³
+    cells/mm².
+  - At p = 0.2 the implied rate is 51 /mm²/h if evaluated at division (16 h cycle), **≈ 270
+    /mm²/h per MCS (3 h)**, or ≈ 1100 /mm²/h per ¼-MCS iteration.
+  - The quoted experiment is "∼218 cells per square millimeter" per hour (p.4 [3887]). Only the
+    per-MCS evaluation lands within 25 %; Fig 3 places the test at division.
+  - "Surface" = contact with medium (Fig 4 shows no other boundary).
+- **A10 Cycle clock and time origin (new item R1).**
+  - M4 needs a mean cycle ≤ 9.1 h from one cell to 25–28 cells by 1.76 d, but the nominal minimum
+    is 16 × ¾ h = 12 h. Fig 4's "2 days" (≈10⁵ µm³, ≈25–40 cells) uses the same clock.
+  - From 2 to 5 d the effective cycle is ≈16 h. Evidence: the M4 slope, and the M5 alternation,
+    which needs 24 h ≈ (k + ½)·T_c (T_c = 16 or 9.6 h; 12 h gives no alternation).
+  - So either the plotted sim clock starts ≈0.6–1.4 d after seeding (most likely, aligned to the
+    experiment), or the earliest cycles are faster.
+  - The Gompertz "8.6–9.5 h" (p.6 [3889]) is a fit extrapolated to t = 0, not a cycle time. It is
+    re-derived by fitting the same Gompertz to our ensemble on the same time window.
+  - A free cell doubling in "four Monte Carlo steps" (p.4 [3887]) and the ≈5.3 MCS cycle in a
+    packed aggregate are compatible; they are two separate S1/S2 targets.
+- **A11 Fig 6 bookkeeping (new item R2).**
+  - Flow cytometry classes cells by DNA content, so the sim must count Q cells in the phase where
+    they stopped.
+  - Late S/G2 = 18/4 = 4.5 against the 6/4 stage ratio. That is impossible for cycling cells
+    alone: **S-labelled Q cells** must come from the end-of-S volume checkpoint.
+  - With the stated >85 % of Q cells arrested in G1 (p.4 [3887]), and the Discussion's claim that
+    arrest is mainly G1-protein-driven (p.9 [3892]), this pins the volume-checkpoint share, and
+    hence ε (06-q8), within S4.
+- **A12 Other pins.**
+  - V₀ = 32 for daughters (64/2, and "max" = 4³ = 2V₀). 27 = 3³ is the seed cube. Its first-cycle
+    effect is absorbed by t₀ (06-q8 part 2).
+  - γ_Q = 4γ_P (p.6 [3889]).
+  - γ_N is operationally pinned: rigid means e^{−(γ_N − ΔJ_max)/T} × ≈10⁷ core-boundary attempts
+    per run ≪ 1, i.e. γ_N ≥ ΔJ_max + 16T. Any larger value is equivalent.
+  - Quiescence is irreversible (Fig 3 and the text have no Q → P path).
+  - Signs per §3.3.
+  - J_QQ: the 7 given J fit an additive form j_P + j_τ′ (j_P = 14, j_Q = 12, j_N = 10,
+    j_M = 2) exactly, except J_PQ = 28 (additive 26). The candidates are **28** (viable cells
+    identical; p.6 [3889] says no evidence Q adhesion differs) and 24 (additive). The paper says
+    results are J-insensitive, so the choice is checked under T11 and never asked.
+- **A13 Coarse grid (new item R3).** At factor 4 per axis (64 voxels per node) a cell of 38–48
+  voxels contains ≈0.6–0.75 nodes, yet the Appendix says "only a few grid points exist inside
+  each cell" (p.10 [3893]). The literal factor is ambiguous. Use 4 with trilinear sampling and
+  run one convergence check against factor 2 (numerical only; non-gating).
+- **A14 Boundary location (new item R4).** With Dirichlet at the tumour–medium interface (the
+  Appendix), the lattice size cannot create the Fig 8 artefact: the tumour stays ≥170 µm from
+  the box. The authors' "comparable to the total lattice size" (p.8 [3891]) suggests the fixed
+  values sat at the box faces, with medium diffusing. Screened in S6.
+
+### 8b.3 Item status
+
+| Item | Verdict | Default / plan |
+|---|---|---|
+| Lattice size (06-q1) | **Pinned** (A1) | ≈300³, Δx_geom ≈ 4.4 µm; J8 larger lattice only for Fig 8 control |
+| γ_N (06-q1) | **Pinned** (A12) | γ_N = ΔJ_max + 20T |
+| T, γ_P, neighbourhood (06-q1, §3.3) | **Screen** S1 → S2 | — |
+| α, θ, threshold comparator (06-q1, 06-q3) | **Screen** S2/S4; comparator (x > θ vs F > θ) author-confirm | — |
+| J1 162/216 | **Unidentifiable from Figs 5–7** (A7); weak via S6 | Keep §4 default; non-gating |
+| J1 per-node | **Pinned** (A7) | Intensive per node |
+| J2 | **Pinned** text (A5) | — |
+| J3 polarity + top tier | **Pinned** as drawn (A4); S1 confirms | Proposes reversing the §4 provisional default (coordinator call) |
+| J4 AND/OR | **Pinned** OR (A2) | — |
+| J5 D_gf/D_if | **Screen** S2 (D_gf), S4 (D_if) | — |
+| J6 necrotic IF secretion | Weak screen inside S4; **author** | Table 1, 24-h window |
+| J7 scheme | **Pinned** (A2) | Implicit, rates inside the solve |
+| J7 ECM factor f | **Screen** S3 (A3 window 1.8–3.2) | — |
+| 06-q3 semantics | (c) excluded, (b) favoured (A6); S2 tests (a)+reset vs (b) | (b) |
+| 06-q8 V₀ | **Pinned** (A12) | 32, seed 27 |
+| 06-q8 ε | **Screen** S4 (A11) | — |
+| 06-q9 surface | **Pinned** medium contact; timing **screen** S5 (A9 favours per MCS) | — |
+| 06-q10 cap | **Pinned** irrelevant to calibration (A8); **screen** S6 for Fig 8 | — |
+| J_QQ, split plane, quiescence reversibility, u^T, GF/IF units | **Pinned** or insensitive (A7, A12; T11 check in S1) | J_QQ = 28; random-orientation plane through the centroid |
+| R1 t₀ offset | Fitted nuisance per arm (A10); **author** | — |
+| R2 Fig 6 bookkeeping | **Pinned** (A11) | Count Q by phase at arrest |
+| R3 coarse factor | Convergence check | 4 + trilinear |
+| R4 BC location | **Screen** S6 | Interface (Appendix) |
+
+### 8b.4 Pre-registered screens
+
+**Common rules (fixed before any run).**
+- n = 8 replicates per arm (the paper shows single runs, p.8 [3891]).
+- t₀ is fitted per arm by least squares on log N for the first three Fig 5a sim points, then held
+  fixed for all other targets.
+- Loss = mean squared log-error to the digitised **published sim** points (the reproduction
+  target), plus normalised errors on the scalar targets listed.
+- An arm wins only if its loss beats the runner-up by > 2 bootstrap SE. Otherwise it is
+  "unidentified": keep the default and send the confirm question.
+- Arms, targets and tolerances are frozen in the S0 commit.
+- Cost basis: an S0 timing pilot. Estimates assume 2–5 × 10⁷ attempts/s per core and ≈0.1 s per
+  implicit field solve on 75³; 300³ for 22 d (176 MCS, 704 iterations) is ≈10–20 min per replicate
+  on one core. Heavy screens run on the FULL-run PC (16 cores).
+
+| Screen | Arms | Discriminating targets (cite) | Lattice, horizon; pilot validity | Est. cost |
+|---|---|---|---|---|
+| **S0** | Digitise Figs 4–8 to CSV; time 128³ × 20 MCS | — | — | ≈1 h, Mac |
+| **S1** cell mechanics | γ_P ∈ {1, 2, 3} × T ∈ {5, 10, 20, 40} × neighbourhood order {1, 2, 3}; plus Rb → E2F as drawn vs ⊣, and single J = 20 vs Table J | (i) free-cell volume 32 → 64 in 4 ± 1 MCS (p.4 [3887]); (ii) ≥95 % of cells reach V^T within a cycle; (iii) 8-cell cluster stays compact and round (Fig 4); (iv) polarity: E2F on after G1 in fresh medium (A4); (v) T11 J-insensitivity | 48³, no PDE (chemistry clamped favourable), 8 MCS. Valid: cell-scale quantities, lattice > 4 cell diameters | 36 × 10 runs × ~1 s: minutes, Mac |
+| **S2** early growth | S1 survivors (≤ 6) × θ ∈ {0.5…0.9, 5 values} × α ∈ {5, 20} × D_gf ∈ {10⁻⁷, 10⁻⁶}; semantics (a)+reset vs (b) on the best 3 | N(t) at 1.8–7.8 d and the 16 h doubling (M4); S/G1 alternation phase 2–5 d (M5); G1 ≥ 60 % by 7 d (Fig 6); growth slows at 5–7 d (p.6 [3889]); P layer 1–2 cells (Fig 4, 10 d) | 160³ (≈700 µm), 0–8 d (64 MCS). Valid: interface Dirichlet makes the fields depend only on the tumour while D ≤ 300 µm and the gap is > 10 coarse nodes; GF is not quasi-steady (R²/D ≈ 4–6 d), so the horizon must be real time, not shortened | ≈120 arms × 8 × ~1.5 min ≈ 24 CPU-h, ≈1.5 h wall on the PC |
+| **S3** chemistry scale | **Tier 0:** 1-D radial transient surrogate (composition from Fig 4) for f ∈ {1, 1.6, 2.7, 4.5}, J1 162/216, AND/OR. **Tier 1 (3D):** best f ± neighbour × J1 | Onset D = 555 ± 50 µm and plateau rim 145 ± 20 µm (Fig 7: two targets, one parameter, so overdetermined); core ≈ 150 µm by D ≈ 650 µm; 18-d Q layer ≫ P layer (Fig 4); D(18 d) ≈ 815 µm (M2) | Tier 0: seconds. Tier 1: 224³ (≈990 µm), 0–14 d. Valid while D ≤ 650 µm (gap ≥ 170 µm) | Tier 1: 4 × 8 × ~5 min ≈ 3 CPU-h |
+| **S4** late phase | ε ∈ {0, 0.05, 0.1, 0.2, off} × D_if ∈ {10⁻⁷, 10⁻⁶} × necrotic IF {2 %/h, 10 %/h ("0.1" read as /h)} (factorial on the S3 winner) | Fig 6 at ≥15 d: G1 78, S 18, G2 4 % (M5); Q_G1/Q ≥ 0.85 (p.4 [3887]); volume-checkpoint Q a minority (p.9 [3892]); Fig 5a N(15–22 d) | 300³, 22 d | 20 arms × 8 × 15 min ≈ 40 CPU-h, ≈3 h wall |
+| **S5** shedding | at division / per MCS / per iteration (p = 0.2) | Shed rate per area once R > 300 µm against 218 /mm²/h (p.4 [3887]); Fig 5a N and Fig 5b V at 15–22 d (T4/T5) | The rate is read off the S3 runs at no cost; 300³ × 22 d only to confirm | 3 × 8 × 15 min ≈ 6 CPU-h |
+| **S6** Fig 8 | {capped, uncapped} × {interface BC, box BC} at 300³, plus uncapped/interface at 450³ (control) × J1 162/216 on the winner | Fig 8a/b sim tracks experiment to ≈13 d, then saturates early (≈7 × 10⁴ cells at 20 d). If early saturation persists at 450³, it is physics (cap/waste) and not a lattice artefact (A8, A14) | 300³ and 450³, 20 d | ≈(4 × 8 × 15 min) + (8 × 50 min) ≈ 15 CPU-h |
+
+Total ≈ 90 CPU-h, ≈ 1 day wall on the PC. S1 and Tier 0 run on the Mac first and cut the arm
+counts of S2 and S3.
+
+### 8b.5 What stays author-only ("we inferred X from Y; please confirm")
+
+1. **J3.** Fig 2 with the top tier on gives E2F on only with Rb → E2F as drawn. We implement it
+   as drawn, with "on" as a logic token. Correct?
+2. **06-q3.** Below threshold, we read the factor level as P(node on) (reading b); "flip" breaks
+   monotonicity. Is "above the threshold" x > θ (F > ½) or F > θ?
+3. **R1.** N ≈ 25 at 1.76 d needs ≤ 9 h cycles against 12 h nominal. Was the sim time axis shifted
+   ≈1 d to align with the experiment?
+4. **J7 / A1.** Figs 4/5 imply ≈4.4 µm per voxel (V/N ≈ 3.8 × 10³ µm³), and Fig 7 needs
+   q/D ≈ 2–3 × Table. Is that the ECM conversion, and was it applied to D or to the rates?
+5. **J1.** No figure separates 162 from 216 (onset shifts 4 %). Which did the runs use? (Non-gating.)
+6. **06-q9.** 20 % per MCS matches 218 /mm²/h; at division it gives ≈50. Which was used?
+7. **J6.** Is the Appendix's "0.1 ml/h" the Table's 2 %/h, or 0.1 h⁻¹?
+8. **R4.** Did the fixed medium values sit at the box faces (which would explain the Fig 8
+   artefact)?
+
+Questions 6–8 are asked only if S5, S4 or S6 ends "unidentified".
+
+### 8b.6 Effect on the hard gates
+
+- **J3** stops being a gate. The paper's initial condition plus the stated rule pins the drawn
+  polarity (A4), and S1 confirms in minutes. It becomes confirm-question 1. The §4 provisional
+  "inhibitory" default should be reviewed by the coordinator: by A4 it makes the first cell arrest.
+- **06-q1** shrinks to calibrated values reported for confirmation:
+  - lattice ≈300³ and γ_N are pinned (A1, A12);
+  - T and γ_P come from S1/S2;
+  - α and θ come from S2/S4, against pre-registered figure targets.
+  The only semantic residue is the comparator in question 2.
+- **J1** is non-gating: it is unidentifiable from the calibration figures and moves Fig 7 by
+  only ≈4 %. Keep the §4 default and show both in the deviations table.
+- The remaining reproduction risk is **f (S3)** and **t₀ (R1)**. If Tier 0 shows that no single
+  f fits both Fig 7 targets, the lactate-driven reading (A2–A3) fails, and this plan must be
+  revisited before any FULL run.

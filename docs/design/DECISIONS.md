@@ -4284,3 +4284,15 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
     - **Guardrail.** With Makie already loaded, the guardrail checks `PottsModelsMakieExt`, which imported non-public `Makie.automatic`; the extension no longer uses it.
     - **Reverse order.** `papers.jl` relies on `akeeb_metrics` from `mechanisms.jl`, now preloaded.
   - No other failure in either order.
+
+## D-234 Jiang 2005 J3: Rb → E2F as drawn, provisional default reversed (2026-10-13; coordinator call, from the spec 06 §8b reverse-engineering plan; maintainer's reverse-engineering-first direction; amends the J3 provisional default of the 2026-10-06 policy)
+- **Finding (06 §8b, A4).** With the top tier on (GSK3b, TGFb, SCF on: the paper's stated initial condition), the Fig 2 logic turns E2F on, and so lets the first cell proliferate, only with Rb → E2F as drawn. The provisional inhibitory form arrests the first cell at once.
+- **Ruling.** Implement Rb → E2F as drawn. J3 is no longer a gate for P6.11. It becomes a confirm-question ("we inferred X from Y, please confirm"), and screen S1 confirms it.
+- **Also pinned by arithmetic in §8b (recorded, not re-ruled here):**
+  - lattice about 300³ at about 4.4 µm per voxel;
+  - J2 takes the text branch;
+  - J4 is OR (necrosis lactate-driven);
+  - J7 is an implicit solve with the rates inside it;
+  - J1 does not gate (about 4 % on necrosis onset).
+- **Screens.** S1–S6, about 90 CPU-h, run on the PC after the P6.11 build. Each is registered as its own D-entry before it runs. The main risk is S3: one ECM factor f must hit both Fig 7 numbers.
+- **Changed.** The `G1SNetwork` sketch default in api-synthesis, the P6.11 row in ROADMAP, and the (gitignored) open question list.

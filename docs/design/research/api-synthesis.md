@@ -1067,7 +1067,7 @@ boundary.
 using Potts, ModelingToolkit, OrdinaryDiffEq, LinearSolve
 using ModelingToolkit: t_nounits as t
 
-function G1SNetwork(; name, rb_e2f = :inhibitory)            # J3 blocking; MTK clocked component
+function G1SNetwork(; name, rb_e2f = :as_drawn)              # J3: as drawn (D-234); MTK clocked component
     k = ShiftIndex(Clock(0.75))                                # one tick per Potts step (45 min)
     @variables GSK3b(t)=1 TGFb(t)=1 SCF(t)=1 SMAD(t)=0 P15(t)=0 P27(t)=0 P21(t)=0 CycD(t)=0 CycE(t)=0 Rb(t)=0 E2F(t)=0
     @parameters F θ stage u[1:8]

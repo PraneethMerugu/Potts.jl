@@ -777,7 +777,7 @@ merges (phase-end checkpoint).
   - coarse field grids (D-051 item 4);
   - R14 implicit transient;
   - `@retire … sites => ref`;
-  - D-075: `Coarse(k; clamp = All())` default, with T10 run under `Any()` and `All()`. Gate: J3.
+  - D-075: `Coarse(k; clamp = All())` default, with T10 run under `Any()` and `All()`. J3: Rb → E2F as drawn (D-234; a confirm-question, no longer a gate). Screens S1–S6 of 06 §8b (about 90 CPU-h) run on the PC after the build.
 - **P6.12** FBCA (X5 settled by D-067: published `mmc1.xls`, flagged):
   - R15 FBA `CellOperator` (COBREXA/JuMP extension, warm start);
   - the Eq 6 averaging operator;
