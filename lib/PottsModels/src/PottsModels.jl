@@ -21,10 +21,10 @@ using SHA: sha256
 using TOML: TOML
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
-    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008
+    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008, ShearedFoam
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
     akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout,
-    merks2008_sprout, merks2008_denovo
+    merks2008_sprout, merks2008_denovo, sheared_foam_state
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
@@ -40,6 +40,7 @@ include("openvt_chain.jl")
 include("openvt_reference.jl")
 public openvt_snapshot, openvt_frame, stop_at_cells, edge_guard
 include("akeeb.jl")
+include("foam.jl")
 
 # OpenVT figure functions (D-175). The methods live in the `PottsModelsMakieExt` extension,
 # which loads with Makie and MakiePotts (`using CairoMakie, MakiePotts`); without them
@@ -149,6 +150,8 @@ PrecompileTools.@setup_workload begin
         _first_mcs(mtkcompile(OpenVTChain(; name = :c)), openvt_chain(11))
         _first_mcs(mtkcompile(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24))),
             openvt_reference_state(; lattice = (24, 24)); capacity = 64)
+        _first_mcs(mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32))),
+            [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5], SequentialCPM(; skip_interior = true))
         a = mtkcompile(AkeebInvasion(; name = :a, lattice = (24, 30)))
         op = akeeb_state(; lattice = (24, 30))
         _first_mcs(a, op; capacity = 1000)

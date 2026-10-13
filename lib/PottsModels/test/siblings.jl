@@ -219,6 +219,28 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
+# CompuCell3D's `ExternalPotential` plugin (pixel-based: a copy pays λ·(x_target − x_source),
+# one uniform λ for the whole lattice) on cells in medium with a closed box and Moore(1)
+# copies, instead of the sheared foam's γ(y, t)·direction[1] on a dry foam with 20 neighbours
+@potts_model ExternalPotentialCells begin
+    @kinds medium cell
+    @parameters begin
+        λ = 2.0
+        V₀ = 25.0
+        λx = -2.0
+        T = 6.0
+        J[kind, kind] = [0.0 4.0; 4.0 8.0]
+    end
+    @lattice Lattice((60, 20); boundary = Closed(), neighborhood = Moore(1))
+    @relations proposal = Moore(1)
+    @energy begin
+        cells(cell) => λ * (volume - V₀)^2
+        contacts => J[kind, kind′]
+    end
+    @drive copy => λx * direction[1]
+    @sweep Metropolis(; temperature = T)
+end
+
 block(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 # 4√λ_max of the covariance of cell `c`'s site coordinates (the inertia-tensor length)
 function sib_length(σ, c)
@@ -326,6 +348,17 @@ const SIBLINGS = Dict(
         @test bad == 0
         θs = sol.u[end].cell.θ[sol.u[end].cell.volume .> 0]
         @test all(x -> 1.5 < x < 2.5, θs) && length(unique(θs)) == length(θs)      # one draw per daughter
+    end),
+    :ShearedFoam => ("CC3D external potential, uniform along x", function ()
+        σ = block((60, 20), (14:18, 6:10), (14:18, 11:15))
+        drift(λx) = map(1:3) do seed
+            p = PottsProblem(ExternalPotentialCells(; name = :e), [ownership => σ, kind => [:cell, :cell], :λx => λx],
+                (0, 150); seed)
+            seed == 1 && λx != 0 && @test selfcheck(p) < 1e-9
+            u = solve(p, SequentialCPM()).u[end]
+            mean(i[1] for i in findall(>(0), u.σ)) - 16.0
+        end
+        @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5    # λx < 0 pushes the cells +x
     end),
     :OpenVTChain => ("compression released by a scheduled per-cell target", function ()
         σ = block((60, 4), [((1 + 4(c - 1)):(4c), 1:4) for c in 1:6]...)       # 6 cells of 16 sites from x = 1

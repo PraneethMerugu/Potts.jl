@@ -50,6 +50,10 @@ end
             (; field_solver = ExplicitEuler(substeps = 15))),
         ("single-division fixture", SingleDivisionFixture(; name = :fixture), [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]]),
         ("OpenVT growing monolayer", OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24))),
+        ("sheared foam", ShearedFoam(; name = :foam, lattice = (32, 32)),
+            [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5; :γ0 => 2.0; :T => 1.0]),
+        ("sheared foam (periodic bulk shear)", ShearedFoam(; name = :foam, lattice = (32, 32)),
+            [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5; :β => 0.5; :bulk => 1.0; :periodic => 1.0; :T => 1.0]),
     ]
     @testset "$label" for (label, sys, op, kw...) in cases
         prob = PottsProblem(sys, op, (0, 10); get(kw, 1, (;))...)
@@ -132,7 +136,7 @@ end
 # `const`s, structs and `@potts_model`s are globals as before.
 const POTTSMODELS_TEST_FILES = [
     "mechanisms.jl", "papers.jl", "siblings.jl", "analysis.jl", "openvt_analysis.jl", "guardrails.jl", "frozen.jl", "tutorial_models.jl",
-    "callbacks_gc.jl",
+    "foam_src.jl", "callbacks_gc.jl",
     (joinpath("acceptance", f) for f in sort(filter(endswith(".jl"), readdir(joinpath(@__DIR__, "acceptance")))))...,
     # paper reproductions (ROADMAP Phase 6 "Acceptance for model reproductions"): the SMOKE
     # tier runs here, the FULL tier under POTTS_FULL_REPRODUCTION=true
