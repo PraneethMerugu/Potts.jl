@@ -4284,6 +4284,7 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Scope.** `centroid(c, k)`, `separation` and `minimum_image` (D-075, api-synthesis §6.4) are not in this freeze. They go to P6.5a2 with their own tests.
 - **Re-frozen the same day (sha256 `ec8c6e94…9351`).** Two claim-set assertions in testset 5 had their expected values swapped. With `partner = [2, 1, 0]`, a copy with old = 0 and new = 1 reads `partner[1] = 2`, so the claim is 2, not 1; likewise new = 2 claims 1. The implementer reported this instead of working around it, and the test author's own calibration stub, `reads = (partner[old], partner[new])`, gives the corrected values. Nothing else changed.
 - **Left open (unpinned).** D-066's output mapping to `birth` (SII ids, `cluster`, plots, PIFF), `with_capacity`, a daughter that receives no site, `sibling(k)` with several alive members of kind k, and the raw value of a reference to a dead cell.
+
 ## D-233 `@convert` is a per-MCS independent-decision pass, device-capable (2026-10-13; maintainer-directed; spec 14 §2.5, §9 ruling; paper over code; amends the R8 sketch, P6.5b scope; under D-066, D-089, D-156)
 - **Semantics.** Each candidate site decides independently from the start-of-pass state, with p evaluated once per MCS per cluster. The 14a code's sequential, re-evaluated form is a recorded variant.
 - **Implementation.** Generated KA kernels, one implementation for CPU and GPU, with no host round trip per MCS:
