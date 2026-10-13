@@ -866,9 +866,9 @@ end
     prob = p65a_pair_problem()
     u = prob.u0
     @test 2 in p65a_claimed(prob, u, p65a_prop(prob, u, 1, 0))  # old = 1 reads its partner 2
-    @test 1 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 1))  # new = 1 … (medium old)
+    @test 2 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 1))  # new = 1 reads its partner 2 (medium old)
     @test 1 in p65a_claimed(prob, u, p65a_prop(prob, u, 2, 0))
-    @test 2 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 2))
+    @test 1 in p65a_claimed(prob, u, p65a_prop(prob, u, 0, 2))  # new = 2 reads its partner 1
     # energy reading q[partner], kind[partner], alive(partner)
     pe = p65a_energy_problem()
     ue = pe.u0
