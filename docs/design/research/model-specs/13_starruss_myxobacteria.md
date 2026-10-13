@@ -234,3 +234,72 @@ I assess this against what 13 and 14a/c actually require. A single **cluster-of-
 10. **Velocity measurement interval** (Fig. 5a) and the "given total path length" for motion efficiency (Fig. 5b).
 11. **Degenerate curvature.** Handling of sin∠ = 0 (straight triplets give R = ∞ and energy 0, so this is fine) and of coincident COMs, which divide by zero.
 12. **Same-cell non-adjacent contact.** Eq. 6 assigns J_CC. Is that intended, or should it be J_SS or 0?
+
+---
+
+## 8b. Reverse-engineering plan (2026-10-13, spec owner)
+
+Placed after §7 so that no existing section is renumbered. Goal: infer every unstated item ourselves first, so author contact asks only "we inferred X from Y; please confirm". Figures were read from the embedded page images: Fig. 2, 3 and 4 are 150-ppi JPEGs; Figs. 5 and 8 are 600-dpi line art. Screens are pre-registered: the candidates, targets and decision rule are fixed **before** any run. No runs have been made yet. Code: none from 2007. Starruß later led Morpheus (2014), whose hex "neighbourhood order 2" = 12 neighbours and whose MCS = one attempt per lattice node. That is research evidence for conventions only (paper over code).
+
+### 8b.1 Pinned now by evidence and arithmetic
+
+- **P-S1: Eq. 7 minus sign.**
+  - With exp(+ΔH′/kT), every uphill move would get p ≥ 1, which contradicts the case split in Eq. 7 itself (p.274). The Metropolis form exp(−ΔH′/kT) is therefore forced. Closed (no author question).
+- **P-S2: Eq. 10 loser term is physically correct as printed (resolves the worry in §7 item 3).**
+  - **Front copy.** Target i is medium and the source j is the cell. d = i − j points forward, so d·θ_j > 0 and ΔD < 0 (advance favoured).
+  - **Rear copy.** Target i is a cell node, retreating, and the source j is medium behind it. d = i − j still points forward, so d·θ_i > 0 and ΔD < 0 (rear retraction favoured).
+  - So both terms drive forward motion. Implement exactly as printed.
+- **P-S3: κ(s) = (√3/2)·s.**
+  - The digitised abscissae of Figs. 5 and 8 are 2.5, 3.35, 4.25, 5.15, 6.85, 10.3, 13.85 and 17.25. Divided by s = 3, 4, 5, 6, 8, 12, 16 and 20, the ratios are 0.83–0.87. A linear fit gives a slope of 0.868 and an intercept of −0.1.
+  - This integer s set is the unique smallest-integer fit.
+  - Geometric reading: segments are idealised as regular hexagons stacked flat-to-flat. Length = s × across-flats (√3R) and width = across-corners (2R), so κ = (√3/2)s.
+  - Hence 'xanthus' s = 8 gives κ = 6.9 (the text's "κ ≈ 6", p.282), and **κ ≈ 10 in Fig. 6 means s = 12** (κ = 10.4).
+- **P-S4: the "xanthus" figures appear to use s ≈ 12, not s = 8.**
+  - The single cells of Fig. 2 (snapshot iv) and Fig. 4 show about 12 segments (±2, counted at 8× zoom). Their length/width is about 93/8 px, κ ≈ 11.
+  - The Fig. 3 snake cell is longer still (about 14–16 segments).
+  - Table I gives s = 8, so the population runs in Fig. 8 use the per-point s. For Figs. 2, 4 and 6 we reproduce at **s = 12** and report s = 8 alongside. Confirm (Q-S1).
+- **P-S5: Fig. 6 is the 10% density case at constant c = 100, about 1.4 × 10⁵ nodes.**
+  - The panel is 320 × 226 px (aspect ≈ 1.42), and a straight cell is about 30 px long.
+  - With an s = 12 cell length of about s·D = 41.6 spacings, the panel is about 440 × 310 spacings, about 1.6 × 10⁵ nodes (±40%).
+  - With c = 100, s = 12 and A = 12, density ρ = 14,400/N is about 9–10%, and the visual coverage is consistent.
+  - Under the convention "c = 100 always" the lattice is N = 100·s·A/ρ = 1.44 × 10⁵. That is screened against the alternative in S-S3.
+- **P-S6: Fig. 8 right (ξ scan) uses 20% density.**
+  - Its Ψ̄(ξ = 300) ≈ 0.63 matches the 20% curve of Fig. 8 left (0.59–0.61 at κ = 6.9 and 10.3). The 30% (0.86–0.89) and 10% (≈ 0.2) curves do not match.
+  - κ cannot be pinned between 6.9 and 10.3 (both give ≈ 0.6). Use s = 8 (Table I), with s = 12 as a check.
+- **P-S7: 1 MCS = N_nodes attempts (Graner–Glazier, cited p.274; Morpheus convention).**
+  - Time calibration from the Fig. 3 labels: 1050 MCS = 49 s, 2200 MCS = 103 s and 7850 MCS = 368 s, constant at **21.3 MCS/s**.
+  - Consistency: 1.8 nodes/100 MCS × 21.3 gives about 0.4 nodes/s. With a cell width of about 0.5 µm ≈ 3.5 nodes, that is about 3–5 µm/min, within the A-motility range. This is supportive only.
+- **P-S8: Fig. 2 initial bend.**
+  - Snapshot i is a U with two corners of about 90°. Each 90° corner gives (1/R)² = (2/(D√2))² ≈ 0.167, so 2 corners × 0.167 × ξ = 300 gives E ≈ 100 E, plus the flanking triplets. That is consistent with the plotted E₀ ≈ 130 E.
+  - The initial condition is therefore: a straight chain plus two right-angle bends, as close to a symmetric U as the hex lattice allows.
+- **P-S9: same-cell non-adjacent contact pays J_CC.** Implement Eq. 6 as printed (§7 item 12). Confirm only (Q-S5).
+
+### 8b.2 Pre-registered screens (2D, hexagonal, periodic; costs are estimates, to be re-measured on a pilot)
+
+**Cost basis.**
+- Single-cell runs: a box of about 120² hex nodes (> 1.5 cell lengths at s = 20) and 2 × 10⁴ MCS, about 3 × 10⁸ attempts, **≈ 1–2 min each**.
+- Population runs: about 7 × 10⁴ nodes on average under C2, with 2 × 10⁴ MCS warm-up plus 5 × 10⁴ MCS measurement, **≈ 15–40 min each**.
+- All heavy runs go on the FULL-run PC (D-157).
+
+| Screen | Candidates | Independent targets (cite) | Decision rule (fixed now) | Reps; cost |
+|---|---|---|---|---|
+| **S-S1 θ normalisation (Eq. 9)** | **U**: unit chord; **R**: raw chord (\|θ\| ≈ 2D ≈ 6.9, so the drive per copy is ≈ 3.5 E vs kT = 0.8) | Fig. 5a velocity at s = 8 ≈ 1.81 nodes/100 MCS. V14: segments "always remain connected" (p.279). Fig. 3 snake at ω = 0.5, ξ ≈ 300 | Reject a candidate if > 1% of frames show a disconnected segment, or if velocity is off by > 30%. Expect U. If both survive, choose by the S-S2 composite score | 15 reps × 2 × s = 8 ≈ 1 core-h |
+| **S-S2 energy neighbourhood ("second-nearest")** | **N12**: 1st + 2nd hex shells (Morpheus order 2); **N6′**: 2nd shell only; **N18**: shells 1–3 | (i) Fig. 2 decay at s = 12: E(500) ≈ 40 ± 8, E(2000) ≈ 18 ± 6, E(4000) ≈ 10 ± 5, E(6000) ≈ 3 ± 3 (read). (ii) Fig. 5a velocity vs κ (8 points). (iii) Fig. 5b efficiency vs κ. (iv) V14 connectivity | Score = mean of normalised squared errors over (i)–(iii), using the best Δt from S-S4 per candidate. A connectivity failure (iv) disqualifies. Lowest score wins if it beats the runner-up by ≥ 20%. Otherwise take N12 (prior) and ask Q-S2 | Fig. 2: 10 reps × 3. Fig. 5: 15 reps × 8 s × 3 ≈ 10–20 core-h |
+| **S-S3 lattice / cell-count convention** | **C2**: c = 100 always, N = 100·s·A/ρ (P-S5). **C1**: fixed lattice 1.44 × 10⁵, c = ρN/(sA) (c = 60–1200) | Fig. 8 left, all 24 points (V8–V10). V11 κ_cr ∈ [3.4, 5.2] at all densities. V13 decline at κ ≈ 17, 30%. Fig. 6 visual density | Measurement protocol, fixed now: 2 × 10⁴ MCS warm-up; ψ sampled every 500 MCS for 5 × 10⁴ MCS; stationarity = first-half vs second-half Ψ̄ within 0.05. Winner = lower RMS over the 24 points, if the gap is ≥ 0.05. Otherwise report both and ask Q-S3 | 5 reps × 24 × 2 ≈ 60–160 core-h C2, about 2× that for C1 (≈ 10–25 h wall) |
+| **S-S4 velocity Δt and efficiency path length (post-processing only)** | Velocity interval Δt ∈ {10, 100, 1000} MCS. Efficiency path length L_p ∈ {90, 180, 360} nodes (180 ≈ the Fig. 4 window of 10⁴ MCS × 1.8/100) | Fig. 5a levels; Fig. 5b levels and the rise to κ ≈ 5 | Choose the Δt and L_p minimising RMS against Fig. 5a/5b means on the S-S2 trajectories. No extra runs | 0 extra |
+| **S-S5 head pinning (Fig. 3)** | **P1**: head nodes frozen (no copies into or out of them). **P2**: head COM tethered, k\|S₁ − S₁⁰\|² with k = 10 E, head shape free. **P3** (negative control): head ω = 0 only | Fig. 3 right: the head stays put over 7850 MCS but its outline changes between frames (e.g. 2550 vs 7850 MCS). A full fold by about 1050 MCS. Shape changes about every 500–1500 MCS | Require head drift ≤ D and a fold by ≤ 1500 MCS in ≥ 4/5 reps; P3 must fail. Between P1 and P2, prefer **P2** because the head outline visibly varies (P1 would freeze it). If P2 detaches or tears, fall back to P1 | 5 reps × 3 × s ∈ {12, 16} ≈ 1 core-h |
+
+**Order.** S-S1 → S-S2 (with S-S4 nested) → S-S5 → S-S3. The population screen runs last, because it is the most expensive and depends on the single-cell choices.
+
+### 8b.3 Remaining author-only items (phrased as "confirm our inference")
+
+- **Q-S1.** Figs. 2, 4 and 6 show about 12 segments (κ ≈ 10). Was s = 12 used there, rather than Table I's s = 8?
+- **Q-S2.** We read "second-nearest" as hex shells 1 + 2 (12 neighbours) for J. Correct?
+- **Q-S3.** Fig. 6 fits 100 cells at 10% density (about 1.4 × 10⁵ nodes). Was c = 100 fixed for Fig. 8?
+- **Q-S4.** We infer κ = (√3/2)s from the Fig. 5/8 abscissae. Is that your definition?
+- **Q-S5.** Same-cell non-adjacent segments pay J_CC as Eq. 6 reads. Intended?
+- **Q-S6.** Fig. 8 right matches 20% density. Which s was used there?
+- **Q-S7.** Was the Fig. 3 head pinned by a tether (our P2 reading) or by freezing its nodes?
+- **Q-S8.** We used warm-up 2 × 10⁴ MCS, sampling every 500 MCS, and Δt / path length per S-S4. What were yours?
+
+Closed without the authors: the Eq. 7 sign (P-S1), the Eq. 10 sign (P-S2), θ as a unit vector (S-S1, expected decisive), and the MCS definition (P-S7).

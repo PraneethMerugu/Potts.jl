@@ -244,3 +244,88 @@ Policy: statistical/qualitative agreement (D-029). 12b gives **one** archetypal 
 ### 7.1 Existing port
 
 There is no Zajac model in `lib/PottsModels/src/` (the files are akeeb.jl, graner_glazier.jl, merks.jl, openvt.jl and wortel_act.jl), so there are no port discrepancies to list.
+
+---
+
+## 8b. Reverse-engineering plan (2026-10-13, spec owner)
+
+Placed after §7 so that no existing section is renumbered. Goal: infer every unstated item ourselves first, so author contact asks only "we inferred X from Y; please confirm". Figures were read from the embedded 200-ppi page images of 12b (Fig. 5 = PDF p.7, Fig. 6 p.8, Fig. 7 p.9, Fig. 8 p.10). Screens are pre-registered: the candidates, targets and decision rule below are fixed **before** any run. No runs have been made yet.
+
+### 8b.1 Sources searched (thesis and code)
+
+- **Thesis.** Zajac, M., 2002, "Modeling convergent extension by way of anisotropic differential adhesion", Ph.D. thesis, Univ. Notre Dame (12b reference list, p.259). Web searches (2026-10-13) found no public copy: none on arXiv or Google-indexed CurateND, and no ProQuest landing page. ProQuest/UMI or the Notre Dame library are the only likely routes, so we ask the authors (Q-Z8).
+- **Code.** Zajac's code was never released. A **third-party** re-implementation exists: the CompuCell3D `ConvergentExtension` plugin, `ConvergentExtensionPlugin.cpp` (15,039 B) at `https://github.com/CompuCell3D/CompuCell3D/tree/master/CompuCell3D/core/CompuCell3D/plugins/ConvergentExtension`. It was read online and not downloaded. Its docs say it is "somewhat simplified", and that its developers had "difficulties to getting it to work properly". It uses per-site **signed** r sin θ (12b uses θ ∈ [0, π], so r sin θ ≥ 0), with example `NeighborOrder 2` and α = 0.99. It is research evidence only (paper over code): it suggests α is dimensionless and of order 1 (screen S-Z5, candidate D3), and nothing more.
+- **Adjacent leads.** Stott, Britton, Glazier & Zajac 1999 (*Math. Comput. Model.* 30:183, cited in 12b p.259) is a Potts model co-written by Zajac. It may show his lattice conventions (neighbour range, sweep). Upadhyaya 2000 (Notre Dame thesis, cited in 12b p.254) is the group's Extended Potts code base. Neither is on disk. Read them before contacting the authors (cheap; not a blocker).
+
+### 8b.2 Pinned now by evidence and arithmetic
+
+- **P-Z1: cell count N = 36 (a 6 × 6 block).**
+  - Fig. 5a shows 6 rows × 6 cells, counted cell by cell.
+  - Fig. 5h shows 2 columns × about 18 rows = 36.
+  - Fig. 8b (cold run) has about 36 arrows. Fig. 6 (about 40) and Fig. 7 (about 35–40) are other runs, consistent within counting error.
+  - Independent check: for N randomly oriented cells, E[λ_max of A] ≈ ½ + ½·√(π/4N), which is 0.57 for N = 36 and 0.54 for N = 100. The Fig. 5 alignment curve starts at about 0.6–0.7, so it favours a small N.
+  - This replaces "≈ 50–70 by eye" in §2.2/§3.
+- **P-Z2: the plotted "Extension" is a length aspect ratio √(λ_b/λ_a), not λ_b/λ_a (resolves A-Z5).**
+  - Fig. 5h measured in pixels: the array is about 208 px long and about 32 px wide, so L/W ≈ 6.5. The plot reads about 6. Under the λ_b/λ_a reading it would read about 40.
+  - Quantisation check: with N = 36 cells of aspect 1.6, aligned across the array, k columns give L/W ≈ 36/(1.6 k²) = 22.5, 5.6, 2.5 and 1.4 for k = 1–4.
+  - The Fig. 5 plateaus at about 2–2.5 (100–350 kSweeps) and about 6 (> 480 kSweeps) match k = 3 and k = 2. The final k = 2 agrees with the text ("two, adjacent columns", p.254).
+  - The text's "λ_b/λ_a as the magnitude" (p.258) therefore conflicts with the figure. We plot √(λ_b/λ_a) and ask for confirmation (Q-Z2).
+- **P-Z3: cell aspect ratios.**
+  - With ε = √(1 − λ_a/λ_b), the second-moment ratio is λ_b/λ_a = (a/b)², so a/b = 1/√(1 − ε²).
+  - The plateau ε ≈ 0.78 (Fig. 5 top) gives a/b ≈ 1.60.
+  - The inset start ε ≈ 0.5–0.6 gives an initial a/b ≈ 1.15–1.25, the "weakly elongated" initial cells (p.253).
+  - Fig. 5h cells measure about 16 × 11.5 px (≈ 1.4; outlines bias this low). The inset reaches about 0.75 by about 0.1 kSweeps (100 sweeps).
+- **P-Z4: the acceptance-rate denominator is boundary-site attempts only.**
+  - Under P-Z5 the array (36 × ~400 sites) sits in a ~1.6 × 10⁵-site lattice, so boundary sites are ≲ 5% of the lattice.
+  - 46% acceptance over all lattice picks is therefore impossible. The 46%/72%/21% rates (p.255) must be per **attempted boundary modification**, counting downhill auto-accepts (p.255 says so).
+  - T is then **defined operationally** as the value giving 46% (validation: 72% and 21%). It is not a free parameter.
+- **P-Z5: cell area A ≈ 250–700 sites; lattice ≈ 400² (estimate).**
+  - Fig. 8b (cold, so lattice steps are visible) has a stair pitch of about 3 px/site. Cells are about 68 × 45 px, giving about 23 × 15 sites, roughly 270 sites.
+  - The Fig. 6 magnified inset gives about 2–2.5 px/site. Its cells are about 40 × 95 px, giving roughly 500–750 sites (hyper-elongated run).
+  - Cost cross-check: "> 72 h at 750 MHz, 14 cycles/op" (p.256) is about 1.4 × 10¹³ ops over about 8.5 × 10⁵ sweeps, about 1.6 × 10⁷ ops per sweep.
+    - With ≥ 50–200 ops per attempt this allows ≲ 0.8–3 × 10⁵ sites per sweep. That is consistent with A of a few hundred and a lattice of about 300²–500², and argues against A ≳ 10³.
+  - Nominal choice: A∘ = 400 (a/b = 1.6 gives a ≈ 14.3, b ≈ 8.9). The final 2-column array is then about 330 × 60 sites, so a 400 × 400 lattice with a ≥ 35-site medium border.
+- **P-Z6: κ (the shape weight) is fixed by the "equal contributions" rule (p.255), not free.**
+  - Choose κ so that, over boundary attempts at the ε plateau, median|ΔE_shape| = median|ΔE_adh| (a factor-of-2 band is acceptable).
+  - The ×10 and ÷10 runs become **validation** targets: the more rigid run curtails alignment and extension; the softer run converges but shows curvature (Fig. 7a; p.255).
+- **P-Z7: run length 850 kSweeps; 1 sweep = N_sites attempts (p.254).** Corrected read of Fig. 5: the large alignment jump is at about **340–380 kSweeps**, not ≈ 450 as in V-Z1. Extension jumps about 470–490 kSweeps.
+- **P-Z8: exact per-copy axes, not lagged.** This is already argued in §2.2. All screens use the exact segment-averaged ΔE (G14). The lagged variant is tested only afterwards, by the §5 acceptance test.
+- **P-Z9: contact segment = all boundary links of one cell pair (working inference for A-Z4).** In a compact 2-column array each cell pair shares one contiguous contact, so "segment" and "pair" coincide almost everywhere. We average r sin θ (not r and θ separately) and weight by link count. This is confirmed with the authors (Q-Z6) rather than screened, because outcomes are expected to be insensitive to it.
+
+### 8b.3 Pre-registered screens (2D; costs are estimates, to be re-measured on a 10-kSweep pilot)
+
+**Common settings.**
+- **Cost basis.** N = 36, A∘ = 400, lattice 400², and boundary-only proposals. About 6 × 10³ boundary sites means about 5 × 10⁹ expensive attempts per 850-kSweep run, at about 1–5 µs each, so **≈ 2–7 core-h per full run**.
+- Short screens use the early targets only.
+- All heavy runs go on the FULL-run PC (D-157).
+- **Iteration.** T is re-tuned to 46% boundary acceptance after **every** candidate change (P-Z4), and κ is re-tuned by P-Z6.
+- **Order.** S-Z1 → S-Z2 → S-Z3 → S-Z4 → S-Z5. If S-Z5 changes the winner of an earlier screen, re-run that one once.
+
+| Screen | Candidates | Independent targets (cite) | Decision rule (fixed now) | Reps; cost |
+|---|---|---|---|---|
+| **S-Z1 energy neighbour range** | Moore order 2 (8 nbrs); order 3 (12); order 4 (20, the Glazier-group habit) | (i) Fig. 8b cold-run facet angles: 0°, 45° and 90° facets are visible, which rules out order 1 alone. (ii) Fig. 5h boundary roughness at 46% acceptance | Run a cold relaxation (21% acceptance, 20 kSweeps). Histogram the boundary-segment angles. Pick the order whose histogram best matches Fig. 8b (L1 distance). If two orders tie within 10%, pick the lower order (cheaper) and ask Q-Z5 | 3 reps × 3 candidates × 20 kSweeps ≈ 1 core-h |
+| **S-Z2 shape target a/b** | a = b (circular); a/b = 1.6 (P-Z3); a/b = 2.0 | Fig. 5 inset: ε ≈ 0.75 by ≈ 0.1 kSweeps. Fig. 5 top: plateau ε ∈ [0.74, 0.82]. p.255: "roughly the same degree of cell elongation" for either target | Keep every candidate that meets both ε targets in ≥ 4/5 reps. If a/b = 1 and 1.6 both pass (the paper predicts this), use 1.6 for Fig. 5 and keep a = b as a reported robustness run | 5 reps × 3 × 5 kSweeps ≈ 2 core-h |
+| **S-Z3 cohesion J_cm/J_cc** | J_cc = 1 with J_cm ∈ {0.75, 1.0, 1.5, 2.0} (surface tension γ = J_cm − J_cc/2 > 0 throughout) | Fig. 7a/b: curvature or a spurious branch at weak cohesion. p.254: increasing the work of separation fixes it. Fig. 5f–h: a straight array | Choose the **smallest** J_cm with no branch and an end-to-end array bend < 30° at 850 kSweeps in ≥ 4/5 reps. A curved or branched outcome at the next-lower value doubles as the Fig. 7 negative control | 5 reps × 4 × full run ≈ 40–140 core-h (≈ 3–9 h wall on the PC) |
+| **S-Z4 area stiffness λ** | λ ∈ {0.5, 2, 8} × (J_cc/A∘) | "little change in cell volume" (12a p.3); Fig. 5 cells visibly uniform | Pick the smallest λ with std(A)/A∘ ≤ 5% at the plateau | 3 reps × 3 × 5 kSweeps ≈ 1 core-h |
+| **S-Z5 anisotropy definition (A-Z3)** | **D1** coupling-relative: p = α²ε²⟨r sin θ⟩²_side / J_cc. **D2** work-of-adhesion: binding W = 2J_cm − J(r,r′), p = (W_aligned − W_unaligned)/W_aligned. **D3** normalised (CC3D-style): Δ = α ε (r sin θ)/b, J = J_cc(1 − ΔΔ′), p = α² | p.254: p < 35% gives "little or no extension". p = 57% gives 2 columns (Fig. 5h). p > 65% consistently gives 1 column. Fig. 6: negative J (disaster) appears only beyond the single-column regime | For each definition run p ∈ {0.30, 0.57, 0.70}. **Pass** = final √(λ_b/λ_a) < 2.0 at 0.30; ∈ [4, 8] at 0.57; > 12 at 0.70 (k = 1), each in ≥ 4/5 reps, with no negative J at 0.57. The definition passing 3/3 wins. If more than one passes, keep D1 (closest to the wording of Eq. 2) and ask Q-Z4. If none passes, the model stays a "reconstruction" | 5 reps × 3 × 3 × full run ≈ 90–300 core-h (≈ 6–19 h wall) |
+| **S-Z6 validation, not a screen** | winning set | V-Z1 (event order; jumps per P-Z7), V-Z2, V-Z4 (72% and 21% acceptance), V-Z5 (α = 0), ×10/÷10 κ (P-Z6) | Pass/fail as already defined in §5 | 5 reps × ~6 conditions ≈ 60–200 core-h |
+
+**Optional cross-check (does not decide anything).**
+- The PRL law D⊥/D∥ = J(0)/J(1) (12a Eq. 7) predicts aspect ≈ 1/(1 − p) for the binding ratio. That gives 1.54, 2.33 and 2.86 at 35%, 57% and 65%.
+- With N = 36, finite-size column quantisation (k = 3 gives 2.5, k = 2 gives 5.6) dominates. The law can therefore only be checked on a large array (N ≳ 150), which costs about 4× per run. Run it only if S-Z5 passes, to support the "analytic ↔ CPM" link in the docs.
+
+### 8b.4 Remaining author-only items (phrased as "confirm our inference")
+
+- **Q-Z1.** From Figs. 5a/5h/8b we count 36 cells (a 6 × 6 block). Correct?
+- **Q-Z2.** Fig. 5's Extension ≈ 6 matches √(λ_b/λ_a) (length ratio), not λ_b/λ_a (p.258). Which was plotted?
+- **Q-Z3.** We read the 46%/72%/21% acceptance as over boundary-site attempts. Correct?
+- **Q-Z4.** We define 57% anisotropy as α²ε²⟨r sin θ⟩²/J_cc (or the S-Z5 winner). Is that it?
+- **Q-Z5.** Fig. 8b facets suggest neighbour order N (S-Z1 winner) for both energy and "nearby site". Correct?
+- **Q-Z6.** Is a contact "segment" all links of a cell pair, with r sin θ averaged and weighted by link count?
+- **Q-Z7.** We infer A∘ ≈ 400 sites, a/b ≈ 1.6, J_cm/J_cc, λ and κ from screens. Can you share the actual values?
+- **Q-Z8.** Could you share the 2002 thesis (and code, if it survives)?
+
+**Status verdict.**
+- Pinned: N, the extension metric, the acceptance denominator, the T and κ calibration rules, the initial aspect, A within a factor of ~2, and the run length.
+- Screened: neighbour order, a/b, cohesion, λ, and the anisotropy definition.
+- If S-Z5 yields a unique passing definition **and** S-Z6 passes, the entry may move from "reconstruction" to "**reproduction (provisional; inferred parameters, author confirmation pending)**". Otherwise it stays a reconstruction.

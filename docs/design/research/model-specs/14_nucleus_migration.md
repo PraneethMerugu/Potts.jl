@@ -96,6 +96,7 @@ E_target volume = Σ_{C=1}^{3} λ_C (V_C − V_C^target)².
 - "Touches substrate" is taken to mean z = 1 cytoplasm sites (derived from the Eq. 6 source convention). The neighbourhood used for "touches" is UNSPECIFIED.
 - There is **no reverse conversion** (lamellipodium → cytoplasm) by rule. Lamellipodium volume also changes through ordinary copies (cytoplasm overwriting lamellipodium, 14a Fig. 3 step 2).
 - This process matters "only when the lamellipodium volume V_3 is much different from its target value", that is, at early times (14a p.2806).
+- **Ruling (2026-10-13; see end of §9):** the paper form is used, with an independent per-site decision and p evaluated once per MCS from the start-of-pass V₃, clamped at 0. The code form below is a recorded variant only.
 - **14a-code:** p = 0.1·(1 − V_3^target/(φ_l · V_total^target)), using the lamellipodium **target** volume, which starts at 1.5 and grows only through conversion. Candidates are cytoplasm sites at z = 1. Conversion is sequential, with p recomputed after each conversion (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:127–165). See §2.9.5.
 
 ### 2.6 Dynamics and acceptance (14a p.2805)
@@ -611,3 +612,14 @@ Each item is marked **RESOLVED** (with a citation) or **STILL OPEN**. Resolution
 18. **Conversion RNG. RESOLVED (noted).** The conversion stream uses a fixed `seed(1000)`, independent of the Potts seed (codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:57). A reimplementation should use an independent per-replicate stream; per the performance-over-exactness policy, parity with this is not required.
 19. **Fig. 12 polarization measure. STILL OPEN (from §2.9.7 item 12).** 14a Fig. 12 says "lamellipodium–nucleus"; the released outputs hold both `dcm_F_CN` (F to C+N, xy, ÷R) and the separate F and N COMs (14a-S1 p.4). Which was plotted is unknown.
 20. **Document S1 inconsistencies. STILL OPEN (minor; deferred to batch 2).** The scan list lacks Table 2's λ = 160, 165, 170; it prints 830 where the product is 840; and it describes a spherical nucleus with the cell centred at L_z/2, while the code uses a 6³ cube (§2.9.7 item 20).
+
+**Ruling under paper-over-code (2026-10-13, spec owner; maintainer-directed).** These rules govern P6.5b and P6.5d. Where the sketch (`sketches/14_nucleus_migration.md`) uses code values, these rules take precedence.
+- **J_cyto–lamellipodium = 20** (Table 1). The code's 10 is a recorded variant (§9 item 3).
+- **Conversion, paper mechanism** (14a p.2806):
+  - After each MCS, **every** cytoplasm site touching the substrate converts **independently** with p = c·(1 − V₃/V₃^target).
+  - V₃ is the lamellipodium's **actual** volume at the **start** of the conversion pass. p is evaluated **once per MCS** per cell, not after each conversion.
+  - p is clamped at 0 when V₃ > V₃^target.
+  - c is unstated; calibrate it under D-156, starting from the code's 0.1.
+- **Code form = recorded variant only.** The sequential, shuffled, per-conversion form with target volumes (`codebases/14a_Fortuna2020_Crawling/Published/Simulation/CellMig3D_Steppables.py:139–165`; §2.5, §2.9.5) is not built unless needed.
+- **14c Eq 7** (ρ[tanh(µ(Q − ⟨Q⟩)/σ_Q) + 1] × Switch) is also evaluated per MCS, from per-MCS statistics and the 100-MCS gate. So the same conversion mechanism serves 14c with a different p expression, through a named block that `@extend` replaces.
+- **Consequence for P6.5b.** Each candidate's decision is independent given the start-of-pass state, so `@convert` can be one device-capable pass in generated KernelAbstractions kernels: decide, then allocate, then paint. It needs no sequential host pass. The sketch's `order = Shuffled()` and per-candidate re-evaluation are dropped from the base design.
