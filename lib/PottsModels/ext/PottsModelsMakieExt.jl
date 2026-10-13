@@ -187,6 +187,10 @@ end
 
 # ---- F1 ---------------------------------------------------------------------------------
 
+# the panel's frame (D-229): thin and grey, as on the other frameworks' closeups
+const F1_FRAME_WIDTH = 1
+const F1_FRAME_COLOUR = Makie.RGBf(0.6, 0.6, 0.6)
+
 # the window × window block (offsets) centred where the 45° ray from the colony centroid
 # leaves the colony (the last cell site on it)
 function _rim_window(frame, window)
@@ -230,9 +234,12 @@ function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool 
     crop = _crop(frame, _rim_window(frame, window), window)
     g = frame_geometry(crop)
     # M's layout in mm (introduction.tex): a 45 mm panel, a 5 mm banner 1 mm above it; 10 px/mm
+    # no outer margin: the lattice fills the image edge to edge, inside a thin grey frame like
+    # the other frameworks' closeups (D-229); the padding only keeps the frame's outer half
     P = 450
-    height = banner ? P + P * 6 ÷ 45 + 20 : P + 20
-    fig = Makie.Figure(; size = (P + 20, height), figure_padding = 10, backgroundcolor = :white)
+    pad = F1_FRAME_WIDTH
+    height = banner ? P + P * 6 ÷ 45 + 2pad : P + 2pad
+    fig = Makie.Figure(; size = (P + 2pad, height), figure_padding = pad, backgroundcolor = :white)
     if banner
         Makie.Box(fig[1, 1]; width = P, height = P * 5 / 45, color = POTTS_COLOUR, strokevisible = false)
         Makie.Label(fig[1, 1], "Potts.jl"; color = :white, font = :bold, fontsize = 30, tellwidth = false,
@@ -240,7 +247,10 @@ function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool 
     end
     ax = Makie.Axis(fig[banner ? 2 : 1, 1]; width = P, height = P, backgroundcolor = :white)
     Makie.hidedecorations!(ax)
-    Makie.hidespines!(ax)
+    ax.spinewidth = F1_FRAME_WIDTH
+    for side in (:left, :right, :top, :bottom)
+        setproperty!(ax, Symbol(side, :spinecolor), F1_FRAME_COLOUR)
+    end
     PottsModels.openvt_colony_panel!(ax, crop; colour = :area, areas = a)
     Makie.limits!(ax, g.origin[1], g.origin[1] + window * g.spacing[1], g.origin[2], g.origin[2] + window * g.spacing[2])
     banner && Makie.rowgap!(fig.layout, 1, P / 45)

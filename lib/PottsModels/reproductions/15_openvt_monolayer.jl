@@ -229,11 +229,15 @@ record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distribution
 # by its area (`coolwarm`, scaled to the panel's own cell-area min–max; the areas come from
 # the full state, so cells cut by the window keep their full area), with thin black
 # boundaries between cells (D-185). The scale limits are our provisional reading. The
-# banner colour RGB(8, 29, 88) is our proposal for Potts.jl. Record
+# block sits on the colony rim, moved inward along the 45° ray from the colony centroid
+# until it is 70 % tissue (offset (971, 969), 53 cells), so that the rim enters at the top
+# edge and leaves at the right edge as in the other frameworks' panels (D-229; the first,
+# rim-centred block was 56 % tissue). The banner colour RGB(8, 29, 88) is our proposal for
+# Potts.jl. Record
 # `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
 # PC, one thread; figure `fig1.png`, drawn by `plot_f1.jl` from
-# `window.tsv` and `window_cells.tsv`. The rerun's stop equals case (a) run 1 of the
-# Figure 3/9 record.
+# `window.tsv` and `window_cells.tsv` (written by `run_f1_reframe.jl`). The rerun's stop
+# equals case (a) run 1 of the Figure 3/9 record.
 
 record("f1-f4-2026-10-08"; commit = "c6ca4bc4") #hide
 record_figure("f1-f4-2026-10-08", "fig1.png"; alt = "Potts.jl panel of Figure 1", width = 360) #hide
@@ -749,7 +753,7 @@ Markdown.parse(s5)
 #
 # | Item | Ours | Manuscript (M) | Suspected cause | Author question |
 # |---|---|---|---|---|
-# | F1 window | a 64 × 64-site block (about 8 cell diameters) centred on the colony rim | 45 × 45 mm close-ups; the window size is not stated | estimated from the TST close-up; the other panels show more colony than medium | not an author question |
+# | F1 window | a 64 × 64-site block (about 8 cell diameters) on the colony rim, 70 % tissue, the rim entering at the top edge and leaving at the right edge | 45 × 45 mm close-ups; the window size is not stated | the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue; D-229) | not an author question |
 # | F2 consortium curves | Potts.jl curves and the spring–dashpot reference only | panels b, d, e overlay all frameworks | the consortium's curves are compared through the frozen spread values (Table S5 above), not redrawn | not an author question |
 # | F3 time axis and framework | t in 775-MCS cycles; TST shown as the comparison row | axis "[T]"; the framework of M's Figure 3 is not named | read as cycles, as the TST data imply | not asked; on our open question list as Q2 (open part) and Q13 |
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked (M over the framework's code) |
@@ -791,7 +795,7 @@ Markdown.parse(s5)
 # | `calibration-2026-10-05` | Figure 2, Table S5 | `run_calibration.jl` | Apple M1 Pro, 4 threads | `30c39601` |
 # | `f5-2026-10-07` | Figure 5 | `run_f5.jl`, `plot_f5_shared.jl` | AMD Ryzen AI Max+ 395, 12 threads | `3af81ae8` |
 # | `f3-f8-2026-10-08` | Figures 3 and 9 | `run_f3_f8.jl` | AMD Ryzen AI Max+ 395, 12 threads | `a64ae188` |
-# | `f1-f4-2026-10-08` | Figures 1 and 4 | `run_f1.jl`, `run_f1_areas.jl`, `plot_f1.jl`, `plot_f4.jl` | AMD Ryzen AI Max+ 395, 1 thread | `c6ca4bc4` |
+# | `f1-f4-2026-10-08` | Figures 1 and 4 | `run_f1.jl`, `run_f1_areas.jl`, `run_f1_reframe.jl`, `plot_f1.jl`, `plot_f4.jl` | AMD Ryzen AI Max+ 395, 1 thread | `c6ca4bc4` |
 # | `sweeps-2026-10-08` | Figures 6 and 7, Table 1 | `run_sweeps.jl`, `plot_f6.jl`, `plot_f7.jl`, `plot_f7_grid.jl` | AMD Ryzen AI Max+ 395, 12 threads | `41fb2ba6` |
 # | `f8beta-2026-10-09` | Figure 8 (β colonies) | `run_f8beta.jl`, `plot_f8_grid.jl` | AMD Ryzen AI Max+ 395, 5 threads | `97c326bf` |
 # | `checkerboard-2026-10-10` | Potts.jl (checkerboard), a characterisation of `CheckerboardCPM` | `run_checkerboard.jl`, `run_ablation.jl`, `check_dH.jl`, `plot_fig2.jl`, `plot_fig3.jl`, `plot_fig9.jl` | AMD Ryzen AI Max+ 395, 4 threads, and its GPU | `7b3181d6` |

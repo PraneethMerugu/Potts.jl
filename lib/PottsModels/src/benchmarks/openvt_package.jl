@@ -328,7 +328,8 @@ function _openvt_pkg_facts(recs, meta)
         large = lattice_of(10000), min_gap = isempty(gaps) ? nothing : minimum(gaps),
         f34 = f34 === nothing ? nothing : (ours = _openvt_pkg_f(v3[f34]["ours"]), band = v3[f34]["band"]),
         window = m1["window"], closeup = (case = m1["case"], run = m1["run"], seed = m1["seed"], N = m1["N"],
-            mcs = m1["mcs"], cells = m1["window_cells"], medium = m1["window_medium_sites"]))
+            mcs = m1["mcs"], cells = m1["window_cells"], medium = m1["window_medium_sites"],
+            tissue = 1 - m1["window_medium_sites"] / m1["window"]^2))
 end
 
 _openvt_pkg_g(x) = isinteger(x) ? string(Int(x)) : string(x)
@@ -823,9 +824,11 @@ function _openvt_pkg_figure_rows(facts)
             "the limits of their colour scales are not stated",
             "the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading",
             "not asked; on our open question list as Q10 (the colour variable and its limits) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed)"),
-        ("F1 window", @sprintf("a %d × %d-site block (about %.0f cell diameters 2R) centred on the colony rim", w, w, w / (2 * facts.R)),
+        ("F1 window", @sprintf("a %d × %d-site block (about %.0f cell diameters 2R) on the colony rim, %.0f %% tissue, the rim entering at the top edge and leaving at the right edge",
+                w, w, w / (2 * facts.R), 100 * facts.closeup.tissue),
             "45 × 45 mm close-ups; the window size is not stated",
-            "estimated from the TST close-up; the other panels show more colony than medium", "not an author question"),
+            "the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue; D-229)",
+            "not an author question"),
         ("F2 consortium curves", "Potts.jl curves and the spring–dashpot reference only", "panels b, d, e overlay all frameworks",
             "the consortium's curves are compared through frozen spread values, not redrawn", "not an author question"),
         ("F3 time axis and framework", "t in $(facts.cycle)-MCS cycles; TST shown as the comparison row",
@@ -1083,7 +1086,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
 
     | Path | Content | Columns (units) |
     |---|---|---|
-    | `closeup.png` | Figure 1 panel without its banner: case ($(cl.case)), run $(cl.run) (seed $(cl.seed)) at the stop (MCS $(cl.mcs), N = $(cl.N)), the $(w) × $(w)-site block on the colony rim ($(cl.cells) cells, $(cl.medium) medium sites) | PNG |
+    | `closeup.png` | Figure 1 panel without its banner: case ($(cl.case)), run $(cl.run) (seed $(cl.seed)) at the stop (MCS $(cl.mcs), N = $(cl.N)), the $(w) × $(w)-site block on the colony rim, moved inward along the 45° ray from the colony centroid to $(round(Int, 100 * cl.tissue)) % tissue ($(cl.cells) cells, $(cl.medium) medium sites) | PNG |
     | `Relaxation/11cells/width.csv` | 11-cell chain width, λ = 2, mean and SD over the runs | `Normalized time (T),Mean Tissue width (CD),STD Tissue width (CD)` |
     | `Relaxation/11+10cells/width.csv`, `inner_width.csv` | 11+10-cell chain: total and inner (11-cell) width, λ = 2, T(2) with no refit | as above (`Mean inner width (CD)`, `STD inner width (CD)`) |
     | `Relaxation/lambda_scan/11cells_lambda<λ>_width.csv` | 11-cell chain width for λ = $(join(_OPENVT_PKG_LAMBDAS, ", ")) (Table S5's runs) | as above |
@@ -1150,9 +1153,9 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     `closeup.png` follows the other frameworks' close-ups: each cell is coloured by its area
     (from the full state, so cells cut by the window keep their full area) with the `coolwarm`
     colour map, scaled to the min–max of the cell areas in the panel, on a white medium, with
-    thin black boundaries along the pixel edges between unlike cells. The scale limits are our
-    provisional reading. The banner colour proposed for Potts.jl is RGB(8, 29, 88). See the F1
-    row below.
+    thin black boundaries along the pixel edges between unlike cells. The lattice fills the
+    image edge to edge inside a thin grey frame. The scale limits are our provisional
+    reading. The banner colour proposed for Potts.jl is RGB(8, 29, 88). See the F1 row below.
 
     ## Deviations from the manuscript
 

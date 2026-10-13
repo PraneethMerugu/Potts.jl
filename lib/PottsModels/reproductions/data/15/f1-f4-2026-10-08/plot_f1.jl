@@ -2,14 +2,14 @@
 # with `coolwarm`, scaled to the panel's own cell-area min–max, thin black pixel-edge
 # boundaries between unlike ids, a white medium. Rebuilt from this record's `window.tsv` (the
 # 64 × 64 block: owners and generations) and `window_cells.tsv` (each block cell's area in the
-# full state, written by `run_f1_areas.jl`), so cells cut by the window keep their full area
+# full state, written by `run_f1_reframe.jl`, D-229), so cells cut by the window keep their full area
 # and no rerun is needed. Writes:
 #
 # - fig1.png: the panel with the Potts.jl banner (`openvt_f1_figure(block; areas)`);
 # - fig1_panel.png: the bare panel (`banner = false`), the consortium's `closeup.png` (P6.15j,
 #   D-180 amendment);
 # - fig1_colony.png, only when F1_STATE names the full state serialized by `run_f1_areas.jl`
-#   (outside git): the whole 10⁴-cell colony in the same style, the panel's block shaded.
+#   or `run_f1_reframe.jl` (outside git): the whole 10⁴-cell colony in the same style, the panel's block shaded.
 #
 #     [F1_STATE=<path>] julia --project=lib/PottsModels/test \
 #         lib/PottsModels/reproductions/data/15/f1-f4-2026-10-08/plot_f1.jl
