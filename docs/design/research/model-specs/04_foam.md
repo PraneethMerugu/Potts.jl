@@ -545,6 +545,26 @@ The grids:
 - T = 1.5 softens the cliff and gives the paper's t(0.01)/t(0.05) ratio (11 vs 10.2), but both times are about 3.6× too fast. One κ_b step lower, β = 0.01 never yields.
 - So a β-proportional per-copy bias pins, whether it acts on walls or on centroids, and with T up to J/2. F1 is sharpened accordingly (our open question list), and further variants run only as pre-registered screens (reverse-engineering first). The next candidate is R3 at higher T, since the trend from T = 0.5 to T = 1.5 softens the cliff.
 
+### 5.5 Eq 2 screen, R3 at higher T: pre-registered protocol (2026-10-13, spec owner; frozen before any run)
+
+**Authority.** The maintainer approved the screen: "yes, run the higher-T screen". It runs in the spec chat on the PC, and the D-entry is D-236 (coordinator).
+
+**Why.** The §5.4 result showed that T softens the R3 cliff. From T = 0.5 to T = 1.5 the threshold drops, and the t(0.01)/t(0.05) ratio reaches 11, against the paper's 10.2. The paper's only stated finite temperatures are T = 5, 10 and 15 at J = 3 (Fig 3d). So the question is whether thermally activated creep near T ≈ J gives the paper's smooth β dependence.
+
+**Readings.** R3 (the frozen displacement form, `P64RShearedFoam`) at T ∈ {3, 5} (T/J = 1 and 5/3). T = 5 is the lowest of the paper's Fig 3(d) temperatures.
+
+**Design.** Everything is as in §5.4 except the grid and the control:
+- the same foams, τ, β values, seeds, caps, early stop and measurement;
+- the grid is κ_b = κ_D190·2^(i/2), i = −16, −14, …, 14. That is 16 values, extended four steps below §5.4 because the threshold is expected to fall with T. This gives 2 × 240 = 480 runs;
+- **a β = 0 thermal control** at each T: κ_b = 0, on the same seeds and caps as the five β columns. That is 15 runs per T and 30 in all.
+
+**Decision rule.** The frozen `p64kb_analyse` (D-205) is applied unchanged to each T table, and stage 2 is as in §5.4. One condition is added, set before any run:
+- If more than one of the 15 control runs at a temperature yields (a measured t_first) within the cap, that temperature is **confounded**. At that T the foam yields without any drive, so a pass there is not a pass, and the result is reported as thermal melting.
+
+**Outcome handling.** As in §5.4. A pass makes "R3 at that T" the provisional bulk-shear form, labelled as our inference. It also turns F1 into a single confirm-only question: "were the bulk-shear runs at T ≈ …?"
+
+**Record.** `data/04/eq2-screen-hiT-<date>/`, written by the same runner with `--only r3h`.
+
 ## 6. Required general features
 
 | ID | Needed? | Use |

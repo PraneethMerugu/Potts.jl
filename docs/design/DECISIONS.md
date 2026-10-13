@@ -4355,4 +4355,4 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - Every reading has a drive threshold, about κ_b·β ≈ 0.01 for R3. Above it, t_first jumps from no yield to ≲ 2000 paper MCS within one κ_b step.
   - T = 1.5 softens the cliff and gives the paper's t(0.01)/t(0.05) ratio (11 vs 10.2), but both times are about 3.6× too fast.
   - So a β-proportional per-copy bias pins, whether on walls or on centroids, with T up to J/2. The negative result is recorded and F1 stays the only route (spec 04 §5.4).
-- **Next (open, put to the maintainer by the spec owner).** Under reverse-engineering-first, R3 at higher T (for example T ∈ {3, 5}; the paper sweeps T up to 15 in Fig 3d), about 360 runs or about 3 h on 24 threads. It needs its own D-entry and the maintainer's yes before any run.
+- **Next: running (2026-10-13).** The maintainer approved it ("yes, run the higher-T screen"). It is R3 at T ∈ {3, 5} plus β = 0 thermal controls, 510 runs, pre-registered in spec 04 §5.5 (frozen before the run), with runner `run_eq2_screen.jl --only r3h` (sha256 `5767bd5b…`; the default still runs the §5.4 set). The record goes to `eq2-screen-hiT-2026-10-13`.

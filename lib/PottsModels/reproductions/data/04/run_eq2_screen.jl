@@ -3,7 +3,9 @@
 # Runs the pre-registered screen of two readings of Eq 2 under bulk shear (Eq 7) against the
 # frozen D-205 targets:
 #   R2  force on bubbles: ΔH = −Σ_{c ∈ new, old} κ_b·β·(Y_c − y_mid)·ΔX_c (script-local model);
-#   R3  the frozen displacement form (R1, `P64RShearedFoam`) at T ∈ {0.5, 1.5}.
+#   R3  the frozen displacement form (R1, `P64RShearedFoam`) at T ∈ {0.5, 1.5};
+#   R3h the same at T ∈ {3, 5} on a grid extended down to i = −16 (spec 04 §5.5), with a
+#       β = 0 thermal control at each T (κ_b = 0; reported, not passed to the decision rule).
 # Everything else is D-205: the 5 ordered foams and τ, β ∈ P64KB_BETAS, 3 replicates with the
 # seeds `p64kb_seed`, the caps `P64KB_CAP`, the early stop and t_first/T1 of `p64kb_run`, and the
 # frozen decision rule `p64kb_analyse` applied unchanged to each table.
@@ -12,14 +14,16 @@
 # each finished job is written to <out>/jobs/<key>.jls and a rerun skips it.
 #
 #   julia --project=lib/PottsModels/test lib/PottsModels/reproductions/data/04/run_eq2_screen.jl \
-#       --out <dir> [--threads N] [--only r2|r3] [--dry-run] [--tiny N]
+#       --out <dir> [--threads N] [--only r2|r3|r3h] [--dry-run] [--tiny N]
+#
+# Without --only the original §5.4 set (r2, r3) runs; r3h runs only when asked for.
 #
 # `--tiny N` runs the first N jobs of the schedule with the cap cut to 30 paper MCS into
 # <out>/jobs-tiny/ (a harness check, not a result) and writes no tables.
 using Potts, PottsModels, Test, TOML, Dates, Serialization, SHA
 using Statistics: mean, median
 
-const USAGE = "usage: --out <dir> [--threads N] [--only r2|r3] [--dry-run] [--tiny N]"
+const USAGE = "usage: --out <dir> [--threads N] [--only r2|r3|r3h] [--dry-run] [--tiny N]"
 function parse_args(args)
     o = Dict{String, Any}("out" => "", "threads" => 0, "dry" => false, "tiny" => 0, "only" => "")
     i = 1
@@ -36,7 +40,7 @@ function parse_args(args)
         i += 1
     end
     isempty(o["out"]) && error("run_eq2_screen.jl: --out <dir> is required ($USAGE)")
-    o["only"] in ("", "r2", "r3") || error("run_eq2_screen.jl: --only must be r2 or r3")
+    o["only"] in ("", "r2", "r3", "r3h") || error("run_eq2_screen.jl: --only must be r2, r3 or r3h")
     return o
 end
 const OPT = parse_args(ARGS)
@@ -180,7 +184,13 @@ const R2_GRID = P64KB_KAPPA_D190 .* 2.0 .^ (R2_I ./ 2)
 const R3_I = collect(-8:2:14)
 const R3_GRID = P64KB_KAPPA_D190 .* 2.0 .^ (R3_I ./ 2)
 const R3_T = [0.5, 1.5]
-const READINGS = [("r2", R2_GRID, nothing); [("r3_T$(T)", R3_GRID, T) for T in R3_T]]
+const R3H_I = collect(-16:2:14)
+const R3H_GRID = P64KB_KAPPA_D190 .* 2.0 .^ (R3H_I ./ 2)
+const R3H_T = [3.0, 5.0]
+# (family, name, grid, T); a name starting with "c_" is a β = 0 control, not a decision table.
+const READINGS = [("r2", "r2", R2_GRID, nothing); [("r3", "r3_T$(T)", R3_GRID, T) for T in R3_T];
+                  [("r3h", "r3_T$(T)", R3H_GRID, T) for T in R3H_T]; [("r3h", "c_T$(T)", [0.0], T) for T in R3H_T]]
+iscontrol(r) = startswith(r, "c_")
 cap(β) = TINY ? 30 : P64KB_CAP[β]
 
 struct Job
@@ -226,7 +236,7 @@ function run_pool(jobs, stage)
 end
 
 runkey(r, i, j, k) = "$(r)_$(lpad(i, 2, '0'))_$(j)_$(k)"
-selected = filter(R -> OPT["only"] == "" || startswith(R[1], OPT["only"]), READINGS)
+selected = [R[2:4] for R in READINGS if (OPT["only"] == "" ? R[1] in ("r2", "r3") : R[1] == OPT["only"])]
 const SCHED = [(r, i, κ, j, β, k, Tv) for (r, grid, Tv) in selected for (i, κ) in enumerate(grid)
                for (j, β) in enumerate(P64KB_BETAS) for k in 1:P64KB_N]
 logmsg("readings ", [R[1] for R in selected], ": ", length(SCHED), " runs")
@@ -278,6 +288,13 @@ for (r, grid, Tv) in selected
             "t_first" => x.t_first, "t1_total" => x.t1_total))
     end
     p64kb_write(joinpath(OUT, r), rows)
+    if iscontrol(r)
+        ny = count(x -> x["t_first"] >= 0, rows)
+        decisions[r] = Dict("control" => "beta_model = 0", "yielded" => ny, "runs" => length(rows),
+            "t1_total" => sum(x -> x["t1_total"], rows), "temperature" => Tv)
+        logmsg(r, ": β = 0 control, ", ny, "/", length(rows), " yielded")
+        continue
+    end
     a = p64kb_analyse(rows; grid)
     decisions[r] = Dict("kappa_b" => something(a.kappa_b, "nothing"), "path" => string(a.path),
         "reason" => string(a.reason), "khat" => a.khat, "temperature" => something(Tv, P64R_T0))
