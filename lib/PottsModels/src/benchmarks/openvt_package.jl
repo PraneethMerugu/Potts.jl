@@ -1038,7 +1038,7 @@ end
 
 # a provenance fact about our measurements, for the results README only (D-219; wording
 # corrected after the 2026-10-13 paper audit: the values come from the Julia port)
-const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements were computed by the Julia port of metrics.cpp, checked against metrics.cpp (GCC 13, -ffp-contract=off) on the consortium's frames."
+const _OPENVT_PKG_COMPILER_NOTE = "Our precomputed measurements were computed by a Julia port of metrics.cpp, checked against metrics.cpp built with -ffp-contract=off (Apple clang 17.0.0 and GCC 15.2.0) on the consortium's centroid files."
 
 # D-215 (8): what the consortium's scripts need to know (results README and EMAIL.md)
 function _openvt_pkg_note_lines(o1)

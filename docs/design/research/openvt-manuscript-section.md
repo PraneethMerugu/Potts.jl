@@ -119,7 +119,7 @@ Julia port of the consortium's `metrics.cpp`. It is checked against `metrics.cpp
 - **The remaining frame.** It differs only through the concave-hull candidate pruning of
   `concaveman`. There the port equals `metrics.cpp` with that pruning disabled.
 - **Build.** The Potts.jl values were computed by the Julia port of `metrics.cpp`, checked
-  against `metrics.cpp` (GCC 13, `-ffp-contract=off`) on the consortium's frames.
+  against `metrics.cpp` built with `-ffp-contract=off` (Apple clang 17.0.0 and GCC 15.2.0) on the consortium's centroid files.
 
 **Calibration.** The relaxation tests of Fig. 2 reproduce the Table S1 time scale. With 100
 replicates per λ, the fitted T(λ) is 297, 156, 111 and 77 MCS for λ = 1, 2, 3 and 5 (Table S5).
