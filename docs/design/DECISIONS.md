@@ -4485,3 +4485,34 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
+
+## D-243 P6.5a2 tests frozen: named pairs (E2) and the reference geometry helpers (E7) (2026-10-14; coordinator, from the P6.5a2 test author; spec-checked by the spec owner; under D-031, D-032, D-048, D-066, D-231)
+- **Frozen.** `acceptance/p6_5a2_ref_helpers.jl`, sha256 `48b871f4…72b1`.
+- **E2.** `J[kind, kind] = Pairs(default = d, (k1, k2) => v, …; symmetric = true)` lowers to the same matrix and the same `prob.p` as the written-out form, at no runtime cost. `remake` updates both sides of the diagonal. Misspelt kinds, a parameter used as a kind, duplicate pairs, and reversed pairs under symmetric fill are each refused with an ArgumentError.
+- **E7.**
+  - `centroid(c, k)` follows the `centroid(k)` convention: a circular mean on periodic axes, wrapped into [1, L+1).
+  - `minimum_image(d, axis)` leaves closed axes unwrapped.
+  - `separation(a, b)` returns a vector, embedded on hex lattices (the nearest image).
+  - `cluster_integral(x)` sums `x` over the sites of the cluster's alive members. The integrand is in site scope, so `kind` and `volume` bind to each site's owner: for a two-member cluster, `cluster_integral(volume)` = V₁² + V₂².
+  - Further pins:
+    - Π_CN−N (14b Eq 10) built from the helpers;
+    - a dead referent reads 0 and drops out of the sums;
+    - after-MCS writes equal `@observed` and a σ-only oracle;
+    - `minimum_image` in a drive and an energy cell term is bitwise equal to an explicit-`ifelse` twin;
+    - refusals per helper (`centroid(c, k)` in energies until R7, D-032);
+    - no reads or claims;
+    - a device testset.
+- **Rulings (spec owner).**
+  - O1: the `cluster_integral` name is pinned now (14b needs it before P6.7b). The fold `sum(x for s in sites(cluster))` comes later as an equivalent spelling.
+  - O2: the sign at d = ±L/2 is free; the magnitude is exactly L/2.
+  - O4: a dead referent's centroid reads 0.0 (D-066).
+  - O5: re-freeze at R7.
+  - O7: lattice units only; 14c's physical scaling is a P6.5d note.
+  - O8: no one-argument `centroid(c)`.
+  - O6 and O9: as pinned.
+- **Left open.**
+  - |d| ≥ L (inputs are assumed within one period).
+  - `separation` with a dead referent (guard with `alive(ref)`).
+  - `minimum_image` on hex.
+  - KindTable spellings, kind-class keys, and `Pairs` without a default.
+  - E6 (docs, prose).

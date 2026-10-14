@@ -596,3 +596,8 @@ decision = "D-233"
 path = "acceptance/p6_5b_ownership.jl"
 sha256 = "61350592f4b96c338d76370b1c6e98f229daca505f7a7ad2729d3f85643cfe0f"
 decision = "D-233"
+
+[[file]]
+path = "acceptance/p6_5a2_ref_helpers.jl"
+sha256 = "48b871f4dddcc13649b860a1aa7559f17f67e854d12043ab3925db3493c372b1"
+decision = "D-243"
