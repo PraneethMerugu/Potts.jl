@@ -371,14 +371,18 @@ conditions and rules, `@observed`, folds; not in energies (no ΔH, D-032) or cop
 """
 _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
 
+# called only when a value is computed outside a model's statements: a default (evaluated
+# from parameters alone, with no lattice or state)
+_GEOMETRY_DEFAULT(name) = "`$name` reads the lattice and the cells, so it cannot be computed in a default value " *
+                          "(defaults are expressions of parameters); write it in an update, equation or @observed"
 """`ref_centroid(c, k)`: coordinate `k` of the centroid of referent `c` (cell scope)."""
-ref_centroid(c, k) = error("`centroid(c, k)` is symbolic-only")
+ref_centroid(c, k) = throw(ArgumentError(_GEOMETRY_DEFAULT("centroid(c, k)")))
 Symbolics.@register_symbolic ref_centroid(c, k)
 """`ref_separation(a, b, k)`: component `k` of the minimum-image `centroid(a) − centroid(b)`."""
-ref_separation(a, b, k) = error("`separation` is symbolic-only")
+ref_separation(a, b, k) = throw(ArgumentError(_GEOMETRY_DEFAULT("separation")))
 Symbolics.@register_symbolic ref_separation(a, b, k)
 """`axis_minimum_image(d, k)`: `d` wrapped to the image nearest 0 on axis `k`."""
-axis_minimum_image(d, k) = error("`minimum_image` is symbolic-only")
+axis_minimum_image(d, k) = throw(ArgumentError(_GEOMETRY_DEFAULT("minimum_image")))
 Symbolics.@register_symbolic axis_minimum_image(d, k)
 
 """

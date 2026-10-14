@@ -440,3 +440,62 @@ const RH_HEX10 = :(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic
     @test rh_msg(rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 3)), clusters = false), "minimum_image")
     @test rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 1)), clusters = false) === nothing   # control
 end
+
+# A `@boundary` site mask is lowered in site scope at the field step: when it is the model's
+# only centroid read, the moment trackers must still be allocated (re-review of 20b9a546).
+# Two 3 × 3 cells held in place (λ = 10⁶, T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at
+# x 1:3 (centroid 2). The mask `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only;
+# `D(c) ~ -c` from c = 0 leaves every other site at 0.
+@potts_model RHMaskCentroid begin
+    @kinds medium ka
+    @variables c(field) = 0.0
+    @lattice Lattice((12, 10); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => 1.0e6 * (volume - 9.0)^2
+    @equations D(c) ~ -c
+    @boundary c begin
+        sites((kind == ka) && (centroid(owner, 1) > 4.0)) => Dirichlet(7.0)
+    end
+    @sweep Metropolis(; temperature = 0.01)
+end
+function rh_mask_sigma()
+    σ = zeros(Int32, 12, 10)
+    σ[5:7, 4:6] .= 1
+    σ[1:3, 4:6] .= 2
+    return σ
+end
+rh_mask_problem(; T = Float64) = PottsProblem(RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
+    (0, 1); T, field_solver = ExplicitEuler(substeps = 1))
+
+@testset "centroid(c, k) in a @boundary site mask (the only centroid read)" begin
+    prob = rh_mask_problem()
+    @test hasproperty(prob.u0.cell, :anchor)                   # the moment trackers are allocated
+    u = solve(prob, SequentialCPM()).u[end]
+    @test Array(u.σ) == rh_mask_sigma()                        # control: σ held
+    @test Array(u.site.c) == 7.0 .* (rh_mask_sigma() .== 1)    # cell 1 clamped; cell 2 (centroid 2) and the medium not
+    if isdefined(Main, :PottsDevices) && PottsDevices.on_device()
+        backend = PottsDevices.device_backend()
+        ud = solve(rh_mask_problem(; T = Float32), CheckerboardCPM(); backend).u[end]
+        @test Array(ud.site.c) == 7.0f0 .* (rh_mask_sigma() .== 1)
+    end
+end
+
+@testset "a geometry helper in a default value is a clear ArgumentError" begin
+    e = rh_bad(:(@potts_model RHDefaultMI begin
+        @kinds medium ka
+        @variables F(site) = minimum_image(1.0, 1)
+        @lattice Lattice((6, 6); boundary = Periodic(), neighborhood = Moore(1))
+        @energy cells => (volume - 4.0)^2
+        @sweep Metropolis(; temperature = 1.0)
+    end))
+    if e === nothing                                           # (the default is evaluated by the problem)
+        σ = zeros(Int32, 6, 6)
+        σ[2:3, 2:3] .= 1
+        e = try
+            Base.invokelatest(PottsProblem, Base.invokelatest(RHDefaultMI; name = :d), [ownership => σ, kind => [:ka]], (0, 1))
+            nothing
+        catch err
+            err isa LoadError ? err.error : err
+        end
+    end
+    @test e isa ArgumentError && occursin("default", sprint(showerror, e)) && occursin("minimum_image", sprint(showerror, e))
+end

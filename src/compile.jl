@@ -409,7 +409,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                         (u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
                         (o.expr for o in getfield(sys, :observed))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
                         (r.when for r in getfield(sys, :link_rules))..., getfield(sys, :sweep).temperature,
-                        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...])
+                        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...,
+                        _boundary_exprs(sys)...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(getfield(sys, :relations), :contact, getfield(sys, :lattice).neighborhood)
@@ -1151,7 +1152,8 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for (x, items) in ((d -> d.expr, getfield(sys, :drives)), (c -> c.kind === :expr ? c.expr : 0, getfield(sys, :constraints)),
             (u -> u.eq.rhs, getfield(sys, :updates)), (eq -> eq.rhs, getfield(sys, :equations)),
             (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)),
-            (_convert_exprs, getfield(sys, :converts)), (r -> r.when, getfield(sys, :link_rules)))
+            (_convert_exprs, getfield(sys, :converts)), (r -> r.when, getfield(sys, :link_rules)),
+            (b -> _boundary_exprs(b), getfield(sys, :boundaries)))
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N; hex), vcat(x(i))), sys, i), items)
     end
     _located(() -> _check_geometry(getfield(sys, :sweep).temperature, N; hex), sys, getfield(sys, :sweep))
@@ -1200,6 +1202,12 @@ function _check_copy_integral(x, what; when = "every copy attempt")
         "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"))
     return nothing
 end
+
+# The expressions of a `@boundary` entry, lowered in site scope at the field step: a site
+# mask and its value, or a face's `Dirichlet` values
+_boundary_exprs(b::BoundaryEntry) = b.axis == 0 ? Any[b.mask, b.value] :
+                                    Any[s.value for s in b.sides if s isa Dirichlet]
+_boundary_exprs(sys::PottsSystem) = Any[x for b in getfield(sys, :boundaries) for x in _boundary_exprs(b)]
 
 _is_hex(sys) = core_lattice(getfield(sys, :lattice)).geometry isa CorePotts.Hexagonal
 
