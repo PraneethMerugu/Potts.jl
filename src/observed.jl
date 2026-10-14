@@ -46,7 +46,17 @@ function _observed_scope(x)
     return scope
 end
 
-_algebraic_cell(x) = (i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
+# A dividing model that reads no `birth` keeps no serials (P6.5a3): a query that reads them
+# afterwards (`sol[birth]`, `sibling`'s lowest-birth rule) is refused, not answered with slots
+function _check_untracked_birth(c::CompiledPottsSystem, e)
+    (_numbers_cells(c) && !c.uses_birth) || return nothing
+    (_uses_builtin(e, :birth) || _has_op(e, cluster_sibling)) || return nothing
+    throw(ArgumentError("`$(nameof(c))` divides but reads no `birth` (nor `sibling`, `@convert`), so it keeps no " *
+                        "cell serials (P6.5a3): `$e` cannot be evaluated after the run. Declare it in the model " *
+                        "(e.g. `@observed bth(cell) ~ birth`) so the serials are kept"))
+end
+
+_algebraic_cell(x) =(i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
 
 # One lock for every model's observed-function cache: ensemble threads (`EnsembleThreads`)
 # read observed quantities concurrently (A-55).
@@ -67,6 +77,7 @@ end
 function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
     _check_integral_pre_outside(e)
+    _check_untracked_birth(c, e)
     rn = c.gather_names
     scope = _observed_scope(e)
     # an algebraic cell variable (`y ~ expr` in `@equations`) has one value per cell, whatever

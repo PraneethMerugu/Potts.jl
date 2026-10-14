@@ -806,8 +806,9 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         push!(model, n => zeros(T, 1))
     end
     # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
-    # its daughters from the counter on; without divisions a cell's serial is its slot
-    if _numbers_cells(c)
+    # its daughters from the counter on; without divisions a cell's serial is its slot. A
+    # dividing model that never reads `birth` has no column, so no serial pass (P6.5a3)
+    if _tracks_births(c)
         push!(cell, :birth => Int32.(1:ncell))
         push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
     end
@@ -822,6 +823,11 @@ end
 
 # Cell serials and spare slots: a model that divides or allocates by `@convert`
 _numbers_cells(c::CompiledPottsSystem) = !isempty(c.divisions) || !isempty(getfield(c.sys, :converts))
+# Cell serials kept (P6.5a3): a model that allocates cells and reads `birth` (`uses_birth`:
+# `birth`, `sibling`, `@convert`). Decided when the model is compiled; the state's `birth`
+# column and `NEXT_BIRTH` counter carry it to both lifecycle planners (`births = nothing`
+# without them, the serial pass skipped).
+_tracks_births(c::CompiledPottsSystem) = _numbers_cells(c) && c.uses_birth
 
 # a cell-variable default that reads the built-in `kind` (E1)
 function _kind_default(v)
@@ -1073,9 +1079,16 @@ end
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
-# counter continues after the capacity, so no serial is ever reused
+# counter continues after the capacity, so no serial is ever reused. A dividing model that
+# does not read `birth` (P6.5a3) drops a given state's column and counter (a state saved
+# before P6.5a3, or of another model), so its states keep the problem's layout.
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (!_numbers_cells(c) || haskey(st.cell, :birth)) && return st
+    if _numbers_cells(c) && !_tracks_births(c)
+        haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
+        return CorePotts.CPMState(st.σ, Base.structdiff(st.cell, NamedTuple{(:birth,)}), st.site,
+            Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history)
+    end
+    (!_tracks_births(c) || haskey(st.cell, :birth)) && return st
     n = length(st.cell.kind)
     # filled where the state lives (a device state stays on the device: no host transfer)
     birth = similar(st.cell.kind, Int32, n)
