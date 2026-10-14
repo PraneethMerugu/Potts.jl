@@ -4322,3 +4322,21 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
   They run on the PC once P6.8 and P6.9 exist.
 - **B2** is no longer a gate. It becomes a confirm-question.
+
+## D-237 RNG entities are 64-bit; generated cell draws are addressed by id and generation (2026-10-13; maintainer ruling, from the P6.0cd record-size review)
+- **Gap.** `draw` folded the entity with `entity % UInt32`, and `cell_entity` packed `id << 8` into a `UInt32`. So site draws at index ≥ 2³² and cell draws at id ≥ 2²⁴ (the division-plane draw) silently reused the streams of smaller entities. Generated cell-scope `rand()` and the daughter rule draws were addressed by the raw cell id. INTERNALS §1.4 says cell draws include the generation, so the code did not match it.
+- **Rule.**
+  1. The entity is 64-bit. Its low word is the counter word. A nonzero high word is folded into the key as `k0 ⊻ hi·W1`, a bijection of `hi`. `hi = 0` leaves the key untouched, behind a branch that keeps the key schedule hoisted: an unconditional xor cost about 15 % per draw on the CPU. Every entity below 2³² draws bit-for-bit as before.
+  2. `cell_entity(id, generation)` returns `UInt64` and equals the old value below 2²⁴ ids.
+  3. Generated cell-scope draws use `cell_entity(c, generation[c])`. A daughter's rule draws use her generation, which both lifecycle paths increment before the rules run.
+- **Consequences.**
+  - Item 3 changes the generated code, fingerprint and seeded trajectory of every model with a cell-scope `rand()`. Of the published models, only Akeeb has one. Their pins are re-frozen under this entry (list below).
+  - Items 1 and 2 change no trajectory below the old limits.
+  - The checkerboard claim word (2²⁴ sites per colour class) is the remaining P6.0cd limit.
+- **Re-frozen under this entry.** These pins were taken from the PC run of cf2da358 against base 2e08a3bd. The CorePotts and MakiePotts suites and frozen.jl passed.
+  - **Akeeb fingerprints.** Float64 `0xc0529959e030d017 → 0x45083869c8f05911` in p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0av, p6_0ax, p6_0c2, p6_0g, p6_0o and p6_0p. Integral-reader variant `0x3bd4b680b6f7cdec → 0x792d84f3cf847051` in p6_0au and p6_0t.
+  - **p6_0o code hashes.** Akeeb Float64 and Float32 `fp`, `raw` and `canon`.
+  - **p6_0bk2 IR hashes (GG 72², cubes 16³).** These are item 1's compare-and-select in `draw`. The semantics are unchanged (GG's recorded SequentialCPM trajectory in p6_4b1 still matches), and the A/B decides the cost.
+  - **p6_4b1 `P64B1_SEQ_OPENVT`.** The fixture is `OpenVTReferenceMonolayer`, whose cell-scope `randn` (`@before_mcs`, division rule) now draws by generation.
+  - **Not frozen: test/symbolic.jl "rand(): counter-based draws".** It compared cell draws between SequentialCPM and CheckerboardCPM for ids live in both runs. A reused id is a different cell, so it now compares only ids that also have the same generation, and asserts that at least one such cell exists.
+- **Also.** Akeeb checkpoints saved before this entry are refused, because the fingerprint changed. The seeded Akeeb runs behind the published records are statistically, not bitwise, reproducible on the new code (D-029).

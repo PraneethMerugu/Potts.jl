@@ -469,7 +469,7 @@ const P60T_FINGERPRINTS = Dict{Symbol, UInt64}(
     :MerksVasculogenesis => 0xe51b575884b86e8d,  # re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
     :SingleDivisionFixture => 0x13a4ddc2bb677287,
     :OpenVTGrowingMonolayer => 0xfcecc4612f387b5e,  # re-pinned under D-122
-    :AkeebInvasion => 0x3bd4b680b6f7cdec,   # re-pinned under P6.3g (D-193): fingerprint only
+    :AkeebInvasion => 0x792d84f3cf847051,   # re-pinned under D-237 (cell draws by id and generation)
     :P60tAfterOnly => 0xa1935accc26c00ef,
 )
 

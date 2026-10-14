@@ -354,7 +354,7 @@ const P60AS_FINGERPRINTS = Dict{String, UInt64}(
     "MerksVasculogenesis" => 0xe51b575884b86e8d,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
     "SingleDivisionFixture" => 0x13a4ddc2bb677287,
     "OpenVTGrowingMonolayer" => 0xfcecc4612f387b5e,
-    "AkeebInvasion" => 0xc0529959e030d017,   # re-pinned under P6.3g (D-193): fingerprint only
+    "AkeebInvasion" => 0x45083869c8f05911,   # re-pinned under D-237 (cell draws by id and generation)
 )
 
 @testset "P6.0as: fingerprints unchanged" begin

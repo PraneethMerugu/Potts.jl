@@ -1456,7 +1456,11 @@ end
     p = PottsProblem(Noisy(; name = :n), [ownership => σ, kind => fill(1, 16)], (0, 4); seed = 3)
     s1 = solve(p, SequentialCPM(); saveat = 0:4)
     s2 = solve(p, CheckerboardCPM(); saveat = 0:4)
-    live = findall(c -> s1.u[end].cell.volume[c] > 0 && s2.u[end].cell.volume[c] > 0, 1:16)
+    # the same cell in both runs: live in both with the same generation (a reused id is a
+    # different cell, and its draws differ by design, D-237)
+    a, b = s1.u[end].cell, s2.u[end].cell
+    live = findall(c -> a.volume[c] > 0 && b.volume[c] > 0 && a.generation[c] == b.generation[c], 1:16)
+    @test !isempty(live)
     @test s1.u[end].cell.u[live] == s2.u[end].cell.u[live] && s1.u[end].site.w == s2.u[end].site.w &&
           s1.u[end].model.tally == s2.u[end].model.tally                                # schedule-independent
     @test s1.u[2].cell.u != s1.u[3].cell.u                                                # fresh every MCS
