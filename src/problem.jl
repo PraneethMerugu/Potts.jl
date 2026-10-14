@@ -1084,10 +1084,11 @@ end
 # before P6.5a3, or of another model), so its states keep the problem's layout.
 # Whether state `st` carries serials really assigned (dropping them loses information): a
 # serial other than 0 and its slot, or a counter past the largest serial (serials issued to
-# cells now gone). Host side (remake, reinit!): the transfers are counted, then discarded.
+# cells now gone). Host side (remake, reinit!, before any run's counters exist): the copies go
+# through the transfer helper with no counter (`nothing`), as at problem setup.
 function _serials_assigned(st::CorePotts.CPMState)
     haskey(st.cell, :birth) || return false
-    stats = CorePotts.PottsStats()
+    stats = nothing
     b = CorePotts._to_host(stats, st.cell.birth)
     any(i -> b[i] != 0 && b[i] != i, eachindex(b)) && return true
     haskey(st.model, CorePotts.NEXT_BIRTH) || return false
