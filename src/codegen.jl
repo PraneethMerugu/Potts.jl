@@ -390,7 +390,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
     for x in getfield(c.sys, :variables)                         # `commit!` resets these before the writes
         i = info(x)
         (i.role in (:site, :field) && i.name in read && get(i.options, :clear_on_ownership_change, false) === true) || continue
-        after[:target][_unwrap(x)] = i.default isa Real ? T(i.default) : zero(T)
+        after[:target][_unwrap(x)] = _reset_value(T, i.default)
     end
     for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
         x, idx = arguments(_unwrap(u.eq.lhs))
@@ -456,7 +456,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     for x in getfield(c.sys, :variables)
         i = info(x)
         get(i.options, :clear_on_ownership_change, false) === true || continue
-        v = i.default isa Real ? T(i.default) : zero(T)
+        v = _reset_value(T, i.default)
         push!(body, :(@inbounds st.site.$(i.name)[target] = $v))
     end
     append!(body, writes)
@@ -1824,12 +1824,16 @@ end
 # (the lifecycle, a `@convert` pass), each site variable declared
 # `clear_on_ownership_change` resets to its default (as a copy's commit resets it); `nothing`
 # for a model without such variables. `@on_copy` updates never run there.
+# the value a `clear_on_ownership_change` site variable resets to: its numeric default, else 0
+# (a `Num` is a `Real`: a symbolic default is no number here)
+_reset_value(T, d) = (d isa Real && !_is_symbolic(d)) ? T(d) : zero(T)
+
 function _ownership_hook(c::CompiledPottsSystem, T)
     resets = Any[]
     for x in getfield(c.sys, :variables)
         i = info(x)
         (i.role in (:site, :field) && get(i.options, :clear_on_ownership_change, false) === true) || continue
-        v = i.default isa Real ? T(i.default) : zero(T)
+        v = _reset_value(T, i.default)
         push!(resets, :(@inbounds st.site.$(i.name)[i] = $v))        # i ∈ 1:nsites (the launch range)
     end
     isempty(resets) && return nothing
