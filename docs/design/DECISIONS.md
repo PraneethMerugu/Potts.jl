@@ -4531,32 +4531,42 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Keywords.** `PottsModels.openvt_colony_panel!` takes `color` and `state_colors`. `colour` and `state_colours` remain as deprecated aliases (`Base.depwarn`), so existing callers keep working.
 - **Re-freeze.** `reproductions/15_openvt_f1_f4.jl` gains one testset: the American keywords work, the British ones are `@test_deprecated`, and an unknown `color` is an ArgumentError. Nothing else in the file changed. New sha256 `911cc88b…7129`.
 
-## D-250 Mechanically safe re-freezes proceed without a per-edit maintainer OK; `tools/frozen_diff.jl` decides (2026-10-14; maintainer-requested, PROPOSED: in effect only once the maintainer approves this entry; amends AUTONOMY §7.3.1 and the per-edit OK practice of D-238–D-241 and D-249)
+## D-250 Mechanically safe re-freezes proceed without a per-edit maintainer OK; `tools/frozen_diff.jl` classifies (2026-10-14; maintainer-approved: "Approve, with P60BK2_IR pinned"; in effect once the adversarial review APPROVEs and the change is pushed; amends AUTONOMY §7.3.1 and the per-edit OK practice of D-238–D-241 and D-249)
 
-- **Why.** Between 2026-10-13 20:16 and 2026-10-14 19:24 UTC, the maintainer answered 8 re-freeze asks (measured from the session transcripts, from the asking turn's end to the reply).
-  - The median wait was 10 min, but three took 79, 86 and 116 min, all at night or bundled with another question. About 5 h of waiting in total.
-  - Half of the asks changed nothing a test checks: page wording (D-241), an appended testset (D-249), and code-hash re-pins (D-237's p6_0bk2 part, q6's pending one).
-- **The rule.** A re-freeze may proceed without asking the maintainer when `julia tools/frozen_diff.jl <base> <candidate>` prints AUTO for every changed frozen file, and all of the following hold:
+- **Why.** Between 2026-10-13 20:16 and 2026-10-14 19:24 UTC the maintainer answered 8 re-freeze asks. The waits were measured from the session transcripts, from the end of the asking turn to the reply.
+  - The median wait was 10 min. Three took 79, 86 and 116 min, at night or bundled with a push question; about 5 h in all.
+  - Half of the asks changed nothing a test checks: page wording (D-241), an appended testset (D-249), and code-hash re-pins (D-237's p6_0bk2 part and q6's pending one).
+- **The rule.** A re-freeze may proceed without the maintainer's OK only when all of these hold:
+  - `julia tools/frozen_diff.jl <base> <candidate>` prints AUTO for every changed frozen file;
   - a fresh reviewer APPROVEs the change (§7.3.3);
-  - the DECISIONS entry that the frozen.toml `decision` field names quotes the script's output;
+  - the DECISIONS entry named by the frozen.toml `decision` field quotes the script's output;
   - the suites pass on the re-frozen tree.
-  Any MAINTAINER line means the coordinator asks the maintainer, as before.
-- **What the script lets through** (it compares syntax trees, so comments are invisible):
-  - **wording:** prose strings only. These are docstrings, `@testset` names, `Markdown.parse`/`md"…"`, `print`/`println`, logging macros and `error`. Interpolated expressions must not change, and no string inside an assertion may change.
-  - **additive:** new top-level `@testset`s and definitions of fresh names, and new `@test` lines inside existing blocks. Inserted code may not reassign, extend or mutate anything the old file defines. There is no `global`, `eval`, `include`, `import`/`using`, method extension, or qualified or indexed assignment, and no `f!(old, …)`.
-  - **pin:** literal values inside a `const` that frozen.toml lists under the file's `pins`, read **at the base commit**, so a re-freeze cannot declare its own pins. `=>` keys and all other structure must stay.
-- **What always needs the maintainer:**
-  - any changed number, symbol, operator or call, a string in an assertion, a removed, reordered, skipped or broken test, or an element added to or removed from a list or mapping (it can widen an allowlist);
-  - TSV records, a removed frozen file, a parse error;
-  - adding a constant to `pins`;
-  - target, tolerance, seed-count and run-length changes (§7.3.1), and a test that fails for a scientific reason (§7.5).
-- **Initial pins (to approve with this entry).** `acceptance/p6_0bk2_skip_interior.jl`: `P60BK2_IR`, the sha256 of the optimized typed IR of `sequential_mcs!`, a code-shape artefact with no scientific content.
+
+  Otherwise the coordinator asks the maintainer, as before.
+- **What the script allows.** It compares syntax trees, so comments are invisible, and it works from an allowlist; anything it does not recognise needs the maintainer.
+  - **Wording.**
+    - A String changes only as a *direct* argument of a prose sink: a docstring, a `@testset` name, an all-string `println`/`print`, or `Markdown.parse`. Interpolations must stay identical.
+    - String macros (`md"…"`, `r"…"`) and strings passed to any other call are code.
+    - Every executable Documenter block in comments or strings (```` ```jldoctest ````, ```` ```@example ````, ```` ```@repl ````, ```` ```@eval ````, ```` ```@setup ````, ```` ```@meta ````) must stay byte-identical.
+  - **Additive.** Only three insertions:
+    - a top-level `@testset`;
+    - a top-level function whose name no Julia file in the repository mentions at the base, and which is not bound in Base, Core or Test;
+    - an `@test`/`@test_throws` line directly in an existing `@testset` body. Never in a function, `let`, `if` or `do` body, and the line may not assign.
+
+    Inserted code passes an allowlist: listed syntax heads and macros only, no access through Main, Core, Base, Test, Libc, Sys, Meta, Random, Pkg or Filesystem, no denied names (eval, include, exit, run, getfield, open, …) as callee or value, and `f!` only on a value the inserted code created. `@testset` bodies are hard local scopes, checked on Julia 1.12.6, so a new testset's assignments stay local.
+  - **Pin.** Literals inside a `const` that frozen.toml lists under the file's `pins` **at the base** may change; `=>` keys and all other structure may not. Any change to a `pins` list needs the maintainer.
+- **What always needs the maintainer.** Any change to code or expectations, a removed, reordered, skipped or broken test, a list or mapping element, data files (TSV), a removed or renamed frozen file, a parse error, a `pins` change, and every change of target, tolerance, seed count or run length (§7.3.1). A test that fails for a scientific reason remains a science question (§7.5).
+- **Pins.** `acceptance/p6_0bk2_skip_interior.jl`: `P60BK2_IR`, the sha256 of the optimized typed IR of `sequential_mcs!`. It is a code-shape artefact with no scientific content.
   - Simulation-output fingerprints (`P60*_FINGERPRINTS`, `P64B1_SEQ_OPENVT`, `P60O_PINS`) stay with the maintainer, because a changed fingerprint means a changed trajectory.
 - **Oversight.** The coordinator lists every AUTO re-freeze in its next report to the maintainer, with the script output and the DECISIONS entry. The maintainer may veto within 24 h; a veto is undone by a new commit restoring the old file (no force-push, D-025).
-- **Checks.** `tools/test/frozen_diff.jl` runs in CI after the frozen check, with three groups:
-  - 12 passing cases;
-  - 30 negative controls, each required to change the source: tolerance, expectation, string in `@test`, `@test_skip`/`@test_broken`, list widening, undeclared pin, pin key, interpolation, reassignment, method extension, qualified method, `push!`/indexed/`global` mutation, `@eval`, `include`, `using`, bare call, statement reorder, removed file, TSV, parse error;
-  - 10 recorded re-freezes from the history (skipped in a shallow clone).
+- **What CI does, and does not do.** CI checks out the full history (`fetch-depth: 0`) and runs `tools/test/frozen_diff.jl`:
+  - 16 passing cases;
+  - 103 negative controls, each required to change the source, covering every exploit from the first review: `exit`/`run`/`eval`/`include` in new code, mutation through pipes, broadcasts, aliases and `Test.get_testset`, insertions into function bodies, `@assert (return …)`/`(break …)`, string macros with code, prose that is really a path or generated code, shadowing names from other files, `macro test`, executable doc blocks;
+  - 11 recorded re-freezes from the history.
+
+  It then logs the classification of the pushed range. That log is an audit trail, not enforcement; the rule above is applied by the coordinator and the reviewer before the push.
+- **Residual risk (stated, not closed).** A new testset may call existing helpers and library functions without a `!`. If such a function mutates global state despite its name, an inserted test could disturb later tests. Frozen helpers are reviewed code, the reviewer checks every AUTO change, and the maintainer sees each one in the report.
 - **The history under this rule.**
-  - **AUTO:** D-241 (wording), D-249 (appended testset), and D-237's p6_0bk2 IR re-pin once `P60BK2_IR` is declared.
-  - **MAINTAINER:** D-238 (a mapping entry), the P6.5b fixture-order fix, the P6.5a2 one-line fix, D-239, D-240 and D-231.
+  - **AUTO:** D-241 (wording), D-249 (appended testset), and D-237's p6_0bk2 IR re-pin with `P60BK2_IR` declared.
+  - **MAINTAINER:** D-238 (a mapping entry), the output fingerprints of D-237, the P6.5b fixture-order fix, the P6.5a2 one-line fix, D-239, D-240 and D-231.
+- **Review.** The first adversarial review of d2648c66 (a denylist) returned REQUEST CHANGES with 20+ false AUTOs. This version replaces it with the allowlist above, and every reported exploit is a negative control.

@@ -162,6 +162,10 @@ coordinator, each iteration:
    - Changing a tolerance, target, seed count or run length needs a new DECISIONS entry
      that states the measured value and the reason. A test that fails for a scientific
      reason is a science question (§7.5), not a tolerance to relax.
+   - Every re-freeze needs the maintainer's OK, except one that `tools/frozen_diff.jl`
+     classifies AUTO for every changed file (prose wording, additions only, or declared
+     `pins`). It still needs a reviewer APPROVE and a DECISIONS entry quoting the script's
+     output, and goes in the coordinator's next report with a 24 h veto (D-250).
 2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the PC.
    - **CPU.** `julia benchmark/ab.jl <base> <candidate> all cpu`.
    - **ROCm.** Add `... all rocm` when the change touches device code.
