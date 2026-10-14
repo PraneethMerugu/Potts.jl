@@ -50,6 +50,10 @@ wait_ci() {
     while ci_running; do sleep 15; done
 }
 
+# machine-wide available memory in GB: the scopes are transient, so their memory.peak is gone
+# when they exit; the low point of MemAvailable during a step bounds the step's total use
+avail_gb() { awk '/^MemAvailable:/ { print int($2 / 1048576) }' /proc/meminfo; }
+
 # step <name> <command...>: run under setsid (its own process group), killed and re-run if a
 # CI job starts. Logs to <item>-<name>.log; appends "<name> <code>" to the status file.
 step() {
@@ -60,8 +64,10 @@ step() {
         (cd "$D" && exec setsid "$@") > "$CI/$ITEM-$name.log" 2>&1 &
         local pid=$!
         echo $pid > "$CI/$ITEM-step.pid"
-        local preempted=0
+        local preempted=0 low a
+        low=$(avail_gb)
         while kill -0 $pid 2>/dev/null; do
+            a=$(avail_gb); [ "$a" -lt "$low" ] && low=$a
             if ci_running; then
                 kill -TERM -- -$pid 2>/dev/null; sleep 10; kill -KILL -- -$pid 2>/dev/null
                 preempted=1
@@ -73,6 +79,7 @@ step() {
         rm -f "$CI/$ITEM-step.pid"
         [ $preempted = 1 ] && { echo "$name preempted by CI $(date +%H:%M)" >> "$S"; continue; }
         echo "$name $code" >> "$S"
+        echo "$name min MemAvailable ${low} GB (15 s samples)" >> "$S"
         return $code
     done
 }
