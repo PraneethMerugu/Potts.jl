@@ -198,6 +198,7 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
     accepted = 0
     tracked = track === nothing ? nothing : 0.0
     attempts = 0                            # attempts of this MCS used so far (null skips included)
+    force = _FORCE_TWO_WORD_PICK[]          # read once per MCS (D-247)
     j = 0
     while true
         n = B.n
@@ -212,7 +213,11 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
             attempts < nsite || break
             attempts += 1
         end
-        t = Int(@inbounds B.list[bounded(rt, n) + 1])      # bounded(·, n) ∈ 0:n-1
+        # bounded(·, n) ∈ 0:n-1; above 2^24 boundary sites the second word comes from draw j's
+        # local index 1, so the draws of smaller lists are unchanged (D-247)
+        k = (force || n > PICK_ONE_WORD_MAX) ? bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n) :
+            bounded(rt, n)
+        t = Int(@inbounds B.list[k + 1])
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
         inside, y = shift(lat, x, @inbounds offsets[dir])

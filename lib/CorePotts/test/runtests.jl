@@ -166,6 +166,67 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         @test abs(cor(hi, lo)) < 0.01
     end
 
+    @testset "rng: two-word site picks (D-247)" begin
+        rng = Random.Xoshiro(5)
+        b64 = CorePotts.bounded64
+        # exactly ⌊x·n / 2⁶⁴⌋ for the 64-bit x = hi·2³² + lo, always in 0:n-1
+        for _ in 1:2000
+            hi, lo, n = rand(rng, UInt32), rand(rng, UInt32), rand(rng, 1:(2^40))
+            @test b64(hi, lo, n) == Int(div(((BigInt(hi) << 32) + lo) * n, BigInt(2)^64))
+            @test 0 <= b64(hi, lo, n) < n
+        end
+        @test b64(typemax(UInt32), typemax(UInt32), 10^12) == 10^12 - 1
+        # up to 2³² sites it refines the one-word pick: the same site, or the next one when the
+        # low word carries (probability about n / 2³³), so small runs barely change
+        for _ in 1:2000
+            hi, lo, n = rand(rng, UInt32), rand(rng, UInt32), rand(rng, 1:(2^32))
+            @test b64(hi, lo, n) - bounded(hi, n) in (0, 1)
+        end
+        @test b64(UInt32(0), UInt32(0), 7) == 0
+        # the bias it removes: at n = 10⁹ the one-word map gives 2³² - 4n sites five inputs and
+        # the rest four, so those sites are drawn 34.3 % of the time instead of their 29.5 %
+        n = 10^9
+        five(t) = cld((t + 1) * 2^32, n) - cld(t * 2^32, n) == 5
+        share = (2^32 - 4n) / n
+        one = mean(_ -> five(bounded(rand(rng, UInt32), n)), 1:400_000)
+        two = mean(_ -> five(b64(rand(rng, UInt32), rand(rng, UInt32), n)), 1:400_000)
+        @test abs(one - 5 * (2^32 - 4n) / 2^32) < 0.003          # negative control: the bias is real
+        @test abs(two - share) < 0.003                           # and gone with two words
+        @test !CorePotts._two_word_pick(2^24) && CorePotts._two_word_pick(2^24 + 1)
+        # end to end, forced on a small lattice: trackers and the tracked ΔH stay exact
+        σ, kinds = blocks((30, 30), 5)
+        lat = Lattice((30, 30))
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+        prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), gg_params())
+        H(u) = total_H(u, lat, prob.contact, gg_params())
+        for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true))
+            base = [solve(remake(prob; seed), alg) for seed in 1:4]
+            CorePotts._FORCE_TWO_WORD_PICK[] = true
+            wide = try
+                [solve(remake(prob; seed), alg) for seed in 1:4]
+            finally
+                CorePotts._FORCE_TWO_WORD_PICK[] = false
+            end
+            for sol in wide
+                u0, u = sol.u[1], sol.u[end]
+                @test sol.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
+                vol = zeros(Int32, length(kinds))
+                foreach(s -> s > 0 && (vol[s] += 1), u.σ)
+                @test vol == u.cell.volume
+            end
+            ratio = sum(s -> s.stats.accepted, wide) / sum(s -> s.stats.accepted, base)
+            @test abs(ratio - 1) < 0.05
+            @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
+        end
+        # a real lattice above 2²⁴ sites runs the two-word pick (one MCS)
+        big = Lattice((4100, 4100))
+        σb = zeros(Int32, 4100, 4100)
+        σb[2000:2009, 2000:2009] .= 1
+        sb = solve(PottsProblem(GG, initial_state(σb, Int32[1]), big, (0, 1), gg_params(); seed = 2), SequentialCPM())
+        @test nsites(big) > CorePotts.PICK_ONE_WORD_MAX
+        @test sb.u[end].cell.volume[1] == count(==(1), sb.u[end].σ) && sb.stats.accepted > 0
+    end
+
     @testset "coloring is conflict free" begin
         for (dims, bnd, s) in (((12, 12), Periodic(), 2), ((13, 11), Periodic(), 2),
                 ((13, 7), Periodic(), 3), ((10, 9), Closed(), 3), ((7, 5, 6), Periodic(), 2),

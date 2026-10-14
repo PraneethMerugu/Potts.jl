@@ -99,6 +99,17 @@ end
 """Lemire multiply-shift draw on `0:n-1` (bias ≤ n / 2³²)."""
 @inline bounded(x::UInt32, n::Integer) = Int((UInt64(x) * UInt64(n)) >> 32)
 
+"""Multiply-shift draw on `0:n-1` from two words, `hi` and `lo` (bias ≤ n / 2⁶⁴; host only)."""
+@inline bounded64(hi::UInt32, lo::UInt32, n::Integer) =
+    Int((UInt128((UInt64(hi) << 32) | lo) * UInt128(n)) >> 64)
+
+# Site picks over `n` sites (D-247): one word up to 2^24 sites, where the bias n / 2³² is at
+# most 2⁻⁸ and every existing run keeps its draws; two words above (bias ≤ n / 2⁶⁴).
+const PICK_ONE_WORD_MAX = 2^24
+# tests: the two-word pick on a small lattice (read once per MCS)
+const _FORCE_TWO_WORD_PICK = Ref(false)
+@inline _two_word_pick(n) = n > PICK_ONE_WORD_MAX || _FORCE_TWO_WORD_PICK[]
+
 """
     cell_entity(id, generation) -> UInt64
 

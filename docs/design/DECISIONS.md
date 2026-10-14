@@ -4485,3 +4485,23 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
+
+## D-247 Sequential site picks above 2²⁴ sites use two words (2026-10-14; maintainer's request, from the D-237 bias note; coordinator to confirm the number; amends D-237 rule 4)
+- **Gap.** `SequentialCPM` and the boundary-site sweep pick a target with `bounded(x, n) = (x·n) >> 32` on one 32-bit word. 2³² inputs over n sites give some sites ⌈2³²/n⌉ inputs and the rest ⌊2³²/n⌋, so the favoured sites are proposed more often. That is a fixed, regular pattern of extra mobility on the lattice. The relative excess is 1/⌊2³²/n⌋: 0.02 % at 10⁶ sites, 2.4 % at 10⁸ and 25 % at 10⁹. Above 2³² sites, some sites were never proposed (D-237 refused them).
+- **Rule.**
+  1. Up to 2²⁴ sites, where the excess is at most 2⁻⁸, the pick is unchanged and every existing run is bit-identical.
+  2. Above 2²⁴, the pick is `bounded64(hi, lo, n) = ⌊(hi·2³² + lo)·n / 2⁶⁴⌋` (UInt128, host only), with bias ≤ n/2⁶⁴.
+     - `SequentialCPM` takes the second word from its draw's fourth word, which was unused. That adds no RNG cost.
+     - The boundary-site sweep uses all four words of draw j, so it draws local index 1 of the same address, only above 2²⁴ boundary sites.
+  3. The choice is per sweep: `nsite` is loop-invariant. For the boundary list it is `n` at each pick, so a list that crosses 2²⁴ switches deterministically.
+  4. D-237 rule 4, the refusal of more than 2³² mobile sites, is lifted. Every site is reachable with two words.
+- **Why a threshold.** Up to 2³² sites the two-word pick refines the one-word one: it gives the same site, or the next one when the low word carries, with probability about n/2³³. Switching everywhere would leave short runs almost unchanged but move pinned long runs; p6_4b1's OpenVT run would see a few carries. A threshold keeps every pin. Lemire's rejection step was not chosen, because its rare redraws would also move pins at any size.
+- **Tests** (lib/CorePotts/test/runtests.jl, "rng: two-word site picks (D-247)"):
+  - `bounded64` equals the BigInt ⌊x·n/2⁶⁴⌋ and stays in 0:n−1.
+  - It refines `bounded` up to 2³² (difference 0 or 1).
+  - At n = 10⁹ the one-word map draws the 2³² − 4n five-input sites 34.3 % of the time. This is the negative control, and it shows the bias is real. The two-word map draws them at their 29.5 % share (400 000 draws each, ±0.003).
+  - The threshold sits at 2²⁴.
+  - `_FORCE_TWO_WORD_PICK` on 30² GG, for SequentialCPM and for skip_interior over 4 seeds: Σ accepted ΔH equals the brute-force ΔH, volumes match a recount, and acceptance is within 5 % of the unforced run. Unforced runs are unchanged.
+  - A real 4100² lattice (above 2²⁴ sites) runs one MCS on the unforced two-word path.
+  - Mutant check: `bounded64 ≡ 0` fails both sweeps.
+- **Pins.** The one-word path's numbers are unchanged, but `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so p6_0bk2's IR hashes (GG 72², cubes 16³) move. They are re-frozen under this entry from the PC run. A PC A/B decides the cost.
