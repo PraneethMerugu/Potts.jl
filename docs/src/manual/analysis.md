@@ -108,5 +108,45 @@ With a weighted contact relation (`Weighted(Moore(1), w)` and
 `contacts => weight * J[kind, kind′]`), the lengths carry the weights and the identity
 still holds.
 
+## Mean squared displacement and Fürth fits
+
+`PottsModels.Analysis` measures cell motility from saved states. Take a tracked point per
+saved state (a cell's centroid from `centroids(σ; periodic)`, projected onto the axes of
+interest), remove the jumps through periodic edges with `unwrap_track`, and average with
+`msd`:
+
+```julia
+using PottsModels.Analysis: centroids, unwrap_track, msd, furth_fit, natural_units
+track = [centroids(σ; periodic = (true, true, false))[k][1:2] for σ in saved]   # cell k, xy
+x = unwrap_track(track, (L, L); periodic = true)
+m = msd([x, …])                    # overlapping windows; replicas of equal length, equal weights
+Δt = (1:length(m)) .* Δt_sample
+fit = furth_fit(Δt, m)             # (; S, D, P, D_fast, D_slow, v_eff, offset, method)
+```
+
+`msd` averages over every window `i ≤ n − ℓ` of each track, then over the tracks with equal
+weights. `furth_msd(Δt; S, D, P)` is the modified Fürth model of Fortuna et al. (2020), Eq. 1,
+
+```math
+\mathrm{MSD}(Δt) = 2D\left(Δt - P\left(1 - e^{-Δt/P}\right)\right) + \frac{2DS}{1 - S}\,Δt,
+```
+
+a persistent random walk (diffusion constant `D`, persistence time `P`) plus a fast,
+uncorrelated part of weight `S`. `furth_fit` has two methods:
+
+- `method = :paper`, the default, is the authors' procedure: fit the logarithm of the
+  MSD's positive second differences by a line (the second derivative of Eq. 1 is
+  `(2D/P)e^{−Δt/P}`), which gives `D` and `P`; subtract the `S = 0` curve and fit a line to
+  the residual at short times, whose slope is `2D_fast` and whose intercept is the
+  localisation error (`offset`). It needs uniformly spaced times, and it throws when the
+  data show no persistence (a purely diffusive or ballistic MSD).
+- `method = :lsq` is the cross-check: a global fit of Eq. 1 with relative weights, with
+  `D, D_fast ≥ 0`. Report both: the second differences of a noisy MSD make `:paper`
+  the less precise of the two.
+
+`natural_units(Δt, m, fit)` returns `τ = Δt/P` and `ρ² = m/(2DP/(1 − S))`, in which every
+fit collapses onto `ρ² = τ − (1 − S)(1 − e^{−τ})` (Eq. 2). The functions do not know units:
+divide positions by the cell radius first to report `D` in radii² per MCS.
+
 Fits, graph analysis and other measurements of saved states are plain Julia; see
 `PottsModels.Analysis` in the [API](@ref api).

@@ -19,12 +19,15 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`topology_moments`](@ref), T1 detection with [`contact_changes`](@ref) and
   [`t1_events`](@ref), spectra with [`power_spectrum`](@ref) (Eq. 9) and
   [`spectral_exponent`](@ref), [`mean_t1`](@ref) (N̄) and [`yield_strain`](@ref).
+- Motility (reproduction 14): [`unwrap_track`](@ref), [`msd`](@ref), the modified Fürth
+  model [`furth_msd`](@ref), its fits [`furth_fit`](@ref) and [`natural_units`](@ref).
 
 Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
 """
 module Analysis
 
 using FFTW: rfft
+using LinearAlgebra: qr
 using Potts: Closed, Lattice, NeighborOrder, Periodic, VonNeumann, contact_graph, neighbors, relation
 
 export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trapz, cell_graph, reachable,
@@ -32,6 +35,7 @@ export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trap
 export concave_hull
 export stored_energy, side_counts, contact_changes, t1_events, topology_distribution, central_moment,
     topology_moments, power_spectrum, spectral_exponent, mean_t1, yield_strain
+export unwrap_track, msd, furth_msd, furth_fit, natural_units
 
 include("peaks.jl")
 include("profiles.jl")
@@ -40,5 +44,6 @@ include("chains.jl")
 include("concave_hull.jl")
 include("edges.jl")
 include("foam.jl")
+include("motility.jl")
 
 end
