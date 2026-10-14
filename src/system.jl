@@ -220,7 +220,7 @@ variables(sys::PottsSystem) = getfield(sys, :variables)
 """
     Potts.lattice(sys::PottsSystem)
 
-The lattice of a model (its `LatticeSpec`: `dims`, neighbourhood, boundary). `sys.lattice`
+The lattice of a model (its `LatticeSpec`: `dims`, neighborhood, boundary). `sys.lattice`
 is not a field read: `sys.<name>` is a declared symbol (D-137).
 """
 lattice(sys::PottsSystem) = getfield(sys, :lattice)

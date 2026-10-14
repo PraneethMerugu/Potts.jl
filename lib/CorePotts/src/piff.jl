@@ -7,7 +7,7 @@
     read_piff(io_or_path, dims; medium = "Medium") -> (labels, kinds, ids)
 
 Labels (`Int32`, 1-based, `0` = medium) over a lattice of size `dims` from a PIFF file,
-the kind name of each labelled cell and its PIFF cell id. Cells are numbered in order of
+the kind name of each labeled cell and its PIFF cell id. Cells are numbered in order of
 first appearance. Boxes outside the lattice, overlapping cells, or a cell listed with two
 types are errors.
 """
@@ -55,7 +55,7 @@ end
 """
     write_piff(io_or_path, labels, kinds; medium = nothing, ids = 1:length(kinds))
 
-Write a labelling as PIFF: one line per run of sites along the first axis. `kinds[c]` is the
+Write a labeling as PIFF: one line per run of sites along the first axis. `kinds[c]` is the
 type name of cell `c` (a name, or anything `string` accepts). With `medium` set to a type
 name, medium sites are written too.
 """

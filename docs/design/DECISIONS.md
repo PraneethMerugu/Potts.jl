@@ -4486,6 +4486,21 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
 
+## D-245 Birth serials kept only when read (P6.5a3) (2026-10-14; spec owner ruling of 2026-10-14, relayed by the coordinator; maintainer: "lets do the birth skip"; amends D-066 item 3's `birth` serials and the X1 rationale)
+- **Readers.** A dividing (or converting) model keeps cell serials only when its compiled model reads them, decided at `mtkcompile` (`CompiledPottsSystem.uses_birth`):
+  - bare `birth`, `birth[ref]`;
+  - `sibling(k)`, `sibling(c, k)` (the lowest-birth rule, E5);
+  - any `@convert` pass (its `from`/`to` default to `sibling(k)`).
+
+  Every model expression is scanned, including `@observed`, division rules and planes, and initialization equations. `members` and `root` do not count: `members` folds in slot order and `root` is the cluster id. A doubtful case keeps the serials.
+  - `sibling` always counts, which is conservative. Birth only breaks ties among several alive members of one kind, so a narrower rule (for example, a kind with at most one member per cluster) could be a later refinement.
+- **Amends D-066 X1.** X1 kept monotone ids in their user-visible form, a `birth` "shown to users". That form is now available only when the model declares it (`@observed bth(cell) ~ birth` or any other reader).
+- **Dropped.** Otherwise the state has no `birth` column and no `#next_birth` counter, so neither lifecycle planner runs the serial pass (`births = nothing`). Generated code and fingerprints are unchanged.
+- **Post-run refusal.** On such a model, an expression read after the run that uses `birth` or `sibling` (`sol[birth]`, `getu`) is an `ArgumentError`: "model `<name>` never reads `birth`, so the birth column was not kept …; declare `@observed bth(cell) ~ birth` in the model to record it".
+- **Old checkpoints.** `remake`/`reinit!` with a state that carries serials drops them. It warns once (`maxlog = 1`), with the same recipe, when serials were really assigned (`_serials_assigned`): a serial differs from 0 and its slot, or the counter is past the largest serial (serials issued to cells now gone). Otherwise the drop is silent, as it is for a counter without a column. The host copies go through the transfer helper `_to_host` (no raw transfer; no run counter exists at that point, so none is charged).
+- **Why.** Performance over exactness: the pass cost the dividing models about 2.5–3 % CPU (PROGRESS 2026-10-14). An explicit opt-in is better than silently returning slot numbers for serials that were never kept.
+- **Tests.** `test/birth_skip.jl` (not frozen). The frozen P6.5a/P6.5b files are unchanged and pass.
+
 ## D-247 Sequential site picks above 2²⁴ sites use two words (2026-10-14; maintainer's request, from the D-237 bias note; coordinator to confirm the number; amends D-237 rule 4)
 - **Gap.** `SequentialCPM` and the boundary-site sweep pick a target with `bounded(x, n) = (x·n) >> 32` on one 32-bit word. 2³² inputs over n sites give some sites ⌈2³²/n⌉ inputs and the rest ⌊2³²/n⌋, so the favoured sites are proposed more often. That is a fixed, regular pattern of extra mobility on the lattice. The relative excess is 1/⌊2³²/n⌋: 0.02 % at 10⁶ sites, 2.4 % at 10⁸ and 25 % at 10⁹. Above 2³² sites, some sites were never proposed (D-237 refused them).
 - **Rule.**
@@ -4508,3 +4523,76 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - Mutants: `bounded64 ≡ 0` fails both sweeps. "lo ignored" (`hi·2³²` only) fails the replays. "Hook ignored" fails the hook checks.
 - **Frozen one-word replay.** p6_9a_global_connectivity.jl:271-272 replays sequential targets with the one-word pick. It is valid below 2²⁴ sites, which covers all its lattices. A run above 2²⁴ would need the two-word replay.
 - **Pins.** The one-word path's numbers are unchanged, but `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so p6_0bk2's IR hashes (GG 72², cubes 16³) move. They are re-frozen under this entry from the PC run. A PC A/B decides the cost.
+
+## D-248 PC branch checks run in two lanes: suites on the CI cores, A/Bs exclusive (2026-10-14; maintainer-approved: two-lane policy, the pueue install and CI yielding; number reserved by the coordinator; amends D-232's core use; under D-157, D-242)
+
+- **Why.** On 2026-10-14 the load was 1.0 on 32 threads, while q5 and q6 waited hours.
+  - Each queue item ran its suites and then its A/B. The suites ran serially on the 4-core benchmark slice (74–94 min per item), and the next item's suites waited for the previous item's A/B.
+  - CI used 0-11/16-27 for about 2.6 h of the previous 25 h.
+  - Items were chained by `while kill -0 $(cat prev.pid)` loops in one shared checkout, which left stale "waiting for" status text.
+- **Lane S (suites).** `tools/pc/item.sh` runs one item at a time in pueue group `suites`.
+  - Each item has its own worktree, `~/potts-ci/<item>`. The steps are instantiate and precompile (as CI does), the frozen check, the unchanged `.github/ci/parallel.sh` on 0-11/16-27, and then the optional docs build and extra commands.
+  - Every Julia process runs in a systemd user scope with `MemoryMax=24G` and `CPUWeight=10` (`tools/pc/julia-scoped.sh`). `OPENVT_PACKAGE_BULK` is exported as before.
+  - **CI yields nothing to it.** Before each step the script waits while a `Runner.Worker` process exists. A step that a CI job interrupts is killed by its process group and re-run after the job ends, inside the same pueue task. The runner itself is never paused.
+- **Lane A (A/B).** `tools/pc/ab.sh` runs in pueue group `ab`.
+  - It first **drains** lane S: it pauses the group with `--wait` and waits until no suites task runs. It never freezes one, because a frozen process keeps its KFD handle (which `wait_idle(gpu = true)` counts as busy) and its memory traffic moves the controls (D-242).
+  - It then runs `benchmark/ab.jl` unchanged, and releases lane S when no other A/B is queued and `~/potts-ci/lane-s.hold` is absent.
+  - D-242 still governs: quiet windows announced by the coordinator, batching at the coordinator's discretion, and scoped A/Bs. Nothing on 12-15/28-31 or on the GPU overlaps an A/B.
+- **Queue.** pueue 4.0.4 (static release binary in `~/.local/bin`, sha256-checked) runs as the user service `pueued`. An A/B is queued with `--after` its suites task, so it runs only when they pass.
+  - PID files stay: `<item>-run.pid`, `<item>-step.pid` (the running step's process group) and `<item>-ab-<backend>.pid`. Jobs are killed by PID file or `pueue kill`, never by pattern.
+  - Status and log files keep their names in `~/potts-ci`.
+- **Checks (PC, 2026-10-14, stub commands).**
+  - **CI preemption.** A step interrupted by a stand-in CI process was killed with its children, waited and re-ran, and the task succeeded.
+  - **Drain.** With one suites task running and one queued when an A/B was added, the running one finished, the queued one waited until the A/B ended, and then it ran.
+  - **Still to measure.** A full lane S run's wall time and its total `memory.peak`, on the first real item.
+- **Not adopted.** Scoping branch suites to the change: a full `parallel.sh` run costs about 25 min, and AUTONOMY §7.4 requires every suite on the merged tree. Running suites on the Mac: D-157 stands.
+- **Separate, not approved yet.** Shrinking the BIOS VRAM carve-out (64 GiB) in favour of GTT, so the OS sees about 120 GB. This needs the maintainer at the PC.
+- **Switch-over.** Between items, after q3, q5, q6 and q7. Those items' scripts and checkouts are not changed.
+
+## D-249 American spelling in docs and comments; `openvt_colony_panel!` keywords `color`/`state_colors`; 15_openvt_f1_f4.jl re-frozen (2026-10-14; maintainer: "yes the style pass is mine, commit it"; re-freeze approved by the user, 2026-10-14; amends D-175's pin)
+- **Style.** Prose in the docs, docstrings and comments uses American spelling (`docs/design/STYLE.md`; CLAUDE.md points docs prose there). No identifier was renamed except the two keywords below.
+- **Keywords.** `PottsModels.openvt_colony_panel!` takes `color` and `state_colors`. `colour` and `state_colours` remain as deprecated aliases (`Base.depwarn`), so existing callers keep working.
+- **Re-freeze.** `reproductions/15_openvt_f1_f4.jl` gains one testset: the American keywords work, the British ones are `@test_deprecated`, and an unknown `color` is an ArgumentError. Nothing else in the file changed. New sha256 `911cc88b…7129`.
+
+## D-250 Re-pins of declared recorded values proceed without a per-edit maintainer OK; `tools/frozen_diff.jl` classifies (2026-10-14; maintainer-approved: "Approve, with P60BK2_IR pinned", then narrowed by the maintainer to "Re-pins only" after two adversarial review rounds; in effect once the review APPROVEs and the change is pushed; amends AUTONOMY §7.3.1)
+
+- **Why.** Between 2026-10-13 20:16 and 2026-10-14 19:24 UTC the maintainer answered 8 re-freeze asks. The waits were measured from the session transcripts, from the end of the asking turn to the reply.
+  - The median wait was 10 min. Three took 79, 86 and 116 min, at night or bundled with a push question.
+  - Code-hash re-pins (`P60BK2_IR`) recur with every change to the sequential sweep's code, under D-237 and again for q6.
+- **Review.** Round 3 (re-pins only) found no false AUTO for `P60BK2_IR`. Its MEDIUM and LOW findings are fixed here: pins on new entries, call-argument strings, span ends, tree comparison of other statements, all errors exit 2, and ci.yml and parallel.sh guarded.
+- **Scope: re-pins only.** Wording and additions were dropped after two review rounds of a general classifier for Julia test code.
+  - Round 1, a denylist: more than 20 false AUTOs, some confirmed at runtime to make frozen tests pass vacuously or never run.
+  - Round 2, an allowlist: still 4 HIGH false AUTOs. These were data aliases treated as fresh, global methods defined in a testset body, unchecked signatures, and destructuring into globals. On frozen Literate paper pages, comments and `Markdown.parse` tables are themselves the pre-registered record.
+
+  A safe general analyser did not look achievable. This version covers only the case that recurs and can be checked by construction. Of the 8 measured asks, it would have covered only the code-hash re-pin, which waited 1 min. Its value is the recurring case, not the long waits, which came from timing.
+- **The rule.** A re-freeze may proceed without the maintainer's OK only when all of these hold:
+  - the **base's own copy** of the tool (`git show <base>:tools/frozen_diff.jl`) prints AUTO for every changed frozen file;
+  - a fresh reviewer APPROVEs the change (§7.3.3);
+  - the DECISIONS entry named by frozen.toml's `decision` field quotes the output;
+  - the suites pass.
+
+  Otherwise the coordinator asks the maintainer, as before.
+- **What AUTO means.** Every difference is a plain String literal inside a `const NAME = …` whose NAME the file's `pins` list declares **at the base**.
+  - The string must be a `=>` value or a vector element. A string passed to a call (`parse(Float64, "0.05")`, `Regex(…)`) is code.
+  - Within that constant, `=>` keys, numbers, calls, interpolations, string macros and all other structure must stay. Types are compared as well, so `7` → `7.0` counts as a change.
+  - Comments may change only on the constant's own lines, which end at its last code line.
+  - Every other statement parses to the same tree, every other line is byte-identical (comments included), and the line count is unchanged.
+- **Always the maintainer.**
+  - Any other change.
+  - Any change to a `pins` list, and a new frozen.toml entry that declares pins. A first freeze needs no maintainer, so it may not declare pins unseen.
+  - Any change to `tools/frozen_diff.jl`, `frozen.jl`, the test runners (`lib/PottsModels/test/runtests.jl`, `test/runtests.jl`), `.github/workflows/ci.yml` or `.github/ci/parallel.sh`. A push cannot loosen the tool, or how frozen files are run, in the same step that uses it.
+  - A removed or renamed frozen file, or a data file.
+  - Errors of any kind, which never give AUTO (exit 2): a parse error, a TOML error, a ref that is not a commit, a base without the tool, or running a copy other than the base's.
+  - The base-copy check holds for honest use. A loosened copy could simply delete it, which is why the reviewer and the coordinator apply the rule rather than CI.
+- **Pins.** `acceptance/p6_0bk2_skip_interior.jl`: `P60BK2_IR`, the sha256 of the optimized typed IR of `sequential_mcs!`. It is a code-shape artefact with no scientific content.
+  - The plain-String check is positional: a pinned string read elsewhere as `parse(…)`, `Regex(…)`, a path or a `Symbol` would still pass. So pin only consts whose strings are recorded values that are compared and never parsed, used as a pattern or path, or turned into a Symbol. Checking that is part of the maintainer's pin decision. `P60BK2_IR` qualifies: it is only compared with a computed sha256.
+  - Simulation-output fingerprints (`P60*_FINGERPRINTS`, `P64B1_SEQ_OPENVT`, `P60O_PINS`) stay with the maintainer, because a changed fingerprint means a changed trajectory.
+- **Oversight.** The coordinator lists every AUTO re-pin in its next report to the maintainer, with the output and the DECISIONS entry. The maintainer may veto within 24 h; a veto is undone by a new commit (no force-push, D-025).
+- **CI.** CI checks out the full history (`fetch-depth: 0`) and runs `tools/test/frozen_diff.jl`. It has four groups:
+  - 6 passing cases;
+  - 29 negative controls, each required to change the source;
+  - 14 end-to-end checks in a scratch git repository: the base copy, the guarded tool and ci.yml, a `pins` change, a new entry declaring pins, a dropped entry, a parse error, a TOML error, a bad ref, no tool at the base, and the candidate's copy refusing to run;
+  - 8 recorded re-freezes, each compared with a declared pin so that none passes vacuously. D-237's p6_0bk2 re-pin is AUTO with `P60BK2_IR` declared. D-237's fingerprints, D-238, D-239, D-241, D-249 and the P6.5a2 fix need the maintainer.
+
+  CI then runs the base's copy on the pushed range and logs the verdict. MAINTAINER is an audit line, not a failure; a crash fails the step. CI does not enforce the rule; the coordinator and the reviewer apply it before the push.
+- **First use.** The tool must be at the base, so the first AUTO is possible only for a re-freeze based on a commit that already contains this change.

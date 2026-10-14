@@ -25,7 +25,7 @@ its model equations another. Each goes through ModelingToolkit's `mtkcompile`, a
 advances the simplified equations for every cell in one batched kernel.
 `Potts.ode_system(mtkcompile(sys), :cell)` returns the compiled system (`:model` for the model
 equations, `nothing` for a scope without equations). Quantities MTK cannot express, such as
-`volume`, neighbour gathers, folds over cells and reads of other cells, appear in it as input
+`volume`, neighbor gathers, folds over cells and reads of other cells, appear in it as input
 parameters.
 
 An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expression.
@@ -168,7 +168,7 @@ u = solve(prob, SequentialCPM()).u[end]
 
 - **Faces.** `x => (low, high)` (and `y`, `z`: axes 1, 2, 3) sets both faces of a closed
   axis, each `Dirichlet(v)` or `NoFlux()`. A face value is a ghost value: `Dirichlet(v)` sets
-  the missing neighbour of an edge site to `2v − c`, so the field reaches `v` midway between
+  the missing neighbor of an edge site to `2v − c`, so the field reaches `v` midway between
   the edge site and the face; `NoFlux()` mirrors the edge site. A closed axis without an entry
   is zero flux. An entry on a periodic axis, on an axis the lattice lacks, on a hexagonal
   lattice, or on a field whose equation has no `Δ` of it is an error naming it.

@@ -128,10 +128,10 @@ openvt_metrics_line(m::NamedTuple) = join((_cpp_g(m[k]) for k in _OPENVT_METRICS
 """
     openvt_neighbor_histogram(n) -> (; n, p)
 
-The neighbour-number distribution `metrics.cpp` writes: for `n = 0:maximum(n)` (as a
+The neighbor-number distribution `metrics.cpp` writes: for `n = 0:maximum(n)` (as a
 `Vector{Int}`), the percentage `p = (100·count)/N` of the `N` cells with that many
-neighbours, computed in that order. Write it with `write_openvt(dest, :O6_neighbors, h)`.
-No cells or a negative neighbour count is an `ArgumentError`.
+neighbors, computed in that order. Write it with `write_openvt(dest, :O6_neighbors, h)`.
+No cells or a negative neighbor count is an `ArgumentError`.
 """
 function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("openvt_neighbor_histogram: no cells"))
@@ -263,7 +263,7 @@ Write `data` as the OpenVT benchmark file `format` (spec 15 §3.1) to `dest`, a 
 
 | `format` | `data` | header |
 |:--|:--|:--|
-| `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbour count | `x,y,i,n` |
+| `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbor count | `x,y,i,n` |
 | `:O2` | `(; x, y, r, f, a)` | `x,y,r,f,a` |
 | `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached 10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
 | `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`; the mean and the population SD (divisor = replicates) of each row, from sequential sums |
@@ -361,7 +361,7 @@ end
 
 Read an OpenVT benchmark file written by [`write_openvt`](@ref), returning the columns as
 vectors: the `data` given to `write_openvt` for O1–O5 (for O3 under the parameter's name;
-for O4 the widths matrix, without the mean and SD columns) and O6 neighbours, and
+for O4 the widths matrix, without the mean and SD columns) and O6 neighbors, and
 `(; t, N, r, A, C, w, g, C_rel, w_rel)` for O6. Integer columns (`i`, `n`, `inhibited`, `N`)
 are `Vector{Int}`, the others `Vector{Float64}`; `nan` reads as `NaN`. O1–O5 round-trip
 exactly; O6 values carry `metrics.cpp`'s six significant digits. An unknown format is an

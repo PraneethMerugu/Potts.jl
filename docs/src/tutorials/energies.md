@@ -1,13 +1,13 @@
 # [Tutorial 1: energies and adhesion](@id tutorial-energies)
 
-In a cellular Potts model, cells move and change shape only to lower the energy ``H``.
-Everything a cell "wants" is written into ``H``. This tutorial builds ``H`` term by term.
+This tutorial builds the energy ``H`` of a cellular Potts model term by term. Cells move
+and change shape only to lower ``H``. Everything a cell "wants" is written into ``H``.
 You will learn:
 
-- how the area (volume) term keeps a cell at its size, and what its strength does;
+- how the volume term keeps a cell at its target volume, and what its strength does;
 - how a surface term controls the shape of a cell;
 - how a table of contact energies makes cells sort, engulf or scatter;
-- how temperature sets the amount of membrane fluctuation;
+- how the temperature sets the amount of membrane fluctuation;
 - the one-line library forms `Volume`, `Surface` and `Adhesion`, and per-kind targets.
 
 ```@example energies
@@ -16,17 +16,17 @@ CairoMakie.activate!(type = "png") # hide
 nothing # hide
 ```
 
-## One cell and its area
+## One cell and its volume
 
-Start with a single cell in the medium. The model has an area term and a contact term with
+Start with one cell in the medium. The model has a volume term and a contact term with
 the medium:
 
 ```@example energies
 @potts_model OneCell begin
     @kinds medium cell
     @parameters begin
-        λ = 1.0          # strength of the area constraint
-        V₀ = 40.0        # target area
+        λ = 1.0          # strength of the volume constraint
+        V₀ = 40.0        # target volume
         λₛ = 0.0         # strength of the surface constraint (off for now)
         S₀ = 60.0        # target surface
         T = 10.0         # temperature
@@ -47,8 +47,9 @@ sol = solve(prob, SequentialCPM(); saveat = 5)
 nothing # hide
 ```
 
-The cell starts as a 6×6 square (36 sites) and grows to its target area of 40. `sol[:volume]`
-holds the volumes of all cells at every saved time; the first (and only) cell is element 1:
+The cell starts as a 6×6 square (36 sites) and grows to its target volume of 40.
+`sol[:volume]` holds the volumes of all cells at every saved time. The first (and only)
+cell is element 1:
 
 ```@example energies
 area(sol) = [v[1] for v in sol[:volume]]
@@ -59,8 +60,8 @@ hlines!(ax, 40; color = :gray, linestyle = :dash)
 fig
 ```
 
-The area fluctuates around ``V_0``. A stronger constraint ``\lambda`` holds it tighter.
-`remake` changes the parameter without compiling the model again:
+The volume fluctuates around ``V_0``. A stronger constraint ``\lambda`` holds it tighter.
+Change ``\lambda`` with `remake`, which does not compile the model again:
 
 ```@example energies
 for λ in (0.3, 5.0)
@@ -71,17 +72,21 @@ axislegend(ax; position = :rb)
 fig
 ```
 
-!!! note "Why does the area settle below the target?"
+!!! note "Why does the volume settle below the target?"
     The contact term charges ``J = 8`` for every bond between the cell and the medium. A
-    smaller cell has fewer such bonds, so the two terms balance a little below ``V_0``. With
-    a weak constraint the contact term wins and the cell can shrink away entirely. Try
-    ``\lambda = 0.1``.
+    smaller cell has fewer such bonds, so the two terms balance a little below ``V_0``. If
+    the constraint is weak, the contact term wins and the cell can shrink away entirely.
+    Try ``\lambda = 0.1``.
 
 ## The surface term and cell shape
 
-`surface` is the number of bonds between the cell and its neighbours (here the 8 Moore
-neighbours of each boundary site). A target surface that is small for the area makes the
-cell round; a larger one makes it irregular, and a very large one tears it into pieces:
+The surface term controls the shape of a cell. `surface` is the number of bonds between
+the cell and its neighbors (here the 8 Moore neighbors of each boundary site). The target
+surface has three effects:
+
+- a target surface that is small for the volume makes the cell round;
+- a larger one makes it irregular;
+- a very large one tears it into pieces.
 
 ```@example energies
 fig = Figure(size = (700, 260))
@@ -95,18 +100,20 @@ fig
 ```
 
 At ``S_0 = 110`` the surface term rewards boundary so much that the cell splits off
-fragments. Nothing in the energy keeps a cell in one piece; `@constraint connectivity(cell)`
-does (see [Constraints](@ref manual-constraint)).
+fragments. Nothing in the energy keeps a cell in one piece. To keep it in one piece, add
+`@constraint connectivity(cell)` (see [Constraints](@ref manual-constraint)).
 
 ## Adhesion between kinds
 
-With several kinds, the contact table ``J`` decides who sticks to whom. Steinberg's
-*differential adhesion hypothesis* says that tissues sort like immiscible liquids. Here are
-three tables for a two-kind aggregate (rows and columns: medium, dark, light). The
-"sorting" table is the one of Graner & Glazier (1992); the rest of this model (smaller
-cells, a 50×50 lattice, a tiled start, 4-neighbour copies) is a generic teaching setup, not
-their model. For the paper's model, see [Getting started](@ref getting-started) and the
-`GranerGlazier` constructor.
+If a model has several kinds, the contact table ``J`` decides which cells stick to which.
+Steinberg's *differential adhesion hypothesis* says that tissues sort like immiscible
+liquids. Below are three contact tables for a two-kind aggregate (rows and columns:
+medium, dark, light).
+
+The "sorting" table is the one of Graner & Glazier (1992). The rest of this model is a
+generic teaching setup, not their model: smaller cells, a 50×50 lattice, a tiled start and
+4-neighbor copies. For the paper's model, see [Getting started](@ref getting-started) and
+the `GranerGlazier` constructor.
 
 | Table | dark–dark | dark–light | light–light | cell–medium | Outcome |
 |---|---|---|---|---|---|
@@ -148,21 +155,23 @@ end
 fig
 ```
 
-The rule of thumb: a kind pair that is cheap to keep in contact ends up in contact. When
-the cells stick to the medium more than to each other (``J_{cM}`` small), the aggregate falls
-apart.
+The rule of thumb: a kind pair that is cheap to keep in contact ends up in contact. If
+the cells stick to the medium more than to each other (``J_{cM}`` small), the aggregate
+falls apart.
 
 !!! note "Surface tension"
     For two kinds `d` and `l` the effective surface tensions are
     ``\gamma_{dl} = J_{dl} - (J_{dd} + J_{ll})/2`` and ``\gamma_{dM} = J_{dM} - J_{dd}/2``.
-    Sorting needs ``\gamma_{dl} > 0``; the kind with the larger ``\gamma`` against the medium
-    ends up inside.
+    Sorting needs ``\gamma_{dl} > 0``. The kind with the larger ``\gamma`` against the
+    medium ends up inside.
 
 ## Temperature
 
-The temperature sets how often a copy that raises ``H`` is accepted. At low ``T`` the
-cells barely move and the tiled start stays frozen in place; at ``T = 10`` the
-kinds sort; at high ``T`` the boundaries are ragged and the sorting is noisier:
+The temperature sets how often a copy that raises ``H`` is accepted:
+
+- at low ``T`` the cells barely move, and the tiled start stays frozen in place;
+- at ``T = 10`` the kinds sort;
+- at high ``T`` the boundaries are ragged, and the sorting is noisier.
 
 ```@example energies
 fig = Figure(size = (900, 300))
@@ -177,8 +186,8 @@ fig
 
 ## Library one-liners
 
-Common terms have one-line forms that expand to the same `domain => expression` pairs.
-This model is `TwoKinds` written with them:
+Common terms have one-line forms. They expand to the same `domain => expression` pairs.
+This model is `TwoKinds`, written with them:
 
 ```@example energies
 @potts_model TwoKindsShort begin
@@ -202,13 +211,14 @@ short_prob = PottsProblem(short, start, (0, 600); seed = 3)
 total_energy(short_prob) == total_energy(base)
 ```
 
-`Surface(kinds...; target, strength)` is the surface term. Use whichever reads better;
-the written-out form is the one to extend.
+The result `true` shows that both forms give the same energy.
+`Surface(kinds...; target, strength)` is the surface term. Use the form that reads better.
+To extend a term, use the written-out form.
 
 ## Per-kind parameters
 
-A parameter can be indexed by kind, like `J`. Here dark cells are twice as big as light
-ones. `V₀[kind]` is a vector with one entry per kind, medium first:
+A parameter can be indexed by kind, like `J`. Here the target volume of dark cells is twice
+that of light cells. `V₀[kind]` is a vector with one entry per kind, medium first:
 
 ```@example energies
 @potts_model TwoSizes begin
@@ -235,10 +245,10 @@ vols, kinds = s[:volume][end], s[:kind][end]
 
 ## What you learned
 
-- Every energy term is `domain => expression`; `cells(kinds…)` sums over cells and
-  `contacts` over neighbouring pairs of sites in different cells.
-- ``\lambda`` sets how tightly a cell holds its area; a surface term shapes the cell.
-- The contact table decides sorting, mixing or scattering; the temperature sets the
+- Every energy term is `domain => expression`. `cells(kinds…)` sums over cells, and
+  `contacts` sums over neighboring pairs of sites in different cells.
+- ``\lambda`` sets how tightly a cell holds its volume. A surface term shapes the cell.
+- The contact table decides sorting, mixing or scattering. The temperature sets the
   fluctuations.
 - Kind-indexed parameters (`J[kind, kind]`, `V₀[kind]`) give each kind its own values.
 

@@ -6,8 +6,8 @@ E 59, 5819, 1999): a large-Q Potts model whose cells are gas bubbles, with a wal
 area constraint and a shear term that biases copies along x.
 
 - **Lattice.** x periodic, y closed walls without wall cells (spec 04 A-2); contacts and
-  proposals over `NeighborOrder(4)`, the 20 neighbours up to the fourth shell (p. 5822).
-- **Energies.** Eq. (1): a wall energy `J` for every unlike neighbour pair and an area
+  proposals over `NeighborOrder(4)`, the 20 neighbors up to the fourth shell (p. 5822).
+- **Energies.** Eq. (1): a wall energy `J` for every unlike neighbor pair and an area
   constraint `Γ(a − A)²` per bubble, with a per-bubble target area `A` (default `16² = 256`,
   p. 5823). A dry foam: every site belongs to a bubble. `Γ = 0` lets the foam coarsen.
 - **Shear.** Copying the source's bubble into the target site adds the bias
@@ -25,10 +25,10 @@ Use [`sheared_foam_state`](@ref) for the paper's ordered start, a brick wall of 
 Differences from the paper:
 - the shear term is the displacement form above; read literally, Eq. 2's absolute `x_i`
   makes the bias grow with x. Model `γ0` and `β` are the paper's times a calibrated scale κ;
-- the paper proposes only at wall sites and only to an unlike neighbour, counting every pick
+- the paper proposes only at wall sites and only to an unlike neighbor, counting every pick
   as a trial. Run with `SequentialCPM(; skip_interior = true)`: wall sites only, a uniform
-  neighbour among the 20, so one paper MCS is τ = 1/ū of ours (ū the mean unlike share of a
-  wall site's neighbours).
+  neighbor among the 20, so one paper MCS is τ = 1/ū of ours (ū the mean unlike share of a
+  wall site's neighbors).
 """
 @potts_model ShearedFoam begin
     @structural_parameters begin

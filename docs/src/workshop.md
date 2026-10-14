@@ -1,8 +1,9 @@
 # [Workshop: lab exercises](@id workshop)
 
-These exercises practise the tutorials. Each one states a question, gives a starting point,
-and hides an answer: click **Answer** to open it. Try first; the answers are one way to do
-it, not the only one. Runs are kept short so that every exercise runs in seconds on a laptop.
+These exercises practice the tutorials. Each exercise states a question, gives a starting
+point, and hides an answer. Click **Answer** to open it. Try each exercise first. An answer is
+one way to do it, not the only one. We keep the runs short, so every exercise runs in seconds
+on a laptop.
 
 Start every session with:
 
@@ -16,11 +17,13 @@ nothing # hide
 ## Exercise 1: make sorting fail
 
 Start from the Graner & Glazier (1992) model with the paper's parameters and aggregate.
-The sorting depends on the order of the contact energies. **Change one entry of `J` so
-that the aggregate no longer sorts**, and show it with a number.
+The sorting depends on the order of the contact energies.
 
-Starting point (the paper's model; the run is 1600 MCS, 100 of the paper's MCS, instead
-of the paper's 10⁴):
+1. **Change one entry of `J` so that the aggregate no longer sorts.**
+2. Show it with a number.
+
+Starting point: the paper's model. The run is 1600 MCS (100 of the paper's MCS) instead
+of the paper's 10⁴:
 
 ```@example workshop
 σ0, kinds0 = graner_glazier_state()
@@ -37,13 +40,13 @@ Main.paper_run("graner_glazier", "../") # hide
 
 !!! details "Hint"
     Sorting needs a positive surface tension between the kinds,
-    ``J_{dl} - (J_{dd} + J_{ll})/2 > 0``. A measure of mixing is the fraction of
+    ``J_{dl} - (J_{dd} + J_{ll})/2 > 0``. To measure mixing, use the fraction of
     dark–light contacts among all cell–cell contacts.
 
 !!! details "Answer"
     The paper's table has ``J_{dl} - (J_{dd} + J_{ll})/2 = 11 - 8 = 3 > 0``. With
-    `J(dark, light) = 6` (paper: 11) the tension is negative, so dark–light contacts are
-    cheaper than like contacts and the kinds mix. We compare the fraction of heterotypic
+    `J(dark, light) = 6` (paper: 11) the tension is negative. Dark–light contacts are then
+    cheaper than like contacts, and the kinds mix. Compare the fraction of heterotypic
     contacts at the start and at the end of both runs:
 
     ```@example workshop
@@ -65,17 +68,18 @@ Main.paper_run("graner_glazier", "../") # hide
      mixing = heterotypic_fraction(mixing.u[end]))
     ```
 
-    In the paper's model the fraction falls as the kinds sort; with `J(dark, light) = 6`
+    In the paper's model, the fraction falls as the kinds sort. With `J(dark, light) = 6`,
     it rises well above its starting value. The neutral value `J(dark, light) = 8` is not
-    enough: the fraction still falls (to about 0.37 against 0.25 for the paper's table),
-    because the two kinds' different energies against the medium still push the light
+    enough. The fraction still falls, to about 0.37 against 0.25 for the paper's table. The
+    two kinds have different energies against the medium, and these still push the light
     cells outwards.
 
 ## Exercise 2: temperature
 
-**How does the temperature change sorting?** Run the paper's model at `T = 2`, `10` (the
-paper's value), `20` and `80`, and compare the heterotypic fraction and the number of
-cells after 100 paper MCS.
+**How does the temperature change sorting?**
+
+1. Run the paper's model at `T = 2`, `10` (the paper's value), `20` and `80`.
+2. After 100 of the paper's MCS, compare the heterotypic fraction and the number of cells.
 
 !!! details "Answer"
     ```@example workshop
@@ -87,17 +91,21 @@ cells after 100 paper MCS.
     at_temperature.([2.0, 10.0, 20.0, 80.0])
     ```
 
-    At `T = 2` the membranes barely fluctuate and the cells are stuck: the fraction falls least
-    from its start (0.47). Raising the temperature speeds sorting up, up to about
-    `T = 20`. Beyond that, the fluctuations work against sorting: at `T = 80` the fraction
-    is higher again and some of the 64 cells have vanished. Graner and Glazier scan the
+    At `T = 2`, the membranes barely fluctuate and the cells are stuck. The fraction falls
+    least from its start (0.47). A higher temperature makes sorting faster, up to about
+    `T = 20`. Above that, the fluctuations work against sorting. At `T = 80`, the fraction
+    is higher again, and some of the 64 cells have vanished. Graner and Glazier scan the
     temperature in their 1993 paper.
 
 ## Exercise 3: add chemotaxis to one kind
 
-Here is a generic teaching model with two kinds and a fixed gradient of `c`, increasing to
-the right. **Make only the `leader` cells chemotactic** and show that they move right
-further than the followers. Runs are random, so compare a few seeds.
+Here is a generic teaching model with two kinds and a fixed gradient of `c`. The gradient
+increases to the right.
+
+1. **Make only the `leader` cells chemotactic.**
+2. Show that the leaders move further right than the followers.
+
+Runs are random, so compare 3 seeds.
 
 ```@example workshop
 @potts_model Two begin
@@ -118,8 +126,8 @@ nothing # hide
 ```
 
 !!! details "Answer"
-    Extend the model with a chemotactic drive restricted to leaders, and set the gradient in
-    the operating point:
+    Extend the model with a chemotactic drive for leaders only. Set the gradient in the
+    operating point:
 
     ```@example workshop
     @potts_model TwoChemo begin
@@ -143,14 +151,14 @@ nothing # hide
 
     The numbers are how far each kind's mean x position moved, in sites. The leaders move
     right in every run, about twice as far as the followers. The followers are not
-    chemotactic, yet they move right too: they stick to the leaders (all cell–cell contacts
-    cost the same, `J = 8`) and are dragged and pushed along. A higher
+    chemotactic, but they move right too. They stick to the leaders (all cell–cell contacts
+    cost the same, `J = 8`), and the leaders drag and push them along. A higher
     `J(leader, follower)` weakens that coupling.
 
 ## Exercise 4: scan a parameter with an ensemble
 
-Using your answer to Exercise 3, **measure how far the leaders travel as a function of
-`χ`**, with 2 replicates per value, in one `EnsembleProblem`.
+Start from your answer to Exercise 3. **Measure how far the leaders travel as a function of
+`χ`.** Use 2 replicates per value, in one `EnsembleProblem`.
 
 !!! details "Answer"
     ```@example workshop
@@ -170,10 +178,12 @@ Using your answer to Exercise 3, **measure how far the leaders travel as a funct
 ## Exercise 5: contact inhibition in a growing colony
 
 The OpenVT growing monolayer (`OpenVTGrowingMonolayer`, Artistoo parameters) grows without
-inhibition by default (`β = 0`); the benchmark's inhibited runs use `β = 0.9`. This exercise
-uses that 2024 set as a lighter teaching example; the benchmark's reference model is
-`OpenVTReferenceMonolayer` (Table S1). **Compare
-the cell counts of both after 900 MCS.** (Benchmark lattice: 400×400; here: 150×150.)
+inhibition by default (`β = 0`). The benchmark's inhibited runs use `β = 0.9`. This exercise
+uses that 2024 set as a lighter teaching example. The benchmark's reference model is
+`OpenVTReferenceMonolayer` (Table S1).
+
+**Compare the cell counts of the free and the inhibited colony after 900 MCS.** (Benchmark
+lattice: 400×400; here: 150×150.)
 
 !!! details "Answer"
     ```@example workshop
@@ -185,9 +195,9 @@ the cell counts of both after 900 MCS.** (Benchmark lattice: 400×400; here: 150
      inhibited = count_cells(solve(remake(p0; p = [:β => 0.9]), SequentialCPM())))
     ```
 
-    With inhibition the colony has about a fifth fewer cells: squeezed cells in the
-    interior stop growing, so they divide later. In a young colony of a few dozen cells the
-    two runs hardly differ; inhibition matters once the cells are crowded.
+    With inhibition, the colony has about a fifth fewer cells. Squeezed cells in the
+    interior stop growing, so they divide later. In a young colony of a few dozen cells, the
+    two runs hardly differ. Inhibition matters once the cells are crowded.
 
 The benchmark's full run:
 
@@ -197,8 +207,8 @@ Main.paper_run("openvt_monolayer", "../") # hide
 
 ## Exercise 6: your own layout
 
-**Write a layer that paints a ring of `n` square cells** around the centre of the lattice,
-and draw the starting state it gives the Graner–Glazier model.
+1. **Write a layer that paints a ring of `n` square cells** around the center of the lattice.
+2. Draw the starting state that it gives the Graner–Glazier model.
 
 !!! details "Answer"
     ```@example workshop
@@ -230,9 +240,9 @@ and draw the starting state it gives the Graner–Glazier model.
 
 ## Going further
 
-- Put a cell-cycle clock in the cells of the OpenVT model with `@components` and make cells
-  divide when the clock completes, instead of at a fixed size ([Tutorial 5](@ref
+- Put a cell-cycle clock in the cells of the OpenVT model with `@components`. Make cells
+  divide when the clock completes, instead of at a fixed volume ([Tutorial 5](@ref
   tutorial-cell-odes)).
-- Link the leaders of Exercise 3 to followers on contact, and see whether they drag them
-  along ([Tutorial 6](@ref tutorial-links)).
-- Run Exercise 1 on the GPU, if you have one ([Tutorial 8](@ref tutorial-gpu)).
+- Link the leaders of Exercise 3 to followers on contact. See whether the leaders drag the
+  followers along ([Tutorial 6](@ref tutorial-links)).
+- If you have a GPU, run Exercise 1 on it ([Tutorial 8](@ref tutorial-gpu)).

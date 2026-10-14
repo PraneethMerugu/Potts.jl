@@ -6,7 +6,7 @@ Comput. Biol. 22, e1014747, 2026), checked against the authors' CompuCell3D sour
 
 - **Kinds.** Leaders and followers, both kept connected (CompuCell3D's `Connectivity`
   plugin, `Local()`: the losing cell's sites in the 8-ring must form one arc and the gaining
-  cell must own a face neighbour of the target; with `VonNeumann(1)` copies the second
+  cell must own a face neighbor of the target; with `VonNeumann(1)` copies the second
   always holds) and never extinct.
 - **Energies.** A per-cell target volume, and adhesion
   `J = [0 2 10; 2 16 J_LF; 10 J_LF 5]` (medium, leader, follower).
@@ -179,9 +179,9 @@ cell `c` is σ's value `c` and `kinds[c]` its kind, `:leader` or `:follower`. An
 no site is not a cell: it counts nothing and its kind is not read. The second method reads `u.σ` and the kinds of a
 state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
 
-- **Adjacency.** Two cells are neighbours when they own von Neumann-adjacent sites
+- **Adjacency.** Two cells are neighbors when they own von Neumann-adjacent sites
   (`x` periodic); the medium is not a cell.
-- **Main tumour `M`.** The connected components of the cells that own a site in row
+- **Main tumor `M`.** The connected components of the cells that own a site in row
   `y = 2` with `x ∈ 1:X−1`: the authors' row 0 and their `x` range, which skips the last
   column.
 - **`invasive`, `infiltrative`** (px², `Float64`). Per column, the top of `M` and the top of
@@ -191,7 +191,7 @@ state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
 - **`fingers`.** The peaks of the kept `top_M` array (on its index, not on `x`) found by
   `find_peaks(…; prominence = 10, distance = 10, width = 5)`, then thinned by
   `merge_peaks(…, 15)`.
-- **`singles`.** Leaders with no neighbour whose mean `y` is above the lowest mean `y`
+- **`singles`.** Leaders with no neighbor whose mean `y` is above the lowest mean `y`
   of a cell of `M`.
 - **`detached`.** Cells of either kind outside `M` whose mean `y` is above that height.
 - **`clusters`.** The connected components outside `M` with at least two cells and at
@@ -200,7 +200,7 @@ state of [`AkeebInvasion`](@ref) (kind 1 is the leader).
   followers, clusters ordered by their smallest cell id.
 
 Throws an `ArgumentError` when no cell owns a site in the seed row (the authors' code has no
-main tumour to measure then). Built from [`PottsModels.Analysis`](@ref): `cell_graph`,
+main tumor to measure then). Built from [`PottsModels.Analysis`](@ref): `cell_graph`,
 `reachable`, `components`, `centroids`, `column_tops`, `trapz`, `find_peaks` and
 `merge_peaks`.
 

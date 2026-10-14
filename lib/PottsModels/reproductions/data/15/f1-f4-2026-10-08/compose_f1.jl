@@ -67,7 +67,7 @@ for (k, (name, path, colour, labelcolour)) in enumerate(PANELS)
     ax = Axis(gl[2, 1]; width = w * mm, height = w * mm, spinewidth = 0.5)
     hidedecorations!(ax)
     if path === nothing
-        PottsModels.openvt_colony_panel!(ax, block; colour = :area, areas)
+        PottsModels.openvt_colony_panel!(ax, block; color = :area, areas)
         limits!(ax, x0, x0 + W, y0, y0 + W)
     else
         img = Makie.FileIO.load(joinpath(G, "results", path))

@@ -28,7 +28,7 @@ the consortium repository), step for step:
 3. Otherwise concaveman: the hull edges are processed first in, first out. An edge
    `(b, c)` with ``|bc|² ≥`` `length_threshold²` looks at the interior points within
    squared segment distance ``d ≤ |bc|²/\\mathrm{concavity}²``, nearest first. The first
-   point `p` with `d` strictly below its squared distance to both neighbouring edges
+   point `p` with `d` strictly below its squared distance to both neighboring edges
    `(a, b)` and `(c, d′)`, and whose new edges `b–p` and `c–p` cross no current edge, is
    inserted between `b` and `c` when ``\\min(|pb|², |pc|²) ≤ |bc|²/\\mathrm{concavity}²``.
    The two new edges join the queue; the point and its duplicates leave the candidates.

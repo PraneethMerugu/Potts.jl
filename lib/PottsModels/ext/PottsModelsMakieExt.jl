@@ -161,10 +161,20 @@ function _site_counts(frame)
     return n
 end
 
-function PottsModels.openvt_colony_panel!(ax, frame; colour::Symbol = :area, areas = nothing, inhibited = nothing,
-        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colours = (GROWING, INHIBITED))
+function PottsModels.openvt_colony_panel!(ax, frame; color::Symbol = :area, areas = nothing, inhibited = nothing,
+        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colors = (GROWING, INHIBITED),
+        colour = nothing, state_colours = nothing)
+    # the British keywords are deprecated aliases (American spelling, 2026-10-14)
+    if colour !== nothing
+        Base.depwarn("`openvt_colony_panel!(…; colour)` is deprecated, use `color`", :openvt_colony_panel!)
+        color = colour
+    end
+    if state_colours !== nothing
+        Base.depwarn("`openvt_colony_panel!(…; state_colours)` is deprecated, use `state_colors`", :openvt_colony_panel!)
+        state_colors = state_colours
+    end
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_colony_panel!: a 2D frame is required"))
-    if colour === :area
+    if color === :area
         a = areas === nothing ? _site_counts(frame) : areas
         fr, key, vals = _with_channel(frame, :area, a)
         if colorrange === nothing
@@ -174,14 +184,14 @@ function PottsModels.openvt_colony_panel!(ax, frame; colour::Symbol = :area, are
         end
         pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "cell area"), colormap = :coolwarm,
             colorrange, medium_color = :white, boundaries = false)
-    elseif colour === :state
-        inhibited === nothing && throw(ArgumentError("openvt_colony_panel!: colour = :state needs `inhibited`"))
+    elseif color === :state
+        inhibited === nothing && throw(ArgumentError("openvt_colony_panel!: color = :state needs `inhibited`"))
         fr, key, _ = _with_channel(frame, :inhibited, Dict(id => (v == true || v == 1) ? 1.0 : 0.0 for (id, v) in inhibited))
         pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "inhibited"),
-            colormap = Makie.cgrad([Makie.to_color(state_colours[1]), Makie.to_color(state_colours[2])], 2; categorical = true), colorrange = (0.0, 1.0),
+            colormap = Makie.cgrad([Makie.to_color(state_colors[1]), Makie.to_color(state_colors[2])], 2; categorical = true), colorrange = (0.0, 1.0),
             medium_color = :white, boundaries = false)
     else
-        throw(ArgumentError("openvt_colony_panel!: colour is :area or :state, got :$colour"))
+        throw(ArgumentError("openvt_colony_panel!: color is :area or :state, got :$color"))
     end
     Makie.linesegments!(ax, _edges(fr); color = :black, linewidth, linecap = :square)
     return pp
@@ -189,11 +199,11 @@ end
 
 # ---- F1 ---------------------------------------------------------------------------------
 
-# the panel's frame (D-229): thin and grey, as on the other frameworks' closeups
+# the panel's frame (D-229): thin and gray, as on the other frameworks' closeups
 const F1_FRAME_WIDTH = 1
-const F1_FRAME_COLOUR = Makie.RGBf(0.6, 0.6, 0.6)
+const F1_FRAME_COLOR = Makie.RGBf(0.6, 0.6, 0.6)
 
-# the window × window block (offsets) centred where the 45° ray from the colony centroid
+# the window × window block (offsets) centered where the 45° ray from the colony centroid
 # leaves the colony (the last cell site on it)
 function _rim_window(frame, window)
     sz = frame_size(frame)
@@ -212,8 +222,8 @@ function _rim_window(frame, window)
         all(1 .<= I .<= sz) || break
         _owner_id(frame, CartesianIndex(I)) > 0 && (t = τ)
     end
-    centre = c .+ t .* d
-    return clamp.(round.(Int, centre .- (window + 1) / 2), 0, sz .- window)
+    center = c .+ t .* d
+    return clamp.(round.(Int, center .- (window + 1) / 2), 0, sz .- window)
 end
 
 # the block as its own frame: same owners, metadata and site positions
@@ -251,9 +261,9 @@ function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool 
     Makie.hidedecorations!(ax)
     ax.spinewidth = F1_FRAME_WIDTH
     for side in (:left, :right, :top, :bottom)
-        setproperty!(ax, Symbol(side, :spinecolor), F1_FRAME_COLOUR)
+        setproperty!(ax, Symbol(side, :spinecolor), F1_FRAME_COLOR)
     end
-    PottsModels.openvt_colony_panel!(ax, crop; colour = :area, areas = a)
+    PottsModels.openvt_colony_panel!(ax, crop; color = :area, areas = a)
     Makie.limits!(ax, g.origin[1], g.origin[1] + window * g.spacing[1], g.origin[2], g.origin[2] + window * g.spacing[2])
     banner && Makie.rowgap!(fig.layout, 1, P / 45)
     return fig

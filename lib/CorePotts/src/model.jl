@@ -143,7 +143,7 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
 
-`CheckerboardCPM` spaces its colours by `footprint` and refuses a model whose contact
+`CheckerboardCPM` spaces its colors by `footprint` and refuses a model whose contact
 relation, or any relation in the problem, reaches farther. A symbolic layer may narrow
 that to the relations its generated copy-step functions read (`CorePotts.copy_step_relations(sys, f)`,
 keyed on `sys`); it does so only while every copy-step function above is its own.

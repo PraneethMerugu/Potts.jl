@@ -66,7 +66,7 @@ include("odes.jl")
 include("initialization.jl")
 include("precompile.jl")
 
-"""Operating-point key for the kinds of the labelled cells (`kind => [:dark, :light, …]`)."""
+"""Operating-point key for the kinds of the labeled cells (`kind => [:dark, :light, …]`)."""
 const kind = B.kind
 const cluster = B.cluster
 export kind, cluster

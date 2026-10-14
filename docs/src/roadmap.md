@@ -11,7 +11,7 @@ Today a cell dies by losing its sites, and kinds change only through callbacks. 
 
 ```julia
 # NOT YET AVAILABLE
-@retire cells(tumor) when = volume < 2               # remove a cell, its sites to the medium or neighbours
+@retire cells(tumor) when = volume < 2               # remove a cell, its sites to the medium or neighbors
 @create medium when = rand() < p, kind = tumor        # seed new cells
 @transition cells(follower) => leader when = …        # change kind by a rule
 @terminate when = count(true for c in cells(tumor)) == 0
@@ -34,7 +34,7 @@ Vector-valued copy-scope names (`δcentroid[c]`, `normal`, `velocity[c]`) and li
 `DirectedMotion`, `PersistentMotion`. Today persistent motion is written with the scalar
 `displacement(c, k)` and `centroid(k)` (see [Drives](@ref manual-drive)).
 
-## Neighbour cells
+## Neighbor cells
 
 ```julia
 # NOT YET AVAILABLE
@@ -42,7 +42,7 @@ Vector-valued copy-scope names (`δcentroid[c]`, `normal`, `velocity[c]`) and li
 ```
 
 Iteration over the cells touching a cell, weighted by the shared interface length, for
-juxtacrine signalling and contact-dependent rules.
+juxtacrine signaling and contact-dependent rules.
 
 ## Fields
 
@@ -59,6 +59,6 @@ components (`JumpSystem`, Catalyst reaction networks, SBML import).
 
 ## Initial states and I/O
 
-- More layouts: Eden growth, `BrickWall`, chains, spheres, fibres, planes, and layouts from
+- More layouts: Eden growth, `BrickWall`, chains, spheres, fibers, planes, and layouts from
   an image or mask.
 - A MorpheusML importer, and live parameter steering in MakiePotts.

@@ -7,7 +7,7 @@ the energy change ``\Delta H`` of every copy from these terms; you never write `
 | Domain | Sum over | Names in scope |
 |---|---|---|
 | `cells(k₁, k₂, …)`, `cells` | every live cell of those kinds (all kinds) | `volume`, `surface`, `major_length`, `kind`, `id`, cell variables (`x`, or `x[c]`) |
-| `contacts`, `contacts(rel)` | every unordered pair of neighbouring sites with different owners, once | `kind`, `kind′`, `owner`, `owner′`, `weight`; site and field variables as `x` and `x′`; cell variables of both sides as `y[owner]`, `y[owner′]` |
+| `contacts`, `contacts(rel)` | every unordered pair of neighboring sites with different owners, once | `kind`, `kind′`, `owner`, `owner′`, `weight`; site and field variables as `x` and `x′`; cell variables of both sides as `y[owner]`, `y[owner′]` |
 | `sites` | every lattice site | `kind`, `owner`, `position`, site and field variables |
 | `edges(rel)` | every link of a relationship | `a`, `b`, `distance`, edge variables |
 | `clusters(k…)` | every compartment cluster whose root cell is of kind `k` | `cluster_volume`, `cluster_surface` |
@@ -48,7 +48,7 @@ Notes:
 
 - A contact pair is counted once (CompuCell3D's convention). An asymmetric contact
   expression is averaged with its mirror (`kind ↔ kind′`, `x ↔ x′`).
-- `x′` exists only for site and field variables; the neighbouring cell's value of a cell
+- `x′` exists only for site and field variables; the neighboring cell's value of a cell
   variable is `y[owner′]`.
 - `centroid`, `integral` and `rand()` are not allowed in energies: their change by a copy
   is not local, or not an energy. Use a drive with `displacement(c, k)` for centroid-based

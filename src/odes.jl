@@ -24,7 +24,7 @@ a compiled model: the `System` that `mtkcompile` produced from that scope's `@eq
   algebraic variable (`y ~ expr` in `@equations`) is an `observed` equation.
 - Each declared parameter the equations read is a parameter under its declared name.
 - Everything else the equations read (built-ins such as `volume`, other scopes' variables,
-  neighbour gathers, folds over cells, reads of other cells `y[j]`) is an input: a further
+  neighbor gathers, folds over cells, reads of other cells `y[j]`) is an input: a further
   parameter standing for that quantity.
 
 A cell system is the template of one cell: Potts advances it for every cell in one batched

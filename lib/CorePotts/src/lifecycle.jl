@@ -138,8 +138,8 @@ Both kinds of division can happen in one MCS:
   through the cluster centroid; `cluster_divide!` runs for each member. A portable
   `cluster_normal` reads `st.cell.volume`, `anchor`, `m1`, `m2` only at the root's index,
   any other cell column only as `generation`, `kind` or `cluster`, and not `st.σ`: the host
-  planner passes a cluster-labelled `σ` and cluster moments at every root, the device planner
-  the cell-labelled `σ`, the full cell columns, and the cluster's volume and moments
+  planner passes a cluster-labeled `σ` and cluster moments at every root, the device planner
+  the cell-labeled `σ`, the full cell columns, and the cluster's volume and moments
   at every index. The daughters form
   a new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
 - `EVENT_DIVIDE` divides the cell alone along `normal`; `divide!` runs. A compartment's

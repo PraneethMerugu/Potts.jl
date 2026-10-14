@@ -2,7 +2,7 @@
 # graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases; the
 # host `contact_graph` (CSR) is built at a synchronization point.
 
-"""`true` if some in-domain `relation` neighbour of site `i` has a different owner."""
+"""`true` if some in-domain `relation` neighbor of site `i` has a different owner."""
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
     lat = ctx.lattice
     x = coordinates(lat, i)
@@ -14,7 +14,7 @@
     return false
 end
 
-"""Weighted count of in-domain `relation` neighbours `j` of site `i` with `pred(σ[j])`."""
+"""Weighted count of in-domain `relation` neighbors `j` of site `i` with `pred(σ[j])`."""
 @inline function count_neighbors(pred::F, σ, ctx, i; relation = ctx.contact) where {F}
     lat = ctx.lattice
     x = coordinates(lat, i)
@@ -79,7 +79,7 @@ end
     ContactGraph
 
 Cells that touch over a relation and their shared interface measure (weighted bond count),
-in CSR form: the neighbours of `c` are `col[row_ptr[c]:row_ptr[c+1]-1]` with `measure`
+in CSR form: the neighbors of `c` are `col[row_ptr[c]:row_ptr[c+1]-1]` with `measure`
 alongside; `medium[c]` is `c`'s interface with the medium.
 """
 struct ContactGraph{T}
@@ -92,7 +92,7 @@ end
 """
     contact_graph(σ, lattice, relation, ncell) -> ContactGraph
 
-Build the graph from scratch (face-sharing neighbours with `VonNeumann(1)`, as CompuCell3D's
+Build the graph from scratch (face-sharing neighbors with `VonNeumann(1)`, as CompuCell3D's
 NeighborTracker; any relation, weighted or not, works).
 """
 function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
@@ -129,7 +129,7 @@ function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
     return ContactGraph(row_ptr, col, measure, medium)
 end
 
-"""Neighbouring cells of `c` (sorted ids)."""
+"""Neighboring cells of `c` (sorted ids)."""
 neighbors(g::ContactGraph, c) = view(g.col, g.row_ptr[c]:(g.row_ptr[c + 1] - 1))
 """Shared interface measure of cells `c` and `n` (zero if they do not touch)."""
 function contact(g::ContactGraph{T}, c, n) where {T}

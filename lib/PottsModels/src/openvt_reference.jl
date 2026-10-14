@@ -67,8 +67,8 @@ end
 """
     openvt_reference_state(; lattice = (1400, 1400), A₀ = 50)
 
-One disc-shaped cell at the lattice centre: the sites whose centres lie within
-`R = √(A₀/π)` of the centre point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id 1,
+One disc-shaped cell at the lattice center: the sites whose centers lie within
+`R = √(A₀/π)` of the center point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id 1,
 as `[ownership => σ, kind => [:cell]]`. For `A₀ = 50` that is 52 sites on an even lattice
 and 45 on an odd one.
 """
@@ -142,11 +142,11 @@ DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready
   within one increment `α` (50/775 px by default) of the β threshold, so the effect is
   negligible;
 - `n`: the number of distinct other cells (medium and the cell itself excluded) among the
-  `Moore(1)` neighbours of the cell's sites (spec §2.4), on the closed lattice (no wrap).
+  `Moore(1)` neighbors of the cell's sites (spec §2.4), on the closed lattice (no wrap).
 
 Like `openvt_snapshot`, it takes any `u` with `u.σ` (2D), `u.cell.volume` and
 `u.cell.A_star`, on the host or a device. `σ` and the volumes are copied to the host twice,
-once by the snapshot and once for the neighbour count.
+once by the snapshot and once for the neighbor count.
 """
 function openvt_frame(u; β::Real, γ::Real, A₀ = 50.0, center = (size(u.σ) .+ 1) ./ 2)
     o = openvt_snapshot(u; A₀, center)

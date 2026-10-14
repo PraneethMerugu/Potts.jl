@@ -8,18 +8,18 @@ their reference code Artistoo:
 - **Activity.** Every site a cell gains becomes fully active (`max_act`); a site taken by the
   medium is inactive; activity decays by one per MCS.
 - **Act term.** Every copy gains `−(λ_act/max_act)(GM(source) − GM(target))`, where `GM(s)`
-  is the plain geometric mean of the activity over `s` and its Moore neighbours owned like
+  is the plain geometric mean of the activity over `s` and its Moore neighbors owned like
   `s` (zero if any is inactive, and zero for the medium). Retracting active sites is
-  therefore penalised.
+  therefore penalized.
 - **Energies.** Adhesion `J`, area `λ(V − V₀)²` and perimeter `λₛ(P − S₀)²`, where the
-  perimeter counts Moore neighbours owned by others.
+  perimeter counts Moore neighbors owned by others.
 - **Connectivity.** `connected = true` adds the ring rule `connectivity(cell; rule =
   ArcOrPair())` (one arc, or else two cells and no medium on the ring), which Niculescu
   et al. use for multicellular runs. Without it, cells can break at high `λ_act`, as
   Wortel et al. report.
 
 The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 200² torus.
-`max_act = 80` gives the keratocyte-like cell. Copies come from the 8 neighbours.
+`max_act = 80` gives the keratocyte-like cell. Copies come from the 8 neighbors.
 """
 @potts_model WortelAct begin
     @structural_parameters begin

@@ -195,7 +195,7 @@ reltol)` is **kept** as the tolerance bundle around an OrdinaryDiffEq algorithm 
 `DynamicSS(alg; abstol)` precedent). Not adopted from the sketches: `@initialize` (10),
 `@kind_classes` (11), `@exchange` (08), `@relations proposal = … ` with a bare law (04 —
 kept but the law wraps a relation), `the(kind)` (05/06/07 → `only`), `initial(volume)`
-(05), `Fill`/`OneCell` (07 → `collective = true`), `cluster_integral` (14 → `sites(cluster)`),
+(05), `Fill`/`OneCell` (07 → `collective = true`), `cluster_integral` (14 → `integral(x; over = cluster)` (maintainer ruling 2026-10-14: `integral(x; over = cluster)`, a scope argument on the existing `integral`; plain `integral(x)` stays the cell sum; D-243 amended); the `sites(cluster)` fold later),
 `@convert x => y, sites => …` keyword form (05/07 → the block form), `order = (Sweep(), …)`
 in `@sweep` (06 → `@schedule`).
 
@@ -921,7 +921,7 @@ the streaming per-MCS series of 04 are `SavingCallback`s, not saved states.
 | `neighbors(c)` relation | `relation = Moore(1)` (04, 10); none (06, 11) | `neighbors(c; relation = contact)` | 04 F4, 09 F7, 10 F7 |
 | Medium as a neighbour | assumed (11) | `neighbors(c)` yields ref 0 for the medium | AUTHORING §12.3's `exposure` example needs it |
 | Contact-pair counts | `count(… for _ in contacts)` (09, 04, 13) | same, over `contacts(rel)` | One comprehension semantics |
-| Cluster reductions | `cluster_integral` (14) | `sum(x for s in sites(cluster))` | Uniform fold; `integral` stays sugar |
+| Cluster reductions | `cluster_integral` (14) | `integral(x; over = cluster)` now; `sum(x for s in sites(cluster))` later | **Update 2026-10-14 (maintainer ruling):** no new name. Cluster scope is an `over = cluster` argument on the existing `integral`, and plain `integral(x)` stays the cell sum. The integrand is in site scope (`kind`/`volume` bind to the site's owner, so a two-member cluster gives `integral(volume; over = cluster)` = V₁² + V₂²), and dead members drop out (D-243, amended). The explicit fold lands later as the general form |
 | Sibling centroid | `centroid(sibling(k), 1)` (14) | `centroid(c, k)` | Mirrors `displacement(c, k)` |
 | Periodic differences | `minimum_image(d, axis)` (14); `separation(x, y)` (13) | both | Scalar and vector forms of one primitive |
 | Rod order | `ν`, `prev`/`next` refs, `chain` links (13) | `@relationship chain … ordered = true` with `prev`/`next`/`rank`/`linked` | One store (13 F1) |
@@ -952,6 +952,8 @@ the streaming per-MCS series of 04 are `SavingCallback`s, not saved states.
 ## 5. Proof: three sketches in the unified API
 
 ### 5.1 Fortuna 14a/14b + Dal-Castel 14c (`@extend`, `@convert`, references, 3D)
+
+> **Superseded (audit 2026-10-13).** The Fortuna example below uses the authors' code values: 4.19R³, `floor(0.85V)`, `Shuffled()` and the target-volume transfer. Spec 14's paper rulings supersede them: V = (4π/3)R³, fixed targets, per-MCS independent conversion with p = c·(1 − V₃/(φ_l·V_cell)), and a strict-`<` ball sized to the target. See spec 14 l.616–631.
 
 ```julia
 using Potts
@@ -1379,7 +1381,7 @@ Every DECISIONS entry or roadmap wording the proposal touches, with the kind of 
   only as the tolerance bundle inside the problem's `field_solver`/`solvers`.
 - `integral` as a separate lowering path (it becomes the `sites(c)` fold).
 - The four separate spellings of "initial value from state" in the sketches.
-- `@exchange`, `@initialize`, `@kind_classes`, `the`, `initial`, `cluster_integral`, `Fill`,
+- `@exchange`, `@initialize`, `@kind_classes`, `the`, `initial`, `cluster_integral` (→ `integral(x; over = cluster)`), `Fill`,
   `OneCell`, `T1Counter`, `spread`, `Relabel`-by-hand host code: none is needed.
 - Per-model `*_state` functions in PottsModels once layouts emit columns.
 

@@ -56,7 +56,7 @@ end
 
 Exact change of the Euler characteristics of the old and new cells under `adjacency`
 (`:face` or `:full`; hexagonal lattices have one self-dual adjacency) when `prop`'s target
-changes owner. Reads the target's neighbour shell, which excludes the target on every axis
+changes owner. Reads the target's neighbor shell, which excludes the target on every axis
 of length ≥ 2, so the result is the same before and after the ownership write. On a
 periodic axis of length 1 the shell wraps onto the target and the change is wrong:
 [`recompute_euler`](@ref), which every problem reading `euler` calls when it is built,

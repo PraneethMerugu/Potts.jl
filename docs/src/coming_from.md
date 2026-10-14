@@ -8,9 +8,9 @@ are not available yet are on the [Roadmap](@ref roadmap).
 
 | Topic | Potts.jl |
 |---|---|
-| Neighbour orders | `NeighborOrder(k)` gives CC3D's cumulative distance shells (2D: 4, 8, 12, 20, … neighbours) |
-| Contact energies | each pair of neighbouring sites is counted **once**, as in CC3D and Morpheus. Contact energies `J` convert 1:1 at the same neighbour order. Exception: Morpheus divides by its `boundaryLengthScaling`; divide a Morpheus `J` by it |
-| Copy proposals | a uniform random target site and a uniform random neighbour as source, in the proposal relation (`@relations proposal = …`) |
+| Neighbor orders | `NeighborOrder(k)` gives CC3D's cumulative distance shells (2D: 4, 8, 12, 20, … neighbors) |
+| Contact energies | each pair of neighboring sites is counted **once**, as in CC3D and Morpheus. Contact energies `J` convert 1:1 at the same neighbor order. Exception: Morpheus divides by its `boundaryLengthScaling`; divide a Morpheus `J` by it |
+| Copy proposals | a uniform random target site and a uniform random neighbor as source, in the proposal relation (`@relations proposal = …`) |
 | Monte Carlo step | one MCS is one attempt per site. A model that counts `n` attempts per site as a step needs `n` of our MCS per step |
 | Acceptance | Metropolis; at `T = 0` ties are accepted with probability ½ (CC3D) |
 | Temperature per kind | `temperature = Tk[kind]`, combined over source and target cells with `combine` (default `min`); the medium never contributes |
@@ -67,7 +67,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | Morpheus | Potts.jl |
 |---|---|
 | `Lattice class="square"/"hexagonal"/"cubic"`, `Size`, `BoundaryConditions` | `@lattice Lattice(dims; geometry = Hexagonal(), boundary = …)` |
-| `Neighborhood Order` (contacts, `ShapeSurface`) | `neighborhood = NeighborOrder(k)`; on hexagonal lattices order 2 is `NeighborOrder(2)` (12 neighbours) |
+| `Neighborhood Order` (contacts, `ShapeSurface`) | `neighborhood = NeighborOrder(k)`; on hexagonal lattices order 2 is `NeighborOrder(2)` (12 neighbors) |
 | `Domain` (circle, image) | `@lattice Lattice(…; domain = x -> …)` or a `Bool` mask |
 | `CellType class="biological"` / `"medium"` | `@kinds medium a b`; the medium comes first |
 | `VolumeConstraint target strength` | `cells(k) => strength * (volume - target)^2` |
@@ -76,7 +76,7 @@ are not available yet are on the [Roadmap](@ref roadmap).
 | `MetropolisKinetics temperature` | `@sweep Metropolis(; temperature = T)` |
 | `MetropolisKinetics yield = Y` | `@sweep Metropolis(; temperature = T, offset = -Y)` |
 | `MonteCarloSampler MCSDuration` | `@sweep Metropolis(; …, mcs_duration = Δt)` |
-| `MCS Neighborhood` (copy neighbourhood) | `@relations proposal = …` |
+| `MCS Neighborhood` (copy neighborhood) | `@relations proposal = …` |
 | `Property` (cell scope) | `@variables x(cell) = x₀` |
 | `Field` with `Diffusion rate` | `c(field)` with `D(c) ~ rate * Δ(c) + …` |
 | `System` with `DiffEqn` (cell scope) | `@equations D(x) ~ …` for a cell variable, or a `System` in `@components` |

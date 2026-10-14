@@ -6,7 +6,7 @@ through them; this page is the reference.
 ## Turning layers into an operating point
 
 - `layout(l, sys)` paints `l` on the lattice of model `sys` (its size, boundaries,
-  neighbourhood, domain and geometry) and returns `[ownership => σ, kind => kinds]`.
+  neighborhood, domain and geometry) and returns `[ownership => σ, kind => kinds]`.
 - `layout(l, dims)` paints on a closed square lattice of size `dims` with `Moore(1)`.
 - `layout(l, x; report = true)` also returns one row per layer, in paint order, with
   `type`, `requested`, `painted` (cells created), `dropped` (painted over completely),
@@ -53,7 +53,7 @@ unambiguous.
   hexagonal lattice too.
 - Membership is **closed**: a site belongs to `Circle(c, r)` when its embedded position is
   at distance `≤ r` from `c`, up to rounding (a relative `1e-12`, so a hexagonal disc of
-  radius 1 about a site holds the site and all 6 neighbours).
+  radius 1 about a site holds the site and all 6 neighbors).
 - A shape **wraps** through a periodic edge and is **clipped** at a closed edge and at the
   domain; the report's `clipped` counts the lost points.
 
@@ -61,7 +61,7 @@ The point patterns are
 
 | Pattern | Points |
 |---|---|
-| `Center()` | the lattice centre, `embed((size .+ 1) ./ 2)` |
+| `Center()` | the lattice center, `embed((size .+ 1) ./ 2)` |
 | `RandomPoints(n; region, seed)` | `n` distinct in-domain sites of `region`, drawn uniformly with `Potts.layer_rng(seed)` |
 | `RandomPoints(n; region, replace = true, seed)` | `n` sites drawn the same way with replacement: points may coincide, and `n` may exceed the region |
 | `[Point(…), Center(), …]` | the given points |
@@ -87,7 +87,7 @@ op, report = layout(denovo, (200, 200); report = true)
 report[2]
 ```
 
-The sprout start grows one blob at the centre for 50 rounds and divides it 7 times, into
+The sprout start grows one blob at the center for 50 rounds and divides it 7 times, into
 128 cells. A few of the small cells are cut into two pieces, as in TST, so it passes
 `splits = :allow`:
 

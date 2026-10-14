@@ -2352,3 +2352,21 @@ The maintainer approved F-1…F-6 (D-049).
 - **Process notes.**
   - P6.5a's first CPU A/B was unreadable because of a concurrent research screen (controls drifted 7.9 %), which led to D-242's quiet windows.
   - Two GPU-group coverage gaps were caught by `device_coverage.jl` and closed with device tests, not allowlists.
+
+## 2026-10-14 — PC queue: two lanes (D-248)
+
+- Measured: a load of 1.0 on 32 threads with q5 and q6 waiting. Serial 4-core suites took 74–94 min per item; a CPU A/B 43 min and a ROCm A/B 52 min; CI was busy about 2.6 h in 25 h.
+- `tools/pc/` added: `item.sh` (lane S, preempted by CI), `ab.sh` (lane A, drains lane S), `julia-scoped.sh`, `setup.sh` and a README.
+- On the PC: pueue 4.0.4 in `~/.local/bin`, the `pueued` user service, groups `suites` and `ab` (parallelism 1), and the scripts in `~/potts-queue`. Nothing in `~/potts-ci` or `~/actions-runner` changed.
+- Tested with stub commands (CI preemption, drain). The first real item will measure wall time and `memory.peak`. The proposal is in `docs/design/research/pc-queue-proposal.md`.
+
+## 2026-10-14 — P6.5a3 merged: birth serials kept only when read (D-245)
+
+- **What.** A dividing model that never reads `birth` now gets no `birth` column, no `#next_birth` counter and no serial pass. Readers are found at compile time: bare `birth`, `birth[ref]`, `sibling`, or any `@convert`. A post-run `birth`/`sibling` query on such a model is refused with the `@observed bth(cell) ~ birth` recipe. An old checkpoint whose serials were really assigned warns once when its column is dropped.
+- **Affected models.** AkeebInvasion, OpenVTGrowingMonolayer, OpenVTReferenceMonolayer and SingleDivisionFixture skip the pass. Trajectories are bitwise unchanged with and without it (Sequential, Checkerboard, and all three device planner forms; Metal included). Generated code and fingerprints are unchanged.
+- **PC (964e0bef).** frozen, CorePotts, GPU (ROCm), Potts and PottsModels all pass. The follow-up commits (to 8e8bcfdd) are host-side messages, checks and docs; `GROUP=Potts` passes on the Mac.
+- **A/B against 99301437 (D-242 scope: akeeb_99x60, openvt_monolayer_100, openvt_reference_100).**
+  - CPU passes. akeeb sequential 0.978, akeeb checkerboard 0.989, the OpenVT cases 0.998–1.001. Largest control deviation 0.0047.
+  - ROCm passes. 0.983–1.006; largest control deviation 0.0090.
+  - So about 2 % of P6.5a's 2.5–3 % Akeeb CPU cost is recovered.
+- **Review.** Adversarial APPROVE on 964e0bef, and again on the follow-up delta.

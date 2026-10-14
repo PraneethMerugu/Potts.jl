@@ -7,7 +7,7 @@
 # fig7.png: M's form, each cell a filled disc of radius radius_i at its centroid (R), with a
 # thin black stroke.
 # fig7_cells.png (when P615G_WORK holds the runner's serialized states): the same five final
-# states as lattice stills (`PottsModels.openvt_colony_panel!(ax, frame; colour = :state)`;
+# states as lattice stills (`PottsModels.openvt_colony_panel!(ax, frame; color = :state)`;
 # since P6.15k in the 9 Oct draft's yellow and teal),
 # inhibited = inhibition code i > 0 at the panel's β = 0 and γ, white medium, thin black
 # pixel-edge boundaries between unlike ids.
@@ -78,8 +78,8 @@ if isdir(states)
         hidedecorations!(ax); hidespines!(ax)
         live = findall(>(0), Array(u.cell.volume))
         code = PottsModels.openvt_frame(u; β = 0.0, γ).i
-        PottsModels.openvt_colony_panel!(ax, frame; colour = :state, inhibited = Dict(c => code[j] > 0 for (j, c) in enumerate(live)),
-            state_colours = (yellow, teal),
+        PottsModels.openvt_colony_panel!(ax, frame; color = :state, inhibited = Dict(c => code[j] > 0 for (j, c) in enumerate(live)),
+            state_colors = (yellow, teal),
             linewidth = 0.2)
         occ = findall(!=(0), σ)
         lo, hi = minimum(occ), maximum(occ)

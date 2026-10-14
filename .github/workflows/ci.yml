@@ -32,6 +32,8 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tools/test/frozen_diff.jl replays recorded re-freezes from the history (D-250)
       - name: Julia on PATH
         run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
       - name: Resolve, instantiate and precompile the workspace
@@ -45,6 +47,21 @@ jobs:
           done
       - name: Frozen acceptance tests are unchanged
         run: $PIN julia --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")'
+      - name: Re-freeze classifier (tools/frozen_diff.jl, D-250)
+        # Tests the classifier, then logs the verdict of the push's base copy on the pushed
+        # range, for the audit trail. A verdict of MAINTAINER (exit 1) is logged, not failed:
+        # the D-250 rule is applied by the coordinator and the reviewer before the push. A
+        # crash (exit 2 or more) fails the step, unless the base predates the tool.
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          $PIN julia --project=lib/PottsModels/test tools/test/frozen_diff.jl
+          if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE:tools/frozen_diff.jl" 2>/dev/null; then
+            git show "$BEFORE:tools/frozen_diff.jl" > "$RUNNER_TEMP/frozen_diff.jl"
+            rc=0
+            $PIN julia --project=lib/PottsModels/test "$RUNNER_TEMP/frozen_diff.jl" "$BEFORE" HEAD || rc=$?
+            [ "$rc" -le 1 ]
+          fi
       - name: Test suites in parallel (PottsModels ×3, GPU, Potts, CorePotts + MakiePotts)
         # .github/ci/parallel.sh: one process per disjoint physical-core pair (with its SMT
         # siblings) on 0-11/16-27; each log is printed in its own group with its wall time and

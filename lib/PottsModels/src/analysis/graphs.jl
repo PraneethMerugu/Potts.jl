@@ -6,7 +6,7 @@
     cell_graph(σ, lattice::Lattice; neighborhood = VonNeumann(1))
 
 The contact graph of the cells of σ as adjacency lists: `g[c]` holds, sorted, the distinct
-cells that own a site neighbouring (under `neighborhood`) a site of cell `c`, for `c` in
+cells that own a site neighboring (under `neighborhood`) a site of cell `c`, for `c` in
 `1:maximum(σ)`. The medium (0) is not a cell. `periodic` gives one flag per axis for a square
 lattice; pass a CorePotts `Lattice` instead for a hexagonal lattice or a domain. Built on
 CorePotts' [`contact_graph`](@ref).

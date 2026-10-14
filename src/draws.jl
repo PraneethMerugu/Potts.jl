@@ -103,7 +103,7 @@ end
 """
 The binding of `count` inside a model: `Base.count`, and the fold over a cell's contact pairs
 `count(pred for _ in contacts)` / `count(pred for _ in contacts(rel))` (D-150 G1; the macro
-routes generator folds to `_fold_iter`/`_fold_or_gather`, which recognise `contacts`).
+routes generator folds to `_fold_iter`/`_fold_or_gather`, which recognize `contacts`).
 """
 struct _Count end
 (::_Count)(args...; kws...) = count(args...; kws...)

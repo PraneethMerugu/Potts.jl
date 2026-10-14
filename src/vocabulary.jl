@@ -274,7 +274,7 @@ _lattice_dim() = (d = _build().dim) > 0 ? d :
 
 """`at(x, i...)`: `x` at an explicit site/cell (`act[target]`) or kind-table entry (`J[a, b]`)."""
 function at end
-"""`gather(n, anchor, body, cond)`: fold of `body` over relation neighbours `n` of `anchor`."""
+"""`gather(n, anchor, body, cond)`: fold of `body` over relation neighbors `n` of `anchor`."""
 function gather end
 """Lattice Laplacian of a field (zero-flux at closed boundaries)."""
 function Δ end
@@ -416,7 +416,7 @@ Symbolics.@register_symbolic _intdiv(a, b)
 # piecewise constant: zero derivative (as `floor`)
 Symbolics.@register_derivative _intdiv(a, b) I Symbolics.unwrap(Num(0))
 
-"""Neighbours of `anchor` over a relation spec, as the iterator of a gather."""
+"""Neighbors of `anchor` over a relation spec, as the iterator of a gather."""
 struct Around{R}
     relation::R
     anchor::Any
@@ -651,10 +651,10 @@ otherwise it is accepted only if
 - the shell is not full: not every shell position is in the domain and owned by `old`
   (taking the target would make a hole);
 - if `gain`: the gaining cell `new` (the medium included) owns a shell site adjacent to the
-  target: a face neighbour under `:face`, any shell site under `:full`.
+  target: a face neighbor under `:face`, any shell site under `:full`.
 
-`adjacency = :face` joins shell sites that are face neighbours (4 in 2D, 6 hex, 6 in 3D);
-`:full` joins any neighbours (8, 26). A hexagonal lattice has one adjacency: there `:full`
+`adjacency = :face` joins shell sites that are face neighbors (4 in 2D, 6 hex, 6 in 3D);
+`:full` joins any neighbors (8, 26). A hexagonal lattice has one adjacency: there `:full`
 is `:face`.
 """
 struct Local
@@ -846,9 +846,9 @@ end
 """
     shell(target)
 
-The target's neighbour shell as a relation for `pieces`, `distinct` and the other folds: the
-8 sites of the 3×3 box (square 2D), the 6 neighbours (hex), the 26 sites of the 3×3×3 box
-(3D), whatever the model's neighbourhood. Periodic axes wrap; positions off a closed face are
+The target's neighbor shell as a relation for `pieces`, `distinct` and the other folds: the
+8 sites of the 3×3 box (square 2D), the 6 neighbors (hex), the 26 sites of the 3×3×3 box
+(3D), whatever the model's neighborhood. Periodic axes wrap; positions off a closed face are
 not part of it.
 """
 struct ShellRelation end
@@ -876,7 +876,7 @@ Base.show(io::IO, ::ShellRelation) = print(io, "shell")
 
 The shell fold: the number of pieces (connected components) of the shell sites owned by `c`
 (any cell expression; `0` for the medium), or of the shell sites where `cond` holds; two
-sites are joined when they are face neighbours (`:face`) or any neighbours (`:full`).
+sites are joined when they are face neighbors (`:face`) or any neighbors (`:full`).
 `pieces(old, shell(target))` is the old `ring_arcs`/`local_components` for a cell. Only
 `shell` is a relation for `pieces` (no custom shells in v1).
 
@@ -1306,7 +1306,7 @@ end
     Dirichlet(v)
 
 A fixed value `v` of a field, in `@boundary`: on a face (`x => (Dirichlet(v), …)`) a ghost
-value, the missing neighbour set to `2v − c` so that the face value `v` is reached midway
+value, the missing neighbor set to `2v − c` so that the face value `v` is reached midway
 between the edge site and its ghost; on a site mask (`sites(pred) => Dirichlet(v)`) a node
 value, every site where `pred` holds set to `v` after every explicit substep. `v` is a
 number, a parameter or a parameter expression (a `remake` of the parameter keeps the code).
@@ -1318,7 +1318,7 @@ end
 """
     NoFlux()
 
-A zero-flux face in `@boundary` (`x => (NoFlux(), …)`): the missing neighbour mirrors the
+A zero-flux face in `@boundary` (`x => (NoFlux(), …)`): the missing neighbor mirrors the
 edge site. A closed axis without an entry is zero flux already.
 """
 struct NoFlux end
@@ -1628,7 +1628,7 @@ function convert_pass(name::Symbol, domain; from = nothing, to = nothing, at = t
     return ConvertSpec(name, d, _unwrap(from), _unwrap(to), fresh, _unwrap(at), _unwrap(p), ts, ws)
 end
 
-"""Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
+"""Names bound inside `@potts_model` bodies (the modeling vocabulary, not exported)."""
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, Local, ArcOrPair,
     Simple, connected, shell, pieces, distinct,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
