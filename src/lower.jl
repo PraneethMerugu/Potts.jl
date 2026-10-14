@@ -405,12 +405,44 @@ function _is_ref(x)
     (op === cluster_sibling || op === as_ref) && return true
     op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
     # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded), whichever
-    # branch is taken (a plain cell index such as `id` reads the same through the guard)
-    op === ifelse && return any(_is_ref, arguments(x)[2:3])
+    # branch is taken (a plain cell index such as `id` reads the same through the guard). The
+    # other branch must be a cell index too: a site index (`target`) would be read as a slot.
+    if op === ifelse
+        br = arguments(x)[2:3]
+        any(_is_ref, br) || return false
+        for b in br
+            _is_cell_index(b) || throw(ArgumentError("`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
+                "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
+                "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"))
+        end
+        return true
+    end
     if op === at
         a = _unwrap(arguments(x)[1])
         iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
         return _is_ref_var(a)
+    end
+    return false
+end
+
+# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `owner′`,
+# `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell indices, or the integer 0
+# (none). Site indices (`target`, `source`, `site`) and numbers other than 0 are not.
+const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :owner′, :cluster)
+function _is_cell_index(x)
+    x = _unwrap(x)
+    SymbolicUtils.isconst(x) && (x = SymbolicUtils.unwrap_const(x))
+    x isa Real && return !(x isa Bool) && iszero(x)
+    x isa SymbolicUtils.BasicSymbolic || return false
+    _is_ref(x) && return true
+    i = info(x)
+    i !== nothing && return i.role === :builtin && i.name in _CELL_INDEX_BUILTINS
+    iscall(x) || return false
+    op = operation(x)
+    op === ifelse && return all(_is_cell_index, arguments(x)[2:3])
+    if op === at && length(arguments(x)) == 2
+        a = info(_unwrap(arguments(x)[1]))
+        return a !== nothing && a.role === :builtin && a.name in (:owner, :cluster)
     end
     return false
 end

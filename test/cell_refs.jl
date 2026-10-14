@@ -388,3 +388,38 @@ end
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
+
+# `ifelse` with a reference in one branch reads as a reference, so its other branch must be a
+# cell index too: a site index (`target`) would be dereferenced as a cell slot (review of
+# P6.5a). Negative control: the same `ifelse` with a cell index (`old`, 0) builds and runs.
+@potts_model CRSiteBranch begin
+    @kinds medium ka
+    @variables partner(cell)::CellRef
+    @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => (volume - 6.0)^2
+    @drive copy => 0.1 * kind[ifelse(mcs > 0, partner[old], target)]
+    @sweep Metropolis(; temperature = 10.0)
+end
+@potts_model CRCellBranch begin
+    @kinds medium ka
+    @variables partner(cell)::CellRef
+    @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => (volume - 6.0)^2
+    @drive copy => 0.1 * kind[ifelse(mcs > 0, partner[old], old)] + 0.1 * volume[ifelse(mcs > 0, partner[new], 0)]
+    @sweep Metropolis(; temperature = 10.0)
+end
+
+@testset "a reference `ifelse` refuses a site-index branch" begin
+    err = try
+        mtkcompile(CRSiteBranch(; name = :sb))
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    msg = sprint(showerror, err)
+    @test occursin("the other must be a cell too", msg) && occursin("got `target`", msg)
+    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[3:5, 6:8] .= 2
+    p = PottsProblem(CRCellBranch(; name = :cb), [ownership => σ, :partner => [2, 1]], (0, 2))
+    @test Symbol(solve(p, SequentialCPM()).retcode) === :Success
+end
