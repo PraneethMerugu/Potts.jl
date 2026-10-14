@@ -4514,5 +4514,6 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The regime is now fixed at cache build by the type of `idbits`: an `Int` (index bits), or `PermutedPriority()`, chosen by `_claim_regime(maxsites)`. `_priority` dispatches on it, so the ≤ 2²⁴ specialisation has no branch.
   - Check (aarch64, Julia 1.12.6): the normalised optimised IR of `propose_body!` for GG 72² is identical to 99301437's, with the same SHA-256 and 442 lines.
   - Tests: `_claim_regime` at 2²⁴ − 1 (24 index bits), at 2²⁴, at 2³² − 1, and forced. Both regimes are reachable through `init`.
+  - Device and connectivity coverage (re-review, MEDIUM): lib/CorePotts/test/gpu.jl "permuted claim priorities on the device (D-246)" forces the regime on 60² GG, 3 seeds, and requires tracked ΔH to equal the brute-force ΔH and the volumes to recount. It runs before the ROCm no-double IR scan, so the scan sees `_fmix32` and `_claim_key` (Metal: 10/10). The CPU forced block also runs a windowed `Global` veto, the first compile of the permuted `propose_conn_body!`: tracked ΔH is exact and no cell gains pieces.
   - A scoped re-A/B (checkerboard cases, CPU and ROCm) decides.
 - **Note.** `RESERVED_STREAMS` is never read, so nothing enforces stream reservation. This predates this entry and is negligible.

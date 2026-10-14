@@ -227,6 +227,24 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
                 @test vol == u.cell.volume
             end
             @test all(i -> perm[i].u[end].σ != base[i].u[end].σ, 1:4)          # another order
+            # the connectivity variant (`propose_conn_body!`) in the permuted regime: a windowed
+            # `Global` veto keeps every cell in one piece, and the tracked ΔH stays exact
+            post(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+                CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+            fc = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}(),
+                connectivity = CorePotts.ConnectivityHooks(; post, uses_global = true))
+            cprob = PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4)
+            integ = init(cprob, CheckerboardCPM(; proposal = Moore(1)); save_start = false)
+            @test integ.cache.idbits isa CorePotts.PermutedPriority && integ.cache.conn !== nothing
+            pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), length(kinds)))
+            u0 = current_state(integ)
+            for _ in 1:15
+                step!(integ)
+            end
+            u = current_state(integ)
+            @test integ.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
+            @test all(first(CorePotts.recompute_pieces(u.σ, lat, Val(false), length(kinds))) .<= pieces0)   # no cell splits
+            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
             ratio = sum(s -> s.stats.accepted, perm) / sum(s -> s.stats.accepted, base)
             @test abs(ratio - 1) < 0.05
         finally
