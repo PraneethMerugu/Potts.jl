@@ -596,3 +596,18 @@ decision = "D-233"
 path = "acceptance/p6_5b_ownership.jl"
 sha256 = "61350592f4b96c338d76370b1c6e98f229daca505f7a7ad2729d3f85643cfe0f"
 decision = "D-233"
+
+[[file]]
+path = "acceptance/p6_5c_initial_state.jl"
+sha256 = "1b0bb39e11c288e8ad31153cdcb47e9fde19b0b5e2cb90765f45534cf7dbebae"
+decision = "D-244"
+
+[[file]]
+path = "acceptance/p6_5c_predicate_source.jl"
+sha256 = "41200996bd94fc6386f5b9c8a3b2c9c0e6754aa02c4011bee4e79013e6763cb2"
+decision = "D-244"
+
+[[file]]
+path = "acceptance/p6_5c_msd_furth.jl"
+sha256 = "70fb82189fdf273b42ecfcd45c450441a712d0fbd061a1b84ae9ca82aa04c2c7"
+decision = "D-244"

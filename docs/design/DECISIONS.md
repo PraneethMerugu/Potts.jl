@@ -4485,3 +4485,36 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
+
+## D-244 P6.5c tests frozen: initial-state vocabulary, predicate sources, MSD and Fürth fits (2026-10-14; coordinator, from the P6.5c test author; spec owner APPROVE; scope from `research/p6-5c-brief.md`; under D-048, D-231)
+- **Frozen.**
+  - `acceptance/p6_5c_initial_state.jl` (`1b0bb39e…bebae`);
+  - `acceptance/p6_5c_predicate_source.jl` (`41200996…cb2`);
+  - `acceptance/p6_5c_msd_furth.jl` (`70fb8218…c2c7`).
+- **A (initial state).**
+  - `Interior`, `Fill`, `Objects` and `Group` are exported; `set_column!` is public, not exported. There is no `Plane`, `Spheres` or `Rect`.
+  - Strict-interior membership, checked against exact site-set oracles, with the closed rule as the negative control. Clipping and domain masks are pinned.
+  - `Fill` reports and its split rule; in `Objects`, the first copy wins.
+  - `Group` cluster columns; today's two-entry output stays byte-identical.
+  - `set_column!` labels and Q-5 (read literally: a surviving cell from any layer without a value for a user column is an ArgumentError). `cluster` comes before user columns.
+  - Fortuna geometry: R = 10 gives a strict ball of 4139, cytoplasm 3923 and nucleus 216; the closed-rule control gives 4169 and 3951. R = 15 gives 13997 and 13781. r₀ = 14.012856 gives 11512.
+- **B (predicate source).**
+  - Exact gating 1 − 0.5ⁿ, and diffusion bitwise equal to a 7-point oracle.
+  - Negative controls; the Fortuna values; phase order.
+  - Device bitwise equality with zero transfers.
+  - Field-free fingerprint `0x60348d185b44bfb6`.
+  - This part already passes on CPU and Metal; only the docs paragraph and a ROCm run are missing.
+- **C (MSD and Fürth).**
+  - `unwrap_track`, and `msd` by hand (overlapping windows).
+  - Eq. 1 and Eq. 2 identities. The `:paper` fit is the default; `:lsq` is the alternative.
+  - Limit cases; an OU + Brownian oracle at seed 14 (all 16 calibration seeds pass).
+  - Shuffled control: a flat MSD within 1%, plus a miss on the `:lsq` targets (the brief's "P < 2" held on only 9 of 16 seeds).
+  - S = 0 control: tight for `:lsq`; `:paper` must only come out below the S = 0.1 fit.
+  - Ballistic `:paper` accepts either outcome.
+- **Spec-owner change before freeze.** The docs regexes for the Plane recipe (any one-layer z-slab `Fill`) and for the equations.md predicate (any `kind[n] ==` inside an `any(… for n in …)`) are loosened. The table-row and `Objects(Interior(Sphere(` checks stay.
+- **Dependency.** PottsModels gains LinearAlgebra (a stdlib).
+- **Carried to P6.5d.** On the S = 0 synthetic, `:paper` reached |S| = 0.058, but Fortuna's headline is S = 0.02 (14a p.2809). The P6.5d tests must:
+  - check S with both `:paper` and `:lsq`;
+  - size the replicates so the S standard error is well below 0.02;
+  - add a synthetic oracle at S = 0.02 on Fortuna's sampling.
+- **Not tested.** Thread-count independence of layouts (host-side; determinism only).

@@ -968,7 +968,8 @@ end
     for n in ("Fill", "Objects", "Group")
         @test occursin(Regex("^\\|\\s*`$(n)", "m"), md)           # DEFECT CHECK: a row of the built-in-layers table
     end
-    @test occursin(r"Fill\(:\w+; region = \(1:L, 1:L, Lz:Lz\)\)", md)   # the Plane recipe
+    # the Plane recipe: any `Fill` whose region is a one-layer z slab (spec owner, D-244)
+    @test occursin(r"Fill\(:\w+;[^\n]*region\s*=\s*\([^()\n]+,[^()\n]+,\s*([\w+\-]+):\1\s*\)", md)
     @test occursin("Objects(Interior(Sphere(", md)               # the Spheres recipe
     @test occursin("Group(", md)                                 # the compartment example
 end

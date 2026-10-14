@@ -411,5 +411,6 @@ end
 @testset "P6.5c predicate source: the equations manual shows a source on a site predicate" begin
     md = read(joinpath(@__DIR__, "..", "..", "..", "..", "docs", "src", "manual", "equations.md"), String)
     @test occursin("@equations", md)                             # control: the page exists
-    @test occursin(r"any\(kind\[n\] == \w+ for n in VonNeumann\(1\)\(site\)\)", md)   # DEFECT CHECK
+    # any `kind[n] ==` test in an `any(… for n in …)` neighbourhood comprehension (D-244)
+    @test occursin(r"any\([^\n]*kind\[n\]\s*==\s*\w+[^\n]*\bfor\s+n\s+in\s+[^\n]+\)", md)   # DEFECT CHECK
 end
