@@ -1,6 +1,7 @@
 # P6.5a2 (ROADMAP Phase 6, step 5; D-231 follow-ups, before P6.5d): E2 named pairs and the
 # E7 geometry helpers `centroid(c, k)`, `minimum_image`, `separation` and
-# `cluster_integral`. Frozen (AUTONOMY §7.3).
+# `integral(x; over = cluster)` (D-243 amendment; the ROADMAP's `cluster_integral`).
+# Frozen (AUTONOMY §7.3).
 # Decisions and sources: D-231 "Scope" (`centroid(c, k)`, `separation`, `minimum_image` go
 # to P6.5a2 with their own tests), D-075 / api-synthesis §2.6–2.7 and §6.4 (the reference
 # vocabulary and the geometry helpers), D-066 item 5 (a dead referent reads as the medium),
@@ -66,14 +67,16 @@
 #    periodic hexagonal lattice it is the embedded nearest image on the rhombic torus
 #    (the one `CorePotts.centroid_distance` measures), not the per-axis wrap of embedded
 #    coordinates. Pinned for two alive referents only.
-# E. `cluster_integral(x)`: the sum of the site expression `x` over every site of every
+# E. `integral(x; over = cluster)` (D-243 amendment; was `cluster_integral(x)`): the sum of
+#    the site expression `x` over every site of every
 #    alive member of the current cell's cluster (each site weight 1; divide by the
 #    cluster's volume for the mean). The same value for every member. For a cell that is
-#    its own cluster it equals `integral(x)`. Cell scope like `integral` (updates,
+#    its own cluster it equals plain `integral(x)`, which stays the cell sum. Cell scope like `integral` (updates,
 #    `@observed`); refused in `@energy` with an ArgumentError (as `integral` is: no ΔH).
 #    The integrand is in site scope (spec-owner ruling, 2026-10-14): `kind` and `volume`
 #    inside `x` bind to the site's owner, the member cell the site belongs to, so
-#    `cluster_integral(volume)` = Σ_members V_m², not (Σ V_m)·V_current.
+#    `integral(volume; over = cluster)` = Σ_members V_m², not (Σ V_m)·V_current. An unknown
+#    `over =` value, and `over = cluster` outside a cell or cluster context, are refused.
 # F. Cost. A model that uses these helpers only outside the sweep keeps
 #    `CorePotts.has_reads(prob.f) == false` (D-058, D-231 item 4).
 #
@@ -82,7 +85,8 @@
 # compiles (the OpenVT model uses `kind′ == medium`) and is not re-pinned here.
 #
 # Open choices (the test author's conservative readings, flagged for the spec owner):
-#   O1 (ruled) `cluster_integral` is the pinned name (ROADMAP row, review E7). The fold
+#   O1 (ruled; superseded 2026-10-14 by the maintainer) the spelling is `integral(x; over =
+#      cluster)`, a scope argument on the existing `integral`, not a new name. The fold
 #      `sum(x for s in sites(cluster))` of api-synthesis §2.1/§6.3 comes later as an
 #      equivalent spelling; it is not pinned here.
 #   O2 (ruled) Ties: at d = ±L/2 the sign of `minimum_image` is free, the magnitude is
@@ -103,17 +107,17 @@
 #   O8 `centroid(c)` (one argument, a vector) is not pinned: it would clash with
 #      `centroid(k)`, the current cell's axis k.
 #   O9 `Pairs` value types: a mixed Int/Float/parameter list is pinned; class keys are not.
-#   R1 (ruling) The binding inside `cluster_integral(x)`: site scope, the owner's `kind` and
-#      `volume` (section 3, "cluster_integral sums over the cluster's sites").
+#   R1 (ruling) The binding inside `integral(x; over = cluster)`: site scope, the owner's `kind` and
+#      `volume` (section 3, "integral(x; over = cluster) sums over the cluster's sites").
 #
 # Sections: 1 the fixtures build; 2 named pairs (E2); 3 centroid(c, k), minimum_image,
-# separation and cluster_integral by hand (square, periodic × closed); 4 dead referents;
+# separation and integral(x; over = cluster) by hand (square, periodic × closed); 4 dead referents;
 # 5 after-MCS writes against `@observed` and an independent oracle after a short run; 6
 # minimum_image in a drive and an energy, bitwise against an explicit-wrap twin; 7 the
 # hexagonal torus; 8 refusals and axis errors (negative controls); 9 cost; 10 device.
 #
 # Today (freeze base 588ad407) every assertion that reads a new name fails (marked DEFECT
-# CHECK): `Pairs`, `minimum_image`, `separation` and `cluster_integral` are undefined and
+# CHECK): `Pairs`, `minimum_image` and `separation` are undefined, `integral` has no `over` keyword, and
 # `centroid` has no two-argument method, so the fixtures that use them do not build. The
 # explicit-wrap twins, the matrix twins, the hand oracles' own checks and the existing
 # refusals pass (marked CONTROL). On the freeze base (Apple M-series): 22 pass, 16 fail,
@@ -287,7 +291,7 @@ p65a2_define(:P65a2Refs, quote
             wcx ~ centroid(sibling(nucleus), 1)
             wmi ~ minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1)
             wsn ~ norm(separation(sibling(cytoplasm), sibling(nucleus)))
-            wci ~ cluster_integral(F)
+            wci ~ integral(F; over = cluster)
         end
         @observed begin
             own1(cell) ~ centroid(1)
@@ -308,9 +312,9 @@ p65a2_define(:P65a2Refs, quote
             scy(cell) ~ separation(sibling(cytoplasm), sibling(nucleus))[2]
             sncx(cell) ~ separation(sibling(nucleus), sibling(cytoplasm))[1]
             scn(cell) ~ norm(separation(sibling(cytoplasm), sibling(nucleus)))
-            ci(cell) ~ cluster_integral(F)
-            civ(cell) ~ cluster_integral(G)
-            cvol(cell) ~ cluster_integral(volume)
+            ci(cell) ~ integral(F; over = cluster)
+            civ(cell) ~ integral(G; over = cluster)
+            cvol(cell) ~ integral(volume; over = cluster)
             own_int(cell) ~ integral(F)
             Πx(cell) ~ volume * minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1) /
                        (volume + volume[sibling(nucleus)])
@@ -537,7 +541,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# 3. centroid(c, k), minimum_image, separation, cluster_integral: hand values
+# 3. centroid(c, k), minimum_image, separation, integral(x; over = cluster): hand values
 
 @testset "P6.5a2: the hand oracles' own checks" begin
     # CONTROL (passes today): the independent oracles reproduce the hand values
@@ -597,7 +601,7 @@ end
     @test observe(prob, :scn, u)[[1, 4]] ≈ [sqrt(9.25), sqrt(4.25)] atol = 1e-12
 end
 
-@testset "P6.5a2: cluster_integral sums over the cluster's sites" begin
+@testset "P6.5a2: integral(x; over = cluster) sums over the cluster's sites" begin
     prob = p65a2_refs_problem()                                  # DEFECT CHECK (the whole testset)
     u = prob.u0
     @test observe(prob, :ci, u)[1:6] == [7457.0, 7457.0, 7457.0, 9903.0, 9903.0, 658.0]
@@ -612,8 +616,26 @@ end
     @test cv[1:3] == [161.0, 161.0, 161.0] && cv[6] == 16.0
     oi = observe(prob, :own_int, u)
     @test oi[1:6] == [4926.0, 1414.0, 1117.0, 8181.0, 1722.0, 658.0]           # integral(F), per cell
-    @test observe(prob, :ci, u)[6] == oi[6]                      # a lone cell: cluster_integral = integral
+    @test observe(prob, :ci, u)[6] == oi[6]                      # a lone cell: the cluster sum = integral
     @test observe(prob, :ci, u)[1] == oi[1] + oi[2] + oi[3]      # the members' integrals add up
+    # plain `integral(x)` stays the cell sum (D-243 amendment): cell 1's own sites only,
+    # not the cluster's (7457)
+    @test oi[1] == 4926.0 && oi[1] != 7457.0
+end
+
+@testset "P6.5a2: integral(x; over = …) refusals" begin
+    op = p65a2_bad_op
+    # an unknown `over =` value
+    eo = p65a2_build_error(:P65a2BadOver, p65a2_bad_expr(:P65a2BadOver; update = :(w ~ integral(F; over = lattice))), op)
+    @test eo isa ArgumentError                                   # DEFECT CHECK
+    @test occursin("over", p65a2_msg(eo))
+    # `over = cluster` outside a cell or cluster context (a site-scope update)
+    es = p65a2_build_error(:P65a2BadOverSite, p65a2_bad_expr(:P65a2BadOverSite; update = :(F ~ integral(F; over = cluster))), op)
+    @test es isa ArgumentError                                   # DEFECT CHECK
+    @test occursin("integral", p65a2_msg(es))
+    # CONTROL (DEFECT CHECK today): `over = cluster` in a cell-scope update builds
+    eok = p65a2_build_error(:P65a2OkOver, p65a2_bad_expr(:P65a2OkOver; update = :(w ~ integral(F; over = cluster))), op)
+    @test eok === nothing                                        # DEFECT CHECK
 end
 
 @testset "P6.5a2: the Π_CN−N polarization of 14b Eq 10 from the helpers" begin
@@ -730,15 +752,15 @@ end
     @test e00 isa ArgumentError && occursin("centroid", p65a2_msg(e00))
     # CONTROL (DEFECT CHECK today): the template itself builds with the helpers in an update
     eok = p65a2_build_error(:P65a2BadNone, p65a2_bad_expr(:P65a2BadNone;
-            update = :(w ~ centroid(sibling(nucleus), 1) + minimum_image(dd, 1) + cluster_integral(F))), op)
+            update = :(w ~ centroid(sibling(nucleus), 1) + minimum_image(dd, 1) + integral(F; over = cluster))), op)
     @test eok === nothing                                        # DEFECT CHECK
     # centroid(c, k) in an energy (no ΔH; D-032 until R7, open O5)
     e1 = p65a2_build_error(:P65a2BadCE, p65a2_bad_expr(:P65a2BadCE;
             energy = :((volume - 9.0)^2 + centroid(sibling(nucleus), 1))), op)
     @test e1 isa ArgumentError                                   # DEFECT CHECK
     @test occursin("centroid", p65a2_msg(e1))
-    # cluster_integral in an energy (refreshed once per MCS: no ΔH, as integral)
-    e2 = p65a2_build_error(:P65a2BadCI, p65a2_bad_expr(:P65a2BadCI; energy = :((volume - 9.0)^2 + cluster_integral(F))), op)
+    # integral(x; over = cluster) in an energy (refreshed once per MCS: no ΔH, as integral)
+    e2 = p65a2_build_error(:P65a2BadCI, p65a2_bad_expr(:P65a2BadCI; energy = :((volume - 9.0)^2 + integral(F; over = cluster))), op)
     @test e2 isa ArgumentError                                   # DEFECT CHECK
     @test occursin("integral", p65a2_msg(e2))
     # axes: not an axis of the 2D lattice, and not a literal
@@ -770,7 +792,7 @@ end
     if isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()
         backend = Main.PottsDevices.device_backend()
         alg = CheckerboardCPM(; proposal = Moore(1))
-        # after-MCS writes of centroid(c, k), minimum_image, separation, cluster_integral
+        # after-MCS writes of centroid(c, k), minimum_image, separation, integral(x; over = cluster)
         prob = p65a2_refs_problem(; tspan = (0, 4), seed = 3, T = Float32)
         sol = solve(prob, alg; backend, saveat = 1)
         @test Symbol(sol.retcode) === :Success
