@@ -31,7 +31,7 @@ sketch `model-specs/sketches/14_nucleus_migration.md`, both with the audit rulin
 | B. Predicate-sourced PDE (R5) | Nothing new to write: the form already compiles and runs on the CPU **[probe]**. P6.5c pins it with acceptance tests (CPU and device) and documents it. It fixes whatever the device run shows broken | none | Only if the device test fails |
 | C. Analysis (R16) | `unwrap_track`, `msd`, `furth_fit` (S, D, P, D_fast, D_slow, v_eff), `furth_msd`, `natural_units` in `PottsModels.Analysis` | 5 functions in `PottsModels.Analysis` | No |
 
-Deferred: the E7 helpers (`centroid(c, k)`, `minimum_image`, `cluster_integral`), which D-231
+Deferred: the E7 helpers (`centroid(c, k)`, `minimum_image`, and the cluster sum `integral(x; over = cluster)`, formerly `cluster_integral`), which D-231
 already assigned to a "P6.5a2" row that ROADMAP does not yet contain (§2, Q-3). Also every
 item in §5.
 
@@ -216,11 +216,11 @@ polarization Π. See §5.
     "paper over code" and D-200.
   - `:lsq` is the documented cross-check, and the P6.5d page reports both.
   - Alternative: make `method` a required keyword.
-- **Q-3. The E7 helpers** (`centroid(c, k)`, `minimum_image`, `cluster_integral`). D-231
+- **Q-3. The E7 helpers** (`centroid(c, k)`, `minimum_image`, and the cluster sum, now `integral(x; over = cluster)`). D-231
   "Scope" assigns `centroid(c, k)`, `separation` and `minimum_image` to **P6.5a2**, but
   ROADMAP has no P6.5a2 row. The ergonomics review E7 says "P6.5b if small, else P6.5c".
   - **Recommendation:** file P6.5a2 now as a separate item before P6.5d, with
-    `cluster_integral` for P6.7b.
+    `cluster_integral` for P6.7b. **Resolved 2026-10-14:** the P6.5a2 row is filed, and its tests pin the cluster sum (site scope). **Renamed 2026-10-14 (maintainer):** the cluster sum is spelled `integral(x; over = cluster)`, with plain `integral(x)` staying the cell sum; D-243 is amended and the section re-frozen. It lands before P6.5d.
   - Its write set (`src/vocabulary.jl`, codegen of cell-scope reads) is disjoint from
     P6.5c's, so the two run in parallel.
   - Not in this brief.
@@ -792,7 +792,7 @@ formula, not the table.
 
 | Item | Where | Why |
 |---|---|---|
-| `centroid(c, k)`, `minimum_image`, `separation`, `cluster_integral` (ergonomics E7) | **P6.5a2** (D-231 "Scope"; row to be filed, Q-3), before P6.5d. `cluster_integral` by P6.7b | DSL/codegen, a disjoint write set |
+| `centroid(c, k)`, `minimum_image`, `separation`, `integral(x; over = cluster)` (ergonomics E7; formerly `cluster_integral`) | **P6.5a2** (D-243, amended 2026-10-14), before P6.5d. The `sites(cluster)` fold later | DSL/codegen, a disjoint write set |
 | Π_CN−N polarization (14b Eq 10), the lamellipodium–nucleus distance (14a Fig 12), `dcm_F_CN` | P6.5d page code on P6.5a2 helpers | model observables |
 | ψ_δ / velocity autocorrelation (14a Eqs 8–10; B6's overlap with MDA-MB-231) | P6.5d page, or an R16 follow-up | not in the ROADMAP row |
 | Four-regime MSD fit (14c Eq. 17), drift V_d, θ histograms | P6.7b | 14c |

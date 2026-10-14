@@ -147,8 +147,8 @@ ens  = EnsembleProblem(prob; trajectories = 5)                       # Fig 5 rep
                  (V_target + volume[sibling(lamellipodium)] + volume[sibling(nucleus)])  # SS:107 (CELLvol)
         φ_sum ~ Pre(φ_sum) + φ_frac - Pre(φ_frac, 100)                                   # [R12]
         φ_EST ~ ifelse(mcs < 100, φ_F, φ_sum / 100)                                      # SS:41, 110–114
-        Q̄  ~ cluster_integral(Q * base_site) / cluster_integral(base_site)               # [NEW]
-        σQ ~ sqrt(cluster_integral(Q^2 * base_site) / cluster_integral(base_site) - Q̄^2)
+        Q̄  ~ integral(Q * base_site; over = cluster) / integral(base_site; over = cluster)               # [NEW]
+        σQ ~ sqrt(integral(Q^2 * base_site; over = cluster) / integral(base_site; over = cluster) - Q̄^2)
     end
     @convert protrusion clusters(cytoplasm) begin     # replaces the base rule by name     # [R8] [NEW]
         from  = sibling(cytoplasm); to = sibling(lamellipodium); order = Shuffled()
@@ -171,7 +171,7 @@ Proposed syntax used above:
 - **`centroid(c, k)`** [NEW]. Coordinate `k` of cell `c`'s centroid, as the cell-first
   counterpart of `displacement(c, k)`.
 - **`minimum_image(d, axis)`** [NEW]. A wrapped coordinate difference on periodic axes.
-- **`cluster_integral(x)`** [NEW]. `integral` summed over the members of a cluster.
+- **`integral(x; over = cluster)`** (P6.5a2, D-243; formerly `cluster_integral`). `integral` summed over the alive members of a cluster, with the integrand in site scope.
 - **`Shuffled()`** [NEW]. A visiting order for sequential host passes, drawn from the
   addressed RNG.
 
@@ -235,7 +235,7 @@ Proposed syntax used above:
 | `created` flag and `order = Shuffled()` in a host pass | **NEW** |
 | `centroid(c, k)` (cell-first) | **NEW** |
 | `minimum_image(d, axis)` | **NEW** (AUTHORING §12.2 mentions "a wrapped difference" but gives no primitive) |
-| `cluster_integral(x)` | **NEW** (R15 lists "rim reductions", not cluster reductions) |
+| `integral(x; over = cluster)` (formerly `cluster_integral`) | **P6.5a2 (D-243)** (R15 lists "rim reductions", not cluster reductions) |
 | replacing a base equation by an update in an `@extend` (`F(field)` → `F(site)`) | **NEW** |
 | `@extend` binding a model-body helper function (`touches_substrate`) | **NEW** |
 | layout helper to set `cluster` | **NEW** |
@@ -301,7 +301,7 @@ Proposed syntax used above:
    write it:
    - `sum(integral(x)[m] for m in members(cluster))`, which needs `integral` at a
      reference (neither R6 nor §12.3 has it);
-   - a `cluster_integral(x)` next to `cluster_volume` (NEW).
+   - `integral(x; over = cluster)` next to `cluster_volume` (P6.5a2, D-243).
 
    The same applies to CELLvol-style sums, which I wrote here as `members` folds.
 7. **A site-scope expression that reads the owner's sibling.** `Q` is a site expression

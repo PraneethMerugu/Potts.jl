@@ -113,7 +113,7 @@ Fortuna never hits this case; myxobacteria (13) and multi-nucleus variants would
 ### E7. Helpers the 14 sketch needs (medium)
 - `centroid(c, k)` (another cell's centroid), for polarization Π and the 14c Q statistics.
 - `minimum_image(d, axis)`, for wrapped differences on periodic axes.
-- `cluster_integral(x)`, for 14c's base statistics.
+- `cluster_integral(x)`, for 14c's base statistics. **Renamed 2026-10-14 (maintainer):** `integral(x; over = cluster)`.
 
 Without them, the 14b/14c observables need host code. All three are cell-scope reads with no sweep-time cost. They land with P6.5b if they're small; otherwise they become P6.5c rows, but they must be in place before P6.5d.
 
