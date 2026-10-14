@@ -108,7 +108,7 @@ akeeb_observables(sol.u[end])
 
 # To scan, `remake` the problem with a contact table and a chemotaxis strength, for
 # example `remake(prob; p = [:J => akeeb_contacts(-2.0), :μ => 15.0])` for the bulk point
-# of the paper's Fig. 4, and set PP with `akeeb_state(; pp)`.
+# P4 (the paper's named bulk point, p.11), and set PP with `akeeb_state(; pp)`.
 #
 # ## 3. Results
 #
@@ -187,7 +187,8 @@ nothing #hide
 #
 # ### The full-run videos
 #
-# Replicate 1 at each phenotype point of the paper's Fig. 4, 500 × 300, 701 MCS, every 10
+# Replicate 1 at each of our phenotype points (P4 is the paper's named bulk point, p.11; P1 is
+# the authors' sample run; P5 and P6 are our on-grid choices), 500 × 300, 701 MCS, every 10
 # MCS. Leaders are red and followers green, coloured by type on a white matrix, without
 # cell outlines. P6 is the failing point.
 #
@@ -384,7 +385,7 @@ Markdown.parse("""
 | lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, Table 1; X:14, X:18–19 | stated (y wall: code only) |
 | T | $(par(:T)) | energy | temperature | Table 1; X:16 | stated |
 | `J_ML`, `J_MF` | $(J[1, 2]), $(J[1, 3]) | energy | medium–leader, medium–follower | Table 1; X:53, X:56 | stated |
-| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | Table 1; X:55, X:57 | stated |
+| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | Table 1; X:57, X:55 | stated |
 | J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | p.6, Table 1; S:37 | stated |
 | λ_V | $(par(:λᵥ)) | energy / site² | volume constraint | p.6, Table 1; S:88 | stated |
 | V_T (start) | 10 | sites | target volume | p.6, Table 1; S:87 | stated |
@@ -422,7 +423,7 @@ Markdown.parse("One run, 500 × 300, 701 MCS, `SequentialCPM`: " *
                "**$(round(t_one; digits = 1)) s** on $MACHINE ($(sol_one.stats.lifecycle.divisions) divisions).")
 
 # The scan is ordinary parameter `remake`: a contact table and a chemotaxis strength per
-# point. The bulk point (−2, 15, 0.5) of the paper's Fig. 4, and the variant seeding that
+# point. The bulk point P4 (−2, 15, 0.5), named in the paper (p.11), and the variant seeding that
 # paints the full 390 leaders:
 
 prob_bulk = remake(base; p = [:J => akeeb_contacts(-2.0), :μ => 15.0])
@@ -619,7 +620,8 @@ Legend(fig[3, 1:3], [MarkerElement(; marker = :diamond, color = :gray), MarkerEl
     ["authors (B; A at 700)", "ours, n = $(length(runs[:P1]))"]; orientation = :horizontal, framevisible = false)
 fig
 
-# Replicate 1 at each phenotype point of the paper's Fig. 4 (V-A10, not gating): the
+# Replicate 1 at each of our phenotype points (V-A10, not gating; only P4 is a named paper
+# point, p.11): the
 # multimodal reference P1, bulk P4, single-cell P5 and no invasion P6, every 10 MCS.
 # Leaders red, followers green, medium white, no cell outlines (D-156). Each video
 # re-solves its point's replicate 1 with dense saves; saving does not change a run, which
