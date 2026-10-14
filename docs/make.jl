@@ -169,6 +169,7 @@ manual = [
     "manual/kinds.md",
     "manual/parameters.md",
     "manual/variables.md",
+    "manual/references.md",
     "manual/lattice.md",
     "manual/energy.md",
     "manual/drive.md",

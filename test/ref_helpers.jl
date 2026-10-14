@@ -348,3 +348,95 @@ end
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
+
+# --- review regressions (P6.5a2) -----------------------------------------------------------
+# A model whose only cluster read is `integral(x; over = cluster)` keeps the cluster column:
+# with `cluster => [1, 1]` both cells read V₁² + V₂² = 4² + 2² = 20; without it each cell is its
+# own cluster (16, 4). The energy holds the volumes (λ = 10⁶, T = 0.01).
+@potts_model RHOverOnly begin
+    @kinds medium ka
+    @variables a1(cell) = 0.0
+    @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => 1.0e6 * (volume - ifelse(id == 1, 4.0, 2.0))^2
+    @after_mcs a1 ~ integral(volume; over = cluster)
+    @sweep Metropolis(; temperature = 0.01)
+end
+function rh_over_sigma()
+    σ = zeros(Int32, 10, 10)
+    σ[2:3, 2:3] .= 1
+    σ[7, 7:8] .= 2
+    return σ
+end
+
+@testset "integral(x; over = cluster) as a model's only cluster read" begin
+    p = PottsProblem(RHOverOnly(; name = :o), [ownership => rh_over_sigma(), kind => [:ka, :ka], cluster => [1, 1]], (0, 1))
+    @test hasproperty(p.u0.cell, :cluster)
+    @test Array(solve(p, SequentialCPM()).u[end].cell.a1)[1:2] == [20.0, 20.0]
+    q = PottsProblem(RHOverOnly(; name = :o), [ownership => rh_over_sigma(), kind => [:ka, :ka]], (0, 1))
+    @test Array(solve(q, SequentialCPM()).u[end].cell.a1)[1:2] == [16.0, 4.0]     # control: one cluster each
+end
+
+@testset "_over_cluster: a dead or out-of-range slot reads 0 (D-066)" begin
+    cell = (; volume = Int32[2, 0, 1, 3], cluster = Int32[1, 1, 1, 4])
+    col = [1.0, 5.0, 2.0, 7.0]
+    @test Potts._over_cluster(cell, col, 1) == 3.0              # alive members 1 and 3; dead 2 left out
+    @test Potts._over_cluster(cell, col, 3) == 3.0
+    @test Potts._over_cluster(cell, col, 2) == 0.0              # dead slot: 0, not its cluster's total
+    @test Potts._over_cluster(cell, col, 0) == 0.0 && Potts._over_cluster(cell, col, 5) == 0.0
+    @test Potts._over_cluster((; volume = Int32[2, 0]), [1.5, 9.0], 1) == 1.5   # no clusters: the cell's own
+end
+
+# axis and hexagonal refusals in every context: @convert `at`, `p` and writes, the sweep
+# temperature (each built to the problem, so a refusal at either stage counts)
+function rh_ctx_error(body; lattice = :(Lattice((10, 10); boundary = Periodic(), neighborhood = Moore(1))),
+        temperature = :(1.0), clusters = true)
+    name = gensym(:RHCtx)
+    e = rh_bad(:(@potts_model $name begin
+        @kinds medium ka kb
+        @variables begin
+            F(site) = 1.0
+            n(model) = 0.0
+        end
+        @lattice $lattice
+        @energy cells => (volume - 4.0)^2
+        $(body.args...)
+        @sweep Metropolis(; temperature = $temperature)
+    end))
+    e === nothing || return e
+    σ = zeros(Int32, 10, 10)
+    σ[2:3, 2:3] .= 1
+    try
+        sys = Base.invokelatest(getfield(@__MODULE__, name); name = :c)
+        op = Any[ownership => σ, kind => [:ka]]
+        clusters && push!(op, cluster => [1])
+        prob = Base.invokelatest(PottsProblem, sys, op, (0, 1); capacity = 3)
+        Base.invokelatest(solve, prob, SequentialCPM())
+        return nothing
+    catch e
+        return e isa LoadError ? e.error : e
+    end
+end
+rh_msg(e, s) = e isa ArgumentError && occursin(s, sprint(showerror, e))
+rh_conv(at, p; w = :(n += 1)) = quote
+    @convert cv clusters(ka) begin
+        to = sibling(kb)
+        at = $at
+        p = $p
+        $w
+    end
+end
+const RH_HEX10 = :(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1)))
+
+@testset "E7 helper axes and the hexagonal refusal in every context" begin
+    @test rh_ctx_error(rh_conv(:(minimum_image(position[1] - 3.0, 1) > -100.0), :(0.0))) === nothing     # control
+    @test rh_msg(rh_ctx_error(rh_conv(:(minimum_image(position[1] - 3.0, 3) > -100.0), :(0.0))), "minimum_image")
+    @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(minimum_image(position[1], 3) > 0, 1.0, 0.0)))), "minimum_image")
+    @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(0.0); w = :(n += minimum_image(1.0, 3)))), "minimum_image")
+    @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(centroid(from, 3) > 0, 1.0, 0.0)))), "centroid")
+    @test rh_msg(rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(minimum_image(position[1], 1) > 100, 1.0, 0.0)));
+        lattice = RH_HEX10), "minimum_image")
+    @test rh_ctx_error(rh_conv(:(F > 0.5), :(ifelse(separation(from, from)[1] > 100, 1.0, 0.0))); lattice = RH_HEX10) ===
+          nothing                                                                               # control: separation on hex
+    @test rh_msg(rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 3)), clusters = false), "minimum_image")
+    @test rh_ctx_error(quote end; temperature = :(1.0 + 0.001 * minimum_image(1.0, 1)), clusters = false) === nothing   # control
+end

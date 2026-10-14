@@ -178,6 +178,9 @@ These names are always available where they make sense:
 | `euler`, `euler(; adjacency = :full)` | Euler characteristic of the cell (see [below](@ref "Euler characteristic")) | cell; `euler[c]`, `euler(c; adjacency)` in drives |
 | `centroid(k)` | coordinate `k` of the centroid | cell (not energies) |
 | `integral(x)` | sum of the site expression `x` over the cell's sites | cell (not energies, drives, constraints or on-copy updates) |
+| `integral(x; over = cluster)` | sum of the site expression `x` over the sites of the cell's compartment cluster (its alive members); `volume`, `kind` in `x` are each site's owner's | as `integral(x)` |
+| `centroid(c, k)`, `separation(a, b)` | another cell's centroid; the minimum-image centroid difference (see [Cell references](@ref manual-references)) | between sweeps (not energies, drives, constraints or on-copy updates) |
+| `minimum_image(d, k)` | `d` wrapped to the image nearest 0 on axis `k` | everywhere (square lattices) |
 | `owner`, `kind`, `position` | owner, its kind, coordinates (`position[1]`) of a site | site |
 | `kind′`, `owner′`, `weight` | the other side of a contact pair, the relation weight | contacts |
 | `source`, `target`, `new`, `old` | the sites and cells of a copy | drives, constraints, on-copy |

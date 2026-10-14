@@ -177,6 +177,7 @@ function lower(x, env::LowerEnv)
     end
     if op === axis_minimum_image
         k = _literal_axis("minimum_image", args[2])
+        _PIECES_HEX[] && throw(ArgumentError(_HEX_MINIMUM_IMAGE))
         return :(Potts._minimum_image_axis($(env.T), ctx.lattice, $(lower(args[1], env)), $k))
     end
     if op === history_lag
@@ -345,15 +346,20 @@ function _history_depths(xs::Vector{Any})
     return depths
 end
 
-# the axis `k` of a geometry helper: a literal integer (the range is checked against the
-# lattice by `_check_geometry`)
+# the axis `k` of a geometry helper: a literal integer, and an axis of the lattice of the
+# model being generated (`_check_geometry` refuses it when the model is built; this guards
+# every context that check may not reach, so no kernel indexes past the lattice's axes)
 function _literal_axis(name, x)
     k = _unwrap(x)
     k isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
     (k isa Real && !(k isa Bool) && isinteger(k)) ||
         throw(ArgumentError("`$name`: the axis is a literal axis of the lattice (1, 2, …); got `$x`"))
+    N = length(_LATTICE_DIMS[])
+    N == 0 || 1 <= k <= N || throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
     return Int(k)
 end
+const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a displacement on a hexagonal lattice " *
+                           "(the nearest image may be a diagonal one); use `separation(a, b)`"
 
 """Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
 periodic axes wrapped); 0 when `r` is 0, out of range or dead (D-066)."""
@@ -379,14 +385,15 @@ a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
 end
 
 """Column `col` (an integral) summed over the alive members of cell `c`'s compartment
-cluster (`c` alone in a model without clusters); 0 for the medium."""
+cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot (D-066)."""
+# O(capacity) per cell, so O(capacity²) per refresh; member lists could replace the scan.
 @inline function _over_cluster(cell, col, c)
     s = zero(eltype(col))
-    c == 0 && return s
-    haskey(cell, :cluster) || return @inbounds col[c]
-    cl = @inbounds cell.cluster[c]
-    for m in 1:length(col)          # `col` and the cell columns have one entry per slot
-        (@inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl) && (s += @inbounds col[m])
+    _alive_slot(cell.volume, c) || return s           # (also checks 0 < c ≤ capacity)
+    haskey(cell, :cluster) || return col[c]
+    cl = cell.cluster[c]
+    for m in eachindex(col)
+        (cell.volume[m] > 0 && cell.cluster[m] == cl) && (s += col[m])
     end
     return s
 end
