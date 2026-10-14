@@ -390,6 +390,7 @@ end
     bad(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? CorePotts.transitioning(EVENT_REMOVE) : EVENT_NONE
     good(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? CorePotts.transitioning(EVENT_DIVIDE) : EVENT_NONE
     kind = (st, p, ctx, key, mcs, c) -> Int32(3 - st.cell.kind[c])
+    prev = CorePotts._FORCE_DEVICE_LIFECYCLE[]         # this file also runs under the forced planner
     for force in (false, true)
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
         try
@@ -403,7 +404,7 @@ end
             u = run_lifecycle(σ, kinds, lat, Lifecycle(good; kind); tspan = (0, 2), alg = CheckerboardCPM()).u[end]
             @test count(>(0), u.cell.volume) == length(kinds) + 1 && u.cell.kind[1] == 3 - kinds[1]
         finally
-            CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = prev
         end
     end
 end
