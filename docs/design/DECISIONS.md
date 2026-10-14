@@ -4520,3 +4520,4 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The cluster section is re-frozen under that spelling with the same hand values. Re-frozen sha256 `1539aabf…2d64`.
   - New pins: plain `integral(x)` stays the cell sum; an unknown `over =` value is refused; `over = cluster` in a site-scope update is refused; a positive control shows cell-scope use builds.
   - Other sections are unchanged. The fold `sum(x for s in sites(cluster))` can still come later as the explicit form.
+- **Fix (2026-10-14, user OK).** `p65a2_build_error` passed the operating-point function `op` to `PottsProblem` instead of `op(sys)`, as its own comment states, so the three positive controls (e5, the `over = cluster` control and section 8's `eok`) could never pass. The refusals were unaffected. One-line fix; re-frozen sha256 `65d781a8…84e2`.

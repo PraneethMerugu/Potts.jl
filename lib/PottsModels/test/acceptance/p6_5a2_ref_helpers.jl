@@ -155,7 +155,7 @@ function p65a2_build_error(name::Symbol, ex::Expr, op)
     try
         Core.eval(@__MODULE__, ex)
         sys = Base.invokelatest(getfield(@__MODULE__, name); name = :bad)
-        Base.invokelatest(PottsProblem, sys, op, (0, 1))
+        Base.invokelatest(PottsProblem, sys, op(sys), (0, 1))
         return nothing
     catch e
         return e isa LoadError ? e.error : e
