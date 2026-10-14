@@ -68,6 +68,8 @@ end
     @test neg(r("Regex(\"a+\")", "Regex(\".*\")"); pins = Set([:P_S])) === :maintainer
     # the constant's lines end at its last code line (L1); other statements compare as trees (L2)
     @test neg(r("# after the pins", "# after the pins, edited"); pins = Set([:P_S])) === :maintainer
+    blk = r("# after the pins", "#= after the pins\nblock text\n=#")
+    @test verdict(r("block text", "edited text"; src = blk); old = blk, pins = Set([:P_S])) === :maintainer
     # files
     @test classify("x.jl", BASE, nothing, PINS)[1] === :maintainer
     @test classify("x.tsv", "a\t1\n", "a\t2\n", PINS)[1] === :maintainer
@@ -146,7 +148,6 @@ end
             git!("checkout", "-q", base)
             c6 = commit!("lib/PottsModels/test/frozen.toml", split(toml, "\n\n")[1] * "\n")
             @test cli(base, c6)[1] == 1                                               # dropped entry
-            git!("checkout", "-q", base)
             git!("checkout", "-q", base)
             c8 = commit!("lib/PottsModels/test/frozen.toml", toml * """
 

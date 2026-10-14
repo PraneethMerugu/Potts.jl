@@ -68,10 +68,16 @@ function statement_spans(src)
             push!(out, (a, line, nlines))
         end
     end
+    # end each statement at the first line where its own text parses complete, so trailing
+    # blanks and comments (`#` lines or a `#= … =#` block) belong to no statement
     lines = split(src, '\n')
     for (k, (st, a, b)) in enumerate(out)
-        while b > a && (isempty(strip(lines[b])) || startswith(strip(lines[b]), "#"))
-            b -= 1
+        for e in a:b
+            x = Meta.parse(join(lines[a:e], '\n'); raise = false)
+            if !(x isa Expr && x.head in (:error, :incomplete))
+                b = e
+                break
+            end
         end
         out[k] = (st, a, b)
     end

@@ -4562,11 +4562,12 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - Errors of any kind, which never give AUTO (exit 2): a parse error, a TOML error, a ref that is not a commit, a base without the tool, or running a copy other than the base's.
   - The base-copy check holds for honest use. A loosened copy could simply delete it, which is why the reviewer and the coordinator apply the rule rather than CI.
 - **Pins.** `acceptance/p6_0bk2_skip_interior.jl`: `P60BK2_IR`, the sha256 of the optimized typed IR of `sequential_mcs!`. It is a code-shape artefact with no scientific content.
+  - The plain-String check is positional: a pinned string read elsewhere as `parse(…)`, `Regex(…)`, a path or a `Symbol` would still pass. So pin only consts whose strings are recorded values that are compared and never parsed, used as a pattern or path, or turned into a Symbol. Checking that is part of the maintainer's pin decision. `P60BK2_IR` qualifies: it is only compared with a computed sha256.
   - Simulation-output fingerprints (`P60*_FINGERPRINTS`, `P64B1_SEQ_OPENVT`, `P60O_PINS`) stay with the maintainer, because a changed fingerprint means a changed trajectory.
 - **Oversight.** The coordinator lists every AUTO re-pin in its next report to the maintainer, with the output and the DECISIONS entry. The maintainer may veto within 24 h; a veto is undone by a new commit (no force-push, D-025).
 - **CI.** CI checks out the full history (`fetch-depth: 0`) and runs `tools/test/frozen_diff.jl`. It has four groups:
   - 6 passing cases;
-  - 28 negative controls, each required to change the source;
+  - 29 negative controls, each required to change the source;
   - 14 end-to-end checks in a scratch git repository: the base copy, the guarded tool and ci.yml, a `pins` change, a new entry declaring pins, a dropped entry, a parse error, a TOML error, a bad ref, no tool at the base, and the candidate's copy refusing to run;
   - 8 recorded re-freezes, each compared with a declared pin so that none passes vacuously. D-237's p6_0bk2 re-pin is AUTO with `P60BK2_IR` declared. D-237's fingerprints, D-238, D-239, D-241, D-249 and the P6.5a2 fix need the maintainer.
 
