@@ -4385,3 +4385,12 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Wording only.** The page (`reproductions/10_akeeb.jl`) called P1, P5 and P6 "phenotype points of the paper's Fig. 4". Fig. 4 gives no parameters. Only P4, the bulk point (−2, 15, 0.5), is a named paper point (p.11). P1 is the authors' sample run, and P5 and P6 are our on-grid choices. Reworded at the four places (the `remake` example, both video introductions and the scan note).
 - **Citations.** In the parameter table, `J_LL` is X:57 and `J_FF` is X:55; the two were swapped.
 - **Unchanged.** No target, verdict, value or code changed. New sha256 `ebd9f1a0…97a6`.
+
+## D-242 Cheaper core merges: batched, scoped A/Bs and protected quiet windows (2026-10-14; maintainer-approved, relayed by the spec owner; amends D-171's per-item A/B and AUTONOMY §7.3.2)
+- **Batch.** One paired A/B per batch of core items, against main, with the same 5 % gate. A failing batch is bisected within itself. First use: the queued quiet-machine CPU A/B compares b7aee166 against P6.5b's head 822838c7, so it covers P6.5a and P6.5b together. P6.5a's ROCm A/B passed (worst case 1.020), and P6.5b's CPU and ROCm A/Bs against P6.5a are recorded as well.
+- **Scope.**
+  - No device-code change (kernels, device structs, codegen of device functions): CPU A/B only.
+  - Front-end or analysis-only change, with no change to the generated sweep code: no A/B, just the suites and CI.
+  - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
+- **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
+- **Not adopted.** A second machine for CI and screens was discussed but not approved.

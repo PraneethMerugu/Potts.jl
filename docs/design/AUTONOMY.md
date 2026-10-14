@@ -165,6 +165,12 @@ coordinator, each iteration:
 2. **Performance gate** (D-171). "The +5 % gate" is the paired A/B on the PC.
    - **CPU.** `julia benchmark/ab.jl <base> <candidate> all cpu`.
    - **ROCm.** Add `... all rocm` when the change touches device code.
+   - **Batches and scope** (D-242).
+     - One paired A/B per batch of core items, against main, with the same gate. If the batch fails, bisect within it.
+     - No device-code change (kernels, device structs, codegen of device functions): CPU only.
+     - Front-end or analysis-only change, with no change to the generated sweep code: no A/B, only the suites and CI.
+     - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path uses the full set.
+     - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends, and the spec chat checks the PC queue and asks before launching.
    - **Defaults.** Two same-commit controls (`<base>-abctl`, `<candidate>-abctl`) and Tuple-cache seeding. Rounds rotate over 8, pinned to CPU 12, and the harness waits for an idle runner and GPU inside the machine lock. The statistic is paired, with a 95 % bootstrap interval.
    - **Verdict.** Let `dev` be the largest control deviation |ratio − 1| and margin = 1.05 − dev.
      - Exit 0 (pass): every candidate/base ≤ margin.
