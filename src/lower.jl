@@ -165,9 +165,11 @@ function lower(x, env::LowerEnv)
     end
     if op === ref_centroid || op === ref_separation
         name = op === ref_centroid ? "centroid(c, k)" : "separation(a, b)"
-        (env.mode === :cell || env.mode === :model) || throw(ArgumentError(
-            "`$name` reads cell centroids, which a copy changes: it is available in cell updates, division conditions " *
-            "and rules and @observed, not in $(_MODE_NAMES[env.mode])"))
+        # between sweeps (cell, model and site scope: updates, field equations, `@convert`
+        # decisions, @observed); energies are refused before lowering (`_check_energy_geometry`)
+        env.mode in (:cell, :model, :site) || throw(ArgumentError(
+            "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
+            "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"))
         k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
         op === ref_centroid &&
             return :(Potts._ref_centroid_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $k))

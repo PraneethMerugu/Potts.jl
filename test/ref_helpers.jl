@@ -222,3 +222,129 @@ end
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end
 end
+
+# --- between-sweep site scope (P6.5d's forms): a @convert gate, a field equation, site updates
+# Sketch 14c's gate Q = minimum_image(position[1] − centroid(sibling(owner, cytoplasm), 1), 1)
+# (14_nucleus_migration.md) with a `separation` factor S. Fixture on 20 × 12, axis 1 periodic:
+# cytoplasm 1 across the seam (x ∈ {18, 19, 20, 1, 2, 3}, y 3:4), centroid x 20.5; nucleus 2
+# at (4, 8) (or at (17, 8), the negative control), cluster 1. So Q(x) = −2.5, −1.5, −0.5, 0.5,
+# 1.5, 2.5 for x = 18, 19, 20, 1, 2, 3 (unwrapped, x = 1, 2, 3 would give −19.5, −18.5,
+# −17.5) and S = minimum_image(4 − 20.5) = 3.5 (17 − 20.5 = −3.5 for the control). The
+# energy holds every volume at its target (λ = 10⁶, T = 0.01), so σ stays put through the sweep.
+@potts_model RHConvQ begin
+    @kinds medium cytoplasm nucleus lamellipodium
+    @variables begin
+        sub(site) = 0.0
+        V_target(cell) = 0.0
+        nconv(model) = 0.0
+    end
+    @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+    Q = minimum_image(position[1] - centroid(sibling(owner, cytoplasm), 1), 1)
+    S = separation(sibling(owner, nucleus), sibling(owner, cytoplasm))[1]
+    @energy begin
+        cells => 1.0e6 * (volume - V_target)^2
+        contacts => 1.0
+    end
+    @convert protrusion clusters(cytoplasm) begin
+        to = sibling(lamellipodium)
+        at = sub > 0.5
+        p = ifelse(Q > 0, ifelse(S > 0, 1.0, 0.0), 0.0)
+        nconv += 1
+    end
+    @sweep Metropolis(; temperature = 0.01)
+end
+@potts_model RHFieldQ begin
+    @kinds medium cytoplasm nucleus
+    @variables begin
+        V_target(cell) = 0.0
+        qf(field) = 0.0
+        qs(site) = 0.0
+        qc(cell) = 0.0
+    end
+    @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+    Q = minimum_image(position[1] - centroid(sibling(owner, cytoplasm), 1), 1)
+    S = separation(sibling(owner, nucleus), sibling(owner, cytoplasm))[1]
+    @energy begin
+        cells => 1.0e6 * (volume - V_target)^2
+        contacts => 1.0
+    end
+    @equations D(qf) ~ (Q + S) * (kind == cytoplasm)
+    @after_mcs begin
+        qs ~ (Q + S) * (kind == cytoplasm)
+        qc ~ minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1)
+    end
+    @observed oq ~ (Q + S) * (kind == cytoplasm)
+    @sweep Metropolis(; temperature = 0.01)
+end
+const RH_CYTO_X = (18, 19, 20, 1, 2, 3)
+function rh_q_sigma(nx)
+    σ = zeros(Int32, 20, 12)
+    σ[collect(RH_CYTO_X), 3:4] .= 1
+    σ[nx, 8] = 2
+    return σ
+end
+rh_q_op(nx) = [ownership => rh_q_sigma(nx), kind => [:cytoplasm, :nucleus], cluster => [1, 1], :V_target => [12.0, 1.0]]
+rh_conv_problem(nx; T = Float64) = PottsProblem(RHConvQ(; name = :cq), [rh_q_op(nx); :sub => Float64.(rh_q_sigma(nx) .== 1)],
+    (0, 1); T, capacity = 4)
+rh_field_problem(nx; T = Float64) = PottsProblem(RHFieldQ(; name = :fq), rh_q_op(nx), (0, 1); T,
+    field_solver = ExplicitEuler(substeps = 1))
+# the hand oracle: (Q + S) at the cytoplasm's sites, 0 elsewhere
+function rh_q_oracle(S)
+    o = zeros(20, 12)
+    for (x, q) in zip(RH_CYTO_X, (-2.5, -1.5, -0.5, 0.5, 1.5, 2.5)), y in 3:4
+        o[x, y] = q + S
+    end
+    return o
+end
+# the converted sites: the cytoplasm's sites with Q > 0 (x = 1, 2, 3), when S > 0
+function rh_conv_check(u, nx; converted)
+    σ = Array(u.σ)
+    want = rh_q_sigma(nx)
+    converted && (want[1:3, 3:4] .= 3)                         # slot 3, the allocated lamellipodium
+    return (σ == want, Array(u.model.nconv)[1], Array(u.cell.kind)[3])
+end
+
+@testset "E7 helpers in a @convert gate (sketch 14c's Q)" begin
+    sol = solve(rh_conv_problem(4), SequentialCPM())
+    @test Symbol(sol.retcode) === :Success
+    ok, n, k3 = rh_conv_check(sol.u[end], 4; converted = true)
+    @test ok && n == 6 && k3 == 3                              # 6 sites with Q > 0, converted to a lamellipodium
+    # negative control: S < 0 (the nucleus at x = 17) gates every candidate off
+    sol = solve(rh_conv_problem(17), SequentialCPM())
+    ok, n, _ = rh_conv_check(sol.u[end], 17; converted = false)
+    @test ok && n == 0
+end
+
+@testset "E7 helpers in a field equation, a site update and a site @observed" begin
+    prob = rh_field_problem(4)
+    u = solve(prob, SequentialCPM()).u[end]
+    @test Array(u.σ) == rh_q_sigma(4)                          # control: σ held through the sweep
+    o = rh_q_oracle(3.5)
+    @test Array(u.site.qs) == o                                # the after-MCS site update
+    @test observe(prob, :oq, u) == o                           # the site-scope observed quantity
+    @test isapprox(Array(u.site.qf), o; atol = 1e-12)          # one explicit Euler step of length 1 from 0
+    @test Array(u.cell.qc)[1:2] == [-3.5, 0.0]                 # the cell update (14b's Πx form): wrap(20.5 − 4)
+    # negative control: another nucleus position changes S, and so every value
+    u17 = solve(rh_field_problem(17), SequentialCPM()).u[end]
+    @test Array(u17.site.qs) == rh_q_oracle(-3.5) && Array(u17.site.qs) != o
+end
+
+@testset "E7 helpers in a @convert gate and a field equation on the device (PottsDevices)" begin
+    if isdefined(Main, :PottsDevices) && PottsDevices.on_device()
+        backend = PottsDevices.device_backend()
+        alg = CheckerboardCPM()
+        sol = solve(rh_conv_problem(4; T = Float32), alg; backend)
+        @test Symbol(sol.retcode) === :Success
+        ok, n, k3 = rh_conv_check(sol.u[end], 4; converted = true)
+        @test ok && n == 6 && k3 == 3
+        ok, n, _ = rh_conv_check(solve(rh_conv_problem(17; T = Float32), alg; backend).u[end], 17; converted = false)
+        @test ok && n == 0
+        u = solve(rh_field_problem(4; T = Float32), alg; backend).u[end]
+        @test Array(u.σ) == rh_q_sigma(4)
+        @test Array(u.site.qs) == Float32.(rh_q_oracle(3.5))      # dyadic values: exact in Float32
+        @test Array(u.site.qf) == Float32.(rh_q_oracle(3.5))
+        @test Array(u.cell.qc)[1:2] == Float32[-3.5, 0.0]
+    else
+        @test_skip "device (POTTS_GPU=metal|rocm)"
+    end
+end

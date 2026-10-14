@@ -364,8 +364,10 @@ _centroid() = Num[_centroid(k) for k in 1:_lattice_dim()]
 `centroid(c, k)`: coordinate `k` of the centroid of the cell that reference `c` names
 (`sibling(k)`, a `CellRef`, `root(cluster)`, a fold's cell), in `centroid(k)`'s convention:
 lattice units, embedded on a hexagonal lattice, periodic axes wrapped into [1, L + 1). A dead
-referent or 0 reads 0 (D-066). Cell scope (updates, `@observed`, folds); not in energies
-(no ΔH, D-032) or copy-step code.
+referent or 0 reads 0 (D-066). Between sweeps: cell and site updates, field equations,
+`@convert` decisions (`sibling(owner, k)` names a site's cluster member), division
+conditions and rules, `@observed`, folds; not in energies (no ΔH, D-032) or copy-step code
+(drives, constraints, on-copy updates).
 """
 _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
 
@@ -383,7 +385,7 @@ Symbolics.@register_symbolic axis_minimum_image(d, k)
 `minimum_image(d, axis)`: on a periodic axis of length L, the representative of `d` modulo L
 nearest 0 (|d| = L/2 keeps its sign); on a closed axis `d` itself. `axis` is a literal lattice
 axis. Lattice units; inputs are assumed within one period. A pure function of `d` and the
-lattice: cell scope, drives, constraints and energies. Square lattices (on a hexagonal one use
+lattice: every scope, drives, constraints and energies included. Square lattices (on a hexagonal one use
 `separation`).
 """
 _minimum_image(d, k) = Symbolics.wrap(axis_minimum_image(_symarg(d), _symarg(k)))
@@ -393,8 +395,10 @@ _minimum_image(d, k) = Symbolics.wrap(axis_minimum_image(_symarg(d), _symarg(k))
 references name, N components (`separation(a, b)[k]`, `norm(separation(a, b))`). On a square
 lattice component k is `minimum_image(centroid(a, k) − centroid(b, k), k)`; on a periodic
 hexagonal lattice it is the embedded nearest image on the rhombic torus (the distance
-`CorePotts.centroid_distance` measures). Every component is 0 when either referent is dead or
-0 (guard with `alive`). Cell scope, as `centroid(c, k)`.
+`CorePotts.centroid_distance` measures). A dead referent, or the reference 0, gives 0 in every
+component (it is not the distance to the medium): guard a read whose referents may be dead
+with `alive(ref)`, e.g. `ifelse(alive(sibling(nucleus)), norm(separation(id, sibling(nucleus))), d₀)`.
+Available where `centroid(c, k)` is.
 """
 _separation(a, b) = Num[Symbolics.wrap(ref_separation(_symarg(a), _symarg(b), Num(k))) for k in 1:_lattice_dim()]
 """
