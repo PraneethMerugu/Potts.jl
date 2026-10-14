@@ -128,7 +128,7 @@ fit = furth_fit(Δt, m)             # (; S, D, P, D_fast, D_slow, v_eff, offset,
 weights. `furth_msd(Δt; S, D, P)` is the modified Fürth model of Fortuna et al. (2020), Eq. 1,
 
 ```math
-\mathrm{MSD}(Δt) = 2D\left(Δt - P\left(1 - e^{-Δt/P}\right)\right) + \frac{2DS}{1 - S}\,Δt,
+\mathrm{MSD}(\Delta t) = 2D\left(\Delta t - P\left(1 - e^{-\Delta t/P}\right)\right) + \frac{2DS}{1 - S}\,\Delta t,
 ```
 
 a persistent random walk (diffusion constant `D`, persistence time `P`) plus a fast,
