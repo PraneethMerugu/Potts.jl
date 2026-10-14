@@ -4521,3 +4521,12 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - New pins: plain `integral(x)` stays the cell sum; an unknown `over =` value is refused; `over = cluster` in a site-scope update is refused; a positive control shows cell-scope use builds.
   - Other sections are unchanged. The fold `sum(x for s in sites(cluster))` can still come later as the explicit form.
 - **Fix (2026-10-14, user OK).** `p65a2_build_error` passed the operating-point function `op` to `PottsProblem` instead of `op(sys)`, as its own comment states, so the three positive controls (e5, the `over = cluster` control and section 8's `eok`) could never pass. The refusals were unaffected. One-line fix; re-frozen sha256 `65d781a8…84e2`.
+- **Implementation rulings (2026-10-14, spec owner; items D-243 left open).**
+  - `minimum_image` on a hexagonal lattice is refused; the message points to `separation`.
+  - `separation(a, b)` gives 0 in every component when either referent is dead or 0, consistent with O4. The docstring shows the `alive(ref)` guard.
+  - `Pairs` without `default`, and kind-class keys, are refused.
+  - `centroid(c, k)` and `separation` are refused in copy-step code (energies, contacts, drives, constraints, `@on_copy`). They are allowed in every between-sweep site context: `@convert` `at`/`p`/writes, field equations, site `@after_mcs`/`@before_mcs`, `@boundary` masks and site `@observed`. 14b and 14c need them there.
+  - Under `over = cluster`, bare cell variables (not only `volume`) rebind to each site's owner. A dead slot's cluster sum is 0. `integral(x; over = cluster)` marks the model as using compartments.
+  - Every helper's axis and hex checks run in every context, with a backstop in lowering.
+  - E6 user docs are delivered: `docs/src/manual/references.md`, plus rows in `parameters.md` and `variables.md`.
+  - Generated code for models that don't use the helpers is unchanged (16/16 gate fingerprints), so there is no A/B (D-242).
