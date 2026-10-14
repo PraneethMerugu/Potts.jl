@@ -327,6 +327,11 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
+    # the sequential sweeps pick a target with one 32-bit word (`bounded`): above 2³² mobile
+    # sites some sites would never be proposed, so refuse rather than wrap (D-237)
+    alg isa SequentialCPM && nmobile(ctx.mobility, lat) > Int(typemax(UInt32)) + 1 && throw(ArgumentError(
+        "SequentialCPM draws its target from one 32-bit word and supports at most 2^32 mobile sites; " *
+        "this lattice has $(nmobile(ctx.mobility, lat)). Use CheckerboardCPM (D-237)"))
     # whole-cell connectivity (P6.9a): the flood scratch and the evaluation mode; nothing otherwise
     ctx = merge(ctx, connectivity_ctx(backend, prob.f, lat, alg isa CheckerboardCPM ? GlobalBoard() : GlobalExact()))
     _preflight(prob, alg, ctx)

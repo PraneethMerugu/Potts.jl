@@ -72,7 +72,7 @@ Proposal: add `Hexagonal(; stacking = :prism)` (later `:fcc`), and keep the `N =
 | A-22 LOW | `checkpoint.jl` | A checkpoint restart reruns `at_init`. | Skip `at_init` on restore. |
 | A-23 LOW | `CellReduce` | Float min/max with NaN are order-dependent. | Document it or use `nanmin`. |
 | A-24 LOW | `HostPhase` | Writes back only `st.cell`. | Write back every mutated group, or document it. |
-| A-25 LOW | `cell_entity` | Overflows for ids ≥ 2^24, and the generation wraps at 256. | Widen, or error at capacity. |
+| A-25 LOW | `cell_entity` | Overflows for ids ≥ 2^24, and the generation wraps at 256. | Widen, or error at capacity. **Resolved by D-237**: the entity is 64-bit, so ids no longer wrap. The 8-bit generation stays, because a replay needs 256 reuses within one MCS. |
 | A-26 LOW | `lifecycle.jl:380` | Free capacity slots carry `kind = 1`, so `sol[:kind]` arrays are capacity-long and `count(==(1), …)` miscounts. Population folds are correct. | Mark free slots with kind 0 (medium), or document it. |
 
 Checked and fine: checkerboard colouring, aliasing, `init_moments` on the hex torus, the contact/surface/boundary helpers, random planes, the partition kernel.
