@@ -4486,15 +4486,17 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
 
-## D-245 Birth serials kept only when read (P6.5a3) (2026-10-14; spec owner ruling of 2026-10-14, relayed by the coordinator; maintainer: "lets do the birth skip"; amends D-066 item 3's `birth` serials)
+## D-245 Birth serials kept only when read (P6.5a3) (2026-10-14; spec owner ruling of 2026-10-14, relayed by the coordinator; maintainer: "lets do the birth skip"; amends D-066 item 3's `birth` serials and the X1 rationale)
 - **Readers.** A dividing (or converting) model keeps cell serials only when its compiled model reads them, decided at `mtkcompile` (`CompiledPottsSystem.uses_birth`):
   - bare `birth`, `birth[ref]`;
   - `sibling(k)`, `sibling(c, k)` (the lowest-birth rule, E5);
   - any `@convert` pass (its `from`/`to` default to `sibling(k)`).
 
   Every model expression is scanned, including `@observed`, division rules and planes, and initialization equations. `members` and `root` do not count: `members` folds in slot order and `root` is the cluster id. A doubtful case keeps the serials.
+  - `sibling` always counts, which is conservative. Birth only breaks ties among several alive members of one kind, so a narrower rule (for example, a kind with at most one member per cluster) could be a later refinement.
+- **Amends D-066 X1.** X1 kept monotone ids in their user-visible form, a `birth` "shown to users". That form is now available only when the model declares it (`@observed bth(cell) ~ birth` or any other reader).
 - **Dropped.** Otherwise the state has no `birth` column and no `#next_birth` counter, so neither lifecycle planner runs the serial pass (`births = nothing`). Generated code and fingerprints are unchanged.
 - **Post-run refusal.** On such a model, an expression read after the run that uses `birth` or `sibling` (`sol[birth]`, `getu`) is an `ArgumentError`: "model `<name>` never reads `birth`, so the birth column was not kept …; declare `@observed bth(cell) ~ birth` in the model to record it".
-- **Old checkpoints.** `remake`/`reinit!` with a state that carries serials drops them. If any serial differs from 0 and its slot (serials were really assigned), it warns once (`maxlog = 1`) with the same recipe; otherwise the drop is silent.
+- **Old checkpoints.** `remake`/`reinit!` with a state that carries serials drops them. It warns once (`maxlog = 1`), with the same recipe, when serials were really assigned (`_serials_assigned`): a serial differs from 0 and its slot, or the counter is past the largest serial (serials issued to cells now gone). Otherwise the drop is silent, as it is for a counter without a column. The host copies go through the counted `_to_host`.
 - **Why.** Performance over exactness: the pass cost the dividing models about 2.5–3 % CPU (PROGRESS 2026-10-14). An explicit opt-in is better than silently returning slot numbers for serials that were never kept.
 - **Tests.** `test/birth_skip.jl` (not frozen). The frozen P6.5a/P6.5b files are unchanged and pass.

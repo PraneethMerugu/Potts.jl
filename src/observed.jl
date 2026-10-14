@@ -56,7 +56,7 @@ function _check_untracked_birth(c::CompiledPottsSystem, e)
                         "`@observed bth(cell) ~ birth` in the model to record it"))
 end
 
-_algebraic_cell(x) =(i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
+_algebraic_cell(x) = (i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)
 
 # One lock for every model's observed-function cache: ensemble threads (`EnsembleThreads`)
 # read observed quantities concurrently (A-55).

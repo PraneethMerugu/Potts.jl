@@ -125,6 +125,13 @@ end
     @divide cells(blob) when = volume >= 14, along = RandomPlane(), b0 => birth
     @sweep Metropolis(; temperature = 4.0)
 end
+@potts_model BSAlong begin             # reads `birth` only in the division plane
+    @kinds medium blob
+    @lattice Lattice((24, 24); boundary = Closed(), neighborhood = Moore(1))
+    @energy cells => 2.0 * (volume - 16)^2
+    @divide cells(blob) when = volume >= 14, along = (birth, 1.0)
+    @sweep Metropolis(; temperature = 4.0)
+end
 @potts_model BSStatic begin            # reads `birth` but never divides: `birth ≡ slot`, no column
     @kinds medium blob
     @variables b0(cell) = 0.0
@@ -150,6 +157,7 @@ bs_blob(model; tspan = (0, 30), seed = 1, kw...) = PottsProblem(model, [ownershi
         ("@observed birth", BSObserved(; name = :o), true, true),
         ("birth[ref] in an update", BSDeref(; name = :d), true, true),
         ("birth in a division rule", BSDivideRule(; name = :r), true, true),
+        ("birth in the division plane", BSAlong(; name = :l), true, true),
         ("birth without divisions", BSStatic(; name = :t), false, true),
     ]
     for (label, model, divides, reads) in cases
@@ -246,10 +254,23 @@ end
     @test !haskey(integ.state.cell, :birth)
     solve!(integ)
     @test Symbol(integ.retcode) === :Success
-    # serials really assigned (a value other than 0 or the slot) are dropped with one warning
-    st = deepcopy(with.u0)
-    st.cell.birth[2] = Int32(99)
-    q2 = @test_logs (:warn, r"model `a` never reads `birth`.*@observed bth\(cell\) ~ birth") remake(prob; u0 = st)
+    # what counts as assigned serials: a value other than 0 and the slot, or a counter past
+    # the largest serial; a counter alone (no column) and the initial layout do not
+    A = Potts._serials_assigned
+    @test !A(with.u0)
+    @test !A(prob.u0)
+    lone = CorePotts.CPMState(with.u0.σ, prob.u0.cell, with.u0.site, with.u0.model, with.u0.history)
+    @test haskey(lone.model, CorePotts.NEXT_BIRTH) && !A(lone)
+    q3 = @test_logs remake(prob; u0 = lone)                 # counter only: dropped silently
+    @test !haskey(q3.u0.model, CorePotts.NEXT_BIRTH)
+    adv = deepcopy(with.u0)
+    adv.model[CorePotts.NEXT_BIRTH][1] += Int32(40)        # serials 1:n, counter advanced (a long run)
+    @test A(adv)
+    odd = deepcopy(with.u0)
+    odd.cell.birth[2] = Int32(99)
+    @test A(odd)
+    # serials really assigned are dropped with one warning
+    q2 = @test_logs (:warn, r"model `a` never reads `birth`.*@observed bth\(cell\) ~ birth") remake(prob; u0 = adv)
     @test !haskey(q2.u0.cell, :birth) && !haskey(q2.u0.model, CorePotts.NEXT_BIRTH)
 end
 

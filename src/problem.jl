@@ -1082,17 +1082,25 @@ end
 # counter continues after the capacity, so no serial is ever reused. A dividing model that
 # does not read `birth` (P6.5a3) drops a given state's column and counter (a state saved
 # before P6.5a3, or of another model), so its states keep the problem's layout.
+# Whether state `st` carries serials really assigned (dropping them loses information): a
+# serial other than 0 and its slot, or a counter past the largest serial (serials issued to
+# cells now gone). Host side (remake, reinit!): the transfers are counted, then discarded.
+function _serials_assigned(st::CorePotts.CPMState)
+    haskey(st.cell, :birth) || return false
+    stats = CorePotts.PottsStats()
+    b = CorePotts._to_host(stats, st.cell.birth)
+    any(i -> b[i] != 0 && b[i] != i, eachindex(b)) && return true
+    haskey(st.model, CorePotts.NEXT_BIRTH) || return false
+    nb = CorePotts._to_host(stats, getfield(st.model, CorePotts.NEXT_BIRTH))
+    return nb[1] != maximum(b; init = zero(eltype(b))) + 1
+end
 _without(nt::NamedTuple, k::Symbol) = NamedTuple{filter(!=(k), keys(nt))}(nt)
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     if _numbers_cells(c) && !_tracks_births(c)
         haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
-        # serials really assigned (a value other than 0 or the slot) are lost: say so once
-        if haskey(st.cell, :birth)
-            b = Array(st.cell.birth)            # host side (remake, reinit!), off the MCS path
-            any(c -> b[c] != 0 && b[c] != c, eachindex(b)) &&
-                @warn "model `$(nameof(c))` never reads `birth`, so the given state's cell serials are dropped " *
-                      "(P6.5a3, D-245); declare `@observed bth(cell) ~ birth` in the model to keep them" maxlog = 1
-        end
+        _serials_assigned(st) &&
+            @warn "model `$(nameof(c))` never reads `birth`, so the given state's cell serials are dropped " *
+                  "(P6.5a3, D-245); declare `@observed bth(cell) ~ birth` in the model to keep them" maxlog = 1
         return CorePotts.CPMState(st.σ, _without(st.cell, :birth), st.site, _without(st.model, CorePotts.NEXT_BIRTH),
             st.history)
     end
