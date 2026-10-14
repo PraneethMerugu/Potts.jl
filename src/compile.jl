@@ -454,13 +454,16 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         uses_pieces, uses_pieces_full = true, false
     end
     # cell serials (P6.5a3): read by `birth`, `sibling` (lowest birth) and every `@convert`
-    # pass; the algebraic equations and the authored energies and drives are scanned too
-    # (they are lowered elsewhere, so a reader there keeps the serials)
+    # pass; the algebraic and initialization equations, the authored energies and drives
+    # and the division planes are scanned too (lowered elsewhere, so a reader there keeps
+    # the serials)
     reads_birth(x) = _uses_builtin(x, :birth) || _has_op(x, cluster_sibling)
     uses_birth = !isempty(converts) || any(reads_birth, scanned) ||
                  any(reads_birth, Any[(eq.rhs for eq in getfield(sys, :equations))...,
+        (eq.rhs for eq in getfield(sys, :initialization_eqs))...,
         (e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
-        (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...])
+        (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
+        (x for d in getfield(sys, :divisions) for x in (d.along isa Tuple ? d.along : (d.along,)))...])
     (uses_pieces || uses_pieces_full) && !isempty(converts) && throw(ArgumentError(
         "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
         "conversion pass yet; a model with `@convert` cannot read them"))
