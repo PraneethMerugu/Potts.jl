@@ -54,12 +54,14 @@ const _CV_SITE = Symbol("#cv_site")        # the entity converting site i in thi
 """
 `st.model` key of the conversion flags (`Int32[4]`): sites converting in this pass, entities
 asking for a slot in this pass, allocations deferred for want of a free slot (cumulative),
-unused.
+entities skipped because their cells are too large for the Int32 moment scratch
+(cumulative). The cumulative counts are read once per solve (Potts' `report_run`).
 """
 const CONVERT_FLAGS = Symbol("#cv_flag")
 const _FLAG_CONVERTED = 1
 const _FLAG_ALLOCATE = 2
 const _FLAG_DEFERRED = 3
+const _FLAG_LARGE = 4                     # entities skipped: too large for the Int32 moment scratch
 
 """
     convert_scratch(dims, ncell, N) -> (; cell, site, model)
@@ -104,7 +106,10 @@ One site conversion pass (R8 `@convert`, D-233), a phase of the MCS order
   - `fresh` — the kind of the cell allocated for an entity with conversions and no live `to`
     (0: such an entity converts nothing);
   - `links` — the names of the adjacency columns of the model's relationships (cell
-    columns, `adjacency_name`; a slot the pass allocates starts unlinked).
+    columns, `adjacency_name`; a slot the pass allocates starts unlinked);
+  - `limit` — the bound of the Int32 moment scratch (as the device lifecycle's): an entity
+    whose `from` (or `from` relative to `to`) has larger second moments converts nothing
+    and is counted.
 
 The pass needs the scratch of `convert_scratch` in the state and the moment trackers. It
 makes no host round trip on a device.
@@ -119,12 +124,13 @@ struct ConvertPass{EN, DE, IN, TR, WR, OC, RL, LK <: Tuple}
     release::RL
     fresh::Int32
     links::LK
+    limit::Int64
 end
 function ConvertPass(entity, decide; init!, transfer! = nothing, writes! = nothing,
         owner_changed = nothing, release = nothing,
-        fresh::Integer = 0, links::Tuple = ())
+        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[])
     ConvertPass(entity, decide, init!, transfer!, writes!,
-        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links))
+        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links), Int64(limit))
 end
 
 # the pass scratch of a state (`convert_scratch`)
@@ -254,7 +260,7 @@ end
 end
 
 @inline function _cv_entity_body!(
-        c, entity::E, st, p, ctx, key, mcs, sc, ::Val{CL}) where {E, CL}
+        c, entity::E, st, p, ctx, key, mcs, sc, limit, ::Val{CL}) where {E, CL}
     vol = st.cell.volume
     @inbounds(vol[c]) > 0 || return nothing
     # a live cell's cluster id is not a free slot, even when that slot's cell is dead
@@ -264,10 +270,33 @@ end
     _live_slot(vol, f) || return nothing
     t = _live_slot(vol, t) ? Int32(t) : Int32(0)
     t == f && return nothing
+    if !_cv_moments_ok(st.cell, ctx.lattice, f, t, limit, Val(ndims(ctx.lattice)))
+        Atomix.@atomic sc.flag[_FLAG_LARGE] += Int32(1)
+        return nothing
+    end
     @inbounds sc.from[c] = Int32(f)
     @inbounds sc.to[c] = t
     Atomix.@atomic sc.src[f] max (c % Int32)     # one entity per `from` (the highest)
     return nothing
+end
+# The moment scratch of a pass stays in Int32: about `from`'s anchor the converted sites' δ²
+# sum to at most `m2[from]`; about `to`'s, |δ_to|² ≤ 2(|δ_from|² + |a_from − a_to|²), so with
+# both terms ≤ limit/4 the sums of `to` stay ≤ limit (a fresh `to` takes `from`'s anchor).
+# Bounds: f, t ∈ 1:capacity (live slots or 0), k ≤ N rows of m2.
+@inline function _cv_moments_ok(cell, lat, f, t, limit, ::Val{N}) where {N}
+    q = limit ÷ 4
+    ok = true
+    for k in 1:N
+        ok &= Int64(@inbounds(cell.m2[_pair(N, k, k), f])) <= q
+    end
+    if t > 0
+        d = min_image(lat, anchor(cell, f, Val(N)), anchor(cell, t, Val(N)))
+        v = Int64(@inbounds cell.volume[f])
+        for k in 1:N
+            ok &= v * Int64(d[k])^2 <= q
+        end
+    end
+    return ok
 end
 @inline _live_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
 
@@ -428,7 +457,7 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     lat = ctx.lattice
     CL = Val(_has_clusters(st))
     _launch(_cv_reset_body!, backend, cap, (sc,))
-    _launch(_cv_entity_body!, backend, cap, (ph.entity, st, p, ctx, key, mcs, sc, CL))
+    _launch(_cv_entity_body!, backend, cap, (ph.entity, st, p, ctx, key, mcs, sc, ph.limit, CL))
     _launch(_cv_decide_body!, backend, n, (ph.decide, st, p, ctx, key, mcs, sc, ph.fresh))
     launches = 3
     _quiet(backend, sc.flag, _FLAG_CONVERTED) && return launches
