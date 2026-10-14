@@ -55,7 +55,7 @@ export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
-public coordinates, shift, linear_index, draw, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
+public coordinates, shift, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
     TrackDeltaH, track_eltype, GhostFace,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
