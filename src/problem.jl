@@ -806,8 +806,9 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         push!(model, n => zeros(T, 1))
     end
     # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
-    # its daughters from the counter on; without divisions a cell's serial is its slot
-    if _numbers_cells(c)
+    # its daughters from the counter on; without divisions a cell's serial is its slot. A
+    # dividing model that never reads `birth` has no column, so no serial pass (P6.5a3)
+    if _tracks_births(c)
         push!(cell, :birth => Int32.(1:ncell))
         push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
     end
@@ -822,6 +823,11 @@ end
 
 # Cell serials and spare slots: a model that divides or allocates by `@convert`
 _numbers_cells(c::CompiledPottsSystem) = !isempty(c.divisions) || !isempty(getfield(c.sys, :converts))
+# Cell serials kept (P6.5a3): a model that allocates cells and reads `birth` (`uses_birth`:
+# `birth`, `sibling`, `@convert`). Decided when the model is compiled; the state's `birth`
+# column and `NEXT_BIRTH` counter carry it to both lifecycle planners (`births = nothing`
+# without them, the serial pass skipped).
+_tracks_births(c::CompiledPottsSystem) = _numbers_cells(c) && c.uses_birth
 
 # a cell-variable default that reads the built-in `kind` (E1)
 function _kind_default(v)
@@ -1073,9 +1079,33 @@ end
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
-# counter continues after the capacity, so no serial is ever reused
+# counter continues after the capacity, so no serial is ever reused. A dividing model that
+# does not read `birth` (P6.5a3) drops a given state's column and counter (a state saved
+# before P6.5a3, or of another model), so its states keep the problem's layout.
+# Whether state `st` carries serials really assigned (dropping them loses information): a
+# serial other than 0 and its slot, or a counter past the largest serial (serials issued to
+# cells now gone). Host side (remake, reinit!, before any run's counters exist): the copies go
+# through the transfer helper with no counter (`nothing`), as at problem setup.
+function _serials_assigned(st::CorePotts.CPMState)
+    haskey(st.cell, :birth) || return false
+    stats = nothing
+    b = CorePotts._to_host(stats, st.cell.birth)
+    any(i -> b[i] != 0 && b[i] != i, eachindex(b)) && return true
+    haskey(st.model, CorePotts.NEXT_BIRTH) || return false
+    nb = CorePotts._to_host(stats, getfield(st.model, CorePotts.NEXT_BIRTH))
+    return nb[1] != maximum(b; init = zero(eltype(b))) + 1
+end
+_without(nt::NamedTuple, k::Symbol) = NamedTuple{filter(!=(k), keys(nt))}(nt)
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (!_numbers_cells(c) || haskey(st.cell, :birth)) && return st
+    if _numbers_cells(c) && !_tracks_births(c)
+        haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
+        _serials_assigned(st) &&
+            @warn "model `$(nameof(c))` never reads `birth`, so the given state's cell serials are dropped " *
+                  "(P6.5a3, D-245); declare `@observed bth(cell) ~ birth` in the model to keep them" maxlog = 1
+        return CorePotts.CPMState(st.σ, _without(st.cell, :birth), st.site, _without(st.model, CorePotts.NEXT_BIRTH),
+            st.history)
+    end
+    (!_tracks_births(c) || haskey(st.cell, :birth)) && return st
     n = length(st.cell.kind)
     # filled where the state lives (a device state stays on the device: no host transfer)
     birth = similar(st.cell.kind, Int32, n)

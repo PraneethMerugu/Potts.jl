@@ -62,6 +62,11 @@ struct CompiledPottsSystem
     uses_pieces::Bool
     uses_pieces_full::Bool
     pieces_hex::Bool
+    # cell serials (P6.5a3, D-066 item 3): whether the model reads `birth`, directly
+    # (`birth`, `birth[ref]`) or through `sibling` (its lowest-birth rule, E5) or a `@convert`
+    # pass (whose `from`/`to` default to `sibling(k)`). A dividing model that reads none of
+    # them carries no `birth` column, so neither planner runs the serial pass (`_tracks_births`)
+    uses_birth::Bool
 end
 
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
@@ -448,6 +453,17 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     if hex && uses_pieces_full
         uses_pieces, uses_pieces_full = true, false
     end
+    # cell serials (P6.5a3): read by `birth`, `sibling` (lowest birth) and every `@convert`
+    # pass; the algebraic and initialization equations, the authored energies and drives
+    # and the division planes are scanned too (lowered elsewhere, so a reader there keeps
+    # the serials)
+    reads_birth(x) = _uses_builtin(x, :birth) || _has_op(x, cluster_sibling)
+    uses_birth = !isempty(converts) || any(reads_birth, scanned) ||
+                 any(reads_birth, Any[(eq.rhs for eq in getfield(sys, :equations))...,
+        (eq.rhs for eq in getfield(sys, :initialization_eqs))...,
+        (e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
+        (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
+        (x for d in getfield(sys, :divisions) for x in (d.along isa Tuple ? d.along : (d.along,)))...])
     (uses_pieces || uses_pieces_full) && !isempty(converts) && throw(ArgumentError(
         "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
         "conversion pass yet; a model with `@convert` cannot read them"))
@@ -540,7 +556,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         needs_moments, relations, contact_spec, proposal_spec, gather_names,
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
-        contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex)
+        contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex, uses_birth)
 end
 
 # ---------------------------------------------------------------------------------------
