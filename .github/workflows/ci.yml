@@ -45,6 +45,8 @@ jobs:
           done
       - name: Frozen acceptance tests are unchanged
         run: $PIN julia --project=lib/PottsModels/test -e 'using Test; include("lib/PottsModels/test/frozen.jl")'
+      - name: Re-freeze classifier (tools/frozen_diff.jl, D-250)
+        run: $PIN julia --project=lib/PottsModels/test tools/test/frozen_diff.jl
       - name: Test suites in parallel (PottsModels ×3, GPU, Potts, CorePotts + MakiePotts)
         # .github/ci/parallel.sh: one process per disjoint physical-core pair (with its SMT
         # siblings) on 0-11/16-27; each log is printed in its own group with its wall time and
