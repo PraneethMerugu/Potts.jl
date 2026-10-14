@@ -105,6 +105,17 @@ end
     ca = centroid(T, cell, l, a); cb = centroid(T, cell, l, b)
     return _periodic_norm(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
 end
+"""
+    centroid_separation(T, cell, lattice, a, b)
+
+Embedded minimum-image vector from the centroid of `b` to that of `a` (an `NTuple`), in float
+type `T`: on a square lattice the per-axis wrap, on a periodic hexagonal lattice the nearest
+image on the rhombic torus, so its norm is `centroid_distance`. Both cells must be alive.
+"""
+@inline function centroid_separation(::Type{T}, cell, l::Lattice{N}, a, b) where {T, N}
+    ca = centroid(T, cell, l, a); cb = centroid(T, cell, l, b)
+    return _min_image(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
+end
 @inline function _periodic_norm(::Type{T}, l::Lattice{N}, δ) where {T, N}
     e = _min_image(T, l, δ)
     s = zero(T)
