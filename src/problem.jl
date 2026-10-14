@@ -834,7 +834,9 @@ function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     (isempty(getfield(c.sys, :converts)) || haskey(st.cell, CorePotts.CONVERT_FLAGS)) && return st
     haskey(st.model, CorePotts.CONVERT_FLAGS) && return st
     sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ))
-    dev(a) = copyto!(similar(st.σ, eltype(a), size(a)), a)
+    # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
+    # state lives, so a device state gets device scratch with no host transfer
+    dev(a) = fill!(similar(st.σ, eltype(a), size(a)), first(a))
     return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
         merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
         merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history)
