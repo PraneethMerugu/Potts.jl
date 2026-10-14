@@ -834,8 +834,7 @@ _substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
 # The scratch of `@convert` passes (`CorePotts.convert_scratch`), made where the state lives;
 # a state that has it, or a model without `@convert`, is returned as is
 function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    (isempty(getfield(c.sys, :converts)) || haskey(st.cell, CorePotts.CONVERT_FLAGS)) && return st
-    haskey(st.model, CorePotts.CONVERT_FLAGS) && return st
+    (isempty(getfield(c.sys, :converts)) || haskey(st.model, CorePotts.CONVERT_FLAGS)) && return st
     sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ))
     # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
     # state lives, so a device state gets device scratch with no host transfer
@@ -1056,6 +1055,7 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
     _track_layout(_ode_layout(_convert_layout(_birth_layout(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
 function _report_converts(info::PottsModelInfo, integ)
@@ -1070,7 +1070,6 @@ function _report_converts(info::PottsModelInfo, integ)
     (deferred > 0 || large > 0) && fill!(dev, 0)        # flags 1–2 are per pass; 3–4 counted again
     return nothing
 end
-
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
