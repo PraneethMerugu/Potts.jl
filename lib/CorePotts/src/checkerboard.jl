@@ -44,6 +44,33 @@ ncolorsites(c::Color) = prod(c.count)
     return nothing
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
+
+# Claim priorities: unique and nonzero within a colour, in a random order.
+# - Up to 2^24 sites per colour (`idbits ≤ 24`): the proposal's random word above the
+#   colour-local index `j` (at least 8 random bits; ties impossible, the index decides).
+# - Above (`idbits > 24`, at most 2^32 - 1 sites): a keyed bijection of `j`,
+#   `fmix32(j ⊻ k)` with `k` drawn per (MCS, colour). A bijection keeps the priorities
+#   unique without index bits, and the key changes the order every MCS. The one input that
+#   maps to 0 is `j = k`; it takes the image of `j = 0`, which no proposal uses.
+const CLAIM_INDEX_BITS_MAX = 24
+@inline function _fmix32(h::UInt32)              # murmur3's finalizer: a bijection of UInt32
+    h ⊻= h >> 16
+    h *= 0x85ebca6b
+    h ⊻= h >> 13
+    h *= 0xc2b2ae35
+    return h ⊻ (h >> 16)
+end
+@inline function _permuted_priority(j, k::UInt32)
+    x = _fmix32((j % UInt32) ⊻ k)
+    return x == 0 ? _fmix32(k) : x
+end
+# the key of a colour in an MCS: addressed by the colour's first site, unique per colour
+@inline _claim_key(key, mcs, lat, color) =
+    draw(key, mcs, linear_index(lat, color.start), STREAM_CLAIM_ORDER)[1]
+@inline function _priority(rp::UInt32, j, idbits, key, mcs, lat, color)
+    idbits <= CLAIM_INDEX_BITS_MAX && return ((rp >> idbits) << idbits) | (j % UInt32)   # j < 2^idbits
+    return _permuted_priority(j, _claim_key(key, mcs, lat, color))                       # j < 2^32
+end
 # a shared read of `c` survives unless a higher-priority copy writes `c`
 @inline _unwritten(wclaim, c::Int32, won::UInt32) = c <= 0 || @inbounds(wclaim[c]) <= won
 
@@ -84,8 +111,7 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    # random high bits | color-local index: unique and nonzero
-                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # j ≤ ncolorsites < 2^idbits
+                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # unique and nonzero
                     # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
                     tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
                     _claim!(claim, a, won)
@@ -191,15 +217,19 @@ end
     commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
 end
 
+# tests: the permuted priorities on a small lattice (read when a cache is built)
+const _FORCE_PERMUTED_PRIORITY = Ref(false)
+
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         proposal = relation(VonNeumann(1), lat)) where {N}
     r, w = reach(f.footprint, proposal)
     s = r + w + 1
     cs = colors(lat, s)
     maxsites = maximum(ncolorsites, cs)
+    maxsites <= typemax(UInt32) || throw(ArgumentError(
+        "a color class has $maxsites sites; 32-bit claim priorities support at most 2^32 - 1"))
     idbits = max(1, ceil(Int, log2(maxsites + 1)))
-    idbits <= 24 || throw(ArgumentError(
-        "a color class has $maxsites sites; 32-bit claim priorities support at most 2^24"))
+    _FORCE_PERMUTED_PRIORITY[] && (idbits = max(idbits, CLAIM_INDEX_BITS_MAX + 1))
     zeros_u32(n) = KernelAbstractions.zeros(backend, UInt32, n)
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),
@@ -311,6 +341,8 @@ end
 
 _conn_buffers(backend, ::Nothing, maxsites) = nothing
 function _conn_buffers(backend, h::ConnectivityHooks, maxsites)
+    maxsites <= typemax(Int32) || throw(ArgumentError(
+        "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     gl = (; glist = z(Int32, maxsites), gcount = z(UInt32, 1), slist = z(Int32, maxsites), scount = z(UInt32, 1),
         deferred = z(UInt32, 1))
@@ -380,7 +412,7 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # as `propose_body!`
+                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # as `propose_body!`
                     code = has_post(f) ? _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal()) : GLOBAL_PASS
                     if code == GLOBAL_PASS || (code == GLOBAL_WINDOW && !SERIAL)
                         # j ≤ ncolorsites ≤ maxsites = length(tk.dH)

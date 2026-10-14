@@ -68,7 +68,9 @@ const STREAM_PROPOSAL = stream_id("CorePotts.proposal")      # direction, accept
 const STREAM_SEQUENTIAL_TARGET = stream_id("CorePotts.sequential_target")
 const STREAM_COLOR_ORDER = stream_id("CorePotts.color_order")
 const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")  # skip, target, direction, acceptance
-const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BOUNDARY_SITE)
+const STREAM_CLAIM_ORDER = stream_id("CorePotts.claim_order")      # permuted claim priorities (> 2^24 sites per colour)
+const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BOUNDARY_SITE,
+    STREAM_CLAIM_ORDER)
 
 """
     draw(key, mcs, entity, stream, local = 0) -> NTuple{4, UInt32}

@@ -4485,3 +4485,24 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
+
+## D-246 Checkerboard claim priorities above 2²⁴ sites per colour: a keyed bijection of the colour index (2026-10-14; maintainer's P6.0cd request, coordinator to confirm the number)
+- **Gap.** A claim priority is `(random word >> idbits) << idbits | j`, where `j` is the colour-local index. The index bits keep priorities unique, so no two committed copies write one cell. The random bits pick the winner of a conflict. With `idbits` index bits, 32 − idbits random bits are left, so the cache refused more than 2²⁴ sites per colour (8 random bits). That capped the lattice at s^N · 2²⁴ sites: 768³ in 3D at s = 3.
+- **Rule.**
+  1. Up to 2²⁴ sites per colour, nothing changes. Every existing run is bit-identical.
+  2. Above, the priority is `fmix32(j ⊻ k)`, murmur3's finalizer, which is a bijection of `UInt32`. `k = draw(key, mcs, linear_index(colour start), STREAM_CLAIM_ORDER)[1]` changes every MCS and differs between colours.
+     - A bijection keeps priorities unique with no index bits.
+     - The single input that maps to 0 (`j = k`) takes the image of `j = 0`, which no proposal uses, so priorities are nonzero.
+     - The key is drawn only for an accepted proposal in this regime: one extra Philox evaluation per accepted copy.
+  3. More than 2³² − 1 sites in a colour is refused when the cache is built (an `ArgumentError`, before any allocation). Whole-cell connectivity lists colour sites as `Int32`, so with it a colour above 2³¹ − 1 sites is refused.
+  4. 64-bit atomic claims were rejected. I believe M1-class Metal GPUs lack 64-bit atomic max (not checked here), and doubling the claim buffers costs bandwidth on every backend.
+- **Tests** (lib/CorePotts/test/runtests.jl, "checkerboard claim priorities (P6.0cd)"):
+  - The ≤ 2²⁴ word equals the old formula.
+  - Permuted priorities are unique and nonzero over 2¹⁷ indices for five keys, including `j = k`.
+  - A site outranks the one Δ further on in 50 ± 1 % of 40 000 draws, for Δ ∈ {1, 2, 3, 64, 4097, 2²⁰}.
+  - Keys are distinct across colours and MCS.
+  - End to end, `_FORCE_PERMUTED_PRIORITY` puts a 30² GG lattice in the new regime. Over four seeds, Σ accepted ΔH equals the brute-force H(end) − H(start), the volume trackers match a recount, and accepted copies are within 5 % of the index regime.
+  - Negative control: a colliding priority mutant fails the ΔH sums.
+  - Refusal: a 2³⁴-site 1-D lattice.
+  - Metal (M1 Pro): the forced regime keeps the tracked ΔH exact on a 60² GG run.
+- **Cost.** The ≤ 2²⁴ path gains one branch on a kernel scalar (`idbits`). A PC A/B decides it. The new regime is used only above 2²⁴ sites per colour.

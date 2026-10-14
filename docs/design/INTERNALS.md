@@ -142,8 +142,10 @@ are counted null attempts); the fidelity reference.
 - **Per color, 2 launches:**
   1. `propose!`: draw a direction, build `prop`, check `constraint`, compute
      `delta_H`, then Metropolis accept. If accepted, claim every **finite** cell in the
-     claim set with `atomic max` of a unique priority (random high bits | canonical
-     color-local index). Medium and obstacle domains are never claimed.
+     claim set with `atomic max` of a unique priority. Up to 2²⁴ sites per colour it is
+     random high bits | canonical color-local index. Above, it is a keyed bijection
+     `fmix32(j ⊻ k)` of that index, with `k` drawn per (MCS, colour) (D-246). That allows up
+     to 2³² − 1 sites per colour. Medium and obstacle domains are never claimed.
   2. `commit!`: if the proposal won every claim, run the generated `commit!`. Also
      clear the alternate claim buffer.
 
