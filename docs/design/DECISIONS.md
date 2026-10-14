@@ -4530,3 +4530,46 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Style.** Prose in the docs, docstrings and comments uses American spelling (`docs/design/STYLE.md`; CLAUDE.md points docs prose there). No identifier was renamed except the two keywords below.
 - **Keywords.** `PottsModels.openvt_colony_panel!` takes `color` and `state_colors`. `colour` and `state_colours` remain as deprecated aliases (`Base.depwarn`), so existing callers keep working.
 - **Re-freeze.** `reproductions/15_openvt_f1_f4.jl` gains one testset: the American keywords work, the British ones are `@test_deprecated`, and an unknown `color` is an ArgumentError. Nothing else in the file changed. New sha256 `911cc88b…7129`.
+
+## D-250 Re-pins of declared recorded values proceed without a per-edit maintainer OK; `tools/frozen_diff.jl` classifies (2026-10-14; maintainer-approved: "Approve, with P60BK2_IR pinned", then narrowed by the maintainer to "Re-pins only" after two adversarial review rounds; in effect once the review APPROVEs and the change is pushed; amends AUTONOMY §7.3.1)
+
+- **Why.** Between 2026-10-13 20:16 and 2026-10-14 19:24 UTC the maintainer answered 8 re-freeze asks. The waits were measured from the session transcripts, from the end of the asking turn to the reply.
+  - The median wait was 10 min. Three took 79, 86 and 116 min, at night or bundled with a push question.
+  - Code-hash re-pins (`P60BK2_IR`) recur with every change to the sequential sweep's code, under D-237 and again for q6.
+- **Review.** Round 3 (re-pins only) found no false AUTO for `P60BK2_IR`. Its MEDIUM and LOW findings are fixed here: pins on new entries, call-argument strings, span ends, tree comparison of other statements, all errors exit 2, and ci.yml and parallel.sh guarded.
+- **Scope: re-pins only.** Wording and additions were dropped after two review rounds of a general classifier for Julia test code.
+  - Round 1, a denylist: more than 20 false AUTOs, some confirmed at runtime to make frozen tests pass vacuously or never run.
+  - Round 2, an allowlist: still 4 HIGH false AUTOs. These were data aliases treated as fresh, global methods defined in a testset body, unchecked signatures, and destructuring into globals. On frozen Literate paper pages, comments and `Markdown.parse` tables are themselves the pre-registered record.
+
+  A safe general analyser did not look achievable. This version covers only the case that recurs and can be checked by construction. Of the 8 measured asks, it would have covered only the code-hash re-pin, which waited 1 min. Its value is the recurring case, not the long waits, which came from timing.
+- **The rule.** A re-freeze may proceed without the maintainer's OK only when all of these hold:
+  - the **base's own copy** of the tool (`git show <base>:tools/frozen_diff.jl`) prints AUTO for every changed frozen file;
+  - a fresh reviewer APPROVEs the change (§7.3.3);
+  - the DECISIONS entry named by frozen.toml's `decision` field quotes the output;
+  - the suites pass.
+
+  Otherwise the coordinator asks the maintainer, as before.
+- **What AUTO means.** Every difference is a plain String literal inside a `const NAME = …` whose NAME the file's `pins` list declares **at the base**.
+  - The string must be a `=>` value or a vector element. A string passed to a call (`parse(Float64, "0.05")`, `Regex(…)`) is code.
+  - Within that constant, `=>` keys, numbers, calls, interpolations, string macros and all other structure must stay. Types are compared as well, so `7` → `7.0` counts as a change.
+  - Comments may change only on the constant's own lines, which end at its last code line.
+  - Every other statement parses to the same tree, every other line is byte-identical (comments included), and the line count is unchanged.
+- **Always the maintainer.**
+  - Any other change.
+  - Any change to a `pins` list, and a new frozen.toml entry that declares pins. A first freeze needs no maintainer, so it may not declare pins unseen.
+  - Any change to `tools/frozen_diff.jl`, `frozen.jl`, the test runners (`lib/PottsModels/test/runtests.jl`, `test/runtests.jl`), `.github/workflows/ci.yml` or `.github/ci/parallel.sh`. A push cannot loosen the tool, or how frozen files are run, in the same step that uses it.
+  - A removed or renamed frozen file, or a data file.
+  - Errors of any kind, which never give AUTO (exit 2): a parse error, a TOML error, a ref that is not a commit, a base without the tool, or running a copy other than the base's.
+  - The base-copy check holds for honest use. A loosened copy could simply delete it, which is why the reviewer and the coordinator apply the rule rather than CI.
+- **Pins.** `acceptance/p6_0bk2_skip_interior.jl`: `P60BK2_IR`, the sha256 of the optimized typed IR of `sequential_mcs!`. It is a code-shape artefact with no scientific content.
+  - The plain-String check is positional: a pinned string read elsewhere as `parse(…)`, `Regex(…)`, a path or a `Symbol` would still pass. So pin only consts whose strings are recorded values that are compared and never parsed, used as a pattern or path, or turned into a Symbol. Checking that is part of the maintainer's pin decision. `P60BK2_IR` qualifies: it is only compared with a computed sha256.
+  - Simulation-output fingerprints (`P60*_FINGERPRINTS`, `P64B1_SEQ_OPENVT`, `P60O_PINS`) stay with the maintainer, because a changed fingerprint means a changed trajectory.
+- **Oversight.** The coordinator lists every AUTO re-pin in its next report to the maintainer, with the output and the DECISIONS entry. The maintainer may veto within 24 h; a veto is undone by a new commit (no force-push, D-025).
+- **CI.** CI checks out the full history (`fetch-depth: 0`) and runs `tools/test/frozen_diff.jl`. It has four groups:
+  - 6 passing cases;
+  - 29 negative controls, each required to change the source;
+  - 14 end-to-end checks in a scratch git repository: the base copy, the guarded tool and ci.yml, a `pins` change, a new entry declaring pins, a dropped entry, a parse error, a TOML error, a bad ref, no tool at the base, and the candidate's copy refusing to run;
+  - 8 recorded re-freezes, each compared with a declared pin so that none passes vacuously. D-237's p6_0bk2 re-pin is AUTO with `P60BK2_IR` declared. D-237's fingerprints, D-238, D-239, D-241, D-249 and the P6.5a2 fix need the maintainer.
+
+  CI then runs the base's copy on the pushed range and logs the verdict. MAINTAINER is an audit line, not a failure; a crash fails the step. CI does not enforce the rule; the coordinator and the reviewer apply it before the push.
+- **First use.** The tool must be at the base, so the first AUTO is possible only for a re-freeze based on a commit that already contains this change.

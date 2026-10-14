@@ -546,6 +546,7 @@ decision = "D-202"
 path = "acceptance/p6_0bk2_skip_interior.jl"
 sha256 = "0af60f5919973c930d7a8d88b02c03c3e97d4b7e47ad55f3a65e3a0f095dce16"
 decision = "D-237"
+pins = ["P60BK2_IR"]   # D-250: literals may be re-pinned without the maintainer (code-shape IR hash)
 
 [[file]]
 path = "reproductions/04_foam_kb_scan.jl"
