@@ -74,13 +74,21 @@ const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLO
     draw(key, mcs, entity, stream, local = 0) -> NTuple{4, UInt32}
 
 Four independent 32-bit words for one address. `entity` is a site index or a cell's
-`(id << 8) | (generation & 0xff)`; `local` packs round/substep/draw/retry.
+`cell_entity(id, generation)`; `local` packs round/substep/draw/retry.
+
+`entity` is 64-bit: its low word is the counter word, and its high word is folded into the
+key as `k0 ⊻ hi * W1` (a bijection of `hi`; `hi = 0` leaves the key as it is). An entity below
+2³² therefore draws exactly as before, and no two entities below 2⁶⁴ share a stream.
 """
 @inline function draw(key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
         local_index::Integer = 0)
     # wrapping conversions: in range by construction, and no exception branch in kernels (X1)
-    return philox4x32(mcs % UInt32, entity % UInt32, stream, local_index % UInt32,
-        key.k0, key.k1)
+    e = entity % UInt64
+    hi = (e >> 32) % UInt32
+    # the branch keeps the key loop-invariant on the common `hi = 0` path, so its schedule
+    # is hoisted (the unconditional xor cost ~15% per draw on the CPU); uniform on GPUs
+    k0 = hi == 0 ? key.k0 : key.k0 ⊻ (hi * PHILOX_W1)
+    return philox4x32(mcs % UInt32, e % UInt32, stream, local_index % UInt32, k0, key.k1)
 end
 
 """Uniform draw on the open interval (0, 1): grid midpoints, never 0 or 1."""
@@ -91,8 +99,14 @@ end
 """Lemire multiply-shift draw on `0:n-1` (bias ≤ n / 2³²)."""
 @inline bounded(x::UInt32, n::Integer) = Int((UInt64(x) * UInt64(n)) >> 32)
 
+"""
+    cell_entity(id, generation) -> UInt64
+
+The `draw` entity of a cell: `(id << 8) | (generation & 0xff)`, 64-bit so that ids at
+or above 2²⁴ do not wrap onto smaller ids (equal to the old 32-bit value below 2²⁴).
+"""
 @inline cell_entity(id::Integer, generation::Integer) =
-    (UInt32(id) << 8) | (UInt32(generation) & 0xff)
+    ((id % UInt64) << 8) | ((generation % UInt64) & 0xff)
 
 """
     normal(T, a::UInt32, b::UInt32)

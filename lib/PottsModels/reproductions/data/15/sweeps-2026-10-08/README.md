@@ -111,3 +111,7 @@ No G file was read or entered git. The only consortium content is the frozen con
   - At γ = 0.8 the run is capped (8876 cells at 271.4 cycles). At γ = 0.7625 it is 259.9 cycles.
   - The interiors are fully arrested: 95.7–98.7 % of cells are inhibited in the F7 panels, against TST's 96.1–99.0 %.
 - **Colony shape** (`fig7_cells.png`, information). At high γ the colonies become ragged and porous, as in TST's F7 row. Growth is confined to cells with free surface, so the rim roughens.
+
+## Reproducibility note (2026-10-14, D-237)
+
+From the D-237 merge onward, generated per-cell random draws (cell-scope `rand()`/`randn()`, daughter rule draws) are addressed by cell id **and generation**. Seeded trajectories of models with per-cell draws (here `OpenVTReferenceMonolayer`) therefore reproduce bit-for-bit only at a pre-D-237 commit: the commit in this record's `provenance.toml`, or monorepo `67e6e017`, the last commit before D-237. The record's statistics and verdicts are unaffected, and checkpoints written before D-237 are refused by fingerprint.

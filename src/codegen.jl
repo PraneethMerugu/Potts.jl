@@ -63,8 +63,12 @@ end
 # `key`: the RNG key in scope (functions of the MCS phases and lifecycle); enables `rand()`.
 _draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity),)
 
+# A cell's draws are addressed by id and generation (INTERNALS §1.4), so a reused id never
+# replays the randomness of the cell that held it before.
+_cell_entity(c) = :(CorePotts.cell_entity($c, @inbounds st.cell.generation[$c]))
+
 _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key = nothing, extra = ()) =
-    LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, c)..., :volume => :($T(@inbounds st.cell.volume[$c])),
+    LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, _cell_entity(c))..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
         :birth => :(Potts._birth(st.cell, $c)),
@@ -1920,9 +1924,10 @@ function _division_rules(c::CompiledPottsSystem, ids, T, who, ruled)
                 push!(block, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
             elseif _has_draw(r)
                 # a drawing rule is evaluated for each daughter (D-150): the parent's draws are
-                # keyed by its id, the daughter's by hers; everything else reads the parent
+                # keyed by its id and generation, the daughter's by hers (her generation is
+                # already incremented); everything else reads the parent
                 vp = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key))
-                vd = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key, extra = (:__draw => (:key, :mcs, :daughter),)))
+                vd = lower(r, _cell_env(T, :parent, rn; mcs = :mcs, key = :key, extra = (:__draw => (:key, :mcs, _cell_entity(:daughter)),)))
                 push!(block, :(vp = $vp), :(vd = $vd), :(@inbounds st.cell.$name[parent] = vp),
                     :(@inbounds st.cell.$name[daughter] = vd))
             else

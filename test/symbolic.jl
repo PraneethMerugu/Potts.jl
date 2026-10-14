@@ -1456,7 +1456,11 @@ end
     p = PottsProblem(Noisy(; name = :n), [ownership => σ, kind => fill(1, 16)], (0, 4); seed = 3)
     s1 = solve(p, SequentialCPM(); saveat = 0:4)
     s2 = solve(p, CheckerboardCPM(); saveat = 0:4)
-    live = findall(c -> s1.u[end].cell.volume[c] > 0 && s2.u[end].cell.volume[c] > 0, 1:16)
+    # the same cell in both runs: live in both with the same generation (a reused id is a
+    # different cell, and its draws differ by design, D-237)
+    a, b = s1.u[end].cell, s2.u[end].cell
+    live = findall(c -> a.volume[c] > 0 && b.volume[c] > 0 && a.generation[c] == b.generation[c], 1:16)
+    @test !isempty(live)
     @test s1.u[end].cell.u[live] == s2.u[end].cell.u[live] && s1.u[end].site.w == s2.u[end].site.w &&
           s1.u[end].model.tally == s2.u[end].model.tally                                # schedule-independent
     @test s1.u[2].cell.u != s1.u[3].cell.u                                                # fresh every MCS
@@ -1472,6 +1476,70 @@ end
         @sweep Metropolis(; temperature = T)
     end
     @test_throws ArgumentError mtkcompile(RandomEnergy(; name = :r))
+end
+
+# D-237 oracle: generated cell draws are addressed by `cell_entity(id, generation)` with the
+# generation the cell holds when it draws, independently of the pins. Single-site B cells
+# vanish (50 per site) and free the lowest ids, so at MCS 8 the first daughters take reused
+# slots (generation 1 → 2) while their parents stay at generation 1: the post-increment,
+# pre-increment, parent's and raw-id addressings all differ.
+@potts_model DaughterDraws begin
+    @kinds medium A B
+    @parameters T = 1.0
+    @variables begin
+        X(cell) = 0.0
+        u(cell) = 0.0
+    end
+    @lattice Lattice((16, 16))
+    @energy cells(A) => (volume - 9.0)^2
+    @energy cells(B) => 50.0 * volume
+    @after_mcs u ~ rand()
+    @divide cells(A) when = mcs == 8, along = RandomPlane(), X => rand()
+    @sweep Metropolis(; temperature = T)
+end
+
+@testset "rand(): cell draws are addressed by id and current generation (D-237)" begin
+    σ = zeros(Int32, 16, 16)
+    σ[1, 1] = 1
+    σ[16, 16] = 2
+    for (k, (i, j)) in enumerate(((3, 3), (3, 10), (10, 3), (10, 10)))
+        σ[i:(i + 2), j:(j + 2)] .= k + 2
+    end
+    prob = PottsProblem(DaughterDraws(; name = :dd), [ownership => σ, kind => [:B, :B, :A, :A, :A, :A]], (0, 10);
+        seed = 5, capacity = 12)
+    key = Potts.CorePotts.RNGKey(prob.seed, prob.replica, prob.repeat)
+    U(e, n, m) = Potts.CorePotts.uniform(Float64, Potts.CorePotts.draw(key, m, e, Potts.CorePotts.stream_id("Potts.draw.$n"))[1])
+    E(c, g) = Potts.CorePotts.cell_entity(c, g)
+    # host lifecycle planner (SequentialCPM), then the device planner on the CPU backend
+    for (label, alg, device) in (("host", SequentialCPM(), false), ("device planner", CheckerboardCPM(), true))
+        Potts.CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
+        try
+            st = solve(prob, alg; save_start = false).u[end].cell
+            gen, X, u = Array(st.generation), Array(st.X), Array(st.u)
+            live = findall(>(0), Array(st.volume))
+            parents = filter(c -> 3 <= c <= 6, live)
+            daughters = filter(c -> !(3 <= c <= 6) && X[c] != 0, live)
+            @test length(parents) == 4 && !isempty(daughters)
+            @test any(d -> gen[d] >= 2, daughters)                  # some daughter took a reused slot
+            # the rule's stream, recovered from the parents alone (generation 1 throughout)
+            ns = filter(n -> all(c -> X[c] == U(E(c, gen[c]), n, 8), parents), 0:63)
+            @test length(ns) == 1
+            n = only(ns)
+            for d in daughters
+                @test X[d] == U(E(d, gen[d]), n, 8)                  # her generation after the increment
+                @test X[d] != U(E(d, gen[d] - 1), n, 8)              # not the one before
+                @test X[d] != U(d, n, 8)                             # nor the raw id
+            end
+            # `@after_mcs u ~ rand()`: every live cell at its own (id, generation), one stream and MCS
+            hits = [(k, m) for k in 0:63, m in 0:10 if all(c -> u[c] == U(E(c, gen[c]), k, m), live)]
+            @test length(hits) == 1
+            k, m = only(hits)
+            @test all(c -> u[c] != U(c, k, m), live)
+            @info "D-237 oracle ($label): $(length(daughters)) daughters, generations $(gen[daughters])"
+        finally
+            Potts.CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+        end
+    end
 end
 
 @potts_model Persistent begin

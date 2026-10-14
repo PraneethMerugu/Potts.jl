@@ -660,7 +660,7 @@ end
 # Recorded on the freeze base (5f69e790, this Mac) with SequentialCPM; our own code, so
 # bitwise (D-158). The sha256 is of σ's Int32 bytes, column-major.
 const P64B1_SEQ_GG = (; sha = "4c32e24553c6780481d0780f45310c7f12cdc045927987e4ebe7da33f0db4186", accepted = 7433)
-const P64B1_SEQ_OPENVT = (; sha = "afecb651b63c0fbe43c6374a9e19bac82dfe5ecd39b70bbc9e07916e954e0c71", accepted = 25877, divisions = 1)
+const P64B1_SEQ_OPENVT = (; sha = "853c247939133c41260b72d239885db62f4143f3d187ec3f715f927fe5fa79f9", accepted = 26980, divisions = 1)   # re-pinned under D-237 (cell draws by id and generation)
 
 @testset "P6.4b1: SequentialCPM results are unchanged (recorded on the base)" begin
     s = solve(p64b1_gg_problem(; tspan = (0, 25), seed = 177), SequentialCPM(); save_start = false)

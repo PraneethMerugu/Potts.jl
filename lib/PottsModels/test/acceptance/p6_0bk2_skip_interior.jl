@@ -241,8 +241,8 @@ const P60BK2_CB = Dict(
 # Item 2b: sha256 of the printed optimized typed IR of `sequential_mcs!` (Julia 1.12.6).
 const P60BK2_IR_VERSION = v"1.12.6"
 const P60BK2_IR = Dict(
-    "GG 72²" => "eb450f913161074f87bb22f49df9ee2eefd2aa3272a918b870f0928b47b281df",
-    "cubes 16³" => "ae79283679dc26748025cac9044d4f02df298b64062a0cbd887fe0a4e2b04a74",
+    "GG 72²" => "96510374a685d7d7ed6583f2982bf5671193dcc23026a2e6c42aa355db529e38",   # re-pinned under D-237 (64-bit draw entity)
+    "cubes 16³" => "76c7b8163d22be37c66267c4124609a92497322a41f336125d293f46177545d2",   # re-pinned under D-237 (64-bit draw entity)
 )
 function p60bk2_ir_hash(prob)
     integ = init(prob, SequentialCPM(); save_start = false)

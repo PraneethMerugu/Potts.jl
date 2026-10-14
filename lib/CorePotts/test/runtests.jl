@@ -1,6 +1,6 @@
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, colors, color_site,
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, colors, color_site,
     ncolorsites, coordinates, linear_index, shift
 
 # ---------------------------------------------------------------------------------------
@@ -133,6 +133,37 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         @test draw(k, 1, 2, s) != draw(k, 1, 2, s + 0x1) != draw(k, 1, 2, s, 1)
         xs = [uniform(Float64, draw(k, 0, i, UInt32(7))[1]) for i in 1:100_000]
         @test abs(mean(xs) - 0.5) < 0.005 && abs(var(xs) - 1 / 12) < 0.002
+    end
+
+    @testset "rng: 64-bit entities do not wrap" begin
+        k = RNGKey(3)
+        s = UInt32(7)
+        philox = CorePotts.philox4x32
+        # below 2³² the entity draws exactly as the 32-bit counter word did
+        for e in (0, 1, 12345, typemax(UInt32) - 1, typemax(UInt32))
+            @test draw(k, 9, e, s, 2) == philox(UInt32(9), UInt32(e), s, UInt32(2), k.k0, k.k1)
+        end
+        @test draw(k, 1, Int32(5), s) == draw(k, 1, 5, s) == draw(k, 1, UInt64(5), s)
+        # cell entities: the old 32-bit value below 2²⁴, no aliasing at or above it
+        old_cell(id, g) = (UInt32(id) << 8) | (UInt32(g) & 0xff)
+        for id in (1, 2, 1000, 2^24 - 1), g in (1, 2, 255, 256, 300)
+            @test cell_entity(id, g) == old_cell(id, g)
+        end
+        @test cell_entity(Int32(7), Int32(3)) == cell_entity(7, 3)
+        for id in (5, 2^20 + 3), m in (1, 2, 255)
+            @test cell_entity(id + m * 2^24, 1) != cell_entity(id, 1)
+            @test draw(k, 4, cell_entity(id + m * 2^24, 1), s) != draw(k, 4, cell_entity(id, 1), s)
+        end
+        # site indices at or above 2³²
+        for i in (0, 7, 2^31)
+            @test draw(k, 4, i + 2^32, s) != draw(k, 4, i, s)
+            @test draw(k, 4, i + 2^32, s) != draw(k, 4, i + 2^33, s)
+        end
+        # high-word entities are still uniform and independent of their low-word partners
+        hi = [uniform(Float64, draw(k, 0, i + (i << 32), s)[1]) for i in 1:100_000]
+        lo = [uniform(Float64, draw(k, 0, i, s)[1]) for i in 1:100_000]
+        @test abs(mean(hi) - 0.5) < 0.005 && abs(var(hi) - 1 / 12) < 0.002
+        @test abs(cor(hi, lo)) < 0.01
     end
 
     @testset "coloring is conflict free" begin

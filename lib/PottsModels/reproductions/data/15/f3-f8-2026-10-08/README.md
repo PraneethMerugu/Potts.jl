@@ -119,3 +119,7 @@ No G file entered git. The G-derived content in git is:
   - The legacy curves' time axis is each framework's legacy cycle, not 775 MCS, so only the 10⁴-cell value of g is compared.
 
 **Videos** are coloured per cell: each cell gets its own categorical colour from MakiePotts' identity palette (`CellIdentityEncoding`, with the D-172 fix). The medium is dark grey on a black frame, with no outlines and no colour bar, and the view zooms out with the colony. `video_f3_f8.jl` renders them from run 1 of each case, one frame every 39 MCS to the stop: (f) seed 15201, (b) seed 15001, (a) seed 15701 and (e) seed 15801. Each video stops at the same MCS as the record's run (7714, 8154, 11600 and 12550). They are not committed.
+
+## Reproducibility note (2026-10-14, D-237)
+
+From the D-237 merge onward, generated per-cell random draws (cell-scope `rand()`/`randn()`, daughter rule draws) are addressed by cell id **and generation**. Seeded trajectories of models with per-cell draws (here `OpenVTReferenceMonolayer`) therefore reproduce bit-for-bit only at a pre-D-237 commit: the commit in this record's `provenance.toml`, or monorepo `67e6e017`, the last commit before D-237. The record's statistics and verdicts are unaffected, and checkpoints written before D-237 are refused by fingerprint.

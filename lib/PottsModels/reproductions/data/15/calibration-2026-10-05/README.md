@@ -32,3 +32,7 @@ There is no video. The consortium (G) curves are not in this record, and never e
   - the inner w₁₁ = 7.24, 9.51 and 9.93;
   - the plateau ends at 0.173 T.
 - **The two lowest V8 values.** w₂₁(10T) = 19.889 is just under the lattice spread of 19.90–19.96, but inside the ± 0.15 band. The inner w₁₁(1T) = 7.241 is near the spread's low end.
+
+## Reproducibility note (2026-10-14, D-237)
+
+From the D-237 merge onward, generated per-cell random draws (cell-scope `rand()`/`randn()`, daughter rule draws) are addressed by cell id **and generation**. Seeded trajectories of models with per-cell draws (here `OpenVTReferenceMonolayer`) therefore reproduce bit-for-bit only at a pre-D-237 commit: the commit in this record's `provenance.toml`, or monorepo `67e6e017`, the last commit before D-237. The record's statistics and verdicts are unaffected, and checkpoints written before D-237 are refused by fingerprint.

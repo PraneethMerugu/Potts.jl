@@ -29,3 +29,7 @@ directory whose files differ from the sha256s pinned here.
 | `o2_manifest.tsv` | one row per O2 file: k, file, rows, bytes, sha256 |
 | `provenance.toml` | commit, test and runner hashes, Manifest hash, machine, threads, timing, file counts and sizes |
 | `run_o1.jl` | the runner (its header has the command) |
+
+## Reproducibility note (2026-10-14, D-237)
+
+From the D-237 merge onward, generated per-cell random draws (cell-scope `rand()`/`randn()`, daughter rule draws) are addressed by cell id **and generation**. Seeded trajectories of models with per-cell draws (here `OpenVTReferenceMonolayer`) therefore reproduce bit-for-bit only at a pre-D-237 commit: the commit in this record's `provenance.toml`, or monorepo `67e6e017`, the last commit before D-237. The record's statistics and verdicts are unaffected, and checkpoints written before D-237 are refused by fingerprint.

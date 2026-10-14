@@ -4417,6 +4417,39 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - **Result (2026-10-13): no pass.** T = 3 fails `consistency` (both targets met at κ̂ ≈ 0.26, but β = 10⁻³ shows no T1s within 2¹⁶ paper MCS). T = 5 fails `off_target` (κ̂ = 0.10 and 0.18). The β = 0 controls had 0 of 15 yields at each T. Record `eq2-screen-hiT-2026-10-13`. Inference, not a ruling: the paper's bulk shear acted like an imposed deformation; F1 is re-sharpened; no further Eq 2 screens without new evidence. Foam stays provisional.
 - **T1 neighbour relation checked (2026-10-13; spec 04 §5.6): ruled out.** In all 45 runs where VonNeumann(1) records no T1, the 20-site shell records no contact change at all. Where both detectors yield (30 runs), t_first agrees within 94 paper MCS, inside the 100-MCS window. The 20-site shell counts about 1.7× more events (flicker), which matters for A-15 only. F1 stands as sharpened in §5.5; no source change. Record `t1-nbhd-check-2026-10-13` (runner sha256 `11288c7d…`).
 
+## D-237 RNG entities are 64-bit; generated cell draws are addressed by id and generation (2026-10-13; maintainer ruling, from the P6.0cd record-size review)
+- **Gap.** `draw` folded the entity with `entity % UInt32`, and `cell_entity` packed `id << 8` into a `UInt32`. So site draws at index ≥ 2³² and cell draws at id ≥ 2²⁴ (the division-plane draw) silently reused the streams of smaller entities. Generated cell-scope `rand()` and the daughter rule draws were addressed by the raw cell id. INTERNALS §1.4 says cell draws include the generation, so the code did not match it.
+- **Rule.**
+  1. The entity is 64-bit. Its low word is the counter word. A nonzero high word is folded into the key as `k0 ⊻ hi·W1`, a bijection of `hi`. `hi = 0` leaves the key untouched, behind a branch that keeps the key schedule hoisted: an unconditional xor cost about 15 % per draw on the CPU. Every entity below 2³² draws bit-for-bit as before.
+  2. `cell_entity(id, generation)` returns `UInt64` and equals the old value below 2²⁴ ids.
+  3. Generated cell-scope draws use `cell_entity(c, generation[c])`. A daughter's rule draws use her generation, which both lifecycle paths increment before the rules run.
+  4. `SequentialCPM` (with or without `skip_interior`) draws its target from one 32-bit word (`bounded`). Above 2³² mobile sites, some sites would never be proposed. `init` refuses such a lattice instead of wrapping: an `ArgumentError` pointing to `CheckerboardCPM`. This adds no hot-path code.
+- **Consequences.**
+  - Item 3 changes the generated code, fingerprint and seeded trajectory of every model with a cell-scope `rand()` or `randn()`. Two exported PottsModels have one:
+    - `AkeebInvasion` (`rand()`);
+    - `OpenVTReferenceMonolayer` (`randn` in `@before_mcs` and in its division rule, `openvt_reference.jl:56,63`).
+  - The pins are re-frozen under this entry (list below).
+  - The OpenVT records under `reproductions/data/15/` and the submission release were produced under the old addressing (see Reproducibility below).
+  - Items 1 and 2 change no trajectory below the old limits.
+  - The checkerboard claim word (2²⁴ sites per colour class) is the remaining P6.0cd limit.
+  - Also noted for P6.0cd: the 32-bit multiply-shift `bounded(x, n)` is biased by up to n/2³². In the sequential target pick, at about 10⁹ mobile sites, some sites are proposed 5 times per 2³² draws and others 4, a 25 % relative difference. Below about 2²⁴ sites the bias stays under 2⁻⁸. A two-word draw for large `n` would remove it, at the cost of changing trajectories above the chosen threshold.
+- **Re-frozen under this entry.** These pins were taken from the PC run of cf2da358 against base 2e08a3bd. The CorePotts and MakiePotts suites and frozen.jl passed.
+  - **Akeeb fingerprints.** Float64 `0xc0529959e030d017 → 0x45083869c8f05911` in p6_0aq, p6_0ar, p6_0as, p6_0at, p6_0av, p6_0ax, p6_0c2, p6_0g, p6_0o and p6_0p. Integral-reader variant `0x3bd4b680b6f7cdec → 0x792d84f3cf847051` in p6_0au and p6_0t.
+  - **p6_0o code hashes.** Akeeb Float64 and Float32 `fp`, `raw` and `canon`.
+  - **p6_0bk2 IR hashes (GG 72², cubes 16³).** These are item 1's compare-and-select in `draw`. The semantics are unchanged (GG's recorded SequentialCPM trajectory in p6_4b1 still matches), and the A/B decides the cost.
+  - **p6_4b1 `P64B1_SEQ_OPENVT`.** The fixture is `OpenVTReferenceMonolayer`, whose cell-scope `randn` (`@before_mcs`, division rule) now draws by generation.
+  - **Not frozen: test/symbolic.jl "rand(): counter-based draws".** It compared cell draws between SequentialCPM and CheckerboardCPM for ids live in both runs. A reused id is a different cell, so it now compares only ids that also have the same generation, and asserts that at least one such cell exists.
+- **Independent oracle (D-048).** test/symbolic.jl "rand(): cell draws are addressed by id and current generation (D-237)" runs on the host planner and on the device planner on the CPU backend. Single-site cells vanish, so some daughters take reused slots (generation 2) while their parents stay at generation 1.
+  - The rule's stream is recovered from the parents alone.
+  - Each daughter's draw must equal the CorePotts draw at `cell_entity(d, generation[d])`, and differ from the draw at `generation[d] - 1` and at the raw id.
+  - Every live cell's `@after_mcs` draw must match its own `(id, generation)`.
+  - So a regression to the pre-increment, parent or raw-id addressing fails this test, whatever the pins say. Negative control: with the codegen of f817dbba (raw ids), the test fails.
+- **Reproducibility (maintainer ruling, 2026-10-14: merge as ruled and record the commit).**
+  - Seeded `AkeebInvasion` and `OpenVTReferenceMonolayer` trajectories produced before this entry reproduce bit-for-bit only at a pre-D-237 commit. That includes the OpenVT submission data in `reproductions/data/15/` and release …-2026-10-12b. Their statistics are unaffected (D-029).
+  - Old checkpoints of those models are refused, because their fingerprints changed.
+  - The data/15 provenance READMEs name the last pre-D-237 commit on `monorepo`.
+- **Also.** AUDIT A-25: the id overflow is resolved here. The 8-bit generation in `cell_entity` stays: a slot replays only if it is reused 256 times within one MCS.
+
 ## D-238 `p6_0v1_device_lifecycle.jl` re-frozen: ShearedFoam in the published-model list (2026-10-13; maintainer OK; follows the D-148, D-150 and D-153 re-freezes)
 - **Why.** The foam batch exported `ShearedFoam` (feat/foam-src). The frozen check "every published model listed" (`Set(P60V1_PUBLISHED) == Set(keys(builders))`) then failed in CI run 38479760388, in both the CPU and GPU groups.
 - **Change.** One builder entry: `ShearedFoam` on the 32² ordered foam (`sheared_foam_state`), with the operating point of the PottsModels smoke test (`ytop = 32`, `ymid = 16.5`, `γ0 = 2`, `T = 1`) and tspan (0, 8). It has no lifecycle, so it only joins the enumeration; no device or counter assertion runs on it. Nothing else changed. New sha256 `d58e6b1a…d576`.

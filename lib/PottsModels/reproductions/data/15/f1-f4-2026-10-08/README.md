@@ -67,3 +67,7 @@ No G file and no G image entered git. The composite was rendered once on the PC,
 
 - **Composite: what to compare.** The consortium closeups show about 5–7 cell diameters across, and more colony than medium. The D-175 rim-centred block showed roughly equal parts colony and medium (56 % tissue).
 - **Composite: the ruling.** The maintainer ruled (D-229, 2026-10-12) that our panel should occupy the image as the others do. The window keeps its size and ray and moves inward to about 70 % tissue, as above.
+
+## Reproducibility note (2026-10-14, D-237)
+
+From the D-237 merge onward, generated per-cell random draws (cell-scope `rand()`/`randn()`, daughter rule draws) are addressed by cell id **and generation**. Seeded trajectories of models with per-cell draws (here `OpenVTReferenceMonolayer`) therefore reproduce bit-for-bit only at a pre-D-237 commit: the commit in this record's `provenance.toml`, or monorepo `67e6e017`, the last commit before D-237. The record's statistics and verdicts are unaffected, and checkpoints written before D-237 are refused by fingerprint.

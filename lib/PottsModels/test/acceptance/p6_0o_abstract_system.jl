@@ -656,8 +656,8 @@ end
 # recorded on 33f681df (Julia 1.12.6); the Float64 fingerprints of the published models and
 # of the ODE pair duplicate the pins of p6_0p/p6_0aq/p6_0c2 (one copy kept by D-136)
 const P60O_PINS = Dict{String, Any}(
-    "AkeebInvasion Float32" => (fp = 0xfdc4fc6758b6fe53, n = 10, raw = "d598d117f31055889c692fd0d75c5fea2193aa305b8b3c0328ad51d768b077fe", canon = "6fad8e8ecb3b75da61495cc32ee1f13d4111dc017435500883ed54dfec048348"),   # re-pinned under P6.3g (D-193): fingerprint only
-    "AkeebInvasion Float64" => (fp = 0xc0529959e030d017, n = 10, raw = "9e7172cac0721d45d762162a3d330d87e5d4feb535dd8169508ed93ce85f54e4", canon = "af032ddb4e0dbe48a2eb91d1ba1ce74d7ff32239875a7d82675509efa899a445"),   # re-pinned under P6.3g (D-193): fingerprint only
+    "AkeebInvasion Float32" => (fp = 0xb33d8e914da1a691, n = 10, raw = "38850597ee5147e5b3c15d33b28bae17c67bb7451c871a9814bcbbc3af43e26d", canon = "e9e1ae06c88da612e6bf8a88e17cfc7db7449c0be7c3b0c693223bf449386709"),   # re-pinned under D-237 (cell draws by id and generation)
+    "AkeebInvasion Float64" => (fp = 0x45083869c8f05911, n = 10, raw = "0447acd8733b6855db101b57e5efe6271aed8df198b567b28bd88c154f49abe0", canon = "20efda08ba2c5825bfa31b2e613d473881f96e339b999a8c45f62cfe435ad72b"),   # re-pinned under D-237 (cell draws by id and generation)
     "GranerGlazier Float32" => (fp = 0x48d814868b724d21, n = 5, raw = "0a2064f5732876eedc0bb5e90a0bd1295111624d4af5b57d1d15e419785ad355", canon = "b4eb0a608543a26bcac6f64e980c9b82124ad0c513435596fec74d46dd70e2a4"),
     "GranerGlazier Float64" => (fp = 0x04a4528dcdf3fcb8, n = 5, raw = "195071f2efa1cc71d817e31314fbca8464939f192a229f7065227bd66c97859e", canon = "4e017226fe7613b59adaf54a9cd28c8a65cc464a526b755467b4745d4b8a6dbc"),
     "MerksVasculogenesis Float32" => (fp = 0xe815f22cab20c1ca, n = 8, raw = "acdc1ab1681ef9ef6c88137ce4dfbe230d9098d013a65fa7cf766ef544e25ee8", canon = "e508dde179188796bd32e4175b258c4c488f4455bf18b7d409ba42aad2b34e13"),   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
