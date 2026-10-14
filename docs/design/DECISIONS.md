@@ -4494,15 +4494,17 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
      - A bijection keeps priorities unique with no index bits.
      - The single input that maps to 0 (`j = k`) takes the image of `j = 0`, which no proposal uses, so priorities are nonzero.
      - The key is drawn only for an accepted proposal in this regime: one extra Philox evaluation per accepted copy.
-  3. More than 2³² − 1 sites in a colour is refused when the cache is built (an `ArgumentError`, before any allocation). Whole-cell connectivity lists colour sites as `Int32`, so with it a colour above 2³¹ − 1 sites is refused.
+  3. More than 2³² − 1 sites in a colour is refused when the cache is built (an `ArgumentError`, before any allocation). Whole-cell connectivity lists colour sites as `Int32`, so with it a colour above 2³¹ − 1 sites is refused, also before any allocation.
   4. 64-bit atomic claims were rejected. I believe M1-class Metal GPUs lack 64-bit atomic max (not checked here), and doubling the claim buffers costs bandwidth on every backend.
 - **Tests** (lib/CorePotts/test/runtests.jl, "checkerboard claim priorities (P6.0cd)"):
   - The ≤ 2²⁴ word equals the old formula.
   - Permuted priorities are unique and nonzero over 2¹⁷ indices for five keys, including `j = k`.
   - A site outranks the one Δ further on in 50 ± 1 % of 40 000 draws, for Δ ∈ {1, 2, 3, 64, 4097, 2²⁰}.
+  - The key is used (review, MEDIUM): for fixed pairs (j, j + Δ), the winner varies over 40 000 MCS keys at 50 ± 1 %. A keyless mutant, `fmix32(j)`, gives 0 or 1.
   - Keys are distinct across colours and MCS.
   - End to end, `_FORCE_PERMUTED_PRIORITY` puts a 30² GG lattice in the new regime. Over four seeds, Σ accepted ΔH equals the brute-force H(end) − H(start), the volume trackers match a recount, and accepted copies are within 5 % of the index regime.
-  - Negative control: a colliding priority mutant fails the ΔH sums.
-  - Refusal: a 2³⁴-site 1-D lattice.
-  - Metal (M1 Pro): the forced regime keeps the tracked ΔH exact on a 60² GG run.
-- **Cost.** The ≤ 2²⁴ path gains one branch on a kernel scalar (`idbits`). A PC A/B decides it. The new regime is used only above 2²⁴ sites per colour.
+  - Negative controls, run once and not committed as tests: a colliding-priority mutant fails the ΔH sums, and the keyless mutant fails the key test.
+  - Refusal: a 2³⁴-site 1-D lattice. With connectivity, a 3·2³¹-site 1-D lattice.
+  - Metal (M1 Pro), verified once and not in the committed suite: the forced regime keeps the tracked ΔH exact on a 60² GG run.
+- **Cost.** The ≤ 2²⁴ path gains one branch on a kernel scalar (`idbits`). A PC A/B decides it. The new regime is used only above 2²⁴ sites per colour. If ROCm regresses (for example, VGPR pressure from the cold-branch Philox), the regime becomes a `Val{PERMUTED}` kernel parameter fixed at cache build.
+- **Note.** `RESERVED_STREAMS` is never read, so nothing enforces stream reservation. This predates this entry and is negligible.

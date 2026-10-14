@@ -228,6 +228,9 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
     maxsites = maximum(ncolorsites, cs)
     maxsites <= typemax(UInt32) || throw(ArgumentError(
         "a color class has $maxsites sites; 32-bit claim priorities support at most 2^32 - 1"))
+    # before any allocation (the buffers below can be tens of GB on a device)
+    f.connectivity === nothing || maxsites <= typemax(Int32) || throw(ArgumentError(
+        "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
     idbits = max(1, ceil(Int, log2(maxsites + 1)))
     _FORCE_PERMUTED_PRIORITY[] && (idbits = max(idbits, CLAIM_INDEX_BITS_MAX + 1))
     zeros_u32(n) = KernelAbstractions.zeros(backend, UInt32, n)
@@ -340,9 +343,7 @@ struct ConnBuffers{G, K1, K2, K3, K4, K5}
 end
 
 _conn_buffers(backend, ::Nothing, maxsites) = nothing
-function _conn_buffers(backend, h::ConnectivityHooks, maxsites)
-    maxsites <= typemax(Int32) || throw(ArgumentError(
-        "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
+function _conn_buffers(backend, h::ConnectivityHooks, maxsites)      # maxsites ≤ 2^31 - 1 (checked by the cache)
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     gl = (; glist = z(Int32, maxsites), gcount = z(UInt32, 1), slist = z(Int32, maxsites), scount = z(UInt32, 1),
         deferred = z(UInt32, 1))

@@ -192,8 +192,18 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             end
             @test abs(f - 0.5) < 0.01
         end
-        # the key differs between the colours of an MCS and between MCS
+        # the key is used: for a fixed pair, which one wins changes from MCS to MCS (a keyless
+        # permutation would let the same site win every conflict of every MCS)
         lat36 = Lattice((36, 36))
+        c1 = first(colors(lat36, 3))
+        for (j, Δ) in ((5, 1), (100, 37), (2^20, 3))
+            f = mean(1:40_000) do m
+                k = CorePotts._claim_key(RNGKey(9), m, lat36, c1)
+                CorePotts._permuted_priority(j, k) > CorePotts._permuted_priority(j + Δ, k)
+            end
+            @test abs(f - 0.5) < 0.01
+        end
+        # the key differs between the colours of an MCS and between MCS
         cs = colors(lat36, 3)
         @test allunique([CorePotts._claim_key(RNGKey(1), m, lat36, c) for c in cs, m in 1:3])
         # end to end on a small lattice forced into the permuted regime: no two commits
@@ -225,6 +235,10 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         @test init(prob, CheckerboardCPM()).cache.idbits <= CorePotts.CLAIM_INDEX_BITS_MAX
         # more than 2^32 - 1 sites in a colour is refused before anything is allocated
         @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((2^34,)), GG, 1)
+        # with whole-cell connectivity (Int32 lists), more than 2^31 - 1 is refused, also before
+        # any allocation (3·2^31 sites: a colour class of 2^31 or more, at most 2^32 - 1)
+        fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = CorePotts.ConnectivityHooks())
+        @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((3 * 2^31,)), fc, 1)
     end
 
     @testset "coloring is conflict free" begin
