@@ -14,6 +14,8 @@ The maintainer asked for fixes to land with P6.5b. Each item says where it belon
 
 The test was to write the Fortuna model as a newcomer would, and record every place where they would need to know an implementation detail, hold an index in their head, or could make a silent mistake.
 
+> **Superseded in part (audit 2026-10-13).** Spec 14's ruling fixes the targets from t = 0, with no `V_target` transfer: the cytoplasm target is (1 − φ_n − φ_l)V and the lamellipodium target is φ_l·V. The conversion probability reads the parameter, p = c·(1 − V₃/(φ_l·V_cell)), not `V_target[to]` (which gives 0/0 when the lamellipodium is absent). E1's default example and E3's `p` and `transfer` usage below predate this ruling. `transfer` remains a general primitive, but Fortuna does not use it.
+
 ## Summary
 
 | # | Friction | Severity | Fix | Where |

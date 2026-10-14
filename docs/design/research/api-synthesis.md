@@ -953,6 +953,8 @@ the streaming per-MCS series of 04 are `SavingCallback`s, not saved states.
 
 ### 5.1 Fortuna 14a/14b + Dal-Castel 14c (`@extend`, `@convert`, references, 3D)
 
+> **Superseded (audit 2026-10-13).** The Fortuna example below uses the authors' code values: 4.19R³, `floor(0.85V)`, `Shuffled()` and the target-volume transfer. Spec 14's paper rulings supersede them: V = (4π/3)R³, fixed targets, per-MCS independent conversion with p = c·(1 − V₃/(φ_l·V_cell)), and a strict-`<` ball sized to the target. See spec 14 l.616–631.
+
 ```julia
 using Potts
 

@@ -725,7 +725,8 @@ Every API change here keeps the old form working, and none changes a frozen verd
   `budget`, each one a named `@schedule` phase costed per D-035 as amended by D-075);
   ownership hooks apply `clear_on_ownership_change`, and `@on_copy` never fires from the
   lifecycle (D-075 clarify). Fixes A-17.
-- [ ] **P6.5c** R2 `Plane`, `Spheres`; R5 predicate-sourced PDE; R16 MSD / Fürth fits.
+- [ ] **P6.5a2** (D-231 follow-ups; alongside P6.5c; E7 before P6.5d) E2 named pairs; E6 docs for cell references; E7 helpers `centroid(c, k)`, `minimum_image`, `cluster_integral` (api-synthesis §6.4), with their own tests.
+- [ ] **P6.5c** (brief: `research/p6-5c-brief.md`, 2026-10-14) (A) `Interior(shape)` strict membership, `Fill(kind; region)`, `Objects`, `Group`, with the Fortuna geometry's exact site counts; (B) R5 predicate-sourced PDE source: tests (device included) and docs, no new syntax; (C) R16 MSD and the Fürth fit in `PottsModels.Analysis` (host only; no A/B under D-242). Also fix `AUTHORING.md` §planned layers (`Spheres`, `Plane`), which contradicts D-087.
   - Initial-state vocabulary (`research/initial-state-review.md` §2, §4): `Fill`, `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends D-075 §3.3, **user-approved 2026-10-01 (D-087)**; the docs show `Plane`/`Spheres` recipes.
 - [ ] **P6.5d** reproduction 14a/14b (and 14c, D-156). C4 resolved from the CC3D source (D-155); no gate.
 
