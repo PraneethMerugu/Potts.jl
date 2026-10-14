@@ -1086,6 +1086,13 @@ _without(nt::NamedTuple, k::Symbol) = NamedTuple{filter(!=(k), keys(nt))}(nt)
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     if _numbers_cells(c) && !_tracks_births(c)
         haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
+        # serials really assigned (a value other than 0 or the slot) are lost: say so once
+        if haskey(st.cell, :birth)
+            b = Array(st.cell.birth)            # host side (remake, reinit!), off the MCS path
+            any(c -> b[c] != 0 && b[c] != c, eachindex(b)) &&
+                @warn "model `$(nameof(c))` never reads `birth`, so the given state's cell serials are dropped " *
+                      "(P6.5a3, D-245); declare `@observed bth(cell) ~ birth` in the model to keep them" maxlog = 1
+        end
         return CorePotts.CPMState(st.σ, _without(st.cell, :birth), st.site, _without(st.model, CorePotts.NEXT_BIRTH),
             st.history)
     end

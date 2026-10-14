@@ -51,9 +51,9 @@ end
 function _check_untracked_birth(c::CompiledPottsSystem, e)
     (_numbers_cells(c) && !c.uses_birth) || return nothing
     (_uses_builtin(e, :birth) || _has_op(e, cluster_sibling)) || return nothing
-    throw(ArgumentError("`$(nameof(c))` divides but reads no `birth` (nor `sibling`, `@convert`), so it keeps no " *
-                        "cell serials (P6.5a3): `$e` cannot be evaluated after the run. Declare it in the model " *
-                        "(e.g. `@observed bth(cell) ~ birth`) so the serials are kept"))
+    throw(ArgumentError("model `$(nameof(c))` never reads `birth`, so the birth column was not kept " *
+                        "(P6.5a3, D-245): `$e` cannot be evaluated after the run; declare " *
+                        "`@observed bth(cell) ~ birth` in the model to record it"))
 end
 
 _algebraic_cell(x) =(i = info(x); i !== nothing && i.role === :observed && get(i.options, :scope, nothing) === :cell)

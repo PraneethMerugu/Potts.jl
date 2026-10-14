@@ -227,17 +227,30 @@ end
     prob = bs_akeeb(; tspan = (0, 3))
     sol = solve(prob, SequentialCPM())
     @test_throws ArgumentError sol[Potts.B.birth]
+    err = try
+        sol[Potts.B.birth]
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("model `a`", err.msg) && occursin("never reads `birth`", err.msg) &&
+          occursin("@observed bth(cell) ~ birth", err.msg)
     @test_throws ArgumentError sol[Potts.B.birth + 1]
     @test length(sol[Potts.B.volume][end]) == length(sol.u[end].cell.kind)           # other quantities still read
     # a state carrying the serials (saved before P6.5a3) takes the problem's layout
     with = bs_with_serials(prob)
-    q = remake(prob; u0 = with.u0)
+    q = @test_logs remake(prob; u0 = with.u0)        # serials 1:n and zeros: slot values, dropped silently
     @test keys(q.u0.cell) == keys(prob.u0.cell) && keys(q.u0.model) == keys(prob.u0.model)
     integ = init(prob, SequentialCPM())
     reinit!(integ, with.u0)
     @test !haskey(integ.state.cell, :birth)
     solve!(integ)
     @test Symbol(integ.retcode) === :Success
+    # serials really assigned (a value other than 0 or the slot) are dropped with one warning
+    st = deepcopy(with.u0)
+    st.cell.birth[2] = Int32(99)
+    q2 = @test_logs (:warn, r"model `a` never reads `birth`.*@observed bth\(cell\) ~ birth") remake(prob; u0 = st)
+    @test !haskey(q2.u0.cell, :birth) && !haskey(q2.u0.model, CorePotts.NEXT_BIRTH)
 end
 
 @testset "P6.5a3: the skip on the device (PottsDevices; device planner forms)" begin

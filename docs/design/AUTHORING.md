@@ -1186,6 +1186,21 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
   - Each domain has one plane (`along`): the rules of one domain must agree; the two
     domains may differ.
 
+### 12.7b `sibling` and `birth` serials (D-066, D-245)
+
+- `sibling(k)` is the alive member of kind `k` of the cell's cluster; with several, the
+  one with the lowest `birth` (the oldest).
+- `birth` is a cell's monotone serial, never reused. A model without divisions or
+  `@convert` has none: `birth` is the slot.
+- **Kept only when read.** A dividing model keeps serials only when it reads them: bare
+  `birth`, `birth[ref]`, `sibling`, or any `@convert`. `members` and `root` do not count.
+  Otherwise the state has no `birth` column, and reading `birth` or `sibling` after the
+  run (`sol[birth]`) is an `ArgumentError`. To record serials, declare them in the model:
+
+  ```julia
+  @observed bth(cell) ~ birth
+  ```
+
 ### 12.8 Initialization, import and steering
 
 - **Layouts (P6.1a, implemented).** Host-side initial conditions built from layers and
