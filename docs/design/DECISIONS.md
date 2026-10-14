@@ -4506,5 +4506,13 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - Negative controls, run once and not committed as tests: a colliding-priority mutant fails the ΔH sums, and the keyless mutant fails the key test.
   - Refusal: a 2³⁴-site 1-D lattice. With connectivity, a 3·2³¹-site 1-D lattice.
   - Metal (M1 Pro), verified once and not in the committed suite: the forced regime keeps the tracked ΔH exact on a 60² GG run.
-- **Cost.** The ≤ 2²⁴ path gains one branch on a kernel scalar (`idbits`). A PC A/B decides it. The new regime is used only above 2²⁴ sites per colour. If ROCm regresses (for example, VGPR pressure from the cold-branch Philox), the regime becomes a `Val{PERMUTED}` kernel parameter fixed at cache build.
+- **Cost, and the regime as a type.**
+  - The first version branched at run time on `idbits`.
+    - q5 A/B against 99301437: ROCm passed (within ±2 %).
+    - CPU checkerboard regressed: GG 72² 1.050 [1.024, 1.060], Akeeb 1.030 [1.023, 1.040]. Controls were within 1 %.
+    - The cold-path Philox was inlined into the host loop: `propose_body!` for GG 72² grew from 442 to 616 lines of optimised LLVM IR.
+  - The regime is now fixed at cache build by the type of `idbits`: an `Int` (index bits), or `PermutedPriority()`, chosen by `_claim_regime(maxsites)`. `_priority` dispatches on it, so the ≤ 2²⁴ specialisation has no branch.
+  - Check (aarch64, Julia 1.12.6): the normalised optimised IR of `propose_body!` for GG 72² is identical to 99301437's, with the same SHA-256 and 442 lines.
+  - Tests: `_claim_regime` at 2²⁴ − 1 (24 index bits), at 2²⁴, at 2³² − 1, and forced. Both regimes are reachable through `init`.
+  - A scoped re-A/B (checkerboard cases, CPU and ROCm) decides.
 - **Note.** `RESERVED_STREAMS` is never read, so nothing enforces stream reservation. This predates this entry and is negligible.

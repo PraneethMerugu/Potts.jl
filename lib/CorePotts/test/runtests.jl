@@ -182,7 +182,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             @test allunique(w) && all(!=(0), w)
         end
         @test CorePotts._permuted_priority(77, UInt32(77)) == CorePotts._fmix32(UInt32(77)) != 0
-        @test CorePotts._priority(rand(rng, UInt32), 5, 25, RNGKey(1), 3, lat4, c4) ==
+        @test CorePotts._priority(rand(rng, UInt32), 5, CorePotts.PermutedPriority(), RNGKey(1), 3, lat4, c4) ==
               CorePotts._permuted_priority(5, CorePotts._claim_key(RNGKey(1), 3, lat4, c4))
         # a random order: a site outranks the one Δ further on half the time, for any Δ
         for Δ in (1, 2, 3, 64, 4097, 2^20)
@@ -216,7 +216,7 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         base = [solve(remake(prob; seed), CheckerboardCPM()) for seed in 1:4]
         CorePotts._FORCE_PERMUTED_PRIORITY[] = true
         try
-            @test init(prob, CheckerboardCPM()).cache.idbits > CorePotts.CLAIM_INDEX_BITS_MAX
+            @test init(prob, CheckerboardCPM()).cache.idbits isa CorePotts.PermutedPriority
             perm = [solve(remake(prob; seed), CheckerboardCPM()) for seed in 1:4]
             for sol in perm
                 u0, u = sol.u[1], sol.u[end]
@@ -232,7 +232,13 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         finally
             CorePotts._FORCE_PERMUTED_PRIORITY[] = false
         end
-        @test init(prob, CheckerboardCPM()).cache.idbits <= CorePotts.CLAIM_INDEX_BITS_MAX
+        # both regimes are reachable, each its own specialisation: an Int below 2^24 sites
+        idb = init(prob, CheckerboardCPM()).cache.idbits
+        @test idb isa Int && idb <= CorePotts.CLAIM_INDEX_BITS_MAX
+        @test CorePotts._claim_regime(2^24 - 1) == 24                    # the last index-bit size
+        @test CorePotts._claim_regime(2^24) isa CorePotts.PermutedPriority
+        @test CorePotts._claim_regime(typemax(UInt32)) isa CorePotts.PermutedPriority
+        @test CorePotts._claim_regime(10, true) isa CorePotts.PermutedPriority
         # more than 2^32 - 1 sites in a colour is refused before anything is allocated
         @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((2^34,)), GG, 1)
         # with whole-cell connectivity (Int32 lists), more than 2^31 - 1 is refused, also before

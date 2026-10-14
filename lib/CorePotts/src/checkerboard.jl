@@ -45,14 +45,17 @@ ncolorsites(c::Color) = prod(c.count)
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
 
-# Claim priorities: unique and nonzero within a colour, in a random order.
-# - Up to 2^24 sites per colour (`idbits ≤ 24`): the proposal's random word above the
+# Claim priorities: unique and nonzero within a colour, in a random order. The regime is
+# fixed when the cache is built, by the type of `idbits`, so each compiles on its own (a
+# runtime branch cost 3–5 % on the CPU checkerboard, D-246):
+# - `idbits::Int`, up to 2^24 sites per colour: the proposal's random word above the
 #   colour-local index `j` (at least 8 random bits; ties impossible, the index decides).
-# - Above (`idbits > 24`, at most 2^32 - 1 sites): a keyed bijection of `j`,
+# - `PermutedPriority()`, above (at most 2^32 - 1 sites): a keyed bijection of `j`,
 #   `fmix32(j ⊻ k)` with `k` drawn per (MCS, colour). A bijection keeps the priorities
 #   unique without index bits, and the key changes the order every MCS. The one input that
 #   maps to 0 is `j = k`; it takes the image of `j = 0`, which no proposal uses.
 const CLAIM_INDEX_BITS_MAX = 24
+struct PermutedPriority end
 @inline function _fmix32(h::UInt32)              # murmur3's finalizer: a bijection of UInt32
     h ⊻= h >> 16
     h *= 0x85ebca6b
@@ -67,10 +70,10 @@ end
 # the key of a colour in an MCS: addressed by the colour's first site, unique per colour
 @inline _claim_key(key, mcs, lat, color) =
     draw(key, mcs, linear_index(lat, color.start), STREAM_CLAIM_ORDER)[1]
-@inline function _priority(rp::UInt32, j, idbits, key, mcs, lat, color)
-    idbits <= CLAIM_INDEX_BITS_MAX && return ((rp >> idbits) << idbits) | (j % UInt32)   # j < 2^idbits
-    return _permuted_priority(j, _claim_key(key, mcs, lat, color))                       # j < 2^32
-end
+@inline _priority(rp::UInt32, j, idbits::Int, key, mcs, lat, color) =
+    ((rp >> idbits) << idbits) | (j % UInt32)                                            # j < 2^idbits
+@inline _priority(rp::UInt32, j, ::PermutedPriority, key, mcs, lat, color) =
+    _permuted_priority(j, _claim_key(key, mcs, lat, color))                              # j < 2^32
 # a shared read of `c` survives unless a higher-priority copy writes `c`
 @inline _unwritten(wclaim, c::Int32, won::UInt32) = c <= 0 || @inbounds(wclaim[c]) <= won
 
@@ -173,7 +176,7 @@ end
     end
 end
 
-struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2, CO}
+struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO}
     prio::P
     source::S
     claims::NTuple{2, C}
@@ -188,7 +191,7 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2, CO}
     groupsize::Vector{Int}            # per color; 0 = let the backend choose
     order::Vector{Int}
     buffer::Base.RefValue{Int}        # claim buffer the next color uses (always cleared)
-    idbits::Int
+    idbits::ID                        # Int (index bits) or PermutedPriority(): the claim regime
     propose!::K1
     commit!::K2
     # whole-cell connectivity (P6.9a): `nothing`, or the lists, counter and kernels of
@@ -220,6 +223,12 @@ end
 # tests: the permuted priorities on a small lattice (read when a cache is built)
 const _FORCE_PERMUTED_PRIORITY = Ref(false)
 
+# the claim regime of a colour of `maxsites` sites: its index bits, or `PermutedPriority()`
+function _claim_regime(maxsites, force::Bool = false)
+    nbits = max(1, ceil(Int, log2(maxsites + 1)))
+    return (force || nbits > CLAIM_INDEX_BITS_MAX) ? PermutedPriority() : nbits
+end
+
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         proposal = relation(VonNeumann(1), lat)) where {N}
     r, w = reach(f.footprint, proposal)
@@ -231,8 +240,7 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
     # before any allocation (the buffers below can be tens of GB on a device)
     f.connectivity === nothing || maxsites <= typemax(Int32) || throw(ArgumentError(
         "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
-    idbits = max(1, ceil(Int, log2(maxsites + 1)))
-    _FORCE_PERMUTED_PRIORITY[] && (idbits = max(idbits, CLAIM_INDEX_BITS_MAX + 1))
+    idbits = _claim_regime(maxsites, _FORCE_PERMUTED_PRIORITY[])
     zeros_u32(n) = KernelAbstractions.zeros(backend, UInt32, n)
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),

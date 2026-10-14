@@ -145,7 +145,8 @@ are counted null attempts); the fidelity reference.
      claim set with `atomic max` of a unique priority. Up to 2²⁴ sites per colour it is
      random high bits | canonical color-local index. Above, it is a keyed bijection
      `fmix32(j ⊻ k)` of that index, with `k` drawn per (MCS, colour) (D-246). That allows up
-     to 2³² − 1 sites per colour. Medium and obstacle domains are never claimed.
+     to 2³² − 1 sites per colour. The regime is the type of the cache's `idbits` (an `Int` or
+     `PermutedPriority()`), so each compiles on its own. Medium and obstacle domains are never claimed.
   2. `commit!`: if the proposal won every claim, run the generated `commit!`. Also
      clear the alternate claim buffer.
 
