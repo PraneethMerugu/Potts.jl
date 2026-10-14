@@ -179,7 +179,9 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
         phases = _phases_parts(c, T, values, spec)
         lifecycle = _with_ref_term(() -> _lifecycle(c, T), "@divide")
         total = _rgf(_total_energy_expr(c, T))
-        delta_E = _rgf(_delta_H_expr(c, T; drives = false))
+        # `energy_change` (host, on the caller's state) is never tracked: it must not bump the
+        # state's `#ref_counts` (built in place, so the fingerprint's build order is kept)
+        delta_E = Base.ScopedValues.with(() -> _rgf(_delta_H_expr(c, T; drives = false)), _REF_SLOTS => nothing)
         i2 = length(glog)
         connectivity = _connectivity_hooks(c, T)
         copy_step = [glog[(i0 + 1):i1]; glog[(i2 + 1):end]]

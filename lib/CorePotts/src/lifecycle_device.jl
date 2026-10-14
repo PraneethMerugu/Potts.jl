@@ -300,7 +300,7 @@ end
     # free-list entries taken this round (serials): scratch, committed to the counter after
     # the partition (`_advance_births!`), so a staged launch that fails in the planner leaves
     # the state's counter as it was for the host planner
-    @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv
+    @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv          # taken has 1 entry, tot 3
     return nothing
 end
 
@@ -453,7 +453,7 @@ end
 @inline _with_rule(::Val{true}, ev, raw) = ev | ((raw >> _RULE_SHIFT) << _RULE_SHIFT)
 
 # H: who is whose daughter; statistics; a daughter's surface starts from zero
-@inline function _plan_h!(t, tot, events, daughter, dv, par, ruled, surf)
+@inline function _plan_h!(t, events, daughter, dv, par, ruled, surf)
     _on(dv, par) || return nothing
     lo, hi = _chunk(t, length(events))
     ntrans = Int32(0)
@@ -502,7 +502,7 @@ end
         clusters, births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, tot, events, daughter, dv, par, ruled, surf)
+    _plan_h!(th, events, daughter, dv, par, ruled, surf)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1027,7 +1027,7 @@ end
         st, p, ctx, key, mcs, clusters, opt.births)
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, tot, buf.events, buf.daughter, dv, par, ruled, opt.surf)
+    _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(_dpartition_body!, tp, length(st.σ),
