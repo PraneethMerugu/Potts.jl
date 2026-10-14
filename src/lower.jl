@@ -128,6 +128,19 @@ function lower(x, env::LowerEnv)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
     op === Δ && return _lower_laplacian(args[1], env)
+    # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
+    op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
+    if op === cluster_sibling
+        cl, k = lower(args[1], env), lower(args[2], env)
+        ctr = _ref_counter(_SIBLING_LABEL)
+        ctr === nothing && return :(Potts._sibling(st.cell, $cl, Int32($k)))
+        return :(Potts._sibling_counted(st.cell, $cl, Int32($k), $(ctr[1]), $(ctr[2])))
+    end
+    op === as_ref && return :(Int32($(lower(args[1], env))))
+    if op === outer_value
+        haskey(env.bind, :__outer) || error("`members(…)` is a fold domain: write `sum(… for m in members(cluster))`")
+        return lower(args[1], env.bind[:__outer])
+    end
     if op === cell_centroid
         haskey(env.bind, :__cell) || error("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities")
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
@@ -367,6 +380,226 @@ end
 """Kind of cell `c` (`0` for the medium)."""
 @inline _cellkind(st, c) = c == 0 ? Int32(0) : Int32(@inbounds st.cell.kind[c])
 
+# ---------------------------------------------------------------------------------------
+# Cell references (R6; D-066 item 5, D-231)
+
+"""Whether `x` is a cell variable declared `::CellRef`."""
+_is_ref_var(x) = (i = info(x); i !== nothing && i.role === :cell && get(i.options, :reference, false) === true)
+# a stand-in for a reference's value (the on-copy value ΔH reads, `_oncopy_after`; a
+# previous-value snapshot `x__pre`)
+_is_ref_standin(x) = (i = info(x); i !== nothing && i.role !== :cell && get(i.options, :reference, false) === true)
+
+"""
+Whether the cell expression `x` is a reference, read as a referent when it indexes a cell
+quantity: a `::CellRef` variable (bare, or read at a cell, as `partner[old]`, every hop of a
+chain), `sibling(…)` or `root(…)`. Any other cell index (`old`, `owner[s]`, a fold's bound
+cell) is read as it is.
+"""
+function _is_ref(x)
+    x = _unwrap(x)
+    x isa SymbolicUtils.BasicSymbolic || return false
+    _is_ref_var(x) && return true
+    _is_ref_standin(x) && return true
+    iscall(x) || return false
+    op = operation(x)
+    (op === cluster_sibling || op === as_ref) && return true
+    op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
+    # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded), whichever
+    # branch is taken (a plain cell index such as `id` reads the same through the guard). The
+    # other branch must be a cell index too: a site index (`target`) would be read as a slot.
+    if op === ifelse
+        br = arguments(x)[2:3]
+        any(_is_ref, br) || return false
+        for b in br
+            _is_cell_index(b) || throw(ArgumentError("`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
+                "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
+                "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"))
+        end
+        return true
+    end
+    if op === at
+        a = _unwrap(arguments(x)[1])
+        iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
+        return _is_ref_var(a)
+    end
+    return false
+end
+
+# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `owner′`,
+# `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell indices, or the integer 0
+# (none). Site indices (`target`, `source`, `site`) and numbers other than 0 are not.
+const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :owner′, :cluster)
+function _is_cell_index(x)
+    x = _unwrap(x)
+    SymbolicUtils.isconst(x) && (x = SymbolicUtils.unwrap_const(x))
+    x isa Real && return !(x isa Bool) && iszero(x)
+    x isa SymbolicUtils.BasicSymbolic || return false
+    _is_ref(x) && return true
+    i = info(x)
+    i !== nothing && return i.role === :builtin && i.name in _CELL_INDEX_BUILTINS
+    iscall(x) || return false
+    op = operation(x)
+    op === ifelse && return all(_is_cell_index, arguments(x)[2:3])
+    if op === at && length(arguments(x)) == 2
+        a = info(_unwrap(arguments(x)[1]))
+        return a !== nothing && a.role === :builtin && a.name in (:owner, :cluster)
+    end
+    return false
+end
+
+"""The references in `x` that index a cell quantity or are tested with `alive` (each hop of a
+chain once), outermost first: the cells a copy's sweep functions read through references."""
+function _ref_reads(x)
+    out = Any[]
+    _ref_reads!(out, _unwrap(x))
+    return out
+end
+function _ref_reads!(out, y)
+    y isa SymbolicUtils.BasicSymbolic || return out
+    iscall(y) || return out
+    (info(y) !== nothing && info(y).role in SCOPES) && return out
+    op = operation(y)
+    # a population fold reads every cell's referents, as a fold reads every cell (snapshot
+    # or not): no per-copy claim, and its bound cells cannot be lowered outside it
+    op === population && return out
+    r = op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
+        op === cell_alive ? arguments(y)[1] : nothing
+    r === nothing || _push_ref!(out, r)
+    foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
+    return out
+end
+# `ifelse(c, a, b)`: each reference branch (both are claimed); others once
+function _push_ref!(out, r)
+    r = _unwrap(r)
+    if r isa SymbolicUtils.BasicSymbolic && iscall(r) && operation(r) === ifelse
+        foreach(b -> _is_ref(b) && _push_ref!(out, b), arguments(r)[2:3])
+        return out
+    end
+    any(z -> isequal(z, r), out) || push!(out, r)
+    return out
+end
+_reads_refs(x) = !isempty(_ref_reads(x))
+# whether `x` reads through a reference anywhere, folds included
+function _mentions_refs(x)
+    found = Ref(false)
+    _walk(x) do y
+        iscall(y) || return
+        op = operation(y)
+        ((op === at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
+    end
+    return found[]
+end
+
+# the state referents are read in: `st`, or the state bound as `:__refst` (the killing
+# credit reads the readers' referents before the copy, `_vacated_energy_expr`)
+_refst(env) = get(env.bind, :__refst, :st)
+
+# Reference diagnostics (E4, E5; `track = (:references,)`): while a tracked problem's code is
+# generated, `_REF_SLOTS` maps each term label to its slot of the state's counter
+# `st.model[REF_COUNTS]`, and `_REF_TERM` names the term being lowered. Untracked (the
+# default), both are `nothing` and the lowered code is unchanged.
+const REF_COUNTS = Symbol("#ref_counts")
+const _SIBLING_LABEL = "sibling(k) found several alive members of kind k (the lowest birth is used)"
+const _REF_SLOTS = Base.ScopedValues.ScopedValue{Union{Nothing, Dict{String, Int}}}(nothing)
+const _REF_TERM = Base.ScopedValues.ScopedValue{Union{Nothing, String}}(nothing)
+_with_ref_term(f, label) = _REF_SLOTS[] === nothing ? f() : Base.ScopedValues.with(f, _REF_TERM => label)
+# `(counter, slot)` for `label` (default: the term being lowered), or `nothing` (untracked)
+function _ref_counter(label = _REF_TERM[])
+    slots = _REF_SLOTS[]
+    (slots === nothing || label === nothing) && return nothing
+    j = get(slots, label, nothing)
+    j === nothing && return nothing
+    return (Expr(:., :(st.model), QuoteNode(REF_COUNTS)), j)
+end
+
+# `x[ref]` for a quantity `x` (Info `i`) of the referent `ref`
+function _lower_deref(i::Info, ref, env)
+    r = lower(ref, env)
+    rs = _refst(env)
+    ctr = _refst(env) === :st ? _ref_counter() : nothing
+    # tracked: a dereference of a dead referent (nonzero, not alive) is counted for its term
+    ctr === nothing || (r = :(Potts._count_dead($(ctr[1]), $(ctr[2]), $rs.cell.volume, $r)))
+    if i.role === :cell
+        return :(Potts._deref($rs.cell.$(i.name), $rs.cell.volume, $r, $(_ref_default(i, env))))
+    elseif i.role in (:site, :field)
+        error("site variable `$(i.name)` indexed by a reference (a cell); a site variable is read at a site")
+    elseif i.role === :builtin
+        n = i.name
+        n === :kind && return :(Potts._deref_kind($rs.cell, $r))
+        n === :volume && return :($(env.T)(Potts._deref_volume($rs.cell.volume, $r)))
+        n === :birth && return :(Potts._deref_birth($rs.cell, $r))
+        n === :cluster && return :(Potts._deref_cluster($rs.cell, $r))
+        n in (:surface, :generation) &&
+            return :(Potts._deref($rs.cell.$n, $rs.cell.volume, $r, zero(eltype($rs.cell.$n))))
+        if n in (:euler, :euler_full) || n in _PIECES_NAMES
+            col = n in _PIECES_NAMES ? _pieces_column(n) : _euler_column(n)
+            return :($(env.T)(Potts._deref($rs.cell.$col, $rs.cell.volume, $r, zero(eltype($rs.cell.$col)))))
+        end
+        error("`$n[…]` cannot be read through a reference")
+    end
+    error("cannot index `$(i.name)` by a reference")
+end
+
+# the value a dead referent's cell variable reads as: its declared default (0 for a reference)
+function _ref_default(i::Info, env)
+    get(i.options, :reference, false) === true && return :(Int32(0))
+    v = i.default
+    v isa Bool && return env.T(v)
+    (v isa Real && !_is_symbolic(v)) && return env.T(v)       # a `Num` is a `Real`
+    (v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v)) && return :($(env.T)($(lower(v, env))))
+    # kind-conditional (E1): the default for kind 0, the medium
+    if v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v; kind = true)
+        kenv = LowerEnv(env.T, :cell, Dict{Symbol, Any}(:kind => :(Int32(0))), env.relname)
+        return :($(env.T)($(lower(v, kenv))))
+    end
+    error("cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
+          "give `$(i.name)` a scalar default (a number or an expression of parameters)")
+end
+
+"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
+@inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
+"""The claim of a copy that reads referent `r`: `r` when it is an alive slot, else 0 (none)."""
+@inline _ref_claim(vol, r) = _alive_slot(vol, r) ? Int32(r) : Int32(0)
+"""Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
+@inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
+@inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
+@inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
+@inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
+"""`birth` of cell `c` (D-066 item 3): its serial with a lifecycle (`cell.birth`), else its slot."""
+# (`c` is a cell slot in 1:capacity: the env's cell, `_birth_at` with c ≠ 0, or a referent
+# `_alive_slot` checked; every column has the capacity's length)
+@inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)
+@inline _birth_at(cell, c) = c == 0 ? Int32(0) : _birth(cell, c)
+@inline _deref_birth(cell, r) = _alive_slot(cell.volume, r) ? _birth(cell, r) : Int32(0)
+"""
+The alive member of kind `k` of cluster `cl`, or 0. With several, the one with the lowest
+`birth` (the oldest; E5); `_sibling_scan` also says whether there were several.
+"""
+@inline _sibling(cell, cl, k) = first(_sibling_scan(cell, cl, k))
+@inline function _sibling_scan(cell, cl, k)
+    best, bb, dup = Int32(0), typemax(Int32), false
+    cl == 0 && return best, dup
+    for m in 1:length(cell.kind)          # m ∈ 1:capacity: every column has that length
+        if @inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k
+            dup |= best != 0
+            b = Int32(_birth(cell, m))
+            b < bb && ((best, bb) = (Int32(m), b))
+        end
+    end
+    return best, dup
+end
+# tracked (E5): counts the scans that found several members
+@inline function _sibling_counted(cell, cl, k, cnt, j)
+    s, dup = _sibling_scan(cell, cl, k)
+    dup && CorePotts._bump!(cnt, j)
+    return s
+end
+# tracked (E4): `r`, counted in slot `j` when it names a dead cell (nonzero and not alive)
+@inline function _count_dead(cnt, j, vol, r)
+    (r != 0 && !_alive_slot(vol, r)) && CorePotts._bump!(cnt, j)
+    return r
+end
+
 # Sort of an index expression: :site or :cell.
 function _sort(x)
     x = _unwrap(x)
@@ -407,6 +640,8 @@ function _lower_at(args, env)
     end
     i = info(x)
     i === nothing && error("cannot index `$(_standin_var(x))`")
+    # `x[ref]`: the referent's value, the medium's when it is dead or 0 (D-066 item 5)
+    i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
         return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])
@@ -449,6 +684,10 @@ function _lower_at(args, env)
         end
         i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
+        if i.name === :birth
+            s === :site && error("`birth[…]` needs a cell (`old`, `new`, a reference), not a site")
+            return :(Potts._birth_at(st.cell, $j))
+        end
         if i.name in (:euler, :euler_full)
             s === :site && error("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site")
             return :($(env.T)(Potts._cellval(st.cell.$(_euler_column(i.name)), $j)))
@@ -478,6 +717,7 @@ function _lower_population(args, env)
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+            :birth => :(Potts._birth(st.cell, $nsym)),
             :euler => :($T(@inbounds st.cell.euler[$nsym])),
             :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
             (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
@@ -492,6 +732,7 @@ function _lower_population(args, env)
         range = :(1:length(st.σ))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
+    bind[:__outer] = env                 # `members(cluster)`: the enclosing cell's `cluster`
     inner = LowerEnv(T, env.mode, bind, env.relname, env.keys)
     op = ni.options.op
     init, step, fin = if op === :sum

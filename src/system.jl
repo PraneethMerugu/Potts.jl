@@ -27,7 +27,8 @@ end
 
 A cellular Potts model: kinds (the first is the medium), a lattice, parameters, scoped
 variables, Hamiltonian terms, drives, constraints, synchronous/on-copy updates, field
-equations (MTK syntax), lifecycle rules and the sweep protocol. `boundaries` holds the
+equations (MTK syntax), lifecycle rules, site conversion passes (`converts`, `@convert`) and
+the sweep protocol. `boundaries` holds the
 `@boundary` entries of the fields (`Potts.boundary_face`, `Potts.boundary_mask`) and
 `schedule` the `@schedule` phases as listed (empty: the default MCS order).
 
@@ -100,6 +101,7 @@ Base.@kwdef struct PottsSystem <: ModelingToolkitBase.AbstractSystem
     # lists them, D-170); compiled into per-scope initialization systems (initialization.jl)
     initialization_eqs::Vector{Equation} = Equation[]
     divisions::Vector{DivideRule} = DivideRule[]
+    converts::Vector{ConvertSpec} = ConvertSpec[]   # `@convert` passes (R8, D-233), in declaration order
     relationships::Vector{RelationshipSpec} = RelationshipSpec[]
     link_rules::Vector{LinkRule} = LinkRule[]
     observed::Vector{ObservedEq} = ObservedEq[]   # also MTK's `observed` field (D-137): `observed(sys)` gives `name ~ expr`
@@ -424,6 +426,10 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     end
     for d in getfield(sys, :divisions)
         println(io, "  divide  ", _domain_string(d.domain), _cadence_string(d.every), " when ", d.when)
+    end
+    for v in getfield(sys, :converts)
+        println(io, "  convert ", v.name, " ", _domain_string(v.domain), ": ", v.from, " → ", v.to,
+            v.fresh == 0 ? "" : " (fresh kind $(v.fresh))", ", at ", v.at, ", p = ", v.p)
     end
     for b in getfield(sys, :boundaries)
         println(io, "  boundary ", info(b.field).name, " ", b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" :

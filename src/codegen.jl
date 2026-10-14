@@ -67,6 +67,7 @@ _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key =
     LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, c)..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
+        :birth => :(Potts._birth(st.cell, $c)),
         :major_length => :(CorePotts.major_length($T, st.cell, ctx.lattice, $c)),
         :euler => :($T(@inbounds st.cell.euler[$c])), :euler_full => :($T(@inbounds st.cell.$(_EULER_FULL[])[$c])),
         (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$c])) for n in _PIECES_NAMES)...,
@@ -292,7 +293,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             env = _cell_env(T, side, rn; kind = k, extra = (:δsurface => δs, :δeuler => :($T($δe)), :δeuler_full => :($T($(c.uses_euler_full ? δf : δe))),
                 :δmajor_length => :(CorePotts.major_length_after($T, st.cell, ctx.lattice, $side, prop.x, $dv)),
                 _pieces_binds(c, T, side)..., oc_binds...))
-            push!(terms, :($(_kindtest(k, kinds)) && (dH += $(lower(ΔE, env)))))
+            push!(terms, :($(_kindtest(k, kinds)) && (dH += $(_with_ref_term(() -> lower(ΔE, env), _term_label(c, kinds))))))
         end
         isempty(terms) || push!(body, Expr(:&&, :($side != 0), Expr(:block, terms...)))
     end
@@ -310,7 +311,8 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             :position => :(Potts._position($T, ctx, target)), :site => :target), rn))
         push!(body, :(dH += $Eafter - $before))
     end
-    drives && c.drive !== nothing && push!(body, :(dH += $(lower(c.drive, _proposal_env(T, rn)))))
+    drives && c.drive !== nothing &&
+        push!(body, :(dH += $(_with_ref_term(() -> lower(c.drive, _proposal_env(T, rn)), "@drive"))))
     push!(body, :(return $T(dH)))
     return _share_shell(:((st, p, prop, ctx) -> $(Expr(:block, body...))))
 end
@@ -388,7 +390,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
     for x in getfield(c.sys, :variables)                         # `commit!` resets these before the writes
         i = info(x)
         (i.role in (:site, :field) && i.name in read && get(i.options, :clear_on_ownership_change, false) === true) || continue
-        after[:target][_unwrap(x)] = i.default isa Real ? T(i.default) : zero(T)
+        after[:target][_unwrap(x)] = _reset_value(T, i.default)
     end
     for (j, u) in enumerate(get(c.updates, (:on_copy, :proposal), Update[]))
         x, idx = arguments(_unwrap(u.eq.lhs))
@@ -397,9 +399,12 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
         side = _oncopy_side(i, idx)
         side === nothing && continue                 # rejected by mtkcompile
         name = Symbol(:__oncopy_, j)
-        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, (;))))
+        # a written reference stays a reference (R6): `q[partner]` with `partner[new]` written reads
+        # the referent through the guarded dereference, as `H` does after the copy
+        opts = _is_ref_var(x) ? (; reference = true) : (;)
+        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, opts)))
         push!(binds, name => Symbol(:v_oncopy_, j))
-        push!(vals, :($(Symbol(:v_oncopy_, j)) = $(lower(u.eq.rhs, _proposal_env(T, rn)))))
+        push!(vals, :($(Symbol(:v_oncopy_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, _proposal_env(T, rn)), _update_label(u)))))
     end
     return after, binds, vals
 end
@@ -425,7 +430,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
         # the commit may run in parallel (checkerboard): no whole-cell search there (P6.9a)
         _reads_global(u.eq.rhs) && throw(ArgumentError("@on_copy: `connected(…; rule = Global())` reads the whole cell; use it in @constraint or @drive"))
         v = Symbol(:v_, j)
-        push!(vals, :($v = $(lower(u.eq.rhs, env))))
+        push!(vals, :($v = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))))
         push!(writes, _write(_unwrap(u.eq.lhs), v, env))
     end
     append!(body, vals)
@@ -451,7 +456,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     for x in getfield(c.sys, :variables)
         i = info(x)
         get(i.options, :clear_on_ownership_change, false) === true || continue
-        v = i.default isa Real ? T(i.default) : zero(T)
+        v = _reset_value(T, i.default)
         push!(body, :(@inbounds st.site.$(i.name)[target] = $v))
     end
     append!(body, writes)
@@ -639,7 +644,8 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
 """The model's MCS phase order (D-145): its `@schedule` placed, or the default order."""
-_phase_order(sys::PottsSystem) = isempty(getfield(sys, :schedule)) ? collect(SCHEDULE_PHASES) : _placed_schedule(getfield(sys, :schedule))
+_phase_order(sys::PottsSystem) = isempty(getfield(sys, :schedule)) ? _default_order(_convert_names(sys)) :
+                                  _placed_schedule(getfield(sys, :schedule), _convert_names(sys))
 
 # The phases, and the last cell update phase with the columns it writes and its expression
 # (`(; phase, writes, expr)`, or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
@@ -657,7 +663,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     reduces, folds = _integral_reduces(c, T)
     refresh(js) = _integral_refresh(T, rn, reduces, folds, js)
     order = _phase_order(c.sys)
-    groups = Dict{Symbol, Vector{Any}}(n => Any[] for n in SCHEDULE_PHASES)
+    groups = Dict{Symbol, Vector{Any}}(n => Any[] for n in order)
     # Integrals (D-042, D-120): fresh at every MCS boundary (and at init); the sweep and a
     # lifecycle with divisions move σ, and an update writing an integral's operand dirties
     # it. One rule on the placed order (D-145): after each σ-moving entry, the integrals read
@@ -674,20 +680,25 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     hasdiv = !isempty(getfield(s, :divisions))
     # what each non-block entry reads (the uncompiled ticks: the compiled ones read their
     # population folds through slots)
-    reads = Dict{Symbol, Vector{Int}}(n => Int[] for n in SCHEDULE_PHASES)
+    reads = Dict{Symbol, Vector{Int}}(n => Int[] for n in order)
     reads[:fields] = _integrals_read(Any[eq.rhs for eq in getfield(s, :equations) if pde(eq)], ints)
     reads[:components] = _integrals_read(Any[(eq.rhs for eq in getfield(s, :equations) if !pde(eq))...,
             (r.when for r in getfield(s, :link_rules))..., (x for b in getfield(s, :discrete) for x in b.next)...], ints)
     reads[:sweep] = _integrals_read(Any[getfield(s, :sweep).temperature], ints)
     hasdiv && (reads[:lifecycle] = _integrals_read(Any[(d.when for d in getfield(s, :divisions))...,
             (r for d in getfield(s, :divisions) for (_, r) in d.rules if !(r isa Split))...], ints))
+    # a `@convert` pass reads the integrals in its expressions, and moves σ (R8, D-233)
+    convs = Dict{Symbol, ConvertSpec}(v.name => v for v in getfield(s, :converts))
+    for (n, v) in convs
+        reads[n] = _integrals_read(_convert_exprs(v), ints)
+    end
     blocks = (:before_mcs, :after_mcs)
     block_reads(n) = _integrals_read(Any[u.eq.rhs for u in getfield(s, :updates) if u.phase === n], ints)
     # an operand's reads include those of its hoisted folds
     operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
     written(phase) = Set{Symbol}(_update_name(u) for u in getfield(s, :updates) if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
-    moves(n) = n === :sweep || (n === :lifecycle && hasdiv)
+    moves(n) = n === :sweep || (n === :lifecycle && hasdiv) || haskey(convs, n)
     # the entries after position k up to the next σ-moving one (that one included) or `end_mcs`
     function ahead(k)
         out = Symbol[]
@@ -824,9 +835,14 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         scope = any(x -> info(x).name === n && info(x).role === :model, getfield(c.sys, :variables)) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
+    # the `@convert` passes (R8, D-233), compiled last (a model without them compiles as before)
+    for v in getfield(s, :converts)
+        push!(groups[v.name], _convert_pass(c, T, v))
+    end
     # the refreshes only a non-default order needs (empty in the default order)
     prerefresh = Dict{Symbol, Vector{Any}}(n => refresh(js) for (n, js) in pre if !isempty(js))
     postlife = haskey(post, :lifecycle) && !isempty(post[:lifecycle]) ? refresh(post[:lifecycle]) : Any[]
+    postconv = Dict{Symbol, Vector{Any}}(n => (haskey(post, n) && !isempty(post[n]) ? refresh(post[n]) : Any[]) for n in keys(convs))
     # masked clamps hold on a fresh initial state (D-145), before its derived quantities (a
     # checkpoint restore and `anneal` run `at_init` without them: `CorePotts._derived`)
     clamps = Any[CorePotts.FieldClamp(ph.field, ph.clamp) for ph in groups[:fields] if ph.clamp !== nothing]
@@ -841,6 +857,9 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         elseif n === :lifecycle
             push!(entries, CorePotts.LifecyclePhase())
             append!(entries, postlife)
+        elseif haskey(convs, n)
+            append!(entries, groups[n])
+            append!(entries, postconv[n])
         else
             append!(entries, groups[n])
         end
@@ -858,7 +877,8 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     push!(mcs, Tuple(run))
     extra = Any[(ph for (_, v) in sort!(collect(prerefresh); by = first) for ph in v)...]
     before = Any[groups[:before_mcs]..., snapshots...]
-    after = Any[postsweep..., groups[:after_mcs]..., groups[:fields]..., comps..., groups[:operators]..., postlife..., extra...]
+    after = Any[postsweep..., groups[:after_mcs]..., groups[:fields]..., comps..., groups[:operators]...,
+        (ph for v in getfield(s, :converts) for ph in (groups[v.name]..., postconv[v.name]...))..., postlife..., extra...]
     phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
         at_init = (clamps..., boundary..., snapshots...), mcs = Tuple(mcs))
     return phases, cand
@@ -877,7 +897,7 @@ function _fuse_before(c::CompiledPottsSystem, T, phases, lc, cand)
     (k > 1 && mcs[k - 1] isa Tuple && !isempty(mcs[k - 1]) && last(mcs[k - 1]) === cand.phase) || return phases, lc
     _reads_own_only(_trigger_expr(c, T).args[2], cand.writes) || return phases, lc     # the body
     fused = CorePotts.Lifecycle(lc.trigger, lc.normal, lc.cluster_normal, lc.kind, lc.divide!, lc.cluster_divide!,
-        lc.rebuild!, lc.every, lc.rules, cand.phase.f!)
+        lc.rebuild!, lc.every, lc.rules, cand.phase.f!, lc.release, lc.owner_changed)
     after = phases.after_mcs
     j = findlast(x -> x === cand.phase, after)
     after = (after[1:(j - 1)]..., after[(j + 1):end]...)
@@ -1006,6 +1026,8 @@ const _CELL_HELPER_READS = Dict{String, Tuple{Vararg{Symbol}}}(
     "CorePotts.centroid_position" => (:volume, :anchor, :m1), "Potts._centroid_axis" => (:volume, :anchor, :m1),
     "Potts._displacement_axis" => (:volume, :anchor, :m1), "CorePotts.major_length" => (:volume, :m1, :m2),
     "CorePotts.cluster_of" => (:cluster,))
+# (the reference helpers `Potts._deref_*`, `_sibling`, `_birth` are not listed: code calling
+# them reads the whole cell state, conservatively)
 function _state_reads(exprs; alias::Union{Nothing, Symbol} = nothing)
     σ = Ref(false)
     whole = Ref(false)
@@ -1405,7 +1427,7 @@ function _site_update_phases(c, T, us, every, rn)
     env = _site_env(T, :i, rn; mcs = :mcs, key = :key, bc = _face_bcs(c))
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     buffered = any(in(c.scratch), names)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         dst = buffered ? Symbol(n, :__next) : n
         :(@inbounds st.site.$dst[i] = $(Symbol(:v_, j)))
@@ -1442,7 +1464,7 @@ _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
 
 function _model_update_expr(c, T, us, every, rn)
     env = _model_env(T, rn; key = :key)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.model.$(info(_unwrap(u.eq.lhs)).name)[1] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs) -> $(Expr(:block, gate, vals..., writes..., :(return nothing))))
@@ -1450,7 +1472,7 @@ end
 
 function _cell_update_expr(c, T, us, every, rn)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [:(@inbounds st.cell.$(info(_unwrap(u.eq.lhs)).name)[c] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, gate,
@@ -1476,7 +1498,7 @@ end
 function _edge_update_expr(c, T, r::Symbol, us, every, rn)
     names = [info(_unwrap(u.eq.lhs)).name for u in us]
     env = _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update)
-    vals = [:($(Symbol(:v_, j)) = $(lower(u.eq.rhs, env))) for (j, u) in enumerate(us)]
+    vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         col = :(st.cell.$(Symbol(:link_, n)))
         :(@inbounds ($col[ek, ea] = $(Symbol(:v_, j)); $col[kb, eb] = $(Symbol(:v_, j))))
@@ -1581,13 +1603,14 @@ const _INDICATOR_OPS = (==, !=, <, <=, >, >=, !, &, |, xor)
 # operations a parameter-only expression may use (evaluated on the host from `p`)
 const _HOST_OPS = (_FLOAT_OPS..., +, -, *, ^, abs, min, max, ifelse, _intdiv, _INDICATOR_OPS...)
 
-"""Whether `x` reads only parameters and constants through plain arithmetic."""
-function _param_only(x)
+"""Whether `x` reads only parameters and constants through plain arithmetic (`kind = true`:
+and the built-in `kind`, a kind-conditional cell-variable default, E1)."""
+function _param_only(x; kind = false)
     ok = Ref(true)
     _walk(x) do y
         i = info(y)
         if i !== nothing
-            i.role === :param || (ok[] = false)
+            (i.role === :param || (kind && i.role === :builtin && i.name === :kind)) || (ok[] = false)
         elseif iscall(y)
             operation(y) in _HOST_OPS || (ok[] = false)
         else
@@ -1691,7 +1714,181 @@ function _lifecycle(c::CompiledPottsSystem, T)
         cluster_normal = _division_normal(c.divisions[clusterids], T),
         divide! = _division_rules(c, cellids, T, :parent, ruled),
         cluster_divide! = _division_rules(c, clusterids, T, :(CorePotts.cluster_of(st.cell, parent)), ruled),
-        every = g, rules = ruled)
+        every = g, rules = ruled, release = _release(c), owner_changed = _ownership_hook(c, T))
+end
+
+# ---------------------------------------------------------------------------------------
+# Site conversion passes (R8 `@convert`, D-233): the model's functions of a
+# `CorePotts.ConvertPass` (its kernels are CorePotts')
+
+_convert_pass(c::CompiledPottsSystem, T, v::ConvertSpec) = _with_ref_term(() -> _convert_pass_fns(c, T, v), _convert_label(v))
+
+function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
+    rn = c.gather_names
+    # the entity (a live cell): its `from` and `to` in its own (cell) scope
+    cenv = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
+    root = v.domain isa ClusterDomain ? :(CorePotts.cluster_of(st.cell, c) == c) : true
+    entity = _rgf(:((st, p, ctx, key, mcs, c) -> begin
+        ($(_kindtest(:(Potts._cellkind(st, c)), v.domain.kinds)) && $root) || return (false, Int32(0), Int32(0))
+        return (true, Int32($(lower(v.from, cenv))), Int32($(lower(v.to, cenv))))
+    end))
+    # the decision of a candidate site `i` of `from`, on the state at the start of the pass
+    senv = _site_env(T, :i, rn; mcs = :mcs, key = :key)
+    senv.bind[:from] = :from
+    senv.bind[:to] = :to
+    stream = CorePotts.stream_id("Potts.convert.$(v.name)")      # the draw address is the contract (D-233 ruling 8)
+    nan = _ref_counter(_convert_nan_label(v))                    # `track = (:references,)`: NaN p counted
+    decide = _rgf(:((st, p, ctx, key, mcs, i, from, to) -> begin
+        $(v.at === true ? nothing : :($(lower(v.at, senv)) || return false))
+        q = $T($(lower(v.p, senv)))
+        $(nan === nothing ? nothing : :(isnan(q) && CorePotts._bump!($(nan[1]), $(nan[2]))))
+        u = CorePotts.uniform($T, CorePotts.draw(key, mcs, i, $stream)[1])
+        # A NaN `p` converts nothing: `clamp` keeps NaN, and `u < NaN` is false (D-233 ruling 6).
+        # Do not rewrite this test as `!(u >= q)`, which would convert every candidate of a NaN `p`.
+        return u < clamp(q, zero($T), one($T))
+    end))
+    # a slot the pass allocates for kind `k`: every cell variable at its declared default for
+    # that kind (E1; nothing is copied from the slot's dead predecessor), and so its
+    # previous-value snapshot (`x__pre`) and its tick scratch (`x__tick`) where it has them
+    kenv = LowerEnv(T, :cell, Dict{Symbol, Any}(:kind => :k), rn)
+    pre = Set{Symbol}(n for (scope, n) in Iterators.flatten(values(c.pre_snapshots)) if scope === :cell)
+    tick = _tick_scratch(c) ? Set{Symbol}(info(x).name for b in c.discrete if b.scope === :cell for x in b.slots) :
+           Set{Symbol}()
+    inits = Any[]
+    for x in getfield(c.sys, :variables)
+        i = info(x)
+        i.role === :cell || continue
+        val = get(i.options, :reference, false) === true ? :(Int32($(Int(i.default)))) :
+              (i.default isa Real && !_is_symbolic(i.default)) ? T(i.default) : :($T($(lower(i.default, kenv))))
+        cols = Symbol[i.name]
+        i.name in pre && push!(cols, Symbol(i.name, :__pre))
+        i.name in tick && push!(cols, _tick_scratch_name(i.name))
+        if length(cols) == 1
+            push!(inits, :(@inbounds st.cell.$(i.name)[d] = $val))           # d ∈ 1:capacity (a free slot)
+        else
+            v0 = Symbol(:init_, i.name)
+            push!(inits, :($v0 = $val), (:(@inbounds st.cell.$n[d] = $v0) for n in cols)...)   # d ∈ 1:capacity
+        end
+    end
+    init! = _rgf(:((st, p, ctx, key, mcs, d, k) -> begin
+        $(inits...)
+        return nothing
+    end))
+    # `transfer(x, from => to; per_site)`: once per entity `r` with `n` conversions
+    transfer! = nothing
+    if !isempty(v.transfers)
+        tenv = _cell_env(T, :r, rn; mcs = :mcs, key = :key)
+        tenv.bind[:from] = :from
+        tenv.bind[:to] = :to
+        body = Any[]
+        for (j, t) in enumerate(v.transfers)
+            a = Symbol(:a_, j)
+            x = info(t.var).name
+            push!(body, :($a = $T($(lower(t.per_site, tenv))) * $T(n)),
+                :(CorePotts._atomic_add!(st.cell.$x, $(lower(t.from, tenv)), -$a)),
+                :(CorePotts._atomic_add!(st.cell.$x, $(lower(t.to, tenv)), $a)))
+        end
+        transfer! = _rgf(:((st, p, ctx, key, mcs, r, from, to, n) -> begin
+            $(body...)
+            return nothing
+        end))
+    end
+    # the compound writes, once per conversion (their sum over the pass is order-free)
+    writes! = nothing
+    if !isempty(v.writes)
+        wenv = _site_env(T, :i, rn; mcs = :mcs, key = :key)
+        wenv.bind[:from] = :from
+        wenv.bind[:to] = :to
+        wenv.bind[:created] = :created
+        vals = Any[]
+        adds = Any[]
+        for (j, (lhs, d)) in enumerate(v.writes)
+            w = Symbol(:w_, j)
+            push!(vals, :($w = $T($(lower(d, wenv)))))
+            i = info(lhs)
+            push!(adds, i !== nothing ? :(CorePotts._atomic_add!(st.model.$(i.name), 1, $w)) :
+                        :(CorePotts._atomic_add!(st.cell.$(info(arguments(lhs)[1]).name), $(lower(arguments(lhs)[2], wenv)), $w)))
+        end
+        writes! = _rgf(:((st, p, ctx, key, mcs, i, from, to, created) -> begin
+            $(vals...)
+            $(adds...)
+            return nothing
+        end))
+    end
+    links = Tuple(CorePotts.adjacency_name(r.name) for r in c.relationships)
+    return CorePotts.ConvertPass(entity, decide; init!, transfer!, writes!, owner_changed = _ownership_hook(c, T),
+        release = _release(c), fresh = v.fresh, links)
+end
+
+# The ownership hook (R8, D-075 clarify): at every site whose owner changes outside a copy
+# (the lifecycle, a `@convert` pass), each site variable declared
+# `clear_on_ownership_change` resets to its default (as a copy's commit resets it); `nothing`
+# for a model without such variables. `@on_copy` updates never run there.
+# the value a `clear_on_ownership_change` site variable resets to: its numeric default, else 0
+# (a `Num` is a `Real`: a symbolic default is no number here)
+_reset_value(T, d) = (d isa Real && !_is_symbolic(d)) ? T(d) : zero(T)
+
+function _ownership_hook(c::CompiledPottsSystem, T)
+    resets = Any[]
+    for x in getfield(c.sys, :variables)
+        i = info(x)
+        (i.role in (:site, :field) && get(i.options, :clear_on_ownership_change, false) === true) || continue
+        v = _reset_value(T, i.default)
+        push!(resets, :(@inbounds st.site.$(i.name)[i] = $v))        # i ∈ 1:nsites (the launch range)
+    end
+    isempty(resets) && return nothing
+    return _rgf(:((st, i) -> begin
+        $(resets...)
+        return nothing
+    end))
+end
+
+# Reference diagnostics (E4/E5, `track = (:references,)`): the terms whose dereferences of
+# dead referents are counted, each one slot of `st.model[REF_COUNTS]`, and the slot of
+# `sibling` scans that found several members
+_term_label(c::CompiledPottsSystem, kinds) =
+    isempty(kinds) ? "@energy cells" : "@energy cells($(join((getfield(c.sys, :kinds)[k + 1] for k in kinds), ", ")))"
+function _update_label(u)
+    l = _unwrap(u.eq.lhs)
+    i = info(l)
+    i === nothing && iscall(l) && operation(l) === at && (i = info(arguments(l)[1]))     # `x[new]` on copy
+    return "update of `$(i === nothing ? l : i.name)`"
+end
+function _ref_count_labels(c::CompiledPottsSystem)
+    labels = String[_term_label(c, ks) for (ks, _) in _sorted(_group_terms(c.cell_terms))]
+    append!(labels, ("@drive", "@constraint", "@sweep temperature", "@divide"))
+    for (_, us) in _sorted(c.updates), u in us
+        push!(labels, _update_label(u))
+    end
+    push!(labels, _SIBLING_LABEL)
+    # `@convert` passes (D-233 ruling 6): their dereferences of dead referents, and their NaN p
+    for v in getfield(c.sys, :converts)
+        push!(labels, _convert_label(v), _convert_nan_label(v))
+    end
+    return unique!(labels)
+end
+_convert_label(v::ConvertSpec) = "@convert $(v.name)"
+_convert_nan_label(v::ConvertSpec) = "@convert $(v.name): p was NaN (it converts nothing)"
+_ref_count_slots(c::CompiledPottsSystem) = Dict(l => j for (j, l) in enumerate(_ref_count_labels(c)))
+
+# The model's `CellRef` columns, in declaration order (R6)
+_ref_columns(c::CompiledPottsSystem) = Symbol[info(x).name for x in getfield(c.sys, :variables) if _is_ref_var(x)]
+
+# D-066 item 5 (a): `Lifecycle.release`, the reset of a live cell's references to dead cells
+# (at every event round, before any id is allocated); `nothing` for a model without references
+function _release(c::CompiledPottsSystem)
+    refs = _ref_columns(c)
+    isempty(refs) && return nothing
+    resets = [quote
+                  r = @inbounds st.cell.$n[c]
+                  (r != 0 && !Potts._alive_slot(st.cell.volume, r)) && (@inbounds st.cell.$n[c] = zero(r))
+              end for n in refs]
+    # c ∈ 1:capacity (the launch range)
+    return _rgf(:((st, c) -> begin
+        @inbounds(st.cell.volume[c]) > 0 || return nothing
+        $(resets...)
+        return nothing
+    end))
 end
 
 # the plane of one domain's divisions (the rules of a domain share it)
@@ -1840,8 +2037,30 @@ end
 function _vacated_energy_expr(c::CompiledPottsSystem, T)
     rn = c.gather_names
     body = Any[:(H = zero($T))]
-    for (kinds, E) in _cell_term_groups(c)
-        push!(body, :($(_kindtest(:(Potts._cellkind(st, c)), kinds)) && (H += $(lower(E, _cell_env(T, :c, rn))))))
+    groups = _cell_term_groups(c)
+    refs = _cell_terms_read_refs(c)
+    # with references (R6): the dead cell's term reads its referents before the copy (`sr`), as ΔH does
+    own = refs ? (:__refst => :sr,) : ()
+    for (kinds, E) in groups
+        push!(body, :($(_kindtest(:(Potts._cellkind(st, c)), kinds)) && (H += $(lower(E, _cell_env(T, :c, rn; extra = own))))))
+    end
+    if refs
+        # every other alive cell m: E_m(its values after; referents before) − E_m(after). ΔH saw
+        # no reader of the dead cell, which now reads the medium in H (D-231 item 2)
+        terms = Any[]
+        for (kinds, E) in groups
+            _reads_refs(E) || continue
+            before = lower(E, _cell_env(T, :m, rn; kind = :km, extra = (:__refst => :sr,)))
+            after = lower(E, _cell_env(T, :m, rn; kind = :km))
+            push!(terms, :($(_kindtest(:km, kinds)) && (H += $before - $after)))
+        end
+        push!(body, quote
+            for m in 1:length(st.cell.kind)
+                (m == c || st.cell.volume[m] == 0) && continue
+                km = Potts._cellkind(st, m)
+                $(terms...)
+            end
+        end)
     end
     cterms = _sorted(_group_terms(c.cluster_terms))
     if !isempty(cterms)
@@ -1852,8 +2071,11 @@ function _vacated_energy_expr(c::CompiledPottsSystem, T)
         end
     end
     push!(body, :(return H))
-    return :((st, p, ctx, c) -> $(Expr(:block, body...)))
+    return refs ? :((st, sr, p, ctx, c) -> $(Expr(:block, body...))) : :((st, p, ctx, c) -> $(Expr(:block, body...)))
 end
+
+# whether a cell term of the model reads through a reference (R6)
+_cell_terms_read_refs(c::CompiledPottsSystem) = any(((_, E),) -> _reads_refs(E), c.cell_terms)
 
 struct _VacatedEnergy end     # `PottsModelInfo.cache` key of the compiled `_vacated_energy_expr`
 
@@ -1864,6 +2086,10 @@ Self-check credit of copy `prop` from state `u` to state `a`: the energy that le
 `H` with the cell the copy kills (`prop.old` owned one site), or zero when it kills none, so
 that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
 credit` for every copy. Internal, host.
+
+With cell terms reading references (R6, D-231 item 2) ΔH reads every referent before the
+copy, so the credit is `E_cell(o, empty state; referents in u)` plus, over every other cell `c`
+alive in `a`, `E_c(c's values in a; referents in u) − E_c(a)`: the readers of the dead cell.
 """
 function _killing_credit(prob, u, prop, a)
     o = prop.old
@@ -1872,5 +2098,6 @@ function _killing_credit(prob, u, prop, a)
     f = lock(_OBSERVED_LOCK) do
         get!(() -> _rgf(_vacated_energy_expr(info.csys, info.T)), info.cache, _VacatedEnergy())
     end
+    _cell_terms_read_refs(info.csys) && return f(a, u, prob.p, _host_ctx(prob), o)
     return f(a, prob.p, _host_ctx(prob), o)
 end

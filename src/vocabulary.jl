@@ -37,7 +37,7 @@ const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :i
     :weight, :source, :target, :old, :new, :mcs, :position, :a, :b, :distance, :cluster,
     :cluster_volume, :cluster_surface, :time, :site, :site′, :major_length, :local_components, :ring_arcs,
     :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full, :largest_piece,
-    :largest_piece_full)
+    :largest_piece_full, :birth)
 
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
 const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
@@ -108,7 +108,7 @@ outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@rel
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 """
-const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship)
+const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relationship, :reference)
 
 # `default` when no value was written (`x(cell)`, D-170): the variable starts at 0.0 as
 # before, and is marked `PottsNoValue`, so that initialization solves for it when its
@@ -119,10 +119,21 @@ const _NO_VALUE = _NoValue()
 struct PottsNoValue end
 _written(x) = (u = Symbolics.unwrap(x); !(u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.getmetadata(u, PottsNoValue, false)))
 
-function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, kwargs...)
+function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess = nothing, type = nothing, kwargs...)
     written = !(default isa _NoValue)
-    written || (default = 0.0)
+    written || (default = type === CellRef ? 0 : 0.0)
     options = NamedTuple(kwargs)
+    # `partner(cell)::CellRef` (R6, D-066 item 5): a cell variable holding a slot id (0: none)
+    if type !== nothing
+        u0 = Symbolics.unwrap(x)
+        n0 = SymbolicUtils.iscall(u0) ? nameof(SymbolicUtils.operation(u0)) : nameof(u0)
+        type === CellRef || throw(ArgumentError("variable `$n0`: `::$type` is not a variable type; the one declared " *
+                                                "type is `CellRef` (`$n0(cell)::CellRef`, a reference to a cell)"))
+        scope === :cell || throw(ArgumentError("variable `$n0`: a `CellRef` is a cell variable, `$n0(cell)::CellRef`"))
+        (default isa Integer && !(default isa Bool) && default >= 0) || throw(ArgumentError(
+            "variable `$n0`: a `CellRef` defaults to a cell id or 0 (no reference), got $(repr(default))"))
+        options = (; options..., reference = true)
+    end
     if !(scope in SCOPES)
         haskey(options, :relationship) && throw(ArgumentError("`relationship` is given twice"))
         options = (; options..., relationship = scope)
@@ -420,6 +431,7 @@ function _fold_or_gather(fold, body, R, s, cond; kws...)
     isempty(kws) || return cond === nothing ? fold((body(n) for n in R(s)); kws...) : fold((body(n) for n in R(s) if cond(n)); kws...)
     R isa ContactDomain && return _contact_fold(fold, body, R(s), cond)          # `contacts(rel)` (D-150)
     R === cells && return _population(fold, body, cells(s), cond)
+    R === members && return _population(fold, body, members(s), cond)            # a cluster's members (R6)
     return cond === nothing ? fold(body(n) for n in R(s)) : fold(body(n) for n in R(s) if cond(n))
 end
 
@@ -427,7 +439,7 @@ end
 function _fold_iter(fold, body, itr, cond; kws...)
     isempty(kws) || return cond === nothing ? fold((body(n) for n in itr); kws...) : fold((body(n) for n in itr if cond(n)); kws...)
     itr === cells && (itr = CellDomain(Int[]))
-    itr isa Union{CellDomain, SiteDomain} && return _population(fold, body, itr, cond)
+    itr isa Union{CellDomain, SiteDomain, MembersDomain} && return _population(fold, body, itr, cond)
     itr isa ContactDomain && return _contact_fold(fold, body, itr, cond)         # a cell's contacts (D-150)
     return cond === nothing ? fold(body(n) for n in itr) : fold(body(n) for n in itr if cond(n))
 end
@@ -438,10 +450,15 @@ function _population(fold, body, d, cond)
     op = nameof(fold)
     op in _POPULATION_FOLDS || throw(ArgumentError("`$op` over a population is not supported; use one of $_POPULATION_FOLDS"))
     k = _next_number!()
-    role = d isa CellDomain ? :bound_cell : :bound_site
-    kinds = d isa CellDomain ? d.kinds : Int[]
+    role = d isa SiteDomain ? :bound_site : :bound_cell
+    kinds = d isa SiteDomain ? Int[] : d.kinds
     n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, k)), Info(role, :n, nothing, (; op, kinds)))
-    return population(n, body(n), cond === nothing ? true : cond(n))
+    c = cond === nothing ? true : cond(n)
+    if d isa MembersDomain           # the alive cells of the enclosing cell's cluster `d.cluster`
+        same = _index(B.cluster, n) == Symbolics.wrap(outer_value(_symarg(d.cluster)))
+        c = c === true ? same : same & c
+    end
+    return population(n, body(n), c)
 end
 
 const FOLDS = (:sum, :prod, :mean, :geomean, :log1p_geomean, :minimum, :maximum, :count,
@@ -1370,27 +1387,28 @@ end
 const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
 
 """
-    _placed_schedule(listed) -> Vector{Symbol}
+    _placed_schedule(listed, converts = Symbol[]) -> Vector{Symbol}
 
 The full phase order of `@schedule listed…` (D-145): the listed phases in the listed order;
 each unlisted phase, in default order, right after the last placed phase that precedes it in
-the default order (first if none). Checks the names and the order rules, naming the offender.
+the default order (first if none). The `@convert` passes `converts` (R8, D-233) are phases
+too, by default in declaration order right before `lifecycle`. Checks the names and the
+order rules, naming the offender.
 """
-function _placed_schedule(listed)
-    seen = Symbol[]
-    for n in listed
-        n isa Symbol || throw(ArgumentError("@schedule lists phase names; got `$n`"))
-        n in SCHEDULE_PHASES || throw(ArgumentError(
-            "@schedule: unknown phase `$n`; the phases are $(join(SCHEDULE_PHASES, ", "))"))
-        n in seen && throw(ArgumentError("@schedule: phase `$n` is listed twice"))
-        push!(seen, n)
+function _placed_schedule(listed, converts = Symbol[])
+    default = _default_order(converts)
+    seen = _schedule_names(listed)
+    for n in seen
+        n in default || throw(ArgumentError(
+            "@schedule: unknown phase `$n`; the phases are $(join(default, ", "))" *
+            (isempty(converts) ? "" : " (the `@convert` passes $(join(converts, ", ")) among them)")))
     end
     :end_mcs in seen && last(seen) !== :end_mcs && throw(ArgumentError(
         "@schedule: `end_mcs` must be last (the MCS boundary: history, callbacks, saving)"))
     seq = copy(seen)
-    for (j, ph) in enumerate(SCHEDULE_PHASES)
+    for (j, ph) in enumerate(default)
         ph in seq && continue
-        pos = maximum((findfirst(==(q), seq) for q in SCHEDULE_PHASES[1:(j - 1)] if q in seq); init = 0)
+        pos = maximum((findfirst(==(q), seq) for q in default[1:(j - 1)] if q in seq); init = 0)
         insert!(seq, pos + 1, ph)
     end
     at(n) = findfirst(==(n), seq)
@@ -1401,6 +1419,215 @@ function _placed_schedule(listed)
     return seq
 end
 
+# the canonical phases with the `@convert` passes right before `lifecycle` (D-233)
+function _default_order(converts)
+    isempty(converts) && return collect(SCHEDULE_PHASES)
+    k = findfirst(==(:lifecycle), SCHEDULE_PHASES)
+    return Symbol[SCHEDULE_PHASES[1:(k - 1)]..., converts..., SCHEDULE_PHASES[k:end]...]
+end
+
+# `@schedule`'s list as names, each once
+function _schedule_names(listed)
+    seen = Symbol[]
+    for n in listed
+        n isa Symbol || throw(ArgumentError("@schedule lists phase names; got `$n`"))
+        n in seen && throw(ArgumentError("@schedule: phase `$n` is listed twice"))
+        push!(seen, n)
+    end
+    return seen
+end
+
+# ---------------------------------------------------------------------------------------
+# Cell references (R6; D-066 item 5, D-075 / api-synthesis §2.6–2.7, D-231)
+
+"""
+    CellRef
+
+The type of a reference cell variable: `@variables partner(cell)::CellRef` declares a cell
+variable holding the slot of another cell (0, the default, is no reference: the medium). A
+reference compares with `==` against `id`, another reference or 0, and dereferences as
+`x[partner]` (a cell variable), `kind[partner]`, `volume[partner]`, `birth[partner]`,
+`alive(partner)`, in chains (`partner[partner[old]]`). A dead referent (volume 0) and the
+reference 0 read as the medium: kind 0, volume 0, `birth` 0, `alive` false, every cell
+variable at its declared default. Daughters copy references; at an event MCS, before any slot
+is reused, every reference to a dead cell is reset to 0 (D-066 item 5 (a)).
+"""
+struct CellRef end
+
+"""`cell_alive(r)`: whether the referent `r` is alive (`volume[r] > 0`; false for 0)."""
+cell_alive(r) = error("`alive` is symbolic-only")
+Symbolics.@register_symbolic cell_alive(r)::Bool
+"""`cluster_sibling(cl, k)`: the alive member of kind `k` of cluster `cl`, or 0."""
+cluster_sibling(cl, k) = error("`sibling` is symbolic-only")
+Symbolics.@register_symbolic cluster_sibling(cl, k)
+"""`as_ref(x)`: the cell id `x` read as a reference (`root(cluster)`)."""
+as_ref(x) = error("`root` is symbolic-only")
+Symbolics.@register_symbolic as_ref(x)
+"""`outer_value(x)`: inside a population fold, `x` of the enclosing cell (`members(cluster)`)."""
+outer_value(x) = error("`members` is symbolic-only")
+Symbolics.@register_symbolic outer_value(x)
+
+_symarg(x) = x isa Num ? x : x isa Real ? Num(x) : x
+_ref_kind(who, k) = (k isa Integer && !(k isa Bool) && k >= 1) ? k : throw(ArgumentError(
+    "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"))
+
+"""
+    alive(ref)
+
+Whether the cell `ref` refers to is alive (owns a site, `volume[ref] > 0`); `false` for the
+reference 0 (D-066 item 1). Read-only.
+"""
+alive(r) = Symbolics.wrap(cell_alive(_symarg(r)))
+"""
+    sibling(k), sibling(c, k)
+
+The alive member of kind `k` of the current cell's compartment cluster (the cell itself when
+it is of kind `k`), or 0 when the cluster has none; `sibling(c, k)` is the same for cell `c`
+(e.g. inside `for c in cells(cytoplasm)`). A reference (cell scope: updates, rules, `@observed`).
+"""
+sibling(k) = Symbolics.wrap(cluster_sibling(B.cluster, Num(_ref_kind("sibling", k))))
+sibling(c, k) = Symbolics.wrap(cluster_sibling(_index(B.cluster, c), Num(_ref_kind("sibling", k))))
+"""
+    root(cluster)
+
+The root of a compartment cluster (`cluster[c]`, D-036) as a reference; a lone cell is its own
+root. A copy-killed root, which still names its cluster, reads as a dead referent.
+"""
+root(x) = Symbolics.wrap(as_ref(_symarg(x)))
+"""
+    members(cluster), members(cluster, k…)
+
+The fold domain of the alive cells of a compartment cluster (of kinds `k…`), the cell itself
+included: `sum(volume[m] for m in members(cluster))`, `count(true for m in members(cluster,
+nucleus))`. The generator's variable is the member.
+"""
+struct MembersDomain
+    cluster::Any
+    kinds::Vector{Int}
+end
+members(cl, kinds::_KindArg...) = MembersDomain(cl, _flat_kinds(kinds))
+
+# ---------------------------------------------------------------------------------------
+# Site conversion (R8 `@convert`, D-233, D-075)
+
+"""
+    Fresh(k)
+
+`to = sibling(k) | Fresh(k)` in a `@convert` block: when the entity has no alive `to`, the
+pass allocates a new cell of kind `k` for it on its first conversion (D-066 X2: born on its
+first site). `to = sibling(k)` alone means the same.
+"""
+struct FreshKind
+    kind::Int
+end
+Fresh(k) = FreshKind(_ref_kind("Fresh", k))
+"""A `@convert` target: a reference and the kind of the cell allocated when it is absent."""
+struct ConvertTarget
+    ref::Any
+    fresh::Int
+end
+Base.:|(r::Num, f::FreshKind) = ConvertTarget(_unwrap(r), f.kind)
+Base.:|(r::SymbolicUtils.BasicSymbolic, f::FreshKind) = ConvertTarget(r, f.kind)
+
+# The names a `@convert` block binds: its `from` and `to` cells (references, read in the
+# entity's scope) and `created` (in its writes: true for the conversion that allocated `to`)
+const CONVERT_FROM = _tag(_sym(:from), Info(:builtin, :from, 0, (; reference = true)))
+const CONVERT_TO = _tag(_sym(:to), Info(:builtin, :to, 0, (; reference = true)))
+const CONVERT_CREATED = _tag(_sym(:created), Info(:builtin, :created, false, (;)))
+
+"""
+    transfer(x, from => to; per_site)
+
+In a `@convert` block: once per entity and pass, with the pass's conversion count `n` of the
+entity, `x[from] -= per_site * n` and `x[to] += per_site * n` (`x` a cell variable; nothing
+when `n = 0`): Σ x over the two cells is conserved.
+"""
+struct ConvertTransfer
+    var::Any
+    from::Any
+    to::Any
+    per_site::Any
+end
+function transfer(x, pair::Pair; per_site)
+    i = info(x)
+    (i !== nothing && i.role === :cell && get(i.options, :reference, false) !== true) || throw(ArgumentError(
+        "transfer(x, from => to; per_site): `x` is a cell variable (a number), got `$x`"))
+    return ConvertTransfer(_unwrap(x), _unwrap(pair.first), _unwrap(pair.second), _unwrap(per_site))
+end
+transfer(args...; per_site = nothing) = throw(ArgumentError("`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
+                                               "`transfer(x, from => to, per_site = 1.0)`"))
+
+"""
+    @convert name domain begin from = …; to = …; at = …; p = …; transfer(…); x[to] += … end
+
+One site conversion pass (R8, D-233): a named phase of the MCS (`@schedule`; by default
+right before `lifecycle`). For each entity of `domain` (`clusters(k…)`: one per cluster whose
+root is of kind `k`; `cells(k…)`: one per alive cell of kind `k`), every site owned by `from`
+for which the site condition `at` holds converts to `to` independently, iff `u < clamp(p, 0,
+1)` with `u` the counter-addressed draw at (mcs, site) of the stream `"Potts.convert.<name>"`;
+`p` and `at` read the state at the start of the pass. Defaults: `from` the entity's member of
+the domain kind (`sibling(k)`), `at = true`, `p = 1`. `to = sibling(k)` (or `… | Fresh(k)`)
+allocates a cell of kind `k` on the entity's first conversion when it has none.
+"""
+struct ConvertSpec
+    name::Symbol
+    domain::Union{CellDomain, ClusterDomain}
+    from::Any                     # a reference in the entity's (cell) scope
+    to::Any
+    fresh::Int                    # the kind allocated for an entity without `to` (0: none)
+    at::Any                       # the site condition
+    p::Any                        # the probability (clamped to [0, 1])
+    transfers::Vector{ConvertTransfer}
+    writes::Vector{Pair{Any, Any}}    # target (a model variable, or `x[ref]`) => increment per conversion
+end
+
+# `to = sibling(k)`: the kind of the implicit allocation (D-233 ruling 4), else 0
+function _implicit_fresh(to)
+    x = _unwrap(to)
+    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === cluster_sibling) || return 0
+    cl, k = arguments(x)
+    isequal(_unwrap(cl), _unwrap(B.cluster)) || return 0
+    k = _unwrap(k)
+    SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
+    return k isa Integer ? Int(k) : k isa Real && isinteger(k) ? Int(k) : 0
+end
+
+"""`@convert` (the macro's call): the pass `name` over `domain` (see `ConvertSpec`)."""
+function convert_pass(name::Symbol, domain; from = nothing, to = nothing, at = true, p = 1, transfers = Any[], writes = Any[])
+    d = _domain(domain)
+    d isa Union{CellDomain, ClusterDomain} ||
+        throw(ArgumentError("@convert $name: the domain is `clusters(kind…)` or `cells(kind…)`, got `$domain`"))
+    0 in d.kinds && throw(ArgumentError("@convert $name: the domain cannot include the medium kind"))
+    if from === nothing
+        length(d.kinds) == 1 || throw(ArgumentError("@convert $name: give `from` (the default, the entity's member " *
+                                                    "of the domain kind, needs a domain of one kind)"))
+        from = sibling(only(d.kinds))
+    end
+    to === nothing && throw(ArgumentError("@convert $name: give `to`, e.g. `to = sibling(k)`"))
+    fresh = 0
+    if to isa ConvertTarget
+        fresh = to.fresh
+        to = to.ref
+    else
+        fresh = _implicit_fresh(to)
+    end
+    for (what, r) in (("from", from), ("to", to))
+        _is_ref(_unwrap(r)) || throw(ArgumentError("@convert $name: `$what` is a reference to a cell (`sibling(k)`, " *
+                                                   "a `CellRef` variable, `root(cluster)`), got `$r`"))
+    end
+    ts = ConvertTransfer[]
+    for t in transfers
+        t isa ConvertTransfer || throw(ArgumentError("@convert $name: `$t` is not `transfer(x, from => to, per_site = …)`"))
+        push!(ts, t)
+    end
+    ws = Pair{Any, Any}[]
+    for w in writes
+        w isa Pair || throw(ArgumentError("@convert $name: a write is `x[to] += …` or `m += …`"))
+        push!(ws, _unwrap(w.first) => _unwrap(w.second))
+    end
+    return ConvertSpec(name, d, _unwrap(from), _unwrap(to), fresh, _unwrap(at), _unwrap(p), ts, ws)
+end
+
 """Names bound inside `@potts_model` bodies (the modelling vocabulary, not exported)."""
 const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, Local, ArcOrPair,
     Simple, connected, shell, pieces, distinct,
@@ -1408,7 +1635,8 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
-    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux)
+    dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux,
+    CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

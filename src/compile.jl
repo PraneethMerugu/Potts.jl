@@ -67,7 +67,7 @@ end
 Base.nameof(c::CompiledPottsSystem) = nameof(c.sys)
 
 const _CELL_ENERGY_BUILTINS = (:volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
-    :pieces, :pieces_full, :largest_piece, :largest_piece_full)
+    :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth)
 # the cell-scope pieces trackers (P6.9a): the face pair, the full pair
 const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_full)
 # cell updates, division rules (cluster trackers change with copies of other members, so
@@ -107,7 +107,7 @@ function _bare_builtins(x, out = Set{Symbol}())
     return out
 end
 
-const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES...)
+const _INDEXABLE = (:owner, :kind, :volume, :surface, :generation, :cluster, :euler, :euler_full, _PIECES_NAMES..., :birth)
 
 # names a user can write (`site′` only arises from `x′`)
 _visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :largest_piece_full)), collect(names))
@@ -210,6 +210,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         d = e.domain
         _located(sys, e) do
         d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_copy_reads(e.expr, d, copy_sites, copy_cells)
+        _check_energy_refs(e.expr, d)
         if d isa CellDomain
             0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind"))
             _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
@@ -265,11 +266,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     end
     drive = isempty(getfield(sys, :drives)) ? nothing : sum(d -> d.expr, getfield(sys, :drives))
     for d in getfield(sys, :drives)
-        _located(() -> _check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"), sys, d)
+        _located(() -> (_check_names(d.expr, _PROPOSAL_BUILTINS, "a drive"); _check_ref_sources(d.expr, "drives")), sys, d)
     end
     for c in getfield(sys, :constraints)
-        c.kind === :expr && _located(() -> _check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint"), sys, c)
+        c.kind === :expr && _located(() -> (_check_names(c.expr, _PROPOSAL_BUILTINS, "a constraint");
+            _check_ref_sources(c.expr, "constraints")), sys, c)
     end
+    _located(() -> _check_ref_sources(getfield(sys, :sweep).temperature, "the @sweep temperature"), sys, getfield(sys, :sweep))
 
     # updates by phase and scope
     updates = Dict{Tuple{Symbol, Symbol}, Vector{Update}}()
@@ -280,6 +283,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             (iscall(lhs) && operation(lhs) === at) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
             u.every == 1 || throw(ArgumentError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
             _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
+            _check_ref_sources(u.eq.rhs, "on-copy updates")
+            _is_ref(arguments(lhs)[2]) && throw(ArgumentError(
+                "@on_copy writes `$(_indexed_string(lhs))` through a reference; an on-copy update writes at the copy's " *
+                "cells or sites (`x[new]`, `x[old]`, `x[target]`)"))
+            _is_ref_var(arguments(lhs)[1]) && _check_ref_value(info(arguments(lhs)[1]).name, u.eq.rhs)
             :proposal
         else
             i = info(lhs)
@@ -295,6 +303,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             else
                 allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
                 _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
+                _is_ref_var(lhs) && _check_ref_value(i.name, u.eq.rhs)
             end
             i.role === :field ? :site : i.role
         end
@@ -333,8 +342,15 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
     end
     for d in getfield(sys, :divisions)
-        _located(() -> _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true),
-            sys, d)
+        _located(sys, d) do
+            _check_names(d.when, _CELL_BUILTINS, "a division condition"; between_copies = true)
+            for (x, r) in d.rules
+                _is_ref_var(x) || continue
+                r isa Split && throw(ArgumentError("@divide: `$(info(x).name) => Split()` halves a number; " *
+                                                   "`$(info(x).name)` is a reference (a `CellRef`)"))
+                _check_ref_value(info(x).name, r)
+            end
+        end
     end
     # each rule divides by its own domain (P6.0a); a kind is divided by one domain only
     cluster_division = any(d -> d.domain isa ClusterDomain, getfield(sys, :divisions))
@@ -362,6 +378,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
     end
     tick_exprs = Any[x for b in getfield(sys, :discrete) for x in b.next]
+    # site conversion passes (R8, D-233)
+    converts = getfield(sys, :converts)
+    _check_converts(sys)
+    convert_exprs = Any[x for v in converts for x in _convert_exprs(v)]
 
     # one writer per target, phase and cadence (combine contributions with `+=`)
     writers = Dict{Any, Update}()
@@ -374,7 +394,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         writers[k] = u
     end
     geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
-    needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) ||
+    needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) || !isempty(converts) ||
                     any(geometric, Any[(e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
                         (u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
                         (o.expr for o in getfield(sys, :observed))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
@@ -410,7 +430,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     scanned = Any[all_exprs..., (d.when for d in getfield(sys, :divisions))...,
         (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
         (r.when for r in getfield(sys, :link_rules))..., last.(edge_terms)...,
-        (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...]
+        (u.eq.lhs for u in getfield(sys, :updates) if u.phase === :on_copy)..., (o.expr for o in getfield(sys, :observed))...,
+        convert_exprs...]
     uses_surface = any(x -> _uses_builtin(x, :surface), scanned)
     uses_cluster_surface = any(x -> _uses_builtin(x, :cluster_surface), scanned)
     uses_euler = any(x -> _uses_builtin(x, :euler), scanned)
@@ -427,7 +448,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     if hex && uses_pieces_full
         uses_pieces, uses_pieces_full = true, false
     end
-    uses_clusters = cluster_division || uses_cluster_surface ||
+    (uses_pieces || uses_pieces_full) && !isempty(converts) && throw(ArgumentError(
+        "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
+        "conversion pass yet; a model with `@convert` cannot read them"))
+    uses_clusters = cluster_division || uses_cluster_surface || any(v -> v.domain isa ClusterDomain, converts) ||
                     any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = getfield(sys, :lattice).neighborhood)
@@ -506,7 +530,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
     _check_boundaries(sys, fields, gather_names)
-    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule))
+    isempty(getfield(sys, :schedule)) || _placed_schedule(getfield(sys, :schedule), _convert_names(sys))
     _check_units(sys)
 
     return CompiledPottsSystem(sys, cell_terms, cluster_terms, contact_terms, site_terms, drive,
@@ -517,6 +541,114 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         Footprint(; read = radius_read, source_read, source_write),
         scratch, schedule, pre_snapshots, update_pops, energy_snapshots, cell_ode_pops, discrete, discrete_pops,
         contact_trackers, authored, ode_systems, initialization, uses_pieces, uses_pieces_full, hex)
+end
+
+# ---------------------------------------------------------------------------------------
+# Site conversion passes (R8, D-233)
+
+_convert_names(sys::PottsSystem) = Symbol[v.name for v in getfield(sys, :converts)]
+
+# the expressions of a pass, as they are evaluated against the state (tracker flags, gathers)
+_convert_exprs(v::ConvertSpec) = Any[v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
+    (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...]
+
+const _CONVERT_SITE_BUILTINS = (_SITE_BUILTINS..., :from, :to)
+
+# Names, scopes and kinds of the `@convert` passes: each pass is a phase of the MCS, so its
+# name is none of the canonical phases and no two passes share one; `from`/`to` are references
+# in the entity's scope; `at`/`p` site expressions (with `from`, `to`); the writes add to a
+# model variable or to a cell variable of a cell (with `created`); no draws (the pass's one
+# draw per site is its own). With frozen kinds, the cells a pass moves sites between are
+# `sibling(k)` of non-frozen kinds (the frozen mask then never changes).
+function _check_converts(sys::PottsSystem)
+    seen = Set{Symbol}()
+    kinds = getfield(sys, :kinds)
+    for v in getfield(sys, :converts)
+        _located(sys, v) do
+            v.name in SCHEDULE_PHASES && throw(ArgumentError(
+                "@convert $(v.name): `$(v.name)` is a phase of the MCS (the phases are $(join(SCHEDULE_PHASES, ", "))); " *
+                "name the pass otherwise"))
+            v.name in seen && throw(ArgumentError("@convert $(v.name): two passes are named `$(v.name)`; name each once"))
+            push!(seen, v.name)
+            for k in v.domain.kinds
+                1 <= k < length(kinds) || throw(ArgumentError("@convert $(v.name): kind number $k is not a cell kind"))
+            end
+            v.fresh == 0 || 1 <= v.fresh < length(kinds) ||
+                throw(ArgumentError("@convert $(v.name): `Fresh($(v.fresh))` is not a cell kind"))
+            for x in _convert_exprs(v)
+                (_has_op(x, random_uniform) || _has_op(x, random_normal) || _has_op(x, random_normal_above)) &&
+                    throw(ArgumentError("@convert $(v.name): `rand()`/`randn()` are not available in a conversion pass " *
+                                        "(each candidate's draw is the pass's own, `u < p`)"))
+            end
+            for (what, r) in (("from", v.from), ("to", v.to))
+                _check_names(r, _CELL_BUILTINS, "`$what` of @convert $(v.name)"; between_copies = true)
+            end
+            v.at isa Bool || _check_names(v.at, _CONVERT_SITE_BUILTINS, "`at` of @convert $(v.name)"; between_copies = true)
+            _check_names(v.p, _CONVERT_SITE_BUILTINS, "`p` of @convert $(v.name)"; between_copies = true)
+            for t in v.transfers
+                _check_names(t.per_site, (_CELL_BUILTINS..., :from, :to), "a transfer of @convert $(v.name)"; between_copies = true)
+                for r in (t.from, t.to)
+                    _is_ref(r) || throw(ArgumentError("@convert $(v.name): a transfer moves between cells, `from => to`; got `$r`"))
+                end
+            end
+            for (lhs, d) in v.writes
+                i = info(lhs)
+                if i !== nothing
+                    i.role === :model || throw(ArgumentError("@convert $(v.name): `$(i.name) += …` writes a model variable; " *
+                                                             "write a cell variable at a cell, `$(i.name)[to] += …`"))
+                else
+                    (iscall(lhs) && operation(lhs) === at && (xi = info(arguments(lhs)[1]); xi !== nothing && xi.role === :cell &&
+                     get(xi.options, :reference, false) !== true)) || throw(ArgumentError(
+                        "@convert $(v.name): a write adds to a model variable (`m += …`) or to a cell variable at a cell " *
+                        "(`x[to] += …`); got `$(_indexed_string(lhs))`"))
+                    _check_names(arguments(lhs)[2], _CONVERT_SITE_BUILTINS, "a write of @convert $(v.name)"; between_copies = true)
+                    _is_ref(arguments(lhs)[2]) || throw(ArgumentError(
+                        "@convert $(v.name): a write adds to a cell variable at a cell named by a reference (`from`, " *
+                        "`to`, `sibling(k)`, a `CellRef`); got `$(_indexed_string(lhs))`"))
+                end
+                _check_names(d, (_CONVERT_SITE_BUILTINS..., :created), "a write of @convert $(v.name)"; between_copies = true)
+            end
+            _check_convert_order(v)
+            if !isempty(getfield(sys, :frozen_kinds))
+                fz = getfield(sys, :frozen_kinds)
+                ks = Int[v.fresh, (_implicit_fresh(r) for r in (v.from, v.to))..., v.domain.kinds...]
+                (_implicit_fresh(v.from) > 0 && _implicit_fresh(v.to) > 0 && !any(in(fz), ks)) || throw(ArgumentError(
+                    "@convert $(v.name): with frozen kinds, `from` and `to` are `sibling(k)` of kinds that are not frozen " *
+                    "(a conversion must not change the frozen sites)"))
+            end
+        end
+    end
+    return nothing
+end
+
+# The transfers and writes of a pass run in parallel, once per entity or converted site, so
+# none of their expressions (amounts, indices, the referents they name) may read a variable
+# the pass transfers or writes: the value read would depend on the order of the atomics.
+function _check_convert_order(v::ConvertSpec)
+    written = Set{Symbol}(info(t.var).name for t in v.transfers)
+    for (lhs, _) in v.writes
+        i = info(lhs)
+        push!(written, i !== nothing ? i.name : info(arguments(lhs)[1]).name)
+    end
+    isempty(written) && return nothing
+    reads = Any[]
+    for t in v.transfers
+        push!(reads, t.per_site, t.from, t.to)
+    end
+    for (lhs, d) in v.writes
+        push!(reads, d)
+        info(lhs) === nothing && push!(reads, arguments(lhs)[2])
+    end
+    for x in reads
+        _walk(x) do y
+            i = info(y)
+            (i !== nothing && i.role in (:cell, :model) && i.name in written) || return
+            throw(ArgumentError("@convert $(v.name): a transfer or write reads `$(i.name)`, which the pass itself " *
+                                "transfers or writes; the value read would depend on the order of the parallel " *
+                                "updates. Read a snapshot (`@after_mcs`) or another variable instead"))
+        end
+    end
+    return nothing
 end
 
 # the proposal neighbourhood: `@relations proposal = …`, or `VonNeumann(1)`
@@ -643,7 +775,8 @@ end
 # are exact (D-041), so they are exempt
 _pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
 # `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
-_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) &&
+# (`kind[ref]` reads the referent's kind column, not σ: R6)
+_is_sigma_at(y) = iscall(y) && operation(y) === at && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
                   (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
@@ -676,7 +809,7 @@ function _copy_varying_read(x, sites, cells; mode = :all)
             elseif i !== nothing && cells !== nothing && !_pop_bound(a[2]) &&
                    ((i.role === :builtin && i.name in _COPY_VARYING_INDEXED) || (i.role === :cell && i.name in cells))
                 hit[] = y                                 # `volume[id]`, `y[id]` with `@on_copy y[…]`
-                bare[] = _authored_name(i)
+                bare[] = _is_ref(a[2]) ? :reference : _authored_name(i)     # `volume[partner]` (R6)
             end
         elseif iscall(y) && operation(y) === at2 && any(_reads_sigma, arguments(y)[2:end])
             hit[] = y                                     # `J[kind[n], …]`
@@ -710,6 +843,13 @@ function _indexed_string(x)
 end
 
 function _copy_read_error(s, bare, where)
+    bare === :reference && return ArgumentError(
+        "this energy reads `$s`$where through a reference, which a copy changes during the sweep; ΔH evaluates " *
+        "the term only for the copy's two cells, so a change of the referent by another copy would be missing " *
+        "from it. Through a reference a cell energy reads only what no copy changes: cell variables no @on_copy " *
+        "update writes, `kind`, `birth`, `alive(ref)`. Read it in a `@drive` (evaluated per copy, e.g. " *
+        "`volume[partner[old]]`, the referent's current value) or snapshot it with `@after_mcs` (a cell variable " *
+        "`v ~ $s`, read bare as `v` in the energy)")
     hint = bare === nothing ? "" : " Read the cell's own value bare, as `$bare`: ΔH updates it for the copy's cells."
     return ArgumentError(
         "this energy reads `$s`$where, which a copy changes; ΔH evaluates the term only where the copy acts " *
@@ -737,6 +877,54 @@ function _check_copy_reads(E, d, sites, cells)
         r === nothing || throw(_copy_read_error(r..., " in a fold over a relation"))
     end
     return nothing
+end
+
+# Cell references in energies (R6, D-231): a cell term reads its referents' static values
+# (`_check_copy_reads` refuses the copy-varying ones) and `root(…)`; `sibling` and `members`
+# read every cell of a cluster (refused, `_check_ref_sources`); other domains read none.
+function _check_energy_refs(E, d)
+    d isa CellDomain && return _check_ref_sources(E, "energies")
+    (_mentions_refs(E) || _has_op(E, as_ref) || _has_op(E, cluster_sibling) || _has_op(E, outer_value)) &&
+        throw(ArgumentError("this energy reads a cell through a reference; references are read in cell energies " *
+                            "(`cells(…) => …`), drives and constraints, not in $(_domain_string(d)) terms"))
+    return nothing
+end
+
+# `sibling` and `members` scan a whole cluster, so no claim set covers them: they are sources
+# of the cell scope (updates, division conditions and rules, `@observed`), not of the sweep
+function _check_ref_sources(x, what)
+    (_has_op(x, cluster_sibling) || _has_op(x, outer_value)) && throw(ArgumentError(
+        "`sibling(…)` and `members(…)` read every cell of a cluster, which a copy changes; they are available in " *
+        "cell updates, division conditions and rules and @observed, not in $what. Keep the reference in a " *
+        "`CellRef` variable updated between sweeps (`@after_mcs nuc ~ sibling(nucleus)`) and read through it"))
+    return nothing
+end
+
+# A `CellRef` is written with a cell id: a reference, `id`, `old`/`new`, `cluster`, an integer
+# (0: none), or a choice between them
+function _check_ref_value(name, x)
+    _ref_valued(x) || throw(ArgumentError(
+        "`$name` is a reference (a `CellRef`); it is written with a cell: another reference, `sibling(k)`, " *
+        "`root(cluster)`, `id`, `old`, `new`, `cluster`, a cell id or 0, or `ifelse` between them; got `$x`"))
+    return nothing
+end
+function _ref_valued(x)
+    x = _unwrap(x)
+    x isa Integer && !(x isa Bool) && return x >= 0
+    x isa SymbolicUtils.BasicSymbolic || return false
+    SymbolicUtils.isconst(x) && return _ref_valued(SymbolicUtils.unwrap_const(x))
+    _is_ref(x) && return true
+    i = info(x)
+    i !== nothing && return i.role === :builtin && i.name in (:id, :old, :new, :cluster) || i.role === :bound_cell
+    iscall(x) || return false
+    op = operation(x)
+    op isa ModelingToolkitBase.Pre && return _ref_valued(arguments(x)[1])
+    op === ifelse && return _ref_valued(arguments(x)[2]) && _ref_valued(arguments(x)[3])
+    if op === at                                      # `cluster[c]`, `owner[s]`
+        a = info(arguments(x)[1])
+        return a !== nothing && a.role === :builtin && a.name in (:cluster, :owner)
+    end
+    return false
 end
 
 # In a contact term a bare cell variable means its value at the owner (`x[owner]`) and a
@@ -867,6 +1055,7 @@ _describe(d::Drive) = "@drive copy => $(d.expr)"
 _describe(c::Constraint) = "@constraint $(c.expr)"
 _describe(u::Update) = "@$(u.phase) $(u.eq)"
 _describe(eq::Equation) = "@equations $eq"
+_describe(v::ConvertSpec, kinds = nothing) = "@convert $(v.name) $(_domain_string(v.domain, kinds))"
 _describe(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
 _describe(x, ::Any) = _describe(x)

@@ -131,7 +131,7 @@ function _compile_odes(sys::PottsSystem)
                      Symbolics.wrap(defs[x])) for x in _algebraic_order(alg)]]
     return _replace(sys; variables, equations, observed, energies = getfield(m, :energies), drives = getfield(m, :drives),
                constraints = getfield(m, :constraints), updates = getfield(m, :updates), divisions = getfield(m, :divisions),
-               link_rules = getfield(m, :link_rules), discrete = getfield(m, :discrete), sweep = getfield(m, :sweep),
+               converts = getfield(m, :converts), link_rules = getfield(m, :link_rules), discrete = getfield(m, :discrete), sweep = getfield(m, :sweep),
                boundaries = getfield(m, :boundaries), sources = merge(srcs, getfield(m, :sources), src)), odes, origin
 end
 

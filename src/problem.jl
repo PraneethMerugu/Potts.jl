@@ -110,7 +110,12 @@ discretised problem.
 after every step; under `CheckerboardCPM` it is brought up to date at the host read points
 (a save, `integrator.u`, `checkpoint`, the end of `solve!`). Tracking changes nothing else
 in the run; it is hashed into the fingerprint (only when on), and `remake(prob; track)`
-switches it.
+switches it. `track = (:references,)` is the debug mode of cell references (R6): every
+dereference of a dead referent (a nonzero reference to a cell that is not alive, which reads
+as the medium) is counted per term (cell energy group, drive, constraint, temperature,
+update, division), as is every `sibling(k)` scan that found several alive members of kind `k`
+(the lowest `birth` is returned); `solve` reports the counts once, in one warning. Nothing of
+it is compiled into an untracked problem.
 """
 function CorePotts.PottsProblem(sys::PottsSystem, op, tspan; kwargs...)
     return CorePotts.PottsProblem(ModelingToolkitBase.mtkcompile(sys), op, tspan; kwargs...)
@@ -132,7 +137,7 @@ function CorePotts.PottsProblem(c::CompiledPottsSystem, op, tspan; T::Type = Flo
     _check_kind_tables(sys, p)
     expression isa Val{true} && throw(ArgumentError(
         "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"))
-    st = _ode_layout(_initial_state(c, opd, T, capacity, values), c, spec)
+    st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values), c, spec), c, track)
     lat = core_lattice(getfield(sys, :lattice))
     relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(c.relations)))
     spacing = getfield(sys, :lattice).spacing === nothing ? nothing : map(T, getfield(sys, :lattice).spacing)
@@ -157,25 +162,31 @@ _cadences!(acc, v::Union{Tuple, AbstractVector}) = (foreach(y -> _cadences!(acc,
 # type `T` and solvers `spec`, as a `CPMFunction` (construction, and `remake` with solvers).
 function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, hctx, cache; track::Tuple = ())
     sys = c.sys
-    fns, generated = _recording() do
+    # `track = (:references,)` (E4/E5): the dereference counters are compiled in; else nothing is
+    slots = :references in track ? _ref_count_slots(c) : nothing
+    fns, generated = Base.ScopedValues.with(_REF_SLOTS => slots) do
+        _recording() do
         _with_faces(c) do
         # the build order is the fingerprint's (D-016); the log ranges mark the copy-step code
         glog = _GENERATED[]
         i0 = length(glog)
-        ce = _constraint_expr(c, T)
+        ce = _with_ref_term(() -> _constraint_expr(c, T), "@constraint")
         delta_H = _rgf(_delta_H_expr(c, T))
         commit! = _rgf(_commit_expr(c, T))
         constraint = ce === nothing ? CorePotts.always : _rgf(ce)
-        temperature = _rgf(_temperature_expr(c, T))
+        temperature = _rgf(_with_ref_term(() -> _temperature_expr(c, T), "@sweep temperature"))
         i1 = length(glog)
         phases = _phases_parts(c, T, values, spec)
-        lifecycle = _lifecycle(c, T)
+        lifecycle = _with_ref_term(() -> _lifecycle(c, T), "@divide")
         total = _rgf(_total_energy_expr(c, T))
-        delta_E = _rgf(_delta_H_expr(c, T; drives = false))
+        # `energy_change` (host, on the caller's state) is never tracked: it must not bump the
+        # state's `#ref_counts` (built in place, so the fingerprint's build order is kept)
+        delta_E = Base.ScopedValues.with(() -> _rgf(_delta_H_expr(c, T; drives = false)), _REF_SLOTS => nothing)
         i2 = length(glog)
         connectivity = _connectivity_hooks(c, T)
         copy_step = [glog[(i0 + 1):i1]; glog[(i2 + 1):end]]
         (; delta_H, commit!, constraint, temperature, phases, lifecycle, total, delta_E, connectivity, copy_step)
+        end
         end
     end
     phases, lifecycle = _fuse_before(c, T, fns.phases[1], fns.lifecycle, fns.phases[2])
@@ -258,13 +269,13 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     foreach(ex -> _ctx_reads!(copy_used, ex, keys(hctx)), fns.copy_step)
     copy_relations = Symbol[k for k in keys(hctx)
                             if k ∉ (:lattice, :spacing) && (k in copy_used || k === :surface || !haskey(c.relations, k))]
-    claims, reads = _claims(c), _reads(c)
+    claims, reads = _claims(c), _with_faces(() -> _reads(c, T), c)
     copy_fns = (; fns.delta_H, fns.commit!, fns.constraint, claims, reads, fns.temperature, fns.connectivity)
     return CorePotts.CPMFunction(fns.delta_H; fns.commit!, fns.constraint, fns.temperature,
         claims, reads, phases, lifecycle, acceptance = _acceptance(getfield(sys, :sweep), T),
         footprint = c.footprint, fingerprint = _code_hash(generated, h),
         sys = PottsModelInfo(c, T, fns.total, fns.delta_E, hctx, cache, spec, copy_relations, copy_fns),
-        track = isempty(track) ? nothing : CorePotts.TrackDeltaH{T}(), fns.connectivity)
+        track = :ΔH in track ? CorePotts.TrackDeltaH{T}() : nothing, fns.connectivity)
 end
 
 # The relation fields `names` that expression `x` reads from the run context (`ctx.<name>`),
@@ -291,18 +302,19 @@ _fingerprint_seed(sys::PottsSystem, T) = string("lattice=", _canonical_value(cor
 # out for its ODE scratch (values kept; CorePotts keeps p, the seed and the frozen mask).
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob.f), kwargs...)
+        ode_solver = mi.solvers.ode_solver, solvers = mi.solvers.solvers, track = _track_names(prob), kwargs...)
     isempty(kwargs) || throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                                            "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
     c = mi.csys
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     values = _derived_parameters(c, prob.p, Set(info(x).name for x in getfield(c.sys, :parameters)))
-    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track = _track(track)), _ode_layout(prob.u0, c, spec)
+    track = _track(track)
+    return _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track), _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 
 # `track` (D-140): the quantities a run accumulates into its statistics. Only `:ΔH` (each
 # committed copy's ΔH → `stats.accepted_ΔH`) for now; per-term names wait for R18.
-const _TRACKABLE = (:ΔH,)
+const _TRACKABLE = (:ΔH, :references)
 function _track(track)
     (track isa Union{Tuple, AbstractVector} && all(x -> x isa Symbol, track)) || throw(ArgumentError(
         "`track` must be a tuple of names, e.g. `track = (:ΔH,)`; got $(repr(track))"))
@@ -313,6 +325,37 @@ function _track(track)
     return Tuple(track)
 end
 _track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:ΔH,)
+_track_names(prob::CorePotts.PottsProblem) =
+    (_track_names(prob.f)..., (haskey(prob.u0.model, REF_COUNTS) ? (:references,) : ())...)
+
+# The reference counters of a tracked problem (`track = (:references,)`, E4/E5): one `UInt32`
+# per term of `_ref_count_labels`, in `st.model`; removed from a state of an untracked one
+function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
+    on = :references in track
+    on == haskey(st.model, REF_COUNTS) && return st
+    model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
+            NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
+    return CorePotts.CPMState(st.σ, st.cell, st.site, model, st.history)
+end
+
+# After a solve (E4/E5): one warning with the counts of a tracked problem, which are then reset
+function CorePotts.report_run(info::PottsModelInfo, integ)
+    model = integ.state.model
+    haskey(model, CorePotts.CONVERT_FLAGS) && _report_converts(info, integ)
+    haskey(model, REF_COUNTS) || return nothing
+    counts = CorePotts._to_host(integ.stats, getfield(model, REF_COUNTS))
+    any(>(0), counts) || return nothing
+    labels = _ref_count_labels(info.csys)
+    lines = String[]
+    for (j, n) in enumerate(counts)
+        n > 0 || continue
+        push!(lines, labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)") ? "$(labels[j]): $n time(s)" :
+                     "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)")
+    end
+    @warn "references in $(nameof(info.csys)) (track = (:references,)):\n  " * join(lines, "\n  ")
+    fill!(getfield(model, REF_COUNTS), 0)
+    return nothing
+end
 
 # The ODE scratch slots `x__ode` a state needs for solvers `spec` (several solver groups in a
 # scope, or cell ODEs reading other cells' unknowns: `_ode_scratch`), each starting as a
@@ -340,11 +383,49 @@ end
 # (link energies read their centroids; a copy writes only its old/new). Leaving one out
 # would let a concurrent copy move a partner whose centroid this copy's ΔH read (P6.0b).
 # Relationships used only by link rules are read on the host between sweeps: no claims.
-function _reads(c::CompiledPottsSystem)
+# References (R6, D-231 item 7): every cell the copy-step functions read through a reference,
+# each hop of a chain (`partner[old]`, `partner[partner[old]]`) and both branches of an
+# `ifelse` between references, shared like link partners; a dead referent, 0, or a value out of
+# 1:capacity claims 0 (none: `Potts._ref_claim`, so no claim array is written out of bounds).
+# References read inside population folds are not claimed (a fold reads every cell).
+function _reads(c::CompiledPottsSystem, T)
     rels = [r for r in c.relationships if any(t -> first(t) === r.name, c.edge_terms)]
-    isempty(rels) && return CorePotts.no_claims
-    parts = [:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
-    return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
+    parts = Any[:(CorePotts.link_claims($(_link_store(c, r.name)), prop, Val($(r.capacity)))...) for r in rels]
+    refs = _ref_read_codes(c, T)
+    isempty(parts) && isempty(refs) && return CorePotts.no_claims
+    isempty(refs) && return _rgf(:((st, p, prop, ctx) -> $(Expr(:tuple, parts...))))
+    return _rgf(:((st, p, prop, ctx) -> $(Expr(:block, _PROP_LOCALS, Expr(:tuple, parts..., refs...)))))
+end
+
+# the lowered reference indices (Int32) the copy step reads, deduplicated
+function _ref_read_codes(c::CompiledPottsSystem, T)
+    rn = c.gather_names
+    out = Any[]
+    seen = Set{String}()
+    add!(code) = (k = _code_key(code); k in seen || (push!(seen, k); push!(out, :(Potts._ref_claim(st.cell.volume, $code)))))
+    for (kinds, E) in _sorted(_group_terms(c.cell_terms))
+        refs = _ref_reads(E)
+        isempty(refs) && continue
+        for (side, k) in ((:old, :k_old), (:new, :k_new))
+            env = _cell_env(T, side, rn; kind = k)
+            for r in refs
+                add!(:(($side != 0 && $(_kindtest(k, kinds))) ? $(lower(r, env)) : Int32(0)))
+            end
+        end
+    end
+    env = _proposal_env(T, rn)
+    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., getfield(c.sys, :sweep).temperature]
+    for u in get(c.updates, (:on_copy, :proposal), Update[])
+        push!(xs, u.eq.rhs)
+        # a reference the copy writes is read by the energies after it
+        x, _ = arguments(_unwrap(u.eq.lhs))
+        _is_ref_var(x) && add!(lower(u.eq.rhs, env))
+    end
+    for x in xs
+        x === nothing && continue
+        foreach(r -> add!(lower(r, env)), _ref_reads(_unwrap(x)))
+    end
+    return out
 end
 
 # Kind tables are indexed by kind (medium first) along every axis.
@@ -645,14 +726,21 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     model = Pair{Symbol, Any}[]
     for x in getfield(sys, :variables)
         i = info(x)
-        v = _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
+        # a kind-conditional default (E1) is evaluated per cell from its kind, below
+        v = i.role === :cell && !haskey(opd, _unwrap(x)) && _kind_default(i.default) ?
+            [_evaluate(_substitute_kind(i.default, k), pvals, "the default of `$(i.name)` for kind $k") for k in kinds] :
+            _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
         if i.role === :site || i.role === :field
             a = v isa AbstractArray ? T.(v) : fill(T(v), getfield(sys, :lattice).dims)
             push!(site, i.name => a)
             i.name in c.scratch && push!(site, Symbol(i.name, :__next) => copy(a))
         elseif i.role === :cell
             v === nothing && throw(ArgumentError("cell variable `$(i.name)` has no initial value; give it in the operating point"))
-            push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
+            if get(i.options, :reference, false) === true
+                push!(cell, i.name => _ref_column(i.name, v, ncell))
+            else
+                push!(cell, i.name => (v isa AbstractArray ? T.(v) : fill(T(v), ncell)))
+            end
         elseif i.role === :edge
             continue                                   # link payloads, below
         elseif i.role === :model
@@ -717,12 +805,54 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     for (n, _) in Iterators.flatten((c.update_pops, c.energy_snapshots, c.cell_ode_pops, c.discrete_pops))
         push!(model, n => zeros(T, 1))
     end
+    # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
+    # its daughters from the counter on; without divisions a cell's serial is its slot
+    if _numbers_cells(c)
+        push!(cell, :birth => Int32.(1:ncell))
+        push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
+    end
     sitent, modelnt = NamedTuple(site), NamedTuple(model)
     history = (; (n => CorePotts.history_buffer(haskey(sitent, n) ? sitent[n] : modelnt[n], d)
                   for (n, d) in sort!(collect(_history_depths(sys)); by = first))...)
     st = CorePotts.initial_state(σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history)
-    cap = capacity === nothing ? (isempty(c.divisions) ? ncell : 2ncell + 64) : capacity
-    return cap > ncell ? CorePotts.with_capacity(st, cap) : st
+    cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
+    st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
+    return _convert_layout(st, c)
+end
+
+# Cell serials and spare slots: a model that divides or allocates by `@convert`
+_numbers_cells(c::CompiledPottsSystem) = !isempty(c.divisions) || !isempty(getfield(c.sys, :converts))
+
+# a cell-variable default that reads the built-in `kind` (E1)
+function _kind_default(v)
+    _is_symbolic(v) || return false
+    k = _unwrap(B.kind)
+    return any(u -> isequal(_unwrap(u), k), Symbolics.get_variables(v))
+end
+_substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
+
+# The scratch of `@convert` passes (`CorePotts.convert_scratch`), made where the state lives;
+# a state that has it, or a model without `@convert`, is returned as is
+function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    (isempty(getfield(c.sys, :converts)) || haskey(st.model, CorePotts.CONVERT_FLAGS)) && return st
+    sc = CorePotts.convert_scratch(size(st.σ), length(st.cell.kind), ndims(st.σ))
+    # every scratch array is constant (zeros, or `typemax` for the minima): filled where the
+    # state lives, so a device state gets device scratch with no host transfer
+    dev(a) = fill!(similar(st.σ, eltype(a), size(a)), first(a))
+    return CorePotts.CPMState(st.σ, merge(st.cell, NamedTuple(n => dev(a) for (n, a) in sc.cell)),
+        merge(st.site, NamedTuple(n => dev(a) for (n, a) in sc.site)),
+        merge(st.model, NamedTuple(n => dev(a) for (n, a) in sc.model)), st.history)
+end
+
+# A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
+function _ref_column(name, v, ncell)
+    vals = v isa AbstractArray ? vec(v) : fill(v, ncell)
+    length(vals) == ncell || throw(ArgumentError("$(length(vals)) values of reference `$name` for $ncell labelled cells"))
+    for r in vals
+        (r isa Integer || (r isa Real && isinteger(r))) && 0 <= r <= ncell ||
+            throw(ArgumentError("reference `$name` = $r: a reference is 0 (none) or a cell id in 1:$ncell"))
+    end
+    return Int32.(vals)
 end
 
 # The initial value of edge variable `x` on the initial links of relationship `r`: its
@@ -923,7 +1053,37 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) = _ode_layout(u0, info.csys, info.solvers)
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
+    _track_layout(_ode_layout(_convert_layout(_birth_layout(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+
+# `@convert` (D-233): the allocations deferred for want of a free slot and the entities
+# skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
+function _report_converts(info::PottsModelInfo, integ)
+    dev = getfield(integ.state.model, CorePotts.CONVERT_FLAGS)
+    flags = CorePotts._to_host(integ.stats, dev)
+    deferred, large = Int(flags[3]), Int(flags[4])
+    deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
+                          "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *
+                          "allocate first; the others convert nothing that MCS). Pass a larger `capacity`."
+    large > 0 && @warn "@convert in $(nameof(info.csys)): $large entity pass(es) skipped: the cells' second " *
+                       "moments exceed the pass's Int32 scratch (a cell far larger than any in use)"
+    (deferred > 0 || large > 0) && fill!(dev, 0)        # flags 1–2 are per pass; 3–4 counted again
+    return nothing
+end
+
+# A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
+# state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
+# counter continues after the capacity, so no serial is ever reused
+function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    (!_numbers_cells(c) || haskey(st.cell, :birth)) && return st
+    n = length(st.cell.kind)
+    # filled where the state lives (a device state stays on the device: no host transfer)
+    birth = similar(st.cell.kind, Int32, n)
+    birth .= Int32(1):Int32(n)
+    next = fill!(similar(st.cell.kind, Int32, 1), Int32(n + 1))
+    return CorePotts.CPMState(st.σ, merge(st.cell, (; birth)), st.site,
+        merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((next,))), st.history)
+end
 
 # a NamedTuple operating point is the map of its fields (D-115)
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple) =

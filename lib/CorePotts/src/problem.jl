@@ -76,6 +76,9 @@ end
 # `remake` into the problem's parameter object and state (identity here).
 remake_parameters(sys, prob, p) = p
 remake_state(sys, prob, u0) = u0
+# Hook for the symbolic layer: a once-per-solve report of opt-in diagnostics, at the end of
+# `solve!` (nothing here)
+report_run(sys, integ) = nothing
 """
     frozen_kinds(sys)
 
@@ -715,6 +718,7 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     _fold_track!(integ)
     _fold_deferred!(integ)
     _check_status!(integ)
+    report_run(integ.f.sys, integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         integ.retcode = SciMLBase.ReturnCode.Success
     end

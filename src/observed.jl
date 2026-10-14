@@ -21,6 +21,9 @@ function _expand_observed(csys::CompiledPottsSystem, x)
 end
 
 function _observed_scope(x)
+    # a fold over `members(cluster)` reads the enclosing cell's `cluster` (`outer_value`)
+    outer = Any[]
+    _walk(y -> (iscall(y) && operation(y) === outer_value && push!(outer, arguments(y)[1])), _unwrap(x))
     x, _ = _strip_populations(_unwrap(x))
     # an integral is a cell quantity, whatever site expression it sums
     calls = Dict{Any, Any}()
@@ -36,9 +39,10 @@ function _observed_scope(x)
     for n in _bare_builtins(x)
         n in (:owner, :position, :site) && return :site
         n in (:volume, :surface, :kind, :id, :generation, :cluster, :cluster_volume, :cluster_surface, :major_length,
-            :euler, :euler_full, :pieces, :pieces_full, :largest_piece, :largest_piece_full) &&
+            :euler, :euler_full, :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth) &&
             (scope = :cell)
     end
+    any(y -> _observed_scope(y) === :cell, outer) && (scope = :cell)
     return scope
 end
 

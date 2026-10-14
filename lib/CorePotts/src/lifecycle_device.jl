@@ -59,14 +59,15 @@ const _ACC_EMPTY = 5
 const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
 const _ACC_LARGE = 7                # divisions deferred: the cell is too large for the Int32
                                     # moment scratch (`_scratch_ok`; also counted as deferred)
-const _NACC = 7
+const _ACC_BADTRANS = 8             # `transitioning` on an event other than a division (an error)
+const _NACC = 8
 
 # The bound of `_scratch_ok` (`typemax(Int32)`); a `Ref` read when the scratch is built, so
 # that tests can lower it (not public API)
 const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
-const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :cluster,
+const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
     :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
@@ -76,7 +77,7 @@ function _device_scratch(backend, N::Int, cap::Int)
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(Int32, 3), mask = z(Int64, 3), limit = _SCRATCH_LIMIT[])
+        mcnt = z(Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1), limit = _SCRATCH_LIMIT[])
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -106,7 +107,7 @@ const FUSE_CELLS = Ref(1 << 13)
 
 function DeviceLifecycle(backend, N::Int, cap::Int, st)
     names = keys(st.cell)
-    cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k))
+    cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k))
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
     return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
@@ -173,10 +174,15 @@ end
         for c in lo:hi
             raw = @inbounds events[c]
             e = _event(ruled, raw)
-            if e == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
+            if _bad_transition(e)                          # counted, thrown on the host; the bit dropped
+                Atomix.@atomic dv.acc[_ACC_BADTRANS] += Int32(1)
+                e = _base_event(e)
+                @inbounds events[c] = _with_rule(ruled, e, raw)
+            end
+            if _base_event(e) == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
                 CL || Atomix.@atomic dv.acc[_ACC_NOCLUSTER] += Int32(1)
-                e = EVENT_NONE
-                @inbounds events[c] = EVENT_NONE
+                e = _undivided(e)                          # a transition (`transitioning`) stays
+                @inbounds events[c] = _with_rule(ruled, e, raw)
             end
             @inbounds removed[c] = e == EVENT_REMOVE
             @inbounds daughter[c] = Int32(0)
@@ -204,7 +210,7 @@ end
         @inbounds(st.cell.volume[c]) > 0 || continue
         r = @inbounds st.cell.cluster[c]
         Atomix.@atomic dv.nlive[r] += Int32(1)
-        if _event(ruled, @inbounds events[r]) == EVENT_DIVIDE_CLUSTER &&
+        if _base_event(_event(ruled, @inbounds events[r])) == EVENT_DIVIDE_CLUSTER &&
            _event(ruled, @inbounds events[c]) != EVENT_REMOVE
             Atomix.@atomic dv.nmem[r] += Int32(1)
         end
@@ -218,7 +224,7 @@ end
     if CL && _on(dv, par)
         lo, hi = _chunk(t, length(events))
         for c in lo:hi
-            _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
+            _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
         end
     end
     @inbounds cnt[t, 2] = dem
@@ -239,13 +245,14 @@ end
     else
         next = Int32(0)
         for r in 1:length(events)
-            _event(ruled, @inbounds events[r]) == EVENT_DIVIDE_CLUSTER || continue
+            raw = @inbounds events[r]
+            _base_event(_event(ruled, raw)) == EVENT_DIVIDE_CLUSTER || continue
             n = @inbounds dv.nmem[r]
             if next + n <= nfree
                 @inbounds dv.coff[r] = next
                 next += n
             else
-                @inbounds events[r] = EVENT_NONE
+                @inbounds events[r] = _with_rule(ruled, _undivided(_event(ruled, raw)), raw)    # a transition stays
                 Atomix.@atomic dv.acc[_ACC_DEFERRED] += Int32(1)
             end
         end
@@ -270,13 +277,13 @@ end
                 k += Int32(1)
                 @inbounds dv.freelist[k] = c % Int32
             end
-            if CL && e == EVENT_DIVIDE_CLUSTER && !greedy
+            if CL && _base_event(e) == EVENT_DIVIDE_CLUSTER && !greedy
                 @inbounds dv.coff[c] = off
                 off += @inbounds dv.nmem[c]
             end
-            if e == EVENT_DIVIDE
+            if _base_event(e) == EVENT_DIVIDE
                 # a member of a dividing cluster divides with it, not alone
-                member = CL && _event(ruled, @inbounds events[st.cell.cluster[c]]) == EVENT_DIVIDE_CLUSTER
+                member = CL && _base_event(_event(ruled, @inbounds events[st.cell.cluster[c]])) == EVENT_DIVIDE_CLUSTER
                 if !member
                     @inbounds dv.req[c] = Int32(1)
                     nreq += Int32(1)
@@ -296,14 +303,32 @@ end
     ndiv = min(nreq, avail)
     ndiv > 0 && Atomix.@atomic dv.acc[_ACC_DIVISIONS] += ndiv
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
+    # free-list entries taken this round (serials): scratch, committed to the counter after
+    # the partition (`_advance_births!`), so a staged launch that fails in the planner leaves
+    # the state's counter as it was for the host planner
+    @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv          # taken has 1 entry, tot 3
     return nothing
 end
+
+# Cell serials (D-066 item 3; `Lifecycle`): the daughter in free-list entry `k + 1` (0-based
+# `k`, the allocation order: slot order) takes serial `next + k`; after the round the counter
+# advances past every entry taken (a division deferred for the moment scratch leaves its
+# serial unused, never reused). `births` is `nothing` without a `birth` column.
+@inline _birth!(::Nothing, d, k) = nothing
+@inline function _birth!(b, d, k)
+    @inbounds b.col[d] = b.next[1] + k % Int32         # `next` has one entry; d is a free slot
+    return nothing
+end
+@inline _advance_births!(::Nothing, dv) = nothing
+@inline _advance_births!(b, dv) = (@inbounds b.next[1] += dv.taken[1]; nothing)   # both have one entry
+_births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
+              (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH)) : nothing
 
 # G: daughters and planes. A cell dividing alone takes its slot and its normal; the item of
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
 # cluster plane on the cluster's moments
 @inline function _plan_g!(t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
-        ruled, st, p, ctx, key, mcs, ::Val{CL}) where {NF, CF, CL}
+        ruled, st, p, ctx, key, mcs, ::Val{CL}, births) where {NF, CF, CL}
     _on(dv, par) || return nothing
     lo, hi = _chunk(t, length(events))
     rk = @inbounds(tot[2]) + @inbounds(cnt[t, 3])
@@ -313,6 +338,7 @@ end
             if rk < nfree
                 if _scratch_ok(dv, st.cell, c, Val(ndims(ctx.lattice)))
                     @inbounds daughter[c] = dv.freelist[rk + 1]
+                    _birth!(births, @inbounds(dv.freelist[rk + 1]), rk)
                     n = normal(st, p, ctx, key, mcs, c % Int32)
                     for d in 1:length(n)
                         @inbounds normals[d, c] = n[d]
@@ -324,8 +350,8 @@ end
             rk += Int32(1)
         end
         # a root (its cluster id is itself) whose cluster divides: members are found by id
-        if CL && @inbounds(st.cell.cluster[c]) == c && _event(ruled, @inbounds events[c]) == EVENT_DIVIDE_CLUSTER
-            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs)
+        if CL && @inbounds(st.cell.cluster[c]) == c && _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER
+            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs, births)
         end
     end
     return nothing
@@ -368,7 +394,7 @@ end
 @inline Base.getindex(a::_OneColumn, d, c) = @inbounds a.v[d]
 
 @inline function _plan_cluster!(r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
-        mcs) where {CF}
+        mcs, births) where {CF}
     cell = st.cell
     lat = ctx.lattice
     N = ndims(lat)
@@ -408,8 +434,9 @@ end
         em = _event(ruled, @inbounds events[m])
         em == EVENT_REMOVE && continue
         @inbounds daughter[m] = dv.freelist[j + 1]
+        _birth!(births, @inbounds(dv.freelist[j + 1]), j)
         j += Int32(1)
-        ev = em == EVENT_TRANSITION ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
+        ev = _transitions(em) ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER     # A-17: it transitions first
         @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
     end
     cellK = merge(cell, (; volume = _OneValue(VK), anchor = _OneColumn(ar), m1 = _OneColumn(m1K), m2 = _OneColumn(m2K)))
@@ -444,7 +471,7 @@ end
             surf === nothing || (@inbounds surf[d] = zero(eltype(surf)))
         end
         e = _event(ruled, @inbounds events[c])
-        (e == EVENT_TRANSITION || e == _EVENT_DIVIDE_CLUSTER_TRANSITION) && (ntrans += Int32(1))
+        _transitions(e) && (ntrans += Int32(1))
         e == EVENT_REMOVE && (nrem += Int32(1))
     end
     ntrans > 0 && Atomix.@atomic dv.acc[_ACC_TRANSITIONS] += ntrans
@@ -455,7 +482,7 @@ end
 # (KA's CPU backend splits the kernel at each `@synchronize` and needs `@index` as its own
 # statement in each part)
 @kernel function _plan_kernel!(events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
-        ruled, st, p, ctx, key, mcs, clusters, surf)
+        ruled, st, p, ctx, key, mcs, clusters, surf, births)
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     ta = @index(Local, Linear)
@@ -478,7 +505,7 @@ end
     @synchronize
     tg = @index(Local, Linear)
     _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
-        clusters)
+        clusters, births)
     @synchronize
     th = @index(Local, Linear)
     _plan_h!(th, events, daughter, dv, par, ruled, surf)
@@ -489,12 +516,13 @@ end
 # side of its plane go to the daughter, whose volume and moment sums (about the parent's
 # anchor) accumulate in integer scratch
 
-@inline function _dpartition_body!(i, dv, par, σ, daughter, normals, bias, removed, cell, lat)
+@inline function _dpartition_body!(i, dv, par, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
     _on(dv, par) || return nothing
     c = @inbounds σ[i]
     c > 0 || return nothing
     if @inbounds(removed[c])
         @inbounds σ[i] = Int32(0)
+        _owner_changed!(hook, st, i)
     elseif (d = @inbounds daughter[c]) > 0
         N = ndims(lat)
         δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
@@ -507,6 +535,7 @@ end
         end
         if side > 0
             @inbounds σ[i] = d
+            _owner_changed!(hook, st, i)
             Atomix.@atomic dv.dvol[d] += Int32(1)
             # `% Int32`: |δ_k|, |δ_k δ_l| ≤ the parent's m2[k, k] ≤ the scratch limit
             # (`_scratch_ok`), and the sums wrap (exact once complete)
@@ -551,8 +580,14 @@ end
 end
 
 @inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
-        ::Val{CL}) where {CL}
+        ::Val{CL}, release::RL, births::BT) where {CL, RL, BT}
     _on(dv, par) || return nothing
+    # the serial counter passes the entries the planner took (the first stage writing state)
+    c == 1 && _advance_births!(births, dv)
+    # D-066 item 5 (a): cell c's references to dead cells reset first (no volume changes in
+    # this stage, so a slot reused this round still reads as dead), and the daughter copies
+    # the reset value; only a live cell's own columns are written (`Lifecycle.release`)
+    _release!(release, st, c)
     d = @inbounds daughter[c]
     if d > 0
         map(a -> _copy_column!(a, c, d), cols)
@@ -758,13 +793,14 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
     fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
-        lc.cluster_divide!)
+        lc.cluster_divide!, lc.release, lc.owner_changed)
     opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
         csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
-        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell))
+        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
+        births = _births(st))
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
         D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -810,8 +846,9 @@ end
 # The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
 # next form takes over. The staged form's trigger (with `before`) and planner may have run:
 # neither writes σ or a cell column (the planner only writes its scratch, the event buffers,
-# the device counts and the `surface` of the free slots it picks as daughters, which the
-# host planner recomputes from σ with the other trackers at an event), so
+# the device counts and the `surface` and `birth` of the free slots it picks as daughters, which
+# the host planner recomputes from σ with the other trackers at an event, or assigns again from
+# the serial counter that only the copies stage advances), so
 # the host planner takes the MCS from scratch, rerunning the trigger but not `before`
 # (`before_ran[]`), and drops this MCS's device counts (`_drop_device_counts!`)
 function _form_failed!(D, e)
@@ -895,11 +932,11 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
     _enqueues(mode) && (D.before_ran[] = true)
     _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
-        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf))
+        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
     _stage!(mode, _dpartition_body!, backend, n,
-        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat))
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st))
     _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
-        ruled, CL))
+        ruled, CL, fns.release, opt.births))
     _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
         fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
     launches = 5
@@ -993,18 +1030,18 @@ end
     @synchronize
     tg = @index(Local, Linear)
     _plan_g!(tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
-        st, p, ctx, key, mcs, clusters)
+        st, p, ctx, key, mcs, clusters, opt.births)
     @synchronize
     th = @index(Local, Linear)
     _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
     @synchronize
     tp = @index(Local, Linear)
     _each_on!(_dpartition_body!, tp, length(st.σ),
-        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice))
+        (dv, par, st.σ, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice, fns.owner_changed, st))
     @synchronize
     tq = @index(Local, Linear)
     _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        st, ruled, clusters))
+        st, ruled, clusters, fns.release, opt.births))
     @synchronize
     tu = @index(Local, Linear)
     _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
@@ -1083,6 +1120,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     s.deferred += deferred
     s.empty_daughters += δ(_ACC_EMPTY)
     nocluster = δ(_ACC_NOCLUSTER)
+    badtrans = δ(_ACC_BADTRANS)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
         _copy!(stats, D.mask, D.dv.mask)
@@ -1099,5 +1137,6 @@ function _fold_lifecycle!(integ; report::Bool = true)
                        "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
                        "only on the CPU"
     nocluster > 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    badtrans > 0 && throw(_bad_transition_error(badtrans))
     return nothing
 end

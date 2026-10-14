@@ -4277,6 +4277,29 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - **V6b, suspected cause:** "T = 0 loop ≈ 35× flatter than the paper's (V3b effect, A-1); at T = 15 our loop is drive-driven and per-period noise is several times below the paper's". Author question: not an author question. The old cause, "T unscaled while γ scaled by κ", was wrong: leaving T unscaled is the paper's protocol, and V6a and V6c pass with it.
   - **V14c, suspected cause:** "pinning (F1): N̄ rises with β in every foam; no L-rescale basis in the paper". Author question: asked (F1).
 
+## D-231 P6.5a tests frozen: R6 cell references, D-066 liveness, claim widening (2026-10-13; coordinator, from the P6.5a test author; under D-058, D-065, D-066, D-075, D-209)
+
+- **Frozen.** `lib/PottsModels/test/acceptance/p6_5a_cell_refs.jl` (sha256 `f621ba92…5d42`). Its header states the API.
+  - **Declaring.** `@variables partner(cell)::CellRef` (a new DSL name), stored as an integer column. Daughters copy it, updates write it, and it compares with `id`.
+  - **Sources.** `sibling(k)`, `sibling(c, k)`, `root(cluster)`, and the fold domains `members(cluster[, k])` over alive members.
+  - **Dereferencing.** `x[ref]`, `kind[ref]`, `volume[ref]`, `birth[ref]`, `alive(ref)`, and chains. A dead referent or 0 reads as the medium (cell variables at their declared defaults).
+  - **Liveness (D-066).** `alive` ≡ volume > 0. `birth` is a serial in `u.cell.birth::Vector{Int32}` that survives checkpoints. A reused slot never gets a dead cell's serial. References to dead cells are reset to 0 in the event MCS's lifecycle plan, before any id is allocated.
+  - **Claims.** Every cell a copy's sweep functions reach through a reference (each hop of a chain) is in `f.reads ∪ f.claims`.
+- **Design choices (the test author's, from precedent; coordinator-confirmed).**
+  1. An `@energy` may read only static values through a reference: cell variables, `kind`, `birth`, `alive`. A copy-varying read (`volume[partner]`) in an energy is refused with D-209's ArgumentError. Drives and constraints may read it.
+  2. ΔH reads referents in the pre-copy state. When a copy kills a referent, the self-check's killing credit adds the change of every alive reader, on top of the dead cell's own energy (D-066 item 5, "exact self-check credits").
+  3. `partner` is a user variable, not a built-in.
+  4. `sibling`, `members` and `root` are pinned in cell scope only. A model that reads references only outside the sweep keeps `has_reads(f) == false`, with no extra claims (D-058).
+- **Statistical protocol (D-065 Q7), pre-registered.**
+  - **Fixture.** Two separated cells with `partner = [2, 1]` and the drive κ(1 ∓ 2(V − V_partner)), κ = 6, T = 24.
+  - **Statistic.** Per replicate, the mean of (V₁ − V₂)² over MCS 50–400.
+  - **Per-push test.** 32 replicates per arm, Welch t, |t| ≤ 3.89 (α = 1e-4) for Checkerboard against Sequential and for a seed-null arm. The stripped-claims negative control must exceed it.
+  - **FULL tier.** Exact claims still leave CheckerboardCPM a −2.4 % ± 0.5 % bias on this fixture, so the FULL tier tests a margin instead: 200 × 1000 MCS, and the 99.9 % interval of the relative difference must lie within ±6 %. Calibration on a hand-installed widening gave [−4.1, −0.8] % against [+14.7, +18.0] % for the control.
+  - **Device.** The checkerboard on the device against the CPU sequential sample.
+- **Scope.** `centroid(c, k)`, `separation` and `minimum_image` (D-075, api-synthesis §6.4) are not in this freeze. They go to P6.5a2 with their own tests.
+- **Re-frozen the same day (sha256 `ec8c6e94…9351`).** Two claim-set assertions in testset 5 had their expected values swapped. With `partner = [2, 1, 0]`, a copy with old = 0 and new = 1 reads `partner[1] = 2`, so the claim is 2, not 1; likewise new = 2 claims 1. The implementer reported this instead of working around it, and the test author's own calibration stub, `reads = (partner[old], partner[new])`, gives the corrected values. Nothing else changed.
+- **Left open (unpinned).** D-066's output mapping to `birth` (SII ids, `cluster`, plots, PIFF), `with_capacity`, a daughter that receives no site, `sibling(k)` with several alive members of kind k, and the raw value of a reference to a dead cell.
+
 ## D-232 CI: device-only GPU step, sharded PottsModels, parallel suites (2026-10-13; coordinator, targets agreed with the spec owner under the maintainer's "CI speed" focus; amends D-157's CI layout)
 
 - **Target.** At most 45 min per push, with no test removed from per-push CI. No scheduled tier: the per-file ranking showed the cost is flat (114 PottsModels files, 35 min, largest 1.6 min), so nothing moved.
@@ -4299,6 +4322,41 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
     - **Guardrail.** With Makie already loaded, the guardrail checks `PottsModelsMakieExt`, which imported non-public `Makie.automatic`; the extension no longer uses it.
     - **Reverse order.** `papers.jl` relies on `akeeb_metrics` from `mechanisms.jl`, now preloaded.
   - No other failure in either order.
+
+## D-233 `@convert` is a per-MCS independent-decision pass, device-capable (2026-10-13; maintainer-directed; spec 14 §2.5, §9 ruling; paper over code; amends the R8 sketch, P6.5b scope; under D-066, D-089, D-156)
+- **Semantics.** Each candidate site decides independently from the start-of-pass state, with p evaluated once per MCS per cluster. The 14a code's sequential, re-evaluated form is a recorded variant.
+- **Implementation.** Generated KA kernels, one implementation for CPU and GPU, with no host round trip per MCS:
+  - (a) a decide kernel with counter-addressed draws (key, mcs, site, a dedicated conversion stream), counting conversions per cluster with atomics;
+  - (b) allocation for clusters with conversions and no target member: reset dead references first (D-066 item 5(b)), then allocate lowest-first through the device division planner (D-089, lifecycle_device.jl);
+  - (c) a paint kernel through the shared ownership-delta routine in device form, with atomic tracker updates (volume, surface, moments, contacts).
+  - `created` marks the birthing conversion. The block is named so `@extend` can replace it (14c).
+- **Gate.** At most 5 % on non-convert models in the A/B, and zero cost when no `@convert` is declared. Test-first per AUTONOMY §7.
+- **Tests frozen (P6.5b; spec-checked by the spec 14 owner).** `acceptance/p6_5b_convert.jl` (sha256 `09016687…b48c`) and `acceptance/p6_5b_ownership.jl` (`61350592…fe0f`):
+  - **Block form:** `@convert name clusters(k) begin from/to/at/p; transfer(x, from => to, per_site); compound writes end`. Defaults: `from = sibling(k)` of the domain kind, `at` = all of `from`'s sites, `p = 1`. `to = sibling(k)` allocates implicitly on the first conversion (lowest free slot, gen + 1, next birth serial, declared defaults); `| Fresh(k)` is equivalent.
+  - **Decisions:** p per candidate from the start-of-pass state, clamped to [0, 1]; a site converts iff u < p, with the draw address pinned (stream `"Potts.convert.<name>"`, (mcs, site), word 1), so results do not depend on threads or algorithm.
+  - **Bookkeeping:** `transfer` once per entity (target volume conserved), `created` true on exactly one conversion, reference reset before allocation, exact tracker recount and ΔH.
+  - **Schedule:** each pass is a named `@schedule` phase, by default just before `lifecycle`; bad names are an ArgumentError; the fingerprint covers the pass and its placement; `@extend` replaces a pass by name.
+  - **Cost:** a convert-free model keeps its pinned fingerprint; 0 B warm on CPU; on the device 0 syncs, 0 transfers, 0 B per MCS including the allocating MCS (supersedes D-075's round-trip allowance for `@convert`); CPU vs device Float32 bitwise on an exact-binary fixture.
+  - **E1:** kind-conditional expression defaults, evaluated per slot at init and for `@convert`-allocated slots only; division daughters copy the parent (D-066).
+  - **Ownership routine:** priority orders application within a round, the schedule orders rounds; default convert before divide; `clear_on_ownership_change` at every site whose owner changes; `@on_copy` never fires from the lifecycle; remove beats divide.
+  - **A-17:** a member's transition is no longer lost when its cluster divides in the same MCS, via a public `CorePotts.transitioning(EVENT_DIVIDE | EVENT_DIVIDE_CLUSTER)`.
+- **Rulings on the test author's choices (spec owner confirmed).**
+  1. `budget` is deferred to a later row; if needed, the order-free form is a cap by draw rank (lowest u first).
+  2. "remove > convert" holds only within a round: a lifecycle removal after the convert pass can still lose sites to it. Open until `@retire` (P6.4c/P6.11).
+  3. Per-conversion compound writes stay alongside `transfer` (the sum is order-free).
+  4. Implicit allocation for `to = sibling(k)`; `Fresh` kept as a redundant spelling.
+  5. Expression defaults are re-evaluated only at init and for `@convert` slots (D-066).
+  6. A dead `to` referent reads kind-0 defaults; a NaN p converts nothing because `u < NaN` is false (`clamp` keeps NaN). The decision line carries a comment so it is never rewritten as `!(u >= p)`; the E4 debug report counts NaN p per pass.
+  7. Zero round trips per MCS on the device (stricter than D-075).
+  8. The draw address is part of the contract.
+  9. `CorePotts.transitioning` is public; candidates are restricted to `from`'s sites even when `at` selects others; `at` replaces api-synthesis's `sites`.
+- **Re-frozen the same day (`p6_5b_convert.jl`, sha256 `682d9477…347b`; maintainer OK).** Testset 1 checked `isdefined` for `P65bFortuna` and `P65bFortunaFresh`, which the file defines only in section 12, so those two assertions failed for any implementation (the implementer reported it). Both checks moved to section 12's first assertion, after the definitions. Nothing else changed.
+- **Left open (unpinned).** `budget`, gate/`when`, order, `Every(n)`, convert-to-medium, remove > convert across rounds, and `@convert` in a model that reads `pieces`/`largest_piece` (a compile error today: the pass does not maintain the pieces trackers).
+- **Review note (2026-10-14; adversarial reviews of P6.5a and P6.5b, coordinator-relayed).**
+  - *Thread independence, narrowed (N3; under performance over exactness).* The decisions (which sites convert, which slots are allocated) do not depend on threads or algorithm. The sums that `transfer` and the compound writes accumulate with Float atomics are bitwise thread-independent only when every increment is exactly representable (the frozen fixtures' are); otherwise they agree to rounding. No ordered reduction is paid for.
+  - *Allocation (N6).* Allocation runs in its own single-item kernel with the device division planner's rule (lowest free slot first, a slot that is the cluster id of a live cell is held), not through the planner itself. p is evaluated per candidate site from the start-of-pass state, which equals the "once per MCS per cluster" wording above when p reads only cell quantities.
+  - *A-17 order (N8).* A transitioning division now applies the `kind` hook before `divide!`/`cluster_divide!`, so a direct CorePotts user's division rules see the new kind. Only a cell that both transitions and divides in one MCS is affected, which no event could express before A-17.
+  - *Resolved.* P6.5a: an `ifelse` with a reference in one branch requires a cell index in the other (a site index was dereferenced as a slot). P6.5b: S1, the Int32 moment scratch is bounded (an entity too large is skipped and counted); S2, deferred allocations and skipped entities are reported once per solve; S3, a compound write's cell must be a reference and `_atomic_add!` checks its bound; S4, a transfer or write may not read a variable the same pass transfers or writes (compile error); S5, `transitioning` is a plain bit operation in kernels and is validated on the host by both planners.
 
 ## D-234 Jiang 2005 J3: Rb → E2F as drawn, provisional default reversed (2026-10-13; coordinator call, from the spec 06 §8b reverse-engineering plan; maintainer's reverse-engineering-first direction; amends the J3 provisional default of the 2026-10-06 policy)
 - **Finding (06 §8b, A4).** With the top tier on (GSK3b, TGFb, SCF on: the paper's stated initial condition), the Fig 2 logic turns E2F on, and so lets the first cell proliferate, only with Rb → E2F as drawn. The provisional inhibitory form arrests the first cell at once.

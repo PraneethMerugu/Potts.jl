@@ -11,7 +11,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
     Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
-    Symbol("@initialization_equations"))
+    Symbol("@initialization_equations"), Symbol("@convert"))
 
 """
     @potts_model Name begin
@@ -70,7 +70,7 @@ _kw_local(k::Symbol) = Symbol("##kw#", k)
 const _BOUND_BUILTINS = (:volume, :surface, :kind, :kind′, :owner, :owner′, :id, :generation, :weight,
     :source, :target, :old, :new, :mcs, :position, :distance, :cluster, :cluster_volume, :cluster_surface,
     :time, :site, :major_length, :local_components, :ring_arcs, :ring_cells, :ring_medium, :direction, :euler,
-    :largest_piece)
+    :largest_piece, :birth)
 # `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
 # forms: reserved, not bound
 _reserved_names() = Set{Symbol}([_BOUND_BUILTINS..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
@@ -129,6 +129,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     bsched = _has_section(body, Symbol("@boundary")) || _has_section(body, Symbol("@schedule"))
     # likewise `@initialization_equations` (D-170)
     inits = _has_section(body, Symbol("@initialization_equations"))
+    # likewise `@convert` (R8, D-233)
+    convs = _has_section(body, Symbol("@convert"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -159,6 +161,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __sweep = nothing
         $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
+        $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -174,6 +177,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         observed = __observed, frozen_kinds = __frozen, kind_classes = __classes, sources = __sources, components = __components,
         sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
         $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
+        $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
         structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -216,6 +220,7 @@ function _prime_targets(parts::_Parts, body::Expr)
         for l in _lines(filter(a -> !(a isa LineNumberNode), ex.args[3:end]))
             decl = l isa Expr && l.head === :(=) ? l.args[1] : l
             decl isa Expr && decl.head === :tuple && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell), [guess = g]`
+            decl isa Expr && decl.head === :(::) && length(decl.args) == 2 && (decl = decl.args[1])   # `x(cell)::CellRef`
             decl isa Expr && decl.head === :ref && (decl = decl.args[1])
             decl isa Expr && decl.head === :call && length(decl.args) == 2 && (scopes[decl.args[1]] = decl.args[2])
         end
@@ -470,6 +475,10 @@ function _section!(parts, sec, args, ln = nothing)
                 decl, rhs = decl.args[1], Expr(:tuple, nothing, decl.args[2])
             end
             range = nothing
+            type = nothing
+            if decl isa Expr && decl.head === :(::) && length(decl.args) == 2   # `x(cell)::CellRef` (R6)
+                decl, type = decl.args
+            end
             if decl isa Expr && decl.head === :ref                         # `p(cell)[1:n]`: a vector
                 range = decl.args[2]
                 decl = decl.args[1]
@@ -484,6 +493,10 @@ function _section!(parts, sec, args, ln = nothing)
                             rhs.args[2].head === :vect ? (rhs.args[1], rhs.args[2]) : (rhs, nothing)
             kw = opts === nothing ? Any[] : [Expr(:kw, o.args[1], o.args[2]) for o in opts.args]
             default === nothing || push!(kw, Expr(:kw, :default, default))
+            if type !== nothing
+                range === nothing || throw(ArgumentError("variable `$k`: a typed variable (`::$type`) is a scalar, not a vector"))
+                push!(kw, Expr(:kw, :type, type))
+            end
             if range === nothing
                 push!(code, :($k = $P.variable(only($P.Symbolics.@variables $k(t)), $(QuoteNode(scope)); $(kw...))),
                     :(push!(__vars, $k)))
@@ -637,9 +650,13 @@ function _section!(parts, sec, args, ln = nothing)
             push!(listed, n)
         end
         isempty(listed) && throw(ArgumentError("@schedule lists at least one phase"))
-        _placed_schedule(listed)
+        # the canonical phases are checked here; a name that is none of them may be a
+        # `@convert` pass (this model's or a base's), checked when the model is compiled
+        all(n -> n in SCHEDULE_PHASES, listed) ? _placed_schedule(listed) : _schedule_names(listed)
         push!(code, :(isempty(__schedule) || throw(ArgumentError("@schedule is given twice; list the phases once"))),
             :(append!(__schedule, Symbol[$(map(QuoteNode, listed)...)])))
+    elseif sec === Symbol("@convert")
+        push!(code, _convert_section(args, ln))
     elseif sec === Symbol("@sweep")
         ex = only(args)
         ex = _replace_call(ex, :Metropolis, :($P.sweep_spec), QuoteNode(:metropolis))
@@ -647,6 +664,40 @@ function _section!(parts, sec, args, ln = nothing)
         push!(code, :(__sweep = $(rewrite(ex))))
     end
     return parts
+end
+
+# `@convert name domain begin … end` (R8, D-233): the block's keys `from`, `to`, `at`, `p`,
+# its `transfer(…)` calls and compound writes, evaluated with `from` and `to` bound to the
+# pass's cells (`created` is a DSL name)
+function _convert_section(args, ln)
+    P = :(Potts)
+    (length(args) == 3 && args[1] isa Symbol && args[3] isa Expr && args[3].head === :block) || throw(ArgumentError(
+        "@convert takes a name, a domain and a block: `@convert protrusion clusters(cytoplasm) begin to = sibling(k); p = … end`"))
+    name, domain, blk = args
+    kws = Any[]
+    seen = Set{Symbol}()
+    transfers = Any[]
+    writes = Any[]
+    for (l, _) in _lines_ln(Any[blk], ln)
+        if l isa Expr && l.head === :(=) && l.args[1] in (:from, :to, :at, :p)
+            k = l.args[1]
+            k in seen && throw(ArgumentError("@convert $name: `$k` is given twice"))
+            push!(seen, k)
+            push!(kws, Expr(:kw, k, rewrite(_strip(l.args[2]))))
+        elseif l isa Expr && l.head === :call && l.args[1] === :transfer
+            push!(transfers, rewrite(l))
+        elseif l isa Expr && l.head in (:+=, :-=)
+            d = rewrite(l.args[2])
+            push!(writes, :($(rewrite(l.args[1])) => $(l.head === :+= ? d : :(-($d)))))
+        else
+            throw(ArgumentError("@convert $name: `$l` is not a line of the block; write `from = …`, `to = …`, `at = …`, " *
+                                "`p = …`, `transfer(x, from => to, per_site = …)` or a compound write `x[to] += …`"))
+        end
+    end
+    call = :($P.convert_pass($(QuoteNode(name)), $domain; $(kws...), transfers = Any[$(transfers...)], writes = Any[$(writes...)]))
+    return _located_push(:__converts, :(let from = $P.CONVERT_FROM, to = $P.CONVERT_TO
+        $call
+    end), ln)
 end
 
 _globalize(ex, k, mod) = ex === k ? GlobalRef(mod, k) :
