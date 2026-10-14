@@ -1082,11 +1082,12 @@ end
 # counter continues after the capacity, so no serial is ever reused. A dividing model that
 # does not read `birth` (P6.5a3) drops a given state's column and counter (a state saved
 # before P6.5a3, or of another model), so its states keep the problem's layout.
+_without(nt::NamedTuple, k::Symbol) = NamedTuple{filter(!=(k), keys(nt))}(nt)
 function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     if _numbers_cells(c) && !_tracks_births(c)
         haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
-        return CorePotts.CPMState(st.σ, Base.structdiff(st.cell, NamedTuple{(:birth,)}), st.site,
-            Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history)
+        return CorePotts.CPMState(st.σ, _without(st.cell, :birth), st.site, _without(st.model, CorePotts.NEXT_BIRTH),
+            st.history)
     end
     (!_tracks_births(c) || haskey(st.cell, :birth)) && return st
     n = length(st.cell.kind)
