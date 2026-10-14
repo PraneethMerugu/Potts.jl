@@ -341,6 +341,7 @@ end
 # After a solve (E4/E5): one warning with the counts of a tracked problem, which are then reset
 function CorePotts.report_run(info::PottsModelInfo, integ)
     model = integ.state.model
+    haskey(model, CorePotts.CONVERT_FLAGS) && _report_converts(info, integ)
     haskey(model, REF_COUNTS) || return nothing
     counts = CorePotts._to_host(integ.stats, getfield(model, REF_COUNTS))
     any(>(0), counts) || return nothing
@@ -1055,6 +1056,21 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
     _track_layout(_ode_layout(_convert_layout(_birth_layout(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+# `@convert` (D-233): the allocations deferred for want of a free slot and the entities
+# skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
+function _report_converts(info::PottsModelInfo, integ)
+    dev = getfield(integ.state.model, CorePotts.CONVERT_FLAGS)
+    flags = CorePotts._to_host(integ.stats, dev)
+    deferred, large = Int(flags[3]), Int(flags[4])
+    deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
+                          "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *
+                          "allocate first; the others convert nothing that MCS). Pass a larger `capacity`."
+    large > 0 && @warn "@convert in $(nameof(info.csys)): $large entity pass(es) skipped: the cells' second " *
+                       "moments exceed the pass's Int32 scratch (a cell far larger than any in use)"
+    (deferred > 0 || large > 0) && fill!(dev, 0)        # flags 1–2 are per pass; 3–4 counted again
+    return nothing
+end
+
 
 # A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
 # state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
