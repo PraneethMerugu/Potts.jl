@@ -46,7 +46,7 @@ _shadow_type(::MaskMobility) = Vector{Bool}
 _shadow_mask(::AllMobile, m) = nothing
 _shadow_mask(::MaskMobility, m) = zeros(Bool, m)
 
-"""The number of on-lattice mobile proposal neighbours of site `u` (coordinates `x`) owned
+"""The number of on-lattice mobile proposal neighbors of site `u` (coordinates `x`) owned
 by another cell than `u`'s."""
 @inline function _unlike(σ, mob, lat, offsets, u::Int, x)
     a = @inbounds σ[u]                      # u ∈ 1:length(σ)

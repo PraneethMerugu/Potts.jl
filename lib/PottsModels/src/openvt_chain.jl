@@ -12,7 +12,7 @@ that the chain relaxes toward its rest length. The time a chain of 11 cells take
   a relaxed cell `A`: energies `λ (volume − A_c)²` and `λ (volume − A)²`.
 - Adhesion `J[kind, kind′]`: cell–cell 20, cell–medium 10 (Table S1).
 - `T = 20`, `A = 50` (one cell diameter CD = 10 sites times the 5-row strip), `A_c = 25`.
-- The lattice is periodic on both axes with Moore(1) neighbours, and proposals are
+- The lattice is periodic on both axes with Moore(1) neighbors, and proposals are
   Moore(1). On a 5-row strip each cell spans the strip, so the chain is one-dimensional.
 - No growth and no division.
 
@@ -63,7 +63,7 @@ The initial chains of [`OpenVTChain`](@ref), placed as in the benchmark's Morphe
 
 Ids run left to right (for `n = 21`: relaxed 1–5, compressed 6–16, relaxed 17–21). The
 first compressed column is `L ÷ 2 − 26` for a lattice of length `L`, Morpheus's box origin
-`L/2 − 27` (0-based), which centres the 11-chain within one site.
+`L/2 − 27` (0-based), which centers the 11-chain within one site.
 """
 function openvt_chain(n::Integer = 11)
     n in (11, 21) || throw(ArgumentError("openvt_chain: n must be 11 or 21, got $n"))

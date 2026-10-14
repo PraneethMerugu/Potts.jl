@@ -41,14 +41,14 @@ pottsplot!(ax, renderframe(sol))
 fig
 ```
 
-The grey region outside the disk is outside the domain.
+The gray region outside the disk is outside the domain.
 
 ### Hexagonal lattices
 
 `geometry = Hexagonal()` makes a 2D hexagonal lattice. Sites are stored on the usual array
-in axial coordinates. `Hex(k)` is the ball of hex distance `k` (6, 18, 36 neighbours);
+in axial coordinates. `Hex(k)` is the ball of hex distance `k` (6, 18, 36 neighbors);
 `Moore(k)` and `VonNeumann(k)` mean `Hex(k)` on this geometry. The 12 *second-nearest*
-neighbours of a hexagonal site (in Euclidean distance shells) are `NeighborOrder(2)`, not
+neighbors of a hexagonal site (in Euclidean distance shells) are `NeighborOrder(2)`, not
 `Hex(2)`, which has 18. Centroids, distances and the Laplacian are Cartesian.
 
 ```@example lattice
@@ -75,9 +75,9 @@ fig
 
 The plot shows the axial array; the cells are compact on the hexagonal lattice.
 
-## Neighbourhoods
+## Neighborhoods
 
-A neighbourhood (a **relation**) is a set of offsets:
+A neighborhood (a **relation**) is a set of offsets:
 
 | Relation | Offsets | 2D count | 3D count |
 |---|---|---|---|
@@ -88,7 +88,7 @@ A neighbourhood (a **relation**) is a set of offsets:
 | `Hex(k)` | hex distance ≤ k (hexagonal lattices) | 6, 18, 36 | |
 | `Stencil([(1, 0), (-1, 0), …])` | explicit offsets | | |
 
-`include_self = true` adds the zero offset, for folds over a site and its neighbours (the
+`include_self = true` adds the zero offset, for folds over a site and its neighbors (the
 Act model's geometric mean).
 
 ## Relation roles: `@relations`
@@ -97,7 +97,7 @@ A model uses relations in three roles:
 
 - **contact**: the pairs of `contacts` energy terms and the bonds counted by `surface`; set
   by `@lattice … neighborhood = …`.
-- **proposal**: where a copy comes from: a random neighbour of the target site in this
+- **proposal**: where a copy comes from: a random neighbor of the target site in this
   relation. The default is the first shell (`VonNeumann(1)`: 4 in 2D, 6 in 3D).
 - **named relations**, used by `contacts(name)` terms and by folds such as
   `sum(c[n] for n in name(site))`.
@@ -107,7 +107,7 @@ A model uses relations in three roles:
     @kinds medium cell
     @lattice Lattice((40, 40); neighborhood = Moore(1))
     @relations begin
-        proposal = Moore(1)           # copy from any of the 8 neighbours
+        proposal = Moore(1)           # copy from any of the 8 neighbors
         far = Ball(3.0)               # a named relation
     end
     @energy begin

@@ -79,7 +79,7 @@ built, before the first MCS:
   0.25–0.45 s for coupled nonlinear equations mixed with explicit ones and steady ODE starts
   (measured on an Apple M-series laptop); later problems pay a few milliseconds, plus about
   2 µs per cell.
-- Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbour gathers,
+- Equations read one cell (or the model). Reads of another cell (`x[j]`), neighbor gathers,
   folds over cells, and site, field and edge variables are errors for now.
 
 ```@example vars
@@ -208,7 +208,7 @@ The `adjacency` keyword says which sites are connected:
 - `:face`, the default: sites sharing an edge (2D) or a face (3D). The holes are read with full adjacency.
 - `:full`: sites sharing any corner. The holes are read with face adjacency.
 
-So four sites round an empty centre, touching only at corners, read `euler = 4` (four
+So four sites round an empty center, touching only at corners, read `euler = 4` (four
 pieces) and `euler(; adjacency = :full) = 0` (one ring). A hexagonal lattice has one
 adjacency, and both forms give the same value.
 
@@ -216,10 +216,10 @@ On a periodic axis χ is that of the cell on the torus. A cell that wraps round 
 counts the cycle as a hole: a band round a periodic 2D lattice reads 0, as does a rod
 through a periodic 3D axis. Out-of-domain sites are background, so a pocket against a
 closed wall is not a hole. A periodic axis must have length 2 or more: on a periodic axis
-of length 1 the target's neighbours wrap onto the target itself, so building a problem that
+of length 1 the target's neighbors wrap onto the target itself, so building a problem that
 reads `euler` on such a lattice is an error (make the axis closed, or longer).
 
 A model that reads `euler` anywhere, an observable included, tracks one `Int32` column per
 adjacency it reads (`u.cell.euler`, `u.cell.euler_full`). The column costs a read of the
-target's 8, 6 or 26 neighbours per accepted copy and per ΔH. A model that never names
+target's 8, 6 or 26 neighbors per accepted copy and per ΔH. A model that never names
 `euler` has no column and no code.

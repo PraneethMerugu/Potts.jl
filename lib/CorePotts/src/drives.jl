@@ -44,8 +44,8 @@ struct Log1pGeometricMean <: MeanFold end
 """
     neighborhood_mean(x, σ, ctx, site, owner; relation, fold = GeometricMean())
 
-Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbours owned by
-`owner`. Zero for the medium or an empty set. The neighbourhood-memory drive of the Act
+Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbors owned by
+`owner`. Zero for the medium or an empty set. The neighborhood-memory drive of the Act
 family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 """
 @inline function neighborhood_mean(x, σ, ctx, site, owner; relation, fold::M = GeometricMean()) where {M <: MeanFold}
@@ -87,7 +87,7 @@ end
 
 Number of pieces the losing cell's (`prop.old`) sites around the target would form if the
 copy were accepted: face-connected components of its sites in the target's Moore
-neighbourhood (3ᴺ − 1 ≤ 26 sites: runs of the 8-ring in 2D, a bit-dilation flood fill in
+neighborhood (3ᴺ − 1 ≤ 26 sites: runs of the 8-ring in 2D, a bit-dilation flood fill in
 3D), or arcs of the 6-ring on a hexagonal lattice. Out-of-domain sites are not part of the
 cell. Zero for the medium, when the target is the cell's last site, or when it is an
 isolated fragment. Connectivity rules are expressions over it: `local_components == 1`
@@ -106,19 +106,19 @@ site, an isolated fragment) is rejected like two.
 """
     ring_arcs(σ, ctx, prop) -> Int
 
-Pieces of the losing cell's (`prop.old`) sites on the target's neighbour shell, two shell
-sites joined when they are lattice face neighbours: the maximal runs (arcs) of the 8-ring
+Pieces of the losing cell's (`prop.old`) sites on the target's neighbor shell, two shell
+sites joined when they are lattice face neighbors: the maximal runs (arcs) of the 8-ring
 on a square 2D lattice and of the 6-ring on a hexagonal one; the face-connected pieces of
 the 26-site Moore shell on a cubic 3D lattice. It equals [`local_components`](@ref) on every
 geometry. Zero for the medium. Out-of-domain sites are not the cell; periodic axes wrap.
-The shell is fixed, whatever the model's neighbourhood.
+The shell is fixed, whatever the model's neighborhood.
 """
 @inline ring_arcs(σ, ctx, prop::Proposal) = local_components(σ, ctx, prop)
 
 """
     ring_cells(σ, ctx, prop) -> Int
 
-Number of distinct cells (medium excluded) on the target's neighbour shell (see
+Number of distinct cells (medium excluded) on the target's neighbor shell (see
 [`ring_arcs`](@ref)).
 """
 @inline ring_cells(σ, ctx, prop::Proposal) = _distinct_cells(read_shell(σ, ctx, prop).owners)
@@ -126,7 +126,7 @@ Number of distinct cells (medium excluded) on the target's neighbour shell (see
 """
     ring_medium(σ, ctx, prop) -> Int
 
-Number of medium sites on the target's neighbour shell (see [`ring_arcs`](@ref)).
+Number of medium sites on the target's neighbor shell (see [`ring_arcs`](@ref)).
 Out-of-domain sites (a closed face, outside a domain mask) are not medium; on a periodic
 axis the shell wraps.
 """

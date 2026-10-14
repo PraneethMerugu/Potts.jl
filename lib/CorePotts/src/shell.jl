@@ -17,8 +17,8 @@ const _CUBE_SHELL = Tuple(Int32.((i, j, k)) for k in -1:1 for j in -1:1 for i in
 """
     shell_offsets(lattice)
 
-The offsets of the target's neighbour shell: the 8 sites of the 3×3 box on a square
-lattice, the 6 neighbours on a hexagonal one, the 26 sites of the 3×3×3 box in 3D.
+The offsets of the target's neighbor shell: the 8 sites of the 3×3 box on a square
+lattice, the 6 neighbors on a hexagonal one, the 26 sites of the 3×3×3 box in 3D.
 """
 @inline shell_offsets(::Lattice{2, M, Hexagonal}) where {M} = _HEX_SHELL
 @inline shell_offsets(::Lattice{2}) = _SQUARE_SHELL
@@ -74,9 +74,9 @@ end
     check_shell_lattice(lattice, quantity)
 
 Throw an `ArgumentError` naming `quantity` when `lattice` has a periodic axis of length 1:
-there the target's neighbour shell wraps onto the target itself, so every shell-based
+there the target's neighbor shell wraps onto the target itself, so every shell-based
 quantity (the local rules, `Global`, `pieces`, `largest_piece`, `local_components`, the
-`ring_*` built-ins, `euler`) would read x as its own neighbour. The one check, run on the
+`ring_*` built-ins, `euler`) would read x as its own neighbor. The one check, run on the
 host when a problem is built (and by [`recompute_euler`](@ref)).
 """
 function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N}
@@ -209,7 +209,7 @@ end
     shell_pieces(lattice, mask, full) -> Int32
 
 Components of the shell positions in `mask`, two positions joined when they are face
-neighbours (`full = false`) or any neighbours (`full = true`; on a hexagonal lattice the
+neighbors (`full = false`) or any neighbors (`full = true`; on a hexagonal lattice the
 two are the same).
 """
 @inline function shell_pieces(lat::Lattice, mask::UInt32, full::Bool)
@@ -223,7 +223,7 @@ end
 `Local(; gain, adjacency)` for the losing cell: `true` for the medium; otherwise its shell
 positions form exactly one piece (zero pieces is refused), the shell is not full (every
 position in the domain and owned by `old`), and, if `gain`, `new` owns a shell site adjacent
-to the target (a face neighbour, or any shell site when `full`). σ may be a
+to the target (a face neighbor, or any shell site when `full`). σ may be a
 [`ShellRead`](@ref).
 """
 @inline local_rule(σ, ctx, prop::Proposal, gain::Bool, full::Bool) =
@@ -267,9 +267,9 @@ end
 
 `Simple(; adjacency)` for cell `c` (`true` for the medium): the target is a simple point of
 `c`'s shell sites with the target, out-of-domain positions counting as background. 2D
-`full = false`: one 4-component of `c` in the 8-shell touching a face neighbour, and one
+`full = false`: one 4-component of `c` in the 8-shell touching a face neighbor, and one
 8-component of the background; `full = true` swaps the adjacencies. 3D: the same with 6
-(over the 18-neighbourhood) and 26. Hex: one arc of each. σ may be a [`ShellRead`](@ref).
+(over the 18-neighborhood) and 26. Hex: one arc of each. σ may be a [`ShellRead`](@ref).
 """
 @inline simple_point(σ, ctx, prop::Proposal, c, full::Bool) =
     c == 0 || _simple_point(read_shell(σ, ctx, prop), ctx.lattice, c, full)

@@ -22,7 +22,7 @@ whose quantities Potts reads (unknowns, parameters, discrete nodes, names the mo
 as `comp.x`) are bound to expressions (`y(t) = 2k`, `k2 = 2k`, `initial_conditions =
 [y => 2k]`, a discrete `X(t) = !Y`), is rejected by name. Bindings of observed variables and
 of parameters nothing reads are ignored, as by MTK; `guesses` are ignored too (MTK
-initialisation is not run).
+initialization is not run).
 """
 struct ComponentSpec
     name::Symbol
@@ -385,7 +385,7 @@ end
 _has_operator(x, ::Type{O}) where {O} = (found = Ref(false); _walk_all(y -> (iscall(y) && operation(y) isa O && (found[] = true)), x); found[])
 
 """
-`mtkcompile` of a discrete component, rejecting what the lowering cannot honour first. MTK
+`mtkcompile` of a discrete component, rejecting what the lowering cannot honor first. MTK
 failures become `ArgumentError`s naming the component. With full ModelingToolkit loaded (which
 replaces MTKBase's compiler and rejects clocked systems), the `PottsModelingToolkitExt`
 extension compiles through MTK's discrete-pass hook (gap G1).

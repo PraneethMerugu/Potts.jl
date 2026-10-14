@@ -14,8 +14,8 @@ Conditions follow the rules of drives: `rand()` and `integral` are not allowed; 
 integral in a cell variable updated `@before_mcs` and read it as `s[new]`, `s[old]` (see
 [Drives](@ref manual-drive)).
 
-The connectivity rules read the target's neighbour shell, whatever the model's
-neighbourhood: the 8 surrounding sites on a square lattice, the 6 on a hexagonal one, the 26
+The connectivity rules read the target's neighbor shell, whatever the model's
+neighborhood: the 8 surrounding sites on a square lattice, the 6 on a hexagonal one, the 26
 on a cubic 3D one. They, their soft form (`@drive connectivity(k; rule, penalty)`), the
 Boolean `connected(old; rule)` and the shell folds `pieces` and `distinct` are described on
 the [Connectivity](@ref manual-connectivity) page, with a mapping from other frameworks.
@@ -39,7 +39,7 @@ using Potts
     @sweep Metropolis(; temperature = 30.0)
 end
 
-# number of pieces of cell 1, on 4-neighbour steps
+# number of pieces of cell 1, on 4-neighbor steps
 function npieces(σ, c)
     seen = falses(size(σ)); n = 0
     for x in CartesianIndices(σ)

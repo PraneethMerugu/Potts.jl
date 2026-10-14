@@ -1,8 +1,8 @@
 # [Tutorial 6: links between cells](@id tutorial-links)
 
-Cells can be tied together: by junctions in an epithelium, by tethers between a leader and
-its followers, by springs in a mechanical model. Potts.jl represents such ties as **links**
-of a named **relationship**. You will learn:
+Potts.jl ties cells together with **links** of a named **relationship**. Such ties
+include junctions in an epithelium, tethers between a leader and its followers, and springs
+in a mechanical model. You will learn:
 
 - how to declare a relationship and give its links an energy;
 - how to start with links, and how to make and break links with `@link` and `@unlink`;
@@ -19,8 +19,8 @@ nothing # hide
 
 ## A chain of springs
 
-Seven cells sit in a row, 6 sites apart. Each is linked to the next by a spring with rest
-length 6, shorter than their distance, so the chain contracts:
+Seven cells sit in a row, 6 sites apart. A spring links each cell to the next. The rest
+length of 6 is shorter than the distance between the cells, so the chain contracts:
 
 ```@example links
 @potts_model Chain begin
@@ -42,11 +42,11 @@ end
 nothing # hide
 ```
 
-- `@relationship bond(cell, cell) capacity = 2` declares a set of links between cells,
-  each cell having at most 2.
+- `@relationship bond(cell, cell) capacity = 2` declares a set of links between cells.
+  Each cell has at most 2 links.
 - `rest(bond)` is an **edge variable**: one value per link of `bond`.
 - `edges(bond) => …` is an energy term summed over every link. Inside it, `a` and `b` are
-  the two linked cells and `distance` is the distance between their centroids.
+  the two linked cells. `distance` is the distance between their centroids.
 
 The initial links go into the operating point under the relationship's name, as pairs of
 cell numbers:
@@ -55,8 +55,8 @@ cell numbers:
 @named chain = Chain()
 op = layout(Tiling((5, 5); spacing = 6, region = (5:76, 18:22), kinds = [:cell]), chain)
 n = length(op[2].second)                          # number of cells
-neighbours = [(i, i + 1) for i in 1:(n - 1)]
-prob = PottsProblem(chain, [op; :bond => neighbours], (0, 600); seed = 1)
+neighbors = [(i, i + 1) for i in 1:(n - 1)]
+prob = PottsProblem(chain, [op; :bond => neighbors], (0, 600); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 10)
 record_potts("links_chain.mp4", sol; framerate = 12, title = "", figure = (; size = (600, 330)))
 nothing # hide
@@ -68,9 +68,12 @@ nothing # hide
 
 ## Reading the links
 
-The links live in the per-cell state. `CorePotts.link_store(u.cell, :bond)` returns the link
-table of a saved state; `CorePotts.linked(store, a, b)` asks whether two cells are linked
-and `CorePotts.link_count(store, c)` counts the links of cell `c`:
+The links live in the per-cell state. Three functions read them:
+
+- `CorePotts.link_store(u.cell, :bond)` returns the link table of a saved state.
+- `CorePotts.linked(store, a, b)` asks whether two cells are linked.
+- `CorePotts.link_count(store, c)` counts the links of cell `c`.
+
 
 ```@example links
 using Potts: CorePotts
@@ -78,9 +81,9 @@ store = CorePotts.link_store(sol.u[end].cell, :bond)
 [CorePotts.linked(store, i, i + 1) for i in 1:(n - 1)]
 ```
 
-To draw the links, connect the centroids of linked cells (`centroids` from
-`PottsModels.Analysis` takes the matrix of cell numbers; a site `i` is drawn between `i - 1`
-and `i`, hence the `- 0.5`):
+To draw the links, connect the centroids of linked cells. `centroids` from
+`PottsModels.Analysis` takes the matrix of cell numbers. The plot draws a site `i` between
+`i - 1` and `i`, hence the `- 0.5`:
 
 ```@example links
 function draw_links!(ax, u, name)
@@ -101,10 +104,13 @@ fig
 
 ## Making and breaking links
 
-Links can also form and break during a run. `@link bond when = condition` checks every pair
-of cells that touch and are not yet linked (`new_contact(a, b)`), and links those for which
-the condition holds; `@unlink bond when = condition` checks every existing link. Here
-motile cells stick together when they meet, and a link breaks when it is stretched beyond
+Links can also form and break during a run:
+
+- `@link bond when = condition` checks every pair of cells that touch and are not yet
+  linked (`new_contact(a, b)`). It links each pair for which the condition holds.
+- `@unlink bond when = condition` checks every existing link.
+
+Here motile cells stick together when they meet. A link breaks when it stretches beyond
 `ℓmax`:
 
 ```@example links
@@ -140,7 +146,7 @@ nothing # hide
 <video src="../links_sticky.mp4" controls autoplay loop muted playsinline width="420"></video>
 ```
 
-Without the links these cells would not stick: their contact energy with each other (14)
+Without the links these cells would not stick. Their contact energy with each other (14)
 is higher than with the medium (10). The links hold the clusters together:
 
 ```@example links
@@ -151,16 +157,26 @@ lines!(ax, sol.t, nlinks.(sol.u))
 fig
 ```
 
-The conditions can use the kinds of the two cells (`kind[a] == leader`), cell variables
-(`x[a]`), the `distance`, edge variables and `mcs`. A rule can run less often: `@link bond
-when = …, every = 10`. A model can declare several relationships, each with its own
-capacity, edge variables, energy and rules. Cells removed by the lifecycle lose their links
-(a cell squeezed out by copies keeps them until the next link rule), and daughters start
-unlinked. See [Relationships](@ref manual-relationships).
+The conditions can use:
+
+- the kinds of the two cells (`kind[a] == leader`);
+- cell variables (`x[a]`);
+- the `distance`;
+- edge variables;
+- `mcs`.
+
+To run a rule less often, add `every`: `@link bond when = …, every = 10`.
+
+A model can declare several relationships. Each has its own capacity, edge variables,
+energy and rules.
+
+Cells removed by the lifecycle lose their links. A cell squeezed out by copies keeps its
+links until the next link rule. Daughters start unlinked. See
+[Relationships](@ref manual-relationships).
 
 ## What you learned
 
-- `@relationship name(cell, cell) capacity = k` declares links; `edges(name) => …` gives
+- `@relationship name(cell, cell) capacity = k` declares links. `edges(name) => …` gives
   them an energy with `a`, `b` and `distance`.
 - Initial links go in the operating point as `:name => [(1, 2), …]`.
 - `@link` and `@unlink` make and break links during a run.

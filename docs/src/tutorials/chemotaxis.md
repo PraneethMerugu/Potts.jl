@@ -1,8 +1,8 @@
 # [Tutorial 2: fields and chemotaxis](@id tutorial-chemotaxis)
 
-Cells sense and secrete chemicals. In Potts.jl a chemical is a **field**: a value at every
-lattice site that obeys a partial differential equation, written in ModelingToolkit
-syntax. You will learn:
+This tutorial adds a chemical that cells sense and secrete. In Potts.jl a chemical is a
+**field**: a value at every site that obeys a partial differential equation. You write the
+equation in ModelingToolkit syntax. You will learn:
 
 - how to declare a field and its reaction–diffusion equation;
 - how to choose the field solver of a problem;
@@ -20,7 +20,7 @@ nothing # hide
 ## A field with a source
 
 The model below has one cell kind and a chemical `c`. The chemical is made in a strip at
-the right edge of the lattice, diffuses and decays. The lattice is closed in x and
+the right edge of the lattice. It diffuses and decays. The lattice is closed in x and
 periodic in y:
 
 ```math
@@ -64,7 +64,7 @@ New pieces:
 - `@drive Chemotaxis(c; strength = χ)` biases copies towards higher `c` (more below).
 
 The problem must say how to integrate the field. `ExplicitEuler(substeps = 8, lower = 0.0)`
-takes 8 explicit Euler steps per MCS and clips negative values:
+takes 8 explicit Euler time steps per MCS (Monte Carlo step). It clips negative values:
 
 ```@example chemo
 @named gradient = Gradient()
@@ -75,7 +75,8 @@ nothing # hide
 ```
 
 `Scattered` places 12 cells at random in the left part of the lattice. With `χ = 0` the
-cells only diffuse. `sol[:c]` gives the field at every saved time, as a matrix:
+cells only diffuse. `sol[:c]` gives the field at every saved time, as a matrix. Plot its
+mean over y at the end of the run:
 
 ```@example chemo
 c_end = sol[:c][end]
@@ -86,28 +87,30 @@ fig
 ```
 
 !!! note "How many substeps"
-    An explicit step is stable only if it is short enough for the diffusion coefficient
-    and the reaction rate. `ExplicitEuler()` without `substeps` chooses the count itself,
-    from the current parameters: the smallest `n` with
-    ``\frac{\Delta t}{n}\left(D \sum_d 4/h_d^2 + k\right) \le 1.8``, where ``k``
-    bounds the reaction's ``|\partial f/\partial c|`` (`k` for `- k * c`, also with an
-    indicator such as `(kind == medium)`). The margin below the stability limit 2 damps
-    grid-scale noise. A number, as here, is a minimum: the automatic count wins when it is
-    larger. When the reaction is not linear in the field (`- k * c^2`), its rate is not
-    counted and the problem warns; give `substeps` with room to spare. A field that blows
-    up to huge positive and negative values is the sign of too few substeps.
+    An explicit time step is stable only if it is short enough for the diffusion
+    coefficient and the reaction rate. Without `substeps`, `ExplicitEuler()` chooses the
+    count itself from the current parameters. It takes the smallest `n` with
+    ``\frac{\Delta t}{n}\left(D \sum_d 4/h_d^2 + k\right) \le 1.8``. Here ``k`` bounds
+    the reaction's ``|\partial f/\partial c|`` (`k` for `- k * c`, also with an indicator
+    such as `(kind == medium)`). The margin below the stability limit 2 damps
+    lattice-scale noise.
+
+    A number, as here, is a minimum: if the automatic count is larger, it wins. If the
+    reaction is not linear in the field (`- k * c^2`), its rate is not counted and the
+    problem warns. In that case, give `substeps` with room to spare. A field that blows up
+    to huge positive and negative values is the sign of too few substeps.
 
 ## Chemotaxis
 
-`Chemotaxis(c; strength = χ)` adds to ``\Delta H`` of a copy from site `source` into site
-`target`
+`Chemotaxis(c; strength = χ)` adds a term to the energy change ``\Delta H`` of a copy from
+source site `source` into target site `target`:
 
 ```math
 \Delta H_\text{chem} = -\chi\,\big(c(\text{target}) - c(\text{source})\big)
 ```
 
-when the gaining cell is a cell, so a cell that extends up the gradient lowers its energy.
-Switch it on with `remake`:
+It adds this term only when the gaining cell is a cell, not the medium. So a cell that
+extends up the gradient lowers its energy. Switch chemotaxis on with `remake`:
 
 ```@example chemo
 prob_chemo = remake(prob; p = [:χ => 300.0])
@@ -121,7 +124,7 @@ nothing # hide
 ```
 
 The cells crawl towards the source at the right. The mean x-coordinate of their sites
-shows it; `sol[:position]` is not needed, the saved states hold the cell numbers:
+shows it. `sol[:position]` is not needed, because the saved states hold the cell numbers:
 
 ```@example chemo
 mean_x(u) = sum(x[1] for x in CartesianIndices(u.σ) if u.σ[x] != 0) / count(!=(0), u.σ)
@@ -135,17 +138,21 @@ fig
 
 ### Writing the drive out
 
-`Chemotaxis` is a one-liner for a `@drive` statement. A drive is a term added to ``\Delta H``
-of a copy attempt, written with the names of the copy: `source` and `target` (sites),
-`new` (the cell gaining the target) and `old` (the cell losing it). Printing the model
-shows what `Chemotaxis(c; strength = χ)` expands to:
+`Chemotaxis` is a one-liner for a `@drive` statement. A drive is a term added to
+``\Delta H`` of a copy attempt. You write it with the names of the copy:
+
+- `source` and `target`, the sites;
+- `new`, the cell gaining the target;
+- `old`, the cell losing it.
+
+Print the model to see what `Chemotaxis(c; strength = χ)` expands to:
 
 ```@example chemo
 gradient
 ```
 
-The printout is Potts's internal form of the model: `Potts.at(c(t), target)` is the field at
-the target site, and `Potts.at2(J, kind, kind′)` is the table entry. In the notation of
+The printout is Potts's internal form of the model. `Potts.at(c(t), target)` is the field
+at the target site, and `Potts.at2(J, kind, kind′)` is the table entry. In the notation of
 `@potts_model` the drive line reads
 `copy => ifelse(new != 0, -χ * (c[target] - c[source]), 0.0)`. Here is the same model
 with that line in place of `Chemotaxis`:
@@ -183,11 +190,13 @@ end
 short(by_hand).u[end].σ == short(gradient).u[end].σ
 ```
 
-With the same seed both runs make the same copies, so the drive is the same.
-Written out, the rule is easy to change: for
-example `kind[new] == leader` would restrict it to one kind. `Chemotaxis` has keywords
-for the common variants: `kinds = (leader,)`, `when = old == 0` (extensions into the
-medium only) and `response = saturating(s)` (``c/(s + c)``, a receptor that saturates).
+The result is `true`. With the same seed both runs make the same copies, so the drive is
+the same. The written-out rule is open to change: for example, `kind[new] == leader`
+would restrict it to one kind. `Chemotaxis` has keywords for the common variants:
+
+- `kinds = (leader,)`;
+- `when = old == 0` (extensions into the medium only);
+- `response = saturating(s)` (``c/(s + c)``, a receptor that saturates).
 
 ## Cells that secrete
 
@@ -225,9 +234,12 @@ sol = solve(prob, SequentialCPM(); saveat = 30)
 nothing # hide
 ```
 
-To show the field, attach it to each frame as a **channel** and colour the frame by that
-channel. The cells are drawn on top as a translucent fill (cells are never outlined in
-these docs), with an ordinary Makie `heatmap!` over the same axis:
+To show the field, follow these steps:
+
+1. Attach the field to each frame as a **channel**.
+2. Color the frame by that channel.
+3. Draw the cells on top as a translucent fill, with an ordinary Makie `heatmap!` over
+   the same axis. Cells are never outlined in these docs.
 
 ```@example chemo
 key = SiteChannelKey(:c, Float64)
@@ -253,19 +265,23 @@ nothing # hide
 <video src="../chemotaxis_aggregation.mp4" controls autoplay loop muted playsinline width="420"></video>
 ```
 
-Cells that happen to be close raise the chemical between them and pull each other into
+Cells that happen to be close raise the chemical between them. They pull each other into
 clusters, and the clusters grow by collecting more cells.
 
 !!! details "Advanced: kind-dependent coefficients and several fields"
-    Any expression of the site is allowed on the right-hand side: `(kind == cell)` selects
-    sites by owner kind, a kind-indexed parameter `δ[kind]` gives each kind its own decay,
-    and several fields can be declared and coupled in one `@equations` block. Each field
-    needs the problem's `field_solver`, or an entry of `solvers = [c => ExplicitEuler(...)]`
-    to give it its own scheme. See [Equations and solvers](@ref manual-equations).
+    Any expression of the site is allowed on the right-hand side:
+
+    - `(kind == cell)` selects sites by owner kind;
+    - a kind-indexed parameter `δ[kind]` gives each kind its own decay;
+    - several fields can be declared and coupled in one `@equations` block.
+
+    Each field needs the problem's `field_solver`. To give a field its own scheme, add an
+    entry of `solvers = [c => ExplicitEuler(...)]`. See
+    [Equations and solvers](@ref manual-equations).
 
 ## What you learned
 
-- `c(field)` declares a chemical field; `@equations D(c) ~ …` gives its PDE with `Δ`.
+- `c(field)` declares a chemical field. `@equations D(c) ~ …` gives its PDE with `Δ`.
 - `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower = 0.0))` integrates it.
 - `Chemotaxis(c; strength)` or `@drive copy => …` biases copies along the field.
 - Fields can be recorded as videos through render-frame channels.

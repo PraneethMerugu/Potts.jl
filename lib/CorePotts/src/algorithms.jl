@@ -68,10 +68,10 @@ replacement over the mobile (not frozen) lattice sites, so `N` is the number of 
 sites, which can change during a run when the frozen mask follows the state. The
 fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
-the problem's copy neighbourhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
+the problem's copy neighborhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
 
 `skip_interior = true` draws only boundary sites (D-177, D-198): mobile sites with a mobile
-proposal neighbour of another owner. Every other pick would propose a copy of its own owner
+proposal neighbor of another owner. Every other pick would propose a copy of its own owner
 (a null move), so the run of such picks between two boundary picks is drawn at once,
 geometric in the boundary fraction. One MCS is still `N` attempts over all mobile sites
 (`stats.attempts`), and a skip run ends at the MCS end, so the law of the state after every
@@ -118,7 +118,7 @@ commit only if they win every claim, so each cell changes at most once per color
 `solve` raise an `ArgumentError`.
 
 One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Accepted copies that lose a claim
-are dropped: with Moore(1) proposals in 2D (4 colours), only about 27% of accepted copies
+are dropped: with Moore(1) proposals in 2D (4 colors), only about 27% of accepted copies
 commit in a crowded monolayer, about 3.6× fewer copies per MCS than `SequentialCPM`. ΔH is
 exact; the difference is one of time scale. Calibrate time-dependent parameters (growth
 rates, schedules) with the algorithm you run, e.g. a relaxation time T on a reference

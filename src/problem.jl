@@ -79,7 +79,7 @@ end
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
-`kind` to the kinds of the labelled cells (names or numbers), `cluster` to their
+`kind` to the kinds of the labeled cells (names or numbers), `cluster` to their
 compartment groups (any ids; equal ids form one cluster; default: every cell alone), variables to initial values
 (scalars or arrays), parameters to values overriding their defaults, and a relationship's
 name to its initial links (`:bond => [(1, 2)]`). An edge variable takes one number (or
@@ -103,7 +103,7 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
 `remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
-discretised problem.
+discretized problem.
 `track = (:ΔH,)` accumulates the ΔH of every committed copy (energy plus every drive, as
 `prob.f.delta_H` returns it; not the acceptance law's offset) into `sol.stats.accepted_ΔH`
 (a `Float64`; `nothing` with the default `track = ()`). Under `SequentialCPM` it is exact

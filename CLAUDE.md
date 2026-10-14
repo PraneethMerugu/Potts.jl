@@ -32,6 +32,10 @@ or run one group directly, e.g. `julia --project=lib/CorePotts/test lib/CorePott
 - Device code must not touch `Float64` values (Metal has no doubles), including struct fields.
 - SciML formatter style (`.JuliaFormatter.toml`); ExplicitImports clean.
 
+## Docs prose
+
+Follow `docs/design/STYLE.md`: page tiers, sentence rules and the terminology glossary.
+
 ## Git
 
 The repository is `PraneethMerugu/Potts.jl` (early cut-over, D-095). Merged work reaches

@@ -1,16 +1,18 @@
 # [Tutorial 7: parameter scans with remake and ensembles](@id tutorial-scans)
 
-A single run of a stochastic model is one sample. To learn how a model depends on a
-parameter you run many replicates at many values. You will learn:
+This tutorial shows how a model depends on a parameter. A single run of a stochastic model
+shows one outcome, so you run many replicates at many parameter values. You will learn:
 
 - how `remake` changes parameters, the initial state, the seed and the time span without
   recompiling;
 - how to run replicates with `EnsembleProblem`;
-- how to scan a parameter inside one ensemble with `prob_func`, and summarise the results.
+- how to scan a parameter inside one ensemble with `prob_func`;
+- how to summarize the results.
 
-We scan the Graner & Glazier (1992) sorting model, the shipped `GranerGlazier` with the
-paper's parameters and initial aggregate. Only the run length is reduced (paper: up to 10⁴
-of its MCS; here: 100 of its MCS, which is 1600 of ours).
+We scan the Graner & Glazier (1992) sorting model. This is the shipped `GranerGlazier`
+with the paper's parameters and initial aggregate. Only the run length is shorter. The paper
+runs up to 10⁴ of its MCS (Monte Carlo steps). Here we run 100 of its MCS, which is 1600 of
+ours.
 
 ```@example scans
 using Potts, PottsModels, CairoMakie
@@ -26,8 +28,8 @@ nothing # hide
 ## A measure of sorting
 
 The fraction of dark–light contacts among all contacts between different cells falls as
-the cells sort. It is a plain function of a saved state (the lattice is periodic, so
-neighbours wrap around):
+the cells sort. It is a plain function of a saved state. The lattice is periodic, so
+neighbors wrap around:
 
 ```@example scans
 function heterotypic_fraction(u)
@@ -47,8 +49,8 @@ heterotypic_fraction(prob.u0)
 
 ## remake
 
-`remake` returns a new problem with some parts changed. Changing parameters, the initial
-state, the seed or the time span never regenerates code, so it is cheap:
+`remake` returns a new problem with some parts changed. It is cheap for parameters, the
+initial state, the seed and the time span, because these changes never regenerate code:
 
 ```@example scans
 hot = remake(prob; p = [:T => 20.0])          # parameters, by name
@@ -70,10 +72,10 @@ one_run = [heterotypic_fraction(solve(with_Jdl(prob, J), SequentialCPM()).u[end]
 
 ## Replicates with an ensemble
 
-`EnsembleProblem` runs `trajectories` copies of a problem. Each copy gets its own random
-stream (its `replica` number), so the copies are independent, and each is reproducible on
-its own. `output_func` reduces each solution to what you need, so the ensemble does not
-keep every saved state:
+`EnsembleProblem` runs `trajectories` replicates of a problem. Each replicate gets its own
+random stream (its `replica` number). The replicates are therefore independent, and each is
+reproducible on its own. `output_func` reduces each solution to what you need. The ensemble
+then does not keep every saved state:
 
 ```@example scans
 ens = EnsembleProblem(prob; output_func = (sol, i) -> (heterotypic_fraction(sol.u[end]), false))
@@ -84,7 +86,7 @@ results.u
 ## A scan in one ensemble
 
 `prob_func` builds the problem of each trajectory. Its second argument carries the
-trajectory number `sim_id`; here trajectory `i` gets the `J` value `Js[mod1(i, 5)]`, so 15
+trajectory number `sim_id`. Here trajectory `i` gets the `J` value `Js[mod1(i, 5)]`, so 15
 trajectories are 3 replicates of each value. The ensemble still gives every trajectory its
 own random stream:
 
@@ -104,24 +106,24 @@ vlines!(ax, 11; color = :gray, linestyle = :dash)
 fig
 ```
 
-Below the neutral value ``J_{dl} = (J_{dd} + J_{ll})/2 = 8`` mixing is favoured; above it
-the higher the dark–light energy, the faster the aggregate sorts. The dashed line is the
-paper's value.
+Below the neutral value ``J_{dl} = (J_{dd} + J_{ll})/2 = 8``, the model favors mixing.
+Above it, the higher the dark–light contact energy, the faster the aggregate sorts. The
+dashed line is the paper's value.
 
 !!! tip "Threads"
-    On the CPU an ensemble runs its trajectories on all of Julia's threads. Start Julia with
-    `julia --threads=auto` to use every core; `solve(ens, SequentialCPM(), EnsembleSerial();
-    trajectories = n)` runs them one after another.
+    On the CPU, an ensemble runs its trajectories on all of Julia's threads. To use every
+    core, start Julia with `julia --threads=auto`. To run the trajectories one after another,
+    use `solve(ens, SequentialCPM(), EnsembleSerial(); trajectories = n)`.
 
 !!! note "What `remake` cannot change cheaply"
     Changing the model's structure (a new term, another lattice size) needs a new model.
     Changing the solvers of fields and ODEs (`field_solver`, `ode_solver`, `solvers`) with
-    `remake` regenerates the code, which takes about a second.
+    `remake` regenerates the code. This takes about a second.
 
 ## What you learned
 
 - `remake(prob; p, u0, seed, tspan)` changes a problem without recompiling.
-- `EnsembleProblem` runs independent, reproducible replicates; `output_func` keeps what
+- `EnsembleProblem` runs independent, reproducible replicates. `output_func` keeps what
   you need.
 - `prob_func` with `ctx.sim_id` turns one ensemble into a parameter scan.
 

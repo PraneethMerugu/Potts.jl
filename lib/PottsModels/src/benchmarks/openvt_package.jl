@@ -98,7 +98,7 @@ framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`.
 With `split = nothing` (the default) it writes `outdir/implementations/<FW>/` (the
 `@potts_model` sources, the record runners, a README on rerunning everything, and
 `parameters.csv`) and `outdir/results/<FW>/` (the O4 relaxation widths and Table S5, the O6
-metrics per run with their replicate means and neighbour histograms, the bare Fig 1 panel as
+metrics per run with their replicate means and neighbor histograms, the bare Fig 1 panel as
 `closeup.png`, each record's provenance without its host name, Table 1 as a CSV, and a README
 with the units, seeds, the notes for the consortium scripts and the deviations table), plus
 the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively named zip per

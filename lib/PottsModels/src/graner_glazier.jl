@@ -19,7 +19,7 @@ Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
   detach and would wrap around;
 - the model does not anneal. The paper measures on a copy annealed for 2 paper MCS at T = 0
   (32 of ours); `test/papers.jl` does the same;
-- one `V₀` for both kinds: the cavity run (per-kind targets, non-neighbour copies) is not
+- one `V₀` for both kinds: the cavity run (per-kind targets, non-neighbor copies) is not
   expressible yet.
 """
 @potts_model GranerGlazier begin

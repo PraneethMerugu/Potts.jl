@@ -27,9 +27,9 @@ end
 """
     init_moments(σ, lattice, ncell) -> (; anchor, m1, m2)
 
-Moment trackers from scratch. Each cell is anchored at the rounded per-axis centre of its
+Moment trackers from scratch. Each cell is anchored at the rounded per-axis center of its
 sites (the circular mean on periodic axes), so the minimum-image offsets are valid while
-the cell spans less than the whole axis about its centre.
+the cell spans less than the whole axis about its center.
 """
 function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
     S = zeros(N, ncell); C = zeros(N, ncell); M = zeros(N, ncell); V = zeros(Int, ncell)
@@ -47,8 +47,8 @@ function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
     for c in 1:ncell, d in 1:N
         V[c] == 0 && continue
         n = l.dims[d]
-        centre = l.periodic[d] ? atan(S[d, c], C[d, c]) * n / 2π + 1 : M[d, c] / V[c]
-        anchor[d, c] = l.periodic[d] ? mod1(round(Int, centre), n) : round(Int, centre)
+        center = l.periodic[d] ? atan(S[d, c], C[d, c]) * n / 2π + 1 : M[d, c] / V[c]
+        anchor[d, c] = l.periodic[d] ? mod1(round(Int, center), n) : round(Int, center)
     end
     m1 = zeros(Int64, N, ncell)
     m2 = zeros(Int64, npairs(N), ncell)
@@ -99,7 +99,7 @@ end
     commit_moments!(cell, lattice, prop)
 
 Move the target site from `prop.old` to `prop.new` in the moment trackers. Call after
-`commit_volume!` (re-centring uses the updated volumes).
+`commit_volume!` (re-centering uses the updated volumes).
 """
 @inline function commit_moments!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0

@@ -233,7 +233,7 @@ column names, so that on a device only those leaves cross:
 - `reads`: copied to the host before the body;
 - `writes`: copied to the host before the body (bodies update them in place) and back after
   it; they are the only leaves written back.
-- `nothing` (the default) keeps the whole-state behaviour: `reads = nothing` copies the whole
+- `nothing` (the default) keeps the whole-state behavior: `reads = nothing` copies the whole
   state down; `writes = nothing` writes every cell column back (and so copies every cell
   column down).
 

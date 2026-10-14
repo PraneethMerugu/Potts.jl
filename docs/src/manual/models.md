@@ -13,7 +13,7 @@ ModelingToolkit's `@mtkmodel` defines a constructor for a system.
 | `@kinds` | cell kinds; the first is the medium; `[frozen]` marks obstacles | [Kinds](@ref manual-kinds) |
 | `@parameters` | numbers of the model, scalars or kind-indexed tables | [Parameters](@ref manual-parameters) |
 | `@variables` | state with a scope: `x(site)`, `x(cell)`, `x(model)`, `c(field)`, `e(rel)` | [Variables and scopes](@ref manual-variables) |
-| `@lattice`, `@relations` | the grid and the neighbourhoods | [Lattices and relations](@ref manual-lattice) |
+| `@lattice`, `@relations` | the grid and the neighborhoods | [Lattices and relations](@ref manual-lattice) |
 | `@energy` | the terms of the Hamiltonian | [Energy](@ref manual-energy) |
 | `@drive` | non-energetic biases of copy attempts | [Drives](@ref manual-drive) |
 | `@constraint` | hard rules on copy attempts | [Constraints](@ref manual-constraint) |

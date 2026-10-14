@@ -12,7 +12,7 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 | `record_potts(file, sol)` | a video of every saved state of a solution (or of a vector of frames) |
 | `potts_legend(position, plot)` | a legend of the kinds |
 
-`pottsplot` attributes: `encoding` (`CellTypeEncoding()`, the default, colours by kind;
+`pottsplot` attributes: `encoding` (`CellTypeEncoding()`, the default, colors by kind;
 `CellIdentityEncoding()` by cell; `ChannelEncoding(key)` by a channel), `boundaries`
 (cell outlines; off by default, and never used in these docs), `medium_color`,
 `obstacle_color`, `colormap`, `category_palette`.

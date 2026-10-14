@@ -379,7 +379,7 @@ end
 `n` boxes of `size` at uniformly random positions inside `region`, at least `gap` medium
 sites apart along some axis (Chebyshev: with `gap = 1` no two cells touch under Moore(1)).
 On a periodic axis the separation is measured through the wrap. On a hexagonal lattice the
-gap is Chebyshev in axial coordinates, which is conservative (hex neighbours are a subset of
+gap is Chebyshev in axial coordinates, which is conservative (hex neighbors are a subset of
 Moore(1)). Like every layer it overwrites earlier layers (pass a `region` to keep clear of a
 [`Frame`](@ref)).
 
@@ -509,9 +509,9 @@ On a lattice with a domain the frame follows the domain boundary: it owns every 
 site within Chebyshev distance `width`, in lattice indices, of a site outside the domain or
 of a closed lattice edge (through the wrap on periodic axes). Without a domain this is the
 rule above. Chebyshev distance is Moore(1) graph distance on a square lattice; on a
-hexagonal lattice it is measured in axial indices and is conservative (hex neighbours are a
+hexagonal lattice it is measured in axial indices and is conservative (hex neighbors are a
 subset of Moore(1)), so the frame seals the domain under any Moore(1)/Hex(1)
-neighbourhood. A domain whose only boundary would be periodic wrap throws, as above.
+neighborhood. A domain whose only boundary would be periodic wrap throws, as above.
 """
 struct Frame{K} <: AbstractLayout
     kind::K
@@ -792,9 +792,9 @@ end
 """
     Center()
 
-A point pattern: the centre of the lattice, the Cartesian point `embed((size(lat) .+ 1) ./ 2)`
+A point pattern: the center of the lattice, the Cartesian point `embed((size(lat) .+ 1) ./ 2)`
 (`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a [`Voronoi`](@ref) generator, alone
-or in a vector of `Point`s. A shape's own centre is an explicit `Point`.
+or in a vector of `Point`s. A shape's own center is an explicit `Point`.
 """
 struct Center end
 
@@ -934,9 +934,9 @@ still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
 - `lloyd = k`: k times, every generator that owns a site moves to the centroid of its sites
   (minimum image along periodic axes, Lloyd's algorithm), and the sites are reassigned: a
   centroidal tessellation of compact cells of similar volume.
-- Then every cell is made one piece under the geometry's nearest-neighbour steps (the 2N axis
-  steps on square lattices, the 6 neighbours on hexagonal ones; wrapping on periodic axes),
-  hence under any neighbourhood that contains them: a stray piece joins the neighbouring
+- Then every cell is made one piece under the geometry's nearest-neighbor steps (the 2N axis
+  steps on square lattices, the 6 neighbors on hexagonal ones; wrapping on periodic axes),
+  hence under any neighborhood that contains them: a stray piece joins the neighboring
   cell whose largest piece it touches most (ties: the lower id), and a cell's largest piece
   never moves.
 
@@ -1184,14 +1184,14 @@ synchronous random (Eden) growth into the medium.
   any other point is not placed, so coinciding points merge (the first one wins). `kinds` is
   cycled over the cells created; ids follow creation order.
 - **Growth.** Each round visits the medium sites of `region` ∩ domain in column-major order.
-  A site with a neighbour (under `neighborhood`, default the lattice's own) owned by a cell
-  of this layer at the start of the round draws one neighbour uniformly, `j = rand(rng,
+  A site with a neighbor (under `neighborhood`, default the lattice's own) owned by a cell
+  of this layer at the start of the round draws one neighbor uniformly, `j = rand(rng,
   1:K)` over the `K` offsets of `CorePotts.relation`, with one `rng =
-  Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbour is a cell of this
+  Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbor is a cell of this
   layer at the start of the round, the site joins it at the end of the round. This is TST's
-  law (every medium site draws one of its neighbours and copies it only from a growing
-  cell); sites with no growing neighbour cannot change, so they draw nothing. TST grows
-  with 8 neighbours even on a lattice with a larger neighbourhood: pass `neighborhood =
+  law (every medium site draws one of its neighbors and copies it only from a growing
+  cell); sites with no growing neighbor cannot change, so they draw nothing. TST grows
+  with 8 neighbors even on a lattice with a larger neighborhood: pass `neighborhood =
   Moore(1)` there.
 
 Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
@@ -1364,7 +1364,7 @@ routine (no state, no trackers); it shares only the cut geometry with
   is unwrapped relative to its first site all the same, so its cut can be torn into pieces
   (deterministically).
 - After the passes, every cell of this layer that is not one piece under the lattice
-  neighbourhood (whether a cut or `layer` itself left it so) counts once in the report row's
+  neighborhood (whether a cut or `layer` itself left it so) counts once in the report row's
   `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
   warning, unless later layers left it one piece in the final state; `splits = :allow`
   silences the warning, not the count.
@@ -1546,7 +1546,7 @@ Layers painted in order: later layers overwrite earlier ones, and cell ids follo
 order. Cells left with no site are dropped (ids stay consecutive); a partly covered cell
 keeps its remaining sites, which may fall apart into pieces. `layout` warns, naming the
 cell, when later layers split a cell into pieces that are not connected under the lattice
-neighbourhood, unless every layer that cut that cell has `splits = :allow`. Nested overlays
+neighborhood, unless every layer that cut that cell has `splits = :allow`. Nested overlays
 are flattened, so each leaf layer is one row of the layout report.
 """
 function overlay(layers::AbstractLayout...)
@@ -1702,10 +1702,10 @@ const _LayoutTarget = Union{Tuple{Vararg{Integer}}, Lattice, LatticeSpec, PottsS
 Paint the layout `l` (see [`overlay`](@ref)) on an empty lattice and return an operating
 point for `PottsProblem`: `σ` is an `Int32` array (0 = medium).
 
-`x` is a `dims` tuple, meaning a closed square lattice with the `Moore(1)` neighbourhood. For
+`x` is a `dims` tuple, meaning a closed square lattice with the `Moore(1)` neighborhood. For
 a hexagonal, periodic, domain-restricted or non-Moore lattice pass the `PottsSystem` (or
-`CompiledPottsSystem`), whose boundaries, neighbourhood, domain and geometry the layouts
-use; a CorePotts `Lattice` carries boundaries, domain and geometry but no neighbourhood,
+`CompiledPottsSystem`), whose boundaries, neighborhood, domain and geometry the layouts
+use; a CorePotts `Lattice` carries boundaries, domain and geometry but no neighborhood,
 so `Moore(1)` is assumed (it only matters for split cells). On a lattice with a domain, no
 cell may cover a site outside it.
 

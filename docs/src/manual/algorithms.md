@@ -3,23 +3,23 @@
 `solve(prob, alg)` takes one of two sweep algorithms, `SequentialCPM` and
 `CheckerboardCPM`. `SequentialCPM` has a faster option, `skip_interior = true`. All of them
 sample the same model: the same energy, constraints, acceptance law and proposal
-neighbourhood. They differ in the order in which copy attempts are made, in where they run,
+neighborhood. They differ in the order in which copy attempts are made, in where they run,
 and in what that order does to the kinetics.
 
 | Algorithm | Backends | Dynamics | Use it for |
 |---|---|---|---|
 | `SequentialCPM()` | CPU | one copy attempt at a time, each at a uniformly drawn mobile target site: the classic CPM | the reference dynamics, against which the reproductions are defined |
 | `SequentialCPM(; skip_interior = true)` | CPU | the same dynamics, drawing only boundary sites and skipping the interior picks exactly; equal in distribution to `SequentialCPM()` | the same runs, faster, when most of the lattice is medium or cell interior |
-| `CheckerboardCPM()` | CPU and GPU | all sites of one colour of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics and time scale differ from `SequentialCPM`'s ([Time scale](@ref manual-algorithms-checkerboard-time)) |
+| `CheckerboardCPM()` | CPU and GPU | all sites of one color of a checkerboard at once; every site is a target once per MCS | GPUs and large lattices; its kinetics and time scale differ from `SequentialCPM`'s ([Time scale](@ref manual-algorithms-checkerboard-time)) |
 
 Both take `acceptance` and `proposal` keywords, which default to the model's
-acceptance law and the problem's proposal neighbourhood (see [Problems, solvers and
+acceptance law and the problem's proposal neighborhood (see [Problems, solvers and
 solutions](@ref manual-problems)). Both also take `skip_interior`, which defaults to
 `false`. On `CheckerboardCPM`, `skip_interior = true` is not available yet: `solve` raises
-an `ArgumentError`. In both algorithms the source of a copy is a uniformly drawn neighbour
-of the target in the proposal neighbourhood; they differ in how targets are chosen.
+an `ArgumentError`. In both algorithms the source of a copy is a uniformly drawn neighbor
+of the target in the proposal neighborhood; they differ in how targets are chosen.
 
-`CheckerboardCPM` spaces its colours by the model's footprint, the distance a copy reads
+`CheckerboardCPM` spaces its colors by the model's footprint, the distance a copy reads
 from its target. The footprint covers what drives, constraints, `@on_copy` updates and the
 temperature read, so a wider read there widens the spacing; an energy that reads a relation
 beyond it (an edge energy, say) is refused. A `contacts(r)` fold widens it wherever the fold
@@ -29,21 +29,21 @@ the MCS boundary (division and link rules, `@before_mcs`/`@after_mcs` updates, c
 
 ## [Time scale of `CheckerboardCPM`](@id manual-algorithms-checkerboard-time)
 
-One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Within a colour, each cell changes
+One `CheckerboardCPM` MCS is not one `SequentialCPM` MCS. Within a color, each cell changes
 at most once: an accepted copy claims the cells it touches and commits only if it wins every
 claim. On a crowded lattice many accepted copies lose a claim and are dropped. With Moore(1)
-proposals on a 2D lattice there are 4 colours, and in a confluent growing monolayer (the
+proposals on a 2D lattice there are 4 colors, and in a confluent growing monolayer (the
 OpenVT reference model) only about 27 % of accepted copies commit: the configuration
 advances by about 3.6× fewer copies per MCS than under `SequentialCPM`.
 
 - **Not an energy error.** ΔH matched a brute-force recompute on 16,605 committed copies,
   with no mismatch.
-- **A time-scale effect.** With 64 colours the checkerboard's behaviour comes back to the
-  sequential level, and `SequentialCPM` at 0.3·N attempts per MCS reproduces the 4-colour
+- **A time-scale effect.** With 64 colors the checkerboard's behavior comes back to the
+  sequential level, and `SequentialCPM` at 0.3·N attempts per MCS reproduces the 4-color
   checkerboard.
-- **The colour count depends on the lattice.** Colours are spaced by the footprint stride
+- **The color count depends on the lattice.** Colors are spaced by the footprint stride
   per axis, so an axis whose length is not a multiple of the stride needs more: on a
-  150 × 5 periodic lattice, stride 2 gives 6 colours rather than 4.
+  150 × 5 periodic lattice, stride 2 gives 6 colors rather than 4.
 
 A schedule written in MCS (a growth rate, a cycle length, a stimulus time) therefore runs
 at a different physical pace under each algorithm. **Calibrate time-dependent parameters
@@ -55,14 +55,14 @@ that algorithm, and express rates per T rather than per MCS.
 ### What it does
 
 `SequentialCPM` makes `N` copy attempts per MCS, where `N` is the number of mobile sites.
-Each attempt picks a mobile target site uniformly, then one of its proposal neighbours
+Each attempt picks a mobile target site uniformly, then one of its proposal neighbors
 uniformly as the source. A source that is off the lattice, frozen or of the same owner
-ends the attempt, which still counts. When every proposal neighbour of the picked site
+ends the attempt, which still counts. When every proposal neighbor of the picked site
 belongs to the same owner as the site (the inside of a cell, or open medium), the attempt
 can only copy that owner onto itself: a null move, which changes nothing. On a lattice that is mostly medium, almost every attempt is null.
 
 With `skip_interior = true`, `SequentialCPM` keeps the set of **boundary sites**: mobile sites with at least one
-mobile proposal neighbour of another owner (frozen and off-lattice neighbours do not count).
+mobile proposal neighbor of another owner (frozen and off-lattice neighbors do not count).
 It draws only from that set. The interior picks it does not make are accounted exactly:
 between two boundary picks, the number of skipped picks is drawn at once from its exact
 law, a geometric run length in the boundary fraction ``|B|/N``. So
@@ -103,7 +103,7 @@ foam reproduction run this way (D-174, D-190).
   lattice this pass is a visible part of the cost: about 0.25 ms per MCS on 1400² (Mac, Apple
   Silicon, CPU; measured in the P6.4b1 review).
 - **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` updates sites in parallel by
-  colour, which is a different dynamics. Whether its kinetics are statistically equivalent
+  color, which is a different dynamics. Whether its kinetics are statistically equivalent
   to `SequentialCPM`'s is open (ROADMAP P6.0bl): on the Merks models they differ
   measurably (eight seeds at 400 MCS: compactness of the 2008 sprout 0.821 sequential
   against 0.869 checkerboard). `skip_interior = true` is equivalent to `SequentialCPM()`

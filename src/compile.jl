@@ -190,7 +190,7 @@ end
 """
     mtkcompile(sys::PottsSystem) -> CompiledPottsSystem
 
-Validate and analyse a Potts model (the symbolic half of compilation; code is generated
+Validate and analyze a Potts model (the symbolic half of compilation; code is generated
 per scalar type by `PottsProblem`).
 """
 function ModelingToolkitBase.mtkcompile(authored::PottsSystem)

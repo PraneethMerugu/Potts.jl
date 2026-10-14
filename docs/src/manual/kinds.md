@@ -74,7 +74,7 @@ Classes are stored on the model as [`Potts.KindClass`](@ref) values.
 ## Frozen kinds
 
 A kind marked `[frozen]` never moves: its sites never change owner and never copy into
-neighbours. Use it for walls, obstacles and substrates. The medium cannot be frozen.
+neighbors. Use it for walls, obstacles and substrates. The medium cannot be frozen.
 
 ```@example kinds
 using Potts, MakiePotts, CairoMakie

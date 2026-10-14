@@ -42,7 +42,7 @@ end
 """
     openvt_monolayer_state(; lattice = (400, 400), A₀ = 25)
 
-One square cell of area ≈ `A₀` at the lattice centre: `[ownership => σ, kind => [:cell]]`.
+One square cell of area ≈ `A₀` at the lattice center: `[ownership => σ, kind => [:cell]]`.
 """
 function openvt_monolayer_state(; lattice = (400, 400), A₀ = 25)
     σ = zeros(Int32, lattice)

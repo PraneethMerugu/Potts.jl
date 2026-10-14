@@ -48,7 +48,7 @@ The repository holds four packages:
 
 | Package | What it is |
 |---|---|
-| **Potts** | The modelling language: `@potts_model`, `PottsProblem`, layouts, components. It re-exports CorePotts. |
+| **Potts** | The modeling language: `@potts_model`, `PottsProblem`, layouts, components. It re-exports CorePotts. |
 | **CorePotts** | The numerical layer: lattices, solvers, solutions, ensembles, callbacks, GPU kernels. |
 | **PottsModels** | Published models as ordinary `@potts_model` constructors. |
 | **MakiePotts** | Plotting of states and solutions with [Makie](https://docs.makie.org). |
@@ -73,7 +73,7 @@ using Potts, PottsModels, MakiePotts, CairoMakie
         J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]     # contact energies
     end
     @lattice Lattice((72, 72); boundary = Periodic(), neighborhood = Moore(1))
-    @relations proposal = Moore(1)                       # copy from any of the 8 neighbours
+    @relations proposal = Moore(1)                       # copy from any of the 8 neighbors
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
         contacts => J[kind, kind′]

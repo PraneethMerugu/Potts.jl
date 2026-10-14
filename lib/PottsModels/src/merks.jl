@@ -17,7 +17,7 @@ Brodsky, Goligorsky, Newman & Glazier, Dev. Biol. 289, 44, 2006):
   decays only in the matrix. The field is advanced by explicit Euler, clipped at zero.
 - Cells stay connected: a copy may not split a cell (a hard veto for the paper's
   connectivity penalty; `Local()`, the CompuCell3D rule: one arc of the losing cell on the
-  8-ring, no full ring, and the gaining cell owns a face neighbour of the target).
+  8-ring, no full ring, and the gaining cell owns a face neighbor of the target).
 
 Defaults are the 2006 parameter set in lattice units (2 µm/px, 30 s/MCS):
 `T = 50`, `χ = 1000`, `J_cc = 40`, `J_cM = 20`, `D = 0.75` (10⁻¹³ m²/s),
@@ -33,7 +33,7 @@ Differences from the paper:
 - the closed walls cost nothing; the paper has frozen border cells with `J_cB = 100`;
 - the field boundary is zero-flux; the paper's code holds `c = 0` on the outer ring
   (absorbing);
-- `L = 50` follows the paper text; the released parameter files labelled for Fig. 4
+- `L = 50` follows the paper text; the released parameter files labeled for Fig. 4
   (`longcells.par`) use `L = 60`; pass `L = 60.0` for that reading.
 
 The field solver is a problem keyword with no default; this model's is the paper's
@@ -85,7 +85,7 @@ end
         n = 282, side = 10, seed = 1)
 
 `n` square endothelial cells of `side²` sites (the default 10² is the target area
-`A = 100`) at random, non-overlapping positions (one-site gaps) in a centred `region` (Merks
+`A = 100`) at random, non-overlapping positions (one-site gaps) in a centered `region` (Merks
 et al. 2006: 282 cells over 333 × 333 sites of a 500² lattice): `[ownership => σ, kind => fill(:endothelial, n)]`.
 It is `layout(merks_layout(; lattice, kw...), lattice)` (D-087).
 """
@@ -96,7 +96,7 @@ merks_state(; lattice = (500, 500), kw...) = layout(merks_layout(; lattice, kw..
         n = 282, side = 10, seed = 1) -> Scattered
 
 The layout behind [`merks_state`](@ref): `n` endothelial boxes of `side²` sites, one medium
-site apart, at uniformly random corners in a centred `region` (`off + 2 : off + R − 1` per
+site apart, at uniformly random corners in a centered `region` (`off + 2 : off + R − 1` per
 axis, `off = (lattice − region) ÷ 2`), drawn from a `StableRNG(seed)`:
 `Scattered(n, (side, side); region, kinds = [:endothelial], seed, gap = 1)`.
 """
@@ -120,7 +120,7 @@ merks2006_layout(; lattice = (500, 500), kw...) = overlay(Frame(:border; width =
     merks2008_sprout(; rounds = 50, divisions = 7, seed = 1)
 
 The [`Merks2008`](@ref) sprouting start of the released parameter files (`sprout_*.par`):
-one Eden blob grown for `rounds` rounds from the lattice centre with 8 neighbours,
+one Eden blob grown for `rounds` rounds from the lattice center with 8 neighbors,
 divided `divisions` times (7 gives 128 cells, 8 the 256 of 01b Fig. 12), inside a frozen
 border two sites thick:
 
@@ -141,7 +141,7 @@ merks2008_sprout(; rounds = 50, divisions = 7, seed = 1) =
         region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)), seed = 1)
 
 The [`Merks2008`](@ref) de novo start: `n` point seeds drawn with replacement in `region`
-(coinciding seeds merge), each grown for `rounds` Eden rounds with 8 neighbours, inside a
+(coinciding seeds merge), each grown for `rounds` Eden rounds with 8 neighbors, inside a
 frozen border two sites thick:
 
 ```julia
@@ -171,7 +171,7 @@ Newman & Glazier, *Dev. Biol.* **289**, 44 (2006) (model-spec 01, Variant E; D-0
 Kinds `medium`, `endothelial` and `border[frozen]`; start it with
 [`merks2006_layout`](@ref).
 
-- Energy (Eqs. 1, 4, 5): `Σ J(1 − δ)` over the 8 Moore neighbours, `λ (a − A)²` and
+- Energy (Eqs. 1, 4, 5): `Σ J(1 − δ)` over the 8 Moore neighbors, `λ (a − A)²` and
   `λ_L (l − L)²` for every endothelial cell, with the length `l = 4√(λ_max/a)` from the
   cell's inertia tensor (`major_length`).
 - Chemotaxis at every copy (Eq. 2, the files' `vecadherinknockout = true`):
@@ -252,9 +252,9 @@ Variant CI; D-050 M1, M4–M7, P6.3e). Kinds `medium`, `endothelial` and `border
 start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](@ref)
 (Fig. 2).
 
-- Energy (Eq. 2): `Σ J(1 − δ)` over the 20 neighbours of `NeighborOrder(4)` (first to
+- Energy (Eq. 2): `Σ J(1 − δ)` over the 20 neighbors of `NeighborOrder(4)` (first to
   fourth order, the files' `neighbours = 3`), and `λ (a − A)²` for every endothelial cell.
-  Copies also take their source among the 20 neighbours.
+  Copies also take their source among the 20 neighbors.
 - Chemotaxis (Eq. 3): `−χ (f(c[target]) − f(c[source]))`, `f(c) = c/(1 + s c)`, with
   `χ = χcM` at cell–medium copies (the target's or the source's owner is the medium) and
   `χcc` at cell–cell copies. `χcc = 0` is contact inhibition; `χcc = χcM` removes it, and

@@ -17,7 +17,7 @@ This repository holds four Julia packages:
 
 | Package | Path | What it is |
 |---|---|---|
-| **Potts** | `/` | The modelling language: `@potts_model`, `PottsProblem`, layouts, components |
+| **Potts** | `/` | The modeling language: `@potts_model`, `PottsProblem`, layouts, components |
 | **CorePotts** | `lib/CorePotts` | The numerical layer: lattices, `SequentialCPM` and `CheckerboardCPM`, solutions, ensembles, callbacks, GPU kernels |
 | **PottsModels** | `lib/PottsModels` | Published models as ordinary `@potts_model` constructors, with reproductions |
 | **MakiePotts** | `lib/MakiePotts` | Plotting of states and solutions with Makie |
@@ -49,7 +49,7 @@ julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
 ```
 
-and open `docs/build/index.html`. It covers getting started, tutorials, the modelling
+and open `docs/build/index.html`. It covers getting started, tutorials, the modeling
 language, and the published models, each built step by step from its public constructor.
 
 ## History

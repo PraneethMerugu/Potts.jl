@@ -104,7 +104,7 @@ end
 
 """
 The contact-count trackers of a compiled model: `(name, relation, mask)` per fold, the
-relation `:contact` (the contact neighbourhood) or a relation declared in `@relations`.
+relation `:contact` (the contact neighborhood) or a relation declared in `@relations`.
 """
 _contact_trackers(c::CompiledPottsSystem) = c.contact_trackers
 
@@ -115,7 +115,7 @@ _fold_spec(rel::Symbol, relations, contact_spec) = rel === :contact ? contact_sp
 Check the folds of `sys` at `mtkcompile`: their relations are declared, symmetric and exclude
 the origin, the kinds fit the mask, and none is read by the sweep's temperature (it is read
 between copies, while concurrent copies change the counts). Returns the largest relation
-radius (the copy's footprint reads that far: the commit updates the target's neighbours'
+radius (the copy's footprint reads that far: the commit updates the target's neighbors'
 counts) and the trackers `(name, relation, mask)`, which `mtkcompile` stores.
 """
 function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
@@ -161,7 +161,7 @@ end
 
 """
 `relations` with `contact_counts` (the lifecycle's rebuild list) when the model has folds.
-Not specialised on the relations' type: one compiled method serves every model (a model
+Not specialized on the relations' type: one compiled method serves every model (a model
 without folds only returns its argument).
 """
 function _with_contact_counts(c::CompiledPottsSystem, @nospecialize(relations::NamedTuple))

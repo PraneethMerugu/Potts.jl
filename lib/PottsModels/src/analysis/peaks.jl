@@ -298,7 +298,7 @@ end
 Peaks of the signal `x`, as SciPy 1.7's `scipy.signal.find_peaks` finds them, with 1-based
 indices.
 
-1. Local maxima: samples higher than both neighbours. A flat top (a plateau) counts once, at
+1. Local maxima: samples higher than both neighbors. A flat top (a plateau) counts once, at
    its midpoint `(left + right) ÷ 2`. The first and last samples are never peaks.
 2. `distance` (≥ 1): peaks are taken from the highest down, and each kept peak removes the
    peaks less than `ceil(distance)` samples from it. Equal heights are taken in the order of

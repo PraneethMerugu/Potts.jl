@@ -11,12 +11,12 @@
     stored_energy(σ, lattice::Lattice; neighborhood = NeighborOrder(4), θ = 1) -> Real
 
 The stored energy φ of Eq. (8) (04b p.5823; spec 04 §2.8),
-φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}): `θ` times the number of unordered neighbour pairs
+φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}): `θ` times the number of unordered neighbor pairs
 `{i, j}` under `neighborhood` with `σ_i ≠ σ_j`, each pair counted once (D-187 reading (a):
 only φ/φ(0) is plotted, so the factor 2 of the ordered sum cancels). The default shell is the
-paper's fourth-nearest neighbourhood (04b p.5822; spec §8). Pairs wrap on `Periodic()` axes;
+paper's fourth-nearest neighborhood (04b p.5822; spec §8). Pairs wrap on `Periodic()` axes;
 a pair that leaves a `Closed()` axis, or the lattice domain, does not exist. Every owner
-counts, the medium (0) included. The neighbourhood must be symmetric (each offset's
+counts, the medium (0) included. The neighborhood must be symmetric (each offset's
 negation also in it); weights of a `Weighted` relation are ignored.
 
 One pass over the sites with half the offsets, no allocation beyond the relation.
@@ -78,7 +78,7 @@ end
     side_counts(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> Vector{Int}
 
 The number of sides `n` of each bubble `1:maximum(σ)` (04b p.5823: a bubble's sides are its
-distinct neighbours; spec 04 §2.8): `length.(cell_graph(σ, lattice; neighborhood))`. Edge
+distinct neighbors; spec 04 §2.8): `length.(cell_graph(σ, lattice; neighborhood))`. Edge
 sharing (`VonNeumann(1)`) is the default; `Moore(1)` also counts corner-only contacts, which
 inflates n (spec §2.8, topology audit 2026-10-01). Contacts wrap on `Periodic()` axes; a
 `Closed()` wall is not a side (D-187 reading (b)), and neither is the medium.
@@ -168,10 +168,10 @@ end
 """
     contact_changes(prev, next) -> (; lost, gained)
 
-The contacts that changed between two neighbour lists in [`cell_graph`](@ref)'s form
-(`g[c]` the sorted neighbours of bubble `c`): `lost` holds the unordered pairs `(a, b)`,
+The contacts that changed between two neighbor lists in [`cell_graph`](@ref)'s form
+(`g[c]` the sorted neighbors of bubble `c`): `lost` holds the unordered pairs `(a, b)`,
 `a < b`, adjacent in `prev` but not in `next`, and `gained` those adjacent in `next` but not
-in `prev`, both sorted. A bubble missing from the shorter list has no neighbours there. The
+in `prev`, both sorted. A bubble missing from the shorter list has no neighbors there. The
 lists are assumed symmetric (`b ∈ g[a]` iff `a ∈ g[b]`), as `cell_graph`'s are.
 
 Per-MCS T1 detection (04b p.5823; spec 04 §2.8) counts these changes: see
@@ -191,7 +191,7 @@ end
 """
     t1_events(prev, next; unit = :t1) -> Float64
 
-The T1 events between two consecutive neighbour lists (04b p.5823: "A change in the neighbor
+The T1 events between two consecutive neighbor lists (04b p.5823: "A change in the neighbor
 list indicates a topological change which … has to be a T1 event"; spec 04 §2.8), in the
 counting unit `unit` (A-15). With `L` and `G` the numbers of lost and gained contacts of
 [`contact_changes`](@ref):
@@ -199,7 +199,7 @@ counting unit `unit` (A-15). With `L` and `G` the numbers of lost and gained con
   - `:t1`: `(L + G) / 2`. One full T1 (one pair parts, another meets) is 1; half of a T1
     seen through a transient four-fold vertex is 1/2 (the half-integers of the Fig. 5 inset).
   - `:pairs`: `L + G`. One T1 is 2 (the even-valued bars of Figs. 4(b) and 5(b)).
-  - `:bubbles`: the number of bubbles whose neighbour list changed. One T1 is 4.
+  - `:bubbles`: the number of bubbles whose neighbor list changed. One T1 is 4.
 
 Any other `unit` is an `ArgumentError`. The result is a `Float64` in every unit, so a series
 of counts has one element type. Nothing is allocated: the sorted lists are merged in place,

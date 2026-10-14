@@ -29,9 +29,9 @@ The operating point is a vector of pairs:
 |---|---|---|
 | `SequentialCPM(; proposal)` | CPU | one copy attempt at a time: the classic model |
 | `SequentialCPM(; proposal, skip_interior = true)` | CPU | the same dynamics, drawing only sites at a cell boundary and skipping the others' null attempts exactly: equal in distribution, faster on mostly-medium lattices |
-| `CheckerboardCPM(; proposal)` | CPU and GPU | all sites of one colour of a checkerboard at once |
+| `CheckerboardCPM(; proposal)` | CPU and GPU | all sites of one color of a checkerboard at once |
 
-`proposal` overrides the model's proposal neighbourhood for this solve.
+`proposal` overrides the model's proposal neighborhood for this solve.
 
 Which one to use, and what `skip_interior = true` does exactly, is on [Choosing an algorithm](@ref manual-algorithms).
 
@@ -107,10 +107,10 @@ resumed.t
 
 The resumed run continues with the same random stream, so it equals the uninterrupted run.
 A checkpoint loads only into a problem built from the same model and solvers, with the same
-schedule, acceptance law and neighbourhoods: the cadences of clocked components, `Every(n)`
+schedule, acceptance law and neighborhoods: the cadences of clocked components, `Every(n)`
 rules, `mcs_duration`, the `@sweep` law (`Metropolis` or `Barker`) and its `offset`, and the
-`@relations proposal` and `@relations contact` neighbourhoods (resolved on the lattice) are part
-of the check. A neighbourhood that resolves to its default (`VonNeumann(1)` for the proposal,
+`@relations proposal` and `@relations contact` neighborhoods (resolved on the lattice) are part
+of the check. A neighborhood that resolves to its default (`VonNeumann(1)` for the proposal,
 the lattice's `neighborhood` for contact) checks like omitting it. Named relations
 (`@relations far = Ball(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and
 inline relations (`Moore(1)(42)`) are part of the check too, each resolved on the lattice:

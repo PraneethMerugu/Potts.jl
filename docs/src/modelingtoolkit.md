@@ -20,7 +20,7 @@ ModelingToolkit initialization systems, solved per cell by MTK's `Initialization
 Existing ModelingToolkit models plug in as components, continuous ones and clocked ones.
 The stochastic lattice dynamics, a Markov operator over cell ownership with no equation
 form in ModelingToolkit, are compiled from the symbolic Hamiltonian by Potts.jl's own code
-generator into fused CPU and GPU kernels. This is the same division of labour Catalyst
+generator into fused CPU and GPU kernels. This is the same division of labor Catalyst
 uses for spatial reaction networks.
 
 ## One model with every part

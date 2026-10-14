@@ -8,8 +8,8 @@ connectivity" below). The cell-scope values `pieces` and `largest_piece` let ene
 cell's connectivity directly (see "A cell's pieces in the energy" below).
 
 The **shell** of the target is the 8 sites of its 3×3 box on a square lattice, its 6
-neighbours on a hexagonal one, and the 26 sites of its 3×3×3 box in 3D, whatever the model's
-neighbourhood. A periodic axis wraps. A shell position off a closed face is out of the domain:
+neighbors on a hexagonal one, and the 26 sites of its 3×3×3 box in 3D, whatever the model's
+neighborhood. A periodic axis wraps. A shell position off a closed face is out of the domain:
 it is never the cell, never the medium, and the folds skip it.
 
 ## One helper, two statements
@@ -42,13 +42,13 @@ other statement.
 
 Details:
 
-- **`adjacency`.** `:face` joins shell sites that are face neighbours (4 in 2D, 6 hex, 6 in
-  3D). `:full` joins any neighbours (8 in 2D, 26 in 3D). A hexagonal lattice has one
+- **`adjacency`.** `:face` joins shell sites that are face neighbors (4 in 2D, 6 hex, 6 in
+  3D). `:full` joins any neighbors (8 in 2D, 26 in 3D). A hexagonal lattice has one
   adjacency, so there `:full` is `:face`.
 - **`Local()`'s full shell.** When every shell position is in the domain and owned by `old`,
   taking the target would make a one-site hole, so `Local()` refuses it, as CompuCell3D does.
   A shell that touches a closed face is never full.
-- **`Local()`'s gain test.** `new` (the medium included) must own a face neighbour of the
+- **`Local()`'s gain test.** `new` (the medium included) must own a face neighbor of the
   target, or under `:full` any shell site. With `VonNeumann(1)` copies the source is always
   such a site, so the test never fires. With `Moore(1)` or longer copies it refuses gains
   that touch the cell only at a corner, or not at all.
@@ -148,8 +148,8 @@ floods the cell from one touching site and stops when it has reached the others.
 - Without a window the checkerboard search is exact, on the CPU and on a device alike: it
   runs over a scratch array one copy at a time (a serial kernel on a device).
 
-**Launches.** A `Global` veto adds one launch per colour on the checkerboard: 4 per MCS in
-2D with `Moore(1)` copies. Cell-scope `pieces` add another one per colour (below). Models
+**Launches.** A `Global` veto adds one launch per color on the checkerboard: 4 per MCS in
+2D with `Moore(1)` copies. Cell-scope `pieces` add another one per color (below). Models
 that use neither generate exactly the code they did before.
 
 **Inline.** `connected(c; rule = Global(…))` in a drive or constraint is exact on the host
@@ -178,7 +178,7 @@ cannot decide reads `false`. A rule without a window is exact there too.
 - **Cost.** The after-values come from the shell when the cell is one piece and the shell
   test holds, or when the target is a piece of its own. Otherwise the cell is flooded.
 - **Checkerboard.** A copy that needs a flood runs in a serial kernel, one copy at a time, over
-  the same scratch. This adds one launch per colour.
+  the same scratch. This adds one launch per color.
 - **Lifecycles.** Divisions and removals rebuild the trackers on the host. A device
   lifecycle does not maintain them, so that combination is an `ArgumentError`.
 
@@ -215,14 +215,14 @@ counts the frame at a closed face.
 and master. Apart from the penalty, its `changeEnergy` is the same in every version:
 
 - it returns 0 when the losing cell is the medium;
-- rule 1: the gaining cell, the medium included, must own a face neighbour of the target;
+- rule 1: the gaining cell, the medium included, must own a face neighbor of the target;
 - rule 2: the losing cell must form exactly one arc on the clockwise 8-ring, so a full ring
   is refused;
 - in 3D the plugin throws.
 
 `Local()` with its defaults is rules 1 and 2. The plugin is 2D only.
 
-**A source artefact we do not reproduce.** CompuCell3D initialises its ring positions to
+**A source artifact we do not reproduce.** CompuCell3D initializes its ring positions to
 pixel (0, 0, 0), and an off-lattice position (off a non-periodic face) keeps that value. At a
 closed edge it therefore reads the owner of pixel (0, 0, 0) for those positions, which can
 add or merge arcs for cells touching that edge. Potts.jl reads off-lattice positions as

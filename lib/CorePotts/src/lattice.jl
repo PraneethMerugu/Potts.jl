@@ -3,7 +3,7 @@
 abstract type AbstractBoundary end
 """Opposite faces are identified."""
 struct Periodic <: AbstractBoundary end
-"""No neighbours across the face: out-of-domain directions are counted null attempts."""
+"""No neighbors across the face: out-of-domain directions are counted null attempts."""
 struct Closed <: AbstractBoundary end
 
 abstract type AbstractGeometry end
@@ -11,8 +11,8 @@ abstract type AbstractGeometry end
 struct Square <: AbstractGeometry end
 """
 Hexagonal 2D lattice in axial coordinates: site `(q, r)` sits at `(q + r/2, r·√3/2)`, and its
-six nearest neighbours are the offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)`, `(-1, 1)` — a subset of
-Moore(1), so checkerboard colouring, periodic wrapping and the integer moment trackers carry
+six nearest neighbors are the offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)`, `(-1, 1)` — a subset of
+Moore(1), so checkerboard coloring, periodic wrapping and the integer moment trackers carry
 over. Periodic axes make a rhombic torus. Positions, distances, centroids, shapes and division
 planes use the embedding; `Moore(k)`/`VonNeumann(k)` mean `Hex(k)` here.
 """
@@ -26,7 +26,7 @@ A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one
 lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on a
 hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside the domain never
 change owner and must belong to the medium. The domain edge is closed: `shift` reports
-neighbours outside it as outside the lattice, so contacts, surfaces, gathers, proposals and
+neighbors outside it as outside the lattice, so contacts, surfaces, gathers, proposals and
 field stencils (zero flux) all stop there.
 """
 struct Lattice{N, M, G <: AbstractGeometry}
@@ -137,7 +137,7 @@ end
 """
     shift(lattice, x, offset) -> (inside::Bool, y)
 
-Neighbour of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside = false`, as
+Neighbor of `x` at `offset`. Periodic axes wrap; a closed axis yields `inside = false`, as
 does a pair with either site outside the lattice domain.
 """
 @inline function shift(l::Lattice{N}, x::NTuple{N, Int}, off::NTuple{N, Int32}) where {N}
@@ -255,7 +255,7 @@ _include_self(spec::Stencil) = any(o -> all(iszero, o), spec.offsets)
 """
     Hex(k)
 
-Hexagonal ball of hex distance ≤ `k` (order 1 = 6 neighbours, 2 = 18, 3 = 36) on a
+Hexagonal ball of hex distance ≤ `k` (order 1 = 6 neighbors, 2 = 18, 3 = 36) on a
 hexagonal lattice (axial offsets).
 """
 struct Hex <: RelationSpec

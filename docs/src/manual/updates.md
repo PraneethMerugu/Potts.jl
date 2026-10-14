@@ -73,9 +73,9 @@ sol = solve(PottsProblem(clocks, op, (0, 20); seed = 1), SequentialCPM(); saveat
   Moore(1)(site))`).
 - **Contact counts.** In cell scope (cell updates and equations, division conditions and
   rules, cell observed quantities), `count(pred for _ in contacts)` is the number of the
-  cell's contact pairs (s, s′), s in the cell and s′ a neighbour of s (inside the lattice)
+  cell's contact pairs (s, s′), s in the cell and s′ a neighbor of s (inside the lattice)
   owned by another cell or the medium, for which `pred` holds; `contacts(rel)` uses a
-  relation declared in `@relations` instead of the contact neighbourhood. `pred` reads the
+  relation declared in `@relations` instead of the contact neighborhood. `pred` reads the
   partner's kind `kind′` (`medium` for the medium) and constants: `count(true for _ in
   contacts)` is the unweighted `surface` over the contact relation, and the free-surface
   fraction `count(kind′ == medium for _ in contacts) / count(true for _ in contacts)` is

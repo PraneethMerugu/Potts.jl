@@ -9,7 +9,7 @@ The boundary length of state `u` split by kind pair, as a
 
 A bond is an unordered pair of sites `{i, i + o}`, with `o` an offset of `relation` (a
 relation such as `Moore(1)`, resolved on the problem's lattice; `nothing` means the
-problem's contact relation). The neighbour must lie inside the lattice and its domain:
+problem's contact relation). The neighbor must lie inside the lattice and its domain:
 periodic axes wrap, closed axes and the domain edge do not. A bond counts when its two
 owners differ. Each bond counts once, with the relation's weight (1 for an unweighted
 relation, so the counts are integers).

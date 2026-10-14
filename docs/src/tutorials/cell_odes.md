@@ -1,8 +1,8 @@
 # [Tutorial 5: cell ODEs and ModelingToolkit components](@id tutorial-cell-odes)
 
-Inside each cell, chemistry runs on its own time scale: a cell-cycle clock, a signalling
-pathway, a gene network. Potts.jl puts ordinary differential equations (ODEs) inside cells,
-written as plain equations or as ModelingToolkit systems. You will learn:
+Potts.jl puts ordinary differential equations (ODEs) inside cells. You write them as plain
+equations or as ModelingToolkit systems. Inside each cell, chemistry runs on its own time
+scale: a cell-cycle clock, a signaling pathway or a gene network. You will learn:
 
 - how to write a per-cell ODE and a whole-model ODE in `@equations`;
 - how to choose the ODE solver of a problem;
@@ -20,9 +20,10 @@ nothing # hide
 
 ## A cell-cycle clock as a component
 
-A ModelingToolkit model is built from variables, parameters and equations. Here is a
-one-variable cell cycle: the phase `m` grows at rate `r/τ`, so it reaches 1 after `τ` MCS
-when `r = 1`. Potts provides the time variable `Potts.t` and the derivative `Potts.D`:
+You build a ModelingToolkit model from variables, parameters and equations. Here is a
+one-variable cell cycle. The phase `m` grows at rate `r/τ`, so it reaches 1 after `τ` MCS
+(Monte Carlo steps) when `r = 1`. Potts provides the time variable `Potts.t` and the
+derivative `Potts.D`:
 
 ```@example odes
 using Potts.ModelingToolkitBase: System, @variables, @parameters
@@ -63,16 +64,20 @@ nothing # hide
 
 Three couplings link the clock to the cell:
 
-- **The cell reads the clock.** The target area `V₀ (1 + m)` doubles over the cycle.
+- **The cell reads the clock.** The target volume `V₀ (1 + m)` doubles over the cycle.
 - **The clock reads the cell.** `cycle.r ~ volume / V₀` replaces the parameter `r` by an
-  expression of the cell, so a compressed cell cycles more slowly.
+  expression of the cell. A compressed cell therefore cycles more slowly.
 - **The clock triggers division.** `when = cycle.m >= 1` divides the cell, and
   `cycle.m => 0.0` restarts both daughters' clocks.
 
-`D(p) ~ 0.1 - 0.05 * p` is a plain per-cell ODE for the cell variable `p`; the scope of the
-variable decides the kind of equation (a `cell` variable gives one ODE per cell, a `field`
-a PDE, a `model` variable one ODE for the whole model). `p => Split()` halves `p` between
-the daughters.
+`D(p) ~ 0.1 - 0.05 * p` is a plain per-cell ODE for the cell variable `p`. The scope of the
+variable decides what the equation is:
+
+- a `cell` variable gives one ODE per cell;
+- a `field` gives a PDE;
+- a `model` variable gives one ODE for the whole model.
+
+`p => Split()` halves `p` between the daughters.
 
 ```@example odes
 @named cycling = Cycling()
@@ -99,14 +104,14 @@ scatter!(ax, phases[alive], sol[:volume][end][alive])
 fig
 ```
 
-The component's parameters that are not coupled become model parameters, so `remake`
-changes them: `remake(prob; p = [:cycle₊τ => 30.0])` halves the cycle time.
+The component's uncoupled parameters become model parameters, so `remake` changes them.
+For example, `remake(prob; p = [:cycle₊τ => 30.0])` halves the cycle time.
 
 ## Choosing the ODE solver
 
-How ODEs are integrated is a choice of the problem, not of the model. The default,
-`ode_solver = ExplicitEuler()`, takes one Euler step per MCS. `RK4(substeps = n)` is the
-classic fourth-order Runge–Kutta method with `n` steps per MCS:
+The problem, not the model, chooses how to integrate the ODEs. The default,
+`ode_solver = ExplicitEuler()`, takes one Euler time step per MCS. `RK4(substeps = n)` is the
+classic fourth-order Runge–Kutta method with `n` time steps per MCS:
 
 ```@example odes
 prob_rk4 = remake(prob; ode_solver = RK4(substeps = 2))
@@ -114,7 +119,7 @@ sol_rk4 = solve(prob_rk4, SequentialCPM())
 count(>(0), sol_rk4[:volume][end])
 ```
 
-`Adaptive(alg; kwargs...)` integrates with any adaptive SciML solver, for stiff or
+`Adaptive(alg; kwargs...)` integrates with any adaptive SciML solver. Use it for stiff or
 precise chemistry. Load the solver package first:
 
 ```@example odes
@@ -125,13 +130,13 @@ count(>(0), sol_adaptive[:volume][end])
 ```
 
 `solvers = [p => RK4(substeps = 4)]` gives one variable (or one component, `cycle`) its
-own solver and leaves the rest to `ode_solver`. Changing a solver regenerates the code,
-which takes a moment; changing parameters does not.
+own solver. The rest use `ode_solver`. Changing a solver regenerates the code, which takes
+a moment. Changing parameters does not regenerate the code.
 
 !!! note "Time units"
-    One MCS is one unit of ODE time by default. `@sweep Metropolis(; temperature = T,
-    mcs_duration = 0.5)` makes one MCS half a time unit, to match the rates of a published
-    ODE model.
+    By default, one MCS is one unit of ODE time. To match the rates of a published ODE
+    model, change this with `mcs_duration`. `@sweep Metropolis(; temperature = T,
+    mcs_duration = 0.5)` makes one MCS half a time unit.
 
 ## A model-level ODE
 
@@ -154,8 +159,8 @@ lines!(ax, sol_g.t, sol_g[:g])
 fig
 ```
 
-`@components model drug = sys` likewise adds one copy of a ModelingToolkit system to the
-whole model, for example a pharmacokinetic model whose dose depends on the cell count.
+`@components model drug = sys` adds one instance of a ModelingToolkit system to the whole
+model. An example is a pharmacokinetic model whose dose depends on the cell count.
 
 ## Advanced: a Boolean gene network
 
@@ -163,9 +168,9 @@ whole model, for example a pharmacokinetic model whose dose depends on the cell 
     This section uses discrete-time ModelingToolkit systems. Skip it on a first reading.
 
 A discrete-time ModelingToolkit system with a `ShiftIndex` clock is a Boolean (or any
-discrete) network that ticks once per MCS. `A(k)` is the new value and `A(k - 1)` the
-previous one. Here `B` follows `A`, and `A` switches on when the input `on` is true and
-`B` was off, so the pair oscillates once the cell's signal arrives:
+discrete) network. It updates once per MCS. `A(k)` is the new value and `A(k - 1)` the
+previous one. Here `B` follows `A`. `A` switches on when the input `on` is true and `B` was
+off. The pair therefore oscillates once the cell's signal arrives:
 
 ```@example odes
 using Potts.ModelingToolkitBase: ShiftIndex
@@ -194,14 +199,14 @@ sol_grn = solve(PottsProblem(switch, op, (0, 15)), SequentialCPM(); saveat = 1)
 [Int(x[1]) for x in sol_grn[:grn₊A]]     # A of cell 1 at each MCS
 ```
 
-Nodes are stored as 0/1 cell variables, can trigger division
-(`when = grn.A & (volume > 40)`), and can be coupled to continuous components.
+Potts.jl stores the network nodes as 0/1 cell variables. A node can trigger division
+(`when = grn.A & (volume > 40)`). You can also couple nodes to continuous components.
 
 ## What you learned
 
 - `D(x) ~ …` in `@equations` is a per-cell ODE for a `cell` variable and a global ODE for a
   `model` variable.
-- `@components cells(k) name = sys` puts a ModelingToolkit system in every cell; couple it
+- `@components cells(k) name = sys` puts a ModelingToolkit system in every cell. Couple it
   with `name.param ~ expression` and read it as `name.var`.
 - The problem chooses the integrator: `ode_solver = ExplicitEuler()`, `RK4(substeps = n)` or
   `Adaptive(alg)`, and `solvers = [...]` per variable.
