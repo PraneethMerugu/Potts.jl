@@ -608,6 +608,7 @@ function _check_converts(sys::PottsSystem)
                 end
                 _check_names(d, (_CONVERT_SITE_BUILTINS..., :created), "a write of @convert $(v.name)"; between_copies = true)
             end
+            _check_convert_order(v)
             if !isempty(getfield(sys, :frozen_kinds))
                 fz = getfield(sys, :frozen_kinds)
                 ks = Int[v.fresh, (_implicit_fresh(r) for r in (v.from, v.to))..., v.domain.kinds...]
@@ -615,6 +616,36 @@ function _check_converts(sys::PottsSystem)
                     "@convert $(v.name): with frozen kinds, `from` and `to` are `sibling(k)` of kinds that are not frozen " *
                     "(a conversion must not change the frozen sites)"))
             end
+        end
+    end
+    return nothing
+end
+
+# The transfers and writes of a pass run in parallel, once per entity or converted site, so
+# none of their expressions (amounts, indices, the referents they name) may read a variable
+# the pass transfers or writes: the value read would depend on the order of the atomics.
+function _check_convert_order(v::ConvertSpec)
+    written = Set{Symbol}(info(t.var).name for t in v.transfers)
+    for (lhs, _) in v.writes
+        i = info(lhs)
+        push!(written, i !== nothing ? i.name : info(arguments(lhs)[1]).name)
+    end
+    isempty(written) && return nothing
+    reads = Any[]
+    for t in v.transfers
+        push!(reads, t.per_site, t.from, t.to)
+    end
+    for (lhs, d) in v.writes
+        push!(reads, d)
+        info(lhs) === nothing && push!(reads, arguments(lhs)[2])
+    end
+    for x in reads
+        _walk(x) do y
+            i = info(y)
+            (i !== nothing && i.role in (:cell, :model) && i.name in written) || return
+            throw(ArgumentError("@convert $(v.name): a transfer or write reads `$(i.name)`, which the pass itself " *
+                                "transfers or writes; the value read would depend on the order of the parallel " *
+                                "updates. Read a snapshot (`@after_mcs`) or another variable instead"))
         end
     end
     return nothing
