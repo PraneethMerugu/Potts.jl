@@ -57,8 +57,9 @@
 #    ArgumentError naming `minimum_image`. A pure function of `d` and the lattice:
 #    usable in cell scope, in a `@drive` (copy scope, e.g. of `position[target][1]`) and
 #    in an `@energy` cell term of static values (a cell variable), on the CPU and the
-#    device. Pinned exactly for |d| < L with |d| ≠ L/2; at |d| = L/2 only |result| = L/2
-#    is pinned (the tie is open, see below). Unit lattice spacing only.
+#    device. Pinned exactly for |d| < L with |d| ≠ L/2; at |d| = ±L/2 the sign is free but
+#    the magnitude is exactly L/2 (O2). Inputs are assumed within one period (O3).
+#    Lattice units only (O7).
 # D. `separation(a, b)`: the minimum-image vector centroid(a) − centroid(b) (13 F3), a
 #    vector of N components (`separation(a, b)[k]`, `norm(separation(a, b))`). On a
 #    square lattice component k is `minimum_image(centroid(a, k) − centroid(b, k), k)`. On a
@@ -70,8 +71,9 @@
 #    cluster's volume for the mean). The same value for every member. For a cell that is
 #    its own cluster it equals `integral(x)`. Cell scope like `integral` (updates,
 #    `@observed`); refused in `@energy` with an ArgumentError (as `integral` is: no ΔH).
-#    Pinned with `x` a site variable; the binding of `kind`/`volume` inside `x` (the
-#    owner's or the current cell's) is not pinned.
+#    The integrand is in site scope (spec-owner ruling, 2026-10-14): `kind` and `volume`
+#    inside `x` bind to the site's owner, the member cell the site belongs to, so
+#    `cluster_integral(volume)` = Σ_members V_m², not (Σ V_m)·V_current.
 # F. Cost. A model that uses these helpers only outside the sweep keeps
 #    `CorePotts.has_reads(prob.f) == false` (D-058, D-231 item 4).
 #
@@ -80,27 +82,29 @@
 # compiles (the OpenVT model uses `kind′ == medium`) and is not re-pinned here.
 #
 # Open choices (the test author's conservative readings, flagged for the spec owner):
-#   O1 `cluster_integral` (ROADMAP row, review E7) vs api-synthesis §2.1/§6.3, which drops
-#      it for the fold `sum(x for s in sites(cluster))`. This file pins the ROADMAP name;
-#      the fold spelling is not pinned (it does not exist today).
-#   O2 Ties: `minimum_image(±L/2, axis)` is pinned only up to sign. CorePotts's integer
-#      `min_image` resolves ties to +, its float `_min_image` and copy-scope `direction`
-#      keep `d`.
-#   O3 |d| ≥ L (several periods) is not pinned; centroid differences lie in (−L, L).
-#   O4 A dead referent's centroid reads 0.0 (today's `centroid(k)` convention for an empty
-#      slot), not NaN; `separation` with a dead referent is not pinned.
-#   O5 `centroid(c, k)` is refused in energies (D-032 until R7) and is not pinned in drives
-#      (api-synthesis lists it for cell scope only). R7 will need a re-freeze of the
-#      energy refusal.
+#   O1 (ruled) `cluster_integral` is the pinned name (ROADMAP row, review E7). The fold
+#      `sum(x for s in sites(cluster))` of api-synthesis §2.1/§6.3 comes later as an
+#      equivalent spelling; it is not pinned here.
+#   O2 (ruled) Ties: at d = ±L/2 the sign of `minimum_image` is free, the magnitude is
+#      exactly L/2. (CorePotts's integer `min_image` resolves ties to +; its float
+#      `_min_image` and copy-scope `direction` keep `d`.)
+#   O3 (ruled) |d| ≥ L is open: inputs are assumed within one period (centroid
+#      differences lie in (−L, L)).
+#   O4 (ruled) A dead referent's centroid reads 0.0 (today's `centroid(k)` convention for
+#      an empty slot), not NaN. `separation` with a dead referent is open: guard it with
+#      `alive(ref)`.
+#   O5 (ruled) `centroid(c, k)` is refused in energies (D-032) and is not pinned in drives
+#      (api-synthesis lists it for cell scope only). The energy refusal is re-frozen at R7.
 #   O6 `minimum_image` is pinned in a `@drive` and an `@energy` cell term (pure arithmetic,
 #      no state read); `minimum_image` on a hexagonal lattice is not pinned (a scalar wrap
 #      of an embedded coordinate is not well defined there; `separation` is).
-#   O7 Lattice spacing ≠ 1 is not pinned: `centroid` is in lattice units while
-#      `position` is scaled by the spacing, so the period of `minimum_image` (L or L·h) is
-#      open; the 14c sketch mixes `position[1]` and `centroid(…, 1)`.
+#   O7 (ruled) Lattice units only: spacing ≠ 1 is not pinned (`centroid` is in lattice
+#      units while `position` is scaled by the spacing).
 #   O8 `centroid(c)` (one argument, a vector) is not pinned: it would clash with
 #      `centroid(k)`, the current cell's axis k.
 #   O9 `Pairs` value types: a mixed Int/Float/parameter list is pinned; class keys are not.
+#   R1 (ruling) The binding inside `cluster_integral(x)`: site scope, the owner's `kind` and
+#      `volume` (section 3, "cluster_integral sums over the cluster's sites").
 #
 # Sections: 1 the fixtures build; 2 named pairs (E2); 3 centroid(c, k), minimum_image,
 # separation and cluster_integral by hand (square, periodic × closed); 4 dead referents;
@@ -306,6 +310,7 @@ p65a2_define(:P65a2Refs, quote
             scn(cell) ~ norm(separation(sibling(cytoplasm), sibling(nucleus)))
             ci(cell) ~ cluster_integral(F)
             civ(cell) ~ cluster_integral(G)
+            cvol(cell) ~ cluster_integral(volume)
             own_int(cell) ~ integral(F)
             Πx(cell) ~ volume * minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1) /
                        (volume + volume[sibling(nucleus)])
@@ -573,7 +578,8 @@ end
     # scalar values (dd = 15, −15, 3, −10.25, ±10)
     m1 = observe(prob, :mdd, u)
     @test m1[1:4] == [-5.0, 5.0, 3.0, 9.75]
-    @test abs(m1[5]) == 10.0 && abs(m1[6]) == 10.0              # the tie, up to sign (open, O2)
+    # the tie d = ±L/2: the sign is free, the magnitude is exactly L/2 = 10 (O2, ruled)
+    @test abs(m1[5]) == 10.0 && abs(m1[6]) == 10.0
     @test observe(prob, :mdd2, u)[1:6] == P65A2_DD              # closed axis: identity
 end
 
@@ -596,6 +602,14 @@ end
     u = prob.u0
     @test observe(prob, :ci, u)[1:6] == [7457.0, 7457.0, 7457.0, 9903.0, 9903.0, 658.0]
     @test observe(prob, :civ, u)[1:6] == [17.0, 17.0, 17.0, 11.0, 11.0, 4.0]   # Σ 1 = the cluster's volume
+    # the integrand is in site scope (ruling R1): `volume` is the site owner's, so the
+    # two-member cluster B (V₄ = 9, V₅ = 2) gives 9² + 2² = 85 for both members. Negative
+    # control (the other reading, the current cell's volume): (9 + 2)·9 = 99 for cell 4 and
+    # (9 + 2)·2 = 22 for cell 5. Cluster A: 12² + 4² + 1² = 161; lone cell 6: 4² = 16.
+    cv = observe(prob, :cvol, u)
+    @test cv[4:5] == [85.0, 85.0]
+    @test cv[4] != 99.0 && cv[5] != 22.0
+    @test cv[1:3] == [161.0, 161.0, 161.0] && cv[6] == 16.0
     oi = observe(prob, :own_int, u)
     @test oi[1:6] == [4926.0, 1414.0, 1117.0, 8181.0, 1722.0, 658.0]           # integral(F), per cell
     @test observe(prob, :ci, u)[6] == oi[6]                      # a lone cell: cluster_integral = integral
