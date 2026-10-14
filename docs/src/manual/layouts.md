@@ -123,8 +123,11 @@ Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), r)), centres; kinds = [:cell])
 ```
 
 `Interior` keeps the code's strict test `|x − c| < r`; write `Sphere(…)` for the closed rule.
-A ball tangent to a substrate must be strict: with its centre at `z = r + 1` the closed ball
-has one site on the plane `z = 1`.
+A ball tangent to a substrate must be strict: with its centre at `z = r + 1` and its `x`
+and `y` on a site, the closed ball has one site on the plane `z = 1` (the point straight
+below the centre, at distance exactly `r`). With `x` or `y` off a site, every site of `z = 1`
+is farther than `r`, so the two rules agree on that plane, though they can still differ
+elsewhere on the sphere.
 
 ### [Compartment cells](@id manual-layouts-groups)
 

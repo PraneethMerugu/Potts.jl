@@ -884,8 +884,8 @@ struct Center end
     RandomPoints(n; region = <whole lattice>, replace = false, seed)
 
 A point pattern: `n` lattice sites of `region` that lie in the lattice's domain, drawn
-uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`; Cartesian, wrapping
-through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
+uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`, or an [`Interior`](@ref)
+of one; Cartesian, wrapping through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
 column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each point draws
 `i = rand(rng, 1:m)`:
 
@@ -1007,7 +1007,7 @@ end
 
 One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
 `Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only the
-sites of `region` (a shape or a tuple of index ranges) that are in the lattice's domain and
+sites of `region` (a shape, an [`Interior`](@ref) of one, or a tuple of index ranges) that are in the lattice's domain and
 still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
 
 - Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
@@ -1277,7 +1277,7 @@ synchronous random (Eden) growth into the medium.
   Moore(1)` there.
 
 Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
-of ranges or a shape) or the domain. Each cell grows from one site, so it is one piece under
+of ranges, a shape or an [`Interior`](@ref) of one) or the domain. Each cell grows from one site, so it is one piece under
 `neighborhood`.
 
 The report row has `requested` = the points, `painted` = the cells created, `misses` = the
@@ -1815,16 +1815,17 @@ with `Potts.set_column!(op, :cluster, label)` instead). `remake` does not apply 
 """
 struct Group <: AbstractLayout
     layers::Vector{AbstractLayout}
-end
-function Group(layers::AbstractLayout...)
-    isempty(layers) && throw(ArgumentError("Group: give at least one layer"))
-    flat = AbstractLayout[]
-    for l in layers
-        l isa Overlay ? append!(flat, l.layers) : push!(flat, l)
+    function Group(layers::Vector{AbstractLayout})
+        isempty(layers) && throw(ArgumentError("Group: give at least one layer"))
+        flat = AbstractLayout[]
+        for l in layers
+            l isa Overlay ? append!(flat, l.layers) : push!(flat, l)
+        end
+        any(l -> l isa Group, flat) && _group_placement()
+        return new(flat)
     end
-    any(l -> l isa Group, flat) && _group_placement()
-    return Group(flat)
 end
+Group(layers::AbstractLayout...) = Group(AbstractLayout[layers...])
 @noinline _group_placement() =
     throw(ArgumentError("Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
                         "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *

@@ -29,7 +29,9 @@ the identity on a non-periodic axis and, on a periodic axis `d`, the minimum ima
 
 `dims` holds one period per axis (the lattice size); `periodic` is one `Bool` per axis or one
 `Bool` for every axis. The result is right when every true displacement between consecutive
-samples is below half the period; this is not detected, so sample often enough.
+samples is below half the period; this is not detected, so sample often enough. A `NaN`
+coordinate (the centroid of a cell that owns no site) is not detected either: it propagates
+to that sample and every later one on its axis.
 
 Throws an `ArgumentError` for an empty track, points of mixed dimensions, `dims` or
 `periodic` of another length than the points, and a non-positive period.
@@ -75,7 +77,10 @@ over overlapping windows, with the squares of all components summed. For a vecto
 tracks of one length `n`, the mean of their MSDs with equal weights. Times are `ℓ·Δt`,
 where `Δt` is the sampling interval: pass the unwrapped tracks of [`unwrap_track`](@ref),
 projected onto the axes of interest (the xy plane for a cell crawling on a substrate). It
-costs O(n·|lags|) per track.
+costs O(n·|lags|) per track, so the default lags cost O(n²): pass `lags` for a long track
+(a 10⁵-sample track takes about 5 s with every lag; `lags = 1:1000` or a logarithmic set is
+far cheaper). A track of one sample has no lag, so its MSD is `Float64[]`. `NaN` points are
+not detected: they propagate to every lag whose windows contain them.
 
 Throws an `ArgumentError` for a lag outside `1:(n − 1)`, tracks of unequal lengths, no
 track, and points of mixed dimensions.
@@ -110,8 +115,13 @@ function _msd(trs, ls::Vector{Int}, ::Val{N}) where {N}
     return out ./ length(trs)
 end
 
-# g(Δt; P) = Δt − P(1 − e^{−Δt/P}), written with `expm1` (no cancellation for Δt ≪ P).
-_furth_g(t, P) = t + P * expm1(-t / P)
+# g(Δt; P) = Δt − P(1 − e^{−Δt/P}) = P(x + expm1(−x)), x = Δt/P. For small x the sum
+# cancels (it is ≈ x²/2), so below x = 1e-4 the series x²/2 − x³/6 + x⁴/24 is used (its
+# truncation error is below x³/60 relative, < 2e-14).
+function _furth_g(t, P)
+    x = t / P
+    return x < 1e-4 ? P * (x^2 / 2 - x^3 / 6 + x^4 / 24) : P * (x + expm1(-x))
+end
 
 function _furth_params(S, D, P, what)
     (0 <= S < 1) || throw(ArgumentError("$what: S must satisfy 0 ≤ S < 1, got $S"))
@@ -178,7 +188,9 @@ Fit the modified Fürth model ([`furth_msd`](@ref)) to an MSD `m` at the times `
   logarithmic grid on `[Δt₁/10, 100·Δt_end]`, refined by golden section to a relative
   `1e-10` (ties go to the smaller `P`). `D_slow` is `(a + b)/2` directly, which stays exact as
   `S → 1`; `S = b/(a + b)` (`NaN` when both vanish). It needs `m > 0`. On a purely diffusive
-  MSD only `D_slow` is identifiable.
+  MSD only `D_slow` is identifiable. A fitted `P` at either end of the grid (`Δt₁/10` or
+  `100·Δt_end`) means the persistence is not resolved by the data (a purely diffusive or a
+  ballistic MSD): read `D_slow` or `v_eff`, not `P`, `D` or `S`.
 
 Throws an `ArgumentError` for fewer than 4 points, `Δt` and `m` of different lengths,
 non-finite values, a `Δt` that is not positive and strictly increasing, an unknown
