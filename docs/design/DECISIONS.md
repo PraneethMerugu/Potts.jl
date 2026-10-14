@@ -4525,3 +4525,8 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Not adopted.** Scoping branch suites to the change: a full `parallel.sh` run costs about 25 min, and AUTONOMY §7.4 requires every suite on the merged tree. Running suites on the Mac: D-157 stands.
 - **Separate, not approved yet.** Shrinking the BIOS VRAM carve-out (64 GiB) in favour of GTT, so the OS sees about 120 GB. This needs the maintainer at the PC.
 - **Switch-over.** Between items, after q3, q5, q6 and q7. Those items' scripts and checkouts are not changed.
+
+## D-249 American spelling in docs and comments; `openvt_colony_panel!` keywords `color`/`state_colors`; 15_openvt_f1_f4.jl re-frozen (2026-10-14; maintainer: "yes the style pass is mine, commit it"; re-freeze approved by the user, 2026-10-14; amends D-175's pin)
+- **Style.** Prose in the docs, docstrings and comments uses American spelling (`docs/design/STYLE.md`; CLAUDE.md points docs prose there). No identifier was renamed except the two keywords below.
+- **Keywords.** `PottsModels.openvt_colony_panel!` takes `color` and `state_colors`. `colour` and `state_colours` remain as deprecated aliases (`Base.depwarn`), so existing callers keep working.
+- **Re-freeze.** `reproductions/15_openvt_f1_f4.jl` gains one testset: the American keywords work, the British ones are `@test_deprecated`, and an unknown `color` is an ArgumentError. Nothing else in the file changed. New sha256 `911cc88b…7129`.
