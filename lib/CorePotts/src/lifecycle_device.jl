@@ -59,7 +59,8 @@ const _ACC_EMPTY = 5
 const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
 const _ACC_LARGE = 7                # divisions deferred: the cell is too large for the Int32
                                     # moment scratch (`_scratch_ok`; also counted as deferred)
-const _NACC = 7
+const _ACC_BADTRANS = 8             # `transitioning` on an event other than a division (an error)
+const _NACC = 8
 
 # The bound of `_scratch_ok` (`typemax(Int32)`); a `Ref` read when the scratch is built, so
 # that tests can lower it (not public API)
@@ -173,6 +174,11 @@ end
         for c in lo:hi
             raw = @inbounds events[c]
             e = _event(ruled, raw)
+            if _bad_transition(e)                          # counted, thrown on the host; the bit dropped
+                Atomix.@atomic dv.acc[_ACC_BADTRANS] += Int32(1)
+                e = _base_event(e)
+                @inbounds events[c] = _with_rule(ruled, e, raw)
+            end
             if _base_event(e) == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
                 CL || Atomix.@atomic dv.acc[_ACC_NOCLUSTER] += Int32(1)
                 e = _undivided(e)                          # a transition (`transitioning`) stays
@@ -1114,6 +1120,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     s.deferred += deferred
     s.empty_daughters += δ(_ACC_EMPTY)
     nocluster = δ(_ACC_NOCLUSTER)
+    badtrans = δ(_ACC_BADTRANS)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
         _copy!(stats, D.mask, D.dv.mask)
@@ -1130,5 +1137,6 @@ function _fold_lifecycle!(integ; report::Bool = true)
                        "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
                        "only on the CPU"
     nocluster > 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    badtrans > 0 && throw(_bad_transition_error(badtrans))
     return nothing
 end

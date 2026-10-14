@@ -379,3 +379,31 @@ end
     step!(integ)
     @test integ.stats.attempts == N0 + integ.nmobile
 end
+
+# `transitioning` is kernel-safe (no throw, it runs in the trigger); a transition bit on an
+# event other than a division is refused on the host, by both planners (review of P6.5b, S5)
+@testset "transitioning: checked on the host, by both planners" begin
+    @test CorePotts.transitioning(EVENT_DIVIDE) == EVENT_DIVIDE | Int32(0x10)
+    @test CorePotts.transitioning(EVENT_REMOVE) isa Int32                  # no throw in a kernel
+    σ, kinds = blocks((30, 30), 5)
+    lat = Lattice((30, 30))
+    bad(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? CorePotts.transitioning(EVENT_REMOVE) : EVENT_NONE
+    good(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? CorePotts.transitioning(EVENT_DIVIDE) : EVENT_NONE
+    kind = (st, p, ctx, key, mcs, c) -> Int32(3 - st.cell.kind[c])
+    for force in (false, true)
+        CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
+        try
+            err = try
+                run_lifecycle(σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg = CheckerboardCPM())
+                nothing
+            catch e
+                e
+            end
+            @test err isa ArgumentError && occursin("other than EVENT_DIVIDE", sprint(showerror, err))
+            u = run_lifecycle(σ, kinds, lat, Lifecycle(good; kind); tspan = (0, 2), alg = CheckerboardCPM()).u[end]
+            @test count(>(0), u.cell.volume) == length(kinds) + 1 && u.cell.kind[1] == 3 - kinds[1]
+        finally
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+        end
+    end
+end

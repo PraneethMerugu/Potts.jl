@@ -37,14 +37,18 @@ applied first: the `kind` hook sees the cell before the division, the daughter s
 see the new kind, and both halves carry it. It composes with `ruled_event`
 (`ruled_event(transitioning(e), i)`). A division that is deferred (no free slot) still
 transitions the cell. `stats.lifecycle.transitions` counts the cell once.
+
+It is called inside the trigger kernel, so it does not check `event`: the planner does, on
+the host (an `ArgumentError` at the MCS's read point for any other event).
 """
-@inline function transitioning(event)
-    e = Int32(event)
-    (e == EVENT_DIVIDE || e == EVENT_DIVIDE_CLUSTER) ||
-        throw(ArgumentError("transitioning(event): the event is EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER, got $event"))
-    return e | _TRANSITIONING
-end
+@inline transitioning(event) = Int32(event) | _TRANSITIONING
 public transitioning
+
+# a trigger value whose transition bit is on an event other than a division (host check)
+@inline _bad_transition(e) = (e & _TRANSITIONING) != Int32(0) &&
+                             !(_base_event(e) == EVENT_DIVIDE || _base_event(e) == EVENT_DIVIDE_CLUSTER)
+_bad_transition_error(n) = ArgumentError("lifecycle: $n trigger value(s) with `transitioning(event)` on an event " *
+                                         "other than EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER")
 
 # the event without its transition bit, and whether the cell transitions
 @inline _base_event(e) = e & ~_TRANSITIONING
@@ -427,6 +431,8 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the device
     rule = lc.rules === Val(true) ? (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r) : nothing
     # `transitioning(e)` (A-17): the transition bit is set apart and re-attached to the planned event
+    nbad = count(_bad_transition, events)
+    nbad > 0 && throw(_bad_transition_error(nbad))
     tb = (events .& _TRANSITIONING) .!= 0
     events .&= ~_TRANSITIONING
     volume = _to_host(pstats, st.cell.volume)
