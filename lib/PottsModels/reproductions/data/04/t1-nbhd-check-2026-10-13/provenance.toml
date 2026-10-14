@@ -1,0 +1,10 @@
+julia = "1.12.6"
+protocol = "spec 04 §5.6"
+threads = 24
+commit = "05ed9baea5970c4e2bbea19728e93d3ed05d56e2"
+runner_sha256 = "11288c7d3b5fa9508dd6f2ddb1d89537055fa4fd7b67da90a261430b524f9ab0"
+started = "2026-10-13T18:52:34.008"
+machine = "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S"
+frozen_sha256 = "dc6de6bcf838173521af39db92cf0476d3ea25b963ee61465d43ba5a2b5d969c"
+tau = 3.4472094822805346
+finished = "2026-10-13T20:27:17.640"

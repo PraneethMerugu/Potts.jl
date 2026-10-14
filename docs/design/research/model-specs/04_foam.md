@@ -595,6 +595,12 @@ The grids:
 
 **Record.** `data/04/t1-nbhd-check-<date>/`: scan.tsv, provenance.toml, README. The runner is `data/04/run_t1_nbhd_check.jl`, not frozen. It includes the frozen tests unchanged as its gate.
 
+**Result (2026-10-13; record `data/04/t1-nbhd-check-2026-10-13/`). Detector ruled out.**
+- In all 45 runs where `vn1` records no T1, `no4` records no contact change at all. The pinned foam never brings non-adjacent bubbles within the 20-site shell.
+- Where both detectors yield (30 runs), t_first agrees to within 94 paper MCS, inside the 100-MCS window; `no4` is 0–20 % earlier.
+- `no4` counts about 1.7× more T1 events (flicker), which is relevant to A-15 and absolute N̄ only.
+- F1 stands as sharpened in §5.5, and the `vn1` default (§2.8) stays.
+
 ## 6. Required general features
 
 | ID | Needed? | Use |
