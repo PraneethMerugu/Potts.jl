@@ -4494,14 +4494,17 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
      - `SequentialCPM` takes the second word from its draw's fourth word, which was unused. That adds no RNG cost.
      - The boundary-site sweep uses all four words of draw j, so it draws local index 1 of the same address, only above 2²⁴ boundary sites.
   3. The choice is per sweep: `nsite` is loop-invariant. For the boundary list it is `n` at each pick, so a list that crosses 2²⁴ switches deterministically.
-  4. D-237 rule 4, the refusal of more than 2³² mobile sites, is lifted. Every site is reachable with two words.
+  4. D-237 rule 4, the refusal of more than 2³² mobile sites, is narrowed. With two words every site is reachable on a plain all-mobile lattice, which indexes sites as `Int`. The boundary list (`BoundaryCache.list`/`pos`) and a frozen mask's mobile-site list (`MaskMobility.sites`) store sites as `Int32`. So `init` refuses `SequentialCPM(; skip_interior = true)`, or any algorithm with a frozen mask, on more than 2³¹ − 1 sites (`_check_site_lists`, an `ArgumentError`). Before, these failed mid-run with an `InexactError` between 2³¹ and 2³², or died after allocating. Widening those lists to `Int64` is a separate item.
 - **Why a threshold.** Up to 2³² sites the two-word pick refines the one-word one: it gives the same site, or the next one when the low word carries, with probability about n/2³³. Switching everywhere would leave short runs almost unchanged but move pinned long runs; p6_4b1's OpenVT run would see a few carries. A threshold keeps every pin. Lemire's rejection step was not chosen, because its rare redraws would also move pins at any size.
 - **Tests** (lib/CorePotts/test/runtests.jl, "rng: two-word site picks (D-247)"):
   - `bounded64` equals the BigInt ⌊x·n/2⁶⁴⌋ and stays in 0:n−1.
   - It refines `bounded` up to 2³² (difference 0 or 1).
   - At n = 10⁹ the one-word map draws the 2³² − 4n five-input sites 34.3 % of the time. This is the negative control, and it shows the bias is real. The two-word map draws them at their 29.5 % share (400 000 draws each, ±0.003).
   - The threshold sits at 2²⁴.
-  - `_FORCE_TWO_WORD_PICK` on 30² GG, for SequentialCPM and for skip_interior over 4 seeds: Σ accepted ΔH equals the brute-force ΔH, volumes match a recount, and acceptance is within 5 % of the unforced run. Unforced runs are unchanged.
-  - A real 4100² lattice (above 2²⁴ sites) runs one MCS on the unforced two-word path.
-  - Mutant check: `bounded64 ≡ 0` fails both sweeps.
+  - `_FORCE_TWO_WORD_PICK` on 30² GG, for SequentialCPM and for skip_interior over 4 seeds: Σ accepted ΔH equals the brute-force ΔH, volumes match a recount, and acceptance is within 5 % of the unforced run. Unforced runs are unchanged. At 30² a carry has probability about 10⁻⁷, so this checks exactness, not the wiring.
+  - The hook reaches the helper both sweeps call.
+  - **Replay oracle (review, MEDIUM 1).** On 4100² (above 2²⁴ sites, unforced), every site borders the other of two interleaved cells. A constraint refuses every copy and records each attempt's target, so σ never changes. The first 300 000 targets of `SequentialCPM` and of `skip_interior` must equal a test-side replay from `draw`: words 1 and 4 for the sequential sweep; for the boundary sweep, word 2 and local index 1's word 1 over B's list. More than 100 of them must differ from the one-word replay (about 0.2 % carry).
+  - `_check_site_lists` refuses a bare 2¹⁶ × 2¹⁶ lattice with `skip_interior` or a frozen mask, and accepts it otherwise.
+  - Mutants: `bounded64 ≡ 0` fails both sweeps. "lo ignored" (`hi·2³²` only) fails the replays. "Hook ignored" fails the hook checks.
+- **Frozen one-word replay.** p6_9a_global_connectivity.jl:271-272 replays sequential targets with the one-word pick. It is valid below 2²⁴ sites, which covers all its lattices. A run above 2²⁴ would need the two-word replay.
 - **Pins.** The one-word path's numbers are unchanged, but `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so p6_0bk2's IR hashes (GG 72², cubes 16³) move. They are re-frozen under this entry from the PC run. A PC A/B decides the cost.

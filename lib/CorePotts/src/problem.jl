@@ -314,6 +314,15 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
 end
 CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolve.init(prob; kwargs...))
 
+# The boundary list and a frozen mask's mobile-site list store sites as Int32: refuse, never
+# wrap (D-247). Plain all-mobile lattices index sites as Int.
+function _check_site_lists(lat, frozen, alg)
+    nsites(lat) > typemax(Int32) && (frozen !== nothing || _skips_interior(alg)) && throw(ArgumentError(
+        "this lattice has $(nsites(lat)) sites; a frozen mask and SequentialCPM(; skip_interior = true) " *
+        "list sites as Int32 and support at most 2^31 - 1 (D-247)"))
+    return nothing
+end
+
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
@@ -327,6 +336,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
     isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
+    _check_site_lists(lat, prob.frozen, alg)
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))

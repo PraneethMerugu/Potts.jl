@@ -215,7 +215,7 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
         end
         # bounded(·, n) ∈ 0:n-1; above 2^24 boundary sites the second word comes from draw j's
         # local index 1, so the draws of smaller lists are unchanged (D-247)
-        k = (force || n > PICK_ONE_WORD_MAX) ? bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n) :
+        k = _two_word_pick(n, force) ? bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n) :
             bounded(rt, n)
         t = Int(@inbounds B.list[k + 1])
         x = coordinates(lat, t)

@@ -108,7 +108,7 @@ end
 const PICK_ONE_WORD_MAX = 2^24
 # tests: the two-word pick on a small lattice (read once per MCS)
 const _FORCE_TWO_WORD_PICK = Ref(false)
-@inline _two_word_pick(n) = n > PICK_ONE_WORD_MAX || _FORCE_TWO_WORD_PICK[]
+@inline _two_word_pick(n, force::Bool = _FORCE_TWO_WORD_PICK[]) = force || n > PICK_ONE_WORD_MAX
 
 """
     cell_entity(id, generation) -> UInt64

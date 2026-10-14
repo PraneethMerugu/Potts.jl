@@ -218,13 +218,53 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             @test abs(ratio - 1) < 0.05
             @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
         end
-        # a real lattice above 2²⁴ sites runs the two-word pick (one MCS)
-        big = Lattice((4100, 4100))
-        σb = zeros(Int32, 4100, 4100)
-        σb[2000:2009, 2000:2009] .= 1
-        sb = solve(PottsProblem(GG, initial_state(σb, Int32[1]), big, (0, 1), gg_params(); seed = 2), SequentialCPM())
-        @test nsites(big) > CorePotts.PICK_ONE_WORD_MAX
-        @test sb.u[end].cell.volume[1] == count(==(1), sb.u[end].σ) && sb.stats.accepted > 0
+        # the hook reaches the helper both sweeps call
+        @test CorePotts._two_word_pick(10, true) && !CorePotts._two_word_pick(10, false)
+        CorePotts._FORCE_TWO_WORD_PICK[] = true
+        @test CorePotts._two_word_pick(10)
+        CorePotts._FORCE_TWO_WORD_PICK[] = false
+        @test !CorePotts._two_word_pick(10)
+        # the wiring, exactly, unforced above 2²⁴ sites: on 4100² every site borders the other
+        # of two interleaved cells, a constraint that refuses every copy records each
+        # attempt's target, and σ never changes, so the targets replay test-side from `draw`
+        L = 4100
+        big = Lattice((L, L))
+        n = L * L
+        @test n > CorePotts.PICK_ONE_WORD_MAX
+        K = 300_000
+        rec, cnt = zeros(Int, K), Ref(0)
+        record(st, p, prop, ctx) = (cnt[] < K && (cnt[] += 1; rec[cnt[]] = prop.target); false)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = record)
+        σb = Int32[1 + (i + j) % 2 for i in 1:L, j in 1:L]
+        bprob = PottsProblem(f, initial_state(σb, Int32[1, 2]), big, (0, 1), gg_params(); seed = 2)
+        key = RNGKey(2)
+        # SequentialCPM: attempt a's target from its draw's first and fourth words
+        solve(bprob, SequentialCPM())
+        @test cnt[] == K
+        seq(m, a, wide) = (w = draw(key, m, a, CorePotts.STREAM_SEQUENTIAL_TARGET);
+            (wide ? CorePotts.bounded64(w[1], w[4], n) : bounded(w[1], n)) + 1)
+        ms = filter(m -> all(a -> rec[a] == seq(m, a, true), 1:K), 0:1)       # the MCS index used
+        @test length(ms) == 1
+        m = only(ms)
+        @test count(a -> rec[a] != seq(m, a, false), 1:K) > 100       # one word differs (~0.2 %)
+        # the boundary sweep: every site is in B (no skips), pick j from draw j's second word
+        # and local index 1's first word, over B's list
+        cnt[] = 0
+        integ = init(bprob, SequentialCPM(; skip_interior = true); save_start = false)
+        step!(integ)
+        @test cnt[] == K && integ.cache.n == n
+        list = integ.cache.list
+        bnd(j, wide) = (w = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE);
+            lo = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE, 1)[1];
+            Int(list[(wide ? CorePotts.bounded64(w[2], lo, n) : bounded(w[2], n)) + 1]))
+        @test all(j -> rec[j] == bnd(j, true), 1:K)
+        @test count(j -> rec[j] != bnd(j, false), 1:K) > 100
+        # Int32 site lists refuse lattices above 2³¹ - 1 sites (no allocation: a bare lattice)
+        huge = Lattice((2^16, 2^16))
+        @test_throws ArgumentError CorePotts._check_site_lists(huge, nothing, SequentialCPM(; skip_interior = true))
+        @test_throws ArgumentError CorePotts._check_site_lists(huge, falses(1), CheckerboardCPM())
+        @test CorePotts._check_site_lists(huge, nothing, SequentialCPM()) === nothing
+        @test CorePotts._check_site_lists(huge, nothing, CheckerboardCPM()) === nothing
     end
 
     @testset "coloring is conflict free" begin
