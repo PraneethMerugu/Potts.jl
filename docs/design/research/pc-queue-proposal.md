@@ -1,6 +1,6 @@
 # PC job queue: two lanes (proposal, 2026-10-14)
 
-Status: **proposal; awaiting maintainer approval.** Under D-157, D-232 and D-242. None of these decisions is reopened, and a second machine is not proposed.
+Status: **approved 2026-10-14 (approvals 1–3; D-248). The BIOS change (4) is not approved.** Under D-157, D-232 and D-242. None of these decisions is reopened, and a second machine is not proposed.
 
 ## 1. Measured (2026-10-14, read-only)
 
