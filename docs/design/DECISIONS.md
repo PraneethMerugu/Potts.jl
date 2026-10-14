@@ -4522,7 +4522,17 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - `_check_site_lists` refuses a bare 2¹⁶ × 2¹⁶ lattice with `skip_interior` or a frozen mask, and accepts it otherwise.
   - Mutants: `bounded64 ≡ 0` fails both sweeps. "lo ignored" (`hi·2³²` only) fails the replays. "Hook ignored" fails the hook checks.
 - **Frozen one-word replay.** p6_9a_global_connectivity.jl:271-272 replays sequential targets with the one-word pick. It is valid below 2²⁴ sites, which covers all its lattices. A run above 2²⁴ would need the two-word replay.
-- **Pins.** The one-word path's numbers are unchanged, but `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so p6_0bk2's IR hashes (GG 72², cubes 16³) move. They are re-frozen under this entry from the PC run. A PC A/B decides the cost.
+- **Pins.** The one-word path's numbers are unchanged. `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so only p6_0bk2's IR hashes move. Nothing else moved in q6's PottsModels run on the PC at 1abf6f37 (x86, Julia 1.12.6): 40533 pass, 2 fail (exactly these pins), 99 broken.
+  - Re-frozen under this entry, from that run:
+    - GG 72²: `96510374…529e38` → `4647a7576adcacc6e85ee57c029ca3e24edcd32e50471d7fdac9686deac4651b`
+    - cubes 16³: `76c7b816…177545d2` → `0359fa7f3f5d8bc113a2ee4161846cd7a8e9648975aeef1cb04ee55b40889d55`
+  - They equal the reviewer's aarch64 values, so the hash does not depend on the architecture.
+  - The maintainer approved this re-freeze in the session of 2026-10-14 ("approved, re-freeze the p6_0bk2 IR hashes").
+  - D-250 classification, run with the base's own tool (`git show fd7abb33:tools/frozen_diff.jl`, `julia frozen_diff.jl fd7abb33`), exit 0:
+
+    ```
+    AUTO        acceptance/p6_0bk2_skip_interior.jl  (pin: P60BK2_IR)
+    ```
 
 ## D-248 PC branch checks run in two lanes: suites on the CI cores, A/Bs exclusive (2026-10-14; maintainer-approved: two-lane policy, the pueue install and CI yielding; number reserved by the coordinator; amends D-232's core use; under D-157, D-242)
 
