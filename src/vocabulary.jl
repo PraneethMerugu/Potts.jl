@@ -98,6 +98,61 @@ _with_unit(x, u) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x),
 """`kind_parameter(name, values)`: a parameter indexed by kind (medium included)."""
 kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name), Info(:kindtable, name, values, (;))), unit)
 
+"""
+    Pairs((k₁, k₂) => v, …; default, symmetric = true)
+
+A kind×kind table written by its named entries (E2), the value of a kind-indexed parameter
+`J[kind, kind] = Pairs(default = 0.0, (medium, cell) => 16, (cell, cell) => Jcc)`. `k₁`, `k₂`
+are kind names of `@kinds`, `v` a number or an expression of scalar parameters. With
+`symmetric = true` entry (k₁, k₂) also sets (k₂, k₁); every unlisted entry is `default`. It
+lowers to the written-out matrix when the model is built: the parameter object, the
+generated code and `remake` are those of the matrix form. A pair given twice (with symmetric
+fill, also as (k₂, k₁)) is an error.
+"""
+struct Pairs
+    entries::Vector{Pair{Any, Any}}
+    default::Any
+    symmetric::Bool
+end
+function Pairs(entries::Pair...; default = nothing, symmetric::Bool = true)
+    default === nothing && throw(ArgumentError("`Pairs(…)`: give the value of the unlisted entries, `default = …`"))
+    return Pairs(Pair{Any, Any}[e for e in entries], default, symmetric)
+end
+Pairs(args...; kws...) = throw(ArgumentError("`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
+                                             "`symmetric`; got $(join(map(repr, args), ", "))"))
+
+_pairs_kind_name(k) = (u = _unwrap(k); i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing; i === nothing ? repr(k) : string(i.name))
+
+# The matrix a `Pairs` value of kind table `name` stands for, in a model of `nk` kinds (the
+# medium included): the value the matrix form would be (its element type promoted as `hvcat`
+# promotes the written entries).
+function _pairs_matrix(t::Pairs, nk::Integer, name::Symbol)
+    nk >= 1 || throw(ArgumentError("kind table `$name = Pairs(…)`: declare the kinds (@kinds) before the parameters"))
+    A = Matrix{Any}(fill(t.default, nk, nk))
+    given = falses(nk, nk)
+    for (key, v) in t.entries
+        (key isa Tuple && length(key) == 2) ||
+            throw(ArgumentError("kind table `$name = Pairs(…)`: an entry is `(k₁, k₂) => v` with two kind names; got `$(repr(key))`"))
+        for k in key
+            (k isa Integer && !(k isa Bool) && 0 <= k < nk) || throw(ArgumentError(
+                "kind table `$name = Pairs(…)`: `$(_pairs_kind_name(k))` is not a kind of @kinds"))
+        end
+        a, b = key[1] + 1, key[2] + 1
+        cells = t.symmetric ? unique([(a, b), (b, a)]) : [(a, b)]
+        any(((i, j),) -> given[i, j], cells) && throw(ArgumentError(
+            "kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" *
+            (t.symmetric && a != b ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric = false` " *
+                                     "for an asymmetric table)" : "")))
+        for (i, j) in cells
+            A[i, j] = v
+            given[i, j] = true
+        end
+    end
+    E = mapreduce(typeof, promote_type, A)
+    return convert(Matrix{E}, A)
+end
+_pairs_matrix(v, nk::Integer, name::Symbol) = v
+
 const SCOPES = (:site, :cell, :model, :field, :edge)
 
 """
@@ -306,6 +361,43 @@ into the lattice). Cell scope: updates, equations, division conditions and rules
 _centroid(k::Integer) = cell_centroid(Num(k))
 _centroid() = Num[_centroid(k) for k in 1:_lattice_dim()]
 """
+`centroid(c, k)`: coordinate `k` of the centroid of the cell that reference `c` names
+(`sibling(k)`, a `CellRef`, `root(cluster)`, a fold's cell), in `centroid(k)`'s convention:
+lattice units, embedded on a hexagonal lattice, periodic axes wrapped into [1, L + 1). A dead
+referent or 0 reads 0 (D-066). Cell scope (updates, `@observed`, folds); not in energies
+(no ΔH, D-032) or copy-step code.
+"""
+_centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
+
+"""`ref_centroid(c, k)`: coordinate `k` of the centroid of referent `c` (cell scope)."""
+ref_centroid(c, k) = error("`centroid(c, k)` is symbolic-only")
+Symbolics.@register_symbolic ref_centroid(c, k)
+"""`ref_separation(a, b, k)`: component `k` of the minimum-image `centroid(a) − centroid(b)`."""
+ref_separation(a, b, k) = error("`separation` is symbolic-only")
+Symbolics.@register_symbolic ref_separation(a, b, k)
+"""`axis_minimum_image(d, k)`: `d` wrapped to the image nearest 0 on axis `k`."""
+axis_minimum_image(d, k) = error("`minimum_image` is symbolic-only")
+Symbolics.@register_symbolic axis_minimum_image(d, k)
+
+"""
+`minimum_image(d, axis)`: on a periodic axis of length L, the representative of `d` modulo L
+nearest 0 (|d| = L/2 keeps its sign); on a closed axis `d` itself. `axis` is a literal lattice
+axis. Lattice units; inputs are assumed within one period. A pure function of `d` and the
+lattice: cell scope, drives, constraints and energies. Square lattices (on a hexagonal one use
+`separation`).
+"""
+_minimum_image(d, k) = Symbolics.wrap(axis_minimum_image(_symarg(d), _symarg(k)))
+
+"""
+`separation(a, b)`: the minimum-image vector `centroid(a) − centroid(b)` of the cells two
+references name, N components (`separation(a, b)[k]`, `norm(separation(a, b))`). On a square
+lattice component k is `minimum_image(centroid(a, k) − centroid(b, k), k)`; on a periodic
+hexagonal lattice it is the embedded nearest image on the rhombic torus (the distance
+`CorePotts.centroid_distance` measures). Every component is 0 when either referent is dead or
+0 (guard with `alive`). Cell scope, as `centroid(c, k)`.
+"""
+_separation(a, b) = Num[Symbolics.wrap(ref_separation(_symarg(a), _symarg(b), Num(k))) for k in 1:_lattice_dim()]
+"""
 `displacement(c, k)`: how far the copy moves the centroid of cell `c` (`new` or `old`) along
 axis `k` (minimum image on periodic axes; zero for the medium or other cells). Proposal
 scope: drives and on-copy updates, e.g. persistent motion
@@ -328,8 +420,29 @@ Folds that draw `rand()`, and folds nested inside a fold that reads the site, st
 """
 cell_integral(x) = error("`integral` is symbolic-only")
 Symbolics.@register_symbolic cell_integral(x)
+"""`cluster_integral_sum(y)`: `y = cell_integral(x)` summed over the alive members of the
+current cell's compartment cluster (`integral(x; over = cluster)`, E7)."""
+cluster_integral_sum(y) = error("`integral(x; over = cluster)` is symbolic-only")
+Symbolics.@register_symbolic cluster_integral_sum(y)
 """Cell-state name of the tracker for `integral(x)`."""
-_integral(x) = cell_integral(x isa Num ? x : Num(x))
+_integral(x; over = nothing) = over === nothing ? cell_integral(x isa Num ? x : Num(x)) : _integral_over(x, over)
+
+# `integral(x; over = cluster)` (E7, D-243): the site expression `x` summed over the sites of
+# every alive member of the cell's cluster. The integrand is in site scope: a bare `volume`
+# (and a bare cell variable) is the value of the site's owner, the member the site belongs to
+# (spec-owner ruling R1), so `integral(volume; over = cluster)` is Σ_members V_m².
+function _integral_over(x, over)
+    u = _unwrap(over)
+    (u isa SymbolicUtils.BasicSymbolic && isequal(u, _unwrap(B.cluster))) || throw(ArgumentError(
+        "`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's compartment cluster); got `$over`"))
+    y = _unwrap(x isa Num ? x : Num(x))
+    sub = Dict{Any, Any}(_unwrap(B.volume) => _unwrap(at(B.volume, B.owner)))
+    for v in _bare_vars(y)
+        info(v).role === :cell && (sub[v] = _unwrap(at(Symbolics.wrap(v), B.owner)))
+    end
+    y = Symbolics.substitute(y, sub; fold = Val(false), filterer = _pair_scope)
+    return Symbolics.wrap(cluster_integral_sum(cell_integral(Symbolics.wrap(y))))
+end
 # named by content (`_symkey`), not by Symbolics' hash, which differs between builds (D-107),
 # of the operand as stored (its site-independent folds read from slots, D-110)
 _integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(_integral_operand(x))); base = 62))
@@ -1636,7 +1749,8 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux,
-    CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer)
+    CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
+    Pairs, minimum_image = _minimum_image, separation = _separation)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object
