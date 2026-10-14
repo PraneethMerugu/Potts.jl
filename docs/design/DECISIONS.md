@@ -4487,7 +4487,7 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
 
 ## D-243 P6.5a2 tests frozen: named pairs (E2) and the reference geometry helpers (E7) (2026-10-14; coordinator, from the P6.5a2 test author; spec-checked by the spec owner; under D-031, D-032, D-048, D-066, D-231)
-- **Frozen.** `acceptance/p6_5a2_ref_helpers.jl`, sha256 `48b871f4…72b1`.
+- **Frozen.** `acceptance/p6_5a2_ref_helpers.jl`, sha256 `48b871f4…72b1` (re-frozen by the amendment below).
 - **E2.** `J[kind, kind] = Pairs(default = d, (k1, k2) => v, …; symmetric = true)` lowers to the same matrix and the same `prob.p` as the written-out form, at no runtime cost. `remake` updates both sides of the diagonal. Misspelt kinds, a parameter used as a kind, duplicate pairs, and reversed pairs under symmetric fill are each refused with an ArgumentError.
 - **E7.**
   - `centroid(c, k)` follows the `centroid(k)` convention: a circular mean on periodic axes, wrapped into [1, L+1).
@@ -4516,3 +4516,7 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - `minimum_image` on hex.
   - KindTable spellings, kind-class keys, and `Pairs` without a default.
   - E6 (docs, prose).
+- **Amendment (2026-10-14, maintainer ruling; supersedes O1).** "Rename cluster_integral(x) before P6.5a2's implementer gets far. Make it a scope argument on the existing integral instead of a new name: integral(x; over = cluster). Plain integral(x) stays the cell sum. Keep the semantics D-243 already pins (site scope, so the two-member case gives V₁² + V₂² = 85; dead members drop out)."
+  - The cluster section is re-frozen under that spelling with the same hand values. Re-frozen sha256 `1539aabf…2d64`.
+  - New pins: plain `integral(x)` stays the cell sum; an unknown `over =` value is refused; `over = cluster` in a site-scope update is refused; a positive control shows cell-scope use builds.
+  - Other sections are unchanged. The fold `sum(x for s in sites(cluster))` can still come later as the explicit form.
