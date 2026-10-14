@@ -1748,15 +1748,27 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
         return u < clamp(q, zero($T), one($T))
     end))
     # a slot the pass allocates for kind `k`: every cell variable at its declared default for
-    # that kind (E1; nothing is copied from the slot's dead predecessor)
+    # that kind (E1; nothing is copied from the slot's dead predecessor), and so its
+    # previous-value snapshot (`x__pre`) and its tick scratch (`x__tick`) where it has them
     kenv = LowerEnv(T, :cell, Dict{Symbol, Any}(:kind => :k), rn)
+    pre = Set{Symbol}(n for (scope, n) in Iterators.flatten(values(c.pre_snapshots)) if scope === :cell)
+    tick = _tick_scratch(c) ? Set{Symbol}(info(x).name for b in c.discrete if b.scope === :cell for x in b.slots) :
+           Set{Symbol}()
     inits = Any[]
     for x in getfield(c.sys, :variables)
         i = info(x)
         i.role === :cell || continue
         val = get(i.options, :reference, false) === true ? :(Int32($(Int(i.default)))) :
               (i.default isa Real && !_is_symbolic(i.default)) ? T(i.default) : :($T($(lower(i.default, kenv))))
-        push!(inits, :(@inbounds st.cell.$(i.name)[d] = $val))           # d ∈ 1:capacity (a free slot)
+        cols = Symbol[i.name]
+        i.name in pre && push!(cols, Symbol(i.name, :__pre))
+        i.name in tick && push!(cols, _tick_scratch_name(i.name))
+        if length(cols) == 1
+            push!(inits, :(@inbounds st.cell.$(i.name)[d] = $val))           # d ∈ 1:capacity (a free slot)
+        else
+            v0 = Symbol(:init_, i.name)
+            push!(inits, :($v0 = $val), (:(@inbounds st.cell.$n[d] = $v0) for n in cols)...)   # d ∈ 1:capacity
+        end
     end
     init! = _rgf(:((st, p, ctx, key, mcs, d, k) -> begin
         $(inits...)
