@@ -2336,3 +2336,19 @@ The maintainer approved F-1…F-6 (D-049).
   - 09: 35 / 2 → 32 / 2, 3 of 3. 10: 124 / 2 → 120 / 2, 4 of 4.
   - 15: 63 / 6, 12 of 15 failing → 62 / 6, 9 of 9 (f5's control arm is 7 information rows; f3-f8's "Controls fail as pre-registered" is a control row).
 - **Test.** `julia --startup-file=no docs/status/test_render.jl`: synthetic rows for every encoding, plus the committed 01, 01b and 04 counts.
+
+## 2026-10-14 — P6.5a and P6.5b merged (cell references; `@convert`, ownership routine, A-17)
+
+- **What.** P6.5a (R6 cell references, D-066 liveness, `birth` serials, claim widening; D-231) and P6.5b (R8 `@convert` as KA decide/allocate/paint kernels, the shared ownership routine, A-17's `transitioning`; D-233) merged together (D-242 batch).
+- **Tests.** The frozen `p6_5a_cell_refs.jl`, `p6_5b_convert.jl` and `p6_5b_ownership.jl` pass. Two re-freezes, both of defects in the frozen tests: P6.5a's swapped claim values, and P6.5b's fixture-order check. New non-frozen tests: `test/cell_refs.jl`, `test/convert.jl` (device coverage of `_release_body!` and the nine `_cv_*` kernels) and the S5 test in `lib/CorePotts/test/lifecycle.jl`.
+- **PC suites at 0cb38f13.** frozen, CorePotts, GPU (ROCm, including device-IR coverage), Potts, MakiePotts and PottsModels all pass.
+- **Review.** Fresh adversarial reviews: P6.5a APPROVE with one should-fix (`ifelse` mixing a reference and a site index); P6.5b CHANGES REQUESTED (S1–S5: moment-scratch overflow, invisible allocation deferral, unchecked write index, read-after-write in transfers and writes, `transitioning` throwing in kernels). All fixed in 13 commits, then APPROVE.
+- **A/B against main b7aee166** (batched, D-242):
+  - **ROCm:** pass. Worst cases are akeeb and openvt_monolayer at 1.011.
+  - **CPU:** UNREADABLE. Judged with the controls stated: largest control deviation 3.2 %, and every candidate/base upper bound below 1.05 (maximum 1.045).
+    - **Real cost:** the dividing models akeeb_99x60.sequential (1.033) and openvt_monolayer_100.checkerboard (1.026) pay about 2.5–3 %, for the `birth` serial pass per event round.
+    - **Not a cost:** graner_glazier_72 (1.03) has no lifecycle; its candidate control runs at 0.97, so this is the per-checkout offset.
+  - **P6.5b against P6.5a:** CPU and ROCm both pass, within 0.5 %.
+- **Process notes.**
+  - P6.5a's first CPU A/B was unreadable because of a concurrent research screen (controls drifted 7.9 %), which led to D-242's quiet windows.
+  - Two GPU-group coverage gaps were caught by `device_coverage.jl` and closed with device tests, not allowlists.

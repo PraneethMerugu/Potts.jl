@@ -717,11 +717,11 @@ Every API change here keeps the old form working, and none changes a frozen verd
 - [x] (merge, 2026-09-30; D-066) **P6.5a0** Liveness survey (D-065 Q6): CompuCell3D, Morpheus and Artistoo death,
   id reuse and exclusion semantics. The output is `research/liveness-survey.md` and a
   decision amending D-035/D-037, with performance deviations recorded.
-- [ ] **P6.5a** R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
+- [x] (merge, 2026-10-14; D-231) **P6.5a** R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
   liveness per D-066 (alive ⇔ volume > 0; `birth` serial; `CellRef` references cleared
   at allocation boundaries; exact self-check credits); claim widening, with checkerboard validated
   statistically against sequential (D-065 Q7).
-- [ ] **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
+- [x] (merge, 2026-10-14; D-233) **P6.5b** R8: the shared ownership-delta routine (priority remove > convert >
   transition > divide > create); `@convert` (block form with `Fresh`, `created`,
   `budget`, each one a named `@schedule` phase costed per D-035 as amended by D-075);
   ownership hooks apply `clear_on_ownership_change`, and `@on_copy` never fires from the
