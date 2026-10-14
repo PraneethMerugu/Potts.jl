@@ -4485,3 +4485,28 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - A change confined to one feature's codegen path may use a short case set. Anything on the shared sweep or ownership path runs the full set.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
+
+## D-248 PC branch checks run in two lanes: suites on the CI cores, A/Bs exclusive (2026-10-14; maintainer-approved: two-lane policy, the pueue install and CI yielding; number reserved by the coordinator; amends D-232's core use; under D-157, D-242)
+
+- **Why.** On 2026-10-14 the load was 1.0 on 32 threads, while q5 and q6 waited hours.
+  - Each queue item ran its suites and then its A/B. The suites ran serially on the 4-core benchmark slice (74–94 min per item), and the next item's suites waited for the previous item's A/B.
+  - CI used 0-11/16-27 for about 2.6 h of the previous 25 h.
+  - Items were chained by `while kill -0 $(cat prev.pid)` loops in one shared checkout, which left stale "waiting for" status text.
+- **Lane S (suites).** `tools/pc/item.sh` runs one item at a time in pueue group `suites`.
+  - Each item has its own worktree, `~/potts-ci/<item>`. The steps are instantiate and precompile (as CI does), the frozen check, the unchanged `.github/ci/parallel.sh` on 0-11/16-27, and then the optional docs build and extra commands.
+  - Every Julia process runs in a systemd user scope with `MemoryMax=24G` and `CPUWeight=10` (`tools/pc/julia-scoped.sh`). `OPENVT_PACKAGE_BULK` is exported as before.
+  - **CI yields nothing to it.** Before each step the script waits while a `Runner.Worker` process exists. A step that a CI job interrupts is killed by its process group and re-run after the job ends, inside the same pueue task. The runner itself is never paused.
+- **Lane A (A/B).** `tools/pc/ab.sh` runs in pueue group `ab`.
+  - It first **drains** lane S: it pauses the group with `--wait` and waits until no suites task runs. It never freezes one, because a frozen process keeps its KFD handle (which `wait_idle(gpu = true)` counts as busy) and its memory traffic moves the controls (D-242).
+  - It then runs `benchmark/ab.jl` unchanged, and releases lane S when no other A/B is queued and `~/potts-ci/lane-s.hold` is absent.
+  - D-242 still governs: quiet windows announced by the coordinator, batching at the coordinator's discretion, and scoped A/Bs. Nothing on 12-15/28-31 or on the GPU overlaps an A/B.
+- **Queue.** pueue 4.0.4 (static release binary in `~/.local/bin`, sha256-checked) runs as the user service `pueued`. An A/B is queued with `--after` its suites task, so it runs only when they pass.
+  - PID files stay: `<item>-run.pid`, `<item>-step.pid` (the running step's process group) and `<item>-ab-<backend>.pid`. Jobs are killed by PID file or `pueue kill`, never by pattern.
+  - Status and log files keep their names in `~/potts-ci`.
+- **Checks (PC, 2026-10-14, stub commands).**
+  - **CI preemption.** A step interrupted by a stand-in CI process was killed with its children, waited and re-ran, and the task succeeded.
+  - **Drain.** With one suites task running and one queued when an A/B was added, the running one finished, the queued one waited until the A/B ended, and then it ran.
+  - **Still to measure.** A full lane S run's wall time and its total `memory.peak`, on the first real item.
+- **Not adopted.** Scoping branch suites to the change: a full `parallel.sh` run costs about 25 min, and AUTONOMY §7.4 requires every suite on the merged tree. Running suites on the Mac: D-157 stands.
+- **Separate, not approved yet.** Shrinking the BIOS VRAM carve-out (64 GiB) in favour of GTT, so the OS sees about 120 GB. This needs the maintainer at the PC.
+- **Switch-over.** Between items, after q3, q5, q6 and q7. Those items' scripts and checkouts are not changed.

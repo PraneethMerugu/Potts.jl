@@ -2352,3 +2352,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Process notes.**
   - P6.5a's first CPU A/B was unreadable because of a concurrent research screen (controls drifted 7.9 %), which led to D-242's quiet windows.
   - Two GPU-group coverage gaps were caught by `device_coverage.jl` and closed with device tests, not allowlists.
+
+## 2026-10-14 — PC queue: two lanes (D-248)
+
+- Measured: a load of 1.0 on 32 threads with q5 and q6 waiting. Serial 4-core suites took 74–94 min per item; a CPU A/B 43 min and a ROCm A/B 52 min; CI was busy about 2.6 h in 25 h.
+- `tools/pc/` added: `item.sh` (lane S, preempted by CI), `ab.sh` (lane A, drains lane S), `julia-scoped.sh`, `setup.sh` and a README.
+- On the PC: pueue 4.0.4 in `~/.local/bin`, the `pueued` user service, groups `suites` and `ab` (parallelism 1), and the scripts in `~/potts-queue`. Nothing in `~/potts-ci` or `~/actions-runner` changed.
+- Tested with stub commands (CI preemption, drain). The first real item will measure wall time and `memory.peak`. The proposal is in `docs/design/research/pc-queue-proposal.md`.
