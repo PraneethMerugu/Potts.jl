@@ -160,7 +160,7 @@ const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :Expli
     :Pairs, :minimum_image, :separation]
 const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
     :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower],
-    :transfer => [:per_site], :integral => [:over], :Pairs => [:default, :symmetric])
+    :transfer => [:per_site], :integral => [:over])
 
 @testset "DSL surface snapshot" begin
     @test sort(collect(keys(Potts.DSL))) == sort(DSL_NAMES)
