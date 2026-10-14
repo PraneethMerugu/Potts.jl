@@ -14,6 +14,8 @@ const P_IR = Dict(
     "cubes" => "bbbb2222",
 )
 const P_N = Dict("GG" => 7)
+const P_S = Dict("tol" => parse(Float64, "0.05"), "re" => Regex("a+"), "v" => ["x1", "x2"])
+# after the pins
 const TOL = 0.05
 helper(x) = 2x
 @testset "first group" begin
@@ -32,6 +34,7 @@ neg(new; kw...) = (new != BASE || error("negative control does not change the so
     @test verdict(r("\"aaaa1111\",", "\"cccc3333\",   # re-pinned under D-x")) === :auto       # comment on a pin line
     @test verdict(r("\"bbbb2222\"", "\"dddd4444\""; src = r("\"aaaa1111\"", "\"cccc3333\""))) === :auto
     @test verdict(replace(r("\"aaaa1111\"", "\"cccc3333\""), "\n" => "\r\n")) === :auto
+    @test verdict(r("\"x1\"", "\"y1\""); pins = Set([:P_S])) === :auto                       # a vector element
 end
 
 @testset "frozen_diff: negative controls (each needs the maintainer)" begin
@@ -60,6 +63,11 @@ end
     @test neg(r("v\"1.12.6\"", "v\"1.12.7\""); pins = Set([:P_IR, :P_IR_VERSION])) === :maintainer
     @test neg(r("const P_IR =", "const P_IR2 =")) === :maintainer
     @test neg(r("const P_IR = Dict(", "P_IR = Dict(")) === :maintainer                         # no longer const
+    # strings passed to a call are code, even in a pinned constant (round 3, M1)
+    @test neg(r("\"0.05\"", "\"0.5\""); pins = Set([:P_S])) === :maintainer
+    @test neg(r("Regex(\"a+\")", "Regex(\".*\")"); pins = Set([:P_S])) === :maintainer
+    # the constant's lines end at its last code line (L1); other statements compare as trees (L2)
+    @test neg(r("# after the pins", "# after the pins, edited"); pins = Set([:P_S])) === :maintainer
     # files
     @test classify("x.jl", BASE, nothing, PINS)[1] === :maintainer
     @test classify("x.tsv", "a\t1\n", "a\t2\n", PINS)[1] === :maintainer
@@ -139,6 +147,26 @@ end
             c6 = commit!("lib/PottsModels/test/frozen.toml", split(toml, "\n\n")[1] * "\n")
             @test cli(base, c6)[1] == 1                                               # dropped entry
             git!("checkout", "-q", base)
+            git!("checkout", "-q", base)
+            c8 = commit!("lib/PottsModels/test/frozen.toml", toml * """
+
+            [[file]]
+            path = "acceptance/c.jl"
+            sha256 = "z"
+            decision = "D-2"
+            pins = ["P_IR"]
+            """)
+            code, out = cli(base, c8)
+            @test code == 1 && occursin("a new frozen.toml entry declares pins", out)    # round 3, M1
+            git!("checkout", "-q", base)
+            mkpath(".github/workflows")
+            c9 = commit!(".github/workflows/ci.yml", "on: push\n")
+            code, out = cli(base, c9)
+            @test code == 1 && occursin("ci.yml changed", out)                            # round 3, L4
+            git!("checkout", "-q", base)
+            c10 = commit!("lib/PottsModels/test/frozen.toml", toml * "\n[[file]\n")
+            @test cli(base, c10)[1] == 2                                                  # TOML error: exit 2 (L3)
+            git!("checkout", "-q", base)
             c7 = commit!(a, r("helper(3) == 6", "helper(3 == 6"))
             @test cli(base, c7)[1] == 2                                               # parse error: never AUTO
             @test cli(base, "no-such-ref")[1] == 2
@@ -171,6 +199,8 @@ end
             @test_skip false     # a shallow clone without this history
             continue
         end
-        @test classify(p, old, new, Set(pins))[1] === want
+        # a :maintainer case runs with a declared pin, so the comparison is exercised (round 3, M2)
+        ps = isempty(pins) ? Set([:NOT_A_PINNED_CONST]) : Set(pins)
+        @test classify(p, old, new, ps)[1] === want
     end
 end

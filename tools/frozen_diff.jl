@@ -7,13 +7,16 @@
 # A changed frozen file (listed in `lib/PottsModels/test/frozen.toml` at <base>) is AUTO only
 # when every difference is a String literal inside a `const NAME = …` whose NAME the file's
 # `pins` list declares *at <base>*. Within that constant, `=>` keys and all other structure
-# must stay; comments on its lines may change. Every line outside the declared constants must
-# be byte-identical, comments included (on a Literate page, comments are the page). The line
+# must stay; comments on its lines may change (its lines end at its last code line). Every
+# statement outside the declared constants must parse to the same tree, and every line outside
+# them must be byte-identical, comments included (on a Literate page, comments are the page). The line
 # count must not change.
 #
-# Everything else needs the maintainer, including any change to a file's `pins` list, to this
-# tool, to `frozen.jl` or to the test runners, and a frozen file removed or renamed. New
-# entries in frozen.toml are first freezes and are not judged.
+# Only a plain String that is a `=>` value or a vector element may change; a string passed to a
+# call is code. Everything else needs the maintainer, including any change to a file's `pins`
+# list, a new frozen.toml entry that declares pins, a change to this tool, `frozen.jl`, the
+# test runners, `.github/workflows/ci.yml` or `.github/ci/parallel.sh`, and a frozen file
+# removed or renamed. Other new entries are first freezes and are not judged.
 #
 # Exit codes: 0 every changed frozen file is AUTO (or none changed), 1 something needs the
 # maintainer, 2 an error, including running a copy that is not the base's own. Errors never
@@ -24,7 +27,8 @@ const TOMLPATH = "lib/PottsModels/test/frozen.toml"
 const TESTDIR = "lib/PottsModels/test"
 const TOOLPATH = "tools/frozen_diff.jl"
 # Changing these changes how frozen files are checked or run: always the maintainer.
-const GUARDED = [TOOLPATH, "lib/PottsModels/test/frozen.jl", "lib/PottsModels/test/runtests.jl", "test/runtests.jl"]
+const GUARDED = [TOOLPATH, "lib/PottsModels/test/frozen.jl", "lib/PottsModels/test/runtests.jl", "test/runtests.jl",
+    ".github/workflows/ci.yml", ".github/ci/parallel.sh"]
 
 struct ToolError <: Exception
     msg::String
@@ -46,7 +50,10 @@ end
 
 # ---- one file --------------------------------------------------------------------------
 
-"Top-level statements with their first and last source lines (the last runs to the next statement)."
+"""
+Top-level statements with their first and last source lines. The last line is the statement's
+last code line: blank and comment-only lines before the next statement are not part of it.
+"""
 function statement_spans(src)
     tree = Meta.parseall(src)
     any(x -> x isa Expr && x.head in (:error, :incomplete), tree.args) && throw(ToolError("parse error"))
@@ -60,6 +67,13 @@ function statement_spans(src)
         else
             push!(out, (a, line, nlines))
         end
+    end
+    lines = split(src, '\n')
+    for (k, (st, a, b)) in enumerate(out)
+        while b > a && (isempty(strip(lines[b])) || startswith(strip(lines[b]), "#"))
+            b -= 1
+        end
+        out[k] = (st, a, b)
     end
     return out
 end
@@ -82,15 +96,20 @@ function same(a, b)
     return typeof(a) === typeof(b) && isequal(a, b)
 end
 
-"Equal except for String literals; `=>` keys must be equal."
-function strings_only(o, n)
+"""
+Equal except for plain String literals that are a `=>` value or a vector element (`slot`);
+`=>` keys must be equal. A string passed to any call (`parse(Float64, "0.05")`, `Regex(…)`)
+is code and must not change.
+"""
+function strings_only(o, n, slot = false)
     same(o, n) && return true
-    o isa String && n isa String && return true
+    o isa String && n isa String && return slot
     (o isa Expr && n isa Expr && o.head === n.head && length(o.args) == length(n.args)) || return false
     o.head === :macrocall && return false
     if o.head === :call && o.args[1] === :(=>) && length(o.args) == 3
-        return same(o.args[2], n.args[2]) && strings_only(o.args[3], n.args[3])
+        return same(o.args[2], n.args[2]) && strings_only(o.args[3], n.args[3], true)
     end
+    o.head === :vect && return all(strings_only(x, y, true) for (x, y) in zip(o.args, n.args))
     return all(strings_only(x, y) for (x, y) in zip(o.args, n.args))
 end
 
@@ -112,7 +131,10 @@ function classify(path, old_src, new_src, pins::Set{Symbol})
     for ((o, o1, o2), (n, n1, n2)) in zip(os, ns)
         (o1, o2) == (n1, n2) || return (:maintainer, ["statements moved (line $o1)"])
         name = pinned_name(o, pins)
-        name === nothing && continue
+        if name === nothing
+            same(strip_lnn(o), strip_lnn(n)) || return (:maintainer, ["line $o1: a statement outside the pins changed"])
+            continue
+        end
         isequal(name, pinned_name(n, pins)) || return (:maintainer, ["line $o1: const $name renamed"])
         strings_only(strip_lnn(o.args[1].args[2]), strip_lnn(n.args[1].args[2])) ||
             return (:maintainer, ["line $o1: const $name changed beyond its string literals"])
@@ -148,6 +170,15 @@ function classify_push(oldref, newref; self = nothing)
             worst = 1
         end
     end
+    oldpaths = Set(f["path"] for f in entries)
+    for (path, ne) in newentries
+        # a first freeze needs no maintainer, so it may not declare pins unseen
+        if !(path in oldpaths) && !isempty(get(ne, "pins", String[]))
+            push!(lines, "MAINTAINER  $path")
+            push!(lines, "    a new frozen.toml entry declares pins")
+            worst = 1
+        end
+    end
     for f in entries
         p = normpath(joinpath(TESTDIR, f["path"]))
         old_src = gitshow(oldref, p)
@@ -179,7 +210,7 @@ function main(args)
         foreach(println, lines)
         return worst
     catch err
-        err isa ToolError || rethrow()
+        # every error, ours or not, is exit 2: never AUTO, never mistaken for a verdict
         println(stderr, "frozen_diff: ", sprint(showerror, err))
         return 2
     end
