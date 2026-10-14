@@ -145,9 +145,10 @@ end
 # a diagnostic counter (`Potts`' `track = (:references,)`): entry `j` of `cnt` (j in range by
 # construction) incremented atomically, on the host or the device
 @inline _bump!(cnt, j) = (Atomix.@atomic cnt[j] += one(eltype(cnt)); nothing)
-# `a[j] += v` atomically (`j == 0`, the medium, is skipped): `@convert` transfers and writes
+# `a[j] += v` atomically, for `j` in `1:length(a)` (0, the medium, and a stale index are skipped):
+# `@convert` transfers and writes
 @inline function _atomic_add!(a, j, v)
-    j != 0 && (@inbounds Atomix.@atomic a[j] += convert(eltype(a), v))     # 0 < j ≤ length(a): a cell slot or 1
+    ((0 < j) & (j <= length(a))) && (@inbounds Atomix.@atomic a[j] += convert(eltype(a), v))   # bound checked here
     return nothing
 end
 # the model's status word at a host read point (`_check_status!`); 0 without one

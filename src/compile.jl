@@ -602,6 +602,9 @@ function _check_converts(sys::PottsSystem)
                         "@convert $(v.name): a write adds to a model variable (`m += …`) or to a cell variable at a cell " *
                         "(`x[to] += …`); got `$(_indexed_string(lhs))`"))
                     _check_names(arguments(lhs)[2], _CONVERT_SITE_BUILTINS, "a write of @convert $(v.name)"; between_copies = true)
+                    _is_ref(arguments(lhs)[2]) || throw(ArgumentError(
+                        "@convert $(v.name): a write adds to a cell variable at a cell named by a reference (`from`, " *
+                        "`to`, `sibling(k)`, a `CellRef`); got `$(_indexed_string(lhs))`"))
                 end
                 _check_names(d, (_CONVERT_SITE_BUILTINS..., :created), "a write of @convert $(v.name)"; between_copies = true)
             end
