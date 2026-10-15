@@ -30,6 +30,16 @@ the cytoplasm sized to its target, and protrusion in both directions (C7). The c
 J_CL = 10 and target-based sequential conversion are recorded variants (§5). Kind indices:
 medium 0, substrate 1, lid 2, cytoplasm 3, lamellipodium 4, nucleus 5. (audit 2026-10-13)
 
+**API alignment 2026-10-14.** The sketch now follows the merged API, as checked by the
+P6.5d brief (`../../p6-5d-brief.md` §8). The brief's §2 model is the reference spelling.
+- `field_solver` moves from `@sweep` to `PottsProblem`.
+- The initial state uses `Objects(Interior(Sphere(...)))`, `Fill` and `Group` (D-244).
+- `@convert` has no `max(0, …)` (the runtime clamps p to [0, 1], D-233) and no
+  `V_target[to]` write (kind-conditional defaults, E1).
+- `@terminate` and `contact(c, n)` are not merged. Detachment is classified after the run
+  (brief §6 Q1).
+- `Pre(x, k)` on a cell variable is refused, so the 14c block waits for R12 (P6.7b).
+
 ## 1. Sketch
 
 ```julia
@@ -39,7 +49,7 @@ using Potts
     @structural_parameters begin
         lattice = (120, 120, 31)       # R = 15: int(8R)² × int(2.1R) (14 §2.9.1; 10R if R ≥ 20 and φ_F ≥ 0.2)
         retraction = true              # C7 (D-067): Medium → lamellipodium copies also pay the term; false = Eq 7
-        stop_on_detachment = true      # code: stop when CYTO–FRONT contact is 0 at a 50-MCS sample (14 §2.9.1)
+        # code's stop_on_detachment dropped: @terminate is not merged; classify after the run (API alignment 2026-10-14)
     end
     @kinds medium substrate[frozen] lid[frozen] cytoplasm lamellipodium nucleus   # 14 §2.9.1 types
     @parameters begin
@@ -63,7 +73,9 @@ using Potts
     end
     @variables begin
         F(field) = 0.0                 # F-actin, on the whole lattice, unconfined (14 §2.9.2)
-        V_target(cell) = 0.0           # fixed from t = 0: φ_n V, (1−φ_n−φ_F)V, φ_F V (audit 2026-10-13)
+        V_target(cell) = ifelse(kind == nucleus, φ_n, ifelse(kind == lamellipodium, φ_F,
+                         ifelse(kind == cytoplasm, 1 - φ_n - φ_F, 0.0))) * (4π / 3) * R^3
+                                       # fixed from t = 0 by kind (E1, D-233); medium 0 (API alignment 2026-10-14)
         front_births(model) = 0.0      # D-066 diagnostic: FRONT deaths = births − alive
     end
     @lattice Lattice(lattice; boundary = (Periodic(), Periodic(), Closed()),   # 14 §2.7; z = CC3D default
@@ -87,19 +99,20 @@ using Potts
 
     # Conversion: cytoplasm at the substrate → lamellipodium, after the PDE (14 §2.5, §9 ruling)
     # Paper form (audit 2026-10-13): independent per site, p from the start-of-pass V₃, once per
-    # MCS, clamped at 0. φ_F is the parameter: V_target[to] of an absent FRONT gives 0/0 = NaN,
-    # and u < NaN is false (silently no conversion). No V_target transfer: targets are fixed.
-    @convert protrusion clusters(cytoplasm) begin                                          # [R8] [NEW name]
-        from  = sibling(cytoplasm); to = sibling(lamellipodium)   # `to` is made on demand (D-066)  # [R6]
-        at    = touches_substrate(site)                           # every CYTO site at z = 1
-        p     = max(0, c_conv * (1 - volume[to] / (φ_F * (4π / 3) * R^3)))                 # [R6]
-        V_target[to] = φ_F * (4π / 3) * R^3                       # set on creation only (fixed)
-        front_births += created                                                            # [NEW created]
+    # MCS; the runtime clamps p to [0, 1] (D-233), so no max(0, …). φ_F is the parameter. With
+    # the medium's default V_target = 0, V_target[to] of an absent FRONT gives 0/0 = NaN and
+    # u < NaN is false; the parameter form is used regardless. No V_target[to] write: the E1
+    # kind default fixes the target, with no transfer (API alignment 2026-10-14).
+    @convert protrusion clusters(cytoplasm) begin                                          # D-233
+        to    = sibling(lamellipodium)                            # `to` is made on demand (D-066)
+        at    = touches_substrate(site)                           # every CYTO site at z = 2 (ball bottoms at z = 2, brief §3)
+        p     = c_conv * (1 - volume[to] / (φ_F * (4π / 3) * R^3))
+        front_births += created
     end
-    if stop_on_detachment
-        @terminate Every(50) when = (mcs > 10) &&                                          # [R3]
-            any(contact(c, sibling(c, lamellipodium)) == 0 for c in cells(cytoplasm))       # [R11a] [R6]
-    end
+    # Detachment (API alignment 2026-10-14): @terminate (R3) and contact(c, n) (R11a) are not
+    # merged. The run goes to the end; the observable lam_cyto below is classified after the
+    # run (brief §6 Q1): a replicate detaches if lam_cyto == 0 at any sample after MCS 10; a
+    # set detaches if ≥ 5 of 10 replicates do.
 
     @observed begin
         front_deaths ~ front_births - count(true for c in cells(lamellipodium))
@@ -108,24 +121,30 @@ using Potts
                    (volume + volume[sibling(nucleus)])
         Πy(cell) ~ volume * minimum_image(centroid(2) - centroid(sibling(nucleus), 2), 2) /
                    (volume + volume[sibling(nucleus)])
+        # FRONT sites with a CYTO face neighbor; 0 means detached (API alignment 2026-10-14; brief §2)
+        lam_cyto(cell) ~ integral((kind == lamellipodium) *
+                   (count(true for n in VonNeumann(1)(site) if kind[n] == cytoplasm) > 0); over = cluster)
     end
-    @sweep Metropolis(; temperature = T, field_solver = ExplicitEuler(substeps = 1))
-    # order per MCS: sweep → F → @convert (14 §2.9.6), to be pinned by the R5 phase order  # [R5]
+    @sweep Metropolis(; temperature = T)   # field_solver goes to PottsProblem (API alignment 2026-10-14)
+    # order per MCS (default schedule): sweep → after_mcs → fields → protrusion → lifecycle (brief §2)
 end
 
-# --- 14a-code initial state: ball tangent to the substrate, 6³ nucleus, no FRONT (C5, 14 §2.9.1) ---
+# --- Initial state: ball tangent to the substrate, 6³ nucleus, no FRONT (C5, 14 §2.9.1; brief §3) ---
+# API alignment 2026-10-14: Objects(Interior(Sphere)), Fill and Group (D-244) replace Spheres,
+# Plane, Tiling and the hand-written cluster list. Group emits the cluster; the kind defaults
+# set V_target, so the operating point carries no V_target column.
 @named cell = FortunaCrawling()
 R = 15; L, Lz = 120, 31; V = (4π / 3) * R^3; φ_F = 0.05             # paper volume (14a p.2806; audit 2026-10-13)
 Vc = (1 - 0.15 - φ_F) * V                                            # cytoplasm target, fixed from t = 0
 r0 = cbrt((Vc + 216) / (4π / 3))                                     # ball holds ≈ Vc cytoplasm + 6³ nucleus seed
-c = (L ÷ 2 + 1, L ÷ 2 + 1, r0 + 1)                                   # tangent: bottoms at z = 1 (0-based)
-op = layout(overlay(Spheres([c]; radius = r0, kinds = [:cytoplasm]), # strict |r − c| < r0, as code  # [R2]
-                    Tiling((6, 6, 6); region = map(a -> (a - 3):(a + 2), c), kinds = [:nucleus]),
-                    Plane(:substrate; axis = 3, at = 1),             # z = 0 plane; the strict ball never reaches it  # [R2]
-                    Plane(:lid; axis = 3, at = Lz)), cell)                                    # [R2]
-op = [op; cluster => [1, 1, 3, 4],                                   # ids follow layer order  # [NEW helper wanted]
-      :V_target => [Vc, 0.15V, 0, 0]]                                # fixed targets; no floor(0.85V) start (audit 2026-10-13)
-prob = PottsProblem(mtkcompile(cell), op, (0, 100_001); seed = 1)    # tSim = 100001 (14 §2.9.1)
+c  = (L ÷ 2 + 1, L ÷ 2 + 1, r0 + 1)                                  # Interior excludes |r − c| = r0: bottoms at z = 2
+cn = (L ÷ 2 + 1, L ÷ 2 + 1, round(Int, r0 + 1))                      # nucleus cube center (brief §3)
+op = layout(overlay(Group(Objects(Interior(Sphere(Point(c...), r0)); kinds = [:cytoplasm]),
+                          Fill(:nucleus; region = map(a -> (a - 3):(a + 2), cn))),
+                    Fill(:substrate; region = (1:L, 1:L, 1:1)),
+                    Fill(:lid; region = (1:L, 1:L, Lz:Lz))), cell)
+prob = PottsProblem(mtkcompile(cell), op, (0, 100_001); seed = 1,
+                    field_solver = ExplicitEuler(substeps = 1))      # PottsProblem keyword (API alignment 2026-10-14)
 sol  = solve(prob, SequentialCPM(); saveat = 0:50:100_001)           # deltaT = 50 (code output cadence)
 ens  = EnsembleProblem(prob; trajectories = 5)                       # Fig 5 replicas; MSD/Fürth fits: R16 docs
 
@@ -145,7 +164,7 @@ ens  = EnsembleProblem(prob; trajectories = 5)                       # Fig 5 rep
         F ~ (kind == lamellipodium) * touches_substrate(site)                           # SS:88–95
         φ_frac ~ volume[sibling(lamellipodium)] /
                  (V_target + volume[sibling(lamellipodium)] + volume[sibling(nucleus)])  # SS:107 (CELLvol)
-        φ_sum ~ Pre(φ_sum) + φ_frac - Pre(φ_frac, 100)                                   # [R12]
+        φ_sum ~ Pre(φ_sum) + φ_frac - Pre(φ_frac, 100)   # [R12] refused on cell vars today (src/lower.jl:163); 14c waits for P6.7b (API alignment 2026-10-14)
         φ_EST ~ ifelse(mcs < 100, φ_F, φ_sum / 100)                                      # SS:41, 110–114
         Q̄  ~ integral(Q * base_site; over = cluster) / integral(base_site; over = cluster)               # [NEW]
         σQ ~ sqrt(integral(Q^2 * base_site; over = cluster) / integral(base_site; over = cluster) - Q̄^2)
@@ -156,7 +175,7 @@ ens  = EnsembleProblem(prob; trajectories = 5)                       # Fig 5 rep
         p     = ρ * (χ * tanh(μ * (Q - Q̄[from]) / σQ[from]) + 1)                         # Eq 7; SS:156–159
         gate  = volume[to] / (V_target[from] + volume[to] + volume[sibling(nucleus)]) - δ <= φ_EST[from]  # SS:162–172
     end
-    @terminate when = count(true for c in cells(lamellipodium)) == 0                     # D-066 item 7 # [R3]
+    @terminate when = count(true for c in cells(lamellipodium)) == 0                     # D-066 item 7 # [R3] not merged (API alignment 2026-10-14)
 end
 ```
 
@@ -193,13 +212,13 @@ Proposed syntax used above:
 | `cells(…) => λ(volume − V_target)²` | 14 §2.2, §2.9.1 | Eq 5, p.2805 |
 | `contacts => ifelse(cluster …, Jint, J)` | 14 §2.2, §9 item 4 | Eq 4; CellMig3D.py:162, 218 |
 | `@drive … λ_F (F[target] − F[source])`, both directions | 14 §2.4, §2.9.4; C7 | Eq 7; CC379 ChemotaxisPlugin.cpp:434–455, 487–502 |
-| `D(F) ~ …`, `ExplicitEuler(substeps = 1)` | 14 §2.3, §2.9.2 | Eq 6, p.2805; CC379 DiffusionSolverFE_CPU.cpp:835–841, 1204, 316–335 |
+| `D(F) ~ …`, `ExplicitEuler(substeps = 1)` (a `PottsProblem` keyword; API alignment 2026-10-14) | 14 §2.3, §2.9.2 | Eq 6, p.2805; CC379 DiffusionSolverFE_CPU.cpp:835–841, 1204, 316–335 |
 | `touches_substrate` (6 face neighbours) | 14 §2.9.2 | CC379 DiffusableVectorCommon.h:78 |
 | `@convert protrusion` (paper p, fixed targets, per MCS) | 14 §2.5, §9 ruling (audit 2026-10-13) | p.2806; code variant Steppables.py:121–165 |
 | FRONT created on demand, dies when it empties | 14 §2.9.5; D-066 item 7 | Steppables.py:149–159 |
-| `@terminate` on detachment | 14 §2.9.1 row "Detachment stop", §2.9.7 item 17 | Steppables.py:404–411 |
+| `lam_cyto` + post-run detachment classification (was `@terminate`; API alignment 2026-10-14) | 14 §2.9.1 row "Detachment stop", §2.9.7 item 17; P6.5d brief §6 Q1 | Steppables.py:404–411 |
 | `Πx`, `Πy` | 14 §3 (Eq 10), §2.8 | 14b Eq 10–11, p.6, p.11 |
-| initial ball, 6³ nucleus, planes | 14 §2.9.1; C5 | Steppables.py:65–105 |
+| initial ball, 6³ nucleus, planes (`Objects`/`Fill`/`Group`, D-244; API alignment 2026-10-14) | 14 §2.9.1; C5; P6.5d brief §3 | Steppables.py:65–105 |
 | `V_target` fixed: (1−φ_n−φ_F)V, φ_n V, φ_F V; V = (4π/3)R³ | 14 §9 ruling (audit 2026-10-13) | 14a p.2806 (code variant: CellMig3D.py:45–47, 60; Steppables.py:109–115) |
 | `(0, 100_001)`, `saveat = 50` | 14 §2.9.1 | CellMig3D.py:41, 84 |
 | 14c: lattice 59×59×21, `λ_F = 175` | 14 §4.2, §5.2 | SC:22, 32–33 |
@@ -222,14 +241,14 @@ Proposed syntax used above:
 | relation gather `any(… for n in VonNeumann(1)(site))` in a field rate | exists as syntax [verify]: the field rate is lowered in a site environment with gather names (`codegen.jl:382`), but ROADMAP P6.5c still lists a "predicate-sourced PDE" |
 | `@after_mcs` updates of site and cell variables, `Pre(x)`, `mcs` | exists |
 | `@observed`, `count(true for c in cells(k))` | exists |
-| `Tiling`, `overlay`, `layout`, `cluster =>` in the operating point, `PottsProblem`, `SequentialCPM`, `EnsembleProblem` | exists |
+| `overlay`, `layout`, `PottsProblem` (with `field_solver`), `SequentialCPM`, `EnsembleProblem` | exists |
 | `@convert` (R8, P6.5b); FRONT created on demand; ownership hooks | planned (R8, step 5) |
 | `sibling`, `members`, reading `x[ref]` (R6, P6.5a) | planned (R6, step 5) |
-| `Spheres`, `Plane` (R2, P6.5c) | planned (R2, step 5) |
+| `Objects(Interior(Sphere(...)))`, `Fill`, `Group` (P6.5c, D-244; replace `Spheres`, `Plane`, `Tiling` and a hand `cluster =>`) | merged (API alignment 2026-10-14) |
 | explicit phase order (R5, P6.3b) | planned (R5, step 3) |
-| `@terminate` (R3, P6.4c) | planned (R3, step 4) |
-| `contact(c, n)` (R11a) | planned (R11a; AUTHORING §12.3) |
-| `Pre(x, 100)` on a cell variable (R12, P6.7b) | planned (R12) |
+| `@terminate` (R3, P6.4c) | not merged; 14a classifies detachment after the run (API alignment 2026-10-14) |
+| `contact(c, n)` (R11a) | not merged; 14a uses the `integral` observable `lam_cyto` (API alignment 2026-10-14) |
+| `Pre(x, 100)` on a cell variable (R12, P6.7b) | refused today (`src/lower.jl:163`); 14c waits (API alignment 2026-10-14) |
 | MSD, modified-Fürth fits, ψ_δ (R16, P6.5c) | planned (R16, docs) |
 | named rules that an `@extend` can replace (`@convert protrusion`) | **NEW** |
 | `created` flag and `order = Shuffled()` in a host pass | **NEW** |
@@ -238,7 +257,7 @@ Proposed syntax used above:
 | `integral(x; over = cluster)` (formerly `cluster_integral`) | **P6.5a2 (D-243)** (R15 lists "rim reductions", not cluster reductions) |
 | replacing a base equation by an update in an `@extend` (`F(field)` → `F(site)`) | **NEW** |
 | `@extend` binding a model-body helper function (`touches_substrate`) | **NEW** |
-| layout helper to set `cluster` | **NEW** |
+| layout helper to set `cluster` | `Group` (D-244; API alignment 2026-10-14) |
 
 ## 4. Friction found
 
@@ -315,6 +334,8 @@ Proposed syntax used above:
    `alive(sibling(…))` guard. The code's behaviour with no FRONT at a sample is unknown
    (not in spec). `sibling` also needs a cell-explicit form inside population folds:
    `sibling(c, k)` versus the cell-scope `sibling(k)`.
+   (API alignment 2026-10-14: moot for 14a. Neither `@terminate` nor `contact(c, n)` is
+   merged; `lam_cyto` reads 0 once FRONT is dead, and detachment is classified after the run.)
 9. **Phase order.** In the code, one MCS is sweep → PDE → conversion → analysis
    (14 §2.9.6). Today fields run in the after phase (`codegen.jl:380–390`). Where the
    R8 routine will run relative to the fields and the after-MCS updates is undefined. In
@@ -337,6 +358,8 @@ Proposed syntax used above:
     fragile. A combinator such as `Group(Spheres(…), Tiling(…))` that emits `cluster` is
     wanted (NEW). 14c also needs a hemisphere and an annulus ("ring") layer (R2 lists
     neither).
+    (API alignment 2026-10-14: resolved for 14a by `Group`, `Objects(Interior(Sphere))` and
+    `Fill`, D-244; §1 uses them.)
 13. **`@extend` cannot bind a helper function.** 14c reuses `touches_substrate`.
     Body-local Julia functions (like WortelAct's `act_mean`) are not part of a system, so
     `@extend` cannot bind them. The extension must repeat the definition, or the helper
@@ -345,6 +368,8 @@ Proposed syntax used above:
     100-deep ring per cell for one running mean. A `window_mean(x, n)` primitive, or the
     running-sum idiom above, is enough. The running-sum idiom is expressible once R12
     exists. The review merged the spec's G15 into R12; that holds, at a memory cost.
+    (API alignment 2026-10-14: `Pre(x, k)` on a cell variable is refused today,
+    `src/lower.jl:163`, so 14c waits for R12, P6.7b.)
 
 ## 5. Open choices
 
@@ -359,7 +384,7 @@ Proposed syntax used above:
 | Lattice | int(8R) (10R when R ≥ 20 and φ_F ≥ 0.2) | paper range [8R, 14R] |
 | Top lid | frozen SUBS_NA at z = L_z − 1, J(M, lid) = −20 (code) | none (paper is silent) |
 | Extra SUBS_NA secretion | off (14a-code) | on (14a-nH port addition, 14 §2.9.8) |
-| Detachment stop | on (code) | off; classify detachment after the run |
+| Detachment stop | off; classify after the run (P6.5d brief §6 Q1; `@terminate` not merged; API alignment 2026-10-14) | on (code) |
 | Conversion RNG | addressed per replicate (§9 item 18; performance over exactness) | fixed `seed(1000)` shared across replicates (code) |
 | Polarization observable | Π_CN−N (14b choice) | lamellipodium–nucleus COM distance (14a Fig 12), `dcm_F_CN` (code; §9 item 19) |
 | R, φ_F, λ_F | 15, 0.05, 150 (code defaults) | scans R ∈ {10, 15, 20}, φ ∈ {0.05, 0.1, 0.2, 0.3}, λ ∈ 75–250 (14a-S1 p.3; Table 2 adds 160–170) |
