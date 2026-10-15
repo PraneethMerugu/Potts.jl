@@ -417,7 +417,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             struct CheckerboardCPM end
             cases(T) = ["fake" => () -> (; u0 = (; σ = zeros(T, 10)))]
             fresh_integrator(prob, alg, backend) = nothing
-            timed_step!(i, backend) = (sleep(0.0005); nothing)
+            timed_step!(i, backend) = (t = time_ns(); while time_ns() - t < 500_000 end; nothing)    # busy wait: sleep allocates a Timer and yields
             """)
         one = joinpath(sb2, "benchmark", "ab_one.jl")
         proj = joinpath(REPO, "benchmark")
@@ -429,6 +429,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test count(startswith("ABR fake.checkerboard "), l) == 1
         @test count(startswith("TC "), l) == 2 && !any(startswith("DISTURBED"), l)
         r = split(only(filter(startswith("ABR fake.sequential "), l)))
+        @test length(r) == 8 && r[7] == "0"           # ABR name med min k maxgc allocs memory
         @test 2e3 < parse(Float64, r[3]) < 1e6        # ~0.5 ms per MCS over 10 sites, in ns
         out = run1(
             "fake", "sequential", "--samples=3", "--seconds=1", "--wait=gpu", "--seed=0")

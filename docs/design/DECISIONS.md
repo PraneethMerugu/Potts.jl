@@ -4662,10 +4662,12 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - The gate's warm-allocation check (`gate.jl`, the minimum of `@allocated` over five calls on MCS 4–8) supports this but is weaker than a per-sample check: it times different MCS, and a minimum hides occasional allocations.
 - **Checked on every run instead of argued.** Each `ABR` line now ends with three fields:
   - the trial's largest per-sample GC time (ns);
-  - the last sample's allocations;
-  - the last sample's bytes.
+  - the minimum allocations over the trial's samples;
+  - the minimum bytes over the trial's samples (BenchmarkTools keeps the minimum, so these two show only allocation present in every sample; the GC field is the check).
 
-  `ab.jl` reads only fields 2–4, and the D-090 `AB` line is unchanged. On the CPU, a GC time above zero in any sample is reported as `DISTURBED`, so the A/B exits 3 and is re-timed.
+  `ab.jl` reads only fields 2–4, and the D-090 `AB` line is unchanged. On the CPU, a GC time above zero in any sample is reported as `DISTURBED` ("a GC ran inside a timed sample of …"), so the A/B exits 3.
+  - That reason is not machine noise. A child runs one thread with no interactive threads, finalizers never start a collection, the step does not yield, and the GC count is read after `setup`. So a collection in a sample means the timed step allocated, which recurs on re-timing.
+  - This amends the exit-3 action of D-171 and AUTONOMY.md (its exit-3 line, "re-time with the machine idle") for this cause only. Do not re-time: run `gate.jl` on the side the log names (`round r <side>:`). On the candidate it is an allocation regression; on the base it is a pre-existing one to report. Exit 3 still takes precedence over 1, so an allocating, slower candidate shows here, not as REGRESSION. `benchmark/README.md` states the same.
 - **Devices keep the scrub.** The ROCm harness wait (`gate.jl` `device_sync(::ROCBackend)`) spins on `AMDGPU.HIP.isdone`, which allocates 16 B per call (D-179). That is why the library waits through a raw `ccall`.
   - So every ROCm sample allocates, and a GC (with device-array finalizers from the previous case's setup integrators) can start inside a sample.
   - The gate never checks device allocations (`measure` records 0 off the CPU), and nothing here was measured on ROCm or Metal.

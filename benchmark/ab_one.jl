@@ -28,9 +28,10 @@
 #   --gctrial, --no-gctrial  BenchmarkTools' GC scrub (`gctrial`: three full collections
 #                    once per trial, before its first sample). Default (D-252): off for the CPU
 #                    variants, on for device variants and in the D-090 legacy form. Each `ABR`
-#                    line ends with the trial's largest per-sample GC time (ns) and the last
-#                    sample's allocations and bytes; on the CPU, a GC inside any timed sample is
-#                    reported as DISTURBED
+#                    line ends with the trial's largest per-sample GC time (ns) and the minimum
+#                    allocations and bytes over its samples; on the CPU, a GC inside any timed
+#                    sample is reported as DISTURBED, which there means the timed step allocated
+#                    (an allocation regression, not machine noise)
 #   --wait=<all|gpu|none>  what to wait for: CI jobs and (rocm) other GPU clients (`all`,
 #                    default), other GPU clients only, or nothing
 #   --deadline=<t>   stop waiting at `time()` = t (default: 4 h from now) and time anyway
@@ -113,11 +114,14 @@ function ab_time(prob, alg, backend; samples, seconds, gctrial = backend !== not
     fresh_integrator(prob, alg, backend)
     b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds gctrial=gctrial)
     n = length(prob.u0.σ)
-    # GC time inside the timed samples (per sample), and the last sample's allocations
+    # the largest per-sample GC time, and the allocations and bytes (BenchmarkTools keeps the
+    # minimum over samples, so these only show allocation in every sample; the GC field is the check)
     return median(b).time / n, minimum(b).time / n, length(b.times), maximum(b.gctimes), b.allocs, b.memory
 end
 
-# D-252: the CPU step allocates nothing, so no collection may land inside a timed sample
+# D-252: the CPU step allocates nothing, so no collection may land inside a timed sample; one
+# thread, the step never yields, and gc time is read after setup, so a GC here means the step
+# allocated (it recurs on re-timing: treat it as an allocation regression, not noise)
 const AB_GC_DISTURBANCES = String[]
 function ab_check_gc!(label, backend, maxgc)
     backend === nothing && maxgc > 0 &&
