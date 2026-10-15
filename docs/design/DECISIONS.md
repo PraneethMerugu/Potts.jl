@@ -4737,3 +4737,7 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - whole-cell connectivity's color lists (refused above 2³¹ − 1 sites per color, D-246);
   - `Int32` cell ids and volumes (σ, `cell.volume`).
 
+  The review found two more, with **no guard** above 2³¹ − 1 sites. Both break P6.0cd's "refuse, never wrap" and are open items:
+  - **Conversions** (convert.jl:315, :403). `sc.first[r]`, the lowest converted site of a region, is an `Int32` atomic min of `i % Int32`, and the `created` test compares it with `i % Int32`. Above 2³¹ − 1 sites the indices wrap. The wrong site is taken as the lowest, and the creating write goes to a wrong site. Above 2³² two sites can both see `created`.
+  - **Connectivity floods** (pieces.jl:121, 167, 187, 305, 325). `FloodScratch.stack` is `Int32`, filled with `Int32(r)`. Above 2³¹ − 1 sites this throws `InexactError` mid-run on the CPU, and is a kernel throw on a device. D-246's guard (checkerboard.jl:241) counts sites per color class, so a 2D lattice of about 9·2³¹ sites passes it.
+  - LOW: the `Int32` `_FLAG_CONVERTED` counter (convert.jl:316) feeds only `== 0` checks, so it misfires only at exactly k·2³² conversions.
