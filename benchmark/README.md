@@ -14,8 +14,7 @@
 - `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4, P6.0bb), below.
 - `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
   cache seeding shared by the gate and the A/B.
-- `test/p6_0s_v7_tooling.jl` (frozen, D-090), `test/exclusive_queue.jl` and
-  `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
+- `test/p6_0s_v7_tooling.jl` (frozen, D-090) and `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
 
 ### Machines and baselines (D-157)
 
@@ -149,7 +148,7 @@ every minute, so a ticket untouched for 5 minutes (e.g. of a SIGKILLed waiter) i
 queue entries whose names are not numbers are ignored. A lock untouched for 3 hours is
 stale (the frozen `test/p6_0s_v7_tooling.jl` checks this rule). The command's exit status
 is passed through, and the ticket and lock are removed on exit, HUP, INT, QUIT, PIPE or
-TERM. `test/exclusive_queue.jl` covers the queue's stale rules.
+TERM.
 
 The legacy rows below were measured with the since-removed `reference/` pin (D-048).
 
