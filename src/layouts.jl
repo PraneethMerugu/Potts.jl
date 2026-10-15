@@ -20,7 +20,7 @@ A layer of an initial condition. Turn layouts into an operating point with
 A new layout is a subtype with one method, `Potts.paint!(op::Potts.LayoutState, l, lat)`
 (the return value is ignored). `op` is opaque: the method reads and writes it only through
 [`new_cell!`](@ref), [`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref),
-[`ncells`](@ref) and [`record!`](@ref), and reads the lattice only through `size(lat)`,
+[`ncells`](@ref), [`record!`](@ref) and [`set_column!`](@ref), and reads the lattice only through `size(lat)`,
 [`isperiodic`](@ref)`(lat, d)` and [`indomain`](@ref)`(lat, x)` (and
 `core_lattice(lat)` for CorePotts' `shift`, `relation` and `embed`). Every name
 is `public`, so a layout in another package passes ExplicitImports' qualified-access check.
@@ -38,7 +38,7 @@ end
 ```
 
 Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`, `Eden`,
-`Splits`) takes
+`Splits`, `Fill`, `Objects`) takes
 `splits = :warn | :allow` and can be rebuilt with changed keywords by
 `remake(l; kw...)`, which re-runs the keyword constructor (so it validates).
 """
@@ -76,12 +76,17 @@ mutable struct LayoutState{N}
     const cutwarn::Vector{Bool}      # … some cutter has `splits = :warn`
     const rows::Vector{_LayerRow}
     const pieces::Vector{Tuple{Int, Int, Bool}}   # `Splits`: (cell, row, warn) of its cells left in pieces
+    const clusters::Dict{Int, Any}   # cell => its cluster label (`Group`, `set_column!(op, :cluster, …)`)
+    const colnames::Vector{Symbol}   # user columns (`set_column!`), in order of first use
+    const colvals::Vector{Dict{Int, Any}}   # … cell => value, one dict per column
     layer::Int                       # the current leaf (0: none)
     base::Int                        # cells allocated before the current leaf
     warn::Bool                       # the current leaf has `splits = :warn`
+    groups::Int                      # the `Group`s painted so far (their labels)
 end
 LayoutState(dims::NTuple{N, Int}) where {N} =
-    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], 0, 0, true)
+    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
+        Symbol[], Dict{Int, Any}[], 0, 0, true, 0)
 
 """
     new_cell!(op::LayoutState, kind) -> id
@@ -198,6 +203,46 @@ function record!(op::LayoutState; requested::Integer, painted::Integer, misses::
     op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!"))
     r = op.rows[op.layer]
     r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
+    return nothing
+end
+
+"""
+    set_column!(op::LayoutState, name::Symbol, id, value)
+
+Record `value` for cell `id` (in `1:ncells(op)`) in the column `name` of the operating point
+[`layout`](@ref) returns; a second call for the same cell overwrites the first. Call it from a
+layer's `paint!`.
+
+- `name = :cluster`: `value` is a label, compared with `isequal`; the cells with equal labels
+  form one cluster (a compartment cell). `layout` then returns `cluster => ids`, where a
+  cell's id is the final id of the lowest-id surviving cell with its label, and a cell
+  without a label is a cluster of its own. [`Group`](@ref) is built on this, and its labels
+  never equal a user's.
+- Any other name (a model's cell variable, such as `:V_target`): `layout` returns
+  `name => values`, one value per surviving cell, so `PottsProblem` uses them in place of the
+  variable's default. Every cell that survives the whole layout, from whichever layer,
+  needs a value, otherwise `layout` throws, naming the column and the cells.
+
+Throws an `ArgumentError` for `name` `:ownership` or `:kind`, an `id` that is not allocated,
+and a call outside a layer's `paint!`.
+"""
+function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
+    op.layer == 0 && throw(ArgumentError("set_column!: called outside a layer's paint!"))
+    name in (:ownership, :kind) &&
+        throw(ArgumentError("set_column!: `$name` is not a column a layer sets (use new_cell! and assign!)"))
+    1 <= id <= ncells(op) ||
+        throw(ArgumentError("set_column!: cell $id is not allocated (ncells = $(ncells(op))); use new_cell!"))
+    if name === :cluster
+        op.clusters[Int(id)] = value
+        return nothing
+    end
+    j = findfirst(==(name), op.colnames)
+    if j === nothing
+        push!(op.colnames, name)
+        push!(op.colvals, Dict{Int, Any}())
+        j = length(op.colnames)
+    end
+    op.colvals[j][Int(id)] = value
     return nothing
 end
 
@@ -727,11 +772,43 @@ function _shape_arg(s::HyperSphere, what)
     return s
 end
 
+"""
+    Interior(s)
+
+The open (strict) interior of the round shape `s` (a `Circle`, `Sphere` or `HyperSphere`):
+a site belongs to `Interior(Circle(c, r))` when its embedded position is at distance `< r`
+from `c`, up to rounding (a relative `1e-12`, so a site at exactly `r` is out, the mirror of
+the closed shape's tolerance). It wraps, clips and counts `clipped` exactly as the closed
+shape does, and is accepted wherever a shape is: the shape of [`Objects`](@ref) and the
+`region` of [`Fill`](@ref), [`RandomPoints`](@ref), [`Voronoi`](@ref) and [`Eden`](@ref).
+`r = 0` is the empty set.
+
+On a square lattice with the center on a site, `Interior(Circle(c, 2.0))` is the 3 × 3 block
+(9 sites) where the closed `Circle(c, 2.0)` has 13; a ball tangent to a plane must be strict
+to stay off it (`Interior(Sphere(Point(x, y, R + 1.0), R))` has no site at `z = 1`).
+
+Throws an `ArgumentError` for anything but a round shape (including an `Interior`), a
+non-finite center, or a radius that is negative or not finite.
+"""
+struct Interior{N, T}
+    shape::HyperSphere{N, T}
+    Interior(s::HyperSphere{N, T}) where {N, T} = new{N, T}(_shape_arg(s, "Interior"))
+end
+Interior(::Interior) = throw(ArgumentError("Interior: the shape is already an Interior"))
+Interior(s) = throw(ArgumentError("Interior: a round shape (Circle, Sphere, HyperSphere) is required, got $(repr(s))"))
+
+# A round shape: closed (`HyperSphere`) or strict (`Interior`).
+const _Round = Union{HyperSphere, Interior}
+_ball(s::HyperSphere) = s
+_ball(s::Interior) = s.shape
+
 # A layer's or pattern's region: the whole lattice (`nothing`), a shape or a box of ranges.
 _place_arg(::Nothing, what) = nothing
 _place_arg(s::HyperSphere, what) = _shape_arg(s, what)
+_place_arg(s::Interior, what) = s
 _place_arg(region, what) = _region_arg(region, length(region), what)
 
+_check_dim(s::Interior, N, what) = _check_dim(s.shape, N, what)
 function _check_dim(::HyperSphere{M}, N, what) where {M}
     M == N || throw(ArgumentError("$what: the shape is $(M)D, the lattice $(N)D"))
     return nothing
@@ -752,12 +829,13 @@ end
 # A shape: the scan covers the index box of its bounding ball (one point per class along
 # periodic axes), so it costs O(box volume × images), not O(lattice). U = index points with
 # periodic coordinates in `1:n` that lie in the shape; `clipped = |U| − sites`.
-function _region_sites(s::HyperSphere, lat::LatticeSpec{N}, what) where {N}
+function _region_sites(s::_Round, lat::LatticeSpec{N}, what) where {N}
     _check_dim(s, N, what)
     clat = core_lattice(lat)
     Ei = inv(_embedding(clat, Val(N)))
-    c = Ei * SVector{N, Float64}(s.center)
-    w = _box_scale(Ei) .* Float64(s.r)
+    b = _ball(s)
+    c = Ei * SVector{N, Float64}(b.center)
+    w = _box_scale(Ei) .* Float64(b.r)
     dims = size(lat)
     per = _periodic(lat)
     lo = ntuple(d -> floor(Int, c[d] - w[d]) - 1, Val(N))
@@ -777,14 +855,18 @@ function _region_sites(s::HyperSphere, lat::LatticeSpec{N}, what) where {N}
 end
 _residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x in lo:hi])
 
-# Closed membership with a relative rounding tolerance (D-138).
+# Closed membership with a relative rounding tolerance (D-138); strict membership with the
+# mirrored tolerance (`Interior`, P6.5c).
 _in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1e-12)
+_in_open(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) < s.r * (1 - 1e-12)
+_member(p::Point, s::HyperSphere) = _in_closed(p, s)
+_member(p::Point, s::Interior) = _in_open(p, s.shape)
 
 # Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in `s`.
-function _in_shape(s::HyperSphere, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
+function _in_shape(s::_Round, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
     images = ntuple(d -> per[d] ? ((x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]) : (x[d]:1:x[d]), Val(N))
     for y in Iterators.product(images...)
-        _in_closed(_cart(clat, y), s) && return true
+        _member(_cart(clat, y), s) && return true
     end
     return false
 end
@@ -802,8 +884,8 @@ struct Center end
     RandomPoints(n; region = <whole lattice>, replace = false, seed)
 
 A point pattern: `n` lattice sites of `region` that lie in the lattice's domain, drawn
-uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`; Cartesian, wrapping
-through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
+uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`, or an [`Interior`](@ref)
+of one; Cartesian, wrapping through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
 column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each point draws
 `i = rand(rng, 1:m)`:
 
@@ -925,7 +1007,7 @@ end
 
 One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
 `Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only the
-sites of `region` (a shape or a tuple of index ranges) that are in the lattice's domain and
+sites of `region` (a shape, an [`Interior`](@ref) of one, or a tuple of index ranges) that are in the lattice's domain and
 still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
 
 - Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
@@ -1053,7 +1135,7 @@ function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, 
     end
 end
 
-# The nearest-neighbour steps of the geometry: the offsets in {-1, 0, 1}ᴺ of shortest
+# The nearest-neighbor steps of the geometry: the offsets in {-1, 0, 1}ᴺ of shortest
 # embedded length (2N axis steps on square lattices, 6 on hexagonal ones).
 function _nearest_steps(clat, ::Val{N}) where {N}
     offs = [o for o in Iterators.product(ntuple(_ -> -1:1, Val(N))...) if any(!=(0), o)]
@@ -1069,7 +1151,7 @@ function _step_index(index::Array{Int, N}, x::CartesianIndex{N}, o, per) where {
     return index[y...]
 end
 
-# Make every cell one piece under the nearest-neighbour `steps` (D-063). Each pass labels the
+# Make every cell one piece under the nearest-neighbor `steps` (D-063). Each pass labels the
 # pieces. A piece that is not its cell's largest (a stray piece) and touches the largest piece
 # of another cell goes to the cell whose largest piece it shares the most bonds with (ties:
 # the lower id). If no stray piece touches a largest piece, the lowest stray piece goes to the
@@ -1195,7 +1277,7 @@ synchronous random (Eden) growth into the medium.
   Moore(1)` there.
 
 Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
-of ranges or a shape) or the domain. Each cell grows from one site, so it is one piece under
+of ranges, a shape or an [`Interior`](@ref) of one) or the domain. Each cell grows from one site, so it is one piece under
 `neighborhood`.
 
 The report row has `requested` = the points, `painted` = the cells created, `misses` = the
@@ -1279,9 +1361,9 @@ function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where
     K = length(offs)
     rng = layer_rng(l.seed, :eden)
     ci = CartesianIndices(σ)
-    # Candidates: medium sites that may have a growing neighbour (a superset of the
-    # frontier). A site leaves when it is painted or found with no growing neighbour, and
-    # re-enters when a neighbour is painted, so every eligible site of a round is a candidate.
+    # Candidates: medium sites that may have a growing neighbor (a superset of the
+    # frontier). A site leaves when it is painted or found with no growing neighbor, and
+    # re-enters when a neighbor is painted, so every eligible site of a round is a candidate.
     cand = Int[]
     incand = falses(size(σ))
     for s in eachindex(σ)
@@ -1324,7 +1406,7 @@ function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where
     return nothing
 end
 
-# Add the medium sites of region ∩ domain that have site `s` as a neighbour to the candidates.
+# Add the medium sites of region ∩ domain that have site `s` as a neighbor to the candidates.
 function _eden_enqueue!(cand, incand, s, allowed, σ::Array{Int32, N}, clat, back) where {N}
     li, ci = LinearIndices(σ), CartesianIndices(σ)
     for o in back
@@ -1377,7 +1459,7 @@ warns, `:allow` accepts it. Throws an `ArgumentError` for `k` outside `0:30` or 
 `shortfall` or `splits`. `remake(s; k = …)` works.
 
 ```julia
-# TST's sprout start: one Eden blob of 50 rounds at the centre, divided 7 times (128 cells)
+# TST's sprout start: one Eden blob of 50 rounds at the center, divided 7 times (128 cells)
 overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = 1), 7; splits = :allow))
 ```
 """
@@ -1590,6 +1672,186 @@ function _paint_leaf!(op::LayoutState, l::AbstractLayout, lat)
 end
 
 # ---------------------------------------------------------------------------------------------
+# Fill, Objects and Group (P6.5c, D-087: in place of `Plane` and `Spheres`)
+# ---------------------------------------------------------------------------------------------
+
+"""
+    Fill(kind; region = <whole lattice>, splits = :warn)
+
+One cell of `kind` owning every in-domain lattice site of `region`, painted over whatever
+earlier layers put there. `region` is `nothing` (every in-domain site), a round shape
+(`Circle`, `Sphere`, `HyperSphere` or an [`Interior`](@ref) of one) or a tuple of index
+ranges (axial on a hexagonal lattice, where a box is a rhombus). Planes, slabs, backgrounds
+and boxes are all `Fill`s: `Fill(:lid; region = (1:L, 1:L, Lz:Lz))` is the plane `z = Lz`.
+
+The report row has `requested = painted = counted = 1`, `misses = 0`, `dropped = 1` when
+later layers paint over every site, and `clipped` the points of the region that are not
+in-domain lattice sites (a shape's points lost to closed edges and the domain, a box's sites
+outside the domain). Deterministic: it draws nothing.
+
+Throws an `ArgumentError` for a region with no in-domain site, a box that reaches outside the
+lattice, a region of another dimension than the lattice, a bad `splits` and a vector of
+kinds (`Fill` paints one cell). `remake(f; region = …)` works.
+"""
+struct Fill{K, R} <: AbstractLayout
+    kind::K
+    region::R
+    splits::Symbol
+end
+function Fill(kind; region = nothing, splits::Symbol = :warn)
+    kind isa Union{AbstractArray, Tuple} &&
+        throw(ArgumentError("Fill: paints one cell, so `kind` is one kind, got $(repr(kind))"))
+    return Fill(kind, _place_arg(region, "Fill"), _splits_arg(splits, "Fill"))
+end
+_splits(l::Fill) = l.splits
+_layout_args(l::Fill) = (Fill, (:kind,), (; l.kind, l.region, l.splits))
+
+function paint!(op::LayoutState, l::Fill, lat::LatticeSpec{N}) where {N}
+    if l.region isa Union{Nothing, Tuple} && lat.domain === nothing
+        # a box on a lattice without a domain: paint it whole (no per-site list)
+        l.region === nothing || length(l.region) == N ||
+            throw(ArgumentError("Fill: the region has $(length(l.region)) ranges, the lattice is $(N)D"))
+        id = new_cell!(op, l.kind)
+        assign!(op, _region(l.region, size(lat), "Fill"), id)
+        record!(op; requested = 1, painted = 1)
+        return nothing
+    end
+    sites, clipped = _region_sites(l.region, lat, "Fill")
+    isempty(sites) && throw(ArgumentError("Fill: the region has no site in the lattice's domain"))
+    id = new_cell!(op, l.kind)
+    for x in sites
+        assign!(op, x, id)
+    end
+    record!(op; requested = 1, painted = 1, clipped)
+    return nothing
+end
+
+"""
+    Objects(shape, points = nothing; kinds, splits = :warn)
+
+One cell per copy of the round `shape` (`Circle`, `Sphere`, `HyperSphere` or an
+[`Interior`](@ref) of one). Without `points` there is one copy, the shape where it is. With
+`points` (`RandomPoints`, `Center()`, a `Point`, or a vector of `Point`s and `Center()`s), copy
+k is the shape translated by the Cartesian vector of point k, so write the template centered
+at the origin. Ids follow copy order and `kinds` is cycled over the copies.
+
+Each copy owns the in-domain sites of its shape (wrapping through periodic edges, clipped at
+closed edges and the domain) and paints over earlier layers; within the layer the first copy
+wins, so a copy never takes a site an earlier copy of the same layer owns.
+
+```julia
+# two balls of radius 3, strict, so neither touches a plane at distance 3
+Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)), [Point(5.0, 5.0, 4.0), Point(13.0, 5.0, 4.0)]; kinds = [:cell])
+```
+
+The report row has `requested = painted = counted =` the copies, `misses = 0`, `dropped` the
+copies left with no site after the whole layout, and `clipped` the sum over the copies of
+their shapes' points that are not in-domain lattice sites (sites lost to an earlier copy are
+not clipped). Randomness comes only from a `RandomPoints` pattern's own seed.
+
+Throws an `ArgumentError` for a shape that is not round, empty `kinds`, an empty point list,
+a bad `splits` and (at layout) a shape or point of another dimension than the lattice.
+`remake(o; points = …)` works.
+"""
+struct Objects{S, P, K} <: AbstractLayout
+    shape::S
+    points::P
+    kinds::Vector{K}
+    splits::Symbol
+end
+function Objects(shape, points = nothing; kinds, splits::Symbol = :warn)
+    shape isa _Round ||
+        throw(ArgumentError("Objects: the shape must be round (Circle, Sphere, HyperSphere or an Interior of one), " *
+                            "got $(repr(shape))"))
+    return Objects(_place_arg(shape, "Objects"), points === nothing ? nothing : _pattern_arg(points, "Objects"),
+        _kinds_arg(kinds, "Objects"), _splits_arg(splits, "Objects"))
+end
+_splits(l::Objects) = l.splits
+_layout_args(l::Objects) = (Objects, (:shape, :points), (; l.shape, l.points, l.kinds, l.splits))
+
+# The shape translated by the Cartesian vector `p`.
+_translate(s::HyperSphere{N}, p) where {N} =
+    HyperSphere(Point{N, Float64}(ntuple(d -> Float64(s.center[d]) + Float64(p[d]), Val(N))), Float64(s.r))
+_translate(s::Interior, p) = Interior(_translate(s.shape, p))
+
+function paint!(op::LayoutState, l::Objects, lat::LatticeSpec{N}) where {N}
+    _check_dim(l.shape, N, "Objects")
+    copies = l.points === nothing ? [l.shape] : [_translate(l.shape, p) for p in _cartesian_points(l.points, lat)]
+    lo = ncells(op) + 1                          # this layer's cells are lo:ncells(op)
+    clipped = 0
+    for (k, s) in enumerate(copies)
+        id = new_cell!(op, l.kinds[mod1(k, length(l.kinds))])
+        sites, c = _region_sites(s, lat, "Objects")
+        clipped += c
+        for x in sites
+            owner(op, x) >= lo && continue       # an earlier copy of this layer: the first wins
+            assign!(op, x, id)
+        end
+    end
+    n = length(copies)
+    record!(op; requested = n, painted = n, clipped)
+    return nothing
+end
+
+"""
+    Group(layers...)
+
+The `layers`, painted in order exactly as by [`overlay`](@ref) (each one a row of the
+layout report, ids in paint order), with every cell they create in one cluster: a
+compartment cell. [`layout`](@ref) then also returns `cluster => ids` (see
+[`Potts.set_column!`](@ref)), which `PottsProblem` takes for a model with compartments.
+Many compartment cells are one `Group` per cell, `overlay((Group(…) for c in centers)...)`.
+
+```julia
+# a cytoplasm disc and a nucleus box, one cell of two compartments, beside a wall
+overlay(Group(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), Fill(:nuc; region = (5:6, 5:6))),
+    Fill(:wall; region = (1:10, 1:1)))
+```
+
+A `Group` is the top-level layout or a member of a top-level `overlay`. It throws an
+`ArgumentError` with no layers, inside another `Group` (directly or through an `overlay`),
+as the layer of a `Splits`, or painted by a custom layer's `paint!` (which groups its cells
+with `Potts.set_column!(op, :cluster, label)` instead). `remake` does not apply to it.
+"""
+struct Group <: AbstractLayout
+    layers::Vector{AbstractLayout}
+    function Group(layers::Vector{AbstractLayout})
+        isempty(layers) && throw(ArgumentError("Group: give at least one layer"))
+        flat = AbstractLayout[]
+        for l in layers
+            l isa Overlay ? append!(flat, l.layers) : push!(flat, l)
+        end
+        any(l -> l isa Group, flat) && _group_placement()
+        return new(flat)
+    end
+end
+Group(layers::AbstractLayout...) = Group(AbstractLayout[layers...])
+@noinline _group_placement() =
+    throw(ArgumentError("Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
+                        "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
+                        "layer groups its cells with Potts.set_column!(op, :cluster, label))"))
+
+# A group's cluster label: never `isequal` to a user's (the type is private).
+struct _GroupLabel
+    n::Int
+end
+
+# Only `layout` and a top-level `overlay` paint a group (as leaves of their own).
+paint!(op::LayoutState, ::Group, lat) = _group_placement()
+function _paint_leaf!(op::LayoutState, g::Group, lat)
+    op.groups += 1
+    label = _GroupLabel(op.groups)
+    for x in g.layers
+        lo = ncells(op) + 1
+        _paint_leaf!(op, x, lat)
+        for c in lo:ncells(op)
+            op.clusters[c] = label
+        end
+    end
+    return nothing
+end
+
+# ---------------------------------------------------------------------------------------------
 # The split check
 # ---------------------------------------------------------------------------------------------
 
@@ -1702,6 +1964,13 @@ const _LayoutTarget = Union{Tuple{Vararg{Integer}}, Lattice, LatticeSpec, PottsS
 Paint the layout `l` (see [`overlay`](@ref)) on an empty lattice and return an operating
 point for `PottsProblem`: `σ` is an `Int32` array (0 = medium).
 
+When some cell got a cluster label (from a [`Group`](@ref) or
+[`set_column!`](@ref)`(op, :cluster, …)`), the point also holds `cluster => ids`: a cell's
+id is the final id of the lowest-id surviving cell with its label, and an unlabeled cell
+is a cluster of its own. Then come the other columns of `set_column!`, `name => values`,
+one per name in order of first use, one value per surviving cell. Without either, the point
+is exactly the two entries above.
+
 `x` is a `dims` tuple, meaning a closed square lattice with the `Moore(1)` neighborhood. For
 a hexagonal, periodic, domain-restricted or non-Moore lattice pass the `PottsSystem` (or
 `CompiledPottsSystem`), whose boundaries, neighborhood, domain and geometry the layouts
@@ -1713,7 +1982,7 @@ With `report = true` it also returns one row per leaf layer, in paint order (an 
 contributes its flattened leaves), with the properties
 
 - `layer`: the leaf's position; `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`, …);
-- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` 1, `InsertUntil` its
+- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` and `Fill` 1, `Objects` its copies, `InsertUntil` its
   `number` (`counted` under a `fraction` rule), `Voronoi` and `Eden` their points, `Splits`
   m·2ᵏ (m the inner layer's cells), a custom layer what it passed to [`record!`](@ref);
 - `painted`: the cells the layer created; `dropped`: of those, the cells left with no site
@@ -1722,7 +1991,7 @@ contributes its flattened leaves), with the properties
   `requested − painted` (their shortfall), a custom layer its `record!` value, other layers 0;
 - `counted`: `InsertUntil` what its stop rule counted (`painted`, plus `misses` under
   `misses = :count`), other layers `painted`;
-- `clipped`: `Voronoi` and `Eden` (and a `Splits` of them) the points of its region (a shape or a box) that are not in-domain
+- `clipped`: `Voronoi`, `Eden`, `Fill` and `Objects` (and a `Splits` of them) the points of its region (a shape or a box) that are not in-domain
   lattice sites, lost to closed edges and to the domain (nothing is lost through a periodic
   edge: a shape wraps); sites it skipped because an earlier layer owns them are not clipped.
   A custom layer its `record!` value, other layers 0;
@@ -1753,7 +2022,30 @@ function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
                          r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)] : nothing
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
+    _push_columns!(point, op, counts)
     return report ? (point, rows) : point
+end
+
+# The `cluster` column (when some cell got a label) and the user columns of `set_column!`,
+# over the surviving cells in final-id order.
+function _push_columns!(point, op::LayoutState, counts)
+    isempty(op.clusters) && isempty(op.colnames) && return point
+    alive = findall(>(0), counts)                # paint ids; final id f is alive[f]
+    if !isempty(op.clusters)
+        root = Dict{Any, Int}()                  # label => the final id of its lowest surviving cell
+        ids = zeros(Int, length(alive))
+        for (f, c) in enumerate(alive)
+            ids[f] = haskey(op.clusters, c) ? get!(root, op.clusters[c], f) : f
+        end
+        push!(point, cluster => ids)
+    end
+    for (name, vals) in zip(op.colnames, op.colvals)
+        missed = [f for (f, c) in enumerate(alive) if !haskey(vals, c)]
+        isempty(missed) || throw(ArgumentError("layout: the column `$name` (set_column!) has no value for the cells " *
+                                               "$missed (final ids); every cell that survives the layout needs one"))
+        push!(point, name => identity.(Any[vals[c] for c in alive]))
+    end
+    return point
 end
 
 # The kind names a layout's built-in layers name (cell kinds and `InsertUntil` hosts).
@@ -1762,6 +2054,9 @@ _layer_kinds(l::Overlay) = Any[k for x in l.layers for k in _layer_kinds(x)]
 _layer_kinds(l::Union{Tiling, Scattered, Voronoi, Eden}) = l.kinds
 _layer_kinds(l::Splits) = _layer_kinds(l.layer)
 _layer_kinds(l::Frame) = (l.kind,)
+_layer_kinds(l::Fill) = (l.kind,)
+_layer_kinds(l::Objects) = l.kinds
+_layer_kinds(l::Group) = Any[k for x in l.layers for k in _layer_kinds(x)]
 _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 
 # Against a model, a layout's kind names may not be its kind classes (D-135): a class would

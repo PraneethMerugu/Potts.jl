@@ -18,6 +18,24 @@ other fields, kind tables (`δ[kind]`). A cell ODE reads cell quantities (`volum
 variables, `integral(c)`) and can read other cells' values (`y[j]`); every ODE step reads
 the state at the start of the step. `time` is the current time.
 
+**A source on a site predicate.** A term of a field rate can be switched on by any
+predicate of the site: its `kind`, a fold over a relation of `site` (the neighbors), site
+variables or a helper function of `site` defined in the model. F-actin made only at
+lamellipodium sites with a face neighbor in the substrate (Fortuna et al. 2020, Eq. 6) is
+
+```julia
+@equations D(F) ~ D_F * Δ(F) - k_decay * F +
+                  k_source * (kind == lamellipodium) * any(kind[n] == substrate for n in VonNeumann(1)(site))
+```
+
+and `count(true for n in VonNeumann(1)(site) if kind[n] == substrate) > 0` is the same test.
+The predicate reads σ as the field phase sees it, which no substep changes (fields run
+between sweeps); a neighbor beyond a closed edge is skipped and a periodic edge wraps, as
+in every neighbor fold. Only the source is gated: diffusion and decay act everywhere, so
+the field spreads beyond the source sites. With one explicit substep the update is
+`F + D_F·ΔF − k_decay·F + k_source·[predicate]`, so a persistent source settles at
+`k_source/k_decay`. The same rate runs in the device field kernel.
+
 ## Cell and model ODEs are ModelingToolkit systems
 
 The cell equations of a model are one ModelingToolkit `System`, the template of one cell, and

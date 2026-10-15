@@ -6,13 +6,17 @@ through them; this page is the reference.
 ## Turning layers into an operating point
 
 - `layout(l, sys)` paints `l` on the lattice of model `sys` (its size, boundaries,
-  neighborhood, domain and geometry) and returns `[ownership => σ, kind => kinds]`.
+  neighborhood, domain and geometry) and returns `[ownership => σ, kind => kinds]`. A
+  layout with a `Group` (or a custom layer calling `Potts.set_column!`) also returns
+  `cluster => ids` and any per-cell columns, in that order (see
+  [Compartment cells](@ref manual-layouts-groups)).
 - `layout(l, dims)` paints on a closed square lattice of size `dims` with `Moore(1)`.
 - `layout(l, x; report = true)` also returns one row per layer, in paint order, with
   `type`, `requested`, `painted` (cells created), `dropped` (painted over completely),
   `misses` and `counted` (`InsertUntil`; for `Eden` and `Splits`, `misses` is the cells
-  requested but not painted), `clipped` (the points of a `Voronoi` or `Eden` region lost to
-  closed edges and the domain; 0 for the other built-in layers) and `splits` (cells this
+  requested but not painted), `clipped` (the points of a `Voronoi`, `Eden`, `Fill` or
+  `Objects` region lost to closed edges and the domain; 0 for the other built-in layers) and
+  `splits` (cells this
   layer alone cut into disconnected pieces, and the cells `Splits` left in pieces).
 - Cells left without a site are dropped and the rest renumbered in order. `layout` warns
   when a cell ends up in disconnected pieces, unless every layer that cut it has
@@ -29,6 +33,9 @@ through them; this page is the reference.
 | `Voronoi(points; region, lloyd = 0, kinds)` | one cell per generator, filling the region's medium sites (it never cuts an earlier layer): each site goes to the nearest generator; `lloyd = k` moves the generators to their cells' centroids k times; every cell is one piece |
 | `Eden(points; rounds, region, kinds, seed, neighborhood, shortfall = :error)` | a one-site cell at each point (coinciding points merge), grown by `rounds` rounds of synchronous random growth into the medium of the region (TST's `GrowInCells`); it never cuts an earlier layer |
 | `Splits(layer, k; shortfall = :error)` | `layer` with each of its cells cut in two across its long axis, `k` times over (TST's `DivideCells`, on the host before the run) |
+| `Fill(kind; region)` | one cell owning every in-domain site of `region` (a box, a shape, or the whole lattice), painted over earlier layers: planes, slabs, backgrounds |
+| `Objects(shape, points; kinds)` | one cell per copy of a round `shape`, translated to each of `points` (or the shape where it is), painted over earlier layers; within the layer the first copy wins |
+| `Group(layers...)` | the layers, painted as by `overlay`, with every cell they create in one cluster (a compartment cell) |
 | `overlay(layers...)` | the layers in order, later ones on top |
 
 `Eden` and `Splits` can paint fewer cells than they are asked for: seeds that coincide or
@@ -43,7 +50,7 @@ adding a layer never changes another layer's draws.
 
 ## Shapes and points
 
-`region` is a tuple of index ranges (a box) or, for `Voronoi`, `Eden` and `RandomPoints`, a round
+`region` is a tuple of index ranges (a box) or, for `Fill`, `Voronoi`, `Eden` and `RandomPoints`, a round
 shape: `Circle(Point(x, y), r)`, `Sphere(Point(x, y, z), r)` or `HyperSphere`. These are
 GeometryBasics' types, the same bindings Makie exports, so `using Potts, CairoMakie` is
 unambiguous.
@@ -54,6 +61,9 @@ unambiguous.
 - Membership is **closed**: a site belongs to `Circle(c, r)` when its embedded position is
   at distance `≤ r` from `c`, up to rounding (a relative `1e-12`, so a hexagonal disc of
   radius 1 about a site holds the site and all 6 neighbors).
+- `Interior(shape)` is the **strict** version: distance `< r`, with the mirrored tolerance,
+  so a site at exactly `r` is out. With the center on a site, `Interior(Circle(c, 2.0))` is
+  the 3 × 3 block (9 sites) where `Circle(c, 2.0)` has 13. It goes wherever a shape goes.
 - A shape **wraps** through a periodic edge and is **clipped** at a closed edge and at the
   domain; the report's `clipped` counts the lost points.
 
@@ -97,6 +107,62 @@ op, report = layout(sprout, (200, 200); report = true)
 report[2]
 ```
 
+## Planes, balls and compartment cells
+
+There is no `Plane` or `Spheres` layer: `Fill` and `Objects` cover both. On a
+`(L, L, Lz)` lattice with `L = 120` and `Lz = 31`, the plane `z = Lz` is
+
+```julia
+Fill(:lid; region = (1:L, 1:L, Lz:Lz))
+```
+
+and balls of radius `r` at a list of centers are copies of one template at the origin:
+
+```julia
+Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), r)), centers; kinds = [:cell])
+```
+
+`Interior` keeps the code's strict test `|x − c| < r`; write `Sphere(…)` for the closed rule.
+A ball tangent to a substrate must be strict: with its center at `z = r + 1` and its `x`
+and `y` on a site, the closed ball has one site on the plane `z = 1` (the point straight
+below the center, at distance exactly `r`). With `x` or `y` off a site, every site of `z = 1`
+is farther than `r`, so the two rules agree on that plane, though they can still differ
+elsewhere on the sphere.
+
+### [Compartment cells](@id manual-layouts-groups)
+
+A `Group` puts every cell its layers create into one cluster, for a model with
+compartments (a `cluster[owner] == cluster[owner′]` contact term). `layout` returns
+`cluster => ids` beside `ownership` and `kind`, and `PottsProblem` takes it as it is, so no
+cluster is written by hand. Fortuna et al.'s nucleus-migration start is a cytoplasm ball
+tangent to the substrate, a 6 × 6 × 6 nucleus at its center, and frozen substrate and lid
+planes:
+
+```julia
+R, L, Lz = 15, 120, 31
+c    = (L ÷ 2 + 1, L ÷ 2 + 1, R + 1)              # z = R + 1, so the ball's lowest layer is z = 2
+body = Group(Objects(Interior(Sphere(Point(Float64.(c)...), Float64(R))); kinds = [:cytoplasm]),
+             Fill(:nucleus; region = map(a -> (a - 3):(a + 2), c)))      # 6³, offsets −3…+2
+op   = layout(overlay(body, Fill(:substrate; region = (1:L, 1:L, 1:1)),
+                            Fill(:lid; region = (1:L, 1:L, Lz:Lz))), sys)
+```
+
+The cytoplasm is cell 1 (13781 sites), the nucleus cell 2 (216) and the planes cells 3 and 4;
+`cluster => [1, 1, 3, 4]`. Targets that depend on the kind are cell-variable defaults of the
+model (`V_target(cell) = ifelse(kind == nucleus, …, …)`), not layout columns. A small 2D
+version:
+
+```@example mlayouts
+using Potts
+cell = Group(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), Fill(:nuc; region = (5:6, 5:6)))
+op = layout(overlay(cell, Fill(:wall; region = (1:10, 1:1))), (10, 10))
+op[3]
+```
+
+Many compartment cells are one `Group` per cell: `overlay((Group(…) for c in centers)...)`.
+A `Group` is the top-level layout or a member of a top-level `overlay`, never inside another
+`Group` or a `Splits`.
+
 !!! note "DomainSets"
     DomainSets (which ModelingToolkit loads) exports its own `Sphere` and `Point`. After
     `using Potts, DomainSets` both names are ambiguous: write `Potts.Sphere` and
@@ -114,6 +180,7 @@ The paint state `op` is used only through:
 | `Potts.owner(op, x)` | the owner painted so far at site `x` (0 = medium) |
 | `Potts.kindof(op, id)`, `Potts.ncells(op)` | a painted cell's kind; the number of cells so far |
 | `Potts.record!(op; requested, painted, misses = 0, counted = painted, clipped = 0)` | the layer's report row |
+| `Potts.set_column!(op, name, id, value)` | a per-cell column: `:cluster` labels (equal labels form one cluster) or a model's cell variable such as `:V_target` (every surviving cell then needs a value) |
 
 The lattice `lat` is read through `size(lat)`, `Potts.isperiodic(lat, d)`,
 `Potts.indomain(lat, x)` and `Potts.core_lattice(lat)` (for CorePotts' `shift`, `relation`

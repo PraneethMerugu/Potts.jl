@@ -2370,3 +2370,12 @@ The maintainer approved F-1…F-6 (D-049).
   - ROCm passes. 0.983–1.006; largest control deviation 0.0090.
   - So about 2 % of P6.5a's 2.5–3 % Akeeb CPU cost is recovered.
 - **Review.** Adversarial APPROVE on 964e0bef, and again on the follow-up delta.
+
+## 2026-10-14 — P6.5c merged: initial-state vocabulary, predicate sources, MSD and Fürth fits (D-244)
+
+- **Initial state (A).** `Interior(shape)` (strict membership), `Fill`, `Objects` (first copy wins) and `Group` (compartment cells with cluster labels) are new layers. `set_column!` (public) writes per-cell columns. `layout` returns `cluster => ids` and the user columns when there are any, and is otherwise exactly the old two-entry output. The Fortuna start (R = 10: ball 4139, cytoplasm 3923, nucleus 216) builds from the layout alone. `Spheres` and `Plane` are recipes, not layers (D-087).
+- **Predicate sources (B).** A field term gated by a site predicate (`any(kind[n] == substrate for n in …)`) already worked; P6.5c adds the docs. Part B passes on CPU, Metal and ROCm.
+- **MSD and Fürth (C).** `unwrap_track`, `msd`, `furth_msd`, `natural_units` and `furth_fit` (`:paper` by default; `:lsq`). PottsModels gains LinearAlgebra. For P6.5d, the S resolution of `:paper` must be checked at Fortuna's S = 0.02 (D-244).
+- **PC (654a9d07).** frozen, GPU (ROCm), Potts, MakiePotts and PottsModels pass, part B passes on ROCm, and the docs build. There is no A/B: the change is front end and analysis only (D-242).
+- **Review.** Adversarial APPROVE; the follow-up (docstrings, an empty-`Group` error, a series for small Δt/P) was checked by the coordinator.
+- **Merge.** The conflicts with the American-spelling pass (D-249) were resolved, and P6.5c's new prose was converted to match; error messages were left as they were. All three acceptance files (596 pass) and `test/layouts.jl` (3305) pass on the merged tree.

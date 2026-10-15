@@ -1277,8 +1277,9 @@ PottsProblem(sys, [ownership => σ, kind => kinds, cluster => groups], tspan)
     (so a layout in another package passes ExplicitImports' qualified-access check), as
     are CorePotts' `shift`, `relation` and `embed`. Ids are those of the paint so far;
     cells with no site are dropped after the whole layout. A random layout owns its seed,
-    so adding a layer never changes another layer's draws. Planned: Eden growth and splits, BrickWall, Chains, Spheres,
-    Fibres, Plane, FromImage/FromMask.
+    so adding a layer never changes another layer's draws. Planned: Eden growth and splits, BrickWall, Chains,
+    Fibres, FromImage/FromMask. Spheres and Plane are not separate layers (D-087): they are
+    `Objects(Interior(Sphere(r)), points)` and a one-layer `Fill(kind; region = …)` slab (P6.5c, D-244).
 - **PIFF import/export** (pure Julia).
 - **MorpheusML importer** (pure Julia, EzXML.jl + expression translation to Symbolics):
   makes the Morpheus model repository a test corpus.

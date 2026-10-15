@@ -74,10 +74,14 @@ export kind, cluster
 include("layouts.jl")
 export AbstractLayout, Tiling, Scattered, Frame, InsertUntil, overlay, layout
 # shapes and point patterns (D-138): GeometryBasics' round shapes and `Point` (the same
-# bindings Makie re-exports), the lattice centre, random sites and the Voronoi layer
+# bindings Makie re-exports), the lattice center, random sites and the Voronoi layer
 export HyperSphere, Circle, Sphere, Point, Center, RandomPoints, Voronoi
 # TST-style seeding (D-141): seed-and-grow and host-side divisions
 export Eden, Splits
+# the initial-state vocabulary (P6.5c, D-087): strict shapes, filled regions, translated copies
+# and compartment groups; `set_column!` is the custom layer's seam for per-cell columns
+export Interior, Fill, Objects, Group
+public set_column!
 public points, layer_rng
 # the layout extension API (D-091): `Potts.paint!(op::LayoutState, l, lat)`, the paint-state
 # accessors and the lattice queries (`size(lat)` is Base's); `core_lattice(lat)`
