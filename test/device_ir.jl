@@ -20,6 +20,21 @@ const KA = CorePotts.KernelAbstractions
 # the LLVM type token `double`, not part of a name (`%double`, `@julia_double_1`, `.double`)
 const DOUBLE = r"(?<![%@.\w\"])double(?![\w.\"])"
 
+"""Run `g()` with GPUCompiler's compile hook set to `h`: a `Ref` up to GPUCompiler 1, a
+`ScopedValue` from GPUCompiler 2 on."""
+function with_compile_hook(g, h)
+    if GPUCompiler.compile_hook isa Base.ScopedValues.ScopedValue
+        return Base.ScopedValues.with(g, GPUCompiler.compile_hook => h)
+    end
+    old = GPUCompiler.compile_hook[]
+    GPUCompiler.compile_hook[] = h
+    try
+        return g()
+    finally
+        GPUCompiler.compile_hook[] = old
+    end
+end
+
 """`[(kernel, optimized LLVM module)]` of every distinct kernel compiled while `f()` runs.
 While a hook is set GPUCompiler recompiles at every launch, so `f` should be short."""
 function kernels_ir(f)
@@ -29,21 +44,16 @@ function kernels_ir(f)
         key = (job.source, job.config)
         key in seen && return nothing
         push!(seen, key)
-        GPUCompiler.compile_hook[] = nothing          # code_llvm compiles again: no re-entry
-        try
-            push!(out, (string(job.source.specTypes), sprint(io -> GPUCompiler.code_llvm(io, job; dump_module = true))))
-        finally
-            GPUCompiler.compile_hook[] = hook
+        # code_llvm compiles again: no hook inside it, so no re-entry
+        ir = with_compile_hook(nothing) do
+            sprint(io -> GPUCompiler.code_llvm(io, job; dump_module = true))
         end
+        push!(out, (string(job.source.specTypes), ir))
         return nothing
     end
-    old = GPUCompiler.compile_hook[]
-    GPUCompiler.compile_hook[] = hook
-    try
+    with_compile_hook(hook) do
         f()
         AMDGPU.synchronize()
-    finally
-        GPUCompiler.compile_hook[] = old
     end
     return out
 end
