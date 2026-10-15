@@ -515,6 +515,20 @@ end
 # `Base.afoldl`, not `_each`: the MCS order is compiler-built and short (`Phases` caps it at 31, afoldl's unrolled limit)
 _run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
 
+function _sequential_sweep!(integ::PottsIntegrator, ctx)
+    if _skips_interior(integ.alg)
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+    else
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.f.track)
+    end
+    integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+    tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+    status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    return nothing
+end
+
 # One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple)
     integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
@@ -525,18 +539,11 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope `mcs`,
     # D-188): n − 1 during the n-th MCS, as the phases' `mcs`
     ctx = sweep_ctx(integ.ctx, integ.t)
-    if _skips_interior(integ.alg)
-        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
-        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
-        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
-    elseif integ.alg isa SequentialCPM
-        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.f.track)
-        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
-        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    if integ.alg isa SequentialCPM
+        # the site-pick regime is fixed per sweep in the context's type (D-247): two static
+        # calls, so the one-word sweep compiles exactly as before
+        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, merge(ctx, (; pick = TwoWordPick()))) :
+        _sequential_sweep!(integ, ctx)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, ctx, integ.law, integ.key, integ.t)

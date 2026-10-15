@@ -198,7 +198,6 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
     accepted = 0
     tracked = track === nothing ? nothing : 0.0
     attempts = 0                            # attempts of this MCS used so far (null skips included)
-    force = _FORCE_TWO_WORD_PICK[]          # read once per MCS (D-247)
     j = 0
     while true
         n = B.n
@@ -213,11 +212,9 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
             attempts < nsite || break
             attempts += 1
         end
-        # bounded(·, n) ∈ 0:n-1; above 2^24 boundary sites the second word comes from draw j's
-        # local index 1, so the draws of smaller lists are unchanged (D-247)
-        k = _two_word_pick(n, force) ? bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n) :
-            bounded(rt, n)
-        t = Int(@inbounds B.list[k + 1])
+        # the pick ∈ 0:n-1. In the two-word regime (the context's type, set by the caller above
+        # 2^24 mobile sites) the second word is draw j's local index 1 (D-247)
+        t = Int(@inbounds B.list[_boundary_pick(_pick_regime(ctx), rt, key, mcs, j, n) + 1])
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
         inside, y = shift(lat, x, @inbounds offsets[dir])
@@ -248,3 +245,8 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
     end
     return accepted, UInt32(0), tracked
 end
+
+# the boundary sweep's pick (D-247): the two-word regime draws its second word only when used
+@inline _boundary_pick(::Nothing, rt::UInt32, key, mcs, j, n) = Int((UInt64(rt) * UInt64(n)) >> 32)   # `bounded`, inlined (see `site_pick`)
+@inline _boundary_pick(::TwoWordPick, rt::UInt32, key, mcs, j, n) =
+    bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n)

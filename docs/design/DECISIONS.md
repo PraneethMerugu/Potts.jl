@@ -4507,8 +4507,10 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   1. Up to 2²⁴ sites, where the excess is at most 2⁻⁸, the pick is unchanged and every existing run is bit-identical.
   2. Above 2²⁴, the pick is `bounded64(hi, lo, n) = ⌊(hi·2³² + lo)·n / 2⁶⁴⌋` (UInt128, host only), with bias ≤ n/2⁶⁴.
      - `SequentialCPM` takes the second word from its draw's fourth word, which was unused. That adds no RNG cost.
-     - The boundary-site sweep uses all four words of draw j, so it draws local index 1 of the same address, only above 2²⁴ boundary sites.
-  3. The choice is per sweep: `nsite` is loop-invariant. For the boundary list it is `n` at each pick, so a list that crosses 2²⁴ switches deterministically.
+     - The boundary-site sweep uses all four words of draw j, so it draws local index 1 of the same address, only in the two-word regime.
+  3. The regime is chosen once per sweep, from the lattice's mobile-site count (`integ.nmobile`). It is carried in the sweep context's type: above 2²⁴ the caller adds `pick = TwoWordPick()`. The sweeps dispatch on it (`site_pick`, `_boundary_pick`), and the one-word methods are `bounded`'s body, so a context without the field compiles to exactly the pre-D-247 loop. The boundary sweep follows the lattice's count, not its list's current length, so a short list on a lattice above 2²⁴ also takes two words. That is equally exact.
+     - **Why a type.** The first version branched in the loop (`nsite > 2²⁴`). It was loop-invariant, but the cold two-word path was inlined. The coordinator's CPU A/B of that version showed the one-word sweeps regressing. The coordinator asked for a function barrier instead, as D-246 did for checkerboard claims.
+     - **Verified against 99301437.** The optimized typed IR of `sequential_mcs!` and `boundary_site_mcs!` is byte-identical on GG 72² and cubes 16³ for both sweeps. Their `code_llvm` is identical once function-symbol numbers are normalised (Julia 1.12.6, aarch64). A ternary on the context's fields still left dead `nothing` statements, `get` left an empty block, and a wrapper that called `bounded` added one more. Each of these moved the IR hash, so the code avoids all three.
   4. D-237 rule 4, the refusal of more than 2³² mobile sites, is narrowed. With two words every site is reachable on a plain all-mobile lattice, which indexes sites as `Int`. The boundary list (`BoundaryCache.list`/`pos`) and a frozen mask's mobile-site list (`MaskMobility.sites`) store sites as `Int32`. So `init` refuses `SequentialCPM(; skip_interior = true)`, or any algorithm with a frozen mask, on more than 2³¹ − 1 sites (`_check_site_lists`, an `ArgumentError`). Before, these failed mid-run with an `InexactError` between 2³¹ and 2³², or died after allocating. Widening those lists to `Int64` is a separate item.
 - **Why a threshold.** Up to 2³² sites the two-word pick refines the one-word one: it gives the same site, or the next one when the low word carries, with probability about n/2³³. Switching everywhere would leave short runs almost unchanged but move pinned long runs; p6_4b1's OpenVT run would see a few carries. A threshold keeps every pin. Lemire's rejection step was not chosen, because its rare redraws would also move pins at any size.
 - **Tests** (lib/CorePotts/test/runtests.jl, "rng: two-word site picks (D-247)"):
@@ -4522,17 +4524,9 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - `_check_site_lists` refuses a bare 2¹⁶ × 2¹⁶ lattice with `skip_interior` or a frozen mask, and accepts it otherwise.
   - Mutants: `bounded64 ≡ 0` fails both sweeps. "lo ignored" (`hi·2³²` only) fails the replays. "Hook ignored" fails the hook checks.
 - **Frozen one-word replay.** p6_9a_global_connectivity.jl:271-272 replays sequential targets with the one-word pick. It is valid below 2²⁴ sites, which covers all its lattices. A run above 2²⁴ would need the two-word replay.
-- **Pins.** The one-word path's numbers are unchanged. `sequential_mcs!` gains a loop-invariant branch and a named fourth word, so only p6_0bk2's IR hashes move. Nothing else moved in q6's PottsModels run on the PC at 1abf6f37 (x86, Julia 1.12.6): 40533 pass, 2 fail (exactly these pins), 99 broken.
-  - Re-frozen under this entry, from that run:
-    - GG 72²: `96510374…529e38` → `4647a7576adcacc6e85ee57c029ca3e24edcd32e50471d7fdac9686deac4651b`
-    - cubes 16³: `76c7b816…177545d2` → `0359fa7f3f5d8bc113a2ee4161846cd7a8e9648975aeef1cb04ee55b40889d55`
-  - They equal the reviewer's aarch64 values, so the hash does not depend on the architecture.
-  - The maintainer approved this re-freeze in the session of 2026-10-14 ("approved, re-freeze the p6_0bk2 IR hashes").
-  - D-250 classification, run with the base's own tool (`git show fd7abb33:tools/frozen_diff.jl`, `julia frozen_diff.jl fd7abb33`), exit 0:
-
-    ```
-    AUTO        acceptance/p6_0bk2_skip_interior.jl  (pin: P60BK2_IR)
-    ```
+- **Pins.** Nothing frozen changes. The one-word path's numbers are unchanged, and since rule 3 its IR is too. p6_0bk2's `P60BK2_IR` hashes are again D-237's values (GG 72² `96510374…529e38`, cubes 16³ `76c7b816…177545d2`), recomputed on this branch.
+  - An earlier commit on this branch (d6fce691) re-pinned them for the in-loop branch. That re-pin had the maintainer's approval and the D-250 AUTO classification. Both p6_0bk2_skip_interior.jl and its frozen.toml entry are now restored byte for byte to fd7abb33, so no re-freeze remains to classify.
+  - The pin now guards the barrier: a change that leaks the two-word path into the one-word sweep moves the hash.
 
 ## D-248 PC branch checks run in two lanes: suites on the CI cores, A/Bs exclusive (2026-10-14; maintainer-approved: two-lane policy, the pueue install and CI yielding; number reserved by the coordinator; amends D-232's core use; under D-157, D-242)
 

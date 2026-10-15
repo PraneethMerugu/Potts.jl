@@ -218,8 +218,15 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             @test abs(ratio - 1) < 0.05
             @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
         end
-        # the hook reaches the helper both sweeps call
-        @test CorePotts._two_word_pick(10, true) && !CorePotts._two_word_pick(10, false)
+        # the hook reaches the caller's choice of regime, which is the sweep context's type:
+        # marked contexts take two words, others one, and each method is its map
+        @test CorePotts._pick_regime((; mcs = 0, pick = CorePotts.TwoWordPick())) === CorePotts.TwoWordPick() &&
+              CorePotts._pick_regime((; mcs = 0)) === nothing
+        for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))
+            @test CorePotts.site_pick(nothing, hi, lo, n) == CorePotts.bounded(hi, n)
+            @test CorePotts.site_pick(CorePotts.TwoWordPick(), hi, lo, n) == CorePotts.bounded64(hi, lo, n)
+            @test CorePotts._boundary_pick(nothing, hi, nothing, 0, 1, n) == CorePotts.bounded(hi, n)
+        end
         CorePotts._FORCE_TWO_WORD_PICK[] = true
         @test CorePotts._two_word_pick(10)
         CorePotts._FORCE_TWO_WORD_PICK[] = false
