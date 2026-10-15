@@ -4638,3 +4638,26 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
   CI then runs the base's copy on the pushed range and logs the verdict. MAINTAINER is an audit line, not a failure; a crash fails the step. CI does not enforce the rule; the coordinator and the reviewer apply it before the push.
 - **First use.** The tool must be at the base, so the first AUTO is possible only for a re-freeze based on a commit that already contains this change.
+
+## D-252 A/B children skip BenchmarkTools' GC scrub (`gctrial = false`); `--gctrial` restores it (2026-10-15; maintainer OK to take it to review, from a measured A/B pair; adversarial review before merge; under D-171, D-242)
+
+- **Why.** On the NucBox, one A/B child process took 71 s on the CPU (16 cases) and 97 s on ROCm (8 cases). The timed steps were only 1.7 s and 0.1 s of that (stage profile, 2026-10-15, mb25base at 99301437, CPU 12).
+  - Every `run(@benchmarkable …)` started with BenchmarkTools' `gctrial` scrub, several full collections at 0.65 s each, so about 2 s per measurement. The same measurement takes 0.02–0.04 s with `gctrial = false`, as does a plain loop.
+  - That came to about 38 of a CPU child's 71 s, and about 17 of a CPU A/B's 43 min (32 children).
+- **Evidence.** The same CPU A/B was run twice with the same harness, q10's pair (99301437 → 94f6b516, all cases, 8 rounds, no disturbed runs), with the scrub and then without it:
+
+  | | gctrial on | gctrial off |
+  |---|---|---|
+  | wall time | 42 min | 23 min |
+  | largest control deviation (GG sequential) | 0.0452 | 0.0490 |
+  | largest control deviation, other cases | about 1.0 % | about 0.8 % |
+  | largest control interval half-width | 0.0245 | 0.0147 |
+  | verdict | pass (margin 1.0048) | UNREADABLE (margin 1.0010) |
+
+  - The candidate ratios agree between the runs, e.g. Akeeb 0.98 / 0.97 and Merks 2008 0.996 / 0.997.
+  - The verdicts differ only because GG's control offset (about 4.5–4.9 % in both modes, the -abctl copies faster) moves the margin. The scrub neither causes nor contains that offset.
+- **Why it is safe.** The CPU timed step allocates nothing (the gate's warm-allocation check), and the ROCm device wait spins without allocating (D-179). So no collection can start inside a timed sample; collections land in the untimed setup.
+- **The change.** `ab_one.jl` `ab_time` defaults to `gctrial = false`. `ab.jl --gctrial` passes `--gctrial` to the children and restores the scrub, and the log header says "; gctrial" when it is on.
+  - `@benchmarkable`, the device wait and the paired statistic are unchanged, so the frozen `p6_0s_v7_tooling.jl` structural checks still apply.
+  - `gate.jl` keeps its scrub. It only checks allocations, its timings are informational, and it runs rarely.
+- **Limits.** One pair, one run per mode. The reviewer decides whether a repeat is needed. The GG offset is a separate, open investigation into a per-checkout effect.

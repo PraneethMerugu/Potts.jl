@@ -74,7 +74,7 @@
 #   --cpu=<n>           the logical CPU to pin to (default 12 on the NucBox); --no-pin
 #   --samples=<n>, --seconds=<s>  BenchmarkTools samples and time budget per case (60, 40)
 #   --gctrial           children run BenchmarkTools' full-GC scrub before each measurement
-#                       (off by default, D-XXX: about 2 s each on the NucBox, no gain in
+#                       (off by default, D-252: about 2 s each on the NucBox, no gain in
 #                       resolution)
 #   --wait=<all|gpu|none>  what each timed run waits for (default all: CI jobs and, for
 #                       rocm, other GPU clients; gpu: other GPU clients only)

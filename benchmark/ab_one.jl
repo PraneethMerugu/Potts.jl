@@ -26,7 +26,7 @@
 #                    0 = no seeding). Seeding runs after the packages load, before any build.
 #   --samples=<n>    samples per measurement (default 60), --seconds=<s> (default 40)
 #   --gctrial        run BenchmarkTools' full-GC scrub before each measurement (`gctrial`).
-#                    Off by default (D-XXX): it cost about 2 s per measurement on the NucBox
+#                    Off by default (D-252): it cost about 2 s per measurement on the NucBox
 #                    and did not improve the controls; the timed step allocates nothing, so
 #                    no collection can start inside a sample
 #   --wait=<all|gpu|none>  what to wait for: CI jobs and (rocm) other GPU clients (`all`,
