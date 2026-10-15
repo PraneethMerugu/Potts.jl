@@ -93,3 +93,24 @@ end
     @test integ.stats.connectivity_deferred == fresh.stats.connectivity_deferred
     @test fresh.stats.connectivity_deferred > 0            # the window does refuse here
 end
+
+# D-253: the flood stacks (`FloodScratch.stack`, the window's `MVector`) hold site indices
+# in `site_index_type`, Int64 above 2³¹ − 1 sites. Forced on 24² (`_FORCE_WIDE_SITES`, read
+# when the scratch is built), the exact flood (SequentialCPM) and the windowed search
+# (CheckerboardCPM) must give the Int32 run exactly, refusals included.
+@testset "P6.9a: the flood stacks at the Int64 site width (D-253)" begin
+    σ = zeros(Int32, 24, 24)
+    σ[5:12, 5:12] .= 1
+    σ[14:20, 6:14] .= 2
+    prob = PottsProblem(CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 4)
+    wide(f) = (Potts.CorePotts._FORCE_WIDE_SITES[] = true; try f() finally Potts.CorePotts._FORCE_WIDE_SITES[] = false end)
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        a = solve(prob, alg; saveat = 1)
+        b = wide(() -> solve(prob, alg; saveat = 1))
+        @test all(i -> a.u[i].σ == b.u[i].σ, eachindex(a.u))
+        @test a.stats.accepted == b.stats.accepted && a.stats.connectivity_deferred == b.stats.connectivity_deferred
+        @test eltype(wide(() -> init(prob, alg)).ctx.flood.stack) === Int64
+        @test eltype(init(prob, alg).ctx.flood.stack) === Int32
+    end
+    @test solve(prob, CheckerboardCPM()).stats.connectivity_deferred > 0     # the window is exercised
+end

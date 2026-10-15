@@ -52,7 +52,8 @@ const _CV_ROOTA = Symbol("#cv_rootA")
 const _CV_ROOTB = Symbol("#cv_rootB")
 const _CV_SITE = Symbol("#cv_site")        # the entity converting site i in this pass, or 0
 """
-`st.model` key of the conversion flags (`Int32[4]`): sites converting in this pass, entities
+`st.model` key of the conversion flags (`I[4]`, `I = site_index_type` of the lattice, D-253):
+sites converting in this pass, entities
 asking for a slot in this pass, allocations deferred for want of a free slot (cumulative),
 entities skipped because their cells are too large for the Int32 moment scratch
 (cumulative). The cumulative counts are read once per solve (Potts' `report_run`).
@@ -73,14 +74,16 @@ cell, site and model state: cell columns for `ncell` slots (grown with the state
 function convert_scratch(dims, ncell::Integer, N::Integer)
     z(T, d...) = zeros(T, d...)
     big(n) = fill(typemax(Int32), n)
+    # site indices and site counts (D-253): `first` and the flags, Int64 above 2³¹ − 1 sites
+    I = site_index_type(prod(dims))
     cell = Pair{Symbol, Any}[
         _CV_FROM => z(Int32, ncell), _CV_TO => z(Int32, ncell), _CV_SRC => z(Int32, ncell),
-        _CV_N => z(Int32, ncell), _CV_FIRST => big(ncell), _CV_NEW => z(Int32, ncell), _CV_HELD => z(
+        _CV_N => z(Int32, ncell), _CV_FIRST => fill(typemax(I), ncell), _CV_NEW => z(Int32, ncell), _CV_HELD => z(
             Int32, ncell),
         _CV_DVOL => z(Int32, ncell), _CV_DM1 => z(Int32, N, ncell), _CV_DM2 => z(Int32, npairs(N), ncell),
         _CV_OKC => z(Bool, ncell), _CV_ROOTA => big(ncell), _CV_ROOTB => big(ncell)]
     return (; cell, site = Pair{Symbol, Any}[_CV_SITE => z(Int32, dims...)],
-        model = Pair{Symbol, Any}[CONVERT_FLAGS => z(Int32, 4)])
+        model = Pair{Symbol, Any}[CONVERT_FLAGS => z(I, 4)])
 end
 
 """
@@ -242,15 +245,15 @@ end
 
 @inline function _cv_reset_body!(c, sc)
     if c == 1
-        @inbounds sc.flag[_FLAG_CONVERTED] = Int32(0)
-        @inbounds sc.flag[_FLAG_ALLOCATE] = Int32(0)
+        @inbounds sc.flag[_FLAG_CONVERTED] = zero(eltype(sc.flag))
+        @inbounds sc.flag[_FLAG_ALLOCATE] = zero(eltype(sc.flag))
     end
     @inbounds begin
         sc.from[c] = Int32(0)
         sc.to[c] = Int32(0)
         sc.src[c] = Int32(0)
         sc.n[c] = Int32(0)
-        sc.first[c] = typemax(Int32)
+        sc.first[c] = typemax(eltype(sc.first))
         sc.new[c] = Int32(0)
         sc.held[c] = Int32(0)
         sc.rootA[c] = typemax(Int32)
@@ -271,7 +274,7 @@ end
     t = _live_slot(vol, t) ? Int32(t) : Int32(0)
     t == f && return nothing
     if !_cv_moments_ok(st.cell, ctx.lattice, f, t, limit, Val(ndims(ctx.lattice)))
-        Atomix.@atomic sc.flag[_FLAG_LARGE] += Int32(1)
+        Atomix.@atomic sc.flag[_FLAG_LARGE] += one(eltype(sc.flag))
         return nothing
     end
     @inbounds sc.from[c] = Int32(f)
@@ -312,9 +315,9 @@ end
     decide(st, p, ctx, key, mcs, i, c, t) || return nothing
     @inbounds sc.site[i] = r
     Atomix.@atomic sc.n[r] += Int32(1)
-    Atomix.@atomic sc.first[r] min (i % Int32)
-    Atomix.@atomic sc.flag[_FLAG_CONVERTED] += Int32(1)
-    t == 0 && Atomix.@atomic sc.flag[_FLAG_ALLOCATE] += Int32(1)
+    Atomix.@atomic sc.first[r] min (i % eltype(sc.first))     # `site_index_type`: no wrap (D-253)
+    Atomix.@atomic sc.flag[_FLAG_CONVERTED] += one(eltype(sc.flag))
+    t == 0 && Atomix.@atomic sc.flag[_FLAG_ALLOCATE] += one(eltype(sc.flag))
     return nothing
 end
 
@@ -334,7 +337,7 @@ end
         end
         if cursor > cap                      # no free slot: the entity converts nothing this pass
             @inbounds sc.n[r] = Int32(0)
-            Atomix.@atomic sc.flag[_FLAG_DEFERRED] += Int32(1)
+            Atomix.@atomic sc.flag[_FLAG_DEFERRED] += one(eltype(sc.flag))
             continue
         end
         d = cursor % Int32
@@ -400,7 +403,7 @@ end
     r > 0 || return nothing
     t = @inbounds sc.to[r]
     t > 0 || return nothing
-    created = @inbounds(sc.new[r]) != 0 && @inbounds(sc.first[r]) == i % Int32
+    created = @inbounds(sc.new[r]) != 0 && @inbounds(sc.first[r]) == i % eltype(sc.first)
     writes!(st, p, ctx, key, mcs, i, @inbounds(sc.from[r]), t, created)
     return nothing
 end

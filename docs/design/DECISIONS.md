@@ -4737,7 +4737,36 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
   - whole-cell connectivity's color lists (refused above 2³¹ − 1 sites per color, D-246);
   - `Int32` cell ids and volumes (σ, `cell.volume`).
 
-  The review found two more, with **no guard** above 2³¹ − 1 sites. Both break P6.0cd's "refuse, never wrap" and are open items:
+  The review found two more, with **no guard** above 2³¹ − 1 sites. Both broke P6.0cd's "refuse, never wrap". The amendment below fixes both:
   - **Conversions** (convert.jl:315, :403). `sc.first[r]`, the lowest converted site of a region, is an `Int32` atomic min of `i % Int32`, and the `created` test compares it with `i % Int32`. Above 2³¹ − 1 sites the indices wrap. The wrong site is taken as the lowest, and the creating write goes to a wrong site. Above 2³² two sites can both see `created`.
   - **Connectivity floods** (pieces.jl:121, 167, 187, 305, 325). `FloodScratch.stack` is `Int32`, filled with `Int32(r)`. Above 2³¹ − 1 sites this throws `InexactError` mid-run on the CPU, and is a kernel throw on a device. D-246's guard (checkerboard.jl:241) counts sites per color class, so a 2D lattice of about 9·2³¹ sites passes it.
   - LOW: the `Int32` `_FLAG_CONVERTED` counter (convert.jl:316) feeds only `== 0` checks, so it misfires only at exactly k·2³² conversions.
+- **Amendment (2026-10-15; branch fix/site-index-paths; coordinator-approved under P6.0cd's "refuse, never wrap").** Both open paths now use the same pattern: `site_index_type`, carried in the array's type.
+  - **Conversions.** `convert_scratch` builds `#cv_first` and the flags (`CONVERT_FLAGS`, so `_FLAG_CONVERTED` too) with the lattice's width. The pass takes its literals from them: `i % eltype(sc.first)`, `typemax(eltype(sc.first))`, and `one`/`zero(eltype(sc.flag))`. `created` therefore compares unwrapped indices. A backend without 64-bit atomics (Metal) refuses an `@convert` model above 2³¹ − 1 sites at `init` (`_check_convert_atomics`, an `ArgumentError`).
+  - **Floods.** `FloodScratch.stack` is `site_index_type(nsites)`, and `_flood!` writes `eltype(stack)(r)`. The window's `MVector` stack takes that type through a new last argument of `_keeps_window`, `eltype(ctx.flood.stack)`. No atomics are involved, so Metal needs no refusal.
+  - **Function barrier (review, blocking).** `site_index_type` reads a `Ref`, so a `FloodScratch` built inside a function infers as `FloodScratch{…, S, …} where S`. `recompute_pieces` built one and flooded in the same loop, so every `_flood!` call dispatched dynamically. The reviewer measured 1000² at 12.0 → 19.2 ms (100 cells) and 13.5 → 65.1 ms (5000 fragmented labels). It runs at problem build and, through `_rebuild_pieces!`, in every host lifecycle event round of a model with `pieces` columns.
+    - Fix: `recompute_pieces` builds the scratch and passes it to `_recompute_pieces!`, which holds the loop.
+    - Measured on this Mac, base → branch: 100 blocks 14.36 → 14.15 ms (face) and 21.40 → 21.27 ms (full); 5000 labels 13.34 → 13.08 ms and 21.75 → 21.44 ms.
+    - `_rebuild_pieces!`'s typed IR is identical to base. `recompute_pieces` infers `Tuple{Vector{Int32}, Vector{Int32}}`.
+    - The other run-time-typed constructions (`BoundaryCache`, `mobility`, `convert_scratch`, `connectivity_ctx`) make at most one dynamic call after construction, not one per site.
+    - LOW, left as is: `_host_ctx` (src/problem.jl) holds the same non-concrete type. Only the `energy_change` analysis calls it, and that allocates per call anyway.
+  - **IR at ≤ 2³¹ − 1 sites.**
+    - Both trees ran these, and compiled the same 30 concrete specializations:
+      - CVDevice (`@convert`) and CGWindow (`Global(; window = 1)`);
+      - under `SequentialCPM` and `CheckerboardCPM`;
+      - the specializations: the `_cv_*` bodies, `_flood!`, `_keeps_exact`, `_keeps_window`, `global_keeps`, `propose_body!`, `commit_body!`, `_conn_color!` and `sequential_mcs!`.
+    - Their optimized typed IR is byte-identical to 26c1ebdc's. The exception is `_keeps_window`'s added `Type{Int32}` argument, a singleton, in its signature and at its one call site. The bodies are identical.
+    - LLVM: the `code_llvm` of the same 30 also matches, once runtime type-tag addresses and line order are normalized. The only differences are that signature, and GC-root slot numbering in the host-side `_conn_color!`.
+    - Warm `step!` allocates 0 bytes on both trees, for both models under both sweeps.
+    - Not identical: the non-concrete specializations, compiled through dynamic dispatch with `Any` arguments. Base has six of `_flood!`, at a concrete `FloodScratch{…, Vector{Int32}, …}`. The branch has three, at `FloodScratch{…, S, …} where S`. These come from inferring a construction. The one per-site loop that inherited the non-concrete type, `recompute_pieces`, now has the function barrier above.
+    - Scope: the evidence is the two fixtures, not Akeeb or OpenVT. Only generic code changed, and at ≤ 2³¹ − 1 sites every array type is unchanged (`Int32`). The frozen PottsModels files that run these paths (p6_5b, p6_9a, the OpenVT entries) are left to the PC suites.
+  - **Tests.**
+    - Forced width (`_FORCE_WIDE_SITES`, read at construction):
+      - test/convert.jl: CVDevice's 4 conversions give exactly one `created` (`births == 1`) and the Int32 run's σ at every MCS, under both sweeps. `#cv_first` and the flags are `Int64` when forced and `Int32` otherwise. On the device, the run equals the CPU's, or on Metal it is refused.
+      - test/connectivity_global.jl: CGWindow under the exact flood (`SequentialCPM`) and the window (`CheckerboardCPM`, whose deferred refusals are > 0) gives the Int32 run's σ, accepted copies and deferred refusals. The stack is `Int64` when forced.
+    - Index math at real indices (lib/CorePotts/test/site_index_math.jl; the P6.0cd Accept line). The kernel bodies run on 2³²- and 2³³-site lattices whose site arrays are sparse `AbstractVector`s.
+      - `_cv_decide_body!` and `_cv_writes_body!`: at sites 2³¹ + 10, 2³² + 10 and 10, the lowest site is exact, and `created` holds at that one site only. A reintroduced `% Int32` fails all three cases: it gives a negative lowest site, and a second `created` at the wrapped 2³² + 10.
+      - `_flood!` at sites ≈ 2.6·10⁹ reaches the cell, while an Int32 stack throws `InexactError` (the negative control).
+      - `global_keeps` refuses the splitting copy, both exactly and in the window.
+    - **Coverage gap:** the forced-width flood and window never run on a device. CGWindow is a Float64 fixture and fails on Metal at both widths ("unsupported use of double value"); that predates this change. The device @convert test covers the Int64 conversion scratch.
+    - Results: CorePotts 16163/16163 and the index-math testset 8/8; Potts convert.jl (the D-253 testset 7/7) and connectivity_global.jl (9/9); Metal device @convert 4/4.

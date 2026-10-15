@@ -327,6 +327,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
     isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
+    _check_convert_atomics(backend, prob.u0)
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
@@ -607,6 +608,16 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
         "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have (D-253); " *
         "run it on the CPU or on ROCm or CUDA"))
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
+end
+
+# A conversion pass above 2³¹ − 1 sites keeps its lowest site and its counts in Int64
+# atomics (`convert_scratch`, D-253), which a backend without them cannot compile: refused
+function _check_convert_atomics(backend, u0)
+    haskey(u0.model, CONVERT_FLAGS) || return nothing
+    (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
+        "this lattice has $(length(u0.σ)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
+        "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
+    return nothing
 end
 
 # Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`;

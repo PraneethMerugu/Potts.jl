@@ -344,9 +344,10 @@ end
 # the Int32 arrays and their code exactly; there is no per-site branch.
 const _FORCE_WIDE_SITES = Ref(false)    # tests: the Int64 width on a small lattice
 site_index_type(nsite::Integer) = (_FORCE_WIDE_SITES[] || nsite > typemax(Int32)) ? Int64 : Int32
-# Whether the backend's kernels have 64-bit atomic adds, which the Int64 mask counters need.
-# Metal's do not (its extension says so): there, a lattice above 2³¹ − 1 sites whose mask
-# follows the state is refused at `init` (`_mobility_scratch`).
+# Whether the backend's kernels have 64-bit atomics, which the Int64 mask counters and the
+# `@convert` scratch need. Metal's do not (its extension says so): there, a lattice above
+# 2³¹ − 1 sites whose mask follows the state, or with an `@convert` pass, is refused at
+# `init` (`_mobility_scratch`, `_check_convert_atomics`).
 _atomic64(backend) = true
 
 # ---------------------------------------------------------------------------------------

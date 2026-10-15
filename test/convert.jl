@@ -80,6 +80,23 @@ const CV_EXPECTED = (; alive = [1, 2], kind2 = 2, birth2 = 3, cluster2 = 1, keep
     end
 end
 
+# D-253: the lowest converted site (`#cv_first`, which decides `created`) and the flags are
+# `site_index_type`, Int64 above 2³¹ − 1 sites. Forced at construction on 24²: the same run
+# exactly, one `created` among the 4 conversions; unforced, Int32.
+@testset "@convert: `created` at the Int64 site width (D-253)" begin
+    wide(f) = (CorePotts._FORCE_WIDE_SITES[] = true; try f() finally CorePotts._FORCE_WIDE_SITES[] = false end)
+    prob = wide(cv_device_problem)
+    @test eltype(getfield(prob.u0.cell, CorePotts._CV_FIRST)) === Int64
+    @test eltype(getfield(prob.u0.model, CorePotts.CONVERT_FLAGS)) === Int64
+    @test eltype(getfield(cv_device_problem().u0.cell, CorePotts._CV_FIRST)) === Int32
+    for alg in (SequentialCPM(), CheckerboardCPM())
+        sol = solve(prob, alg; saveat = 1)
+        ref = solve(cv_device_problem(), alg; saveat = 1)                    # the Int32 run
+        @test cv_device_summary(sol.u[end]) == CV_EXPECTED                  # births == 1
+        @test all(i -> sol.u[i].σ == ref.u[i].σ, eachindex(sol.u))
+    end
+end
+
 @testset "@convert passes on the device (PottsDevices)" begin
     if isdefined(Main, :PottsDevices) && PottsDevices.on_device()
         backend = PottsDevices.device_backend()
@@ -89,6 +106,13 @@ end
         sol = solve(prob, CheckerboardCPM(); backend)
         @test Symbol(sol.retcode) === :Success
         @test cv_device_summary(sol.u[end]) == cpu
+        # D-253: the Int64 width on the device, or its refusal without 64-bit atomics (Metal)
+        wprob = (CorePotts._FORCE_WIDE_SITES[] = true; try cv_device_problem() finally CorePotts._FORCE_WIDE_SITES[] = false end)
+        if CorePotts._atomic64(backend)
+            @test cv_device_summary(solve(wprob, CheckerboardCPM(); backend).u[end]) == cpu
+        else
+            @test_throws r"@convert pass.*Int64 atomics.*D-253" init(wprob, CheckerboardCPM(); backend)
+        end
     else
         @test_skip "device (POTTS_GPU=metal|rocm)"
     end
