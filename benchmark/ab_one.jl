@@ -25,6 +25,8 @@
 #   --seed=<n>       seed the Tuple type cache to n entries (default BenchMachine.SEED_ENTRIES;
 #                    0 = no seeding). Seeding runs after the packages load, before any build.
 #   --samples=<n>    samples per measurement (default 60), --seconds=<s> (default 40)
+#   --no-gctrial     skip BenchmarkTools' full-GC scrub before each measurement (`gctrial`):
+#                    about 2 s per measurement on the NucBox; an experiment, off by default
 #   --wait=<all|gpu|none>  what to wait for: CI jobs and (rocm) other GPU clients (`all`,
 #                    default), other GPU clients only, or nothing
 #   --deadline=<t>   stop waiting at `time()` = t (default: 4 h from now) and time anyway
@@ -103,9 +105,9 @@ function ab_variant(v)
     return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
 end
 
-function ab_time(prob, alg, backend; samples, seconds)
+function ab_time(prob, alg, backend; samples, seconds, gctrial = true)
     fresh_integrator(prob, alg, backend)
-    b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds)
+    b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds gctrial=gctrial)
     n = length(prob.u0.σ)
     return median(b).time / n, minimum(b).time / n, length(b.times)
 end
@@ -116,6 +118,7 @@ function ab_one_main(pos, opts)
     AB_LEGACY || println("TC ", join(BenchMachine.type_cache_stats(), " "))
     samples = parse(Int, get(opts, "samples", "60"))
     seconds = parse(Float64, get(opts, "seconds", "40"))
+    gctrial = !haskey(opts, "no-gctrial")
     if haskey(opts, "variants")
         Base.include(Main, opts["variants"])
         vs = Main.AB_VARIANTS
@@ -128,7 +131,7 @@ function ab_one_main(pos, opts)
                 append!(sides, ["base-ctl" => vs[1][2](T), "cand-ctl" => vs[2][2](T)])
             for r in 1:rounds, (label, prob) in circshift(sides, -(r - 1))
 
-                med, mn, k = ab_time(prob, alg, backend; samples, seconds)
+                med, mn, k = ab_time(prob, alg, backend; samples, seconds, gctrial)
                 println("ABR $label:$v $med $mn $k")
                 flush(stdout)
             end
@@ -152,7 +155,7 @@ function ab_one_main(pos, opts)
                     println("ABSKIP $name.$v")
                     continue
                 end
-                med, mn, k = ab_time(prob, alg, backend; samples, seconds)
+                med, mn, k = ab_time(prob, alg, backend; samples, seconds, gctrial)
                 println(AB_LEGACY ? "AB $med" : "ABR $name.$v $med $mn $k")
                 flush(stdout)
             end
