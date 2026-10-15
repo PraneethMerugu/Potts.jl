@@ -57,7 +57,7 @@ title = "Graner & Glazier (1992) cell sorting — GranerGlazier, seed $SEED\n" *
         "$(L)×$(L), $(ncell) cells, $(T_END) MCS (10⁴ paper MCS); relaxed start\n" *
         "frames annealed 2 paper MCS at T = 0, log-spaced in time"
 
-# phenotype colours: sorting is read by kind (dark, light)
+# phenotype colors: sorting is read by kind (dark, light)
 panel = Panel(""; plot = (; category_palette = [:steelblue4, :lightgoldenrod1], medium_color = :white))
 sol, info = paper_run("graner_glazier"; prob, alg, saveat, title, framerate = 24, panels = [panel],
     state = display_state,

@@ -135,7 +135,7 @@ No cells or a negative neighbor count is an `ArgumentError`.
 """
 function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("openvt_neighbor_histogram: no cells"))
-    any(<(0), n) && throw(ArgumentError("openvt_neighbor_histogram: negative neighbour count"))
+    any(<(0), n) && throw(ArgumentError("openvt_neighbor_histogram: negative neighbor count"))
     nmax = Int(maximum(n; init = 0))
     counts = zeros(Int, nmax + 1)
     for k in n

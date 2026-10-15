@@ -1,8 +1,8 @@
 # # Jiang, Swart, Saxena, Asipauskas & Glazier (1999): sheared two-dimensional foam
 #
 # A dry foam is a packing of gas bubbles separated by thin walls. Sheared slowly, it stores
-# energy in its walls like an elastic solid until bubbles swap neighbours (T1 events), and
-# then it flows. Jiang and co-authors modelled the foam as a large-Q Potts model with an
+# energy in its walls like an elastic solid until bubbles swap neighbors (T1 events), and
+# then it flows. Jiang and co-authors modeled the foam as a large-Q Potts model with an
 # area constraint per bubble and a shear term that biases copies along x. They showed
 # hysteresis loops whose shape changes from elastic to viscoelastic to plastic with the
 # shear amplitude and the wall energy J, and stick–slip avalanches of T1 events whose
@@ -40,8 +40,8 @@ nothing #hide
 
 # ## 1. The model
 #
-# Eq. (1) of the paper: a wall energy J for every pair of unlike neighbouring sites, over
-# the 20 neighbours up to the fourth shell, and an area constraint Γ(a − A)² per bubble. The
+# Eq. (1) of the paper: a wall energy J for every pair of unlike neighboring sites, over
+# the 20 neighbors up to the fourth shell, and an area constraint Γ(a − A)² per bubble. The
 # shear adds, for a copy of the source's bubble into the target site, the bias
 # γ(y, t)·(x_target − x_source) along x (Eq. 2 in the displacement form, deviation DV3),
 # with γ on the two boundary rows only (Eq. 6, boundary shear) or linear in y about the
@@ -91,7 +91,7 @@ nothing #hide
 #
 # The paper's ordered foam (p.5823): 256 bricks of 16² in common bond, a short anneal at
 # T = 3, then relaxation at T = 0. Proposals are made at wall sites only
-# (`SequentialCPM(; skip_interior = true)`), to a uniform neighbour among the 20 (deviation
+# (`SequentialCPM(; skip_interior = true)`), to a uniform neighbor among the 20 (deviation
 # DV1).
 
 L = (256, 256)
@@ -207,7 +207,7 @@ rec_cal = only(rec_rows("calibration.tsv"))
 τ_rec = parse(Float64, rec_cal["tau"])
 nothing #hide
 
-## videos: one fixed colour per bubble id, no outlines (a bubble keeps its colour while others vanish)
+## videos: one fixed color per bubble id, no outlines (a bubble keeps its color while others vanish)
 function foam_video(file, F; fps = 15, title = "")
     n = maximum(maximum, F)
     rng = Xoshiro(4)
@@ -236,7 +236,7 @@ nothing #hide
 # ### The runs, as videos
 #
 # These are short runs made on this page with the full run's protocol; the verdicts below
-# come from the full run. Each bubble keeps one colour, without outlines. Left: the ordered foam forming from the
+# come from the full run. Each bubble keeps one color, without outlines. Left: the ordered foam forming from the
 # brick wall (10 MCS at T = 3, then 1000 MCS at T → 0⁺, every 10 MCS). Right: that foam
 # coarsening at Γ = 0, T = 3 until μ2(n) reaches 0.81, the paper's first disordered foam
 # (Figs. 6, 8(b), 11); the frozen protocol then resets each bubble's target area and
@@ -309,7 +309,7 @@ Markdown.parse(join([ #hide
 
 # ### Deviations
 #
-# One row per failed target and per labelled difference from the paper (D-154). The
+# One row per failed target and per labeled difference from the paper (D-154). The
 # columns are our value, the paper's value, the suspected cause and the status of the
 # question to the authors: "not an author question", "not asked" (the question is on our
 # open question list; spec 04 §7 names it), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩".
@@ -329,7 +329,7 @@ Markdown.parse(join([ #hide
     "|---|---|---|---|---|", #hide
     ("| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
      for r in rec_rows(isfile(joinpath(rec_dir, "deviations_amended.tsv")) ? "deviations_amended.tsv" : "deviations.tsv"))..., #hide
-    "| DV1 proposal law and time scale τ | a uniform neighbour among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbours are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbours: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbour, every pick counted as a trial (p.5822) | the paper's unlike-neighbour proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
+    "| DV1 proposal law and time scale τ | a uniform neighbor among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbors are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbors: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbor, every pick counted as a trial (p.5822) | the paper's unlike-neighbor proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
     "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
     "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
     "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
@@ -346,7 +346,7 @@ Markdown.parse(join([ #hide
 # κ × 0.001 ≈ 0.0025, and the largest bias a copy can get anywhere in the foam is about
 # 0.64. In a relaxed foam at T → 0⁺ the energy barriers are whole numbers (the wall and
 # area terms change in integer steps), larger than that bias, so the copies that would
-# let bubbles swap neighbours are never accepted. The foam is pinned: no T1 event occurs. The full run has no T1 events at
+# let bubbles swap neighbors are never accepted. The foam is pinned: no T1 event occurs. The full run has no T1 events at
 # β ≤ 0.001 in any foam, and none in the ordered foam at β = 0.005 either. Its yield
 # measure β·t_first is 0.105 for the ordered foam, against about 48 in the paper.
 #
@@ -377,7 +377,7 @@ Markdown.parse(join([ #hide
 # ### Protocol
 #
 # - **Lattice and energy.** 256², x periodic, y closed without wall cells (A-2); J = 3 over
-#   `NeighborOrder(4)` (20 neighbours, p.5822); Γ = 1, A = 256 (p.5823); a dry foam, no
+#   `NeighborOrder(4)` (20 neighbors, p.5822); Γ = 1, A = 256 (p.5823); a dry foam, no
 #   medium site.
 # - **Ordered foam.** The brick wall, anneal 10 MCS at T = 3, relax 1000 MCS at T → 0⁺
 #   (A-8). Ten foams in the full run.
@@ -395,7 +395,7 @@ Markdown.parse(join([ #hide
 #   butterfly → U transition at γ0 = 5.7–5.8, Fig. 3(a)). No crossing stops the full run as a
 #   science question.
 # - **Observables** (`PottsModels.Analysis`). φ = `stored_energy` (Eq. 8, unlike pairs over
-#   the 20 neighbours), φ̂ = φ/φ(0); n = `side_counts` (VonNeumann(1)); μ2(n), μ2(a) =
+#   the 20 neighbors), φ̂ = φ/φ(0); n = `side_counts` (VonNeumann(1)); μ2(n), μ2(a) =
 #   `topology_moments`; T1s per MCS = `t1_events` between consecutive `cell_graph`s;
 #   spectra = `power_spectrum` and `spectral_exponent` (Eq. 9); N̄ = `mean_t1`; the first T1
 #   avalanche = `yield_strain`.

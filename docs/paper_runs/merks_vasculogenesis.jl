@@ -27,7 +27,7 @@ hours(t) = round(t / 120; digits = 1)
 title = "Merks et al. (2006) vasculogenesis — Merks2006, 500×500, 282 cells, $(T_END) MCS (50 h), seed $SEED\n" *
         "A = 100, λ = 50, L = 50, λ_L = 5, χ = 1000, T = 50, E₀ = 5000 (soft); one frame every $EVERY MCS (12.5 min)"
 sol, info = paper_run("merks_vasculogenesis"; prob, alg, saveat = EVERY, title, framerate = 24,
-    # each cell its own colour (D-172); the one-site frozen border is cropped from the view
+    # each cell its own color (D-172); the one-site frozen border is cropped from the view
     panels = [Panel(""; encoding = CellIdentityEncoding(), plot = (; medium_color = :white),
         limits = (1.5, LAT[1] - 0.5, 1.5, LAT[2] - 0.5))],
     size = (760, 800),
@@ -37,7 +37,7 @@ sol, info = paper_run("merks_vasculogenesis"; prob, alg, saveat = EVERY, title, 
                      "A = 100, λ = 50, λ_L = 5, L = 50, χ = 1000, T = 50, D = 0.75, α = ε = 5.4·10⁻³, soft connectivity " *
                      "penalty E₀ = 5000, frozen border (J_cB = 100) with c = 0, 15 field substeps per MCS. 282 cells of 10² " *
                      "(merks2006_layout) on 500×500, 6000 MCS = 50 h (paper: Fig. 4 to 48 h, Fig. 5 to 50 h), seed 1, " *
-                     "SequentialCPM, one frame every 25 MCS; the clock shows MCS and hours. Each cell has its own colour. " *
+                     "SequentialCPM, one frame every 25 MCS; the clock shows MCS and hours. Each cell has its own color. " *
                      rendered_on(),
         "paper" => "Merks et al., Dev. Biol. 289, 44 (2006), Figs. 4-5; reproduction 01",
         "initial_state" => "layout(merks2006_layout(; lattice = (500, 500), seed = $SEED), (500, 500)): 282 square 10×10 cells in the central 333×333, one-site frozen border",

@@ -229,7 +229,7 @@ function akeeb_observables(σ::AbstractMatrix{<:Integer}, kinds::AbstractVector{
     g = A.cell_graph(σ; periodic = (true, false))                       # O1
     seeds = unique(Int(σ[x, 2]) for x in 1:(X - 1) if σ[x, 2] != 0)     # O2
     isempty(seeds) &&
-        throw(ArgumentError("akeeb_observables: no cell owns a site in row y = 2 (x ∈ 1:$(X - 1)), so there is no main tumour"))
+        throw(ArgumentError("akeeb_observables: no cell owns a site in row y = 2 (x ∈ 1:$(X - 1)), so there is no main tumor"))
     M = A.reachable(g, seeds)
     inM = falses(n)
     inM[M] .= true

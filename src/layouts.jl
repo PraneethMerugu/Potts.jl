@@ -768,7 +768,7 @@ _cart(clat, x::NTuple{N, Real}) where {N} = Point{N, Float64}(embed(clat, map(Fl
 
 function _shape_arg(s::HyperSphere, what)
     (all(isfinite, s.center) && isfinite(s.r) && s.r >= 0) ||
-        throw(ArgumentError("$what: a shape needs a finite centre and a finite, non-negative radius, got $s"))
+        throw(ArgumentError("$what: a shape needs a finite center and a finite, non-negative radius, got $s"))
     return s
 end
 

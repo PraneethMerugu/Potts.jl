@@ -34,7 +34,7 @@
 #   + \lambda \sum_{\sigma} (a_\sigma - A)^2 ,
 # ```
 #
-# a contact energy for every pair of neighbouring sites in different cells, and an area
+# a contact energy for every pair of neighboring sites in different cells, and an area
 # constraint that holds each cell's area ``a_\sigma`` near the target ``A``. The medium
 # has no area constraint.
 #
@@ -58,9 +58,9 @@ using Potts, PottsModels
 #
 # `@structural_parameters` holds values that are fixed when the model is compiled, here
 # the lattice size. `@lattice` builds a two-dimensional periodic lattice. `Moore(1)` is the
-# neighbourhood used for contacts: the 8 nearest and next-nearest neighbours, as in the
+# neighborhood used for contacts: the 8 nearest and next-nearest neighbors, as in the
 # paper. `@relations proposal = Moore(1)` makes copy attempts come from the same 8
-# neighbours: the paper copies from "one of the eight neighboring sites" (PRE, p. 2130).
+# neighbors: the paper copies from "one of the eight neighboring sites" (PRE, p. 2130).
 #
 # ## Step 2: cell kinds
 #
@@ -111,10 +111,10 @@ J_dd < (J_dd + J_ll) / 2 < J_dl < J_ll < J_M
 #
 # <<fragment contacts>>
 #
-# The domain `contacts` sums over pairs of neighbouring sites (in the lattice's `Moore(1)`
-# neighbourhood) that belong to different cells: the factor
+# The domain `contacts` sums over pairs of neighboring sites (in the lattice's `Moore(1)`
+# neighborhood) that belong to different cells: the factor
 # ``(1 - \delta_{\sigma_i \sigma_j})`` of Eq. (2). `kind` is the kind of one site's cell
-# and `kind′` that of its neighbour's, so `J[kind, kind′]` is
+# and `kind′` that of its neighbor's, so `J[kind, kind′]` is
 # ``J(\tau(\sigma_i), \tau(\sigma_j))``.
 #
 # You never write the energy *change* of a copy: the compiler derives ``\Delta H`` from
@@ -124,8 +124,8 @@ J_dd < (J_dd + J_ll) / 2 < J_dl < J_ll < J_M
 #
 # <<fragment sweep>>
 #
-# A copy attempt picks a random site and a random neighbour, and proposes to copy the
-# neighbour's cell into the site. `Metropolis` accepts it with probability 1 when
+# A copy attempt picks a random site and a random neighbor, and proposes to copy the
+# neighbor's cell into the site. `Metropolis` accepts it with probability 1 when
 # ``\Delta H \le 0`` and ``e^{-\Delta H / T}`` otherwise (PRE Eq. (3)). One Monte Carlo
 # step (MCS) is as many attempts as the lattice has sites. The paper's MCS is 16 times
 # longer (PRL, p. 2014), so one paper MCS is 16 of ours.
@@ -157,7 +157,7 @@ n = 200
 radius = sqrt(40n / π)
 side = 2ceil(Int, radius) + 1 + 2 * 10
 @named sorting = CellSorting(; lattice = (side, side))
-disk = Circle(Point((side + 1) / 2, (side + 1) / 2), radius)     # centred on the lattice
+disk = Circle(Point((side + 1) / 2, (side + 1) / 2), radius)     # centered on the lattice
 u0 = layout(Voronoi(RandomPoints(n; region = disk, seed = 1); region = disk, lloyd = 30, kinds = [:dark, :light]), sorting)
 first(u0[2].second, 6)
 
@@ -177,7 +177,7 @@ sol = solve(prob, SequentialCPM(); saveat = 0:32:1600)
 
 # ## The run as a movie
 #
-# MakiePotts draws saved states, one colour per kind (dark cells blue, light cells green,
+# MakiePotts draws saved states, one color per kind (dark cells blue, light cells green,
 # medium black). `record_potts` writes the whole solution as a movie:
 
 using MakiePotts, CairoMakie
@@ -232,7 +232,7 @@ lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
 # | Measurement | on a copy annealed for 2 paper MCS at ``T = 0`` (PRE p. 2134) | on the raw states on this page; the paper run's frames are annealed copies, as the PRE displays them |
 # | Target area per kind | one value, except the cavity run (PRE Fig. 28) | one `V₀`; a per-kind table `V₀[kind]` gives the cavity run's targets |
 #
-# Every energy, parameter, neighbourhood and the temperature are the paper's.
+# Every energy, parameter, neighborhood and the temperature are the paper's.
 #
 # ## This model ships as `GranerGlazier`
 #

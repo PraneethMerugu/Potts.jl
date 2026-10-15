@@ -714,7 +714,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     kkey = _unwrap(B.kind)
     kinds = haskey(opd, kkey) ? opd[kkey] : fill(1, ncell)
     kinds = Int32[k isa Symbol ? _kind_index(sys, k) : _kind_number(k) for k in (kinds isa AbstractVector ? kinds : fill(kinds, ncell))]
-    length(kinds) == ncell || throw(ArgumentError("$(length(kinds)) kinds for $ncell labelled cells"))
+    length(kinds) == ncell || throw(ArgumentError("$(length(kinds)) kinds for $ncell labeled cells"))
     nk = length(getfield(sys, :kinds)) - 1
     for k in kinds
         1 <= k <= nk || throw(ArgumentError("kind number $k is out of range: cell kinds are 1:$nk " *
@@ -771,7 +771,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     ckey = _unwrap(B.cluster)
     if c.uses_clusters
         ids = haskey(opd, ckey) ? opd[ckey] : 1:ncell
-        length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labelled cells"))
+        length(ids) == ncell || throw(ArgumentError("$(length(ids)) cluster ids for $ncell labeled cells"))
         rel = c.uses_cluster_surface ? c.relations[:surface] : nothing
         append!(cell, pairs(CorePotts.init_clusters(σ, ids, lat; relation = rel, T, kind = kinds,
             prefer = _cluster_kinds(c))))
@@ -853,7 +853,7 @@ end
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
 function _ref_column(name, v, ncell)
     vals = v isa AbstractArray ? vec(v) : fill(v, ncell)
-    length(vals) == ncell || throw(ArgumentError("$(length(vals)) values of reference `$name` for $ncell labelled cells"))
+    length(vals) == ncell || throw(ArgumentError("$(length(vals)) values of reference `$name` for $ncell labeled cells"))
     for r in vals
         (r isa Integer || (r isa Real && isinteger(r))) && 0 <= r <= ncell ||
             throw(ArgumentError("reference `$name` = $r: a reference is 0 (none) or a cell id in 1:$ncell"))

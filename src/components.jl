@@ -226,7 +226,7 @@ function _reject_ignored_features(comp)
     what(x) = first(join(string.(x), ", "), 200)
     for (field, items, why) in (
             ("initialization_eqs", ModelingToolkitBase.initialization_equations(sys),
-                "Potts does not run MTK initialisation; give the values as variable defaults or in the operating point"),
+                "Potts does not run MTK initialization; give the values as variable defaults or in the operating point"),
             ("discrete_events", ModelingToolkitBase.discrete_events(sys),
                 "write the event as a Potts update (`@after_mcs`) or a discrete component"),
             ("continuous_events", ModelingToolkitBase.continuous_events(sys),
@@ -313,7 +313,7 @@ function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String
         w = _unwrap(v)
         w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && reads(x) &&
             throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression; " *
-                                "Potts takes a component's values as plain numbers (it does not run MTK initialisation)"))
+                                "Potts takes a component's values as plain numbers (it does not run MTK initialization)"))
     end
     return nothing
 end

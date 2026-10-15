@@ -1,7 +1,7 @@
 # Paper run: the OpenVT monolayer reference model of the consortium manuscript (Table S1),
 # `OpenVTReferenceMonolayer`, case (b) of reproduction 15: β = γ = 0 (no contact inhibition),
 # stochastic division threshold X ~ N(2, 0.4), one disc-shaped cell of area A*(0) = 50 at the
-# centre of a closed 1400² lattice, grown until the end of the first MCS with N ≥ 10⁴ cells.
+# center of a closed 1400² lattice, grown until the end of the first MCS with N ≥ 10⁴ cells.
 # Reproduction 15 runs case (b) to 10³ cells (Figures 3 and 5) and the same parameters to 10⁴
 # as case (a); this video follows the 10⁴ stop. The problem is the reproduction's
 # (`p615f_problem` in its frozen test; `video_f3_f8.jl` in `data/15/f3-f8-2026-10-08/`):
@@ -77,7 +77,7 @@ merge!(info, Dict{String, Any}(
     "algorithm" => string(alg), "retcode" => string(sol.retcode),
     "final_cells" => N, "final_mcs" => T_STOP, "final_cycles" => round(T_STOP / CYCLE; digits = 2),
     "parameters" => "Table S1 defaults: A*(0) = 50, λ = 2, T = 20, α = 50/775, J_cc = 20, J_cM = 10, μ_X = 2, σ_X = 0.4; β = γ = 0",
-    "initial_state" => "openvt_reference_state(; lattice = ($L, $L)): one disc of area A*(0) at the centre",
+    "initial_state" => "openvt_reference_state(; lattice = ($L, $L)): one disc of area A*(0) at the center",
     "stop_rule" => "end of the first MCS with N ≥ $N_STOP (stop_at_cells), edge_guard(5; terminate = true)",
     "paper" => "OpenVT consortium, Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition (in preparation), §2.1 and Table S1; reproduction 15, case (b)",
     "deviations" => "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15.",
@@ -85,6 +85,6 @@ merge!(info, Dict{String, Any}(
                  "α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 " *
                  "(β = γ = 0, no contact inhibition): one cell to N = $N cells at MCS $T_STOP " *
                  "($(round(T_STOP / CYCLE; digits = 2)) cell cycles of 775 MCS) on a closed $(L)×$(L) lattice, seed $SEED, " *
-                 "SequentialCPM(; proposal = Moore(1)), one frame every $EVERY MCS. Each cell has its own colour. " *
+                 "SequentialCPM(; proposal = Moore(1)), one frame every $EVERY MCS. Each cell has its own color. " *
                  rendered_on()))
 write_sidecar("openvt_monolayer", info)

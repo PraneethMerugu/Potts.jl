@@ -33,7 +33,7 @@ end
 function _half_offsets(offs::Tuple)
     for o in offs
         all(iszero, o) || map(-, o) in offs ||
-            throw(ArgumentError("stored_energy: the neighbourhood is not symmetric (offset $o without $(map(-, o)))"))
+            throw(ArgumentError("stored_energy: the neighborhood is not symmetric (offset $o without $(map(-, o)))"))
     end
     return [o for o in offs if _positive(o)]
 end

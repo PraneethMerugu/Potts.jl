@@ -209,7 +209,7 @@ function _check_init_reads(x, what)
                 throw(ArgumentError("$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
                                     "initialization is planned (P6.4a)"))
             end
-            throw(ArgumentError("$what reads `$y`, which reads across entities (a neighbour gather, a fold over " *
+            throw(ArgumentError("$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
                                 "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
                                 "initialization is planned (P6.4a)"))
         end

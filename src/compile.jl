@@ -223,7 +223,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         elseif d isa ClusterDomain
             0 in d.kinds && throw(ArgumentError("clusters(…) cannot include the medium kind"))
             _check_names(e.expr, _CLUSTER_BUILTINS, "a cluster term")
-            isempty(_gathers(e.expr)) || throw(ArgumentError("cluster terms reading neighbours are not supported"))
+            isempty(_gathers(e.expr)) || throw(ArgumentError("cluster terms reading neighbors are not supported"))
             push!(cluster_terms, (_all_kinds(sys, d.kinds), e.expr))
         elseif d isa ContactDomain
             _check_names(e.expr, _CONTACT_BUILTINS, "a contact term")
@@ -240,7 +240,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         elseif d isa SiteDomain
             _check_names(e.expr, _SITE_BUILTINS, "a site term")
             _check_static(_strip_populations(e.expr)[1], "a site term")
-            isempty(_gathers(e.expr)) || throw(ArgumentError("site terms reading neighbours are not supported yet"))
+            isempty(_gathers(e.expr)) || throw(ArgumentError("site terms reading neighbors are not supported yet"))
             push!(site_terms, e.expr)
         else
             throw(ArgumentError("unknown energy domain $d"))
@@ -708,7 +708,7 @@ function _check_boundaries(sys::PottsSystem, fields, rn)
                 ax = _AXIS_NAMES[b.axis]
                 lat.geometry isa CorePotts.Hexagonal && throw(ArgumentError(
                     "@boundary $n: face conditions (`$ax => …`) are for square lattices; this lattice is Hexagonal " *
-                    "(its missing neighbours are zero flux); a site mask `sites(…) => Dirichlet(v)` works on every lattice"))
+                    "(its missing neighbors are zero flux); a site mask `sites(…) => Dirichlet(v)` works on every lattice"))
                 b.axis <= N || throw(ArgumentError(
                     "@boundary $n: axis `$ax` does not exist on this $(N)D lattice (its axes are $(join(_AXIS_NAMES[1:N], ", ")))"))
                 lat.periodic[b.axis] && throw(ArgumentError(

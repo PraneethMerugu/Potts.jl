@@ -4,7 +4,7 @@
 # Niculescu et al. (PLoS Comput. Biol. 11, e1004280), single-cell runs (Figs. 2-4): one cell
 # (A = 500, λ_A = 50, P = 340, λ_P = 2) on a wrapped 200×200 lattice, no chemotaxis, runs of
 # 30 000 MCS. The `WortelAct` defaults are the amoeboid set (λ_act = 200, max_act = 20, T = 20).
-# The cell starts as a 23×23 square (area 529) at the centre, as in `test/papers.jl`.
+# The cell starts as a 23×23 square (area 529) at the center, as in `test/papers.jl`.
 #
 #     julia --project=docs docs/paper_runs/wortel_act.jl
 include(joinpath(@__DIR__, "common.jl"))
@@ -33,6 +33,6 @@ paper_run("wortel_act"; prob, alg, saveat = EVERY, title, framerate = 30, panels
     meta = Dict{String, Any}("model" => "WortelAct",
         "caption" => "Paper run — Niculescu et al. (2015) Act model, amoeboid cell (λ_act = 200, max_act = 20): 200×200 torus, 30 000 MCS (paper: same), seed 1. Initial shape: 23×23 square (unstated in the paper).",
         "paper" => "Niculescu, Textor & de Boer, PLoS Comput. Biol. 11, e1004280 (2015), single-cell runs (Figs. 2-4, 30 000 MCS); Wortel et al., Biophys. J. 120, 2609 (2021)",
-        "initial_state" => "one 23×23 square cell (area 529) at the lattice centre",
+        "initial_state" => "one 23×23 square cell (area 529) at the lattice center",
         "save_every_mcs" => EVERY,
         "deviations" => "Initial cell shape not stated in the paper (a 23×23 square here)."))

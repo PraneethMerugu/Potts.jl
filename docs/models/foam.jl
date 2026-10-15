@@ -1,11 +1,11 @@
 # # [A sheared two-dimensional foam](@id model-foam)
 #
 # A dry foam is a packing of gas bubbles separated by thin walls. Jiang, Swart, Saxena,
-# Asipauskas and Glazier (1999) modelled it as a cellular Potts model: one cell per bubble,
-# a wall energy, an area constraint, and a shear term that favours copies along x. Shear is
+# Asipauskas and Glazier (1999) modeled it as a cellular Potts model: one cell per bubble,
+# a wall energy, an area constraint, and a shear term that favors copies along x. Shear is
 # applied either at the boundary rows only or across the whole foam (bulk shear). Under
 # slow shear the foam first stores energy in its walls like an elastic solid. Then bubbles
-# swap neighbours (T1 events), often several at once, and the stored energy drops; the
+# swap neighbors (T1 events), often several at once, and the stored energy drops; the
 # foam flows. PottsModels ships the model as `ShearedFoam`, and this page runs it.
 #
 # The comparison with the paper's figures is the foam reproduction page (reproduction 04),
@@ -42,7 +42,7 @@ sheared = solve(remake(prob; u0 = [ownership => Array(relaxed.σ); start[2:3]], 
     alg; saveat = 0:20:4000)
 nothing #hide
 
-# The run, one colour per bubble, the lattice filling the frame:
+# The run, one color per bubble, the lattice filling the frame:
 
 bare = (; limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false, yticksvisible = false,
     xticklabelsvisible = false, yticklabelsvisible = false, xgridvisible = false, ygridvisible = false,
@@ -56,8 +56,8 @@ nothing #hide
 # <video src="boundary_shear.mp4" controls autoplay loop muted playsinline width="512"></video>
 # ```
 #
-# The stored energy (the number of unlike neighbour pairs, relative to the start) rises while
-# the foam deforms and drops when bubbles swap neighbours; the second panel counts the T1
+# The stored energy (the number of unlike neighbor pairs, relative to the start) rises while
+# the foam deforms and drops when bubbles swap neighbors; the second panel counts the T1
 # events.
 
 using PottsModels.Analysis: stored_energy, cell_graph, t1_events
@@ -114,7 +114,7 @@ fig
 # end
 # ```
 #
-# The energy is a wall energy `J` over the 20 neighbours up to the fourth shell and an area
+# The energy is a wall energy `J` over the 20 neighbors up to the fourth shell and an area
 # constraint per bubble. The drive adds, for a copy from a source site into a target site,
 # a bias proportional to the x displacement `direction[1]`: on the two boundary rows only
 # (`γ0`), or growing linearly with the distance from the mid-plane (`β`, `bulk = 1`),

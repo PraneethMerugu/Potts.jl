@@ -1,6 +1,6 @@
 # # [Vasculogenesis by chemotaxis and cell elongation](@id model-merks)
 #
-# Endothelial cells spread on Matrigel organise themselves into a polygonal network of
+# Endothelial cells spread on Matrigel organize themselves into a polygonal network of
 # cords, the first step of blood-vessel formation (vasculogenesis). The cells secrete a
 # chemoattractant and move up its gradient. Merks and coworkers (2006) found that in a
 # cellular Potts model this chemotaxis alone gathers the cells into round islands, and that
@@ -42,9 +42,9 @@
 #   + \lambda \sum_\sigma (a_\sigma - A)^2 + \lambda_L \sum_\sigma (l_\sigma - L)^2 .
 # ```
 #
-# A copy from site ``x`` into its neighbour ``x'`` changes the energy by an extra
+# A copy from site ``x`` into its neighbor ``x'`` changes the energy by an extra
 # chemotaxis term, Eq. (2), ``\Delta H_{\text{chemotaxis}} = \chi\,(c(x) - c(x'))``
-# (``\gamma`` in the paper): copies up the gradient are favoured. The chemoattractant
+# (``\gamma`` in the paper): copies up the gradient are favored. The chemoattractant
 # ``c`` obeys Eq. (6),
 #
 # ```math
@@ -58,7 +58,7 @@
 #
 # `Merks2006` is the 2006 model as the paper and the authors' code define it:
 #
-# - **Energy** (Eqs. 1, 4, 5): contacts over the 8 Moore neighbours, ``\lambda (a - A)^2``
+# - **Energy** (Eqs. 1, 4, 5): contacts over the 8 Moore neighbors, ``\lambda (a - A)^2``
 #   and ``\lambda_L (l - L)^2`` for every endothelial cell, with ``l = 4\sqrt{\lambda_b/a}``
 #   (`major_length`).
 # - **Chemotaxis** at every copy (Eq. 2): ``-\chi\,(f(c(x')) - f(c(x)))`` with
@@ -142,7 +142,7 @@ nothing #hide
 # <video src="merks2006.mp4" controls autoplay loop muted playsinline width="420"></video>
 # ```
 #
-# Each cell has its own colour; the frozen border is cropped from the view.
+# Each cell has its own color; the frozen border is cropped from the view.
 #
 # ```@docs
 # Merks2006
@@ -155,7 +155,7 @@ nothing #hide
 # Merks et al. (2008) drop the length constraint and make chemotaxis contact-inhibited:
 # it acts only at cell–matrix interfaces (``\chi(c, M) = 500``, ``\chi(c, c) = 0``), which
 # turns a dispersed population into a network and a compact cluster into sprouts. Its
-# other changes: contacts and copies over the 20 neighbours of `NeighborOrder(4)` (first to
+# other changes: contacts and copies over the 20 neighbors of `NeighborOrder(4)` (first to
 # fourth order), a two-site frozen border, smaller cells (``A = 50``, ``\lambda = 25``),
 # ``\alpha = \varepsilon = 0.03``, and no field for the first ``t_\text{relax} = 100`` MCS
 # (the authors' relaxation). Its time origin is the authors' loop counter, which includes
@@ -191,8 +191,8 @@ nothing #hide
 # - no frozen border: the closed lattice walls cost nothing (paper: ``J(c, B) = 100``);
 # - the field has a zero-flux boundary (the authors' code holds ``c = 0`` on the border);
 # - the field is stepped after the sweep, not before it, and is clipped at 0;
-# - its 2008 switch (`contact_inhibited = true`) keeps 8 Moore neighbours, the 2006 cell
-#   size and no saturation (`Merks2008` uses 20 neighbours and the 2008 set).
+# - its 2008 switch (`contact_inhibited = true`) keeps 8 Moore neighbors, the 2006 cell
+#   size and no saturation (`Merks2008` uses 20 neighbors and the 2008 set).
 #
 # The parameters are the 2006 set. The rest of this section builds it.
 #
@@ -200,7 +200,7 @@ nothing #hide
 #
 # <<fragment lattice>>
 #
-# The lattice is closed (no wrap-around), with Moore contacts (the paper's 8 neighbours)
+# The lattice is closed (no wrap-around), with Moore contacts (the paper's 8 neighbors)
 # and copies (from the authors' code). The paper's border differs; see the table at the
 # end.
 # `contact_inhibited` is a second structural parameter: it selects one of two chemotaxis
@@ -250,7 +250,7 @@ nothing #hide
 # A *drive* adds a term to ``\Delta H`` of every copy without being part of ``H``.
 # Chemotaxis is one: it biases copies but stores no energy. In a copy, `source` is the site
 # copied from and `target` the site copied into, so `-χ * (c[target] - c[source])` is
-# Eq. (2): negative, hence favoured, when the cell extends up the gradient.
+# Eq. (2): negative, hence favored, when the cell extends up the gradient.
 #
 # The `if` is evaluated when the model is constructed. With `contact_inhibited = true` the
 # drive acts only when a cell extends into the medium (`old == 0`: the target belonged to
@@ -271,9 +271,9 @@ nothing #hide
 #
 # <<fragment constraint>>
 #
-# A constraint vetoes copies. The paper penalises copies that would split a cell
+# A constraint vetoes copies. The paper penalizes copies that would split a cell
 # (an energy threshold above 2000, p. 49); here such copies are forbidden outright. The
-# default rule, `Local()`, decides from the 8 neighbours of the target site whether the
+# default rule, `Local()`, decides from the 8 neighbors of the target site whether the
 # losing cell stays in one piece (see [Connectivity](@ref manual-connectivity)).
 #
 # ### Step 9: the sweep
@@ -323,7 +323,7 @@ round_cells = solve(remake(prob; p = [:λ_L => 0.0]), SequentialCPM(); saveat = 
 
 # ### The runs as movies
 #
-# `record_potts` writes a solution as a movie; each cell has its own colour.
+# `record_potts` writes a solution as a movie; each cell has its own color.
 
 record_potts("merks/elongated.mp4", sol; framerate = 15, title = "elongated cells (λ_L = 5)",
     encoding = CellIdentityEncoding(), figure = (; size = (400, 400)))
@@ -369,13 +369,13 @@ fig
 # | Initial cells | shape not stated | 10 × 10 squares |
 # | Lattice border | frozen border cells with ``J = 100`` against cells | closed walls that cost nothing |
 # | Field at the border | the authors' code holds ``c = 0`` on an absorbing border ring | zero flux |
-# | Contact-inhibited variant (2008) | 20 neighbours for contacts and copies (the authors' parameter files) | `contact_inhibited = true` keeps the 8 Moore neighbours |
+# | Contact-inhibited variant (2008) | 20 neighbors for contacts and copies (the authors' parameter files) | `contact_inhibited = true` keeps the 8 Moore neighbors |
 # | Acceptance | Metropolis with a dissipation threshold ``E_0`` (Eq. (3)), value not given | plain Metropolis |
 # | Connectivity | an energy penalty above 2000 (p. 49) | a hard veto |
 # | Field integration | 15 explicit substeps per MCS (p. 49) | the same, `ExplicitEuler(substeps = 15)`, clipped at 0 |
 #
 # The cell size, contact energies, temperature, chemotaxis strength, the field
-# integration, the diffusion, secretion and decay rates inside the lattice, the 2006 model's neighbourhoods and the cell density
+# integration, the diffusion, secretion and decay rates inside the lattice, the 2006 model's neighborhoods and the cell density
 # are the paper's.
 #
 # ### This variant ships as `MerksVasculogenesis`

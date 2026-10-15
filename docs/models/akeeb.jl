@@ -1,6 +1,6 @@
-# # [Leader–follower tumour invasion](@id model-akeeb)
+# # [Leader–follower tumor invasion](@id model-akeeb)
 #
-# Tumours invade the surrounding tissue in several ways: as single cells, as fingers or
+# Tumors invade the surrounding tissue in several ways: as single cells, as fingers or
 # as detached clusters. In many carcinomas a minority of *leader* cells, which sense and
 # follow cues in the matrix, pulls a majority of *follower* cells behind it. Akeeb, Marcus
 # and Jiang (2026) model a slab of followers seeded with leaders, and map how adhesion
@@ -54,7 +54,7 @@ using Potts, PottsModels
 # <<fragment lattice>>
 #
 # 500 × 300 sites, periodic along ``x`` and closed along ``y`` (paper p. 4). Contacts
-# use the 8 neighbours and copies the 4 nearest, as in the authors' CompuCell3D files.
+# use the 8 neighbors and copies the 4 nearest, as in the authors' CompuCell3D files.
 #
 # ## Step 2: cell kinds
 #
@@ -104,7 +104,7 @@ using Potts, PottsModels
 # <<fragment constraints>>
 #
 # `connectivity(leader, follower)` forbids copies that would split a leader or a
-# follower: the cell losing the target site must keep its neighbours of that site in one
+# follower: the cell losing the target site must keep its neighbors of that site in one
 # arc (CompuCell3D's `Connectivity` plugin, used by the authors; the default rule
 # `Local()`, see [Connectivity](@ref manual-connectivity)). `no_extinction` forbids
 # copies that take a cell's last site.
@@ -220,8 +220,8 @@ axislegend(ax; position = :lt)
 fig
 
 # The paper measures the final front with the authors' analysis code: the areas under the
-# top of the main tumour (invasive) and under the top of any cell (infiltrative), both
-# above the tumour's lowest top; the fingers of the front; single leaders; detached
+# top of the main tumor (invasive) and under the top of any cell (infiltrative), both
+# above the tumor's lowest top; the fingers of the front; single leaders; detached
 # cells; and clusters that contain a follower.
 # `akeeb_observables` computes exactly these quantities (built from the
 # `PottsModels.Analysis` tools) at a state. Here they are for this run at the authors'
@@ -250,7 +250,7 @@ Markdown.parse("""
 # | Leader cue | a potential ``-\lambda \sum_x c(x)`` over leader sites (Eq. (1)) | CompuCell3D's per-copy chemotaxis, ``-\mu\,(c(\text{target}) - c(\text{source}))`` when a leader gains or loses the site |
 # | Leaders at the start | 25% of the followers "reassigned" (p. 5) | one-site leaders inserted into followers; missed draws counted, so about 382 painted for 390 counted |
 # | Division time | one draw from ``U(25, 125)`` MCS per cycle (p. 6) | a fresh test every MCS: clock ``> 75 + 50\,U`` |
-# | Neighbourhoods | not stated | contacts over 8 neighbours, copies from 4 (CompuCell3D orders 2 and 1) |
+# | Neighborhoods | not stated | contacts over 8 neighbors, copies from 4 (CompuCell3D orders 2 and 1) |
 # | ``y`` boundary | not stated | a closed wall (the CompuCell3D default) |
 # | Connectivity | not mentioned | every cell kept in one piece (CompuCell3D `Connectivity`) |
 # | Time | 700 MCS (701 CompuCell3D steps) | 701 MCS (the authors' MCS 700) |

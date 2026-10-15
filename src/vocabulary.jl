@@ -504,7 +504,7 @@ mean(itr) = sum(itr) / length(itr)
 """
 function _gather(fold, body, a::Around, cond = nothing; adjacency = nothing)
     op = nameof(fold)
-    op in FOLDS || throw(ArgumentError("`$op` is not a recognised fold over a relation; use one of $FOLDS"))
+    op in FOLDS || throw(ArgumentError("`$op` is not a recognized fold over a relation; use one of $FOLDS"))
     op === :pieces && !(a.relation isa ShellRelation) && _not_shell()
     adjacency === nothing || op === :pieces ||
         throw(ArgumentError("`$op` over a relation takes no `adjacency`; only `pieces` does"))
@@ -855,7 +855,7 @@ struct ShellRelation end
 const shell = ShellRelation()
 function (s::ShellRelation)(anchor; kws...)
     isempty(kws) || throw(ArgumentError("shell($anchor; $(join(keys(kws), ", "))): the shell takes no options; it is " *
-                                        "the target's neighbour shell without the target itself (no `include_self`)"))
+                                        "the target's neighbor shell without the target itself (no `include_self`)"))
     return Around(s, _shell_anchor(anchor))
 end
 # the shell is anchored at a site (`target`, `source`), never at a cell

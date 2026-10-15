@@ -1,4 +1,4 @@
-# Paper run: Akeeb, Marcus & Jiang (2026) leader/follower tumour invasion.
+# Paper run: Akeeb, Marcus & Jiang (2026) leader/follower tumor invasion.
 #
 # The authors' released reference sample `Sample/Multimodal_invasion` (J_LF = 2, λ = μ = 24,
 # PP = 0.5): the published 500×300 slab (`akeeb_state`), run for the CompuCell3D source's

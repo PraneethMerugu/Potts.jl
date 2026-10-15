@@ -4,11 +4,11 @@
 #     This page builds the Act model and runs it as a tutorial. Unlike the other pages of
 #     this section, it does not compare the model's results with the papers' figures.
 #
-# A crawling cell pushes its front forward by polymerising actin, and newly protruded
+# A crawling cell pushes its front forward by polymerizing actin, and newly protruded
 # regions are the most active. Niculescu, Textor and de Boer (2015) captured this with one
 # extra rule in the cellular Potts model: every site remembers how recently its cell
-# gained it, and copies that extend from active regions are favoured. The positive
-# feedback makes cells polarise and crawl persistently. Wortel and coworkers (2021) used
+# gained it, and copies that extend from active regions are favored. The positive
+# feedback makes cells polarize and crawl persistently. Wortel and coworkers (2021) used
 # the same model to study how speed and persistence are coupled. This page builds it.
 #
 # **What you will learn**
@@ -16,7 +16,7 @@
 # - how a per-site variable stores a memory that the cell writes as it moves;
 # - how `@on_copy` updates a site at the moment it changes owner, and `@after_mcs` after
 #   every MCS;
-# - how a drive reads a neighbourhood of a site, through a helper function;
+# - how a drive reads a neighborhood of a site, through a helper function;
 # - how a perimeter constraint enters the energy;
 # - how to follow a migrating cell on a periodic lattice.
 #
@@ -43,8 +43,8 @@
 # ```
 #
 # where ``\mathrm{GM}(s)`` is the geometric mean of the activity over ``s`` and its
-# neighbours that belong to the same cell (zero for the medium). Extending from an active
-# region into a less active one is favoured; retracting an active region is penalised.
+# neighbors that belong to the same cell (zero for the medium). Extending from an active
+# region into a less active one is favored; retracting an active region is penalized.
 
 # ## The paper run
 #
@@ -89,7 +89,7 @@ using Potts, PottsModels
 # <<fragment shape>>
 #
 # An area constraint and a perimeter constraint. `surface` is the built-in cell
-# perimeter: the number of (site, Moore neighbour) pairs in which the neighbour belongs to
+# perimeter: the number of (site, Moore neighbor) pairs in which the neighbor belongs to
 # another cell or the medium.
 #
 # <<fragment contacts>>
@@ -99,7 +99,7 @@ using Potts, PottsModels
 # <<fragment drive>>
 #
 # A model can define helper functions of a site. `Moore(1; include_self = true)(s)` lists
-# `s` and its 8 neighbours, `owner[n]` is the cell that owns site `n`, and `geomean` is the
+# `s` and its 8 neighbors, `owner[n]` is the cell that owns site `n`, and `geomean` is the
 # geometric mean (zero if any value is zero). So `act_mean(s)` is ``\mathrm{GM}(s)``, and
 # the drive is ``\Delta H_{\text{Act}}``. The medium's sites have zero activity, so its
 # ``\mathrm{GM}`` is zero.
@@ -119,7 +119,7 @@ using Potts, PottsModels
 #
 # At high ``\lambda_{\text{Act}}`` a cell can tear apart, as Wortel et al. report. With
 # `connected = true` copies that would split a cell are forbidden by an "arc or pair"
-# rule on the 8 neighbours of the target site: the copy is allowed if the losing cell
+# rule on the 8 neighbors of the target site: the copy is allowed if the losing cell
 # forms at most one arc on that ring, or if exactly two cells and no medium are on it.
 # This is the connectivity rule Niculescu et al. use in their multicellular runs.
 #
@@ -156,8 +156,8 @@ still = solve(remake(prob; p = [:λ_act => 0.0]), SequentialCPM(); saveat = 0:10
 #
 # The movie shows the cell on the whole torus (left) and, next to it, its activity
 # `sol[:act]`, the memory that drives it (right). The right panel follows the cell: it
-# shows the 80 × 80 sites around the cell's centre, with the activity drawn only inside
-# the cell. On a torus the centre is a circular mean along each axis, and `circshift`
+# shows the 80 × 80 sites around the cell's center, with the activity drawn only inside
+# the cell. On a torus the center is a circular mean along each axis, and `circshift`
 # moves the cell to the middle of the window even when it crosses an edge.
 
 using Statistics: mean
@@ -169,7 +169,7 @@ function centre(u)
     end
 end
 acts = sol[:act]
-function act_window(i)            # activity inside the cell, centred on it, 80 × 80 sites
+function act_window(i)            # activity inside the cell, centered on it, 80 × 80 sites
     a = [s == 1 ? x : NaN for (x, s) in zip(acts[i], sol.u[i].σ)]
     c = round.(Int, centre(sol.u[i]))
     return circshift(a, (L ÷ 2 - c[1], L ÷ 2 - c[2]))[61:140, 61:140]
@@ -198,12 +198,12 @@ nothing #hide
 # <video src="act.mp4" controls autoplay loop muted playsinline width="660"></video>
 # ```
 #
-# The cell polarises and crawls. Fresh, fully active sites (bright) mark its front; the
+# The cell polarizes and crawls. Fresh, fully active sites (bright) mark its front; the
 # activity fades (dark) towards the rear.
 
 # ## Measuring migration
 #
-# Summing the shortest step between saved centres (through the wrap) gives the unwrapped
+# Summing the shortest step between saved centers (through the wrap) gives the unwrapped
 # path:
 
 CairoMakie.activate!(type = "png")
@@ -229,7 +229,7 @@ fig
 #
 # | | Niculescu et al. (2015) | Here |
 # |:--|:--|:--|
-# | Implementation | the Tissue Simulation Toolkit | the semantics of Artistoo, the authors' later reference code (Wortel et al. 2021): activity written on copy, decay after each MCS, geometric mean over the Moore neighbours of the same cell |
+# | Implementation | the Tissue Simulation Toolkit | the semantics of Artistoo, the authors' later reference code (Wortel et al. 2021): activity written on copy, decay after each MCS, geometric mean over the Moore neighbors of the same cell |
 # | Connectivity | used in the multicellular runs: a split is allowed when exactly two cells and no medium are on the ring | off by default; `connected = true` adds the same rule |
 # | Run length | long tracks for speed and persistence statistics | one 1000-MCS track |
 # | Initial cell shape | not stated | a 22 × 22 square |

@@ -82,7 +82,7 @@ host when a problem is built (and by [`recompute_euler`](@ref)).
 function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N}
     for d in 1:N
         lat.periodic[d] && lat.dims[d] == 1 && throw(ArgumentError(
-            "`$quantity` reads the target's neighbour shell, which needs every periodic axis to have " *
+            "`$quantity` reads the target's neighbor shell, which needs every periodic axis to have " *
             "length ≥ 2: axis $d is periodic with length 1, so the shell wraps onto the target itself; " *
             "use a $(N - 1)D lattice, or make axis $d Closed (or longer)"))
     end
