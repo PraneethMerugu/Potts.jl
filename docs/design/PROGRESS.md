@@ -2412,3 +2412,8 @@ The maintainer approved F-1…F-6 (D-049).
 - **Cost.** Generated code for models that do not use the helpers is unchanged (16/16 gate fingerprints), so no A/B (D-242).
 - **Review.** Adversarial APPROVE after three rounds (fixed: `uses_clusters` missed `over = cluster`; `_check_geometry` gaps; a dead slot read its cluster's sum; a `@boundary` mask with `centroid` crashed; E6 docs).
 - **Tests.** The branch's own PC run failed only in `test/device_ir.jl`, which predates 73dfe2b2 (GPUCompiler 2's ScopedValue hook) and stopped the GPU group early. On the merged tree (with 73dfe2b2) every PC suite passes, GPU included, and so does the docs build.
+
+## 2026-10-15 — No deprecation aliases (D-249 amendment)
+
+- **What.** `openvt_colony_panel!` loses the `colour`/`state_colours` aliases and their `Base.depwarn` blocks (user: no deprecation warnings or refactor bloat until the paper is released). The two `colou?rs` assertions of `15_openvt_checkerboard_page.jl` noted in the frozen-pages entry above are back to their original form with `colors`. `page_quotes.jl` maps only "characteris".
+- **Frozen.** `15_openvt_f1_f4.jl` and `15_openvt_checkerboard_page.jl` re-pinned under D-249; the user's approval of the re-pins is batched with the shim audit.
