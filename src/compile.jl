@@ -120,6 +120,14 @@ _visible(names) = filter(n -> !(n in (:site′, :euler_full, :pieces_full, :larg
 # `between_copies`: `x` is evaluated between copy attempts (updates, divisions, equations),
 # not inside ΔH, so population bodies may read cluster trackers.
 function _check_names(x, allowed, what; between_copies::Bool = false)
+    # an integral's operand is a site expression, lowered in site scope: checked there (the
+    # owner reads of `integral(x; over = cluster)`'s operand, `volume[owner]`, D-243)
+    ints = Dict{Any, Any}()
+    _walk(y -> (iscall(y) && operation(y) === cell_integral && (ints[y] = 0)), _unwrap(x))
+    if !isempty(ints)
+        foreach(y -> _check_names(arguments(y)[1], _SITE_BUILTINS, "the site expression of `integral`"), keys(ints))
+        x = Symbolics.substitute(_unwrap(x), ints; fold = Val(false))
+    end
     x, pops = _strip_populations(x)
     for p in pops                                  # population bodies have their own scope
         n, body, cond = arguments(p)
@@ -214,6 +222,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     for e in getfield(sys, :energies)
         d = e.domain
         _located(sys, e) do
+        _check_energy_geometry(e.expr)
         d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_copy_reads(e.expr, d, copy_sites, copy_cells)
         _check_energy_refs(e.expr, d)
         if d isa CellDomain
@@ -398,13 +407,15 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
         writers[k] = u
     end
-    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length)
+    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length) ||
+                   _has_op(x, ref_centroid) || _has_op(x, ref_separation)
     needs_moments = !isempty(getfield(sys, :divisions)) || !isempty(relationships) || !isempty(converts) ||
                     any(geometric, Any[(e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
                         (u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
                         (o.expr for o in getfield(sys, :observed))..., (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)...,
                         (r.when for r in getfield(sys, :link_rules))..., getfield(sys, :sweep).temperature,
-                        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...])
+                        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))..., tick_exprs...,
+                        _boundary_exprs(sys)...])
 
     # relations: contact (ctx.contact), surface, named, gathers
     contact_spec = get(getfield(sys, :relations), :contact, getfield(sys, :lattice).neighborhood)
@@ -468,7 +479,8 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
         "conversion pass yet; a model with `@convert` cannot read them"))
     uses_clusters = cluster_division || uses_cluster_surface || any(v -> v.domain isa ClusterDomain, converts) ||
-                    any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume), scanned)
+                    any(x -> _uses_builtin(x, :cluster) || _uses_builtin(x, :cluster_volume) ||
+                             _has_op(x, cluster_integral_sum), scanned)
     (uses_surface || uses_cluster_surface) && !haskey(relations, :surface) &&
         (relations[:surface] = getfield(sys, :lattice).neighborhood)
     radius_read = 1
@@ -1144,18 +1156,23 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     end
     for b in getfield(sys, :discrete)
         env = b.scope === :cell ? cellenv : _model_env(T, rn; key = :key)
-        _located(() -> foreach(x -> (lower(x, env); _check_geometry(x, length(getfield(sys, :lattice).dims))), b.next), sys, b)
+        _located(() -> foreach(x -> (lower(x, env); _check_geometry(x, length(getfield(sys, :lattice).dims);
+                                                                    hex = _is_hex(sys))), b.next), sys, b)
     end
     # geometry axes, and names the lowering environments cannot rule out
     N = length(getfield(sys, :lattice).dims)
+    hex = _is_hex(sys)
     for e in getfield(sys, :energies)
-        _located(() -> _check_geometry(e.expr, N; energy = true), sys, e)
+        _located(() -> _check_geometry(e.expr, N; energy = true, hex), sys, e)
     end
     for (x, items) in ((d -> d.expr, getfield(sys, :drives)), (c -> c.kind === :expr ? c.expr : 0, getfield(sys, :constraints)),
             (u -> u.eq.rhs, getfield(sys, :updates)), (eq -> eq.rhs, getfield(sys, :equations)),
-            (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)))
-        foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N), vcat(x(i))), sys, i), items)
+            (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)),
+            (_convert_exprs, getfield(sys, :converts)), (r -> r.when, getfield(sys, :link_rules)),
+            (b -> _boundary_exprs(b), getfield(sys, :boundaries)))
+        foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N; hex), vcat(x(i))), sys, i), items)
     end
+    _located(() -> _check_geometry(getfield(sys, :sweep).temperature, N; hex), sys, getfield(sys, :sweep))
     # `integral(Pre(x))` is the block-start fold of an update block (D-042). Outside the
     # blocks `Pre(x)` is the stored value, so the integral would silently be another one.
     for (x, items) in ((eq -> eq.rhs, getfield(sys, :equations)), (d -> [d.when; [r for (_, r) in d.rules if !(r isa Split)]], getfield(sys, :divisions)),
@@ -1165,7 +1182,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     _located(() -> _check_integral_pre_outside(getfield(sys, :sweep).temperature), sys, getfield(sys, :sweep))   # D-133
     for o in getfield(sys, :observed)
         _located(sys, o) do
-            _check_geometry(o.expr, N)
+            _check_geometry(o.expr, N; hex)
             _has_op(o.expr, history_lag) &&
                 throw(ArgumentError("`Pre(x, k)` is not available in @observed; keep the lag in a variable updated @after_mcs"))
             _has_op(o.expr, random_uniform) &&
@@ -1202,12 +1219,44 @@ function _check_copy_integral(x, what; when = "every copy attempt")
     return nothing
 end
 
+# The expressions of a `@boundary` entry, lowered in site scope at the field step: a site
+# mask and its value, or a face's `Dirichlet` values
+_boundary_exprs(b::BoundaryEntry) = b.axis == 0 ? Any[b.mask, b.value] :
+                                    Any[s.value for s in b.sides if s isa Dirichlet]
+_boundary_exprs(sys::PottsSystem) = Any[x for b in getfield(sys, :boundaries) for x in _boundary_exprs(b)]
+
+_is_hex(sys) = core_lattice(getfield(sys, :lattice)).geometry isa CorePotts.Hexagonal
+
+_energy_centroid_error(name) = ArgumentError("`$name` is not available in energies: a copy moves the centroids it " *
+                                              "reads and that shift is not part of ΔH (D-032); read it in cell " *
+                                              "updates or @observed, or use `displacement(c, k)` in a @drive")
+
+# The E7 helpers an energy may not read (D-243), refused before the reference checks so the
+# error names the helper: `centroid(c, k)` and `separation` (no ΔH, D-032 until R7) and
+# `integral(x; over = cluster)` (refreshed once per MCS, as `integral`)
+function _check_energy_geometry(E)
+    _has_op(E, ref_centroid) && throw(_energy_centroid_error("centroid"))
+    _has_op(E, ref_separation) && throw(_energy_centroid_error("separation"))
+    _has_op(E, cluster_integral_sum) && throw(ArgumentError(
+        "`integral(x; over = cluster)` is not available in energies (it is refreshed once per MCS, so it has no ΔH)"))
+    return nothing
+end
+
 """Axes of `centroid`/`displacement` and of the copy-scope `direction[k]` and `position[s][k]`
 (D-188) must be literal lattice axes; `centroid` has no ΔH in energies."""
-function _check_geometry(x, N; energy = false)
+function _check_geometry(x, N; energy = false, hex = false)
     _walk(x) do y
         iscall(y) || return
         op = operation(y)
+        if op === ref_centroid || op === ref_separation || op === axis_minimum_image
+            name = op === ref_centroid ? "centroid" : op === ref_separation ? "separation" : "minimum_image"
+            energy && op !== axis_minimum_image && throw(_energy_centroid_error(name))
+            hex && op === axis_minimum_image && throw(ArgumentError(_HEX_MINIMUM_IMAGE))
+            k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[end]))
+            (k isa Real && isinteger(k) && 1 <= k <= N) ||
+                throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+            return
+        end
         if op === cell_integral
             energy && throw(ArgumentError("`integral` is not available in energies (it is refreshed once per MCS, " *
                                           "so it has no ΔH); write the site term in the energy instead"))

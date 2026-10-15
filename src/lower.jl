@@ -155,6 +155,31 @@ function lower(x, env::LowerEnv)
         haskey(env.bind, :__cell) || error("`integral(x)` is per cell: use it in cell updates, division conditions or observed quantities")
         return :(Potts._cellval(st.cell.$(_integral_name(args[1])), $(env.bind[:__cell])))
     end
+    # the E7 geometry helpers (D-243)
+    if op === cluster_integral_sum
+        haskey(env.bind, :__cell) || throw(ArgumentError(
+            "`integral(x; over = cluster)` is per cell (the sum over the cell's cluster): use it in cell updates, " *
+            "division conditions or observed quantities, not in $(_MODE_NAMES[env.mode])"))
+        y = _unwrap(args[1])
+        return :(Potts._over_cluster(st.cell, st.cell.$(_integral_name(arguments(y)[1])), $(env.bind[:__cell])))
+    end
+    if op === ref_centroid || op === ref_separation
+        name = op === ref_centroid ? "centroid(c, k)" : "separation(a, b)"
+        # between sweeps (cell, model and site scope: updates, field equations, `@convert`
+        # decisions, @observed); energies are refused before lowering (`_check_energy_geometry`)
+        env.mode in (:cell, :model, :site) || throw(ArgumentError(
+            "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
+            "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"))
+        k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
+        op === ref_centroid &&
+            return :(Potts._ref_centroid_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $k))
+        return :(Potts._separation_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $(lower(args[2], env)), $k))
+    end
+    if op === axis_minimum_image
+        k = _literal_axis("minimum_image", args[2])
+        _PIECES_HEX[] && throw(ArgumentError(_HEX_MINIMUM_IMAGE))
+        return :(Potts._minimum_image_axis($(env.T), ctx.lattice, $(lower(args[1], env)), $k))
+    end
     if op === history_lag
         (haskey(env.bind, :mcs) && env.mode !== :proposal) || error("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))")
         _walk(args[1]) do y
@@ -319,6 +344,58 @@ function _history_depths(xs::Vector{Any})
         end
     end
     return depths
+end
+
+# the axis `k` of a geometry helper: a literal integer, and an axis of the lattice of the
+# model being generated (`_check_geometry` refuses it when the model is built; this guards
+# every context that check may not reach, so no kernel indexes past the lattice's axes)
+function _literal_axis(name, x)
+    k = _unwrap(x)
+    k isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
+    (k isa Real && !(k isa Bool) && isinteger(k)) ||
+        throw(ArgumentError("`$name`: the axis is a literal axis of the lattice (1, 2, …); got `$x`"))
+    N = length(_LATTICE_DIMS[])
+    N == 0 || 1 <= k <= N || throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+    return Int(k)
+end
+const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a displacement on a hexagonal lattice " *
+                           "(the nearest image may be a diagonal one); use `separation(a, b)`"
+
+"""Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
+periodic axes wrapped); 0 when `r` is 0, out of range or dead (D-066)."""
+@inline function _ref_centroid_axis(::Type{T}, cell, lat, r, k) where {T}
+    _alive_slot(cell.volume, r) || return zero(T)
+    return CorePotts.centroid_position(T, cell, lat, Int(r))[k]
+end
+
+"""Component `k` of the embedded minimum-image `centroid(a) − centroid(b)`; 0 unless both
+referents are alive."""
+@inline function _separation_axis(::Type{T}, cell, lat, a, b, k) where {T}
+    (_alive_slot(cell.volume, a) && _alive_slot(cell.volume, b)) || return zero(T)
+    return CorePotts.centroid_separation(T, cell, lat, Int(a), Int(b))[k]
+end
+
+"""`d` on axis `k`: on a periodic axis of length L, `d − L round(d / L)` (the image nearest 0;
+a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
+@inline function _minimum_image_axis(::Type{T}, lat, d, k) where {T}
+    x = _tofloat(T, d)
+    lat.periodic[k] || return x
+    L = T(lat.dims[k])
+    return x - L * round(x / L)
+end
+
+"""Column `col` (an integral) summed over the alive members of cell `c`'s compartment
+cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot (D-066)."""
+# O(capacity) per cell, so O(capacity²) per refresh; member lists could replace the scan.
+@inline function _over_cluster(cell, col, c)
+    s = zero(eltype(col))
+    _alive_slot(cell.volume, c) || return s           # (also checks 0 < c ≤ capacity)
+    haskey(cell, :cluster) || return col[c]
+    cl = cell.cluster[c]
+    for m in eachindex(col)
+        (cell.volume[m] > 0 && cell.cluster[m] == cl) && (s += col[m])
+    end
+    return s
 end
 
 """Centroid of cell `c` along axis `k` (0 for the medium and empty slots)."""

@@ -2405,3 +2405,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Page 15's self-check.** `page_quotes.jl` (checkerboard record, not frozen) builds the phrases page 15 must contain. It now emits American spelling, and maps the record's `author_question` text for display; the record itself is unchanged.
 - **Review.** Adversarial REQUEST CHANGES (the self-check would have failed the docs build), then APPROVE; three LOW leftovers in Markdown tables were fixed before merge.
 - **Tests.** PC suites and the docs build pass, including `15_openvt_d213.jl` with the bulk package directory. The docs build also covers part 2 of the spelling pass (393b2713).
+
+## 2026-10-15 — P6.5a2: named pairs and the reference geometry helpers merged (D-243)
+
+- **What.** E2 `Pairs(default = d, (k1, k2) => v, …)` for contact matrices, lowered to the written-out form at no runtime cost. E7 helpers `centroid(c, k)`, `minimum_image(d, axis)`, `separation(a, b)` and `integral(x; over = cluster)` (the maintainer's spelling of `cluster_integral`), with the spec owner's implementation rulings. E6 user docs: `manual/references.md`, plus rows in `parameters.md` and `variables.md`.
+- **Cost.** Generated code for models that do not use the helpers is unchanged (16/16 gate fingerprints), so no A/B (D-242).
+- **Review.** Adversarial APPROVE after three rounds (fixed: `uses_clusters` missed `over = cluster`; `_check_geometry` gaps; a dead slot read its cluster's sum; a `@boundary` mask with `centroid` crashed; E6 docs).
+- **Tests.** The branch's own PC run failed only in `test/device_ir.jl`, which predates 73dfe2b2 (GPUCompiler 2's ScopedValue hook) and stopped the GPU group early. On the merged tree (with 73dfe2b2) every PC suite passes, GPU included, and so does the docs build.

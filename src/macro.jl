@@ -457,7 +457,10 @@ function _section!(parts, sec, args, ln = nothing)
                 k = lhs.args[1]
                 _declare!(parts, k, "parameter")
                 push!(parts.params, k)
-                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $(rewrite(val)) : $(_kw_local(k)); $(kw...))))
+                # `J[kind, kind] = Pairs(…)` (E2): kind names checked here, lowered to the matrix
+                v = _is_pairs_table(val) ? :($P._pairs_matrix($(rewrite(_check_pairs(parts, k, val))), length(__kinds), $(QuoteNode(k)))) :
+                    rewrite(val)
+                push!(code, :($k = $P.kind_parameter($(QuoteNode(k)), $(_kw_local(k)) === nothing ? $v : $(_kw_local(k)); $(kw...))))
             else
                 k = lhs::Symbol
                 _declare!(parts, k, "parameter")
@@ -759,10 +762,67 @@ end
 Make user syntax symbolic: `x[i…]` → `_index`, `&&`/`||`/`!` → symbolic logic, `c ? a : b`
 → `ifelse`, `div(a, b)`/`a ÷ b` → `_intdiv`, `euler(…)` → `_euler(…)`, and `fold(body for n in R(s) if cond)` → a relation gather.
 """
+_is_pairs_table(val) = val isa Expr && val.head === :call && val.args[1] === :Pairs
+
+# `Pairs((k₁, k₂) => v, …; default, symmetric)` of kind table `k` (E2, D-243): every key names
+# a kind of `@kinds` (or one an `@extend` base binds); a misspelling, a parameter or another
+# declared name is refused here, naming it, and a pair written twice (by name) too
+function _check_pairs(parts, k, val)
+    seen = Tuple{Symbol, Symbol}[]
+    symmetric = true
+    for a in val.args[2:end]
+        if a isa Expr && a.head === :parameters
+            for q in a.args
+                q isa Expr && q.head === :kw && q.args[1] === :symmetric && q.args[2] isa Bool && (symmetric = q.args[2])
+            end
+        elseif a isa Expr && a.head === :kw
+            a.args[1] === :symmetric && a.args[2] isa Bool && (symmetric = a.args[2])
+        end
+    end
+    for a in val.args[2:end]
+        a isa Expr && a.head in (:parameters, :kw) && continue
+        (a isa Expr && a.head === :call && a.args[1] === :(=>) && a.args[2] isa Expr && a.args[2].head === :tuple &&
+         length(a.args[2].args) == 2) ||
+            throw(ArgumentError("kind table `$k = Pairs(…)`: an entry is `(k₁, k₂) => v` with two kind names; got `$a`"))
+        names = a.args[2].args
+        for n in names
+            n isa Symbol || throw(ArgumentError("kind table `$k = Pairs(…)`: `$n` is not a kind name of @kinds"))
+            what = get(parts.declared, n, nothing)
+            what == "kind" && continue
+            what === nothing && n in parts.bound && continue          # bound by `@extend`, checked when built
+            throw(ArgumentError("kind table `$k = Pairs(…)`: `$n` is " *
+                                (what === nothing ? "not a kind of @kinds (a misspelling?)" :
+                                 "$(_with_article(what)), not a kind; the keys are kind names of @kinds")))
+        end
+        p = (names[1], names[2])
+        if p in seen || (symmetric && reverse(p) in seen)
+            throw(ArgumentError("kind table `$k = Pairs(…)`: the pair ($(p[1]), $(p[2])) is given twice" *
+                                (symmetric && p[1] !== p[2] ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); " *
+                                                              "pass `symmetric = false` for an asymmetric table)" : "")))
+        end
+        push!(seen, p)
+    end
+    return val
+end
+
+# `integral(x; over = s)`: `s` is `cluster`; another name is refused here (it need not be bound)
+function _check_integral_over(ex)
+    for a in ex.args[2:end]
+        kws = a isa Expr && a.head === :parameters ? a.args : a isa Expr && a.head === :kw ? Any[a] : Any[]
+        for q in kws
+            q isa Expr && q.head === :kw && q.args[1] === :over && q.args[2] isa Symbol && q.args[2] !== :cluster &&
+                throw(ArgumentError("`integral(x; over = …)`: `over` is `cluster` (the alive members of the cell's " *
+                                    "compartment cluster); got `$(q.args[2])`"))
+        end
+    end
+    return nothing
+end
+
 function rewrite(ex)
     ex isa Expr || return ex
     P = :(Potts)
     h = ex.head
+    h === :call && ex.args[1] === :integral && _check_integral_over(ex)
     if h === :ref
         # `v[end]`, `v[begin + 1]`: ordinary Julia indexing (`end` only means something in a ref)
         _has_endbegin(ex.args[2:end]) && return Expr(:ref, rewrite(ex.args[1]), ex.args[2:end]...)

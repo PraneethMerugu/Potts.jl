@@ -4486,6 +4486,51 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 - **Quiet windows.** While an A/B runs there are no research screens and no pushes. The coordinator announces when a window starts and ends; the spec chat checks the PC queue and asks before launching. On 2026-10-13 a concurrent screen pushed the controls to a 7.9 % drift and made P6.5a's first CPU A/B unreadable.
 - **Not adopted.** A second machine for CI and screens was discussed but not approved.
 
+## D-243 P6.5a2 tests frozen: named pairs (E2) and the reference geometry helpers (E7) (2026-10-14; coordinator, from the P6.5a2 test author; spec-checked by the spec owner; under D-031, D-032, D-048, D-066, D-231)
+- **Frozen.** `acceptance/p6_5a2_ref_helpers.jl`, sha256 `48b871f4…72b1` (re-frozen by the amendment below).
+- **E2.** `J[kind, kind] = Pairs(default = d, (k1, k2) => v, …; symmetric = true)` lowers to the same matrix and the same `prob.p` as the written-out form, at no runtime cost. `remake` updates both sides of the diagonal. Misspelt kinds, a parameter used as a kind, duplicate pairs, and reversed pairs under symmetric fill are each refused with an ArgumentError.
+- **E7.**
+  - `centroid(c, k)` follows the `centroid(k)` convention: a circular mean on periodic axes, wrapped into [1, L+1).
+  - `minimum_image(d, axis)` leaves closed axes unwrapped.
+  - `separation(a, b)` returns a vector, embedded on hex lattices (the nearest image).
+  - `cluster_integral(x)` sums `x` over the sites of the cluster's alive members. The integrand is in site scope, so `kind` and `volume` bind to each site's owner: for a two-member cluster, `cluster_integral(volume)` = V₁² + V₂².
+  - Further pins:
+    - Π_CN−N (14b Eq 10) built from the helpers;
+    - a dead referent reads 0 and drops out of the sums;
+    - after-MCS writes equal `@observed` and a σ-only oracle;
+    - `minimum_image` in a drive and an energy cell term is bitwise equal to an explicit-`ifelse` twin;
+    - refusals per helper (`centroid(c, k)` in energies until R7, D-032);
+    - no reads or claims;
+    - a device testset.
+- **Rulings (spec owner).**
+  - O1: the `cluster_integral` name is pinned now (14b needs it before P6.7b). The fold `sum(x for s in sites(cluster))` comes later as an equivalent spelling.
+  - O2: the sign at d = ±L/2 is free; the magnitude is exactly L/2.
+  - O4: a dead referent's centroid reads 0.0 (D-066).
+  - O5: re-freeze at R7.
+  - O7: lattice units only; 14c's physical scaling is a P6.5d note.
+  - O8: no one-argument `centroid(c)`.
+  - O6 and O9: as pinned.
+- **Left open.**
+  - |d| ≥ L (inputs are assumed within one period).
+  - `separation` with a dead referent (guard with `alive(ref)`).
+  - `minimum_image` on hex.
+  - KindTable spellings, kind-class keys, and `Pairs` without a default.
+  - E6 (docs, prose).
+- **Amendment (2026-10-14, maintainer ruling; supersedes O1).** "Rename cluster_integral(x) before P6.5a2's implementer gets far. Make it a scope argument on the existing integral instead of a new name: integral(x; over = cluster). Plain integral(x) stays the cell sum. Keep the semantics D-243 already pins (site scope, so the two-member case gives V₁² + V₂² = 85; dead members drop out)."
+  - The cluster section is re-frozen under that spelling with the same hand values. Re-frozen sha256 `1539aabf…2d64`.
+  - New pins: plain `integral(x)` stays the cell sum; an unknown `over =` value is refused; `over = cluster` in a site-scope update is refused; a positive control shows cell-scope use builds.
+  - Other sections are unchanged. The fold `sum(x for s in sites(cluster))` can still come later as the explicit form.
+- **Fix (2026-10-14, user OK).** `p65a2_build_error` passed the operating-point function `op` to `PottsProblem` instead of `op(sys)`, as its own comment states, so the three positive controls (e5, the `over = cluster` control and section 8's `eok`) could never pass. The refusals were unaffected. One-line fix; re-frozen sha256 `65d781a8…84e2`.
+- **Implementation rulings (2026-10-14, spec owner; items D-243 left open).**
+  - `minimum_image` on a hexagonal lattice is refused; the message points to `separation`.
+  - `separation(a, b)` gives 0 in every component when either referent is dead or 0, consistent with O4. The docstring shows the `alive(ref)` guard.
+  - `Pairs` without `default`, and kind-class keys, are refused.
+  - `centroid(c, k)` and `separation` are refused in copy-step code (energies, contacts, drives, constraints, `@on_copy`). They are allowed in every between-sweep site context: `@convert` `at`/`p`/writes, field equations, site `@after_mcs`/`@before_mcs`, `@boundary` masks and site `@observed`. 14b and 14c need them there.
+  - Under `over = cluster`, bare cell variables (not only `volume`) rebind to each site's owner. A dead slot's cluster sum is 0. `integral(x; over = cluster)` marks the model as using compartments.
+  - Every helper's axis and hex checks run in every context, with a backstop in lowering.
+  - E6 user docs are delivered: `docs/src/manual/references.md`, plus rows in `parameters.md` and `variables.md`.
+  - Generated code for models that don't use the helpers is unchanged (16/16 gate fingerprints), so there is no A/B (D-242).
+
 ## D-244 P6.5c tests frozen: initial-state vocabulary, predicate sources, MSD and Fürth fits (2026-10-14; coordinator, from the P6.5c test author; spec owner APPROVE; scope from `research/p6-5c-brief.md`; under D-048, D-231)
 - **Frozen.**
   - `acceptance/p6_5c_initial_state.jl` (`1b0bb39e…bebae`);

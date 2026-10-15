@@ -612,3 +612,8 @@ decision = "D-244"
 path = "acceptance/p6_5c_msd_furth.jl"
 sha256 = "70fb82189fdf273b42ecfcd45c450441a712d0fbd061a1b84ae9ca82aa04c2c7"
 decision = "D-244"
+
+[[file]]
+path = "acceptance/p6_5a2_ref_helpers.jl"
+sha256 = "65d781a8c7ad5f7e392344a45e4f6ce63b7be430942c81ae50cd0470f00884e2"
+decision = "D-243"

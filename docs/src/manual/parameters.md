@@ -11,6 +11,7 @@ callback) and per trajectory of an ensemble, without regenerating code.
 | `J[kind, kind] = [0 16; 16 2]` | a table indexed by two kinds (medium first) |
 | `V₀[kind] = [0.0, 40.0, 25.0]` | a table indexed by one kind |
 | `J[kind, kind] = [0 Jx; Jx 2]` | a table whose entries are computed from other parameters |
+| `J[kind, kind] = Pairs((medium, cell) => 16, …; default = 0)` | a two-kind table written by its named entries (below) |
 | `d[1:2] = [1.0, 0.5]` | a vector; its components are `d_1`, `d_2` |
 | `λ = 1.0, [unit = u"J"]` | a parameter with a unit (see below) |
 
@@ -99,6 +100,35 @@ table (`J[kind, kind′]`) must be symmetric for the values it takes; an asymmet
 
 Values are converted to the problem's number type (`Float64`, or `Float32` for GPU
 problems), so a `remake` never changes the compiled code.
+
+## Named pairs: `Pairs`
+
+A contact table written as a matrix depends on the order of the kinds, and a swapped row is
+easy to miss. `Pairs` names each entry by its kinds instead:
+
+```julia
+@kinds medium substrate cytoplasm nucleus
+@parameters begin
+    Jcn = 7.0
+    J[kind, kind] = Pairs(default = 0.0, (medium, substrate) => 20, (medium, cytoplasm) => 16,
+                          (substrate, cytoplasm) => 3.5, (cytoplasm, nucleus) => Jcn, (nucleus, nucleus) => 2.5)
+    μ[kind, kind] = Pairs((cytoplasm, nucleus) => 4.0, (nucleus, cytoplasm) => 9.0; default = 1.0, symmetric = false)
+end
+```
+
+- Each entry is `(k₁, k₂) => v`, where `k₁` and `k₂` are kind names from `@kinds` and `v` is
+  a number or an expression of parameters, as in the matrix form.
+- With `symmetric = true`, the default, an entry sets both (k₁, k₂) and (k₂, k₁). With
+  `symmetric = false` it sets only (k₁, k₂).
+- Every entry you do not list takes `default`, which is required.
+- When the model is built, `Pairs` becomes the same matrix as the written-out form. The
+  parameter object, the generated code and `remake` are identical, so it costs nothing at
+  run time.
+- Each of the following is an `ArgumentError` when the model is defined, and the message
+  names the problem:
+  - a misspelt kind;
+  - a name that is not a kind, such as a parameter or a kind class;
+  - a pair given twice. With symmetric fill, (k₂, k₁) after (k₁, k₂) counts as given twice.
 
 ## Units
 
