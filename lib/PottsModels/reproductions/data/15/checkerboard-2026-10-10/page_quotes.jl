@@ -38,7 +38,7 @@ function cb_quotes(dir)
     crit_ref(case) = only(unique(f2(parse(Float64, r["crit_ref"])) for (k, r) in abl if k[1] == case))
     n_ref(case) = only(unique(r["n_ref"] for (k, r) in abl if k[1] == case))
     T, Ts = t["T_lambda2"], t["T_seq_p1b"]
-    section = ["$(t["colours_chain"]) colours on the chain and $(t["colours_monolayer"]) on the monolayer",
+    section = ["$(t["colours_chain"]) colors on the chain and $(t["colours_monolayer"]) on the monolayer",
         "commit `$(c8(prov["commit"]))`",
         "T(λ = 2) = $T MCS", "sequential $Ts MCS on the same chain (z = $(f2(t["z_p1b"])))",
         "$(t["T_seq"]) MCS on the sequential record's P1 strip (z = $(f2(t["z"])))", "5T = $(t["cycle_mcs"]) MCS",
@@ -47,9 +47,9 @@ function cb_quotes(dir)
         "$(grp(dh["copies"])) committed copies ($(dh["mismatches"]) mismatches",
         "$(pct(dh["commit_fraction"])) of accepted copies commit",
         "$(grp(round(Int, dh["committed_per_mcs"]))) of $(grp(round(Int, dh["accepted_per_mcs"]))) per MCS at $(grp(dh["live_at_start"])) cells",
-        "($(t["colours_monolayer"]) colours, stride $(stride[1]))",
-        "$nab colours (T = $(ab["T_c64"]) MCS, cycle $(ab["cycle_c64"]) MCS)",
-        "$(arm[1]) colours on the chain, $(arm[2]) on the monolayer",
+        "($(t["colours_monolayer"]) colors, stride $(stride[1]))",
+        "$nab colors (T = $(ab["T_c64"]) MCS, cycle $(ab["cycle_c64"]) MCS)",
+        "$(arm[1]) colors on the chain, $(arm[2]) on the monolayer",
         "T_c64 = $(ab["T_c64"]) $(ab["T_c64"] < Ts ? "<" : ">=") $Ts",
         "T = $T is the net of thinning and update order on the chain",
         "runs per arm: $(ab["runs_per_arm"])",
@@ -60,7 +60,7 @@ function cb_quotes(dir)
     kc = count(d -> abl[key(d)]["beyond_contrast"] == "true", devs)
     push!(section, "The contrast is beyond the spread for " * (kc == length(devs) ? "every row" : "$kc of $(length(devs)) rows"))
     kr = count(d -> abl[key(d)]["beyond_c64"] == "true", devs)
-    push!(section, "the 64-colour remainder is beyond the spread in " * (kr == 0 ? "no row" : "$kr of $(length(devs)) rows"))
+    push!(section, "the 64-color remainder is beyond the spread in " * (kr == 0 ? "no row" : "$kr of $(length(devs)) rows"))
     clauses = [String(strip(first(split(d["suspected_cause"], ':')))) for d in devs]
     for c in unique(clauses)
         k = count(==(c), clauses)
@@ -68,15 +68,18 @@ function cb_quotes(dir)
     end
     page = ["T(λ = 2) = $T MCS against $Ts", "cases (f) and (b) in its own $(t["cycle_mcs"])-MCS cycles",
         "case (a) in its own $(t["cycle_mcs"])-MCS cycles", "Potts.jl (checkerboard) has its own λ = 2 row on the P1b chain: T = $T MCS",
-        "| `$dir` | Potts.jl (checkerboard), a characterisation of `CheckerboardCPM` |",
+        "| `$dir` | Potts.jl (checkerboard), a characterization of `CheckerboardCPM` |",
         "and its GPU | `$(c8(prov["commit"]))` |"]
     cell(s) = replace(s, "|" => "∣")
+    # display only: the page uses American spelling (D-249); the record's text is unchanged
+    am(s) = replace(s, "colour" => "color", "Colour" => "Color", "characteris" => "characteriz",
+        "Characteris" => "Characteriz", "neighbour" => "neighbor", "Neighbour" => "Neighbor")
     function cause(d)
         r = abl[key(d)]
         x(k) = parse(Float64, r[k])
         s = String(strip(first(split(d["suspected_cause"], ':')))) *
-            "; 4 against $nab colours: z $(sg(x("z_contrast"))) (crit $(f2(x("crit_contrast"))), n = $(r["n_arm"]) per arm); " *
-            "$nab-colour remainder z $(sg(x("z_c64"))) against sequential (crit $(f2(x("crit_ref"))))"
+            "; 4 against $nab colors: z $(sg(x("z_contrast"))) (crit $(f2(x("crit_contrast"))), n = $(r["n_arm"]) per arm); " *
+            "$nab-color remainder z $(sg(x("z_c64"))) against sequential (crit $(f2(x("crit_ref"))))"
         same = sign(x("diff_c64")) == sign(x("diff_stock")) ? "same" : "opposite"
         return s * (r["beyond_c64"] == "true" ? ", beyond the spread, of the $same sign, $(pct(abs(x("remainder_fraction")))) of the stock difference" :
                     ": not resolved, not absent (limit $(sig(x("resolution_c64"))), $(pct(x("resolution_fraction"))) of the stock difference)")
@@ -84,7 +87,7 @@ function cb_quotes(dir)
     rows = map(devs) do d
         z = match(r"\|z\| = (\d+\.\d+)", d["target"])
         "| `$(key(d)[2])` ($(d["case"]))" * (z === nothing ? "" : ", ∣z∣ = $(z[1])") * " | " *
-        join(cell.((d["ours"], d["paper"], cause(d), d["author_question"])), " | ") * " |"
+        join(cell.((d["ours"], d["paper"], cause(d), am(d["author_question"]))), " | ") * " |"
     end
     return section, page, rows
 end
