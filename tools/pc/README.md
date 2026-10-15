@@ -18,6 +18,13 @@ $P add -g ab -l q8-cpu --after $s -- ~/potts-queue/ab.sh q8 ~/potts-ci/<base> ~/
 
 - `--after` runs the A/B only if the suites pass. A suites step that CI interrupts is re-run inside the same task, so the task does not fail because of CI.
 - Use `--extra '<command>'` for steps beyond the standard suites, such as one ROCm acceptance file. Each extra runs from the checkout, pinned to 0-11/16-27, and `$JULIA` is the scoped wrapper.
+  - pueue joins everything after `--` into one `sh -c` string, so inner quotes are lost unless the whole command is passed as a single quoted string:
+
+    ```bash
+    pueue add -p -g suites -l q9 -- "$HOME/potts-queue/item.sh q9 <commit> --extra 'julia --project=lib/PottsModels/test path/to/file.jl'"
+    ```
+
+    Unquoted, `item.sh` exits 64 ("unknown argument"), as q14 did on 2026-10-15.
 - The base checkout of an A/B must exist and be instantiated. `ab.jl` creates the `-abctl` worktrees itself.
 
 ## Watching and stopping
