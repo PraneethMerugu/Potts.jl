@@ -220,8 +220,28 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         end
         # the hook reaches the caller's choice of regime, which is the sweep context's type:
         # marked contexts take two words, others one, and each method is its map
-        @test CorePotts._pick_regime((; mcs = 0, pick = CorePotts.TwoWordPick())) === CorePotts.TwoWordPick() &&
+        @test CorePotts._pick_regime(CorePotts._with_two_word_pick((; mcs = 0))) === CorePotts.TwoWordPick() &&
               CorePotts._pick_regime((; mcs = 0)) === nothing
+        # review (MEDIUM): the key is not an identifier, so a relation named `pick` neither
+        # selects a regime nor is shadowed by one; it ran before D-247 and still runs
+        @test CorePotts._pick_regime((; mcs = 0, pick = 1)) === nothing
+        @test CorePotts._with_two_word_pick((; pick = 1)).pick === 1
+        let lat = Lattice((30, 30)), (σ, kinds) = blocks((30, 30), 5)
+            f = CPMFunction(gg_delta_H; temperature = gg_temperature)
+            prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 3), gg_params(); relations = (; pick = Moore(1)))
+            for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true)), force in (false, true)
+                CorePotts._FORCE_TWO_WORD_PICK[] = force
+                sol = try
+                    solve(prob, alg)
+                finally
+                    CorePotts._FORCE_TWO_WORD_PICK[] = false
+                end
+                @test SciMLBase.successful_retcode(sol)
+            end
+            # `mcs` is the sweep's own context field (D-188), so a relation may not take it
+            @test_throws r"relation names .*`mcs`.* are reserved" PottsProblem(f, initial_state(σ, kinds), lat, (0, 3),
+                gg_params(); relations = (; mcs = Moore(1)))
+        end
         for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))
             @test CorePotts.site_pick(nothing, hi, lo, n) == CorePotts.bounded(hi, n)
             @test CorePotts.site_pick(CorePotts.TwoWordPick(), hi, lo, n) == CorePotts.bounded64(hi, lo, n)

@@ -44,8 +44,8 @@ function PottsProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
     t0, t1 = Int.(tspan)
     0 <= t0 <= t1 <= typemax(UInt32) ||
         throw(ArgumentError("tspan must satisfy 0 ≤ t0 ≤ t1 ≤ 2^32 - 1"))
-    any(in((:contact, :proposal, :lattice, :mobility, :spacing)), keys(relations)) &&
-        throw(ArgumentError("relation names `contact`, `proposal`, `lattice`, `mobility`, `spacing` are reserved"))
+    any(in((:contact, :proposal, :lattice, :mobility, :mcs, :spacing)), keys(relations)) &&
+        throw(ArgumentError("relation names `contact`, `proposal`, `lattice`, `mobility`, `mcs`, `spacing` are reserved"))
     rs = map(r -> relation(r, lattice), NamedTuple(relations))
     h = spacing === nothing ? nothing : Tuple(spacing)
     h === nothing || (length(h) == ndims(lattice) && all(x -> x > 0, h)) ||
@@ -542,7 +542,7 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     if integ.alg isa SequentialCPM
         # the site-pick regime is fixed per sweep in the context's type (D-247): two static
         # calls, so the one-word sweep compiles exactly as before
-        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, merge(ctx, (; pick = TwoWordPick()))) :
+        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx)) :
         _sequential_sweep!(integ, ctx)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
