@@ -21,7 +21,7 @@
 # about 0.25 ms on 1400²); quiet sites cost nothing else.
 
 mutable struct BoundaryCache{N, K, FZ, I}
-    const list::Vector{I}           # B in `list[1:n]`, any order (I: `site_index_type`, D-251)
+    const list::Vector{I}           # B in `list[1:n]`, any order (I: `site_index_type`, D-253)
     const pos::Vector{I}            # position in `list`, 0 outside B
     const unlike::Vector{Int32}     # on-lattice mobile proposal neighbours of another owner
     const σ0::Vector{Int32}         # σ as B last saw it

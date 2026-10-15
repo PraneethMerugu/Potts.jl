@@ -339,7 +339,7 @@ function _check_aliasing(offs, l::Lattice{N}) where {N}
 end
 
 # ---------------------------------------------------------------------------------------
-# Site lists and site counts (D-251): `Int32` up to 2³¹ − 1 sites, `Int64` above. The width
+# Site lists and site counts (D-253): `Int32` up to 2³¹ − 1 sites, `Int64` above. The width
 # is part of the array types, chosen once from the site count, so a lattice that fits keeps
 # the Int32 arrays and their code exactly; there is no per-site branch.
 const _FORCE_WIDE_SITES = Ref(false)    # tests: the Int64 width on a small lattice

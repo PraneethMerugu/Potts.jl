@@ -255,7 +255,7 @@ end
 # at once. The device lifecycle (D-089) keeps its own counts on the device (`_fold_lifecycle!`).
 struct MobileCounters{D, I}
     device::D
-    host::Vector{I}             # I: `site_index_type` of the lattice (D-251)
+    host::Vector{I}             # I: `site_index_type` of the lattice (D-253)
 end
 
 # Ensemble statistics: totals over trajectories.
@@ -604,7 +604,7 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
     I = site_index_type(nsites(prob.lattice))
     I === Int64 && !_atomic64(backend) && throw(ArgumentError(
         "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
-        "counts sites in Int64 atomics, which the $(nameof(typeof(backend))) backend does not have (D-251); " *
+        "counts sites in Int64 atomics, which the $(nameof(typeof(backend))) backend does not have (D-253); " *
         "run it on the CPU or on ROCm or CUDA"))
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
 end

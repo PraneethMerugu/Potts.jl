@@ -1,9 +1,9 @@
-# D-251: site lists (the boundary list, a frozen mask's mobile sites) and the counters of the
+# D-253: site lists (the boundary list, a frozen mask's mobile sites) and the counters of the
 # mask refreshes are Int32 up to 2³¹ − 1 sites and Int64 above. Lattices that large do not
 # fit a test machine, so `_FORCE_WIDE_SITES` takes the Int64 width on small ones: every run
 # must then be bit-identical to its Int32 run, since the width changes storage only.
 
-@testset "site lists widen above 2³¹ − 1 sites (D-251)" begin
+@testset "site lists widen above 2³¹ − 1 sites (D-253)" begin
     @test CorePotts.site_index_type(typemax(Int32)) === Int32
     @test CorePotts.site_index_type(Int64(typemax(Int32)) + 1) === Int64
     function forced(f, wide::Bool; device = false)

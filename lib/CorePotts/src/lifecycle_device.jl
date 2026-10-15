@@ -757,7 +757,7 @@ end
     @inbounds dv.mask[1] += d
     @inbounds dv.mask[2] += d * Int64(mcs)
     @inbounds dv.mask[3] += Int64(1)
-    @inbounds dv.mcnt[2] = zero(eltype(dv.mcnt))     # `site_index_type` (D-251)
+    @inbounds dv.mcnt[2] = zero(eltype(dv.mcnt))     # `site_index_type` (D-253)
     @inbounds dv.mcnt[3] = zero(eltype(dv.mcnt))
     return nothing
 end
