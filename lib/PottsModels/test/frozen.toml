@@ -444,7 +444,7 @@ decision = "D-176"
 
 [[file]]
 path = "reproductions/15_openvt_f1_f4.jl"
-sha256 = "911cc88b6e59e422bc3aa9ee03c3bf97f6ca1d76d90ca80233f92404293b7129"
+sha256 = "687dd91d94c95779985c50ca29ebaa86c86ab6072d72290ad296d12ff691d4ff"
 decision = "D-249"
 
 [[file]]
@@ -575,7 +575,7 @@ decision = "D-218"
 
 [[file]]
 path = "reproductions/15_openvt_checkerboard_page.jl"
-sha256 = "e5dabeb257e32619afde13eee35918f978d037934edc571319f5eb0531a98387"
+sha256 = "ae87f6dab3a2445b9e61983036399a0ff2327a97170bb6a370a009a10ad26ee0"
 decision = "D-249"
 
 [[file]]

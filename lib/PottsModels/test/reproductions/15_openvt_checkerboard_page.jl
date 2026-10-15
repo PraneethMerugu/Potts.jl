@@ -256,7 +256,7 @@ end
                 @test ok
             end
             cc, cm = t["colours_chain"], t["colours_monolayer"]
-            @test any(p -> occursin(r"chain"i, p) && occursin(r"monolayer"i, p) && occursin(Regex("\\b$cc colou?rs"), p) &&
+            @test any(p -> occursin(r"chain"i, p) && occursin(r"monolayer"i, p) && occursin(Regex("\\b$cc colors"), p) &&
                            occursin(Regex("\\b$cm\\b"), p), p615p_paras(prose))
         end
         # (P4) the comparison summary and the deviations table
@@ -273,7 +273,7 @@ end
             @test ok
         end
         mc = p615p_maxcolours()
-        @test mc !== nothing && occursin(Regex("$mc colou?rs"), flat)
+        @test mc !== nothing && occursin("$mc colors", flat)
         dh = get(P615P_META, "dH_check", nothing)
         dh === nothing || @test occursin(p615p_numre(dh["copies"]), flat) && occursin(Regex("\\b$(dh["mismatches"]) mismatch"), flat)
     end
