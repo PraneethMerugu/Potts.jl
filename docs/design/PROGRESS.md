@@ -2398,3 +2398,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Tests.** The bias negative control (one word draws the five-input sites 34.3 % of the time, two words 29.5 %), the forced regime on both sweeps (ΔH sums, volume recounts, acceptance), and an unforced 4100² replay oracle of every target. The PC suites pass (frozen, CorePotts, Potts, PottsModels).
 - **Merge.** The conflicts with D-246 were independent additions (DECISIONS, ROADMAP, the two CorePotts testsets).
 - **Review.** Adversarial APPROVE.
+
+## 2026-10-15 — American spelling on the frozen pages merged (D-249 amendment)
+
+- **What.** The comment prose, rendered strings and Markdown tables of the frozen Literate pages 01, 09 and 10, and of page 15, use American spelling. Code is token-identical to before once comments and strings are masked. 01, 09, 10 and `15_openvt_checkerboard_page.jl` are re-pinned under D-249, and the page test's two `colours` assertions accept `colou?rs` (user: "Both (a) and (b)").
+- **Page 15's self-check.** `page_quotes.jl` (checkerboard record, not frozen) builds the phrases page 15 must contain. It now emits American spelling, and maps the record's `author_question` text for display; the record itself is unchanged.
+- **Review.** Adversarial REQUEST CHANGES (the self-check would have failed the docs build), then APPROVE; three LOW leftovers in Markdown tables were fixed before merge.
+- **Tests.** PC suites and the docs build pass, including `15_openvt_d213.jl` with the bulk package directory. The docs build also covers part 2 of the spelling pass (393b2713).
