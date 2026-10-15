@@ -73,9 +73,9 @@
 #   --seed=<n>          Tuple type cache entries to seed to (default 500000); --no-seed
 #   --cpu=<n>           the logical CPU to pin to (default 12 on the NucBox); --no-pin
 #   --samples=<n>, --seconds=<s>  BenchmarkTools samples and time budget per case (60, 40)
-#   --gctrial           children run BenchmarkTools' full-GC scrub before each measurement
-#                       (off by default, D-252: about 2 s each on the NucBox, no gain in
-#                       resolution)
+#   --gctrial, --no-gctrial  BenchmarkTools' GC scrub in the children (three full
+#                       collections once per trial). Default (D-252): off for cpu, on for
+#                       rocm and metal. A GC inside a timed CPU sample counts as disturbed.
 #   --wait=<all|gpu|none>  what each timed run waits for (default all: CI jobs and, for
 #                       rocm, other GPU clients; gpu: other GPU clients only)
 #   --max-wait=<hours>  the overall deadline for waiting (default 4)
@@ -170,7 +170,7 @@ function parse_ab(args)
         control = !haskey(opts, "no-control"),
         maxwait = 3600 * parse(Float64, get(opts, "max-wait", "4")),
         samples = get(opts, "samples", "60"), seconds = get(opts, "seconds", "40"),
-        gctrial = haskey(opts, "gctrial"),
+        gctrial = haskey(opts, "gctrial") ? true : haskey(opts, "no-gctrial") ? false : backend != "cpu",
         warm = !haskey(opts, "no-warm"), child = get(opts, "child", CHILD))
 end
 
@@ -283,7 +283,7 @@ function child(dir, childargs, o, deadline)
     pin = o.pin ? BenchMachine.pin_cmd(o.machine, o.cpu) : ``
     mem = BenchMachine.mem_cmd(o.machine)
     proj = joinpath(dir, "benchmark")
-    cmd = `$LOCK $mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) $childargs --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? ["--gctrial"] : String[])`
+    cmd = `$LOCK $mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) $childargs --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? "--gctrial" : "--no-gctrial")`
     buf = IOBuffer()
     p = run(pipeline(ignorestatus(setenv(cmd, child_env(dir, o); dir)); stdout = buf, stderr = buf))
     out = String(take!(buf))
@@ -475,7 +475,7 @@ function ab_main(args)
         o.pin ?
         "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) idle" :
         "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
-        o.gctrial ? "; gctrial" : "")
+        o.gctrial ? "; gctrial on" : "; gctrial off")
     println("harness: $(o.child) (checkout $harness at $(describe(harness)))")
     R, D = Results(), String[]
     if o.inprocess
