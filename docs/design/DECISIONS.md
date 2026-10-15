@@ -4749,7 +4749,10 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
     - Measured on this Mac, base → branch: 100 blocks 14.36 → 14.15 ms (face) and 21.40 → 21.27 ms (full); 5000 labels 13.34 → 13.08 ms and 21.75 → 21.44 ms.
     - `_rebuild_pieces!`'s typed IR is identical to base. `recompute_pieces` infers `Tuple{Vector{Int32}, Vector{Int32}}`.
     - The other run-time-typed constructions (`BoundaryCache`, `mobility`, `convert_scratch`, `connectivity_ctx`) make at most one dynamic call after construction, not one per site.
-    - LOW, left as is: `_host_ctx` (src/problem.jl) holds the same non-concrete type. Only the `energy_change` analysis calls it, and that allocates per call anyway.
+    - LOW, left as is: `_host_ctx` (src/problem.jl) holds the same non-concrete type. It has three callers, all host analysis entry points that build a fresh context on every call and allocate anyway, so each makes one dynamic call per evaluation and none loops over sites:
+      - `energy_change` (src/problem.jl);
+      - `total_energy` (src/problem.jl);
+      - `_killing_credit` (src/codegen.jl), which also takes a lock and fetches its generated function on every call.
   - **IR at ≤ 2³¹ − 1 sites.**
     - Both trees ran these, and compiled the same 30 concrete specializations:
       - CVDevice (`@convert`) and CGWindow (`Global(; window = 1)`);

@@ -3,6 +3,8 @@
 # reintroduced `% Int32` or `Int32(r)` cannot show; here the kernel bodies run on a 2³²- or
 # 2³³-site lattice whose site arrays are sparse (only the touched entries are stored).
 
+using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, global_keeps, GLOBAL_REFUSED, Proposal
+
 struct SparseSites{T} <: AbstractVector{T}
     n::Int
     d::Dict{Int, T}
