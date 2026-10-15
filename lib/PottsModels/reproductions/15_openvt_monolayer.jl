@@ -507,7 +507,7 @@ end
 # **Evidence.** The direct contrast of the stock 4 colors against 64 colors (T = 127 MCS,
 # cycle 635 MCS), each at its own calibrated T (`ablation.tsv`, runs per arm: b 100, f 100,
 # a 30; ablation commits `80a6e40f`, `d1f6a7a8` and `e5c3a54a`; D-221, D-227): the
-# "4 against 64 colours" z of each row. The contrast is beyond the spread for every row, so
+# "4 against 64 colors" z of each row. The contrast is beyond the spread for every row, so
 # all 28 rows: thinning (D-008).
 #
 # **What the 64-color remainder can and cannot show.** The remainder is the 64-color arm
