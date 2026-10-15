@@ -480,6 +480,7 @@ end
 # the device and match the CPU run in Float32 (D-135)
 module P60gOnDevice
 using Test, Potts, PottsModels
+using Main: SingleDivisionFixture  # test-only model (D-254); p6_0g uses it by name
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
 end
 
