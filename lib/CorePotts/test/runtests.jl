@@ -385,12 +385,6 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
             Int(list[(wide ? CorePotts.bounded64(w[2], lo, n) : bounded(w[2], n)) + 1]))
         @test all(j -> rec[j] == bnd(j, true), 1:K)
         @test count(j -> rec[j] != bnd(j, false), 1:K) > 100
-        # Int32 site lists refuse lattices above 2³¹ - 1 sites (no allocation: a bare lattice)
-        huge = Lattice((2^16, 2^16))
-        @test_throws ArgumentError CorePotts._check_site_lists(huge, nothing, SequentialCPM(; skip_interior = true))
-        @test_throws ArgumentError CorePotts._check_site_lists(huge, falses(1), CheckerboardCPM())
-        @test CorePotts._check_site_lists(huge, nothing, SequentialCPM()) === nothing
-        @test CorePotts._check_site_lists(huge, nothing, CheckerboardCPM()) === nothing
     end
 
     @testset "coloring is conflict free" begin
@@ -594,6 +588,7 @@ include("lifecycle.jl")
 include("relationships.jl")
 include("compartments.jl")
 include("lifecycle_device.jl")
+include("site_lists.jl")
 include("contact_counts.jl")
 include("euler.jl")
 include("pieces.jl")

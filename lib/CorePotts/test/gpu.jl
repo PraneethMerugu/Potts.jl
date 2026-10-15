@@ -538,6 +538,21 @@
         @test integ.nmobile == 900 - 36 && integ.stats.lifecycle.removals == 0
         integ.u                                                       # … until a host read point
         @test integ.nmobile == 900 && integ.stats.lifecycle.removals == 1
+        # D-251: the Int64 width (forced; it is the width above 2³¹ − 1 sites) on the device.
+        # With 64-bit atomic adds the counted run equals its Int32 run; without them (Metal)
+        # a mask that follows the state is refused at `init`, and a run without one still runs
+        wide(f) = (CorePotts._FORCE_WIDE_SITES[] = true; try f() finally CorePotts._FORCE_WIDE_SITES[] = false end)
+        fk32 = fk_problem(rm2; T = Float32)
+        if CorePotts._atomic64(backend)
+            a = solve(fk32, CheckerboardCPM(); backend, saveat = 1)
+            b = wide(() -> solve(fk32, CheckerboardCPM(); backend, saveat = 1))
+            @test all(i -> Array(a.u[i].σ) == Array(b.u[i].σ), eachindex(a.u))
+            @test a.stats.attempts == b.stats.attempts && b.stats.lifecycle.removals == 1
+        else
+            @test_throws r"Int64 atomics.*D-251" wide(() -> init(fk32, CheckerboardCPM(); backend))
+            static = fk_problem(rm2; T = Float32, sys = nothing)
+            @test wide(() -> solve(static, CheckerboardCPM(); backend)).retcode == ReturnCode.Success
+        end
         @test integ.stats.attempts == (S + 1) * (900 - 36) + 900      # MCS S+1 corrected
         # removal of the frozen cell: the mobile-site count grows by the device count
         sol = solve(fk_problem(rm2; T = Float32), CheckerboardCPM(); backend)

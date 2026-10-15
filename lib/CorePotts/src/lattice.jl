@@ -339,6 +339,17 @@ function _check_aliasing(offs, l::Lattice{N}) where {N}
 end
 
 # ---------------------------------------------------------------------------------------
+# Site lists and site counts (D-251): `Int32` up to 2³¹ − 1 sites, `Int64` above. The width
+# is part of the array types, chosen once from the site count, so a lattice that fits keeps
+# the Int32 arrays and their code exactly; there is no per-site branch.
+const _FORCE_WIDE_SITES = Ref(false)    # tests: the Int64 width on a small lattice
+site_index_type(nsite::Integer) = (_FORCE_WIDE_SITES[] || nsite > typemax(Int32)) ? Int64 : Int32
+# Whether the backend's kernels have 64-bit atomic adds, which the Int64 mask counters need.
+# Metal's do not (its extension says so): there, a lattice above 2³¹ − 1 sites whose mask
+# follows the state is refused at `init` (`_mobility_scratch`).
+_atomic64(backend) = true
+
+# ---------------------------------------------------------------------------------------
 # Mobility: frozen sites (walls, obstacles, fixed owners) are neither copy targets nor
 # sources and are not counted in N; they still count in contact energies.
 
@@ -348,7 +359,7 @@ struct AllMobile end
 """
 Sites with `frozen[i] = true` never change owner and never donate. On the host, `sites`
 lists the mobile sites (SequentialCPM draws its targets from them; the count is
-`length(sites)`). On a device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and
+`length(sites)`), as `Int32` or, above 2³¹ − 1 sites, `Int64` (`site_index_type`). On a device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and
 the integrator keeps the mobile count on the host. A refresh (`refresh_frozen!`, `reinit!`)
 rewrites both in place, so the integrator's context stays valid.
 """
@@ -362,7 +373,7 @@ function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
     frozen === nothing && return AllMobile()
     size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
     any(!, frozen) || throw(ArgumentError("every site is frozen"))     # at construction only
-    sites = Int32[]
+    sites = site_index_type(length(frozen))[]
     _mobile_sites!(sites, frozen)
     return MaskMobility(Array{Bool}(frozen), sites)
 end
@@ -375,7 +386,7 @@ _backend_mobility(backend, m::MaskMobility) = MaskMobility(_to_backend(backend, 
 # `sites` ← the mobile sites of a host mask, in place. The first `resize!` grows the list to
 # the full site count once (later calls stay within that capacity and do not allocate). A
 # run may freeze every site: the list is then empty and an MCS makes no attempt.
-function _mobile_sites!(sites::Vector{Int32}, frozen)
+function _mobile_sites!(sites::Union{Vector{Int32}, Vector{Int64}}, frozen)
     resize!(sites, length(frozen))
     j = 0
     @inbounds for i in eachindex(IndexLinear(), frozen)
@@ -400,14 +411,15 @@ _set_mobility!(stats, m, frozen) = throw(ArgumentError(
 # The standard rule, one work item per site: a site is frozen when it lies outside the
 # lattice domain or its owner's kind is one of `kinds`. Counts, in `counter`, the change of
 # the mobile count (entry 2) and the number of sites that changed (entry 3); entry 1 is the
-# lifecycle's event count, read in the same transfer.
+# lifecycle's event count, read in the same transfer. The counter has the site lists' width
+# (`site_index_type`), so neither count wraps on any lattice.
 @inline function _frozen_body!(i, frozen, counter, σ, kind, kinds, lat)
     s = @inbounds σ[i]
     f = !in_domain(lat, i) || (s != 0 && _in_kinds(@inbounds(kind[s]), kinds))
     if f != @inbounds(frozen[i])
         @inbounds frozen[i] = f
-        Atomix.@atomic counter[2] += f ? Int32(-1) : Int32(1)
-        Atomix.@atomic counter[3] += Int32(1)
+        Atomix.@atomic counter[2] += f ? -one(eltype(counter)) : one(eltype(counter))
+        Atomix.@atomic counter[3] += one(eltype(counter))
     end
     return nothing
 end

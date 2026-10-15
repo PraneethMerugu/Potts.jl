@@ -71,13 +71,13 @@ const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :bi
     :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
-function _device_scratch(backend, N::Int, cap::Int)
+function _device_scratch(backend, N::Int, cap::Int, nsite::Int)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)
     return (; flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap), req = z(Int32, cap),
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1), limit = _SCRATCH_LIMIT[])
+        mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1), limit = _SCRATCH_LIMIT[])
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -110,7 +110,7 @@ function DeviceLifecycle(backend, N::Int, cap::Int, st)
     cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k))
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
     fused = length(st.σ) <= FUSE_SITES[] && cap <= FUSE_CELLS[] ? _fused_kernel!(backend, PLAN_WG) : nothing
-    return DeviceLifecycle(_device_scratch(backend, N, cap), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
+    return DeviceLifecycle(_device_scratch(backend, N, cap, length(st.σ)), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
         Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), Ref(0),
         zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
 end
@@ -757,8 +757,8 @@ end
     @inbounds dv.mask[1] += d
     @inbounds dv.mask[2] += d * Int64(mcs)
     @inbounds dv.mask[3] += Int64(1)
-    @inbounds dv.mcnt[2] = Int32(0)
-    @inbounds dv.mcnt[3] = Int32(0)
+    @inbounds dv.mcnt[2] = zero(eltype(dv.mcnt))     # `site_index_type` (D-251)
+    @inbounds dv.mcnt[3] = zero(eltype(dv.mcnt))
     return nothing
 end
 
