@@ -25,8 +25,10 @@
 #   --seed=<n>       seed the Tuple type cache to n entries (default BenchMachine.SEED_ENTRIES;
 #                    0 = no seeding). Seeding runs after the packages load, before any build.
 #   --samples=<n>    samples per measurement (default 60), --seconds=<s> (default 40)
-#   --no-gctrial     skip BenchmarkTools' full-GC scrub before each measurement (`gctrial`):
-#                    about 2 s per measurement on the NucBox; an experiment, off by default
+#   --gctrial        run BenchmarkTools' full-GC scrub before each measurement (`gctrial`).
+#                    Off by default (D-XXX): it cost about 2 s per measurement on the NucBox
+#                    and did not improve the controls; the timed step allocates nothing, so
+#                    no collection can start inside a sample
 #   --wait=<all|gpu|none>  what to wait for: CI jobs and (rocm) other GPU clients (`all`,
 #                    default), other GPU clients only, or nothing
 #   --deadline=<t>   stop waiting at `time()` = t (default: 4 h from now) and time anyway
@@ -105,7 +107,7 @@ function ab_variant(v)
     return alg, dev ? device_backend() : nothing, dev ? Float32 : Float64
 end
 
-function ab_time(prob, alg, backend; samples, seconds, gctrial = true)
+function ab_time(prob, alg, backend; samples, seconds, gctrial = false)
     fresh_integrator(prob, alg, backend)
     b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds gctrial=gctrial)
     n = length(prob.u0.σ)
@@ -118,7 +120,7 @@ function ab_one_main(pos, opts)
     AB_LEGACY || println("TC ", join(BenchMachine.type_cache_stats(), " "))
     samples = parse(Int, get(opts, "samples", "60"))
     seconds = parse(Float64, get(opts, "seconds", "40"))
-    gctrial = !haskey(opts, "no-gctrial")
+    gctrial = haskey(opts, "gctrial")
     if haskey(opts, "variants")
         Base.include(Main, opts["variants"])
         vs = Main.AB_VARIANTS
