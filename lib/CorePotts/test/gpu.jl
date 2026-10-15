@@ -690,6 +690,30 @@ p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
     end
 end
 
+# D-246: the permuted claim regime (above 2^24 sites per color), forced on a small lattice,
+# so its kernels (`_fmix32`, the claim key) compile on the device and reach the IR scan below
+@testset "permuted claim priorities on the device (D-246)" begin
+    backend = PottsDevices.device_backend()
+    σ, kinds = blocks((60, 60), 5)
+    lat = Lattice((60, 60))
+    on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float32}())
+    prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 20), gg_params(Float32))
+    H(u) = total_H(u, lat, prob.contact, gg_params())
+    CorePotts._FORCE_PERMUTED_PRIORITY[] = true
+    try
+        @test init(prob, CheckerboardCPM(); backend).cache.idbits isa CorePotts.PermutedPriority
+        for seed in 1:3
+            sol = solve(remake(prob; seed), CheckerboardCPM(); backend)
+            u0, u = sol.u[1], sol.u[end]
+            @test sol.stats.accepted_ΔH == H(u) - H(u0)                # no two commits conflicted
+            @test abs(H(u) - H(u0)) > 100
+            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+        end
+    finally
+        CorePotts._FORCE_PERMUTED_PRIORITY[] = false
+    end
+end
+
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
 # D-157); the scan lives with the monorepo's shared test helpers
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")

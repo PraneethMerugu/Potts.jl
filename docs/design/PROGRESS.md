@@ -2379,3 +2379,13 @@ The maintainer approved F-1…F-6 (D-049).
 - **PC (654a9d07).** frozen, GPU (ROCm), Potts, MakiePotts and PottsModels pass, part B passes on ROCm, and the docs build. There is no A/B: the change is front end and analysis only (D-242).
 - **Review.** Adversarial APPROVE; the follow-up (docstrings, an empty-`Group` error, a series for small Δt/P) was checked by the coordinator.
 - **Merge.** The conflicts with the American-spelling pass (D-249) were resolved, and P6.5c's new prose was converted to match; error messages were left as they were. All three acceptance files (596 pass) and `test/layouts.jl` (3305) pass on the merged tree.
+
+## 2026-10-15 — P6.0cd: checkerboard claim priorities above 2^24 sites per color merged (D-246)
+
+- **What.** Up to 2^24 sites per color, the claim priority is the old packed word. Above that, it is a keyed bijection of the color index (`fmix32(j ⊻ k)`, with `k` drawn per MCS and color). The regime is a type chosen when the cache is built (`Int` or `PermutedPriority`). More than 2^32 − 1 sites per color is refused, as is more than 2^31 − 1 with whole-cell connectivity, both before any allocation.
+- **First A/B (runtime branch, e6ad4340).** CPU regressed: GG checkerboard 1.050 and Akeeb checkerboard 1.030, with controls within 1 %. The cause was the inlined cold path. Making the regime a type gives LLVM IR of `propose_body!` and `propose_conn_body!` identical to 99301437.
+- **Re-A/B (ff68e2bf) against 99301437.**
+  - CPU was unreadable only on graner_glazier_72, where the candidate's control ran 3–4 % fast. GG sequential, which this branch does not touch, read 1.036. Against its own control, GG is 0.99–1.00. Akeeb checkerboard is 0.997, and every other case is within ±0.5 %. Judged with the controls stated: pass.
+  - ROCm passes: 0.997–1.014, largest control deviation 0.0119.
+- **Tests.** The forced permuted regime runs on the device before the ROCm IR scan, and on the CPU with whole-cell connectivity. The keyless and colliding mutants fail. The PC suites pass (frozen, CorePotts, GPU), and so does CorePotts on the merged tree.
+- **Review.** Adversarial APPROVE after three rounds.

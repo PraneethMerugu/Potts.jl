@@ -166,6 +166,105 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         @test abs(cor(hi, lo)) < 0.01
     end
 
+    @testset "checkerboard claim priorities (P6.0cd)" begin
+        rng = Random.Xoshiro(11)
+        lat4 = Lattice((4, 4))
+        c4 = first(colors(lat4, 2))
+        # up to 2^24 sites per color: exactly the packed word it always was
+        for _ in 1:1000
+            rp, ib = rand(rng, UInt32), rand(rng, 1:CorePotts.CLAIM_INDEX_BITS_MAX)
+            j = rand(rng, 1:(2^ib - 1))
+            @test CorePotts._priority(rp, j, ib, RNGKey(1), 3, lat4, c4) == ((rp >> ib) << ib) | UInt32(j)
+        end
+        # above: a keyed bijection of the color index, unique and nonzero (j == k included)
+        for k in (UInt32(1), UInt32(77), UInt32(2^16), rand(rng, UInt32), rand(rng, UInt32))
+            w = [CorePotts._permuted_priority(j, k) for j in 1:(2^17)]
+            @test allunique(w) && all(!=(0), w)
+        end
+        @test CorePotts._permuted_priority(77, UInt32(77)) == CorePotts._fmix32(UInt32(77)) != 0
+        @test CorePotts._priority(rand(rng, UInt32), 5, CorePotts.PermutedPriority(), RNGKey(1), 3, lat4, c4) ==
+              CorePotts._permuted_priority(5, CorePotts._claim_key(RNGKey(1), 3, lat4, c4))
+        # a random order: a site outranks the one Δ further on half the time, for any Δ
+        for Δ in (1, 2, 3, 64, 4097, 2^20)
+            f = mean(1:40_000) do _
+                j, k = rand(rng, 1:(2^30)), rand(rng, UInt32)
+                CorePotts._permuted_priority(j, k) > CorePotts._permuted_priority(j + Δ, k)
+            end
+            @test abs(f - 0.5) < 0.01
+        end
+        # the key is used: for a fixed pair, which one wins changes from MCS to MCS (a keyless
+        # permutation would let the same site win every conflict of every MCS)
+        lat36 = Lattice((36, 36))
+        c1 = first(colors(lat36, 3))
+        for (j, Δ) in ((5, 1), (100, 37), (2^20, 3))
+            f = mean(1:40_000) do m
+                k = CorePotts._claim_key(RNGKey(9), m, lat36, c1)
+                CorePotts._permuted_priority(j, k) > CorePotts._permuted_priority(j + Δ, k)
+            end
+            @test abs(f - 0.5) < 0.01
+        end
+        # the key differs between the colors of an MCS and between MCS
+        cs = colors(lat36, 3)
+        @test allunique([CorePotts._claim_key(RNGKey(1), m, lat36, c) for c in cs, m in 1:3])
+        # end to end on a small lattice forced into the permuted regime: no two commits
+        # conflict (the tracked ΔH sums exactly), trackers stay exact, kinetics unchanged
+        σ, kinds = blocks((30, 30), 5)
+        lat = Lattice((30, 30))
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+        prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), gg_params())
+        H(u) = total_H(u, lat, prob.contact, gg_params())
+        base = [solve(remake(prob; seed), CheckerboardCPM()) for seed in 1:4]
+        CorePotts._FORCE_PERMUTED_PRIORITY[] = true
+        try
+            @test init(prob, CheckerboardCPM()).cache.idbits isa CorePotts.PermutedPriority
+            perm = [solve(remake(prob; seed), CheckerboardCPM()) for seed in 1:4]
+            for sol in perm
+                u0, u = sol.u[1], sol.u[end]
+                @test sol.stats.accepted_ΔH == H(u) - H(u0)
+                @test abs(H(u) - H(u0)) > 100                                   # non-vacuous
+                vol = zeros(Int32, length(kinds))
+                foreach(s -> s > 0 && (vol[s] += 1), u.σ)
+                @test vol == u.cell.volume
+            end
+            @test all(i -> perm[i].u[end].σ != base[i].u[end].σ, 1:4)          # another order
+            # the connectivity variant (`propose_conn_body!`) in the permuted regime: a windowed
+            # `Global` veto keeps every cell in one piece, and the tracked ΔH stays exact
+            post(st, p, prop, ctx, stage) = CorePotts.global_gains(st.σ, ctx, prop, Val(false)) ?
+                CorePotts.global_keeps(st.σ, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
+            fc = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}(),
+                connectivity = CorePotts.ConnectivityHooks(; post, uses_global = true))
+            cprob = PottsProblem(fc, initial_state(σ, kinds), lat, (0, 15), gg_params(); seed = 4)
+            integ = init(cprob, CheckerboardCPM(; proposal = Moore(1)); save_start = false)
+            @test integ.cache.idbits isa CorePotts.PermutedPriority && integ.cache.conn !== nothing
+            pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), length(kinds)))
+            u0 = current_state(integ)
+            for _ in 1:15
+                step!(integ)
+            end
+            u = current_state(integ)
+            @test integ.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
+            @test all(first(CorePotts.recompute_pieces(u.σ, lat, Val(false), length(kinds))) .<= pieces0)   # no cell splits
+            @test u.cell.volume == [count(==(c), u.σ) for c in eachindex(kinds)]
+            ratio = sum(s -> s.stats.accepted, perm) / sum(s -> s.stats.accepted, base)
+            @test abs(ratio - 1) < 0.05
+        finally
+            CorePotts._FORCE_PERMUTED_PRIORITY[] = false
+        end
+        # both regimes are reachable, each its own specialisation: an Int below 2^24 sites
+        idb = init(prob, CheckerboardCPM()).cache.idbits
+        @test idb isa Int && idb <= CorePotts.CLAIM_INDEX_BITS_MAX
+        @test CorePotts._claim_regime(2^24 - 1) == 24                    # the last index-bit size
+        @test CorePotts._claim_regime(2^24) isa CorePotts.PermutedPriority
+        @test CorePotts._claim_regime(typemax(UInt32)) isa CorePotts.PermutedPriority
+        @test CorePotts._claim_regime(10, true) isa CorePotts.PermutedPriority
+        # more than 2^32 - 1 sites in a color is refused before anything is allocated
+        @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((2^34,)), GG, 1)
+        # with whole-cell connectivity (Int32 lists), more than 2^31 - 1 is refused, also before
+        # any allocation (3·2^31 sites: a color class of 2^31 or more, at most 2^32 - 1)
+        fc = CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = CorePotts.ConnectivityHooks())
+        @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((3 * 2^31,)), fc, 1)
+    end
+
     @testset "coloring is conflict free" begin
         for (dims, bnd, s) in (((12, 12), Periodic(), 2), ((13, 11), Periodic(), 2),
                 ((13, 7), Periodic(), 3), ((10, 9), Closed(), 3), ((7, 5, 6), Periodic(), 2),

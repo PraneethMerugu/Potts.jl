@@ -44,6 +44,36 @@ ncolorsites(c::Color) = prod(c.count)
     return nothing
 end
 @inline _won(claim, c::Int32, won::UInt32) = c <= 0 || @inbounds(claim[c]) == won
+
+# Claim priorities: unique and nonzero within a color, in a random order. The regime is
+# fixed when the cache is built, by the type of `idbits`, so each compiles on its own (a
+# runtime branch cost 3–5 % on the CPU checkerboard, D-246):
+# - `idbits::Int`, up to 2^24 sites per color: the proposal's random word above the
+#   color-local index `j` (at least 8 random bits; ties impossible, the index decides).
+# - `PermutedPriority()`, above (at most 2^32 - 1 sites): a keyed bijection of `j`,
+#   `fmix32(j ⊻ k)` with `k` drawn per (MCS, color). A bijection keeps the priorities
+#   unique without index bits, and the key changes the order every MCS. The one input that
+#   maps to 0 is `j = k`; it takes the image of `j = 0`, which no proposal uses.
+const CLAIM_INDEX_BITS_MAX = 24
+struct PermutedPriority end
+@inline function _fmix32(h::UInt32)              # murmur3's finalizer: a bijection of UInt32
+    h ⊻= h >> 16
+    h *= 0x85ebca6b
+    h ⊻= h >> 13
+    h *= 0xc2b2ae35
+    return h ⊻ (h >> 16)
+end
+@inline function _permuted_priority(j, k::UInt32)
+    x = _fmix32((j % UInt32) ⊻ k)
+    return x == 0 ? _fmix32(k) : x
+end
+# the key of a color in an MCS: addressed by the color's first site, unique per color
+@inline _claim_key(key, mcs, lat, color) =
+    draw(key, mcs, linear_index(lat, color.start), STREAM_CLAIM_ORDER)[1]
+@inline _priority(rp::UInt32, j, idbits::Int, key, mcs, lat, color) =
+    ((rp >> idbits) << idbits) | (j % UInt32)                                            # j < 2^idbits
+@inline _priority(rp::UInt32, j, ::PermutedPriority, key, mcs, lat, color) =
+    _permuted_priority(j, _claim_key(key, mcs, lat, color))                              # j < 2^32
 # a shared read of `c` survives unless a higher-priority copy writes `c`
 @inline _unwritten(wclaim, c::Int32, won::UInt32) = c <= 0 || @inbounds(wclaim[c]) <= won
 
@@ -55,7 +85,7 @@ end
 #
 # Track (D-140): `tk` is `nothing` (no track) or `(; track, dH, acc)`. An accepted proposal
 # writes its tracked value into `dH[j]`; a committing copy adds it into `acc[t]` (one target
-# per site per colour: no atomics, nothing zeroed per colour). The host reduces `acc` only at
+# per site per color: no atomics, nothing zeroed per color). The host reduces `acc` only at
 # read points (`_fold_track!`). Without a track the kernels are the untracked ones
 # (`propose_kernel!`, `commit_kernel!`): no `tk` argument at all, the same code as before the
 # track existed.
@@ -84,8 +114,7 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    # random high bits | color-local index: unique and nonzero
-                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # j ≤ ncolorsites < 2^idbits
+                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # unique and nonzero
                     # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
                     tk === nothing || (@inbounds tk.dH[j] = tk.track(st, p, prop, ctx, dH0))
                     _claim!(claim, a, won)
@@ -147,7 +176,7 @@ end
     end
 end
 
-struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2, CO}
+struct CheckerboardCache{N, P, S, C, W, B, TK, ID, K1, K2, CO}
     prio::P
     source::S
     claims::NTuple{2, C}
@@ -155,18 +184,18 @@ struct CheckerboardCache{N, P, S, C, W, B, TK, K1, K2, CO}
     # arguments instead of dead buffers (P6.0b3: two dead buffer arguments cost 3 % on Metal)
     wclaims::NTuple{2, W}
     status::B
-    # track buffers (D-140): `nothing` without `f.track`, else `(; dH, acc)`: the per-colour
+    # track buffers (D-140): `nothing` without `f.track`, else `(; dH, acc)`: the per-color
     # scratch (maxsites) and the per-site accumulator (nsites), in the track's scalar type
     track::TK
     colors::Vector{Color{N}}
     groupsize::Vector{Int}            # per color; 0 = let the backend choose
     order::Vector{Int}
     buffer::Base.RefValue{Int}        # claim buffer the next color uses (always cleared)
-    idbits::Int
+    idbits::ID                        # Int (index bits) or PermutedPriority(): the claim regime
     propose!::K1
     commit!::K2
     # whole-cell connectivity (P6.9a): `nothing`, or the lists, counter and kernels of
-    # `ConnBuffers`; without it the colour loop is exactly the one above
+    # `ConnBuffers`; without it the color loop is exactly the one above
     conn::CO
 end
 
@@ -191,15 +220,27 @@ end
     commit_body!(j, st, claim, next_claim, wclaim, next_wclaim, prio, source, f, p, ctx, color, nclear, nthreads, tk)
 end
 
+# tests: the permuted priorities on a small lattice (read when a cache is built)
+const _FORCE_PERMUTED_PRIORITY = Ref(false)
+
+# the claim regime of a color of `maxsites` sites: its index bits, or `PermutedPriority()`
+function _claim_regime(maxsites, force::Bool = false)
+    nbits = max(1, ceil(Int, log2(maxsites + 1)))
+    return (force || nbits > CLAIM_INDEX_BITS_MAX) ? PermutedPriority() : nbits
+end
+
 function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, ncell::Int,
         proposal = relation(VonNeumann(1), lat)) where {N}
     r, w = reach(f.footprint, proposal)
     s = r + w + 1
     cs = colors(lat, s)
     maxsites = maximum(ncolorsites, cs)
-    idbits = max(1, ceil(Int, log2(maxsites + 1)))
-    idbits <= 24 || throw(ArgumentError(
-        "a color class has $maxsites sites; 32-bit claim priorities support at most 2^24"))
+    maxsites <= typemax(UInt32) || throw(ArgumentError(
+        "a color class has $maxsites sites; 32-bit claim priorities support at most 2^32 - 1"))
+    # before any allocation (the buffers below can be tens of GB on a device)
+    f.connectivity === nothing || maxsites <= typemax(Int32) || throw(ArgumentError(
+        "whole-cell connectivity lists colour sites as Int32; a color class has $maxsites sites (at most 2^31 - 1)"))
+    idbits = _claim_regime(maxsites, _FORCE_PERMUTED_PRIORITY[])
     zeros_u32(n) = KernelAbstractions.zeros(backend, UInt32, n)
     return CheckerboardCache(zeros_u32(maxsites),
         KernelAbstractions.zeros(backend, Int, maxsites),
@@ -281,11 +322,11 @@ end
 # ---------------------------------------------------------------------------------------
 # Whole-cell connectivity on the checkerboard (P6.9a, D-075 Q6)
 #
-# Per colour, between the propose and commit kernels:
+# Per color, between the propose and commit kernels:
 #  - the copies that need the exact floods (`f.defer`: cell-scope `pieces`, an inline
 #    `Global` without window) are listed by the propose kernel and run in list order by one
 #    work item over the flood scratch (`serial_conn_kernel!`; a host loop on the CPU). They
-#    read only cells no other copy of the colour writes (the claims), so σ is as at propose;
+#    read only cells no other copy of the color writes (the claims), so σ is as at propose;
 #  - the accepted copies whose `Global` local test fails are compacted into a list (an
 #    atomic counter) instead of claiming. The deferred kernel searches each one (in its
 #    window: an `MVector` stack and visited bits, no allocation), raises its claims if it
@@ -293,8 +334,8 @@ end
 #    `deferred` (read into `stats.connectivity_deferred` at host read points). A veto
 #    without window searches exactly over the flood scratch: the list then runs in order
 #    on one work item (`global_serial_kernel!`).
-# The commit kernel resets both counters. Extra launches per colour: one per list the model
-# has (`_conn_launches`), so 4 per MCS in 2D (4 colours) for a `Global` veto.
+# The commit kernel resets both counters. Extra launches per color: one per list the model
+# has (`_conn_launches`), so 4 per MCS in 2D (4 colors) for a `Global` veto.
 
 struct ConnBuffers{G, K1, K2, K3, K4, K5}
     gl::G               # (; glist, gcount, slist, scount, deferred)
@@ -310,7 +351,7 @@ struct ConnBuffers{G, K1, K2, K3, K4, K5}
 end
 
 _conn_buffers(backend, ::Nothing, maxsites) = nothing
-function _conn_buffers(backend, h::ConnectivityHooks, maxsites)
+function _conn_buffers(backend, h::ConnectivityHooks, maxsites)      # maxsites ≤ 2^31 - 1 (checked by the cache)
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     gl = (; glist = z(Int32, maxsites), gcount = z(UInt32, 1), slist = z(Int32, maxsites), scount = z(UInt32, 1),
         deferred = z(UInt32, 1))
@@ -344,7 +385,7 @@ _conn_launches(c::ConnBuffers) = 2 + c.post + c.defer
     return nothing
 end
 
-# append colour index `j` to a list (each j at most once per colour: count ≤ maxsites = length)
+# append color index `j` to a list (each j at most once per color: count ≤ maxsites = length)
 @inline function _push_list!(list, count, j)
     i = Atomix.@atomic count[1] += UInt32(1)        # count has one entry
     @inbounds list[i] = Int32(j)
@@ -380,7 +421,7 @@ end
                 if !isfinite(dH)
                     @inbounds Atomix.@atomic status[1] |= STATUS_NONFINITE     # status has 1 entry
                 elseif accept(law, T(dH), temperature, uniform(T, ra))
-                    won = ((rp >> idbits) << idbits) | (j % UInt32)          # as `propose_body!`
+                    won = _priority(rp, j, idbits, key, mcs, lat, color)     # as `propose_body!`
                     code = has_post(f) ? _post(f)(st, p, prop, ctx, SERIAL ? GlobalSearch() : GlobalLocal()) : GLOBAL_PASS
                     if code == GLOBAL_PASS || (code == GLOBAL_WINDOW && !SERIAL)
                         # j ≤ ncolorsites ≤ maxsites = length(tk.dH)
@@ -456,7 +497,7 @@ end
     end
 end
 
-# One colour with the connectivity hooks: propose, the serial list, the deferred list, commit.
+# One color with the connectivity hooks: propose, the serial list, the deferred list, commit.
 function _conn_color!(c::ConnBuffers, g, n, pargs, cargs)
     gl = c.gl
     prio, source, claim, wclaim, status, st, f, p, ctx, law, key, mcs, color, idbits, tk = pargs
