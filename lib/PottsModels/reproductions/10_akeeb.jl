@@ -1,4 +1,4 @@
-# # Akeeb, Marcus & Jiang (2026): leader–follower tumour invasion
+# # Akeeb, Marcus & Jiang (2026): leader–follower tumor invasion
 #
 # In many carcinomas a minority of *leader* cells climbs cues in the matrix and pulls a
 # majority of *follower* cells behind it.
@@ -64,7 +64,7 @@ nothing #hide
         rate(cell) = 0.0                          # target growth per MCS (followers 0.015)
         cue(site) = 0.0                           # c(x, y) = y − 1, set by akeeb_state
     end
-    ## x periodic, y a closed wall; contacts over 8 neighbours, copies from the 4 nearest
+    ## x periodic, y a closed wall; contacts over 8 neighbors, copies from the 4 nearest
     @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = Moore(1))
     @relations proposal = VonNeumann(1)
     @energy begin
@@ -189,7 +189,7 @@ nothing #hide
 #
 # Replicate 1 at each of our phenotype points (P4 is the paper's named bulk point, p.11; P1 is
 # the authors' sample run; P5 and P6 are our on-grid choices), 500 × 300, 701 MCS, every 10
-# MCS. Leaders are red and followers green, coloured by type on a white matrix, without
+# MCS. Leaders are red and followers green, colored by type on a white matrix, without
 # cell outlines. P6 is the failing point.
 #
 # ```@raw html
@@ -283,9 +283,9 @@ dev_rows = [ #hide
     "| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |", #hide
-    "| Closed bottom edge (D7) | ring positions off the lattice read as nothing | not mentioned (code: CompuCell3D reads ring positions off the lattice as the cell at pixel (0, 0, 0)) | a CompuCell3D source artefact we do not reproduce; suspected small, affects bottom-wall cells only; unmeasured | not an author question |", #hide
-    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumour volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
-    "| Main-tumour seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
+    "| Closed bottom edge (D7) | ring positions off the lattice read as nothing | not mentioned (code: CompuCell3D reads ring positions off the lattice as the cell at pixel (0, 0, 0)) | a CompuCell3D source artifact we do not reproduce; suspected small, affects bottom-wall cells only; unmeasured | not an author question |", #hide
+    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumor volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
+    "| Main-tumor seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
     "| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |", #hide
     "| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (D-050 A5, D-142) | not an author question |", #hide
     "| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in the Details (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only (D-029) | not an author question |", #hide
@@ -357,19 +357,19 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 #
 # | Paper / code | `AkeebInvasion` statement |
 # |---|---|
-# | contact term, 8 neighbours (`<NeighborOrder>2</NeighborOrder>`, X:59) | `contacts => J[kind, kind′]` on `Lattice((500, 300); boundary = (Periodic(), Closed()), neighborhood = Moore(1))` |
+# | contact term, 8 neighbors (`<NeighborOrder>2</NeighborOrder>`, X:59) | `contacts => J[kind, kind′]` on `Lattice((500, 300); boundary = (Periodic(), Closed()), neighborhood = Moore(1))` |
 # | volume term, λ_V = 2, target 10 (S:86–88) | `cells => λᵥ * (volume - V_target)^2` |
 # | chemotaxis: ΔH = −λ[c(target) − c(source)] when the copying or the replaced cell is a leader (CC3D 4.6.0 `ChemotaxisPlugin`, X:66–73) | `@drive copy => ifelse((kind[new] == leader) \|\| (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)` |
 # | static cue c(x, y) = y (S:78–83; p.6) | the per-site variable `cue`, set to `y − 1` by `akeeb_state` (1-based) |
 # | `Connectivity` penalty 10⁵ (X:29–31), which also keeps one-site cells alive | `@constraint connectivity(leader, follower)` and `@constraint no_extinction` |
-# | copies from the 4 nearest neighbours (`<NeighborOrder>1</NeighborOrder>`, X:17) | `@relations proposal = VonNeumann(1)` |
+# | copies from the 4 nearest neighbors (`<NeighborOrder>1</NeighborOrder>`, X:17) | `@relations proposal = VonNeumann(1)` |
 # | Metropolis at T = 10, Eq. (2), p.4 | `@sweep Metropolis(; temperature = T)` |
 # | followers' target grows 0.015 per MCS while below 20 (S:111–115) | `@after_mcs V_target ~ ifelse(Pre(V_target) < V_max, Pre(V_target) + rate, Pre(V_target))` |
 # | clock +1 per MCS; divide when volume > 20 and clock > 75 + U{0…49}, redrawn every MCS (S:136–147) | `@after_mcs clock ~ …` and `@divide cells(follower) when = … (clock > clock_min + clock_spread * rand())` |
 # | random division plane; target halved, clocks reset (S:151–163) | `along = RandomPlane(), V_target => Split(), clock => 0.0` |
 #
 # The authors' 2D XMLs set the connectivity `<Penalty>` to 10⁵, which CompuCell3D 4.3.1 and
-# 4.6.0 honour, so it acts as a veto at T = 10; CompuCell3D 4.7.0 and later ignore the value
+# 4.6.0 honor, so it acts as a veto at T = 10; CompuCell3D 4.7.0 and later ignore the value
 # and use a hard-coded 64, so re-running the XML on current CompuCell3D gives a soft penalty
 # of about 1.7 × 10⁻³ acceptance per violation at T = 10.
 #
@@ -432,15 +432,15 @@ count(==(:leader), op_retry[2].second), count(==(:leader), akeeb_state()[2].seco
 
 # #### Measurement (spec 10 §5.3.3, O1–O8)
 #
-# `akeeb_observables(u)` is the authors' metric code at one state: the main tumour is the
+# `akeeb_observables(u)` is the authors' metric code at one state: the main tumor is the
 # set of cells connected (by von Neumann contacts, x periodic) to the cells in the
 # authors' row y = 1 (our y = 2); the invasive and infiltrative areas integrate the
-# per-column tops of the main tumour and of any cell above the main tumour's lowest top;
+# per-column tops of the main tumor and of any cell above the main tumor's lowest top;
 # fingers are SciPy 1.7 `find_peaks(prominence = 10, distance = 10, width = 5)` on the
-# main-tumour profile followed by the authors' merge (`PottsModels.Analysis`, D-069,
-# D-073); singles are leaders with no neighbour above the main tumour's lowest cell
-# centroid; detached cells are all cells outside the main tumour above that line; clusters
-# are components outside the main tumour of at least two cells with at least one
+# main-tumor profile followed by the authors' merge (`PottsModels.Analysis`, D-069,
+# D-073); singles are leaders with no neighbor above the main tumor's lowest cell
+# centroid; detached cells are all cells outside the main tumor above that line; clusters
+# are components outside the main tumor of at least two cells with at least one
 # follower.
 
 akeeb_observables(sol_one.u[end])

@@ -39,8 +39,8 @@ decision = "D-076"
 
 [[file]]
 path = "../reproductions/09_cell_sorting.jl"
-sha256 = "b06622ef5f22aee0eee2b3f3e11d004716062c999dd687cf0d347f643666e498"
-decision = "D-239"
+sha256 = "2e439b2e7ef6b6e52d930321143d7343f9aca1fd0f338487286aae7f008059a1"
+decision = "D-249"
 
 [[file]]
 path = "acceptance/p6_2a_akeeb_analysis.jl"
@@ -349,8 +349,8 @@ decision = "D-167"
 
 [[file]]
 path = "../reproductions/10_akeeb.jl"
-sha256 = "ebd9f1a0abe826424096bf126df7ab6d4a2a9d93453f3dd5bb4c73fe21e897a6"
-decision = "D-241"
+sha256 = "273c586b8959daa7811b86e57d3c8e60735739e89bac4dfb7470eeeada397377"
+decision = "D-249"
 
 [[file]]
 path = "reproductions/15_openvt_calibration.jl"
@@ -384,8 +384,8 @@ decision = "D-240"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "97829e62cad8327cd0cc1bc44af305d9e60ac3fa2b365fc103240d864dafab15"
-decision = "D-240"
+sha256 = "62cfb5783bd71945d8539da565c550432bdd3d9875b7ed7d1a3672d31b720dca"
+decision = "D-249"
 
 [[file]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
@@ -575,8 +575,8 @@ decision = "D-218"
 
 [[file]]
 path = "reproductions/15_openvt_checkerboard_page.jl"
-sha256 = "8499f9535f28fd1a80a9d1babfbd6279f0980a1ad13a89f45b4abcff7647fc57"
-decision = "D-226"
+sha256 = "e5dabeb257e32619afde13eee35918f978d037934edc571319f5eb0531a98387"
+decision = "D-249"
 
 [[file]]
 path = "reproductions/15_openvt_d213.jl"
