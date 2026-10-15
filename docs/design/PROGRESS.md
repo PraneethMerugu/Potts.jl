@@ -2424,3 +2424,10 @@ The maintainer approved F-1…F-6 (D-049).
 
 - **What.** `openvt_colony_panel!` loses the `colour`/`state_colours` aliases and their `Base.depwarn` blocks (user: no deprecation warnings or refactor bloat until the paper is released). The two `colou?rs` assertions of `15_openvt_checkerboard_page.jl` noted in the frozen-pages entry above are back to their original form with `colors`. `page_quotes.jl` maps only "characteris".
 - **Frozen.** `15_openvt_f1_f4.jl` and `15_openvt_checkerboard_page.jl` re-pinned under D-249; the user's approval of the re-pins is batched with the shim audit.
+
+## 2026-10-15 — Back-compatibility shims removed (D-254)
+
+- **What.** Per the user's ruling (no aliases, legacy forms, old-data conversions or test-only fixture models before the paper), the library loses the old positional `Lifecycle` and `CPMFunction` forms, `HostPhase(f!, every)`, the D-090 A/B form (`ab.jl … <sequential|checkerboard>`, `ab_one.jl <case> <alg>`, the `AB` line), the `BoundarySiteCPM` fallback in `ab_one.jl`, the pre-D-090 lock compatibility, the birth-serial conversions of old states (now an `ArgumentError`), the `rule = :local`/`:arc_or_pair` symbols, and the `@sweep` solver migration error. `SingleDivisionFixture` moves to `lib/PottsModels/test/fixtures.jl`, with its fingerprint unchanged.
+- **Frozen.** Eight files re-pinned under D-254 with the user's approval: p6_0af, p6_0s_v7_tooling, p6_0v1, p6_3g, p6_0aa, p6_3a, p6_0m (one comment) and the 01_merks page (one comment). The 19 frozen files that name the fixture are unedited.
+- **Kept.** The ModelingToolkit extension's API guards, the state accessors (`cell_kinds` and the others), the 4-argument `Phases`, and the ring builtins (now documented as builtins, not old names).
+- **Tests (Mac).** See the D-254 commit message. The full suites, the docs build and ROCm run on the PC.

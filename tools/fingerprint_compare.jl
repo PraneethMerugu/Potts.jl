@@ -16,6 +16,8 @@ const ROOT = normpath(joinpath(@__DIR__, ".."))
 const WORKER = raw"""
 using Potts, PottsModels, TOML
 using OrdinaryDiffEqRosenbrock: Rodas5P
+# the test-only models of the checkout's PottsModels tests (D-254)
+isdefined(Main, :SingleDivisionFixture) || include(joinpath(dirname(Base.active_project()), "fixtures.jl"))
 two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
 @potts_model FCPair begin
     @kinds medium A

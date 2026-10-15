@@ -59,9 +59,8 @@
 #    is the number of distinct values over the in-domain sites (the medium's 0 is a value).
 #    `components` is gone with no alias (ruling 6): not in `Potts.DSL`, and a model using it
 #    does not build.
-# 7. Aliases (the old names other than `components`), byte-identical generated code and
-#    fingerprint: `rule = :local` ≡ `rule = Local()` ≡ no rule; `rule = :arc_or_pair` ≡
-#    `rule = ArcOrPair()`; `ring_cells` ≡ `distinct(owner[n] for n in shell(target) if
+# 7. Equivalent spellings, byte-identical generated code and fingerprint: `rule = Local()` ≡
+#    no rule; `ring_cells` ≡ `distinct(owner[n] for n in shell(target) if
 #    owner[n] != 0)`; `ring_medium` ≡ `count(owner[n] == 0 for n in shell(target))`.
 #    `ring_arcs` and `local_components` keep their values: `pieces(old, shell(target))` for a
 #    cell, 0 for the medium; `ring_cells` keeps "out of domain is nothing" (no frame).
@@ -99,8 +98,8 @@
 # connectivity(…; penalty)` and `UndefVarError` for `pieces`, `shell`, `Local`, `ArcOrPair`,
 # `Simple` (every readback and veto model, every build-error control); `Potts.DSL` has no
 # `Local`/`ArcOrPair`/`Simple` and `Global` takes no `adjacency`; `:components` is still in
-# the DSL; the `rule = :local` full-shell copy is accepted and the `rule = :arc_or_pair` edge
-# copy is accepted. Passing on the base (controls): the Akeeb check, the oracle
+# the DSL; the full-shell copy under the local rule is accepted and the closed-edge copy under
+# the ring rule is accepted. Passing on the base (controls): the Akeeb check, the oracle
 # self-checks, the old-name values (validated through the same enumeration harness).
 using Potts: CorePotts
 
@@ -470,7 +469,7 @@ end
 @potts_model P63gAliasLocal begin
     @kinds medium A B
     @lattice Lattice((7, 7); boundary = Closed(), neighborhood = Moore(1))
-    @constraint connectivity(A; rule = :local)
+    @constraint connectivity(A; rule = Local())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P63gVetoDefault begin
@@ -488,7 +487,7 @@ end
 @potts_model P63gAliasPair begin
     @kinds medium A B
     @lattice Lattice((7, 7); boundary = Closed(), neighborhood = Moore(1))
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P63gVetoPair begin
@@ -753,10 +752,7 @@ p63g_fp(M) = (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1; σ[6:7, 6:7] .= 2;
               PottsProblem(M(; name = :x), [ownership => σ, kind => [:A, :B]], (0, 1)).f.fingerprint)
 
 const P63G_ALIASES = [
-    "rule = :local ≡ Local() ≡ default" => [:(@constraint connectivity(A; rule = :local)),
-        :(@constraint connectivity(A; rule = Local())), :(@constraint connectivity(A))],
-    "rule = :arc_or_pair ≡ ArcOrPair()" => [:(@constraint connectivity(A; rule = :arc_or_pair)),
-        :(@constraint connectivity(A; rule = ArcOrPair()))],
+    "Local() ≡ default" => [:(@constraint connectivity(A; rule = Local())), :(@constraint connectivity(A))],
     "ring_cells ≡ distinct(…shell…)" => [:(@drive copy => 1.0 * ring_cells),
         :(@drive copy => 1.0 * distinct(owner[n] for n in shell(target) if owner[n] != 0))],
     "ring_medium ≡ count(…shell…)" => [:(@drive copy => 1.0 * ring_medium),

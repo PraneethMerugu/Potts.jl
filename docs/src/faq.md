@@ -64,7 +64,6 @@ Potts.jl then checks the model for dimensional consistency when it compiles the 
 | `` `a` is reserved `` | `a` and `b` are the cells of a link; rename the kind or parameter (e.g. `a₀`) |
 | `` … has the name of a built-in `` | `volume`, `kind`, `target`, `mcs`, … are built in; choose another name |
 | `` model `X` has the field `c`, so `PottsProblem` needs `field_solver = …` `` | pass `PottsProblem(…; field_solver = ExplicitEuler(substeps = n, lower = 0.0))` |
-| `` `@sweep` no longer takes `field_solver` `` | solvers are problem keywords: `PottsProblem(sys, op, tspan; field_solver = …)` |
 | `` primes exist only for site/field variables `` | `x′` is the other side of a contact pair, for site and field variables; for a cell variable write `x[owner′]` |
 | `` `volume` is not available in a drive `` | drives are in the copy scope: write `volume[new]`, `volume[old]` or `volume[owner[target]]` |
 | an error naming `rand()` in an energy, drive or constraint | draw the random number in an update and store it in a variable |

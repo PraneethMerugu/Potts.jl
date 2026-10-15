@@ -206,38 +206,35 @@ end
     @test solve(p0, SequentialCPM(); saveat = 1).u[end].cell.q[1:2] == [1.0, 2.0]        # ref 0: default 0.0
 end
 
-# a state of the dividing model as saved before cell serials existed
+# a state of the dividing model without its serial column and counter: another layout
 cr_old_layout(st) = CorePotts.CPMState(st.σ, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
     st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history)
 
-@testset "a pre-serial state of a dividing model gets birth = slot and a fresh counter" begin
+@testset "a state without the serials of a model that reads `birth` is an ArgumentError" begin
     σ = zeros(Int32, 24, 24); σ[4:9, 4:9] .= 1; σ[15:20, 15:20] .= 2
     p = PottsProblem(CRDivide(; name = :d), [ownership => σ, kind => [:blob, :blob], :partner => [2, 1]], (0, 4);
         capacity = 8)
     old = cr_old_layout(p.u0)
     @test !haskey(old.cell, :birth)
-    q = remake(p; u0 = old)
-    @test q.u0.cell.birth == Int32.(1:8)
-    @test q.u0.model[CorePotts.NEXT_BIRTH] == Int32[9]
-    @test keys(q.u0.cell) == keys(p.u0.cell) && keys(q.u0.model) == keys(p.u0.model)
-    u = solve(q, SequentialCPM()).u[end]
-    alive = findall(>(0), u.cell.volume)
-    @test length(alive) == 4
-    @test sort(observe(q, :bth, u)[alive]) == [1, 2, 9, 10]          # no serial reused
-    # a checkpoint saved before serials
+    err = try
+        remake(p; u0 = old)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("model `d`", err.msg) && occursin("reads `birth`", err.msg)
+    # a checkpoint without serials
     integ = init(p, SequentialCPM())
     step!(integ)
     ck = CorePotts.checkpoint(integ)
     ck0 = CorePotts.PottsCheckpoint(cr_old_layout(ck.state), ck.t, ck.seed, ck.replica, ck.repeat, ck.p,
         ck.fingerprint, ck.stats)
-    u2 = solve(p, SequentialCPM(); checkpoint = ck0).u[end]
-    @test sort(Array(u2.cell.birth)[findall(>(0), u2.cell.volume)]) == [1, 2, 9, 10]
-    # reinit! with an old-layout state
-    integ2 = init(p, SequentialCPM())
-    reinit!(integ2, old)
-    @test integ2.state.cell.birth == Int32.(1:8)
-    solve!(integ2)
-    @test Symbol(integ2.retcode) === :Success
+    @test_throws ArgumentError solve(p, SequentialCPM(); checkpoint = ck0)
+    @test_throws ArgumentError reinit!(init(p, SequentialCPM()), old)
+    # control: the state with its serials
+    q = remake(p; u0 = deepcopy(p.u0))
+    @test q.u0.cell.birth == p.u0.cell.birth && q.u0.model[CorePotts.NEXT_BIRTH] == p.u0.model[CorePotts.NEXT_BIRTH]
+    @test Symbol(solve(q, SequentialCPM()).retcode) === :Success
 end
 
 # E4/E5/E8 (ergonomics review): the reference debug mode `track = (:references,)`, the

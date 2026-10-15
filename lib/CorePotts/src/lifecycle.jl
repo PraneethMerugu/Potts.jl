@@ -167,11 +167,6 @@ Lifecycle(trigger; normal = AlongMinorAxis{Float64}(), kind = keep_kind, divide!
     rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing) =
     Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
         release, owner_changed)
-# the positional forms before P6.5a (no references) and P6.5b (no ownership hook)
-Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every::Int, rules::Val, before) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every, rules, before, nothing)
-Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every::Int, rules::Val, before, release) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, every, rules, before, release, nothing)
 
 # the ownership hook at site `i` (`Lifecycle.owner_changed`)
 @inline _owner_changed!(::Nothing, st, i) = nothing

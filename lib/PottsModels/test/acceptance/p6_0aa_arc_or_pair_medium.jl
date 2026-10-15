@@ -1,5 +1,5 @@
 # P6.0aa (ROADMAP Phase 6, step 0; topology-neighborhood-audit §6 item 4): the pair
-# exemption of `connectivity(k; rule = :arc_or_pair)` needs a medium-free ring, as in TST's
+# exemption of `connectivity(k; rule = ArcOrPair())` needs a medium-free ring, as in TST's
 # `ConnectivityPreservedP` (ca.cpp:1218), which Wortel/Niculescu cite. Frozen (AUTONOMY §7.3).
 #
 # Semantics pinned here (the losing cell `old` is of a constrained kind, 2D square lattice,
@@ -17,7 +17,7 @@
 #
 # The predicate is read the way the other acceptance files read it (`p6_0m_defects.jl`):
 # the compiled constraint `prob.f.constraint` of a `@potts_model` built through the public
-# `connectivity(...; rule = :arc_or_pair)`, and of the published `WortelAct(connected = true)`.
+# `connectivity(...; rule = ArcOrPair())`, and of the published `WortelAct(connected = true)`.
 using Potts: CorePotts
 
 p60aa_allows(prob, σ, x, y) = prob.f.constraint(prob.u0, prob.p,
@@ -28,14 +28,14 @@ p60aa_allows(prob, σ, x, y) = prob.f.constraint(prob.u0, prob.p,
     @kinds medium A
     @lattice Lattice((12, 12); neighborhood = Moore(1))
     @energy cells => (volume - 7)^2
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P60aaClosed begin
     @kinds medium A
     @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => (volume - 7)^2
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 
@@ -89,7 +89,7 @@ const P60AA_SRC = (6, 5)        # the source left of the target: (0, -1) on the 
     @test !p60aa_model_allows(P60aaPeriodic, σ1, P60AA_X, P60AA_SRC)
 
     # the published model that motivated the item: WortelAct(connected = true), same junction
-    # (kind `cell`; its constraint is `connectivity(cell; rule = :arc_or_pair)`)
+    # (kind `cell`; its constraint is `connectivity(cell; rule = ArcOrPair())`)
     wprob = PottsProblem(WortelAct(; name = :w, lattice = (12, 12), connected = true),
         [ownership => σ, kind => [:cell, :cell]], (0, 1))
     @test !p60aa_allows(wprob, σ, P60AA_X, P60AA_SRC)

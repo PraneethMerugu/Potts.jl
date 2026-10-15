@@ -182,20 +182,19 @@ cannot decide reads `false`. A rule without a window is exact there too.
 - **Lifecycles.** Divisions and removals rebuild the trackers on the host. A device
   lifecycle does not maintain them, so that combination is an `ArgumentError`.
 
-## Old names
+## Ring builtins
 
-| Old | New | Generated code |
+`ring_cells`, `ring_medium`, `ring_arcs` and `local_components` are named copy-scope
+builtins. They read the target's neighbor shell. Each one has the fold equivalent below,
+which explains its value.
+
+| Builtin | Fold equivalent | Generated code |
 |---|---|---|
-| `rule = :local` | `rule = Local()` (the default) | identical |
-| `rule = :arc_or_pair` | `rule = ArcOrPair()` | identical |
 | `ring_cells` | `distinct(owner[n] for n in shell(target) if owner[n] != 0)` | identical |
 | `ring_medium` | `count(owner[n] == 0 for n in shell(target))` | identical |
-| `ring_arcs`, `local_components` | `pieces(old, shell(target))` for a cell (0 for the medium) | the values are kept |
-| `components(old; scope = Global())` | removed with no alias; write `!connected(old; rule = Global())` | |
+| `ring_arcs`, `local_components` | `pieces(old, shell(target))` for a cell (0 for the medium) | same values |
 
-The symbols are aliases of the rule values, so their meaning changed with them. Since P6.3g,
-`rule = :local` also refuses a full shell and runs the gain test, and `rule = :arc_or_pair`
-counts the frame at a closed face.
+Like the folds, `ring_cells` reads an out-of-domain position as nothing.
 
 ## Coming from another framework
 

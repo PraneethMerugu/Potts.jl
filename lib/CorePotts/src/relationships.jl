@@ -268,7 +268,6 @@ struct HostPhase{F, R, W}
 end
 HostPhase(f!; every::Integer = 1, reads = nothing, writes = nothing) =
     HostPhase(f!, Int(every), _declared(reads), _declared(writes))
-HostPhase(f!, every::Integer) = HostPhase(f!, Int(every), nothing, nothing)
 _declared(::Nothing) = nothing
 _declared(s::Symbol) = (s,)
 function _declared(names)

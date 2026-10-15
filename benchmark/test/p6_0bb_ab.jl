@@ -139,14 +139,14 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                 env["POTTS_MACHINE"] = "nucbox"
                 out = read(setenv(`$(jl()) -e $code`, env), String)
                 @test out == "false true"
-                # and the D-090 run itself works there: a stub child runs and prints its line
+                # and an A/B run itself works there: a stub child runs and prints its line
                 stubco = mktempdir(; cleanup = true)
                 mkpath(joinpath(stubco, "benchmark"))
                 write(joinpath(stubco, "benchmark", "Project.toml"), "")
-                write(joinpath(stubco, "benchmark", "ab_one.jl"), "println(\"AB 1.0\")")
+                write(joinpath(stubco, "benchmark", "ab_one.jl"), "println(\"ABR c.sequential 1.0 1.0 60 0 0 0\")")
                 sbx = sandbox()
                 p = run(pipeline(ignorestatus(setenv(
-                        `$(jl()) $(joinpath(sbx, "benchmark", "ab.jl")) $stubco $stubco c sequential 1`,
+                        `$(jl()) $(joinpath(sbx, "benchmark", "ab.jl")) $stubco $stubco c cpu 1 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
                         env; dir = sbx)); stdout = devnull, stderr = devnull))
                 @test success(p)
             end
@@ -202,11 +202,6 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
     end
 
     @testset "arguments" begin
-        @test islegacy(["b", "c", "gg", "sequential", "4"])           # the frozen D-090 form
-        @test islegacy(["b", "c", "gg", "checkerboard"])
-        @test !islegacy(["b", "c", "gg", "metal"])                    # Metal goes to the paired form
-        @test !islegacy(["b", "c", "gg", "sequential", "--rounds=4"])
-        @test !islegacy(["b", "c", "gg", "cpu", "4"])
         @test_throws ErrorException parse_ab(["b", "c", "gg"])        # the 3-argument form errors
         o = withenv(() -> parse_ab(["b", "c", "all", "cpu"]), "POTTS_MACHINE" => "nucbox")
         @test o.variants == "sequential,checkerboard" && o.rounds == 8 && o.control &&
@@ -221,7 +216,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--stat=mean"])
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--wait=sometimes"])
         o = parse_ab([
-            "b", "c", "gg", "sequential", "--no-control", "--no-seed", "--rounds=3"])
+            "b", "c", "gg", "cpu", "--alg=sequential", "--no-control", "--no-seed", "--rounds=3"])
         @test o.backend == "cpu" && o.variants == "sequential" && !o.control &&
               o.seed == 0 &&
               o.rounds == 3
@@ -230,6 +225,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         o = parse_ab(["--inprocess", "d", "v.jl", "cpu", "--alg=checkerboard"])
         @test o.inprocess && o.pos == ["d", "v.jl", "cpu"] && o.variants == "checkerboard"
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cuda"])
+        @test_throws ErrorException parse_ab(["b", "c", "gg", "sequential"])   # an algorithm is not a backend
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--alg=metal"])
         @test_throws ErrorException parse_ab(["b", "c"])
     end
@@ -413,7 +409,10 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             using BenchmarkTools
             const DEVICE = ""
             device_backend() = nothing
-            struct SequentialCPM end
+            struct SequentialCPM
+                skip_interior::Bool
+            end
+            SequentialCPM(; skip_interior = false) = SequentialCPM(skip_interior)
             struct CheckerboardCPM end
             cases(T) = ["fake" => () -> (; u0 = (; σ = zeros(T, 10)))]
             fresh_integrator(prob, alg, backend) = nothing
@@ -437,9 +436,6 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         out = run1(
             "all", "sequential", "--samples=3", "--seconds=1", "--wait=none", "--seed=0")
         @test occursin("ABR fake.sequential", out)
-        out = run1("fake", "sequential")             # the D-090 form: one AB line only
-        l = filter(!isempty, split(out, '\n'))
-        @test length(l) == 1 && startswith(l[1], "AB ")
         buf = IOBuffer()
         p = run(pipeline(
             ignorestatus(`$(jl()) --project=$proj $one nope sequential --wait=none --seed=0`);

@@ -11,13 +11,11 @@
 #    first, polling about once a second, so a run queued before an A/B runs before the
 #    A/B's next round (each round takes a fresh ticket at the back). Entries whose names
 #    are not numbers are ignored.
-#  - The lock is the directory $LOCK (atomic mkdir), as in the earlier script that other
-#    checkouts may still run: the head of the queue must still take it, so this script and
-#    the earlier one are mutually exclusive.
+#  - The lock is the directory $LOCK (atomic mkdir), taken by the head of the queue.
 #  - Stale rules. Live waiters touch their ticket at every poll and a live holder touches
 #    its ticket and the lock every minute, so a ticket untouched for 5 minutes belongs to a
-#    dead process (e.g. a SIGKILLed waiter) and is removed. The lock keeps the earlier
-#    script's 3-hour rule, because that script's holders never refresh it.
+#    dead process (e.g. a SIGKILLed waiter) and is removed. A lock untouched for 3 hours is
+#    removed (the frozen tooling test checks this rule).
 #  - The ticket and lock are removed on exit, including after INT, TERM, HUP, QUIT or PIPE
 #    (the command still finishes first: the lock is held for as long as it runs).
 # All state lives under paths starting with /tmp/potts-exclusive (the frozen test relies
