@@ -108,7 +108,6 @@ cell–medium), drawn as one `linesegments` plot with square caps so the outline
   inhibited), by default in the colors of M's 2 Oct Fig 7: growing RGB(44,123,182),
   inhibited RGB(253,174,97); `state_colors = (growing, inhibited)` sets others (the 9 Oct
   draft's grids use yellow and teal or red).
-- `colour` and `state_colours` are deprecated aliases of `color` and `state_colors`.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """

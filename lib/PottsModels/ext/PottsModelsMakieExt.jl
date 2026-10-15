@@ -162,17 +162,7 @@ function _site_counts(frame)
 end
 
 function PottsModels.openvt_colony_panel!(ax, frame; color::Symbol = :area, areas = nothing, inhibited = nothing,
-        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colors = (GROWING, INHIBITED),
-        colour = nothing, state_colours = nothing)
-    # the British keywords are deprecated aliases (American spelling, 2026-10-14)
-    if colour !== nothing
-        Base.depwarn("`openvt_colony_panel!(…; colour)` is deprecated, use `color`", :openvt_colony_panel!)
-        color = colour
-    end
-    if state_colours !== nothing
-        Base.depwarn("`openvt_colony_panel!(…; state_colours)` is deprecated, use `state_colors`", :openvt_colony_panel!)
-        state_colors = state_colours
-    end
+        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colors = (GROWING, INHIBITED))
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_colony_panel!: a 2D frame is required"))
     if color === :area
         a = areas === nothing ? _site_counts(frame) : areas

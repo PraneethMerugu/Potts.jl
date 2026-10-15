@@ -72,8 +72,7 @@ function cb_quotes(dir)
         "and its GPU | `$(c8(prov["commit"]))` |"]
     cell(s) = replace(s, "|" => "∣")
     # display only: the page uses American spelling (D-249); the record's text is unchanged
-    am(s) = replace(s, "colour" => "color", "Colour" => "Color", "characteris" => "characteriz",
-        "Characteris" => "Characteriz", "neighbour" => "neighbor", "Neighbour" => "Neighbor")
+    am(s) = replace(s, "characteris" => "characteriz")
     function cause(d)
         r = abl[key(d)]
         x(k) = parse(Float64, r[k])

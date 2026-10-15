@@ -2419,3 +2419,8 @@ The maintainer approved F-1…F-6 (D-049).
 - **Evidence (CPU only, 99301437 → 94f6b516).** Wall time 42 → 23 min; largest control half-width 0.0245 → 0.0147; candidate ratios agree. The GG control offset (about 4.5–4.9 %) is the same with and without the scrub.
 - **Review.** Adversarial APPROVE after three rounds (round 1: the ROCm wait allocates, so devices keep the scrub; round 2: the allocation fields are minima, and the exit-3 action).
 - **Repeat.** Waived for the CPU if the next routine CPU A/B shows zero GC time in every sample; otherwise a reversed-order pair decides.
+
+## 2026-10-15 — No deprecation aliases (D-249 amendment)
+
+- **What.** `openvt_colony_panel!` loses the `colour`/`state_colours` aliases and their `Base.depwarn` blocks (user: no deprecation warnings or refactor bloat until the paper is released). The two `colou?rs` assertions of `15_openvt_checkerboard_page.jl` noted in the frozen-pages entry above are back to their original form with `colors`. `page_quotes.jl` maps only "characteris".
+- **Frozen.** `15_openvt_f1_f4.jl` and `15_openvt_checkerboard_page.jl` re-pinned under D-249; the user's approval of the re-pins is batched with the shim audit.
