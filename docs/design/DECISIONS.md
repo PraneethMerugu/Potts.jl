@@ -4711,3 +4711,45 @@ The reference is the existing f3-f8 record; there is no sequential re-run.
 
   CI then runs the base's copy on the pushed range and logs the verdict. MAINTAINER is an audit line, not a failure; a crash fails the step. CI does not enforce the rule; the coordinator and the reviewer apply it before the push.
 - **First use.** The tool must be at the base, so the first AUTO is possible only for a re-freeze based on a commit that already contains this change.
+
+## D-252 CPU A/B children skip BenchmarkTools' GC scrub (`gctrial`); device and legacy runs keep it; every CPU sample is checked for GC (2026-10-15; maintainer OK to take it to review, from a measured A/B pair; adversarial review round 1 applied; under D-171, D-179, D-242)
+
+- **Why.** On the PC, one A/B child process took 71 s on the CPU (16 cases) and 97 s on ROCm (8 cases). The timed steps were only 1.7 s and 0.1 s of that (stage profile, 2026-10-15, checkout at 99301437, logical CPU 12).
+  - Each `run(@benchmarkable …)` begins with BenchmarkTools' `gctrial` scrub, three `GC.gc()` calls at about 0.65 s each, once per trial before its first sample. That is about 2 s per measurement.
+  - With `gctrial = false` the same measurement takes 0.02–0.04 s, as does a plain loop. On the CPU the benchmark runs took 38.2 s of the child's 71 s, about 36 s of it scrubbing (16 × ~2.2 s); over 32 children that is about 19 min per CPU A/B.
+- **Evidence (CPU only).** The same CPU A/B, 99301437 → 94f6b516, all cases, 8 rounds, no disturbed runs, was run twice with one harness: with the scrub, then without it.
+
+  | | gctrial on | gctrial off |
+  |---|---|---|
+  | wall time | 42 min | 23 min |
+  | largest control deviation (GG sequential) | 0.0452 | 0.0490 |
+  | largest control deviation, other cases | about 1.0 % | about 0.8 % |
+  | largest control interval half-width | 0.0245 | 0.0147 |
+  | verdict | pass (margin 1.0048) | UNREADABLE (margin 1.0010) |
+
+  - The candidate ratios agree between the runs, e.g. Akeeb 0.98 / 0.97 and Merks 2008 0.996 / 0.997.
+  - The verdicts differ only because GG's control deviation, about 4.5–4.9 % in both modes with the control copies faster, sets the margin. The scrub neither causes nor contains it; that offset is a separate, open investigation.
+- **Why the scrub hardly matters on the CPU.** It sets the heap state before sample 1 only; `gcsample` is false.
+  - With `setup` building a fresh integrator and `evals = 1`, allocation happens before every sample, so the scrub never governed samples 2–60. The median over ~60 samples barely depends on it.
+  - A child runs single-threaded, and a CPU step that allocates nothing cannot start a collection inside a sample.
+  - The gate's warm-allocation check (`gate.jl`, the minimum of `@allocated` over five calls on MCS 4–8) supports this but is weaker than a per-sample check: it times different MCS, and a minimum hides occasional allocations.
+- **Checked on every run instead of argued.** Each `ABR` line now ends with three fields:
+  - the trial's largest per-sample GC time (ns);
+  - the minimum allocations over the trial's samples;
+  - the minimum bytes over the trial's samples (BenchmarkTools keeps the minimum, so these two show only allocation present in every sample; the GC field is the check).
+
+  `ab.jl` reads only fields 2–4, and the D-090 `AB` line is unchanged. On the CPU, a GC time above zero in any sample is reported as `DISTURBED` ("a GC ran inside a timed sample of …"), so the A/B exits 3.
+  - That reason is not machine noise. A child runs one thread with no interactive threads, finalizers never start a collection, the step does not yield, and the GC count is read after `setup`. So a collection in a sample means the timed step allocated, which recurs on re-timing.
+  - This amends the exit-3 action of D-171 and AUTONOMY.md (its exit-3 line, "re-time with the machine idle") for this cause only. Do not re-time: run `gate.jl` on the side the log names (`round r <side>:`). On the candidate it is an allocation regression; on the base it is a pre-existing one to report. Exit 3 still takes precedence over 1, so an allocating, slower candidate shows here, not as REGRESSION. `benchmark/README.md` states the same.
+- **Devices keep the scrub.** The ROCm harness wait (`gate.jl` `device_sync(::ROCBackend)`) spins on `AMDGPU.HIP.isdone`, which allocates 16 B per call (D-179). That is why the library waits through a raw `ccall`.
+  - So every ROCm sample allocates, and a GC (with device-array finalizers from the previous case's setup integrators) can start inside a sample.
+  - The gate never checks device allocations (`measure` records 0 off the CPU), and nothing here was measured on ROCm or Metal.
+- **The change.**
+  - In `ab.jl`, `gctrial` defaults to off for `cpu` and on for `rocm` and `metal`. `--gctrial` or `--no-gctrial` overrides it, the child always receives the explicit flag, and the log header says "gctrial on" or "gctrial off".
+  - In `ab_one.jl` without a flag, the default is off for the CPU variants and on for device variants and for the D-090 legacy form.
+  - In the legacy form `ab.jl` runs each checkout's own `ab_one.jl`, and an older one always scrubs. So a mixed legacy run (old base, new candidate) still scrubs on both sides.
+  - `gate.jl` keeps its scrub: it checks allocations, its timings are informational, and it runs rarely.
+- **Repeat plan.**
+  - **CPU:** no repeat pair. The next routine CPU A/B must show zero GC time in every sample (no `DISTURBED` from the new check). If it does not, a reversed-order repeat (off first, then on) on 99301437 → 94f6b516 decides.
+  - **ROCm and Metal:** unchanged (scrub on), so no pair is needed. Turning it off there would need its own on/off pair.
+- **Effect.** About 19 min less per CPU A/B (measured 42 → 23 min). ROCm A/Bs are unchanged.

@@ -2412,3 +2412,10 @@ The maintainer approved F-1…F-6 (D-049).
 - **Cost.** Generated code for models that do not use the helpers is unchanged (16/16 gate fingerprints), so no A/B (D-242).
 - **Review.** Adversarial APPROVE after three rounds (fixed: `uses_clusters` missed `over = cluster`; `_check_geometry` gaps; a dead slot read its cluster's sum; a `@boundary` mask with `centroid` crashed; E6 docs).
 - **Tests.** The branch's own PC run failed only in `test/device_ir.jl`, which predates 73dfe2b2 (GPUCompiler 2's ScopedValue hook) and stopped the GPU group early. On the merged tree (with 73dfe2b2) every PC suite passes, GPU included, and so does the docs build.
+
+## 2026-10-15 — A/B harness: CPU timing without the per-trial GC scrub (D-252)
+
+- **What.** `ab.jl`/`ab_one.jl` time CPU cases with `gctrial = false`; ROCm, Metal and the legacy D-090 form keep the scrub (`--gctrial`/`--no-gctrial` override). Each `ABR` line also carries the trial's largest per-sample GC time and the minimum allocations and bytes. On the CPU any GC inside a timed sample marks the run DISTURBED, and D-252 says why that is an allocation in the timed step, not machine noise: run gate.jl on the named side, do not re-time.
+- **Evidence (CPU only, 99301437 → 94f6b516).** Wall time 42 → 23 min; largest control half-width 0.0245 → 0.0147; candidate ratios agree. The GG control offset (about 4.5–4.9 %) is the same with and without the scrub.
+- **Review.** Adversarial APPROVE after three rounds (round 1: the ROCm wait allocates, so devices keep the scrub; round 2: the allocation fields are minima, and the exit-3 action).
+- **Repeat.** Waived for the CPU if the next routine CPU A/B shows zero GC time in every sample; otherwise a reversed-order pair decides.

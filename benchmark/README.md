@@ -94,7 +94,7 @@ apart narrows what passes; it never loosens it.
 | 0 | pass: every candidate/base ≤ margin |
 | 1 | regression: some candidate/base > 1 + `--tolerance` (0.05) |
 | 2 | unreadable: some candidate/base between the margin and 1 + tolerance; re-run, or judge with the controls' range stated |
-| 3 | some timed run was disturbed (listed); takes precedence: time again with the machine idle |
+| 3 | some timed run was disturbed (listed); takes precedence: time again with the machine idle. Exception (D-252): `a GC ran inside a timed sample of …` on a CPU case is not noise but an allocating step; run `gate.jl` on the side named in the `round r <side>:` line, and on the candidate treat it as an allocation regression |
 | 4 | harness error: bad arguments, a dirty checkout or one that is not a checkout's top level, a candidate that skips a case, a child that crashed |
 
 A control whose interval excludes 1 is flagged on its case (a per-checkout offset, below);
