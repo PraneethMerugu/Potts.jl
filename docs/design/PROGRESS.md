@@ -2389,3 +2389,12 @@ The maintainer approved F-1…F-6 (D-049).
   - ROCm passes: 0.997–1.014, largest control deviation 0.0119.
 - **Tests.** The forced permuted regime runs on the device before the ROCm IR scan, and on the CPU with whole-cell connectivity. The keyless and colliding mutants fail. The PC suites pass (frozen, CorePotts, GPU), and so does CorePotts on the merged tree.
 - **Review.** Adversarial APPROVE after three rounds.
+
+## 2026-10-15 — P6.0cd: two-word sequential site picks above 2^24 sites merged (D-247)
+
+- **What.** Above 2^24 sites, `SequentialCPM` and the boundary-site sweep pick a target with `bounded64` (bias ≤ n/2^64). `SequentialCPM` takes the second word from its draw's unused fourth word; the boundary sweep draws local index 1 of the same address. The regime is a type in the sweep context (`TwoWordPick`), so up to 2^24 sites every run is bit-identical. D-237's refusal of more than 2^32 mobile sites is narrowed to the `Int32` site lists (`skip_interior`, frozen masks).
+- **First A/B (in-loop branch).** CPU regressed 1.6–2.9 % on the sequential cases. Making the regime a type gives optimized IR of `sequential_mcs!` and `boundary_site_mcs!` byte-identical to 99301437 on GG 72² and cubes 16³; `P60BK2_IR` is back at D-237's values, so nothing frozen changes.
+- **Re-A/B (94f6b516) against 99301437, CPU.** Unreadable only on graner_glazier_72, where the candidate's control ran 2.7–4.2 % fast (cand-ctl/base about 1.004 sequential, 0.998 checkerboard). Every other case is within ±0.4 %, and akeeb sequential reads 0.971. With identical IR and the controls stated, judged a pass.
+- **Tests.** The bias negative control (one word draws the five-input sites 34.3 % of the time, two words 29.5 %), the forced regime on both sweeps (ΔH sums, volume recounts, acceptance), and an unforced 4100² replay oracle of every target. The PC suites pass (frozen, CorePotts, Potts, PottsModels).
+- **Merge.** The conflicts with D-246 were independent additions (DECISIONS, ROADMAP, the two CorePotts testsets).
+- **Review.** Adversarial APPROVE.

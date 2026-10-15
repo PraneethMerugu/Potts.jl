@@ -13,8 +13,9 @@ function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, tr
     accepted = 0
     tracked = track === nothing ? nothing : 0.0
     for attempt in 1:nsite
-        rt, rd, ra, _ = draw(key, mcs, attempt, STREAM_SEQUENTIAL_TARGET)
-        t = mobile_site(mob, bounded(rt, nsite) + 1)
+        rt, rd, ra, rx = draw(key, mcs, attempt, STREAM_SEQUENTIAL_TARGET)
+        # the pick regime is the context's type (D-247): one word unless the caller marked it
+        t = mobile_site(mob, site_pick(_pick_regime(ctx), rt, rx, nsite) + 1)
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
         inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])

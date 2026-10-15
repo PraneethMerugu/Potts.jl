@@ -116,6 +116,8 @@ key.k0 ⊻= (entity >> 32) * W1       # high word of the entity; 0 below 2³², 
 - Nothing depends on thread order or launch order. The same seed reproduces a run on
   a given backend; this is free, and not a published guarantee (D-029).
 - Bounded integer draws use Lemire multiply-shift. Uniforms are grid midpoints in (0,1).
+  Site picks over more than 2²⁴ sites (the sequential and boundary-site targets) multiply
+  two words (`bounded64`, bias ≤ n/2⁶⁴). Below that, one word keeps every existing draw (D-247).
 - The requested `tspan` must fit the 32-bit MCS field (checked at `init`).
 - 4x32 rather than the old 4x64: 32-bit multiplies are native on every GPU.
 

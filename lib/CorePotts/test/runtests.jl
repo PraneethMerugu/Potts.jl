@@ -265,6 +265,134 @@ surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
         @test_throws ArgumentError CorePotts.CheckerboardCache(CorePotts.KernelAbstractions.CPU(), Lattice((3 * 2^31,)), fc, 1)
     end
 
+    @testset "rng: two-word site picks (D-247)" begin
+        rng = Random.Xoshiro(5)
+        b64 = CorePotts.bounded64
+        # exactly ⌊x·n / 2⁶⁴⌋ for the 64-bit x = hi·2³² + lo, always in 0:n-1
+        for _ in 1:2000
+            hi, lo, n = rand(rng, UInt32), rand(rng, UInt32), rand(rng, 1:(2^40))
+            @test b64(hi, lo, n) == Int(div(((BigInt(hi) << 32) + lo) * n, BigInt(2)^64))
+            @test 0 <= b64(hi, lo, n) < n
+        end
+        @test b64(typemax(UInt32), typemax(UInt32), 10^12) == 10^12 - 1
+        # up to 2³² sites it refines the one-word pick: the same site, or the next one when the
+        # low word carries (probability about n / 2³³), so small runs barely change
+        for _ in 1:2000
+            hi, lo, n = rand(rng, UInt32), rand(rng, UInt32), rand(rng, 1:(2^32))
+            @test b64(hi, lo, n) - bounded(hi, n) in (0, 1)
+        end
+        @test b64(UInt32(0), UInt32(0), 7) == 0
+        # the bias it removes: at n = 10⁹ the one-word map gives 2³² - 4n sites five inputs and
+        # the rest four, so those sites are drawn 34.3 % of the time instead of their 29.5 %
+        n = 10^9
+        five(t) = cld((t + 1) * 2^32, n) - cld(t * 2^32, n) == 5
+        share = (2^32 - 4n) / n
+        one = mean(_ -> five(bounded(rand(rng, UInt32), n)), 1:400_000)
+        two = mean(_ -> five(b64(rand(rng, UInt32), rand(rng, UInt32), n)), 1:400_000)
+        @test abs(one - 5 * (2^32 - 4n) / 2^32) < 0.003          # negative control: the bias is real
+        @test abs(two - share) < 0.003                           # and gone with two words
+        @test !CorePotts._two_word_pick(2^24) && CorePotts._two_word_pick(2^24 + 1)
+        # end to end, forced on a small lattice: trackers and the tracked ΔH stay exact
+        σ, kinds = blocks((30, 30), 5)
+        lat = Lattice((30, 30))
+        on = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackDeltaH{Float64}())
+        prob = PottsProblem(on, initial_state(σ, kinds), lat, (0, 15), gg_params())
+        H(u) = total_H(u, lat, prob.contact, gg_params())
+        for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true))
+            base = [solve(remake(prob; seed), alg) for seed in 1:4]
+            CorePotts._FORCE_TWO_WORD_PICK[] = true
+            wide = try
+                [solve(remake(prob; seed), alg) for seed in 1:4]
+            finally
+                CorePotts._FORCE_TWO_WORD_PICK[] = false
+            end
+            for sol in wide
+                u0, u = sol.u[1], sol.u[end]
+                @test sol.stats.accepted_ΔH == H(u) - H(u0) && abs(H(u) - H(u0)) > 100
+                vol = zeros(Int32, length(kinds))
+                foreach(s -> s > 0 && (vol[s] += 1), u.σ)
+                @test vol == u.cell.volume
+            end
+            ratio = sum(s -> s.stats.accepted, wide) / sum(s -> s.stats.accepted, base)
+            @test abs(ratio - 1) < 0.05
+            @test solve(remake(prob; seed = 1), alg).u[end].σ == base[1].u[end].σ  # unforced: unchanged
+        end
+        # the hook reaches the caller's choice of regime, which is the sweep context's type:
+        # marked contexts take two words, others one, and each method is its map
+        @test CorePotts._pick_regime(CorePotts._with_two_word_pick((; mcs = 0))) === CorePotts.TwoWordPick() &&
+              CorePotts._pick_regime((; mcs = 0)) === nothing
+        # review (MEDIUM): the key is not an identifier, so a relation named `pick` neither
+        # selects a regime nor is shadowed by one; it ran before D-247 and still runs
+        @test CorePotts._pick_regime((; mcs = 0, pick = 1)) === nothing
+        @test CorePotts._with_two_word_pick((; pick = 1)).pick === 1
+        let lat = Lattice((30, 30)), (σ, kinds) = blocks((30, 30), 5)
+            f = CPMFunction(gg_delta_H; temperature = gg_temperature)
+            prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 3), gg_params(); relations = (; pick = Moore(1)))
+            for alg in (SequentialCPM(), SequentialCPM(; skip_interior = true)), force in (false, true)
+                CorePotts._FORCE_TWO_WORD_PICK[] = force
+                sol = try
+                    solve(prob, alg)
+                finally
+                    CorePotts._FORCE_TWO_WORD_PICK[] = false
+                end
+                @test SciMLBase.successful_retcode(sol)
+            end
+            # `mcs` is the sweep's own context field (D-188), so a relation may not take it
+            @test_throws r"relation names .*`mcs`.* are reserved" PottsProblem(f, initial_state(σ, kinds), lat, (0, 3),
+                gg_params(); relations = (; mcs = Moore(1)))
+        end
+        for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))
+            @test CorePotts.site_pick(nothing, hi, lo, n) == CorePotts.bounded(hi, n)
+            @test CorePotts.site_pick(CorePotts.TwoWordPick(), hi, lo, n) == CorePotts.bounded64(hi, lo, n)
+            @test CorePotts._boundary_pick(nothing, hi, nothing, 0, 1, n) == CorePotts.bounded(hi, n)
+        end
+        CorePotts._FORCE_TWO_WORD_PICK[] = true
+        @test CorePotts._two_word_pick(10)
+        CorePotts._FORCE_TWO_WORD_PICK[] = false
+        @test !CorePotts._two_word_pick(10)
+        # the wiring, exactly, unforced above 2²⁴ sites: on 4100² every site borders the other
+        # of two interleaved cells, a constraint that refuses every copy records each
+        # attempt's target, and σ never changes, so the targets replay test-side from `draw`
+        L = 4100
+        big = Lattice((L, L))
+        n = L * L
+        @test n > CorePotts.PICK_ONE_WORD_MAX
+        K = 300_000
+        rec, cnt = zeros(Int, K), Ref(0)
+        record(st, p, prop, ctx) = (cnt[] < K && (cnt[] += 1; rec[cnt[]] = prop.target); false)
+        f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = record)
+        σb = Int32[1 + (i + j) % 2 for i in 1:L, j in 1:L]
+        bprob = PottsProblem(f, initial_state(σb, Int32[1, 2]), big, (0, 1), gg_params(); seed = 2)
+        key = RNGKey(2)
+        # SequentialCPM: attempt a's target from its draw's first and fourth words
+        solve(bprob, SequentialCPM())
+        @test cnt[] == K
+        seq(m, a, wide) = (w = draw(key, m, a, CorePotts.STREAM_SEQUENTIAL_TARGET);
+            (wide ? CorePotts.bounded64(w[1], w[4], n) : bounded(w[1], n)) + 1)
+        ms = filter(m -> all(a -> rec[a] == seq(m, a, true), 1:K), 0:1)       # the MCS index used
+        @test length(ms) == 1
+        m = only(ms)
+        @test count(a -> rec[a] != seq(m, a, false), 1:K) > 100       # one word differs (~0.2 %)
+        # the boundary sweep: every site is in B (no skips), pick j from draw j's second word
+        # and local index 1's first word, over B's list
+        cnt[] = 0
+        integ = init(bprob, SequentialCPM(; skip_interior = true); save_start = false)
+        step!(integ)
+        @test cnt[] == K && integ.cache.n == n
+        list = integ.cache.list
+        bnd(j, wide) = (w = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE);
+            lo = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE, 1)[1];
+            Int(list[(wide ? CorePotts.bounded64(w[2], lo, n) : bounded(w[2], n)) + 1]))
+        @test all(j -> rec[j] == bnd(j, true), 1:K)
+        @test count(j -> rec[j] != bnd(j, false), 1:K) > 100
+        # Int32 site lists refuse lattices above 2³¹ - 1 sites (no allocation: a bare lattice)
+        huge = Lattice((2^16, 2^16))
+        @test_throws ArgumentError CorePotts._check_site_lists(huge, nothing, SequentialCPM(; skip_interior = true))
+        @test_throws ArgumentError CorePotts._check_site_lists(huge, falses(1), CheckerboardCPM())
+        @test CorePotts._check_site_lists(huge, nothing, SequentialCPM()) === nothing
+        @test CorePotts._check_site_lists(huge, nothing, CheckerboardCPM()) === nothing
+    end
+
     @testset "coloring is conflict free" begin
         for (dims, bnd, s) in (((12, 12), Periodic(), 2), ((13, 11), Periodic(), 2),
                 ((13, 7), Periodic(), 3), ((10, 9), Closed(), 3), ((7, 5, 6), Periodic(), 2),

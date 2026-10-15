@@ -101,6 +101,32 @@ end
 """Lemire multiply-shift draw on `0:n-1` (bias ≤ n / 2³²)."""
 @inline bounded(x::UInt32, n::Integer) = Int((UInt64(x) * UInt64(n)) >> 32)
 
+"""Multiply-shift draw on `0:n-1` from two words, `hi` and `lo` (bias ≤ n / 2⁶⁴; host only)."""
+@inline bounded64(hi::UInt32, lo::UInt32, n::Integer) =
+    Int((UInt128((UInt64(hi) << 32) | lo) * UInt128(n)) >> 64)
+
+# Site picks of the sequential sweeps over `n` sites (D-247): one word up to 2^24 mobile sites,
+# where the bias n / 2³² is at most 2⁻⁸ and every existing run keeps its draws; two words
+# above (bias ≤ n / 2⁶⁴). The regime is part of the sweep context's type: the caller adds
+# `var"#pick" = TwoWordPick()` above the threshold, and a context without it compiles to the
+# one-word sweep exactly (a runtime branch in the loop slowed the CPU sweeps). The key is not
+# an identifier, so no relation (whose names share the context) can take or shadow it.
+const PICK_ONE_WORD_MAX = 2^24
+struct TwoWordPick end
+# tests: the two-word pick on a small lattice (read by the caller once per MCS)
+const _FORCE_TWO_WORD_PICK = Ref(false)
+const PICK_KEY = Symbol("#pick")
+_with_two_word_pick(ctx::NamedTuple) = merge(ctx, NamedTuple{(PICK_KEY,)}((TwoWordPick(),)))
+_two_word_pick(n) = _FORCE_TWO_WORD_PICK[] || n > PICK_ONE_WORD_MAX
+# resolved at compile time; dispatch on the folded `Val` leaves no branch (`get` left an empty block)
+@inline _pick_regime(ctx::NamedTuple{names}) where {names} = _pick_regime(ctx, Val(PICK_KEY in names))
+@inline _pick_regime(::NamedTuple, ::Val{false}) = nothing
+@inline _pick_regime(ctx::NamedTuple, ::Val{true}) = getfield(ctx, PICK_KEY)
+# dispatch, not a ternary, and the one-word method is `bounded`'s body rather than a call to it,
+# so it inlines to exactly the old IR (each wrapper layer leaves an empty block)
+@inline site_pick(::Nothing, hi::UInt32, lo::UInt32, n::Integer) = Int((UInt64(hi) * UInt64(n)) >> 32)
+@inline site_pick(::TwoWordPick, hi::UInt32, lo::UInt32, n::Integer) = bounded64(hi, lo, n)
+
 """
     cell_entity(id, generation) -> UInt64
 

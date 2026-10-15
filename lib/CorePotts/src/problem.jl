@@ -44,8 +44,8 @@ function PottsProblem(f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p;
     t0, t1 = Int.(tspan)
     0 <= t0 <= t1 <= typemax(UInt32) ||
         throw(ArgumentError("tspan must satisfy 0 ≤ t0 ≤ t1 ≤ 2^32 - 1"))
-    any(in((:contact, :proposal, :lattice, :mobility, :spacing)), keys(relations)) &&
-        throw(ArgumentError("relation names `contact`, `proposal`, `lattice`, `mobility`, `spacing` are reserved"))
+    any(in((:contact, :proposal, :lattice, :mobility, :mcs, :spacing)), keys(relations)) &&
+        throw(ArgumentError("relation names `contact`, `proposal`, `lattice`, `mobility`, `mcs`, `spacing` are reserved"))
     rs = map(r -> relation(r, lattice), NamedTuple(relations))
     h = spacing === nothing ? nothing : Tuple(spacing)
     h === nothing || (length(h) == ndims(lattice) && all(x -> x > 0, h)) ||
@@ -314,6 +314,15 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
 end
 CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolve.init(prob; kwargs...))
 
+# The boundary list and a frozen mask's mobile-site list store sites as Int32: refuse, never
+# wrap (D-247). Plain all-mobile lattices index sites as Int.
+function _check_site_lists(lat, frozen, alg)
+    nsites(lat) > typemax(Int32) && (frozen !== nothing || _skips_interior(alg)) && throw(ArgumentError(
+        "this lattice has $(nsites(lat)) sites; a frozen mask and SequentialCPM(; skip_interior = true) " *
+        "list sites as Int32 and support at most 2^31 - 1 (D-247)"))
+    return nothing
+end
+
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
@@ -327,14 +336,10 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
     isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
+    _check_site_lists(lat, prob.frozen, alg)
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
-    # the sequential sweeps pick a target with one 32-bit word (`bounded`): above 2³² mobile
-    # sites some sites would never be proposed, so refuse rather than wrap (D-237)
-    alg isa SequentialCPM && nmobile(ctx.mobility, lat) > Int(typemax(UInt32)) + 1 && throw(ArgumentError(
-        "SequentialCPM draws its target from one 32-bit word and supports at most 2^32 mobile sites; " *
-        "this lattice has $(nmobile(ctx.mobility, lat)). Use CheckerboardCPM (D-237)"))
     # whole-cell connectivity (P6.9a): the flood scratch and the evaluation mode; nothing otherwise
     ctx = merge(ctx, connectivity_ctx(backend, prob.f, lat, alg isa CheckerboardCPM ? GlobalBoard() : GlobalExact()))
     _preflight(prob, alg, ctx)
@@ -510,6 +515,20 @@ end
 # `Base.afoldl`, not `_each`: the MCS order is compiler-built and short (`Phases` caps it at 31, afoldl's unrolled limit)
 _run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); nothing), nothing, t...); nothing)
 
+function _sequential_sweep!(integ::PottsIntegrator, ctx)
+    if _skips_interior(integ.alg)
+        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+    else
+        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.f.track)
+    end
+    integ.stats.accepted = max(integ.stats.accepted, 0) + acc
+    tracked === nothing || (integ.stats.accepted_ΔH += tracked)
+    status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    return nothing
+end
+
 # One entry of the MCS order: a tuple of phases, the sweep or the lifecycle.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple)
     integ.stats.launches += _run_phases(phases, integ.state, integ.p, integ.ctx,
@@ -520,18 +539,11 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase)
     # the copy functions see the number of completed MCS as `ctx.mcs` (the copy-scope `mcs`,
     # D-188): n − 1 during the n-th MCS, as the phases' `mcs`
     ctx = sweep_ctx(integ.ctx, integ.t)
-    if _skips_interior(integ.alg)
-        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
-        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
-        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
-    elseif integ.alg isa SequentialCPM
-        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.f.track)
-        integ.stats.accepted = max(integ.stats.accepted, 0) + acc
-        tracked === nothing || (integ.stats.accepted_ΔH += tracked)
-        status != 0 && (integ.retcode = SciMLBase.ReturnCode.Failure)
+    if integ.alg isa SequentialCPM
+        # the site-pick regime is fixed per sweep in the context's type (D-247): two static
+        # calls, so the one-word sweep compiles exactly as before
+        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx)) :
+        _sequential_sweep!(integ, ctx)
     else
         integ.stats.launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, ctx, integ.law, integ.key, integ.t)
