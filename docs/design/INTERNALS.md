@@ -285,7 +285,7 @@ provide it errors rather than narrowing (F9).
 ## 2. Potts — symbolic layer
 
 Depends on ModelingToolkitBase, Symbolics, SymbolicIndexingInterface, DynamicQuantities,
-CorePotts. Full ModelingToolkit, MethodOfLines and Unitful are extensions.
+CorePotts. Full ModelingToolkit (AGPL) is not a dependency or an extension (D-256).
 
 ### 2.1 `PottsSystem <: ModelingToolkitBase.AbstractSystem`
 

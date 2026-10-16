@@ -1121,11 +1121,8 @@ end
   `Clock(dt; phase)`. `ShiftIndex()` (an inferred clock) is not available.
 - Random-order asynchronous updating is written in MTK form: a per-cell draw
   `@equations grn.u ~ rand()` and rules `A(k) ~ ifelse(u < 1/3, f_A, A(k - 1))`.
-- Loading full `ModelingToolkit` (11.45 or later; its compiler rejects clocked systems) is
-  supported: the `PottsModelingToolkitExt` extension compiles discrete components through
-  MTK's discrete-pass hook, with the same generated code. Full MTK also compiles
-  continuous components itself; it may order their unknowns differently (so the cell
-  variables are declared in another order), with the same results.
+- Components compile with ModelingToolkitBase's `mtkcompile`. Full `ModelingToolkit` (AGPL)
+  is not a dependency, and Potts has no extension for it (D-256).
 
 **Randomness (implemented).**
 - `rand()` inside a model is a uniform draw in (0, 1), fresh every MCS for every cell or

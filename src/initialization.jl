@@ -11,13 +11,12 @@
 # an operating-point value fixes a variable, a variable declared without one is solved for
 # when its scope's conditions name it. An operating-point value of an algebraic variable
 # (`y ~ expr` in `@equations`) is the condition `expr ~ value`. Potts checks the counts itself
-# (a matching of conditions to free variables), so the messages name the variables, and so
-# what is accepted does not depend on whether full ModelingToolkit (with its least-squares
-# fallbacks) is loaded. Every result is checked against the conditions themselves
-# (`_InitCheck`: a residual small against the size of the terms, and a Jacobian that is not
-# singular), so a condition without a solution, or without a unique one, is an error rather
-# than a least-squares answer or the guess. Cross-entity reads (another cell, gathers, folds,
-# site, field and edge variables) are refused until P6.4a (R17).
+# (a matching of conditions to free variables), so the messages name the variables. Every
+# result is checked against the conditions themselves (`_InitCheck`: a residual small against
+# the size of the terms, and a Jacobian that is not singular), so a condition without a
+# solution, or without a unique one, is an error rather than a least-squares answer or the
+# guess. Cross-entity reads (another cell, gathers, folds, site, field and edge variables) are
+# refused until P6.4a (R17).
 
 """
     Potts.initialization_system(csys::CompiledPottsSystem, scope::Symbol)

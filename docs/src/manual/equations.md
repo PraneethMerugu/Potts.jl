@@ -67,8 +67,6 @@ An algebraic equation `y ~ expr` defines a cell or model variable `y` by an expr
   one variable are errors. So are a variable with both `D(y)` and `y ~ …`, and an update or
   division rule that writes `y`, or reads it as a previous value (`Pre(y)`). Site and field
   variables have no algebraic equations.
-- What is accepted does not depend on whether full ModelingToolkit is loaded, although its
-  tearing can solve some implicit equations.
 
 ```julia
 @equations begin

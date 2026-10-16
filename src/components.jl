@@ -386,9 +386,7 @@ _has_operator(x, ::Type{O}) where {O} = (found = Ref(false); _walk_all(y -> (isc
 
 """
 `mtkcompile` of a discrete component, rejecting what the lowering cannot honor first. MTK
-failures become `ArgumentError`s naming the component. With full ModelingToolkit loaded (which
-replaces MTKBase's compiler and rejects clocked systems), the `PottsModelingToolkitExt`
-extension compiles through MTK's discrete-pass hook (gap G1).
+failures become `ArgumentError`s naming the component.
 """
 function _compile_discrete(comp)
     eqs = ModelingToolkitBase.equations(comp.system)
@@ -404,15 +402,12 @@ function _compile_discrete(comp)
             "(hybrid systems are not supported); make two components, one continuous and one discrete, " *
             "coupled with `@equations`; got $eq"))
     end
-    ext = Base.get_extension(@__MODULE__, :PottsModelingToolkitExt)
-    ext === nothing || ext.check_compatible()           # G1: the MTK hook, checked once per session
-    compile = ext === nothing ? ModelingToolkitBase.mtkcompile : ext.compile_discrete
-    return _mtk_compile_call(compile, comp)
+    return _mtk_compile_call(ModelingToolkitBase.mtkcompile, comp)
 end
 
 # ModelingToolkit's compile of a discrete component. Only errors ModelingToolkit raises become
-# `ArgumentError`s naming the component: an error raised in Potts' own code (the extension's
-# pass runs inside MTK's compile) is a Potts bug and propagates unchanged (P6.0k2 F4).
+# `ArgumentError`s naming the component: an error raised in Potts' own code (a unit-check hook
+# of an extension runs inside MTK's compile) is a Potts bug and propagates unchanged (P6.0k2 F4).
 function _mtk_compile_call(compile::F, comp) where {F}
     try
         return compile(comp.system)

@@ -3323,24 +3323,60 @@ end
     @test_throws r"every discrete variable needs an update" mtkcompile(DiscreteUndetermined(; name = :u))
 end
 
-# Gap G1: with full ModelingToolkit loaded (it replaces MTKBase's compiler, and its own
-# rejects clocked systems), `PottsModelingToolkitExt` compiles discrete components through
-# MTK's discrete-pass hook. Loading MTK is session-wide, so both sides run in fresh processes;
-# they must generate the same code and the same trajectories.
-@testset "discrete components with full ModelingToolkit loaded (G1)" begin
-    script = joinpath(@__DIR__, "mtk_extension.jl")
-    run_script(args...) = read(`$(Base.julia_cmd()) --startup-file=no --project=$(@__DIR__) $script $args`, String)
-    lines(s, prefix) = filter(startswith(prefix), split(s, '\n'))
-    base, full = run_script(), run_script("mtk")
-    @test length(lines(base, "P60K|")) == 4
-    @test lines(full, "P60K|") == lines(base, "P60K|")
-    # algebraic equations (P6.0bn): accepted alike, the same code and trajectories
-    @test length(lines(base, "P6BN|")) == 4
-    @test lines(full, "P6BN|") == lines(base, "P6BN|")
-    # entity-local initialization (P6.0bo): the same values and rejections (under- and
-    # overdetermined counts, no solution, no unique solution)
-    @test length(lines(base, "P6BO|")) == 6
-    @test lines(full, "P6BO|") == lines(base, "P6BO|")
+# P6.0k2 F4 (moved from the deleted test/mtk_extension.jl, D-256): a failure raised inside
+# MTK's compile of a discrete component becomes an `ArgumentError` naming the component; an
+# error raised in Potts' own code propagates unchanged.
+Potts.ModelingToolkitBase.@variables k2X(_tc)::Bool = false k2Y(_tc)::Bool = false
+@testset "discrete compile errors: MTK's relabelled, Potts' own propagate" begin
+    comp = Potts.ComponentSpec(:grn, System([dA(_kd) ~ !dB(_kd - 1), dB(_kd) ~ dA(_kd - 1)], _tc; name = :grn), :model)
+    # an MTK failure (an unknown with no update) names the component
+    bad = Potts.ComponentSpec(:grn, System([k2X(_kd) ~ k2Y(_kd - 1)], _tc; name = :grn), :model)
+    err = try
+        Potts._compile_discrete(bad); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("component `grn`", sprint(showerror, err))
+    # a non-Potts error raised inside the compile call: relabelled
+    err = try
+        Potts._mtk_compile_call(sys -> throw(DomainError(sys, "outside Potts")), comp); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("ModelingToolkit cannot compile", sprint(showerror, err))
+    # a Potts internal broken on purpose (a MethodError raised in components.jl): unchanged
+    err = try
+        Potts._mtk_compile_call(sys -> Potts._clock_cadence(comp, nothing, Any[], 1.0), comp); nothing
+    catch e
+        e
+    end
+    @test err isa MethodError
+    err = try
+        Potts._mtk_compile_call(sys -> Potts._discrete_plan(comp, nothing, 1.0), comp); nothing
+    catch e
+        e
+    end
+    @test err isa MethodError
+end
+
+@testset "P6.0k2 review: stdlib frames are not Potts', brownians are rejected" begin
+    # a stdlib frame (recorded under the build machine's path) is not Potts code
+    bt = try
+        Statistics.quantile([1.0], 2.0)
+    catch
+        catch_backtrace()
+    end
+    @test !Potts._raised_in_potts(bt)
+    Potts.ModelingToolkitBase.@variables y(Potts.t) = 1.0
+    Potts.ModelingToolkitBase.@parameters k = 0.3
+    Potts.ModelingToolkitBase.@brownians B
+    noisy = System([Potts.D(y) ~ -k * y + 5.0 * B], Potts.t; name = :noisy)
+    err = try
+        Potts._reject_ignored_features(Potts.ComponentSpec(:noisy, noisy, :model)); nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("brownians", err.msg)
 end
 
 # P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H

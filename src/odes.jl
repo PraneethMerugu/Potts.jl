@@ -8,9 +8,8 @@
 # its own batched `CellPhase`/`ModelPhase`, as before; an algebraic variable is not stored,
 # and everywhere the model reads it, it reads its definition (MTK's observed semantics).
 #
-# ModelingToolkitBase alone moves `y ~ x` to `observed` and solves no implicit equation;
-# full ModelingToolkit also tears. Potts accepts only explicit, acyclic definitions and
-# checks that itself, so what is accepted does not depend on which of the two is loaded.
+# ModelingToolkitBase moves `y ~ x` to `observed` and solves no implicit equation. Potts
+# accepts only explicit, acyclic definitions and checks that itself.
 
 """
     Potts.ode_system(csys::CompiledPottsSystem, scope::Symbol)
