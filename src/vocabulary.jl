@@ -585,8 +585,7 @@ end
 const FOLDS = (:sum, :prod, :mean, :geomean, :log1p_geomean, :minimum, :maximum, :count,
     :any, :all, :distinct, :pieces)
 
-# A fold over `shell(s)`. The two old shell counts are aliases of their folds and lower to
-# the same code (D-193): `distinct(owner[n] for n in shell(target) if owner[n] != 0)` is
+# A fold over `shell(s)`. Two folds lower to the same code as a ring builtin (D-193): `distinct(owner[n] for n in shell(target) if owner[n] != 0)` is
 # `ring_cells`, `count(owner[n] == 0 for n in shell(target))` is `ring_medium`.
 function _is_true(x)
     x = _unwrap(x)
@@ -604,7 +603,7 @@ function _shell_fold(fold, body, a::Around, cond; kws...)
                 op === :count && isequal(_unwrap(b), _unwrap(_index(B.owner, n) == 0)) && _is_true(c) ? B.ring_medium :
                 nothing
         if alias !== nothing
-            _build().count = count0            # the alias numbers nothing, as the old name
+            _build().count = count0            # the fold numbers nothing, as the builtin
             return alias
         end
     end
@@ -853,13 +852,7 @@ Base.show(io::IO, r::Local) = print(io, "Local(; gain = ", r.gain, ", adjacency 
 Base.show(io::IO, ::ArcOrPair) = print(io, "ArcOrPair()")
 Base.show(io::IO, r::Simple) = print(io, "Simple(; adjacency = ", repr(r.adjacency), ")")
 
-# the old rule symbols are aliases of the rule values (byte-identical code)
-const _CONNECTIVITY_RULES = (:local, :arc_or_pair)
 function _rule(who, r)
-    r === :local && return Local()
-    r === :arc_or_pair && return ArcOrPair()
-    r isa Symbol && throw(ArgumentError("$who: unknown rule `:$r` (one of `Local()`, `ArcOrPair()`, `Simple()`; " *
-                                        "the symbols $(join(repr.(_CONNECTIVITY_RULES), ", ")) are aliases)"))
     r isa Union{Local, ArcOrPair, Simple, Global} ||
         throw(ArgumentError("$who: `rule` must be `Local()`, `ArcOrPair()`, `Simple()` or `Global()`, got $(repr(r))"))
     return r
@@ -942,8 +935,7 @@ statements:
 
 `rule` is `Local()` (the default; CompuCell3D's `Connectivity`), `ArcOrPair()` (TST),
 `Simple()` (no splits, no holes) or `Global(; window, adjacency)` (the whole cell; CompuCell3D's
-`ConnectivityGlobal`); the symbols `:local` and `:arc_or_pair` are aliases of the first two.
-A `penalty` in `@constraint`, or none in `@drive`, is an `ArgumentError`. See the
+`ConnectivityGlobal`). A `penalty` in `@constraint`, or none in `@drive`, is an `ArgumentError`. See the
 "Connectivity" manual page for the rules and the mapping from other frameworks.
 """
 function connectivity(kinds::_KindArg...; rule = Local(), penalty = nothing)
@@ -1370,11 +1362,6 @@ A hand-built `SweepSpec(law, temperature, combine, offset, mcs_duration)` checks
 `combine` and `mcs_duration` the same way.
 """
 function sweep_spec(law::Symbol; temperature, combine = min, offset = 0.0, mcs_duration = 1.0, kwargs...)
-    for k in keys(kwargs)
-        k in (:field_solver, :ode_solver, :solvers) && throw(ArgumentError(
-            "`@sweep` no longer takes `$k`: pass it to the problem, " *
-            "`PottsProblem(sys, op, tspan; $k = …)`"))
-    end
     isempty(kwargs) || throw(ArgumentError("`@sweep`: unknown keyword(s) $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                                            "it takes `temperature`, `combine`, `offset` and `mcs_duration`"))
     # `offset`, `combine` and `mcs_duration` are checked by the constructor, in that order

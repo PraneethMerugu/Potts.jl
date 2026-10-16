@@ -2419,3 +2419,15 @@ The maintainer approved F-1…F-6 (D-049).
 - **Evidence (CPU only, 99301437 → 94f6b516).** Wall time 42 → 23 min; largest control half-width 0.0245 → 0.0147; candidate ratios agree. The GG control offset (about 4.5–4.9 %) is the same with and without the scrub.
 - **Review.** Adversarial APPROVE after three rounds (round 1: the ROCm wait allocates, so devices keep the scrub; round 2: the allocation fields are minima, and the exit-3 action).
 - **Repeat.** Waived for the CPU if the next routine CPU A/B shows zero GC time in every sample; otherwise a reversed-order pair decides.
+
+## 2026-10-15 — No deprecation aliases (D-249 amendment)
+
+- **What.** `openvt_colony_panel!` loses the `colour`/`state_colours` aliases and their `Base.depwarn` blocks (user: no deprecation warnings or refactor bloat until the paper is released). The two `colou?rs` assertions of `15_openvt_checkerboard_page.jl` noted in the frozen-pages entry above are back to their original form with `colors`. `page_quotes.jl` maps only "characteris".
+- **Frozen.** `15_openvt_f1_f4.jl` and `15_openvt_checkerboard_page.jl` re-pinned under D-249; the user's approval of the re-pins is batched with the shim audit.
+
+## 2026-10-15 — Back-compatibility shims removed (D-254)
+
+- **What.** Per the user's ruling (no aliases, legacy forms, old-data conversions or test-only fixture models before the paper), the library loses the old positional `Lifecycle` and `CPMFunction` forms, `HostPhase(f!, every)`, the D-090 A/B form (`ab.jl … <sequential|checkerboard>`, `ab_one.jl <case> <alg>`, the `AB` line), the `BoundarySiteCPM` fallback in `ab_one.jl`, the pre-D-090 lock compatibility, the birth-serial conversions of old states (now an `ArgumentError`), the `rule = :local`/`:arc_or_pair` symbols, and the `@sweep` solver migration error. `SingleDivisionFixture` moves to `lib/PottsModels/test/fixtures.jl`, with its fingerprint unchanged.
+- **Frozen.** Eight files re-pinned under D-254 with the user's approval: p6_0af, p6_0s_v7_tooling, p6_0v1, p6_3g, p6_0aa, p6_3a, p6_0m (one comment) and the 01_merks page (one comment). The 19 frozen files that name the fixture are unedited.
+- **Kept.** The ModelingToolkit extension's API guards, the state accessors (`cell_kinds` and the others), the 4-argument `Phases`, and the ring builtins (now documented as builtins, not old names).
+- **Tests (Mac).** All pass: `frozen.jl` (369); CorePotts suite; `p6_0s_v7_tooling.jl` (34 with `POTTS_GPU=metal`), `p6_0bb_ab.jl` (180); the edited frozen files, p6_0c, and the fixture users p6_0aq, p6_0o, p6_0bm, p6_0al and `tools/fingerprint_compare.jl` (fingerprint `0x13a4ddc2bb677287` unchanged); p6_0an, p6_0v2b, p6_4b1 (given states); mechanisms, siblings, guardrails, p6_5a, the 01_merks page; `test/symbolic.jl`, `cell_refs.jl`, `birth_skip.jl`; Potts Aqua, ExplicitImports and the transfer and model-name guards. The full suites, the docs build and ROCm run on the PC.

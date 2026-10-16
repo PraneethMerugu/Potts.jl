@@ -2,6 +2,8 @@
 # hand-written CorePotts ports in `models.jl` exactly (same ΔH, commit and constraints on
 # every proposal; test/symbolic.jl).
 using Potts, PottsModels
+isdefined(Main, :SingleDivisionFixture) ||
+    include(joinpath(@__DIR__, "..", "..", "lib", "PottsModels", "test", "fixtures.jl"))   # test-only models (D-254)
 
 # The published models come from lib/PottsModels (M3.3 acceptance: parity from its sources).
 const Sorting = GranerGlazier

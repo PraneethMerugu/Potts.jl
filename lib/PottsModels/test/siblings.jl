@@ -319,7 +319,6 @@ const SIBLINGS = Dict(
         sol = solve(p, SequentialCPM())
         @test sol.stats.lifecycle.divisions >= 2
     end),
-    :SingleDivisionFixture => ("major-axis division", () -> SIBLINGS[:OpenVTGrowingMonolayer][2]()),
     :OpenVTReferenceMonolayer => ("von Neumann inhibition by the other kind, uniform thresholds per daughter", function ()
         σ = block((40, 40), (14:17, 14:17), (18:21, 14:17), (14:17, 18:21), (18:21, 18:21))
         p = PottsProblem(KindInhibitedGrowth(; name = :k), [ownership => σ, kind => [:A, :B, :B, :A]], (0, 150);

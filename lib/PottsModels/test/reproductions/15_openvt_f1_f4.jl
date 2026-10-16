@@ -660,14 +660,11 @@ end
     @test PottsModels.openvt_snapshot(p615h_state(σ3)).f[1] == 0.0 && isempty(p615h_pairs(σ3, 1).med)
 end
 
-# American keyword names (2026-10-14); the British ones remain as deprecated aliases
-@testset "P6.15h openvt_colony_panel!: color / state_colors, deprecated colour / state_colours" begin
+@testset "P6.15h openvt_colony_panel!: color and state_colors keywords" begin
     σ, frame = p615h_colony()
     inh = Dict(id => isodd(id) for id in unique(filter(>(0), vec(σ))))
     ax() = Makie.Axis(Makie.Figure()[1, 1])
     @test PottsModels.openvt_colony_panel!(ax(), frame; color = :area) !== nothing
     @test PottsModels.openvt_colony_panel!(ax(), frame; color = :state, inhibited = inh, state_colors = (:yellow, :teal)) !== nothing
-    @test_deprecated PottsModels.openvt_colony_panel!(ax(), frame; colour = :area)
-    @test_deprecated PottsModels.openvt_colony_panel!(ax(), frame; color = :state, inhibited = inh, state_colours = (:yellow, :teal))
     @test_throws ArgumentError PottsModels.openvt_colony_panel!(ax(), frame; color = :nope)
 end

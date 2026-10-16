@@ -25,7 +25,7 @@ Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
 
-# Saved-state accessors (the legacy `PottsSavedState` vocabulary).
+# Saved-state accessors: the arrays of a state by name.
 """Site → cell id array (`0` = medium)."""
 ownership(st::CPMState) = st.σ
 """Kind of every cell slot (cells are kinds `1…`, the medium is `0`)."""
@@ -173,16 +173,6 @@ function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
     return CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases,
         lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity)
 end
-# the positional form before P6.9a: no whole-cell connectivity
-CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
-    acceptance, footprint::Footprint, fingerprint, sys, track) =
-    CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
-        acceptance, footprint, UInt64(fingerprint), sys, track, nothing)
-# the positional form without `track` (before D-140): untracked
-CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
-    acceptance, footprint::Footprint, fingerprint, sys) =
-    CPMFunction(delta_H, commit!, constraint, claims, reads, temperature, bias, phases, lifecycle,
-        acceptance, footprint, UInt64(fingerprint), sys, nothing, nothing)
 
 """
     TrackDeltaH{T}()

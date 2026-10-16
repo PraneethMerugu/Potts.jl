@@ -14,8 +14,7 @@
 - `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4, P6.0bb), below.
 - `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
   cache seeding shared by the gate and the A/B.
-- `test/p6_0s_v7_tooling.jl` (frozen, D-090), `test/exclusive_transition.jl` and
-  `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
+- `test/p6_0s_v7_tooling.jl` (frozen, D-090) and `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
 
 ### Machines and baselines (D-157)
 
@@ -118,12 +117,6 @@ So two checkouts of one commit differ by up to ~1 % on the CPU and ~2.3 % on ROC
 that the rounds' bootstrap interval does not cover. With tolerance 0.05 the pass margin of
 these runs is therefore 1.0399 (CPU) and 1.0274 (ROCm); every candidate/base read below it.
 
-The D-090 form `ab.jl <base> <candidate> <case> <sequential|checkerboard> [rounds]` (no
-options) is kept for its frozen contract (`test/p6_0s_v7_tooling.jl`, L2): each checkout's
-own `ab_one.jl` (unseeded), base then candidate, no control, the fastest run median per
-side. Only that form is kept: the three-argument form, which used to mean Metal, is an
-error, and `<case> metal [rounds]` runs the paired form.
-
 ### Device timings run to GPU completion (D-090)
 
 On a device backend `step!` only enqueues kernels. Every device timing (Metal, ROCm) in `gate.jl`
@@ -143,23 +136,19 @@ advisory: the gate only flags a slow row, and `ab.jl` decides it. CPU rows time
 Before 2026-10-01 the Metal rows timed host enqueue only, so Graner–Glazier and Wortel read
 far below their GPU cost; the Metal rows of `baseline.toml` were re-measured once then (the
 CPU rows were left as they were). Metal A/B verdicts from before that date on those models
-say nothing about GPU cost, and an `ab.jl` run against a base checkout older than D-090
-compares enqueue time (base) with completion time (candidate).
+say nothing about GPU cost.
 
 ### The machine lock (`tools/exclusive.sh`, D-090)
 
 A FIFO ticket queue in front of the directory lock `/tmp/potts-exclusive.lock`. Each call
-takes a numbered ticket in `/tmp/potts-exclusive.q`; the lowest ticket is next and must
-still take the directory lock by `mkdir`, so it excludes holders of the earlier script
-(a bare `mkdir` loop polling every 20 s) as well. Waiters poll about once a second, so a run
-queued before an A/B gets the lock before the A/B's next round. Waiters touch their ticket
-every poll and holders every minute, so a ticket untouched for 5 minutes (e.g. of a
-SIGKILLed waiter) is removed; queue entries whose names are not numbers are ignored. The
-lock keeps the earlier script's 3-hour stale rule, because that script never refreshes it.
-The command's exit status is passed through, and the ticket and lock are removed on exit,
-HUP, INT, QUIT, PIPE or TERM. During the transition a waiter of the earlier script (20 s
-poll) can lose the lock repeatedly to queued waiters (1 s poll), but never overlaps them.
-`test/exclusive_transition.jl` covers both scripts together and the queue's stale rules.
+takes a numbered ticket in `/tmp/potts-exclusive.q`; the lowest ticket is next and takes the
+directory lock by `mkdir`. Waiters poll about once a second, so a run queued before an A/B
+gets the lock before the A/B's next round. Waiters touch their ticket every poll and holders
+every minute, so a ticket untouched for 5 minutes (e.g. of a SIGKILLed waiter) is removed;
+queue entries whose names are not numbers are ignored. A lock untouched for 3 hours is
+stale (the frozen `test/p6_0s_v7_tooling.jl` checks this rule). The command's exit status
+is passed through, and the ticket and lock are removed on exit, HUP, INT, QUIT, PIPE or
+TERM.
 
 The legacy rows below were measured with the since-removed `reference/` pin (D-048).
 

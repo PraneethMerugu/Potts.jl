@@ -291,7 +291,6 @@ p60v1_matches(g, c, before) = p60v1_same_canon(g, c) && p60v1_live(g) == p60v1_l
 function p60v1_published(T)
     gg = graner_glazier_state()
     w = zeros(Int32, 32, 32); w[12:20, 12:20] .= 1
-    sd = zeros(Int32, 12, 8); sd[5:8, 4:5] .= 1
     return Dict(
         :GranerGlazier => () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], (0, 8); T),
         :WortelAct => () -> PottsProblem(WortelAct(; name = :w, lattice = (32, 32)), [ownership => w, kind => [:cell]], (0, 8); T),
@@ -301,8 +300,6 @@ function p60v1_published(T)
             openvt_monolayer_state(; lattice = (24, 24)), (0, 8); T, capacity = 64),
         :AkeebInvasion => () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
             akeeb_state(; lattice = (99, 60)), (0, 8); T, capacity = 1000),
-        :SingleDivisionFixture => () -> PottsProblem(SingleDivisionFixture(; name = :s), [ownership => sd, kind => [:epithelial]],
-            (0, 8); T, capacity = 4),
         :OpenVTChain => () -> PottsProblem(OpenVTChain(; name = :c), openvt_chain(11), (0, 8); T),   # D-148 re-freeze
         # D-150 re-freeze: X ≡ 2 (σ_X = 0) keeps the disc (52 sites) below its threshold of 100
         :OpenVTReferenceMonolayer => () -> PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24)),
@@ -349,8 +346,8 @@ const P60V1_CPU_ALGS = (SequentialCPM(), CheckerboardCPM())
     builders = p60v1_published(Float64)
     @test Set(P60V1_PUBLISHED) == Set(keys(builders))           # every published model listed
     withlc = sort([n for (n, make) in builders if make().f.lifecycle !== nothing])
-    @test length(withlc) >= 3                                    # non-vacuous: OpenVT, Akeeb, the fixture
-    @test issubset([:OpenVTGrowingMonolayer, :AkeebInvasion, :SingleDivisionFixture], withlc)
+    @test length(withlc) >= 3                                    # non-vacuous: OpenVT, Akeeb and more
+    @test issubset([:OpenVTGrowingMonolayer, :AkeebInvasion], withlc)
     for n in withlc
         deltas, l0, l1, ckd = p60v1_window(builders[n](), CheckerboardCPM(); backend = CPU(), nwarm = 2, nstep = 4)
         @test l0 == l1                                           # the window is quiet

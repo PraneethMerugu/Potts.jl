@@ -12,9 +12,12 @@
 #      keeps lock or queue state in starts with the literal prefix `/tmp/potts-exclusive`.
 #      The test copies `tools/` and `benchmark/*.jl` into a sandbox and rewrites that prefix
 #      to a private directory, so it never takes or waits on the real machine lock.
-#  L2. `ab.jl`'s command line is unchanged. Its runs are fresh processes,
-#      `julia --project=benchmark <checkout>/benchmark/ab_one.jl <case> <alg>`, started in the
-#      checkout. Each prints a line `AB <ns/site>`, and each round runs base then candidate.
+#  L2. `ab.jl`'s paired form, `ab.jl <base> <candidate> <cases> cpu [rounds] --alg=<alg>
+#      --no-control --no-warm --child=<file>`: its runs are fresh processes,
+#      `julia --project=<checkout>/benchmark <file> <cases> <alg> [options]`, started in the
+#      checkout under the machine lock (a relative <file> resolves in the checkout). Each
+#      prints a line `ABR <label> <median ns/site> <minimum ns/site> <samples> <GC ns>
+#      <allocs> <bytes>`, and each round runs both sides, in an order that rotates by round.
 #  T1. `measure(make, alg; backend)` in `benchmark/gate.jl` returns `(ns per site, allocs)`.
 #      When `backend !== nothing`, the timed expression is `step!` followed by
 #      `KernelAbstractions.synchronize(backend)`. When `backend === nothing` (the CPU rows),
@@ -118,7 +121,7 @@ log = ENV["P60S_LOG"]
 tag = basename(dirname(@__DIR__))
 st(w) = open(io -> println(io, tag, " ", w, " ", round(time(); digits = 6)), log, "a")
 st("start"); sleep(3.0); st("end")
-println("AB 1.0")
+println("ABR fake_case.sequential 1.0 1.0 60 0 0 0")
 """
 
 function fake_checkout(root, name)
@@ -145,7 +148,7 @@ function fairness_scenario()
         wait_until(() -> stamp_of(events(log), "H", "end") !== nothing, 60) || return (; error = "H never ended")
         sleep(0.5)
         tab = time()                                              # the A/B starts after W queued
-        abcmd = setenv(`$(Base.julia_cmd()) --startup-file=no $(joinpath(sb.root, "benchmark", "ab.jl")) $base $cand fake_case sequential 4`,
+        abcmd = setenv(`$(Base.julia_cmd()) --startup-file=no $(joinpath(sb.root, "benchmark", "ab.jl")) $base $cand fake_case cpu 4 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
             merge(ENV, Dict("P60S_LOG" => log)); dir = sb.root)
         ab = spawn(abcmd; out = about)
         push!(procs, ab)
@@ -292,7 +295,7 @@ end
             @test fair.ab_ok
             @test count(startswith("round "), split(fair.abtxt, '\n')) == 4
             @test length(children) == 8
-            @test [c[1] for c in children] == repeat(["base", "cand"], 4)
+            @test [c[1] for c in children] == repeat(["base", "cand", "cand", "base"], 2)
             hend, wstart, wend = stamp_of(ev, "H", "end"), stamp_of(ev, "W", "start"), stamp_of(ev, "W", "end")
             @test hend !== nothing && fair.tq < hend < fair.tab                # W queued while H held, before the A/B
             @test wstart !== nothing && wend !== nothing
@@ -363,11 +366,11 @@ end
                     (t = time_ns(); while time_ns() - t < $SPIN end; nothing)
                 """)
             code = "include(popfirst!(ARGS)); include($(repr(abonejl)))"
-            cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $code $pre graner_glazier_72 checkerboard`; dir = REPO)
+            cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $code $pre graner_glazier_72 checkerboard --seed=0 --samples=60 --seconds=40 --wait=none --no-gctrial`; dir = REPO)
             out = read(cmd, String)
-            line = filter(startswith("AB "), split(out, '\n'))
+            line = filter(startswith("ABR "), split(out, '\n'))
             @test length(line) == 1
-            ab = parse(Float64, last(split(only(line))))
+            ab = parse(Float64, split(only(line))[3])
             @info @sprintf("P6.0v7 mock: ab_one CPU %.1f µs per MCS", ab * n / 1e3)
             @test ab * n < SPIN / 2
         end
@@ -389,8 +392,8 @@ end
                 gmin = min(g1, g2)
                 @info @sprintf("P6.0v7 Metal GG 72: gate %.2f ns/site, step!+synchronize %.2f ns/site", gmin, rmin)
                 @test gmin >= 0.5 * rmin
-                out = read(Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) $abonejl graner_glazier_72 metal`; dir = REPO), String)
-                ab = parse(Float64, last(split(only(filter(startswith("AB "), split(out, '\n'))))))
+                out = read(Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) $abonejl graner_glazier_72 metal --seed=0 --samples=60 --seconds=40 --wait=none --gctrial`; dir = REPO), String)
+                ab = parse(Float64, split(only(filter(startswith("ABR "), split(out, '\n'))))[3])
                 r3 = ref()
                 rmed = minimum(median(r).time for r in (r1, r2, r3)) / n
                 @info @sprintf("P6.0v7 Metal GG 72: ab_one median %.2f ns/site, step!+synchronize median %.2f ns/site", ab, rmed)

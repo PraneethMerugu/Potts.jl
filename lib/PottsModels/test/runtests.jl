@@ -6,6 +6,8 @@ using Statistics: mean
 # device selection (D-157): the acceptance files' device testsets run here only when
 # POTTS_GPU = metal | rocm; the GPU group runs them from test/gpu.jl
 isdefined(Main, :PottsDevices) || include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl"))
+# test-only models that the acceptance files use by name (D-254)
+isdefined(Main, :SingleDivisionFixture) || include(joinpath(@__DIR__, "fixtures.jl"))
 
 function selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))

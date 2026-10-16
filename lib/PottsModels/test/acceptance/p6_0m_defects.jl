@@ -7,7 +7,7 @@
 #     medium gains, `new == 0`) gives that copy the drive `-strength * (c[target] - c[source])`.
 #     The default (`kinds = ()`, `when = true`) keeps the documented rule "acts when the
 #     gaining cell is a cell": a retraction gets 0, an extension gets the drive.
-#  2. `connectivity(k)` (rule `:local`): a copy that takes a site from a constrained cell is
+#  2. `connectivity(k)` (rule `Local()`): a copy that takes a site from a constrained cell is
 #     accepted iff the cell's sites around the target form EXACTLY one piece (D-074). Zero
 #     pieces (the cell's last site; an isolated fragment site) is rejected, like two pieces
 #     (a bridge). Square (Moore ring, face-connected pieces) and hexagonal (6-ring arcs).

@@ -181,8 +181,8 @@ end
     @test e isa ArgumentError && occursin("Potts model", sprint(showerror, e))
     # unknown keywords: `@sweep`, `remake`; `f` together with a solver keyword
     @test solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, substeps = 2)) isa ArgumentError
-    @test occursin("PottsProblem", sprint(showerror, solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0,
-        ode_solver = RK4()))))
+    e = solver_err(() -> Potts.sweep_spec(:metropolis; temperature = 1.0, ode_solver = RK4()))
+    @test e isa ArgumentError && occursin("ode_solver", sprint(showerror, e))
     e = solver_err(() -> remake(bysym; nope = 1))
     @test e isa ArgumentError && occursin("nope", sprint(showerror, e))
     @test solver_err(() -> remake(bysym; f = byvar.f, ode_solver = RK4())) isa ArgumentError

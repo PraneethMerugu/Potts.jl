@@ -3,16 +3,18 @@
 # (`CompiledPottsSystem.uses_birth`: `birth`, `birth[ref]`, `sibling`, `@convert`); the state
 # then has no `birth` column or `NEXT_BIRTH` counter and the planners take `births = nothing`.
 #
-# Oracle (D-048): the same problem with the serial column and counter installed by hand (the
-# layout before P6.5a3, built through CorePotts so `remake_state` does not drop them) runs the
-# pass; serials are not an RNG input, so σ and every other cell column must match bitwise.
+# Oracle (D-048): the same problem with the serial column and counter installed by hand (built
+# through CorePotts, since `remake_state` refuses a state of another layout) runs the pass;
+# serials are not an RNG input, so σ and every other cell column must match bitwise.
 # Negative control: a model that reads `birth` through `sibling` keeps the pass, and its
 # serials follow the D-066 rule (each round's daughters take the next serials in slot order).
 using Potts: CorePotts
 using PottsModels: AkeebInvasion, akeeb_state, OpenVTGrowingMonolayer, openvt_monolayer_state, OpenVTReferenceMonolayer,
-    SingleDivisionFixture, GranerGlazier
+    GranerGlazier
+isdefined(Main, :SingleDivisionFixture) ||
+    include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))   # test-only models (D-254)
 
-# the problem `prob` with the pre-P6.5a3 serial layout (initial cells 1:n, the counter at n + 1)
+# the problem `prob` with the serial layout (initial cells 1:n, the counter at n + 1)
 function bs_with_serials(prob)
     st = prob.u0
     n = Int(maximum(Array(st.σ)))
@@ -245,33 +247,21 @@ end
           occursin("@observed bth(cell) ~ birth", err.msg)
     @test_throws ArgumentError sol[Potts.B.birth + 1]
     @test length(sol[Potts.B.volume][end]) == length(sol.u[end].cell.kind)           # other quantities still read
-    # a state carrying the serials (saved before P6.5a3) takes the problem's layout
+    # a state with the serial layout is a state of another model: an ArgumentError naming the model
     with = bs_with_serials(prob)
-    q = @test_logs remake(prob; u0 = with.u0)        # serials 1:n and zeros: slot values, dropped silently
-    @test keys(q.u0.cell) == keys(prob.u0.cell) && keys(q.u0.model) == keys(prob.u0.model)
+    err = try
+        remake(prob; u0 = with.u0)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError && occursin("model `a`", err.msg) && occursin("`birth` cell column", err.msg)
     integ = init(prob, SequentialCPM())
-    reinit!(integ, with.u0)
-    @test !haskey(integ.state.cell, :birth)
-    solve!(integ)
-    @test Symbol(integ.retcode) === :Success
-    # what counts as assigned serials: a value other than 0 and the slot, or a counter past
-    # the largest serial; a counter alone (no column) and the initial layout do not
-    A = Potts._serials_assigned
-    @test !A(with.u0)
-    @test !A(prob.u0)
+    @test_throws ArgumentError reinit!(integ, with.u0)
     lone = CorePotts.CPMState(with.u0.σ, prob.u0.cell, with.u0.site, with.u0.model, with.u0.history)
-    @test haskey(lone.model, CorePotts.NEXT_BIRTH) && !A(lone)
-    q3 = @test_logs remake(prob; u0 = lone)                 # counter only: dropped silently
-    @test !haskey(q3.u0.model, CorePotts.NEXT_BIRTH)
-    adv = deepcopy(with.u0)
-    adv.model[CorePotts.NEXT_BIRTH][1] += Int32(40)        # serials 1:n, counter advanced (a long run)
-    @test A(adv)
-    odd = deepcopy(with.u0)
-    odd.cell.birth[2] = Int32(99)
-    @test A(odd)
-    # serials really assigned are dropped with one warning
-    q2 = @test_logs (:warn, r"model `a` never reads `birth`.*@observed bth\(cell\) ~ birth") remake(prob; u0 = adv)
-    @test !haskey(q2.u0.cell, :birth) && !haskey(q2.u0.model, CorePotts.NEXT_BIRTH)
+    @test haskey(lone.model, CorePotts.NEXT_BIRTH)
+    @test_throws ArgumentError remake(prob; u0 = lone)                 # the counter alone
+    @test keys(remake(prob; u0 = deepcopy(prob.u0)).u0.cell) == keys(prob.u0.cell)   # control: its own layout
 end
 
 @testset "P6.5a3: the skip on the device (PottsDevices; device planner forms)" begin

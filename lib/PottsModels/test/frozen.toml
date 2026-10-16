@@ -54,8 +54,8 @@ decision = "D-157"
 
 [[file]]
 path = "acceptance/p6_0m_defects.jl"
-sha256 = "c04ea42fe9ba578dd670cac2178cd946d27169b6d2fcff331f4f45c3de4e502b"
-decision = "D-196"
+sha256 = "98ac860802e10bf243406b1888cf1096ec373f8f0f0b889e0cdaa1c947ba81b9"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0m2_potts_problem.jl"
@@ -114,8 +114,8 @@ decision = "D-081"
 
 [[file]]
 path = "../../../benchmark/test/p6_0s_v7_tooling.jl"
-sha256 = "f05c55365955a5b11c65cc0e9756fd83c0d0461ffef0ab0c03c36a58023f926f"
-decision = "D-167"
+sha256 = "d5bbafa003ec215c038eb0f205fa46d43a0c5a653561d57a19495d655bf3c9bf"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_1a6_layout_protocol.jl"
@@ -144,8 +144,8 @@ decision = "D-137"
 
 [[file]]
 path = "acceptance/p6_0v1_device_lifecycle.jl"
-sha256 = "d58e6b1ab931f218bea5480c77190c2a366d09adf1e625dd3deb8aa7c15ad576"
-decision = "D-157"
+sha256 = "a51cc1e4aa2af9dbfd3bf9214956c140881ccb83c68e60b0a66cee345436d783"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0ad_barker_offset.jl"
@@ -154,8 +154,8 @@ decision = "D-100"
 
 [[file]]
 path = "acceptance/p6_0aa_arc_or_pair_medium.jl"
-sha256 = "e930e5e9bb77243b361e15463559e8d86a40eb9db4d88bbea441e992e2d7df0f"
-decision = "D-196"
+sha256 = "0bcd74d0ae1b81b9150635301109a3b74a0812d9f6c09b04916aeb74220acd54"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
@@ -189,8 +189,8 @@ decision = "D-196"
 
 [[file]]
 path = "acceptance/p6_0af_lifecycle_followups.jl"
-sha256 = "0eebef43dc6ac75566e7db991a0209a098298d2e78cd008fd8a6be1a1849a0ce"
-decision = "D-157"
+sha256 = "ec48cf524ecb6131870358fb519b173e078900d6ec9c77728c3cac977a1b70df"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0aj_concurrent_builds.jl"
@@ -334,8 +334,8 @@ decision = "D-138"
 
 [[file]]
 path = "acceptance/p6_3a_topology_track.jl"
-sha256 = "72fbfbec929200b4bb65f997291082932e50a9cc108ac873964623dff015e158"
-decision = "D-197"
+sha256 = "7e6f29053be634b4f1391d126210460f15e1b4c0d5fca847c75e75883826aa5c"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_3c_eden_splits.jl"
@@ -384,8 +384,8 @@ decision = "D-240"
 
 [[file]]
 path = "../reproductions/01_merks.jl"
-sha256 = "5e1da9a70b94e156d9a1d76824a454133569683ea0cdbb50583ae6b886a75940"
-decision = "D-249"
+sha256 = "632d648b3f56195bee5c1933c22cf6b185c454929afb433b2989b688ce1ec920"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
@@ -444,7 +444,7 @@ decision = "D-176"
 
 [[file]]
 path = "reproductions/15_openvt_f1_f4.jl"
-sha256 = "911cc88b6e59e422bc3aa9ee03c3bf97f6ca1d76d90ca80233f92404293b7129"
+sha256 = "687dd91d94c95779985c50ca29ebaa86c86ab6072d72290ad296d12ff691d4ff"
 decision = "D-249"
 
 [[file]]
@@ -489,8 +489,8 @@ decision = "D-207"
 
 [[file]]
 path = "acceptance/p6_3g_connectivity_vocabulary.jl"
-sha256 = "c612214e3b29457bb1a8501aa1d886ff2ee98815814b8e86614756cecfa2aadb"
-decision = "D-197"
+sha256 = "c464162ba66dff3bb1f80c83a9549493e7e497098e92edeb3f58cba3a89e3479"
+decision = "D-254"
 
 [[file]]
 path = "acceptance/p6_4a1_copy_direction.jl"
@@ -575,7 +575,7 @@ decision = "D-218"
 
 [[file]]
 path = "reproductions/15_openvt_checkerboard_page.jl"
-sha256 = "e5dabeb257e32619afde13eee35918f978d037934edc571319f5eb0531a98387"
+sha256 = "ae87f6dab3a2445b9e61983036399a0ff2327a97170bb6a370a009a10ad26ee0"
 decision = "D-249"
 
 [[file]]

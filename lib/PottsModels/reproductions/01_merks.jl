@@ -75,7 +75,7 @@ nothing #hide
 #     if rule === :soft                       # the authors' ring test on the losing cell
 #         @drive copy => E₀ * ((kind[old] == endothelial) & !((ring_arcs <= 1) | ((ring_cells == 2) & (ring_medium == 0))))
 #     else
-#         @constraint connectivity(endothelial; rule = :arc_or_pair)
+#         @constraint connectivity(endothelial; rule = ArcOrPair())
 #     end
 #     @equations D(c) ~ Dc * Δ(c) + α * (kind == endothelial) - ε * c * (kind == medium)  # Eq. 6
 #     @boundary c begin

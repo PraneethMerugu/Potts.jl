@@ -83,7 +83,7 @@ statements on or off:
 @structural_parameters begin connected = false end
 …
 if connected
-    @constraint connectivity(cell; rule = :arc_or_pair)
+    @constraint connectivity(cell; rule = ArcOrPair())
 end
 ```
 
@@ -344,7 +344,7 @@ Connectivity rules are then ordinary statements:
 | Rule | Statement |
 |---|---|
 | Hard (CC3D, Morpheus) | `@constraint connectivity(k)`, i.e. `local_components == 1` for losers of kind `k` (D-074: zero pieces, the last site or an isolated fragment, is rejected too, so such a cell cannot die by copies) |
-| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = :arc_or_pair)`, i.e. `ring_arcs <= 1 \|\| (ring_cells == 2 && ring_medium == 0)` (one arc, or exactly two cells and no medium on the ring, D-099; zero arcs pass; D-074 covers the local rule only) |
+| Ring rule (TST `ConnectivityPreservedP`, Merks) | `connectivity(k; rule = ArcOrPair())`, i.e. `ring_arcs <= 1 \|\| (ring_cells == 2 && ring_medium == 0)` (one arc, or exactly two cells and no medium on the ring, D-099; zero arcs pass; D-074 covers the local rule only) |
 | Soft penalty (Artistoo, CC3D strength, Merks E₀ under Metropolis) | `@drive copy => λ * (local_components > 1)` |
 
 An unknown `rule` is an error.
@@ -802,7 +802,7 @@ act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[
 @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)                          # gained sites active
 @after_mcs act ~ max(Pre(act) - 1, 0)
 if connected
-    @constraint connectivity(cell; rule = :arc_or_pair)
+    @constraint connectivity(cell; rule = ArcOrPair())
 end
 ```
 
@@ -819,7 +819,7 @@ else                                                   # 2006: every copy
     @drive copy => -χ * (c[target] - c[source])
 end
 @equations D(c) ~ Dc * Δ(c) + σc * (kind == endothelial) - δc * c * (kind == medium)
-@constraint connectivity(endothelial; rule = :local)
+@constraint connectivity(endothelial; rule = Local())
 ```
 
 Its problem gives the field solver (D-075): `PottsProblem(MerksVasculogenesis(…), op, tspan;

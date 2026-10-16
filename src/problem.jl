@@ -1060,7 +1060,7 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
 CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
-    _track_layout(_ode_layout(_convert_layout(_birth_layout(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
+    _track_layout(_ode_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys, info.solvers), info.csys, _track_names(prob))
 
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
@@ -1077,42 +1077,17 @@ function _report_converts(info::PottsModelInfo, integ)
     return nothing
 end
 
-# A state of a dividing model saved before cell serials (R6, D-066 item 3: a checkpoint, a
-# state given to `reinit!`) has no `birth` column: every slot's serial is its slot, and the
-# counter continues after the capacity, so no serial is ever reused. A dividing model that
-# does not read `birth` (P6.5a3) drops a given state's column and counter (a state saved
-# before P6.5a3, or of another model), so its states keep the problem's layout.
-# Whether state `st` carries serials really assigned (dropping them loses information): a
-# serial other than 0 and its slot, or a counter past the largest serial (serials issued to
-# cells now gone). Host side (remake, reinit!, before any run's counters exist): the copies go
-# through the transfer helper with no counter (`nothing`), as at problem setup.
-function _serials_assigned(st::CorePotts.CPMState)
-    haskey(st.cell, :birth) || return false
-    stats = nothing
-    b = CorePotts._to_host(stats, st.cell.birth)
-    any(i -> b[i] != 0 && b[i] != i, eachindex(b)) && return true
-    haskey(st.model, CorePotts.NEXT_BIRTH) || return false
-    nb = CorePotts._to_host(stats, getfield(st.model, CorePotts.NEXT_BIRTH))
-    return nb[1] != maximum(b; init = zero(eltype(b))) + 1
-end
-_without(nt::NamedTuple, k::Symbol) = NamedTuple{filter(!=(k), keys(nt))}(nt)
-function _birth_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
-    if _numbers_cells(c) && !_tracks_births(c)
-        haskey(st.cell, :birth) || haskey(st.model, CorePotts.NEXT_BIRTH) || return st
-        _serials_assigned(st) &&
-            @warn "model `$(nameof(c))` never reads `birth`, so the given state's cell serials are dropped " *
-                  "(P6.5a3, D-245); declare `@observed bth(cell) ~ birth` in the model to keep them" maxlog = 1
-        return CorePotts.CPMState(st.σ, _without(st.cell, :birth), st.site, _without(st.model, CorePotts.NEXT_BIRTH),
-            st.history)
-    end
-    (!_tracks_births(c) || haskey(st.cell, :birth)) && return st
-    n = length(st.cell.kind)
-    # filled where the state lives (a device state stays on the device: no host transfer)
-    birth = similar(st.cell.kind, Int32, n)
-    birth .= Int32(1):Int32(n)
-    next = fill!(similar(st.cell.kind, Int32, 1), Int32(n + 1))
-    return CorePotts.CPMState(st.σ, merge(st.cell, (; birth)), st.site,
-        merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((next,))), st.history)
+# A given state has this model's serial layout (D-066 item 3, P6.5a3): the `birth` column and
+# the `NEXT_BIRTH` counter exactly when the model reads `birth`. Any other layout is a state of
+# another model, an `ArgumentError`.
+function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
+    want = _tracks_births(c)
+    col, ctr = haskey(st.cell, :birth), haskey(st.model, CorePotts.NEXT_BIRTH)
+    col == ctr == want && return st
+    throw(ArgumentError("the given state does not fit model `$(nameof(c))`: " *
+                        (want ? "the model reads `birth`, so a state needs the `birth` cell column and its counter" :
+                         "the model keeps no cell serials, so a state has no `birth` cell column or counter") *
+                        " (the state has $(col ? "a" : "no") `birth` column and $(ctr ? "a" : "no") counter)"))
 end
 
 # a NamedTuple operating point is the map of its fields (D-115)

@@ -20,7 +20,7 @@ using SciMLBase: ReturnCode
 using SHA: sha256
 using TOML: TOML
 
-export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, SingleDivisionFixture,
+export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer,
     AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008, ShearedFoam
 export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
     akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout,
@@ -108,7 +108,6 @@ cell–medium), drawn as one `linesegments` plot with square caps so the outline
   inhibited), by default in the colors of M's 2 Oct Fig 7: growing RGB(44,123,182),
   inhibited RGB(253,174,97); `state_colors = (growing, inhibited)` sets others (the 9 Oct
   draft's grids use yellow and teal or red).
-- `colour` and `state_colours` are deprecated aliases of `color` and `state_colors`.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """
@@ -136,7 +135,6 @@ PrecompileTools.@setup_workload begin
     σ = zeros(Int32, 24, 24)
     σ[8:14, 8:14] .= 1
     PrecompileTools.@compile_workload begin
-        mtkcompile(SingleDivisionFixture(; name = :s))
         gg = graner_glazier_state()
         _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
         _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])

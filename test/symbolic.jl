@@ -2075,11 +2075,11 @@ end
 
 # P6.0m: the ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
 # rule, so D-074 leaves it alone: at most one arc (zero included) or exactly two ring cells
-@potts_model ArcOrPair begin
+@potts_model ArcOrPairModel begin
     @kinds medium A
     @lattice Lattice((12, 12); neighborhood = Moore(1))
     @energy cells => (volume - 1)^2
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model LocalOne begin
@@ -2090,24 +2090,24 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-@testset "connectivity(rule = :arc_or_pair) keeps TST's zero-arc pass (P6.0m, D-074 scope)" begin
+@testset "connectivity(rule = ArcOrPair()) keeps TST's zero-arc pass (P6.0m, D-074 scope)" begin
     allows(M, σ, x, y) = (p = PottsProblem(M(; name = :r), [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1));
         prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
         p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p)))
     σ = zeros(Int32, 12, 12); σ[6, 6] = 1
-    @test allows(ArcOrPair, σ, (6, 6), (7, 6))            # the last site: 0 arcs pass
+    @test allows(ArcOrPairModel, σ, (6, 6), (7, 6))            # the last site: 0 arcs pass
     @test !allows(LocalOne, σ, (6, 6), (7, 6))            # negative control: the local rule rejects it
     σ[2:3, 2:3] .= 1
-    @test allows(ArcOrPair, σ, (6, 6), (7, 6))            # an isolated fragment: 0 arcs pass
+    @test allows(ArcOrPairModel, σ, (6, 6), (7, 6))            # an isolated fragment: 0 arcs pass
     @test !allows(LocalOne, σ, (6, 6), (7, 6))
     σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1
-    @test !allows(ArcOrPair, σ, (6, 6), (6, 7))           # a bridge, one cell on the ring: 2 arcs
+    @test !allows(ArcOrPairModel, σ, (6, 6), (6, 7))           # a bridge, one cell on the ring: 2 arcs
     σ[6, 5] = 2
-    @test !allows(ArcOrPair, σ, (6, 6), (6, 5))           # 2 arcs, two cells but medium on the ring: refused
+    @test !allows(ArcOrPairModel, σ, (6, 6), (6, 5))           # 2 arcs, two cells but medium on the ring: refused
     σ = fill(Int32(2), 12, 12); σ[3:9, 6] .= 1
-    @test allows(ArcOrPair, σ, (6, 6), (6, 5))            # 2 arcs, exactly two cells and no medium: the pair
+    @test allows(ArcOrPairModel, σ, (6, 6), (6, 5))            # 2 arcs, exactly two cells and no medium: the pair
     σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
-    @test allows(ArcOrPair, σ, (6, 4), (7, 4))            # an ordinary boundary copy: 1 arc
+    @test allows(ArcOrPairModel, σ, (6, 4), (7, 4))            # an ordinary boundary copy: 1 arc
 end
 
 # P6.0m (D-075): `Chemotaxis`'s `when` defaults to `new != 0`; `when = true` is every copy;

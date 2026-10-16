@@ -2,6 +2,9 @@
 # generated code with T = Float32 runs on the device with exact trackers and CPU-equivalent
 # statistics (D-029).
 using Statistics: mean, var
+# test-only models that the included acceptance files use by name (D-254)
+isdefined(Main, :SingleDivisionFixture) ||
+    include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
 
 # ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
 PottsDevices.device_name() == "rocm" && include("device_ir.jl")
@@ -477,6 +480,7 @@ end
 # the device and match the CPU run in Float32 (D-135)
 module P60gOnDevice
 using Test, Potts, PottsModels
+using Main: SingleDivisionFixture  # test-only model (D-254); p6_0g uses it by name
 include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0g_kind_classes.jl"))
 end
 

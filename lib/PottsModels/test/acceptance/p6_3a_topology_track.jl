@@ -23,7 +23,7 @@
 #    over random states on square, hex and 3D, Periodic and Closed; 3D also has hand-checked
 #    fixtures. The values are read both through `CorePotts.ring_*` and through a compiled
 #    `@drive` (the DSL dispatch).
-# 2. The ring rules on hex and 3D: `connectivity(k; rule = :arc_or_pair)` (arcs ≤ 1, or two
+# 2. The ring rules on hex and 3D: `connectivity(k; rule = ArcOrPair())` (arcs ≤ 1, or two
 #    cells and no medium on the shell) and `connectivity(k)` (`local_components == 1`),
 #    hand-checked junctions (the P6.0aa fixtures transposed to hex and 3D).
 # 3. The soft E₀ drive (01a p.49; TST `conn_diss`, model-spec 01 §7.3) is an ordinary
@@ -291,7 +291,7 @@ end
     @kinds medium A
     @lattice Lattice((12, 12); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1))
     @energy cells => (volume - 7)^2
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P63aLocalHex begin
@@ -305,7 +305,7 @@ end
     @kinds medium A
     @lattice Lattice((7, 7, 7); boundary = Periodic(), neighborhood = Moore(1))
     @energy cells => (volume - 7)^2
-    @constraint connectivity(A; rule = :arc_or_pair)
+    @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
 @potts_model P63aLocalCubic begin

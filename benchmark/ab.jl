@@ -80,48 +80,13 @@
 #                       rocm, other GPU clients; gpu: other GPU clients only)
 #   --max-wait=<hours>  the overall deadline for waiting (default 4)
 #   --no-warm           skip the untimed precompile run of each checkout
-#
-# The D-090 form `ab.jl <base> <candidate> <case> <sequential|checkerboard> [rounds]` (no
-# options) is kept for its frozen contract (benchmark/test/p6_0s_v7_tooling.jl, L2): each
-# checkout's own `ab_one.jl` (unseeded), base then candidate, no control, the fastest run
-# median per side. Only that form is kept: the three-argument form (which used to mean
-# `metal`) is an error, and `<case> metal [rounds]` now runs the paired form.
+#   --child=<file>      the timed child script (default: this checkout's `ab_one.jl`); a
+#                       relative path resolves in each side's checkout (the tests' stubs)
 using Printf
 isdefined(Main, :BenchMachine) || include(joinpath(@__DIR__, "machine.jl"))
 
 const LOCK = joinpath(@__DIR__, "..", "tools", "exclusive.sh")
 const CHILD = joinpath(@__DIR__, "ab_one.jl")
-
-# ------------------------------------------------------------------- the D-090 form
-function islegacy(args)
-    return length(args) in (4, 5) && !any(startswith("--"), args) &&
-           args[4] in ("sequential", "checkerboard") &&
-           (length(args) == 4 || all(isdigit, args[5]))
-end
-
-function legacy_main(args)
-    base, cand, case, alg = args[1:4]
-    rounds = length(args) >= 5 ? parse(Int, args[5]) : 4
-    m = BenchMachine.machine()
-    pin = BenchMachine.pins(m) ? BenchMachine.pin_cmd(m, BenchMachine.bench_cpu(m)) : ``
-    mem = BenchMachine.mem_cmd(m)
-    println("note: the D-090 form (no control, no seeding, fixed order); ",
-        "prefer `ab.jl <base> <candidate> <case> cpu --alg=$alg`")
-    function once(dir)
-        ab_one = joinpath(dir, "benchmark", "ab_one.jl")
-        out = read(Cmd(`$LOCK $mem $pin julia --project=benchmark $ab_one $case $alg`; dir), String)
-        return parse(Float64, last(split(only(filter(startswith("AB "), split(out, '\n'))))))
-    end
-    a, b = Float64[], Float64[]
-    for r in 1:rounds
-        push!(a, once(base))
-        push!(b, once(cand))
-        @printf("round %d  base %.2f  candidate %.2f ns/site (median)\n", r, a[end], b[end])
-    end
-    ratio = minimum(b) / minimum(a)
-    @printf("%s.%s  candidate/base = %.3f\n", case, alg, ratio)
-    return ratio > 1.05 ? 1 : 0
-end
 
 # ------------------------------------------------------------------- arguments
 function parse_ab(args)
@@ -144,9 +109,6 @@ function parse_ab(args)
               "(the backend is required: cpu, rocm or metal)")
     backend = pos[n]
     algs = get(opts, "alg", "sequential,checkerboard")
-    if backend in ("sequential", "checkerboard")
-        algs, backend = backend, "cpu"
-    end
     backend in ("cpu", "metal", "rocm") ||
         error("backend must be cpu, metal or rocm; got $(repr(backend))")
     stat = get(opts, "stat", backend == "metal" ? "fastest" : "paired")
@@ -464,7 +426,6 @@ function verdict(R, D, o)
 end
 
 function ab_main(args)
-    islegacy(args) && return legacy_main(args)
     o = parse_ab(args)
     m = o.machine
     BenchMachine.pin_self_to_work!(m)     # the parent and the lock's keeper stay off 12–15
