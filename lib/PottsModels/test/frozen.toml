@@ -314,8 +314,8 @@ decision = "D-133"
 
 [[file]]
 path = "acceptance/p6_0o_abstract_system.jl"
-sha256 = "2f06d30f3859f3fe90d77bfd7fff3cddd9201f8e437f5f2e850f17cc07a4f885"
-decision = "D-271"
+sha256 = "d5dd8c622cdcf958d8dd82bf1d72dea40e32401dcf9765111391376f69f395c4"
+decision = "D-260"
 
 [[file]]
 path = "acceptance/p6_0g_kind_classes.jl"

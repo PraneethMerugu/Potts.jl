@@ -608,3 +608,10 @@ why = "W-lite: p60aj_binders walks the old PottsSystem fields (energies, drives,
 assertion = "p6_0aj_concurrent_builds.jl:216 walk(getfield(sys, f)) (top level, P60AJ_SERIAL)"
 old = "the file loads and its testsets pass"
 new = "FieldError: type PottsSystem has no field `energies`; the file's testsets do not run"
+
+[[edits]]
+path = "acceptance/p6_0o_abstract_system.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-260"
+why = "W-lite container: four fields, inner-System accessors, loud MTK rebuilds"
