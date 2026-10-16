@@ -622,3 +622,10 @@ commit = "(see refreeze(list-A) commit on lp/c4)"
 fixup_of = "C4"
 decision = "D-261"
 why = "MTK claims read Potts.inner(sys); no complete"
+
+[[edits]]
+path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-262"
+why = "PottsSweepSpec read from Potts.inner(sys); Potts.extend"

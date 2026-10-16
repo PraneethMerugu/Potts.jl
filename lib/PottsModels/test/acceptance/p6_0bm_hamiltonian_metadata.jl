@@ -13,8 +13,8 @@
 #  A. `Potts.hamiltonian`, `Potts.drives` and `Potts.PottsSweepSpec` are public names of
 #     Potts with docstrings. `PottsSweepSpec` is a concrete type.
 #  H. `hamiltonian(sys)` is an `AbstractVector` of `domain => expr` pairs, one per `@energy`
-#     term, in declaration order (`@extend` merged), on a `PottsSystem`, on a completed one
-#     and on a `CompiledPottsSystem`. `expr` is the term's energy density as written: a
+#     term, in declaration order (`@extend` merged), on a `PottsSystem` and on a
+#     `CompiledPottsSystem`. `expr` is the term's energy density as written: a
 #     Symbolics expression in the declared parameter, variable and built-in symbols (`volume`,
 #     `kind′`, …). Drives, constraints and the temperature are not Hamiltonian terms. The
 #     domain (`first`) is the DSL domain value; its type is not pinned.
@@ -30,21 +30,24 @@
 #       models' as written.
 #  D. `drives(sys)`: the `@drive copy => expr` expressions in declaration order (Symbolics
 #     expressions); empty for a model without drives.
-#  M. Metadata. `getmetadata(sys, Potts.PottsSweepSpec, nothing)` (MTK's generic accessor,
-#     ModelingToolkitBase re-exports SymbolicUtils' function) returns a `PottsSweepSpec` on
-#     every published model and fixture, with no user action; `hasmetadata` is true. Its
+#  M. Metadata. `getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing)` (MTK's generic
+#     accessor, ModelingToolkitBase re-exports SymbolicUtils' function, on the complete System
+#     a `PottsSystem` wraps; W-lite, cutover C4) returns a `PottsSweepSpec` on every published
+#     model and fixture, with no user action; `hasmetadata` is true. Its
 #     properties `hamiltonian`, `drives`, `constraints`, `temperature` and `proposal` are
 #     the system's: `hamiltonian` and `drives` equal the accessors, `constraints` has one
 #     entry per `@constraint`, `temperature` is the `@sweep` temperature as written (the
 #     declared symbol `T`), `proposal` the `@relations proposal` relation. It is present on
-#     `complete(sys)`, `mtkcompile(sys)` (the `CompiledPottsSystem` itself) and its `.sys`,
-#     and describes the merged model after `extend` (never the base's stale payload).
-#     `show` of the payload names `PottsSweepSpec`. Other metadata keys behave as before.
+#     `mtkcompile(sys)` (the `CompiledPottsSystem` itself) and on its `.sys`'s inner System,
+#     and describes the merged model after `Potts.extend` (never the base's stale payload).
+#     `show` of the payload names `PottsSweepSpec`. Other metadata keys behave as before on
+#     the inner System.
 #  N. Negative controls: a plain MTK `System` (and its `mtkcompile`) has no payload
 #     (`getmetadata(…, PottsSweepSpec, nothing) === nothing`, `hasmetadata` false), and
 #     builds an `ODEProblem`.
-#  X. Downstream detection: generic code that asks `hasmetadata(sys, PottsSweepSpec)` tells
-#     every Potts model from a plain `System`; on every published model `ODEProblem` and
+#  X. Downstream detection: generic code that asks `hasmetadata(s, PottsSweepSpec)` of an MTK
+#     `System` (`Potts.inner(sys)` for a `PottsSystem`) tells every Potts model from a plain
+#     `System`; on every published model `ODEProblem` and
 #     `JumpProblem` are still `ArgumentError`s naming `PottsProblem` (D-137 rule 5; a
 #     regression guard that passes before this item).
 #
@@ -228,13 +231,13 @@ end
         @test p60bm_names(last(t)) == names                         # exactly the symbols written
         @test all(v -> isapprox(p60bm_eval(last(t), v), f(v); rtol = 1e-12, atol = 1e-12), P60BM_POINTS)
     end
-    # the symbols are the model's own: the declared parameter symbols (a completed system's)
-    c = complete(sys)
+    # the symbols are the model's own: the declared parameter symbols (the complete inner System's)
+    c = sys
     @test any(v -> isequal(v, P60BM_S.unwrap(c.λd)), P60BM_S.get_variables(P60BM_S.unwrap(last(H[1]))))
     @test any(v -> isequal(v, P60BM_S.unwrap(c.Jc)), P60BM_S.get_variables(P60BM_S.unwrap(last(H[3]))))
     # neither the temperature nor the drive's parameter is in H
     @test !any(t -> (:T in p60bm_names(last(t))) || (:μ in p60bm_names(last(t))), H)
-    # the same on a completed and on a compiled system
+    # the same on a compiled system
     for s in (c, mtkcompile(sys))
         Hs = Potts.hamiltonian(s)
         @test length(Hs) == 3 && all(i -> isequal(P60BM_S.unwrap(last(Hs[i])), P60BM_S.unwrap(last(H[i]))), 1:3)
@@ -253,7 +256,7 @@ end
     @test total_energy(pB) == 56.5
     @test p60bm_substituted_H(H, P60BM_σB, P60BM_KINDS, P60BM_VALS) ≈ 56.5
     # the H symbols are live parameters: change Jc and λd through `remake` and H follows
-    c = complete(sys)
+    c = sys
     v2 = merge(P60BM_VALS, Dict(:Jc => 2.0, :λd => 0.5))
     p2 = remake(prob; p = [c.Jc => 2.0, c.λd => 0.5])
     want = p60bm_hand_H(P60BM_σA, P60BM_KINDS, v2)
@@ -266,7 +269,7 @@ end
 
 @testset "P6.0bm H: extend merges the terms" begin
     base = P60bmHam(; name = :hx)
-    ext = extend(P60bmExtra(; name = :extra), base)
+    ext = Potts.extend(P60bmExtra(; name = :extra), base)
     H = Potts.hamiltonian(ext)
     @test length(H) == 4
     got = Set(string(P60BM_S.unwrap(last(t))) for t in H)
@@ -318,37 +321,40 @@ end
 # ---------------------------------------------------------------------------------------
 # M. The typed metadata payload
 
-p60bm_spec(s) = P60BM_M.getmetadata(s, Potts.PottsSweepSpec, nothing)
+# a PottsSystem keeps its metadata on the complete System it wraps (W-lite, C4)
+p60bm_meta(s) = s isa PottsSystem ? Potts.inner(s) : s
+p60bm_spec(s) = P60BM_M.getmetadata(p60bm_meta(s), Potts.PottsSweepSpec, nothing)
 p60bm_same_terms(a, b) = length(a) == length(b) &&
                          all(i -> isequal(P60BM_S.unwrap(last(a[i])), P60BM_S.unwrap(last(b[i]))), eachindex(a, b))
 
 @testset "P6.0bm M: the fixture's payload" begin
     sys = P60bmHam(; name = :hx)
-    @test P60BM_M.hasmetadata(sys, Potts.PottsSweepSpec)
+    @test P60BM_M.hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)
     spec = p60bm_spec(sys)
     @test spec isa Potts.PottsSweepSpec
     @test p60bm_same_terms(spec.hamiltonian, Potts.hamiltonian(sys))
     @test length(spec.drives) == 1 && isequal(P60BM_S.unwrap(only(spec.drives)), P60BM_S.unwrap(only(Potts.drives(sys))))
     @test length(spec.constraints) == 1
-    @test isequal(P60BM_S.unwrap(spec.temperature), P60BM_S.unwrap(complete(sys).T))
+    @test isequal(P60BM_S.unwrap(spec.temperature), P60BM_S.unwrap(sys.T))
     @test spec.proposal == Moore(1)
     @test startswith(sprint(show, MIME"text/plain"(), spec), "PottsSweepSpec")
     @test occursin("PottsSweepSpec", sprint(show, spec))
-    # present after complete and mtkcompile (on the compiled system and on its `.sys`)
+    # present after mtkcompile (on the compiled system and on its `.sys`)
     cs = mtkcompile(sys)
-    for s in (complete(sys), cs, getfield(cs, :sys))
-        @test P60BM_M.hasmetadata(s, Potts.PottsSweepSpec)
+    for s in (cs, getfield(cs, :sys))
+        @test P60BM_M.hasmetadata(p60bm_meta(s), Potts.PottsSweepSpec)
         @test p60bm_spec(s) isa Potts.PottsSweepSpec && p60bm_same_terms(p60bm_spec(s).hamiltonian, spec.hamiltonian)
     end
     # other keys are untouched: absent unless set, and set out of place as before
-    @test P60BM_M.getmetadata(sys, P60bmOtherKey, :none) === :none && !P60BM_M.hasmetadata(sys, P60bmOtherKey)
-    s2 = P60BM_M.setmetadata(sys, P60bmOtherKey, 42)
+    i = Potts.inner(sys)
+    @test P60BM_M.getmetadata(i, P60bmOtherKey, :none) === :none && !P60BM_M.hasmetadata(i, P60bmOtherKey)
+    s2 = P60BM_M.setmetadata(i, P60bmOtherKey, 42)
     @test P60BM_M.getmetadata(s2, P60bmOtherKey, :none) == 42 && p60bm_spec(s2) isa Potts.PottsSweepSpec
 end
 
 @testset "P6.0bm M: extend gives the merged model's payload" begin
     base = P60bmHam(; name = :hx)
-    ext = extend(P60bmExtra(; name = :extra), base)
+    ext = Potts.extend(P60bmExtra(; name = :extra), base)
     spec = p60bm_spec(ext)
     @test spec isa Potts.PottsSweepSpec
     @test length(spec.hamiltonian) == 4                             # not the base's 3, not the extra's 1
@@ -359,7 +365,7 @@ end
 @testset "P6.0bm M: published models" begin
     @testset "$label" for (label, build, nterms) in P60BM_PUBLISHED
         sys = build()
-        @test P60BM_M.hasmetadata(sys, Potts.PottsSweepSpec)
+        @test P60BM_M.hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)
         spec = p60bm_spec(sys)
         @test spec isa Potts.PottsSweepSpec
         @test p60bm_same_terms(spec.hamiltonian, Potts.hamiltonian(sys)) && length(spec.hamiltonian) == nterms
@@ -367,7 +373,7 @@ end
         @test spec.proposal isa CorePotts.RelationSpec
     end
     gg = GranerGlazier(; name = :gg)
-    @test isequal(P60BM_S.unwrap(p60bm_spec(gg).temperature), P60BM_S.unwrap(complete(gg).T))
+    @test isequal(P60BM_S.unwrap(p60bm_spec(gg).temperature), P60BM_S.unwrap(gg.T))
     @test p60bm_spec(gg).proposal == Moore(1)
     @test p60bm_spec(AkeebInvasion(; name = :akeeb, lattice = (60, 40))).proposal == VonNeumann(1)
     @test length(p60bm_spec(AkeebInvasion(; name = :akeeb, lattice = (60, 40))).constraints) == 2
@@ -391,8 +397,9 @@ end
 # ---------------------------------------------------------------------------------------
 # X. Downstream detection, and the misuse refusal
 
-# what a downstream package writes: no Potts internals, only MTK's metadata API
-p60bm_has_sweep(s) = P60BM_M.hasmetadata(s, Potts.PottsSweepSpec)
+# what a downstream package writes: no Potts internals, only MTK's metadata API on an MTK
+# `System` (for a `PottsSystem`, the public `Potts.inner(sys)`)
+p60bm_has_sweep(s) = P60BM_M.hasmetadata(p60bm_meta(s), Potts.PottsSweepSpec)
 
 @testset "P6.0bm X: generic code detects the sweep" begin
     @test !p60bm_has_sweep(p60bm_decay()) && !p60bm_has_sweep(P60BM_M.mtkcompile(p60bm_decay()))
