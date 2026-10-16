@@ -27,16 +27,18 @@
 #     written; per statement, exactly the symbols written; exactly the `Pre` arguments
 #     written (MTK's own `Pre` operator); the value of the right-hand side at fixed points
 #     (MTK's generic `Symbolics.substitute`, `Pre(x)` substituted first); for the plain
-#     statements, structural equality with the equation rebuilt from the completed system's
-#     declared symbols and `ModelingToolkitBase.Pre`.
-#  F. The four forms: `updates` is the same (`isequal` equations, equal phase/scope/
-#     cadence) on the plain system, `complete(sys)`, and `mtkcompile(sys)` (the authored
-#     model, D-160), and after `extend` it lists the merged model's statements. With
+#     statements, structural equality with the equation rebuilt from the system's declared
+#     symbols (`sys.x`, the complete inner System's; W-lite, cutover C4) and
+#     `ModelingToolkitBase.Pre`.
+#  F. The forms: `updates` is the same (`isequal` equations, equal phase/scope/cadence) on
+#     the plain system and `mtkcompile(sys)` (the authored model, D-160), and after
+#     `Potts.extend` it lists the merged model's statements (MTK's `complete` of a
+#     `PottsSystem` is refused since C4: the model already wraps a complete System). With
 #     `@components`, the compiled system reports the statements as written (reading the
 #     component's coupled parameter and observed quantity), not the lowered ones; the
 #     negative control is `.sys`, the lowered model, whose statement differs. An edge-scope
-#     update is pinned on the plain and completed forms only (`mtkcompile` of an edge
-#     update is a pre-existing gap, not this item's).
+#     update is pinned on the plain form only (`mtkcompile` of an edge update is a
+#     pre-existing gap, not this item's).
 #  P. Published models: their statements as declared (Wortel act: `@on_copy` at site scope,
 #     then `@after_mcs` at site scope; Akeeb: two cell-scope `@after_mcs`; OpenVT growing
 #     monolayer: one cell-scope `@after_mcs`; OpenVT reference: one cell-scope
@@ -44,8 +46,8 @@
 #     Compiled equals authored on each.
 #  N. Negative controls and regression guards (pass before this item):
 #     - a model without updates returns an empty vector (also compiled);
-#     - MTK's `discrete_events(sys)` and `continuous_events(sys)` are empty on every form of
-#       every fixture and published model: UNTIL P6.4c, which stores `@discrete_events`/
+#     - MTK's `discrete_events` and `continuous_events` of `Potts.inner(sys)` are empty on
+#       every form of every fixture and published model: UNTIL P6.4c, which stores `@discrete_events`/
 #       `@terminate` as `SymbolicDiscreteCallback`s (D-162 ruling 2) and re-freezes this
 #       check. Per-entity, per-copy and structural rules are never callbacks;
 #     - `PottsSweepSpec` is still present, and `ODEProblem`/`JumpProblem` still refuse
@@ -311,8 +313,8 @@ end
         @test isempty(p60bp_pre_args(u.eq.lhs))                                # the new value on the left
         val === nothing || @test isapprox(p60bp_eval(u.eq.rhs, P60BP_POINT), val; rtol = 1e-12)
     end
-    # structural: rebuilt from the completed system's declared symbols and MTK's `Pre`
-    c = complete(P60bpAll(; name = :pa))
+    # structural: rebuilt from the system's declared symbols and MTK's `Pre`
+    c = P60bpAll(; name = :pa)
     Pre = P60BP_M.Pre
     uw(x) = P60BP_S.unwrap(x)
     @test isequal(uw(U[1].eq.lhs), uw(c.m)) && isequal(uw(U[1].eq.rhs), uw(Pre(c.m) + c.α))
@@ -329,19 +331,17 @@ end
 # ---------------------------------------------------------------------------------------
 # F. The four forms
 
-@testset "P6.0bp F: plain, complete and mtkcompile agree" begin
+@testset "P6.0bp F: plain and mtkcompile agree" begin
     sys = P60bpAll(; name = :pa)
     U = p60bp_updates(sys)
     cs = mtkcompile(sys)
-    @test p60bp_same(p60bp_updates(complete(sys)), U)
     @test p60bp_same(p60bp_updates(cs), U)
-    @test p60bp_same(p60bp_updates(mtkcompile(complete(sys))), U)
 end
 
 @testset "P6.0bp F: extend lists the merged model's statements" begin
     base = P60bpAll(; name = :pa)
     extra = P60bpExtra(; name = :extra)
-    ext = extend(extra, base)
+    ext = Potts.extend(extra, base)
     U = p60bp_updates(ext)
     @test length(U) == length(P60BP_TABLE) + 1
     key(u) = (u.phase, u.scope, u.every, string(u.eq))
@@ -352,7 +352,7 @@ end
     @test p60bp_same(p60bp_updates(mtkcompile(ext)), U)
 end
 
-@testset "P6.0bp F: an edge-scope update (plain and complete)" begin
+@testset "P6.0bp F: an edge-scope update" begin
     sys = P60bpEdge(; name = :pe)
     U = p60bp_updates(sys)
     @test length(U) == 1
@@ -360,7 +360,6 @@ end
     @test u.phase === :after_mcs && u.scope === :edge && u.every == Potts.Every(1)
     @test p60bp_target(u) === :rest && p60bp_pre_args(u.eq.rhs) == Set([:rest])
     @test p60bp_eval(u.eq.rhs, Dict(:Pre_rest => 10.0)) == 9.0
-    @test p60bp_same(p60bp_updates(complete(sys)), U)
 end
 
 @testset "P6.0bp F: a compiled model with components reports the statement as written" begin
@@ -422,25 +421,26 @@ end
 @testset "P6.0bp N: a model without updates" begin
     sys = P60bpNone(; name = :none)
     @test isempty(p60bp_updates(sys)) && p60bp_updates(sys) isa AbstractVector
-    @test isempty(p60bp_updates(complete(sys))) && isempty(p60bp_updates(mtkcompile(sys)))
+    @test isempty(p60bp_updates(mtkcompile(sys)))
 end
 
 @testset "P6.0bp N: no MTK events until P6.4c (D-162)" begin
-    # MTK's accessors take an `AbstractSystem`: the compiled model's `.sys` (D-137)
-    forms(s) = (s, complete(s), getfield(mtkcompile(s), :sys))
+    # MTK's event accessors read the complete System a `PottsSystem` wraps (W-lite, C4), for
+    # the authored model and the compiled model's `.sys` (D-137)
+    forms(s) = (Potts.inner(s), Potts.inner(getfield(mtkcompile(s), :sys)))
     fixtures = [P60bpAll(; name = :pa), P60bpNone(; name = :none), P60bpComp(; name = :pc),
-        P60bpTiming(; name = :pt), extend(P60bpExtra(; name = :extra), P60bpAll(; name = :pa))]
+        P60bpTiming(; name = :pt), Potts.extend(P60bpExtra(; name = :extra), P60bpAll(; name = :pa))]
     for sys in [fixtures; [b() for (_, b, _) in P60BP_PUBLISHED]], s in forms(sys)
         @test isempty(P60BP_M.discrete_events(s))
         @test isempty(P60BP_M.continuous_events(s))
     end
     e = P60bpEdge(; name = :pe)
-    @test isempty(P60BP_M.discrete_events(e)) && isempty(P60BP_M.discrete_events(complete(e)))
+    @test isempty(P60BP_M.discrete_events(Potts.inner(e))) && isempty(P60BP_M.continuous_events(Potts.inner(e)))
 end
 
 @testset "P6.0bp N: the sweep payload and the D-137 rule 5 refusals are unaffected" begin
     for sys in (P60bpAll(; name = :pa), P60bpComp(; name = :pc), WortelAct(; name = :act, lattice = (8, 8)))
-        @test P60BP_M.hasmetadata(sys, Potts.PottsSweepSpec)
+        @test P60BP_M.hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)
         @test P60BP_M.getmetadata(mtkcompile(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
         @test p60bp_clear(() -> P60BP_M.ODEProblem(sys, [], (0.0, 1.0)), "ODEProblem", "PottsProblem")
         @test p60bp_clear(() -> P60BP_M.JumpProblem(sys, [], (0.0, 1.0)), "JumpProblem", "PottsProblem")
@@ -448,7 +448,7 @@ end
 end
 
 @testset "P6.0bp N: update timing (behaviour unchanged)" begin
-    sys = complete(P60bpTiming(; name = :pt))
+    sys = P60bpTiming(; name = :pt)
     σ = zeros(Int32, 8, 8)
     σ[3:5, 3:5] .= 1
     prob = PottsProblem(sys, [ownership => σ, kind => [:A]], (0, 12))
