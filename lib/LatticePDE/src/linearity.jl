@@ -1,0 +1,99 @@
+# The linearity table (v3 §5.2, R2 F-4, FR-27): `Symbolics.linear_expansion` cannot see
+# through registered operators, so the classification is ours. Each additive term of a rate
+# right-hand side gets one class with respect to the equation's own field `c`:
+#
+#   Diffusion     Δ(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a constant or
+#                 parameter
+#   LinearLocal   coefficient × c
+#   LaggedSwitch  coefficient × max(a, 0) or ifelse(·, a, 0), a affine in c (a LinearLocal
+#                 term whose switch the implicit solvers lag, §5.2)
+#   Advection     Advect(u, c)
+#   CrossLinear   linear in one other field and free of c
+#   Source        reads no field
+#   Other         everything else (treated explicitly)
+#
+# The rule is conservative: a term is linear only when every coefficient (a factor, a
+# divisor, `K`, `u`, the switch's other terms) reads no unknown field of the system, only
+# constants, parameters and inputs. Unknowns are every non-input field, aux fields included
+# (`K ~ c^2` makes `DivKGrad(K, c)` Other), because the solve groups are not known here. A
+# multiplier of a diffusion or advection term must also read no input: `kind * Δ(c)` is not
+# conservative. A term that reads an aux field at all is Other (its dependence is hidden).
+#
+# Operator classes match with `isa` on the struct's UnionAll (`Advect{S}` is parametric), and
+# literals are read through `unwrap_const` (SymbolicUtils 4 wraps them in `Const`).
+
+_reads(x, ops) = (u = unwrap(x); iscall(u) && (any(o -> isequal(o, operation(u)), ops) || any(a -> _reads(a, ops), arguments(u))))
+_iszero(x) = (v = unwrap_const(unwrap(x)); v isa Number && iszero(v))
+_isread(x, op) = (u = unwrap(x); iscall(u) && isequal(operation(u), op))
+
+# Dx(K * Dx(c)) or Dx(Dx(c)) (collapsed to order 2): (K or nothing, c) when it is the flux form
+function _raw_flux(u)
+    d = operation(u)
+    a = only(arguments(u))
+    d.order == 2 && return (nothing, a)
+    d.order == 1 || return nothing
+    fs = iscall(a) && operation(a) === (*) ? arguments(a) : [a]
+    k = findfirst(f -> iscall(f) && operation(f) isa Differential && operation(f).order == 1 &&
+                           isequal(operation(f).x, d.x), fs)
+    k === nothing && return nothing
+    K = length(fs) == 1 ? 1 : prod(fs[setdiff(eachindex(fs), k)])
+    return (K, only(arguments(fs[k])))
+end
+
+function _linclass(u, op, S, I)
+    free(x) = !_reads(x, S)
+    _isread(u, op) && return :LinearLocal
+    iscall(u) || return :Other
+    f, a = operation(u), arguments(u)
+    if f === Δ || f isa DivKGrad
+        return _isread(a[end], op) && all(free, a[1:(end - 1)]) ? :Diffusion : :Other
+    elseif f isa Differential
+        r = _raw_flux(u)
+        return r !== nothing && _isread(r[2], op) && free(r[1]) ? :Diffusion : :Other
+    elseif f isa Advect
+        return _isread(a[2], op) && free(a[1]) ? :Advection : :Other
+    elseif f === (*) || f === (/)
+        dep = findall(x -> _reads(x, (op,)), a)
+        (length(dep) == 1 && (f === (*) || dep[1] == 1)) || return :Other
+        k = _linclass(unwrap(a[dep[1]]), op, S, I)
+        rest = a[setdiff(eachindex(a), dep)]
+        all(free, rest) || return :Other
+        k in (:Diffusion, :Advection) && any(x -> _reads(x, I), rest) && return :Other
+        return k
+    elseif f === max || f === min || f === ifelse
+        arms = f === ifelse ? a[2:3] : a
+        f === ifelse && !all(t -> _affine(t, op, S, I), _cmpargs(a[1])) && return :Other
+        any(_iszero, arms) && count(x -> _reads(x, (op,)), arms) == 1 &&
+            all(x -> _affine(x, op, S, I), arms) && return :LaggedSwitch
+    end
+    return :Other
+end
+_cmpargs(c) = (u = unwrap(c); iscall(u) ? arguments(u) : [u])
+function _affine(x, op, S, I)
+    u = unwrap(x)
+    terms = iscall(u) && operation(u) === (+) ? arguments(u) : [u]
+    return all(t -> !_reads(t, S) || _linclass(unwrap(t), op, S, I) == :LinearLocal, terms)
+end
+
+"""
+    linearity(rhs, c, fields; inputs = (), aux = ()) -> Vector{Pair{Any, Symbol}}
+
+The class of each additive term of `rhs` with respect to field `c` (an applied dependent
+variable or its operation). `fields` lists the operations of the unknown fields of the system
+(every non-input field), `inputs` those of the inputs and `aux` those of the algebraic
+(`K ~ expr`) fields; a term that reads an aux field is `Other`. A coefficient that reads an unknown
+makes the term `Other` (the conservative rule in the file header).
+"""
+function linearity(rhs, c, fields; inputs = (), aux = ())
+    op = (u = unwrap(c); iscall(u) ? operation(u) : u)
+    u = unwrap(rhs)
+    terms = iscall(u) && operation(u) === (+) ? arguments(u) : [u]
+    return map(terms) do t
+        _reads(t, fields) || return t => :Source
+        _reads(t, aux) && return t => :Other                  # an aux field hides its dependence
+        _reads(t, (op,)) && return t => _linclass(t, op, fields, inputs)
+        others = [f for f in fields if _reads(t, (f,))]
+        return t => (length(others) == 1 &&
+                     _linclass(t, only(others), fields, inputs) in (:LinearLocal, :Diffusion) ? :CrossLinear : :Other)
+    end
+end

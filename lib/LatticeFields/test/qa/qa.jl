@@ -24,6 +24,11 @@ const LF_NONPUBLIC = (
           nothing
 end
 
+@testset "Aqua" begin
+    using Aqua: Aqua
+    Aqua.test_all(LatticeFields)
+end
+
 @testset "source rules" begin
     root = dirname(@__DIR__) |> dirname
     files = [joinpath(d, f) for dir in ("src", "test")

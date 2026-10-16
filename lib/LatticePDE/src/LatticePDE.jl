@@ -8,13 +8,27 @@ say on a lattice (v3 §5.1, §5.5).
 
 Every operator is a positional registered term (S-3): options that are not symbolic live
 in a callable struct (`DivKGrad(:harmonic)`, `Advect(Upwind1())`), and every symbolic
-argument is positional, so `substitute`, `simplify` and `get_variables` see it. Nothing
-here lowers or discretizes a term.
+argument is positional, so `substitute`, `simplify` and `get_variables` see it.
+
+The discretizer (`LatticeDiscretization`, `symbolic_discretize`) puts a `PDESystem` on a
+lattice: it parses the boundary conditions, classifies rate terms in the linearity table,
+reads maps and offset reads, and lowers every equation to a LatticeFields `Program`.
 """
 module LatticePDE
 
-using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex
-using Symbolics: Symbolics, Equation, Num, VarDomainPairing, @register_symbolic
+using DomainSets: Interval, leftendpoint, rightendpoint
+using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, NodeValueRule, MaskDecl,
+                        Access, Sel, Scalar, Bpolicy, Ex, field!, rule!, kernel, add!, program,
+                        node!, constant!, param!, runtime!, coord!, table!, call!, cast!, arith!,
+                        compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
+                        F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
+                        ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
+                        NOT, AND, OR, INSIDE_OP
+using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
+using SciMLBase: AbstractDiscretization
+import SciMLBase: discretize, symbolic_discretize
+using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
+                 unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
@@ -22,6 +36,8 @@ export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEnti
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
        get_potts_entity
 export vocabulary_issues, check_vocabulary
+export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
+       parse_bcs, linearity, Grid, Interval
 
 # ---------------------------------------------------------------------------------------
 # Field operators: opaque terms, lowered by the discretizer and never evaluated here
@@ -276,5 +292,10 @@ function _scan_term!(issues, where, u)
     foreach(a -> _scan_term!(issues, where, a), args)
     return issues
 end
+
+include("bcs.jl")
+include("linearity.jl")
+include("lower.jl")
+include("discretize.jl")
 
 end # module LatticePDE

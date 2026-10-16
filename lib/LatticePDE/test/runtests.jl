@@ -278,6 +278,9 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
         @test_throws ArgumentError check_vocabulary(pd)
     end
 
+    include("discretize.jl")
+    include("example.jl")
+
     @testset "QA" begin
         using Aqua, ExplicitImports
         Aqua.test_all(LatticePDE; ambiguities = false)
@@ -290,5 +293,12 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
         # `get_unit` (MTK unit inference, which registered operators extend) is
         # not declared public by ModelingToolkitBase
         @test check_all_qualified_accesses_are_public(LatticePDE; ignore = (:get_unit,)) === nothing
+        # no model, paper or author names in the package or its tests (BRIEF rules)
+        files = [joinpath(d, f) for dir in ("src", "test") for (d, _, fs) in walkdir(joinpath(@__DIR__, "..", dir))
+                 for f in fs if endswith(f, ".jl")]
+        banned = Regex("\\b(" * join(["Jiang", "Merks", "Bauer", "Graner", "Glazier", "Fortuna", "Hogeweg", "Szabo",
+                                        "Marée", "FBCA", "OpenVT"], "|") * ")\\b")
+        @test isempty(filter(f -> normpath(f) != normpath(@__FILE__) && occursin(banned, read(f, String)), files))
+        @test !any(f -> occursin("@generated", read(f, String)), filter(f -> occursin("/src/", f), files))
     end
 end
