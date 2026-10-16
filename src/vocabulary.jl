@@ -325,19 +325,16 @@ _lattice_dim() = (d = _build().dim) > 0 ? d :
                  throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
 
 # ---------------------------------------------------------------------------------------
-# Symbolic operations recognised by lowering
+# Symbolic operations recognised by lowering (the field operator `Δ` is LatticePDE's)
 
 """`at(x, i...)`: `x` at an explicit site/cell (`act[target]`) or kind-table entry (`J[a, b]`)."""
 function at end
 """`gather(n, anchor, body, cond)`: fold of `body` over relation neighbors `n` of `anchor`."""
 function gather end
-"""Lattice Laplacian of a field (zero-flux at closed boundaries)."""
-function Δ end
 
 at(x, i) = error("`at` is symbolic-only")
 """`at2(J, a, b)`: a two-index kind-table entry `J[a, b]`."""
 at2(x, i, j) = error("`at2` is symbolic-only")
-Δ(x) = error("`Δ` is symbolic-only")
 gather(n, a, b, c) = error("`gather` is symbolic-only")
 """`population(n, body, cond)`: fold of `body` over live cells or sites `n` (`n`'s metadata)."""
 population(n, b, c) = error("`population` is symbolic-only")
@@ -346,7 +343,6 @@ Symbolics.@register_symbolic at(x, i)
 Symbolics.@register_symbolic at2(x, i, j)
 Symbolics.@register_symbolic gather(n, a, b, c)
 Symbolics.@register_symbolic population(n, b, c)
-Symbolics.@register_symbolic Δ(x)
 """`cell_centroid(k)`: coordinate `k` of the current cell's centroid (cell scope)."""
 cell_centroid(k) = error("`cell_centroid` is symbolic-only")
 """`copy_displacement(c, k)`: change of cell `c`'s centroid along axis `k` by the copy (proposal scope)."""

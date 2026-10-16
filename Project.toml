@@ -10,6 +10,7 @@ CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LatticePDE = "8c13e429-a5cc-4e77-8f91-d2d1c866aeb6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
@@ -31,6 +32,7 @@ PottsDynamicQuantitiesExt = ["DynamicQuantities", "TermInterface"]
 
 [sources]
 CorePotts = {path = "lib/CorePotts"}
+LatticePDE = {path = "lib/LatticePDE"}
 
 [compat]
 ADTypes = "1"
@@ -39,6 +41,7 @@ CorePotts = "0.3"
 GeometryBasics = "0.5"
 JumpProcesses = "9.33"
 KernelAbstractions = "0.9.42"
+LatticePDE = "0.1"
 LinearAlgebra = "1"
 SciMLBase = "3"
 SimpleNonlinearSolve = "2.14"
@@ -63,6 +66,8 @@ projects = [
     "lib/CorePotts/test",
     "lib/LatticeFields",
     "lib/LatticeFields/test",
+    "lib/LatticePDE",
+    "lib/LatticePDE/test",
     "lib/MakiePotts",
     "lib/MakiePotts/test",
     "lib/PottsModels",

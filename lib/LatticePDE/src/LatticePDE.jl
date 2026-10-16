@@ -1,0 +1,270 @@
+"""
+    LatticePDE
+
+The MTK-facing vocabulary of the lattice field compiler: the registered operators that
+field equations and CPM terms are written with, the metadata keys that tag variables and
+parameters, and the scans that refuse spellings MTK accepts but that do not mean what they
+say on a lattice (v3 §5.1, §5.5).
+
+Every operator is a positional registered term (S-3): options that are not symbolic live
+in a callable struct (`DivKGrad(:harmonic)`, `Advect(Upwind1())`), and every symbolic
+argument is positional, so `substitute`, `simplify` and `get_variables` see it. Nothing
+here lowers or discretizes a term.
+"""
+module LatticePDE
+
+using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex
+using Symbolics: Symbolics, Equation, VarDomainPairing, @register_symbolic
+using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
+
+export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
+export LatticePlacement, LatticeStorage, LatticeLevel, LatticeSpacing, PottsEntity
+export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
+       get_potts_entity
+export vocabulary_issues, check_vocabulary
+
+# ---------------------------------------------------------------------------------------
+# Field operators: opaque terms, lowered by the discretizer and never evaluated here
+
+"""
+`Δ(c)`: the lattice Laplacian of field `c` (zero flux at closed boundaries). In the
+finite-volume lowering it is `DivKGrad` with `K ≡ 1`.
+"""
+function Δ end
+Δ(x) = error("`Δ` is symbolic-only")
+@register_symbolic Δ(x)
+
+const FACE_MEANS = (:harmonic, :arithmetic)
+
+"""
+    DivKGrad(mean)
+
+`DivKGrad(mean)(K, c)` is the conservative diffusion term `∇⋅(K ∇c)`. `mean` sets the
+face value of `K`: `:harmonic` or `:arithmetic`. `K` and `c` are positional symbolic
+arguments; the face mean is an option of the operator, kept through `substitute` and
+`simplify` because it is part of the term's operation.
+"""
+struct DivKGrad
+    mean::Symbol
+    function DivKGrad(mean::Symbol)
+        mean in FACE_MEANS || throw(ArgumentError("DivKGrad: the face mean must be one of " *
+                                                  "$(join(repr.(FACE_MEANS), ", ")); got $(repr(mean))"))
+        return new(mean)
+    end
+end
+(op::DivKGrad)(K, c) = error("`DivKGrad($(repr(op.mean)))` is symbolic-only")
+@register_symbolic (op::DivKGrad)(K, c)
+
+"""Discretization scheme of an [`Advect`](@ref) term."""
+abstract type AdvectionScheme end
+"""`Upwind1()`: first-order upwind advection."""
+struct Upwind1 <: AdvectionScheme end
+
+"""
+    Advect(scheme)
+
+`Advect(scheme)(u, c)` is the advection term of field `c` by velocity `u` (a velocity
+component, or the velocity array). `scheme` is an [`AdvectionScheme`](@ref).
+"""
+struct Advect{S <: AdvectionScheme}
+    scheme::S
+end
+(op::Advect)(u, c) = error("`Advect` is symbolic-only")
+# One registration for a velocity component and the velocity array: SymbolicUtils 4 gives
+# scalar and array symbolics one `BasicSymbolic` type, so two registrations (`u` and
+# `u::AbstractVector`) define the same methods twice, an error under precompilation.
+@register_symbolic (op::Advect)(u::Union{Real, AbstractVector}, c)
+
+# ---------------------------------------------------------------------------------------
+# CPM reads and kind sets: these run inside compiled cell ODEs, so the numeric methods
+# evaluate (a kind arrives as a Real after `mtkcompile(; inputs)`)
+
+"""
+`at(T, k)`: entry `k` of the kind table `T` (`at(Dk, kindₛ)`), or the value of `c` at an
+explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
+input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
+"""
+at(T::AbstractArray, k::Union{Integer, AbstractFloat}) = T[Int(k)]
+# one registration for the table and the site forms (see `Advect`)
+@register_symbolic at(T::Union{Real, AbstractVector}, k::Integer)
+
+"""`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`)."""
+at2(T::AbstractArray, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = T[Int(k), Int(kp)]
+@register_symbolic at2(T::AbstractMatrix, k::Integer, kp::Integer)
+
+"""
+`ismember(k, s)`: whether the integer `k` (a kind) is one of the tuple `s` of integer
+codes. The `∈` forms do not work in a symbolic expression: `kind ∈ Set(…)` evaluates to
+`false` before any term exists (a product with it vanishes), `kind ∈ (a, b)` builds an
+interval domain pairing and `kind ∈ [a, b]` builds an `in` term that LatticePDE refuses.
+"""
+ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
+@register_symbolic ismember(k::Integer, s::Tuple)::Bool
+
+"""
+`masked(pred, v)`: the masked interior condition `c ~ masked(pred, v)`, written in the
+boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
+symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
+"""
+masked(p, v) = error("`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
+                     "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
+                     "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`.")
+@register_symbolic masked(p::Bool, v::Real)
+
+# No operator here has a symbolic derivative: the field operators are lowered, never
+# expanded, and the CPM reads are piecewise constant in their kind arguments. A derivative
+# that reaches one of them is an error, not the unevaluated `D(op(…))` Symbolics returns by
+# default. (`expand_derivatives` asks only for arguments whose own derivative is nonzero.)
+_no_derivative(op) = throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
+                                         "`$op` has no derivative rule (differentiate the field before applying " *
+                                         "the operator, or keep the derivative outside it)"))
+Symbolics.@register_derivative Δ(x) I _no_derivative(Δ)
+Symbolics.@register_derivative (op::DivKGrad)(K, c) I _no_derivative(op)
+Symbolics.@register_derivative (op::Advect)(u, c) I _no_derivative(op)
+Symbolics.@register_derivative at(T, k) I _no_derivative(at)
+Symbolics.@register_derivative at2(T, k, kp) I _no_derivative(at2)
+Symbolics.@register_derivative ismember(k, s) I _no_derivative(ismember)
+Symbolics.@register_derivative masked(p, v) I _no_derivative(masked)
+
+# the registered operators of this vocabulary (the scans check their arguments)
+_isvocabulary(f) = f === Δ || f isa DivKGrad || f isa Advect || f === at || f === at2 || f === ismember ||
+                   f === masked
+
+# ---------------------------------------------------------------------------------------
+# Metadata keys (`@variables c(..) [lattice_placement = …]`). MTK's own `tunable` is reused;
+# these are ours, so they carry the `lattice_` and `potts_` prefixes.
+
+"""Metadata key `lattice_placement`: where a field's values live on the lattice."""
+struct LatticePlacement end
+"""Metadata key `lattice_storage`: how a field is stored."""
+struct LatticeStorage end
+"""Metadata key `lattice_level`: the grid level a field lives on."""
+struct LatticeLevel end
+"""
+Metadata key `lattice_spacing`: marks a parameter as the grid spacing along axis `a`
+(`@parameters dx [lattice_spacing = 1]`). The discretization supplies its value from the
+grid; the tag, not the name, marks it.
+"""
+struct LatticeSpacing end
+"""
+Metadata key `potts_entity`: what a coupling input of a field system reads from the CPM
+(`kindₛ(t, x, y)::Int32 [input = true, potts_entity = …]`).
+"""
+struct PottsEntity end
+
+Symbolics.option_to_metadata_type(::Val{:lattice_placement}) = LatticePlacement
+Symbolics.option_to_metadata_type(::Val{:lattice_storage}) = LatticeStorage
+Symbolics.option_to_metadata_type(::Val{:lattice_level}) = LatticeLevel
+Symbolics.option_to_metadata_type(::Val{:lattice_spacing}) = LatticeSpacing
+Symbolics.option_to_metadata_type(::Val{:potts_entity}) = PottsEntity
+
+_meta(x, key) = Symbolics.getmetadata(Symbolics.unwrap(x), key, nothing)
+"""`get_lattice_placement(x)`: the `lattice_placement` of `x`, or `nothing`."""
+get_lattice_placement(x) = _meta(x, LatticePlacement)
+"""`get_lattice_storage(x)`: the `lattice_storage` of `x`, or `nothing`."""
+get_lattice_storage(x) = _meta(x, LatticeStorage)
+"""`get_lattice_level(x)`: the `lattice_level` of `x`, or `nothing`."""
+get_lattice_level(x) = _meta(x, LatticeLevel)
+"""`get_lattice_spacing(x)`: the axis of the spacing parameter `x`, or `nothing`."""
+get_lattice_spacing(x) = _meta(x, LatticeSpacing)
+"""`get_potts_entity(x)`: the `potts_entity` of `x`, or `nothing`."""
+get_potts_entity(x) = _meta(x, PottsEntity)
+
+# ---------------------------------------------------------------------------------------
+# Scans: spellings MTK builds without complaint that are wrong or meaningless here
+
+const ISMEMBER_HINT = "write a kind set as `ismember(kindₛ, (2, 3))`"
+const SHIFT_HINT = "write a discrete map as `Shift(t, 1)(c(t, x, y)) ~ rhs`"
+
+"""
+    vocabulary_issues(pdesys::PDESystem)
+    vocabulary_issues(eqs, bcs = Equation[])
+
+The refusals of the LatticePDE surface, one message per offending term, empty when the
+system is clean. Checked in every equation and boundary condition, on both sides and inside
+every operator's arguments:
+
+  - a side or entry that is a `VarDomainPairing` (`kindₛ ∈ (2, 3)` builds an interval);
+  - a side that is a literal `Bool` (`kindₛ ∈ Set(…)` evaluates to `false` before a term
+    exists);
+  - an `in` term (`kindₛ ∈ [2, 3]`), a valid term that is not a kind set here;
+  - a `ShiftIndex` argument (`N(k + 1)` on the callable `N(..)` builds a term whose
+    argument is the shift index; MTK refuses the same notation on `N(t, x, y)`);
+  - a `Pre` term (the callback "previous value", not a map's previous step).
+
+`kindₛ ∈ Set(…)` inside a larger expression cannot be seen: the product `α * false` is
+already `0`, so the term is gone from the equation before any scan runs.
+"""
+vocabulary_issues(sys::PDESystem) = vocabulary_issues(sys.eqs, sys.bcs)
+function vocabulary_issues(eqs, bcs = Equation[])
+    issues = String[]
+    for (where, list) in (("equation", eqs), ("boundary condition", bcs)), (i, e) in enumerate(list)
+        _scan_entry!(issues, "$where $i", e)
+    end
+    return issues
+end
+
+"""
+    check_vocabulary(pdesys::PDESystem)
+    check_vocabulary(eqs, bcs = Equation[])
+
+Throw an `ArgumentError` listing every [`vocabulary_issues`](@ref) entry; return `nothing`
+when there are none.
+"""
+function check_vocabulary(args...)
+    issues = vocabulary_issues(args...)
+    isempty(issues) || throw(ArgumentError("LatticePDE refuses $(length(issues)) term" *
+                                           "$(length(issues) == 1 ? "" : "s"):\n  - " * join(issues, "\n  - ")))
+    return nothing
+end
+
+function _scan_entry!(issues, where, e)
+    if e isa Equation
+        _scan_side!(issues, "$where (lhs)", e.lhs)
+        _scan_side!(issues, "$where (rhs)", e.rhs)
+    else
+        _scan_side!(issues, where, e)
+    end
+    return issues
+end
+
+function _scan_side!(issues, where, x)
+    x isa AbstractArray && (foreach(y -> _scan_side!(issues, where, y), x); return issues)
+    v = unwrap_const(Symbolics.unwrap(x))
+    if v isa VarDomainPairing
+        push!(issues, "$where: `$(v.variables) ∈ $(v.domain)` is a domain pairing (an interval), " *
+                      "not a kind set; $ISMEMBER_HINT")
+    elseif v isa Bool
+        push!(issues, "$where: the side is the literal `$v`; `kindₛ ∈ Set(…)` evaluates before a term " *
+                      "exists; $ISMEMBER_HINT")
+    elseif v isa AbstractArray
+        foreach(y -> _scan_side!(issues, where, y), v)
+    else
+        _scan_term!(issues, where, v)
+    end
+    return issues
+end
+
+function _scan_term!(issues, where, u)
+    iscall(u) || return issues
+    f = operation(u)
+    args = arguments(u)
+    if f === in
+        push!(issues, "$where: `$u` is an `in` term, not a kind set; $ISMEMBER_HINT")
+    elseif f isa Pre
+        push!(issues, "$where: `$u` uses `Pre`, the callback previous value, which has no meaning " *
+                      "in a field system; $SHIFT_HINT")
+    end
+    if _isvocabulary(f) && any(a -> unwrap_const(a) isa Bool, args)
+        push!(issues, "$where: `$u` has a literal `Bool` argument; `kindₛ ∈ Set(…)` evaluates before a " *
+                      "term exists; $ISMEMBER_HINT")
+    end
+    if any(a -> unwrap_const(a) isa ShiftIndex, args)
+        push!(issues, "$where: `$u` has a `ShiftIndex` argument (the `c(k + 1)` notation does not " *
+                      "apply to space-time variables); $SHIFT_HINT")
+    end
+    foreach(a -> _scan_term!(issues, where, a), args)
+    return issues
+end
+
+end # module LatticePDE

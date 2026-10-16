@@ -1,0 +1,17 @@
+[deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+LatticePDE = "8c13e429-a5cc-4e77-8f91-d2d1c866aeb6"
+ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Aqua = "0.8"
+DomainSets = "0.8"
+ExplicitImports = "1.15"
+SciMLBase = "3"
+Test = "1"
