@@ -291,7 +291,9 @@ CorePotts. Full ModelingToolkit (AGPL) is not a dependency or an extension (D-25
 ### 2.1 `PottsSystem <: ModelingToolkitBase.AbstractSystem`
 
 (P6.0o, D-137.) Potts fields: `name`, `kinds`, `frozen_kinds`, `kind_classes`, `lattice`,
-`parameters`, `variables` (scope in their metadata: cell, model, site, field, edge),
+`parameters` (MTK `@parameters`; kind tables are array parameters), `variables` (scope in
+their `potts_entity` metadata, `Potts.Entity`: cell, model, site, field, edge; built-ins are
+MTK inputs `volume(t)` with the entity `Builtin(:volume)`),
 `relations`, `energies::Vector{EnergyTerm}`, `drives`, `constraints`, `updates`,
 `equations`, `divisions`, `relationships`, `link_rules`, `observed::Vector{ObservedEq}`,
 `components` (`ComponentSpec`s), `discrete` (bound clocked components), `sweep`,

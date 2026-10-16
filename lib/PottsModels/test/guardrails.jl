@@ -159,7 +159,9 @@ const DSL_NAMES = [:Adaptive, :Adhesion, :Chemotaxis, :Dirichlet, :Every, :Expli
     :Fresh, :created, :transfer,
     # D-243 (P6.5a2): named kind pairs (E2) and the E7 geometry helpers (`integral` gains
     # `over = cluster`, the maintainer's spelling of the cluster sum)
-    :Pairs, :minimum_image, :separation]
+    :Pairs, :minimum_image, :separation,
+    # D-257 item 5 (cutover C3): `ismember(kind, g)`, the kind-set term of `@equations`
+    :ismember]
 const DSL_KEYWORDS = Dict(:connectivity => [:penalty, :rule], :connected => [:rule], :Volume => [:strength, :target],
     :Surface => [:strength, :target], :Chemotaxis => [:kinds, :response, :strength, :when], :randn => [:lower],
     :transfer => [:per_site], :integral => [:over])

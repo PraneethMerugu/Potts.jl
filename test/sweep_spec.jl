@@ -89,7 +89,7 @@ ss_eq_names(eq) = union(ss_names(eq.lhs), ss_names(eq.rhs))
     # the fold update reads `count_contacts` (the cell's contacts, all and with the medium)
     f = only(filter(u -> :f in ss_names(u.eq.lhs), U))
     @test occursin("count_contacts(contact_partner, true, contact)", string(f.eq.rhs))
-    @test occursin("count_contacts(contact_partner, kind′ == 0, contact)", string(f.eq.rhs))
+    @test occursin("count_contacts(contact_partner, kind′(t) == 0, contact)", string(f.eq.rhs))
     # isequal-stable across the plain, completed and compiled forms
     for V in (Potts.updates(complete(sys)), Potts.updates(mtkcompile(sys)), Potts.updates(sys))
         @test length(V) == length(U) && all(i -> isequal(V[i].eq, U[i].eq), eachindex(U, V))

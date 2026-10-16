@@ -268,7 +268,9 @@ function _hoist_pair_terms(Ea, E, rel::Symbol)
     seen = Set{Any}()
     function visit(x)
         x = _unwrap(x)
-        (x isa SymbolicUtils.BasicSymbolic && iscall(x)) || return nothing
+        # a tagged quantity (`site(t)`, `cue(t)`: MTK-native calls since C3) is a leaf, as a
+        # plain symbol is: only its uses are bound
+        (x isa SymbolicUtils.BasicSymbolic && iscall(x) && info(x) === nothing) || return nothing
         foreach(visit, arguments(x))
         _pair_only(x) && !(x in seen) && (push!(seen, x); push!(found, x))
         return nothing
@@ -279,7 +281,7 @@ function _hoist_pair_terms(Ea, E, rel::Symbol)
     sub = Dict{Any, Any}()
     binds = Tuple{Any, Any}[]
     for (k, x) in enumerate(found)
-        v = _tag(_sym(Symbol(:__pair_, rel, :_, k)), Info(:bound, :pair, nothing, (;)))
+        v = _tag(_sym(Symbol(:__pair_, rel, :_, k)), Entity(:bound, :pair, nothing, (;)))
         push!(binds, (v, isempty(sub) ? x : Symbolics.substitute(x, sub; fold = Val(false))))
         sub[x] = _unwrap(v)
     end
@@ -467,7 +469,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
         # a written reference stays a reference (R6): `q[partner]` with `partner[new]` written reads
         # the referent through the guarded dereference, as `H` does after the copy
         opts = _is_ref_var(x) ? (; reference = true) : (;)
-        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Info(:builtin, name, nothing, opts)))
+        after[side][_unwrap(x)] = _unwrap(_tag(_sym(name), Entity(:builtin, name, nothing, opts)))
         push!(binds, name => Symbol(:v_oncopy_, j))
         push!(vals, :($(Symbol(:v_oncopy_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, _proposal_env(T, rn)), _update_label(u)))))
     end
@@ -475,7 +477,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
 end
 
 """Where an on-copy write `x[idx]` lands for the energies: `:new`, `:old`, `:target` or `nothing`."""
-function _oncopy_side(i::Info, idx)
+function _oncopy_side(i::Entity, idx)
     ii = info(idx)
     (ii === nothing || ii.role !== :builtin) && return nothing
     i.role === :cell && ii.name in (:new, :old) && return ii.name
@@ -1267,7 +1269,7 @@ function _ode_locals(odes)
     locals = Dict{Any, Any}()
     bind = Dict{Symbol, Any}()
     for (i, (x, _)) in enumerate(odes)
-        s = _tag(_sym(Symbol(:__y, i)), Info(:builtin, Symbol(:__y, i), nothing, (;)))
+        s = _tag(_sym(Symbol(:__y, i)), Entity(:builtin, Symbol(:__y, i), nothing, (;)))
         locals[_unwrap(x)] = _unwrap(s)
         bind[Symbol(:__y, i)] = ys[i]
     end
@@ -1608,12 +1610,13 @@ end
 # term here (fields are stepped one after another, so `u` is fixed during this step), with
 # no part in ∂f/∂x.
 function _auto_substeps(x, rate, values, dt, lattice, n = nothing)
+    rate = _expand_ismember(rate)       # bounds and ∂f/∂x see the spelled-out `|` of equalities
     L = _unwrap(Symbolics.variable(:__Lap))
     lap = Dict{Any, Any}()
     xu = _unwrap(x)
     _walk(y -> (iscall(y) && operation(y) === Δ && isequal(_unwrap(arguments(y)[1]), xu) && (lap[y] = L)), rate)
     rate_L = _unwrap(Symbolics.substitute(rate, lap; fold = Val(false)))
-    coef = isempty(lap) ? 0 : _unwrap(Symbolics.derivative(Symbolics.wrap(rate_L), Symbolics.wrap(L)))
+    coef = isempty(lap) ? 0 : _table_derivative(rate_L, L)
     _warn_negative_diffusion(x, coef, values)
     h = something(lattice.spacing, ntuple(_ -> 1.0, length(lattice.dims)))
     env = _model_env(Float64, Dict{Any, Symbol}())
@@ -1662,6 +1665,24 @@ function _warn_negative_diffusion(x, coef, values)
     return
 end
 
+# `∂f/∂x`, with each kind-table read (`at(Dk, kind)`, `at2(J, kind, kind′)`) a constant:
+# Symbolics differentiates through a registered call's arguments, and a table is an array
+# parameter, which it cannot differentiate.
+function _table_derivative(f, x)
+    hide, show = Dict{Any, Any}(), Dict{Any, Any}()
+    _walk(f) do y
+        if iscall(y) && (operation(y) === at || operation(y) === at2) && role(arguments(y)[1]) === :kindtable &&
+           !haskey(hide, y)
+            p = _sym(Symbol(:__table_, length(hide) + 1))
+            hide[y] = p
+            show[p] = y
+        end
+    end
+    g = isempty(hide) ? f : _unwrap(Symbolics.substitute(f, hide; fold = Val(false)))
+    d = _unwrap(Symbolics.derivative(Symbolics.wrap(g), Symbolics.wrap(x)))
+    return isempty(show) ? d : _unwrap(Symbolics.substitute(d, show; fold = Val(false)))
+end
+
 # A host expression (in `p`) bounding |∂f/∂x| over every site and state, for the field's
 # reaction `f` (the rate without its diffusion term), or `nothing` when no bound follows from
 # the parameters alone (a reaction nonlinear in `x`, or a rate scaled by other state). For a
@@ -1671,7 +1692,7 @@ end
 # `−k x (kind == medium)` and `−k x rand()` are bounded by |k|.
 function _rate_bound(x, reaction, env)
     d = try
-        _unwrap(Symbolics.derivative(Symbolics.wrap(reaction), Symbolics.wrap(x)))
+        _table_derivative(reaction, x)
     catch
         return nothing
     end

@@ -124,6 +124,7 @@ function lower(x, env::LowerEnv)
     op = operation(x)
     args = arguments(x)
     (op === at || op === at2) && return _lower_at(args, env)
+    op === ismember && return lower(_ismember_or(Symbolics.wrap(args[1]), SymbolicUtils.unwrap_const(args[2])), env)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
@@ -232,7 +233,7 @@ function _literal(v, env)
     error("cannot lower constant $v")
 end
 
-function _lower_named(x, i::Info, env::LowerEnv)
+function _lower_named(x, i::Entity, env::LowerEnv)
     r = i.role
     r === :param && return :(p.$(i.name))
     r === :kindtable && error("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, kind′]`")
@@ -534,7 +535,7 @@ end
 function _ref_reads!(out, y)
     y isa SymbolicUtils.BasicSymbolic || return out
     iscall(y) || return out
-    (info(y) !== nothing && info(y).role in SCOPES) && return out
+    _is_quantity_call(info(y)) && return out
     op = operation(y)
     # a population fold reads every cell's referents, as a fold reads every cell (snapshot
     # or not): its bound cells cannot be lowered outside it
@@ -589,8 +590,8 @@ function _ref_counter(label = _REF_TERM[])
     return (Expr(:., :(st.model), QuoteNode(REF_COUNTS)), j)
 end
 
-# `x[ref]` for a quantity `x` (Info `i`) of the referent `ref`
-function _lower_deref(i::Info, ref, env)
+# `x[ref]` for a quantity `x` (Entity `i`) of the referent `ref`
+function _lower_deref(i::Entity, ref, env)
     r = lower(ref, env)
     rs = _refst(env)
     ctr = _refst(env) === :st ? _ref_counter() : nothing
@@ -618,7 +619,7 @@ function _lower_deref(i::Info, ref, env)
 end
 
 # the value a dead referent's cell variable reads as: its declared default (0 for a reference)
-function _ref_default(i::Info, env)
+function _ref_default(i::Entity, env)
     get(i.options, :reference, false) === true && return :(Int32(0))
     v = i.default
     v isa Bool && return env.T(v)
@@ -973,7 +974,7 @@ function _walk(f, x)
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return
     f(x)
-    if iscall(x) && !(info(x) !== nothing && info(x).role in SCOPES)
+    if iscall(x) && !_is_quantity_call(info(x))
         foreach(a -> _walk(f, a), arguments(x))
     end
     return

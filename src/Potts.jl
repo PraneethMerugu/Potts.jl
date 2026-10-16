@@ -18,7 +18,7 @@ using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, C
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
-using LatticePDE: LatticePDE, Δ
+using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember
 using LinearAlgebra: Symmetric, eigen, svdvals
 using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
 using PrecompileTools: PrecompileTools

@@ -14,7 +14,7 @@ here lowers or discretizes a term.
 module LatticePDE
 
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex
-using Symbolics: Symbolics, Equation, VarDomainPairing, @register_symbolic
+using Symbolics: Symbolics, Equation, Num, VarDomainPairing, @register_symbolic
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 
 export Δ, DivKGrad, Advect, AdvectionScheme, Upwind1, at, at2, ismember, masked
@@ -84,13 +84,23 @@ end
 explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
 input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
 """
-at(T::AbstractArray, k::Union{Integer, AbstractFloat}) = T[Int(k)]
-# one registration for the table and the site forms (see `Advect`)
-@register_symbolic at(T::Union{Real, AbstractVector}, k::Integer)
+at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) = T[Int(k)]
+# One registration for the table and the site forms (see `Advect`). The index is any `Real`
+# term: a kind or a cell id may be a `Real`-typed input (a CPM built-in), and an integer
+# literal is a kind code (`at(Dk, 0)`, the medium's entry).
+@register_symbolic at(T::Union{Real, AbstractVector}, k::Real)
+# literal indices into symbolic tables and site values (the registration covers a symbolic
+# index only)
+at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = at(T, Num(k))
 
 """`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`)."""
-at2(T::AbstractArray, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = T[Int(k), Int(kp)]
-@register_symbolic at2(T::AbstractMatrix, k::Integer, kp::Integer)
+at2(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
+    T[Int(k), Int(kp)]
+@register_symbolic at2(T::AbstractMatrix, k::Real, kp::Real)
+at2(T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = at2(T, Num(k), Num(kp))
+
+# unit inference (MTK `get_unit`): a read has the unit of what it reads, `Δ(c)` that of `c`
+ModelingToolkitBase.get_unit(::Union{typeof(at), typeof(at2), typeof(Δ)}, args) = ModelingToolkitBase.get_unit(args[1])
 
 """
 `ismember(k, s)`: whether the integer `k` (a kind) is one of the tuple `s` of integer
@@ -99,7 +109,7 @@ codes. The `∈` forms do not work in a symbolic expression: `kind ∈ Set(…)`
 interval domain pairing and `kind ∈ [a, b]` builds an `in` term that LatticePDE refuses.
 """
 ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
-@register_symbolic ismember(k::Integer, s::Tuple)::Bool
+@register_symbolic ismember(k::Real, s::Tuple)::Bool
 
 """
 `masked(pred, v)`: the masked interior condition `c ~ masked(pred, v)`, written in the

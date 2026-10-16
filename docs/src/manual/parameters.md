@@ -15,6 +15,12 @@ callback) and per trajectory of an ensemble, without regenerating code.
 | `d[1:2] = [1.0, 0.5]` | a vector; its components are `d_1`, `d_2` |
 | `λ = 1.0, [unit = u"J"]` | a parameter with a unit (see below) |
 
+Every parameter is a ModelingToolkit parameter (`ModelingToolkitBase.isparameter` is true). A
+kind table is an array parameter, `J[1:n, 1:n]` for `n` kinds with the medium. A model reads a
+table entry `J[kind, kind′]` as LatticePDE's registered read `at2(J, kind, kind′)` (`at` for a
+one-kind table). It never uses ModelingToolkit's own indexing, because a compiled cell template
+cannot take an input as an index.
+
 ```@example params
 using Potts
 

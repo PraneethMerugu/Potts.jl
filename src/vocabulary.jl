@@ -1,32 +1,36 @@
 # The symbolic vocabulary of a Potts model: parameters, scoped variables, built-in names,
 # kind tables, relation gathers and the helpers `@potts_model` rewrites expressions into.
 #
-# Every model quantity is a Symbolics expression carrying a `PottsInfo` metadata record
-# (its role and options). Lowering (`lower.jl`) maps roles to state reads.
-
-"""Metadata key for Potts symbolic quantities."""
-struct PottsInfo end
+# Every model quantity is an MTK symbol: parameters are `@parameters` (kind tables are array
+# parameters), built-ins are inputs `volume(t) [input = true]`, and each carries what it is in
+# the model under the `potts_entity` metadata key (LatticePDE's `PottsEntity`). Lowering
+# (`lower.jl`) maps entities to state reads.
 
 """
-Role and options of a symbolic quantity:
+    Entity(role, name, default, options)
 
-- `:param` — scalar parameter (`default` value)
-- `:kindtable` — kind-indexed parameter array (`J[kind, kind′]`), `default` an array over
-  kinds including the medium
-- `:site`, `:cell`, `:model`, `:field` — scoped state variables `x(t)`
-- `:builtin` — names bound by domains (`volume`, `kind′`, `source`, …)
-- `:bound` — the iteration variable of a relation gather (`options.relation`, `options.op`)
+The `potts_entity` metadata value of a model quantity (`[potts_entity = Builtin(:volume)]`):
+what it is in the model, its name, its default and options.
+
+- `:param`: scalar parameter (an MTK `@parameters` symbol, `default` value)
+- `:kindtable`: kind-indexed array parameter (`J[1:nk, 1:nk]`, read `J[kind, kind′]`),
+  `default` an array over kinds including the medium
+- `:site`, `:cell`, `:model`, `:field`, `:edge`: scoped state variables `x(t)`
+- `:builtin`: names bound by domains (`volume`, `kind′`, `source`, …), MTK inputs `x(t)`
+- `:bound`: the iteration variable of a relation gather (`options.relation`, `options.op`)
 """
-struct Info
+struct Entity
     role::Symbol
     name::Symbol
     default::Any
     options::NamedTuple
 end
+"""`Builtin(name)`: the `potts_entity` of the built-in `name` (`volume`, `kind`, …)."""
+Builtin(name::Symbol) = Entity(:builtin, name, nothing, (;))
 
-info(x) = (u = Symbolics.unwrap(x); u isa SymbolicUtils.BasicSymbolic ? SymbolicUtils.getmetadata(u, PottsInfo, nothing) : nothing)
+info(x) = (u = Symbolics.unwrap(x); u isa SymbolicUtils.BasicSymbolic ? SymbolicUtils.getmetadata(u, PottsEntity, nothing) : nothing)
 role(x) = (i = info(x); i === nothing ? :none : i.role)
-_tag(x, i::Info) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), PottsInfo, i))
+_tag(x, i::Entity) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), PottsEntity, i))
 
 _sym(name::Symbol) = Symbolics.unwrap(only(Symbolics.@variables $name))
 
@@ -39,22 +43,29 @@ const BUILTIN_NAMES = (:volume, :surface, :kind, :kind′, :owner, :owner′, :i
     :ring_cells, :ring_medium, :direction, :euler, :euler_full, :pieces, :pieces_full, :largest_piece,
     :largest_piece_full, :birth)
 
+# A built-in is an MTK input `name(t)`: the CPM supplies its value wherever it is read.
+_builtin(n::Symbol) = _tag(only(Symbolics.@variables $n(t) [input = true]), Builtin(n))
 """Built-in symbols, one per name in `BUILTIN_NAMES` (shared by every model)."""
-const B = NamedTuple{BUILTIN_NAMES}(map(n -> _tag(_sym(n), Info(:builtin, n, nothing, (;))), BUILTIN_NAMES))
+const B = NamedTuple{BUILTIN_NAMES}(map(_builtin, BUILTIN_NAMES))
+# Text shown to users (statement descriptions, errors) names a built-in as written in a
+# model, `volume`, not as the MTK input it is, `volume(t)`.
+const _BUILTIN_CALL_TEXT = Regex("(?<![\\w′₊])(" * join(sort(collect(string.(BUILTIN_NAMES)); by = length, rev = true), "|") *
+                                 ")\\(t\\)")
+_builtin_text(s::AbstractString) = replace(s, _BUILTIN_CALL_TEXT => s"\1")
 
 # Tracker deltas substituted during ΔH derivation (not user-visible)
-const DVOLUME = _tag(_sym(:δvolume), Info(:delta, :volume, nothing, (;)))
-const DSURFACE = _tag(_sym(:δsurface), Info(:delta, :surface, nothing, (;)))
-const DCSURFACE = _tag(_sym(:δcluster_surface), Info(:delta, :cluster_surface, nothing, (;)))
+const DVOLUME = _tag(_sym(:δvolume), Entity(:delta, :volume, nothing, (;)))
+const DSURFACE = _tag(_sym(:δsurface), Entity(:delta, :surface, nothing, (;)))
+const DCSURFACE = _tag(_sym(:δcluster_surface), Entity(:delta, :cluster_surface, nothing, (;)))
 # not a delta: the cell's major length after the copy (not additive)
-const DMAJOR = _tag(_sym(:δmajor_length), Info(:delta, :major_length, nothing, (;)))
-const DEULER = _tag(_sym(:δeuler), Info(:delta, :euler, nothing, (;)))
-const DEULER_FULL = _tag(_sym(:δeuler_full), Info(:delta, :euler_full, nothing, (;)))
+const DMAJOR = _tag(_sym(:δmajor_length), Entity(:delta, :major_length, nothing, (;)))
+const DEULER = _tag(_sym(:δeuler), Entity(:delta, :euler, nothing, (;)))
+const DEULER_FULL = _tag(_sym(:δeuler_full), Entity(:delta, :euler_full, nothing, (;)))
 # not deltas: a cell's pieces and largest piece after the copy (P6.9a)
-const DPIECES = _tag(_sym(:δpieces), Info(:delta, :pieces, nothing, (;)))
-const DLARGEST = _tag(_sym(:δlargest_piece), Info(:delta, :largest_piece, nothing, (;)))
-const DPIECES_FULL = _tag(_sym(:δpieces_full), Info(:delta, :pieces_full, nothing, (;)))
-const DLARGEST_FULL = _tag(_sym(:δlargest_piece_full), Info(:delta, :largest_piece_full, nothing, (;)))
+const DPIECES = _tag(_sym(:δpieces), Entity(:delta, :pieces, nothing, (;)))
+const DLARGEST = _tag(_sym(:δlargest_piece), Entity(:delta, :largest_piece, nothing, (;)))
+const DPIECES_FULL = _tag(_sym(:δpieces_full), Entity(:delta, :pieces_full, nothing, (;)))
+const DLARGEST_FULL = _tag(_sym(:δlargest_piece_full), Entity(:delta, :largest_piece_full, nothing, (;)))
 
 # `euler(; adjacency)` and `euler(c; adjacency)` (P6.3j, D-192): `@potts_model` rewrites a
 # call of `euler` to this. Each adjacency is its own built-in (one tracker column each);
@@ -90,13 +101,25 @@ _largest_piece(args...; kwargs...) = throw(ArgumentError(
 # Declarations
 
 """`parameter(name, default; unit)`: a scalar model parameter (`unit`: MTK `VariableUnit`)."""
-parameter(name::Symbol, default; unit = nothing) = _with_unit(_tag(_sym(name), Info(:param, name, default, (;))), unit)
+parameter(name::Symbol, default; unit = nothing) = _with_unit(_tag(_param(name), Entity(:param, name, default, (;))), unit)
+_param(name::Symbol) = Symbolics.unwrap(only(ModelingToolkitBase.@parameters $name))
 
 _with_unit(x, ::Nothing) = x
 _with_unit(x, u) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), ModelingToolkitBase.VariableUnit, u))
 
-"""`kind_parameter(name, values)`: a parameter indexed by kind (medium included)."""
-kind_parameter(name::Symbol, values; unit = nothing) = _with_unit(_tag(_sym(name), Info(:kindtable, name, values, (;))), unit)
+"""
+`kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
+parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through LatticePDE's
+`at`/`at2` (`J[kind, kind′]` in a model), never MTK's `getindex`, which a compiled template
+cannot take with an input index (S-4).
+"""
+function kind_parameter(name::Symbol, values; unit = nothing)
+    (values isa AbstractArray && ndims(values) in (1, 2)) ||
+        throw(ArgumentError("kind table `$name` takes a vector (one value per kind) or a matrix; got $(repr(values))"))
+    n = size(values)
+    x = length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]]) : only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]])
+    return _with_unit(_tag(x, Entity(:kindtable, name, values, (;))), unit)
+end
 
 """
     Pairs((k₁, k₂) => v, …; default, symmetric = true)
@@ -154,6 +177,9 @@ end
 _pairs_matrix(v, nk::Integer, name::Symbol) = v
 
 const SCOPES = (:site, :cell, :model, :field, :edge)
+# A declared quantity written `x(t)`, a scoped variable or a built-in input: one leaf of an
+# expression (walks never descend into its call of `t`).
+_is_quantity_call(i) = i !== nothing && (i.role in SCOPES || i.role === :builtin)
 
 """
 `variable(x, scope; default, guess, options...)`: tag an `x(t)` variable with its scope. Without
@@ -204,7 +230,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
     end
-    v = _with_unit(_tag(x, Info(scope, name, default, options)), unit)
+    v = _with_unit(_tag(x, Entity(scope, name, default, options)), unit)
     written || (v = _with_metadata(v, PottsNoValue, true))
     # `[guess = g]` (MTK's variable metadata): seeds the variable's initialization solve
     guess === nothing || (v = ModelingToolkitBase.setguess(v, guess))
@@ -257,8 +283,8 @@ end
 function vector_parameter(name::Symbol, r, default; unit = nothing)
     n = _vector_length(r)
     _check_components(name, default, n)
-    return QuantityVector(name, [_with_unit(_tag(_sym(_component_name(name, i)),
-                                                 Info(:param, _component_name(name, i), _component(default, i), (; vector = name, index = i))),
+    return QuantityVector(name, [_with_unit(_tag(_param(_component_name(name, i)),
+                                                 Entity(:param, _component_name(name, i), _component(default, i), (; vector = name, index = i))),
                                             _component(unit, i)) for i in 1:n])
 end
 
@@ -327,20 +353,15 @@ _lattice_dim() = (d = _build().dim) > 0 ? d :
 # ---------------------------------------------------------------------------------------
 # Symbolic operations recognised by lowering (the field operator `Δ` is LatticePDE's)
 
-"""`at(x, i...)`: `x` at an explicit site/cell (`act[target]`) or kind-table entry (`J[a, b]`)."""
-function at end
+# `x[i]` and `J[a, b]` in a model are LatticePDE's registered reads `at(x, i)` (an explicit
+# site or cell, `act[target]`, or a kind-table entry `Dk[kind]`) and `at2(J, a, b)`.
 """`gather(n, anchor, body, cond)`: fold of `body` over relation neighbors `n` of `anchor`."""
 function gather end
 
-at(x, i) = error("`at` is symbolic-only")
-"""`at2(J, a, b)`: a two-index kind-table entry `J[a, b]`."""
-at2(x, i, j) = error("`at2` is symbolic-only")
 gather(n, a, b, c) = error("`gather` is symbolic-only")
 """`population(n, body, cond)`: fold of `body` over live cells or sites `n` (`n`'s metadata)."""
 population(n, b, c) = error("`population` is symbolic-only")
 
-Symbolics.@register_symbolic at(x, i)
-Symbolics.@register_symbolic at2(x, i, j)
 Symbolics.@register_symbolic gather(n, a, b, c)
 Symbolics.@register_symbolic population(n, b, c)
 """`cell_centroid(k)`: coordinate `k` of the current cell's centroid (cell scope)."""
@@ -463,7 +484,23 @@ MCS boundary, after the lifecycle), read from a ring buffer of depth `k`. `Pre(x
 initial value. Lags are available where the MCS clock is: updates, equations,
 division conditions and rules, link rules.
 """
-_pre(x) = ModelingToolkitBase.Pre(x)
+_pre(x) = _builtin_now(ModelingToolkitBase.Pre(x))
+# MTK's `Pre` distributes over a call's arguments, and a built-in is a function of `t`, so
+# `Pre(w[new])` is `at(Pre(w), Pre(new))`. A built-in is an input the CPM supplies when the
+# statement runs; it has no previous value: `Pre(new)` is `new`.
+function _builtin_now(x)
+    u = _unwrap(x)
+    u isa SymbolicUtils.BasicSymbolic || return x
+    sub = Dict{Any, Any}()
+    _walk_all(u) do y
+        if iscall(y) && operation(y) isa ModelingToolkitBase.Pre && role(arguments(y)[1]) === :builtin
+            sub[y] = arguments(y)[1]
+        end
+    end
+    isempty(sub) && return x
+    r = Symbolics.substitute(u, sub; fold = Val(false))
+    return x isa Num ? Symbolics.wrap(r) : r
+end
 _pre(v::AbstractVector) = [_pre(x) for x in v]
 _pre(v::AbstractVector, k::Integer) = [_pre(x, k) for x in v]
 _pre(x, k::Integer) = (k >= 1 || throw(ArgumentError("Pre(x, k) needs k ≥ 1")); history_lag(x, Num(k)))
@@ -497,7 +534,8 @@ _rand() = random_uniform(Num(_next_number!()))
 _index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(at(x, i)) : at(x, i))
 _index(x::QuantityVector, i::Num) = Num[at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
-_index(x::Num, i, j) = (_no_class_index(i, j); at2(x, i, j))
+_index(x::Symbolics.Arr, i) = (_no_class_index(i); at(x, i))           # a kind table
+_index(x::Symbolics.Arr, i, j) = (_no_class_index(i, j); at2(x, i, j))
 _index(x, i...) = (_no_class_index(i...); getindex(x, i...))
 
 """
@@ -569,7 +607,7 @@ function _population(fold, body, d, cond)
     k = _next_number!()
     role = d isa SiteDomain ? :bound_site : :bound_cell
     kinds = d isa SiteDomain ? Int[] : d.kinds
-    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, k)), Info(role, :n, nothing, (; op, kinds)))
+    n = _tag(_sym(Symbol(role === :bound_cell ? :c_ : :s_, k)), Entity(role, :n, nothing, (; op, kinds)))
     c = cond === nothing ? true : cond(n)
     if d isa MembersDomain           # the alive cells of the enclosing cell's cluster `d.cluster`
         same = _index(B.cluster, n) == Symbolics.wrap(outer_value(_symarg(d.cluster)))
@@ -626,7 +664,7 @@ function _gather(fold, body, a::Around, cond = nothing; adjacency = nothing)
         throw(ArgumentError("`$op` over a relation takes no `adjacency`; only `pieces` does"))
     opts = op === :pieces ? (; relation = a.relation, op, full = _check_adjacency("pieces", something(adjacency, :face)) === :full) :
            (; relation = a.relation, op)
-    n = _tag(_sym(Symbol(:n_, _next_number!())), Info(:bound, :n, nothing, opts))
+    n = _tag(_sym(Symbol(:n_, _next_number!())), Entity(:bound, :n, nothing, opts))
     b = body(n)
     c = cond === nothing ? true : cond(n)
     return gather(n, a.anchor, b, c)
@@ -665,7 +703,8 @@ Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)
 Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
 Base.in(x::Integer, g::KindClass) = x in g.kinds
 # `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
-_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with `kind ∈ $(g.name)`"))
+_class_compare(g::KindClass) = throw(ArgumentError("`$(g.name)` is a kind class; test membership with " *
+                                                    "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"))
 Base.:(==)(::Num, g::KindClass) = _class_compare(g)
 Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
 Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
@@ -680,6 +719,41 @@ function Base.in(x::Num, g::KindClass)
         r = r | (x == ks[i])
     end
     return r
+end
+
+# `ismember(kind, g)`: LatticePDE's kind-set term, with the class's kind codes in member order
+LatticePDE.ismember(x::Num, g::KindClass) = ismember(x, Tuple(g.kinds))
+"""
+The unrolled `|` of equalities a kind-set term `ismember(x, (k₁, …, kₙ))` stands for, folded
+left in member order: the expression `x ∈ g` builds for a class `g` of the same kinds.
+"""
+function _ismember_or(x, ks::Tuple)
+    isempty(ks) && throw(ArgumentError("`ismember($x, ())`: the kind set is empty"))
+    r = Num(x) == ks[1]
+    for i in 2:length(ks)
+        r = r | (Num(x) == ks[i])
+    end
+    return r
+end
+
+"""
+`x` with every kind-set term `ismember(k, (k₁, …))` replaced by its `|` of equalities
+(`_ismember_or`): the form host-side analysis (substep bounds, `∂f/∂x`) reads, where a
+registered term is opaque (Symbolics cannot differentiate it, and it bounds nothing).
+"""
+function _expand_ismember(x)
+    u = _unwrap(x)
+    u isa SymbolicUtils.BasicSymbolic || return x
+    sub = Dict{Any, Any}()
+    _walk_all(u) do y
+        if iscall(y) && operation(y) === ismember && !haskey(sub, y)
+            a = arguments(y)
+            sub[y] = _unwrap(_ismember_or(Symbolics.wrap(a[1]), SymbolicUtils.unwrap_const(a[2])))
+        end
+    end
+    isempty(sub) && return x
+    r = Symbolics.substitute(u, sub; fold = Val(false))
+    return x isa Num ? Symbolics.wrap(r) : r
 end
 
 """Build the class `name` from its members' names and values (kind numbers or classes)."""
@@ -1097,9 +1171,9 @@ function _bind_edge_scope(vars, rels, bases = ())
         i = info(x)
         (i !== nothing && i.role === :edge && !haskey(i.options, :relationship)) || return x
         r = get(inherited, i.name, nothing)
-        r === nothing || return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = r)))
+        r === nothing || return _tag(x, Entity(:edge, i.name, i.default, (; i.options..., relationship = r)))
         own === nothing && return x
-        return _tag(x, Info(:edge, i.name, i.default, (; i.options..., relationship = own, implicit_relationship = true)))
+        return _tag(x, Entity(:edge, i.name, i.default, (; i.options..., relationship = own, implicit_relationship = true)))
     end
 end
 """Edge variable name → relationship, for the edge variables among `xs` bound to one."""
@@ -1116,7 +1190,7 @@ end
 function _settle_edge_scope(x)
     i = info(x)
     (i !== nothing && i.role === :edge && haskey(i.options, :implicit_relationship)) || return x
-    return _tag(x, Info(:edge, i.name, i.default, _without_implicit(i.options)))
+    return _tag(x, Entity(:edge, i.name, i.default, _without_implicit(i.options)))
 end
 _without_implicit(o::NamedTuple) = (; (k => v for (k, v) in pairs(o) if k !== :implicit_relationship)...)
 """`new_contact(a, b)`: the pair touches and is not yet linked (the candidates of `@link`)."""
@@ -1397,7 +1471,7 @@ end
 # Observed quantities
 
 """`@observed name ~ expr`: a derived quantity, evaluated on saved states (`sol[name]`)."""
-observed_var(name::Symbol) = _tag(_sym(name), Info(:observed, name, nothing, (;)))
+observed_var(name::Symbol) = _tag(_sym(name), Entity(:observed, name, nothing, (;)))
 struct ObservedEq
     var::Any
     expr::Any
@@ -1635,9 +1709,9 @@ Base.:|(r::SymbolicUtils.BasicSymbolic, f::FreshKind) = ConvertTarget(r, f.kind)
 
 # The names a `@convert` block binds: its `from` and `to` cells (references, read in the
 # entity's scope) and `created` (in its writes: true for the conversion that allocated `to`)
-const CONVERT_FROM = _tag(_sym(:from), Info(:builtin, :from, 0, (; reference = true)))
-const CONVERT_TO = _tag(_sym(:to), Info(:builtin, :to, 0, (; reference = true)))
-const CONVERT_CREATED = _tag(_sym(:created), Info(:builtin, :created, false, (;)))
+const CONVERT_FROM = _tag(_sym(:from), Entity(:builtin, :from, 0, (; reference = true)))
+const CONVERT_TO = _tag(_sym(:to), Entity(:builtin, :to, 0, (; reference = true)))
+const CONVERT_CREATED = _tag(_sym(:created), Entity(:builtin, :created, false, (;)))
 
 """
     transfer(x, from => to; per_site)
@@ -1741,7 +1815,7 @@ const DSL = (; cells, clusters, contacts, sites, edges, new_contact, connectivit
     centroid = _centroid, displacement = _displacement, integral = _integral,
     dot = _dot, norm = _norm, normalize = _normalize, geomean, log1p_geomean, mean, Δ, Dirichlet, NoFlux,
     CellRef, alive, sibling, root, members, Fresh, created = CONVERT_CREATED, transfer,
-    Pairs, minimum_image = _minimum_image, separation = _separation)
+    Pairs, minimum_image = _minimum_image, separation = _separation, ismember)
 
 # ---------------------------------------------------------------------------------------
 # Parameters object

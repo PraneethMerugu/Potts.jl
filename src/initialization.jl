@@ -159,7 +159,7 @@ function _init_walk(f, x)
     x isa SymbolicUtils.BasicSymbolic || return
     f(x)
     _kind_read(x) && return
-    if iscall(x) && !(info(x) !== nothing && info(x).role in SCOPES)
+    if iscall(x) && !_is_quantity_call(info(x))
         foreach(a -> _init_walk(f, a), arguments(x))
     end
     return

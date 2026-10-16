@@ -48,7 +48,10 @@ end
 ```
 
 `kind[x] ∈ g` tests membership of a symbolic kind (`kind`, `kind′`, `kind[new]`,
-`kind[old]`, `kind[c]`, `kind[n]`), and `kind[x] ∉ g` its negation. It is the same as
+`kind[old]`, `kind[c]`, `kind[n]`), and `kind[x] ∉ g` its negation. In `@equations` (cell,
+model and field equations, which are ModelingToolkit equations) write the term
+`ismember(kind, g)` instead; there `∈` is an error that shows this form, because
+ModelingToolkit gives `∈` another meaning (`kind ∈ Set(…)` is `false` before any term exists). It is the same as
 writing the comparisons out, `(kind[x] == tip) || (kind[x] == stalk)`: the generated code
 compares against constant kind numbers, allocates nothing and runs on every backend. A model
 written with classes is the same model, with the same generated code, as one with the

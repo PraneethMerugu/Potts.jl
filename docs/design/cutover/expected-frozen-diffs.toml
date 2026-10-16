@@ -16,6 +16,9 @@
 # category = "fingerprint"     one of: fingerprint | code-pin | mtk-container | digest |
 #                              launch-count | checkpoint | auto-repin | deleted-api
 # why      = "…"               one line: what changed and why the new value is right
+# assertion = "…"              (C3 on) file:line and the failing expression
+# old      = "…"               (C3 on) the value or behavior the frozen file expects
+# new      = "…"               (C3 on) what the commit gives instead
 #
 # [[edits]]                    one per prepared refreeze(list-A) commit
 # path     = "acceptance/…jl"
@@ -27,6 +30,178 @@
 # C1 (full ModelingToolkit removed): no frozen file loads full ModelingToolkit or its extension;
 # the frozen files that name ModelingToolkit do so in prose or claim regexes only. No entry.
 
-failures = []
+# C3: only p6_0g fails (15 testsets, all from its two class fixtures not building). Every other frozen
+# file matches the C2b baseline; the baseline itself fails the OpenVT package files on this Mac
+# (15_openvt_package.jl, 15_openvt_d213.jl: no bulk directory / package inputs), unchanged by C3.
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: @on_copy gate"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
 
-edits = []
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: a class name is not an operating-point kind"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: class fixtures build"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "p6_0g_kind_classes.jl:620-623 `ok` (fixtures P60gC and the second class fixture build)"
+old = "both class fixtures build"
+new = "ArgumentError: '@equations: `kind ∈ endothelial` tests membership with `∈`; an equation writes a kind set as `ismember(kind, endothelial)`'"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: classes lower to the explicit gates (same code, same fingerprint)/main"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: constraint gates (expression and connectivity(g))"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: drive and Chemotaxis(kinds = g) gates"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: energy gates (cells(g), contacts, sites) against an oracle"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: identical trajectories, class vs explicit (CheckerboardCPM, Float32)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: identical trajectories, class vs explicit (CheckerboardCPM, Float64)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: identical trajectories, class vs explicit (SequentialCPM, Float32)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: identical trajectories, class vs explicit (SequentialCPM, Float64)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: membership matters (a class without stalk)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: update, equation and observed gates (CheckerboardCPM)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: update, equation and observed gates (SequentialCPM)"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: ΔH self-check"
+since = "C3"
+list = "A"
+category = "deleted-api"
+why = "D-257 item 5 (V3-3): `∈` in @equations is a build error that prints the ismember form; the fixtures' two cell ODEs use it"
+assertion = "this testset builds the class fixtures (lines 207-208, 319-320 write `D(g) ~ 0.5 * (kind ∈ endothelial)`); it throws before its assertions"
+old = "the testset passes"
+new = "errors: the fixture does not build (same ArgumentError as 'class fixtures build')"
+
+
+[[edits]]
+path = "acceptance/p6_0g_kind_classes.jl"
+commit = "(see refreeze(list-A) commit on lp/c3)"
+fixup_of = "C3"
+decision = "D-258"
+why = "lines 207-208, 319-320: `(kind ∈ endothelial)` -> `ismember(kind, endothelial)` in @equations; lowers to the same code"

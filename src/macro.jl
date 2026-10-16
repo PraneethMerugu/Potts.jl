@@ -347,6 +347,22 @@ _rewrite_eq(l) = l isa Expr && l.head === :call && l.args[1] === :~ && length(l.
                  :(Potts._eq($(rewrite(l.args[2])), $(rewrite(l.args[3])))) : rewrite(l)
 _is_range(ex) = ex isa Expr && ex.head === :call && ex.args[1] === :(:)
 
+# `@equations` lines are MTK equations (D-257 item 5, V3-3): a kind set is the positional
+# term `ismember(kind, g)`. `∈` has an MTK meaning of its own (a domain pairing; `∈ Set(…)`
+# is `false` before any term exists, deleting the term), so it is refused here, while the
+# line is still syntax, with the form to write.
+function _no_membership_sugar(ex)
+    ex isa Expr || return nothing
+    if ex.head === :call && ex.args[1] in (:∈, :∉, :in) && length(ex.args) == 3
+        a, g = ex.args[2], ex.args[3]
+        form = ex.args[1] === :∉ ? "!ismember($a, $g)" : "ismember($a, $g)"
+        throw(ArgumentError("@equations: `$ex` tests membership with `$(ex.args[1])`; an equation writes a kind " *
+                            "set as `$form`"))
+    end
+    foreach(_no_membership_sugar, ex.args)
+    return nothing
+end
+
 const _COMPOUND = (:+=, :-=, :*=, :/=)
 """
 Compound assignments in an update block: `x += a` is `x ~ Pre(x) + a`, and every compound
@@ -616,7 +632,8 @@ function _section!(parts, sec, args, ln = nothing)
                                                               :($P.update($phase, $every, $l)), lln)))
         end
     elseif sec === Symbol("@equations")
-        foreach(((l, lln),) -> push!(code, _located_push(:__equations, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+        foreach(((l, lln),) -> (_no_membership_sugar(l); push!(code, _located_push(:__equations, _rewrite_eq(l), lln))),
+            _lines_ln(args, ln))
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")

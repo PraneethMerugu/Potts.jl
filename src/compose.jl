@@ -173,7 +173,7 @@ function _inherit_edge_scope(model, inbase, xs, bxs)
         r = get(i.options, :relationship, nothing)
         if r === nothing || get(i.options, :implicit_relationship, false) === true
             opts = _without_implicit(i.options)
-            return _tag(x, Info(:edge, i.name, i.default, (; opts..., relationship = rb)))
+            return _tag(x, Entity(:edge, i.name, i.default, (; opts..., relationship = rb)))
         end
         r === rb || throw(ArgumentError("$model: `$(i.name)` is an edge variable of relationship `$rb` $inbase; " *
             "re-declaring it as `$(i.name)($r)` would move it to relationship `$r`. Re-declare it as " *

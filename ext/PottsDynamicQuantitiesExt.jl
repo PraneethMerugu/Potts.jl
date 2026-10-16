@@ -4,7 +4,6 @@
 module PottsDynamicQuantitiesExt
 
 using DynamicQuantities: DynamicQuantities as DQ
-using LatticePDE: LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTK, get_unit, VariableUnit, ValidationError
 using Potts: Potts, PottsSystem, Split, info
 using Symbolics: Symbolics
@@ -16,8 +15,7 @@ _isunitless(u) = iszero(DQ.dimension(u))
 _same(a, b) = DQ.dimension(a) == DQ.dimension(b)
 
 # unit rules for Potts' symbolic operations
-MTK.get_unit(::Union{typeof(Potts.at), typeof(Potts.at2), typeof(Potts.history_lag),
-        typeof(Potts.cell_integral), typeof(LatticePDE.Δ)}, args) = get_unit(args[1])
+MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args) = get_unit(args[1])
 MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
         typeof(Potts.random_uniform)}, args) = UNITLESS                    # lattice units
 MTK.get_unit(::MTK.Pre, args) = get_unit(args[1])

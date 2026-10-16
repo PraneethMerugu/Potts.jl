@@ -96,6 +96,14 @@ MTK.parameters(sys)
 MTK.equations(sys)
 ```
 
+Parameters are MTK parameters, and built-ins such as `kind` and `volume` are MTK inputs
+`kind(t)`, `volume(t)` whose values the CPM supplies. What each symbol is in the model (a
+cell variable, a built-in, …) is its `potts_entity` metadata:
+
+```@example mtk
+(all(MTK.isparameter, MTK.parameters(sys)), MTK.isinput(kind), Potts.LatticePDE.get_potts_entity(kind))
+```
+
 `MTK.unknowns`, `MTK.observed`, `nameof`, `complete` and `extend` work too.
 SymbolicIndexingInterface (SII) indexes a problem, a solution and an integrator by name,
 including an algebraic variable that is not stored:

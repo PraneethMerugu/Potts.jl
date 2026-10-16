@@ -636,7 +636,7 @@ function _non_parameters(v)
            "a default is an expression of parameters, numbers and functions"
 end
 
-function _param_value(T, v, i::Info)
+function _param_value(T, v, i::Entity)
     _is_symbolic(v) && throw(ArgumentError("parameter `$(i.name)` = `$(_is_symbolic(i.default) ? i.default : v)` does not " *
                                            "reduce to numbers with the parameter values" * _non_parameters(v)))
     if i.role === :kindtable
@@ -892,7 +892,7 @@ CorePotts.remake_parameters(info::PottsModelInfo, prob, p::_SymbolicMap) = _set_
 # parameter object `old` with the parameter map `p` applied as one change (D-112)
 function _set_parameter_map(info::PottsModelInfo, old::PottsParameters, p)
     p = _expand_vectors(info.csys.sys, Pair{Any, Any}[_localize(info.csys.sys, k; strict = true) => v for (k, v) in p])
-    names = Dict{Any, Info}()
+    names = Dict{Any, Entity}()
     for x in getfield(info.csys.sys, :parameters)
         i = Potts.info(x)
         names[_unwrap(x)] = i

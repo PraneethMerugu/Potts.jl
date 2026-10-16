@@ -52,10 +52,11 @@ _is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l)
                   (!iscall(l) || !(operation(l) isa Function) || operation(l) === getindex)
 
 # Operations MTK sees inside a template: plain functions (arithmetic, `exp`, comparisons,
-# `ifelse`, registered user functions). Potts' own operations (`at`, `gather`,
-# `population`, `cell_integral`, …), operators (`Pre`) and `getindex` stand for a quantity MTK
-# cannot express: the whole call is an input.
-_template_op(op) = op isa Function && op !== getindex && parentmodule(op) !== (@__MODULE__) &&
+# `ifelse`, registered user functions). Potts' own operations (`gather`, `population`,
+# `cell_integral`, …), LatticePDE's reads `at`/`at2` (a kind-table entry or a value at a
+# cell), operators (`Pre`) and `getindex` stand for a quantity MTK cannot express: the whole
+# call is an input (S-4: an input never indexes an array parameter inside a template).
+_template_op(op) = op isa Function && op !== getindex && op !== at && op !== at2 && parentmodule(op) !== (@__MODULE__) &&
                    !(op isa Union{Differential, Pre, ModelingToolkitBase.Shift, ModelingToolkitBase.Sample, ModelingToolkitBase.Hold})
 
 """
@@ -126,7 +127,7 @@ function _compile_odes(sys::PottsSystem)
     names = Set{Symbol}(info(x).name for x in keys(alg))
     variables = Any[x for x in getfield(sys, :variables) if !(info(x).name in names)]
     observed = [getfield(m, :observed);
-                [ObservedEq(_tag(_sym(info(x).name), Info(:observed, info(x).name, nothing, (; scope = info(x).role))),
+                [ObservedEq(_tag(_sym(info(x).name), Entity(:observed, info(x).name, nothing, (; scope = info(x).role))),
                      Symbolics.wrap(defs[x])) for x in _algebraic_order(alg)]]
     return _replace(sys; variables, equations, observed, energies = getfield(m, :energies), drives = getfield(m, :drives),
                constraints = getfield(m, :constraints), updates = getfield(m, :updates), divisions = getfield(m, :divisions),

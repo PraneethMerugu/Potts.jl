@@ -66,7 +66,7 @@ function _integral_pre(x)
 end
 
 # A symbolic stand-in read as a stored array `st.<scope>.name` (role :site/:cell/:model).
-_standin(role::Symbol, name::Symbol) = _unwrap(_tag(_sym(name), Info(role, name, nothing, (;))))
+_standin(role::Symbol, name::Symbol) = _unwrap(_tag(_sym(name), Entity(role, name, nothing, (;))))
 
 # Replace `Pre(x)` (and bare `x` when `self(x)`) for snapshotted names by their snapshot.
 # Integrals are left intact: `integral(Pre(x))` and `integral(x)` are cell slots of their
@@ -358,7 +358,7 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     infos = Dict(_update_name(u) => info(_unwrap(u.eq.lhs)) for u in us)
     # a snapshot keeps its variable's default and reference flag (R6): `q[partner]` of a dead
     # referent reads `q`'s default, and `Pre(partner)` is still a reference
-    snapinfo(n) = (i = infos[n]; Info(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
+    snapinfo(n) = (i = infos[n]; Entity(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
                                      get(i.options, :reference, false) === true ? (; reference = true) : (;)))
     snap = Dict{Symbol, Any}(n => _unwrap(_tag(_sym(Symbol(n, :__pre)), snapinfo(n))) for n in snapnames)
     order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)

@@ -11,7 +11,7 @@
 # that reads no fold generates none of this: its code and fingerprint are unchanged.
 
 """The bound variable of a contact fold (`_` in `count(pred for _ in contacts)`): not readable."""
-const _CONTACT_PARTNER = _tag(_sym(:contact_partner), Info(:contact_partner, :_, nothing, (;)))
+const _CONTACT_PARTNER = _tag(_sym(:contact_partner), Entity(:contact_partner, :_, nothing, (;)))
 
 """
     count_contacts(contact_partner, pred, relation)
@@ -28,7 +28,7 @@ count_contacts(n, pred, rel) = error("`count_contacts` is symbolic-only")
 Symbolics.@register_symbolic count_contacts(n, pred, rel::Symbol)
 
 # A fold's tracker symbol (`contacts_<relation>_<hash>`) as its description `count_contacts(…)`
-_fold_description(i::Info) = _unwrap(count_contacts(_CONTACT_PARTNER, i.options.pred, i.options.relation))
+_fold_description(i::Entity) = _unwrap(count_contacts(_CONTACT_PARTNER, i.options.pred, i.options.relation))
 
 """
     _contact_fold(fold, body, d::ContactDomain, cond)
@@ -48,7 +48,7 @@ function _contact_fold(fold, body, d::ContactDomain, cond)
     rel = d.relation
     Threads.atomic_add!(_FOLDS_BUILT, 1)
     name = Symbol(:contacts_, rel, :_, string(_fnv64(_symkey(pred)); base = 62))
-    return Symbolics.wrap(_tag(_sym(name), Info(:contact_count, name, nothing, (; relation = rel, pred))))
+    return Symbolics.wrap(_tag(_sym(name), Entity(:contact_count, name, nothing, (; relation = rel, pred))))
 end
 
 # A predicate of a contact fold: `Bool` or a symbolic expression of `kind′` and constants
@@ -85,7 +85,7 @@ end
 
 """The distinct contact folds read by the statements of `sys`, sorted by name: `(name, relation, pred)`."""
 function _contact_folds(sys::PottsSystem)
-    found = Dict{Symbol, Info}()
+    found = Dict{Symbol, Entity}()
     xs = Any[(u.eq.rhs for u in getfield(sys, :updates))..., (u.eq.lhs for u in getfield(sys, :updates))...,
         (eq.rhs for eq in getfield(sys, :equations))..., (d.when for d in getfield(sys, :divisions))...,
         (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,

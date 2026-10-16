@@ -102,7 +102,7 @@ function _bare_builtins(x, out = Set{Symbol}())
     x isa SymbolicUtils.BasicSymbolic || return out
     i = info(x)
     i !== nothing && i.role === :builtin && push!(out, i.name)
-    if iscall(x) && !(i !== nothing && i.role in SCOPES)
+    if iscall(x) && !_is_quantity_call(i)
         args = arguments(x)
         skip = operation(x) === at || operation(x) === at2
         for (j, a) in enumerate(args)
@@ -1038,12 +1038,12 @@ function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
         _unwrap(B.pieces) => DPIECES, _unwrap(B.largest_piece) => DLARGEST,
         _unwrap(B.pieces_full) => DPIECES_FULL, _unwrap(B.largest_piece_full) => DLARGEST_FULL, after...)
     naive = Symbolics.substitute(E, sub; fold = Val(false)) - E
-    # `expand` rebuilds the arguments of opaque (registered) functions, which would strip the
-    # metadata of scoped variables `x(t)` inside them: expand over placeholders instead
+    # `expand` rebuilds call terms, which strips the metadata of scoped variables and
+    # built-ins `x(t)`: expand over placeholders instead
     hide, show = Dict{Any, Any}(), Dict{Any, Any}()
     _walk(naive) do y
         i = info(y)
-        if i !== nothing && i.role in SCOPES && !haskey(hide, y)
+        if _is_quantity_call(i) && !haskey(hide, y)
             p = _sym(Symbol(:__scoped_, length(hide) + 1))
             hide[y] = p
             show[p] = y
@@ -1073,26 +1073,29 @@ function _located(f, sys::PottsSystem, x)
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(getfield(sys, :sources), x, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)$(_algebraic_note(x, e.msg))\n  in $(_describe(x, getfield(sys, :kinds)))$loc"))
+        msg = _builtin_text(e.msg)
+        throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, getfield(sys, :kinds)))$loc"))
     end
 end
 
-# descriptions are built only when reporting (printing symbolic expressions is slow)
-_describe(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
-_describe(d::Drive) = "@drive copy => $(d.expr)"
-_describe(c::Constraint) = "@constraint $(c.expr)"
-_describe(u::Update) = "@$(u.phase) $(u.eq)"
-_describe(eq::Equation) = "@equations $eq"
-_describe(v::ConvertSpec, kinds = nothing) = "@convert $(v.name) $(_domain_string(v.domain, kinds))"
-_describe(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
+# descriptions are built only when reporting (printing symbolic expressions is slow); a
+# built-in shows as written (`volume`, not the input `volume(t)`)
+_describe(x, kinds...) = _builtin_text(_describe_text(x, kinds...))
+_describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
+_describe_text(d::Drive) = "@drive copy => $(d.expr)"
+_describe_text(c::Constraint) = "@constraint $(c.expr)"
+_describe_text(u::Update) = "@$(u.phase) $(u.eq)"
+_describe_text(eq::Equation) = "@equations $eq"
+_describe_text(v::ConvertSpec, kinds = nothing) = "@convert $(v.name) $(_domain_string(v.domain, kinds))"
+_describe_text(d::DivideRule, kinds = nothing) = "@divide $(_domain_string(d.domain, kinds))$(_cadence_string(d.every)) when = $(d.when)"
 _cadence_string(n) = n == 1 ? "" : " Every($n)"
-_describe(x, ::Any) = _describe(x)
-_describe(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
-_describe(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
-_describe(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
-_describe(b::BoundaryEntry) = "@boundary $(info(b.field).name) " *
+_describe_text(x, ::Any) = _describe_text(x)
+_describe_text(r::LinkRule) = "@$(r.action) $(r.relationship)$(_cadence_string(r.every)) when = $(r.when)"
+_describe_text(o::ObservedEq) = "@observed $(o.var) ~ $(o.expr)"
+_describe_text(s::SweepSpec) = "@sweep temperature = $(s.temperature)"
+_describe_text(b::BoundaryEntry) = "@boundary $(info(b.field).name) " *
                               (b.axis == 0 ? "sites($(b.mask)) => Dirichlet($(b.value))" : "$(_AXIS_NAMES[b.axis]) => …")
-_describe(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
+_describe_text(b::DiscreteBlock) = "@components $(b.scope === :model ? "model" : "cells") $(b.name) (discrete)"
 
 # Lower every statement once, in the scope it will be generated in, so errors that lowering
 # finds (a site variable without a site, a cell variable indexed by a site, …) surface at

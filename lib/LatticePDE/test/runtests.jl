@@ -60,6 +60,23 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
         @test ismember(Int32(3), (2, 3)) && !ismember(1.0, (2, 3))
     end
 
+    @testset "reads take any index: literal codes, Real-typed inputs, unwrapped terms" begin
+        @variables owner(t) cv(t) flag(t)::Bool
+        isread(e, f, n) = opof(e) === f && length(arguments(unwrap(e))) == n
+        # literal kind codes into symbolic tables (the medium is 0): a term, not a symbolic
+        # array indexed by the literal (negative control: the numeric method still evaluates)
+        @test isread(at(Dk, 0), at, 2) && unwrap_const(arguments(unwrap(at(Dk, 0)))[2]) == 0
+        @test isread(at2(J, 0, 1), at2, 3) && isread(at2(J, ke, 0), at2, 3) && isread(at2(J, 0, ke), at2, 3)
+        @test at([10.0, 20.0, 30.0], 1) == 10.0
+        # a site or cell value at a literal, at a Real-typed input, and a Bool-typed value
+        @test isread(at(cv, 3), at, 2) && isread(at(cv, owner), at, 2) && isread(at(flag, owner), at, 2)
+        @test isread(at2(J, owner, cv), at2, 3)
+        # unwrapped terms (as a compiler walking a term tree holds them) build the same read
+        @test isequal(at(unwrap(cv), unwrap(owner)), unwrap(at(cv, owner)))
+        @test isequal(at2(unwrap(J), unwrap(owner), unwrap(cv)), unwrap(at2(J, owner, cv)))
+        @test contains_var(at(cv, owner), owner) && contains_var(at2(J, owner, 0), J)
+    end
+
     @testset "operators inside a PDESystem" begin
         pd = PDESystem(eqs, bcs, dom, [t, x, y], [ce, oe, Ke, ke, ve], [Dc, α, ε, Dk, K0, J]; name = :ops)
         @test length(pd.eqs) == 3 && length(pd.bcs) == 2
@@ -270,6 +287,8 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
         @test check_all_qualified_accesses_via_owners(LatticePDE) === nothing
         # `VarDomainPairing` (what `x ∈ (a, b)` builds) is not declared public by Symbolics
         @test check_all_explicit_imports_are_public(LatticePDE; ignore = (:VarDomainPairing,)) === nothing
-        @test check_all_qualified_accesses_are_public(LatticePDE) === nothing
+        # `get_unit` (MTK unit inference, which registered operators extend) is
+        # not declared public by ModelingToolkitBase
+        @test check_all_qualified_accesses_are_public(LatticePDE; ignore = (:get_unit,)) === nothing
     end
 end
