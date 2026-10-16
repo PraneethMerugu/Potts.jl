@@ -1,0 +1,32 @@
+# Expected frozen-suite differences of the field-compiler cutover (D-256; v3 §11.2, §11.3).
+#
+# The frozen suite (files listed in lib/PottsModels/test/frozen.toml) runs on C2, C3, C8 and the
+# branch head. Its failure set must equal `failures` below EXACTLY: an unlisted failure, or a
+# listed failure that passes, stops the line. Edits to frozen files are never made in ordinary
+# commits; each is a separate `refreeze(list-A): <file> — <why>` commit, listed in `edits`, and
+# the whole list A is approved once by the maintainer before the merge.
+#
+# Schema.
+#
+# [[failures]]                 one per expected failing testset of a frozen file
+# path     = "acceptance/…jl"  relative to lib/PottsModels/test (as in frozen.toml)
+# testset  = "…"               the failing @testset name (exact)
+# since    = "C2"              the first commit at which it fails (C1 … C10)
+# list     = "A"               re-freeze list (v3 §11.3): "A" cutover, "B" KA 0.10 bump
+# category = "fingerprint"     one of: fingerprint | code-pin | mtk-container | digest |
+#                              launch-count | checkpoint | auto-repin | deleted-api
+# why      = "…"               one line: what changed and why the new value is right
+#
+# [[edits]]                    one per prepared refreeze(list-A) commit
+# path     = "acceptance/…jl"
+# commit   = "…"               short hash of the refreeze commit on feat/lattice-pde
+# fixup_of = "C8"              the commit it folds into after approval (v3 §11.2)
+# decision = "D-…"             the DECISIONS draft that sets the new sha256 in frozen.toml
+# why      = "…"
+#
+# C1 (full ModelingToolkit removed): no frozen file loads full ModelingToolkit or its extension;
+# the frozen files that name ModelingToolkit do so in prose or claim regexes only. No entry.
+
+failures = []
+
+edits = []
