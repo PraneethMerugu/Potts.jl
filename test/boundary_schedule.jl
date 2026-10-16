@@ -40,10 +40,10 @@ bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = Expli
 
 @testset "@boundary/@schedule: extension, phases and display" begin
     keep, own = BSKeep(; name = :k), BSOwn(; name = :o)
-    @test getfield(keep, :schedule) == [:fields, :sweep]
-    @test [b.axis for b in getfield(keep, :boundaries)] == [1, 0]
-    @test getfield(own, :schedule) == [:sweep, :fields]
-    @test [b.axis for b in getfield(own, :boundaries)] == [2]                   # the field's block replaced
+    @test Potts._p(keep, :schedule) == [:fields, :sweep]
+    @test [b.axis for b in Potts._p(keep, :boundaries)] == [1, 0]
+    @test Potts._p(own, :schedule) == [:sweep, :fields]
+    @test [b.axis for b in Potts._p(own, :boundaries)] == [2]                   # the field's block replaced
     # the schedule `fields, sweep`: the field step sits before the sweep, its clamp on it
     ph = bs_problem(BSBase(; name = :b)).f.phases
     k = findfirst(e -> e isa CorePotts.SweepPhase, ph.mcs)

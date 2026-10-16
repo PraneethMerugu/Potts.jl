@@ -109,7 +109,7 @@ end
 
 @testset "initialization: extend keeps the base's equations" begin
     sys = IniExt(; name = :e)
-    @test length(INI_M.initialization_equations(sys)) == 2
+    @test length(INI_M.initialization_equations(Potts.inner(sys))) == 2
     @test occursin("initialization", sprint(show, MIME"text/plain"(), sys))
     prob = PottsProblem(sys, ini_op(), (0, 1))
     @test ini_u0(prob, :Vt) == 2 .* INI_VOL
@@ -143,7 +143,7 @@ end
     @test only(Array(prob.u0.model.m)) ≈ 6.0 rtol = 1e-12
     @test ini_u0(prob, :x) ≈ [1.0, 1.0] rtol = 1e-12                         # (xd − volume) / 3
     # keyed by the compiled model's symbol, the declared symbol or the name: the same values
-    for key in (complete(sys).xd, getproperty(sys, :xd), :xd)
+    for key in (sys.xd, getproperty(sys, :xd), :xd)
         p = PottsProblem(sys, ini_op(key => [19.0, 15.0]), (0, 1))
         @test ini_u0(p, :x) ≈ [1.0, 1.0] rtol = 1e-12
     end

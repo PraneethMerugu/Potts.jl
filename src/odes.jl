@@ -69,7 +69,7 @@ equations).
 function _compile_odes(sys::PottsSystem)
     deqs = Dict{Symbol, Vector{Equation}}()
     aeqs = Dict{Symbol, Vector{Equation}}()
-    for eq in getfield(sys, :equations)
+    for eq in _p(sys, :equations)
         l = _unwrap(eq.lhs)
         if _is_derivative(l)
             i = info(arguments(l)[1])
@@ -107,12 +107,12 @@ function _compile_odes(sys::PottsSystem)
         defs[x] = expand(r)
     end
     src = IdDict{Any, LineNumberNode}()
-    srcs = getfield(sys, :sources)
+    srcs = _p(sys, :sources)
     origin = IdDict{Any, Any}()                       # rewritten statement → the authored one
     keep(old, new) = (haskey(srcs, old) && (src[new] = srcs[old]); origin[new] = old; new)
     m = isempty(alg) ? nothing : _map_statements(expand, sys; seen = origin)
     equations = Equation[]
-    for (j, eq) in enumerate(getfield(sys, :equations))
+    for (j, eq) in enumerate(_p(sys, :equations))
         l = _unwrap(eq.lhs)
         x = _is_derivative(l) ? info(arguments(l)[1]) : nothing
         if x !== nothing && haskey(rates, x.name)
@@ -120,24 +120,24 @@ function _compile_odes(sys::PottsSystem)
         elseif !_is_derivative(l) && !_is_coupling(l)
             continue                                   # an algebraic equation: eliminated
         else
-            push!(equations, m === nothing ? eq : keep(eq, getfield(m, :equations)[j]))
+            push!(equations, m === nothing ? eq : keep(eq, m.equations[j]))
         end
     end
     m === nothing && return _replace(sys; equations, sources = merge(srcs, src)), odes, origin
     names = Set{Symbol}(info(x).name for x in keys(alg))
-    variables = Any[x for x in getfield(sys, :variables) if !(info(x).name in names)]
-    observed = [getfield(m, :observed);
-                [ObservedEq(_tag(_sym(info(x).name), Entity(:observed, info(x).name, nothing, (; scope = info(x).role))),
+    variables = Any[x for x in _p(sys, :variables) if !(info(x).name in names)]
+    observed = [m.observed;
+                [_observed_eq(_tag(_sym(info(x).name), Entity(:observed, info(x).name, nothing, (; scope = info(x).role))),
                      Symbolics.wrap(defs[x])) for x in _algebraic_order(alg)]]
-    return _replace(sys; variables, equations, observed, energies = getfield(m, :energies), drives = getfield(m, :drives),
-               constraints = getfield(m, :constraints), updates = getfield(m, :updates), divisions = getfield(m, :divisions),
-               converts = getfield(m, :converts), link_rules = getfield(m, :link_rules), discrete = getfield(m, :discrete), sweep = getfield(m, :sweep),
-               boundaries = getfield(m, :boundaries), sources = merge(srcs, getfield(m, :sources), src)), odes, origin
+    return _replace(sys; variables, equations, observed, energies = m.energies, drives = m.drives,
+               constraints = m.constraints, updates = m.updates, divisions = m.divisions,
+               converts = m.converts, link_rules = m.link_rules, discrete = m.discrete, sweep = m.sweep,
+               boundaries = m.boundaries, sources = merge(srcs, m.sources, src)), odes, origin
 end
 
 # The algebraic variables of a model with its ODEs simplified (`_compile_odes`), as the
 # `@observed` entries that carry their declared scope.
-_algebraic_observed(sys::PottsSystem) = [o for o in getfield(sys, :observed) if haskey(info(o.var).options, :scope)]
+_algebraic_observed(sys::PottsSystem) = [o for o in _p(sys, :observed) if haskey(info(o.lhs).options, :scope)]
 
 # The statement being compiled reads its algebraic variables as their definitions, so an
 # error about a definition's quantities would not name the variable. While `_via_algebraic`
@@ -149,7 +149,7 @@ const _ALGEBRAIC_READS = Base.ScopedValues.ScopedValue{Any}(nothing)
 function _via_algebraic(f::F, sys::PottsSystem, origin) where {F}
     alg = _algebraic_observed(sys)
     isempty(alg) && return f()
-    defs = Dict{Symbol, Any}(info(o.var).name => o.expr for o in alg)
+    defs = Dict{Symbol, Any}(info(o.lhs).name => o.rhs for o in alg)
     return Base.ScopedValues.with(f, _ALGEBRAIC_READS => (; origin, defs))
 end
 
@@ -191,17 +191,17 @@ not when it is first observed.
 """
 function _check_algebraic_lowering(sys::PottsSystem, rn)
     for o in _algebraic_observed(sys)
-        i = info(o.var)
+        i = info(o.lhs)
         cell = i.options.scope === :cell
         try
-            lower(o.expr, cell ? _cell_env(Float64, :c, rn; mcs = :t) : _model_env(Float64, rn; mcs = :t))
+            lower(o.rhs, cell ? _cell_env(Float64, :c, rn; mcs = :t) : _model_env(Float64, rn; mcs = :t))
             # an integral is evaluated by summing its operand over the cell's sites
-            _walk(o.expr) do y
+            _walk(o.rhs) do y
                 iscall(y) && operation(y) === cell_integral && lower(arguments(y)[1], _site_env(Float64, :i, rn; mcs = :t))
             end
         catch e
             e isa Union{ArgumentError, ErrorException} || rethrow()
-            throw(ArgumentError("the algebraic equation `$(i.name) ~ $(o.expr)` cannot be evaluated at " *
+            throw(ArgumentError("the algebraic equation `$(i.name) ~ $(o.rhs)` cannot be evaluated at " *
                                 "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"))
         end
     end
@@ -294,11 +294,11 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
     message(name, by) = "`$name` is defined by an algebraic equation (`$(alg[byname[name]].eq)`); it is not a stored " *
                         "variable, so $by cannot write it"
     target(l) = (l = _unwrap(l); iscall(l) && (operation(l) === at || operation(l) === at2) ? _unwrap(arguments(l)[1]) : l)
-    for u in getfield(sys, :updates)
+    for u in _p(sys, :updates)
         i = info(target(u.eq.lhs))
         i !== nothing && haskey(byname, i.name) && _located(() -> throw(ArgumentError(message(i.name, "@$(u.phase)"))), sys, u)
     end
-    for d in getfield(sys, :divisions), (k, _) in d.rules
+    for d in _p(sys, :divisions), (k, _) in d.rules
         i = info(target(k))
         i !== nothing && haskey(byname, i.name) && _located(() -> throw(ArgumentError(message(i.name, "a division rule"))), sys, d)
     end
@@ -330,8 +330,8 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     istarget = Set{Any}(targets)
     # input names: a built-in's or another scope's variable's own name, else `input_k`; never
     # the name of a target, a parameter or another declared variable
-    reserved = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters), getfield(sys, :variables))))
-    own = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, getfield(sys, :parameters))))
+    reserved = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, _p(sys, :parameters), _p(sys, :variables))))
+    own = Set{Symbol}(info(x).name for x in Iterators.flatten((targets, _p(sys, :parameters))))
     used = Set{Symbol}()
     params = Any[]
     inputs = Dict{Any, Any}()                          # authored expression → its parameter

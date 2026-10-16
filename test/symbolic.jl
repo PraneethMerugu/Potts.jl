@@ -455,13 +455,13 @@ end
     base = Spring(; name = :s)                       # `rest(edge)`: `bond`
     rest_sym = only(Potts.Symbolics.@variables rest(Potts.t))
     ext(scope; rels = [Potts.relationship(:tether; capacity = 1)]) = Potts.PottsSystem(; name = :x,
-        kinds = getfield(base, :kinds), lattice = Potts.lattice(base), sweep = getfield(base, :sweep), relationships = rels,
+        kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep), relationships = rels,
         variables = Any[Potts.variable(rest_sym, scope; default = 9.0)])
     σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2
     op = [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]]
     for (scope, rels) in ((:edge, [Potts.relationship(:tether; capacity = 1)]), (:edge, Potts.RelationshipSpec[]),
                           (:edge, [Potts.relationship(:tether), Potts.relationship(:glue)]), (:bond, Potts.RelationshipSpec[]))
-        c = mtkcompile(extend(ext(scope; rels), base))
+        c = mtkcompile(Potts.extend(ext(scope; rels), base))
         @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
         @test all(r -> isempty(c.edge_vars[r]), filter(!=(:bond), collect(keys(c.edge_vars))))
         prob = PottsProblem(c, op, (0, 5))
@@ -469,11 +469,11 @@ end
         @test total_energy(prob) == total_energy(PottsProblem(base, [op; :rest => 9.0], (0, 5)))
     end
     # a nested extension (of an extension) keeps it too
-    c = mtkcompile(extend(ext(:edge; rels = Potts.RelationshipSpec[]), extend(ext(:edge), base; name = :mid)))
+    c = mtkcompile(Potts.extend(ext(:edge; rels = Potts.RelationshipSpec[]), Potts.extend(ext(:edge), base; name = :mid)))
     @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest] && isempty(c.edge_vars[:tether])
     # another relationship: rejected when built, naming the variable and both relationships
-    @test_throws ArgumentError extend(ext(:tether), base)
-    @test_throws r"`rest`.*`bond`.*`tether`" extend(ext(:tether), base)
+    @test_throws ArgumentError Potts.extend(ext(:tether), base)
+    @test_throws r"`rest`.*`bond`.*`tether`" Potts.extend(ext(:tether), base)
     # control: without the base's variable, `rest(tether)` is the extension's own
     c = mtkcompile(ext(:tether))
     @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:rest]
@@ -537,13 +537,13 @@ end
     body = EdgeBody(; name = :x)
     @test sort([Potts.info(x).name for x in mtkcompile(body).edge_vars[:tether]]) == [:len, :rest]
     # the mark of an implicit binding is not code: settling it keeps the fingerprint
-    settled = Potts.PottsSystem(; (f => getfield(body, f) for f in fieldnames(Potts.PottsSystem))...,
+    settled = Potts.PottsSystem(; name = nameof(body), (f => Potts._p(body, f) for f in fieldnames(Potts.PottsPart))...,
         variables = map(Potts._settle_edge_scope, Potts.variables(body)))
     @test any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.variables(body))
     @test !any(x -> haskey(Potts.info(x).options, :implicit_relationship), Potts.variables(settled))
     bop = [ownership => σ, kind => [:blob, :blob, :blob], :tether => [(2, 3)]]
     @test PottsProblem(body, bop, (0, 5)).f.fingerprint == PottsProblem(settled, bop, (0, 5)).f.fingerprint
-    sys = extend(EdgeBody(; name = :x), Spring(; name = :s))
+    sys = Potts.extend(EdgeBody(; name = :x), Spring(; name = :s))
     c = mtkcompile(sys)
     @test [Potts.info(x).name for x in c.edge_vars[:bond]] == [:rest]
     @test [Potts.info(x).name for x in c.edge_vars[:tether]] == [:len]
@@ -553,12 +553,12 @@ end
     @test p.u0.cell.link_rest[1, 1] == 9.0 && p.u0.cell.link_len[1, 2] == 18.0
     @test total_energy(p) == total_energy(q) == 3264 + 72 + 6
     # an explicit `rest(tether)` is still a move, and rejected
-    @test_throws r"`rest`.*`bond`.*`tether`" extend(RestOnTether(; name = :x) |> s -> Potts.PottsSystem(; name = :x,
-        kinds = getfield(s, :kinds), lattice = Potts.lattice(s), sweep = getfield(s, :sweep), relationships = getfield(s, :relationships),
+    @test_throws r"`rest`.*`bond`.*`tether`" Potts.extend(RestOnTether(; name = :x) |> s -> Potts.PottsSystem(; name = :x,
+        kinds = Potts._p(s, :kinds), lattice = Potts.lattice(s), sweep = Potts._p(s, :sweep), relationships = Potts._p(s, :relationships),
         variables = Any[Potts.variable(only(Potts.Symbolics.@variables rest(Potts.t)), :tether; default = 5.0)]),
         Spring(; name = :s))
     # once merged, a binding is settled: a second base declaring `rest` elsewhere is an error
-    @test_throws ArgumentError extend(extend(EdgeBody(; name = :x), Spring(; name = :s)), RestOnTether(; name = :t))
+    @test_throws ArgumentError Potts.extend(Potts.extend(EdgeBody(; name = :x), Spring(; name = :s)), RestOnTether(; name = :t))
 end
 
 @testset "extend: edge variables of bases and changes of scope are checked" begin
@@ -574,7 +574,7 @@ end
     @test_throws "an edge variable of relationship `tether`" mtkcompile(CrossRead(; name = :c))
     c = Chain(; name = :c)
     @test_throws "declared twice" mtkcompile(Potts.PottsSystem(; name = :dup, kinds = [:medium, :blob],
-        lattice = Potts.lattice(c), relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = getfield(c, :sweep)))
+        lattice = Potts.lattice(c), relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = Potts._p(c, :sweep)))
     @test isequal(mtkcompile(Spring(; name = :s)).edge_vars[:bond], Potts.variables(Spring(; name = :s)))   # `rest(edge)`: the only one
     @test_throws "is a variable scope" mtkcompile(CellRelationship(; name = :cr))
 end
@@ -748,7 +748,7 @@ end
     sys = Census(; name = :census)
     prob = PottsProblem(sys, [ownership => σ, kind => kinds], (0, 6))
     sol = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = [2, 4, 6])
-    named(n) = only(filter(x -> Potts.info(x).name === n, vcat(Potts.variables(sys), [o.var for o in getfield(sys, :observed)], Potts.parameters(sys))))
+    named(n) = only(filter(x -> Potts.info(x).name === n, vcat(Potts.variables(sys), [o.lhs for o in Potts._p(sys, :observed)], Potts.parameters(sys))))
     live(u) = findall(>(0), u.cell.volume)
     @test sol[named(:total)] == [sum(u.site.act) for u in sol.u]
     @test sol[named(:ndark)][2:end] == [count(c -> kinds[c] == 1, live(u)) for u in sol.u[2:end]]   # t = 0: default
@@ -1034,7 +1034,7 @@ end
         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0))
     @test mtkcompile(Potts.PottsSystem(; base..., divisions = [Potts.divide(Potts.cells(1);
         when = Potts.B.cluster == Potts.B.id)])).uses_clusters
-    @test mtkcompile(Potts.PottsSystem(; base..., observed = [Potts.ObservedEq(Potts.observed_var(:cv),
+    @test mtkcompile(Potts.PottsSystem(; base..., observed = [Potts._observed_eq(Potts.observed_var(:cv),
         Potts.B.cluster_volume)])).uses_clusters
 end
 
@@ -1088,9 +1088,9 @@ end
 
 @testset "composition: extend and @extend" begin
     ext = ChemoSorting(; name = :chemo)
-    @test getfield(ext, :kinds) == [:medium, :dark, :light]
+    @test Potts._p(ext, :kinds) == [:medium, :dark, :light]
     @test Set(Potts.info(x).name for x in Potts.parameters(ext)) == Set([:λ, :V₀, :T, :J, :χ])
-    @test length(getfield(ext, :energies)) == 2 && length(getfield(ext, :drives)) == 1 && Potts.lattice(ext) == Potts.lattice(SORTING.sys)
+    @test length(Potts._p(ext, :energies)) == 2 && length(Potts._p(ext, :drives)) == 1 && Potts.lattice(ext) == Potts.lattice(SORTING.sys)
     σ, kinds = graner_state()
     a = symbolic_graner_problem(; nmcs = 5)
     b = PottsProblem(ext, [ownership => σ, kind => kinds], (0, 5); field_solver = ExplicitEuler())
@@ -1103,14 +1103,14 @@ end
     @test sol[:volume][end] == [Float64(v) for v in sol.u[end].cell.volume] && sol[:c][end] == sol.u[end].site.c
     # an added frozen kind and a redeclared (wider) contact table; base overrides by keyword
     w = WalledSorting(; name = :walled)
-    @test getfield(w, :kinds) == [:medium, :dark, :light, :wall] && getfield(w, :frozen_kinds) == [3]
+    @test Potts._p(w, :kinds) == [:medium, :dark, :light, :wall] && Potts._p(w, :frozen_kinds) == [3]
     @test count(x -> Potts.info(x).name === :J, Potts.parameters(w)) == 1 && size(Potts.info(only(filter(x -> Potts.info(x).name === :J, Potts.parameters(w)))).default) == (4, 4)
     @test Potts.lattice(w).dims == (40, 40)
     σw = zeros(Int32, 40, 40); σw[:, 1] .= 1; σw[10:15, 10:15] .= 2; σw[20:25, 20:25] .= 3
     pw = PottsProblem(w, [ownership => σw, kind => [:wall, :dark, :light]], (0, 10))
     @test pw.p.T == 6.0 && count(pw.frozen) == 40
-    @test_throws ArgumentError extend(PottsSystem(; name = :x, kinds = [:medium, :light], lattice = Potts.lattice(SORTING.sys),
-        sweep = getfield(SORTING.sys, :sweep)), SORTING.sys)
+    @test_throws ArgumentError Potts.extend(PottsSystem(; name = :x, kinds = [:medium, :light], lattice = Potts.lattice(SORTING.sys),
+        sweep = Potts._p(SORTING.sys, :sweep)), SORTING.sys)
     @test_throws ArgumentError Potts.lookup(SORTING.sys, :nope)
 end
 
@@ -1186,7 +1186,7 @@ const BAD_DRIVE_LINE = @__LINE__() - 3
     m = msg(() -> mtkcompile(BadDrive(; name = :bad)))
     @test occursin("`volume` is not available in a drive", m) && occursin("symbolic.jl:$BAD_DRIVE_LINE", m)
     # locations survive `extend`
-    m = msg(() -> mtkcompile(extend(PottsSystem(; name = :e, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+    m = msg(() -> mtkcompile(Potts.extend(PottsSystem(; name = :e, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
         sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)), BadSiteVar(; name = :bad))))
     @test occursin("symbolic.jl:$BAD_ENERGY_LINE", m)
 end
@@ -1669,12 +1669,12 @@ end
 end
 
 @testset "a model built inside an @extend base has its own build state" begin
-    draws(sys) = sort!([parse(Int, m[1]) for m in eachmatch(r"random_uniform\((\d+)\)", string(getfield(sys, :updates)))])
+    draws(sys) = sort!([parse(Int, m[1]) for m in eachmatch(r"random_uniform\((\d+)\)", string(Potts._p(sys, :updates)))])
     s = _ExtendsBuilder(; name = :o)                 # threw a DimensionMismatch (3D helper's dim leaked)
     @test draws(s) == [1, 2]                         # base's draw, then the extension's: the helper's two draws are its own
     @test draws(_Helper3D(; name = :h)) == [1, 2]
     @test length(Potts.lattice(s).dims) == 2
-    @test count(u -> occursin("cell_centroid", string(u.eq)), getfield(s, :updates)) == 2   # p is 2D, not 3D
+    @test count(u -> occursin("cell_centroid", string(u.eq)), Potts._p(s, :updates)) == 2   # p is 2D, not 3D
     @test draws(_BuildsHelper(; name = :b)) == [1]   # serial build of the base alone is unchanged
 end
 
@@ -2552,7 +2552,7 @@ end
     for sys in (SiteContactsExt1(; name = :e1), SiteContactsExt2(; name = :e2))
         σ, kinds, cue = site_contact_state((24, 24))
         prob = PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue, :v_1 => 1 .- cue, :v_2 => cue .^ 2], (0, 4))
-        @test length(getfield(sys, :energies)) == 3             # the base's two terms and the extension's
+        @test length(Potts._p(sys, :energies)) == 3             # the base's two terms and the extension's
         @test site_selfcheck(prob, Moore(1)) < 1e-9
     end
     @test Potts.lookup(SiteContactsBase(; name = :b), :v′) isa Potts.QuantityVector
@@ -2807,7 +2807,7 @@ end
     @test Potts.link_rule(:link, rel, Potts.Every(4); when = true).every == 4
     @test Potts.link_rule(:link, rel; when = true, every = 4).every == 4
     @test_throws r"`3` is not a cadence" Potts.link_rule(:link, rel, 3; when = true)
-    @test only(getfield(LinkCadence(; name = :l), :link_rules)).every == 7
+    @test only(Potts._p(LinkCadence(; name = :l), :link_rules)).every == 7
     # a division's description names a non-default cadence (errors located at the rule)
     @test Potts._describe(Potts.divide(dom, Potts.Every(3); when = V >= 4)) == "@divide cells(1) Every(3) when = volume >= 4"
     @test Potts._describe(Potts.divide(dom; when = V >= 4)) == "@divide cells(1) when = volume >= 4"
@@ -2945,12 +2945,12 @@ end
         @kinds medium ka kb
         @divide cells(ka) Every(3) when = volume >= 8 + rand()
     end)
-    @test [d.every for d in getfield(sys, :divisions)] == [2, 3]                  # both rules stay, each with its cadence
+    @test [d.every for d in Potts._p(sys, :divisions)] == [2, 3]                  # both rules stay, each with its cadence
     # two separately built models: extend renumbers the draws of `sys` and keeps its cadences
-    other = @test_logs (:warn, r"adds to the base's") Potts.ModelingToolkitBase.extend(
+    other = @test_logs (:warn, r"adds to the base's") Potts.extend(
         CadenceDivOther(; name = :o), CadenceDivBase(; name = :b))
-    @test [d.every for d in getfield(other, :divisions)] == [2, 3]
-    @test string(getfield(other, :divisions)[2].when) != string(getfield(CadenceDivOther(; name = :o), :divisions)[1].when)   # renumbered
+    @test [d.every for d in Potts._p(other, :divisions)] == [2, 3]
+    @test string(Potts._p(other, :divisions)[2].when) != string(Potts._p(CadenceDivOther(; name = :o), :divisions)[1].when)   # renumbered
     @test_logs ext(quote                                                    # same cadence: silent
         @extend base = CadenceDivBase()
         @kinds medium ka kb
@@ -3702,8 +3702,8 @@ end
         "`vb_2`", "component of the vector `vb`") === :ok
     # programmatic: `extend` and a hand-built `PottsSystem`
     base, var = NameVecBase(; name = :b), NameVecVarBase(; name = :v)
-    @test rejection(() -> extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
-    @test rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(base, :kinds), lattice = Potts.lattice(base), sweep = getfield(base, :sweep),
+    @test rejection(() -> Potts.extend(var, base), "`vb_1`", "in the base `b`", "component of the vector `vb`") === :ok
+    @test rejection(() -> Potts.PottsSystem(; name = :p, kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep),
         parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]), "`vb_1`", vec) === :ok
     # the label reads `parameter `vb_2` (a component of the vector `vb`)`
     @test rejection(() -> single(quote @kinds medium host; @parameters begin vb_2 = 3.0; vb[1:2] = [1.0, 2.0] end end),
@@ -4101,38 +4101,38 @@ using Potts.ModelingToolkitBase: Setfield as NsSetfield
 
 @testset "D-137: a key namespaced by the model itself is the declared quantity" begin
     SII = Potts.SymbolicIndexingInterface
+    M = Potts.ModelingToolkitBase
     sys = NsCell(; name = :pr)
-    cs = complete(sys)
-    @test SII.getname(sys.λ) === :pr₊λ && SII.getname(cs.λ) === :λ          # the keys differ …
+    ns = M.toggle_namespacing(Potts.inner(sys), true)                       # MTK's namespaced view
+    @test SII.getname(ns.λ) === :pr₊λ && SII.getname(sys.λ) === :λ          # the keys differ …
     # … and mean the same everywhere: operating point (parameter and variable)
-    p1 = PottsProblem(sys, [ns_op(); sys.λ => 7.0; sys.x => 3.0], (0, 2))
-    p2 = PottsProblem(sys, [ns_op(); cs.λ => 7.0; cs.x => 3.0], (0, 2))
+    p1 = PottsProblem(sys, [ns_op(); ns.λ => 7.0; ns.x => 3.0], (0, 2))
+    p2 = PottsProblem(sys, [ns_op(); sys.λ => 7.0; sys.x => 3.0], (0, 2))
     @test p1.p == p2.p && p1.p.λ == 7.0 && p1.u0.cell.x == p2.u0.cell.x == [3.0, 3.0]
     @test PottsProblem(sys, [ns_op(); Symbol("pr₊λ") => 5.0], (0, 1)).p.λ == 5.0     # the name, too
     # remake p and u0
-    @test remake(p1; p = [sys.λ => 9.0]).p.λ == 9.0
-    @test remake(p1; u0 = [ns_op(); sys.x => 4.0]).u0.cell.x == [4.0, 4.0]
+    @test remake(p1; p = [ns.λ => 9.0]).p.λ == 9.0
+    @test remake(p1; u0 = [ns_op(); ns.x => 4.0]).u0.cell.x == [4.0, 4.0]
     # getu / setu / getp / observe / prob[…] / sol[…], with observed quantities and expressions
-    @test SII.getu(p1, sys.x)(p1) == [3.0, 3.0] && SII.getp(p1, sys.λ)(p1) == 7.0
-    @test observe(p1, sys.total) == observe(p1, cs.total) == 6.0
-    @test p1[sys.total] == 6.0 && p1[sys.g] == p1[cs.g]
-    @test observe(p1, 2 * sys.total + sys.λ) == 2 * 6.0 + 7.0
+    @test SII.getu(p1, ns.x)(p1) == [3.0, 3.0] && SII.getp(p1, ns.λ)(p1) == 7.0
+    @test observe(p1, ns.total) == observe(p1, sys.total) == 6.0
+    @test p1[ns.total] == 6.0 && p1[ns.g] == p1[sys.g]
+    @test observe(p1, 2 * ns.total + ns.λ) == 2 * 6.0 + 7.0
     q = deepcopy(p1)
-    SII.setu(q, sys.x)(q, [1.0, 2.0])
+    SII.setu(q, ns.x)(q, [1.0, 2.0])
     @test q.u0.cell.x == [1.0, 2.0]
     sol = solve(p1, SequentialCPM())
-    @test sol[sys.total] == sol[cs.total] && sol[sys.g] == sol[cs.g]
+    @test sol[ns.total] == sol[sys.total] && sol[ns.g] == sol[sys.g]
     # solvers keys
     fp(k) = PottsProblem(sys, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
-    @test fp(sys.x) == fp(cs.x) == fp(:x) != PottsProblem(sys, ns_op(), (0, 1)).f.fingerprint
-    # components: `sys.dc.y` and `sys.dc`
+    @test fp(ns.x) == fp(sys.x) == fp(:x) != PottsProblem(sys, ns_op(), (0, 1)).f.fingerprint
+    # components: `sys.dc.y` is the flattened `dc₊y`
     comp = NsComp(; name = :pc)
-    cc = complete(comp)
     @test PottsProblem(comp, [ns_op(); comp.dc.y => 2.0], (0, 1)).u0.cell.dc₊y == [2.0, 2.0]
     cfp(k) = PottsProblem(comp, ns_op(), (0, 1); solvers = [k => RK4()]).f.fingerprint
-    @test cfp(comp.dc) == cfp(cc.dc) == cfp(comp.dc.y) == cfp(cc.dc.y)
+    @test cfp(comp.dc.y) == cfp(M.toggle_namespacing(Potts.inner(comp), true).dc.y)
     # negative controls: a key namespaced by another model names nothing here
-    other = NsCell(; name = :other)
+    other = M.toggle_namespacing(Potts.inner(NsCell(; name = :other)), true)
     for f in (() -> PottsProblem(sys, [ns_op(); other.λ => 1.0], (0, 1)), () -> remake(p1; p = [other.λ => 1.0]),
               () -> observe(p1, other.total))
         e = try
@@ -4140,7 +4140,7 @@ using Potts.ModelingToolkitBase: Setfield as NsSetfield
         catch err
             err
         end
-        @test e isa ArgumentError && occursin("complete(sys).x", e.msg) && occursin("other₊", e.msg)
+        @test e isa ArgumentError && occursin("`sys.x`", e.msg) && occursin("other₊", e.msg)
     end
     # … and wherever else a key is resolved (review round 2): `getp`, `prob.ps[…]`, `solvers`,
     # and inside an expression
@@ -4152,41 +4152,32 @@ using Potts.ModelingToolkitBase: Setfield as NsSetfield
         catch err
             err
         end
-        @test e isa ArgumentError && occursin("other₊", e.msg) && occursin("complete(sys).x", e.msg)
+        @test e isa ArgumentError && occursin("other₊", e.msg) && occursin("`sys.x`", e.msg)
     end
     @test p1[sys.total + sys.λ] == 6.0 + 7.0                     # control: the model's own keys
     @test p1.ps[sys.λ] == 7.0 && SII.getp(p1, sys.λ)(p1) == 7.0
-    # a vector quantity and a kind are not properties; the error names what they are
-    e = try sys.w catch err err end
-    @test e isa ArgumentError && occursin("vector quantity", e.msg) && occursin("`w_1`", e.msg)
-    e = try sys.host catch err err end
-    @test e isa ArgumentError && occursin("`host` is a kind", e.msg)
-    e = try sys.nosuch catch err err end
-    @test e isa ArgumentError && occursin("does not exist", e.msg)
-    @test isequal(Potts.ModelingToolkitBase.independent_variables(sys), Any[Potts._unwrap(Potts.t)])
+    # a vector quantity, a kind or an unknown name is not a property (MTK's own error)
+    @test_throws ArgumentError sys.w
+    @test_throws ArgumentError sys.host
+    @test_throws ArgumentError sys.nosuch
+    @test isequal(M.independent_variables(sys), Any[Potts._unwrap(Potts.t)])
 end
 
-@testset "D-137: @set on the MTK mirror names, metadata precedence, complete exported" begin
+@testset "W-lite: MTK's system operations on a PottsSystem are loud; metadata is the inner System's" begin
     M = Potts.ModelingToolkitBase
     sys = NsCell(; name = :pr)
-    @test complete === M.complete                                           # exported, MTK's function
-    s0 = NsSetfield.@set sys.eqs = Potts.Equation[]
-    @test isempty(M.equations(s0)) && isempty(getfield(s0, :equations)) && length(M.equations(sys)) == 1
-    ps = Any[first(Potts.parameters(sys))]
-    s1 = NsSetfield.@set sys.ps = ps
-    @test length(M.parameters(s1)) == 1 && isequal(Potts.parameters(s1), ps) && getfield(s1, :ps) === getfield(s1, :parameters)
-    s2 = NsSetfield.@set sys.unknowns = Any[]
-    @test isempty(Potts.variables(s2)) && isempty(M.unknowns(s2))
-    @test nameof(NsSetfield.@set sys.name = :zz) === :zz
-    @test_throws ArgumentError NsSetfield.@set sys.systems = Any[]
-    @test_throws ArgumentError NsSetfield.@set sys.observed = M.observed(sys)
-    # extend: the newest value of a key wins, the extension's over the base's
-    a = M.setmetadata(M.setmetadata(NsCell(; name = :a), NsKey, 1), NsKey, 2)
-    b = M.setmetadata(NsCell(; name = :b), NsKey, 3)
-    @test M.getmetadata(a, NsKey, nothing) == 2
-    @test M.getmetadata(extend(a, NsCell(; name = :b)), NsKey, nothing) == 2
-    @test M.getmetadata(extend(NsCell(; name = :b), a), NsKey, nothing) == 2
-    @test M.getmetadata(extend(b, a), NsKey, nothing) == 3 && M.getmetadata(extend(a, b), NsKey, nothing) == 2
+    @test !isdefined(Potts, :complete) || Potts.complete === M.complete     # Potts no longer exports MTK's `complete`
+    @test !Base.isexported(Potts, :complete) && !Base.isexported(Potts, :extend)
+    @test_throws Exception M.complete(sys)
+    @test_throws Exception M.extend(sys, NsCell(; name = :b))
+    @test_throws Exception M.toggle_namespacing(sys, false)
+    @test_throws Exception NsSetfield.@set sys.name = :zz
+    @test_throws Exception M.getmetadata(sys, NsKey, nothing)
+    # the sweep payload is on the inner System, and follows `Potts.extend`
+    @test M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
+    e = Potts.extend(NsCell(; name = :a), NsCell(; name = :b))
+    @test M.getmetadata(Potts.inner(e), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
+    @test M.getmetadata(Potts.inner(sys), NsKey, nothing) === nothing
 end
 
 # P6.4a1 (D-188): the copy scope reads `direction[k]`, `position[s][k]` and `mcs`.

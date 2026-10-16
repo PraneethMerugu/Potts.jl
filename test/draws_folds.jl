@@ -61,7 +61,7 @@ end
         ex = :(@after_mcs x ~ $call)
         if shown === nothing          # `Base.rand()` is the model's `rand()` (a draw, not a constant)
             c = _df_build(ex)
-            @test any(u -> Potts._has_draw(u.eq.rhs), getfield(c.sys, :updates))
+            @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(c.sys, :updates))
         else
             msg = _df_msg(() -> _df_build(ex))
             @test occursin("`$shown`", msg) && occursin("not available in a model", msg)
@@ -70,7 +70,7 @@ end
     # the model's own forms build and draw
     for call in (:(rand()), :(randn()), :(randn(1.0, 2.0)), :(randn(q, 2.0; lower = 0.0)))
         c = _df_build(:(@after_mcs x ~ $call))
-        @test any(u -> Potts._has_draw(u.eq.rhs), getfield(c.sys, :updates))
+        @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(c.sys, :updates))
     end
     # a negative SD is an error when it is a number
     @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower = 0.0)))))
@@ -117,7 +117,7 @@ end
         _df_msg(() -> _df_build(; temperature = :(T + count(true for _ in contacts) / 100))))
     # `count` stays Base's elsewhere: a population fold and a plain helper
     p = _df_build(:(@after_mcs z ~ count(volume > 5 for c in cells)))
-    @test !any(u -> occursin("contacts_", string(u.eq.rhs)), getfield(p.sys, :updates))
+    @test !any(u -> occursin("contacts_", string(u.eq.rhs)), Potts._p(p.sys, :updates))
     @test Potts.DSL.count(isodd, [1, 2, 3]) == 2 && nameof(Potts.DSL.count) === :count
 end
 

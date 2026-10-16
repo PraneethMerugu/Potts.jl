@@ -27,7 +27,7 @@ Square, hexagonal and 3D lattices; `u` must be a host state.
 function boundary_lengths(prob::CorePotts.PottsProblem, u = prob.u0; relation = nothing)
     info = prob.f.sys
     info isa PottsModelInfo || throw(ArgumentError("boundary_lengths: not a problem of a Potts model"))
-    names = getfield(info.csys.sys, :kinds)
+    names = _p(info.csys.sys, :kinds)
     r = relation === nothing ? prob.contact : CorePotts.relation(relation, prob.lattice)
     CorePotts.is_symmetric(r) || throw(ArgumentError("boundary_lengths: the relation is not symmetric " *
                                                      "(each offset needs its negation with the same weight), so its bonds are not unordered pairs"))

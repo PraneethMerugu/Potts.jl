@@ -11,7 +11,7 @@ const SECTIONS = (Symbol("@structural_parameters"), Symbol("@kinds"), Symbol("@p
     Symbol("@before_mcs"), Symbol("@equations"), Symbol("@divide"), Symbol("@sweep"),
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
     Symbol("@extend"), Symbol("@components"), Symbol("@boundary"), Symbol("@schedule"),
-    Symbol("@initialization_equations"), Symbol("@convert"))
+    Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@bcs"))
 
 """
     @potts_model Name begin
@@ -131,6 +131,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     inits = _has_section(body, Symbol("@initialization_equations"))
     # likewise `@convert` (R8, D-233)
     convs = _has_section(body, Symbol("@convert"))
+    # likewise `@bcs` (raw MTK boundary conditions: stored and printed; the field compiler classifies them)
+    bcs = _has_section(body, Symbol("@bcs"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -156,12 +158,13 @@ function _potts_model(name::Symbol, body::Expr, mod)
         __divisions = $P.DivideRule[]
         __relationships = $P.RelationshipSpec[]
         __links = $P.LinkRule[]
-        __observed = $P.ObservedEq[]
+        __observed = $P.Equation[]
         __lattice = nothing
         __sweep = nothing
         $(bsched ? :(__boundaries = $P.BoundaryEntry[]; __schedule = Symbol[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
+        $(bcs ? :(__bcs = $P.Equation[]) : nothing)
         __bases = $P.PottsSystem[]
         __sources = IdDict{Any, LineNumberNode}()
         __components = Any[]
@@ -178,6 +181,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         sweep = __sweep, $((bsched ? (Expr(:kw, :boundaries, :__boundaries), Expr(:kw, :schedule, :__schedule)) : ())...),
         $((inits ? (Expr(:kw, :initialization_eqs, :__init_eqs),) : ())...),
         $((convs ? (Expr(:kw, :converts, :__converts),) : ())...),
+        $((bcs ? (Expr(:kw, :bcs, :__bcs),) : ())...),
         structural = $structural, metadata = $P._built_metadata(__features)))
     targets = :(Dict{Symbol, String}($([:($(QuoteNode(k)) => $v) for (k, v) in _prime_targets(parts, body)]...)))
     return quote
@@ -192,13 +196,13 @@ function _potts_model(name::Symbol, body::Expr, mod)
                 rethrow()
             end
             $(extends ? :(for b in __bases                # an extension inherits what it does not declare
-                __lattice === nothing && (__lattice = getfield(b, :lattice))
-                __sweep === nothing && (__sweep = getfield(b, :sweep))
-                isempty(__kinds) && append!(__kinds, getfield(b, :kinds))
+                __lattice === nothing && (__lattice = $P._p(b, :lattice))
+                __sweep === nothing && (__sweep = $P._p(b, :sweep))
+                isempty(__kinds) && append!(__kinds, $P._p(b, :kinds))
             end) : nothing)
             __lattice === nothing && throw(ArgumentError($("model $name has no @lattice")))
             __sweep === nothing && throw(ArgumentError($("model $name has no @sweep")))
-            $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
+            $(extends ? :(foldl((s, b) -> $P.extend(s, b; name), __bases; init = $finish)) : finish)
           end
         end
     end
@@ -264,17 +268,17 @@ end
 function _base_description(bases, x::Symbol)
     named(i) = i !== nothing && (i.name === x || get(i.options, :vector, nothing) === x)
     for b in bases
-        for v in getfield(b, :variables)
+        for v in _p(b, :variables)
             i = info(v)
             named(i) || continue
             i.role in (:site, :field) && return nothing
             return _scope_description(i.role, get(i.options, :relationship, nothing))
         end
-        any(p -> named(info(p)), getfield(b, :parameters)) && return "a parameter"
-        x in getfield(b, :kinds) && return "a kind"
-        any(o -> named(info(o.var)), getfield(b, :observed)) && return "an observed quantity"
-        haskey(getfield(b, :relations), x) && return "a relation"
-        any(r -> r.name === x, getfield(b, :relationships)) && return "a relationship"
+        any(p -> named(info(p)), _p(b, :parameters)) && return "a parameter"
+        x in _p(b, :kinds) && return "a kind"
+        any(o -> named(info(o.lhs)), _p(b, :observed)) && return "an observed quantity"
+        haskey(_p(b, :relations), x) && return "a relation"
+        any(r -> r.name === x, _p(b, :relationships)) && return "a relationship"
     end
     return nothing
 end
@@ -556,7 +560,7 @@ function _section!(parts, sec, args, ln = nothing)
         nested = Expr(:call, :($P._nested), params, :($P._BaseCall($(call.args[1]), __base_failed)),
             filter(x -> x !== params, call.args[2:end])...)
         push!(code, :($bname = $nested), :(push!(__bases, $bname)),
-            :($P._build().dim == 0 && $P._set_dim!(length(getfield($bname, :lattice).dims))))
+            :($P._build().dim == 0 && $P._set_dim!(length($P._p($bname, :lattice).dims))))
         foreach(n -> push!(code, :($n = $P.lookup($bname, $(QuoteNode(n))))), names)
         # a bound site or field variable `x` brings its contact-pair value `x′` along
         for n in names
@@ -601,7 +605,7 @@ function _section!(parts, sec, args, ln = nothing)
             k isa Symbol || throw(ArgumentError("@observed: `$lhs` is not a name"))
             _declare!(parts, k, "observed quantity")
             push!(code, :($k = $P.observed_var($(QuoteNode(k)))),
-                _located_push(:__observed, :($P.ObservedEq($k, $(_rewrite_arg(l.args[3])))), ln))
+                _located_push(:__observed, :($P._observed_eq($k, $(_rewrite_arg(l.args[3])))), ln))
         end
     elseif sec === Symbol("@relationship")
         decl = args[1]
@@ -636,6 +640,8 @@ function _section!(parts, sec, args, ln = nothing)
             _lines_ln(args, ln))
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
+    elseif sec === Symbol("@bcs")
+        foreach(((l, lln),) -> push!(code, _located_push(:__bcs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@divide")
         domain = args[1]
         opts, rules = _options(args[2:end])

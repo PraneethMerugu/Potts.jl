@@ -1,11 +1,11 @@
-# Composition: `extend(sys, base)` merges two Potts models (MTK's `extend`), and
+# Composition: `Potts.extend(sys, base)` merges two Potts models, and
 # `@extend names = base = Model()` inside `@potts_model` binds names of a base model.
 #
 # Kinds are numbered, and expressions refer to kinds by number, so the base's kinds must be
 # a prefix of the extension's (an extension may add kinds after them).
 
 """
-    extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
+    Potts.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
 
 The model with everything in `base` and `sys`. `sys` wins where both define something
 (parameters and variables by name, relations, the lattice and sweep of a `@potts_model`
@@ -24,17 +24,19 @@ variable of `sys` that re-declares one of `base` (to change its default) is the 
 relationship's (an unscoped `x(edge)` takes it), and one scoped to another relationship is an
 `ArgumentError` naming the variable and both relationships.
 """
-function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = nameof(sys))
-    length(getfield(sys, :kinds)) >= length(getfield(base, :kinds)) && getfield(sys, :kinds)[1:length(getfield(base, :kinds))] == getfield(base, :kinds) ||
-        throw(ArgumentError("extend: the kinds of $(nameof(base)) $(getfield(base, :kinds)) must come first in $(nameof(sys)) $(getfield(sys, :kinds))"))
+function extend(sys::PottsSystem, base::PottsSystem; name::Symbol = nameof(sys))
+    _check_inner_matches_part(sys, "Potts.extend")
+    _check_inner_matches_part(base, "Potts.extend")
+    length(_p(sys, :kinds)) >= length(_p(base, :kinds)) && _p(sys, :kinds)[1:length(_p(base, :kinds))] == _p(base, :kinds) ||
+        throw(ArgumentError("extend: the kinds of $(nameof(base)) $(_p(base, :kinds)) must come first in $(nameof(sys)) $(_p(sys, :kinds))"))
     sys = _renumber_draws(sys, base)
-    for u in getfield(sys, :updates), b in getfield(base, :updates)
+    for u in _p(sys, :updates), b in _p(base, :updates)
         _target_key(u) == _target_key(b) && u.every != b.every &&
             @warn "extend: `$(u.eq.lhs)` @$(u.phase) Every($(u.every)) replaces the base's Every($(b.every)) update"
     end
     # division rules accumulate: a rule of `sys` for kinds the base already divides at another
     # cadence adds a check, it does not replace the base's (both fire at their own MCS)
-    for u in getfield(sys, :divisions), b in getfield(base, :divisions)
+    for u in _p(sys, :divisions), b in _p(base, :divisions)
         typeof(u.domain) == typeof(b.domain) && u.every != b.every && _kinds_overlap(u.domain, b.domain) &&
             @warn "extend: $(_describe(u)) adds to the base's $(_describe(b)) (division rules accumulate: " *
                   "both fire at their own cadence; the base's rule is not replaced)"
@@ -48,48 +50,49 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name = 
         what == old || throw(_category_clash(name, n, what, "$old $inbase"))
     end
     # an edge variable keeps its relationship (D-127)
-    svars = _inherit_edge_scope(name, inbase, getfield(sys, :variables), getfield(base, :variables))
+    svars = _inherit_edge_scope(name, inbase, _p(sys, :variables), _p(base, :variables))
     # a vector replaces the base's vector of its name as a whole, so it may not be shorter
     # (the base's statements may read the components it would drop)
     key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
-    _check_vector_lengths(name, inbase, Iterators.flatten((getfield(base, :parameters), getfield(base, :variables))),
-        Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables))))
+    _check_vector_lengths(name, inbase, Iterators.flatten((_p(base, :parameters), _p(base, :variables))),
+        Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))))
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
     # kind classes (D-135): the base's, then the extension's new ones; a restated class must
     # keep its members in order (`x ∈ g` unrolls in member order)
-    classes = copy(getfield(base, :kind_classes))
-    for g in getfield(sys, :kind_classes)
+    classes = copy(_p(base, :kind_classes))
+    for g in _p(sys, :kind_classes)
         i = findfirst(h -> h.name === g.name, classes)
         if i === nothing
             push!(classes, g)
         elseif classes[i].kinds != g.kinds
-            here, there = (Tuple(get(getfield(sys, :kinds), k + 1, k) for k in h.kinds) for h in (g, classes[i]))   # kind names
+            here, there = (Tuple(get(_p(sys, :kinds), k + 1, k) for k in h.kinds) for h in (g, classes[i]))   # kind names
             throw(ArgumentError("extend: kind class `$(g.name)` is $here in $(nameof(sys)) but $there $inbase; " *
                                 "restate it with the same members in the same order (the order is in the generated code), or rename it"))
         end
     end
-    return PottsSystem(; name, kinds = getfield(sys, :kinds), frozen_kinds = sort!(union(getfield(base, :frozen_kinds), getfield(sys, :frozen_kinds))),
+    return PottsSystem(; name, kinds = _p(sys, :kinds), frozen_kinds = sort!(union(_p(base, :frozen_kinds), _p(sys, :frozen_kinds))),
         kind_classes = classes,
-        lattice = getfield(sys, :lattice), parameters = byname(getfield(base, :parameters), getfield(sys, :parameters)),
-        variables = map(_settle_edge_scope, byname(getfield(base, :variables), svars)), relations = merge(getfield(base, :relations), getfield(sys, :relations)),
-        energies = [getfield(base, :energies); getfield(sys, :energies)], drives = [getfield(base, :drives); getfield(sys, :drives)],
-        constraints = [getfield(base, :constraints); getfield(sys, :constraints)],
-        updates = [_unreplaced(getfield(base, :updates), getfield(sys, :updates), _target_key); getfield(sys, :updates)],
-        equations = [_unreplaced(getfield(base, :equations), getfield(sys, :equations), eq -> string(eq.lhs)); getfield(sys, :equations)],
-        initialization_eqs = [getfield(base, :initialization_eqs); getfield(sys, :initialization_eqs)],
-        divisions = [getfield(base, :divisions); getfield(sys, :divisions)],
-        converts = _merged_converts(getfield(base, :converts), getfield(sys, :converts)),
-        relationships = unique(r -> r.name, [getfield(sys, :relationships); getfield(base, :relationships)]),
-        link_rules = [getfield(base, :link_rules); getfield(sys, :link_rules)],
-        observed = [_unreplaced(getfield(base, :observed), getfield(sys, :observed), o -> info(o.var).name); getfield(sys, :observed)],
-        components = unique(c -> c.name, [getfield(sys, :components); getfield(base, :components)]),
-        discrete = unique(b -> b.name, [getfield(sys, :discrete); getfield(base, :discrete)]),
-        sweep = getfield(sys, :sweep), structural = merge(getfield(base, :structural), getfield(sys, :structural)),
+        lattice = _p(sys, :lattice), parameters = byname(_p(base, :parameters), _p(sys, :parameters)),
+        variables = map(_settle_edge_scope, byname(_p(base, :variables), svars)), relations = merge(_p(base, :relations), _p(sys, :relations)),
+        energies = [_p(base, :energies); _p(sys, :energies)], drives = [_p(base, :drives); _p(sys, :drives)],
+        constraints = [_p(base, :constraints); _p(sys, :constraints)],
+        updates = [_unreplaced(_p(base, :updates), _p(sys, :updates), _target_key); _p(sys, :updates)],
+        equations = [_unreplaced(_p(base, :equations), _p(sys, :equations), eq -> string(eq.lhs)); _p(sys, :equations)],
+        initialization_eqs = [_p(base, :initialization_eqs); _p(sys, :initialization_eqs)],
+        divisions = [_p(base, :divisions); _p(sys, :divisions)],
+        converts = _merged_converts(_p(base, :converts), _p(sys, :converts)),
+        relationships = unique(r -> r.name, [_p(sys, :relationships); _p(base, :relationships)]),
+        link_rules = [_p(base, :link_rules); _p(sys, :link_rules)],
+        observed = [_unreplaced(_p(base, :observed), _p(sys, :observed), o -> info(o.lhs).name); _p(sys, :observed)],
+        components = unique(c -> c.name, [_p(sys, :components); _p(base, :components)]),
+        discrete = unique(b -> b.name, [_p(sys, :discrete); _p(base, :discrete)]),
+        sweep = _p(sys, :sweep), structural = merge(_p(base, :structural), _p(sys, :structural)),
         # a field's boundary is the extension's when it gives one (all its entries), else the base's
-        boundaries = [filter(b -> !any(x -> _boundary_name(x) === _boundary_name(b), getfield(sys, :boundaries)),
-                getfield(base, :boundaries)); getfield(sys, :boundaries)],
-        schedule = isempty(getfield(sys, :schedule)) ? getfield(base, :schedule) : getfield(sys, :schedule),
-        sources = merge(getfield(base, :sources), getfield(sys, :sources)),
+        boundaries = [filter(b -> !any(x -> _boundary_name(x) === _boundary_name(b), _p(sys, :boundaries)),
+                _p(base, :boundaries)); _p(sys, :boundaries)],
+        schedule = isempty(_p(sys, :schedule)) ? _p(base, :schedule) : _p(sys, :schedule),
+        sources = merge(_p(base, :sources), _p(sys, :sources)),
+        bcs = [_p(base, :bcs); _p(sys, :bcs)], bindings = [_p(base, :bindings); _p(sys, :bindings)],
         metadata = _merged_metadata(base, sys))
 end
 
@@ -105,44 +108,23 @@ function _merged_converts(base, mine)
     return out
 end
 
-# MTK's `extend` metadata: the base's entries, then the extension's, so the newest value of a
-# key wins (the extension's over the base's). An `ImmutableDict` iterates newest first, so
-# each system's entries are re-inserted oldest first. MTK's mutable cache is left out.
+# Potts' build record (`_BuiltFeatures`): the base's entries, then the extension's, so the newest
+# value of a key wins. An `ImmutableDict` iterates newest first, so each system's entries are
+# re-inserted oldest first.
 function _merged_metadata(base::PottsSystem, sys::PottsSystem)
-    meta = _EMPTY_METADATA
-    for s in (base, sys), kv in Iterators.reverse(collect(getfield(s, :metadata)))
-        kv[1] === ModelingToolkitBase.MutableCacheKey || (meta = Base.ImmutableDict(meta, kv))
+    meta = Base.ImmutableDict{DataType, Any}()
+    for s in (base, sys), kv in Iterators.reverse(collect(_p(s, :metadata)))
+        meta = Base.ImmutableDict(meta, kv)
     end
     return meta
 end
 
-# --- MTK operations a Potts model does not support (D-137 rule 5): clear errors naming the
-# Potts route, instead of MTK's generic methods (`compose(x, [y])` reached MTK's varargs
-# `compose` and recursed without end; the others were MethodErrors).
-
-const _COMPOSE_MSG = "compose: Potts models do not compose with other systems (D-039); embed an MTK system in a " *
-                     "Potts model with `@components`, and merge two Potts models with `extend` (`@extend`)"
-ModelingToolkitBase.compose(::PottsSystem, ::AbstractArray; kw...) = throw(ArgumentError(_COMPOSE_MSG))
-ModelingToolkitBase.compose(::ModelingToolkitBase.AbstractSystem, ::AbstractVector{<:PottsSystem}; kw...) =
-    throw(ArgumentError(_COMPOSE_MSG))
-ModelingToolkitBase.compose(::PottsSystem, ::AbstractVector{<:PottsSystem}; kw...) = throw(ArgumentError(_COMPOSE_MSG))
-ModelingToolkitBase.compose(::PottsSystem, ::ModelingToolkitBase.AbstractSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
-ModelingToolkitBase.compose(::ModelingToolkitBase.AbstractSystem, ::PottsSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
-ModelingToolkitBase.compose(::PottsSystem, ::PottsSystem; kw...) = throw(ArgumentError(_COMPOSE_MSG))
-
-const _EXTEND_MSG = "extend: a Potts model extends, and is extended by, only another Potts model (`extend(sys, base)`, " *
-                    "`@extend`); embed an MTK System in a Potts model with `@components`"
-ModelingToolkitBase.extend(::PottsSystem, ::ModelingToolkitBase.AbstractSystem; kw...) = throw(ArgumentError(_EXTEND_MSG))
-ModelingToolkitBase.extend(::ModelingToolkitBase.AbstractSystem, ::PottsSystem; kw...) = throw(ArgumentError(_EXTEND_MSG))
-
-_problem_msg(f) = "$f: a Potts model is not an ODE or jump system; build its problem with " *
-                  "`PottsProblem(sys, op, tspan)` and solve it with a CPM algorithm"
-const _AnyPottsSystem = Union{PottsSystem, CompiledPottsSystem}
-SciMLBase.ODEProblem(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
+# A compiled model is not an ODE or jump system either (the `PottsSystem` refusals: system.jl)
+SciMLBase.ODEProblem(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
     throw(ArgumentError(_problem_msg("ODEProblem")))
-SciMLBase.ODEProblem{iip}(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) where {iip} =
+SciMLBase.ODEProblem{iip}(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
-JumpProcesses.JumpProblem(::_AnyPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
+JumpProcesses.JumpProblem(::CompiledPottsSystem, op, tspan::Union{Nothing, Tuple}; kw...) =
     throw(ArgumentError(_problem_msg("JumpProblem")))
 
 """
@@ -189,7 +171,7 @@ that name as well. Checked whenever a `PottsSystem` is constructed (`@potts_mode
 """
 function _check_primed_names(sys::PottsSystem)
     names = Set{Symbol}()
-    for x in Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables), (o.var for o in getfield(sys, :observed))))
+    for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables), (o.lhs for o in _p(sys, :observed))))
         i = info(x)
         i === nothing && continue
         push!(names, i.name)
@@ -228,9 +210,9 @@ function _name_categories(sys::PottsSystem)
         old == what || throw(_category_clash(nameof(sys), n, what, old))
         return nothing
     end
-    foreach(k -> claim(k, "kind"), getfield(sys, :kinds))
-    foreach(g -> claim(g.name, "kind class"), getfield(sys, :kind_classes))
-    for (what, xs) in (("parameter", getfield(sys, :parameters)), ("variable", getfield(sys, :variables)))
+    foreach(k -> claim(k, "kind"), _p(sys, :kinds))
+    foreach(g -> claim(g.name, "kind class"), _p(sys, :kind_classes))
+    for (what, xs) in (("parameter", _p(sys, :parameters)), ("variable", _p(sys, :variables)))
         for x in xs
             i = info(x)
             i === nothing && continue
@@ -243,10 +225,10 @@ function _name_categories(sys::PottsSystem)
             end
         end
     end
-    foreach(o -> (i = info(o.var); i === nothing || claim(i.name, "observed quantity")), getfield(sys, :observed))
-    foreach(k -> k === :contact || claim(k, "relation"), keys(getfield(sys, :relations)))
-    foreach(r -> claim(r.name, "relationship"), getfield(sys, :relationships))
-    for c in getfield(sys, :components)
+    foreach(o -> (i = info(o.lhs); i === nothing || claim(i.name, "observed quantity")), _p(sys, :observed))
+    foreach(k -> k === :contact || claim(k, "relation"), keys(_p(sys, :relations)))
+    foreach(r -> claim(r.name, "relationship"), _p(sys, :relationships))
+    for c in _p(sys, :components)
         claim(c.name, "component")
         for u in Iterators.flatten((ModelingToolkitBase.unknowns(c.system), ModelingToolkitBase.parameters(c.system)))
             claim(Symbol(c.name, :₊, SymbolicIndexingInterface.getname(u)), "quantity of the component `$(c.name)`")
@@ -294,9 +276,9 @@ _target_key(u::Update) = (u.phase, string(u.eq.lhs))
 # at 1, so the extension's draws move past the base's to keep their streams independent.
 _draw_indices(xs) = (out = Int[]; foreach(x -> _walk_all(y -> (iscall(y) && operation(y) === random_uniform &&
     push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))), x), xs); out)
-_random_exprs(s::PottsSystem) = Any[(u.eq.rhs for u in getfield(s, :updates))..., (eq.rhs for eq in getfield(s, :equations))...,
-    (d.when for d in getfield(s, :divisions))..., (r for d in getfield(s, :divisions) for (_, r) in d.rules)..., (r.when for r in getfield(s, :link_rules))...,
-    (x for b in getfield(s, :discrete) for x in b.next)...]
+_random_exprs(s::PottsSystem) = Any[(u.eq.rhs for u in _p(s, :updates))..., (eq.rhs for eq in _p(s, :equations))...,
+    (d.when for d in _p(s, :divisions))..., (r for d in _p(s, :divisions) for (_, r) in d.rules)..., (r.when for r in _p(s, :link_rules))...,
+    (x for b in _p(s, :discrete) for x in b.next)...]
 function _renumber_draws(sys::PottsSystem, base::PottsSystem)
     mine = _draw_indices(_random_exprs(sys))
     theirs = _draw_indices(_random_exprs(base))
@@ -312,11 +294,9 @@ function _renumber_draws(sys::PottsSystem, base::PottsSystem)
         isempty(sub) ? x : Symbolics.substitute(x, sub; fold = Val(false))
     end
     m = _map_statements(shift, sys)
-    return _replace(sys; merge(m, (; sources = merge(getfield(sys, :sources), m.sources)))...)
+    return _replace(sys; merge(m, (; sources = merge(_p(sys, :sources), m.sources)))...)
 end
 
-"""`sys` with some fields replaced."""
-_replace(sys::PottsSystem; kw...) = PottsSystem(; (f => getfield(sys, f) for f in fieldnames(PottsSystem))..., kw...)
 
 """
     lookup(sys::PottsSystem, name::Symbol)
@@ -328,21 +308,21 @@ at the other site of a contact pair. `@extend` binds names with it.
 function lookup(sys::PottsSystem, name::Symbol)
     x = _lookup_primed(sys, name)
     x === nothing || return x
-    for x in Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables)))
+    for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables)))
         info(x).name === name && return x
     end
-    for o in getfield(sys, :observed)
-        info(o.var).name === name && return o.var
+    for o in _p(sys, :observed)
+        info(o.lhs).name === name && return Symbolics.wrap(o.lhs)
     end
     # a vector quantity: its components (tagged `vector = name`) in order (A-37)
-    comps = [x for x in Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables))) if get(info(x).options, :vector, nothing) === name]
+    comps = [x for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))) if get(info(x).options, :vector, nothing) === name]
     isempty(comps) || return QuantityVector(name, Num[Symbolics.wrap(x) for x in sort!(comps; by = x -> info(x).options.index)])
-    k = findfirst(==(name), getfield(sys, :kinds))
+    k = findfirst(==(name), _p(sys, :kinds))
     k === nothing || return k - 1
-    g = findfirst(h -> h.name === name, getfield(sys, :kind_classes))
-    g === nothing || return getfield(sys, :kind_classes)[g]
-    haskey(getfield(sys, :relations), name) && return RelationRef(name)
-    any(r -> r.name === name, getfield(sys, :relationships)) && return RelationshipRef(name)
+    g = findfirst(h -> h.name === name, _p(sys, :kind_classes))
+    g === nothing || return _p(sys, :kind_classes)[g]
+    haskey(_p(sys, :relations), name) && return RelationRef(name)
+    any(r -> r.name === name, _p(sys, :relationships)) && return RelationshipRef(name)
     throw(ArgumentError("$(nameof(sys)) has no parameter, variable, kind, kind class or relation `$name`"))
 end
 
@@ -356,5 +336,5 @@ function _lookup_primed(sys::PottsSystem, name::Symbol)
 end
 function _is_site_quantity(sys::PottsSystem, name::Symbol)
     return any(x -> (i = info(x); i !== nothing && i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
-        getfield(sys, :variables))
+        _p(sys, :variables))
 end

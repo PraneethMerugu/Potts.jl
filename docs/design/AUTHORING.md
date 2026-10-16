@@ -47,10 +47,10 @@ plot(sol, 100)                      # MakiePotts recipe
 ```
 
 `@potts_model` mirrors `@mtkmodel`: a block of sections that produce a
-`PottsSystem <: ModelingToolkitBase.AbstractSystem` (D-137: MTK's `equations`, `unknowns`,
-`parameters`, `observed`, metadata and `sys.x` namespacing work on it). Everything the macro does is also
-available as plain constructors (`PottsSystem(energies, equations, …; name)`); the macro
-is sugar.
+`PottsSystem <: ModelingToolkitBase.AbstractSystem` that holds a complete MTK `System`
+(W-lite LA, v3 §7.1: MTK's `equations`, `unknowns`, `parameters`, `observed` and `sys.x` read the
+inner System). Everything the macro does is also available as the plain constructor
+(`PottsSystem(; name, kinds, lattice, sweep, energies, equations, …)`); the macro is sugar.
 
 ---
 
@@ -742,7 +742,7 @@ MTK's `@extend`:
 - The base's kinds must come first in the extension's `@kinds`, which may add more (for
   example `wall[frozen]`).
 
-`extend(sys, base)` is the functional form. Quantities can also be read by name:
+`Potts.extend(sys, base)` is the functional form. Quantities can also be read by name:
 `sol[:volume]`, `sol[:c]`, `sol[:my_observed]`.
 
 ---

@@ -86,13 +86,13 @@ end
 """The distinct contact folds read by the statements of `sys`, sorted by name: `(name, relation, pred)`."""
 function _contact_folds(sys::PottsSystem)
     found = Dict{Symbol, Entity}()
-    xs = Any[(u.eq.rhs for u in getfield(sys, :updates))..., (u.eq.lhs for u in getfield(sys, :updates))...,
-        (eq.rhs for eq in getfield(sys, :equations))..., (d.when for d in getfield(sys, :divisions))...,
-        (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in getfield(sys, :link_rules))..., (o.expr for o in getfield(sys, :observed))...,
-        (e.expr for e in getfield(sys, :energies))..., (d.expr for d in getfield(sys, :drives))...,
-        (c.expr for c in getfield(sys, :constraints) if c.kind === :expr)..., getfield(sys, :sweep).temperature,
-        (x for b in getfield(sys, :discrete) for x in b.next)...]
+    xs = Any[(u.eq.rhs for u in _p(sys, :updates))..., (u.eq.lhs for u in _p(sys, :updates))...,
+        (eq.rhs for eq in _p(sys, :equations))..., (d.when for d in _p(sys, :divisions))...,
+        (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in _p(sys, :link_rules))..., (o.rhs for o in _p(sys, :observed))...,
+        (e.expr for e in _p(sys, :energies))..., (d.expr for d in _p(sys, :drives))...,
+        (c.expr for c in _p(sys, :constraints) if c.kind === :expr)..., _p(sys, :sweep).temperature,
+        (x for b in _p(sys, :discrete) for x in b.next)...]
     for x in xs
         _walk(x) do y
             i = info(y)
@@ -124,13 +124,13 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
     folds = _contact_folds(sys)
     isempty(folds) && return none
     haskey(relations, :contact_counts) && throw(ArgumentError("the relation name `contact_counts` is reserved"))
-    _walk(getfield(sys, :sweep).temperature) do y
+    _walk(_p(sys, :sweep).temperature) do y
         i = info(y)
         i !== nothing && i.role === :contact_count && throw(ArgumentError(
             "`count(… for _ in contacts)` is not available in the @sweep temperature: it is a cell quantity, exact " *
             "between sweeps, and the temperature is read during the sweep"))
     end
-    nk = length(getfield(sys, :kinds))
+    nk = length(_p(sys, :kinds))
     rad = 0
     trackers = Tuple{Symbol, Symbol, UInt64}[]
     for (name, rel, pred) in folds
@@ -167,7 +167,7 @@ without folds only returns its argument).
 function _with_contact_counts(c::CompiledPottsSystem, @nospecialize(relations::NamedTuple))
     ts = _contact_trackers(c)
     isempty(ts) && return relations
-    nk = length(getfield(c.sys, :kinds))
+    nk = length(_p(c.sys, :kinds))
     cc = CorePotts.ContactCounts(Tuple(CorePotts.ContactCount(n, _fold_spec(r, c.relations, c.contact_spec), m; kinds = nk)
                                        for (n, r, m) in ts))
     return merge(relations, (; contact_counts = cc))
@@ -194,12 +194,12 @@ _has_draw(x) = _has_any_op(x, _DRAW_OPS)
 function _has_bounded_draw(sys::PottsSystem)
     _may_have(sys, :bounded) || return false
     hit(x) = _has_any_op(x, _BOUNDED_DRAW_OPS)
-    any(u -> hit(u.eq.rhs), getfield(sys, :updates)) && return true
-    any(eq -> hit(eq.rhs), getfield(sys, :equations)) && return true
-    for d in getfield(sys, :divisions)
+    any(u -> hit(u.eq.rhs), _p(sys, :updates)) && return true
+    any(eq -> hit(eq.rhs), _p(sys, :equations)) && return true
+    for d in _p(sys, :divisions)
         hit(d.when) && return true
         any(((_, r),) -> !(r isa Split) && hit(r), d.rules) && return true
     end
-    any(r -> hit(r.when), getfield(sys, :link_rules)) && return true
-    return any(b -> any(hit, b.next), getfield(sys, :discrete))
+    any(r -> hit(r.when), _p(sys, :link_rules)) && return true
+    return any(b -> any(hit, b.next), _p(sys, :discrete))
 end

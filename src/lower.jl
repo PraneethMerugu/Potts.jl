@@ -297,11 +297,11 @@ _integrals(sys::PottsSystem; observed = false) = first(_integrals_folds(sys; obs
 function _integrals_folds(sys::PottsSystem; observed = false)
     out = Any[]
     folds = Vector{Pair{Symbol, Any}}[]
-    head = Any[(u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
-        (d.when for d in getfield(sys, :divisions))..., (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in getfield(sys, :link_rules))...]
-    tail = Any[getfield(sys, :sweep).temperature, (x for b in getfield(sys, :discrete) for x in b.next)...]
-    xs = Any[head..., (o.expr for o in getfield(sys, :observed))..., tail...]
+    head = Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
+        (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in _p(sys, :link_rules))...]
+    tail = Any[_p(sys, :sweep).temperature, (x for b in _p(sys, :discrete) for x in b.next)...]
+    xs = Any[head..., (o.rhs for o in _p(sys, :observed))..., tail...]
     # operands read by a statement other than `@observed`
     stored = Any[]
     for x in Any[head..., tail...]
@@ -329,9 +329,9 @@ function _integrals_folds(sys::PottsSystem; observed = false)
 end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
-_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in getfield(sys, :updates))..., (eq.rhs for eq in getfield(sys, :equations))...,
-    (d.when for d in getfield(sys, :divisions))..., (r for d in getfield(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-    (r.when for r in getfield(sys, :link_rules))..., (x for b in getfield(sys, :discrete) for x in b.next)...])
+_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
+    (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+    (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...])
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
     for x in xs

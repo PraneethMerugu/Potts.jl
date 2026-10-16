@@ -20,14 +20,14 @@ part of a model relates to ModelingToolkit; this section lists the functions it 
 
 The sweep's definition is visible to ModelingToolkit's generic tools.
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
-expressions, `Potts.drives(sys)` gives the `@drive` expressions, and MTK's
-`ModelingToolkitBase.constraints(sys)` gives the `@constraint` entries. Generic code detects
-a Potts model, and reads its sweep, with MTK's metadata API:
+expressions, `Potts.drives(sys)` gives the `@drive` expressions, and the payload's
+`constraints` property gives the `@constraint` entries. Generic code detects
+a Potts model, and reads its sweep, with MTK's metadata API on the model's inner System:
 
 ```julia
 using ModelingToolkitBase: getmetadata, hasmetadata
-hasmetadata(sys, Potts.PottsSweepSpec)               # true for every Potts model, false for a System
-spec = getmetadata(sys, Potts.PottsSweepSpec, nothing)
+hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)   # true for every Potts model, false for a plain System
+spec = getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing)
 spec.hamiltonian, spec.drives, spec.constraints, spec.temperature, spec.proposal
 ```
 

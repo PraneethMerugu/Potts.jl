@@ -13,7 +13,8 @@ claim is given in brackets, e.g. [C1].
 Potts.jl is built on ModelingToolkit. Every Potts model is a ModelingToolkit system: an
 `AbstractSystem` whose parameters, state variables, equations, observables, update rules
 and Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can
-inspect, index and complete. The continuous parts of a model, its cell- and model-scale
+inspect and index. The model wraps a complete ModelingToolkit `System`,
+`Potts.inner(sys)`, which MTK's tools take where they need a `System`. The continuous parts of a model, its cell- and model-scale
 ODEs, are ModelingToolkit systems compiled by `mtkcompile`; Potts.jl lowers the simplified
 equations into its batched kernels. Entity-local initialization equations are
 ModelingToolkit initialization systems, solved per cell by MTK's `InitializationProblem`.
@@ -77,13 +78,13 @@ nothing # hide
 
 ## A model is an `AbstractSystem` [C1, C2]
 
-A Potts model is a `PottsSystem`, a subtype of ModelingToolkit's `AbstractSystem`. It is
-not MTK's concrete `System`: a Potts model carries a lattice, kinds and a sweep, which a
-`System` has no place for.
+A Potts model is a `PottsSystem`, a subtype of ModelingToolkit's `AbstractSystem` that
+holds a complete MTK `System` (`Potts.inner(sys)`) for its quantities, equations and
+observed quantities. The lattice, kinds and sweep are the Potts layer around it.
 
 ```@example mtk
 const MTK = Potts.ModelingToolkitBase
-(sys isa MTK.AbstractSystem, sys isa MTK.System, MTK.iscomplete(complete(sys)))
+(sys isa MTK.AbstractSystem, sys isa MTK.System, Potts.inner(sys) isa MTK.System, MTK.iscomplete(Potts.inner(sys)))
 ```
 
 MTK's own accessors work on it and return Symbolics objects:
@@ -104,7 +105,10 @@ cell variable, a built-in, …) is its `potts_entity` metadata:
 (all(MTK.isparameter, MTK.parameters(sys)), MTK.isinput(kind), Potts.LatticePDE.get_potts_entity(kind))
 ```
 
-`MTK.unknowns`, `MTK.observed`, `nameof`, `complete` and `extend` work too.
+`MTK.unknowns`, `MTK.observed`, `MTK.initial_conditions` and `nameof` work too, and `sys.k` is
+the declared symbol `k`. Ask `Potts.inner(sys)` for any other MTK accessor (`iscomplete`,
+`full_equations`, the metadata, …). Potts models merge with `Potts.extend` (`@extend`) and
+compose with `Potts.compose`.
 SymbolicIndexingInterface (SII) indexes a problem, a solution and an integrator by name,
 including an algebraic variable that is not stored:
 
@@ -117,16 +121,16 @@ sol = solve(prob, SequentialCPM(); saveat = 1)
 ## The Hamiltonian as Symbolics expressions [C3]
 
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
-expressions; `Potts.drives(sys)` and `MTK.constraints(sys)` give the drives and the
-constraints. Generic code reads the whole sweep definition through MTK's metadata API:
+expressions; `Potts.drives(sys)` gives the drives, and the sweep payload's `constraints`
+gives the constraints. Generic code reads the whole sweep definition through MTK's metadata API:
 
 ```@example mtk
 Potts.hamiltonian(sys)
 ```
 
 ```@example mtk
-spec = MTK.getmetadata(sys, Potts.PottsSweepSpec, nothing)
-(MTK.hasmetadata(sys, Potts.PottsSweepSpec), MTK.hasmetadata(decay, Potts.PottsSweepSpec),
+spec = MTK.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing)
+(MTK.hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec), MTK.hasmetadata(decay, Potts.PottsSweepSpec),
  isequal(spec.hamiltonian, Potts.hamiltonian(sys)))
 ```
 

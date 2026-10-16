@@ -97,9 +97,9 @@ _site_env(T, i, relname; mcs = nothing, key = nothing, bc = nothing) =
 # `nothing` or `(low, high)` (each `Dirichlet` or `NoFlux`); `nothing` without faces, so the
 # generated code of a model without them is today's.
 function _face_bcs(c::CompiledPottsSystem)
-    faces = [b for b in getfield(c.sys, :boundaries) if b.axis != 0]
+    faces = [b for b in _p(c.sys, :boundaries) if b.axis != 0]
     isempty(faces) && return nothing
-    N = length(getfield(c.sys, :lattice).dims)
+    N = length(_p(c.sys, :lattice).dims)
     out = Dict{Symbol, Vector{Any}}()
     for b in faces
         axes = get!(() -> Any[nothing for _ in 1:N], out, info(b.field).name)
@@ -114,7 +114,7 @@ end
 const _FACES = Base.ScopedValues.ScopedValue{Any}(nothing)
 _with_faces(f, c::CompiledPottsSystem) =
     Base.ScopedValues.with(f, _FACES => _face_bcs(c), _EULER_FULL => c.euler_full_column, _PIECES_HEX => c.pieces_hex,
-        _LATTICE_DIMS => Tuple(getfield(c.sys, :lattice).dims))
+        _LATTICE_DIMS => Tuple(_p(c.sys, :lattice).dims))
 
 # The column `euler(; adjacency = :full)` reads in the model being generated: `:euler` on a
 # hexagonal lattice (one self-dual adjacency, D-192 Q4), else `:euler_full`
@@ -133,7 +133,7 @@ _pieces_column(name::Symbol) = !_PIECES_HEX[] ? name : name === :pieces_full ? :
 # by each `sites(pred) => Dirichlet(value)` whose `pred` holds at `i` (a later entry wins), or
 # `nothing` when the field has no mask.
 function _clamp_function(c::CompiledPottsSystem, T, name::Symbol)
-    masks = [b for b in getfield(c.sys, :boundaries) if b.axis == 0 && info(b.field).name === name]
+    masks = [b for b in _p(c.sys, :boundaries) if b.axis == 0 && info(b.field).name === name]
     isempty(masks) && return nothing
     env = _site_env(T, :i, c.gather_names; mcs = :mcs, key = :key)
     body = [:($(lower(b.mask, env)) && (v = $T($(lower(b.value, env))))) for b in masks]
@@ -454,7 +454,7 @@ function _oncopy_after(c::CompiledPottsSystem, T, rn)
     vals = Any[]
     read = Set{Symbol}(n for E in Any[last.(c.cell_terms)..., c.site_terms..., values(c.contact_terms)...]
                        for (r, n) in _uses(E) if r in SCOPES)
-    for x in getfield(c.sys, :variables)                         # `commit!` resets these before the writes
+    for x in _p(c.sys, :variables)                         # `commit!` resets these before the writes
         i = info(x)
         (i.role in (:site, :field) && i.name in read && get(i.options, :clear_on_ownership_change, false) === true) || continue
         after[:target][_unwrap(x)] = _reset_value(T, i.default)
@@ -531,7 +531,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     c.uses_clusters && push!(body, :(CorePotts.commit_cluster_volume!(st.cell, prop)))
     # `clear_on_ownership_change`: the target's value resets to the default, before the
     # on-copy writes (which may set it again)
-    for x in getfield(c.sys, :variables)
+    for x in _p(c.sys, :variables)
         i = info(x)
         get(i.options, :clear_on_ownership_change, false) === true || continue
         v = _reset_value(T, i.default)
@@ -591,7 +591,7 @@ _is_global_veto(k::Constraint) = (code = _connectivity_code(k); code !== nothing
 # `(who, rule)` for each
 function _inline_globals(c::CompiledPottsSystem)
     out = Tuple{Symbol, Global}[]
-    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., getfield(c.sys, :sweep).temperature]
+    xs = Any[c.drive, (k.expr for k in c.constraints if k.kind === :expr)..., _p(c.sys, :sweep).temperature]
     for x in xs
         x === nothing && continue
         _walk(x) do y
@@ -660,7 +660,7 @@ end
 # gaining and losing cells and combined (`combine`, default `min`); the medium never
 # contributes (CompuCell3D/Morpheus convention).
 function _temperature_expr(c::CompiledPottsSystem, T)
-    sw = getfield(c.sys, :sweep)
+    sw = _p(c.sys, :sweep)
     rn = c.gather_names
     if _observed_scope(sw.temperature) === :cell
         tn = lower(sw.temperature, _cell_env(T, :new, rn; kind = :k_new))
@@ -725,8 +725,8 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
 """The model's MCS phase order (D-145): its `@schedule` placed, or the default order."""
-_phase_order(sys::PottsSystem) = isempty(getfield(sys, :schedule)) ? _default_order(_convert_names(sys)) :
-                                  _placed_schedule(getfield(sys, :schedule), _convert_names(sys))
+_phase_order(sys::PottsSystem) = isempty(_p(sys, :schedule)) ? _default_order(_convert_names(sys)) :
+                                  _placed_schedule(_p(sys, :schedule), _convert_names(sys))
 
 # The phases, and the last cell update phase with the columns it writes and its expression
 # (`(; phase, writes, expr)`, or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
@@ -758,26 +758,26 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     ints = _integrals(s)
     all_ints = Set{Int}(eachindex(ints))
     pde(eq) = info(arguments(_unwrap(eq.lhs))[1]).role in (:field, :site)
-    hasdiv = !isempty(getfield(s, :divisions))
+    hasdiv = !isempty(_p(s, :divisions))
     # what each non-block entry reads (the uncompiled ticks: the compiled ones read their
     # population folds through slots)
     reads = Dict{Symbol, Vector{Int}}(n => Int[] for n in order)
-    reads[:fields] = _integrals_read(Any[eq.rhs for eq in getfield(s, :equations) if pde(eq)], ints)
-    reads[:components] = _integrals_read(Any[(eq.rhs for eq in getfield(s, :equations) if !pde(eq))...,
-            (r.when for r in getfield(s, :link_rules))..., (x for b in getfield(s, :discrete) for x in b.next)...], ints)
-    reads[:sweep] = _integrals_read(Any[getfield(s, :sweep).temperature], ints)
-    hasdiv && (reads[:lifecycle] = _integrals_read(Any[(d.when for d in getfield(s, :divisions))...,
-            (r for d in getfield(s, :divisions) for (_, r) in d.rules if !(r isa Split))...], ints))
+    reads[:fields] = _integrals_read(Any[eq.rhs for eq in _p(s, :equations) if pde(eq)], ints)
+    reads[:components] = _integrals_read(Any[(eq.rhs for eq in _p(s, :equations) if !pde(eq))...,
+            (r.when for r in _p(s, :link_rules))..., (x for b in _p(s, :discrete) for x in b.next)...], ints)
+    reads[:sweep] = _integrals_read(Any[_p(s, :sweep).temperature], ints)
+    hasdiv && (reads[:lifecycle] = _integrals_read(Any[(d.when for d in _p(s, :divisions))...,
+            (r for d in _p(s, :divisions) for (_, r) in d.rules if !(r isa Split))...], ints))
     # a `@convert` pass reads the integrals in its expressions, and moves σ (R8, D-233)
-    convs = Dict{Symbol, ConvertSpec}(v.name => v for v in getfield(s, :converts))
+    convs = Dict{Symbol, ConvertSpec}(v.name => v for v in _p(s, :converts))
     for (n, v) in convs
         reads[n] = _integrals_read(_convert_exprs(v), ints)
     end
     blocks = (:before_mcs, :after_mcs)
-    block_reads(n) = _integrals_read(Any[u.eq.rhs for u in getfield(s, :updates) if u.phase === n], ints)
+    block_reads(n) = _integrals_read(Any[u.eq.rhs for u in _p(s, :updates) if u.phase === n], ints)
     # an operand's reads include those of its hoisted folds
     operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
-    written(phase) = Set{Symbol}(_update_name(u) for u in getfield(s, :updates) if u.phase === phase)
+    written(phase) = Set{Symbol}(_update_name(u) for u in _p(s, :updates) if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
     moves(n) = n === :sweep || (n === :lifecycle && hasdiv) || haskey(convs, n)
     # the entries after position k up to the next σ-moving one (that one included) or `end_mcs`
@@ -870,13 +870,13 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     # energy snapshots (D-041): after the before-MCS updates, constant during the sweep
     snapshots = isempty(c.energy_snapshots) ? () : (_slots_phase(T, c.energy_snapshots, rn),)
     # fields after the synchronous updates (MTK equations advance with the MCS clock)
-    dt = getfield(c.sys, :sweep).mcs_duration
+    dt = _p(c.sys, :sweep).mcs_duration
     bcs = _face_bcs(c)
     for (x, rate) in c.fields
         name = info(x).name
         f = _rgf(:((st, p, ctx, key, mcs, i, c) -> $(lower(rate, _site_env(T, :i, rn; mcs = :mcs, key = :key, bc = bcs)))))
         solver = spec.resolved[name]
-        sub = _auto_substeps(x, rate, values, dt, getfield(c.sys, :lattice), solver.substeps)
+        sub = _auto_substeps(x, rate, values, dt, _p(c.sys, :lattice), solver.substeps)
         lowerclip = solver.lower
         push!(groups[:fields], CorePotts.FieldStep((:site, name) => (:site, Symbol(name, :__next)), f;
             dt = T(dt), substeps = sub, lower = lowerclip === nothing ? nothing : T(lowerclip),
@@ -913,11 +913,11 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     finish = groups[:end_mcs]
     append!(finish, boundary)
     for (n, _) in sort!(collect(_history_depths(c.sys)); by = first)
-        scope = any(x -> info(x).name === n && info(x).role === :model, getfield(c.sys, :variables)) ? :model : :site
+        scope = any(x -> info(x).name === n && info(x).role === :model, _p(c.sys, :variables)) ? :model : :site
         push!(finish, CorePotts.HistoryPush(n => (scope, n)))
     end
     # the `@convert` passes (R8, D-233), compiled last (a model without them compiles as before)
-    for v in getfield(s, :converts)
+    for v in _p(s, :converts)
         push!(groups[v.name], _convert_pass(c, T, v))
     end
     # the refreshes only a non-default order needs (empty in the default order)
@@ -959,7 +959,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     extra = Any[(ph for (_, v) in sort!(collect(prerefresh); by = first) for ph in v)...]
     before = Any[groups[:before_mcs]..., snapshots...]
     after = Any[postsweep..., groups[:after_mcs]..., groups[:fields]..., comps..., groups[:operators]...,
-        (ph for v in getfield(s, :converts) for ph in (groups[v.name]..., postconv[v.name]...))..., postlife..., extra...]
+        (ph for v in _p(s, :converts) for ph in (groups[v.name]..., postconv[v.name]...))..., postlife..., extra...]
     phases = CorePotts.Phases(; before_mcs = Tuple(before), after_mcs = Tuple(after), end_mcs = Tuple(finish),
         at_init = (clamps..., boundary..., snapshots...), mcs = Tuple(mcs))
     return phases, cand
@@ -1855,7 +1855,7 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
     tick = _tick_scratch(c) ? Set{Symbol}(info(x).name for b in c.discrete if b.scope === :cell for x in b.slots) :
            Set{Symbol}()
     inits = Any[]
-    for x in getfield(c.sys, :variables)
+    for x in _p(c.sys, :variables)
         i = info(x)
         i.role === :cell || continue
         val = get(i.options, :reference, false) === true ? :(Int32($(Int(i.default)))) :
@@ -1930,7 +1930,7 @@ _reset_value(T, d) = (d isa Real && !_is_symbolic(d)) ? T(d) : zero(T)
 
 function _ownership_hook(c::CompiledPottsSystem, T)
     resets = Any[]
-    for x in getfield(c.sys, :variables)
+    for x in _p(c.sys, :variables)
         i = info(x)
         (i.role in (:site, :field) && get(i.options, :clear_on_ownership_change, false) === true) || continue
         v = _reset_value(T, i.default)
@@ -1947,7 +1947,7 @@ end
 # dead referents are counted, each one slot of `st.model[REF_COUNTS]`, and the slot of
 # `sibling` scans that found several members
 _term_label(c::CompiledPottsSystem, kinds) =
-    isempty(kinds) ? "@energy cells" : "@energy cells($(join((getfield(c.sys, :kinds)[k + 1] for k in kinds), ", ")))"
+    isempty(kinds) ? "@energy cells" : "@energy cells($(join((_p(c.sys, :kinds)[k + 1] for k in kinds), ", ")))"
 function _update_label(u)
     l = _unwrap(u.eq.lhs)
     i = info(l)
@@ -1962,7 +1962,7 @@ function _ref_count_labels(c::CompiledPottsSystem)
     end
     push!(labels, _SIBLING_LABEL)
     # `@convert` passes (D-233 ruling 6): their dereferences of dead referents, and their NaN p
-    for v in getfield(c.sys, :converts)
+    for v in _p(c.sys, :converts)
         push!(labels, _convert_label(v), _convert_nan_label(v))
     end
     return unique!(labels)
@@ -1972,7 +1972,7 @@ _convert_nan_label(v::ConvertSpec) = "@convert $(v.name): p was NaN (it converts
 _ref_count_slots(c::CompiledPottsSystem) = Dict(l => j for (j, l) in enumerate(_ref_count_labels(c)))
 
 # The model's `CellRef` columns, in declaration order (R6)
-_ref_columns(c::CompiledPottsSystem) = Symbol[info(x).name for x in getfield(c.sys, :variables) if _is_ref_var(x)]
+_ref_columns(c::CompiledPottsSystem) = Symbol[info(x).name for x in _p(c.sys, :variables) if _is_ref_var(x)]
 
 # D-066 item 5 (a): `Lifecycle.release`, the reset of a live cell's references to dead cells
 # (at every event round, before any id is allocated); `nothing` for a model without references

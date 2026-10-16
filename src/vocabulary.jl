@@ -1159,7 +1159,7 @@ function _bind_edge_scope(vars, rels, bases = ())
     # D-127: a payload column belongs to one relationship, so a re-declaration inherits it
     inherited = Dict{Symbol, Symbol}()
     from = Dict{Symbol, Symbol}()                      # edge variable → the base declaring it
-    for b in bases, (n, r) in _edge_relationships(getfield(b, :variables))
+    for b in bases, (n, r) in _edge_relationships(_p(b, :variables))
         old = get!(inherited, n, r)
         old === r || throw(ArgumentError("bases `$(from[n])` and `$(nameof(b))` both declare edge variable " *
             "`$n`, on `$old` and `$r`; rename one (an edge variable belongs to one relationship)"))
@@ -1472,10 +1472,8 @@ end
 
 """`@observed name ~ expr`: a derived quantity, evaluated on saved states (`sol[name]`)."""
 observed_var(name::Symbol) = _tag(_sym(name), Entity(:observed, name, nothing, (;)))
-struct ObservedEq
-    var::Any
-    expr::Any
-end
+"""An `@observed` entry: the MTK observed equation `name ~ expr` (it is also the inner System's observed equation)."""
+_observed_eq(var, expr) = Equation(_unwrap(var), _unwrap(expr))
 
 # ---------------------------------------------------------------------------------------
 # Field boundaries (`@boundary`, D-145) and the phase order (`@schedule`)

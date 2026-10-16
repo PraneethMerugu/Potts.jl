@@ -290,26 +290,35 @@ CorePotts. Full ModelingToolkit (AGPL) is not a dependency or an extension (D-25
 
 ### 2.1 `PottsSystem <: ModelingToolkitBase.AbstractSystem`
 
-(P6.0o, D-137.) Potts fields: `name`, `kinds`, `frozen_kinds`, `kind_classes`, `lattice`,
-`parameters` (MTK `@parameters`; kind tables are array parameters), `variables` (scope in
-their `potts_entity` metadata, `Potts.Entity`: cell, model, site, field, edge; built-ins are
-MTK inputs `volume(t)` with the entity `Builtin(:volume)`),
-`relations`, `energies::Vector{EnergyTerm}`, `drives`, `constraints`, `updates`,
-`equations`, `divisions`, `relationships`, `link_rules`, `observed::Vector{ObservedEq}`,
-`components` (`ComponentSpec`s), `discrete` (bound clocked components), `sweep`,
-`structural`, `sources` (source locations).
+(P6.0o, D-137; W-lite LA, v3 §7.1, C4.) Four fields: `name`, `inner` (a complete, flattened
+ModelingToolkitBase `System`: the declared parameters and variables, the `@equations`,
+`@initialization_equations`, `@observed` and `@components`; its parent is the unflattened
+hierarchy), `fields` (the field `PDESystem`, or `nothing` until the field compiler fills it)
+and `part::PottsPart`: `kinds`, `frozen_kinds`, `kind_classes`, `lattice`, `parameters` (MTK
+`@parameters`; kind tables are array parameters), `variables` (scope in their `potts_entity`
+metadata, `Potts.Entity`; built-ins are MTK inputs `volume(t)` with the entity
+`Builtin(:volume)`), `relations`, `energies`, `drives`, `constraints`, `updates`, `equations`,
+`initialization_eqs`, `divisions`, `converts`, `relationships`, `link_rules`,
+`observed::Vector{Equation}`, `components`, `discrete`, `sweep`, `boundaries`, `bcs`
+(`@bcs`, stored and printed), `schedule`, `structural`, `sources`, `metadata` (Potts' build
+record, not MTK metadata) and `bindings` (`FieldBinding`s, `(path, name)`).
 
-MTK mirror fields, read by MTK's generic accessors: `eqs`, `unknowns`, `ps` (the same
-vectors as `equations`, `variables`, `parameters`), `systems` (the component systems, by
-component name), `metadata`, `namespacing`, `complete`. The constructor derives the four
-mirrors, so they cannot disagree with the Potts fields; `checks = false` (positional
-constructor) skips the construction checks. The `observed` field keeps the `ObservedEq`s,
-so `observed`, `getvar` (behind `sys.x`) and `propertynames` are Potts methods.
+`Potts.wrap(name, sys, fields, part)` builds one: it completes an uncompleted `sys`, refuses
+a complete system that still has subsystems and a name mismatch, and stores the
+`PottsSweepSpec` as the inner System's metadata. The keyword constructor builds the inner
+System from the part (`complete(…; allow_parameter_eqs = true)`: a component parameter bound
+in `@equations` is an equation with no unknowns). The compile pipeline's rewrites
+(`_replace`) change the part and keep the authored inner System. `Potts.extend` merges two
+parts and rebuilds; `Potts.compose` composes the inner Systems through `get_parent`.
 
-`sys.x` is MTK's `getproperty`: the namespaced symbolic of a declared quantity or a
-component, an `ArgumentError` for anything else. Internal code therefore reads fields with
-`getfield` (or `Potts.lattice`, `Potts.parameters`, `Potts.variables`); the P6.0o
-acceptance file scans `src/` and `ext/` for property reads.
+Owned methods (exactly 15, pinned by `test/wlite.jl`): `getproperty` and `show` (text/plain);
+`equations`, `unknowns`, `parameters`, `observed`, `initial_conditions`, `bindings`,
+`independent_variables`; SII `symbolic_container` plus `parameter_index` (2), `is_parameter`
+(`ParameterIndex`), `observed`, `parameter_observed`. Besides them: `mtkcompile` (the CPM
+compile entry) and the 48 generated problem-constructor refusals. Every other MTKBase
+function is a `FieldError`/`MethodError` on a `PottsSystem`, except `iscomplete` (false; R-1).
+`sys.x` is MTK's `getproperty` on the inner System. Internal code reads payload fields with
+`_p(sys, :f)` and the container with `getfield`; `test/wlite.jl` scans `src/` for property reads.
 
 Composition: `extend` (and `@extend`) between Potts models and `@components` for MTK
 systems. `complete`, `extend` and `show` are Potts'; `compose`, `ODEProblem`/`JumpProblem`

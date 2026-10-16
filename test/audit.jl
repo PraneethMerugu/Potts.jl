@@ -169,7 +169,7 @@ end
 end
 
 @testset "A-32 draws stay independent under extend" begin
-    m = extend(AuditDrawExt(; name = :e), AuditDrawBase(; name = :b))
+    m = Potts.extend(AuditDrawExt(; name = :e), AuditDrawBase(; name = :b))
     σ = zeros(Int32, 8, 8); σ[2:3, 2:3] .= 1
     u = solve(PottsProblem(m, [ownership => σ, kind => [1]], (0, 3)), SequentialCPM()).u[end]
     @test u.model.x[1] != u.model.y[1]

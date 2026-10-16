@@ -238,7 +238,7 @@ end
     # an operating-point value for an algebraic variable is the condition `y ~ value` (D-170):
     # here its definition reads only the fixed `x`, so it overdetermines, by name and by symbol
     @test alg_error(() -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`", "algebraic", "overdetermined")
-    @test alg_error(() -> PottsProblem(ok, alg_op(complete(ok).y => 1.0), (0, 1)), "`y`", "overdetermined")
+    @test alg_error(() -> PottsProblem(ok, alg_op(ok.y => 1.0), (0, 1)), "`y`", "overdetermined")
     @test PottsProblem(ok, alg_op(:x => 2.0), (0, 1)) isa PottsProblem               # control
     # every published-model-free model still compiles without templates
     c = mtkcompile(alg_model(quote end))

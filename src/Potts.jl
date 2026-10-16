@@ -11,7 +11,6 @@ module Potts
 # exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ADTypes: AutoFiniteDiff
-using ConstructionBase: ConstructionBase
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
 # the compile workload's `@potts_model` body names these (precompile.jl)
@@ -20,7 +19,7 @@ using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticePDE: LatticePDE, PottsEntity, Δ, at, at2, ismember
 using LinearAlgebra: Symmetric, eigen, svdvals
-using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, extend, complete
+using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
@@ -43,7 +42,7 @@ const D = ModelingToolkitBase.D_nounits
 for name in names(CorePotts)
     (name === :CorePotts || !Base.isexported(CorePotts, name)) || @eval export $name
 end
-export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile, extend, complete,
+export @potts_model, @named, PottsSystem, CompiledPottsSystem, mtkcompile,
     total_energy, energy_change, generated_code, parameters, variables, observe, Adaptive, ExplicitEuler, RK4
 
 include("seeds.jl")
@@ -95,8 +94,11 @@ public KindClass
 # `@boundary` conditions (D-145), bound inside model bodies like the rest of `Potts.DSL`
 public Dirichlet, NoFlux
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
-# read with `ModelingToolkitBase.getmetadata(sys, Potts.PottsSweepSpec, default)`
+# read with `ModelingToolkitBase.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
+# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap,
+# compose and extend; the field bindings
+public inner, fields, wrap, compose, extend, PottsPart, FieldBinding, resolve
 # the model's cell and model ODEs as the MTK systems `mtkcompile` produced
 public ode_system
 # the model's cell and model initialization as MTK systems (`@initialization_equations`, D-170)

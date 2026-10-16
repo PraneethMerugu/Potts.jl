@@ -254,17 +254,17 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :random_uniform, :gather, :population,   # operators whose `get_unit` rules it defines
     :_check_units,        # the unit-check hook `mtkcompile` calls, defined by the extension
     :_describe,           # statement labels for unit error messages
+    :_p,                  # reads a PottsSystem's payload field (W-lite part, C4)
     # --- PottsDynamicQuantitiesExt -> MTK
     :get_unit,            # MTK's unit-inference function the extension extends; not public
     # --- Potts -> MTKBase: discrete components (P6.0k). The clock of a compiled discrete
     # system is only available as this variable metadata; no public accessor exists.
     :VariableTimeDomain,  # metadata key holding a discrete variable's clock
     :IntegerSequence,     # the clock of `ShiftIndex(t, 0)` (one tick per step, no period)
-    # --- Potts -> MTKBase: `PottsSystem <: AbstractSystem` (D-137). `sys.x` is MTK's
-    # `getproperty`, which calls `getvar`; PottsSystem's `observed` field holds Potts'
-    # `ObservedEq`s, so it needs its own `getvar`. `extend` drops MTK's mutable cache entry
-    # from the merged metadata, as MTK's own `extend` does.
-    :getvar, :MutableCacheKey,
+    # --- Potts -> MTKBase: the W-lite container (C4, v3 §7.1). MTKBase's
+    # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the container,
+    # which has no index cache; the owned method forwards it to the inner System instead.
+    :ParameterIndex,
 )
 # Names imported with `using M: x` that are not public in `M`.
 const POTTS_NONPUBLIC_EXPLICIT = (

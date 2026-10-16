@@ -205,6 +205,10 @@ u = solve(prob, SequentialCPM()).u[end]
 `Δ(c)` reads the faces wherever the model uses it: equations, site updates, site energies,
 drives, constraints and `@observed`.
 
+`@bcs` takes raw MTK boundary conditions, one per line (for example
+`c ~ masked(kind == border, 0.0)`). In this release they are stored in the model and printed
+with it; they do not change the run. The field compiler reads them in a later release.
+
 ## Components
 
 `@components` adds ModelingToolkit systems to the model:

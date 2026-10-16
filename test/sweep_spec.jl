@@ -36,22 +36,21 @@ end
     @test map(typeof ∘ last, H) == map(typeof ∘ last, Hc)
     @test isequal(Potts.drives(sys), Potts.drives(cs))
     # the payload of the compiled system is the authored one's
-    spec, specc = getmetadata(sys, Potts.PottsSweepSpec, nothing), getmetadata(cs, Potts.PottsSweepSpec, nothing)
+    spec, specc = getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing), getmetadata(cs, Potts.PottsSweepSpec, nothing)
     @test isequal(spec.hamiltonian, specc.hamiltonian) && isequal(specc.hamiltonian, H)
     @test isequal(spec.drives, specc.drives) && isequal(spec.temperature, specc.temperature)
     @test spec.proposal == specc.proposal
     # the term reads the component's coupled parameter and observed quantity as written
     names = Set(Symbol(v) for v in Potts.Symbolics.get_variables(Potts.Symbolics.unwrap(last(H[1]))))
     @test any(n -> occursin("ss_r", string(n)), names) && any(n -> occursin("ss_y", string(n)), names)
-    # a compiled system is read-only; other keys are read from `.sys`
+    # a compiled system is read-only; it answers the authored inner System's keys
     @test_throws ArgumentError setmetadata(cs, SsOtherKey, 1)
     @test_throws ArgumentError setmetadata(cs, Potts.PottsSweepSpec, spec)
-    @test_throws ArgumentError setmetadata(sys, Potts.PottsSweepSpec, spec)
-    cs2 = mtkcompile(setmetadata(sys, SsOtherKey, 7))
-    @test getmetadata(cs2, SsOtherKey, nothing) == 7 && hasmetadata(cs2, SsOtherKey)
     @test !hasmetadata(cs, SsOtherKey) && hasmetadata(cs, Potts.PottsSweepSpec)
-    # derived on read: the key is never stored in the raw metadata
-    @test !any(kv -> kv[1] === Potts.PottsSweepSpec, getfield(sys, :metadata))
+    @test getmetadata(cs, SsOtherKey, :none) === :none
+    # the payload is the inner System's metadata, never Potts' own build record
+    @test hasmetadata(Potts.inner(sys), Potts.PottsSweepSpec)
+    @test !any(kv -> kv[1] === Potts.PottsSweepSpec, Potts._p(sys, :metadata))
 end
 
 # `updates` (D-164, P6.0bp review H1): a contact fold prints as the fold it stands for,
@@ -90,12 +89,12 @@ ss_eq_names(eq) = union(ss_names(eq.lhs), ss_names(eq.rhs))
     f = only(filter(u -> :f in ss_names(u.eq.lhs), U))
     @test occursin("count_contacts(contact_partner, true, contact)", string(f.eq.rhs))
     @test occursin("count_contacts(contact_partner, kind′(t) == 0, contact)", string(f.eq.rhs))
-    # isequal-stable across the plain, completed and compiled forms
-    for V in (Potts.updates(complete(sys)), Potts.updates(mtkcompile(sys)), Potts.updates(sys))
+    # isequal-stable across the plain and compiled forms
+    for V in (Potts.updates(mtkcompile(sys)), Potts.updates(sys))
         @test length(V) == length(U) && all(i -> isequal(V[i].eq, U[i].eq), eachindex(U, V))
     end
     # negative control: the stored statements still name the trackers, which this check catches
-    raw = [u.eq for u in getfield(sys, :updates)]
+    raw = [u.eq for u in Potts._p(sys, :updates)]
     @test any(eq -> any(n -> startswith(string(n), "contacts_"), ss_eq_names(eq)), raw)
     @test any(eq -> !isempty(setdiff(ss_eq_names(eq), allowed)), raw)
 end

@@ -79,7 +79,7 @@ function _init_located(f, sys::PottsSystem, eq)
     catch e
         e isa Union{ArgumentError, ErrorException} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        ln = get(getfield(sys, :sources), eq, nothing)
+        ln = get(_p(sys, :sources), eq, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         throw(ArgumentError("$(e.msg)\n  in @initialization_equations $eq$loc"))
     end
@@ -92,9 +92,9 @@ has none (every published model), which costs nothing.
 """
 function _compile_initialization(sys::PottsSystem)
     out = Dict{Symbol, _InitScope}()
-    eqs = getfield(sys, :initialization_eqs)
+    eqs = _p(sys, :initialization_eqs)
     isempty(eqs) && return out
-    defs = Dict{Symbol, Any}(info(o.var).name => _unwrap(o.expr) for o in _algebraic_observed(sys))
+    defs = Dict{Symbol, Any}(info(o.lhs).name => _unwrap(o.rhs) for o in _algebraic_observed(sys))
     rates = _init_rates(sys)
     byscope = Dict{Symbol, Vector{Tuple{Equation, Equation, Equation}}}()
     for eq in eqs
@@ -121,7 +121,7 @@ end
 # `mtkcompile` (odes.jl)
 function _init_rates(sys::PottsSystem)
     rates = Dict{Symbol, Tuple{Any, Any}}()
-    for eq in getfield(sys, :equations)
+    for eq in _p(sys, :equations)
         l = _unwrap(eq.lhs)
         _is_derivative(l) || continue
         x = arguments(l)[1]
@@ -283,7 +283,7 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
     params = Any[]
     inputs = Dict{Any, Any}()
     ics = Dict{Any, Any}()
-    taken = Set{Symbol}(info(x).name for x in Iterators.flatten((getfield(sys, :parameters), getfield(sys, :variables))))
+    taken = Set{Symbol}(info(x).name for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))))
     function input(y)
         haskey(inputs, y) && return
         i = _kind_read(y) ? nothing : info(y)
@@ -349,7 +349,7 @@ model's conditions first, then each cell's. `cell` and `model` are the state's c
 function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model, pvals)
     sys = c.sys
     alg = _algebraic_observed(sys)
-    conds = isempty(alg) ? Any[] : Any[o for o in alg if haskey(opd, _unwrap(o.var))]
+    conds = isempty(alg) ? Any[] : Any[o for o in alg if haskey(opd, _unwrap(o.lhs))]
     isempty(c.initialization) && isempty(conds) && return nothing
     volume = zeros(Float64, ncell)
     for l in σ
@@ -358,7 +358,7 @@ function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model
     builtins = (; volume, id = Float64.(1:ncell), kind = Float64.(kinds))
     for scope in (:model, :cell)
         s = get(c.initialization, scope, nothing)
-        cs = Any[o for o in conds if info(o.var).options.scope === scope]
+        cs = Any[o for o in conds if info(o.lhs).options.scope === scope]
         s === nothing && isempty(cs) && continue
         scope === :cell && ncell == 0 && continue
         _initialize_scope!(c, scope, s, cs, opd, builtins, scope === :cell ? ncell : 1, cell, model, pvals)
@@ -376,24 +376,24 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     # an operating-point value of an algebraic variable `y`: the condition `definition ~ value`
     values = Any[]
     for o in conds
-        name = info(o.var).name
-        what = "the operating-point value of the algebraic variable `$name` (the condition `$name ~ value`, `$name ~ $(o.expr)`)"
-        _check_init_reads(o.expr, what)
-        v = _evaluate(opd[_unwrap(o.var)], pvals, "the operating-point value of `$name`")
+        name = info(o.lhs).name
+        what = "the operating-point value of the algebraic variable `$name` (the condition `$name ~ value`, `$name ~ $(o.rhs)`)"
+        _check_init_reads(o.rhs, what)
+        v = _evaluate(opd[_unwrap(o.lhs)], pvals, "the operating-point value of `$name`")
         v isa AbstractArray ? (length(v) == n || throw(ArgumentError("$(length(v)) values of `$name` for $n entities"))) :
         v isa Real || throw(ArgumentError("the operating-point value of `$name`: a number or one number per cell; got $(repr(v))"))
         push!(values, v)
     end
-    exprs = Any[eqs; [o.expr for o in conds]]
+    exprs = Any[eqs; [o.rhs for o in conds]]
     vars = _scope_vars(exprs, scope)
     # fixed: a written value or an operating-point value, read from the declaration
-    declared = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in getfield(sys, :variables))
+    declared = Dict{Symbol, Any}(info(x).name => _unwrap(x) for x in _p(sys, :variables))
     fixed(x) = (d = get(declared, info(x).name, _unwrap(x)); haskey(opd, d) || _written(d))
     free = Any[x for x in vars if !fixed(x)]
     # the count, by a matching of conditions to free variables: names what is over- or
     # underdetermined (MTK would refuse it too, `fully_determined`, without naming it)
-    rows = [(; text = i <= length(eqs) ? "`$(authored[i])`" : "the operating-point value of the algebraic variable `$(info(conds[i - length(eqs)].var).name)`",
-                label = i <= length(eqs) ? nothing : info(conds[i - length(eqs)].var).name,
+    rows = [(; text = i <= length(eqs) ? "`$(authored[i])`" : "the operating-point value of the algebraic variable `$(info(conds[i - length(eqs)].lhs).name)`",
+                label = i <= length(eqs) ? nothing : info(conds[i - length(eqs)].lhs).name,
                 free = Set{Symbol}(info(x).name for x in _scope_vars((exprs[i],), scope) if !fixed(x)),
                 fixed = Symbol[info(x).name for x in _scope_vars((exprs[i],), scope) if fixed(x)],
                 model = scope === :cell ? Symbol[info(x).name for x in _scope_vars((exprs[i],), :model)] : Symbol[])
@@ -436,13 +436,13 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     end
     targets = Any[]
     for (j, o) in enumerate(conds)
-        p = fresh(Symbol(info(o.var).name, :_value))
+        p = fresh(Symbol(info(o.lhs).name, :_value))
         push!(params, p)
         push!(sources, (:condition, j))
         push!(targets, p)
     end
     sub(x) = isempty(pmap) ? _unwrap(x) : _init_substitute(x, pmap)
-    ieqs = Equation[[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs]; [sub(o.expr) ~ p for (o, p) in zip(conds, targets)]]
+    ieqs = Equation[[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs]; [sub(o.rhs) ~ p for (o, p) in zip(conds, targets)]]
     value(src, k) = src[1] === :builtin ? getproperty(builtins, src[2])[k] :
                     src[1] === :param ? src[2] :
                     src[1] === :table ? Float64(_table_entry(src[4], src[2], ntuple(_ -> Int(builtins.kind[k]), src[3])...)) :

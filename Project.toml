@@ -5,7 +5,6 @@ authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 JumpProcesses = "ccbc3e58-028d-4f4c-8cd5-9ae44345cda5"
@@ -36,7 +35,6 @@ LatticePDE = {path = "lib/LatticePDE"}
 
 [compat]
 ADTypes = "1"
-ConstructionBase = "1.5"
 CorePotts = "0.3"
 GeometryBasics = "0.5"
 JumpProcesses = "9.33"

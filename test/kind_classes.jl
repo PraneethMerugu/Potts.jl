@@ -91,14 +91,14 @@ end
         @extend endothelial = base = KCBase()
     end))), "kind class `sprout`", "`endothelial`")
     s = KCExt(; name = :m)
-    @test [(g.name, g.kinds) for g in getfield(s, :kind_classes)] == [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
+    @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] == [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
     @potts_model KCExtOnlyClass begin
         @extend tip, stalk = base = KCBase()
         @kinds pair = (tip, stalk)           # no kind lines: the kinds are the base's
     end
     s = KCExtOnlyClass(; name = :m)
-    @test getfield(s, :kinds) == [:medium, :fluid, :tip, :stalk]
-    @test [(g.name, g.kinds) for g in getfield(s, :kind_classes)] == [(:endothelial, [2, 3]), (:pair, [2, 3])]
+    @test Potts._p(s, :kinds) == [:medium, :fluid, :tip, :stalk]
+    @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] == [(:endothelial, [2, 3]), (:pair, [2, 3])]
 end
 
 @testset "kind classes: an @extend restatement keeps the member order" begin
@@ -133,7 +133,7 @@ end
 
 @testset "kind classes: programmatic classes are checked" begin
     s = KCBase(; name = :m)
-    with(classes) = kc_error(() -> PottsSystem(; (f => getfield(s, f) for f in fieldnames(PottsSystem))...,
+    with(classes) = kc_error(() -> PottsSystem(; name = nameof(s), (f => Potts._p(s, f) for f in fieldnames(Potts.PottsPart))...,
                                                 kind_classes = classes))
     @test with([Potts.KindClass(:ok, [1, 3])]) === nothing
     @test has(with([Potts.KindClass(:volume, [1])]), "kind class `volume`", "built-in")

@@ -60,7 +60,7 @@ _built_metadata(c0) = Base.ImmutableDict(Base.ImmutableDict{DataType, Any}(), _B
                                                                                                 bounded = _BOUNDED_BUILT[] != c0[2]))
 """Whether `sys` may contain feature `k` (`:folds`, `:bounded`): `false` only if its constructor built none."""
 function _may_have(sys, k::Symbol)
-    m = get(getfield(sys, :metadata), _BuiltFeatures, nothing)
+    m = get(_p(sys, :metadata), _BuiltFeatures, nothing)
     return m === nothing || getfield(m, k)::Bool
 end
 
