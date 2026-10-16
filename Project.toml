@@ -61,6 +61,8 @@ projects = [
     "docs",
     "lib/CorePotts",
     "lib/CorePotts/test",
+    "lib/LatticeFields",
+    "lib/LatticeFields/test",
     "lib/MakiePotts",
     "lib/MakiePotts/test",
     "lib/PottsModels",

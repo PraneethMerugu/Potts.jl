@@ -1,0 +1,15 @@
+[deps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+AllocCheck = "9b6a8646-10ed-4001-bbdc-1d2f46dfbb1a"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+LatticeFields = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
+Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+AMDGPU = "2"
+ExplicitImports = "1.15"
+Metal = "1"
+Test = "1"

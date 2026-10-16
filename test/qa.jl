@@ -181,7 +181,7 @@ end
     allow = Set(strip(first(split(l, "   #"))) for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
                 if !startswith(l, "#") && !isempty(strip(l)))
     bad = String[]
-    for d in ("src", "lib/CorePotts/src", "lib/MakiePotts/src"), (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
+    for d in ("src", "lib/CorePotts/src", "lib/LatticeFields/src", "lib/MakiePotts/src"), (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
         endswith(f, ".jl") || continue
         rel = relpath(joinpath(dir, f), root)
         for (line, s) in _privileged_hits(joinpath(dir, f))

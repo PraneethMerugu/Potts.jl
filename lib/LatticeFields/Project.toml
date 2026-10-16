@@ -1,0 +1,13 @@
+name = "LatticeFields"
+uuid = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
+version = "0.1.0-DEV"
+authors = ["Praneeth Merugu <merugufam@gmail.com>"]
+
+[deps]
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+RuntimeGeneratedFunctions = "7e49a35a-f44a-4d26-94aa-eba1b4ca6b47"
+
+[compat]
+KernelAbstractions = "0.9.42"
+RuntimeGeneratedFunctions = "0.5"
+julia = "1.12"

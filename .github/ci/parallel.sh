@@ -11,7 +11,7 @@
 #   4-5   4-5,20-21      PottsModels shard 3/3  (julia -t 4)
 #   6-7   6-7,22-23      GPU group (ROCm, device-only, test/shared/device_only.jl)
 #   8-9   8-9,24-25      Potts
-#   10-11 10-11,26-27    CorePotts, then MakiePotts
+#   10-11 10-11,26-27    LatticeFields, CorePotts, then MakiePotts
 #
 # Every process writes its own log. The script waits for all of them, prints each log in a
 # collapsible group with its wall time and exit code, and exits non-zero if any failed. The
@@ -44,8 +44,8 @@ for k in 1 2 3; do
 done
 launch GPU 6-7,22-23 env GROUP=GPU POTTS_GPU=rocm "$JULIA" --project=test test/runtests.jl
 launch Potts 8-9,24-25 env GROUP=Potts "$JULIA" --project=test test/runtests.jl
-launch CorePotts+MakiePotts 10-11,26-27 bash -c \
-    "GROUP=CorePotts '$JULIA' --project=test test/runtests.jl && GROUP=MakiePotts '$JULIA' --project=test test/runtests.jl"
+launch LatticeFields+CorePotts+MakiePotts 10-11,26-27 bash -c \
+    "GROUP=LatticeFields '$JULIA' --project=test test/runtests.jl && GROUP=CorePotts '$JULIA' --project=test test/runtests.jl && GROUP=MakiePotts '$JULIA' --project=test test/runtests.jl"
 wait
 
 failed=0

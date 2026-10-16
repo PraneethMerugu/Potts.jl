@@ -184,7 +184,7 @@ const NEXT_BIRTH = Symbol("#next_birth")
 # the reference reset of an event round (`Lifecycle.release`), one launch over the cells
 @inline _release_body!(c, release::F, st) where {F} = (release(st, c % Int32); nothing)
 _run_release!(::Nothing, st, backend) = 0
-_run_release!(f::F, st, backend) where {F} = (_launch(_release_body!, backend, ncells(st), (f, st)); 1)
+_run_release!(f::F, st, backend) where {F} = (Exec.launch!(backend, _release_body!, ncells(st), (f, st)); 1)
 @inline _release!(::Nothing, st, c) = nothing
 @inline _release!(f::F, st, c) where {F} = (f(st, c % Int32); nothing)
 
@@ -371,7 +371,7 @@ struct LifecycleCache{E, C, D, R, NM, B, DL}
 end
 
 function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false)
-    T = backend isa KernelAbstractions.CPU ? Float64 : Float32
+    T = Exec.supports_float64(backend) ? Float64 : Float32
     return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
         KernelAbstractions.zeros(backend, Int32, capacity),
@@ -413,7 +413,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     stats = pstats.lifecycle
     cap = length(st.cell.kind)
     slot = Int32((cache.round[] += 1) % 2 + 1)
-    _launch(_trigger_body!, backend, cap, (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs))
+    Exec.launch!(backend, _trigger_body!, cap, (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs))
     launches = 1 + nb
     _sync!(pstats, backend)
     _copy!(pstats, cache.host, 1, cache.count, slot, 1)
@@ -507,12 +507,12 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         _cluster_planes!(pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
     end
     if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)    # after the host planes
-        _launch(_normal_body!, backend, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
+        Exec.launch!(backend, _normal_body!, cap, (cache.normals, cache.events, cache.daughter, lc.normal, st, p,
             ctx, key, mcs, lc.rules))
         launches += 1
     end
     n = length(st.σ)
-    _launch(_partition_body!, backend, n, (st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
+    Exec.launch!(backend, _partition_body!, n, (st.σ, cache.daughter, cache.normals, cache.bias, cache.removed,
         st.cell, ctx.lattice, lc.owner_changed, st))
     launches += 1
 
@@ -546,7 +546,7 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     end
     any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(pstats, st, findall(removed), daughter[parents])
-    _launch(_cell_rule_body!, backend, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
+    Exec.launch!(backend, _cell_rule_body!, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
         lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules))
     launches += 1
 

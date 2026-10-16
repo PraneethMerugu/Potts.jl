@@ -1,7 +1,7 @@
 # Synchronous phases around the copy sweep (INTERNALS §1.6, D-033).
 #
 # A phase is any callable `phase(st, p, ctx, key, mcs, backend)` that enqueues work without
-# synchronizing. The built-in kinds are plain KernelAbstractions kernels:
+# synchronizing. The built-in kinds are kernel bodies run by `Exec.launch!`:
 #
 #   SitePhase(f!)   f!(st, p, ctx, key, mcs, i)   for every site i
 #   CellPhase(f!)   f!(st, p, ctx, key, mcs, c)   for every cell c
@@ -30,27 +30,10 @@ struct CellPhase{F}
     f!::F
 end
 
-# Every kernel is a thin `@kernel` around an `@inline` body `body(i, args...)`. `_launch` runs
-# the body as a plain loop when the CPU backend would run the launch as one workgroup: a KA
-# CPU launch allocates (argument tuple, boxed indices) even inline, and a warm MCS must not.
-@kernel function _each_kernel!(body, args)
-    i = @index(Global, Linear)          # KA's CPU backend needs `@index` as its own statement
-    body(i, args...)
-end
-
-"""Run `body(i, args...)` for `i in 1:n` on `backend` (returns nothing, does not synchronize)."""
-@inline function _launch(body::B, backend, n, args::A) where {B, A}
-    if _inline(backend, n)
-        for i in 1:n
-            body(i, args...)
-        end
-    else
-        _each_kernel!(backend)(body, args; ndrange = n, workgroupsize = _phase_groupsize(backend, n))
-    end
-    return nothing
-end
-_inline(backend, n) = false
-_inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
+# Every kernel is a body `body(i, args...)` run for `i in 1:n` by `Exec.launch!`
+# (LatticeFields): the host executor on the CPU (plain loops; threaded chunks for large `n`),
+# the one generic `if`-guarded device kernel elsewhere (v3 §4.4). A warm MCS on the CPU
+# allocates nothing (no KernelAbstractions CPU launch).
 
 # Device→device copies and fills in the step path (P6.0v8, D-101). Metal.jl's `copyto!`
 # between device arrays synchronizes before its blit and waits for it (two GPU waits per
@@ -64,7 +47,7 @@ _inline(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n) >= n
 function _device_copy!(backend, dst::AbstractArray, src::AbstractArray)
     length(dst) >= length(src) || throw(DimensionMismatch("destination has $(length(dst)) elements, the source $(length(src))"))
     isempty(src) && return nothing                       # no zero-size kernel launch
-    _launch(_copy_body!, backend, length(src), (dst, src))
+    Exec.launch!(backend, _copy_body!, length(src), (dst, src))
     return nothing
 end
 _device_copy!(::KernelAbstractions.CPU, dst::AbstractArray, src::AbstractArray) = (copyto!(dst, src); nothing)
@@ -72,7 +55,7 @@ _device_copy!(::KernelAbstractions.CPU, dst::AbstractArray, src::AbstractArray) 
 """`fill!(dst, v)` on `backend` without a GPU wait: one kernel on a device."""
 function _device_fill!(backend, dst::AbstractArray, v)
     isempty(dst) && return nothing
-    _launch(_fill_body!, backend, length(dst), (dst, convert(eltype(dst), v)))
+    Exec.launch!(backend, _fill_body!, length(dst), (dst, convert(eltype(dst), v)))
     return nothing
 end
 _device_fill!(::KernelAbstractions.CPU, dst::AbstractArray, v) = (fill!(dst, v); nothing)
@@ -83,14 +66,14 @@ _device_fill!(::KernelAbstractions.CPU, dst::AbstractArray, v) = (fill!(dst, v);
     (f!(st, p, ctx, key, mcs, c % Int32); nothing)         # c ≤ ncells < 2^31
 
 function (ph::SitePhase{F})(st, p, ctx, key, mcs, backend) where {F}
-    _launch(_site_phase_body!, backend, nsites(ctx.lattice), (ph.f!, st, p, ctx, key, mcs))
+    Exec.launch!(backend, _site_phase_body!, nsites(ctx.lattice), (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
 
 function (ph::CellPhase{F})(st, p, ctx, key, mcs, backend) where {F}
     n = ncells(st)
     n == 0 && return 0
-    _launch(_cell_phase_body!, backend, n, (ph.f!, st, p, ctx, key, mcs))
+    Exec.launch!(backend, _cell_phase_body!, n, (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
 
@@ -108,18 +91,9 @@ end
 @inline _model_phase_body!(_, f!::F, st, p, ctx, key, mcs) where {F} = (f!(st, p, ctx, key, mcs); nothing)
 
 function (ph::ModelPhase{F})(st, p, ctx, key, mcs, backend) where {F}
-    _launch(_model_phase_body!, backend, 1, (ph.f!, st, p, ctx, key, mcs))
+    Exec.launch!(backend, _model_phase_body!, 1, (ph.f!, st, p, ctx, key, mcs))
     return 1
 end
-
-# On the CPU backend every workgroup beyond the first is a spawned task. Small launches run
-# inline as one workgroup; large ones split into one workgroup per thread of at least
-# CPU_GRAIN sites. (Multithreaded launches of ~1000 sites were 6× slower than inline.)
-const CPU_GRAIN = 8192
-_groupsize(backend, n) = 0
-_groupsize(::KernelAbstractions.CPU, n) = max(cld(n, Threads.nthreads()), min(n, CPU_GRAIN))
-_phase_groupsize(backend, n) = nothing
-_phase_groupsize(backend::KernelAbstractions.CPU, n) = _groupsize(backend, n)
 
 """State accessor `st.<A>.<B>`, resolved at compile time like a `NamedTuple` field."""
 struct Part{A, B} end
@@ -167,7 +141,7 @@ function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
         "(grow rings with the state, e.g. `with_capacity`)"))
     depth = size(ring, ndims(ring))
     n = length(s)
-    _launch(_history_body!, backend, n, (ring, s, mod1(mcs + 1, depth), n))
+    Exec.launch!(backend, _history_body!, n, (ring, s, mod1(mcs + 1, depth), n))
     return 1
 end
 

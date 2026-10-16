@@ -459,30 +459,30 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     n = length(st.σ)
     lat = ctx.lattice
     CL = Val(_has_clusters(st))
-    _launch(_cv_reset_body!, backend, cap, (sc,))
-    _launch(_cv_entity_body!, backend, cap, (ph.entity, st, p, ctx, key, mcs, sc, ph.limit, CL))
-    _launch(_cv_decide_body!, backend, n, (ph.decide, st, p, ctx, key, mcs, sc, ph.fresh))
+    Exec.launch!(backend, _cv_reset_body!, cap, (sc,))
+    Exec.launch!(backend, _cv_entity_body!, cap, (ph.entity, st, p, ctx, key, mcs, sc, ph.limit, CL))
+    Exec.launch!(backend, _cv_decide_body!, n, (ph.decide, st, p, ctx, key, mcs, sc, ph.fresh))
     launches = 3
     _quiet(backend, sc.flag, _FLAG_CONVERTED) && return launches
     surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing
     rel = haskey(ctx, :surface) ? ctx.surface : nothing
     links = map(L -> L(st), ph.links)
     if ph.fresh > 0
-        _launch(_cv_allocate_body!, backend, 1, (
+        Exec.launch!(backend, _cv_allocate_body!, 1, (
             ph, st, p, ctx, key, mcs, sc, links, surf, _births(st), CL))
         launches += 1
     end
     if ph.transfer! !== nothing
-        _launch(_cv_transfer_body!, backend, cap, (ph.transfer!, st, p, ctx, key, mcs, sc))
+        Exec.launch!(backend, _cv_transfer_body!, cap, (ph.transfer!, st, p, ctx, key, mcs, sc))
         launches += 1
     end
     if ph.writes! !== nothing
-        _launch(_cv_writes_body!, backend, n, (ph.writes!, st, p, ctx, key, mcs, sc))
+        Exec.launch!(backend, _cv_writes_body!, n, (ph.writes!, st, p, ctx, key, mcs, sc))
         launches += 1
     end
-    _launch(_cv_paint_body!, backend, n, (st, ctx, sc, surf, rel, ph.owner_changed))
-    _launch(_cv_write_sigma_body!, backend, n, (st.σ, sc))
-    _launch(_cv_finalize_body!, backend, cap, (st.cell, sc, lat))
+    Exec.launch!(backend, _cv_paint_body!, n, (st, ctx, sc, surf, rel, ph.owner_changed))
+    Exec.launch!(backend, _cv_write_sigma_body!, n, (st.σ, sc))
+    Exec.launch!(backend, _cv_finalize_body!, cap, (st.cell, sc, lat))
     launches += 3
     # the trackers rebuilt from σ, as the device lifecycle rebuilds them (`lifecycle_device.jl`)
     dv = (; flag = sc.flag, okc = sc.okc, rootA = sc.rootA, rootB = sc.rootB)
@@ -490,29 +490,29 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     cc = _contact_counts(ctx)
     if cc !== nothing
         cols = _count_columns(st, cc)
-        _launch(_dcount_zero_body!, backend, cap, (dv, par, cols))
-        _launch(_dcount_body!, backend, n, (dv, par, st.σ, st.cell.kind, cc, cols, lat))
+        Exec.launch!(backend, _dcount_zero_body!, cap, (dv, par, cols))
+        Exec.launch!(backend, _dcount_body!, n, (dv, par, st.σ, st.cell.kind, cc, cols, lat))
         launches += 2
     end
     eul = _euler_columns(st.cell)
     if eul !== nothing
-        _launch(_deuler_zero_body!, backend, cap, (dv, par, eul))
-        _launch(_deuler_body!, backend, _euler_anchors(lat), (dv, par, st.σ, eul, lat))
+        Exec.launch!(backend, _deuler_zero_body!, cap, (dv, par, eul))
+        Exec.launch!(backend, _deuler_body!, _euler_anchors(lat), (dv, par, st.σ, eul, lat))
         launches += 2
     end
     if _has_clusters(st)
         cvol = haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing
         csurf = haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
                 st.cell.cluster_surface : nothing
-        _launch(_dcluster_mark_body!, backend, cap, (dv, par, st.cell))
-        _launch(_dcluster_root_body!, backend, cap, (dv, par, st.cell, cvol, csurf))
+        Exec.launch!(backend, _dcluster_mark_body!, cap, (dv, par, st.cell))
+        Exec.launch!(backend, _dcluster_root_body!, cap, (dv, par, st.cell, cvol, csurf))
         launches += 2
         if cvol !== nothing
-            _launch(_dcluster_volume_body!, backend, cap, (dv, par, st.cell, cvol))
+            Exec.launch!(backend, _dcluster_volume_body!, cap, (dv, par, st.cell, cvol))
             launches += 1
         end
         if csurf !== nothing
-            _launch(_dcluster_surface_body!, backend, n, (
+            Exec.launch!(backend, _dcluster_surface_body!, n, (
                 dv, par, st.σ, st.cell, csurf, ctx.surface, lat))
             launches += 1
         end

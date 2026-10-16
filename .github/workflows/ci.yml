@@ -58,7 +58,7 @@ jobs:
             echo "Dependency changes against the last green run:"
             julia .github/ci/manifest_diff.jl "$LOCK" Manifest.toml
           fi
-          for p in test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
+          for p in test lib/LatticeFields/test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
             $PIN julia --project=$p -e 'using Pkg; Pkg.precompile()'
           done
       - name: Frozen acceptance tests are unchanged
@@ -78,7 +78,7 @@ jobs:
             $PIN julia --project=lib/PottsModels/test "$RUNNER_TEMP/frozen_diff.jl" "$BEFORE" HEAD || rc=$?
             [ "$rc" -le 1 ]
           fi
-      - name: Test suites in parallel (PottsModels ×3, GPU, Potts, CorePotts + MakiePotts)
+      - name: Test suites in parallel (PottsModels ×3, GPU, Potts, LatticeFields + CorePotts + MakiePotts)
         # .github/ci/parallel.sh: one process per disjoint physical-core pair (with its SMT
         # siblings) on 0-11/16-27; each log is printed in its own group with its wall time and
         # exit code, and any failure fails this step. OPENVT_PACKAGE_BULK: the OpenVT package's

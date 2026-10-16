@@ -7,7 +7,7 @@
 # - negative controls for the scan itself: a kernel that widens to Float64 through a
 #   Float64 literal, and one that converts explicitly, are flagged; their Float32 twin is not;
 # - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_device.jl) compiles
-#   and does not dispatch on ROCm, as that code assumes.
+#   the kernel the launch then runs, and writes nothing, on ROCm.
 #
 # ROCm only (included first from test/gpu.jl when POTTS_GPU=rocm).
 module DeviceIR
@@ -87,19 +87,36 @@ end
 end
 
 # --- the staged lifecycle's compile-only launch (lifecycle_device.jl, `_CompileOnly`) -----
-# It relies on the backend compiling a launch over an empty range and then not dispatching
-# it (verified for Metal.jl 1.10); on ROCm: the hook sees the kernel, the array is untouched.
+# `Exec.compile!`: a launch of the kernel `Exec.launch!` runs, with `n = 0` (no work item
+# passes the guard). On ROCm: the hook sees the kernel, the array is untouched, and the
+# launch that follows compiles nothing new (`_kernel_instances` does not grow).
 @inline devir_write!(i, a) = (@inbounds a[i] = 2.0f0; nothing)      # i ≤ length(a)
+@inline devir_write3!(i, a) = (@inbounds a[i] = 3.0f0; nothing)     # i ≤ length(a)
 
 @testset "device IR: a compile-only launch compiles and does not dispatch (ROCm)" begin
     backend = AMDGPU.ROCBackend()
     a = AMDGPU.ROCArray(ones(Float32, 4))
-    irs = kernels_ir(() -> CorePotts._stage!(CorePotts._CompileOnly(), devir_write!, backend, 4, (a,)))
+    m = CorePotts._CompileOnly()
+    CorePotts._stage!(m, devir_write!, backend, 4, (a,))
+    @test length(m.jobs) == 1
+    irs = kernels_ir(() -> CorePotts._compile!(m, backend))
     @test length(irs) == 1 && occursin("devir_write!", first(only(irs)))
     @test Array(a) == ones(Float32, 4)
     CorePotts._stage!(CorePotts._Enqueue(), devir_write!, backend, 4, (a,))   # control: a launch writes
     AMDGPU.synchronize()
     @test Array(a) == fill(2.0f0, 4)
+    # without the hook (which recompiles at every launch): the compile adds one kernel
+    # instance, the launch that follows none
+    b = AMDGPU.ROCArray(ones(Float32, 4))
+    ninst() = length(AMDGPU.Compiler._kernel_instances)
+    m2 = CorePotts._CompileOnly()
+    CorePotts._stage!(m2, devir_write3!, backend, 4, (b,))
+    n0 = ninst()
+    CorePotts._compile!(m2, backend)
+    @test ninst() == n0 + 1 && Array(b) == ones(Float32, 4)
+    CorePotts._stage!(CorePotts._Enqueue(), devir_write3!, backend, 4, (b,))
+    AMDGPU.synchronize()
+    @test ninst() == n0 + 1 && Array(b) == fill(3.0f0, 4)
 end
 
 end # module DeviceIR

@@ -772,3 +772,35 @@ if PottsDevices.device_name() == "rocm" && isfile(DEVICE_IR_SCAN)
     include(DEVICE_IR_SCAN)
     DeviceIRScan.check("CorePotts")
 end
+
+# Compile before enqueue (v3 §4.4): the staged lifecycle's compile set (`_CompileOnly`,
+# `Exec.compile!` with `n = 0`) compiles exactly the kernels the launches then run, on host
+# tasks, and writes nothing. Counted in the backend's kernel-instance cache.
+@inline cp_compile_write!(i, a, v) = (@inbounds a[i] = v; nothing)      # i ≤ length(a)
+@testset "compile-only launches compile what the launch runs, and write nothing (device)" begin
+    backend = PottsDevices.device_backend()
+    pkg = PottsDevices.device_package()
+    ninst() = length(PottsDevices.device_name() == "metal" ? pkg.kernel_instances : pkg.Compiler._kernel_instances)
+    a = PottsDevices.device_array(ones(Float32, 300))
+    b = PottsDevices.device_array(ones(Int32, 40))
+    m = CorePotts._CompileOnly()
+    CorePotts._stage!(m, cp_compile_write!, backend, 300, (a, 2.0f0))
+    CorePotts._stage!(m, cp_compile_write!, backend, 40, (b, Int32(5)))
+    @test length(m.jobs) == 2
+    PottsDevices.device_sync()
+    n0 = ninst()
+    CorePotts._compile!(m, backend)
+    PottsDevices.device_sync()
+    @test ninst() == n0 + 2
+    @test Array(a) == ones(Float32, 300) && Array(b) == ones(Int32, 40)
+    CorePotts._stage!(CorePotts._Enqueue(), cp_compile_write!, backend, 300, (a, 2.0f0))
+    CorePotts._stage!(CorePotts._Enqueue(), cp_compile_write!, backend, 40, (b, Int32(5)))
+    PottsDevices.device_sync()
+    @test ninst() == n0 + 2                                    # reused: no compile at the launch
+    @test Array(a) == fill(2.0f0, 300) && Array(b) == fill(Int32(5), 40)
+    # negative control: a launch with new argument types compiles
+    c = PottsDevices.device_array(ones(Float32, 8))
+    CorePotts.Exec.launch!(backend, cp_compile_write!, 8, (c, Int32(7)))
+    PottsDevices.device_sync()
+    @test ninst() == n0 + 3
+end

@@ -697,7 +697,7 @@ end
 function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
     sc = integ.mscratch
     _flush_counts!(integ)                           # earlier device refreshes first
-    _launch(_frozen_body!, integ.backend, length(integ.state.σ),
+    Exec.launch!(integ.backend, _frozen_body!, length(integ.state.σ),
         (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
     integ.stats.launches += 1
     _copy!(integ.stats, sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)

@@ -142,6 +142,29 @@ function FieldStep(pair::Pair, rate; dt = 1.0, substeps = 1, lower = nothing, cl
         substeps isa Integer ? Int(substeps) : substeps, lower, clamp)
 end
 
+# FieldStep and FieldClamp keep their pre-Exec launch path (feb9b931's `_launch`) until C8
+# deletes them (v3 §9.1: code C8 deletes is not ported). On the CPU, a launch that fits one
+# workgroup (always single-threaded, else up to 8192 sites) is a plain loop inlined into the
+# step; anything else is a KernelAbstractions launch.
+@kernel function _field_each_kernel!(body, args)
+    i = @index(Global, Linear)          # KA's CPU backend needs `@index` as its own statement
+    body(i, args...)
+end
+@inline function _field_launch(body::B, backend, n, args::A) where {B, A}
+    if _field_inline(backend, n)
+        for i in 1:n
+            body(i, args...)
+        end
+    else
+        _field_each_kernel!(backend)(body, args; ndrange = n, workgroupsize = _field_groupsize(backend, n))
+    end
+    return nothing
+end
+_field_groupsize(backend, n) = nothing
+_field_groupsize(::KernelAbstractions.CPU, n) = max(cld(n, Threads.nthreads()), min(n, 8192))
+_field_inline(backend, n) = false
+_field_inline(backend::KernelAbstractions.CPU, n) = _field_groupsize(backend, n) >= n
+
 @inline _substeps(n::Int, p) = n
 _substeps(f::F, p) where {F} = max(1, Int(f(p)))
 
@@ -169,7 +192,7 @@ function (ph::FieldStep{F, S, R})(st, p, ctx, key, mcs, backend) where {F, S, R}
     nsub = _substeps(ph.substeps, p)
     h = eltype(c)(ph.dt / nsub)
     for _ in 1:nsub
-        _launch(_step_body(ph.clamp), backend, n, _step_args(ph.clamp, ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
+        _field_launch(_step_body(ph.clamp), backend, n, _step_args(ph.clamp, ph.rate, cn, c, st, p, ctx, key, mcs, h, ph.lower))
         _device_copy!(backend, c, cn)        # a kernel: no GPU wait (P6.0v8)
     end
     return 2 * nsub
@@ -194,7 +217,7 @@ FieldClamp(path::Tuple{Symbol, Symbol}, clamp) = FieldClamp(Part(path), clamp)
 
 function (ph::FieldClamp)(st, p, ctx, key, mcs, backend)
     c = ph.field(st)
-    _launch(_field_clamp_body!, backend, length(c), (ph.clamp, c, st, p, ctx, key, mcs))
+    _field_launch(_field_clamp_body!, backend, length(c), (ph.clamp, c, st, p, ctx, key, mcs))
     return 1
 end
 

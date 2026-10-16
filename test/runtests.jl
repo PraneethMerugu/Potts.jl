@@ -1,5 +1,5 @@
 # Test entry point for the whole monorepo.
-#   GROUP=All (default) | Potts | CorePotts | MakiePotts | PottsModels | GPU
+#   GROUP=All (default) | Potts | CorePotts | LatticeFields | MakiePotts | PottsModels | GPU
 # Each group runs in the shared workspace environment of its own test project.
 const GROUP = get(ENV, "GROUP", "All")
 const ROOT = dirname(@__DIR__)
@@ -10,6 +10,8 @@ function run_group(project, file, args...; env = ())
     run(cmd)
 end
 
+GROUP in ("All", "LatticeFields") &&
+    run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl"))
 GROUP in ("All", "CorePotts") &&
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl"))
 GROUP in ("All", "MakiePotts") &&
@@ -37,6 +39,8 @@ if GROUP == "GPU"
     only = get(ENV, "POTTS_DEVICE_ONLY", "true") == "true"
     suite(project, runner; env) = only ?
         run_group(project, joinpath(ROOT, "test/shared/device_only.jl"), runner; env) : run_group(project, runner; env)
+    run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl");
+        env = ("LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false"))
     suite(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl");
         env = (env..., "COREPOTTS_QA" => "false"))
     suite(joinpath(ROOT, "test"), joinpath(ROOT, "test/potts.jl"); env = (env..., "POTTS_QA" => "false"))

@@ -18,10 +18,11 @@ Metropolis(; offset = 0) = Metropolis(offset)
 # The acceptance law: the algorithm's, else the model's, else Metropolis().
 _law(alg, f) = something(alg.acceptance, f.acceptance, Metropolis())
 
-# Backends without doubles (Metal) cannot even truncate a Float64 field on the device.
+# Device code stays Float32 (`Exec.supports_float64`): backends without doubles (Metal)
+# cannot even truncate a Float64 field on the device.
 _device_law(law, backend) = law
 _device_law(law::Metropolis{Float64}, backend) =
-    backend isa KernelAbstractions.CPU ? law : Metropolis(Float32(law.offset))
+    Exec.supports_float64(backend) ? law : Metropolis(Float32(law.offset))
 
 """
     Barker(; offset = 0)
@@ -37,7 +38,7 @@ end
 Barker(; offset = 0) = Barker(offset)
 
 _device_law(law::Barker{Float64}, backend) =
-    backend isa KernelAbstractions.CPU ? law : Barker(Float32(law.offset))
+    Exec.supports_float64(backend) ? law : Barker(Float32(law.offset))
 
 @inline function accept(law::Metropolis, dH::T, temperature::T, u::T) where {T}
     x = dH - T(law.offset)

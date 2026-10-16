@@ -140,12 +140,49 @@ end
     @test u.cell.kind[1:4] == Int32[1, 1, 1, 1]          # member 2 and its daughter took kind 1
 end
 
-@testset "CPU launches: inline loops and multi-workgroup kernels agree" begin
-    # single-threaded runs take the inline path everywhere; force the KA path explicitly
-    out = zeros(Int, 100)
-    body(i, a, k) = (@inbounds a[i] = k * i; nothing)
-    CorePotts._each_kernel!(CorePotts.CPU())(body, (out, 3); ndrange = 100, workgroupsize = 16)
-    @test out == 3 .* (1:100)
+# The host executor (LatticeFields.Exec, v3 §9.1): a site phase of more than `HOST_GRAIN`
+# sites runs in threaded chunks when Julia has threads. The checkerboard runs its phases inline
+# (`threads = false`): a threaded lockless phase is not reproducible (D-271). The trajectory
+# must not depend on the chunks: a 4-thread process (chunks) reproduces this process's
+# single-threaded run (plain loops), and a different seed does not (negative control).
+const HOST_EXEC_RUN = raw"""
+using CorePotts, StaticArrays
+using CorePotts: Exec
+kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
+function gg_dH(st, p, prop, ctx)
+    J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+    E(v, c) = p.λ * (v - p.V0)^2
+    return contact_delta(st.σ, ctx, prop, J) + volume_delta(st.cell.volume, prop, E)
+end
+jac!(st, p, ctx, key, mcs, i) = (@inbounds st.site.v[i] = st.site.u[i] + 1; nothing)
+function host_exec_run(seed)
+    L = 192                                   # a site phase of 36864 sites > HOST_GRAIN
+    σ = zeros(Int32, L, L); kinds = Int32[]; id = 0
+    for x in 1:8:(L - 6), y in 1:8:(L - 6)
+        id += 1; push!(kinds, isodd(id) ? 1 : 2); σ[x:(x + 6), y:(y + 6)] .= id
+    end
+    p = (; J = SMatrix{3, 3}(0.0, 16, 16, 16, 2, 11, 16, 11, 14), λ = 1.0, V0 = 49.0, T = 10.0)
+    u = zeros(L, L)
+    f = CPMFunction(gg_dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = Phases(after_mcs = (SitePhase(jac!), CopyPhase((:site, :u) => (:site, :v)))))
+    st = initial_state(σ, kinds; site = (; u, v = copy(u)))
+    sol = solve(PottsProblem(f, st, Lattice((L, L)), (0, 6), p; seed), CheckerboardCPM(; proposal = Moore(1), threads = false);
+        save_start = false)
+    return hash((sol.u[end].σ, sol.u[end].cell.volume, sol.u[end].site.u))
+end
+"""
+@testset "host executor: threaded chunks give the single-threaded trajectory" begin
+    mod = Module()
+    Base.include_string(mod, HOST_EXEC_RUN)
+    @test CorePotts.Exec.HOST_GRAIN < 192^2
+    here = Base.invokelatest(mod.host_exec_run, 1)
+    @test here != Base.invokelatest(mod.host_exec_run, 2)               # control: the seed matters
+    code = HOST_EXEC_RUN * "\nprint(Threads.nthreads(), \" \", host_exec_run(1))"
+    out = read(`$(Base.julia_cmd()) --startup-file=no -t 4 --project=$(Base.active_project()) -e $code`, String)
+    nt, h = split(strip(out))
+    @test parse(Int, nt) == 4
+    @test parse(UInt, h) == here
+    # and a warm CPU checkerboard step allocates nothing (in place of the KA-workgroup check)
     L = Lattice((48, 48))
     σ, kinds = blocks((48, 48), 6)
     prob = PottsProblem(GG, initial_state(σ, kinds), L, (0, 20), gg_params())

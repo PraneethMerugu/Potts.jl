@@ -479,36 +479,55 @@ end
     return nothing
 end
 
-# (KA's CPU backend splits the kernel at each `@synchronize` and needs `@index` as its own
-# statement in each part)
-@kernel function _plan_kernel!(events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
+# `live = false` is the compile launch (compile before enqueue, v3 §4.4): one workgroup in
+# which every stage is skipped, so nothing is read or written. The guard is an `if` around
+# each stage, not around the kernel: `@synchronize` stays at the top level, where every
+# work item reaches it. (KA's CPU backend splits the kernel at each `@synchronize` and needs
+# `@index` as its own statement in each part.)
+@kernel function _plan_kernel!(live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
         ruled, st, p, ctx, key, mcs, clusters, surf, births)
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     ta = @index(Local, Linear)
-    _plan_a!(ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters)
+    if live
+        _plan_a!(ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters)
+    end
     @synchronize
     tb = @index(Local, Linear)
-    _plan_b!(tb, events, dv, par, ruled, st, clusters)
+    if live
+        _plan_b!(tb, events, dv, par, ruled, st, clusters)
+    end
     @synchronize
     tc = @index(Local, Linear)
-    _plan_c!(tc, cnt, events, dv, par, ruled, clusters)
+    if live
+        _plan_c!(tc, cnt, events, dv, par, ruled, clusters)
+    end
     @synchronize
     td = @index(Local, Linear)
-    _plan_d!(td, cnt, tot, events, dv, par, ruled)
+    if live
+        _plan_d!(td, cnt, tot, events, dv, par, ruled)
+    end
     @synchronize
     te = @index(Local, Linear)
-    _plan_e!(te, cnt, tot, events, dv, par, round, ruled, st, clusters)
+    if live
+        _plan_e!(te, cnt, tot, events, dv, par, round, ruled, st, clusters)
+    end
     @synchronize
     tf = @index(Local, Linear)
-    _plan_f!(tf, cnt, tot, dv, par)
+    if live
+        _plan_f!(tf, cnt, tot, dv, par)
+    end
     @synchronize
     tg = @index(Local, Linear)
-    _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
-        clusters, births)
+    if live
+        _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
+            clusters, births)
+    end
     @synchronize
     th = @index(Local, Linear)
-    _plan_h!(th, events, daughter, dv, par, ruled, surf)
+    if live
+        _plan_h!(th, events, daughter, dv, par, ruled, surf)
+    end
 end
 
 # ---------------------------------------------------------------------------------------
@@ -824,14 +843,16 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
             # any is enqueued, so a compilation failure hands over an untouched MCS. What can
             # still fail is a launch whose workgroup exceeds its compiled pipeline's limit:
             # only the planner has a fixed workgroup (`PLAN_WG`); every other kernel's group is
-            # sized by the backend from that limit (`_launch`, `workgroupsize = nothing`). So
+            # sized by the backend from that limit (`Exec.launch!`). So
             # a real failure happens at the trigger (nothing enqueued) or at the planner (the
             # trigger and `before` ran): before the partition writes σ or any cell column, and
             # the host planner takes the MCS without `before` (`before_ran[]`) and without
             # this MCS's device counts (`_drop_device_counts!`). Should a launch fail after the
             # partition all the same (an environmental error), the state is partly divided
             # with stale trackers: that failure is rethrown, not handed over.
-            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _CompileOnly())
+            compile = _CompileOnly()
+            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, compile)
+            _compile!(compile, backend)
             _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, mode)
         catch e
             e isa InterruptException && rethrow()
@@ -867,42 +888,45 @@ function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, m
     return 1
 end
 
-# How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); only compile each, with
-# the argument types of the launch, enqueueing none (`_CompileOnly`, the first launch of
-# the form); enqueue each and count it in `n` (`_Counted`, the first launch of the form;
-# tests: fail after `k` kernels, `_STAGED_FAULT_AFTER`; `k < 0`: never)
+# How `_run_staged!` issues its kernels: enqueue each (`_Enqueue`); only collect each
+# kernel's compile, with the argument types of the launch, enqueueing none (`_CompileOnly`,
+# the first launch of the form; `_compile!` then compiles the set on host tasks); enqueue
+# each and count it in `n` (`_Counted`, the first launch of the form; tests: fail after `k`
+# kernels, `_STAGED_FAULT_AFTER`; `k < 0`: never)
 struct _Enqueue end
-struct _CompileOnly end
+struct _CompileOnly
+    jobs::Vector{Any}                   # one compile per kernel (`Exec.compile_all!`)
+end
+_CompileOnly() = _CompileOnly(Any[])
+_compile!(m::_CompileOnly, backend) = Exec.compile_all!(backend, m.jobs)
 struct _Counted
     k::Int
     n::Base.RefValue{Int}               # kernels enqueued so far (`DeviceLifecycle.enqueued`)
 end
 
-_stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A} = _launch(body, backend, n, args)
+_stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A} = Exec.launch!(backend, body, n, args)
 function _stage!(m::_Counted, body::B, backend, n, args::A) where {B, A}
     _fault_point(m)
-    _launch(body, backend, n, args)
+    Exec.launch!(backend, body, n, args)
     m.n[] += 1
     return nothing
 end
-# Compile without dispatching: a launch over an empty range. That this compiles the kernel
-# (cached by argument types, which do not depend on the range) and then returns before
-# dispatching is a property of the backend's KA launch, not of the KA API: verified for
-# Metal.jl 1.10 (`Metal.kernel_instances` grows here and not at the launch that follows),
-# AMDGPU.jl (`@roc launch = false`, then a return on zero blocks; verified on 2.7, guarded by
-# `test/device_ir.jl`, D-157) and (from its source) CUDA.jl. The CPU backend has no separate
-# compilation step.
-_stage!(::_CompileOnly, body::B, backend::KernelAbstractions.CPU, n, args::A) where {B, A} = nothing
-function _stage!(::_CompileOnly, body::B, backend, n, args::A) where {B, A}
-    _each_kernel!(backend)(body, args; ndrange = 0, workgroupsize = 1)
+# Compile without enqueueing work: `Exec.compile!`, a launch of the kernel `Exec.launch!`
+# runs, with `n = 0`, so no work item passes its guard (the kernel type does not depend on
+# the ndrange: the launch that follows reuses the compile; a launch over an empty range is
+# not used, since KA 0.10 returns before compiling it). Guarded by `test/device_ir.jl` (ROCm)
+# and the CorePotts Metal suite. The host executor has no compilation step.
+function _stage!(m::_CompileOnly, body::B, backend, n, args::A) where {B, A}
+    push!(m.jobs, () -> Exec.compile!(backend, body, args))
     return nothing
 end
 
-_stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = PLAN_WG); nothing)
+_stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(true, args...; ndrange = PLAN_WG); nothing)
 _stage_plan!(m::_Counted, D, backend, args::A) where {A} =
-    (_fault_point(m); D.plan!(args...; ndrange = PLAN_WG); m.n[] += 1; nothing)
-_stage_plan!(::_CompileOnly, D, backend::KernelAbstractions.CPU, args::A) where {A} = nothing
-_stage_plan!(::_CompileOnly, D, backend, args::A) where {A} = (D.plan!(args...; ndrange = 0); nothing)
+    (_fault_point(m); D.plan!(true, args...; ndrange = PLAN_WG); m.n[] += 1; nothing)
+# the planner's compile: one workgroup with `live = false` (no stage runs)
+_stage_plan!(m::_CompileOnly, D, backend, args::A) where {A} =
+    (push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG)); nothing)
 
 _fault_point(m::_Counted) =
     (m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)")); nothing)

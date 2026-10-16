@@ -152,14 +152,15 @@ are counted null attempts); the fidelity reference.
   2. `commit!`: if the proposal won every claim, run the generated `commit!`. Also
      clear the alternate claim buffer.
 
-  Every kernel is an `@inline` body `body(i, args...)` under a thin `@kernel` wrapper: the
-  phases, field steps and lifecycle share `_each_kernel!`; propose and commit keep their own
-  wrappers with `@Const` read-only buffers (the generic wrapper cost 22% on Metal 576²,
-  958 → 750 MCS/s). On the CPU backend, a
-  launch that fits one workgroup (always single-threaded, and up to `CPU_GRAIN` sites
-  otherwise) runs the body as a plain loop (`_launch`). A KernelAbstractions CPU launch
-  allocates (argument tuple, boxed indices) even inline, and a warm MCS must allocate
-  nothing (AUTONOMY §5, gated in the QA group).
+  Every kernel is an `@inline` body `body(i, args...)`, run by `LatticeFields.Exec`. On a
+  device, the phases, field steps and lifecycle share Exec's one generic wrapper
+  (`unsafe_indices = true` with an `if i <= n` guard; KA 0.9 refuses `return` in a kernel);
+  propose and commit keep their own wrappers with `@Const` read-only buffers (the generic
+  wrapper cost 22% on Metal 576², 958 → 750 MCS/s). On the CPU every kernel, propose and
+  commit included, runs on Exec's host executor, never as a KernelAbstractions CPU launch
+  (PoCL on KA 0.10): a plain loop up to `Exec.HOST_GRAIN` sites or with one thread, else
+  threaded chunks of at least `HOST_GRAIN` sites. The loop allocates nothing, and a warm
+  MCS must allocate nothing (AUTONOMY §5, gated in the QA group).
 - **Why this is correct.** Claims guarantee each claimed cell changes at most once
   per color, and same-color targets lie outside each other's read/write footprints.
   So ΔH is exact for every term the footprint analysis can bound. Models with terms

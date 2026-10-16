@@ -155,7 +155,7 @@ end
 
 # D-009 (P6.0cc): without an algorithm, SequentialCPM() on the CPU; a device backend has no
 # default and says to pass CheckerboardCPM
-struct P60ccDevice <: CorePotts.KernelAbstractions.GPU end
+struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
 @testset "default algorithm (D-009)" begin
     σ, kinds = blocks((20, 20), 5)
     prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
