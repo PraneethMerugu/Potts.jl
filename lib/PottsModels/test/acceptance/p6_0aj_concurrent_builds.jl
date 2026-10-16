@@ -213,7 +213,7 @@ function p60aj_binders(sys)
     end
     if sys isa Potts.PottsSystem
         for f in (:energies, :drives, :constraints, :updates, :equations, :divisions, :link_rules, :observed, :variables, :relations)
-            walk(getfield(sys, f))
+            walk(getfield(getfield(sys, :part), f))   # the Potts payload (W-lite, C4)
         end
     else
         walk(sys)

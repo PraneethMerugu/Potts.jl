@@ -4991,6 +4991,10 @@ C4 moves the old `PottsSystem` fields into `getfield(sys, :part)`, stops exporti
 - `merks_2006_defaults.jl`: `Potts.lattice(m).dims`.
 The new sha256s are in `frozen.toml`.
 
+## D-265 Re-freeze (list A, C4): p6_0aj reads the statements from the payload (2026-10-16; provisional — taken under the maintainer's 2026-10-16 grant, awaiting the list-A OK; D-256, D-259; amends the file's frozen pin only; the number is provisional)
+
+`lib/PottsModels/test/acceptance/p6_0aj_concurrent_builds.jl` collects the names each statement binds (`p60aj_binders`) by walking `getfield(sys, f)` for the old `PottsSystem` fields (`energies`, `drives`, `constraints`, `updates`, `equations`, `divisions`, `link_rules`, `observed`, `variables`, `relations`). Since C4 those fields are in the payload, so the walk threw `FieldError` while the file's top-level constants were built, and the whole file failed to load. The edit walks `getfield(getfield(sys, :part), f)`; the same statements are walked (`@observed` entries are now `Equation`s, which the walker already descends). Nothing else changes. The new sha256 is in `frozen.toml`.
+
 ## D-C6 The LatticePDE discretizer's implementation choices (2026-10-16; provisional — taken under the maintainer's 2026-10-16 grant, awaiting confirmation; D-256; the coordinator assigns the number at merge)
 
 1. **Own method, not PDEBase.** `LatticeDiscretization <: SciMLBase.AbstractDiscretization` with LatticePDE's own `symbolic_discretize`. PDEBase's interface does not fit: its `parse_bcs` cannot read masked markers or per-component array bcs (R2 S-5), and its discretizer interface targets array ODEs, not a lattice IR (R2 F-2). Until the steppers land (C7a), `discretize` returns the same `CompiledField` as `symbolic_discretize`.

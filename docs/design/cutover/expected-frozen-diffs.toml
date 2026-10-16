@@ -685,3 +685,10 @@ commit = "(see refreeze(list-A) commit on lp/c4)"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0aj_concurrent_builds.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-265"
+why = "p60aj_binders walks getfield(getfield(sys, :part), f): the statement fields moved into the payload"
