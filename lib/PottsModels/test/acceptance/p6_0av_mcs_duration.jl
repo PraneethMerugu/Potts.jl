@@ -238,11 +238,11 @@ end
     end
     for (l, v) in P60AV_GOOD
         @testset "md = $l" begin
-            @test getfield(P60avODE(; name = :ode, md = v), :sweep).mcs_duration === Float64(v)
+            @test getfield(getfield(P60avODE(; name = :ode, md = v), :part), :sweep).mcs_duration === Float64(v)
         end
     end
-    @test getfield(P60avExtInherit(; name = :ext, md = 0.5), :sweep).mcs_duration === 0.5
-    @test getfield(P60avExtOwn(; name = :ext, md = 0.5), :sweep).mcs_duration === 0.5
+    @test getfield(getfield(P60avExtInherit(; name = :ext, md = 0.5), :part), :sweep).mcs_duration === 0.5
+    @test getfield(getfield(P60avExtOwn(; name = :ext, md = 0.5), :part), :sweep).mcs_duration === 0.5
 end
 
 @testset "P6.0av: runs at mcs_duration = 0.5 (checked by hand)" begin

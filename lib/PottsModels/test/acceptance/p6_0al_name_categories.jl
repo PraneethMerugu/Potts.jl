@@ -150,16 +150,16 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
     @testset "programmatic builds: extend and PottsSystem" begin
         base = P60alBase(; name = :b)
         var = P60alVarGain(; name = :v)
-        @test p60al_rejection(() -> P60AL_MTKB.extend(var, base), "gain", "parameter", "variable") === :ok
-        @test p60al_rejection(() -> P60AL_MTKB.extend(base, var), "gain", "parameter", "variable") === :ok
-        @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice),
-            sweep = getfield(base, :sweep), parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]),
+        @test p60al_rejection(() -> Potts.extend(var, base), "gain", "parameter", "variable") === :ok
+        @test p60al_rejection(() -> Potts.extend(base, var), "gain", "parameter", "variable") === :ok
+        @test p60al_rejection(() -> Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
+            sweep = getfield(getfield(base, :part), :sweep), parameters = Any[Potts.parameters(base)...], variables = Any[Potts.variables(var)...]),
             "gain", "parameter", "variable") === :ok
         # control: the same parts without the clash
-        @test Potts.PottsSystem(; name = :p, kinds = getfield(base, :kinds), lattice = getfield(base, :lattice), sweep = getfield(base, :sweep),
+        @test Potts.PottsSystem(; name = :p, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base), sweep = getfield(getfield(base, :part), :sweep),
             parameters = Any[filter(p -> Potts.info(p).name !== :gain, Potts.parameters(base))...],
             variables = Any[Potts.variables(var)...]) isa Potts.PottsSystem
-        @test P60AL_MTKB.extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
+        @test Potts.extend(P60alBase(; name = :b2), base) isa Potts.PottsSystem
     end
 
     @testset "controls: a redeclaration in its own category is an override" begin
@@ -170,11 +170,11 @@ p60al_find(xs, n) = only(filter(x -> Potts.info(x).name === n, xs))
         @test p60al_count(Potts.variables(m), :level) == 1 && Potts.info(p60al_find(Potts.variables(m), :level)).default == 2.0
         @test p60al_runs(m)
         m = p60al_model(quote @extend P60alBase(); @observed total ~ 2.0 * sum(volume for n in cells) end)
-        @test count(o -> Potts.info(o.var).name === :total, getfield(m, :observed)) == 1
+        @test count(o -> Potts.info(o.lhs).name === :total, getfield(getfield(m, :part), :observed)) == 1
         m = p60al_model(quote @extend P60alBase(); @kinds medium host extra end)
-        @test getfield(m, :kinds) == [:medium, :host, :extra]
+        @test getfield(getfield(m, :part), :kinds) == [:medium, :host, :extra]
         m = p60al_model(quote @extend P60alBase(); @relations reach = Moore(1) end)
-        @test getfield(m, :relations)[:reach] == Moore(1)
+        @test getfield(getfield(m, :part), :relations)[:reach] == Moore(1)
         m = p60al_model(quote @extend b1 = P60alBase(); @extend b2 = P60alBase() end)
         @test p60al_count(Potts.parameters(m), :gain) == 1
         m = p60al_model(quote @extend P60alCompBase(); @parameters rate = 1.0 end)

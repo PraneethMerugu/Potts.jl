@@ -357,7 +357,7 @@ end
 
 @testset "P6.0bn S: the cell template of the alias model" begin
     sys = P60bnAlias(; name = :alias)
-    for cs in (mtkcompile(sys), mtkcompile(complete(sys)))
+    for cs in (mtkcompile(sys),)
         s = p60bn_ode(cs, :cell)
         @test s isa P60BN_M.System
         @test P60BN_M.iscomplete(s) && p60bn_scheduled(s)
@@ -574,7 +574,7 @@ end
 
 @testset "P6.0bn N: complete keeps the alias, mtkcompile eliminates it" begin
     plain = p60bn_plain()
-    c = complete(plain)
+    c = P60BN_M.complete(plain)
     @test P60BN_M.iscomplete(c) && !p60bn_scheduled(c)
     @test :xa in p60bn_names(P60BN_M.unknowns(c)) && !(:xa in p60bn_observed_names(c))
     s = P60BN_M.mtkcompile(plain)

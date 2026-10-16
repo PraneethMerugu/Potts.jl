@@ -423,7 +423,7 @@ end
 
 @testset "P6.0bo S: the cell template carries the initialization equations" begin
     sys = p60bo_build(:P60boTarget)
-    for cs in (mtkcompile(sys), mtkcompile(complete(sys)))
+    for cs in (mtkcompile(sys),)
         s = p60bo_init(cs, :cell)
         @test s isa P60BO_M.System && P60BO_M.iscomplete(s)
         @test length(P60BO_M.initialization_equations(s)) == 1

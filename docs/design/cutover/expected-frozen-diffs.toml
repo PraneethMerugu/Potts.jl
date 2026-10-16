@@ -636,3 +636,52 @@ commit = "(see refreeze(list-A) commit on lp/c4)"
 fixup_of = "C4"
 decision = "D-263"
 why = "plain and compiled forms; events and payload on Potts.inner(sys)"
+
+[[edits]]
+path = "acceptance/merks_2006_defaults.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0al_name_categories.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0av_mcs_duration.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0bn_ode_mtkcompile.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0bo_initialization.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0bv_edge_after_mcs.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
+
+[[edits]]
+path = "acceptance/p6_0e2_prime_errors.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-264"
+why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"

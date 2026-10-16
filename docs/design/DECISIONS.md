@@ -4981,6 +4981,16 @@ C4 keeps `PottsSweepSpec` as metadata on the complete System a `PottsSystem` wra
 
 `lib/PottsModels/test/acceptance/p6_0bp_updates.jl` checked `updates` on four forms (plain, `complete`, `mtkcompile`, `mtkcompile(complete)`). Since C4 a `PottsSystem` already wraps a complete System and MTK's `complete` of it is refused, so eight testsets failed. The edit checks the plain and compiled forms, uses `Potts.extend`, reads events and the sweep payload from `Potts.inner(sys)`, and rebuilds the structural oracle from `sys.x`. Two testsets are renamed to match ("P6.0bp F: plain and mtkcompile agree", "P6.0bp F: an edge-scope update"). The timing oracle and the other controls are unchanged. The new sha256 is in `frozen.toml`.
 
+## D-264 Re-freeze (list A, C4): mechanical container edits in seven frozen files (2026-10-16; provisional — taken under the maintainer's 2026-10-16 grant, awaiting the list-A OK; D-256, D-259; the number is provisional)
+
+C4 moves the old `PottsSystem` fields into `getfield(sys, :part)`, stops exporting `complete` and `extend`, and stores `@observed` entries as `Equation`s. Seven frozen files used those forms and nothing else of the container; each edit is mechanical and no assertion changes meaning:
+- `p6_0bv_edge_after_mcs.jl`: drop the two `mtkcompile(complete(x))` checks (the plain form is already checked); events of `Potts.inner(.sys)`.
+- `p6_0bn_ode_mtkcompile.jl`, `p6_0bo_initialization.jl`: drop the `mtkcompile(complete(sys))` loop entry; `ModelingToolkitBase.complete` for a plain MTK System.
+- `p6_0al_name_categories.jl`: `Potts.extend` for MTK's `extend`; `getfield(getfield(x, :part), :f)`; `Potts.lattice(x)`; `o.lhs` for `o.var`.
+- `p6_0av_mcs_duration.jl`, `p6_0e2_prime_errors.jl`: `getfield(getfield(x, :part), :f)`; `Potts.lattice(x)`.
+- `merks_2006_defaults.jl`: `Potts.lattice(m).dims`.
+The new sha256s are in `frozen.toml`.
+
 ## D-C6 The LatticePDE discretizer's implementation choices (2026-10-16; provisional — taken under the maintainer's 2026-10-16 grant, awaiting confirmation; D-256; the coordinator assigns the number at merge)
 
 1. **Own method, not PDEBase.** `LatticeDiscretization <: SciMLBase.AbstractDiscretization` with LatticePDE's own `symbolic_discretize`. PDEBase's interface does not fit: its `parse_bcs` cannot read masked markers or per-component array bcs (R2 S-5), and its discretizer interface targets array ODEs, not a lattice IR (R2 F-2). Until the steppers land (C7a), `discretize` returns the same `CompiledField` as `symbolic_discretize`.

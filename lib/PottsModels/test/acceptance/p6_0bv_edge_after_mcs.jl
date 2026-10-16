@@ -11,7 +11,7 @@
 # Rule (supported, not refused): an edge-scope MCS update runs once per existing link of
 # the written variable's relationship, with the meaning the existing edge machinery already
 # gives an edge (the `edges(rel) => …` term and `@unlink` condition environment):
-#  C. `mtkcompile` accepts it (plain and `complete` input), and `Potts.updates(csys)` on the
+#  C. `mtkcompile` accepts it, and `Potts.updates(csys)` on the
 #     compiled form equals the authored listing (phase, scope `:edge`, cadence and the
 #     `isequal` equation; the P6.0bp F check extended to the compiled form).
 #  B. Behaviour, on a frozen configuration (every copy costs ≥ ~990 at T = 1, so σ and the
@@ -188,7 +188,6 @@ p60bv_links(cell) = Array(CorePotts.link_store(cell, :bond).links)
     cs = mtkcompile(sys)
     @test cs isa Potts.CompiledPottsSystem
     @test p60bv_same(Potts.updates(cs), U)
-    @test p60bv_same(Potts.updates(mtkcompile(complete(sys))), U)
     u = only(Potts.updates(cs))
     @test u.phase === :after_mcs && u.scope === :edge && u.every == Potts.Every(1)
     @test p60bv_lhsname(u) === :rest
@@ -198,9 +197,8 @@ p60bv_links(cell) = Array(CorePotts.link_store(cell, :bond).links)
     @test [p60bv_row(u) for u in Ur] == [(:after_mcs, :edge, Potts.Every(1)), (:after_mcs, :cell, Potts.Every(1)),
                                          (:before_mcs, :edge, Potts.Every(3))]
     @test p60bv_same(Potts.updates(mtkcompile(r)), Ur)
-    @test p60bv_same(Potts.updates(mtkcompile(complete(r))), Ur)
     # the compiled system still has no MTK events (D-162)
-    @test isempty(P60BV_M.discrete_events(getfield(mtkcompile(sys), :sys)))
+    @test isempty(P60BV_M.discrete_events(Potts.inner(getfield(mtkcompile(sys), :sys))))
 end
 
 # ---------------------------------------------------------------------------------------
