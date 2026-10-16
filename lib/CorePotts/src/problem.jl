@@ -253,9 +253,9 @@ end
 # Counts of the standard-rule refresh (D-081) run by `refresh_frozen!` and on the host
 # lifecycle path: `device` = [unused, mobile-count change, changed sites], read into `host`
 # at once. The device lifecycle (D-089) keeps its own counts on the device (`_fold_lifecycle!`).
-struct MobileCounters{D}
+struct MobileCounters{D, I}
     device::D
-    host::Vector{Int32}
+    host::Vector{I}             # I: `site_index_type` of the lattice (D-253)
 end
 
 # Ensemble statistics: totals over trajectories.
@@ -314,15 +314,6 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
 end
 CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolve.init(prob; kwargs...))
 
-# The boundary list and a frozen mask's mobile-site list store sites as Int32: refuse, never
-# wrap (D-247). Plain all-mobile lattices index sites as Int.
-function _check_site_lists(lat, frozen, alg)
-    nsites(lat) > typemax(Int32) && (frozen !== nothing || _skips_interior(alg)) && throw(ArgumentError(
-        "this lattice has $(nsites(lat)) sites; a frozen mask and SequentialCPM(; skip_interior = true) " *
-        "list sites as Int32 and support at most 2^31 - 1 (D-247)"))
-    return nothing
-end
-
 function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, saveat, save_start, save_end, callback)
     alg isa SequentialCPM && !(backend isa CPU) &&
         throw(ArgumentError("SequentialCPM runs on the host; use CheckerboardCPM on $(typeof(backend))"))
@@ -336,7 +327,7 @@ function _init(prob::PottsProblem, alg::CPMAlgorithm, fresh::Bool; backend, save
     outside = filter(t -> !(t0 <= t <= t1), collect(Int, saveat))
     isempty(outside) || @warn "saveat times outside tspan $(prob.tspan) are never reached: $outside"
     lat = prob.lattice
-    _check_site_lists(lat, prob.frozen, alg)
+    _check_convert_atomics(backend, prob.u0)
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
@@ -611,7 +602,22 @@ const _FORCE_DEVICE_LIFECYCLE = Ref(false)
 _mobility_scratch(backend, prob, ::AllMobile) = nothing
 function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
-    return MobileCounters(KernelAbstractions.zeros(backend, Int32, 3), zeros(Int32, 3))
+    I = site_index_type(nsites(prob.lattice))
+    I === Int64 && !_atomic64(backend) && throw(ArgumentError(
+        "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
+        "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have (D-253); " *
+        "run it on the CPU or on ROCm or CUDA"))
+    return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
+end
+
+# A conversion pass above 2³¹ − 1 sites keeps its lowest site and its counts in Int64
+# atomics (`convert_scratch`, D-253), which a backend without them cannot compile: refused
+function _check_convert_atomics(backend, u0)
+    haskey(u0.model, CONVERT_FLAGS) || return nothing
+    (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
+        "this lattice has $(length(u0.σ)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
+        "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
+    return nothing
 end
 
 # Statistics of a new run: `accepted_ΔH` is 0.0 when `f` tracks, else `nothing`;
@@ -690,7 +696,7 @@ function _refresh_frozen!(integ, m::MaskMobility, kinds::Tuple)
         (m.frozen, sc.device, integ.state.σ, integ.state.cell.kind, kinds, integ.ctx.lattice))
     integ.stats.launches += 1
     _copy!(integ.stats, sc.host, sc.device)         # synchronizes (a no-op copy on the CPU)
-    fill!(sc.device, Int32(0))
+    fill!(sc.device, zero(eltype(sc.host)))
     integ.nmobile += sc.host[2]
     sc.host[3] > 0 && m.sites !== nothing && _mobile_sites!(m.sites, m.frozen)
     return nothing

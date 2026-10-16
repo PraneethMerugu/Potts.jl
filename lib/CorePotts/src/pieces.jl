@@ -118,7 +118,8 @@ Adapt.@adapt_structure FloodScratch
 function FloodScratch(backend, lat::Lattice, after_slots::Integer)
     n = nsites(lat)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)   # host or device scratch
-    return FloodScratch(z(UInt32, n), z(Int32, n), z(UInt32, 1),
+    # the stack holds sites: `site_index_type` (D-253), Int64 above 2³¹ − 1 sites
+    return FloodScratch(z(UInt32, n), z(site_index_type(n), n), z(UInt32, 1),
         after_slots > 0 ? z(Int32, 4 * after_slots, n) : nothing)
 end
 
@@ -164,7 +165,7 @@ function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
     stack = fl.stack
     offs = _adjacency_offsets(lat, adj)
     top = 1
-    @inbounds stack[1] = Int32(s0)              # stack has nsites entries: each site enters once
+    @inbounds stack[1] = eltype(stack)(s0)      # stack has nsites entries: each site enters once
     size = 1
     while top > 0
         s = Int(@inbounds stack[top])
@@ -184,7 +185,7 @@ function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
             end
             @inbounds mark[r] = S
             top += 1
-            @inbounds stack[top] = Int32(r)
+            @inbounds stack[top] = eltype(stack)(r)
             size += 1
         end
     end
@@ -270,11 +271,11 @@ the visited bits are `MVector`s sized by `CAP` (no allocation, device-safe). `CA
 the box (`_box_size`); a larger box is refused for want of window.
 """
 function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
-        adj::Val, ::Val{W}, ::Val{CAP}) where {N, W, CAP}
+        adj::Val, ::Val{W}, ::Val{CAP}, ::Type{I}) where {N, W, CAP, I}
     _box_size(lat, W) <= CAP || return GLOBAL_WINDOW
     seen = MVector{cld(CAP, 32), UInt32}(ntuple(_ -> UInt32(0), Val(cld(CAP, 32))))
     tmark = MVector{cld(CAP, 32), UInt32}(ntuple(_ -> UInt32(0), Val(cld(CAP, 32))))
-    stack = MVector{CAP, Int32}(undef)
+    stack = MVector{CAP, I}(undef)                  # sites: the flood stack's width (D-253)
     offs = _adjacency_offsets(lat, adj)
     # the touches, marked in `tmark` (each inside the box: W ≥ 1)
     ntouch = 0
@@ -302,7 +303,7 @@ function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
         _setbit!(seen, i0)
         found += 1
         top = 1
-        @inbounds stack[1] = Int32(linear_index(lat, y0))         # each box site enters once: top ≤ CAP
+        @inbounds stack[1] = I(linear_index(lat, y0))             # each box site enters once: top ≤ CAP
         escaped = false
         while top > 0
             s = Int(@inbounds stack[top])
@@ -322,7 +323,7 @@ function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
                 _setbit!(seen, i)
                 _bit(tmark, i) && (found += 1)
                 top += 1
-                @inbounds stack[top] = Int32(r)
+                @inbounds stack[top] = I(r)
             end
         end
         first && found == ntouch && return GLOBAL_PASS
@@ -354,7 +355,7 @@ end
     ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap) = _keeps_search(
     GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap)
 @inline _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap) = _keeps_window(
-    σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap)
+    σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap, eltype(ctx.flood.stack))
 
 """
     global_gains(σ, ctx, prop, Val(full)) -> Bool
@@ -528,7 +529,12 @@ edits of σ. A dead cell has (0, 0).
 function recompute_pieces(σ, lat::Lattice, adj::Val, ncell::Integer)
     P = zeros(Int32, ncell)
     L = zeros(Int32, ncell)
-    fl = FloodScratch(CPU(), lat, 0)
+    # a function barrier: the scratch's stack type is chosen from the site count at run time
+    # (`site_index_type`, D-253), so the floods run in a method specialized on it
+    _recompute_pieces!(P, L, σ, lat, adj, FloodScratch(CPU(), lat, 0))
+    return P, L
+end
+function _recompute_pieces!(P, L, σ, lat::Lattice, adj::Val, fl::FloodScratch)
     S = _stamps!(fl, UInt32(2))
     for i in 1:nsites(lat)
         c = σ[i]

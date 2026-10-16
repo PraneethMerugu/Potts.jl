@@ -20,9 +20,9 @@
 # with the sites that read it. The comparison is one pass over two arrays (O(N) per MCS,
 # about 0.25 ms on 1400²); quiet sites cost nothing else.
 
-mutable struct BoundaryCache{N, K, FZ}
-    const list::Vector{Int32}       # B in `list[1:n]`, any order
-    const pos::Vector{Int32}        # position in `list`, 0 outside B
+mutable struct BoundaryCache{N, K, FZ, I}
+    const list::Vector{I}           # B in `list[1:n]`, any order (I: `site_index_type`, D-253)
+    const pos::Vector{I}            # position in `list`, 0 outside B
     const unlike::Vector{Int32}     # on-lattice mobile proposal neighbours of another owner
     const σ0::Vector{Int32}         # σ as B last saw it
     const frozen0::FZ               # the frozen mask as B last saw it (`nothing`: all mobile)
@@ -36,7 +36,8 @@ end
 function BoundaryCache(σ, mob, lat::Lattice{N}, proposal::Relation{N, K}) where {N, K}
     m = length(σ)
     rev = map(o -> map(-, o), proposal.offsets)
-    B = BoundaryCache{N, K, _shadow_type(mob)}(zeros(Int32, m), zeros(Int32, m), zeros(Int32, m),
+    I = site_index_type(m)
+    B = BoundaryCache{N, K, _shadow_type(mob), I}(zeros(I, m), zeros(I, m), zeros(Int32, m),
         zeros(Int32, m), _shadow_mask(mob, m), rev, 0, -1, -1, 0.0)
     _rebuild_boundary!(B, σ, mob, lat, proposal.offsets)
     return B
@@ -112,7 +113,7 @@ end
 end
 
 function _rebuild_boundary!(B::BoundaryCache, σ, mob, lat, offsets)
-    fill!(B.pos, Int32(0))
+    fill!(B.pos, zero(eltype(B.pos)))
     B.n = 0
     for u in eachindex(B.σ0)
         _recount!(B, σ, mob, lat, offsets, u, coordinates(lat, u))
