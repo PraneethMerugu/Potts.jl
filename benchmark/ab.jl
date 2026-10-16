@@ -472,4 +472,10 @@ function ab_cli(args)
     end
 end
 
-abspath(PROGRAM_FILE) == (@__FILE__) && exit(ab_cli(ARGS))
+# When run as a script, stderr shares stdout's file description. A caller that sends both to one
+# file by name (two opens, two offsets) would otherwise get stderr written over the report's
+# first lines; with the shared description neither stream overwrites the other.
+if abspath(PROGRAM_FILE) == (@__FILE__)
+    redirect_stderr(stdout)
+    exit(ab_cli(ARGS))
+end
