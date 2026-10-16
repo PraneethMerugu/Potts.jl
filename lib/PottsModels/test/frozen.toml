@@ -319,8 +319,8 @@ decision = "D-271"
 
 [[file]]
 path = "acceptance/p6_0g_kind_classes.jl"
-sha256 = "93ffe48837d21b86c56ab2bb17e81aa2c888b1830bf41755263583c69535c8e4"
-decision = "D-271"
+sha256 = "011a3dc5d1f65300f675038a63b4794c4c78cff0ec825dd55bfee1922c39ea8a"
+decision = "D-258"
 
 [[file]]
 path = "acceptance/p6_1b_boundary_anneal.jl"

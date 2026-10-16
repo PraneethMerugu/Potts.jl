@@ -204,8 +204,8 @@ p60g_define(:P60gC, :(@potts_model P60gC begin
         near ~ count(true for n in Moore(1)(site) if kind[n] ∈ ecm)
     end
     @equations begin
-        D(g) ~ 0.5 * (kind ∈ endothelial)
-        D(q) ~ 0.25 * (kind ∈ endothelial)
+        D(g) ~ 0.5 * ismember(kind, endothelial)
+        D(q) ~ 0.25 * ismember(kind, endothelial)
     end
     @observed begin
         nec ~ count(true for c in cells(endothelial))
@@ -316,8 +316,8 @@ p60g_define(:P60gCTip, :(@potts_model P60gCTip begin
         near ~ count(true for n in Moore(1)(site) if kind[n] ∈ ecm)
     end
     @equations begin
-        D(g) ~ 0.5 * (kind ∈ endothelial)
-        D(q) ~ 0.25 * (kind ∈ endothelial)
+        D(g) ~ 0.5 * ismember(kind, endothelial)
+        D(q) ~ 0.25 * ismember(kind, endothelial)
     end
     @sweep Metropolis(; temperature = 3.0)
 end))
