@@ -615,3 +615,10 @@ commit = "(see refreeze(list-A) commit on lp/c4)"
 fixup_of = "C4"
 decision = "D-260"
 why = "W-lite container: four fields, inner-System accessors, loud MTK rebuilds"
+
+[[edits]]
+path = "acceptance/p6_0bs_mtk_claims.jl"
+commit = "(see refreeze(list-A) commit on lp/c4)"
+fixup_of = "C4"
+decision = "D-261"
+why = "MTK claims read Potts.inner(sys); no complete"

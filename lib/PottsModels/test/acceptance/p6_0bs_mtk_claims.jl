@@ -9,18 +9,21 @@
 # The claims and their checks (public API only; one testset per claim):
 #  C1. "Potts.jl is built on ModelingToolkit. Every Potts model is a ModelingToolkit
 #      `AbstractSystem`" (D-137, D-159). `PottsSystem <: ModelingToolkitBase.AbstractSystem`;
-#      every published model and the fixture is one, plain and completed; none is a
-#      `ModelingToolkitBase.System` (the forbidden "models are MTK `System`s").
+#      every published model and the fixture is one and wraps a complete MTK `System`
+#      (`Potts.inner(sys)`, W-lite, cutover C4); none is itself a `ModelingToolkitBase.System`
+#      (the forbidden "models are MTK `System`s").
 #  C2. "... whose parameters, state variables, equations, observables ... are Symbolics
-#      expressions that ModelingToolkit's generic tools can inspect, index and complete"
-#      (plan §5). On every published model MTK's own `equations`, `unknowns`, `parameters`,
-#      `observed`, `nameof`, `complete` work and return Symbolics objects; `extend` merges two
-#      models; SymbolicIndexingInterface `getu` (an observed algebraic variable included),
-#      `getp` and `setp` work on a fixture's problem, solution and integrator.
+#      expressions that ModelingToolkit's generic tools can inspect and index" (plan §5; since
+#      C4 "complete" holds through the complete System a model wraps, `Potts.inner(sys)`: MTK's
+#      `complete` of the container itself is refused). On every published model MTK's own
+#      `equations`, `unknowns`, `parameters`, `observed`, `nameof` work and return Symbolics
+#      objects and equal the inner System's; `Potts.extend` merges two models;
+#      SymbolicIndexingInterface `getu` (an observed algebraic variable included), `getp` and
+#      `setp` work on a fixture's problem, solution and integrator.
 #  C3. The Hamiltonian, drives and constraints are Symbolics expressions readable through
-#      MTK's metadata API (D-160): `Potts.hamiltonian`, `Potts.drives`,
-#      `ModelingToolkitBase.constraints`, and `getmetadata(sys, Potts.PottsSweepSpec, nothing)`
-#      on every published model (plain, completed, compiled); a plain `System` has no
+#      MTK's metadata API (D-160): `Potts.hamiltonian`, `Potts.drives`, the payload's
+#      `constraints`, and `getmetadata(Potts.inner(sys), Potts.PottsSweepSpec,
+#      nothing)` on every published model (authored and compiled); a plain `System` has no
 #      payload (negative control).
 #  C4. "The continuous parts of a model, its cell- and model-scale ODEs, are ModelingToolkit
 #      systems compiled by `mtkcompile`; Potts.jl lowers the simplified equations into its
@@ -36,8 +39,8 @@
 #      and the component runs as its Euler oracle; a `ShiftIndex` Boolean network ticks as
 #      its hand recurrence.
 #  C6. "update rules", not events (D-162, D-164). `Potts.updates(sys)` lists each update as a
-#      Symbolics `Equation` in MTK's `Pre` form; `ModelingToolkitBase.discrete_events(sys)`
-#      and `continuous_events(sys)` are empty on every published model and the fixture, so
+#      Symbolics `Equation` in MTK's `Pre` form; `ModelingToolkitBase.discrete_events` and
+#      `continuous_events` of `Potts.inner(sys)` are empty on every published model and the fixture, so
 #      nothing may claim that events are MTK callbacks or compiled by MTK.
 #  C7. "Entity-local initialization equations are ModelingToolkit initialization systems,
 #      solved per cell by MTK's `InitializationProblem`" (D-170).
@@ -185,15 +188,15 @@ const P60BS_ALL = [P60BS_PUBLISHED; ("P60bsAll fixture", () -> P60bsAll(; name =
         sys = build()
         @test sys isa P60BS_M.AbstractSystem && sys isa PottsSystem
         @test !(sys isa P60BS_M.System)
-        cs = complete(sys)
-        @test cs isa P60BS_M.AbstractSystem && P60BS_M.iscomplete(cs)
+        cs = Potts.inner(sys)
+        @test cs isa P60BS_M.System && P60BS_M.iscomplete(cs)
     end
     # control: an MTK System is both, so the detector can tell them apart
     @test P60BS_DC isa P60BS_M.System && P60BS_DC isa P60BS_M.AbstractSystem
 end
 
 # ---------------------------------------------------------------------------------------
-# C2. MTK's generic tools inspect, index and complete a Potts model
+# C2. MTK's generic tools inspect and index a Potts model (and complete its inner System)
 
 @testset "P6.0bs C2: MTK's generic accessors on every published model" begin
     @testset "$label" for (label, build) in P60BS_ALL
@@ -205,14 +208,14 @@ end
         @test !isempty(p) || !isempty(u)
         @test all(p60bs_symbolic, u) && all(p60bs_symbolic, p)
         @test nameof(sys) isa Symbol
-        @test p60bs_names(P60BS_M.unknowns(complete(sys))) == p60bs_names(u)
-        @test p60bs_names(P60BS_M.parameters(complete(sys))) == p60bs_names(p)
+        @test p60bs_names(P60BS_M.unknowns(Potts.inner(sys))) == p60bs_names(u)
+        @test p60bs_names(P60BS_M.parameters(Potts.inner(sys))) == p60bs_names(p)
     end
     sys = P60bsAll(; name = :all)
     @test Set([:x, :xalias, :m, :gap, :acc, :c, :rt]) ⊆ p60bs_names(P60BS_M.unknowns(sys))
     @test Set([:k, :r, :Dc]) ⊆ p60bs_names(P60BS_M.parameters(sys))
-    # `extend` merges two models (MTK's generic name, Potts' method)
-    ext = extend(P60bsExtra(; name = :extra), sys)
+    # `Potts.extend` merges two models
+    ext = Potts.extend(P60bsExtra(; name = :extra), sys)
     @test ext isa PottsSystem
     @test :κ in p60bs_names(P60BS_M.parameters(ext)) && :k in p60bs_names(P60BS_M.parameters(ext))
     @test length(Potts.hamiltonian(ext)) == 2
@@ -242,8 +245,8 @@ end
         @test H isa AbstractVector && !isempty(H)
         @test all(t -> t isa Pair && p60bs_symbolic(last(t)), H)
         @test all(p60bs_symbolic, Potts.drives(sys))
-        @test P60BS_M.constraints(sys) isa AbstractVector
-        for s in (sys, complete(sys), mtkcompile(sys), mtkcompile(sys).sys)
+        @test P60BS_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing).constraints isa AbstractVector
+        for s in (Potts.inner(sys), mtkcompile(sys), Potts.inner(mtkcompile(sys).sys))
             @test P60BS_M.hasmetadata(s, Potts.PottsSweepSpec)
             spec = P60BS_M.getmetadata(s, Potts.PottsSweepSpec, nothing)
             @test spec isa Potts.PottsSweepSpec
@@ -285,7 +288,7 @@ end
     # N: the oracle can fail (a wrong rate does not match)
     @test !isapprox(sol[:x][end], fill(2.0 * 0.8^P60BS_N, 2); rtol = 1e-6)
     # N: the scheduled detector can fail: `complete` alone keeps the alias and is not scheduled
-    plain = complete(P60BS_DC)
+    plain = P60BS_M.complete(P60BS_DC)
     @test !P60BS_M.isscheduled(plain) && :yal in p60bs_names(P60BS_M.unknowns(plain))
     @test P60BS_M.isscheduled(P60BS_M.mtkcompile(P60BS_DC))
     # an uncompiled model has no ODE system (the message names mtkcompile)
@@ -325,7 +328,7 @@ end
 
 @testset "P6.0bs C6: update rules, not events" begin
     sys = P60bsAll(; name = :all)
-    for s in (sys, complete(sys), mtkcompile(sys))
+    for s in (sys, mtkcompile(sys))
         us = Potts.updates(s)
         @test length(us) == 1
         u = only(us)
@@ -345,8 +348,8 @@ end
         s = build()
         @test Potts.updates(s) isa AbstractVector
         @test all(u -> u.eq isa P60BS_S.Equation, Potts.updates(s))
-        @test isempty(P60BS_M.discrete_events(s))
-        @test isempty(P60BS_M.continuous_events(s))
+        @test isempty(P60BS_M.discrete_events(Potts.inner(s)))
+        @test isempty(P60BS_M.continuous_events(Potts.inner(s)))
     end
 end
 
