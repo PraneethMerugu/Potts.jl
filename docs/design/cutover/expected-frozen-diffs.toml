@@ -818,3 +818,10 @@ commit = "PENDING"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R6"
+why = "D-250 AUTO re-pin: the sweeps take the attempt/color range of a sub-MCS pass (D-C8 item 14), which changes the pinned IR text"
