@@ -99,7 +99,7 @@ end
         ks = map(p.kernels) do k
             Kernel{N}(k.key, k.space, reverse(k.nodes),
                 k.operands, k.consts, k.accesses, k.tables,
-                k.calls, k.stores, k.reductions)
+                k.calls, k.stores, k.reductions, k.gate)
         end
         return with_kernels(p, ks)
     end

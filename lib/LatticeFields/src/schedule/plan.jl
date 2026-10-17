@@ -69,6 +69,8 @@ Why `k` cannot join `group` (`nothing` if it can). `jacobi[i]` is the SCC of ker
 function fusion_blocker(p::Program, group::Vector{Int}, k::Int, scc)
     ks = p.kernels
     ks[k].space == ks[group[1]].space || return (:space, "different iteration space")
+    any(i -> ks[i].gate != 0 || !isempty(ks[i].reductions), [group; k]) &&
+        return (:space, "a gated or reducing kernel runs alone")
     for g in group
         wg = writes(ks[g])
         for a in ks[k].accesses
@@ -148,9 +150,14 @@ struct StepPlan{N}
 end
 
 function _ndrange(p, k, strategy)
-    strategy == :cartesian ? Int.(leveldims(p, k.space.level)) :
-    (nsites(p, k.space.level),)
+    strategy == :cartesian && return Int.(leveldims(p, k.space.level))
+    n = nsites(p, k.space.level)
+    return isempty(k.reductions) ? (n,) : (256 * reduction_blocks(n),)
 end
+"""
+Workgroups of a reducing kernel over `n` sites: one per 256-site block.
+"""
+reduction_blocks(n::Integer) = cld(Int(n), 256)
 function workgroup(N, strategy)
     return strategy == :cartesian ? (N == 3 ? (64, 2, 2) : N == 2 ? (64, 4) : (256,)) :
            (256,)

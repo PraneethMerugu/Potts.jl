@@ -99,7 +99,8 @@ function kernel_args(p::Program, k::Kernel)
     for st in k.stores
         b2 = p.fields[st.access.field].buffers == 2
         f(st.access.field, b2 ? :next : :cur)
-        b2 && k.space.kind != FULL && f(st.access.field, :cur)
+        b2 && (k.space.kind != FULL || k.gate != 0 || st.law == :accumulate) &&
+            f(st.access.field, :cur)
     end
     k.space.kind == MASKED && f(p.masks[k.space.mask].field, :cur)
     for t in k.tables
@@ -113,7 +114,7 @@ end
 _loads(k::Kernel) = ((n, k.accesses[n.imm]) for n in k.nodes if n.op == LOAD)
 
 function lower_index(p::Program{N}, k::Kernel{N}, o::CompileOptions) where {N}
-    box = any(a -> count(!iszero, a.offset.a) >= 2, k.accesses)
+    box = any(a -> count(!iszero, a.offset.a) >= 2, k.accesses) && isempty(k.reductions)
     strategy = o.debug ? :linear : o.index == :auto ? (box ? :cartesian : :linear) : o.index
     levels = Int8[k.space.level]
     foreach(a -> push!(levels, k.space.level + a.level), k.accesses)
@@ -121,7 +122,8 @@ function lower_index(p::Program{N}, k::Kernel{N}, o::CompileOptions) where {N}
     return Lowered(strategy, unique!(levels), lanes, as)
 end
 
-# Emission context.
+# Emission context. `prefix` names the value variables (`v<i>`; a RESTRICT child scope uses
+# its own prefix) and `child` is the child offset that level −1 accesses add inside it.
 struct Ctx{N, X}
     p::Program{N}
     k::Kernel{N}
@@ -129,53 +131,68 @@ struct Ctx{N, X}
     L::Lowered
     names::Dict{Tuple{Int32, Symbol}, Symbol}
     index::X                         # access -> linear index expression (a lowering stage)
+    prefix::Symbol
+    child::NTuple{N, Int}
 end
+function Ctx(p::Program{N}, k, o, L, names, index) where {N}
+    Ctx(p, k, o, L, names, index, :v, ntuple(_ -> 0, N))
+end
+vname(c::Ctx, i) = Symbol(c.prefix, i)
 
 _dim(c::Ctx, level, d) = (j = findfirst(==(level), c.L.levels); :($(c.o.I)(G.dims[$j][$d])))
 _I(c::Ctx, v) = c.o.I(v)
 
 """
-Target coordinate along axis `d` before the boundary policy, with the level shift. Coarse
-level convention (contract.jl): a coarse axis has `n ÷ 2` sites; fine sites pair up, and the
-last aggregate of an odd axis takes width 3. So a fine `x` maps to coarse
-`min((x − 1) ÷ 2 + 1, nc)`, and a coarse `x` has its children at `2(x − 1) + 1 + o`.
+Fine-frame coordinate of access `a` along axis `d`, before wrapping, and the fine level.
+Coarse level convention (contract.jl): a coarse axis has `n ÷ 2` sites; fine sites pair up,
+and the last aggregate of an odd axis takes width 3. A level −1 access reads the child
+`2(x − 1) + 1 + o` (`o` in the fine frame, plus the RESTRICT child offset); a level +1 access
+reads the parent of the fine site `x + o`. An axis of size 1 is never coarsened (identity).
 """
-function _coord(c::Ctx, a::Access, d, lev)
+function _fine(c::Ctx, a::Access, d)
     o = a.offset.cond == 0 ? _I(c, a.offset.a[d]) :
-        :(ifelse($(Symbol(:v, a.offset.cond)), $(_I(c, a.offset.b[d])), $(_I(c, a.offset.a[d]))))
+        :(ifelse($(vname(c, a.offset.cond)), $(_I(c, a.offset.b[d])), $(_I(c, a.offset.a[d]))))
     x = Symbol(:x, d)
-    a.level == 0 && return :($x + $o)
-    nc = _dim(c, lev, d)
-    c.o.debug &&
-        return a.level > 0 ? :(min(fld($x - 1, 2) + 1, $nc) + $o) : :(2 * ($x - 1) + 1 + $o)
-    one_ = _I(c, 1)
-    return a.level > 0 ? :(min((($x - $one_) >> 1) + $one_, $nc) + $o) :
-           :(($x - $one_) * $(_I(c, 2)) + $one_ + $o)
+    a.level >= 0 && return :($x + $o), c.k.space.level
+    lev = c.k.space.level + a.level
+    leveldims(c.p, lev)[d] == 1 && return :($x + $o), lev
+    ch = _I(c, c.child[d])
+    c.o.debug && return :(2 * ($x - 1) + 1 + $ch + $o), lev
+    return :(($x - $(_I(c, 1))) * $(_I(c, 2)) + $(_I(c, 1)) + $ch + $o), lev
 end
 
 """
-Largest |offset| of an access along axis `d` (both `Sel` arms).
+Largest |offset| of an access along axis `d` (both `Sel` arms), with the child offset.
 """
-_maxoff(a::Access, d) = max(abs(Int(a.offset.a[d])), abs(Int(a.offset.b[d])))
+function _maxoff(c::Ctx, a::Access, d)
+    max(abs(Int(a.offset.a[d])), abs(Int(a.offset.b[d]))) +
+    (a.level < 0 ? 2 : 0)
+end
 
 """
-Target coordinates of an access. Periodic axes wrap: one conditional fold when every offset
-is smaller than the axis (checked at compile time against the program's dims), else
-`mod1`. With `bounded = true`, CLAMP and ZERO clamp non-periodic axes into range; the
-inside test of ZERO reads the unclamped coordinates (`bounded = false`).
+Target coordinates of an access. Periodic axes wrap in the fine frame: one conditional fold
+when every offset is smaller than the axis (checked at compile time against the program's
+dims), else `mod1`. With `bounded = true`, CLAMP and ZERO clamp non-periodic axes into
+range; the inside test of ZERO reads the unclamped coordinates (`bounded = false`). A level
++1 access then maps the fine coordinate to its parent, `min((y − 1) ÷ 2 + 1, nc)`.
 """
 function _target(c::Ctx{N}, a::Access{N}; bounded::Bool = true) where {N}
     lev = c.k.space.level + a.level
     ys = Any[]
-    dims = leveldims(c.p, lev)
     for d in 1:N
-        y, n = _coord(c, a, d, lev), _dim(c, lev, d)
-        shifted = a.offset.cond != 0 || a.offset.a[d] != 0 || a.level != 0
+        y, fl = _fine(c, a, d)
+        n = _dim(c, fl, d)
+        shifted = a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0
         if shifted && a.policy != INSIDE && c.p.periodic[d]
-            y = c.o.debug || _maxoff(a, d) >= dims[d] ? :(mod1($y, $n)) :
+            y = c.o.debug || _maxoff(c, a, d) >= leveldims(c.p, fl)[d] ? :(mod1($y, $n)) :
                 :((y = $y; ifelse(y < $(_I(c, 1)), y + $n, ifelse(y > $n, y - $n, y))))
         elseif bounded && shifted && a.policy in (CLAMP, ZERO)
             y = c.o.debug ? :(clamp($y, 1, $n)) : :(min(max($y, $(_I(c, 1))), $n))
+        end
+        if bounded && a.level > 0 && leveldims(c.p, fl)[d] != 1
+            nc = _dim(c, lev, d)
+            y = c.o.debug ? :(min(fld($y - 1, 2) + 1, $nc)) :
+                :(min((($y - $(_I(c, 1))) >> 1) + $(_I(c, 1)), $nc))
         end
         push!(ys, y)
     end
@@ -189,7 +206,7 @@ offset 0 after pass 2), which is the bounds argument for the `@inbounds` emitted
 """
 function linear_index(c::Ctx{N}, a::Access{N}) where {N}
     comp = a.comp.cond == 0 ? _I(c, a.comp.a) :
-           :(ifelse($(Symbol(:v, a.comp.cond)), $(_I(c, a.comp.b)), $(_I(c, a.comp.a))))
+           :(ifelse($(vname(c, a.comp.cond)), $(_I(c, a.comp.b)), $(_I(c, a.comp.a))))
     own = zero_offset(a) && !c.o.debug
     ys, lev = _target(c, a)
     ns = [_dim(c, lev, d) for d in 1:N]
@@ -209,13 +226,18 @@ function linear_index(c::Ctx{N}, a::Access{N}) where {N}
 end
 
 """
-Inside test of an INSIDE access: every non-periodic axis with a nonzero offset.
+Inside test of an INSIDE access: every non-periodic axis with a nonzero offset, in the fine
+frame.
 """
 function _inside(c::Ctx{N}, a::Access{N}) where {N}
     ys, lev = _target(c, a; bounded = false)
-    ts = [:(($(_I(c, 1)) <= $(ys[d])) & ($(ys[d]) <= $(_dim(c, lev, d))))
-          for d in 1:N
-          if (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level != 0) && !c.p.periodic[d]]
+    ts = Any[]
+    for d in 1:N
+        (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0) && !c.p.periodic[d] ||
+            continue
+        fl = a.level < 0 ? lev : c.k.space.level
+        push!(ts, :(($(_I(c, 1)) <= $(ys[d])) & ($(ys[d]) <= $(_dim(c, fl, d)))))
+    end
     return isempty(ts) ? true : foldl((x, y) -> :($x & $y), ts)
 end
 
@@ -227,7 +249,7 @@ Expression of node `i` (operands already bound to `v<j>`).
 """
 function _nodeexpr(c::Ctx, i)
     k, n, T = c.k, c.k.nodes[i], c.o.T
-    a = Any[Symbol(:v, j) for j in args(k, n)]
+    a = Any[vname(c, j) for j in args(k, n)]
     if n.op == CONST
         v = k.consts[n.imm]
         return n.type == BOOL ? v != 0 : jtype(n.type, T)(v)
@@ -262,25 +284,31 @@ function _nodeexpr(c::Ctx, i)
 end
 
 """
-Emit node `i` and its operands into `out` once per scope; COND arms get their own scopes.
+Emit node `i` and its operands into `out` once per scope; COND arms get their own scopes,
+and a RESTRICT emits its operand once per child under a child prefix.
 """
 function _emit!(out, c::Ctx, i, done::Set{Int32})
     i in done && return nothing
     n = c.k.nodes[i]
+    if n.op == RESTRICT
+        push!(out, :($(vname(c, i)) = $(_restrict(c, i))))
+        push!(done, i)
+        return nothing
+    end
     for j in deps_k(c.k, i)
         n.op == COND && j != args(c.k, n)[1] && continue
         _emit!(out, c, j, done)
     end
-    v = Symbol(:v, i)
+    v = vname(c, i)
     if n.op == COND
         cnd, x, y = args(c.k, n)
         arms = map((x, y)) do j
             blk = Any[]
             _emit!(blk, c, j, copy(done))
-            push!(blk, Symbol(:v, j))
+            push!(blk, vname(c, j))
             Expr(:block, blk...)
         end
-        push!(out, :($v = if $(Symbol(:v, cnd))
+        push!(out, :($v = if $(vname(c, cnd))
             $(arms[1])
         else
             $(arms[2])
@@ -291,6 +319,42 @@ function _emit!(out, c::Ctx, i, done::Set{Int32})
     push!(done, i)
     return nothing
 end
+
+"""
+The children of a coarse site: 2 per coarsened axis, plus a third at the last site of an odd
+axis (`x == nc` and `n > 2nc`); the operand is re-emitted per child with its level −1
+accesses shifted by the child offset, and combined in a fixed order.
+"""
+function _restrict(c::Ctx{N}, i) where {N}
+    n = c.k.nodes[i]
+    c.prefix == :v || irerror("kernel `", c.k.key, "`: nested RESTRICT")
+    lev = c.k.space.level
+    lev >= 1 || irerror("kernel `", c.k.key, "`: RESTRICT at level 0")
+    root = args(c.k, n)[1]
+    ranges = ntuple(d -> leveldims(c.p, lev - 1)[d] == 1 ? (0:0) : (0:2), N)
+    T = jtype(n.type, c.o.T)
+    acc = nothing
+    for (m, o) in enumerate(Iterators.product(ranges...))
+        cc = Ctx(c.p, c.k, c.o, c.L, c.names, c.index, Symbol(:r, i, :_, m, :_v), o)
+        blk = Any[]
+        _emit!(blk, cc, root, Set{Int32}())
+        term = Expr(:block, blk..., vname(cc, root))
+        tails = [d for d in 1:N if o[d] == 2]
+        if !isempty(tails)
+            pred = foldl((x, y) -> :($x & $y),
+                [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
+                   ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
+                 for d in tails])
+            term = :(if $pred
+                $term
+            else
+                $(zero(T))
+            end)
+        end
+        acc = acc === nothing ? term : n.imm == 0 ? :($acc + $term) : :(max($acc, $term))
+    end
+    return acc
+end
 function deps_k(k::Kernel, i)
     (n = k.nodes[i]; a = collect(Int32, args(k, n));
         n.op in (LOAD, INSIDE_OP) && (acc = k.accesses[n.imm];
@@ -298,13 +362,22 @@ function deps_k(k::Kernel, i)
             acc.offset.cond != 0 && push!(a, acc.offset.cond)); a)
 end
 
+"""
+A store; `:accumulate` adds the value to the current one at the own site (no other thread
+touches the site, so no atomics).
+"""
 function _store(c::Ctx, s::Store)
     f = c.p.fields[s.access.field]
     A = c.names[(s.access.field, f.buffers == 2 ? :next : :cur)]
-    v = Symbol(:v, s.value)
+    v = vname(c, s.value)
     L = lanetype(f.storage, c.o.T, c.o.lanes)
-    isfloat(f.storage) && L != c.o.T && (v = :(lanecast($L, $v)))
     idx = c.index(c, s.access)
+    if s.law == :accumulate
+        cur = _ref(c, c.names[(s.access.field, :cur)], idx)
+        isfloat(f.storage) && L != c.o.T && (cur = :(lanecast($(c.o.T), $cur)))
+        v = :($cur + $v)
+    end
+    isfloat(f.storage) && L != c.o.T && (v = :(lanecast($L, $v)))
     return c.o.debug ? :($A[$idx] = $v) : :(@inbounds $A[$idx] = $v)
 end
 
@@ -384,7 +457,8 @@ end
     emit(p, k, o; stages) -> (Expr, Lowered)
 
 Pass 6: the body expression. Stores follow their values (interleaved) in canonical order;
-`stages.order(ctx)` lists nodes emitted before any store.
+`stages.order(ctx)` lists nodes emitted before any store. A gated kernel evaluates its gate
+first; a kernel with reductions has the workgroup form (`_blocks`).
 """
 function emit(p::Program{N}, k::Kernel{N}, o::CompileOptions; stages = LOWERING) where {N}
     lower, order = stages.index, stages.order
@@ -397,29 +471,107 @@ function emit(p::Program{N}, k::Kernel{N}, o::CompileOptions; stages = LOWERING)
         push!(head, :($(names[a]) = S[$l][$j]))
     end
     c = Ctx(p, k, o, L, names, stages.target)
-    body = Any[]
     done = Set{Int32}()
+    gate = Any[]
+    if k.gate != 0
+        any(n -> n.op in (LOAD, COORD, INSIDE_OP, RESTRICT), k.nodes[_cone(k, k.gate)]) &&
+            irerror("kernel `", k.key, "`: the gate depends on the site")
+        _emit!(gate, c, k.gate, done)
+    end
+    body = Any[]
     foreach(i -> _emit!(body, c, i, done), order(c))
     for s in k.stores
         _emit!(body, c, s.value, done)
         push!(body, _store(c, s))
     end
+    for (q, r) in enumerate(k.reductions)
+        _emit!(body, c, r.value, done)
+        push!(body, :($(Symbol(:rv, q)) = $(vname(c, r.value))))
+    end
     needx = c.L.strategy == :cartesian || o.debug || k.space.kind == RESTRICTED ||
             any(n -> n.op in (COORD, INSIDE_OP), k.nodes) ||
             any(a -> !zero_offset(a), k.accesses)
     pre = needx ? _coords(c) : Any[]
-    if k.space.kind != FULL
-        body = Any[Expr(:if, _guard(c), Expr(:block, body...), Expr(:block, stages.passthrough(c)...))]
+    conds = Any[]
+    k.space.kind != FULL && push!(conds, _guard(c))
+    k.gate != 0 && pushfirst!(conds, vname(c, k.gate))
+    if !isempty(conds)
+        body = Any[Expr(:if, foldl((x, y) -> :($x & $y), conds), Expr(:block, body...),
+            Expr(:block, stages.passthrough(c)...))]
     end
     if L.strategy == :cartesian
         inb = foldl((x, y) -> :($x & $y),
             [:($(Symbol(:x, d)) <= $(_dim(c, k.space.level, d))) for d in 1:N])
         body = Any[Expr(:if, inb, Expr(:block, body...))]
     end
-    sig = L.strategy == :cartesian ? (:x, :S, :P, :G) : (:s, :S, :P, :G)
-    # Exec passes the site as `Int` (`@index` and the host loop); the body computes in `I`
-    L.strategy == :cartesian || pushfirst!(head, :(s = s % $(o.I)))
-    ex = Expr(:->, Expr(:tuple, sig...), Expr(
-        :block, head..., pre..., body..., :(return nothing)))
+    if !isempty(k.reductions)
+        ex = _blocks(c, head, gate, pre, body)
+    else
+        sig = L.strategy == :cartesian ? (:x, :S, :P, :G) : (:s, :S, :P, :G)
+        # Exec passes the site as `Int` (`@index` and the host loop); the body computes in `I`
+        L.strategy == :cartesian || pushfirst!(head, :(s = s % $(o.I)))
+        ex = Expr(:->, Expr(:tuple, sig...), Expr(
+            :block, head..., gate..., pre..., body..., :(return nothing)))
+    end
     return _strip!(ex), L
+end
+
+"""
+Nodes the value `i` depends on (its cone), `i` included.
+"""
+function _cone(k::Kernel, i)
+    seen = Set{Int32}()
+    walk(j) = (j in seen || (push!(seen, j); foreach(walk, deps_k(k, j))); nothing)
+    walk(i)
+    return collect(seen)
+end
+
+"""
+Workgroup form of a reducing kernel (contract item 5): `body(ph, blk, t, lds, S, P, G)`,
+256 items per block, 9 phases. Phase 1: item `t` runs site `256(blk − 1) + t` and writes
+its reduction values to `lds` (the identity past the end or when gated; two-buffer outputs
+still pass through). Phases 2–9: the halving tree, `lds[t] ⊕= lds[t + stride]` for
+`t ≤ stride = 256 >> (ph − 1)` (coalesced, fixed order; `item` in the code); item 1 writes `target[blk]` in
+phase 9.
+"""
+function _blocks(c::Ctx{N}, head, gate, pre, body) where {N}
+    k, T, I = c.k, c.o.T, c.o.I
+    j = findfirst(==(k.space.level), c.L.levels)
+    nsite = foldl((x, y) -> :($x * $y), [:($I(G.dims[$j][$d])) for d in 1:N])
+    R = length(k.reductions)
+    rvs, put, tree, fin = Any[], Any[], Any[], Any[]
+    for (q, r) in enumerate(k.reductions)
+        rv, off = Symbol(:rv, q), I(256 * (q - 1))
+        push!(rvs, :($rv = $(r.op == :sum ? zero(T) : T(-Inf))))
+        push!(put, :(@inbounds lds[item + $off] = $rv))            # t ≤ 256, q ≤ R: in 256R
+        comb = r.op == :sum ? :(lds[item + $off] + lds[item + rstride + $off]) :
+               :(max(lds[item + $off], lds[item + rstride + $off]))
+        push!(tree, :(@inbounds lds[item + $off] = $comb))         # t + rstride ≤ 256
+        A = c.names[(r.target, :table)]
+        push!(fin,
+            :(@inbounds $A[clamp(blk, one(blk), length($A) % typeof(blk))] = lds[1 + $off]))
+    end
+    R > 0 || error("_blocks without reductions")
+    site = Any[pre..., body...]
+    ex = quote
+        blk, item = $I(g), $I(it)
+        if ph == one(ph)
+            s = (blk - $(I(1))) * $(I(256)) + item
+            $(rvs...)
+            if s <= nsite
+                $(site...)
+            end
+            $(put...)
+        else
+            rstride = $(I(256)) >> (ph - one(ph))
+            if item <= rstride
+                $(tree...)
+            end
+            if (ph == $(Int32(9))) & (item == one(item))
+                $(fin...)
+            end
+        end
+    end
+    return Expr(:->, :(ph, g, it, lds, S, P, G),
+        Expr(:block, head..., gate..., :(nsite = $nsite), ex.args..., :(return nothing)))
 end

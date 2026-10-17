@@ -12,9 +12,11 @@ using ..IR: IR, FULL, Kernel, KernelBuilder, LOAD, CONST, PARAM, COORD, RUNTIME,
             lanebytes, nsites, with_kernels, cast!, isfloat, REAL, leveldims
 using ..Compile: CompiledKernel, CompileOptions, LOWERING, compile_kernel, legality, reads,
                  writes, zero_offset
+using KernelAbstractions: KernelAbstractions, @index, @kernel, @localmem, @synchronize
 
 include("contract.jl")
 include("cost.jl")
 include("plan.jl")
+include("workgroup.jl")
 
 end # module Schedule

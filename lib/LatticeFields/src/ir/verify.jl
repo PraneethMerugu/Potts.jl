@@ -7,7 +7,7 @@ end
 Base.showerror(io::IO, e::IRError) = print(io, "IRError: ", e.msg)
 irerror(msg...) = throw(IRError(string(msg...)))
 
-const _SAMETYPE = (ADD, MUL, NEG, DIV, FMA, MIN, MAX, ABS, SQRT, EXP, LOG, CALL)
+const _SAMETYPE = (ADD, MUL, NEG, DIV, FMA, MIN, MAX, ABS, SQRT, EXP, LOG, CALL, RESTRICT)
 
 function _verify_node(p::Program, k::Kernel, i::Int, n::Node)
     as = args(k, n)
@@ -73,6 +73,14 @@ function verify(p::Program)
                 "kernel `", k.key, "`: store of a ", t, " value into lane ", f.storage,
                 " of `", f.key, "` (add an explicit cast)")
         end
+        for r in k.reductions
+            0 < r.value <= length(k.nodes) && k.nodes[r.value].type == REAL &&
+            1 <= r.target <= length(p.tables) ||
+                irerror("kernel `", k.key, "`: bad reduction (value v", r.value,
+                    ", target #", r.target, ")")
+        end
+        k.gate == 0 || 0 < k.gate <= length(k.nodes) && k.nodes[k.gate].type == BOOL ||
+            irerror("kernel `", k.key, "`: the gate v", k.gate, " is not a Bool node")
     end
     return p
 end

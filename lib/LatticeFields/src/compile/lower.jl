@@ -41,8 +41,8 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
         stages = LOWERING) where {N}
     o.T === nothing && (o = CompileOptions(Float32, o.I, o.float64_ok, o.debug, o.index, o.lanes))
     check_types(p, k, o)
-    (any(s -> s.law != :owned, k.stores) || !isempty(k.reductions)) && irerror("kernel `",
-        k.key, "`: `:accumulate` stores and reductions are not lowered yet (C7b)")
+    !isempty(k.reductions) && o.index == :cartesian &&
+        irerror("kernel `", k.key, "`: reductions need the linear index strategy")
     big = maximum(nsites(p, l) * ncomp(f) for f in p.fields for l in f.levels)
     big > typemax(Int32) && o.I == Int32 &&
         (o = CompileOptions(o.T, Int64, o.float64_ok, o.debug, o.index, o.lanes))

@@ -33,6 +33,9 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 # an op never changes an existing program's text (O-2 additivity).
 @enum Op::UInt8 CONST PARAM LOAD TABLE COORD INSIDE_OP BITTEST RUNTIME ADD MUL NEG DIV FMA MIN MAX ABS POWI SQRT EXP LOG CALL EQ LT LE AND OR NOT XOR SELECT COND CAST IDX RESTRICT ELEMENT_SUM
 
+# RESTRICT(x; imm = 0 sum | 1 max) at a coarse site combines `x` over the site's children
+# (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at level −1
+# is taken relative to each child in turn (offset in the fine frame).
 opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
@@ -59,8 +62,11 @@ struct Level{N}
 end
 Level(g::Grid{N}, shift = 0) where {N} = Level{N}(g, Int8(shift), nothing)
 # Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of an
-# odd axis takes width 3 (high end, P4-mg42; contract.jl).
-leveldims(l::Level) = map(d -> Int32(max(d >> l.shift, 1)), l.grid.dims)
+# odd axis takes width 3 (high end, P4-mg42; contract.jl). An axis of size 1 is never
+# coarsened (it stays 1, identity map); an axis that would reach 0 sites makes the level
+# illegal (`coarsenable`, checked by legality).
+leveldims(l::Level) = map(d -> Int32(d == 1 ? 1 : max(d >> l.shift, 1)), l.grid.dims)
+coarsenable(l::Level) = all(d -> d == 1 || d >> l.shift >= 1, l.grid.dims)
 
 """
 Placement in half-integers: all zeros is a site (cell center), a 1 on axis `d` a face.
@@ -151,7 +157,8 @@ function Space{N}(kind = FULL; level = 0, class = 0, mask = 0,
 end
 
 """
-A store: `law = :owned` (own site, offset 0) or `:accumulate` (reductions only).
+A store: `law = :owned` (own site, offset 0) or `:accumulate` (adds the value to the
+current one at the own site; race-free, no atomics).
 """
 struct Store{N}
     access::Access{N}
@@ -159,12 +166,23 @@ struct Store{N}
     law::Symbol
 end
 
+"""
+A reduction of `value` over the kernel's sites, `op ∈ (:sum, :max)`, into table `target`:
+entry `b` holds the partial of the 256-site block `b` (pairwise sums inside a block); a
+finishing pass combines the blocks. Deterministic: block boundaries never depend on the
+launch configuration.
+"""
 struct Reduction
     op::Symbol
     value::Int32
     target::Int32
 end
 
+"""
+A kernel. `gate` is a `BOOL` node (0: none): where it is false the kernel does nothing but
+the pass-through of its two-buffer outputs, like a site outside a masked space. Solvers
+gate on device flags (`done`). A kernel with `reductions` runs in 256-site blocks.
+"""
 struct Kernel{N}
     key::String
     space::Space{N}
@@ -176,6 +194,7 @@ struct Kernel{N}
     calls::Vector{Symbol}            # CALL imm -> function name (whitelist `CALLS`)
     stores::Vector{Store{N}}
     reductions::Vector{Reduction}
+    gate::Int32
 end
 args(k::Kernel, n::Node) = view(k.operands, n.args)
 args(k::Kernel, i::Integer) = args(k, k.nodes[i])

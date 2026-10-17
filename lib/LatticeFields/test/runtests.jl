@@ -8,11 +8,13 @@ gpu in ("", "metal", "rocm") ||
 include("exec_helpers.jl")
 include("host_runner.jl")
 include("fixtures.jl")
+include("solvers_cases.jl")
 isempty(gpu) || include("device_backend.jl")
 
-# groups: exec, ir, compile, schedule, problems, qa (all by default); LATTICEFIELDS_QA = false skips qa
-const GROUPS = isempty(ARGS) ? ["exec", "ir", "compile", "schedule", "problems", "qa"] :
-               ARGS
+# groups: exec, ir, compile, schedule, problems, solvers, qa (all by default); `solvers_gate`
+# (the PG-4 size sweep, about 10 minutes) is opt-in; LATTICEFIELDS_QA = false skips qa
+const GROUPS = isempty(ARGS) ?
+               ["exec", "ir", "compile", "schedule", "problems", "solvers", "qa"] : ARGS
 
 @testset "LatticeFields" begin
     for g in GROUPS
@@ -27,6 +29,8 @@ const GROUPS = isempty(ARGS) ? ["exec", "ir", "compile", "schedule", "problems",
                 end
                 g == "problems" && !isempty(gpu) && include("problems_device.jl")
             end
+            g == "solvers" && !isempty(gpu) &&
+                @testset "solvers_device.jl" include("solvers_device.jl")
         end
     end
 end

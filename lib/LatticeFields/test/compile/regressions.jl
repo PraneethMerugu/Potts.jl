@@ -134,13 +134,15 @@ end
 end
 
 @testset "review refusals and hygiene" begin
-    # :accumulate stores and reductions are refused until C7b lowers them
+    # :accumulate adds to the current value at the own site (C7b)
     pb = ProgramBuilder(Grid((4,)); periodic = (true,))
-    r, o = field!(pb, "r"; role = :input), field!(pb, "o"; role = :output)
+    r, o = field!(pb, "r"; role = :input), field!(pb, "v"; role = :output)
     kb = kernel(pb)
     IR.store(kb, o, load(kb, r); law = :accumulate)
     add!(pb, kb, "acc")
-    @test occursin("not lowered yet", regmsg(() -> plan(semantic(program(pb)))))
+    for got in each_mode(pb, ("r" => Float32[1, 2, 3, 4], "v" => Float32[10, 20, 30, 40]))
+        @test got == Float32[11, 22, 33, 44]
+    end
     # α = β = 0 face rule
     pb = ProgramBuilder(Grid((4, 4)); periodic = (true, false))
     u = field!(pb, "u"; buffers = 2)

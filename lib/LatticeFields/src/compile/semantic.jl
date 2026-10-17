@@ -49,8 +49,14 @@ function legality(p::Program{N}) where {N}
         end
         k.space.kind == MASKED && !(1 <= k.space.mask <= length(p.masks)) &&
             irerror("kernel `", k.key, "`: masked space without a mask")
+        any(n -> n.op == RESTRICT, k.nodes) && k.space.level < 1 &&
+            irerror("kernel `", k.key, "`: RESTRICT in a level-0 space")
         any(a -> abs(a.level) > 1, k.accesses) &&
             irerror("kernel `", k.key, "`: an access shifts more than one level")
+    end
+    for l in p.hierarchy
+        coarsenable(l) || irerror("level ", l.shift, " coarsens an axis of size 1 (dims ",
+            Int.(l.grid.dims), "): an axis of size 1 is never coarsened")
     end
     any(l -> l.widths !== nothing, p.hierarchy) &&
         irerror("explicit level widths are not ",

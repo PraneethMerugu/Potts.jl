@@ -17,6 +17,7 @@ mutable struct KernelBuilder{N}
     calls::Vector{Symbol}
     stores::Vector{Store{N}}
     reductions::Vector{Reduction}
+    gate::Int32
     interned::Dict{Tuple{Op, Scalar, Vector{Int32}, Int64}, Int32}
     constid::Dict{UInt64, Int32}
     accid::Dict{Access{N}, Int32}
@@ -24,7 +25,7 @@ end
 function KernelBuilder{N}(fieldkeys, fieldlanes, tablekeys, space::Space{N}) where {N}
     return KernelBuilder{N}(
         fieldkeys, fieldlanes, tablekeys, space, Node[], Int32[], Float64[],
-        Access{N}[], Symbol[], Store{N}[], Reduction[],
+        Access{N}[], Symbol[], Store{N}[], Reduction[], Int32(0),
         Dict{Tuple{Op, Scalar, Vector{Int32}, Int64}, Int32}(),
         Dict{UInt64, Int32}(), Dict{Access{N}, Int32}())
 end
@@ -248,6 +249,28 @@ eq(x::Ex, y) = Ex(x.b, compare!(x.b, EQ, x.id, _id(x.b, y)))
 select(c::Ex, x, y) = Ex(c.b, select!(c.b, c.id, _id(c.b, x), _id(c.b, y)))
 cond(c::Ex, x, y) = Ex(c.b, cond!(c.b, c.id, _id(c.b, x), _id(c.b, y)))
 
+"""
+`RESTRICT`: combine `x` (built with level −1 accesses relative to a child) over the
+children of the coarse site, `op ∈ (:sum, :max)`.
+"""
+function restrict(x::Ex; op::Symbol = :sum)
+    op in (:sum, :max) || error("RESTRICT: op `$op` is not :sum or :max")
+    t = x.b.nodes[x.id].type
+    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : 1))
+end
+"""
+Reduce `x` over the kernel's sites into the partials table `target` (`op ∈ (:sum, :max)`).
+"""
+function reduce!(kb::KernelBuilder, op::Symbol, x::Ex, target::Integer)
+    op in (:sum, :max) || error("reduction op `$op` is not :sum or :max")
+    push!(kb.reductions, Reduction(op, cast!(kb, x.id, REAL), Int32(target)))
+    return nothing
+end
+"""
+Gate the kernel on the `BOOL` expression `c` (see `Kernel`).
+"""
+gate!(kb::KernelBuilder, c::Ex) = (kb.gate = c.id; nothing)
+
 # ---- canonical finish ---------------------------------------------------------------------
 """
 Node dependencies, including `Sel` conditions carried by accesses.
@@ -280,6 +303,7 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
         seen[i] && return; seen[i] = true; foreach(visit, deps(b, i)); push!(order, i))
     foreach(s -> visit(s.value), stores)
     foreach(r -> visit(r.value), b.reductions)
+    b.gate != 0 && visit(b.gate)
     newid = zeros(Int32, length(b.nodes))
     newid[order] .= 1:length(order)
     nodes, operands, consts, accesses, calls = Node[], Int32[], Float64[], Access{N}[],
@@ -310,8 +334,8 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
     red = [Reduction(r.op, newid[r.value], r.target) for r in b.reductions]
     tabs = Int32[n.imm for n in nodes if n.op == TABLE]
     return Kernel{N}(
-        String(key), b.space, nodes, operands, consts, accesses, unique!(tabs),
-        calls, st, red)
+        String(key), b.space, nodes, operands, consts, accesses,
+        unique!([tabs; Int32[r.target for r in red]]), calls, st, red, remapc(b.gate))
 end
 
 """
@@ -337,7 +361,9 @@ function rebuild(f::F, k::Kernel{N}, keys::Tuple; space = k.space, fieldmap = id
             new[s.value], s.law)
         push!(b.stores, Store{N}(s2.access, storefn(b, s2, s2.value), s.law))
     end
-    append!(b.reductions, (Reduction(r.op, new[r.value], r.target) for r in k.reductions))
+    append!(b.reductions,
+        (Reduction(r.op, new[r.value], tablemap(r.target)) for r in k.reductions))
+    k.gate != 0 && (b.gate = new[k.gate])
     return finish(b, key)
 end
 

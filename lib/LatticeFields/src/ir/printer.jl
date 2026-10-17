@@ -84,7 +84,7 @@ function print_kernel(io::IO, p::Program, k::Kernel)
             print(io, " ", p.tables[n.imm].key)
         elseif n.op == CALL
             print(io, " ", k.calls[n.imm])
-        elseif n.op in (PARAM, RUNTIME, COORD, POWI, BITTEST, IDX)
+        elseif n.op in (PARAM, RUNTIME, COORD, POWI, BITTEST, IDX, RESTRICT)
             print(io, " #", n.imm)
         end
         foreach(a -> print(io, " v", a), args(k, n))
@@ -96,8 +96,9 @@ function print_kernel(io::IO, p::Program, k::Kernel)
         println(io, " <- v", s.value, " ", s.law)
     end
     for r in k.reductions
-        println(io, "  reduce ", r.op, " v", r.value, " -> #", r.target)
+        println(io, "  reduce ", r.op, " v", r.value, " -> ", p.tables[r.target].key)
     end
+    k.gate != 0 && println(io, "  gate v", k.gate)
     return nothing
 end
 
