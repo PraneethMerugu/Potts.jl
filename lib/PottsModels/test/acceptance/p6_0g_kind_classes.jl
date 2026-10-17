@@ -632,7 +632,7 @@ const P60G_CLASS_FIXTURES = (:P60gC, :P60gCTip, :P60gXSpare, :P60gLifeC, :P60gCl
     @test getfield(sys, :kinds) == [:medium, :fluid, :matrix, :tip, :stalk]
 end
 
-const P60G_X_PIN = 0x4ccf59c87e80b7b5                    # P60gX on 462b012a; re-pinned under P6.3g (D-193): fingerprint only
+const P60G_X_PIN = 0x4ccf59c87e80b7b5                    # P60gX on 462b012a; re-pinned under P6.3g (D-193): fingerprint only; re-pinned under D-C8 (fields on the field compiler)
 @testset "P6.0g: classes lower to the explicit gates (same code, same fingerprint)" begin
     pairs = (
         ("main", () -> p60g_problem(p60g_model(:P60gC)), () -> p60g_problem(P60gX),
@@ -975,7 +975,7 @@ const P60G_PUBLISHED = Dict{String, UInt64}(
     "GranerGlazier" => 0xe6e09483034b4193,
     "WortelAct" => 0x9a9fcac5fc22b7c5,
     "WortelAct connected" => 0xe1e52da078e581c9,   # re-pinned under P6.3g (D-193): fingerprint only
-    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    "MerksVasculogenesis" => 0xeb4c1851b0fe68da,   # re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
     "OpenVTGrowingMonolayer" => 0x34b40af65c56a113,
     "SingleDivisionFixture" => 0xd2bed53e2590b709,
     "AkeebInvasion" => 0x72ced0fc70498f16,   # re-pinned under D-237 (cell draws by id and generation)

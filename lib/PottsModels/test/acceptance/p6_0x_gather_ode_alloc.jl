@@ -189,7 +189,7 @@ p60x_published() = (
 const p60x_PUBLISHED = Dict{Symbol, UInt64}(
     :GranerGlazier => 0xe6e09483034b4193,   # re-pinned under D-122
     :WortelAct => 0x9a9fcac5fc22b7c5,   # re-pinned under D-124
-    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies)
+    :MerksVasculogenesis => 0xeb4c1851b0fe68da,   # re-recorded at the P6.0y merge (D-102: substep function); re-pinned under D-122; re-pinned under D-189 rulings 3 and 10: dynamics change (gain test, full-shell refusal under Moore(1) copies); re-pinned under D-C8 (fields on the field compiler)
     :OpenVTGrowingMonolayer => 0x34b40af65c56a113,   # re-pinned under D-122
 )
 

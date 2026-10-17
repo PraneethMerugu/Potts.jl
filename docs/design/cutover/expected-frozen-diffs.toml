@@ -720,3 +720,101 @@ commit = "PENDING"
 fixup_of = "C8"
 decision = "D-C8-R4"
 why = "the field compiler orders the update's floating-point operations differently: two bit-pattern pins are re-pinned (each changed word moves 1 ulp); the FTCS oracle at rtol 1e-13 stays"
+
+[[edits]]
+path = "acceptance/p6_0ag_ode_expand_all.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0ah_canonical_term_order.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0as_sweep_validation.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0at_relation_fingerprint.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0au_integral_readers.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0av_mcs_duration.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0ax_gather_scan.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0c2_canonical_followups.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0g_kind_classes.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0o_abstract_system.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0p_cadence_fingerprint.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0t_integral_refresh.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
+
+[[edits]]
+path = "acceptance/p6_0x_gather_ode_alloc.jl"
+commit = "PENDING"
+fixup_of = "C8"
+decision = "D-C8-R5"
+why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
