@@ -3,7 +3,12 @@
 """
 A lowered kernel: the body expression plus everything Exec needs to launch it.
 `args[l]` lists `(field or table id, role)` for lane `lanes[l]`, in the order of `S[l]`;
-`levels` gives the order of `G.dims`; `derive` maps the raw Float64 parameters to `P`.
+`levels` gives the order of `G.dims`. `T` is the value type the body is emitted for
+(Float32, Float64, BigFloat); Dual arrays and parameters of that value type run the same
+body. `derive(Praw, c, t)` maps the raw parameters (any `Real` eltype, kept as given) to `P`
+in the type of `c` (the compute element type): the raw values, then the hoisted ones,
+derived in at least Float64 and rounded once. `timed`: some hoisted value reads the time
+`t`, so `P` is derived again at each launch.
 """
 struct CompiledKernel{N}
     key::String
@@ -16,6 +21,7 @@ struct CompiledKernel{N}
     nparams::Int
     derived::Vector{Any}
     derive::Expr
+    timed::Bool
     T::Type
     I::Type
     hash::String
@@ -49,12 +55,20 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
     verify(with_kernels(p, [k]))
     body, L = emit(p, k, o; stages)
     T = o.T
-    derive = Expr(:->, :P, Expr(:tuple, Expr(:..., :(map($T, P))), [:($T($d))
-                                                                    for d in derived]...))
+    vals = Any[[:(lanecast(typeof(c), P[$i])) for i in 1:(p.nparams)];
+               [:(lanecast(typeof(c), $d)) for d in derived]]
+    derive = :((P, c, t) -> begin
+        Q = map(_wide, P)
+        t = _wide(t)
+        $(Expr(:tuple, vals...))
+    end)
+    timed = any(d -> _reads(d, :t), derived)
     h = bytes2hex(sha1(string(body)))
     return CompiledKernel{N}(k.key, body, L.strategy, k.space, L.levels, L.lanes, L.args,
-        p.nparams, derived, derive, T, o.I, h, k)
+        p.nparams, derived, derive, timed, T, o.I, h, k)
 end
+
+_reads(ex, s::Symbol) = ex === s || (ex isa Expr && any(a -> _reads(a, s), ex.args))
 
 """
 Compile `ex` to a RuntimeGeneratedFunction without its expression (CLAUDE.md rule).

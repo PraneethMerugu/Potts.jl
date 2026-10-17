@@ -2,18 +2,6 @@
 # dynamic ndranges (one compile per distinct static ndrange?), parallel compile, plan walk
 # overhead. Compiles are counted in the backend's kernel-instance cache: one entry per
 # compiled (function, argument types) pair.
-if gpu == "metal"
-    using Metal: Metal
-    const DEV = Metal.MetalBackend()
-    instances() = length(Metal.kernel_instances)
-    devarray(x) = Metal.MtlArray(x)
-else
-    using AMDGPU: AMDGPU
-    const DEV = AMDGPU.ROCBackend()
-    instances() = length(AMDGPU.Compiler._kernel_instances)
-    devarray(x) = AMDGPU.ROCArray(x)
-end
-devsync() = KA.synchronize(DEV)
 
 # fresh body types per testset, so no earlier compile is reused
 struct Put{K} end

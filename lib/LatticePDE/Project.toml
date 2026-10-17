@@ -4,7 +4,9 @@ version = "0.1.0-DEV"
 authors = ["Praneeth Merugu <merugufam@gmail.com>"]
 
 [deps]
+CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LatticeFields = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
 ModelingToolkitBase = "7771a370-6774-4173-bd38-47e70ca0b839"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
@@ -15,7 +17,9 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 LatticeFields = {path = "../LatticeFields"}
 
 [compat]
+CommonSolve = "0.2"
 DomainSets = "0.8"
+KernelAbstractions = "0.9.42"
 LatticeFields = "0.1"
 ModelingToolkitBase = "1.77"
 SciMLBase = "3"

@@ -2,14 +2,17 @@ using Test, LatticeFields
 
 # device tests: LATTICEFIELDS_GPU (or POTTS_GPU) = metal | rocm
 const gpu = lowercase(strip(get(ENV, "LATTICEFIELDS_GPU", get(ENV, "POTTS_GPU", ""))))
-gpu in ("", "metal", "rocm") || error("LATTICEFIELDS_GPU must be \"\", \"metal\" or \"rocm\"; got \"$gpu\"")
+gpu in ("", "metal", "rocm") ||
+    error("LATTICEFIELDS_GPU must be \"\", \"metal\" or \"rocm\"; got \"$gpu\"")
 
 include("exec_helpers.jl")
 include("host_runner.jl")
 include("fixtures.jl")
+isempty(gpu) || include("device_backend.jl")
 
-# groups: exec, ir, compile, schedule, qa (all by default); LATTICEFIELDS_QA = false skips qa
-const GROUPS = isempty(ARGS) ? ["exec", "ir", "compile", "schedule", "qa"] : ARGS
+# groups: exec, ir, compile, schedule, problems, qa (all by default); LATTICEFIELDS_QA = false skips qa
+const GROUPS = isempty(ARGS) ? ["exec", "ir", "compile", "schedule", "problems", "qa"] :
+               ARGS
 
 @testset "LatticeFields" begin
     for g in GROUPS
@@ -22,6 +25,7 @@ const GROUPS = isempty(ARGS) ? ["exec", "ir", "compile", "schedule", "qa"] : ARG
                 for f in sort(readdir(joinpath(@__DIR__, g)))
                     endswith(f, ".jl") && @testset "$f" include(joinpath(@__DIR__, g, f))
                 end
+                g == "problems" && !isempty(gpu) && include("problems_device.jl")
             end
         end
     end

@@ -1,10 +1,15 @@
 # Pass 3 (non-semantic, after the fingerprint): POWI ≤ 4 to products, and parameter hoisting.
-# A maximal subtree whose leaves are only parameters and constants (and that holds a
-# parameter) becomes a derived parameter, computed on the host in Float64 per launch and
-# rounded once to `T` (`D/h²`, `dt·D/h²`). The debug emission mode skips this pass.
+# A maximal subtree whose leaves are only parameters, constants and the time `t` (and that
+# holds a parameter or `t`) becomes a derived parameter, computed on the host in at least
+# Float64 and rounded once to the compute type (`D/h²`, `sin(ω t)`). A subtree that reads `t`
+# (a bare `t` included) is derived again at each launch on the host, so the device never
+# holds the runtime slot of absolute time (P5 §3.3); the step `dt` stays a runtime value. The debug emission mode skips this pass.
 
 const _NOT_HOSTABLE = (
     LOAD, INSIDE_OP, COORD, RUNTIME, TABLE, BITTEST, IDX, RESTRICT, ELEMENT_SUM)
+# `G.rt[1]` is the time `t` (contract item 4); the other runtime slots stay on the device
+const TIME_SLOT = 1
+_istime(n::Node) = n.op == RUNTIME && n.imm == TIME_SLOT
 
 function _powi_node!(b, k::Kernel, i, a, ctx)
     n = k.nodes[i]
@@ -24,8 +29,9 @@ function _hostflags(k::Kernel)
     hasp = falses(length(k.nodes))
     for (i, n) in enumerate(k.nodes)
         as = args(k, n)
-        host[i] = !(n.op in _NOT_HOSTABLE) && n.type == REAL && all(a -> host[a], as)
-        hasp[i] = n.op == PARAM || any(a -> hasp[a], as)
+        host[i] = (_istime(n) || !(n.op in _NOT_HOSTABLE)) && n.type == REAL &&
+                  all(a -> host[a], as)
+        hasp[i] = n.op == PARAM || _istime(n) || any(a -> hasp[a], as)
     end
     return host, hasp
 end
@@ -45,20 +51,21 @@ function _group_node!(host, hasp)
 end
 
 """
-Host Float64 expression of node `i` (parameters from the raw tuple `P`).
+Host expression of node `i`: parameters from the widened raw tuple `Q`, the time as `t`.
 """
 function hostexpr(k::Kernel, i::Integer)
     n = k.nodes[i]
     n.op == CONST && return k.consts[n.imm]
-    n.op == PARAM && return :(P[$(Int(n.imm))])
+    n.op == PARAM && return :(Q[$(Int(n.imm))])
+    _istime(n) && return :t
     return opexpr(n.op, Any[hostexpr(k, a) for a in args(k, n)], n, k, Float64)
 end
 
 """
     hoist_params(p, k) -> (kernel, derived::Vector{Any})
 
-Replace each maximal parameter-only subtree by `PARAM(nparams + j)`; `derived[j]` is its host
-Float64 expression.
+Replace each maximal subtree of parameters, constants and `t` by `PARAM(nparams + j)`;
+`derived[j]` is its host expression (of `Q` and `t`).
 """
 function hoist_params(p::Program, k::Kernel)
     h, hp = _hostflags(k)
@@ -74,7 +81,7 @@ function hoist_params(p::Program, k::Kernel)
     hoisted = [i
                for i in eachindex(k.nodes)
                if host[i] && hasp[i] && used_by_device[i] &&
-                      !(k.nodes[i].op in (PARAM, CONST))]
+                      !(k.nodes[i].op in (PARAM, CONST))]     # a bare `t` is hoisted too
     derived = Any[hostexpr(k, i) for i in hoisted]
     slot = Dict(i => p.nparams + j for (j, i) in enumerate(hoisted))
     k2 = rebuild(k, buildkeys(p)) do b, k, i, a, ctx

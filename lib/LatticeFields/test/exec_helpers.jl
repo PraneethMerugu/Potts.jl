@@ -25,7 +25,9 @@ rwalk(t::Tuple) = (first(t)(); rwalk(Base.tail(t)))
 function host_plan(n)
     a = zeros(Int, 64)
     b = zeros(Float32, 64)
-    ls = ntuple(k -> isodd(k) ? Exec.Launch(KA.CPU(), AddK{k}(), (a,), 64; static = true) :
-                     Exec.Launch(KA.CPU(), scale!, (b, Float32(k)), 64; static = true), n)
+    ls = ntuple(
+        k -> isodd(k) ? Exec.Launch(KA.CPU(), AddK{k}(), (a,), 64; static = true) :
+             Exec.Launch(KA.CPU(), scale!, (b, Float32(k)), 64; static = true),
+        n)
     return ls, a, b
 end

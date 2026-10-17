@@ -1,6 +1,7 @@
-# The standalone MTK form of v3 §7.4, verbatim up to `discretize`: it builds, lowers to a
-# LatticeFields program on a 512² grid and runs explicit steps through the host runner. The
-# `solve(prob, ExplicitEuler(dt = 1f-2); saveat = 1)` line needs the steppers (C7a).
+# The standalone MTK form of v3 §7.4, verbatim, solved on 512² (12 automatic substeps per
+# step). The field is uniform in y (periodic pair), so every row is the 1D problem
+# D c″ − k c with c = 1 at x = 0 and no flux at x = 1, which a Float64 host loop with the
+# same steps checks; the raw `Differential` spelling lowers to the same program.
 @testset "§7.4 standalone example" begin
     ex = quote
         using ModelingToolkitBase, LatticePDE
@@ -9,29 +10,37 @@
         @named rd = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * Δ(c(t, x, y)) - k * c(t, x, y),
             [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
             [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k])
-        prob = discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32, problem = :owned);
-                          update = $euler)
+        prob = discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32, problem = :owned))
+        sol  = solve(prob, ExplicitEuler(dt = 1f-2); saveat = 1)
+        sol[c(t, x, y)]
     end
     m = Module(:Example74)
     foreach(e -> e isa LineNumberNode || Core.eval(m, e), ex.args)    # `using` before the macros expand
-    prob = m.prob
+    prob, sol = m.prob, m.sol
     p = prob.program
     @test p.spacing == (1 / 512, 1 / 512) && p.periodic == (false, true)   # from the domain and the bc pair
-    @test prob.defaults == [1e-3, 0.1] && only(values(prob.initial)) == 0.0
-    s = semantic(p)
-    sp = plan(s)                                                # Float32 bodies
-    st = HostStore(s)
-    dt = 0.2 / 512^2 / 1e-3                                     # inside the explicit stability limit
-    foreach(_ -> run_step!(s, sp, st, prob.defaults; rt = (0.0, dt)), 1:20)
-    v = reshape(current(st, s, "c"), 512, 512)
-    @test all(isfinite, v) && v[1, 7] > v[2, 7] > v[3, 7] > 0 && v[100, 7] == 0   # fed at x = 0
-    @test v[1, :] == fill(v[1, 1], 512)                          # periodic in y: no y dependence
+    @test prob.p == [1e-3, 0.1] && prob.stability(prob.p) ≈ 1e-3 * 8 * 512^2 + 0.1
+    @test sol.substeps == 12 && sol.t == 0:10
+    v = Core.eval(m, :(sol[c(t, x, y)]))
+    @test length(v) == 11 && size(v[end]) == (512, 512) && all(isfinite, v[end])
+    @test all(j -> v[end][:, j] == v[end][:, 1], 1:512)            # periodic in y: no y dependence
+    # the 1D oracle, Float64, same 12 000 substeps
+    n, h = 512, 1 / 512
+    dt = 1e-2 / 12
+    u = zeros(n)
+    for _ in 1:12_000
+        u = [u[i] + dt * (1e-3 * ((i < n ? u[i + 1] : u[i]) + (i > 1 ? u[i - 1] : 2 - u[i]) - 2u[i]) / h^2 - 0.1u[i])
+             for i in 1:n]
+    end
+    @test maximum(abs, v[end][:, 1] .- u) < 1e-4
+    @test maximum(abs, v[end][:, 1] .- (cosh.(10 .* (1 .- ((1:n) .- 0.5) ./ n)) ./ cosh(10))) > 1e-3  # not the steady state yet
     # the raw `Differential` spelling lowers to the same program (§7.4, P3-rev item 5)
     raw = Core.eval(m, quote
         Dx, Dy = Differential(x), Differential(y)
         @named rd2 = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * (Dx(Dx(c(t, x, y))) + Dy(Dy(c(t, x, y)))) - k * c(t, x, y),
             rd.bcs, rd.domain, [t, x, y], [c(t, x, y)], [Dc, k])
-        discretize(rd2, LatticeDiscretization(Grid((512, 512)); T = Float32); update = $euler)
+        symbolic_discretize(rd2, LatticeDiscretization(Grid((512, 512)); T = Float32))
     end)
-    @test sprint(LatticeFields.IR.print_program, raw.program) == sprint(LatticeFields.IR.print_program, p)
+    ref = Core.eval(m, :(symbolic_discretize(rd, LatticeDiscretization(Grid((512, 512)); T = Float32))))
+    @test sprint(LatticeFields.IR.print_program, raw.program) == sprint(LatticeFields.IR.print_program, ref.program)
 end

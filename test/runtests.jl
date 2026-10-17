@@ -1,5 +1,5 @@
 # Test entry point for the whole monorepo.
-#   GROUP=All (default) | Potts | CorePotts | LatticeFields | MakiePotts | PottsModels | GPU
+#   GROUP=All (default) | Potts | CorePotts | LatticeFields | LatticePDE | MakiePotts | PottsModels | GPU
 # Each group runs in the shared workspace environment of its own test project.
 const GROUP = get(ENV, "GROUP", "All")
 const ROOT = dirname(@__DIR__)
@@ -12,6 +12,8 @@ end
 
 GROUP in ("All", "LatticeFields") &&
     run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl"))
+GROUP in ("All", "LatticePDE") &&
+    run_group(joinpath(ROOT, "lib/LatticePDE/test"), joinpath(ROOT, "lib/LatticePDE/test/runtests.jl"))
 GROUP in ("All", "CorePotts") &&
     run_group(joinpath(ROOT, "lib/CorePotts/test"), joinpath(ROOT, "lib/CorePotts/test/runtests.jl"))
 GROUP in ("All", "MakiePotts") &&

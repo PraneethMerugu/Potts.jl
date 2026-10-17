@@ -13,6 +13,9 @@ argument is positional, so `substitute`, `simplify` and `get_variables` see it.
 The discretizer (`LatticeDiscretization`, `symbolic_discretize`) puts a `PDESystem` on a
 lattice: it parses the boundary conditions, classifies rate terms in the linearity table,
 reads maps and offset reads, and lowers every equation to a LatticeFields `Program`.
+`discretize` returns the problem (an owned `FieldProblem` or a SciML `ODEProblem`); the
+steppers and `solve` are re-exported, so a standalone model needs only `using
+ModelingToolkitBase, LatticePDE`.
 """
 module LatticePDE
 
@@ -24,6 +27,13 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
                         F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
                         ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
                         NOT, AND, OR, INSIDE_OP
+using CommonSolve: solve, init, step!, solve!
+using KernelAbstractions: KernelAbstractions
+using LatticeFields: Exec, Problems
+using LatticeFields.Compile: CompileOptions
+using LatticeFields.IR: fieldid
+using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
+                              ExplicitEuler, ExplicitMap, ode_problem, RT_DT
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization
 import SciMLBase: discretize, symbolic_discretize
@@ -38,6 +48,7 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, Interval
+export ExplicitEuler, ExplicitMap, FieldProblem, solve, init, step!, solve!, stability_bound
 
 # ---------------------------------------------------------------------------------------
 # Field operators: opaque terms, lowered by the discretizer and never evaluated here
@@ -99,6 +110,12 @@ end
 `at(T, k)`: entry `k` of the kind table `T` (`at(Dk, kindₛ)`), or the value of `c` at an
 explicit site or cell `s` (`at(c, target)`). Never index an array parameter with a symbolic
 input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
+
+With two or more integer inputs (for example the two kinds of [`at2`](@ref)),
+`mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
+ModelingToolkitBase `complete` (FR-36, MTKBase 1.77): it requires the inputs in its own
+parameter order, which is hash order and so depends on the names and the machine. Give the
+inputs in the reverse order (`inputs = [b, a]`).
 """
 at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) = T[Int(k)]
 # One registration for the table and the site forms (see `Advect`). The index is any `Real`
@@ -109,7 +126,13 @@ at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, Abstract
 # index only)
 at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = at(T, Num(k))
 
-"""`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`)."""
+"""
+`at2(J, a, b)`: entry `(a, b)` of the pair table `J` (`at2(J, kindₛ, kindₛ′)`).
+
+The two kinds are two integer inputs, so `mtkcompile(sys; inputs = [kindₛ, kindₛ′])` can
+fail with `AssertionError: last_idx <= idx` (FR-36, see [`at`](@ref)); then give
+`inputs = [kindₛ′, kindₛ]`.
+"""
 at2(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
     T[Int(k), Int(kp)]
 @register_symbolic at2(T::AbstractMatrix, k::Real, kp::Real)
@@ -297,5 +320,6 @@ include("bcs.jl")
 include("linearity.jl")
 include("lower.jl")
 include("discretize.jl")
+include("problems.jl")
 
 end # module LatticePDE

@@ -1,8 +1,12 @@
-# A CPU host-loop runner implementing the Exec contract (src/schedule/contract.jl), so the
-# tests execute generated bodies without a GPU. Exec (C2) replaces it at the merge.
+# The tests run generated bodies through Exec's host executor (LatticeFields.Problems binds
+# each launch description of a step plan to an Exec.Launch). The padded host loop below is
+# kept only as an oracle: it pads launches as a device does (linear: up to a multiple of 256,
+# guarded `s <= G.n`; Cartesian: the padded box, each axis guarded by the body), and every
+# test step compares Exec's result with it bit for bit.
 
 using LatticeFields
-using LatticeFields: IR, Compile, Schedule
+using LatticeFields: IR, Compile, Schedule, Problems
+using KernelAbstractions: KernelAbstractions
 using LatticeFields.IR: Grid, Coef, FaceRule, ImmersedRule, NodeValueRule, Space,
                         ProgramBuilder,
                         field!, mask!, rule!, kernel, load, store, param, coord, select, eq,
@@ -12,85 +16,78 @@ using LatticeFields.Compile: CompileOptions, debug_options, semantic, compile_ke
                              body_function, derive_function, fingerprint, LOWERING
 using LatticeFields.Schedule: plan, StepPlan, LaunchSpec, CostModel
 
-"""
-The geometry object of the contract (item 4).
-"""
-struct HostGeom{N, L, R, I, T}
-    n::I
-    dims::NTuple{L, NTuple{N, Int32}}
-    rt::NTuple{R, T}
-end
+const HOST = KernelAbstractions.CPU()
+using LatticeFields.Problems: FieldStore, array, current, launch_geometry,
+                              launch_parameters, launch_arrays
 
-# Padded launches, as on a device: the linear wrapper guards `s <= G.n`; Cartesian bodies
-# guard each axis themselves (contract item 1).
-function host_loop!(body::F, n::I, S, P, G) where {F, I}
-    for s in one(I):(cld(n, I(256)) * I(256))
+# ---- the oracle: padded host loops over the same bodies ----------------------------------
+function oracle_loop!(body::F, n, S, P, G) where {F}
+    for s in 1:(cld(Int(n), 256) * 256)
         s <= G.n && body(s, S, P, G)
     end
     return nothing
 end
-function host_cartesian!(body::F, padded::NTuple{N, Int}, S, P,
-        G::HostGeom{N, L, R, I}) where {F, N, L, R, I}
+function oracle_cartesian!(body::F, padded::NTuple{N, Int}, S, P, G) where {F, N}
     for ci in CartesianIndices(padded)
-        body(map(c -> c % I, Tuple(ci)), S, P, G)
+        body(Tuple(ci), S, P, G)
     end
+    return nothing
+end
+function oracle_launch!(p, l::LaunchSpec, st, Praw, rt)
+    ck = l.kernel
+    S, P, G = launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, rt)
+    body = Compile.body_function(ck)
+    padded = map((n, w) -> cld(n, w) * w, l.ndrange, l.workgroup)
+    ck.strategy == :cartesian ? oracle_cartesian!(body, padded, S, P, G) :
+    oracle_loop!(body, G.n, S, P, G)
     return nothing
 end
 
 """
-Arrays of a program: one or two buffers per field, plus the current-slot index.
+Host store of a program: zeroed arrays, `init(key, A)` applied to each buffer (the second
+buffer of a two-buffer field copies the first), 4-element zero tables.
 """
-mutable struct HostStore
-    bufs::Dict{Int32, Vector{Any}}
-    cur::Dict{Int32, Int}
-    tables::Dict{Int32, Any}
-end
-function HostStore(p::IR.Program{N}; init = (key, A) -> nothing) where {N}
-    bufs, cur = Dict{Int32, Vector{Any}}(), Dict{Int32, Int}()
+function HostStore(p::IR.Program; init = (key, A) -> nothing)
+    st = FieldStore(HOST, p)
     for (i, f) in enumerate(p.fields)
-        dims = Int.(IR.leveldims(p, f.levels[1]))
-        A = [zeros(IR.juliatype(f.storage), prod(dims) * IR.ncomp(f))
-             for _ in 1:(f.buffers)]
+        A = st.bufs[i]
         foreach(a -> init(f.key, a), A)
         length(A) == 2 && copyto!(A[2], A[1])
-        bufs[Int32(i)], cur[Int32(i)] = A, 1
     end
-    return HostStore(bufs, cur, Dict{Int32, Any}())
+    foreach(i -> st.tables[i] = zeros(IR.juliatype(p.tables[i].storage), 4), eachindex(st.tables))
+    return st
 end
-function array(st::HostStore, id, role)
-    role == :table && return st.tables[id]
-    b = st.bufs[id]
-    return length(b) == 1 ? b[1] : b[role == :cur ? st.cur[id] : 3 - st.cur[id]]
+function _rt2(rt)
+    length(rt) == 2 ? Float64.(Tuple(rt)) :
+    length(rt) == 1 ? (Float64(rt[1]), 0.0) : (0.0, 0.0)
 end
-current(st::HostStore, p, key) = array(st, IR.fieldid(p, key), :cur)
+function _snapshot(st)
+    FieldStore(st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs], copy(st.cur), copy(st.tables))
+end
+_same(a, b) = length(a) == length(b) && all(i -> isequal(a[i], b[i]), eachindex(a))   # -0.0 ≠ 0.0, NaN = NaN
 
 """
-Everything a launch needs, built once; `run!` is the warm call.
+A launch bound through Exec (host executor); `run!` is the warm call.
 """
-function prepare(p::IR.Program{N}, l::LaunchSpec{N}, st::HostStore, Praw; rt = ()) where {N}
-    ck = l.kernel
-    S = Tuple(Tuple(array(st, id, role) for (id, role) in lane) for lane in l.bind)
-    P = derive_function(ck)(Tuple(Float64.(Praw)))
-    I = ck.I
-    dims = Tuple(map(Int32, IR.leveldims(p, lv)) for lv in ck.levels)
-    n = I(prod(IR.leveldims(p, ck.space.level)))
-    G = HostGeom{N, length(dims), length(rt), I, ck.T}(n, dims, Tuple(ck.T.(rt)))
-    padded = map((n, w) -> cld(n, w) * w, l.ndrange, l.workgroup)
-    return (body_function(ck), ck.strategy, S, P, G, padded)
+function prepare(p::IR.Program, l::LaunchSpec, st, Praw; rt = ())
+    Problems.bind(
+        HOST, p, l, launch_arrays(st, l), launch_parameters(l.kernel, Praw), _rt2(rt))
 end
-function run!(prep)
-    body, strategy, S, P, G, padded = prep
-    strategy == :cartesian ? host_cartesian!(body, padded, S, P, G) :
-    host_loop!(body, G.n, S, P, G)
-    return nothing
-end
+run!(l) = (l(); nothing)
 
 """
-Run one step plan on the host: launches in order, then the host slot swaps.
+Run one step plan through Exec, then the host slot swaps. The same step runs on a copy of
+the store through the padded oracle loops; every array must agree bit for bit.
 """
-function run_step!(p::IR.Program, sp::StepPlan, st::HostStore, Praw; rt = ())
-    foreach(l -> run!(prepare(p, l, st, Praw; rt)), sp.launches)
-    foreach(f -> st.cur[f] = 3 - st.cur[f], sp.swaps)
+function run_step!(p::IR.Program, sp::StepPlan, st, Praw; rt = ())
+    ref = _snapshot(st)
+    for l in sp.launches
+        oracle_launch!(p, l, ref, Praw, _rt2(rt))
+    end
+    Problems.run_step!(HOST, p, sp, st, Praw; rt = _rt2(rt))
+    Problems.swap!(ref, sp)
+    @test all(i -> all(j -> _same(st.bufs[i][j], ref.bufs[i][j]), eachindex(st.bufs[i])),
+        eachindex(st.bufs))
     return st
 end
 

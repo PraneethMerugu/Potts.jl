@@ -1,8 +1,9 @@
 # Passes 4–6: types, index lowering and emission of `body(s, S, P, G)` (linear) or
-# `body(s, x, S, P, G)` (Cartesian), stores interleaved in canonical order. The debug mode is
-# a flag here: Float64, no hoisting, coordinates from `CartesianIndices` and targets from
-# bounds-checked `LinearIndices`, no `@inbounds`. It shares no index arithmetic with the
-# optimized path, so it is the oracle for optimized emission.
+# `body(x, S, P, G)` (Cartesian; Exec launches both, contract.jl), stores interleaved in
+# canonical order. The debug mode is a flag here: Float64, no hoisting, coordinates from
+# `CartesianIndices` and targets from bounds-checked `LinearIndices`, no `@inbounds`. It
+# shares no index arithmetic with the optimized path, so it is the oracle for optimized
+# emission.
 
 """
 Compile options. `T`: compute value type; `I`: site index type (switched to Int64
@@ -343,7 +344,8 @@ function _coords(c::Ctx{N}) where {N}
         for d in (N - 1):-1:1
             lin = :($(Symbol(:x, d)) - $(_I(c, 1)) + $(ns[d]) * ($lin))
         end
-        return Any[[:($(Symbol(:x, d)) = x[$d]) for d in 1:N]...; :(s = $lin + $(_I(c, 1)))]
+        return Any[[:($(Symbol(:x, d)) = x[$d] % $(c.o.I)) for d in 1:N]...;
+                   :(s = $lin + $(_I(c, 1)))]
     end
     c.o.debug && return Any[:(ci = CartesianIndices(($([:(Int($n)) for n in ns]...),))[s]);
                [:($(Symbol(:x, d)) = ci[$d]) for d in 1:N]...]
@@ -415,6 +417,8 @@ function emit(p::Program{N}, k::Kernel{N}, o::CompileOptions; stages = LOWERING)
         body = Any[Expr(:if, inb, Expr(:block, body...))]
     end
     sig = L.strategy == :cartesian ? (:x, :S, :P, :G) : (:s, :S, :P, :G)
+    # Exec passes the site as `Int` (`@index` and the host loop); the body computes in `I`
+    L.strategy == :cartesian || pushfirst!(head, :(s = s % $(o.I)))
     ex = Expr(:->, Expr(:tuple, sig...), Expr(
         :block, head..., pre..., body..., :(return nothing)))
     return _strip!(ex), L

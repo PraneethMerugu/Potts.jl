@@ -279,7 +279,10 @@ bcs = [ce ~ masked(ke == 3, 0.0), oe ~ masked(ismember(ke, (2, 3)), 1.0)]
     end
 
     include("discretize.jl")
+    include("problems.jl")
+    include("numbers.jl")
     include("example.jl")
+    isempty(get(ENV, "LATTICEPDE_GPU", "")) || include("device.jl")
 
     @testset "QA" begin
         using Aqua, ExplicitImports

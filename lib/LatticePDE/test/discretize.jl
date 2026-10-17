@@ -15,7 +15,7 @@ const euler = (kb, c, r) -> c + runtime(kb, 2) * r          # rt = (t, dt)
 ir(cf) = sprint(print_program, cf.program)
 dom2(a = 1.0, b = 1.0) = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, a), y ∈ Interval(0.0, b)]
 pde(eqs, bcs, dvs, ps; d = dom2()) = PDESystem(eqs, bcs, d, [t, x, y], dvs, ps; name = :f)
-lower64(sys, dims; kw...) = discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); update = euler, kw...)
+lower64(sys, dims; kw...) = symbolic_discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); update = euler, kw...)
 
 """Semantic program, step plan and host store of a lowered system (Float64)."""
 function runner(cf)
@@ -75,28 +75,28 @@ end
     eq = [D(ce) ~ Dc * Δ(ce)]
     sys = pde(eq, [c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc])
     g = Grid((4, 4))
-    base = ir(discretize(sys, LatticeDiscretization(g)))
+    base = ir(symbolic_discretize(sys, LatticeDiscretization(g)))
     for key in (c, ce, unwrap(ce))                  # the callable, the applied term, unwrapped
-        @test ir(discretize(sys, LatticeDiscretization(g; methods = Dict(key => FiniteVolume())))) == base
+        @test ir(symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(key => FiniteVolume())))) == base
     end
-    @test throws_with(() -> discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume()))), "matches no")
-    @test throws_with(() -> discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem))), "FiniteVolume")
-    @test throws_with(() -> discretize(sys, LatticeDiscretization(Grid((4, 4, 4)))), "3 axes")
-    @test throws_with(() -> discretize(pde(eq, Equation[], [ce], [Dc => 1e-3]), LatticeDiscretization(g)), "`Pair`")
-    @test throws_with(() -> discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g)), "two equations")
-    @test throws_with(() -> discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g)), "no equation")
-    @test throws_with(() -> discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g)), "input is set by the CPM")
+    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume()))), "matches no")
+    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem))), "FiniteVolume")
+    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4, 4)))), "3 axes")
+    @test throws_with(() -> symbolic_discretize(pde(eq, Equation[], [ce], [Dc => 1e-3]), LatticeDiscretization(g)), "`Pair`")
+    @test throws_with(() -> symbolic_discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g)), "two equations")
+    @test throws_with(() -> symbolic_discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g)), "no equation")
+    @test throws_with(() -> symbolic_discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g)), "input is set by the CPM")
     # wrong bcs are detected: a face of a periodic axis; periodicity for one field only
-    @test throws_with(() -> discretize(pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
+    @test throws_with(() -> symbolic_discretize(pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
                                        LatticeDiscretization(g)), "periodic pair makes periodic")
     two = pde([eq; D(oe) ~ Δ(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
-    @test throws_with(() -> discretize(two, LatticeDiscretization(g)), "periodicity is per axis")
+    @test throws_with(() -> symbolic_discretize(two, LatticeDiscretization(g)), "periodicity is per axis")
     # the vocabulary scans run first
-    @test_throws ArgumentError discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+    @test_throws ArgumentError symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
     # spellings with no lattice meaning
     for (rhs, msg) in [Dx(ce) => "flux form", Dx(Dx(ce) * Dy(ce)) => "flux form", at(ce, ke) => "array parameter",
         ce^cT => "", Symbolics.Num(unwrap(z)) => "not a declared"]
-        f = () -> discretize(pde([D(ce) ~ rhs], Equation[], [ce, ke], [Dc, cT]), LatticeDiscretization(g))
+        f = () -> symbolic_discretize(pde([D(ce) ~ rhs], Equation[], [ce, ke], [Dc, cT]), LatticeDiscretization(g))
         msg == "" ? (@test f() isa CompiledField) : (@test throws_with(f, msg))
     end
 end
@@ -124,7 +124,7 @@ end
         @test only(last.(LatticePDE.linearity(rhs, ce, states; inputs))) == want
     end
     # the system table uses the same rule: an aux coefficient that depends on c
-    cf = discretize(pde([D(ce) ~ DivKGrad(:harmonic)(Ke, ce) + Ke * ce, Ke ~ ce^2], Equation[], [ce, Ke], Num[]),
+    cf = symbolic_discretize(pde([D(ce) ~ DivKGrad(:harmonic)(Ke, ce) + Ke * ce, Ke ~ ce^2], Equation[], [ce, Ke], Num[]),
                     LatticeDiscretization(Grid((4, 4))))
     @test Set(last.(cf.linearity["c"])) == Set([:Other])
     # Symbolics' own expansion is blind to the registered operators (FR-27): the reason for the table
@@ -135,7 +135,7 @@ end
     g = Grid((5, 4))
     bc = [c(t, 0, y) ~ 1.0, h0 * c(t, 1, y) + Dx(c(t, 1, y)) ~ g0, c(t, x, 0) ~ c(t, x, 1)]
     aux = [Ke ~ K0 + x]
-    low(rhs; e = Equation[]) = ir(discretize(pde([D(ce) ~ rhs; e], bc, isempty(e) ? [ce] : [ce, Ke], [Dc, h0, g0, K0]),
+    low(rhs; e = Equation[]) = ir(symbolic_discretize(pde([D(ce) ~ rhs; e], bc, isempty(e) ? [ce] : [ce, Ke], [Dc, h0, g0, K0]),
                                              LatticeDiscretization(g)))
     @test low(Dc * (Dx(Dx(ce)) + Dy(Dy(ce)))) == low(Dc * Δ(ce))
     @test low(Dx(Ke * Dx(ce)) + Dy(Ke * Dy(ce)); e = aux) == low(DivKGrad(:harmonic)(Ke, ce); e = aux)
@@ -299,7 +299,7 @@ end
     rhs = ifelse(sum(mem) > 0, Dc * sum(m * rd(a, b) for (m, (a, b)) in zip(mem, offs)) / sum(mem), Ne)
     per = [N(t, 0, y) ~ N(t, 1, y), N(t, x, 0) ~ N(t, x, 1)]
     sys(r; e = [Shift(t, 1)(Ne) ~ r]) = pde(e, per, [Ne, ke], [Dc, dx, dy])
-    cf = discretize(sys(rhs), LatticeDiscretization(Grid((n, n)); T = Float64))
+    cf = symbolic_discretize(sys(rhs), LatticeDiscretization(Grid((n, n)); T = Float64))
     @test cf.defaults == [1e-3, 0.2, 0.2]                       # spacing parameters valued from the grid
     @test occursin("kernel map:N", ir(cf))
     kind = fill(Int32(1), n, n)
@@ -329,7 +329,7 @@ end
     @test abs((sum(got) - sum(Float64.(N0))) - Float64(sum(want) - sum(N0))) < 1e-12   # the mass change
     @test sum(want) != sum(N0)                                  # the map is not conservative
     # a closed lattice: offset reads outside the box read 0 (kind 0 is not in I)
-    closed = discretize(pde([Shift(t, 1)(Ne) ~ rhs], Equation[], [Ne, ke], [Dc, dx, dy]),
+    closed = symbolic_discretize(pde([Shift(t, 1)(Ne) ~ rhs], Equation[], [Ne, ke], [Dc, dx, dy]),
                         LatticeDiscretization(Grid((n, n)); T = Float64))
     want_c = direct(N0, 1 // 1; periodic = false)
     got_c = apply(closed, (1.0, 0.2, 0.2))
@@ -337,7 +337,7 @@ end
     @test abs((sum(got_c) - sum(Float64.(N0))) - Float64(sum(want_c) - sum(N0))) < 1e-12
     @test maximum(abs, got_c .- Float64.(want)) > 1e-3          # the two lattices differ at the edges
     # negative control: a flux-form rate step of the same field misses the exact map
-    flux = discretize(pde([D(Ne) ~ Δ(Ne)], per, [Ne], Num[]),
+    flux = symbolic_discretize(pde([D(Ne) ~ Δ(Ne)], per, [Ne], Num[]),
                       LatticeDiscretization(Grid((n, n)); T = Float64); update = euler)
     R = runner(flux)
     copyto!(field(R, "N"), Float64.(vec(N0)))
@@ -350,7 +350,7 @@ end
         [Shift(t, 1)(Ne) ~ MTKB.Hold()(Ne)] => "not supported", [D(Ne) ~ rd(1, 0) - Ne] => "only in map equations",
         [Shift(t, 1)(Ne) ~ N(t, x + dx / 2, y)] => "integer literal", [Shift(t, 1)(Ne) ~ N(t, x + Dc, y)] => "lattice_spacing",
         [Shift(t, 1)(Ne) ~ N(t, x + dy, y)] => "lattice_spacing = 1", [N(ShiftIndex(t, 1) + 1) ~ rhs] => "ShiftIndex"]
-        @test throws_with(() -> discretize(sys(rhs; e), g), msg)
+        @test throws_with(() -> symbolic_discretize(sys(rhs; e), g), msg)
     end
 end
 
@@ -379,7 +379,7 @@ end
               at(Dk, ke) * Δ(oe)
         sys = pde([D(ce) ~ rhs, D(oe) ~ Δ(oe) + ce * oe + sin(ce) + cos(oe), Ke ~ K0 + exp(ce)],
                   Equation[], [ce, oe, Ke, ke], [Dc, k, K0, cT, g0, h0, Dk])
-        return ir(discretize(sys, LatticeDiscretization(Grid((4, 3)))))
+        return ir(symbolic_discretize(sys, LatticeDiscretization(Grid((4, 3)))))
     end
     order() = string.(arguments(unwrap(Dc * Δ(ce) + K0 * Δ(oe) + h0 * ismember(ke, (2,)) + k * sin(ce) +
                                        cT * exp(oe) + g0 * cos(ce) + Δ(Ke))))
@@ -428,7 +428,7 @@ end
         cell && (empty[2:3, 2:3] .= false; N0[2:3, 2:3] .= 0)
         want = exact(N0, empty, Dv, periodic)
         @test sum(want[empty]) - sum(N0[empty]) == pinned       # the port reproduces t4
-        cf = discretize(pde([Shift(t, 1)(Ne) ~ rhs], periodic ? per : Equation[], [Ne, ke], [Dc, dx, dy]),
+        cf = symbolic_discretize(pde([Shift(t, 1)(Ne) ~ rhs], periodic ? per : Equation[], [Ne, ke], [Dc, dx, dy]),
                         LatticeDiscretization(Grid((n, n)); T = Float64))
         R = runner(cf)
         copyto!(field(R, "N"), Float64.(vec(N0)))
@@ -449,7 +449,7 @@ end
     rhs0 = ifelse(ismember(ke, (0,)),
                   Dc * sum(ismember(kindₛ(t, x + a * dx, y + b * dy), (0,)) * N(t, x + a * dx, y + b * dy)
                            for (a, b) in offs) / sum(ismember(kindₛ(t, x + a * dx, y + b * dy), (0,)) for (a, b) in offs), Ne)
-    R = runner(discretize(pde([Shift(t, 1)(Ne) ~ rhs0], Equation[], [Ne, ke], [Dc, dx, dy]),
+    R = runner(symbolic_discretize(pde([Shift(t, 1)(Ne) ~ rhs0], Equation[], [Ne, ke], [Dc, dx, dy]),
                           LatticeDiscretization(Grid((n, n)); T = Float64)))
     copyto!(field(R, "N"), Float64.(vec(N0)))
     copyto!(field(R, "kindₛ"), Int32.(ifelse.(vec(empty), 0, 2)))
@@ -459,9 +459,9 @@ end
 
 @testset "periodicity covers map fields" begin
     sys = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1)], [ce, Ne], Num[])
-    @test throws_with(() -> discretize(sys, LatticeDiscretization(Grid((4, 4)))), "periodicity is per axis")
+    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4)))), "periodicity is per axis")
     ok = pde([D(ce) ~ Δ(ce), Shift(t, 1)(Ne) ~ Ne], [c(t, x, 0) ~ c(t, x, 1), N(t, x, 0) ~ N(t, x, 1)], [ce, Ne], Num[])
-    @test discretize(ok, LatticeDiscretization(Grid((4, 4)))) isa CompiledField
+    @test symbolic_discretize(ok, LatticeDiscretization(Grid((4, 4)))) isa CompiledField
 end
 
 @testset "array state end to end (two components)" begin
@@ -497,7 +497,7 @@ end
         s = semantic(cf.program)
         sp = plan(s)                                            # Float32 compute
         st = HostStore(s)
-        merge!(st.tables, tables)
+        foreach(((k, v),) -> k <= length(st.tables) && (st.tables[k] = v), tables)   # programs without the table ignore it
         for l in sp.launches
             @test !has_f64(l.kernel.body)
             prep = prepare(s, l, st, cf.defaults; rt = (0.0, 0.1))
@@ -506,7 +506,7 @@ end
         end
         return length(sp.launches)
     end
-    f32(sys, dims) = discretize(sys, LatticeDiscretization(Grid(dims); T = Float32); update = euler)
+    f32(sys, dims) = symbolic_discretize(sys, LatticeDiscretization(Grid(dims); T = Float32); update = euler)
     offs = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
     mem = [ismember(kindₛ(t, x + a * dx, y + b * dy), (1,)) for (a, b) in offs]
     maprhs = ifelse(sum(mem) > 0, Dc * sum(m * N(t, x + a * dx, y + b * dy) for (m, (a, b)) in zip(mem, offs)) / sum(mem), Ne)
@@ -539,49 +539,49 @@ end
     # 2. one condition per face, mask and start
     for bcs in ([c(t, 0, y) ~ 1.0, Dx(c(t, 0, y)) ~ 0.0], [ce ~ masked(ke == 3, 1.0), ce ~ masked(ke == 2, 0.0)],
                 [c(0, x, y) ~ 0.0, c(0, x, y) ~ 1.0])
-        @test throws_with(() -> discretize(sysb(bcs), g), "already has a condition")
+        @test throws_with(() -> symbolic_discretize(sysb(bcs), g), "already has a condition")
     end
-    @test discretize(sysb([c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0]), g) isa CompiledField
+    @test symbolic_discretize(sysb([c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0]), g) isa CompiledField
     # 3. the left side: a time operator on the plain field read
     for (e, msg) in [[Dx(ce) ~ Δ(ce)] => "time rate", [Shift(x, 1)(Ne) ~ 2 * Ne] => "in time",
                      [D(c(t, 0, y)) ~ Δ(ce)] => "time rate", [Shift(t, 1)(N(t, x + dx, y)) ~ 2 * Ne] => "Shift(t, 1)(c(t, x, y))",
                      [c(t, 0, y) ~ 1.0] => "field read"]
-        @test throws_with(() -> discretize(pde(e, Equation[], [ce, Ne], [dx]), g), msg)
+        @test throws_with(() -> symbolic_discretize(pde(e, Equation[], [ce, Ne], [dx]), g), msg)
     end
     # 4. an offset needs a lattice_spacing parameter (x + 1 is a physical offset)
-    @test throws_with(() -> discretize(pde([Shift(t, 1)(Ne) ~ N(t, x + 1, y)], Equation[], [Ne], Num[]), g), "lattice_spacing")
-    @test discretize(pde([Shift(t, 1)(Ne) ~ N(t, x + dx, y)], Equation[], [Ne], [dx]), g) isa CompiledField
+    @test throws_with(() -> symbolic_discretize(pde([Shift(t, 1)(Ne) ~ N(t, x + 1, y)], Equation[], [Ne], Num[]), g), "lattice_spacing")
+    @test symbolic_discretize(pde([Shift(t, 1)(Ne) ~ N(t, x + dx, y)], Equation[], [Ne], [dx]), g) isa CompiledField
     # 7. a Robin face whose ghost value is undefined (α/2 + β/h = 0: h = 1/4, β = 1/8 at the low face)
-    @test throws_with(() -> discretize(sysb([c(t, 0, y) + 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g), "ghost value")
-    @test discretize(sysb([c(t, 0, y) - 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g) isa CompiledField
+    @test throws_with(() -> symbolic_discretize(sysb([c(t, 0, y) + 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g), "ghost value")
+    @test symbolic_discretize(sysb([c(t, 0, y) - 0.125 * Dx(c(t, 0, y)) ~ 1.0]), g) isa CompiledField
 end
 
 @testset "review round 2: refusals" begin
     g = LatticeDiscretization(Grid((4, 4)); T = Float64)
-    map(r; ps = [dx]) = () -> discretize(pde([Shift(t, 1)(Ne) ~ r], Equation[], [Ne], ps), g)
+    map(r; ps = [dx]) = () -> symbolic_discretize(pde([Shift(t, 1)(Ne) ~ r], Equation[], [Ne], ps), g)
     # 1. an offset is `a * dx` exactly
     for r in (N(t, x + dx^2, y), N(t, x + 3dx * dx, y), N(t, x + 1 / dx, y), N(t, x + sqrt(dx), y))
         @test throws_with(map(r), "lattice")
     end
     @test map(N(t, x - 2dx, y))() isa CompiledField
     # 2. a term that reads an aux field is Other (its dependence on c is hidden)
-    lin(eqs, ps = Num[]) = Set(last.(discretize(pde(eqs, Equation[], [ce, Ke], ps), g).linearity["c"]))
+    lin(eqs, ps = Num[]) = Set(last.(symbolic_discretize(pde(eqs, Equation[], [ce, Ke], ps), g).linearity["c"]))
     @test lin([D(ce) ~ Δ(ce) + Ke, Ke ~ ce^2]) == Set([:Diffusion, :Other])
     @test lin([D(ce) ~ Δ(ce) + Dc * Δ(Ke), Ke ~ ce^2], [Dc]) == Set([:Diffusion, :Other])
     # 3. initial conditions: state fields only, values read no field
-    @test throws_with(() -> discretize(pde([D(ce) ~ Δ(ce), Ke ~ ce], [K(0, x, y) ~ 3.0], [ce, Ke], Num[]), g),
+    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), Ke ~ ce], [K(0, x, y) ~ 3.0], [ce, Ke], Num[]), g),
                       "only rate and map fields")
-    @test throws_with(() -> discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ c(0, x, y) + 1], [ce], Num[]), g),
+    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ c(0, x, y) + 1], [ce], Num[]), g),
                       "cannot read a field")
-    @test throws_with(() -> discretize(pde([D(ce) ~ Δ(ce), D(oe) ~ Δ(oe)], [c(0, x, y) ~ o(0, x, y)], [ce, oe], Num[]), g),
+    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), D(oe) ~ Δ(oe)], [c(0, x, y) ~ o(0, x, y)], [ce, oe], Num[]), g),
                       "")                                       # refused by the parser (a field on each side)
-    @test discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ sin(x)], [ce], Num[]), g) isa CompiledField
+    @test symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(0, x, y) ~ sin(x)], [ce], Num[]), g) isa CompiledField
     # 4. an aux equation that reads its own field
-    @test throws_with(() -> discretize(pde([D(ce) ~ Δ(ce), Ke ~ Ke + ce], Equation[], [ce, Ke], Num[]), g),
+    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce), Ke ~ Ke + ce], Equation[], [ce, Ke], Num[]), g),
                       "cannot read itself")
     # 5. the Robin check with a parameter coefficient (default 1/8 = h/2 at the low face)
     @parameters βr = 0.125
-    @test throws_with(() -> discretize(pde([D(ce) ~ Δ(ce)], [c(t, 0, y) + βr * Dx(c(t, 0, y)) ~ 1.0], [ce], [βr]), g),
+    @test throws_with(() -> symbolic_discretize(pde([D(ce) ~ Δ(ce)], [c(t, 0, y) + βr * Dx(c(t, 0, y)) ~ 1.0], [ce], [βr]), g),
                       "ghost value")
     # and an input multiplier of advection is Other, as of diffusion
     st, inp = [operation(unwrap(ce))], [operation(unwrap(ke)), operation(unwrap(vel(t, x, y)))]
@@ -591,7 +591,7 @@ end
 
 @testset "state type: lanes per T, default by backend, refusals (P5 C6-1, C6-3)" begin
     sys = pde([D(ce) ~ Dc * Δ(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
-    lanes(T) = [f.storage for f in discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
+    lanes(T) = [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
                 if f.key == "c"]
     @test lanes(Float32) == [F32] && lanes(Float64) == [F64] && lanes(Float16) == [F16]
     @test lanes(BigFloat) == [F64]                    # host problems fill F64 lanes with BigFloat

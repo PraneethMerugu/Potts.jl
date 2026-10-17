@@ -68,11 +68,10 @@ function _lane(st, T)
     T === BigFloat && return F64          # host only: an F64 lane holds BigFloat (`lanetype`)
     _dverr("T = $T is not a state type: use Float16, Float32, Float64 or BigFloat (host)")
 end
-# the state type: `disc.T`, else Float64 on the host (no backend) and Float32 on a device
-# backend (C7a refines this with `Exec.supports_float64`)
+# the state type: `disc.T`, else Float64 on a host backend and Float32 on a device
 function _statetype(disc::LatticeDiscretization)
     disc.T === nothing || return disc.T
-    return disc.backend === nothing ? Float64 : Float32
+    return disc.backend === nothing || Exec.supports_float64(disc.backend) ? Float64 : Float32
 end
 _default(p) = ModelingToolkitBase.hasdefault(p) ? Float64(unwrap_const(ModelingToolkitBase.getdefault(p))) : NaN
 
@@ -240,7 +239,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             bc = bcs[b]
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / h[d])
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
-            val(α) / 2 + val(β) == 0 &&
+            Problems.degenerate(val(α), val(β)) &&
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
             rule!(pb, FaceRule(f, Int8(d), Int8(s), α, β, _coef(bc.value, params)))
         end
@@ -283,11 +282,3 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                            Float64.(collect(unwrap_const.(unwrap.(d))))) for p in arrays]
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin)
 end
-
-"""
-    discretize(pdesys, disc::LatticeDiscretization; kw...)
-
-At this stage the same as [`symbolic_discretize`](@ref); the problem wrappers
-(`problem = :owned | :ode | :linear`) are added with the steppers.
-"""
-discretize(sys::PDESystem, disc::LatticeDiscretization; kw...) = symbolic_discretize(sys, disc; kw...)

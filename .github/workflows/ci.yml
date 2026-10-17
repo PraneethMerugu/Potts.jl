@@ -58,7 +58,7 @@ jobs:
             echo "Dependency changes against the last green run:"
             julia .github/ci/manifest_diff.jl "$LOCK" Manifest.toml
           fi
-          for p in test lib/LatticeFields/test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
+          for p in test lib/LatticeFields/test lib/LatticePDE/test lib/CorePotts/test lib/MakiePotts/test lib/PottsModels/test benchmark docs; do
             $PIN julia --project=$p -e 'using Pkg; Pkg.precompile()'
           done
       - name: Frozen acceptance tests are unchanged

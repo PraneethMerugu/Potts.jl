@@ -1,6 +1,7 @@
-# The contract between Schedule and Exec (v3 §4.4). C5 builds descriptions only; Exec (C2)
-# turns them into launches. The merge with Exec is mechanical: Exec implements the four
-# items below for a `LaunchSpec`, and nothing else in this package depends on Exec.
+# The contract between Schedule and Exec (v3 §4.4). Schedule builds descriptions only;
+# `Problems.bind` turns a `LaunchSpec` into an `Exec.Launch` (linear: the guarded wrapper
+# with `n = G.n`; Cartesian: the Cartesian wrapper), and nothing in Schedule depends on Exec.
+# Exec passes the site `s` (or `x`) as `Int`; the body converts it to its index type `I`.
 #
 # 1. Bodies. `body_function(spec.kernel)` is a drop_expr'd RuntimeGeneratedFunction,
 #    content-addressed by `spec.kernel.hash` (equal bodies share one compile).
@@ -15,9 +16,11 @@
 #    `spec.bind[l][j] = (id, role)`: role `:cur` / `:next` select the current or next slot
 #    of a two-buffer field (`:cur` only for a one-buffer field), `:table` a table array.
 #    Lanes are `spec.kernel.lanes[l]`. Multi-component fields are one array of planes.
-# 3. Parameters. `P = derive_function(spec.kernel)(Praw)`: `Praw::NTuple{nparams,Float64}`
-#    on the host; `P::NTuple{NP, T}` reaches the device (no Float64 on Metal), with
-#    `NP = nparams + length(spec.kernel.derived)` (the hoisted parameters follow the raw ones).
+# 3. Parameters. `P = derive_function(spec.kernel)(Praw, c, t)`: `Praw::NTuple{nparams}` of
+#    any `Real` eltype on the host, `c` a value of the compute element type, `t` the time;
+#    `P::NTuple{NP, typeof(c)}` reaches the device (no Float64 on Metal), with
+#    `NP = nparams + length(spec.kernel.derived)` (the hoisted parameters follow the raw ones;
+#    a kernel with `timed` hoisted values is derived again at each launch).
 # 4. Geometry `G`, any isbits object with fields
 #      n::I                          sites of the launch space (`spec.ndrange`)
 #      dims::NTuple{L,NTuple{N,I32}} per level in `spec.kernel.levels` order
