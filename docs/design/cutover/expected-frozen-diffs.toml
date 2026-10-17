@@ -22,7 +22,7 @@
 #
 # [[edits]]                    one per prepared refreeze(list-A) commit
 # path     = "acceptance/…jl"
-# commit   = "…"               short hash of the refreeze commit on feat/lattice-pde
+# commit   = "…"               short hash of the refreeze commit (C4 list-A edits and C8 list-A edits, on lp/c8 after C8)
 # fixup_of = "C8"              the commit it folds into after approval (v3 §11.2)
 # decision = "D-…"             the DECISIONS draft that sets the new sha256 in frozen.toml
 # why      = "…"
@@ -201,10 +201,13 @@ new = "errors: the fixture does not build (same ArgumentError as 'class fixtures
 
 [[edits]]
 path = "acceptance/p6_0g_kind_classes.jl"
-commit = "(see refreeze(list-A) commit on lp/c3)"
+commit = "3236178d"
 fixup_of = "C3"
 decision = "D-258"
 why = "lines 207-208, 319-320: `(kind ∈ endothelial)` -> `ismember(kind, endothelial)` in @equations; lowers to the same code"
+# PENDING (integration dry run lp/int): with this edit on top of C4, line 632 `getfield(sys, :kinds)`
+# fails (FieldError; see the C4 note below). The C4 form `getfield(getfield(sys, :part), :kinds)` is
+# not yet prepared as a refreeze(list-A) commit; it needs the maintainer's go-ahead.
 
 # C4 (W-lite LA container, D-259): the container's fields, metadata and MTK's complete/extend change.
 # Measured on this Mac on the C4 code (frozen files p6_0o, bs, bm, bp, bv, bn, bo, al, av, merks_2006_defaults,
@@ -611,217 +614,509 @@ new = "FieldError: type PottsSystem has no field `energies`; the file's testsets
 
 [[edits]]
 path = "acceptance/p6_0o_abstract_system.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "3f29d4e5"
 fixup_of = "C4"
 decision = "D-260"
 why = "W-lite container: four fields, inner-System accessors, loud MTK rebuilds"
 
 [[edits]]
 path = "acceptance/p6_0bs_mtk_claims.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "8f2ef8dd"
 fixup_of = "C4"
 decision = "D-261"
 why = "MTK claims read Potts.inner(sys); no complete"
 
 [[edits]]
 path = "acceptance/p6_0bm_hamiltonian_metadata.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "b2328a69"
 fixup_of = "C4"
 decision = "D-262"
 why = "PottsSweepSpec read from Potts.inner(sys); Potts.extend"
 
 [[edits]]
 path = "acceptance/p6_0bp_updates.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "a88f14cd"
 fixup_of = "C4"
 decision = "D-263"
 why = "plain and compiled forms; events and payload on Potts.inner(sys)"
 
 [[edits]]
 path = "acceptance/merks_2006_defaults.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0al_name_categories.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0av_mcs_duration.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0bn_ode_mtkcompile.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0bo_initialization.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0bv_edge_after_mcs.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0e2_prime_errors.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "c5b69c89"
 fixup_of = "C4"
 decision = "D-264"
 why = "mechanical container edits (part fields, Potts.extend, Potts.lattice, no complete)"
 
 [[edits]]
 path = "acceptance/p6_0aj_concurrent_builds.jl"
-commit = "(see refreeze(list-A) commit on lp/c4)"
+commit = "cffc97b9"
 fixup_of = "C4"
 decision = "D-265"
 why = "p60aj_binders walks getfield(getfield(sys, :part), f): the statement fields moved into the payload"
 
 [[edits]]
 path = "acceptance/p6_0v3_launch_fusion.jl"
-commit = "PENDING"
+commit = "a10ebf5e"
 fixup_of = "C8"
 decision = "D-C8-R1"
 why = "CorePotts.FieldStep is deleted: the fixture's substep is a SitePhase into the scratch plus a CopyPhase (same operations, same order); Merks c digests move by roundoff only (σ digest unchanged)"
 
 [[edits]]
 path = "acceptance/p6_3b_boundary_schedule.jl"
-commit = "PENDING"
+commit = "fa07a6df"
 fixup_of = "C8"
 decision = "D-C8-R2"
 why = "CorePotts.laplacian and FieldStep are deleted: the controls' oracle is a hand-written 5-point Laplacian with the per-face ghost rule, one SitePhase + CopyPhase per substep"
 
 [[edits]]
 path = "acceptance/p6_5c_predicate_source.jl"
-commit = "PENDING"
+commit = "4d8fe43e"
 fixup_of = "C8"
 decision = "D-C8-R3"
 why = "CorePotts.stable_substeps is deleted (C8): the two controls assert the live substep count of an integrator built with the automatic count (expected 1, as before)"
 
 [[edits]]
 path = "acceptance/p6_0y_stable_substeps.jl"
-commit = "PENDING"
+commit = "e67d6d1a"
 fixup_of = "C8"
 decision = "D-C8-R4"
 why = "the field compiler orders the update's floating-point operations differently: two bit-pattern pins are re-pinned (each changed word moves 1 ulp); the FTCS oracle at rtol 1e-13 stays"
 
 [[edits]]
 path = "acceptance/p6_0ag_ode_expand_all.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0ah_canonical_term_order.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0as_sweep_validation.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0at_relation_fingerprint.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0au_integral_readers.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0av_mcs_duration.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0ax_gather_scan.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0c2_canonical_followups.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0g_kind_classes.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0o_abstract_system.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0p_cadence_fingerprint.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0t_integral_refresh.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0x_gather_ode_alloc.jl"
-commit = "PENDING"
+commit = "307d1d22"
 fixup_of = "C8"
 decision = "D-C8-R5"
 why = "fingerprint of a model with fields: the generated field code (filled inputs, field phases, PDESystem) changes the compiled-program hash"
 
 [[edits]]
 path = "acceptance/p6_0bk2_skip_interior.jl"
-commit = "PENDING"
+commit = "26438bee"
 fixup_of = "C8"
 decision = "D-C8-R6"
 why = "D-250 AUTO re-pin: the sweeps take the attempt/color range of a sub-MCS pass (D-C8 item 14), which changes the pinned IR text"
+
+# C8: measured on the PC (three PottsModels shards, CPU) at C8 on top of the C4 refreeze tail (the
+# former 5c01b6fd, before the review follow-ups; C8 is now 5fc74be9 and sits before the C4 refreezes).
+# Besides p6_0g line 632 (listed above, pending) and the bulk-less OpenVT package files (unchanged
+# baseline), these fail there and pass after the six C8 refreeze(list-A) commits. Re-measured at the
+# manifest commit's parent 26438bee (same tree as lp/c8 head): only p6_0g:632 and the OpenVT package files fail.
+
+[[failures]]
+path = "acceptance/p6_0ag_ode_expand_all.jl"
+testset = "P6.0ag: fingerprints of models without an ODE unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0ag_ode_expand_all.jl:407 (build()).f.fingerprint == P60AG_PUBLISHED[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0ah_canonical_term_order.jl"
+testset = "P6.0ah: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0ah_canonical_term_order.jl:385 fp == P60AH_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0aq_acceptance_fingerprint.jl"
+testset = "P6.0aq: fingerprints under the default acceptance law unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0aq_acceptance_fingerprint.jl:265 fp == P60AQ_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0as_sweep_validation.jl"
+testset = "P6.0as: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0as_sweep_validation.jl:363 fp == P60AS_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0at_relation_fingerprint.jl"
+testset = "P6.0at: fingerprints of models reading no named or gather relation unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0at_relation_fingerprint.jl:488 fp == P60AT_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0au_integral_readers.jl"
+testset = "P6.0au: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0au_integral_readers.jl:367 fp == P60AU_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0ax_gather_scan.jl"
+testset = "P6.0ax: fingerprints of models that built before are unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0ax_gather_scan.jl:573 fp == P60AX_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0c2_canonical_followups.jl"
+testset = "P6.0c2: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0c2_canonical_followups.jl:550 fp == get(P60C2_FINGERPRINTS, name, nothing)"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0p_cadence_fingerprint.jl"
+testset = "P6.0p: fingerprints of models without clocked components unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0p_cadence_fingerprint.jl:350 fp == P60P_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0t_integral_refresh.jl"
+testset = "P6.0t: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0t_integral_refresh.jl:479 fp == P60T_FINGERPRINTS[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0x_gather_ode_alloc.jl"
+testset = "P6.0x: fingerprints of models without a gather unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0x_gather_ode_alloc.jl:252 (build()).f.fingerprint == p60x_PUBLISHED[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: published fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0g_kind_classes.jl:987 fp == P60G_PUBLISHED[name]"
+old = "MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0g_kind_classes.jl"
+testset = "P6.0g: classes lower to the explicit gates (same code, same fingerprint)"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (P60gX has a field) (fixed by D-C8-R5)"
+assertion = "p6_0g_kind_classes.jl:661 fx == P60G_X_PIN"
+old = "0x00f52e12e133c906"
+new = "0xcaa274201d432e7d"
+
+[[failures]]
+path = "acceptance/p6_0av_mcs_duration.jl"
+testset = "P6.0av: fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does (fixed by D-C8-R5)"
+assertion = "p6_0av_mcs_duration.jl:354 fps[name] == P60AV_FINGERPRINTS[name] (rows 'field md = 0.5' and MerksVasculogenesis)"
+old = "field md = 0.5 0x0604ff900ded1dcb; MerksVasculogenesis 0xe51b575884b86e8d"
+new = "0xf0609cefa9b93632; 0xd89dd8d35e4384c8"
+
+[[failures]]
+path = "acceptance/p6_0o_abstract_system.jl"
+testset = "P6.0o P: generated code and fingerprints unchanged"
+since = "C8"
+list = "A"
+category = "fingerprint"
+why = "C8 lowers the fields through the field compiler (filled inputs, FieldPhase, PDESystem): the generated code of every model with fields changes, so its fingerprint does; the raw and canonical code-text hashes too (fixed by D-C8-R5)"
+assertion = "p6_0o_abstract_system.jl:652/654/655 fp, canon, raw == pin (five rows: Merks Float32/Float64, contact-inhibited Float32/Float64, fixture field)"
+old = "the D-260 pins"
+new = "the D-C8-R5 pins"
+
+[[failures]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+testset = "P6.0bk2: SequentialCPM()'s loop compiles to the base code (GG 72²)"
+since = "C8"
+list = "A"
+category = "auto-repin"
+why = "the sweeps take the attempt/color range of a sub-MCS pass (D-C8 item 14): the IR text changes, the trajectory does not (fixed by D-C8-R6)"
+assertion = "p6_0bk2_skip_interior.jl:287 p60bk2_ir_hash(mk()) == P60BK2_IR[label]"
+old = "96510374…9e38"
+new = "a390240e…e3e0"
+
+[[failures]]
+path = "acceptance/p6_0bk2_skip_interior.jl"
+testset = "P6.0bk2: SequentialCPM()'s loop compiles to the base code (cubes 16³)"
+since = "C8"
+list = "A"
+category = "auto-repin"
+why = "the sweeps take the attempt/color range of a sub-MCS pass (D-C8 item 14): the IR text changes, the trajectory does not (fixed by D-C8-R6)"
+assertion = "p6_0bk2_skip_interior.jl:287 p60bk2_ir_hash(mk()) == P60BK2_IR[label]"
+old = "76c7b816…45d2"
+new = "7ba4a1c4…e5bc"
+
+[[failures]]
+path = "acceptance/p6_0v3_launch_fusion.jl"
+testset = "P6.0v3: the fixtures (CPU)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.FieldStep is deleted; the CorePotts-level field fixture uses it (fixed by D-C8-R1)"
+assertion = "p6_0v3_launch_fusion.jl:313 builds the fixture with CorePotts.FieldStep"
+old = "the testset passes"
+new = "errors: UndefVarError FieldStep not defined in CorePotts"
+
+[[failures]]
+path = "acceptance/p6_0v3_launch_fusion.jl"
+testset = "P6.0v3 (5): exactness on the CPU (SequentialCPM)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.FieldStep is deleted (the fixture); with the fixture rewritten, the Merks c digest moves by roundoff (σ digest unchanged) (fixed by D-C8-R1)"
+assertion = "p6_0v3_launch_fusion.jl:338 builds the fixture with CorePotts.FieldStep; after the fixture rewrite, :361 (σ, c) digests == P60V3_MERKS_DIGESTS[T]"
+old = "the testset passes"
+new = "errors (UndefVarError FieldStep); after the fixture rewrite the c digests are 0xc5b4a23678e39e9d (Float64), 0xe6e0367178bb509e (Float32): max abs dc 6.9e-18 / 3.7e-9"
+
+[[failures]]
+path = "acceptance/p6_0v3_launch_fusion.jl"
+testset = "P6.0v3 (5): exactness on the CPU (CheckerboardCPM)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.FieldStep is deleted (the fixture); with the fixture rewritten, the Merks c digest moves by roundoff (σ digest unchanged) (fixed by D-C8-R1)"
+assertion = "p6_0v3_launch_fusion.jl:338 builds the fixture with CorePotts.FieldStep; after the fixture rewrite, :361 (σ, c) digests == P60V3_MERKS_DIGESTS[T]"
+old = "the testset passes"
+new = "errors (UndefVarError FieldStep); after the fixture rewrite the c digests are 0xc5b4a23678e39e9d (Float64), 0xe6e0367178bb509e (Float32): max abs dc 6.9e-18 / 3.7e-9"
+
+[[failures]]
+path = "acceptance/p6_0v3_launch_fusion.jl"
+testset = "P6.0v3 (5): exactness on the device"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "device runs only (GROUP=GPU): CorePotts.FieldStep is deleted (the fixture); inferred from the CPU testsets, not run at C8 (at head GROUP=GPU passes it, 7/7) (fixed by D-C8-R1)"
+assertion = "p6_0v3_launch_fusion.jl builds the fixture with CorePotts.FieldStep"
+old = "the testset passes"
+new = "errors (UndefVarError FieldStep)"
+
+[[failures]]
+path = "acceptance/p6_3b_boundary_schedule.jl"
+testset = "P6.3b control: the oracle is CorePotts' explicit Euler, per-face rule and clamp (base)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.laplacian and FieldStep are deleted; the oracle used them (fixed by D-C8-R2)"
+assertion = "p6_3b_boundary_schedule.jl:482 builds the oracle with CorePotts.FieldStep"
+old = "the testset passes"
+new = "errors: UndefVarError FieldStep not defined in CorePotts"
+
+[[failures]]
+path = "acceptance/p6_5c_predicate_source.jl"
+testset = "P6.5c predicate source: mass balance and the 7-point oracle (D_F = 1/16)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.stable_substeps is deleted (fixed by D-C8-R3)"
+assertion = "p6_5c_predicate_source.jl:205 CorePotts.stable_substeps(D, 1.0, (1.0, 1.0, 1.0), 0.5) == 1"
+old = "the testset passes"
+new = "errors: UndefVarError stable_substeps not defined in CorePotts"
+
+[[failures]]
+path = "acceptance/p6_5c_predicate_source.jl"
+testset = "P6.5c predicate source: Fortuna's values (one substep, F → 0.9, 0.99, 0.999)"
+since = "C8"
+list = "A"
+category = "deleted-api"
+why = "CorePotts.stable_substeps is deleted (fixed by D-C8-R3)"
+assertion = "p6_5c_predicate_source.jl:267 CorePotts.stable_substeps(0.0001, 1.0, (1.0, 1.0, 1.0), 0.9) == 1"
+old = "the testset passes"
+new = "errors: UndefVarError stable_substeps not defined in CorePotts"
+
+[[failures]]
+path = "acceptance/p6_0y_stable_substeps.jl"
+testset = "P6.0y: an explicit substeps = n is unchanged (bitwise)"
+since = "C8"
+list = "A"
+category = "digest"
+why = "the field compiler orders the update's floating-point operations differently: the last bits move (roundoff) (fixed by D-C8-R4)"
+assertion = "p6_0y_stable_substeps.jl:250 p60y_bits(us[end]) == bits (3 cases)"
+old = "the recorded bit patterns"
+new = "patterns equal in the leading digits, differing in the last bits"
+
+[[failures]]
+path = "acceptance/p6_0y_stable_substeps.jl"
+testset = "P6.0y: Merks with ExplicitEuler(substeps = 15, lower = 0.0) is unchanged"
+since = "C8"
+list = "A"
+category = "digest"
+why = "as above, for Merks' field (fixed by D-C8-R4)"
+assertion = "p6_0y_stable_substeps.jl:266 p60y_bits(c) == p60y_MERKS_BITS"
+old = "p60y_MERKS_BITS"
+new = "patterns equal in the leading digits, differing in the last bits"
